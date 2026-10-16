@@ -1995,6 +1995,8 @@ export type AgentContextData = {
     planApproved?: boolean;
     /** Whether ChatHandlingOption='Consult' is active for at least one listed sub-agent */
     subAgentConsultEnabled?: boolean;
+    /** Whether this sub-agent's parent resolves ChatHandlingOption='Consult' for this pairing */
+    parentConsults?: boolean;
     /** Whether at least one listed sub-agent has one or more active configuration presets */
     subAgentPresetsAvailable?: boolean;
     /** Markdown formatted snapshot of the user's current application context */

@@ -1334,4 +1334,67 @@ describe('VS-CON-2: Sub-Agent Consult flow in BaseAgent.Execute()', () => {
         expect(turn1ConsultMsg).toBeDefined();
         expect(turn1ConsultMsg?.metadata?.wasCompacted).toBe(true);
     });
+
+    it('VS-CON-6: gatherPromptTemplateData sets parentConsults=true for child and related sub-agents under Consult (depth > 0) and omits it at depth 0 or non-Consult pairings', async () => {
+        const child = registerChildSubAgent({ Parent: 'DirectorAgent', ChatHandlingOption: null });
+        const { subAgent: related, relationship } = registerRelatedSubAgent(
+            {},
+            { ChatHandlingOption: 'Consult' }
+        );
+        harness.agent.ChatHandlingOption = 'Consult';
+
+        const parentRun = new FakeAgentRun();
+        parentRun.AgentID = AGENT_ID;
+
+        const gatherFor = async (
+            agentEntity: MJAIAgentEntityExtended,
+            depth: number,
+            run?: FakeAgentRun
+        ): Promise<{ parentConsults?: boolean; parentAgentName?: string }> => {
+            const instance = new BaseAgent();
+            (instance as unknown as { _depth: number })._depth = depth;
+            const gather = (
+                instance as unknown as {
+                    gatherPromptTemplateData: (
+                        ag: MJAIAgentEntityExtended,
+                        u: UserInfo,
+                        extra?: Record<string, unknown>,
+                        actionChanges?: unknown,
+                        subAgentChanges?: unknown,
+                        withholding?: unknown,
+                        pr?: MJAIAgentRunEntityExtended
+                    ) => Promise<{ parentConsults?: boolean; parentAgentName?: string }>;
+                }
+            ).gatherPromptTemplateData.bind(instance);
+            return gather(
+                agentEntity,
+                { ID: USER_ID } as unknown as UserInfo,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                run as unknown as MJAIAgentRunEntityExtended | undefined
+            );
+        };
+
+        // 1. Child sub-agent (ParentID === AGENT_ID) at depth 1 under Consult -> parentConsults: true
+        const childData = await gatherFor(child, 1, parentRun);
+        expect(childData.parentConsults).toBe(true);
+        expect(childData.parentAgentName).toBe('DirectorAgent');
+
+        // 2. Related sub-agent (ParentID === null, relationship.ChatHandlingOption === 'Consult') at depth 1 -> parentConsults: true
+        const relatedData = await gatherFor(related, 1, parentRun);
+        expect(relatedData.parentConsults).toBe(true);
+        expect(relatedData.parentAgentName).toBe('');
+
+        // 3. Depth 0 (root / task-graph run where parentRun is passed for lineage) -> parentConsults omitted
+        const rootWithParentRunData = await gatherFor(child, 0, parentRun);
+        expect(rootWithParentRunData.parentConsults).toBeUndefined();
+
+        // 4. Non-Consult pairing (relationship.ChatHandlingOption === 'Retry') at depth 1 -> parentConsults omitted
+        relationship.ChatHandlingOption = 'Retry';
+        const nonConsultRelatedData = await gatherFor(related, 1, parentRun);
+        expect(nonConsultRelatedData.parentConsults).toBeUndefined();
+    });
 });
+

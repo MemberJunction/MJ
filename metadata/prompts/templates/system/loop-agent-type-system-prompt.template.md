@@ -725,6 +725,17 @@ You have {{subAgentCount}} sub-agents. Delegate appropriately.
 # Role: Sub-Agent
 Parent: {{ parentAgentName }}. Your results return to parent, not user.
 {% endif -%}
+{%- if subAgentConsultEnabled %}
+## Sub-Agent Consults
+A sub-agent may ask you something; it shows up as "Sub-agent X is asking you".
+- Answer from your own context: call it again with `resumeRunId` and your answer in `message`.
+- Ask your own caller (`Chat`) only when only they can answer.
+- Or tell it to proceed without the answer (`resumeRunId` with instructions).
+- After the round limit, its question goes to your caller.
+{% endif -%}
+{%- if parentConsults %}
+When you need input, your Chat goes to your parent agent, which may answer you. It is not shown to a user.
+{% endif -%}
 
 {%- if subAgentCount > 0 or actionCount > 0 or skillCount > 0 or (planModeActive and not planApproved) %}
 # Capabilities

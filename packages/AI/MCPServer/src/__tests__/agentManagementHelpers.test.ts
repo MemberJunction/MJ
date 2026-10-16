@@ -37,11 +37,39 @@ describe('validateCreateSpec', () => {
     it('rejects a spec that carries an ID', () => {
         expect(ValidateCreateSpec({ ID: 'ABC-123', Name: 'My Agent' })).toMatch(/must not carry an ID/);
     });
+
+    it('accepts a spec with ChatHandlingOption: Consult on the agent and on a related sub-agent', () => {
+        expect(
+            ValidateCreateSpec({
+                Name: 'Consult Agent',
+                ChatHandlingOption: 'Consult',
+                MaxSubAgentConsultRounds: 3,
+                SubAgents: [
+                    {
+                        Type: 'related',
+                        ChatHandlingOption: 'Consult',
+                        SubAgent: { ID: '00000000-0000-0000-0000-000000000002', Name: 'Child', StartingPayloadValidationMode: 'Fail' }
+                    }
+                ]
+            })
+        ).toBeNull();
+    });
 });
 
 describe('validateUpdateSpec', () => {
     it('accepts a spec with both ID and Name', () => {
         expect(ValidateUpdateSpec({ ID: '00000000-0000-0000-0000-000000000001', Name: 'My Agent' })).toBeNull();
+    });
+
+    it('accepts an update spec with ChatHandlingOption: Consult', () => {
+        expect(
+            ValidateUpdateSpec({
+                ID: '00000000-0000-0000-0000-000000000001',
+                Name: 'Consult Agent',
+                ChatHandlingOption: 'Consult',
+                MaxSubAgentConsultRounds: 2
+            })
+        ).toBeNull();
     });
 
     it('rejects a spec without an ID', () => {

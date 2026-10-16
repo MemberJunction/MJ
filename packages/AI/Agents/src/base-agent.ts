@@ -5447,7 +5447,8 @@ export class BaseAgent {
             params.data,
             params.actionChanges,
             params.subAgentChanges,
-            this.promptWithholding(params)
+            this.promptWithholding(params),
+            params.parentRun
         );
 
         // Set up the hierarchical prompt execution
@@ -10528,7 +10529,8 @@ The context is now within limits. Please retry your request with the recovered c
         extraData?: any,
         actionChanges?: ActionChange[],
         subAgentChanges?: SubAgentChange[],
-        withholding?: PromptWithholding
+        withholding?: PromptWithholding,
+        parentRun?: MJAIAgentRunEntityExtended
     ): Promise<AgentContextData> {
         try {
             const engine = AIEngine.Instance;
@@ -10637,6 +10639,23 @@ The context is now within limits. Please retry your request with the recovered c
                 sa => (AIEngine.Instance.GetAgentConfigurationPresets?.(sa.ID, true) ?? []).length > 0
             );
 
+            let parentConsults = false;
+            const effectiveParentRun = parentRun ?? this._executeParams?.parentRun;
+            if (!isRoot && effectiveParentRun?.AgentID) {
+                const parentAgent = (engine.Agents ?? []).find(
+                    a => UUIDsEqual(a.ID, effectiveParentRun.AgentID)
+                );
+                if (parentAgent) {
+                    const isDirectChild = agent.ParentID != null && UUIDsEqual(agent.ParentID, parentAgent.ID);
+                    const relationship = isDirectChild
+                        ? undefined
+                        : (engine.AgentRelationships ?? []).find(
+                            r => UUIDsEqual(r.AgentID, parentAgent.ID) && UUIDsEqual(r.SubAgentID, agent.ID) && r.Status === 'Active'
+                        );
+                    parentConsults = this.resolveSubAgentChatHandlingOption(parentAgent, relationship) === 'Consult';
+                }
+            }
+
             const contextData: AgentContextData = {
                 agentName: agent.Name,
                 agentDescription: agent.Description,
@@ -10651,6 +10670,7 @@ The context is now within limits. Please retry your request with the recovered c
                 planModeActive: this._planModeActive,
                 planApproved: this._planApproved,
                 ...(subAgentConsultEnabled ? { subAgentConsultEnabled: true } : {}),
+                ...(parentConsults ? { parentConsults: true } : {}),
                 ...(subAgentPresetsAvailable ? { subAgentPresetsAvailable: true } : {}),
                 appContext: appContext,
             };

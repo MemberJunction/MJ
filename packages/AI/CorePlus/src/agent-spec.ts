@@ -163,6 +163,11 @@ export interface AgentSpec {
     ChatHandlingOption?: 'Consult' | 'Failed' | 'Retry' | 'Success';
 
     /**
+    * Maximum number of times a single sub-agent may return a Chat step and be answered by this agent (when ChatHandlingOption resolves to Consult) within one run of this agent. After this many consult rounds for that sub-agent, the next Chat from it escalates to this agent's caller. 0 means escalate immediately without consulting. Defaults to 3 when unset.
+    */
+    MaxSubAgentConsultRounds?: number;
+
+    /**
     * Default artifact type produced by this agent. This is the primary artifact type; additional artifact types can be linked via AIAgentArtifactType junction table. Can be NULL if agent does not produce artifacts by default.
     */
     DefaultArtifactTypeID?: string;
@@ -288,6 +293,11 @@ export interface SubAgentSpec {
      * doesn't fit the sub-agent's payload structure, this is where that info can go.
      */
     SubAgentContextPaths?: Record<string, string>;
+    /**
+     * Only used when Type === 'related'. Optional per-relationship override for how Chat next steps from this sub-agent
+     * are handled by the parent. When absent, inherits `AIAgent.ChatHandlingOption` from the parent agent.
+     */
+    ChatHandlingOption?: 'Consult' | 'Failed' | 'Retry' | 'Success';
     /**
      * Only used when Type === 'related'. Optional ID of an `MJ: AI Agent Configurations` preset on the sub-agent
      * to use by default when the parent invokes this sub-agent without an explicit `presetName`.

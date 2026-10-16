@@ -609,6 +609,7 @@ export class AgentSpecSync {
             // Other config
             DefaultPromptEffortLevel: agent.DefaultPromptEffortLevel || undefined,
             ChatHandlingOption: agent.ChatHandlingOption || undefined,
+            MaxSubAgentConsultRounds: agent.MaxSubAgentConsultRounds ?? undefined,
             DefaultArtifactTypeID: agent.DefaultArtifactTypeID || undefined,
             OwnerUserID: agent.OwnerUserID || undefined,
             InvocationMode: agent.InvocationMode,
@@ -697,6 +698,7 @@ export class AgentSpecSync {
             SubAgentInputMapping: this.parseJsonField<Record<string, string>>(relationship.SubAgentInputMapping),
             SubAgentOutputMapping: this.parseJsonField<Record<string, string>>(relationship.SubAgentOutputMapping),
             SubAgentContextPaths: this.parseJsonField<Record<string, string>>(relationship.SubAgentContextPaths),
+            ChatHandlingOption: relationship.ChatHandlingOption || undefined,
             ConfigurationPresetID: relationship.ConfigurationPresetID || undefined
         };
     }
@@ -949,6 +951,7 @@ export class AgentSpecSync {
         // Other config
         agentEntity.DefaultPromptEffortLevel = this.Spec.DefaultPromptEffortLevel || null;
         agentEntity.ChatHandlingOption = this.Spec.ChatHandlingOption || null;
+        agentEntity.MaxSubAgentConsultRounds = this.Spec.MaxSubAgentConsultRounds ?? 3;
         agentEntity.DefaultArtifactTypeID = this.Spec.DefaultArtifactTypeID || null;
 
         // Set OwnerUserID - always use contextUser if available (user creating/modifying the agent)
@@ -1166,6 +1169,7 @@ export class AgentSpecSync {
         relationshipEntity.AgentID = agentId;
         relationshipEntity.SubAgentID = SubAgentSpec.SubAgent.ID;
         relationshipEntity.Status = 'Active';
+        relationshipEntity.ChatHandlingOption = SubAgentSpec.ChatHandlingOption ?? null;
         relationshipEntity.ConfigurationPresetID = SubAgentSpec.ConfigurationPresetID ?? null;
 
         // Serialize mapping fields
@@ -1633,6 +1637,7 @@ export class AgentSpecSync {
             StartingPayloadValidationMode: partial.StartingPayloadValidationMode || 'Fail',
             DefaultPromptEffortLevel: partial.DefaultPromptEffortLevel,
             ChatHandlingOption: partial.ChatHandlingOption,
+            MaxSubAgentConsultRounds: partial.MaxSubAgentConsultRounds,
             DefaultArtifactTypeID: partial.DefaultArtifactTypeID,
             OwnerUserID: partial.OwnerUserID,
             InvocationMode: partial.InvocationMode || 'Any',
