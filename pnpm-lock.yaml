@@ -3460,6 +3460,24 @@ importers:
 
   packages/AI/VideoStudio/Engine:
     dependencies:
+      '@memberjunction/ai':
+        specifier: 6.2.0-edge.4
+        version: link:../../Core
+      '@memberjunction/ai-engine-base':
+        specifier: 6.2.0-edge.4
+        version: link:../../BaseAIEngine
+      '@memberjunction/ai-prompts':
+        specifier: 6.2.0-edge.4
+        version: link:../../Prompts
+      '@memberjunction/core':
+        specifier: 6.2.0-edge.4
+        version: link:../../../MJCore
+      '@memberjunction/global':
+        specifier: 6.2.0-edge.4
+        version: link:../../../MJGlobal
+      '@memberjunction/storage':
+        specifier: 6.2.0-edge.4
+        version: link:../../../MJStorage
       '@memberjunction/video-studio-core':
         specifier: 6.2.0-edge.4
         version: link:../Core
