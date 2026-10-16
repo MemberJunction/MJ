@@ -5389,7 +5389,7 @@ export class BaseAgent {
             // ask_user) — and NAMES the control ones. The runner keeps them only when the selected
             // model's LLM.NativeControlFlow resolves to 'implicit'; a hybrid model never sees them.
             const toolSet = BuildNativeToolSet(actionSet, subAgents, (sa) => {
-                const presetNames = (AIEngine.Instance.GetAgentConfigurationPresets(sa.ID, true) ?? []).map(p => p.Name);
+                const presetNames = AIEngine.Instance.GetAgentConfigurationPresets(sa.ID, true).map(p => p.Name);
                 return {
                     consultEnabled: this.isSubAgentConsultEnabledForSubAgent(params.agent, sa),
                     ...(presetNames.length > 0 ? { presetNames } : {})
@@ -6376,7 +6376,7 @@ export class BaseAgent {
             if (req.presetName != null && req.presetName.trim() !== '') {
                 const matchedPreset = AIEngine.Instance.FindActiveAgentConfigurationPreset(subAgent.ID, req.presetName);
                 if (!matchedPreset) {
-                    const availablePresets = (AIEngine.Instance.GetAgentConfigurationPresets(subAgent.ID, true) ?? [])
+                    const availablePresets = AIEngine.Instance.GetAgentConfigurationPresets(subAgent.ID, true)
                         .map(p => p.Name);
                     const availableList = availablePresets.length > 0 ? availablePresets.join(', ') : 'none';
                     const errorMessage = `Sub-agent '${subAgent.Name}' has no preset '${req.presetName}'. Available: ${availableList}.`;
@@ -10774,7 +10774,7 @@ The context is now within limits. Please retry your request with the recovered c
                 sa => this.isSubAgentConsultEnabledForSubAgent(agent, sa)
             );
             const subAgentPresetsAvailable = uniqueActiveSubAgents.some(
-                sa => (AIEngine.Instance.GetAgentConfigurationPresets(sa.ID, true) ?? []).length > 0
+                sa => AIEngine.Instance.GetAgentConfigurationPresets(sa.ID, true).length > 0
             );
 
             let parentConsults = false;
@@ -12491,7 +12491,7 @@ The context is now within limits. Please retry your request with the recovered c
                      r.Status === 'Active'
             );
             if (relationship?.ConfigurationPresetID) {
-                const preset = (AIEngine.Instance.AgentConfigurations ?? []).find(
+                const preset = AIEngine.Instance.AgentConfigurations.find(
                     p => UUIDsEqual(p.ID, relationship.ConfigurationPresetID)
                 );
                 if (preset && preset.Status === 'Active' && UUIDsEqual(preset.AgentID, subAgent.ID)) {
@@ -12552,7 +12552,7 @@ The context is now within limits. Please retry your request with the recovered c
             if (sa.ExecutionMode !== 'Sequential') {
                 line += ` _(${sa.ExecutionMode}, order: ${sa.ExecutionOrder})_`;
             }
-            const presets = AIEngine.Instance.GetAgentConfigurationPresets(sa.ID, true) ?? [];
+            const presets = AIEngine.Instance.GetAgentConfigurationPresets(sa.ID, true);
             if (presets.length > 0) {
                 const presetSummary = presets.map(p => {
                     const desc = p.Description?.trim();

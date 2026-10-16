@@ -348,7 +348,8 @@ describe('VS-CON-7: Sub-Agent Configuration Presets', () => {
                 makeRelationship({ ConfigurationPresetID: PRESET_STD_ID }),
             ];
             const caller = new TestablePresetAgent();
-            const stepEntity = { ID: 'step-1', TargetLogID: null, InputData: '{}' } as unknown as MJAIAgentRunStepEntityExtended;
+            const save = vi.fn().mockResolvedValue(true);
+            const stepEntity = { ID: 'step-1', TargetLogID: null, InputData: '{}', Save: save } as unknown as MJAIAgentRunStepEntityExtended;
 
             await caller.invokeExecuteSubAgent(
                 {
@@ -369,6 +370,7 @@ describe('VS-CON-7: Sub-Agent Configuration Presets', () => {
             expect(mockRunAgent).toHaveBeenCalledTimes(1);
             const passedParams: ExecuteAgentParams = mockRunAgent.mock.calls[0][0];
             expect(passedParams.configurationId).toBe(AI_CONFIG_HIGH);
+            await vi.waitFor(() => expect(save).toHaveBeenCalled());
             expect(JSON.parse(stepEntity.InputData!)).toMatchObject({
                 presetName: 'High',
                 presetId: PRESET_HIGH_ID,
@@ -377,7 +379,8 @@ describe('VS-CON-7: Sub-Agent Configuration Presets', () => {
 
         it('matches per-call presetName against Name first, then DisplayName, trimmed and case-insensitively', async () => {
             const caller = new TestablePresetAgent();
-            const stepEntity = { ID: 'step-1', TargetLogID: null, InputData: '{}' } as unknown as MJAIAgentRunStepEntityExtended;
+            const save = vi.fn().mockResolvedValue(true);
+            const stepEntity = { ID: 'step-1', TargetLogID: null, InputData: '{}', Save: save } as unknown as MJAIAgentRunStepEntityExtended;
 
             await caller.invokeExecuteSubAgent(
                 { agent: parentAgent, conversationMessages: [], configurationId: AI_CONFIG_PARENT },
@@ -393,6 +396,7 @@ describe('VS-CON-7: Sub-Agent Configuration Presets', () => {
 
             const passedParams: ExecuteAgentParams = mockRunAgent.mock.calls[0][0];
             expect(passedParams.configurationId).toBe(AI_CONFIG_DRAFT);
+            await vi.waitFor(() => expect(save).toHaveBeenCalled());
             expect(JSON.parse(stepEntity.InputData!)).toMatchObject({
                 presetName: 'Draft',
                 presetId: PRESET_DRAFT_ID,
@@ -404,7 +408,8 @@ describe('VS-CON-7: Sub-Agent Configuration Presets', () => {
                 makeRelationship({ ConfigurationPresetID: PRESET_STD_ID }),
             ];
             const caller = new TestablePresetAgent();
-            const stepEntity = { ID: 'step-2', TargetLogID: null, InputData: '{}' } as unknown as MJAIAgentRunStepEntityExtended;
+            const save = vi.fn().mockResolvedValue(true);
+            const stepEntity = { ID: 'step-2', TargetLogID: null, InputData: '{}', Save: save } as unknown as MJAIAgentRunStepEntityExtended;
 
             await caller.invokeExecuteSubAgent(
                 {
@@ -423,6 +428,7 @@ describe('VS-CON-7: Sub-Agent Configuration Presets', () => {
 
             const passedParams: ExecuteAgentParams = mockRunAgent.mock.calls[0][0];
             expect(passedParams.configurationId).toBe(AI_CONFIG_STD);
+            await vi.waitFor(() => expect(save).toHaveBeenCalled());
             expect(JSON.parse(stepEntity.InputData!)).toMatchObject({
                 presetName: 'Standard',
                 presetId: PRESET_STD_ID,
@@ -468,7 +474,8 @@ describe('VS-CON-7: Sub-Agent Configuration Presets', () => {
                 })
             );
             const caller = new TestablePresetAgent();
-            const stepEntity = { ID: 'step-null-cfg', TargetLogID: null, InputData: '{}' } as unknown as MJAIAgentRunStepEntityExtended;
+            const save = vi.fn().mockResolvedValue(true);
+            const stepEntity = { ID: 'step-null-cfg', TargetLogID: null, InputData: '{}', Save: save } as unknown as MJAIAgentRunStepEntityExtended;
 
             await caller.invokeExecuteSubAgent(
                 {
@@ -488,6 +495,7 @@ describe('VS-CON-7: Sub-Agent Configuration Presets', () => {
 
             const passedParams: ExecuteAgentParams = mockRunAgent.mock.calls[0][0];
             expect(passedParams.configurationId).toBeUndefined();
+            await vi.waitFor(() => expect(save).toHaveBeenCalled());
             expect(JSON.parse(stepEntity.InputData!)).toMatchObject({
                 presetName: 'SystemDefault',
                 presetId: PRESET_DEFAULT_NULL_CFG_ID,
