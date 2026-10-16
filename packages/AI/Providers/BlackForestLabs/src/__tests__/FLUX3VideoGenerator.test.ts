@@ -544,5 +544,103 @@ describe('FLUX3VideoGenerator', () => {
             expect(readyJob2.Usage?.cost).toBe(0.45);
             expect(readyJob2.Provenance?.C2PA).toBe(false);
         });
+
+        it('rejects on poll 503, rejects on Ready download 502 while preserving remembered size/cost for retry, and maps unknown status to Running', async () => {
+            const pollingUrl = 'https://api.us.bfl.ai/v1/get_result?id=vid-retry-1';
+            const deliveryUrl = 'https://delivery-us1.bfl.ai/results/vid-retry-1.mp4';
+            const mp4WithC2pa = makeMp4Fixture(true);
+
+            // 1. Submit job (16:9 standard -> fhd 1920x1088, 6s, submit cost 72 credits)
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                json: () =>
+                    Promise.resolve({
+                        id: 'vid-retry-1',
+                        polling_url: pollingUrl,
+                        cost: 72,
+                    }),
+            });
+
+            await generator.GenerateVideo({
+                Prompt: 'Retry resilience clip',
+                Mode: 'TextToVideo',
+                DurationSeconds: 6,
+                AspectRatio: '16:9',
+                Quality: 'standard',
+            });
+
+            // 2. Unknown status ('Upscaling') maps to Running
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                json: () =>
+                    Promise.resolve({
+                        id: 'vid-retry-1',
+                        status: 'Upscaling',
+                    }),
+            });
+            const unknownStatusJob = await generator.GetVideoGenerationStatus(pollingUrl);
+            expect(unknownStatusJob.Status).toBe('Running');
+
+            // 3. Poll HTTP 503 rejects so the runner's transient error budget retries
+            mockFetch.mockResolvedValueOnce({
+                ok: false,
+                status: 503,
+                text: () => Promise.resolve('Service Unavailable'),
+            });
+            await expect(generator.GetVideoGenerationStatus(pollingUrl)).rejects.toThrow(
+                /BFL poll error \(503\)/,
+            );
+
+            // 4. Ready poll whose delivery download returns 502 rejects without deleting remembered size/cost
+            mockFetch
+                .mockResolvedValueOnce({
+                    ok: true,
+                    json: () =>
+                        Promise.resolve({
+                            id: 'vid-retry-1',
+                            status: 'Ready',
+                            result: { sample: deliveryUrl },
+                        }),
+                })
+                .mockResolvedValueOnce({
+                    ok: false,
+                    status: 502,
+                    text: () => Promise.resolve('Bad Gateway'),
+                });
+            await expect(generator.GetVideoGenerationStatus(pollingUrl)).rejects.toThrow(
+                /Failed to download video from delivery URL \(502\)/,
+            );
+
+            // 5. Next poll returns Ready + 200 download -> Succeeded with remembered table size and submit cost
+            mockFetch
+                .mockResolvedValueOnce({
+                    ok: true,
+                    json: () =>
+                        Promise.resolve({
+                            id: 'vid-retry-1',
+                            status: 'Ready',
+                            result: { sample: deliveryUrl },
+                        }),
+                })
+                .mockResolvedValueOnce({
+                    ok: true,
+                    headers: new Headers({ 'content-type': 'video/mp4' }),
+                    arrayBuffer: () =>
+                        Promise.resolve(
+                            mp4WithC2pa.buffer.slice(
+                                mp4WithC2pa.byteOffset,
+                                mp4WithC2pa.byteOffset + mp4WithC2pa.byteLength,
+                            ),
+                        ),
+                });
+
+            const succeededJob = await generator.GetVideoGenerationStatus(pollingUrl);
+            expect(succeededJob.Status).toBe('Succeeded');
+            expect(succeededJob.Video?.Width).toBe(1920);
+            expect(succeededJob.Video?.Height).toBe(1088);
+            expect(succeededJob.Video?.DurationSeconds).toBe(6);
+            expect(succeededJob.Usage?.cost).toBe(0.72);
+            expect(succeededJob.Usage?.costCurrency).toBe('USD');
+        });
     });
 });

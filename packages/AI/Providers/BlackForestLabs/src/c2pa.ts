@@ -1,5 +1,6 @@
 /**
- * C2PA JUMBF UUID in ISO-BMFF `uuid` boxes: d8fec3d6-1b0e-483c-9297-5828877ec481
+ * C2PA JUMBF UUID in ISO-BMFF top-level `uuid` boxes per C2PA 2.2 §A.5.1.1:
+ * `d8fec3d6-1b0e-483c-9297-5828877ec481`
  */
 const C2PA_JUMBF_UUID = Buffer.from([
     0xd8, 0xfe, 0xc3, 0xd6,

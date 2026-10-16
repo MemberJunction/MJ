@@ -348,7 +348,7 @@ export class FLUX3VideoGenerator extends BaseVideoGenerator {
 
                 const arrayBuffer = await downloadResponse.arrayBuffer();
                 const videoBuffer = Buffer.from(arrayBuffer);
-                const contentTypeHeader = downloadResponse.headers?.get('content-type');
+                const contentTypeHeader = downloadResponse.headers.get('content-type');
                 const mimeType = contentTypeHeader
                     ? contentTypeHeader.split(';')[0].trim() || 'video/mp4'
                     : 'video/mp4';
@@ -385,12 +385,10 @@ export class FLUX3VideoGenerator extends BaseVideoGenerator {
                 };
             }
 
-            const unknownStatusMsg = `Unexpected BFL task status: ${String(pollResult.status)}`;
+            // Unknown intermediate status is treated as Running so the runner's poll cap bounds it
             return {
                 JobID: jobId,
-                Status: 'Failed',
-                ErrorMessage: unknownStatusMsg,
-                ErrorInfo: ErrorAnalyzer.AnalyzeError(new Error(unknownStatusMsg), 'Black Forest Labs'),
+                Status: 'Running',
             };
         } catch (error) {
             if (IsRequestAborted(error, signal)) {
@@ -406,13 +404,7 @@ export class FLUX3VideoGenerator extends BaseVideoGenerator {
                 };
             }
 
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            return {
-                JobID: jobId,
-                Status: 'Failed',
-                ErrorMessage: errorMessage,
-                ErrorInfo: ErrorAnalyzer.AnalyzeError(error, 'Black Forest Labs'),
-            };
+            throw error;
         }
     }
 

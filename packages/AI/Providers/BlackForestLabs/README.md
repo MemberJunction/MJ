@@ -92,7 +92,7 @@ generator.setPollingConfig({
 | Model | ID | Modality | Description |
 |-------|-----|----------|-------------|
 | FLUX 3 Image | `flux-3-image` | Image | Up to 4K resolution, 16 aspect ratios, and up to 10 reference images |
-| FLUX 3 Video | `flux-3-video` | Video | Text-to-video, image-to-video, and video-to-video up to 1080p, 15s, with native audio and C2PA provenance |
+| FLUX 3 Video | `flux-3-video` | Video | Text-to-video and image-to-video (5–20s), continuation via `v2v` (5–15s); API supports `hd`..`uhd` (driver maps `Quality` up to `qhd`) with optional native audio; driver refuses `VideoToVideo` and measures MP4 bytes for C2PA |
 | FLUX.2 Pro | `flux-2-pro` | Image | 32B parameter, photorealistic 4MP images |
 | FLUX 1.1 Pro | `flux-1.1-pro` | Image | Production-ready, high-volume workloads |
 | FLUX.1 Dev | `flux-dev` | Image | Open-weights 12B for development |
@@ -107,13 +107,12 @@ generator.setPollingConfig({
 
 - **Verification date**: `2026-10-16`
 - **Documentation URLs read**:
-  - `https://docs.bfl.ai/flux_3/flux3_video` (`flux3_video.md`)
-  - `https://docs.bfl.ai/flux_3/flux3_image` (`flux3_image.md`)
-  - `https://docs.bfl.ai/api-reference/utility/generate-a-video-with-flux-3` (`generate-a-video-with-flux-3.md`)
-  - `https://docs.bfl.ai/api-reference/utility/generate-an-image-with-flux-3` (`generate-an-image-with-flux-3.md`)
-  - `https://docs.bfl.ai/api-reference/models/generate-an-image-with-flux-2-pro` (`generate-an-image-with-flux-2-pro.md`)
-  - `https://docs.bfl.ai/api-reference/tasks/get-result` (`get-result.md`)
-  - `https://docs.bfl.ai/flux_2/flux2_text_to_image` (`flux2_text_to_image.md`)
+  - `https://docs.bfl.ai/flux_3/flux3_video` (`flux_3/flux3_video.md`)
+  - `https://docs.bfl.ai/flux_3/flux3_image` (`flux_3/flux3_image.md`)
+  - `https://docs.bfl.ai/api-reference/utility/generate-a-video-with-flux-3` (`api-reference/utility/generate-a-video-with-flux-3.md`)
+  - `https://docs.bfl.ai/api-reference/utility/generate-an-image-with-flux-3` (`api-reference/utility/generate-an-image-with-flux-3.md`)
+  - `https://docs.bfl.ai/api-reference/utility/get-result` (`api-reference/utility/get-result.md`)
+  - `https://docs.bfl.ai/flux_2/flux2_text_to_image` (`flux_2/flux2_text_to_image.md`)
   - `https://bfl.ai/pricing` (`1 credit = $0.01 USD`)
 - **Endpoints & Authentication**:
   - Base URLs: `https://api.bfl.ai/v1` (global), `https://api.eu.bfl.ai/v1`, `https://api.us.bfl.ai/v1`
@@ -121,19 +120,19 @@ generator.setPollingConfig({
   - FLUX 3 Video submit: `POST /v1/flux-3-video`
   - FLUX 3 Image submit: `POST /v1/flux-3-image`
   - FLUX.2 Pro submit: `POST /v1/flux-2-pro`
-  - Result polling: `GET <polling_url>` from submit response (validated to be `https:` and hostname ending in `.bfl.ai`), or fallback `GET /v1/get_result?id=<id>`
+  - Result polling: `GET <polling_url>` from submit response (validated to be `https:` and hostname ending in `.bfl.ai`), or fallback `GET /v1/get_result?id=<id>` when `polling_url` is omitted
 - **FLUX 3 Video (`Flux3VideoInputsBody`, `additionalProperties: false`) parameters & limits**:
-  - `mode`: `'t2v' | 'i2v' | 'v2v'` (required; `'v2v'` on `/v1/flux-3-video` is video continuation via `start_video`, whereas video editing is a separate endpoint `/v1/flux-tools/video-edit-v1`)
+  - `mode`: `'t2v' | 'i2v' | 'v2v'` (required; `'v2v'` on `/v1/flux-3-video` is video continuation via `start_video`, whereas video editing is a separate endpoint `/v1/flux-tools/video-edit-v1`; `FLUX3VideoGenerator` refuses `Mode: 'VideoToVideo'`)
   - `prompt`: string (required)
-  - `resolution`: `'hd' | 'fhd' | 'qhd' | 'uhd'` (default `'fhd'`; mapped from `Quality`: `'draft' -> 'hd' + draft: true`, `'standard' -> 'fhd'`, `'high' -> 'qhd'`)
-  - `aspect_ratio`: `'21:9' | '2:1' | '16:9' | '4:3' | '1:1' | '3:4' | '9:16' | '9:21'` (default `'16:9'`; `'4:5'` is not supported)
-  - `duration`: integer `5..20` seconds for `'t2v'` and `'i2v'`; `5..15` seconds for `'v2v'` (default `5`)
+  - `resolution`: `'hd' | 'fhd' | 'qhd' | 'uhd'` (API schema default `'hd'`; driver maps `Quality`: `'draft' -> 'hd' + draft: true`, `'standard' -> 'fhd'`, `'high' -> 'qhd'`)
+  - `aspect_ratio`: `'auto' | '21:9' | '2:1' | '16:9' | '4:3' | '1:1' | '3:4' | '9:16' | '9:21'` (API schema default `'auto'`; driver requires one of the 8 fixed ratios so pixel dimensions are known; `'4:5'` is not supported)
+  - `duration`: `'auto'` or integer `5..20` seconds for `'t2v'` and `'i2v'`; `5..15` seconds for `'v2v'` (API schema default `'auto'`; driver requires an integer in `5..20` for `'t2v'`/`'i2v'` or `5..15` for `'v2v'`)
   - `generate_audio`: boolean (BFL API defaults to `true`; `FLUX3VideoGenerator` always sends `generate_audio: params.WantAudio === true` so omitted `WantAudio` never bills for audio)
   - `draft`: boolean (optional; set to `true` for `'draft'` quality tier)
   - `keyframes`: `Array<[number, string]> | string[]` (`1..10` items; required in `'i2v'` mode; timestamped `[seconds, image]` pairs with `0 <= seconds <= duration` or plain base64/HTTPS URL strings; each image ≤20 MB)
   - `start_video`: string (`'v2v'` continuation mode only; base64 or HTTPS URL; MP4/MOV/WebM; ≤20 MB; ≤15s)
   - `safety_tolerance`: integer `0..7` (default `2`)
-  - `webhook_url`, `webhook_secret`: optional strings
+  - `user`, `version`: optional strings in the `t2v`/`i2v`/`v2v` input schemas (`webhook_url` and `webhook_secret` are not in the `t2v`/`i2v`/`v2v` input schemas)
   - Does not accept `seed`, `fps`, `width`, or `height`.
 - **FLUX 3 Video 8×4 Dimension Lookup Table (`FLUX3_VIDEO_DIMENSIONS`, `width × height`)**:
 
@@ -151,29 +150,81 @@ generator.setPollingConfig({
 - **FLUX 3 Image (`Flux3ImageInputs`, `additionalProperties: false`) parameters & limits**:
   - `prompt`: string (required)
   - `images`: string[] | null (optional; up to `10` reference images)
-  - `aspect_ratio`: `'auto' | '21:9' | '2:1' | '16:9' | '3:2' | '7:5' | '4:3' | '5:4' | '1:1' | '4:5' | '3:4' | '5:7' | '2:3' | '9:16' | '1:2' | '9:21'` (default `'1:1'`)
+  - `aspect_ratio`: `'auto' | '21:9' | '2:1' | '16:9' | '3:2' | '7:5' | '4:3' | '5:4' | '1:1' | '4:5' | '3:4' | '5:7' | '2:3' | '9:16' | '1:2' | '9:21'` (API schema default `'auto'`; driver defaults to `'1:1'` when no dimensions or aspect ratio are specified)
   - `resolution`: `'768sq' | '1k' | '1.5k' | '2k' | '4k'` (default `'1k'`)
   - `grounding`: boolean (BFL API defaults to `true`; `FLUXImageGenerator` always sets `grounding: false` so image generation never makes unsolicited web searches)
   - `safety_tolerance`: integer `0..7` (default `2`)
   - Does not accept `width`, `height`, `seed`, or `output_format`.
-- **Polling Statuses (`StatusResponse`)**:
-  - Active: `'Pending'`, `'Reasoning'`, `'Generating'` (plus legacy `'Queued'`, `'Processing'` on image endpoints)
+- **Polling Statuses (`StatusResponse` — 9 values)**:
+  - Active: `'Pending'`, `'Reasoning'`, `'Generating'`
   - Success: `'Ready'` (`result.sample` contains the signed delivery URL)
-  - Terminal failures: `'Error'`, `'Failed'`, `'Request Moderated'`, `'Content Moderated'`, `'No Card Generated'` (surfaces `details['Moderation Reasons']` when present), `'Task not found'`
-- **Pricing Status**:
-  - BFL bills in credits (`1 credit = $0.01 USD`). Submit responses include initial `cost` (credits) and `/v1/get_result` includes settled `cost` (credits) on `'Ready'` (which may differ for variable-billing endpoints like FLUX 3 Video). Both drivers convert `(pollResult.cost ?? submitResult.cost) / 100` to USD on `ModelUsage`. Per-second/per-resolution FLUX 3 credit rate tables are not yet published on `bfl.ai/pricing`, so exact settled cost comes directly from the BFL response `cost` field.
+  - Terminal failures: `'Error'`, `'Request Moderated'`, `'Content Moderated'`, `'No Card Generated'` (surfaces `details['Moderation Reasons']` when present), `'Task not found'`
+- **Pricing Status (`bfl.ai/pricing`, `1 credit = $0.01 USD`)**:
+  - Submit responses include initial `cost` (credits) and `/v1/get_result` includes settled `cost` (credits) on `'Ready'`. Both drivers convert `(pollResult.cost ?? submitResult.cost) / 100` to USD on `ModelUsage`.
+  - Published **FLUX 3 Video** credits per output second on `bfl.ai/pricing`:
+    - Draft 720p (`hd`): `6` credits/s (`$0.06/s`)
+    - Standard `t2v` / `i2v`: 720p (`hd`) `15` credits/s (`$0.15/s`), 1080p (`fhd`) `24` credits/s (`$0.24/s`), 1440p (`qhd`) `28` credits/s (`$0.28/s`), 2160p (`uhd`) `41` credits/s (`$0.41/s`)
+    - Video-to-video (`v2v` continuation): 720p (`hd`) `21` credits/s (`$0.21/s`), 1080p (`fhd`) `27` credits/s (`$0.27/s`), 1440p (`qhd`) `31` credits/s (`$0.31/s`), 2160p (`uhd`) `45` credits/s (`$0.45/s`)
+  - Published **FLUX 3 Image** rates per image on `bfl.ai/pricing`: `768×768` `$0.041`, `1K` `$0.048`, `1.5K` `$0.07`, `2K` `$0.10`, `4K` `$0.607` (reference images and prompts are not charged extra).
 - **Delivery URL Expiry Conflict**:
-  - `docs.bfl.ai/flux_3/flux3_video` states signed `result.sample` URLs expire after **10 minutes**, whereas `docs.bfl.ai/api-reference/tasks/get-result` states signed delivery URLs are valid for **~2 hours**. Both drivers download bytes immediately upon `'Ready'` and never persist `result.sample`.
+  - BFL's documentation states three different expiry windows for signed `result.sample` delivery URLs: **10 minutes** (integration guide), **~1 hour** (FLUX 3 text-to-image and Video Edit pages), and **~2 hours** (video quickstart and FLUX 3 overview). Both drivers download bytes immediately upon `'Ready'` and never persist `result.sample`.
 - **C2PA Provenance**:
-  - BFL embeds a C2PA JUMBF manifest box (`uuid` box with UUID `d8fec3d6-1b0e-483c-9297-5828877ec481`) into generated media. `FLUX3VideoGenerator` inspects downloaded MP4 bytes with `HasC2PAManifest(bytes)` and sets `result.Provenance = { C2PA: HasC2PAManifest(bytes) }`.
+  - BFL's help center documents C2PA embedding for API images only (nothing in BFL's docs states C2PA for video). `FLUX3VideoGenerator` measures the downloaded MP4 bytes at runtime with `HasC2PAManifest(bytes)` (top-level ISO-BMFF `uuid` box with extended type `d8fec3d6-1b0e-483c-9297-5828877ec481`, C2PA 2.2 §A.5.1.1) and sets `result.Provenance = { C2PA: HasC2PAManifest(bytes) }`.
 
-## Opt-in Live Smoke Test (Manual Verification Only)
+## Opt-in Live Smoke Test (Run Only With Explicit Approval)
 
-Automated test suites in CI and local builds never make live network calls to BFL. To manually verify against the live BFL API when credentials and budget are explicitly provided:
+Automated test suites in CI and local builds never make live network calls to BFL. To run a live end-to-end smoke check (after `VS-GEN-2` lands and only with explicit approval from Colin):
+
+- **Expected spend**: 1 draft 5-second 720p (`hd`) clip ≈ **30 credits (`$0.30 USD`)** at `bfl.ai/pricing`'s draft rate of 6 credits/s.
 
 ```bash
-BFL_LIVE_SMOKE=1 BFL_API_KEY="<your-bfl-api-key>" pnpm --filter @memberjunction/ai-blackforestlabs test
+node -e '
+import { writeFileSync } from "node:fs";
+import { AIEngine } from "@memberjunction/aiengine";
+import { AIVideoRunner } from "@memberjunction/ai-prompts";
+import { Metadata, RunView } from "@memberjunction/core";
+
+const user = Metadata.Provider.CurrentUser;
+await AIEngine.Instance.Config(false, user);
+
+const runner = new AIVideoRunner();
+const result = await runner.RunGenerateVideo({
+    Prompt: "A calm ocean wave rolling onto a sandy beach at sunrise",
+    Mode: "TextToVideo",
+    DurationSeconds: 5,
+    AspectRatio: "16:9",
+    Quality: "draft",
+    WantAudio: false,
+    ContextUser: user,
+});
+
+if (!result.Success || !result.Video?.Data?.length) {
+    console.error("Smoke test failed:", result.ErrorMessage);
+    process.exit(1);
+}
+
+writeFileSync("/tmp/flux3-smoke.mp4", result.Video.Data);
+console.log("Saved /tmp/flux3-smoke.mp4", {
+    bytes: result.Video.Data.length,
+    width: result.Video.Width,
+    height: result.Video.Height,
+    durationSeconds: result.Video.DurationSeconds,
+    c2pa: result.Provenance?.C2PA,
+    promptRunId: result.PromptRunID,
+});
+
+const rv = new RunView();
+const runRes = await rv.RunView({
+    EntityName: "MJ: AI Prompt Runs",
+    ExtraFilter: `ID = '\''${result.PromptRunID}'\''`,
+    Fields: ["ID", "Success", "Cost", "CostCurrency", "TokensUsedRollup"],
+    ResultType: "simple",
+}, user);
+console.log("PromptRun row:", runRes.Results[0]);
+process.exit(0);
+'
 ```
+Then open `/tmp/flux3-smoke.mp4` to verify playback and confirm `PromptRun row` has a non-null `Cost` (`~0.30` USD).
 
 ## Dependencies
 

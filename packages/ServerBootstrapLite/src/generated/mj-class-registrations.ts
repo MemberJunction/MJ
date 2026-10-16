@@ -43,8 +43,9 @@ import {
     BettyBotLLM,
 } from '@memberjunction/ai-betty-bot';
 
-// @memberjunction/ai-blackforestlabs (1 classes)
+// @memberjunction/ai-blackforestlabs (2 classes)
 import {
+    FLUX3VideoGenerator,
     FLUXImageGenerator,
 } from '@memberjunction/ai-blackforestlabs';
 
@@ -1425,6 +1426,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     BedrockLLM,
     BettyLLM,
     BettyBotLLM,
+    FLUX3VideoGenerator,
     FLUXImageGenerator,
     CerebrasLLM,
     CloudflareDecision,
@@ -1616,11 +1618,11 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJCompanyEntity,
     MJCompanyIntegrationEntity,
     MJCompanyIntegrationEntityMapEntity,
-    MJCompanyIntegrationFieldMapEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJCompanyIntegrationFieldMapEntity,
     MJCompanyIntegrationRecordMapEntity,
     MJCompanyIntegrationRunAPILogEntity,
     MJCompanyIntegrationRunDetailEntity,
@@ -1820,11 +1822,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJRecordChangeReplayRunEntity,
     MJRecordCloneLogEntity,
     MJRecordCloneLogItemEntity,
-    MJRecordGeoCodeEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJRecordGeoCodeEntity,
     MJRecordLinkEntity,
     MJRecordMergeDeletionLogEntity,
     MJRecordMergeLogEntity,
@@ -2024,11 +2026,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     UpdateTypeformAction,
     WatchNewJotFormSubmissionsAction,
     WatchNewSurveyMonkeyResponsesAction,
-    WatchNewTypeformResponsesAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    WatchNewTypeformResponsesAction,
     AttachTagsAction,
     CreateUserAction_actions_bizapps_lms,
     DetachTagsAction,
@@ -2228,11 +2230,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     PredictiveStudioRunFeaturePipelineServerOperation,
     PredictiveStudioScheduleModelScoringAction,
     PredictiveStudioScoreRecordSetAction,
-    PredictiveStudioScoreRecordSetServerOperation,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    PredictiveStudioScoreRecordSetServerOperation,
     PredictiveStudioStartExperimentSessionServerOperation,
     PredictiveStudioTrainModelAction,
     PredictiveStudioTrainModelServerOperation,
@@ -2432,11 +2434,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     PDFExtractorAction,
     ParallelExecuteAction,
     PasswordStrengthAction,
-    PerplexitySearchAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    PerplexitySearchAction,
     PostalCodeLookupAction,
     PreviewDocumentAction,
     QRCodeAction,
@@ -2526,7 +2528,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1073;
+export const CLASS_REGISTRATIONS_COUNT = 1074;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
