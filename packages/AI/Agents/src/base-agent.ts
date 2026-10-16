@@ -6168,7 +6168,26 @@ export class BaseAgent {
 
         // for next step, let's do a little quick validation here for sub-agent and actions to ensure requests are valid
         switch (nextStep.step) {
-            case 'Sub-Agent':           
+            case 'Sub-Agent':
+                if (
+                    nextStep.taskGraph?.folded &&
+                    (!nextStep.subAgent?.name || !this.resolveSubAgentByName(params, nextStep.subAgent.name))
+                ) {
+                    this.logStatus(
+                        `target is not a sub-agent of ${params.agent.Name}; submitting durably`,
+                        false,
+                        params
+                    );
+                    return {
+                        ...nextStep,
+                        step: 'Tasks' as typeof nextStep.step,
+                        subAgent: undefined,
+                        taskGraph: {
+                            spec: nextStep.taskGraph.spec,
+                            folded: false,
+                        },
+                    };
+                }
                 return this.validateSubAgentNextStep<P>(params, nextStep, currentPayload, agentRun, currentStep);
             case 'Actions':
                 return this.validateActionsNextStep<P>(params, nextStep, currentPayload, agentRun, currentStep);

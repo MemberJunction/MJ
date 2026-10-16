@@ -28,6 +28,7 @@ import {
     MJTaskEntity,
     MJTaskDependencyEntity,
     MJTaskTypeEntity,
+    MJAIAgentEntity,
     MJAIAgentRequestEntity,
 } from '@memberjunction/core-entities';
 import {
@@ -44,6 +45,7 @@ import {
     ConfigOf,
 } from '@memberjunction/ai-core-plus';
 import { UUIDsEqual } from '@memberjunction/global';
+import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AgentDecisionService } from '@memberjunction/ai-agents';
 import { HeldDecisionAnswers, type DecisionTaskRow, type TaskStepConfiguration } from './decision-node';
@@ -1344,7 +1346,11 @@ export class TaskGraphService {
     // internals
     // ────────────────────────────────────────────────────────────────────────
 
-    /** Maps every referenced agent name to its ID, or reports all unresolvable names at once. */
+    /**
+     * Maps every referenced agent name to its ID, resolving only `Status = 'Active'` agents that
+     * `context.ContextUser` has permission to run (`AIAgentPermissionHelper.FilterRunnableAgents`).
+     * Reports all refused names at once, split into "unknown or inactive" and "not runnable by you".
+     */
     private async resolveAgents(
         spec: TaskGraphSpec,
         context: TaskGraphSubmitContext,
@@ -1356,22 +1362,57 @@ export class TaskGraphService {
         if (names.length === 0) return { Success: true, Map: new Map() };
 
         const quoted = names.map((n) => `'${n.replace(/'/g, "''")}'`).join(',');
-        const result = await RunView.FromMetadataProvider(context.Provider).RunView<{ ID: string; Name: string }>(
-            { EntityName: 'MJ: AI Agents', ExtraFilter: `Name IN (${quoted})`, Fields: ['ID', 'Name'], ResultType: 'simple' },
+        const result = await RunView.FromMetadataProvider(context.Provider).RunView<{
+            ID: string;
+            Name: string;
+            Status?: MJAIAgentEntity['Status'];
+        }>(
+            {
+                EntityName: 'MJ: AI Agents',
+                ExtraFilter: `Name IN (${quoted}) AND Status = 'Active'`,
+                Fields: ['ID', 'Name', 'Status'],
+                ResultType: 'simple',
+            },
             context.ContextUser,
         );
 
-        const found = new Map((result.Results ?? []).map((r) => [r.Name, r.ID]));
-        const missing = names.filter((n) => !found.has(n));
-        if (missing.length > 0) {
+        const activeRows = (result.Results ?? [])
+            .filter((r) => (r.Status ?? 'Active') === 'Active')
+            .map((r) => ({
+                ID: r.ID,
+                Name: r.Name,
+                Status: (r.Status ?? 'Active') as MJAIAgentEntity['Status'],
+            }));
+        const activeByName = new Map(activeRows.map((r) => [r.Name, r]));
+        const unknownOrInactive = names.filter((n) => !activeByName.has(n));
+
+        const runnableRows =
+            activeRows.length > 0
+                ? await AIAgentPermissionHelper.FilterRunnableAgents(activeRows, context.ContextUser)
+                : [];
+        const runnableByName = new Map(runnableRows.map((r) => [r.Name, r.ID]));
+        const notRunnable = names.filter((n) => activeByName.has(n) && !runnableByName.has(n));
+
+        if (unknownOrInactive.length > 0 || notRunnable.length > 0) {
+            const parts: string[] = [];
+            if (unknownOrInactive.length > 0) {
+                parts.push(
+                    `${unknownOrInactive.length} unknown or inactive agent(s): ${unknownOrInactive.join(', ')}`,
+                );
+            }
+            if (notRunnable.length > 0) {
+                parts.push(
+                    `${notRunnable.length} agent(s) not runnable by you: ${notRunnable.join(', ')}`,
+                );
+            }
             return {
                 Success: false,
                 ErrorMessage:
-                    `Task graph "${spec.workflowName}" references ${missing.length} unknown agent(s): ${missing.join(', ')}. ` +
+                    `Task graph "${spec.workflowName}" references ${parts.join('; ')}. ` +
                     `Submitting would execute the graph with holes where those tasks should be.`,
             };
         }
-        return { Success: true, Map: found };
+        return { Success: true, Map: runnableByName };
     }
 
     /**

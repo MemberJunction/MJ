@@ -15763,6 +15763,9 @@ importers:
       '@memberjunction/ai-core-plus':
         specifier: 6.2.0-edge.4
         version: link:../AI/CorePlus
+      '@memberjunction/ai-engine-base':
+        specifier: 6.2.0-edge.4
+        version: link:../AI/BaseAIEngine
       '@memberjunction/ai-prompts':
         specifier: 6.2.0-edge.4
         version: link:../AI/Prompts

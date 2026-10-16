@@ -32,6 +32,12 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
     };
 });
 
+vi.mock('@memberjunction/ai-engine-base', () => ({
+    AIAgentPermissionHelper: {
+        FilterRunnableAgents: vi.fn(async <T>(agents: T[]) => agents),
+    },
+}));
+
 vi.mock('@memberjunction/aiengine', () => ({
     AIEngine: {
         get Instance() {

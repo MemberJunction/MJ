@@ -30,6 +30,7 @@ import { dirname, join, relative } from 'path';
 import { fileURLToPath } from 'url';
 import { LOOP_NEXT_STEP_TYPES } from '../agent-types/loop-agent-response-type';
 import { ASK_USER_TOOL, COMPLETE_TASK_TOOL, PAYLOAD_CHANGE_TOOL, SUB_AGENT_TOOL_PREFIX } from '../native-tools/control-tools';
+import { FormatValidationErrors, ValidateTaskGraphSpec } from '@memberjunction/ai-core-plus';
 
 const __dirname_ = dirname(fileURLToPath(import.meta.url));
 // src/__tests__/ → repo root is 5 levels up (Agents → AI → packages → root).
@@ -49,6 +50,7 @@ const NEXT_STEP_FIELDS = new Set([
 ]);
 const ACTION_FIELDS = new Set(['name', 'params']);
 const SUB_AGENT_FIELDS = new Set(['name', 'message', 'templateParameters', 'terminateAfter']);
+const HANDOFF_FIELDS = new Set(['agentName', 'brief', 'reason', 'presetName']);
 const PAYLOAD_CHANGE_FIELDS = new Set(['newElements', 'updateElements', 'removeElements', 'replaceElements', 'reasoning']);
 
 const VALID_STEP_TYPES = new Set<string>(LOOP_NEXT_STEP_TYPES);
@@ -197,16 +199,39 @@ function conformanceProblems(response: Record<string, unknown>, allowDescription
             }
         }
     }
+    const handoff = asRecord(nextStep.handoff);
+    for (const key of Object.keys(handoff ?? {})) {
+        if (!HANDOFF_FIELDS.has(key)) {
+            problems.push(`nextStep.handoff.${key} is not a handoff field — expected ${[...HANDOFF_FIELDS].join('/')}`);
+        }
+    }
     return problems;
 }
 
 const templateExemplars = walk(TEMPLATES_DIR, '.md').flatMap(exemplarsInMarkdown);
 const outputExemplars = walk(OUTPUT_DIR, '.json').flatMap(exemplarsInOutputFile);
 
+const allParsedExemplars: Array<{ location: string; value: Record<string, unknown> }> = [
+    ...templateExemplars.flatMap((e) => {
+        try {
+            const parsed = asRecord(JSON.parse(e.json));
+            return parsed ? [{ location: e.location, value: parsed }] : [];
+        } catch {
+            return [];
+        }
+    }),
+    ...outputExemplars.map((e) => ({ location: e.location, value: e.value })),
+];
+
+const tasksExemplars = allParsedExemplars.filter((e) => asRecord(e.value.nextStep)?.type === 'Tasks');
+const handoffExemplars = allParsedExemplars.filter((e) => asRecord(e.value.nextStep)?.type === 'Handoff');
+
 describe('shipped LoopAgentResponse exemplars', () => {
     it('finds exemplars to check — a silent zero would make every assertion below vacuous', () => {
         expect(templateExemplars.length).toBeGreaterThan(50);
         expect(outputExemplars.length).toBeGreaterThan(20);
+        expect(tasksExemplars.length).toBeGreaterThanOrEqual(1);
+        expect(handoffExemplars.length).toBeGreaterThanOrEqual(1);
     });
 
     it.each(templateExemplars.map((e) => [e.location, e] as const))('%s is valid JSON', (_location, exemplar) => {
@@ -222,6 +247,31 @@ describe('shipped LoopAgentResponse exemplars', () => {
 
     it.each(outputExemplars.map((e) => [e.location, e] as const))('%s matches LoopAgentResponse', (_location, exemplar) => {
         expect(conformanceProblems(exemplar.value, exemplar.wrapped)).toEqual([]);
+    });
+
+    it.each(tasksExemplars.map((e) => [e.location, e] as const))('%s Tasks exemplar passes ValidateTaskGraphSpec', (location, exemplar) => {
+        const nextStep = asRecord(exemplar.value.nextStep);
+        const spec = nextStep?.tasks ?? nextStep?.taskGraph;
+        const result = ValidateTaskGraphSpec(spec);
+        const formatted = result.Valid ? '' : `${location}:\n${FormatValidationErrors(result.Errors)}`;
+        expect(formatted).toBe('');
+    });
+
+    it.each(handoffExemplars.map((e) => [e.location, e] as const))('%s Handoff exemplar has non-empty agentName and brief', (location, exemplar) => {
+        const nextStep = asRecord(exemplar.value.nextStep);
+        const handoff = asRecord(nextStep?.handoff);
+        const problems: string[] = [];
+        if (!handoff) {
+            problems.push(`${location}: nextStep.handoff is missing or not an object`);
+        } else {
+            if (typeof handoff.agentName !== 'string' || handoff.agentName.trim().length === 0) {
+                problems.push(`${location}: nextStep.handoff.agentName must be a non-empty string`);
+            }
+            if (typeof handoff.brief !== 'string' || handoff.brief.trim().length === 0) {
+                problems.push(`${location}: nextStep.handoff.brief must be a non-empty string`);
+            }
+        }
+        expect(problems).toEqual([]);
     });
 });
 
