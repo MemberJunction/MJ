@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { pathToFileURL } from 'node:url';
+import { format as formatUtil } from 'node:util';
 import {
     RENDER_WORKER_ENV,
     RENDER_WORKER_PORT_PREFIX,
@@ -9,8 +10,11 @@ import { HyperFramesRenderBackend } from './hyperframes-backend.js';
 import {
     CreateRenderWorkerServer,
     DEFAULT_CONCURRENCY,
+    DEFAULT_HOST,
     DEFAULT_MAX_BODY_BYTES,
+    DEFAULT_MAX_BODY_MB,
     DEFAULT_MAX_TIMEOUT_MS,
+    DEFAULT_PORT,
     type RenderWorkerServer,
 } from './server.js';
 
@@ -45,14 +49,17 @@ export interface StartRenderWorkerOptions {
  * Parses `RENDER_WORKER_ENV` environment variables into a validated `RenderWorkerMainConfig`.
  */
 export function ParseRenderWorkerEnv(env: NodeJS.ProcessEnv = process.env): RenderWorkerMainConfig {
-    const host = env[RENDER_WORKER_ENV.Host]?.trim() || '127.0.0.1';
+    const host = env[RENDER_WORKER_ENV.Host]?.trim() || DEFAULT_HOST;
     const rawPort = env[RENDER_WORKER_ENV.Port]?.trim();
-    const port = rawPort !== undefined && rawPort !== '' ? Number.parseInt(rawPort, 10) : 8788;
+    const port =
+        rawPort !== undefined && rawPort !== '' ? Number.parseInt(rawPort, 10) : DEFAULT_PORT;
 
     const token = env[RENDER_WORKER_ENV.Token]?.trim() || undefined;
     const rawMaxBodyMb = env[RENDER_WORKER_ENV.MaxBodyMb]?.trim();
     const maxBodyMb =
-        rawMaxBodyMb !== undefined && rawMaxBodyMb !== '' ? Number.parseFloat(rawMaxBodyMb) : 64;
+        rawMaxBodyMb !== undefined && rawMaxBodyMb !== ''
+            ? Number.parseFloat(rawMaxBodyMb)
+            : DEFAULT_MAX_BODY_MB;
     const maxBodyBytes =
         Number.isFinite(maxBodyMb) && maxBodyMb > 0
             ? Math.round(maxBodyMb * 1024 * 1024)
@@ -75,7 +82,7 @@ export function ParseRenderWorkerEnv(env: NodeJS.ProcessEnv = process.env): Rend
 
     return {
         Host: host,
-        Port: Number.isFinite(port) && port >= 0 ? port : 8788,
+        Port: Number.isFinite(port) && port >= 0 ? port : DEFAULT_PORT,
         Token: token,
         MaxBodyBytes: maxBodyBytes,
         Concurrency: concurrency,
@@ -102,18 +109,36 @@ export function AssertNonRootUser(allowRoot: boolean, effectiveUid?: number): vo
 }
 
 /**
+ * Redirects `console.log` and `console.info` to `process.stderr` so third-party libraries
+ * cannot pollute stdout after the `VIDEO_STUDIO_RENDER_WORKER_PORT=<port>` handshake line.
+ */
+export function RedirectConsoleStdoutToStderr(): void {
+    const writeStderr = (...args: unknown[]): void => {
+        process.stderr.write(`${formatUtil(...args)}\n`);
+    };
+    console.log = writeStderr;
+    console.info = writeStderr;
+}
+
+/**
  * Starts the HTTP render worker using `RENDER_WORKER_ENV`, writes
  * `VIDEO_STUDIO_RENDER_WORKER_PORT=<port>` to stdout once listening, and returns the server handle.
  */
 export async function StartRenderWorkerFromEnv(
     options: StartRenderWorkerOptions = {},
 ): Promise<RenderWorkerServer> {
+    process.env.DO_NOT_TRACK = '1';
+    process.env.HYPERFRAMES_NO_TELEMETRY = '1';
+
     const config = ParseRenderWorkerEnv(options.Env);
     AssertNonRootUser(config.AllowRoot, options.EffectiveUid);
 
     const backend = options.Backend ?? new HyperFramesRenderBackend();
     const server = CreateRenderWorkerServer({
         Backend: backend,
+        Host: config.Host,
+        Port: config.Port,
+        Token: config.Token,
         BearerToken: config.Token,
         MaxBodyBytes: config.MaxBodyBytes,
         Concurrency: config.Concurrency,
@@ -124,12 +149,15 @@ export async function StartRenderWorkerFromEnv(
     const writeLine =
         options.WriteStdoutLine ?? ((line: string): void => void process.stdout.write(`${line}\n`));
     writeLine(`${RENDER_WORKER_PORT_PREFIX}${boundPort}`);
+    RedirectConsoleStdoutToStderr();
 
     return server;
 }
 
 async function runCliEntrypoint(): Promise<void> {
     try {
+        process.env.DO_NOT_TRACK = '1';
+        process.env.HYPERFRAMES_NO_TELEMETRY = '1';
         const backend = new HyperFramesRenderBackend();
         const server = await StartRenderWorkerFromEnv({ Backend: backend });
 

@@ -1,4 +1,4 @@
-import { randomUUID, timingSafeEqual } from 'node:crypto';
+import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
 import * as http from 'node:http';
 import {
     RENDER_WORKER_ROUTES,
@@ -10,11 +10,18 @@ import {
     type RenderResultMetadata,
     type RenderStreamEvent,
     type RenderWorkerErrorBody,
-    type RenderWorkerErrorCode,
     type StillsRequest,
 } from '@memberjunction/video-studio-core';
-import { RenderWorkerError, type RenderBackend } from './backend.js';
-import { StageRenderBundle, ValidateRenderGeometry } from './bundle.js';
+import {
+    RenderWorkerError,
+    type RenderBackend,
+    type RenderWorkerLocalErrorCode,
+} from './backend.js';
+import {
+    StageRenderBundle,
+    ValidateCompositionGeometryMatch,
+    ValidateRenderGeometry,
+} from './bundle.js';
 import {
     RunCheckJob,
     RunContactSheetJob,
@@ -24,14 +31,26 @@ import {
 } from './jobs.js';
 import { RunLintGate } from './lint-gate.js';
 
-/** Default maximum JSON request body size (64 MiB). */
-export const DEFAULT_MAX_BODY_BYTES = 64 * 1024 * 1024;
+/** Default bind host for the render worker HTTP server. */
+export const DEFAULT_HOST = '127.0.0.1';
 
-/** Default maximum concurrent heavy jobs (`/render`, `/stills`, `/contact-sheet`, `/keyframes`). */
+/** Default bind port (`0` selects an ephemeral OS-assigned port). */
+export const DEFAULT_PORT = 0;
+
+/** Default maximum JSON request body size in megabytes (256 MiB). */
+export const DEFAULT_MAX_BODY_MB = 256;
+
+/** Default maximum JSON request body size in bytes (256 MiB). */
+export const DEFAULT_MAX_BODY_BYTES = DEFAULT_MAX_BODY_MB * 1024 * 1024;
+
+/** Default maximum concurrent jobs (`/check`, `/render`, `/stills`, `/contact-sheet`, `/keyframes`). */
 export const DEFAULT_CONCURRENCY = 1;
 
-/** Default per-job timeout ceiling (10 minutes). */
-export const DEFAULT_MAX_TIMEOUT_MS = 600_000;
+/** Default per-job timeout ceiling (30 minutes). */
+export const DEFAULT_MAX_TIMEOUT_MS = 30 * 60 * 1000;
+
+/** Default timeout for non-render jobs (`/check`, `/stills`, `/contact-sheet`, `/keyframes`, pre-render lint) (5 minutes). */
+export const DEFAULT_NON_RENDER_TIMEOUT_MS = 5 * 60 * 1000;
 
 /** Default heartbeat interval for streaming `/render` responses (15 seconds). */
 export const DEFAULT_HEARTBEAT_MS = 15_000;
@@ -45,14 +64,26 @@ export const DEFAULT_VIDEO_TTL_MS = 10 * 60 * 1000;
 export interface RenderWorkerServerOptions {
     /** Rendering backend (`FakeRenderBackend` in unit tests, `HyperFramesRenderBackend` in production). */
     Backend: RenderBackend;
-    /** Optional bearer token required on every route except `GET /health`. */
+    /** Default bind host when `Listen()` is called without an explicit host (defaults to `'127.0.0.1'`). */
+    Host?: string;
+    /** Default bind port when `Listen()` is called without an explicit port (defaults to `0`). */
+    Port?: number;
+    /** Optional bearer token required on every route (including `GET /health`). */
+    Token?: string;
+    /** Alias for `Token` (optional bearer token required on every route including `GET /health`). */
     BearerToken?: string;
-    /** Maximum request body size in bytes (defaults to 64 MiB). */
+    /** Maximum request body size in megabytes (defaults to 256 MiB). */
+    MaxBodyMb?: number;
+    /** Maximum request body size in bytes (if set, overrides `MaxBodyMb`). */
     MaxBodyBytes?: number;
-    /** Maximum concurrent heavy render/capture jobs (defaults to 1). */
+    /** Maximum concurrent render/check/capture jobs (defaults to 1). */
     Concurrency?: number;
-    /** Maximum timeout in milliseconds per job (defaults to 600,000 ms). */
+    /** Maximum timeout in milliseconds per job (defaults to 1,800,000 ms / 30 min). */
     MaxTimeoutMs?: number;
+    /** Default timeout in milliseconds for non-render jobs and pre-render lint (defaults to 300,000 ms / 5 min). */
+    NonRenderTimeoutMs?: number;
+    /** Base directory for temporary bundle staging and keyframe extraction (defaults to `os.tmpdir()`). */
+    TempRoot?: string;
     /** Interval in milliseconds for `Heartbeat` NDJSON events on `/render` (defaults to 15,000 ms). */
     HeartbeatIntervalMs?: number;
     /** TTL in milliseconds for unfetched MP4 entries in `/videos/<VideoID>` (defaults to 600,000 ms). */
@@ -67,7 +98,7 @@ export interface RenderWorkerServer {
     readonly HttpServer: http.Server;
     /** Bound TCP port after `Listen` resolves (`0` before listening). */
     readonly Port: number;
-    /** Starts listening on `host` and `port` (defaults to `'127.0.0.1'` and `0`). */
+    /** Starts listening on `host` and `port` (defaults to `options.Host ?? '127.0.0.1'` and `options.Port ?? 0`). */
     Listen(port?: number, host?: string): Promise<number>;
     /** Aborts in-flight jobs, clears the video store, and closes the HTTP server. */
     Close(): Promise<void>;
@@ -79,16 +110,54 @@ interface StoredVideoEntry {
 }
 
 /**
+ * Returns `true` when `host` is a loopback address (`127.0.0.1`, `::1`, `::ffff:127.0.0.1`, or `localhost`).
+ */
+export function IsLoopbackHost(host: string): boolean {
+    const normalized = host.trim().toLowerCase().replace(/^\[|\]$/g, '');
+    return (
+        normalized === '127.0.0.1' ||
+        normalized === '::1' ||
+        normalized === '::ffff:127.0.0.1' ||
+        normalized === 'localhost'
+    );
+}
+
+function assertLoopbackOrToken(host: string, bearerToken: string | undefined): void {
+    if (!IsLoopbackHost(host) && !bearerToken) {
+        throw new Error(
+            `Refusing to bind render worker to non-loopback host "${host}" without a bearer token.`,
+        );
+    }
+}
+
+/**
  * Creates an HTTP server implementing all `RENDER_WORKER_ROUTES`.
  *
  * Notice that this module does NOT import `hyperframes-backend.ts`; callers inject `Backend`.
  */
 export function CreateRenderWorkerServer(options: RenderWorkerServerOptions): RenderWorkerServer {
     const backend = options.Backend;
-    const bearerToken = options.BearerToken?.trim() || undefined;
-    const maxBodyBytes = options.MaxBodyBytes ?? DEFAULT_MAX_BODY_BYTES;
+    const defaultHost = options.Host?.trim() || DEFAULT_HOST;
+    const defaultPort =
+        options.Port !== undefined && Number.isFinite(options.Port) && options.Port >= 0
+            ? options.Port
+            : DEFAULT_PORT;
+    const bearerToken = (options.Token ?? options.BearerToken)?.trim() || undefined;
+
+    assertLoopbackOrToken(defaultHost, bearerToken);
+
+    const maxBodyBytes =
+        options.MaxBodyBytes ??
+        (options.MaxBodyMb !== undefined && Number.isFinite(options.MaxBodyMb) && options.MaxBodyMb > 0
+            ? Math.round(options.MaxBodyMb * 1024 * 1024)
+            : DEFAULT_MAX_BODY_BYTES);
     const maxConcurrency = Math.max(1, options.Concurrency ?? DEFAULT_CONCURRENCY);
     const maxTimeoutMs = Math.max(50, options.MaxTimeoutMs ?? DEFAULT_MAX_TIMEOUT_MS);
+    const nonRenderTimeoutMs = Math.min(
+        maxTimeoutMs,
+        Math.max(50, options.NonRenderTimeoutMs ?? DEFAULT_NON_RENDER_TIMEOUT_MS),
+    );
+    const tempRoot = options.TempRoot?.trim() || undefined;
     const heartbeatMs = Math.max(20, options.HeartbeatIntervalMs ?? DEFAULT_HEARTBEAT_MS);
     const videoTtlMs = Math.max(100, options.VideoTtlMs ?? DEFAULT_VIDEO_TTL_MS);
 
@@ -134,14 +203,14 @@ export function CreateRenderWorkerServer(options: RenderWorkerServerOptions): Re
         const method = req.method ?? 'GET';
         const urlPath = (req.url ?? '/').split('?')[0] ?? '/';
 
-        if (method === 'GET' && urlPath === RENDER_WORKER_ROUTES.Health) {
-            const health = await backend.Health();
-            sendJson(res, health.Healthy ? 200 : 503, health);
+        if (bearerToken && !verifyBearerToken(req.headers.authorization, bearerToken)) {
+            sendErrorJson(res, new RenderWorkerError('Unauthorized', 'Missing or invalid Bearer token.'));
             return;
         }
 
-        if (bearerToken && !verifyBearerToken(req.headers.authorization, bearerToken)) {
-            sendErrorJson(res, new RenderWorkerError('Unauthorized', 'Missing or invalid Bearer token.'));
+        if (method === 'GET' && urlPath === RENDER_WORKER_ROUTES.Health) {
+            const health = await backend.Health();
+            sendJson(res, health.Healthy ? 200 : 503, health);
             return;
         }
 
@@ -163,8 +232,15 @@ export function CreateRenderWorkerServer(options: RenderWorkerServerOptions): Re
 
         if (method === 'POST' && urlPath === RENDER_WORKER_ROUTES.Check) {
             const body = await readJsonBody<CheckRequest>(req, maxBodyBytes);
-            const result = await RunCheckJob(body, backend);
-            sendJson(res, 200, result);
+            const result = await runHeavyJobWithGuards(
+                req,
+                res,
+                nonRenderTimeoutMs,
+                (signal) => RunCheckJob(body, backend, signal, { TempRoot: tempRoot }),
+            );
+            if (result !== undefined) {
+                sendJson(res, 200, result);
+            }
             return;
         }
 
@@ -173,8 +249,8 @@ export function CreateRenderWorkerServer(options: RenderWorkerServerOptions): Re
             const result = await runHeavyJobWithGuards(
                 req,
                 res,
-                body.TimeoutMs,
-                (signal) => RunStillsJob(body, backend, signal),
+                body.TimeoutMs ?? nonRenderTimeoutMs,
+                (signal) => RunStillsJob(body, backend, signal, { TempRoot: tempRoot }),
             );
             if (result !== undefined) {
                 sendJson(res, 200, result);
@@ -187,8 +263,8 @@ export function CreateRenderWorkerServer(options: RenderWorkerServerOptions): Re
             const result = await runHeavyJobWithGuards(
                 req,
                 res,
-                undefined,
-                (signal) => RunContactSheetJob(body, backend, signal),
+                nonRenderTimeoutMs,
+                (signal) => RunContactSheetJob(body, backend, signal, { TempRoot: tempRoot }),
             );
             if (result !== undefined) {
                 sendJson(res, 200, result);
@@ -201,8 +277,8 @@ export function CreateRenderWorkerServer(options: RenderWorkerServerOptions): Re
             const result = await runHeavyJobWithGuards(
                 req,
                 res,
-                undefined,
-                (signal) => RunKeyframesJob(body, backend, signal),
+                nonRenderTimeoutMs,
+                (signal) => RunKeyframesJob(body, backend, signal, { TempRoot: tempRoot }),
             );
             if (result !== undefined) {
                 sendJson(res, 200, result);
@@ -234,77 +310,155 @@ export function CreateRenderWorkerServer(options: RenderWorkerServerOptions): Re
             Fps: body.Fps,
             DurationSeconds: body.DurationSeconds,
         });
-
-        const preStage = await StageRenderBundle(body.Bundle, { InjectPreamble: false });
-        try {
-            const check = await RunLintGate(body.Bundle, preStage.RootDir, backend);
-            if (check.BlockRender) {
-                throw new RenderWorkerError(
-                    'LintBlocked',
-                    'Composition failed pre-render lint checks.',
-                    check.Issues,
-                );
-            }
-        } finally {
-            await preStage.Cleanup();
-        }
-
-        res.writeHead(200, {
-            'Content-Type': 'application/x-ndjson; charset=utf-8',
-            'Cache-Control': 'no-cache, no-transform',
-            Connection: 'keep-alive',
+        ValidateCompositionGeometryMatch(body.Bundle, {
+            Width: body.Width,
+            Height: body.Height,
+            DurationSeconds: body.DurationSeconds,
         });
 
-        const writeEvent = (event: RenderStreamEvent): void => {
-            if (!res.writableEnded && !res.destroyed) {
-                res.write(`${JSON.stringify(event)}\n`);
+        const controller = new AbortController();
+        activeAbortControllers.add(controller);
+
+        let timedOut = false;
+        let activeTimeoutMs = maxTimeoutMs;
+        const effectiveTimeout = Math.min(
+            maxTimeoutMs,
+            typeof body.TimeoutMs === 'number' && body.TimeoutMs > 0
+                ? body.TimeoutMs
+                : maxTimeoutMs,
+        );
+        const preLintTimeoutMs = Math.min(nonRenderTimeoutMs, effectiveTimeout);
+        activeTimeoutMs = preLintTimeoutMs;
+
+        let timeoutTimer = setTimeout(() => {
+            timedOut = true;
+            controller.abort();
+        }, preLintTimeoutMs);
+        timeoutTimer.unref?.();
+
+        const onDisconnect = (): void => {
+            if (!res.writableEnded) {
+                controller.abort();
             }
         };
+        req.once('aborted', onDisconnect);
+        res.once('close', onDisconnect);
 
-        const heartbeatTimer = setInterval(() => {
-            writeEvent({ Type: 'Heartbeat' });
-        }, heartbeatMs);
-        heartbeatTimer.unref?.();
-
+        let heartbeatTimer: NodeJS.Timeout | undefined;
+        let acquired = false;
         try {
-            const renderResult = await runWithSemaphoreAndTimeout(
-                req,
-                res,
-                body.TimeoutMs,
-                (signal) =>
-                    RunRenderJob(
-                        body,
-                        backend,
-                        (progress: RenderProgress) => {
-                            writeEvent({ Type: 'Progress', Progress: progress });
-                        },
-                        signal,
-                        { SkipLintGate: true },
-                    ),
-            );
+            await semaphore.Acquire(controller.signal);
+            acquired = true;
 
-            const videoId = storeVideo(renderResult.Video);
-            const metadata: RenderResultMetadata = {
-                VideoID: videoId,
-                VideoSizeBytes: renderResult.Video.byteLength,
-                Format: renderResult.Format,
-                MimeType: renderResult.MimeType,
-                Width: renderResult.Width,
-                Height: renderResult.Height,
-                Fps: renderResult.Fps,
-                DurationSeconds: renderResult.DurationSeconds,
-                FrameCount: renderResult.FrameCount,
-                HasAudio: renderResult.HasAudio,
-                RendererVersion: renderResult.RendererVersion,
-                RenderDurationMs: renderResult.RenderDurationMs,
+            const preStage = await StageRenderBundle(body.Bundle, {
+                TempRoot: tempRoot,
+                Geometry: {
+                    Width: body.Width,
+                    Height: body.Height,
+                    Fps: body.Fps,
+                    DurationSeconds: body.DurationSeconds,
+                },
+            });
+            try {
+                if (controller.signal.aborted) {
+                    throw new RenderWorkerError('Cancelled', 'Render job was cancelled.');
+                }
+                const check = await RunLintGate(body.Bundle, preStage.RootDir, backend);
+                if (controller.signal.aborted) {
+                    throw new RenderWorkerError('Cancelled', 'Render job was cancelled.');
+                }
+                if (check.BlockRender) {
+                    throw new RenderWorkerError(
+                        'LintBlocked',
+                        'Composition failed pre-render lint checks.',
+                        check.Issues,
+                    );
+                }
+            } finally {
+                await preStage.Cleanup();
+            }
+
+            clearTimeout(timeoutTimer);
+            activeTimeoutMs = effectiveTimeout;
+            timeoutTimer = setTimeout(() => {
+                timedOut = true;
+                controller.abort();
+            }, effectiveTimeout);
+            timeoutTimer.unref?.();
+
+            res.writeHead(200, {
+                'Content-Type': 'application/x-ndjson; charset=utf-8',
+                'Cache-Control': 'no-cache, no-transform',
+                Connection: 'keep-alive',
+            });
+
+            const writeEvent = (event: RenderStreamEvent): void => {
+                if (!res.writableEnded && !res.destroyed) {
+                    res.write(`${JSON.stringify(event)}\n`);
+                }
             };
-            writeEvent({ Type: 'Result', Result: metadata });
+
+            heartbeatTimer = setInterval(() => {
+                writeEvent({ Type: 'Heartbeat' });
+            }, heartbeatMs);
+            heartbeatTimer.unref?.();
+
+            try {
+                const renderResult = await RunRenderJob(
+                    body,
+                    backend,
+                    (progress: RenderProgress) => {
+                        writeEvent({ Type: 'Progress', Progress: progress });
+                    },
+                    controller.signal,
+                    { SkipLintGate: true, TempRoot: tempRoot },
+                );
+
+                const videoId = storeVideo(renderResult.Video);
+                const metadata: RenderResultMetadata = {
+                    VideoID: videoId,
+                    VideoSizeBytes: renderResult.Video.byteLength,
+                    Format: renderResult.Format,
+                    MimeType: renderResult.MimeType,
+                    Width: renderResult.Width,
+                    Height: renderResult.Height,
+                    Fps: renderResult.Fps,
+                    DurationSeconds: renderResult.DurationSeconds,
+                    FrameCount: renderResult.FrameCount,
+                    HasAudio: renderResult.HasAudio,
+                    RendererVersion: renderResult.RendererVersion,
+                    RenderDurationMs: renderResult.RenderDurationMs,
+                };
+                writeEvent({ Type: 'Result', Result: metadata });
+            } catch (err) {
+                const mappedErr = timedOut
+                    ? new RenderWorkerError(
+                          'Timeout',
+                          `Render job exceeded timeout of ${activeTimeoutMs} ms.`,
+                      )
+                    : toRenderWorkerError(err);
+                writeEvent({ Type: 'Error', Error: mappedErr.ToBody() });
+            }
         } catch (err) {
-            const workerErr = toRenderWorkerError(err);
-            writeEvent({ Type: 'Error', Error: workerErr.ToBody() });
+            if (timedOut) {
+                throw new RenderWorkerError(
+                    'Timeout',
+                    `Render job exceeded timeout of ${activeTimeoutMs} ms.`,
+                );
+            }
+            throw err;
         } finally {
-            clearInterval(heartbeatTimer);
-            if (!res.writableEnded && !res.destroyed) {
+            if (heartbeatTimer !== undefined) {
+                clearInterval(heartbeatTimer);
+            }
+            clearTimeout(timeoutTimer);
+            req.removeListener('aborted', onDisconnect);
+            res.removeListener('close', onDisconnect);
+            activeAbortControllers.delete(controller);
+            if (acquired) {
+                semaphore.Release();
+            }
+            if (res.headersSent && !res.writableEnded && !res.destroyed) {
                 res.end();
             }
         }
@@ -350,8 +504,10 @@ export function CreateRenderWorkerServer(options: RenderWorkerServerOptions): Re
         req.once('aborted', onDisconnect);
         res.once('close', onDisconnect);
 
-        await semaphore.Acquire(controller.signal);
+        let acquired = false;
         try {
+            await semaphore.Acquire(controller.signal);
+            acquired = true;
             return await fn(controller.signal);
         } catch (err) {
             if (timedOut) {
@@ -366,7 +522,9 @@ export function CreateRenderWorkerServer(options: RenderWorkerServerOptions): Re
             req.removeListener('aborted', onDisconnect);
             res.removeListener('close', onDisconnect);
             activeAbortControllers.delete(controller);
-            semaphore.Release();
+            if (acquired) {
+                semaphore.Release();
+            }
         }
     }
 
@@ -377,7 +535,8 @@ export function CreateRenderWorkerServer(options: RenderWorkerServerOptions): Re
         get Port(): number {
             return boundPort;
         },
-        async Listen(port = 0, host = '127.0.0.1'): Promise<number> {
+        async Listen(port = defaultPort, host = defaultHost): Promise<number> {
+            assertLoopbackOrToken(host, bearerToken);
             return new Promise<number>((resolve, reject) => {
                 const onError = (err: Error): void => {
                     httpServer.removeListener('listening', onListening);
@@ -408,6 +567,8 @@ export function CreateRenderWorkerServer(options: RenderWorkerServerOptions): Re
             if (!httpServer.listening) {
                 return;
             }
+            httpServer.closeIdleConnections?.();
+            httpServer.closeAllConnections?.();
             await new Promise<void>((resolve) => {
                 httpServer.close(() => resolve());
             });
@@ -468,12 +629,9 @@ function verifyBearerToken(authHeader: string | undefined, expectedToken: string
         return false;
     }
     const provided = authHeader.slice('Bearer '.length);
-    const expectedBuf = Buffer.from(expectedToken, 'utf8');
-    const providedBuf = Buffer.from(provided, 'utf8');
-    if (expectedBuf.byteLength !== providedBuf.byteLength) {
-        return false;
-    }
-    return timingSafeEqual(expectedBuf, providedBuf);
+    const expectedHash = createHash('sha256').update(expectedToken, 'utf8').digest();
+    const providedHash = createHash('sha256').update(provided, 'utf8').digest();
+    return timingSafeEqual(expectedHash, providedHash);
 }
 
 async function readJsonBody<T>(req: http.IncomingMessage, maxBytes: number): Promise<T> {
@@ -523,7 +681,7 @@ function toRenderWorkerError(error: unknown): RenderWorkerError {
     return new RenderWorkerError('Internal', message || 'Internal render worker error.');
 }
 
-function statusCodeForErrorCode(code: RenderWorkerErrorCode): number {
+function statusCodeForErrorCode(code: RenderWorkerLocalErrorCode): number {
     switch (code) {
         case 'Unauthorized':
             return 401;
@@ -534,6 +692,7 @@ function statusCodeForErrorCode(code: RenderWorkerErrorCode): number {
         case 'InvalidRequest':
         case 'InvalidBundle':
         case 'TooManyStills':
+        case 'GEOMETRY_MISMATCH':
             return 400;
         case 'LintBlocked':
             return 422;

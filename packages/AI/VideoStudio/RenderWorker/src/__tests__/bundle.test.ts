@@ -1,4 +1,5 @@
 import * as fs from 'node:fs/promises';
+import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { RenderProjectBundle } from '@memberjunction/video-studio-core';
 import {
@@ -7,6 +8,7 @@ import {
     RenderWorkerError,
     StageRenderBundle,
     ValidateBundleRelativePath,
+    ValidateCompositionGeometryMatch,
     ValidateRenderBundle,
     ValidateRenderGeometry,
 } from '../index.js';
@@ -41,6 +43,7 @@ describe('bundle validation and staging', () => {
         'a/../../b',
         '/etc/passwd',
         'C:\\foo',
+        'C:foo',
         'a\\b',
         'a//b',
         './a',
@@ -56,6 +59,17 @@ describe('bundle validation and staging', () => {
         } catch (err) {
             expect((err as RenderWorkerError).Code).toBe('InvalidBundle');
         }
+    });
+
+    it('rejects invalid Format and non-integer Seed with InvalidBundle', () => {
+        const badFormat = createValidBundle({ Format: '4:3' as unknown as RenderProjectBundle['Format'] });
+        expect(() => ValidateRenderBundle(badFormat)).toThrow(/Bundle\.Format/);
+
+        const floatSeed = createValidBundle({ Seed: 1.5 });
+        expect(() => ValidateRenderBundle(floatSeed)).toThrow(/Bundle\.Seed/);
+
+        const nanSeed = createValidBundle({ Seed: Number.NaN });
+        expect(() => ValidateRenderBundle(nanSeed)).toThrow(/Bundle\.Seed/);
     });
 
     it('rejects case-insensitive duplicate file paths (Index.html vs index.html)', () => {
@@ -78,7 +92,7 @@ describe('bundle validation and staging', () => {
         expect(() => ValidateRenderBundle(bundle)).toThrow(/Duplicate bundle path/);
     });
 
-    it('rejects missing entry file or non-.html entry file', () => {
+    it('rejects missing entry file or non-.html/.htm entry file', () => {
         const missingEntry = createValidBundle({ EntryFile: 'missing.html' });
         expect(() => ValidateRenderBundle(missingEntry)).toThrow(/not found in Bundle\.Files/);
 
@@ -86,7 +100,7 @@ describe('bundle validation and staging', () => {
             EntryFile: 'main.js',
             Files: [{ Path: 'main.js', Content: 'console.log(1);' }],
         });
-        expect(() => ValidateRenderBundle(nonHtmlEntry)).toThrow(/must be an \.html file/);
+        expect(() => ValidateRenderBundle(nonHtmlEntry)).toThrow(/must be an \.html or \.htm file/);
     });
 
     it('rejects malformed base64 asset data', () => {
@@ -176,13 +190,52 @@ describe('bundle validation and staging', () => {
         ).toThrow(/DurationSeconds must be/);
     });
 
-    it('stages files and assets to disk and Cleanup() removes temp dir idempotently', async () => {
+    it('rejects request geometry that mismatches composition data-* attributes with GEOMETRY_MISMATCH', () => {
         const bundle = createValidBundle();
+        expect(() =>
+            ValidateCompositionGeometryMatch(bundle, { Width: 1920, Height: 1080, DurationSeconds: 2.02 }),
+        ).not.toThrow();
+
+        for (const bad of [
+            { Width: 1280, Height: 720, DurationSeconds: 2 },
+            { Width: 1920, Height: 1080, DurationSeconds: 3 },
+        ]) {
+            try {
+                ValidateCompositionGeometryMatch(bundle, bad);
+                expect.fail('Expected GEOMETRY_MISMATCH');
+            } catch (err) {
+                expect((err as RenderWorkerError).Code).toBe('GEOMETRY_MISMATCH');
+            }
+        }
+    });
+
+    it('stages .html and .htm files with CSP + preamble on line 1 (preserving line numbers) and Cleanup() removes temp dir idempotently', async () => {
+        const bundle = createValidBundle({
+            EntryFile: 'index.htm',
+            Files: [
+                {
+                    Path: 'index.htm',
+                    Content: '<!doctype html>\n<html>\n<body>\n<div id="target">Hello</div>\n</body>\n</html>',
+                },
+                {
+                    Path: 'sub/card.html',
+                    Content: '<!doctype html>\n<html><body>Card</body></html>',
+                },
+            ],
+            DataSnapshot: { Bad: '</script><script>alert(1)</script>' },
+        });
         const staged = await StageRenderBundle(bundle);
 
         const entryHtml = await fs.readFile(staged.EntryPath, 'utf8');
         expect(entryHtml).toContain('Content-Security-Policy');
         expect(entryHtml).toContain('MJVideo');
+        expect(entryHtml).not.toContain('</script><script>alert(1)');
+        // Line 4 of the original file must still be line 4 after single-line preamble injection
+        const lines = entryHtml.split('\n');
+        expect(lines[3]).toBe('<div id="target">Hello</div>');
+
+        const cardHtml = await fs.readFile(path.join(staged.RootDir, 'sub/card.html'), 'utf8');
+        expect(cardHtml).toContain('Content-Security-Policy');
 
         await staged.Cleanup();
         await expect(fs.stat(staged.RootDir)).rejects.toThrow();

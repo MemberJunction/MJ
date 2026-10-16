@@ -29,15 +29,15 @@ import {
     type RenderBackend,
 } from './backend.js';
 import {
-    ApplyPreambleToStagedBundle,
     StageRenderBundle,
+    ValidateCompositionGeometryMatch,
     ValidateRenderGeometry,
+    ValidateStrictBase64,
 } from './bundle.js';
 import { EvaluateDomRules } from './checks/dom-rules.js';
 import { BuildCheckCliFailedIssue } from './checks/hyperframes-check.js';
 import { RunStaticChecks } from './checks/static-checks.js';
 import { RunLintGate, SortCheckIssues } from './lint-gate.js';
-import { BuildPreambleOptionsFromBundle } from './preamble.js';
 
 /** Maximum number of still capture points allowed in a single `/stills` request. */
 export const MAX_STILL_POINTS = 48;
@@ -55,22 +55,31 @@ export const CONTACT_SHEET_WIDTH = 1536;
 export const MJ_MEASURE_TEXT_FAILED_CODE = 'MJ_MEASURE_TEXT_FAILED';
 
 /**
+ * Common options shared across job runners.
+ */
+export interface RunJobCommonOptions {
+    /** Optional base directory for temporary bundle staging and keyframe extraction. */
+    TempRoot?: string;
+}
+
+/**
  * Executes a `/check` job (VS-RND-5 Step 8):
- * 1. Validate request & geometry
- * 2. Stage bundle (without preamble so authored files are linted cleanly)
+ * 1. Validate request & geometry (including composition root attribute match)
+ * 2. Stage bundle (with preamble injected on a single line so line numbers stay unchanged and
+ *    `@hyperframes/lint` sees `window.__timelines` for `OnFrame`-only compositions)
  * 3. Run RND-1 lint gate (`RunLintGate`); if lint-blocked, return lint issues immediately
  *    without invoking Chromium
  * 4. Run static authored-file checks (`RunStaticChecks`)
- * 5. Inject preamble (`ApplyPreambleToStagedBundle`)
- * 6. Run `hyperframes check --json` via `backend.RunCheckCli`
- * 7. Measure rendered text at `SampleTimestampsSeconds ?? [0]` via `backend.MeasureText` and
+ * 5. Run `hyperframes check --json` via `backend.RunCheckCli`
+ * 6. Measure rendered text at `SampleTimestampsSeconds ?? [0]` via `backend.MeasureText` and
  *    evaluate DOM rules (`EvaluateDomRules`)
- * 8. Merge, dedupe on `Code + Selector + File + Line` keeping earliest `TimestampSeconds`, and sort.
+ * 7. Merge, dedupe on `Code + Selector + File + Line` keeping earliest `TimestampSeconds`, and sort.
  */
 export async function RunCheckJob(
     req: CheckRequest,
     backend: RenderBackend,
     signal?: AbortSignal,
+    options?: RunJobCommonOptions,
 ): Promise<CheckResult> {
     if (!req || typeof req !== 'object' || !req.Bundle) {
         throw new RenderWorkerError('InvalidRequest', 'CheckRequest.Bundle is required.');
@@ -80,8 +89,15 @@ export async function RunCheckJob(
         Width: req.Width,
         Height: req.Height,
     });
+    ValidateCompositionGeometryMatch(req.Bundle, {
+        Width: req.Width,
+        Height: req.Height,
+    });
 
-    const staged = await StageRenderBundle(req.Bundle, { InjectPreamble: false });
+    const staged = await StageRenderBundle(req.Bundle, {
+        TempRoot: options?.TempRoot,
+        Geometry: { Width: req.Width, Height: req.Height, Fps: 30 },
+    });
     try {
         const lintResult = await RunLintGate(req.Bundle, staged.RootDir, backend);
         if (lintResult.BlockRender) {
@@ -91,13 +107,6 @@ export async function RunCheckJob(
         const staticIssues = RunStaticChecks(req.Bundle, {
             AllowedDataLiterals: req.AllowedDataLiterals,
         });
-
-        const preambleOptions = BuildPreambleOptionsFromBundle(req.Bundle, {
-            Width: req.Width,
-            Height: req.Height,
-            Fps: 30,
-        });
-        await ApplyPreambleToStagedBundle(staged.RootDir, req.Bundle, preambleOptions);
 
         const checkJob: BackendCheckJob = {
             RootDir: staged.RootDir,
@@ -211,7 +220,7 @@ async function runDomChecksSafely(
 /**
  * Options for `RunRenderJob`.
  */
-export interface RunRenderJobOptions {
+export interface RunRenderJobOptions extends RunJobCommonOptions {
     /** If true, skips re-running `RunLintGate` (used when the HTTP server pre-checks before streaming). */
     SkipLintGate?: boolean;
 }
@@ -238,9 +247,22 @@ export async function RunRenderJob(
         Fps: req.Fps,
         DurationSeconds: req.DurationSeconds,
     });
+    ValidateCompositionGeometryMatch(req.Bundle, {
+        Width: req.Width,
+        Height: req.Height,
+        DurationSeconds: req.DurationSeconds,
+    });
 
     const startMs = Date.now();
-    const staged = await StageRenderBundle(req.Bundle, { InjectPreamble: false });
+    const staged = await StageRenderBundle(req.Bundle, {
+        TempRoot: options?.TempRoot,
+        Geometry: {
+            Width: req.Width,
+            Height: req.Height,
+            Fps: req.Fps,
+            DurationSeconds: req.DurationSeconds,
+        },
+    });
     try {
         if (!options?.SkipLintGate) {
             const check = await RunLintGate(req.Bundle, staged.RootDir, backend);
@@ -252,14 +274,6 @@ export async function RunRenderJob(
                 );
             }
         }
-
-        const preambleOptions = BuildPreambleOptionsFromBundle(req.Bundle, {
-            Width: req.Width,
-            Height: req.Height,
-            Fps: req.Fps,
-            DurationSeconds: req.DurationSeconds,
-        });
-        await ApplyPreambleToStagedBundle(staged.RootDir, req.Bundle, preambleOptions);
 
         const rendered = await backend.Render(
             {
@@ -277,6 +291,7 @@ export async function RunRenderJob(
 
         const videoBytes = await fs.readFile(rendered.OutputPath);
         const probe = await backend.Probe(rendered.OutputPath);
+        const rendererVersion = backend.GetRendererVersion?.() ?? PINNED_HYPERFRAMES_VERSION;
 
         return {
             Format: req.Bundle.Format,
@@ -288,7 +303,7 @@ export async function RunRenderJob(
             DurationSeconds: probe.DurationSeconds || req.DurationSeconds,
             FrameCount: rendered.FrameCount,
             HasAudio: probe.HasAudio,
-            RendererVersion: PINNED_HYPERFRAMES_VERSION,
+            RendererVersion: rendererVersion,
             RenderDurationMs: Math.max(1, Date.now() - startMs),
         };
     } finally {
@@ -304,6 +319,7 @@ export async function RunStillsJob(
     req: StillsRequest,
     backend: RenderBackend,
     signal?: AbortSignal,
+    options?: RunJobCommonOptions,
 ): Promise<StillsResult> {
     if (!req || typeof req !== 'object' || !req.Bundle) {
         throw new RenderWorkerError('InvalidRequest', 'StillsRequest.Bundle is required.');
@@ -331,11 +347,18 @@ export async function RunStillsJob(
         Width: req.Width,
         Height: req.Height,
     });
+    ValidateCompositionGeometryMatch(req.Bundle, {
+        Width: req.Width,
+        Height: req.Height,
+    });
 
     const imageFormat = req.ImageFormat ?? 'png';
     const mimeType = imageFormat === 'jpeg' ? 'image/jpeg' : 'image/png';
 
-    const staged = await StageRenderBundle(req.Bundle, { InjectPreamble: false });
+    const staged = await StageRenderBundle(req.Bundle, {
+        TempRoot: options?.TempRoot,
+        Geometry: { Width: req.Width, Height: req.Height, Fps: 30 },
+    });
     try {
         const check = await RunLintGate(req.Bundle, staged.RootDir, backend);
         if (check.BlockRender) {
@@ -345,13 +368,6 @@ export async function RunStillsJob(
                 check.Issues,
             );
         }
-
-        const preambleOptions = BuildPreambleOptionsFromBundle(req.Bundle, {
-            Width: req.Width,
-            Height: req.Height,
-            Fps: 30,
-        });
-        await ApplyPreambleToStagedBundle(staged.RootDir, req.Bundle, preambleOptions);
 
         const buffers = await backend.CaptureStills(
             {
@@ -380,11 +396,12 @@ export async function RunStillsJob(
                 ImageBase64: Buffer.from(bytes).toString('base64'),
             };
         });
+        const rendererVersion = backend.GetRendererVersion?.() ?? PINNED_HYPERFRAMES_VERSION;
 
         return {
             Format: req.Bundle.Format,
             Stills: stills,
-            RendererVersion: PINNED_HYPERFRAMES_VERSION,
+            RendererVersion: rendererVersion,
         };
     } finally {
         await staged.Cleanup();
@@ -408,6 +425,7 @@ export async function RunContactSheetJob(
     req: ContactSheetRequest,
     backend: RenderBackend,
     signal?: AbortSignal,
+    options?: RunJobCommonOptions,
 ): Promise<ContactSheetResult> {
     if (!req || typeof req !== 'object' || !VIDEO_FORMATS.includes(req.Format)) {
         throw new RenderWorkerError('InvalidRequest', 'ContactSheetRequest.Format must be a valid VideoFormat.');
@@ -418,8 +436,27 @@ export async function RunContactSheetJob(
 
     const columns = req.Columns ?? defaultColumnsForFormat(req.Format);
     const maxTilesPerSheet = req.MaxTilesPerSheet ?? DEFAULT_TILES_PER_SHEET;
-    if (columns < 1 || columns > 12 || maxTilesPerSheet < 1) {
+    if (
+        !Number.isInteger(columns) ||
+        columns < 1 ||
+        columns > 12 ||
+        !Number.isInteger(maxTilesPerSheet) ||
+        maxTilesPerSheet < 1
+    ) {
         throw new RenderWorkerError('InvalidRequest', 'Invalid Columns or MaxTilesPerSheet.');
+    }
+
+    for (const still of req.Stills) {
+        if (!still || typeof still !== 'object' || typeof still.Key !== 'string' || !still.Key.trim()) {
+            throw new RenderWorkerError('InvalidRequest', 'Each CapturedStill requires a non-empty Key.');
+        }
+        if (still.MimeType !== 'image/png' && still.MimeType !== 'image/jpeg') {
+            throw new RenderWorkerError(
+                'InvalidRequest',
+                `Still "${still.Key}" has invalid MimeType "${String(still.MimeType)}"; must be "image/png" or "image/jpeg".`,
+            );
+        }
+        ValidateStrictBase64(still.ImageBase64, `Stills[${still.Key}].ImageBase64`, false, 'InvalidRequest');
     }
 
     const gridChunks = chunkArray(req.Stills, maxTilesPerSheet);
@@ -443,6 +480,7 @@ export async function RunContactSheetJob(
             },
             backend,
             signal,
+            options?.TempRoot,
         );
         sheets.push(sheet);
     }
@@ -460,6 +498,7 @@ export async function RunContactSheetJob(
                 },
                 backend,
                 signal,
+                options?.TempRoot,
             );
             sheets.push(stripSheet);
         }
@@ -473,25 +512,28 @@ export async function RunContactSheetJob(
 
 /**
  * Executes a `/keyframes` job: writes the base64 MP4 to a temp file, probes duration, extracts
- * up to `MaxFrames` (`<= 24`, default `12`) scene-change + uniform-sample keyframes via
+ * up to `MaxFrames` (`<= 24`, default `16`) scene-change + uniform-sample keyframes via
  * `backend.ExtractKeyframes`, and optionally builds contact sheets when `BuildContactSheet` is true.
  */
 export async function RunKeyframesJob(
     req: KeyframeRequest,
     backend: RenderBackend,
     signal?: AbortSignal,
+    options?: RunJobCommonOptions,
 ): Promise<KeyframeResult> {
     if (!req || typeof req !== 'object' || typeof req.VideoBase64 !== 'string' || !req.VideoBase64.trim()) {
         throw new RenderWorkerError('InvalidRequest', 'KeyframeRequest.VideoBase64 is required.');
     }
-    const maxFrames = req.MaxFrames ?? 12;
+    const videoBytes = ValidateStrictBase64(req.VideoBase64, 'KeyframeRequest.VideoBase64', false, 'InvalidRequest');
+    const maxFrames = req.MaxFrames ?? 16;
     if (!Number.isInteger(maxFrames) || maxFrames < 1 || maxFrames > 24) {
         throw new RenderWorkerError('InvalidRequest', 'KeyframeRequest.MaxFrames must be an integer in 1..24.');
     }
 
-    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'mj-video-keyframes-'));
+    const tempBase = options?.TempRoot ?? os.tmpdir();
+    await fs.mkdir(tempBase, { recursive: true });
+    const tempDir = await fs.mkdtemp(path.join(tempBase, 'mj-video-keyframes-'));
     try {
-        const videoBytes = Buffer.from(req.VideoBase64, 'base64');
         const videoPath = path.join(tempDir, 'input.mp4');
         await fs.writeFile(videoPath, videoBytes);
 
@@ -521,6 +563,7 @@ export async function RunKeyframesJob(
                 { Format: inferredFormat, Stills: syntheticStills },
                 backend,
                 signal,
+                options,
             );
             sheets = sheetRes.Sheets;
         }
@@ -554,6 +597,7 @@ async function renderContactSheetHtmlToImage(
     spec: ContactSheetRenderSpec,
     backend: RenderBackend,
     signal?: AbortSignal,
+    tempRoot?: string,
 ): Promise<ContactSheetImage> {
     const { width, height } = computeContactSheetDimensions(spec.Format, spec.Columns, spec.Stills.length);
     const html = buildContactSheetHtml(spec, width, height);
@@ -568,6 +612,7 @@ async function renderContactSheetHtmlToImage(
     };
 
     const staged = await StageRenderBundle(syntheticBundle, {
+        TempRoot: tempRoot,
         Geometry: { Width: width, Height: height, Fps: 30, DurationSeconds: 1 },
     });
     try {

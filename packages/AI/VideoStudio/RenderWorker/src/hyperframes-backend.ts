@@ -4,6 +4,7 @@ import * as fssync from 'node:fs';
 import { createRequire } from 'node:module';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import {
     captureFrameToBuffer,
@@ -19,7 +20,6 @@ import {
     type CaptureSession,
 } from '@hyperframes/engine';
 import {
-    lintMediaUrls,
     lintProject,
     shouldBlockRender,
     type HyperframeLintFinding,
@@ -62,6 +62,34 @@ const nodeRequire = createRequire(import.meta.url);
 /** Timeout in milliseconds for `hyperframes check --json` CLI subprocesses (2 minutes). */
 export const CHECK_CLI_TIMEOUT_MS = 120_000;
 
+const PACKAGE_ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+
+/**
+ * Resolves the installed version of `@hyperframes/<subpackage>` from its `package.json` at runtime,
+ * falling back to `PINNED_HYPERFRAMES_VERSION` if resolution fails.
+ */
+export function GetInstalledHyperFramesPackageVersion(subpackage = 'producer'): string {
+    try {
+        const pkgJsonPath = path.join(PACKAGE_ROOT_DIR, 'node_modules', '@hyperframes', subpackage, 'package.json');
+        const raw = fssync.readFileSync(pkgJsonPath, 'utf8');
+        const parsed = JSON.parse(raw) as { version?: unknown };
+        if (typeof parsed.version === 'string' && parsed.version.trim().length > 0) {
+            return parsed.version.trim();
+        }
+    } catch {
+        // Fall back to pinned version
+    }
+    return PINNED_HYPERFRAMES_VERSION;
+}
+
+/**
+ * Resolves the installed `@hyperframes/producer` version from its `package.json` at runtime,
+ * falling back to `PINNED_HYPERFRAMES_VERSION` if resolution fails.
+ */
+export function GetInstalledHyperFramesVersion(): string {
+    return GetInstalledHyperFramesPackageVersion('producer');
+}
+
 /**
  * Production `RenderBackend` backed by `@hyperframes/producer`, `@hyperframes/engine`,
  * `@hyperframes/lint`, headless Chromium, and `ffmpeg` / `ffprobe`.
@@ -70,19 +98,18 @@ export const CHECK_CLI_TIMEOUT_MS = 120_000;
  * `@hyperframes/*` or spawns `ffmpeg` / `ffprobe`.
  */
 export class HyperFramesRenderBackend implements RenderBackend {
+    public GetRendererVersion(): string {
+        return GetInstalledHyperFramesVersion();
+    }
+
     public async Lint(dir: string, entry: string): Promise<{ Issues: CheckIssue[]; Block: boolean }> {
         const explicitEntry = entry === 'index.html' ? undefined : path.join(dir, entry);
         const report = await lintProject(dir, explicitEntry, { host: 'cli' });
 
-        const entryFullPath = path.join(dir, entry);
-        const entryHtml = await fs.readFile(entryFullPath, 'utf8');
-        const mediaDiags = await lintMediaUrls(entryHtml, { timeoutMs: 250 });
-
-        const projectFindings = report.results.flatMap((r) => r.result.findings);
-        const allDiags: HyperframeLintFinding[] = [...projectFindings, ...mediaDiags];
-        const issues = allDiags
+        const projectFindings: HyperframeLintFinding[] = report.results.flatMap((r) => r.result.findings);
+        const issues = projectFindings
             .filter((diag) => diag.severity === 'error' || diag.severity === 'warning')
-            .map((diag) => mapLintFindingToCheckIssue(diag, entry));
+            .map((diag) => mapLintFindingToCheckIssue(diag, dir, entry));
         const errorCount = issues.filter((i) => i.Severity === 'Error').length;
         const warningCount = issues.filter((i) => i.Severity === 'Warning').length;
         const block = shouldBlockRender(true, false, errorCount, warningCount);
@@ -229,12 +256,7 @@ export class HyperFramesRenderBackend implements RenderBackend {
         const browserBinary = ensureBrowserBinaryEnv();
         const fpsInt = Math.max(1, Math.round(job.Fps));
 
-        if (job.EntryFile !== 'index.html') {
-            const indexTarget = path.join(job.RootDir, 'index.html');
-            if (!fssync.existsSync(indexTarget)) {
-                await fs.copyFile(path.join(job.RootDir, job.EntryFile), indexTarget);
-            }
-        }
+        await ensureIndexHtmlForServer(job.RootDir, job.EntryFile);
 
         const server = await createFileServer({
             projectDir: job.RootDir,
@@ -258,6 +280,7 @@ export class HyperFramesRenderBackend implements RenderBackend {
         );
 
         try {
+            await configureBundleOnlyRequestInterception(session, server.url);
             await initializeSession(session);
             const buffers: Uint8Array[] = [];
             for (const timestamp of job.TimestampsSeconds) {
@@ -363,7 +386,7 @@ export class HyperFramesRenderBackend implements RenderBackend {
         return {
             Healthy: errors.length === 0,
             NodeVersion: process.version,
-            HyperFramesVersion: PINNED_HYPERFRAMES_VERSION,
+            HyperFramesVersion: GetInstalledHyperFramesVersion(),
             ChromiumVersion: chromiumVersion,
             FfmpegVersion: ffmpegVersion,
             Errors: errors,
@@ -378,13 +401,21 @@ export class HyperFramesRenderBackend implements RenderBackend {
     }
 }
 
-function mapLintFindingToCheckIssue(diag: HyperframeLintFinding, defaultFile: string): CheckIssue {
+function mapLintFindingToCheckIssue(
+    diag: HyperframeLintFinding,
+    dir: string,
+    defaultFile: string,
+): CheckIssue {
+    const rawFile = diag.file ?? defaultFile;
+    const relativeFile = path.isAbsolute(rawFile)
+        ? path.relative(dir, rawFile).split(path.sep).join('/')
+        : rawFile.split(path.sep).join('/');
     return {
         Code: diag.code,
         Category: mapLintCategory(diag.code),
         Severity: diag.severity === 'error' ? 'Error' : 'Warning',
         Message: diag.message,
-        File: diag.file ?? defaultFile,
+        File: relativeFile || defaultFile,
         Line: diag.line ?? undefined,
     };
 }
@@ -500,7 +531,7 @@ async function detectSceneChangeTimestamps(
                 '-i',
                 videoPath,
                 '-vf',
-                "select='gt(scene,0.25)',showinfo",
+                "select='gt(scene,0.3)',showinfo",
                 '-f',
                 'null',
                 '-',
@@ -585,6 +616,8 @@ async function extractSinglePngFrame(
 }
 
 function ensureBrowserBinaryEnv(): string {
+    process.env.DO_NOT_TRACK = '1';
+    process.env.HYPERFRAMES_NO_TELEMETRY = '1';
     const resolved = resolveBrowserBinary();
     if (!resolved) {
         throw new RenderWorkerError(
@@ -614,6 +647,22 @@ function resolveBrowserBinary(): string | undefined {
         return fromEngine;
     }
 
+    if (process.env.PUPPETEER_CACHE_DIR) {
+        const fromCustomCache = findFileRecursive(
+            process.env.PUPPETEER_CACHE_DIR,
+            'chrome-headless-shell',
+        );
+        if (fromCustomCache) {
+            return fromCustomCache;
+        }
+    }
+
+    const puppeteerCache = path.join(os.homedir(), '.cache', 'puppeteer', 'chrome-headless-shell');
+    const fromHomeCache = findFileRecursive(puppeteerCache, 'chrome-headless-shell');
+    if (fromHomeCache) {
+        return fromHomeCache;
+    }
+
     const systemCandidates = [
         '/usr/bin/chromium',
         '/usr/bin/chromium-browser',
@@ -625,8 +674,7 @@ function resolveBrowserBinary(): string | undefined {
         }
     }
 
-    const puppeteerCache = path.join(os.homedir(), '.cache', 'puppeteer', 'chrome-headless-shell');
-    return findFileRecursive(puppeteerCache, 'chrome-headless-shell');
+    return undefined;
 }
 
 function findFileRecursive(dir: string, targetName: string): string | undefined {
@@ -679,9 +727,7 @@ async function ensureIndexHtmlForServer(rootDir: string, entryFile: string): Pro
         return;
     }
     const indexTarget = path.join(rootDir, 'index.html');
-    if (!fssync.existsSync(indexTarget)) {
-        await fs.copyFile(path.join(rootDir, entryFile), indexTarget);
-    }
+    await fs.copyFile(path.join(rootDir, entryFile), indexTarget);
 }
 
 function resolveHyperFramesCliBinPath(): string {
@@ -699,6 +745,15 @@ function buildReducedCheckCliEnv(): NodeJS.ProcessEnv {
     }
     if (process.env.TMPDIR !== undefined) {
         env.TMPDIR = process.env.TMPDIR;
+    }
+    if (process.env.CHROME_PATH !== undefined) {
+        env.CHROME_PATH = process.env.CHROME_PATH;
+    }
+    if (process.env.PUPPETEER_EXECUTABLE_PATH !== undefined) {
+        env.PUPPETEER_EXECUTABLE_PATH = process.env.PUPPETEER_EXECUTABLE_PATH;
+    }
+    if (process.env.PUPPETEER_CACHE_DIR !== undefined) {
+        env.PUPPETEER_CACHE_DIR = process.env.PUPPETEER_CACHE_DIR;
     }
     return env;
 }

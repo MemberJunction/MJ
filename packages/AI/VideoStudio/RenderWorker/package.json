@@ -24,9 +24,12 @@
     "browser:install": "node --input-type=module -e \"import { createRequire } from 'node:module'; import { pathToFileURL } from 'node:url'; const req = createRequire(import.meta.resolve('@hyperframes/engine')); process.argv = ['node', 'puppeteer', 'browsers', 'install', 'chrome-headless-shell']; await import(pathToFileURL(req.resolve('puppeteer/lib/puppeteer/node/cli.js')).href);\""
   },
   "dependencies": {
+    "@hyperframes/core": "0.8.134",
     "@hyperframes/engine": "0.8.134",
     "@hyperframes/lint": "0.8.134",
+    "@hyperframes/parsers": "0.8.134",
     "@hyperframes/producer": "0.8.134",
+    "@hyperframes/studio-server": "0.8.134",
     "@memberjunction/video-studio-core": "6.2.0-edge.4",
     "hyperframes": "0.8.134"
   },

@@ -29,13 +29,18 @@ export const FAKE_MP4_BYTES = Buffer.from([
 ]);
 
 /**
+ * Error codes emitted by the render worker, including `GEOMETRY_MISMATCH` (HTTP 400).
+ */
+export type RenderWorkerLocalErrorCode = RenderWorkerErrorCode | 'GEOMETRY_MISMATCH';
+
+/**
  * Structured error thrown inside the render worker with an HTTP-mappable error code.
  */
 export class RenderWorkerError extends Error {
-    public readonly Code: RenderWorkerErrorCode;
+    public readonly Code: RenderWorkerLocalErrorCode;
     public readonly Issues?: CheckIssue[];
 
-    public constructor(code: RenderWorkerErrorCode, message: string, issues?: CheckIssue[]) {
+    public constructor(code: RenderWorkerLocalErrorCode, message: string, issues?: CheckIssue[]) {
         super(message);
         this.name = 'RenderWorkerError';
         this.Code = code;
@@ -47,7 +52,7 @@ export class RenderWorkerError extends Error {
      */
     public ToBody(): RenderWorkerErrorBody {
         const body: RenderWorkerErrorBody = {
-            Code: this.Code,
+            Code: this.Code as RenderWorkerErrorCode,
             Message: this.message,
         };
         if (this.Issues && this.Issues.length > 0) {
@@ -191,6 +196,8 @@ export interface RenderBackend {
     ): Promise<ExtractedKeyframe[]>;
     /** Checks runtime dependencies and returns version and health status. */
     Health(): Promise<RenderHealth>;
+    /** Returns the installed renderer version string (defaults to PINNED_HYPERFRAMES_VERSION). */
+    GetRendererVersion?(): string;
 }
 
 /**

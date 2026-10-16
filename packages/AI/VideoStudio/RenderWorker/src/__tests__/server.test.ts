@@ -1,4 +1,7 @@
+import * as fs from 'node:fs/promises';
 import * as http from 'node:http';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
     RENDER_WORKER_ROUTES,
@@ -73,27 +76,41 @@ describe('CreateRenderWorkerServer HTTP contract', () => {
         }
     });
 
-    it('serves /health 200 without auth even when BearerToken is set, and 503 when unhealthy', async () => {
+    it('requires Bearer token on /health when configured, serves 200 when healthy and 503 when unhealthy, and refuses non-loopback Host without Token', async () => {
+        expect(() =>
+            CreateRenderWorkerServer({
+                Backend: new FakeRenderBackend(),
+                Host: '0.0.0.0',
+            }),
+        ).toThrow(/non-loopback host/i);
+
         const healthyServer = CreateRenderWorkerServer({
             Backend: new FakeRenderBackend({ Healthy: true }),
-            BearerToken: 'secret-token-123',
+            Token: 'secret-token-123',
         });
         serversToClose.push(healthyServer);
-        const port1 = await healthyServer.Listen(0);
+        const port1 = await healthyServer.Listen();
 
-        const res1 = await fetch(`http://127.0.0.1:${port1}${RENDER_WORKER_ROUTES.Health}`);
+        const unauthRes = await fetch(`http://127.0.0.1:${port1}${RENDER_WORKER_ROUTES.Health}`);
+        expect(unauthRes.status).toBe(401);
+
+        const res1 = await fetch(`http://127.0.0.1:${port1}${RENDER_WORKER_ROUTES.Health}`, {
+            headers: { Authorization: 'Bearer secret-token-123' },
+        });
         expect(res1.status).toBe(200);
         const health1 = (await res1.json()) as RenderHealth;
         expect(health1.Healthy).toBe(true);
 
         const unhealthyServer = CreateRenderWorkerServer({
             Backend: new FakeRenderBackend({ Healthy: false }),
-            BearerToken: 'secret-token-123',
+            Token: 'secret-token-123',
         });
         serversToClose.push(unhealthyServer);
-        const port2 = await unhealthyServer.Listen(0);
+        const port2 = await unhealthyServer.Listen();
 
-        const res2 = await fetch(`http://127.0.0.1:${port2}${RENDER_WORKER_ROUTES.Health}`);
+        const res2 = await fetch(`http://127.0.0.1:${port2}${RENDER_WORKER_ROUTES.Health}`, {
+            headers: { Authorization: 'Bearer secret-token-123' },
+        });
         expect(res2.status).toBe(503);
         const health2 = (await res2.json()) as RenderHealth;
         expect(health2.Healthy).toBe(false);
@@ -161,7 +178,7 @@ describe('CreateRenderWorkerServer HTTP contract', () => {
         expect(unknownErr.Code).toBe('NotFound');
     });
 
-    it('returns 422 LintBlocked with issues on /render and /stills when lint fails', async () => {
+    it('returns 422 LintBlocked with issues on /render and /stills when lint fails, and 400 GEOMETRY_MISMATCH on mismatched data-width', async () => {
         const server = CreateRenderWorkerServer({
             Backend: new FakeRenderBackend(),
         });
@@ -194,6 +211,18 @@ describe('CreateRenderWorkerServer HTTP contract', () => {
         const stillsErr = (await stillsRes.json()) as RenderWorkerErrorBody;
         expect(stillsErr.Code).toBe('LintBlocked');
         expect(stillsErr.Issues?.length).toBeGreaterThan(0);
+
+        // GEOMETRY_MISMATCH -> 400
+        const mismatchBundle = createCleanBundle(
+            '<!doctype html><html><body><div data-composition-id="main" data-width="1920" data-height="1080"></div></body></html>',
+        );
+        const mismatchRes = await fetch(`http://127.0.0.1:${port}${RENDER_WORKER_ROUTES.Render}`, {
+            method: 'POST',
+            body: JSON.stringify(createValidRenderRequest(mismatchBundle)),
+        });
+        expect(mismatchRes.status).toBe(400);
+        const mismatchErr = (await mismatchRes.json()) as { Code: string; Message: string };
+        expect(mismatchErr.Code).toBe('GEOMETRY_MISMATCH');
     });
 
     it('streams Progress, Heartbeat, and Result on /render, then GET /videos/<VideoID> serves video/mp4 once and 404 on second fetch', async () => {
@@ -261,9 +290,22 @@ describe('CreateRenderWorkerServer HTTP contract', () => {
         expect(eventsB.some((e) => e.Type === 'Result')).toBe(true);
     });
 
-    it('aborts a hanging data-fake-hang render on per-request TimeoutMs with Error event Code: Timeout', async () => {
+    it('aborts a hanging data-fake-hang render on per-request TimeoutMs with Error event Code: Timeout, and times out hanging /check with 504 Timeout', async () => {
+        const hangingCheckBackend = new FakeRenderBackend();
+        hangingCheckBackend.RunCheckCli = async (_job, signal) => {
+            await new Promise<void>((_resolve, reject) => {
+                if (signal?.aborted) {
+                    reject(new Error('Aborted'));
+                    return;
+                }
+                signal?.addEventListener('abort', () => reject(new Error('Aborted')), { once: true });
+            });
+            return [];
+        };
+
         const server = CreateRenderWorkerServer({
-            Backend: new FakeRenderBackend(),
+            Backend: hangingCheckBackend,
+            NonRenderTimeoutMs: 60,
         });
         serversToClose.push(server);
         const port = await server.Listen(0);
@@ -283,59 +325,87 @@ describe('CreateRenderWorkerServer HTTP contract', () => {
         if (errorEvent && errorEvent.Type === 'Error') {
             expect(errorEvent.Error.Code).toBe('Timeout');
         }
-    });
 
-    it('aborts backend signal and releases concurrency slot when client req.destroy() disconnects mid-render', async () => {
-        const server = CreateRenderWorkerServer({
-            Backend: new FakeRenderBackend({ StepDelayMs: 15 }),
-            Concurrency: 1,
-        });
-        serversToClose.push(server);
-        const port = await server.Listen(0);
-
-        const hangBundle = createCleanBundle(
-            '<!doctype html><html><body><div data-composition-id="main" data-duration="2" data-fps="30" data-width="1280" data-height="720" data-fake-hang data-no-timeline></div></body></html>',
-        );
-        const hangPayload = JSON.stringify(createValidRenderRequest(hangBundle));
-
-        await new Promise<void>((resolve, reject) => {
-            const clientReq = http.request(
-                {
-                    hostname: '127.0.0.1',
-                    port,
-                    path: RENDER_WORKER_ROUTES.Render,
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Content-Length': Buffer.byteLength(hangPayload),
-                    },
-                },
-                (res) => {
-                    res.once('data', () => {
-                        clientReq.destroy();
-                        resolve();
-                    });
-                },
-            );
-            clientReq.once('error', () => resolve());
-            clientReq.once('timeout', () => reject(new Error('timeout')));
-            clientReq.write(hangPayload);
-            clientReq.end();
-        });
-
-        // Give the server a moment to process socket close & release the semaphore
-        await new Promise((r) => setTimeout(r, 30));
-
-        // Subsequent request must succeed promptly
-        const nextRes = await fetch(`http://127.0.0.1:${port}${RENDER_WORKER_ROUTES.Render}`, {
+        const checkRes = await fetch(`http://127.0.0.1:${port}${RENDER_WORKER_ROUTES.Check}`, {
             method: 'POST',
-            body: JSON.stringify(createValidRenderRequest()),
+            body: JSON.stringify({ Bundle: createCleanBundle(), Width: 1280, Height: 720 }),
         });
-        const events = await parseNdjsonStream(nextRes);
-        expect(events.some((e) => e.Type === 'Result')).toBe(true);
+        expect(checkRes.status).toBe(504);
+        const checkErr = (await checkRes.json()) as RenderWorkerErrorBody;
+        expect(checkErr.Code).toBe('Timeout');
     });
 
-    it('handles /stills (> 48 -> 400 TooManyStills), /contact-sheet (grid + TransitionStrip, HTML-escaped label, > 4 sheets -> TooManyStills), /check, and /keyframes (with BuildContactSheet: true)', async () => {
+    it('aborts backend signal, releases concurrency slot, and leaves TempRoot empty after success, LintBlocked, and client disconnect', async () => {
+        const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'mj-vs-temproot-test-'));
+        try {
+            const server = CreateRenderWorkerServer({
+                Backend: new FakeRenderBackend({ StepDelayMs: 15 }),
+                Concurrency: 1,
+                TempRoot: tempRoot,
+            });
+            serversToClose.push(server);
+            const port = await server.Listen(0);
+
+            // 1. LintBlocked leaves TempRoot empty
+            const dirtyBundle = createCleanBundle(
+                '<!doctype html><html><body><script>fetch("https://evil.example.com");</script></body></html>',
+            );
+            const lintBlockedRes = await fetch(`http://127.0.0.1:${port}${RENDER_WORKER_ROUTES.Render}`, {
+                method: 'POST',
+                body: JSON.stringify(createValidRenderRequest(dirtyBundle)),
+            });
+            expect(lintBlockedRes.status).toBe(422);
+            expect(await fs.readdir(tempRoot)).toEqual([]);
+
+            // 2. Client disconnect mid-render releases slot and cleans up TempRoot
+            const hangBundle = createCleanBundle(
+                '<!doctype html><html><body><div data-composition-id="main" data-duration="2" data-fps="30" data-width="1280" data-height="720" data-fake-hang data-no-timeline></div></body></html>',
+            );
+            const hangPayload = JSON.stringify(createValidRenderRequest(hangBundle));
+
+            await new Promise<void>((resolve, reject) => {
+                const clientReq = http.request(
+                    {
+                        hostname: '127.0.0.1',
+                        port,
+                        path: RENDER_WORKER_ROUTES.Render,
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Content-Length': Buffer.byteLength(hangPayload),
+                        },
+                    },
+                    (res) => {
+                        res.once('data', () => {
+                            clientReq.destroy();
+                            resolve();
+                        });
+                    },
+                );
+                clientReq.once('error', () => resolve());
+                clientReq.once('timeout', () => reject(new Error('timeout')));
+                clientReq.write(hangPayload);
+                clientReq.end();
+            });
+
+            // Give the server a moment to process socket close & release the semaphore
+            await new Promise((r) => setTimeout(r, 40));
+            expect(await fs.readdir(tempRoot)).toEqual([]);
+
+            // 3. Subsequent request succeeds promptly and cleans up TempRoot
+            const nextRes = await fetch(`http://127.0.0.1:${port}${RENDER_WORKER_ROUTES.Render}`, {
+                method: 'POST',
+                body: JSON.stringify(createValidRenderRequest()),
+            });
+            const events = await parseNdjsonStream(nextRes);
+            expect(events.some((e) => e.Type === 'Result')).toBe(true);
+            expect(await fs.readdir(tempRoot)).toEqual([]);
+        } finally {
+            await fs.rm(tempRoot, { recursive: true, force: true }).catch(() => undefined);
+        }
+    });
+
+    it('handles /stills (> 48 -> 400 TooManyStills), /contact-sheet (grid + TransitionStrip, HTML-escaped label, > 4 sheets -> TooManyStills, bad base64/mime/columns -> 400), /check, and /keyframes (with BuildContactSheet: true)', async () => {
         const server = CreateRenderWorkerServer({
             Backend: new FakeRenderBackend(),
         });
@@ -416,6 +486,35 @@ describe('CreateRenderWorkerServer HTTP contract', () => {
         expect(overflowSheetRes.status).toBe(400);
         const overflowErr = (await overflowSheetRes.json()) as RenderWorkerErrorBody;
         expect(overflowErr.Code).toBe('TooManyStills');
+
+        // /contact-sheet rejects injected ImageBase64, invalid MimeType, or non-integer Columns with 400
+        const badBase64Res = await fetch(`http://127.0.0.1:${port}${RENDER_WORKER_ROUTES.ContactSheet}`, {
+            method: 'POST',
+            body: JSON.stringify({
+                Format: '16:9',
+                Stills: [{ ...stillsResult.Stills[0]!, ImageBase64: '"><script>x</script>' }],
+            }),
+        });
+        expect(badBase64Res.status).toBe(400);
+
+        const badMimeRes = await fetch(`http://127.0.0.1:${port}${RENDER_WORKER_ROUTES.ContactSheet}`, {
+            method: 'POST',
+            body: JSON.stringify({
+                Format: '16:9',
+                Stills: [{ ...stillsResult.Stills[0]!, MimeType: 'text/html' }],
+            }),
+        });
+        expect(badMimeRes.status).toBe(400);
+
+        const badColumnsRes = await fetch(`http://127.0.0.1:${port}${RENDER_WORKER_ROUTES.ContactSheet}`, {
+            method: 'POST',
+            body: JSON.stringify({
+                Format: '16:9',
+                Stills: stillsResult.Stills,
+                Columns: '1; position:fixed',
+            }),
+        });
+        expect(badColumnsRes.status).toBe(400);
 
         // 3. /keyframes with BuildContactSheet: true
         const kfRes = await fetch(`http://127.0.0.1:${port}${RENDER_WORKER_ROUTES.Keyframes}`, {

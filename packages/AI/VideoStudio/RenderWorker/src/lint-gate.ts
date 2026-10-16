@@ -17,6 +17,8 @@ const HTML_URL_ATTR_REGEX =
     /\b(src|href|poster|data|xlink:href|action|formaction|background|ping)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>"']+))/gi;
 const HTML_SRCSET_ATTR_REGEX = /\bsrcset\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>"']+))/gi;
 const HTML_STYLE_ATTR_REGEX = /\bstyle\s*=\s*(?:"([^"]*)"|'([^']*)')/gi;
+const HTML_EVENT_HANDLER_ATTR_REGEX =
+    /\bon[a-z]+\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>"']+))/gi;
 
 const CSS_URL_REGEX = /\burl\(\s*(?:"([^"]*)"|'([^']*)'|([^)\s"']+))\s*\)/gi;
 const CSS_IMPORT_REGEX = /@import\s+(?:url\(\s*)?(?:"([^"]*)"|'([^']*)'|([^)\s"';]+))/gi;
@@ -57,7 +59,7 @@ const JS_NETWORK_API_RULES: readonly NetworkPatternRule[] = [
     { Regex: /\bserviceWorker\b/g, Label: 'serviceWorker' },
     { Regex: /\bwindow\s*\.\s*open\s*\(/g, Label: 'window.open' },
     {
-        Regex: /\b(?:window\s*\.\s*|document\s*\.\s*)?location\s*(?:=[^=]|\.\s*(?:assign|replace)\s*\(|\.\s*href\s*=)/g,
+        Regex: /\b(?:(?:window|document|self|top|parent|frames)\s*\.\s*)*location\s*(?:=[^=]|\.\s*(?:assign|replace|reload)\s*\(|\.\s*[a-zA-Z_$][a-zA-Z0-9_$]*\s*=|\[\s*["'`][^"'`]+["'`]\s*\]\s*=)/g,
         Label: 'location navigation',
     },
 ];
@@ -96,7 +98,7 @@ export function ScanAuthoredFilesForLintIssues(bundle: RenderProjectBundle): Che
             issues.push(...scanHtmlFile(file));
         } else if (lower.endsWith('.css')) {
             issues.push(...scanCssBlock(file.Content, file.Path, 1));
-        } else if (lower.endsWith('.js') || lower.endsWith('.mjs')) {
+        } else {
             issues.push(...scanJsBlock(file.Content, file.Path, 1));
         }
     }
@@ -145,7 +147,7 @@ function scanHtmlFile(file: RenderCompositionFile): CheckIssue[] {
 
     for (const match of html.matchAll(HTML_URL_ATTR_REGEX)) {
         const attrName = match[1] ?? 'attr';
-        const rawUrl = (match[2] ?? match[3] ?? match[4] ?? '').trim();
+        const rawUrl = decodeHtmlEntities((match[2] ?? match[3] ?? match[4] ?? '').trim());
         const line = computeLineNumber(html, match.index ?? 0);
         const issue = checkUrlReference(rawUrl, file.Path, line, `HTML attribute "${attrName}"`);
         if (issue) {
@@ -154,7 +156,7 @@ function scanHtmlFile(file: RenderCompositionFile): CheckIssue[] {
     }
 
     for (const match of html.matchAll(HTML_SRCSET_ATTR_REGEX)) {
-        const rawSrcset = (match[1] ?? match[2] ?? match[3] ?? '').trim();
+        const rawSrcset = decodeHtmlEntities((match[1] ?? match[2] ?? match[3] ?? '').trim());
         const line = computeLineNumber(html, match.index ?? 0);
         for (const candidate of rawSrcset.split(',')) {
             const urlPart = candidate.trim().split(/\s+/)[0] ?? '';
@@ -166,9 +168,15 @@ function scanHtmlFile(file: RenderCompositionFile): CheckIssue[] {
     }
 
     for (const match of html.matchAll(HTML_STYLE_ATTR_REGEX)) {
-        const styleContent = match[1] ?? match[2] ?? '';
+        const styleContent = decodeHtmlEntities(match[1] ?? match[2] ?? '');
         const line = computeLineNumber(html, match.index ?? 0);
         issues.push(...scanCssBlock(styleContent, file.Path, line));
+    }
+
+    for (const match of html.matchAll(HTML_EVENT_HANDLER_ATTR_REGEX)) {
+        const handlerJs = decodeHtmlEntities(match[1] ?? match[2] ?? match[3] ?? '');
+        const line = computeLineNumber(html, match.index ?? 0);
+        issues.push(...scanJsBlock(handlerJs, file.Path, line));
     }
 
     for (const match of html.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/gi)) {
@@ -184,6 +192,24 @@ function scanHtmlFile(file: RenderCompositionFile): CheckIssue[] {
     }
 
     return issues;
+}
+
+function decodeHtmlEntities(value: string): string {
+    return value
+        .replace(/&#x([0-9a-fA-F]+);?/g, (_, hex: string) => {
+            const code = Number.parseInt(hex, 16);
+            return Number.isFinite(code) && code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : '';
+        })
+        .replace(/&#([0-9]+);?/g, (_, dec: string) => {
+            const code = Number.parseInt(dec, 10);
+            return Number.isFinite(code) && code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : '';
+        })
+        .replace(/&quot;/gi, '"')
+        .replace(/&apos;/gi, "'")
+        .replace(/&#39;/g, "'")
+        .replace(/&lt;/gi, '<')
+        .replace(/&gt;/gi, '>')
+        .replace(/&amp;/gi, '&');
 }
 
 function scanCssBlock(css: string, filePath: string, baseLine: number): CheckIssue[] {

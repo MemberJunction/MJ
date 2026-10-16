@@ -21,6 +21,7 @@ export {
     type FakeRenderBackendOptions,
     type MeasuredText,
     type RenderBackend,
+    type RenderWorkerLocalErrorCode,
 } from './backend.js';
 
 export {
@@ -34,8 +35,11 @@ export {
     MIN_FRAME_DIMENSION,
     StageRenderBundle,
     ValidateBundleRelativePath,
+    ValidateCompositionGeometryMatch,
     ValidateRenderBundle,
     ValidateRenderGeometry,
+    ValidateStrictBase64,
+    type CompositionGeometryMatchParams,
     type RenderGeometryParams,
     type StageBundleOptions,
     type StagedBundle,
@@ -105,6 +109,7 @@ export {
     RunKeyframesJob,
     RunRenderJob,
     RunStillsJob,
+    type RunJobCommonOptions,
     type RunRenderJobOptions,
 } from './jobs.js';
 
@@ -112,9 +117,14 @@ export {
     CreateRenderWorkerServer,
     DEFAULT_CONCURRENCY,
     DEFAULT_HEARTBEAT_MS,
+    DEFAULT_HOST,
     DEFAULT_MAX_BODY_BYTES,
+    DEFAULT_MAX_BODY_MB,
     DEFAULT_MAX_TIMEOUT_MS,
+    DEFAULT_NON_RENDER_TIMEOUT_MS,
+    DEFAULT_PORT,
     DEFAULT_VIDEO_TTL_MS,
+    IsLoopbackHost,
     type RenderWorkerServer,
     type RenderWorkerServerOptions,
 } from './server.js';

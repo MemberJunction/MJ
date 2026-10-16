@@ -3479,13 +3479,22 @@ importers:
 
   packages/AI/VideoStudio/RenderWorker:
     dependencies:
-      '@hyperframes/engine':
+      '@hyperframes/core':
         specifier: 0.8.134
         version: 0.8.134(@types/node@24.10.11)
+      '@hyperframes/engine':
+        specifier: 0.8.134
+        version: 0.8.134
       '@hyperframes/lint':
         specifier: 0.8.134
         version: 0.8.134
+      '@hyperframes/parsers':
+        specifier: 0.8.134
+        version: 0.8.134
       '@hyperframes/producer':
+        specifier: 0.8.134
+        version: 0.8.134(@types/node@24.10.11)
+      '@hyperframes/studio-server':
         specifier: 0.8.134
         version: 0.8.134(@types/node@24.10.11)
       '@memberjunction/video-studio-core':
@@ -19972,8 +19981,8 @@ packages:
   '@hyperbrowser/sdk@0.91.8':
     resolution: {integrity: sha512-5D5aVc9QUxhd1heC7iYO0NvLSLCqhoPsIigCsLaaNHtyt91RX7HuLYWEAyGOai8I6WjfxWuzlR1D7wBtexi0zw==}
 
-  '@hyperframes/core@0.8.166':
-    resolution: {integrity: sha512-xYZtWUN7qeeNRhrU8pdxo8AsqAxbRozSoNA3XhFlvsest95JSJtc9mpoxBHcqd6iqrh6tIN3XJhrya4P/d2trQ==}
+  '@hyperframes/core@0.8.134':
+    resolution: {integrity: sha512-K4w9HBLiGxyQAhKPW/NpU9u4NSj1+c3gn//oQRJY74/1CPOVaI7L2afjDekDe2zNDOzdkMUOKn8KfBWWlapR+g==}
 
   '@hyperframes/engine@0.8.134':
     resolution: {integrity: sha512-+BbTE1Rpn4za7e0SZppY0CidZf/c5CrUEJDjsuGvUsG/lH06HqgQr26ENEam/GYNpwZme6uc793GNyLqYb/lVw==}
@@ -19982,21 +19991,15 @@ packages:
   '@hyperframes/lint@0.8.134':
     resolution: {integrity: sha512-Yf3fMzR03QOsXUogkj8j+D9/8PxedsB12kqwtJIL7kw4Zhpl0g8qvLvkMY8c9BVARZCl0bhjFBcr0GOaxNo8xA==}
 
-  '@hyperframes/lint@0.8.166':
-    resolution: {integrity: sha512-XMQBRvE5lNXztCw/h8f+G7edIJW0ALI6QD3DGUWKOkDoHPJW9Kns0cW6GusV6gFsq2NhKU8mYs8BRiSNkCRVBg==}
-
   '@hyperframes/parsers@0.8.134':
     resolution: {integrity: sha512-Vf+yzEiDPtrKKaOM55HW/j/Dro61OruWeIjDPMz+HgpRzYtrZ1yxuA9lyOhrvYC06zQiTSKcQHx5jmvMPl4cpA==}
-
-  '@hyperframes/parsers@0.8.166':
-    resolution: {integrity: sha512-pLD9OquYkvRs83gY/xfWW25qdzhg45qtiP7CbF/qRjQwBHrxaNPCEp0vSQ7uT9G9iqkf+E/cyvoz+wo+t3Mfuw==}
 
   '@hyperframes/producer@0.8.134':
     resolution: {integrity: sha512-kCRuOzZNjTx2eiIOVY2HBb0Xsc9uDKH6lZKzOkgYtZpwc9jqR2dnTLPE4GDqcfwwsUdbhSQVdzsRtmC07xxm+w==}
     engines: {node: '>=22'}
 
-  '@hyperframes/studio-server@0.8.166':
-    resolution: {integrity: sha512-CndvnqdeQnrysf9ySHCg6xfyn4KJrILULWBHcuiFc4MCIOnifYUGpB3OHErId642Zm8j39C47E4rzXLERXodeA==}
+  '@hyperframes/studio-server@0.8.134':
+    resolution: {integrity: sha512-bw06XkiT/7d6VWQmdpT7IhTJz7Quc4vYBYZvVSEk5nBrKPB73ViLqWWVQ/lKC7P7EFnpk/ZqEIdavy5Tfaxqsw==}
 
   '@iconify/types@2.0.0':
     resolution: {integrity: sha512-+wluvCrRhXrhyOmRDJ3q8mux9JkKy5SJ/v8ol2tu4FVjyYvtEzkc/3pK15ET6RKg4b4w4BmTk1+gsCUhf21Ykg==}
@@ -24375,6 +24378,9 @@ packages:
   bplist-parser@0.3.2:
     resolution: {integrity: sha512-apC2+fspHGI3mMKj+dGevkGo/tCqVB8jMb6i+OX+E29p0Iposz07fABkRIfVUPNd5A5VbuOz1bZbnmkKLYF+wQ==}
     engines: {node: '>= 5.10.0'}
+
+  bpm-detective@2.0.5:
+    resolution: {integrity: sha512-FaHFT5WDCR5zwtjVTqxk01o2MDaf22ORHityX1lxMamBcVNX6NWXB6hw7nx4fmlEseRMv0xfuSybINZylljLfA==}
 
   brace-expansion@1.1.15:
     resolution: {integrity: sha512-EwOCDEex4quD37XhqM3omwtMoJjr//isUZz1JopUNWms+4Z2ViyM/k1YIRePpoVNnQhENnxtFjLaxNHrT7xIUg==}
@@ -29494,10 +29500,6 @@ packages:
     engines: {node: '>=18.0'}
     peerDependencies:
       postcss: ^8.4.31
-
-  postcss-selector-parser@7.1.1:
-    resolution: {integrity: sha512-orRsuYpJVw8LdAwqqLykBj9ecS5/cRHlI5+nvTo8LcCKmzDmqVORXtOIYEEQuL9D4BxtA1lm5isAqzQZCoQ6Eg==}
-    engines: {node: '>=4'}
 
   postcss-selector-parser@7.1.6:
     resolution: {integrity: sha512-7qASPzhKF2l2KLboRZux8CCTRMdGiV08vWmyKzPz22qZ7ZjQBOeY7rNzNoCLSUiftJ7HUq0GERHmxw/t0dCdMw==}
@@ -37319,13 +37321,13 @@ snapshots:
       - encoding
       - utf-8-validate
 
-  '@hyperframes/core@0.8.166(@types/node@24.10.11)':
+  '@hyperframes/core@0.8.134(@types/node@24.10.11)':
     dependencies:
       '@chenglou/pretext': 0.0.5
-      '@hyperframes/lint': 0.8.166
-      '@hyperframes/parsers': 0.8.166
-      '@hyperframes/studio-server': 0.8.166(@types/node@24.10.11)
-      acorn: 8.19.0
+      '@hyperframes/lint': 0.8.134
+      '@hyperframes/parsers': 0.8.134
+      '@hyperframes/studio-server': 0.8.134(@types/node@24.10.11)
+      bpm-detective: 2.0.5
       linkedom: 0.18.13
       postcss: 8.5.25
       wawoff2: 2.0.1
@@ -37335,17 +37337,16 @@ snapshots:
       - '@types/node'
       - canvas
 
-  '@hyperframes/engine@0.8.134(@types/node@24.10.11)':
+  '@hyperframes/engine@0.8.134':
     dependencies:
       '@hono/node-server': 2.1.5(hono@4.11.7)
-      '@hyperframes/core': 0.8.166(@types/node@24.10.11)
-      '@hyperframes/parsers': 0.8.166
+      '@hyperframes/core': 0.8.134(@types/node@24.10.11)
+      '@hyperframes/parsers': 0.8.134
       hono: 4.11.7
       linkedom: 0.18.13
       puppeteer: 25.14.0
       puppeteer-core: 25.14.0
     transitivePeerDependencies:
-      - '@types/node'
       - bufferutil
       - canvas
       - proxy-agent
@@ -37355,18 +37356,6 @@ snapshots:
   '@hyperframes/lint@0.8.134':
     dependencies:
       '@hyperframes/parsers': 0.8.134
-      acorn: 8.19.0
-      acorn-walk: 8.3.5
-      htmlparser2: 10.1.0
-      linkedom: 0.18.13
-      postcss: 8.5.25
-      postcss-selector-parser: 7.1.6
-    transitivePeerDependencies:
-      - canvas
-
-  '@hyperframes/lint@0.8.166':
-    dependencies:
-      '@hyperframes/parsers': 0.8.166
       acorn: 8.19.0
       acorn-walk: 8.3.5
       htmlparser2: 10.1.0
@@ -37387,26 +37376,14 @@ snapshots:
     transitivePeerDependencies:
       - canvas
 
-  '@hyperframes/parsers@0.8.166':
-    dependencies:
-      '@babel/parser': 7.29.7
-      acorn: 8.19.0
-      acorn-walk: 8.3.5
-      entities: 7.0.1
-      linkedom: 0.18.13
-      magic-string: 0.30.21
-      recast: 0.23.11
-    transitivePeerDependencies:
-      - canvas
-
   '@hyperframes/producer@0.8.134(@types/node@24.10.11)':
     dependencies:
       '@hono/node-server': 2.1.5(hono@4.11.7)
-      '@hyperframes/core': 0.8.166(@types/node@24.10.11)
-      '@hyperframes/engine': 0.8.134(@types/node@24.10.11)
+      '@hyperframes/core': 0.8.134(@types/node@24.10.11)
+      '@hyperframes/engine': 0.8.134
       '@hyperframes/lint': 0.8.134
-      '@hyperframes/parsers': 0.8.166
-      '@hyperframes/studio-server': 0.8.166(@types/node@24.10.11)
+      '@hyperframes/parsers': 0.8.134
+      '@hyperframes/studio-server': 0.8.134(@types/node@24.10.11)
       hono: 4.11.7
       linkedom: 0.18.13
       postcss: 8.5.25
@@ -37420,10 +37397,10 @@ snapshots:
       - utf-8-validate
       - yauzl
 
-  '@hyperframes/studio-server@0.8.166(@types/node@24.10.11)':
+  '@hyperframes/studio-server@0.8.134(@types/node@24.10.11)':
     dependencies:
-      '@hyperframes/core': 0.8.166(@types/node@24.10.11)
-      '@hyperframes/parsers': 0.8.166
+      '@hyperframes/core': 0.8.134(@types/node@24.10.11)
+      '@hyperframes/parsers': 0.8.134
       hono: 4.11.7
       linkedom: 0.18.13
       postcss: 8.5.25
@@ -42478,6 +42455,8 @@ snapshots:
     dependencies:
       big-integer: 1.6.52
 
+  bpm-detective@2.0.5: {}
+
   brace-expansion@1.1.15:
     dependencies:
       balanced-match: 1.0.2
@@ -47403,7 +47382,7 @@ snapshots:
 
   mlly@1.8.0:
     dependencies:
-      acorn: 8.15.0
+      acorn: 8.19.0
       pathe: 2.0.3
       pkg-types: 1.3.1
       ufo: 1.6.3
@@ -48598,13 +48577,13 @@ snapshots:
     dependencies:
       icss-utils: 5.1.0(postcss@8.5.25)
       postcss: 8.5.25
-      postcss-selector-parser: 7.1.1
+      postcss-selector-parser: 7.1.6
       postcss-value-parser: 4.2.0
 
   postcss-modules-scope@3.2.1(postcss@8.5.25):
     dependencies:
       postcss: 8.5.25
-      postcss-selector-parser: 7.1.1
+      postcss-selector-parser: 7.1.6
 
   postcss-modules-values@4.0.0(postcss@8.5.25):
     dependencies:
@@ -48614,11 +48593,6 @@ snapshots:
   postcss-safe-parser@7.0.1(postcss@8.5.25):
     dependencies:
       postcss: 8.5.25
-
-  postcss-selector-parser@7.1.1:
-    dependencies:
-      cssesc: 3.0.0
-      util-deprecate: 1.0.2
 
   postcss-selector-parser@7.1.6:
     dependencies:

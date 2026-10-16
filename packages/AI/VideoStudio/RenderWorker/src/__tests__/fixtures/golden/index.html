@@ -38,7 +38,7 @@
   </style>
 </head>
 <body>
-  <div id="root" data-composition-id="golden-comp" data-duration="3" data-fps="30" data-width="1280" data-height="720" data-no-timeline>
+  <div id="root" data-composition-id="golden-comp" data-duration="3" data-fps="30" data-width="1280" data-height="720">
     <audio id="tone" src="assets/tone.wav" data-start="0" data-duration="3"></audio>
     <div id="card" data-mj-bound>
       <img id="badge" src="assets/badge.png" alt="Badge" />
@@ -68,12 +68,6 @@
 
       if (window.MJVideo && typeof window.MJVideo.OnFrame === "function") {
         window.MJVideo.OnFrame(updateAtTime);
-      }
-      if (!window.__hf) {
-        window.__hf = {
-          duration: 3,
-          seek: function(t) { updateAtTime(t); }
-        };
       }
       updateAtTime(0);
     })();

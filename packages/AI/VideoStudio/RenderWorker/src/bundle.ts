@@ -123,8 +123,8 @@ export function ValidateRenderBundle(bundle: RenderProjectBundle): void {
     }
 
     ValidateBundleRelativePath(bundle.EntryFile, 'EntryFile');
-    if (!/\.html$/i.test(bundle.EntryFile)) {
-        throw new RenderWorkerError('InvalidBundle', `EntryFile "${bundle.EntryFile}" must be an .html file.`);
+    if (!/\.html?$/i.test(bundle.EntryFile)) {
+        throw new RenderWorkerError('InvalidBundle', `EntryFile "${bundle.EntryFile}" must be an .html or .htm file.`);
     }
 
     validateFilesAndAssets(bundle);
@@ -254,9 +254,76 @@ export function ValidateRenderGeometry(params: RenderGeometryParams): void {
     }
 }
 
+export interface CompositionGeometryMatchParams {
+    Width: number;
+    Height: number;
+    DurationSeconds?: number;
+}
+
+/**
+ * Validates that the entry HTML's `data-width`, `data-height`, and `data-duration` attributes
+ * (if present on `[data-composition-id]`) match the request's `Width`, `Height`, and `DurationSeconds`,
+ * throwing `RenderWorkerError('GEOMETRY_MISMATCH', ...)` (HTTP 400) on mismatch.
+ */
+export function ValidateCompositionGeometryMatch(
+    bundle: RenderProjectBundle,
+    params: CompositionGeometryMatchParams,
+): void {
+    if (!bundle || !Array.isArray(bundle.Files)) {
+        return;
+    }
+    const entry = bundle.Files.find((f) => f && f.Path === bundle.EntryFile);
+    if (!entry || typeof entry.Content !== 'string') {
+        return;
+    }
+
+    const compositionTagMatch = /<[a-z0-9-]+\b[^>]*\bdata-composition-id\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)[^>]*>/i.exec(
+        entry.Content,
+    );
+    const scope = compositionTagMatch ? compositionTagMatch[0] : entry.Content;
+
+    const widthMatch = /\bdata-width\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>"']+))/i.exec(scope);
+    if (widthMatch) {
+        const rawWidth = (widthMatch[1] ?? widthMatch[2] ?? widthMatch[3] ?? '').trim();
+        const attrWidth = Number.parseFloat(rawWidth);
+        if (!Number.isFinite(attrWidth) || attrWidth !== params.Width) {
+            throw new RenderWorkerError(
+                'GEOMETRY_MISMATCH',
+                `Entry HTML data-width (${rawWidth}) does not match request Width (${params.Width}).`,
+            );
+        }
+    }
+
+    const heightMatch = /\bdata-height\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>"']+))/i.exec(scope);
+    if (heightMatch) {
+        const rawHeight = (heightMatch[1] ?? heightMatch[2] ?? heightMatch[3] ?? '').trim();
+        const attrHeight = Number.parseFloat(rawHeight);
+        if (!Number.isFinite(attrHeight) || attrHeight !== params.Height) {
+            throw new RenderWorkerError(
+                'GEOMETRY_MISMATCH',
+                `Entry HTML data-height (${rawHeight}) does not match request Height (${params.Height}).`,
+            );
+        }
+    }
+
+    if (params.DurationSeconds !== undefined) {
+        const durationMatch = /\bdata-duration\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>"']+))/i.exec(scope);
+        if (durationMatch) {
+            const rawDuration = (durationMatch[1] ?? durationMatch[2] ?? durationMatch[3] ?? '').trim();
+            const attrDuration = Number.parseFloat(rawDuration);
+            if (!Number.isFinite(attrDuration) || Math.abs(attrDuration - params.DurationSeconds) > 0.05) {
+                throw new RenderWorkerError(
+                    'GEOMETRY_MISMATCH',
+                    `Entry HTML data-duration (${rawDuration}) does not match request DurationSeconds (${params.DurationSeconds}) within 0.05s tolerance.`,
+                );
+            }
+        }
+    }
+}
+
 /**
  * Stages a validated `RenderProjectBundle` into a fresh `mkdtemp` directory and injects the preamble
- * into every `.html` file (unless `options.InjectPreamble === false`).
+ * into every `.html` / `.htm` file (unless `options.InjectPreamble === false`).
  */
 export async function StageRenderBundle(
     bundle: RenderProjectBundle,
@@ -273,7 +340,7 @@ export async function StageRenderBundle(
         const entryPath = resolveInsideRoot(rootDir, bundle.EntryFile);
         for (const file of bundle.Files) {
             const targetPath = resolveInsideRoot(rootDir, file.Path);
-            const isHtml = /\.html$/i.test(file.Path);
+            const isHtml = /\.html?$/i.test(file.Path);
             const content =
                 injectPreamble && isHtml
                     ? InjectPreambleIntoHtml(file.Content, preambleOptions)
@@ -313,7 +380,7 @@ export async function StageRenderBundle(
 
 /**
  * Injects the CSP `<meta>`, bundled default `@font-face` `<style>`, and `window.MJVideo`
- * preamble into every `.html` file of a bundle that was staged with `InjectPreamble: false`,
+ * preamble into every `.html` / `.htm` file of a bundle that was staged with `InjectPreamble: false`,
  * and stages the worker's bundled SIL OFL default fonts (`Inter` and `JetBrains Mono`) into `__mj_fonts/`.
  */
 export async function ApplyPreambleToStagedBundle(
@@ -323,7 +390,7 @@ export async function ApplyPreambleToStagedBundle(
 ): Promise<void> {
     await stageBundledDefaultFonts(rootDir);
     for (const file of bundle.Files) {
-        if (!/\.html$/i.test(file.Path)) {
+        if (!/\.html?$/i.test(file.Path)) {
             continue;
         }
         const targetPath = resolveInsideRoot(rootDir, file.Path);
@@ -361,26 +428,40 @@ function registerUniqueRelativePath(seenLowerPaths: Set<string>, relPath: string
     seenLowerPaths.add(key);
 }
 
-function validateBase64String(dataBase64: string, label: string): void {
+/**
+ * Validates that `dataBase64` is a well-formed base64 string and returns the decoded `Buffer`.
+ */
+export function ValidateStrictBase64(
+    dataBase64: string,
+    label: string,
+    allowEmpty = true,
+    errorCode: 'InvalidBundle' | 'InvalidRequest' = 'InvalidBundle',
+): Buffer {
     if (typeof dataBase64 !== 'string') {
-        throw new RenderWorkerError('InvalidBundle', `Asset "${label}" DataBase64 must be a string.`);
+        throw new RenderWorkerError(errorCode, `${label} must be a base64 string.`);
     }
     const stripped = dataBase64.replace(/\s+/g, '');
     if (stripped.length === 0) {
-        return;
+        if (!allowEmpty) {
+            throw new RenderWorkerError(errorCode, `${label} must be a non-empty base64 string.`);
+        }
+        return Buffer.alloc(0);
     }
     if (
         stripped.length % 4 !== 0 ||
         !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(stripped)
     ) {
-        throw new RenderWorkerError('InvalidBundle', `Asset "${label}" contains invalid base64 data.`);
+        throw new RenderWorkerError(errorCode, `${label} contains invalid base64 data.`);
     }
+    return Buffer.from(stripped, 'base64');
+}
+
+function validateBase64String(dataBase64: string, label: string): void {
+    ValidateStrictBase64(dataBase64, `Asset "${label}"`, true, 'InvalidBundle');
 }
 
 function decodeBase64Strict(dataBase64: string, label: string): Buffer {
-    validateBase64String(dataBase64, label);
-    const stripped = dataBase64.replace(/\s+/g, '');
-    return Buffer.from(stripped, 'base64');
+    return ValidateStrictBase64(dataBase64, `Asset "${label}"`, true, 'InvalidBundle');
 }
 
 function expectedAspectRatio(format: VideoFormat): number {

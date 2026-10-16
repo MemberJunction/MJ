@@ -152,8 +152,23 @@ describe('MJVideo runtime preamble in Node vm', () => {
         ]).toEqual(seqAt15First);
     });
 
-    it('produces deterministic Noise(key, ...) values in [0, 1) and fires OnFrame on __hf.seek(t)', () => {
-        const { Window } = runPreambleInVm({ Seed: 777 });
+    it('fires MJVideo.OnFrame and author window.__timelines[id].seek when HyperFrames replaces window.__hf.seek', () => {
+        const authorSeekTimes: number[] = [];
+        const host = createFakeElement({ 'data-composition-id': 'animated-card', 'data-duration': '4' });
+        const timelines: Record<string, { duration: () => number; seek: (t: number) => void }> = {
+            'animated-card': {
+                duration: () => 4,
+                seek: (t: number) => {
+                    authorSeekTimes.push(t);
+                },
+            },
+        };
+
+        const { Window, FireDomContentLoaded } = runPreambleInVm(
+            { Seed: 777, DurationSeconds: 4 },
+            [host],
+            timelines,
+        );
         const n1 = Window.MJVideo.Noise('particle', 3, 'x');
         const n2 = Window.MJVideo.Noise('particle', 3, 'x');
         const n3 = Window.MJVideo.Noise('particle', 4, 'x');
@@ -165,30 +180,41 @@ describe('MJVideo runtime preamble in Node vm', () => {
 
         const observedTimes: number[] = [];
         Window.MJVideo.OnFrame((t) => observedTimes.push(t));
+        FireDomContentLoaded();
 
-        // Even if HyperFrames replaces window.__hf.seek later, our setter wraps it
-        let underlyingCalledWith = -1;
+        // Simulate HyperFrames runtime replacing window.__hf.seek with a function that seeks window.__timelines
         Window.__hf.seek = (t: number): void => {
-            underlyingCalledWith = t;
+            for (const tl of Object.values(timelines)) {
+                tl.seek(t);
+            }
         };
 
         Window.__hf.seek(2.25);
-        expect(underlyingCalledWith).toBe(2.25);
+        expect(authorSeekTimes).toEqual([2.25]);
         expect(observedTimes).toEqual([2.25]);
+        expect(host.hasAttribute('data-no-timeline')).toBe(false);
     });
 
-    it('auto-tags static [data-composition-id] hosts with data-no-timeline when no timeline is registered', () => {
-        const staticHost = createFakeElement({ 'data-composition-id': 'static-card' });
-        const animatedHost = createFakeElement({ 'data-composition-id': 'animated-card' });
+    it('registers a synthetic timeline in window.__timelines for OnFrame-only compositions and never sets data-no-timeline', () => {
+        const staticHost = createFakeElement({ 'data-composition-id': 'static-card', 'data-duration': '3' });
+        const timelines: Record<string, { duration: () => number; seek: (t: number) => void }> = {};
 
-        const { FireDomContentLoaded } = runPreambleInVm(
-            {},
-            [staticHost, animatedHost],
-            { 'animated-card': { seek: () => undefined } },
+        const { Window, FireDomContentLoaded } = runPreambleInVm(
+            { DurationSeconds: 3 },
+            [staticHost],
+            timelines,
         );
 
+        const observedTimes: number[] = [];
+        Window.MJVideo.OnFrame((t) => observedTimes.push(t));
         FireDomContentLoaded();
-        expect(staticHost.hasAttribute('data-no-timeline')).toBe(true);
-        expect(animatedHost.hasAttribute('data-no-timeline')).toBe(false);
+
+        expect(staticHost.hasAttribute('data-no-timeline')).toBe(false);
+        expect(typeof timelines['static-card']?.seek).toBe('function');
+        expect(timelines['static-card']?.duration()).toBe(3);
+
+        // Simulate HyperFrames runtime calling window.__timelines['static-card'].seek(t) directly
+        timelines['static-card']!.seek(1.5);
+        expect(observedTimes).toEqual([1.5]);
     });
 });
