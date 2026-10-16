@@ -1,9 +1,6 @@
 import { BaseEntity, ValidationResult } from "@memberjunction/core";
 import { MJTemplateContentEntity, MJTemplateEntity, MJTemplateParamEntity } from "../generated/entity_subclasses";
-import { NormalizeUUID, OrdinalCompare, RegisterClass, UUIDsEqual } from "@memberjunction/global";
-
-/** The content-row fields {@link MJTemplateEntityExtended.SelectHighestPriorityContent} reads. */
-export type TemplateContentSelectionFields = Pick<MJTemplateContentEntity, 'ID' | 'Type' | 'Priority' | '__mj_CreatedAt'>;
+import { RegisterClass, UUIDsEqual } from "@memberjunction/global";
 
 @RegisterClass(BaseEntity, 'MJ: Templates')
 export class MJTemplateEntityExtended extends MJTemplateEntity {
@@ -33,26 +30,18 @@ export class MJTemplateEntityExtended extends MJTemplateEntity {
     }
 
     /**
-     * The content a template renders: lowest `Priority` (optionally of one type), ties to the oldest row, then the lowest
-     * normalised ID, so every caller picks the same row whatever order the rows arrived in.
-     */
-    public static SelectHighestPriorityContent<T extends TemplateContentSelectionFields>(contents: readonly T[], type?: string): T | undefined {
-        const wanted = type?.trim().toLowerCase();
-        const candidates = wanted ? contents.filter((c) => c.Type?.trim().toLowerCase() === wanted) : [...contents];
-        const time = (d: Date | null | undefined): number => (d ? new Date(d).getTime() : 0);
-        return candidates.sort((a, b) =>
-            (a.Priority - b.Priority)
-            || (time(a.__mj_CreatedAt) - time(b.__mj_CreatedAt))
-            || OrdinalCompare(NormalizeUUID(a.ID), NormalizeUUID(b.ID)))[0];
-    }
-
-    /**
-     * Returns the highest priority content for the template (see {@link SelectHighestPriorityContent}).
+     * Returns the highest priority content for the template
      * @param type If provided, returns the highest priority content of the specified type
      * @returns
      */
-    public GetHighestPriorityContent(type?: string): MJTemplateContentEntity | undefined {
-        return MJTemplateEntityExtended.SelectHighestPriorityContent(this.Content, type);
+    public GetHighestPriorityContent(type?: string): MJTemplateContentEntity {
+        if (type) {
+            return this.Content.filter(c => c.Type.trim().toLowerCase() === type.trim().toLowerCase())
+                .sort((a, b) => a.Priority - b.Priority)[0];
+        }
+        else {
+            return this.Content.sort((a, b) => a.Priority - b.Priority)[0];
+        }
     }
 
     /**

@@ -53,7 +53,6 @@ import {
     AggregateValue,
     CompositeKey,
     DatasetItemFilterType,
-    DatasetReadOptions,
     DatasetResultType,
     DatasetItemResultType,
     DatasetStatusResultType,
@@ -5698,16 +5697,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
      * dataset inside one transaction expects to see its own rows.
      *
      * {@link ProviderBase.RefreshWithinTransaction} is the exception: the caller owns the
-     * transaction and is waiting for the reload, so its pass's metadata reads carry
-     * `JoinAmbientTransaction` and see the caller's uncommitted rows (MJ#4836). A detached engine
-     * reload passes `ReadOnPool`, which puts any dataset's reads on the pool.
+     * transaction and is waiting for the reload, so the metadata reads join that transaction and
+     * see the caller's uncommitted rows (MJ#4836).
      */
-    protected datasetReadsOnPool(datasetName: string, readOptions?: Readonly<DatasetReadOptions>): boolean {
-        if (readOptions?.ReadOnPool === true) {
-            return true;
-        }
+    protected datasetReadsOnPool(datasetName: string): boolean {
         return datasetName === GenericDatabaseProvider._mjMetadataDatasetName
-            && readOptions?.JoinAmbientTransaction !== true;
+            && !this.MetadataReadsJoinTransaction;
     }
 
     /**
@@ -5781,7 +5776,6 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         contextUser?: UserInfo,
         providerToUse?: IMetadataProvider,
         forceRefresh?: boolean,
-        datasetReadOptions?: Readonly<DatasetReadOptions>,
     ): Promise<DatasetResultType> {
         const provider = (providerToUse ?? this) as GenericDatabaseProvider;
         const schema = provider.MJCoreSchemaName;
@@ -5797,7 +5791,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             `INNER JOIN ${provider.QuoteSchemaAndView(schema, 'vwEntities')} e ON di.${provider.QuoteIdentifier('EntityID')} = e.${provider.QuoteIdentifier('ID')} ` +
             `WHERE d.${provider.QuoteIdentifier('Name')} = ${provider.BuildParameterPlaceholder(0)}`;
 
-        const readOptions: ExecuteSQLOptions = { ignoreAmbientTransaction: this.datasetReadsOnPool(datasetName, datasetReadOptions) };
+        const readOptions: ExecuteSQLOptions = { ignoreAmbientTransaction: this.datasetReadsOnPool(datasetName) };
         const items = await provider.ExecuteSQL<Record<string, unknown>>(sSQL, [datasetName], readOptions, contextUser);
 
         if (!items || items.length === 0) {
@@ -6080,7 +6074,6 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         itemFilters?: DatasetItemFilterType[],
         contextUser?: UserInfo,
         providerToUse?: IMetadataProvider,
-        datasetReadOptions?: Readonly<DatasetReadOptions>,
     ): Promise<DatasetStatusResultType> {
         const overallStart = performance.now();
         const provider = (providerToUse ?? this) as GenericDatabaseProvider;
@@ -6097,7 +6090,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             `INNER JOIN ${provider.QuoteSchemaAndView(schema, 'vwEntities')} e ON di.${provider.QuoteIdentifier('EntityID')} = e.${provider.QuoteIdentifier('ID')} ` +
             `WHERE d.${provider.QuoteIdentifier('Name')} = ${provider.BuildParameterPlaceholder(0)}`;
 
-        const readOptions: ExecuteSQLOptions = { ignoreAmbientTransaction: this.datasetReadsOnPool(datasetName, datasetReadOptions) };
+        const readOptions: ExecuteSQLOptions = { ignoreAmbientTransaction: this.datasetReadsOnPool(datasetName) };
         const items = await provider.ExecuteSQL<Record<string, unknown>>(
             sSQL, [datasetName], readOptions, contextUser,
         );
@@ -6866,7 +6859,6 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 await this.BeginPhysicalTransaction();
                 this._affinity.OpenEpoch();
                 this._affinity.Bind(membership);
-                DatabaseProviderBase.InstancesInTransaction.add(this);
                 return;
             }
             if (!this.HasPhysicalTransaction) {
@@ -7111,7 +7103,6 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
      */
     private clearTransactionState(): void {
         this._affinity.CloseEpoch();
-        DatabaseProviderBase.InstancesInTransaction.delete(this);
         this._transactionDepth = 0;
         this._doomed = false;
         this.clearSavepointState();

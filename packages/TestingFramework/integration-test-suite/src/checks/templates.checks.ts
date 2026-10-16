@@ -49,18 +49,6 @@ function engineTemplate(ctx: IntegrationCheckContext) {
     return t;
 }
 
-/**
- * The Text content the fixture template renders, from the engine cache. `GetHighestPriorityContent` answers undefined
- * for a template without such content; the fixture always has one, so its absence is a failure, thrown here.
- */
-function engineTextContent(ctx: IntegrationCheckContext): MJTemplateContentEntity {
-    const content = engineTemplate(ctx).GetHighestPriorityContent('Text');
-    if (!content) {
-        throw new Error('fixture template has no Text content in the engine cache');
-    }
-    return content;
-}
-
 async function resolveID(entity: string, filter: string, user: UserInfo): Promise<string> {
     const r = await new RunView().RunView({ EntityName: entity, ExtraFilter: filter, Fields: ['ID'], ResultType: 'simple', MaxRows: 1 }, user);
     const id = (r.Results?.[0] as { ID?: string } | undefined)?.ID;
@@ -75,7 +63,10 @@ export const TemplatesChecks: NamedCheck[] = [
         Fn: async (ctx: IntegrationCheckContext) => {
             const engine = TemplateEngineServer.Instance;
             const t = engineTemplate(ctx);
-            const content = engineTextContent(ctx);
+            const content = t.GetHighestPriorityContent('Text');
+            Assert(content != null, 'template content must resolve (attribution guard — review P2)');
+            Assert(content != null, 'template content must resolve (attribution guard — review P2)');
+            Assert(content != null, 'fixture template has no Text content in the engine cache');
 
             const data = { name: 'World', count: 3 };
             const first = await engine.RenderTemplate(t, content, data);
@@ -150,7 +141,7 @@ export const TemplatesChecks: NamedCheck[] = [
         Fn: async (ctx: IntegrationCheckContext) => {
             const engine = TemplateEngineServer.Instance;
             const t = engineTemplate(ctx);
-            const content = engineTextContent(ctx);
+            const content = t.GetHighestPriorityContent('Text');
 
             // Missing required 'name' → validation blocks the render with the param named
             const bad = await engine.RenderTemplate(t, content, {});
@@ -175,7 +166,7 @@ export const TemplatesChecks: NamedCheck[] = [
         Fn: async (ctx: IntegrationCheckContext) => {
             const engine = TemplateEngineServer.Instance;
             const t = engineTemplate(ctx);
-            const content = engineTextContent(ctx);
+            const content = t.GetHighestPriorityContent('Text');
 
             const script = await engine.RenderTemplate(t, content, { name: '<script>alert(1)</script>', count: 1 });
             Assert(script.Success, `script-injection render failed: ${script.Message}`);
@@ -199,7 +190,7 @@ export const TemplatesChecks: NamedCheck[] = [
             // The engine-cached template's virtual Content collection carries our exact saved row + text
             const t = engineTemplate(ctx);
             Assert(t.Content.some((c) => UUIDsEqual(c.ID, f.Content.ID)), 'virtual Content collection contains the fixture content row');
-            const cached = engineTextContent(ctx);
+            const cached = t.GetHighestPriorityContent('Text');
             AssertEqual(cached.TemplateText, f.TemplateText, 'engine-cached TemplateText byte-equals the saved entity text');
 
             // Round-trip an UPDATE: entity save → forced Config refresh → new text renders
@@ -209,7 +200,7 @@ export const TemplatesChecks: NamedCheck[] = [
             await engine.Config(true, ctx.User, ctx.Provider);
 
             const t2 = engineTemplate(ctx);
-            const c2 = engineTextContent(ctx);
+            const c2 = t2.GetHighestPriorityContent('Text');
             AssertEqual(c2.TemplateText, newText, 'refreshed engine cache carries the UPDATED text');
             const r = await engine.RenderTemplate(t2, c2, { name: 'X' }, true, true);
             Assert(r.Success, `post-update render failed: ${r.Message}`);

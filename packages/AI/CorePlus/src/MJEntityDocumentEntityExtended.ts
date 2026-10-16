@@ -1,17 +1,18 @@
 import { BaseEntity, CompositeKey } from "@memberjunction/core";
-import { MJEntityDocumentEntity, MJTemplateContentEntity } from "@memberjunction/core-entities";
-import { RegisterClass } from "@memberjunction/global";
-import { LinkedTemplateText, type TemplateContentVersion } from "./LinkedTemplateText";
+import { MJEntityDocumentEntity } from "@memberjunction/core-entities";
+import { RegisterClass, UUIDsEqual } from "@memberjunction/global";
+import { TemplateEngineBase } from "@memberjunction/templates-base-types";
 
 /**
  * Extended client-side subclass for `MJ: Entity Documents` that exposes a
- * `TemplateText` virtual property mirroring the content the linked Template
- * renders (its highest-priority `TemplateContent`), as `MJAIPromptEntityExtended` does:
+ * `TemplateText` virtual property mirroring the underlying linked Template's
+ * primary `TemplateContent.TemplateText`. Mirrors the pattern established for
+ * `MJ: AI Prompts` (`MJAIPromptEntityExtended`):
  *
  *   - `TemplateText` is NOT a database column on `EntityDocument` — it's read
  *     from the linked Template + TemplateContent via `TemplateEngineBase` on
- *     load (and read through on every access), and pushed back to the same
- *     Template/TemplateContent records on save (the save-side wiring lives in `MJEntityDocumentEntityServer` in
+ *     load, and pushed back to the same Template/TemplateContent records on
+ *     save (the save-side wiring lives in `MJEntityDocumentEntityServer` in
  *     `@memberjunction/core-entities-server`).
  *   - Lets `mj-sync` use `TemplateText` in entity-document metadata files
  *     (with `@file:`) just like it does for AI Prompts, instead of having to
@@ -23,29 +24,24 @@ import { LinkedTemplateText, type TemplateContentVersion } from "./LinkedTemplat
  */
 @RegisterClass(BaseEntity, "MJ: Entity Documents")
 export class MJEntityDocumentEntityExtended extends MJEntityDocumentEntity {
-    private readonly linkedTemplateText = new LinkedTemplateText();
-
     /** Pre-mutation snapshot of TemplateText, used by `TemplateTextDirty` and reset post-Save. */
-    protected get _originalTemplateText(): string {
-        return this.linkedTemplateText.OriginalText;
-    }
-    protected set _originalTemplateText(value: string) {
-        this.linkedTemplateText.OriginalText = value;
-    }
+    protected _originalTemplateText: string = "";
+    private _templateText: string = "";
 
     /**
-     * Virtual property holding the active template body for this EntityDocument: the content the linked Template
-     * renders, read through the template engine's cache; pushed back into that same row on `Save` (server-side subclass).
+     * Virtual property holding the active template body for this EntityDocument.
+     * Loaded from the linked Template's primary `TemplateContent.TemplateText`
+     * on `InnerLoad` / `LoadFromData`; pushed back into that same record on
+     * `Save` (server-side subclass).
      */
     public get TemplateText(): string {
-        this.RefreshTemplateTextFromCache();
-        return this.linkedTemplateText.Text;
+        return this._templateText;
     }
     public set TemplateText(value: string) {
-        this.linkedTemplateText.Text = value;
+        this._templateText = value;
     }
     public get TemplateTextDirty(): boolean {
-        return this.linkedTemplateText.Dirty;
+        return this._templateText !== this._originalTemplateText;
     }
 
     /** Routes `Set('TemplateText', ...)` into the virtual property so the
@@ -79,32 +75,41 @@ export class MJEntityDocumentEntityExtended extends MJEntityDocumentEntity {
         return result;
     }
 
-    /** Adopts the cached rendered content when it is newer than the text's source, never over an unsaved edit. */
-    protected RefreshTemplateTextFromCache(): void {
-        this.linkedTemplateText.RefreshFrom(this.CurrentTemplateContent());
-    }
-
-    /** The content the linked template renders (`GetHighestPriorityContent`), from its provider's template cache. */
-    protected CurrentTemplateContent(): MJTemplateContentEntity | undefined {
-        return LinkedTemplateText.RenderedContent(this, this.TemplateID);
-    }
-
-    /** Records the content row the template text now matches; the server subclass calls it after saving the text. */
-    protected RecordTemplateTextSource(content: TemplateContentVersion): void {
-        this.linkedTemplateText.RecordSource(content);
-    }
-
     /**
-     * Resolves the linked template body from the template engine's cache. Without a `TemplateID` (before the first
-     * save) the text is empty, so a later edit and Save() go through the create-Template branch in the server subclass.
+     * Resolve the linked template body via `TemplateEngineBase`'s cached
+     * `TemplateContents` (no extra RunView). If the EntityDocument has no
+     * `TemplateID` (initial state before first save), `TemplateText` is set
+     * to empty so subsequent edits + Save() go through the create-Template
+     * branch in the server subclass.
+     *
+     * When multiple TemplateContent rows exist for a single Template
+     * (priority-stacked, multi-language, etc.), this loads the oldest one —
+     * matching the convention used by `MJAIPromptEntityExtended`.
      */
     protected async LoadTemplateText(): Promise<boolean> {
-        return this.linkedTemplateText.Load(this.CurrentTemplateContent());
+        if (this.TemplateID && !this.TemplateText) {
+            const candidates = TemplateEngineBase.Instance.TemplateContents.filter(
+                tc => UUIDsEqual(tc.TemplateID, this.TemplateID)
+            );
+            if (candidates.length > 0) {
+                const sorted = candidates.sort((a, b) => {
+                    const aTime = a.__mj_CreatedAt ? new Date(a.__mj_CreatedAt).getTime() : 0;
+                    const bTime = b.__mj_CreatedAt ? new Date(b.__mj_CreatedAt).getTime() : 0;
+                    return aTime - bTime;
+                });
+                this.TemplateText = sorted[0].TemplateText || "";
+                this._originalTemplateText = this.TemplateText;
+                return true;
+            }
+        }
+        this.TemplateText = "";
+        this._originalTemplateText = "";
+        return false;
     }
 
-    /** Ensures the template engine cache is warm, then loads template text. */
+    /** Ensures the TemplateEngineBase cache is warm, then loads template text. */
     protected async LoadRelatedEntities(): Promise<void> {
-        await LinkedTemplateText.EnsureLoaded(this);
+        await TemplateEngineBase.Instance.Config(false, this.ContextCurrentUser);
         await this.LoadTemplateText();
     }
 }

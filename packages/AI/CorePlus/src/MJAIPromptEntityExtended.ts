@@ -1,49 +1,28 @@
 import { BaseEntity, CompositeKey } from "@memberjunction/core";
-import { MJAIPromptEntity, MJTemplateContentEntity, MJTemplateParamEntity } from "@memberjunction/core-entities";
+import { MJAIPromptEntity, MJTemplateParamEntity } from "@memberjunction/core-entities";
 import { compareStringsByLine, RegisterClass, UUIDsEqual } from "@memberjunction/global";
-import { LinkedTemplateText, type TemplateContentVersion } from "./LinkedTemplateText";
+import { TemplateEngineBase } from "@memberjunction/templates-base-types";
 
 @RegisterClass(BaseEntity, "MJ: AI Prompts")
 export class MJAIPromptEntityExtended extends MJAIPromptEntity {
-    private readonly linkedTemplateText = new LinkedTemplateText();
-
-    /** The text as last loaded or saved. */
-    protected get _originalTemplateText(): string {
-        return this.linkedTemplateText.OriginalText;
-    }
-    protected set _originalTemplateText(value: string) {
-        this.linkedTemplateText.OriginalText = value;
-    }
-
+    /**
+     * private property to hold the template text.
+     */
+    protected _originalTemplateText: string = "";
+    private _templateText: string = "";
     /**
      * Virtual property to hold the template text.
      * This property is used to create or update the Template and Template Contents entity records automatically
-     * whenever the AIPrompt is saved. Reads through to the template engine's cache.
+     * whenever the AIPrompt is saved.
      */
     public get TemplateText(): string {
-        this.RefreshTemplateTextFromCache();
-        return this.linkedTemplateText.Text;
+        return this._templateText;
     }
     public set TemplateText(value: string) {
-        this.linkedTemplateText.Text = value;
+        this._templateText = value;
     }
     public get TemplateTextDirty(): boolean {
-        return this.linkedTemplateText.Dirty;
-    }
-
-    /** Adopts the cached rendered content when it is newer than the text's source, never over an unsaved edit. */
-    protected RefreshTemplateTextFromCache(): void {
-        this.linkedTemplateText.RefreshFrom(this.CurrentTemplateContent());
-    }
-
-    /** The template content this prompt renders (`GetHighestPriorityContent`), from its provider's template cache. */
-    protected CurrentTemplateContent(): MJTemplateContentEntity | undefined {
-        return LinkedTemplateText.RenderedContent(this, this.TemplateID);
-    }
-
-    /** Records the content row the template text now matches; the server subclass calls it after saving the text. */
-    protected RecordTemplateTextSource(content: TemplateContentVersion): void {
-        this.linkedTemplateText.RecordSource(content);
+        return this._templateText !== this._originalTemplateText;        
     }
 
     override Set(FieldName: string, Value: any): void {
@@ -108,7 +87,27 @@ export class MJAIPromptEntityExtended extends MJAIPromptEntity {
     }
 
     protected async LoadTemplateText() {
-        return this.linkedTemplateText.Load(this.CurrentTemplateContent());
+        if (this.TemplateID && !this.TemplateText) {
+            // Use TemplateEngineBase's cached TemplateContents instead of RunView
+            const tcResult = TemplateEngineBase.Instance.TemplateContents.filter(tc => UUIDsEqual(tc.TemplateID, this.TemplateID));
+            if (tcResult && tcResult.length > 0) {
+                // Sort by __mj_CreatedAt ASC and take first row (oldest)
+                const sorted = tcResult.sort((a, b) => {
+                    const aTime = a.__mj_CreatedAt ? new Date(a.__mj_CreatedAt).getTime() : 0;
+                    const bTime = b.__mj_CreatedAt ? new Date(b.__mj_CreatedAt).getTime() : 0;
+                    return aTime - bTime; // ASC order
+                });
+                const tc = sorted[0];
+                // we found the Template Contents, set the TemplateText property
+                this.TemplateText = tc.TemplateText || "";
+                this._originalTemplateText = this.TemplateText; // store the original text for comparison later
+                return true; // we successfully loaded the Template Contents
+            }
+        }
+        // if we did not find any Template Contents, we can set the TemplateText to an empty string
+        this.TemplateText = "";
+        this._originalTemplateText = ""; // reset original text
+        return false; // should be able to load Template Contents even if not found
     }
 
     /**
@@ -117,8 +116,8 @@ export class MJAIPromptEntityExtended extends MJAIPromptEntity {
      */
     protected async LoadTemplateParams(): Promise<boolean> {
         if (this.TemplateID) {
-            // Use the template engine's cached TemplateParams instead of RunView
-            const params = LinkedTemplateText.EngineFor(this).TemplateParams.filter(tp => UUIDsEqual(tp.TemplateID, this.TemplateID));
+            // Use TemplateEngineBase's cached TemplateParams instead of RunView
+            const params = TemplateEngineBase.Instance.TemplateParams.filter(tp => UUIDsEqual(tp.TemplateID, this.TemplateID));
             // Sort by Name ASC to match original behavior
             this._templateParams = params.sort((a, b) => (a.Name || '').localeCompare(b.Name || ''));
             return true;
@@ -131,7 +130,7 @@ export class MJAIPromptEntityExtended extends MJAIPromptEntity {
 
 
     protected async LoadRelatedEntities(): Promise<void> {
-        await LinkedTemplateText.EnsureLoaded(this);
+        await TemplateEngineBase.Instance.Config(false, this.ContextCurrentUser);
         await Promise.all([
             this.LoadTemplateText(),
             this.LoadTemplateParams()

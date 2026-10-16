@@ -60,9 +60,6 @@ export class TemplateEntityLoader extends nunjucks.Loader {
     }
 }
 
-/** A compiled template and the text it was compiled from, so a saved edit is recompiled. */
-type CompiledTemplateEntry = { Text: string; Template: nunjucks.Template };
-
 /**
  * TemplateEngine is used for accessing template metadata/caching it, and rendering templates
  */
@@ -150,7 +147,6 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
     public get TemplateContents(): MJTemplateContentEntity[] { return this.base.TemplateContents; }
     public get TemplateParams(): MJTemplateParamEntity[] { return this.base.TemplateParams; }
     public FindTemplate(templateName: string): MJTemplateEntityExtended { return this.base.FindTemplate(templateName); }
-    public FindTemplateByID(templateID: string): MJTemplateEntityExtended | undefined { return this.base.FindTemplateByID(templateID); }
 
     public SetupNunjucks(): void {
         this._templateLoader = new TemplateEntityLoader();
@@ -225,7 +221,7 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
      * Compiled templates per environment, then per template content ID, so a raw compile is never served to an
      * escaping render.
      */
-    private _templateCache = new WeakMap<nunjucks.Environment, Map<string, CompiledTemplateEntry>>();
+    private _templateCache = new WeakMap<nunjucks.Environment, Map<string, nunjucks.Template>>();
 
     /** {@link GetReferencedVariables} results by template text. */
     private _referencedVariablesCache = new Map<string, ReferencedVariablesResult>();
@@ -380,16 +376,14 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
         if (templateContentId && cacheTemplate) {
             let envCache = this._templateCache.get(env);
             if (!envCache) {
-                envCache = new Map<string, CompiledTemplateEntry>();
+                envCache = new Map<string, nunjucks.Template>();
                 this._templateCache.set(env, envCache);
             }
-            const cached = envCache.get(templateContentId);
-            // a saved edit keeps the content ID but changes the text, so the text is compared too
-            if (cached && cached.Text === templateText) {
-                return cached.Template;
+            let template = envCache.get(templateContentId);
+            if (!template) {
+                template = this.createNunjucksTemplate(templateText, env);
+                envCache.set(templateContentId, template);
             }
-            const template = this.createNunjucksTemplate(templateText, env);
-            envCache.set(templateContentId, { Text: templateText, Template: template });
             return template;
         }
         else {
@@ -435,7 +429,7 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
 
     /** Clears the compiled-template cache and the cached {@link GetReferencedVariables} results. */
     public ClearTemplateCache() {
-        this._templateCache = new WeakMap<nunjucks.Environment, Map<string, CompiledTemplateEntry>>();
+        this._templateCache = new WeakMap<nunjucks.Environment, Map<string, nunjucks.Template>>();
         this._referencedVariablesCache.clear();
     }
 

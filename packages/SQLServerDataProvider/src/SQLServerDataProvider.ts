@@ -667,37 +667,14 @@ export class SQLServerDataProvider
   public override async Refresh(providerToUse?: IMetadataProvider): Promise<boolean> {
     // An explicit Refresh must really reload: base Refresh() is a silent no-op while a save is in
     // flight, which left callers (CodeGen after a fire-and-forget prompt-run save) on stale metadata.
-    if (!(await this.prepareForMetadataReload('Refresh'))) {
-      return false;
-    }
-    return super.Refresh(providerToUse);
-  }
-
-  /**
-   * Mirrors {@link Refresh}, and rescans the view column order afterwards as {@link Config} does after a refresh: the
-   * base runs its own reload pass here instead of going through Config.
-   */
-  public override async RefreshWithinTransaction(providerToUse?: IMetadataProvider): Promise<boolean> {
-    if (!(await this.prepareForMetadataReload('RefreshWithinTransaction'))) {
-      return false;
-    }
-    const refreshed = await super.RefreshWithinTransaction(providerToUse);
-    if (refreshed) {
-      await this.loadViewColumnOrderCache();
-    }
-    return refreshed;
-  }
-
-  /** Waits for in-flight saves, then invalidates this pool's view-column-order cache; false (logged) on timeout. */
-  private async prepareForMetadataReload(callerName: string): Promise<boolean> {
     if (!(await this.waitForSavesToFinish())) {
-      LogError(`SQLServerDataProvider.${callerName}: ${this._refreshSuspendCount} save(s) still in flight after ${SQLServerDataProvider.REFRESH_WAIT_TIMEOUT_MS}ms; metadata was NOT refreshed`);
+      LogError(`SQLServerDataProvider.Refresh: ${this._refreshSuspendCount} save(s) still in flight after ${SQLServerDataProvider.REFRESH_WAIT_TIMEOUT_MS}ms; metadata was NOT refreshed`);
       return false;
     }
     if (this._pool) {
       SQLServerDataProvider.InvalidateViewColumnOrderCache(this._pool);
     }
-    return true;
+    return super.Refresh(providerToUse);
   }
 
   /** Resolves true once no save is in flight, or false after REFRESH_WAIT_TIMEOUT_MS. */

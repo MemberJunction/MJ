@@ -25,7 +25,6 @@ vi.mock('../generated/entity_subclasses', () => ({
 }));
 
 import { MJTemplateEntityExtended } from '../custom/MJTemplateEntityExtended';
-import { MJTemplateContentEntity } from '../generated/entity_subclasses';
 
 // Helper to create a mock content object with the required properties
 function createContent(type: string, priority: number): { Type: string; Priority: number } {
@@ -56,11 +55,6 @@ function createParam(
  */
 function bare<T>(ctor: new (...args: never[]) => T): T {
     return new (ctor as unknown as new () => T)();
-}
-
-/** A Template Content row (this file mocks the entity class) carrying the fields the content selection reads. */
-function contentRow(fields: Pick<MJTemplateContentEntity, 'ID' | 'Type' | 'Priority' | '__mj_CreatedAt'>): MJTemplateContentEntity {
-    return Object.assign(bare(MJTemplateContentEntity), fields);
 }
 
 describe('MJTemplateEntityExtended', () => {
@@ -163,7 +157,7 @@ describe('MJTemplateEntityExtended', () => {
 
             const result = template.GetHighestPriorityContent();
             expect(result).toBeDefined();
-            expect(result?.Priority).toBe(1);
+            expect(result.Priority).toBe(1);
         });
 
         it('should filter by type when type is provided', () => {
@@ -175,8 +169,8 @@ describe('MJTemplateEntityExtended', () => {
 
             const result = template.GetHighestPriorityContent('HTML');
             expect(result).toBeDefined();
-            expect(result?.Priority).toBe(3);
-            expect(result?.Type).toBe('HTML');
+            expect(result.Priority).toBe(3);
+            expect(result.Type).toBe('HTML');
         });
 
         it('should match type case-insensitively when filtering', () => {
@@ -188,7 +182,7 @@ describe('MJTemplateEntityExtended', () => {
 
             const result = template.GetHighestPriorityContent('html');
             expect(result).toBeDefined();
-            expect(result?.Priority).toBe(2);
+            expect(result.Priority).toBe(2);
         });
 
         it('should handle whitespace in type filter', () => {
@@ -199,7 +193,7 @@ describe('MJTemplateEntityExtended', () => {
 
             const result = template.GetHighestPriorityContent('  HTML  ');
             expect(result).toBeDefined();
-            expect(result?.Priority).toBe(5);
+            expect(result.Priority).toBe(5);
         });
 
         it('should return undefined when Content is empty', () => {
@@ -225,28 +219,7 @@ describe('MJTemplateEntityExtended', () => {
 
             const result = template.GetHighestPriorityContent();
             expect(result).toBeDefined();
-            expect(result?.Priority).toBe(2);
-        });
-
-        it('breaks a priority tie by the oldest row, then the lowest ID, whatever order the rows arrived in', () => {
-            const newer = contentRow({ ID: 'b', Type: 'Text', Priority: 1, __mj_CreatedAt: new Date('2026-02-01') });
-            const older = contentRow({ ID: 'c', Type: 'Text', Priority: 1, __mj_CreatedAt: new Date('2026-01-01') });
-            const olderLowerID = contentRow({ ID: 'a', Type: 'Text', Priority: 1, __mj_CreatedAt: new Date('2026-01-01') });
-            template.Content = [newer, older];
-            expect(template.GetHighestPriorityContent()).toBe(older);
-            template.Content = [older, newer];
-            expect(template.GetHighestPriorityContent()).toBe(older);
-            template.Content = [older, olderLowerID];
-            expect(template.GetHighestPriorityContent()).toBe(olderLowerID);
-        });
-
-        it('breaks an ID tie the same way whatever the ID case (SQL Server upper, PostgreSQL lower) and locale', () => {
-            const at = new Date('2026-01-01');
-            const upperB = { ID: 'B0000000-0000-0000-0000-000000000000', Type: 'Text', Priority: 1, __mj_CreatedAt: at };
-            const lowerA = { ID: 'a0000000-0000-0000-0000-000000000000', Type: 'Text', Priority: 1, __mj_CreatedAt: at };
-            // ordinal on the raw IDs would pick 'B…' (upper-case sorts before lower-case); normalised, 'a…' wins
-            expect(MJTemplateEntityExtended.SelectHighestPriorityContent([upperB, lowerA])).toBe(lowerA);
-            expect(MJTemplateEntityExtended.SelectHighestPriorityContent([lowerA, upperB])).toBe(lowerA);
+            expect(result.Priority).toBe(2);
         });
     });
 

@@ -19,7 +19,7 @@ vi.mock('@memberjunction/core-entities', () => {
 type ForbiddenSearchInput = Parameters<SearchEngine['LogForbiddenSearch']>[0];
 
 const {
-    mockSearch, mockStreamSearch, mockLogForbidden, mockResolvePermission, mockRenderTemplate, mockFindTemplateByID,
+    mockSearch, mockStreamSearch, mockLogForbidden, mockResolvePermission, mockRenderTemplate, mockFindTemplate,
     mockLogError, mockLogStatusEx, cachedSkills, Verdict, PERMITTED,
 } = vi.hoisted(() => {
     /** A resolver verdict, built the way the resolver builds one. */
@@ -36,7 +36,7 @@ const {
         // behaves as before this gate existed, instead of tripping on an undefined verdict.
         mockResolvePermission: vi.fn(async (_input: ResolvePermissionInput): Promise<EffectivePermission> => PERMITTED),
         mockRenderTemplate: vi.fn(async () => ({ Success: true, Output: 'rendered query' })),
-        mockFindTemplateByID: vi.fn((_id: string): { GetHighestPriorityContent: () => { TemplateText: string } } | undefined => undefined),
+        mockFindTemplate: vi.fn((_id: string): { GetHighestPriorityContent: () => { TemplateText: string } } | undefined => undefined),
         mockLogError: vi.fn((_message: string) => {}),
         mockLogStatusEx: vi.fn((_options: LogStatusOptions | string) => {}),
         /** What AIEngine.Instance.Skills holds for the test. */
@@ -55,7 +55,7 @@ vi.mock('@memberjunction/aiengine', () => ({
 }));
 
 vi.mock('@memberjunction/templates', () => ({
-    TemplateEngineServer: { Instance: { Config: vi.fn(async () => {}), FindTemplateByID: mockFindTemplateByID, RenderTemplate: mockRenderTemplate } }
+    TemplateEngineServer: { Instance: { Config: vi.fn(async () => {}), FindTemplate: mockFindTemplate, RenderTemplate: mockRenderTemplate } }
 }));
 
 vi.mock('@memberjunction/core', () => ({
@@ -113,7 +113,7 @@ describe('AgentPreExecutionRAG', () => {
             vi.mocked(SearchEngineBase.Instance.GetActiveScopeByID).mockImplementation((id: string) => scopes[id]);
             mockSearch.mockResolvedValue(emptySearch);
             mockResolvePermission.mockResolvedValue(PERMITTED);
-            mockFindTemplateByID.mockReturnValue(undefined);
+            mockFindTemplate.mockReturnValue(undefined);
             cachedSkills.length = 0;
         });
 
@@ -199,7 +199,7 @@ describe('AgentPreExecutionRAG', () => {
 
         it('gates before the query template is rendered; the Forbidden row carries the message, not a rendering', async () => {
             vi.mocked(SearchEngineBase.Instance.GetAgentScopes).mockReturnValue([rowFor('s1', 'tmpl-1')]);
-            mockFindTemplateByID.mockReturnValue({ GetHighestPriorityContent: () => ({ TemplateText: '{{ lastUserMessage }}' }) });
+            mockFindTemplate.mockReturnValue({ GetHighestPriorityContent: () => ({ TemplateText: '{{ lastUserMessage }}' }) });
             await run();
             // Control: permitted, the template renders and its output is the query.
             expect(mockRenderTemplate).toHaveBeenCalledTimes(1);

@@ -622,18 +622,6 @@ describe('TemplateEngineServer', () => {
             expect(result2.Output).toBe('second');
         });
 
-        it('recompiles a cached template when its content text changes', async () => {
-            const templateEntity = {
-                ID: 't-1',
-                ValidateTemplateInput: vi.fn().mockReturnValue({ Success: true, Errors: [] }),
-                GetParametersForContent: vi.fn().mockReturnValue([]),
-            };
-            const first = await engine.RenderTemplate(templateEntity as never, { ID: 'tc-9', TemplateText: 'A {{ x }}' } as never, { x: 1 });
-            const second = await engine.RenderTemplate(templateEntity as never, { ID: 'tc-9', TemplateText: 'B {{ x }}' } as never, { x: 1 });
-            expect(first.Output).toBe('A 1');
-            expect(second.Output).toBe('B 1');
-        });
-
         it('renders raw when autoescape is false and escapes by default', async () => {
             const templateEntity = {
                 ID: 't-1',

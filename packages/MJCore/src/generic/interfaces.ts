@@ -262,8 +262,7 @@ export class PotentialDuplicateResponse {
 export interface IEntityDataProvider {
     Config(configData: ProviderConfigDataBase): Promise<boolean>
 
-    /** @returns the record's row, or null when no row matches the key */
-    Load(entity: BaseEntity, CompositeKey: CompositeKey, EntityRelationshipsToLoad: string[], user: UserInfo) : Promise<{} | null>
+    Load(entity: BaseEntity, CompositeKey: CompositeKey, EntityRelationshipsToLoad: string[], user: UserInfo) : Promise<{}>
 
     Save(entity: BaseEntity, user: UserInfo, options: EntitySaveOptions) : Promise<{}>
 
@@ -1078,16 +1077,14 @@ export interface IMetadataProvider {
      * @param contextUser
      * @param providerToUse
      * @param forceRefresh When true, bypasses all caching and fetches fresh data from the database
-     * @param readOptions Where the reads run — see {@link DatasetReadOptions}
      */
-    GetDatasetByName(datasetName: string, itemFilters?: DatasetItemFilterType[], contextUser?: UserInfo, providerToUse?: IMetadataProvider, forceRefresh?: boolean, readOptions?: Readonly<DatasetReadOptions>): Promise<DatasetResultType>;
+    GetDatasetByName(datasetName: string, itemFilters?: DatasetItemFilterType[], contextUser?: UserInfo, providerToUse?: IMetadataProvider, forceRefresh?: boolean): Promise<DatasetResultType>;
     /**
      * Retrieves the date status information for a dataset and all its items from the server. This method will match the datasetName and itemFilters to the server's dataset and item filters to determine a match
      * @param datasetName 
      * @param itemFilters 
-     * @param readOptions Where the reads run — see {@link DatasetReadOptions}
      */
-    GetDatasetStatusByName(datasetName: string, itemFilters?: DatasetItemFilterType[], contextUser?: UserInfo, providerToUse?: IMetadataProvider, readOptions?: Readonly<DatasetReadOptions>): Promise<DatasetStatusResultType>;
+    GetDatasetStatusByName(datasetName: string, itemFilters?: DatasetItemFilterType[], contextUser?: UserInfo, providerToUse?: IMetadataProvider): Promise<DatasetStatusResultType>;
 
     /**
      * Gets a database by name, if required, and caches it in a format available to the client (e.g. IndexedDB, LocalStorage, File, etc). The cache method is Provider specific
@@ -1973,14 +1970,6 @@ export type DatasetItemResultType = {
 export type DatasetItemFilterType = {
     ItemCode: string;
     Filter: string;
-}
-
-/** Per-call options for a provider's dataset reads. Providers without database transactions ignore them. */
-export type DatasetReadOptions = {
-    /** Read inside the ambient transaction, even the metadata dataset (only {@link ProviderBase.RefreshWithinTransaction} sets it). */
-    JoinAmbientTransaction?: boolean;
-    /** Read on the pool even while a transaction is open (a detached engine reload). Wins over `JoinAmbientTransaction`. */
-    ReadOnPool?: boolean;
 }
 
 /**

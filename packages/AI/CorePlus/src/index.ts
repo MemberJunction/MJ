@@ -30,7 +30,6 @@ export * from './realtime-session-events';
 export * from './client-tool-media';
 export * from './artifact-tool-library';
 
-export * from './LinkedTemplateText';
 export * from './MJAIPromptEntityExtended';
 export * from './MJAIPromptCategoryEntityExtended';
 export * from './MJAIAgentEntityExtended';

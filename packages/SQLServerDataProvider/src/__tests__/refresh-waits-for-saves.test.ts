@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { GenericDatabaseProvider } from '@memberjunction/generic-database-provider';
 import { SQLServerDataProvider } from '../SQLServerDataProvider';
 
 /**
@@ -15,8 +14,6 @@ interface ProviderTestSurface {
   readonly AllowRefresh: boolean;
   Config(configData: unknown, providerToUse?: unknown): Promise<boolean>;
   Refresh(): Promise<boolean>;
-  RefreshWithinTransaction(): Promise<boolean>;
-  loadViewColumnOrderCache(): Promise<void>;
   Save(entity: unknown, user: unknown, options: unknown): Promise<unknown>;
 }
 
@@ -31,7 +28,6 @@ const flush = () => new Promise<void>((resolve) => setImmediate(resolve));
 
 afterEach(() => {
   vi.useRealTimers();
-  vi.restoreAllMocks();
 });
 
 describe('SQLServerDataProvider.Refresh while a save is in flight', () => {
@@ -88,29 +84,5 @@ describe('SQLServerDataProvider.Refresh while a save is in flight', () => {
     expect(provider.AllowRefresh).toBe(false);
     provider.OnResumeRefresh();
     expect(provider.AllowRefresh).toBe(true);
-  });
-});
-
-describe('SQLServerDataProvider.RefreshWithinTransaction', () => {
-  // the base runs its own reload pass instead of Config(), so the override does Refresh()'s extra work itself
-  function makeInTransactionProvider() {
-    const { provider, configSpy } = makeProvider();
-    const rescanSpy = vi.fn(async () => undefined);
-    provider.loadViewColumnOrderCache = rescanSpy;
-    const passSpy = vi.spyOn(GenericDatabaseProvider.prototype, 'RefreshWithinTransaction').mockResolvedValue(true);
-    return { provider, configSpy, rescanSpy, passSpy };
-  }
-
-  it('waits for an in-flight save, runs the base pass (not Config) and rescans the view column order', async () => {
-    const { provider, configSpy, rescanSpy, passSpy } = makeInTransactionProvider();
-    provider.OnSuspendRefresh();
-    const pending = provider.RefreshWithinTransaction();
-    await flush();
-    expect(passSpy).not.toHaveBeenCalled();
-    provider.OnResumeRefresh();
-    expect(await pending).toBe(true);
-    expect(passSpy).toHaveBeenCalledTimes(1);
-    expect(rescanSpy).toHaveBeenCalledTimes(1);
-    expect(configSpy).not.toHaveBeenCalled();
   });
 });

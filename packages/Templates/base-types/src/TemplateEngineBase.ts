@@ -1,6 +1,6 @@
-import { BaseEngine, BaseEntityEvent, BaseEnginePropertyConfig, IMetadataProvider, LogError, UserInfo } from "@memberjunction/core";
+import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, UserInfo } from "@memberjunction/core";
 import { MJTemplateCategoryEntity, MJTemplateContentEntity, MJTemplateContentTypeEntity, MJTemplateEntityExtended, MJTemplateParamEntity } from "@memberjunction/core-entities";
-import { NormalizeUUID, UUIDsEqual } from "@memberjunction/global";
+import { NormalizeUUID } from "@memberjunction/global";
 
 /** Rows grouped by their normalized TemplateID. */
 function groupByTemplate<T extends { TemplateID: string }>(rows: T[]): Map<string, T[]> {
@@ -37,50 +37,16 @@ export class TemplateEngineBase extends BaseEngine<TemplateEngineBase> {
         TemplateParams: MJTemplateParamEntity[]
     };
 
-    /** The engine's one config: the `Template_Metadata` dataset, held in a single property. */
-    protected static TemplateConfigs(): Partial<BaseEnginePropertyConfig>[] {
-        return [
+    public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider) {
+        const c: Partial<BaseEnginePropertyConfig>[] = [
             {
                 Type: 'dataset',
                 DatasetName: 'Template_Metadata',
                 DatasetResultHandling: "single_property",
                 PropertyName: "_metadata"
             }
-        ];
-    }
-
-    public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider) {
-        await this.Load(TemplateEngineBase.TemplateConfigs(), provider, forceRefresh, contextUser);
-    }
-
-    /**
-     * The templates load as one dataset, which the base class cannot match to an entity event, so a saved Template
-     * Content would stay stale until restart. Reload the dataset when an entity it holds changes, locally or on another
-     * server; inside an open transaction the reload runs after the commit.
-     */
-    protected override async HandleIndividualBaseEntityEvent(event: BaseEntityEvent): Promise<boolean> {
-        const name = (event.baseEntity?.EntityInfo?.Name || event.entityName || '').trim().toLowerCase();
-        const changes = event.type === 'save' || event.type === 'delete' || event.type === 'remote-invalidate';
-        if (!changes || !this.DatasetEntityNames().has(name)) {
-            return super.HandleIndividualBaseEntityEvent(event);
-        }
-        if (this.IsPermissionConstrained) {
-            return true; // as the base class: the user cannot read the templates, so there is nothing to reload
-        }
-        try {
-            await this.RunAfterCommitOrNow(event, `TemplateEngineBase reload for ${name}`, () => this.ReloadTemplates());
-            return true;
-        }
-        catch (e) {
-            // the event subscriber does not await this, so a rejection here would be unhandled
-            LogError(e);
-            return false;
-        }
-    }
-
-    /** Reloads the template dataset, bypassing every cache. It runs detached from the save, so its reads use the pool. */
-    protected async ReloadTemplates(): Promise<void> {
-        await this.Load(TemplateEngineBase.TemplateConfigs(), this.ProviderToUse, true, this.ContextUser, BaseEngine.BackgroundReloadReads);
+        ]
+        await this.Load(c, provider, forceRefresh, contextUser);
     }
 
     protected async AdditionalLoading(contextUser?: UserInfo): Promise<void> {
@@ -98,22 +64,21 @@ export class TemplateEngineBase extends BaseEngine<TemplateEngineBase> {
         }
     }
 
-    // Empty before the first load: prompt and entity-document template text reads through to these at any time
     public get Templates(): MJTemplateEntityExtended[] {
-        return this._metadata?.Templates ?? [];
+        return this._metadata.Templates;
     }
 
     public get TemplateContentTypes(): MJTemplateContentTypeEntity[] {
-        return this._metadata?.TemplateContentTypes ?? [];
+        return this._metadata.TemplateContentTypes;
     }
     public get TemplateCategories(): MJTemplateCategoryEntity[] {
-        return this._metadata?.TemplateCategories ?? [];
+        return this._metadata.TemplateCategories;
     }
     public get TemplateContents(): MJTemplateContentEntity[] {
-        return this._metadata?.TemplateContents ?? [];
+        return this._metadata.TemplateContents;
     }
     public get TemplateParams(): MJTemplateParamEntity[] {
-        return this._metadata?.TemplateParams ?? [];
+        return this._metadata.TemplateParams;
     }
 
     /**
@@ -123,15 +88,5 @@ export class TemplateEngineBase extends BaseEngine<TemplateEngineBase> {
      */
     public FindTemplate(templateName: string): MJTemplateEntityExtended {
         return this.Templates.find((t) => t.Name.trim().toLowerCase() === templateName.trim().toLowerCase())
-    }
-
-    /** The cached template with this ID (any case); undefined when the cache does not know it. */
-    public FindTemplateByID(templateID: string): MJTemplateEntityExtended | undefined {
-        return this.Templates.find((t) => UUIDsEqual(t.ID, templateID));
-    }
-
-    /** The content row the cached template with this ID renders (its highest-priority content), if any. */
-    public FindRenderedContent(templateID: string): MJTemplateContentEntity | undefined {
-        return this.FindTemplateByID(templateID)?.GetHighestPriorityContent();
     }
 }

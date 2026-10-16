@@ -1,7 +1,7 @@
 import { BaseEntity, BaseEntityResult, EntitySaveOptions, IMetadataProvider, IRunViewProvider, LogErrorEx, TransactionGroupBase } from "@memberjunction/core";
 import { RegisterClass, uuidv4 } from "@memberjunction/global";
 import { MJAIPromptEntityExtended } from "@memberjunction/ai-core-plus";
-import { MJTemplateCategoryEntity, MJTemplateContentEntity, MJTemplateContentTypeEntity, MJTemplateEntity, MJTemplateEntityExtended } from "@memberjunction/core-entities";
+import { MJTemplateCategoryEntity, MJTemplateContentEntity, MJTemplateContentTypeEntity, MJTemplateEntity } from "@memberjunction/core-entities";
 
 /**
  * Server specific sub-class that handles the automatic creation and updating of
@@ -174,16 +174,17 @@ export class MJAIPromptEntityServer extends MJAIPromptEntityExtended {
                 throw new Error("Cannot update linked Template Contents because TemplateID is null.");
             }
             const rv = this.RunViewProviderToUse
-            // update the content the prompt runner renders
             const result = await rv.RunView<MJTemplateContentEntity>({
                 EntityName: "MJ: Template Contents",
                 ExtraFilter: `TemplateID='${this.TemplateID}'`,
+                OrderBy: "__mj_CreatedAt ASC", // first one
                 ResultType: 'entity_object',
+                MaxRows: 1 // should only be one row
             }, this.ContextCurrentUser);
             let tc: MJTemplateContentEntity | undefined = undefined;
             if (result && result.Success && result.Results.length > 0) {
                 // we found an existing Template Content, so update it
-                tc = MJTemplateEntityExtended.SelectHighestPriorityContent(result.Results);
+                tc = result.Results[0];
             }
             else {
                 tc = await md.GetEntityObject<MJTemplateContentEntity>("MJ: Template Contents", this.ContextCurrentUser);
@@ -200,8 +201,7 @@ export class MJAIPromptEntityServer extends MJAIPromptEntityExtended {
             }
             // now save the Template Contents
             if (await tc.Save()) {
-                // the template engine still caches the previous version until its reload lands
-                this.RecordTemplateTextSource(tc);
+                // if we saved successfully, we can return
                 return true;
             }
             else {
@@ -247,7 +247,6 @@ export class MJAIPromptEntityServer extends MJAIPromptEntityExtended {
                 tc.Priority = 1; // default priority
                 tc.IsActive = true;
                 if (await tc.Save()) {
-                    this.RecordTemplateTextSource(tc);
                     return t;
                 } 
                 else {

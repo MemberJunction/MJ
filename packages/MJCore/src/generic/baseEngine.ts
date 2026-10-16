@@ -8,7 +8,7 @@ import { RunView, RunViewParams } from "../views/runView";
 import { LogError, LogStatus, LogStatusEx, LogWarning } from "./logging";
 import { EntityInfo } from "./entityInfo";
 import { Metadata } from "./metadata";
-import { DatasetItemFilterType, DatasetReadOptions, DatasetResultType, IMetadataProvider, IRunViewProvider, ProviderType, RunViewDatabaseStatus, RunViewResult } from "./interfaces";
+import { DatasetItemFilterType, DatasetResultType, IMetadataProvider, IRunViewProvider, ProviderType, RunViewDatabaseStatus, RunViewResult } from "./interfaces";
 import { BaseInfo } from "./baseInfo";
 import { BaseEntity, BaseEntityEvent } from "./baseEntity";
 import { CompositeKey, KeyValuePair } from "./compositeKey";
@@ -355,10 +355,6 @@ interface ExternalChangeReload {
 export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartupSink {
     private _loaded: boolean = false;
     private _loadingSubject: BehaviorSubject<boolean> = new BehaviorSubject<boolean>(false);
-    /** The one forced load queued behind the load in flight (see {@link Load}). */
-    private _queuedForcedReload: { Args: Parameters<BaseEngine<T>['Load']>; Run: Promise<void> } | null = null;
-    /** Whether the load in flight reads on the pool (see {@link Load}). */
-    private _inFlightReadsOnPool = false;
     private _contextUser: UserInfo;
     /**
      * True once {@link ResolveContextUser} has put this engine on the MJ system user. Makes the
@@ -371,8 +367,6 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     private _metadataConfigs: BaseEnginePropertyConfig[] = [];
     private _dynamicConfigs: Map<string, BaseEnginePropertyConfig> = new Map();
     private _dataMap: Map<string, EngineDataMapEntry> = new Map();
-    /** Lower-cased names of the entities each loaded dataset config holds, by property name. */
-    private _datasetEntityNames: Map<string, ReadonlySet<string>> = new Map();
     private _expirationTimers: Map<string, number> = new Map();
     private _entityEventSubjects: Map<string, Subject<BaseEntityEvent>> = new Map();
     private _provider: IMetadataProvider;
@@ -700,28 +694,22 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     /**
      * This method should be called by sub-classes to load up their specific metadata requirements. For more complex metadata
      * loading or for post-processing of metadata loading done here, overide the AdditionalLoading method to add your logic.
-     *
-     * While another load is in flight, a plain load joins it, except a loaded engine's plain load inside a transaction
-     * during a pool reload, which returns at once: the reload's reads may wait on that transaction. A forced load does
-     * not join (the load in flight may have read before the change that asked for the reload): it queues one follow-up
-     * load, shared by every forced request made meanwhile, which runs with the latest request's arguments once the load
-     * in flight finishes.
      * @param configs
      * @param contextUser
-     * @param readOptions where dataset configs read (see {@link DatasetReadOptions})
      * @returns
      */
-    protected async Load(configs: Partial<BaseEnginePropertyConfig>[], provider: IMetadataProvider, forceRefresh: boolean = false, contextUser?: UserInfo, readOptions?: Readonly<DatasetReadOptions>): Promise<void> {
+    protected async Load(configs: Partial<BaseEnginePropertyConfig>[], provider: IMetadataProvider, forceRefresh: boolean = false, contextUser?: UserInfo): Promise<void> {
         if (this.ProviderToUse?.ProviderType === ProviderType.Database && !contextUser)
             throw new Error('For server-side use of all engine classes, you must provide the contextUser parameter')
         if (this._loadingSubject.value) {
-            if (forceRefresh) {
-                return this.queueForcedReload([configs, provider, forceRefresh, contextUser, readOptions]);
-            }
-            if (this._loaded && this._inFlightReadsOnPool && DatabaseProviderBase.CallerInAnyTransaction()) {
-                return;
-            }
-            return this.waitForInFlightLoad();
+            return new Promise<void>((resolve) => {
+                const subscription = this._loadingSubject.subscribe((loading) => {
+                    if (!loading) {
+                        subscription.unsubscribe();
+                        resolve();
+                    }
+                });
+            });
         }
 
         if (!this._loaded || forceRefresh) {
@@ -751,7 +739,6 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 contextUser?.ID
             );
 
-            this._inFlightReadsOnPool = readOptions?.ReadOnPool === true;
             this._loadingSubject.next(true);
             try {
                 this.SetProvider(provider);
@@ -764,7 +751,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 // Register with the engine registry
                 BaseEngineRegistry.Instance.RegisterEngine(this);
 
-                await this.LoadConfigs(configs, this._contextUser, forceRefresh, readOptions);
+                await this.LoadConfigs(configs, this._contextUser, forceRefresh);
                 await this.AdditionalLoading(this._contextUser); // Call the additional loading method
                 await this.SetupGlobalEventListener();
 
@@ -789,35 +776,6 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 TelemetryManager.Instance.EndEvent(eventId);
             }
         }
-    }
-
-    private waitForInFlightLoad(): Promise<void> {
-        return new Promise<void>((resolve) => {
-            const subscription = this._loadingSubject.subscribe((loading) => {
-                if (!loading) {
-                    subscription.unsubscribe();
-                    resolve();
-                }
-            });
-        });
-    }
-
-    private queueForcedReload(args: Parameters<BaseEngine<T>['Load']>): Promise<void> {
-        const queued = this._queuedForcedReload;
-        if (queued) {
-            // a forced reload may always read on the pool, so a queued request's pool reads are never dropped
-            const readOnPool = queued.Args[4]?.ReadOnPool === true || args[4]?.ReadOnPool === true;
-            queued.Args = readOnPool ? [args[0], args[1], args[2], args[3], { ...args[4], ReadOnPool: true }] : args;
-            return queued.Run;
-        }
-        const entry = { Args: args, Run: Promise.resolve() };
-        entry.Run = (async () => {
-            await this.waitForInFlightLoad();
-            this._queuedForcedReload = null; // a request arriving from now on queues behind this load
-            await this.Load(...entry.Args);
-        })();
-        this._queuedForcedReload = entry;
-        return entry.Run;
     }
 
     /**
@@ -1059,16 +1017,27 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                             await this.applyImmediateMutation(config, event);
                         }
                     };
-                    // By commit, the same object may have been deleted and reset by NewRecord()
-                    // (new key, blank fields). Cloning it then would cache a blank row, so a save
-                    // whose object no longer carries the saved key is superseded — the later
-                    // event on that object (queued behind this one) is the one that counts.
-                    const savedKey = event.type === 'save' ? event.baseEntity.PrimaryKey.ToString() : null;
-                    const applyIfCurrent = async (): Promise<void> => {
-                        if (savedKey !== null && event.baseEntity.PrimaryKey.ToString() !== savedKey) return;
-                        await applyAll();
-                    };
-                    await this.RunAfterCommitOrNow(event, `BaseEngine cache mutation for ${eName}`, applyIfCurrent);
+                    // The entity raises save/delete as soon as its own write returns, while an
+                    // enclosing transaction may still be open. Mutating the cache now would keep a
+                    // rolled-back row cached for the life of the process, so follow the transaction:
+                    // apply on commit, drop on rollback. The token must be captured before the first
+                    // await — this runs synchronously inside the save that raised the event.
+                    const provider = event.baseEntity.ProviderToUse;
+                    if (provider instanceof DatabaseProviderBase && provider.TransactionDepth > 0) {
+                        const token = provider.CapturePostCommitToken();
+                        // By commit, the same object may have been deleted and reset by NewRecord()
+                        // (new key, blank fields). Cloning it then would cache a blank row, so a save
+                        // whose object no longer carries the saved key is superseded — the later
+                        // event on that object (queued behind this one) is the one that counts.
+                        const savedKey = event.type === 'save' ? event.baseEntity.PrimaryKey.ToString() : null;
+                        const applyIfCurrent = async (): Promise<void> => {
+                            if (savedKey !== null && event.baseEntity.PrimaryKey.ToString() !== savedKey) return;
+                            await applyAll();
+                        };
+                        provider.RunAfterCommit(applyIfCurrent, `BaseEngine cache mutation for ${eName}`, token);
+                        return true;
+                    }
+                    await applyAll();
                     return true;
                 } else {
                     // At least one config requires full refresh, use debouncing
@@ -1082,39 +1051,6 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             LogError(e);
             return false;
         }
-    }
-
-    /** Read options for a reload that runs detached from the write that caused it: on the pool. */
-    protected static readonly BackgroundReloadReads: Readonly<DatasetReadOptions> = { ReadOnPool: true };
-
-    /**
-     * Runs a cache update an entity event asks for after the commit of the transaction the event's write ran in (never
-     * on rollback), or now when the write is in no transaction: updating the cache while that transaction is open would
-     * keep a rolled-back row. Call it before the handler's first `await`, while the save's post-commit token can still
-     * be captured. The token decides, not the provider's depth: on a shared provider an open transaction belongs to the
-     * async scope that began it, and a save from another scope is already durable, so its update runs inline.
-     */
-    protected async RunAfterCommitOrNow(event: BaseEntityEvent, description: string, task: () => Promise<void>): Promise<void> {
-        const provider = event.baseEntity?.ProviderToUse;
-        if (provider instanceof DatabaseProviderBase) {
-            const token = provider.CapturePostCommitToken();
-            if (token && token.Epoch !== null) {
-                provider.RunAfterCommit(task, description, token);
-                return;
-            }
-        }
-        await task();
-    }
-
-    /** Lower-cased names of the entities this engine's loaded dataset configs hold; empty before the first load. */
-    protected DatasetEntityNames(): ReadonlySet<string> {
-        const names = new Set<string>();
-        for (const set of this._datasetEntityNames.values()) {
-            for (const name of set) {
-                names.add(name);
-            }
-        }
-        return names;
     }
 
     /**
@@ -1971,9 +1907,8 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      * @param contextUser - The context user information
      * @param bypassCache - When true, bypasses all server-side caching (RunView and dataset) to fetch fresh data
      *   directly from the database. Passed through from {@link Load} when `forceRefresh` is true (i.e., `Config(true)`).
-     * @param readOptions - Where the dataset configs read; passed through from {@link Load}.
      */
-    protected async LoadConfigs(configs: Partial<BaseEnginePropertyConfig>[], contextUser: UserInfo, bypassCache: boolean = false, readOptions?: Readonly<DatasetReadOptions>): Promise<void> {
+    protected async LoadConfigs(configs: Partial<BaseEnginePropertyConfig>[], contextUser: UserInfo, bypassCache: boolean = false): Promise<void> {
         this._metadataConfigs = configs.map(c => this.UpgradeObjectToConfig(c));
 
         // now, break up the configs into two chunks, datasets and views of entities so we can load all the views in a single network call via RunViews()
@@ -1986,7 +1921,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         // any entity is denied (marking the engine as permission-constrained).
         const entityConfigsToLoad = this.CheckPermissionsOrSkipAll(entityConfigs, contextUser);
 
-        await Promise.all([...datasetConfigs.map(c => this.LoadSingleDatasetConfig(c, contextUser, bypassCache, readOptions)),
+        await Promise.all([...datasetConfigs.map(c => this.LoadSingleDatasetConfig(c, contextUser, bypassCache)),
                            this.LoadMultipleEntityConfigs(entityConfigsToLoad, contextUser, bypassCache)]);
 
         // Register cross-server cache change callbacks for entity configs
@@ -2302,16 +2237,15 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      * @param bypassCache - When true, bypasses server-side cache to get fresh data from the database.
      *   Uses {@link IMetadataProvider.GetDatasetByName} with `forceRefresh` to skip all cache reads,
      *   then {@link IMetadataProvider.CacheDataset} to store fresh results for subsequent non-forced calls.
-     * @param readOptions - Where a bypassing read runs; a cached read ignores it.
      */
-    protected async LoadSingleDatasetConfig(config: BaseEnginePropertyConfig, contextUser: UserInfo, bypassCache: boolean = false, readOptions?: Readonly<DatasetReadOptions>): Promise<void> {
+    protected async LoadSingleDatasetConfig(config: BaseEnginePropertyConfig, contextUser: UserInfo, bypassCache: boolean = false): Promise<void> {
         const p = this.ProviderToUse;
         // When bypassing cache, use GetDatasetByName with forceRefresh to skip all cache reads,
         // then CacheDataset to store the fresh results for subsequent non-forced calls.
         // Otherwise, use GetAndCacheDatasetByName which validates staleness before returning cached data.
         let result: DatasetResultType;
         if (bypassCache) {
-            result = await p.GetDatasetByName(config.DatasetName, config.DatasetItemFilters, contextUser, undefined, true, readOptions);
+            result = await p.GetDatasetByName(config.DatasetName, config.DatasetItemFilters, contextUser, undefined, true);
             await p.CacheDataset(config.DatasetName, config.DatasetItemFilters, result);
         } else {
             result = await p.GetAndCacheDatasetByName(config.DatasetName, config.DatasetItemFilters);
@@ -2364,7 +2298,6 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 }
             }
             this._dataMap.set(config.PropertyName, { datasetName: config.DatasetName, data: result.Results, loadedSuccessfully: true });
-            this._datasetEntityNames.set(config.PropertyName, new Set(result.Results.filter((item) => item.EntityName).map((item) => item.EntityName.trim().toLowerCase())));
 
             if (config.Expiration) {
                 this.setExpirationTimer(config.PropertyName, config.Expiration);

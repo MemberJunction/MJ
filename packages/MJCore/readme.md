@@ -1431,13 +1431,6 @@ the `BeginISATransaction` trio was retired in 6.2.
 through its result: a result it rejects rolls back and is returned unchanged. The generated `Delete()` override of a
 `CascadeDeletes` entity uses it through `BaseEntity.DeleteWithinEntityTransaction`.
 
-`ProviderBase.RefreshWithinTransaction()` reloads metadata with reads that join the open ambient transaction
-(`DatasetReadOptions.JoinAmbientTransaction`), so `mj sync push` sees the metadata rows it has not committed yet. It
-runs its own reload pass and never waits for a pool reload in flight, whose reads would block on the caller's own
-locks; every pass takes a generation, and a pass that finishes after a newer one was adopted is discarded. An engine
-reload that runs detached from the write that caused it can read a dataset on the pool instead
-(`BaseEngine.Load(…, BaseEngine.BackgroundReloadReads)`).
-
 ---
 
 ## Provider Architecture

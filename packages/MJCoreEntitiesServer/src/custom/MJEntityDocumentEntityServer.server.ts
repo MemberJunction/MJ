@@ -1,7 +1,7 @@
 import { BaseEntity, BaseEntityResult, EntitySaveOptions, IMetadataProvider, IRunViewProvider, LogErrorEx, TransactionGroupBase } from "@memberjunction/core";
 import { RegisterClass, uuidv4 } from "@memberjunction/global";
 import { MJEntityDocumentEntityExtended } from "@memberjunction/ai-core-plus";
-import { MJTemplateCategoryEntity, MJTemplateContentEntity, MJTemplateContentTypeEntity, MJTemplateEntity, MJTemplateEntityExtended } from "@memberjunction/core-entities";
+import { MJTemplateCategoryEntity, MJTemplateContentEntity, MJTemplateContentTypeEntity, MJTemplateEntity } from "@memberjunction/core-entities";
 
 /**
  * Server-side subclass for `MJ: Entity Documents` that mirrors the
@@ -144,7 +144,7 @@ export class MJEntityDocumentEntityServer extends MJEntityDocumentEntityExtended
         return false;
     }
 
-    /** Update the content the linked Template renders in place, and record it as the text's source. */
+    /** Update the linked Template's primary TemplateContent in place. */
     protected async UpdateLinkedTemplateContents(md: IMetadataProvider, tg?: TransactionGroupBase): Promise<boolean> {
         try {
             if (!this.TemplateID) {
@@ -154,12 +154,14 @@ export class MJEntityDocumentEntityServer extends MJEntityDocumentEntityExtended
             const result = await rv.RunView<MJTemplateContentEntity>({
                 EntityName: "MJ: Template Contents",
                 ExtraFilter: `TemplateID='${this.TemplateID}'`,
+                OrderBy: "__mj_CreatedAt ASC",
                 ResultType: 'entity_object',
+                MaxRows: 1,
             }, this.ContextCurrentUser);
 
             let tc: MJTemplateContentEntity | undefined;
             if (result && result.Success && result.Results.length > 0) {
-                tc = MJTemplateEntityExtended.SelectHighestPriorityContent(result.Results);
+                tc = result.Results[0];
             } else {
                 // No content row yet (Template exists but is empty) — create one.
                 tc = await md.GetEntityObject<MJTemplateContentEntity>("MJ: Template Contents", this.ContextCurrentUser);
@@ -173,8 +175,6 @@ export class MJEntityDocumentEntityServer extends MJEntityDocumentEntityExtended
             if (tg) tc.TransactionGroup = tg;
 
             if (await tc.Save()) {
-                // the template engine still caches the previous version until its reload lands
-                this.RecordTemplateTextSource(tc);
                 return true;
             } else {
                 throw new Error("Failed to update linked Template Contents for the Entity Document: " + tc.LatestResult?.CompleteMessage);
@@ -212,7 +212,6 @@ export class MJEntityDocumentEntityServer extends MJEntityDocumentEntityExtended
             tc.IsActive = true;
 
             if (await tc.Save()) {
-                this.RecordTemplateTextSource(tc);
                 return t;
             } else {
                 throw new Error("Failed to save Template Contents for the new Template: " + tc.LatestResult?.CompleteMessage);

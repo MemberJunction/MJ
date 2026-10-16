@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { GenericDatabaseProviderTestBase } from './helpers/GenericDatabaseProviderTestBase';
-import { SaveSQLResult, DeleteSQLResult, UserInfo, LocalCacheManager, ExecuteSQLOptions, ProviderConfigDataBase, IMetadataProvider, AllMetadata, DatasetReadOptions } from '@memberjunction/core';
+import { SaveSQLResult, DeleteSQLResult, UserInfo, LocalCacheManager, ExecuteSQLOptions, ProviderConfigDataBase, IMetadataProvider } from '@memberjunction/core';
 import type { ExecuteSQLBatchOptions } from '../GenericDatabaseProvider';
 
 vi.mock('sql-formatter', () => ({ format: (sql: string) => sql }));
@@ -54,11 +54,6 @@ class TestProvider extends GenericDatabaseProviderTestBase {
         return queries.map(() => [{ ID: 'row' }]);
     }
     override get TrustLocalCacheCompletely(): boolean { return false; }
-    /** The metadata dataset read with the pass's read options, without building a metadata graph from the stub rows. */
-    protected override async GetAllMetadata(_providerToUse?: IMetadataProvider, forceRefresh?: boolean, readOptions?: Readonly<DatasetReadOptions>): Promise<AllMetadata> {
-        await this.GetDatasetByName('MJ_Metadata', undefined, user, undefined, forceRefresh, readOptions);
-        return new AllMetadata();
-    }
 }
 
 const item = (code: string): Record<string, unknown> => ({
@@ -97,17 +92,9 @@ describe('dataset reads and the ambient transaction (MJ#4514)', () => {
         expect(provider.batchOptions.every(o => !o?.ignoreAmbientTransaction)).toBe(true);
     });
 
-    it('any dataset reads on the pool when the read carries ReadOnPool (an event-driven engine reload)', async () => {
-        // No context user: this covers transaction routing, not per-user scope (dataset-caller-scope.test.ts).
-        await provider.GetDatasetByName('Template_Metadata', undefined, undefined, undefined, true, { ReadOnPool: true });
-        await provider.GetDatasetStatusByName('Template_Metadata', undefined, undefined, undefined, { ReadOnPool: true });
-        expect(provider.sqlOptions.map(o => o?.ignoreAmbientTransaction)).toEqual([true, true]);
-        expect(provider.batchOptions.map(o => o?.ignoreAmbientTransaction)).toEqual([true, true]);
-    });
-
     it('RefreshWithinTransaction reads MJ_Metadata inside the transaction (MJ#4836)', async () => {
         await provider.RefreshWithinTransaction();
-        expect(provider.configCalls).toBe(0); // its own reload pass, not a Config() run
+        expect(provider.configCalls).toBe(1);
         expect(provider.sqlOptions.length).toBeGreaterThan(0);
         expect(provider.batchOptions.length).toBeGreaterThan(0);
         expect(provider.sqlOptions.every(o => o?.ignoreAmbientTransaction === false)).toBe(true);
@@ -120,5 +107,4 @@ describe('dataset reads and the ambient transaction (MJ#4514)', () => {
         expect(provider.sqlOptions.every(o => o?.ignoreAmbientTransaction === true)).toBe(true);
         expect(provider.batchOptions.every(o => o?.ignoreAmbientTransaction === true)).toBe(true);
     });
-
 });
