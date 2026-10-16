@@ -1,23 +1,13 @@
 /**
  * Archetype JSONType contracts for `MJ: Video Archetypes` (§4.3).
  *
- * These interfaces are referenced both by `VideoGenerationSpec` and by CodeGen's
- * `JSONType` metadata on `MJ: Video Archetypes` (`BeatTemplate` and `Pacing` columns).
+ * `VideoBeatTemplate` is referenced by CodeGen's `JSONType` metadata on
+ * `MJ: Video Archetypes.BeatTemplate`. `VideoPacing` (used by both `MJ: Video Archetypes.Pacing`
+ * and `VideoStyleGuide.Pacing`) lives in `video-generation-spec.ts` so `generate-prompt-types.mjs`
+ * (which inspects a single file's AST declarations without following imports) includes its
+ * definition in `video-generation-spec.ts.generated-for-prompt.md`. Both files are re-exported
+ * from `index.ts`.
  */
-
-/**
- * Cut cadence and hold rules governing how quickly visual states change in a film.
- */
-export interface VideoPacing {
-    /** Target average interval in seconds between visual state changes. */
-    AvgSecondsBetweenChanges: number;
-    /** Rules governing minimum hold times on key numbers, headlines, and end cards. */
-    HoldRules: string;
-    /** Optional minimum duration in seconds allowed for any single beat. */
-    MinBeatDurationSeconds?: number;
-    /** Optional maximum duration in seconds allowed for any single beat. */
-    MaxBeatDurationSeconds?: number;
-}
 
 /**
  * Reusable beat slot definition within an `MJ: Video Archetypes` beat template (§4.3).

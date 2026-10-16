@@ -7,10 +7,6 @@
  * remain self-contained for LLMs.
  */
 
-import type { VideoPacing } from './archetype-types.js';
-
-export type { VideoPacing } from './archetype-types.js';
-
 // ---------------------------------------------------------------------------
 // Core Status & Format Unions
 // ---------------------------------------------------------------------------
@@ -289,6 +285,20 @@ export interface ReferenceAnalysis {
     TextureLearned?: string;
     /** Explicit elements from the reference that must not be imitated or copied. */
     DoNotCopy: string[];
+}
+
+/**
+ * Cut cadence and hold rules governing how quickly visual states change in a film (§3.1, §4.3).
+ */
+export interface VideoPacing {
+    /** Target average interval in seconds between visual state changes. */
+    AvgSecondsBetweenChanges: number;
+    /** Rules governing minimum hold times on key numbers, headlines, and end cards. */
+    HoldRules: string;
+    /** Optional minimum duration in seconds allowed for any single beat. */
+    MinBeatDurationSeconds?: number;
+    /** Optional maximum duration in seconds allowed for any single beat. */
+    MaxBeatDurationSeconds?: number;
 }
 
 /**
