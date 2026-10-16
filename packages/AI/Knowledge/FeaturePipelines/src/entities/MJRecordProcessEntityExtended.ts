@@ -207,7 +207,6 @@ function pipelineEntityFieldValues(record: MJRecordProcessEntity): FeaturePipeli
   return BuildEntityFieldValueLookup(provider.EntityByID(record.EntityID));
 }
 
-/** Whether the record's data provider also resolves entity metadata by ID, as every MJ provider does. */
 /** Whether the record's data provider is also a metadata provider (every MJ provider is both; a bare double may not be). */
 function isMetadataProvider(
   provider: IEntityDataProvider | null | undefined
@@ -215,6 +214,7 @@ function isMetadataProvider(
   return !!provider && 'ProviderType' in provider;
 }
 
+/** Whether the record's data provider also resolves entity metadata by ID, as every MJ provider does. */
 function resolvesEntities(
   provider: IEntityDataProvider | null | undefined
 ): provider is IEntityDataProvider & Pick<IMetadataProvider, 'EntityByID'> {

@@ -10693,9 +10693,10 @@ duplicate of a `next` mechanism, an unrequested feature, or a near-duplicate tes
 ## 13. Scope reduction (2026-10-16)
 
 The owner's rule: a change outside the pipeline packages stays only if the Feature Pipeline literally fails without
-it. Spec: `.superpowers/sdd/PR-1-feature-pipelines/slim/scope-reduction-spec.md`; audits: `slim/audit-*.md`.
+it. The scope-reduction spec and its audits live with the owner's patch set kept outside the repository.
 
-Moved out of this PR, as patches under `slim/patches/` (one follow-up PR each):
+Moved out of this PR, into the owner's patch set kept outside the repository (one patch per group, with a note each;
+one follow-up PR each):
 01 cascade delete / error 213 (M1.7, M1.10) · 02 sync-push metadata reload (M1.11) · 03 engine reload-on-save
 (M1.6's mechanism; see below) · 04 strict-parameters contract and gate C3.3 (M5.1–M5.4 except Bedrock's `?? 0.7`)
 · 05 product-wide raw rendering (M3.3's mechanism; agent harness) · 06 Explorer fixes to unrelated screens (QA

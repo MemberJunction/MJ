@@ -376,6 +376,9 @@ describe('validateOutputValue — runtime enforcement (P1-2)', () => {
   it('rejects coerce-to-other on non-enum constraints during spec validation', () => {
     const spec: DataFeatureSpec = {
       Name: 'Invalid Coerce Spec',
+      Description: 'Invalid Coerce Spec',
+      Context: { Fields: ['CurrentJobTitle'] },
+      Caching: { Cacheable: false },
       PromptID: 'prompt-1',
       Outputs: [
         {
@@ -401,6 +404,9 @@ describe('validateOutputValue — runtime enforcement (P1-2)', () => {
     for (const ref of maliciousPaths) {
       const spec: DataFeatureSpec = {
         Name: 'Malicious Ref Spec',
+        Description: 'Malicious Ref Spec',
+        Context: { Fields: ['CurrentJobTitle'] },
+        Caching: { Cacheable: false },
         PromptID: 'prompt-1',
         Outputs: [
           {
@@ -420,6 +426,9 @@ describe('validateOutputValue — runtime enforcement (P1-2)', () => {
     // Valid paths should not be flagged for prototype pollution
     const validSpec: DataFeatureSpec = {
       Name: 'Valid Spec',
+      Description: 'Valid Spec',
+      Context: { Fields: ['CurrentJobTitle'] },
+      Caching: { Cacheable: false },
       PromptID: 'prompt-1',
       Outputs: [
         {
@@ -463,7 +472,7 @@ describe('validateOutputValue — runtime enforcement (P1-2)', () => {
       ],
     };
 
-    const issues = ValidateSpec(malformedSpec as DataFeatureSpec, sampleEntity);
+    const issues = ValidateSpec(parsedSpec(malformedSpec), sampleEntity);
     const modeIssue = issues.find(i => i.Path === 'Outputs[0].Target.Mode');
     expect(modeIssue).toBeDefined();
     expect(modeIssue?.Severity).toBe('error');
@@ -474,6 +483,9 @@ describe('validateOutputValue — runtime enforcement (P1-2)', () => {
   it('rejects child target missing required Map, ParentField, or EntityName', () => {
     const spec: DataFeatureSpec = {
       Name: 'Incomplete Child Spec',
+      Description: 'Incomplete Child Spec',
+      Context: { Fields: ['CurrentJobTitle'] },
+      Caching: { Cacheable: false },
       PromptID: 'prompt-1',
       Outputs: [
         {
@@ -568,8 +580,8 @@ describe('DataFeatureSpec — decision-derived extensions', () => {
     });
 
     it('rejects unrecognized FeatureKind', () => {
-      const spec = baseSpec();
-      spec.Outputs[0].FeatureKind = 'invalid-kind' as unknown as FeatureKind;
+      const valid = baseSpec();
+      const spec = parsedSpec({ ...valid, Outputs: [{ ...valid.Outputs[0], FeatureKind: 'invalid-kind' }] });
       const issues = ValidateSpec(spec, sampleEntity);
       expect(issues.some(i => i.Path === 'Outputs[0].FeatureKind' && i.Severity === 'error')).toBe(true);
     });
@@ -682,6 +694,7 @@ describe('DataFeatureSpec — decision-derived extensions', () => {
         Name: 'EnumPipeline',
         Description: 'Categorizes seniority',
         Context: { Fields: ['CurrentJobTitle'] },
+        Caching: { Cacheable: false },
         PromptID: 'prompt-1',
         Outputs: [
           {

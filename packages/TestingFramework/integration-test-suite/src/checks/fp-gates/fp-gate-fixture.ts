@@ -20,7 +20,6 @@ import type { FeaturePipelineGoldenSetInput, GoldenCase } from '@memberjunction/
 import { Settle, type FeaturePipelineGateFixture, type IntegrationCheckContext } from '@memberjunction/testing-integration';
 import { FeaturePipelineGateStubTable, type StubAnswer } from './feature-pipeline-gate-stub-driver';
 import { FORCED_INVALID, GOLDEN_TITLES, NON_EXISTENT_FUNCTION_ID } from './golden-titles';
-import { FixtureQuerySaveOptions } from '../query-fixture-save-options';
 
 type Pool = NonNullable<IntegrationCheckContext['Pool']>;
 
@@ -295,8 +294,8 @@ export class FeaturePipelineGateFixtures {
     }
 
     /**
-     * Creates the stub prompt's template and its one content row, as a prompt save would, but with the content saved
-     * without AI actions, so its parameter extraction makes no model call. Returns the template's ID.
+     * Creates the stub prompt's template and its one content row, as a prompt save would; its parameter extraction runs
+     * as on next. Returns the template's ID.
      */
     protected static async CreateStubTemplate(ctx: IntegrationCheckContext, name: string, templateText: string): Promise<string> {
         const template = await ctx.Provider.GetEntityObject<MJTemplateEntity>('MJ: Templates', ctx.User);
@@ -313,7 +312,7 @@ export class FeaturePipelineGateFixtures {
         content.TemplateText = templateText;
         content.Priority = 1;
         content.IsActive = true;
-        if (!(await content.Save(FixtureQuerySaveOptions()))) {
+        if (!(await content.Save())) {
             throw new Error(`Feature Pipeline gate fixture: saving the template content failed: ${content.LatestResult?.CompleteMessage || 'unknown error'}`);
         }
         return template.ID;

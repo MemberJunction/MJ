@@ -14549,9 +14549,6 @@ importers:
         specifier: 6.2.0-edge.4
         version: link:../../Templates/engine
     devDependencies:
-      '@memberjunction/templates-base-types':
-        specifier: 6.2.0-edge.4
-        version: link:../../Templates/base-types
       '@memberjunction/unit-testing':
         specifier: 6.2.0-edge.4
         version: link:../../UnitTesting
