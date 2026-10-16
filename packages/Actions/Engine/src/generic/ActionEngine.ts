@@ -222,23 +222,8 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
       if (action.Type === 'Runtime') {
          return false;
       }
-      const registration = MJGlobal.Instance.ClassFactory.GetRegistration(BaseAction, this.ActionClassKey(action));
+      const registration = MJGlobal.Instance.ClassFactory.GetRegistration(BaseAction, action.DriverClass || action.Name);
       return declaresAuthorizesCaller(registration?.SubClass);
-   }
-
-   /** The ClassFactory key an action's class is registered under: its DriverClass, else its name. */
-   public ActionClassKey(action: Pick<MJActionEntity, 'DriverClass' | 'Name'>): string {
-      return action.DriverClass || action.Name;
-   }
-
-   /** True when a {@link BaseAction} subclass is registered under `classKey` in this process. */
-   public IsActionClassRegistered(classKey: string): boolean {
-      return MJGlobal.Instance.ClassFactory.GetRegistration(BaseAction, classKey) !== null;
-   }
-
-   /** True when `action` can run in this process: a Runtime action, or one whose class is registered. */
-   public IsActionClassLoaded(action: Pick<MJActionEntity, 'Type' | 'DriverClass' | 'Name'>): boolean {
-      return action.Type === 'Runtime' || this.IsActionClassRegistered(this.ActionClassKey(action));
    }
 
    // ── Proxied cached collections (single source of truth: ActionEngineBase.Instance) ──
@@ -659,7 +644,7 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
    protected CreateActionInstance(params: RunActionParams): BaseAction | null {
       const action = MJGlobal.Instance.ClassFactory.CreateInstance<BaseAction>(
          BaseAction,
-         this.ActionClassKey(params.Action),
+         params.Action.DriverClass || params.Action.Name,
          params.ContextUser
       );
       return action && action.constructor !== BaseAction ? action : null;

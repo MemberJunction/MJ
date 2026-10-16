@@ -282,12 +282,6 @@ When the sweep reclaims a hung job's lease:
 
 The engine loads the job list ONCE at `StartPolling` time. Runtime changes to the `MJ: Scheduled Jobs` table (adds, deletions, cron edits) are NOT picked up automatically by the engine. Callers must explicitly invoke `await engine.OnJobChanged(contextUser)` after making such changes. This is pre-existing behavior — not changed by v5.39 — but worth calling out because the per-poll `Config(false)` no-op was moved out of the poll path, making the explicit `OnJobChanged` trigger the only refresh mechanism.
 
-### Action jobs whose class is not loaded
-
-When a class-based action's class is not registered in the server (its app installed database-only), `ActionScheduledJobDriver`
-pauses the job instead of failing it on every run: `Status = 'Paused'` and `"PausedForMissingClass": "<class key>"` in its
-`Configuration`. At its next start, a server that loads the class sets the job back to `Active` and removes the marker.
-
 ### Graceful shutdown
 
 `StopPolling({ waitForInflight, maxWaitMs })` lets shutdown wait for dispatched jobs to settle:

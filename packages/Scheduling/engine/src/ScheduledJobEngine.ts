@@ -25,7 +25,6 @@ import { BaseScheduledJob, ScheduledJobExecutionContext } from './BaseScheduledJ
 import { DecideMissedRun } from './MissedRunPolicy';
 import { CronExpressionHelper } from './CronExpressionHelper';
 import { NotificationManager } from './NotificationManager';
-import { ActionScheduledJobDriver } from './drivers/ActionScheduledJobDriver';
 
 /**
  * Engine for managing scheduled job execution
@@ -67,13 +66,6 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
     private pollingTimer?: NodeJS.Timeout;
     private isPolling: boolean = false;
     private hasInitialized: boolean = false;
-
-    /**
-     * True while {@link StartPolling} is running its upfront work. A job-change event raised by that work (the saves
-     * of a resumed job or of initializeNextRunTimes) re-enters StartPolling through {@link onBaseJobsChanged} before
-     * `isPolling` is set; this flag turns that re-entry into a no-op so only one poll timer is armed.
-     */
-    private startingPolling: boolean = false;
 
     /**
      * Subscription to the base engine's {@link SchedulingEngineBase.JobsChanged$}. Created
@@ -315,29 +307,14 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
      * @param contextUser - User context for execution
      */
     public async StartPolling(contextUser: UserInfo): Promise<void> {
-        if (this.isPolling || this.startingPolling) {
+        if (this.isPolling) {
             this.log('Polling already started');
             return;
         }
-        this.startingPolling = true;
-        try {
-            await this.startPollingOnce(contextUser);
-        } finally {
-            this.startingPolling = false;
-        }
-    }
-
-    /**
-     * The body of {@link StartPolling}, run by at most one caller at a time.
-     * @private
-     */
-    private async startPollingOnce(contextUser: UserInfo): Promise<void> {
 
         // Upfront work — done ONCE before any poll fires.
-        // Order: resume jobs paused for a missing action class whose class is now loaded (so Config loads them as
-        // Active), then Config (so this.ScheduledJobs is populated), then initializeNextRunTimes / cleanupStaleLocks /
-        // permission probe.
-        await this.resumeJobsPausedForMissingClass(contextUser);
+        // Order: Config first (so this.ScheduledJobs is populated), then
+        // initializeNextRunTimes / cleanupStaleLocks / permission probe.
         await this.Config(false, contextUser);
 
         // Retain the context user and subscribe to job-change notifications BEFORE the
@@ -400,22 +377,6 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
         // us between StartPolling returning and the first poll firing.
         this.pollingTimer = setTimeout(poll, this.ActivePollingInterval ?? 60_000);
         this.log('Started scheduled job polling');
-    }
-
-    /**
-     * Sets jobs paused for a missing action class back to Active when this server loads the class. A failure is
-     * logged and polling still starts.
-     * @private
-     */
-    private async resumeJobsPausedForMissingClass(contextUser: UserInfo): Promise<void> {
-        try {
-            const resumed = await ActionScheduledJobDriver.ResumeJobsPausedForMissingClass(contextUser, this.Base.ProviderToUse);
-            if (resumed.length > 0) {
-                console.log(`📅 Scheduled Jobs: resumed ${resumed.length} job(s) whose action class is now loaded: ${resumed.join(', ')}`);
-            }
-        } catch (error) {
-            this.logError('Resuming jobs paused for a missing action class failed (polling continues)', error);
-        }
     }
 
     /**
@@ -538,9 +499,8 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
      * it has reconciled and Active-filtered {@link ScheduledJobs}). Recomputes the polling
      * cadence and — if polling is currently suspended but active jobs now exist — restarts it.
      *
-     * Re-entry is safe: saves made during {@link StartPolling}'s upfront work (resumed jobs,
-     * initializeNextRunTimes) emit change events that call back into StartPolling, which returns
-     * at once while `startingPolling` is set — and also once polling is running.
+     * Cannot recurse: {@link StartPolling} calls `Config(false)`, a no-op once metadata is
+     * loaded, so it emits no further change events; and it short-circuits when already polling.
      */
     private async onBaseJobsChanged(): Promise<void> {
         try {

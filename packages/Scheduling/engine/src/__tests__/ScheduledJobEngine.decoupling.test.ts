@@ -244,11 +244,6 @@ vi.mock('@memberjunction/scheduling-engine-base', () => {
     };
 });
 
-// The engine resumes jobs paused for a missing action class at StartPolling; the real driver pulls in the action engine.
-vi.mock('../drivers/ActionScheduledJobDriver', () => ({
-    ActionScheduledJobDriver: { ResumeJobsPausedForMissingClass: vi.fn().mockResolvedValue([]) }
-}));
-
 vi.mock('../CronExpressionHelper', () => ({
     CronExpressionHelper: {
         GetNextRunTime: vi.fn().mockReturnValue(new Date('2099-01-01T00:00:00Z')),

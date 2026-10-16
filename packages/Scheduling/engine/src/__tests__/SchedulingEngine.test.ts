@@ -159,14 +159,6 @@ vi.mock('@memberjunction/scheduling-engine-base', () => ({
     }
 }));
 
-const { mockResumePausedJobs } = vi.hoisted(() => ({ mockResumePausedJobs: vi.fn() }));
-
-// The engine resumes jobs paused for a missing action class at StartPolling; the real driver pulls in the action
-// engine, which this suite does not mock.
-vi.mock('../drivers/ActionScheduledJobDriver', () => ({
-    ActionScheduledJobDriver: { ResumeJobsPausedForMissingClass: mockResumePausedJobs }
-}));
-
 vi.mock('../CronExpressionHelper', () => ({
     CronExpressionHelper: {
         GetNextRunTime: vi.fn().mockReturnValue(new Date('2025-06-01T00:00:00Z')),
@@ -182,7 +174,6 @@ vi.mock('../NotificationManager', () => ({
 }));
 
 import { SchedulingEngine } from '../ScheduledJobEngine';
-import { UserInfo } from '@memberjunction/core';
 import { CronExpressionHelper } from '../CronExpressionHelper';
 
 describe('SchedulingEngine', () => {
@@ -200,7 +191,6 @@ describe('SchedulingEngine', () => {
         (CronExpressionHelper.GetNextRunTime as ReturnType<typeof vi.fn>).mockReturnValue(new Date('2025-06-01T00:00:00Z'));
         (CronExpressionHelper.IsExpressionDue as ReturnType<typeof vi.fn>).mockReturnValue(false);
         (CronExpressionHelper.GetMinIntervalMs as ReturnType<typeof vi.fn>).mockReturnValue(86_400_000);
-        mockResumePausedJobs.mockResolvedValue([]);
         // Access the singleton and reset its state
         engine = SchedulingEngine.Instance;
         // Stop any existing polling
@@ -255,44 +245,6 @@ describe('SchedulingEngine', () => {
         it('should set IsPolling to true', async () => {
             const mockUser = { ID: 'user-1' } as Parameters<typeof engine.StartPolling>[0];
             mockBase.ScheduledJobs = [{ ID: 'job-1', Name: 'TestJob', Status: 'Active' }];
-            await engine.StartPolling(mockUser);
-            expect(engine.IsPolling).toBe(true);
-            await engine.StopPolling();
-            mockBase.ScheduledJobs = [];
-        });
-
-        it('resumes jobs paused for a missing action class before it loads the active jobs', async () => {
-            const mockUser = new UserInfo();
-            mockBase.ScheduledJobs = [{ ID: 'job-1', Name: 'TestJob', Status: 'Active' }];
-            mockResumePausedJobs.mockResolvedValue(['Sync']);
-            await engine.StartPolling(mockUser);
-            expect(mockResumePausedJobs).toHaveBeenCalledWith(mockUser, mockBase.ProviderToUse);
-            expect(mockResumePausedJobs.mock.invocationCallOrder[0]).toBeLessThan(mockBase.Config.mock.invocationCallOrder[0]);
-            await engine.StopPolling();
-            mockBase.ScheduledJobs = [];
-        });
-
-        it('ignores a StartPolling re-entered by a job-change event raised during its own upfront work', async () => {
-            const mockUser = new UserInfo();
-            mockBase.ScheduledJobs = [{ ID: 'job-1', Name: 'TestJob', Status: 'Active' }];
-            let reentry: Promise<void> | undefined;
-            mockResumePausedJobs.mockImplementationOnce(async () => {
-                // A resumed job's save fires JobsChanged$, whose handler calls StartPolling before isPolling is set.
-                reentry = engine.StartPolling(mockUser);
-                return ['Sync'];
-            });
-            await engine.StartPolling(mockUser);
-            await reentry;
-            expect(mockResumePausedJobs).toHaveBeenCalledTimes(1);
-            expect(mockBase.Config).toHaveBeenCalledTimes(1);
-            await engine.StopPolling();
-            mockBase.ScheduledJobs = [];
-        });
-
-        it('keeps polling when resuming the paused jobs fails', async () => {
-            const mockUser = new UserInfo();
-            mockBase.ScheduledJobs = [{ ID: 'job-1', Name: 'TestJob', Status: 'Active' }];
-            mockResumePausedJobs.mockRejectedValue(new Error('Reading paused scheduled jobs failed: timeout'));
             await engine.StartPolling(mockUser);
             expect(engine.IsPolling).toBe(true);
             await engine.StopPolling();
