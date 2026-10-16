@@ -1,5 +1,5 @@
 import { ClientRealtimeSessionConfig, JSONObject, ResolveResponseDoneUsage } from '@memberjunction/ai';
-import { BaseRealtimeClient, RealtimeClientState } from './baseRealtimeClient';
+import { BaseRealtimeClient, RealtimeClientState, ToProviderSessionConfig } from './baseRealtimeClient';
 import { base64ToArrayBuffer } from '../audio/pcmUtils';
 import { IRealtimePcmPlayback, RealtimePcmPlayback } from '../audio/pcmPlayback';
 import { RealtimeAudioMeter } from '../audio/audioMeter';
@@ -916,9 +916,12 @@ export abstract class OpenAIProtocolWebSocketRealtimeClient extends OpenAIProtoc
 
     /** Opens the provider socket for this connection (drivers own URL/auth specifics). */
     protected abstract openProviderSocket(config: ClientRealtimeSessionConfig): IOpenAIProtocolClientSocket;
-    /** Extracts the wire-shaped `session` object from the server pact. Default: the pact itself. */
+    /**
+     * Extracts the wire-shaped `session` object from the server pact. Default: the pact minus the
+     * client-only hints ({@link ToProviderSessionConfig}).
+     */
     protected resolveSessionObject(config: ClientRealtimeSessionConfig): JSONObject {
-        return config.SessionConfig ?? {};
+        return ToProviderSessionConfig(config.SessionConfig ?? {});
     }
     /** Resolves the PCM sample rate for the audio plane (both directions). */
     protected abstract resolveSampleRate(config: ClientRealtimeSessionConfig): number;

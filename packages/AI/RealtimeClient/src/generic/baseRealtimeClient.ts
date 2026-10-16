@@ -1,6 +1,7 @@
 import {
     ClientRealtimeSessionConfig,
     DEFAULT_REALTIME_AUDIO_TRACKS,
+    JSONObject,
     RealtimeTrack,
     RealtimeTrackDescriptor,
     RealtimeTrackDirection,
@@ -8,6 +9,25 @@ import {
     RealtimeUsageModalityDetail,
 } from '@memberjunction/ai';
 import { IRealtimeAudioMeter, REALTIME_AUDIO_BIN_COUNT } from '../audio/audioMeter';
+
+/**
+ * Session-config key under which the realtime runtime hands a driver the tracks to negotiate
+ * (`RealtimeSessionRuntime.BuildClientConfig` aggregates them from the active channels). It is a
+ * CLIENT-side negotiation hint, never a provider field: a driver reads it (Gemini) or ignores it.
+ */
+export const REQUESTED_TRACKS_SESSION_KEY = 'requestedTracks';
+
+/**
+ * The session config as the PROVIDER must receive it: the server-built config minus the
+ * client-only hints the runtime adds. Drivers that send the config on the wire go through this —
+ * OpenAI's Realtime API rejects the WHOLE `session.update` on an unknown key
+ * (`unknown_parameter: 'session.requestedTracks'`), so one stray hint costs the session its
+ * instructions and every tool.
+ */
+export function ToProviderSessionConfig(sessionConfig: JSONObject): JSONObject {
+    const { [REQUESTED_TRACKS_SESSION_KEY]: _clientOnly, ...providerConfig } = sessionConfig;
+    return providerConfig;
+}
 
 /**
  * A point-in-time snapshot of the session's audible activity, sampled by the host

@@ -1,7 +1,7 @@
 import { RegisterClass } from '@memberjunction/global';
 import { ClientRealtimeSessionConfig, JSONObject } from '@memberjunction/ai';
 import { RealtimeAudioMeter } from '../audio/audioMeter';
-import { BaseRealtimeClient } from '../generic/baseRealtimeClient';
+import { BaseRealtimeClient, ToProviderSessionConfig } from '../generic/baseRealtimeClient';
 import {
     OpenAIProtocolRealtimeClient,
     OpenAIProtocolClientEvent,
@@ -362,7 +362,7 @@ export class OpenAIRealtimeClient extends OpenAIProtocolRealtimeClient {
             return;
         }
         if (channel.readyState === 'open') {
-            channel.send(JSON.stringify({ type: 'session.update', session: this.sessionConfig }));
+            channel.send(JSON.stringify({ type: 'session.update', session: ToProviderSessionConfig(this.sessionConfig) }));
         }
     }
 }
