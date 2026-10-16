@@ -111,6 +111,8 @@ export class LLMFeaturePipelineDriver extends BaseFeaturePipelineDriver {
         params.contextUser = context.contextUser;
         // A Feature Value is keyed on the pipeline's pinned parameters, so a call that would send others is refused
         params.strictParameters = true;
+        // The template is a prompt for a model, not HTML: a title such as "Affineur & Owner" must reach it unescaped
+        params.templateAutoescape = false;
         return params;
     }
 }

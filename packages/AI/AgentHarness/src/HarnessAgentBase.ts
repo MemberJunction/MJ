@@ -821,8 +821,6 @@ export class HarnessAgentBase extends BaseAgent {
                     { ...(promptParams.data ?? {}), ...(promptParams.templateData ?? {}) },
                     true,
                     true,
-                    // plain text for a model, not HTML — the same raw render AIPromptRunner makes
-                    { autoescape: false },
                 );
                 if (rendered.Success && rendered.Output?.trim()) {
                     return rendered.Output;

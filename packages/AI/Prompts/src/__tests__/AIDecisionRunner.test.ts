@@ -568,7 +568,21 @@ describe('AIDecisionRunner', () => {
     expect(result.Answers).toEqual({});
   });
 
-  it('renders the state template without HTML escaping, since the state is plain text for the model', async () => {
+  it('renders the state template raw when templateAutoescape is false', async () => {
+    const params = new AIDecisionParams();
+    params.prompt = makeDecisionPrompt({ TemplateID: TEMPLATE_ID });
+    params.Questions = defaultQuestions;
+    params.data = { entityId: 'Affineur & Owner' };
+    params.provider = fakeProvider;
+    params.templateAutoescape = false;
+
+    h.mockRenderTemplate.mockClear();
+    await runner.ExecuteDecision(params);
+
+    expect(h.mockRenderTemplate.mock.calls[0][5]).toEqual({ autoescape: false });
+  });
+
+  it('renders the state template with the engine default when templateAutoescape is unset', async () => {
     const params = new AIDecisionParams();
     params.prompt = makeDecisionPrompt({ TemplateID: TEMPLATE_ID });
     params.Questions = defaultQuestions;
@@ -578,7 +592,7 @@ describe('AIDecisionRunner', () => {
     h.mockRenderTemplate.mockClear();
     await runner.ExecuteDecision(params);
 
-    expect(h.mockRenderTemplate.mock.calls[0][5]).toEqual({ autoescape: false });
+    expect(h.mockRenderTemplate.mock.calls[0][5]).toBeUndefined();
   });
 
   // 4. Template rendering path: when State is omitted from params, renders template and passes rendered string to driver

@@ -1,4 +1,4 @@
-/** A prompt template's output is plain text for a model, so both of the runner's template renders ask for a raw render. */
+/** Both of the runner's template renders honour AIPromptParams.templateAutoescape: raw when false, the engine default otherwise. */
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { BaseEntity, EntityInfo } from '@memberjunction/core';
 import { MJTemplateContentEntity, MJTemplateEntityExtended } from '@memberjunction/core-entities';
@@ -43,23 +43,46 @@ function makeRunner(template: MJTemplateEntityExtended) {
     return { runner, render, params };
 }
 
-describe('AIPromptRunner renders prompt templates without HTML escaping', () => {
+describe('AIPromptRunner template rendering and templateAutoescape', () => {
     afterEach(() => {
         vi.restoreAllMocks();
     });
 
-    it('passes autoescape: false to the template engine', async () => {
+    it('renders with the engine default (escaped) when templateAutoescape is unset', async () => {
         const template = makeTemplate();
         const { runner, render, params } = makeRunner(template);
+
+        await runner['renderPromptTemplate'](template, params);
+
+        expect(render).toHaveBeenCalledTimes(1);
+        expect(render.mock.calls[0][5]).toBeUndefined();
+    });
+
+    it('renders raw when templateAutoescape is false', async () => {
+        const template = makeTemplate();
+        const { runner, render, params } = makeRunner(template);
+        params.templateAutoescape = false;
 
         await runner['renderPromptTemplate'](template, params);
 
         expect(render.mock.calls[0][5]).toEqual({ autoescape: false });
     });
 
-    it('passes autoescape: false when rendering a parent prompt with its child templates', async () => {
+    it('renders a parent prompt with its child templates using the engine default when templateAutoescape is unset', async () => {
         const template = makeTemplate();
         const { runner, render, params } = makeRunner(template);
+        const prompt = entity(MJAIPromptEntityExtended, 'MJ: AI Prompts', { ID: 'P', Name: 'Parent', TemplateID: 'T' });
+
+        await runner['renderPromptWithChildTemplates'](prompt, params, { child: 'Affineur & Owner' });
+
+        expect(render).toHaveBeenCalledTimes(1);
+        expect(render.mock.calls[0][5]).toBeUndefined();
+    });
+
+    it('renders a parent prompt with its child templates raw when templateAutoescape is false', async () => {
+        const template = makeTemplate();
+        const { runner, render, params } = makeRunner(template);
+        params.templateAutoescape = false;
         const prompt = entity(MJAIPromptEntityExtended, 'MJ: AI Prompts', { ID: 'P', Name: 'Parent', TemplateID: 'T' });
 
         await runner['renderPromptWithChildTemplates'](prompt, params, { child: 'Affineur & Owner' });

@@ -504,6 +504,14 @@ describe('DecisionFeaturePipelineDriver', () => {
             expect(req.Hooks.AfterPromptExecute).not.toHaveBeenCalled();
         });
 
+        it('renders the decision prompt template raw, since the state is plain text for the model', async () => {
+            const runner = answerWith(decided({ Status: choice('Open', 0.9, { Open: 0.9, Closed: 0.1 }) }));
+
+            await driver.ComputeOutputs(request(decisionSpec([statusOutput()])));
+
+            expect(runner.Calls[0].templateAutoescape).toBe(false);
+        });
+
         it("asks a field-backed enum's options, with their descriptions, from the record entity's field", async () => {
             const runner = answerWith(decided({ Status: choice('Open', 0.9, { Open: 0.9, Closed: 0.1 }) }));
 

@@ -509,6 +509,13 @@ export class AIPromptParams extends AIModelRunParams {
   strictParameters?: boolean;  // case-violation-ok-legacy-back-compat: new member of shipped camelCase AIPromptParams keeps its casing
 
   /**
+   * When false, the prompt's template renders without HTML escaping: its output is plain text for a model, not HTML.
+   * Unset keeps the template engine's default (escaped), as every caller got before this member existed. Feature
+   * Pipeline drivers set it to false.
+   */
+  templateAutoescape?: boolean;  // case-violation-ok-legacy-back-compat: new member of shipped camelCase AIPromptParams keeps its casing
+
+  /**
    * Optional prompt to use for model selection instead of the main prompt.
    * When executing hierarchical prompts, this allows using a child prompt's model
    * selection configuration instead of the parent prompt's configuration.

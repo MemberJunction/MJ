@@ -104,6 +104,7 @@ export class DecisionFeaturePipelineDriver extends BaseFeaturePipelineDriver {
         params.contextUser = context.contextUser;
         params.State = serializedState;
         params.Questions = questions;
+        params.templateAutoescape = false; // the state is plain text for the decision model, not HTML
 
         const runner = this.CreateDecisionRunner();
         const result = await runner.ExecuteDecision(params);

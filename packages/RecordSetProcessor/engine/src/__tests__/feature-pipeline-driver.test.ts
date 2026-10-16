@@ -439,6 +439,7 @@ describe('Feature Pipeline driver seam', () => {
             const out = await new LLMFeaturePipelineDriver().ComputeOutputs(request);
             const sent: AIPromptParams = executePrompt.mock.calls[0][0];
             expect(sent.strictParameters).toBe(true);
+            expect(sent.templateAutoescape).toBe(false);
             expect('ErrorMessage' in out ? null : out.ParameterFidelity).toEqual(fidelity);
         });
 
