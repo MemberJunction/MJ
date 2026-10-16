@@ -11,7 +11,7 @@
  * @since 2.49.0
  */
 
-import { MJAIAgentTypeEntity,  MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentConfigurationEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity, MJAISkillEntity, MJEnvironmentEntityExtended, MJConversationSkillEntity, MJAIVendorEntity, ConversationEngine, type ConversationBranchRow } from '@memberjunction/core-entities';
+import { MJAIAgentEntity, MJAIAgentTypeEntity, MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentConfigurationEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity, MJAISkillEntity, MJEnvironmentEntityExtended, MJConversationSkillEntity, MJAIVendorEntity, ConversationEngine, type ConversationBranchRow } from '@memberjunction/core-entities';
 import { BuildActionToolSet, FilterDeclarableActions, SanitizeToolName } from './native-tools/action-tool-builder';
 import { BuildNativeToolSet, COMPLETE_TASK_TOOL, SUB_AGENT_TOOL_PREFIX, type NativeToolBinding } from './native-tools/control-tools';
 import { BuildAssistantToolCallTurn, BuildToolResultTurn, CompactToolResultContent, type NativeToolResult } from './native-tools/tool-result-turns';
@@ -1853,9 +1853,9 @@ export class BaseAgent {
      * Populated when a child sub-agent pauses with `FinalStep === 'Chat'` under `'Consult'`,
      * and removed when the parent resumes that child run.
      * Reset at the start of each agent run.
-     * @protected
+     * @private
      */
-    protected _openSubAgentConsults: Map<string, SubAgentConsultRecord> = new Map();
+    private _openSubAgentConsults: Map<string, SubAgentConsultRecord> = new Map();
 
     /**
      * Tracks whether we have already logged the warning that `'Consult'` is not
@@ -6920,13 +6920,8 @@ export class BaseAgent {
     private resolveSubAgentChatHandlingOption(
         parentAgent: MJAIAgentEntityExtended,
         relationship?: MJAIAgentRelationshipEntity
-    ): 'Consult' | 'Failed' | 'Retry' | 'Success' | null {
-        return (relationship?.ChatHandlingOption ?? parentAgent.ChatHandlingOption ?? null) as
-            | 'Consult'
-            | 'Failed'
-            | 'Retry'
-            | 'Success'
-            | null;
+    ): MJAIAgentEntity['ChatHandlingOption'] {
+        return relationship?.ChatHandlingOption ?? parentAgent.ChatHandlingOption ?? null;
     }
 
     /**
@@ -6940,7 +6935,7 @@ export class BaseAgent {
      * @private
      */
     private isSubAgentConsultActive(
-        resolvedOption: 'Consult' | 'Failed' | 'Retry' | 'Success' | null,
+        resolvedOption: MJAIAgentEntity['ChatHandlingOption'],
         params?: ExecuteAgentParams
     ): boolean {
         if (resolvedOption !== 'Consult') {
@@ -6969,7 +6964,7 @@ export class BaseAgent {
         parentAgent: MJAIAgentEntityExtended,
         relationship?: MJAIAgentRelationshipEntity,
         params?: ExecuteAgentParams
-    ): 'Consult' | 'Failed' | 'Retry' | 'Success' | null {
+    ): MJAIAgentEntity['ChatHandlingOption'] {
         const resolved = this.resolveSubAgentChatHandlingOption(parentAgent, relationship);
         if (resolved === 'Consult' && !this.isSubAgentConsultActive(resolved, params)) {
             return null;
@@ -7018,7 +7013,7 @@ export class BaseAgent {
         currentPayload: P,
         agentRun: MJAIAgentRunEntityExtended,
         currentStep: MJAIAgentRunStepEntityExtended,
-        chatHandlingOption?: 'Consult' | 'Failed' | 'Retry' | 'Success' | null
+        chatHandlingOption?: MJAIAgentEntity['ChatHandlingOption']
     ): Promise<BaseAgentNextStep<P>> {
         // Use caller-resolved option when provided; otherwise fall back to params.agent.ChatHandlingOption
         const effectiveOption = chatHandlingOption !== undefined
@@ -16169,11 +16164,6 @@ The context is now within limits. Please retry your request with the recovered c
                 contextMessage, // Context message with parent payload data (or undefined if no context paths)
                 stepCount
             );
-
-            if (stepEntity && subAgentResult.agentRun?.ID) {
-                stepEntity.TargetLogID = subAgentResult.agentRun.ID;
-                stepEntity.SubAgentRun = subAgentResult.agentRun;
-            }
 
             // Merge sub-agent's media outputs into parent's array.
             // This includes both promoted media and intercepted binary (with refIds) for placeholder resolution.

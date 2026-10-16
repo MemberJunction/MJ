@@ -24,7 +24,7 @@ export interface SubAgentConsultRecord {
     subAgentId: string;
     subAgentName: string;
     round: number;
-    question: string;
+    question: string | null;
 }
 
 /**
@@ -34,7 +34,7 @@ export interface FormatSubAgentConsultMessageParams {
     subAgentName: string;
     round: number;
     maxRounds: number;
-    question: string;
+    question: string | null;
     responseForm?: AgentResponseForm | null;
     childRunId: string;
 }
@@ -94,9 +94,10 @@ function extractQuestionOptionLabels(question: FormQuestion): string[] {
  * when a sub-agent pauses with `FinalStep === 'Chat'` under `'Consult'`.
  */
 export function FormatSubAgentConsultMessage(params: FormatSubAgentConsultMessageParams): string {
+    const questionText = params.question?.trim() ? params.question : '(no message provided)';
     const lines: string[] = [
         `## Sub-agent ${params.subAgentName} is asking you (round ${params.round} of ${params.maxRounds})`,
-        `**Question:** ${params.question}`,
+        `**Question:** ${questionText}`,
     ];
 
     const formSummary = FormatResponseFormSummary(params.responseForm);

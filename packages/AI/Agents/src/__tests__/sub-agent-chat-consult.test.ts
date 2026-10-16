@@ -29,7 +29,7 @@ import {
 } from '@memberjunction/ai-core-plus';
 import { RecordToolCallingDecision } from '@memberjunction/ai-prompts';
 import { SanitizeToolName } from '../native-tools/action-tool-builder';
-import { LogStatus } from '@memberjunction/core';
+import { LogError, LogStatus } from '@memberjunction/core';
 import type { ChatMessage, IMetadataProvider, MJAIAgentRelationshipEntity, UserInfo } from '@memberjunction/core';
 
 // ============================================================================
@@ -572,6 +572,27 @@ describe('VS-CON-2: Sub-Agent Consult pure formatting helpers', () => {
         expect(msg).toContain('**Child run ID:** run-sub-123');
         expect(msg).toContain('Answer this question from what you already know, ask your own caller with a Chat step only if they alone can answer, or tell the sub-agent to proceed without it.');
     });
+
+    it('FormatSubAgentConsultMessage uses "(no message provided)" when question is null or empty and never prints "null"', () => {
+        const msgNull = FormatSubAgentConsultMessage({
+            subAgentName: 'ScriptwriterSubAgent',
+            round: 1,
+            maxRounds: 3,
+            question: null,
+            childRunId: 'run-sub-null',
+        });
+        expect(msgNull).toContain('**Question:** (no message provided)');
+        expect(msgNull).not.toContain('**Question:** null');
+
+        const msgBlank = FormatSubAgentConsultMessage({
+            subAgentName: 'ScriptwriterSubAgent',
+            round: 1,
+            maxRounds: 3,
+            question: '   ',
+            childRunId: 'run-sub-blank',
+        });
+        expect(msgBlank).toContain('**Question:** (no message provided)');
+    });
 });
 
 // ============================================================================
@@ -752,6 +773,7 @@ describe('VS-CON-2: Sub-Agent Consult flow in BaseAgent.Execute()', () => {
         expect(result.agentRun.Status).toBe('AwaitingFeedback');
         expect(result.agentRun.FinalStep).toBe('Chat');
         expect(result.agentRun.Message).toBe('Could you tell me your brand primary hex color?');
+        expect(LogError).not.toHaveBeenCalledWith(expect.stringContaining('Invalid ChatHandlingOption'));
     });
 
     it('Case 3 & 4 (Bound exceeded + Default bound): MaxSubAgentConsultRounds=2 gives 2 consults then propagates 3rd Chat; NULL gives default 3 consults then propagates 4th Chat', async () => {
@@ -1396,5 +1418,102 @@ describe('VS-CON-2: Sub-Agent Consult flow in BaseAgent.Execute()', () => {
         const nonConsultRelatedData = await gatherFor(related, 1, parentRun);
         expect(nonConsultRelatedData.parentConsults).toBeUndefined();
     });
+
+    it('Single-path terminateAfter:true under Consult does not end the parent: runner gets a second call and OutputData has shouldTerminate:false and a consult record', async () => {
+        const childAgent = registerChildSubAgent();
+        const childRunId = 'bbbbbbbb-2222-4000-8000-000000000055';
+
+        harness.executeSubAgentHandler = async () =>
+            makeSubAgentChatResult({
+                runId: childRunId,
+                agentId: childAgent.ID,
+                agentName: childAgent.Name,
+                message: 'Should I include captions?',
+            });
+
+        const { agent, runner, flushSteps } = makeAgent([
+            () =>
+                llmEnvelope({
+                    taskComplete: false,
+                    message: 'Delegating with terminateAfter: true',
+                    nextStep: {
+                        type: 'Sub-Agent',
+                        subAgent: {
+                            name: 'ScriptwriterSubAgent',
+                            message: 'Write final script',
+                            terminateAfter: true,
+                        },
+                    },
+                }),
+            () =>
+                llmEnvelope({
+                    taskComplete: true,
+                    message: 'Resolved after consult on second turn',
+                }),
+        ]);
+
+        const result = await agent.Execute(makeParams());
+        await flushSteps();
+
+        expect(result.success).toBe(true);
+        expect(runner.Calls).toHaveLength(2);
+        const subAgentStep = harness.steps.find(s => s.StepType === 'Sub-Agent');
+        expect(subAgentStep).toBeDefined();
+        const parsedOutput = JSON.parse(subAgentStep?.OutputData ?? '{}');
+        expect(parsedOutput.shouldTerminate).toBe(false);
+        expect(parsedOutput.consult).toEqual({
+            childRunId,
+            subAgentId: childAgent.ID,
+            subAgentName: 'ScriptwriterSubAgent',
+            round: 1,
+            question: 'Should I include captions?',
+        });
+    });
+
+    it('Related sub-agent path does not roll child TotalCost or TotalTokensUsed into the parent run totals', async () => {
+        const { subAgent } = registerRelatedSubAgent(
+            {},
+            { ChatHandlingOption: 'Consult' }
+        );
+        harness.executeSubAgentHandler = async () =>
+            makeSubAgentSuccessResult({
+                runId: 'cccccccc-2222-4000-8000-000000000077',
+                agentId: subAgent.ID,
+                agentName: subAgent.Name,
+                payload: { voiceCast: 'warm' },
+            });
+
+        const { agent, runner, flushSteps } = makeAgent([
+            () =>
+                llmEnvelope({
+                    taskComplete: false,
+                    message: 'Calling related VoiceCastingAgent',
+                    nextStep: {
+                        type: 'Sub-Agent',
+                        subAgent: {
+                            name: 'VoiceCastingAgent',
+                            message: 'Cast voice',
+                            terminateAfter: false,
+                        },
+                    },
+                }),
+            () =>
+                llmEnvelope({
+                    taskComplete: true,
+                    message: 'Completed after related sub-agent',
+                }),
+        ]);
+
+        const result = await agent.Execute(makeParams());
+        await flushSteps();
+
+        expect(result.success).toBe(true);
+        expect(runner.Calls).toHaveLength(2);
+        // makeSubAgentSuccessResult sets child TotalCost=0.01 and TotalTokensUsed=40;
+        // parent prompt calls have 0 cost/tokens, so parent TotalCost must remain 0.
+        expect(result.agentRun.TotalCost).toBe(0);
+        expect(result.agentRun.TotalTokensUsed).toBe(0);
+    });
 });
+
 
