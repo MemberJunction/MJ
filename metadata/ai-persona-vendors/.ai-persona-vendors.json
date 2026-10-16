@@ -338,6 +338,10 @@
     "relatedEntities": {},
     "primaryKey": {
       "ID": "4C699EF4-5AD4-454E-965F-F2ACE2C146D2"
+    },
+    "sync": {
+      "lastModified": "2026-10-13T18:59:59.747Z",
+      "checksum": "b31b3e65a150b8280a8113cf3d825cc0e39c01db093ac7489044f7883b50b320"
     }
   },
   {
@@ -355,6 +359,10 @@
     "relatedEntities": {},
     "primaryKey": {
       "ID": "7DBC8C6C-C70D-42AE-B782-908C4BA94B43"
+    },
+    "sync": {
+      "lastModified": "2026-10-13T18:59:59.770Z",
+      "checksum": "a0c1574f5f9d3fd3896ee183fceb2a69989b29aee96788f02857c0b8ac523eab"
     }
   },
   {
@@ -372,6 +380,10 @@
     "relatedEntities": {},
     "primaryKey": {
       "ID": "376C9056-2036-426A-B2CD-1C589BEA99D9"
+    },
+    "sync": {
+      "lastModified": "2026-10-13T18:59:59.790Z",
+      "checksum": "98f7b184d67a6da4f462fd429b59724ba39cbfd84696f92685bed690a434daa8"
     }
   },
   {
@@ -389,6 +401,10 @@
     "relatedEntities": {},
     "primaryKey": {
       "ID": "E1B458AF-9984-4182-A666-5A80AB0C08EA"
+    },
+    "sync": {
+      "lastModified": "2026-10-13T18:59:59.813Z",
+      "checksum": "0f14d357142a393c980967508be72dffbeaadc3cf7fc7e37d21561dcb8fdf4c1"
     }
   },
   {
@@ -406,6 +422,10 @@
     "relatedEntities": {},
     "primaryKey": {
       "ID": "75D9DAE7-B0E9-4672-B233-EEA2D36E2E07"
+    },
+    "sync": {
+      "lastModified": "2026-10-13T18:59:59.838Z",
+      "checksum": "41dac9d486750b580a3099b0bdd4764fe5b8e413bb3e25ee54910ab09f7fb700"
     }
   },
   {
@@ -423,6 +443,10 @@
     "relatedEntities": {},
     "primaryKey": {
       "ID": "B8205D0F-4B86-47B3-9657-32297A4D4046"
+    },
+    "sync": {
+      "lastModified": "2026-10-13T18:59:59.872Z",
+      "checksum": "49546ac195441b045f7e1f8dacfe34a7c8b7bf1f36f92fb0fc40a76bfbdecb99"
     }
   },
   {
@@ -445,6 +469,10 @@
     "relatedEntities": {},
     "primaryKey": {
       "ID": "549D0E7C-2E3F-44C6-A60A-6F40F418336B"
+    },
+    "sync": {
+      "lastModified": "2026-10-13T18:59:59.896Z",
+      "checksum": "2c6f48cd155979cecd8b041e9ff65ef7c207b7c201bc5724952abdbe8e9b0647"
     }
   },
   {

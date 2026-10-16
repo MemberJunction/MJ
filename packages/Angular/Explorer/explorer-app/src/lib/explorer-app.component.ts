@@ -8,23 +8,25 @@
  *   <mj-explorer-app></mj-explorer-app>
  */
 
-import { Component, OnInit, OnDestroy, Inject, Input, Optional, ViewEncapsulation, ChangeDetectorRef, ViewContainerRef, ComponentRef, Type, EnvironmentInjector, ContentChildren, QueryList, TemplateRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, Inject, Input, Optional, ViewEncapsulation, ChangeDetectorRef, ViewContainerRef, ComponentRef, Type, EnvironmentInjector, ContentChildren, QueryList, TemplateRef, viewChild } from '@angular/core';
 import { DOCUMENT } from '@angular/common';
 import { Router, NavigationEnd } from '@angular/router';
 import { Subject } from 'rxjs';
 import { filter, take, takeUntil } from 'rxjs/operators';
-import { CompositeKey, EntityInfo, LogError, Metadata, SetProductionStatus, type PublicAuthProviderInfo } from '@memberjunction/core';
+import { CompositeKey, EntityInfo, LogError, Metadata, ResolveMJAPIURL, SetProductionStatus, type PublicAuthProviderInfo } from '@memberjunction/core';
 import {
   MJAuthBase,
   StandardUserInfo,
   AuthErrorType,
   AuthProviderCatalog,
+  LoginScreenLoader,
   MJ_AUTH_PROVIDER_RESOLUTION,
   type AuthProviderResolution
 } from '@memberjunction/ng-auth-services';
+import { LoginDesignTokens, LoginThemeTokens, type LoginBlock, type LoginDesign, type LoginRegion, type PublicLoginScreen, type ThemeLogos } from '@memberjunction/theme-engine';
 import { WorkspaceInitializerService } from '@memberjunction/ng-workspace-initializer';
 import { MJEnvironmentConfig, MJ_ENVIRONMENT } from '@memberjunction/ng-bootstrap';
-import { SystemValidationService, ServerConnectivityService } from '@memberjunction/ng-explorer-core';
+import { SystemValidationService, ServerConnectivityService, ServerConnectivityBannerComponent } from '@memberjunction/ng-explorer-core';
 import { NavigationService, AgentContextUpdate, RecordSourceContext } from '@memberjunction/ng-shared';
 import { AgentClientService } from '@memberjunction/ng-agent-client';
 import { ClientToolResultEvent } from '@memberjunction/ai-agent-client';
@@ -140,11 +142,10 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
    * Extra content for the login screen expressed as data rather than markup — a support route, a
    * trust mark, a policy link. Each card names the region it belongs to (see {@link MJLoginCard}).
    *
-   * This is the channel a *configured* deployment uses: nothing about the login screen can come
-   * from MJ metadata, because the screen renders before any authenticated call is possible (the
-   * only pre-auth server surface is the allow-listed public provider catalog). A host that keeps
-   * per-tenant branding somewhere resolves it itself — as Explorer already resolves the provider
-   * catalog before bootstrap — and binds it here.
+   * This is the channel a *configured* deployment uses from code. A host that keeps per-tenant
+   * branding somewhere resolves it itself — as Explorer already resolves the provider catalog before
+   * bootstrap — and binds it here. A design published in Login Studio is the data-driven route
+   * instead: see {@link PublishedLoginScreen}.
    *
    * A host that needs richer content than a card projects a template into the region's slot
    * instead, which takes over from the cards there.
@@ -165,6 +166,58 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
    */
   public LoginSlotTemplate(name: MJLoginSlotName): TemplateRef<unknown> | null {
     return this.loginSlotChildren?.find((s) => s.SlotName === name)?.Template ?? null;
+  }
+
+  /**
+   * Draw the default theme's published sign-in page (Login Studio) and wear its brand colors before
+   * sign-in. A published design wins over {@link LoginLayout}, {@link LoginBannerAlignment} and
+   * {@link LoginHeading}, and over {@link LoginCards} in a region it fills; a host's `mjLoginSlot`
+   * templates still win over it, region by region. Set false to keep the login screen exactly as this host's inputs and CSS draw it.
+   * @since 6.2.0
+   */
+  @Input() UsePublishedLoginScreen = true;
+
+  /**
+   * The default theme's published sign-in page (`GET /auth/login-screen`), or `null` while it loads,
+   * when there is none, when the server predates the route, or when {@link UsePublishedLoginScreen} is off.
+   * @since 6.2.0
+   */
+  public PublishedLoginScreen: PublicLoginScreen | null = null;
+
+  /**
+   * The default theme's brand and the published design's `--mj-login-*` tokens, on the login wrapper
+   * only: it exists while signed out, so it cannot race the user's own theme applied after sign-in.
+   */
+  public LoginDesignStyle: Record<string, string> = {};
+
+  public get LoginDesign(): LoginDesign | null {
+    return this.PublishedLoginScreen?.Design ?? null;
+  }
+
+  /** A published region's blocks, or `null` when the design leaves that region to the stock content. */
+  public LoginDesignBlocks(region: LoginRegion): readonly LoginBlock[] | null {
+    const blocks = this.LoginDesign?.Regions[region];
+    return blocks?.length ? blocks : null;
+  }
+
+  public get LoginLogos(): ThemeLogos {
+    return this.PublishedLoginScreen?.Logos ?? {};
+  }
+
+  public get LoginBrandName(): string | null {
+    return this.PublishedLoginScreen?.ThemeName ?? null;
+  }
+
+  public get EffectiveLoginLayout(): MJLoginLayout {
+    return this.LoginDesign?.Layout ?? this.LoginLayout;
+  }
+
+  public get EffectiveLoginAlignment(): 'start' | 'center' {
+    return this.LoginDesign?.Alignment ?? this.LoginBannerAlignment;
+  }
+
+  public get EffectiveLoginHeading(): string | null {
+    return this.LoginDesign ? this.LoginDesign.Heading : this.LoginHeading;
   }
 
   /** Cards configured for the story panel. */
@@ -289,19 +342,24 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
   /** Shell-header height in pixels — matches `.shell-header { height: 60px }`. */
   private static readonly SHELL_HEADER_PX = 60;
 
+  /** The offline banner above the shell header; absent until the shell renders. */
+  private readonly connectivityBanner = viewChild(ServerConnectivityBannerComponent);
+
   /**
    * Top boundary (in px) the chat overlay bubble cannot be dragged past. The
    * shell-header is 60px tall, but if the server-connectivity banner is showing
-   * it sits above the shell-header and pushes everything down. The banner
-   * component publishes its height to `--mj-connectivity-banner-height` on
-   * `<html>`, so we add it in. Re-evaluated on every change-detection pass —
-   * Angular's animation events fire CD when the banner show/hides finish.
+   * it sits above the shell-header and pushes everything down, so we add its
+   * height in.
+   *
+   * The height is read from the banner's `HeightPx` signal, never from the DOM.
+   * The banner publishes it from an animation-done listener that can fire while
+   * views are refreshing; a DOM read is invisible to change detection, so this
+   * binding went stale and dev mode reported NG0100 on every later pass
+   * (MJ #4377). A signal read registers this view as a consumer, so the write
+   * re-refreshes it.
    */
   public get ChatOverlayTopBoundaryPx(): number {
-    const bannerHeight = parseFloat(
-      getComputedStyle(document.documentElement).getPropertyValue('--mj-connectivity-banner-height')
-    ) || 0;
-    return MJExplorerAppComponent.SHELL_HEADER_PX + bannerHeight;
+    return MJExplorerAppComponent.SHELL_HEADER_PX + (this.connectivityBanner()?.HeightPx() ?? 0);
   }
 
   private destroy$ = new Subject<void>();
@@ -445,6 +503,7 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
       const result = await this.workspaceInit.initializeWorkspace(token, userInfo, {
         GRAPHQL_URI: this.environment.GRAPHQL_URI,
         GRAPHQL_WS_URI: this.environment.GRAPHQL_WS_URI,
+        MJAPI_URI: this.environment.MJAPI_URI,
         MJ_CORE_SCHEMA_NAME: this.environment.MJ_CORE_SCHEMA_NAME
       });
 
@@ -670,6 +729,9 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
 
     // Apply saved or OS-preferred theme for the login page
     this.applyLoginTheme();
+
+    // The sign-in page published in Login Studio, and the default theme's brand under it
+    void this.loadPublishedLoginScreen();
 
     // Re-apply login theme when the user logs out (ThemeService.Reset() clears data-theme)
     this.AuthBase.isAuthenticated()
@@ -1232,10 +1294,12 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
   }
 
   /**
-   * Derive the health check URL from GRAPHQL_URI and start the connectivity polling service.
+   * Build the health check URL off the MJAPI URL and start the connectivity polling service.
    */
   private startConnectivityMonitoring(): void {
-    const healthUrl = new URL('/healthcheck', this.environment.GRAPHQL_URI).toString();
+    // MJAPI_URI when configured (MJ #5674); otherwise the pre-#5674 origin-relative URL.
+    const mjapiUrl = ResolveMJAPIURL(this.environment.MJAPI_URI);
+    const healthUrl = mjapiUrl ? `${mjapiUrl}/healthcheck` : new URL('/healthcheck', this.environment.GRAPHQL_URI).toString();
     this.connectivityService.Start(healthUrl);
   }
 
@@ -1346,6 +1410,24 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
     this.applyThemeToDOM();
   }
 
+  /** Loads the published sign-in page (usually already fetched by the app's bootstrap preload). */
+  private async loadPublishedLoginScreen(): Promise<void> {
+    if (!this.UsePublishedLoginScreen) return;
+    const screen = await LoginScreenLoader.Load(this.environment.GRAPHQL_URI, undefined, this.environment.MJAPI_URI);
+    if (!screen) return;
+    this.PublishedLoginScreen = screen;
+    this.refreshLoginStyle();
+    this.cdr.detectChanges();
+  }
+
+  /** The brand's stock mapping differs by color mode, so this follows the login screen's theme toggle. */
+  private refreshLoginStyle(): void {
+    const screen = this.PublishedLoginScreen;
+    this.LoginDesignStyle = screen
+      ? { ...LoginThemeTokens(screen.Seeds, this.IsDarkMode), ...LoginDesignTokens(screen.Design) }
+      : {};
+  }
+
   /**
    * Set or remove the data-theme attribute on the document root
    */
@@ -1355,6 +1437,7 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
     } else {
       this.Document.documentElement.removeAttribute('data-theme');
     }
+    this.refreshLoginStyle();
   }
 
   /**

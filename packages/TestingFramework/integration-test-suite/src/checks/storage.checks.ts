@@ -1,5 +1,5 @@
 /**
- * storage.checks.ts — the 'storage' bundle (ST1–ST6): the file-storage abstraction's
+ * storage.checks.ts — the 'storage' bundle (ST1–ST9): the file-storage abstraction's
  * DETERMINISTIC seams, exercised against the live DB + the real compiled driver registry
  * (packages/MJStorage — a subsystem that previously had zero integration coverage).
  *
@@ -30,23 +30,70 @@
  *   - ST6  Engine lifecycle: Config is idempotent (second call keeps state), forceRefresh
  *          reloads without losing the canonical catalog, and HasStorageAccounts agrees with
  *          AccountsWithProviders.
+ *   - ST7  The storage-account gate refuses an account that does not exist with the SAME
+ *          access-denied message as a restricted one (`StorageAccessEvaluator`), so the refusal
+ *          never reveals whether an account ID is real — and it does so before `GetDriver`.
+ *   - ST8  Account permissions are evaluated per call against `MJ: File Storage Account
+ *          Permissions` (A12.1/A12.16): on a fixture account, zero rows → open (the current
+ *          product rule, pinned); a Role row the seeded no-grant user lacks → that user is refused
+ *          with the access-denied error while the context user passes the gate (the driver's own
+ *          credential error proves the gate was passed); CanWrite is decided separately from
+ *          CanRead; a grant added mid-check is seen on the next call. Fixture rows are deleted and
+ *          asserted gone.
+ *   - ST9  The agent File Storage actions run the same gate, in-process through
+ *          `ActionEngineServer.RunAction` (the path the GraphQL `RunAction` resolver and every agent
+ *          take): on a role-restricted fixture account the seeded no-grant user gets `ACCESS_DENIED`
+ *          with the access-denied message from `File Storage: Get Download URL`, an unknown account
+ *          name gets the identical result, the role holder passes the gate (whatever the driver then
+ *          does with the fixture credential), and `List Storage Providers` omits the account for the
+ *          no-grant user while listing it for the role holder.
  *
- * Read-only except ST4's single self-cleaning `MJ: Files` row (DeleteType='Hard', deleted in
- * a finally). No lifecycle registration needed.
+ * Read-only except ST4's single self-cleaning `MJ: Files` row and ST8/ST9's fixtures (a credential
+ * when none exists, a storage account and its permission rows), all deleted in a finally. No
+ * lifecycle registration needed.
  *
  * // CI-FIRST-RUN: designed from the real APIs against the migrated schema (seed rows read
  * // from the v5.38 baseline). Not yet executed against a live DB in the authoring session —
  * // watch ST1 (exact seeded key strings) and ST4 (Files entity has no CHECK on Status) on
  * // the first CI run.
  */
-import { RunView } from '@memberjunction/core';
-import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
-import { MJFileEntity, MJFileStorageProviderEntity } from '@memberjunction/core-entities';
-import { FileStorageEngine, FileStorageBase } from '@memberjunction/storage';
-import { Assert, AssertEqual, IntegrationCheckRegistry } from '@memberjunction/testing-integration';
+import { BaseEntity, RunView, UserInfo } from '@memberjunction/core';
+import { EscapeSQLString, MJGlobal, UUIDsEqual } from '@memberjunction/global';
+import {
+    MJCredentialEntity,
+    MJFileEntity,
+    MJFileStorageAccountEntity,
+    MJFileStorageAccountPermissionEntity,
+    MJFileStorageProviderEntity
+} from '@memberjunction/core-entities';
+import { UserCache } from '@memberjunction/generic-database-provider';
+import { ActionEngineServer } from '@memberjunction/actions';
+import { MJActionEntityExtended, RunActionParams } from '@memberjunction/actions-base';
+import type { ActionResult } from '@memberjunction/actions-base';
+import {
+    FileStorageEngine,
+    FileStorageBase,
+    StorageAccessEvaluator,
+    StorageAccountAccessDeniedError,
+    STORAGE_ACCOUNT_ACCESS_DENIED_MESSAGE
+} from '@memberjunction/storage';
+import {
+    Assert,
+    AssertEqual,
+    FindUserByEmail,
+    IntegrationCheckRegistry,
+    SEEDED_NOGRANT_EMAIL,
+    SEED_FIXTURES_COMMAND
+} from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 
 const FIXTURE_TAG = '(mj-integration-test — safe to delete)';
+
+/**
+ * The result code the File Storage actions return when the storage gate refuses
+ * (`STORAGE_ACCESS_DENIED_RESULT_CODE` in `@memberjunction/core-actions`, which this suite does not depend on).
+ */
+const ACTION_ACCESS_DENIED = 'ACCESS_DENIED';
 
 /** An account ID that can never exist (valid uniqueidentifier, all zeros + fe suffix). */
 const UNKNOWN_ACCOUNT_ID = '00000000-0000-0000-0000-0000000000fe';
@@ -80,6 +127,234 @@ function requireProvider(engine: FileStorageEngine, name: string): MJFileStorage
     const provider = engine.Providers.find(p => p.Name === name);
     Assert(provider != null, `canonical file storage provider '${name}' is missing from the engine cache — the baseline seed did not land or was renamed`);
     return provider!;
+}
+
+/** What a refused call threw: the message, or null when it did not throw. */
+async function refusalOf(call: () => Promise<unknown>): Promise<string | null> {
+    try {
+        await call();
+        return null;
+    } catch (error) {
+        return error instanceof Error ? error.message : String(error);
+    }
+}
+
+/** ST8's fixture: a storage account (and, when no credential existed to reuse, the credential it points at). */
+interface AccountFixture {
+    Account: MJFileStorageAccountEntity;
+    CreatedCredential: MJCredentialEntity | null;
+    Permissions: MJFileStorageAccountPermissionEntity[];
+}
+
+/**
+ * The credential a fixture account points at: an existing one when the deployment has any (it is never decrypted —
+ * no driver call succeeds in this bundle), else a fresh fixture credential. Null (with the reason) when neither works.
+ */
+async function fixtureCredential(ctx: IntegrationCheckContext): Promise<{ ID: string; Created: MJCredentialEntity | null } | string> {
+    const existing = await new RunView().RunView<{ ID: string }>(
+        { EntityName: 'MJ: Credentials', Fields: ['ID'], MaxRows: 1, ResultType: 'simple' }, ctx.User);
+    if (existing.Success && existing.Results.length > 0) {
+        return { ID: existing.Results[0].ID, Created: null };
+    }
+    const types = await new RunView().RunView<{ ID: string }>(
+        { EntityName: 'MJ: Credential Types', Fields: ['ID'], MaxRows: 1, ResultType: 'simple' }, ctx.User);
+    if (!types.Success || types.Results.length === 0) {
+        return `no MJ: Credential Types row to create a fixture credential from (${types.ErrorMessage ?? 'none seeded'})`;
+    }
+    const credential = await ctx.Provider.GetEntityObject<MJCredentialEntity>('MJ: Credentials', ctx.User);
+    credential.NewRecord();
+    credential.CredentialTypeID = types.Results[0].ID;
+    credential.Name = `mj-it-storage-acl-${Date.now()} ${FIXTURE_TAG}`;
+    credential.Values = '{}';
+    let saved = false;
+    let thrown = '';
+    try {
+        saved = await credential.Save();
+    } catch (error) {
+        // Values is field-encrypted; a deployment without an encryption key throws here rather than returning false.
+        thrown = error instanceof Error ? error.message : String(error);
+    }
+    if (!saved) {
+        return `fixture credential save failed: ${thrown || credential.LatestResult?.CompleteMessage || 'unknown error'}`;
+    }
+    return { ID: credential.ID, Created: credential };
+}
+
+/** Creates ST8's fixture account on the AWS S3 provider, or returns why it could not. */
+async function createAccountFixture(ctx: IntegrationCheckContext, engine: FileStorageEngine): Promise<AccountFixture | string> {
+    const credential = await fixtureCredential(ctx);
+    if (typeof credential === 'string') {
+        return credential;
+    }
+    const account = await ctx.Provider.GetEntityObject<MJFileStorageAccountEntity>('MJ: File Storage Accounts', ctx.User);
+    account.NewRecord();
+    account.Name = `mj-it-storage-acl-${Date.now()} ${FIXTURE_TAG}`;
+    account.ProviderID = requireProvider(engine, 'AWS S3 Storage').ID;
+    account.CredentialID = credential.ID;
+    account.IncludeInGlobalSearch = false;
+    if (!(await account.Save())) {
+        await credential.Created?.Delete().catch(() => undefined);
+        return `fixture account save failed: ${account.LatestResult?.CompleteMessage ?? 'unknown error'}`;
+    }
+    return { Account: account, CreatedCredential: credential.Created, Permissions: [] };
+}
+
+/** Adds a permission row to the fixture account (tracked for cleanup). */
+async function addPermission(
+    ctx: IntegrationCheckContext,
+    fixture: AccountFixture,
+    row: Pick<MJFileStorageAccountPermissionEntity, 'Type' | 'CanRead' | 'CanWrite'> & { RoleID?: string; UserID?: string }
+): Promise<MJFileStorageAccountPermissionEntity> {
+    const permission = await ctx.Provider.GetEntityObject<MJFileStorageAccountPermissionEntity>('MJ: File Storage Account Permissions', ctx.User);
+    permission.NewRecord();
+    permission.FileStorageAccountID = fixture.Account.ID;
+    permission.Type = row.Type;
+    permission.RoleID = row.RoleID ?? null;
+    permission.UserID = row.UserID ?? null;
+    permission.CanRead = row.CanRead;
+    permission.CanWrite = row.CanWrite;
+    Assert(await permission.Save(), `permission fixture save failed: ${permission.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+    fixture.Permissions.push(permission);
+    return permission;
+}
+
+/** Deletes one fixture row; returns a failure description, or null when it was deleted. */
+async function deleteFixtureRow(row: BaseEntity, label: string): Promise<string | null> {
+    const deleted = await row.Delete().catch(() => false);
+    return deleted ? null : `${label} delete failed: ${row.LatestResult?.CompleteMessage ?? 'unknown error'}`;
+}
+
+/**
+ * Deletes the whole fixture in FK order — every row is attempted even when one fails — then asserts the account and
+ * its permission rows are gone.
+ */
+async function deleteAccountFixture(ctx: IntegrationCheckContext, fixture: AccountFixture): Promise<void> {
+    const failures: Array<string | null> = [];
+    for (const permission of fixture.Permissions) {
+        failures.push(await deleteFixtureRow(permission, 'permission'));
+    }
+    const accountID = EscapeSQLString(fixture.Account.ID);
+    failures.push(await deleteFixtureRow(fixture.Account, 'account'));
+    if (fixture.CreatedCredential) {
+        failures.push(await deleteFixtureRow(fixture.CreatedCredential, 'credential'));
+    }
+    const [permissions, accounts] = await new RunView().RunViews<{ ID: string }>([
+        {
+            EntityName: 'MJ: File Storage Account Permissions',
+            ExtraFilter: `FileStorageAccountID='${accountID}'`,
+            Fields: ['ID'],
+            ResultType: 'simple',
+            BypassCache: true
+        },
+        { EntityName: 'MJ: File Storage Accounts', ExtraFilter: `ID='${accountID}'`, Fields: ['ID'], ResultType: 'simple', BypassCache: true },
+    ], ctx.User);
+    const reported = failures.filter((f): f is string => f !== null);
+    Assert(reported.length === 0, `ST8 fixture cleanup: ${reported.join('; ')}`);
+    AssertEqual(permissions.Results?.length ?? -1, 0, 'fixture permission rows left behind');
+    AssertEqual(accounts.Results?.length ?? -1, 0, 'fixture account left behind');
+}
+
+/** Asserts `user` is refused `access` on the account with the access-denied error, before any driver call. */
+async function assertRefused(ctx: IntegrationCheckContext, accountID: string, user: UserInfo, access: 'Read' | 'Write', why: string): Promise<void> {
+    const evaluator = StorageAccessEvaluator.Instance;
+    let error: Error | null = null;
+    try {
+        await evaluator.AssertAccountAccess(accountID, user, access, ctx.Provider);
+    } catch (e) {
+        error = e instanceof Error ? e : new Error(String(e));
+    }
+    Assert(error instanceof StorageAccountAccessDeniedError, `${why}: expected StorageAccountAccessDeniedError, got ${error?.message ?? 'no refusal'}`);
+    AssertEqual(error!.message, STORAGE_ACCOUNT_ACCESS_DENIED_MESSAGE, `${why}: refusal message`);
+}
+
+/** The ST8 assertions proper, run against a live fixture account. */
+async function assertAccountGate(ctx: IntegrationCheckContext, fixture: AccountFixture, noGrant: UserInfo, roleID: string): Promise<void> {
+    const evaluator = StorageAccessEvaluator.Instance;
+    const accountID = fixture.Account.ID;
+
+    // Zero rows → open to everyone (the current product rule, pinned).
+    Assert(await evaluator.UserCanAccessAccount(accountID, noGrant, 'Read', ctx.Provider),
+        'a zero-row account must be open (current rule) to the no-grant user');
+
+    // Restrict to a role the no-grant user lacks: refused for them, while the context user (who holds the role) passes the
+    // same gate every account-keyed FileResolver route runs before it loads the account or touches a driver.
+    await addPermission(ctx, fixture, { Type: 'Role', RoleID: roleID, CanRead: true, CanWrite: false });
+    await assertRefused(ctx, accountID, noGrant, 'Read', 'no-grant user on a role-restricted account');
+    const gate = await refusalOf(() => evaluator.AssertAccountAccess(accountID, ctx.User, 'Read', ctx.Provider));
+    AssertEqual(gate, null, 'the context user holds the role, so the gate must let it through');
+    await assertRefused(ctx, accountID, ctx.User, 'Write', 'CanWrite=0 must refuse Write even with CanRead');
+
+    // Per call, no snapshot: a grant added now is seen by the very next call, and a revocation likewise.
+    const grant = await addPermission(ctx, fixture, { Type: 'User', UserID: noGrant.ID, CanRead: true, CanWrite: false });
+    Assert(await evaluator.UserCanAccessAccount(accountID, noGrant, 'Read', ctx.Provider), 'a User grant added mid-check must be seen on the next call');
+    Assert((await deleteFixtureRow(grant, 'permission')) === null, 'revoking the mid-check User grant failed');
+    fixture.Permissions = fixture.Permissions.filter(p => p !== grant);
+    await assertRefused(ctx, accountID, noGrant, 'Read', 'a revoked User grant must stop applying on the next call');
+    console.log('      → zero rows open; role-restricted: no-grant refused, context user passed; CanWrite separate; grant/revoke seen per call');
+}
+
+/** Runs a core action in-process as `user`, the way the GraphQL `RunAction` resolver and agents do (no log row). */
+async function runStorageAction(action: MJActionEntityExtended, user: UserInfo, inputs: Record<string, string>): Promise<ActionResult> {
+    const params = new RunActionParams();
+    params.Action = action;
+    params.ContextUser = user;
+    params.Filters = [];
+    params.SkipActionLog = true;
+    params.Params = Object.entries(inputs).map(([Name, Value]) => ({ Name, Value, Type: 'Input' as const }));
+    return ActionEngineServer.Instance.RunAction(params);
+}
+
+/** The names `List Storage Providers` returns for `user`. */
+async function listedAccountNames(action: MJActionEntityExtended, user: UserInfo): Promise<string[]> {
+    const result = await runStorageAction(action, user, {});
+    Assert(result.Success, `List Storage Providers failed for ${user.Email}: ${result.Message ?? 'no message'}`);
+    const accounts = (result.Params ?? []).find(p => p.Name === 'Accounts' && p.Type === 'Output')?.Value as Array<{ Name: string }> | undefined;
+    return (accounts ?? []).map(a => a.Name);
+}
+
+/** Asserts an action result is the storage gate's refusal, worded the same whether the account is restricted or missing. */
+function assertActionRefused(result: ActionResult, why: string): void {
+    Assert(!result.Success, `${why}: the action must fail, got Success=true`);
+    AssertEqual(result.ResultCode, ACTION_ACCESS_DENIED, `${why}: result code`);
+    AssertEqual(result.Message, STORAGE_ACCOUNT_ACCESS_DENIED_MESSAGE, `${why}: refusal message`);
+}
+
+/** The ST9 assertions proper, run against a live role-restricted fixture account. */
+async function assertActionGate(
+    fixture: AccountFixture,
+    contextUser: UserInfo,
+    noGrant: UserInfo,
+    actions: { Download: MJActionEntityExtended; List: MJActionEntityExtended }
+): Promise<void> {
+    const name = fixture.Account.Name;
+    assertActionRefused(await runStorageAction(actions.Download, noGrant, { StorageAccount: name, ObjectName: 'probe.txt' }),
+        'no-grant user on a role-restricted account');
+    assertActionRefused(await runStorageAction(actions.Download, noGrant, { StorageAccount: `mj-it-no-such-account-${Date.now()}`, ObjectName: 'probe.txt' }),
+        'an account name that does not exist');
+    const permitted = await runStorageAction(actions.Download, contextUser, { StorageAccount: name, ObjectName: 'probe.txt' });
+    Assert(permitted.ResultCode !== ACTION_ACCESS_DENIED,
+        `the role holder must pass the gate (the driver may then fail on the fixture credential); got ${permitted.ResultCode}: ${permitted.Message}`);
+
+    // List Storage Providers lists only accounts on ACTIVE providers (existing behaviour), so the listing legs prove
+    // something only when the fixture's provider is active. A clean database ships every provider inactive; there the
+    // listing filter is covered by the action's unit tests (file-storage-actions.access.test.ts), not here.
+    const providerActive = FileStorageEngine.Instance.AccountsWithProviders
+        .find(a => UUIDsEqual(a.account.ID, fixture.Account.ID))?.provider.IsActive !== false;
+    if (!providerActive) {
+        console.warn('  ⚠ storage.ST9 NOTE — the fixture account\'s provider is inactive in this database, so List Storage Providers '
+            + 'cannot list it for anyone; the listing legs were not exercised (the Get Download URL legs were).');
+    } else {
+        Assert(!(await listedAccountNames(actions.List, noGrant)).includes(name), 'List Storage Providers must omit an account the no-grant user cannot read');
+        Assert((await listedAccountNames(actions.List, contextUser)).includes(name), 'List Storage Providers must list the account for the role holder');
+    }
+    console.log(`      → Get Download URL: no-grant refused (${ACTION_ACCESS_DENIED}), unknown account refused identically, role holder passed `
+        + `(${permitted.ResultCode}); List Storage Providers ${providerActive ? 'filtered per caller' : 'legs skipped (inactive provider)'}`);
+}
+
+/** The active core action named `name`, or null (with the engine configured for `user`). */
+async function coreAction(name: string, user: UserInfo): Promise<MJActionEntityExtended | null> {
+    await ActionEngineServer.Instance.Config(false, user);
+    return ActionEngineServer.Instance.Actions.find(a => a.Name === name) ?? null;
 }
 
 export const StorageChecks: NamedCheck[] = [
@@ -246,6 +521,80 @@ export const StorageChecks: NamedCheck[] = [
             AssertEqual(engine.HasStorageAccounts, engine.AccountsWithProviders.length > 0,
                 'HasStorageAccounts must agree with AccountsWithProviders');
             console.log(`      → idempotent Config kept ${countBefore} providers; forceRefresh reloaded the full canonical catalog`);
+        }
+    },
+    {
+        Id: 'storage.ST7',
+        Name: 'ST7: the account gate refuses an unknown account exactly like a restricted one — before GetDriver',
+        Fn: async (ctx: IntegrationCheckContext) => {
+            await configuredEngine(ctx);
+            await assertRefused(ctx, UNKNOWN_ACCOUNT_ID, ctx.User, 'Read', 'an account that does not exist');
+            await assertRefused(ctx, UNKNOWN_ACCOUNT_ID, ctx.User, 'Write', 'an account that does not exist');
+            const readable = await StorageAccessEvaluator.Instance.AccessibleAccountIDs([UNKNOWN_ACCOUNT_ID, 'not-a-uuid'], ctx.User, 'Read', ctx.Provider);
+            AssertEqual(readable.size, 0, 'unknown and malformed account IDs must never be reported accessible');
+            console.log('      → unknown account refused with the access-denied message (Read and Write); malformed IDs never accessible');
+        }
+    },
+    {
+        Id: 'storage.ST8',
+        Name: 'ST8: account permissions are evaluated per call — zero rows open, role restriction refuses the no-grant user, grants seen immediately',
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const engine = await configuredEngine(ctx);
+            const noGrant = FindUserByEmail(UserCache.Instance.Users, SEEDED_NOGRANT_EMAIL);
+            if (!noGrant || UUIDsEqual(noGrant.ID, ctx.User.ID)) {
+                console.warn(`  ⚠ storage.ST8 SKIPPED — seeded no-grant user '${SEEDED_NOGRANT_EMAIL}' not in the user cache; `
+                    + `seed with: ${SEED_FIXTURES_COMMAND}`);
+                return;
+            }
+            AssertEqual(noGrant.UserRoles.length, 0, `fixture invalid: '${SEEDED_NOGRANT_EMAIL}' has roles; it must have none`);
+            const roleID = ctx.User.UserRoles?.[0]?.RoleID;
+            if (!roleID) {
+                console.warn('  ⚠ storage.ST8 SKIPPED — the context user has no role to restrict the fixture account to');
+                return;
+            }
+            const fixture = await createAccountFixture(ctx, engine);
+            if (typeof fixture === 'string') {
+                console.warn(`  ⚠ storage.ST8 NOTE — SKIPPED, no fixture storage account could be created: ${fixture}`);
+                return;
+            }
+            try {
+                await assertAccountGate(ctx, fixture, noGrant, roleID);
+            } finally {
+                await deleteAccountFixture(ctx, fixture);
+            }
+        }
+    },
+    {
+        Id: 'storage.ST9',
+        Name: 'ST9: the File Storage actions run the account gate — no-grant user refused (unknown account alike), role holder passes, list filtered',
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const engine = await configuredEngine(ctx);
+            const noGrant = FindUserByEmail(UserCache.Instance.Users, SEEDED_NOGRANT_EMAIL);
+            if (!noGrant || UUIDsEqual(noGrant.ID, ctx.User.ID)) {
+                console.warn(`  ⚠ storage.ST9 SKIPPED — seeded no-grant user '${SEEDED_NOGRANT_EMAIL}' not in the user cache; `
+                    + `seed with: ${SEED_FIXTURES_COMMAND}`);
+                return;
+            }
+            const roleID = ctx.User.UserRoles?.[0]?.RoleID;
+            const download = await coreAction('File Storage: Get Download URL', ctx.User);
+            const list = await coreAction('List Storage Providers', ctx.User);
+            if (!roleID || !download || !list) {
+                console.warn(`  ⚠ storage.ST9 SKIPPED — ${!roleID ? 'the context user has no role to restrict the fixture account to'
+                    : 'the File Storage core actions are not in the action catalog'}`);
+                return;
+            }
+            const fixture = await createAccountFixture(ctx, engine);
+            if (typeof fixture === 'string') {
+                console.warn(`  ⚠ storage.ST9 NOTE — SKIPPED, no fixture storage account could be created: ${fixture}`);
+                return;
+            }
+            try {
+                await addPermission(ctx, fixture, { Type: 'Role', RoleID: roleID, CanRead: true, CanWrite: true });
+                await engine.Config(true, ctx.User, ctx.Provider);
+                await assertActionGate(fixture, ctx.User, noGrant, { Download: download, List: list });
+            } finally {
+                await deleteAccountFixture(ctx, fixture);
+            }
         }
     }
 ];

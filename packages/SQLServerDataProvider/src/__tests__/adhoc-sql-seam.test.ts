@@ -5,7 +5,7 @@
  * close the gap it papered over by proving the REAL provider method (the inherited
  * `InternalRunQuery` → `ExecuteAdhocQuery` pipeline running on a SQLServerDataProvider
  * instance) actually:
- *   1. invokes SQLExpressionValidator.validateFullQuery with the ad-hoc SQL,
+ *   1. invokes SQLExpressionValidator.ValidateFullQuery with the ad-hoc SQL and the SQL Server dialect,
  *   2. refuses to touch the connection when validation fails (returning the
  *      validator's own error), and
  *   3. executes the EXACT validated SQL through the mssql request boundary.
@@ -57,7 +57,7 @@ describe('SQLServerDataProvider ad-hoc SQL seam (real InternalRunQuery → Execu
     mssqlState.Reset();
   });
 
-  it('invokes SQLExpressionValidator.validateFullQuery with exactly the ad-hoc SQL before executing', async () => {
+  it('invokes SQLExpressionValidator.ValidateFullQuery with exactly the ad-hoc SQL and the SQL Server dialect before executing', async () => {
     const provider = makeProvider();
     const sqlText = 'SELECT TOP 10 ID, Name FROM __mj.vwUsers ORDER BY Name';
     const validatorSpy = vi.spyOn(SQLExpressionValidator.Instance, 'ValidateFullQuery');
@@ -66,7 +66,7 @@ describe('SQLServerDataProvider ad-hoc SQL seam (real InternalRunQuery → Execu
     const result = await provider.RunQueryDirect({ SQL: sqlText }, TEST_USER);
 
     expect(validatorSpy).toHaveBeenCalledTimes(1);
-    expect(validatorSpy).toHaveBeenCalledWith(sqlText);
+    expect(validatorSpy).toHaveBeenCalledWith(sqlText, 'sqlserver');
     expect(result.Success).toBe(true);
     // The EXACT SQL the caller supplied is what hit the mssql request — no rewriting.
     expect(mssqlState.Queries).toHaveLength(1);
@@ -99,7 +99,7 @@ describe('SQLServerDataProvider ad-hoc SQL seam (real InternalRunQuery → Execu
     const badSQL = "INSERT INTO Users (Name) VALUES ('hacked')";
     // The expected error is whatever the REAL validator produces — computed here,
     // asserted below, so the provider must surface the validator's message verbatim.
-    const expected = SQLExpressionValidator.Instance.validateFullQuery(badSQL);
+    const expected = SQLExpressionValidator.Instance.ValidateFullQuery(badSQL, 'sqlserver');
     expect(expected.valid).toBe(false);
 
     const result = await provider.RunQueryDirect({ SQL: badSQL }, TEST_USER);
@@ -120,6 +120,20 @@ describe('SQLServerDataProvider ad-hoc SQL seam (real InternalRunQuery → Execu
     expect(result.Success).toBe(false);
     expect(result.ErrorMessage).toBeTruthy();
     expect(mssqlState.Queries).toHaveLength(0);
+  });
+
+  it('screens with the SQL Server dialect, so a bracket alias that contains a quote is accepted', async () => {
+    // PostgreSQL would read the quote inside [Today's Count] as the start of a literal, so this
+    // query is accepted only when the screen knows the dialect.
+    const provider = makeProvider();
+    const sqlText = "SELECT COUNT(*) AS [Today's Count] FROM __mj.vwUsers WHERE Status = 'Active'";
+    mssqlState.QueueResult({ rows: [{ "Today's Count": 3 }] });
+
+    const result = await provider.RunQueryDirect({ SQL: sqlText }, TEST_USER);
+
+    expect(result.Success).toBe(true);
+    expect(mssqlState.Queries).toHaveLength(1);
+    expect(mssqlState.Queries[0].sql).toBe(sqlText);
   });
 
   it('returns an "Ad-hoc query execution failed" error result when the request throws', async () => {
@@ -184,7 +198,7 @@ describe('SQLServerDataProvider ad-hoc SQL seam (real InternalRunQuery → Execu
       TEST_USER,
     );
 
-    expect(validatorSpy).toHaveBeenCalledWith(sqlText);
+    expect(validatorSpy).toHaveBeenCalledWith(sqlText, 'sqlserver');
     expect(result.Success).toBe(true);
     expect(result.QueryID).toBe(''); // ad-hoc result shape — the saved-query ID was ignored
     expect(result.QueryName).toBe('Ad-Hoc Query');

@@ -371,7 +371,7 @@ if (result.warnings.length > 0) {
 
 ### Trace State Evolution
 Each agent step tracks:
-- `PayloadAtStart`: State before the step
+- `PayloadAtStart`: State before the step. It can be NULL, with `PayloadAtStartSourceStepID` pointing at the earlier step in the same run whose `PayloadAtEnd` it equals. Readers get the value with `ResolvePayloadAtStart` / `ApplyResolvedPayloadAtStart` from `@memberjunction/ai-core-plus`.
 - `PayloadAtEnd`: State after applying changes
 - Change request details in step output
 

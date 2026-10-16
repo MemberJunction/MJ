@@ -409,6 +409,10 @@ describe('createViewUserSearchSQL — UserSearchParamFormatAPI still gets the fr
         expect(provider.buildSQL(customFormatEntity(), '2026')).toBe(`(([Year]  = 2026))`);
     });
 
+    it('says why it refuses a term that cannot be read as complete SQL tokens', () => {
+        expect(() => provider.buildSQL(customFormatEntity(), '[2026')).toThrow(/cannot be read as complete SQL tokens/);
+    });
+
     it('a QUOTED custom format keeps working for terms with punctuation', () => {
         const e = makeEntity({ fields: [makeField({ name: 'Phone', predicate: 'Exact', paramFormat: " = '{0}'" })] });
         expect(provider.buildSQL(e, "O'Leary")).toBe(`(([Phone]  = 'O''Leary'))`);

@@ -226,10 +226,19 @@ const telemetrySchema = z.object({
   level: z.enum(['minimal', 'standard', 'verbose', 'debug']).optional().default('standard'),
 });
 
-const serverExtensionSchema = z.object({
-  Enabled: z.boolean().default(true),
+/**
+ * A host `mj.config.cjs` `serverExtensions[]` entry. Only `DriverClass` is required: an entry whose
+ * DriverClass an Open App package already publishes is an OVERLAY (MergeServerExtensionConfigs) and
+ * may set just the fields it overrides — `{ DriverClass: 'X', OwnsCORS: false }` — without repeating
+ * `RootPath`. `Enabled` has no schema default for the same reason: a defaulted `true` would silently
+ * re-enable an extension the package ships disabled. Whether the MERGED entry is complete (a valid
+ * `RootPath`; `Enabled` defaults to true) is validated after the merge, by prepareServerExtensionConfigs,
+ * which reports an incomplete host-only entry instead of mounting it.
+ */
+export const ServerExtensionSchema = z.object({
+  Enabled: z.boolean().optional(),
   DriverClass: z.string(),
-  RootPath: z.string(),
+  RootPath: z.string().optional(),
   Settings: z.record(z.unknown()).default({})
 }).passthrough();
 
@@ -314,6 +323,15 @@ const loggingSettingsSchema = z.object({
      */
     logVariables: z.boolean().optional().default(false),
   }).optional().default({}),
+});
+
+const aiPromptRunsSchema = z.object({
+  /**
+   * Server default for which template inputs prompt runs store in AIPromptRun.Messages:
+   * 'None' (key sizes only), 'Referenced' (keys the templates read) or 'Full'.
+   * AIPrompt.TemplateDataCapture and AIPromptParams.TemplateDataCapture override it.
+   */
+  templateDataCapture: z.enum(['None', 'Referenced', 'Full']).optional(),
 });
 
 const corsSchema = z.object({
@@ -810,6 +828,11 @@ const realtimeSchema = z.object({
   enabled: zodBooleanWithTransforms().default(true),
   /** Mid-session identity verification (off by default). */
   identityVerification: identityVerificationSchema.optional().default({}),
+  /**
+   * Seconds a client-direct call's recording waits for missing shards after its terminal signal before it
+   * is assembled anyway as `Partial` (gaps become silence). Defaults to 90.
+   */
+  recordingAssemblyGraceSeconds: z.coerce.number().positive().optional().default(90),
 }).passthrough();
 
 const configInfoSchema = z.object({
@@ -830,9 +853,10 @@ const configInfoSchema = z.object({
   telemetry: telemetrySchema.optional().default({}),
   queryDialects: queryDialectSchema.optional().default({}),
   multiTenancy: multiTenancySchema.optional().default({}),
-  serverExtensions: z.array(serverExtensionSchema).optional().default([]),
+  serverExtensions: z.array(ServerExtensionSchema).optional().default([]),
   cacheSettings: cacheSettingsSchema.optional().default({}),
   loggingSettings: loggingSettingsSchema.optional().default({}),
+  aiPromptRuns: aiPromptRunsSchema.optional(),
   feedbackSettings: feedbackSettingsSchema.optional().default({}),
   cors: corsSchema.optional().default({}),
   rateLimiting: rateLimitSchema.optional().default({}),
@@ -860,6 +884,12 @@ const configInfoSchema = z.object({
   ___codeGenAPIPort: z.coerce.number().optional().default(3999),
   ___codeGenAPISubmissionDelay: z.coerce.number().optional().default(5000),
   graphqlRootPath: z.string().optional().default('/'),
+  /**
+   * Path prefix MJAPI mounts every route it serves under (core routes and server extensions), on its own
+   * listener. `/` unless a proxy forwards a prefix WITHOUT stripping it (e.g. CloudFront `/api/*` → MJAPI):
+   * then set `MJAPI_BASE_PATH=/api`. Independent of `graphqlRootPath`, which is only Apollo's path. MJ #5674.
+   */
+  apiBasePath: z.string().optional().default('/'),
   enableIntrospection: z.coerce.boolean().optional().default(false),
   websiteRunFromPackage: z.coerce.number().optional(),
   userEmailMap: z
@@ -893,9 +923,10 @@ export type { WorkQueueConfig } from './services/workQueueConfig.js';
 export type TelemetryConfig = z.infer<typeof telemetrySchema>;
 export type QueryDialectConfig = z.infer<typeof queryDialectSchema>;
 export type MultiTenancyConfig = z.infer<typeof multiTenancySchema>;
-export type ServerExtensionConfig = z.infer<typeof serverExtensionSchema>;
+export type ServerExtensionConfig = z.infer<typeof ServerExtensionSchema>;
 export type CacheSettingsConfig = z.infer<typeof cacheSettingsSchema>;
 export type LoggingSettingsConfig = z.infer<typeof loggingSettingsSchema>;
+export type AIPromptRunsConfig = z.infer<typeof aiPromptRunsSchema>;
 export type FeedbackGithubSettingsConfig = z.infer<typeof feedbackGithubSettingsSchema>;
 export type FeedbackSettingsConfig = z.infer<typeof feedbackSettingsSchema>;
 export type CorsConfig = z.infer<typeof corsSchema>;
@@ -931,6 +962,7 @@ export const DEFAULT_SERVER_CONFIG: Partial<ConfigInfo> = {
   // GraphQL server settings (environment-driven with defaults)
   graphqlPort: process.env.GRAPHQL_PORT ? parseInt(process.env.GRAPHQL_PORT, 10) : 4000,
   graphqlRootPath: process.env.GRAPHQL_ROOT_PATH ?? '/',
+  apiBasePath: process.env.MJAPI_BASE_PATH ?? '/',
   baseUrl: process.env.GRAPHQL_BASE_URL ?? 'http://localhost',
   publicUrl: process.env.MJAPI_PUBLIC_URL,
   enableIntrospection: process.env.ENABLE_INTROSPECTION === 'true',
