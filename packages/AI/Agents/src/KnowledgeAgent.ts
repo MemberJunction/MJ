@@ -189,9 +189,9 @@ export class KnowledgeAgent {
             case 'create_entity_document':
                 return this.executeCreateEntityDocument(parameters, contextUser);
             case 'run_vectorization':
-                return this.executeRunVectorization(parameters, contextUser);
+                return this.executeRunVectorization(parameters, contextUser, provider);
             case 'run_duplicate_detection':
-                return this.executeRunDuplicateDetection(parameters, contextUser);
+                return this.executeRunDuplicateDetection(parameters, contextUser, provider);
             default:
                 return { Success: false, ErrorMessage: `Unknown server tool: ${toolName}` };
         }
@@ -349,7 +349,8 @@ export class KnowledgeAgent {
 
     private async executeRunVectorization(
         parameters: Record<string, unknown>,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
     ): Promise<{ Success: boolean; Data?: Record<string, unknown>; ErrorMessage?: string }> {
         try {
             const entityID = String(parameters['entityID'] || '');
@@ -359,7 +360,7 @@ export class KnowledgeAgent {
 
             // Dynamic import to avoid circular dependencies
             const { EntityVectorSyncer } = await import('@memberjunction/ai-vector-sync');
-            const syncer = new EntityVectorSyncer();
+            const syncer = new EntityVectorSyncer(provider);
             await syncer.Config(false, contextUser);
 
             const result = await syncer.VectorizeEntity({
@@ -383,7 +384,8 @@ export class KnowledgeAgent {
 
     private async executeRunDuplicateDetection(
         parameters: Record<string, unknown>,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
     ): Promise<{ Success: boolean; Data?: Record<string, unknown>; ErrorMessage?: string }> {
         try {
             const entityID = String(parameters['entityID'] || '');
@@ -395,7 +397,7 @@ export class KnowledgeAgent {
                 return { Success: false, ErrorMessage: 'listID is required' };
             }
 
-            const detector = new DuplicateRecordDetector();
+            const detector = new DuplicateRecordDetector(provider);
             detector.CurrentUser = contextUser;
 
             const request = this.buildDuplicateRequest(entityID, listID, parameters);
