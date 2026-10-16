@@ -167,6 +167,11 @@ export interface AnalysisConfig {
   relationshipDiscovery?: RelationshipDiscoveryConfig;
   sampleQueryGeneration?: SampleQueryGenerationConfig;
   organicKeyDetection?: OrganicKeyDetectionConfig;
+  /**
+   * Read the existing indexes on every table and show them to the LLM as evidence for keys and
+   * important columns (default true). Indexes often exist where no PK/FK is declared.
+   */
+  useExistingIndexes?: boolean;
 }
 
 /**

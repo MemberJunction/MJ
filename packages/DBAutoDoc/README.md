@@ -513,6 +513,16 @@ Triggered automatically when:
 - Tables lack primary key constraints
 - Insufficient foreign key relationships detected (below threshold)
 
+### Existing Indexes as Evidence
+
+Databases often have indexes where no key is declared: developers index the columns they join and filter on. DBAutoDoc reads every table's indexes right after introspection and stores them in the state file (`schemas[].tables[].indexes`). The LLM sees them in the discovery validation pass, table analysis, and PK/FK pruning:
+
+- A `UNIQUE` index or primary key on non-null columns is strong evidence for the primary key (or an alternate key).
+- A non-unique index led by an ID- or code-like column often marks a foreign key.
+- In FK pruning, each candidate says whether its target column has a unique index.
+
+They are hints, not proof, and are weighed with names, statistics and value overlap. Turn this off with `"analysis": { "useExistingIndexes": false }`. A resumed run reads indexes for any table whose state has none yet. If a schema's catalog can't be read, the run continues without its indexes.
+
 ### Organic Key Detection (Optional)
 
 Foreign keys require **shared exact values**. Organic keys (MemberJunction [PR #2193](https://github.com/MemberJunction/MJ/pull/2193)) capture the weaker-but-broader condition of **shared identity**: two columns refer to the same real-world thing once each is canonicalized through its own transformation. That joins far more cross-system data than exact-match FKs -- e.g. the same phone number stored as `+1 (555) 123-4567`, `5551234567`, and `555.123.4567` across HubSpot, Zendesk, and QuickBooks.

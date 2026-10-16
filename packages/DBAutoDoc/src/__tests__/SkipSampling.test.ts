@@ -46,6 +46,7 @@ vi.mock('../database/Database.js', () => {
         ]
       }
     ]);
+    LoadIndexes = vi.fn().mockResolvedValue([]);
   }
 
   class DataSampler {

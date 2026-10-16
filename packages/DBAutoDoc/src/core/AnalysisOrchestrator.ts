@@ -11,6 +11,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 import { DatabaseConnection, Introspector, DataSampler } from '../database/Database.js';
 import { AutoDocConnectionConfig } from '../types/driver.js';
+import type { BaseAutoDocDriver } from '../drivers/BaseAutoDocDriver.js';
 import { TopologicalSorter } from '../database/TopologicalSorter.js';
 import { StateManager } from '../state/StateManager.js';
 import { IterationTracker } from '../state/IterationTracker.js';
@@ -25,7 +26,6 @@ import { DatabaseDocumentation, AnalysisRun, DataSamplingPhase, TableDefinition 
 import { DiscoveryTriggerAnalyzer } from '../discovery/DiscoveryTriggerAnalyzer.js';
 import { DiscoveryEngine } from '../discovery/DiscoveryEngine.js';
 import { OrganicKeyDetector } from '../discovery/OrganicKeyDetector.js';
-import type { BaseAutoDocDriver } from '../drivers/BaseAutoDocDriver.js';
 import { DetectedOrganicKeysOutput } from '../discovery/OrganicKeyTranslator.js';
 import { PluginManager } from '../plugins/PluginManager.js';
 import type { AutoDocPluginHook } from '../plugins/types.js';
@@ -173,6 +173,7 @@ export class AnalysisOrchestrator {
         await stateManager.save(state);
 
       }
+      await this.loadExistingIndexes(state, db.getDriver(), stateManager);
       await runHook('AfterIntrospection');
 
       await this.sampleTableData(state, db.getDriver(), stateManager);
@@ -518,6 +519,38 @@ export class AnalysisOrchestrator {
       Driver: db?.getDriver(),
       RunFolder: runFolder,
       Log: (message: string) => this.onProgress(message)
+    });
+    stateManager.updateSummary(state);
+    await stateManager.save(state);
+  }
+
+  /**
+   * Stores each table's existing indexes in the state so the LLM passes can use them as key
+   * evidence. Runs on resumed runs too, for tables whose indexes were never read.
+   */
+  private async loadExistingIndexes(
+    state: DatabaseDocumentation,
+    driver: BaseAutoDocDriver,
+    stateManager: StateManager
+  ): Promise<void> {
+    if (this.config.analysis.useExistingIndexes === false) {
+      return;
+    }
+    const schemas = state.schemas.filter((s) => s.tables.some((t) => t.indexes === undefined));
+    if (schemas.length === 0) {
+      return;
+    }
+    this.onProgress('Reading existing indexes');
+    const failed = await new Introspector(driver).LoadIndexes(schemas);
+    for (const f of failed) {
+      this.onProgress(`Warning: could not read indexes for schema ${f.SchemaName}: ${f.Error}`, f);
+    }
+    // Totals cover every table in the state, so a resumed run also counts tables loaded earlier.
+    const allTables = state.schemas.flatMap((s) => s.tables);
+    this.onProgress('Existing indexes loaded', {
+      tables: allTables.filter((t) => t.indexes !== undefined).length,
+      indexes: allTables.reduce((sum, t) => sum + (t.indexes?.length ?? 0), 0),
+      newlyLoadedTables: schemas.flatMap((s) => s.tables).filter((t) => t.indexes !== undefined).length
     });
     stateManager.updateSummary(state);
     await stateManager.save(state);
