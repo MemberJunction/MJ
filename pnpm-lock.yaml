@@ -3472,9 +3472,6 @@ importers:
       '@memberjunction/core':
         specifier: 6.2.0-edge.4
         version: link:../../../MJCore
-      '@memberjunction/global':
-        specifier: 6.2.0-edge.4
-        version: link:../../../MJGlobal
       '@memberjunction/storage':
         specifier: 6.2.0-edge.4
         version: link:../../../MJStorage

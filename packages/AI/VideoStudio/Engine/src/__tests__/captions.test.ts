@@ -117,4 +117,40 @@ describe('BuildWebVtt', () => {
             ].join('\n'),
         );
     });
+
+    it('escapes &, <, > (including -->) in word cues and collapses multiline fallback text into one escaped cue line', () => {
+        const lines: NarrationLine[] = [
+            {
+                Key: 'line-words',
+                BeatKey: 'beat-1',
+                Text: 'R&D <5% -->',
+                WordTimings: [
+                    { Word: 'R&D', StartSeconds: 0.0, EndSeconds: 0.5 },
+                    { Word: '<5%', StartSeconds: 0.6, EndSeconds: 1.0 },
+                    { Word: '-->', StartSeconds: 1.1, EndSeconds: 1.5 },
+                ],
+            },
+            {
+                Key: 'line-fallback',
+                BeatKey: 'beat-1',
+                Text: 'First paragraph\n\nR&D <5% --> up',
+                StartSeconds: 2.0,
+                DurationSeconds: 3.0,
+            },
+        ];
+
+        const vtt = BuildWebVtt(lines);
+        expect(vtt).toBe(
+            [
+                'WEBVTT',
+                '',
+                '00:00:00.000 --> 00:00:01.500',
+                'R&amp;D &lt;5% --&gt;',
+                '',
+                '00:00:02.000 --> 00:00:05.000',
+                'First paragraph R&amp;D &lt;5% --&gt; up',
+                '',
+            ].join('\n'),
+        );
+    });
 });

@@ -350,10 +350,10 @@ describe('FitTimelineToNarration', () => {
         const cues: AudioCue[] = [
             // 50% into old beat-2 (4..10 => 7.0s) by position alone
             { Key: 'cue-pos', TimestampSeconds: 7.0, Kind: 'Sfx', AssetKey: 'sfx-1' },
-            // Explicitly pinned to beat-3 via BeatKey even though timestamp 12.0 is 50% of beat-3 (10..14)
-            { Key: 'cue-key', TimestampSeconds: 12.0, Kind: 'Stinger', BeatKey: 'beat-3' },
+            // Explicitly pinned to beat-1 via BeatKey even though timestamp 7.0 lies in beat-2 (4..10) by position
+            { Key: 'cue-key', TimestampSeconds: 7.0, Kind: 'Sfx', BeatKey: 'beat-1' },
             // Unknown BeatKey -> warning, timestamp unchanged
-            { Key: 'cue-missing', TimestampSeconds: 2.5, Kind: 'Duck', BeatKey: 'beat-nonexistent' },
+            { Key: 'cue-missing', TimestampSeconds: 2.5, Kind: 'MusicDuck', BeatKey: 'beat-nonexistent' },
         ];
 
         const result = FitTimelineToNarration({
@@ -365,8 +365,8 @@ describe('FitTimelineToNarration', () => {
 
         // New beat-2 is 5.0..11.8 (length 6.8), 50% => 8.4s
         expect(result.Cues[0].TimestampSeconds).toBe(8.4);
-        // New beat-3 is 11.8..15.7 (length 3.9), 50% => 11.8 + 1.95 = 13.75s
-        expect(result.Cues[1].TimestampSeconds).toBe(13.75);
+        // Pinned to beat-1 (old 0..4, new 0..5.0); 7.0 clamps to fraction 1.0 of beat-1 => 5.0s (not 8.4s from beat-2)
+        expect(result.Cues[1].TimestampSeconds).toBe(5.0);
         // Unmatched cue stays at 2.5s
         expect(result.Cues[2].TimestampSeconds).toBe(2.5);
 

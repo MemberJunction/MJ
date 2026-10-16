@@ -16,10 +16,7 @@ const {
     mockAiEngineState: {
         Config: vi.fn().mockResolvedValue(undefined),
         Models: [] as Record<string, unknown>[],
-        ModelTypes: [] as Record<string, unknown>[],
-        ModelVendors: [] as Record<string, unknown>[],
-        Vendors: [] as Record<string, unknown>[],
-        VendorTypeDefinitions: [] as Record<string, unknown>[],
+        IsInferenceProvider: vi.fn((mv: { TypeID?: string }) => mv.TypeID === 'type-inference'),
     },
     mockStorageState: {
         Config: vi.fn().mockResolvedValue(undefined),
@@ -188,35 +185,52 @@ function makeBaseSpec(): VideoGenerationSpec {
 describe('RunNarrationPipeline and ResolveNarrationModelID', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        mockAiEngineState.IsInferenceProvider.mockImplementation(
+            (mv: { TypeID?: string }) => mv.TypeID === 'type-inference',
+        );
         mockAiEngineState.Models = [
             {
                 ID: 'model-openai-tts',
                 Name: 'OpenAI TTS',
+                APIName: 'tts-1',
                 IsActive: true,
                 AIModelType: 'TTS',
                 PowerRank: 100,
                 ModelVendors: [
-                    { Vendor: 'OpenAI', Status: 'Active', Type: 'Inference Provider' },
+                    { Vendor: 'OpenAI', Status: 'Active', TypeID: 'type-inference' },
+                ],
+            },
+            {
+                ID: 'model-eleven-dev-only',
+                Name: 'Eleven Labs Developer Row Only',
+                APIName: 'eleven-dev-only',
+                IsActive: true,
+                AIModelType: 'TTS',
+                PowerRank: 999,
+                ModelVendors: [
+                    { Vendor: 'Eleven Labs', Status: 'Active', TypeID: 'type-developer' },
                 ],
             },
             {
                 ID: 'model-eleven-v3',
                 Name: 'Eleven Labs',
+                APIName: '',
                 IsActive: true,
                 AIModelType: 'TTS',
                 PowerRank: 5,
                 ModelVendors: [
-                    { Vendor: 'Eleven Labs', Status: 'Active', Type: 'Inference Provider' },
+                    { Vendor: 'Eleven Labs', Status: 'Active', TypeID: 'type-inference' },
                 ],
             },
             {
                 ID: 'model-eleven-v4',
                 Name: 'Eleven v4',
+                APIName: 'eleven_v4',
                 IsActive: true,
                 AIModelType: 'TTS',
                 PowerRank: 15,
                 ModelVendors: [
-                    { Vendor: 'Eleven Labs', Status: 'Active', Type: 'Inference Provider' },
+                    { Vendor: 'Eleven Labs', Status: 'Active', TypeID: 'type-inference' },
                 ],
             },
         ];
@@ -228,10 +242,41 @@ describe('RunNarrationPipeline and ResolveNarrationModelID', () => {
         });
     });
 
-    it('matches ElevenLabs to metadata vendor "Eleven Labs" and picks highest PowerRank', () => {
+    it('matches ElevenLabs to metadata vendor "Eleven Labs", ignores Model Developer rows, and picks highest PowerRank', () => {
         expect(ResolveNarrationModelID('ElevenLabs')).toBe('model-eleven-v4');
         expect(ResolveNarrationModelID('eleven-labs')).toBe('model-eleven-v4');
         expect(ResolveNarrationModelID('UnknownVendor')).toBeUndefined();
+    });
+
+    it('breaks PowerRank ties deterministically by preferring non-empty APIName, then Name ascending regardless of input order', () => {
+        const legacyWithoutApi = {
+            ID: 'model-eleven-legacy',
+            Name: 'Eleven Labs',
+            APIName: '',
+            IsActive: true,
+            AIModelType: 'TTS',
+            PowerRank: 10,
+            ModelVendors: [
+                { Vendor: 'Eleven Labs', Status: 'Active', TypeID: 'type-inference' },
+            ],
+        };
+        const v4WithApi = {
+            ID: 'model-eleven-v4',
+            Name: 'Eleven v4',
+            APIName: 'eleven_v4',
+            IsActive: true,
+            AIModelType: 'TTS',
+            PowerRank: 10,
+            ModelVendors: [
+                { Vendor: 'Eleven Labs', Status: 'Active', TypeID: 'type-inference' },
+            ],
+        };
+
+        mockAiEngineState.Models = [legacyWithoutApi, v4WithApi];
+        expect(ResolveNarrationModelID('ElevenLabs')).toBe('model-eleven-v4');
+
+        mockAiEngineState.Models = [v4WithApi, legacyWithoutApi];
+        expect(ResolveNarrationModelID('ElevenLabs')).toBe('model-eleven-v4');
     });
 
     it('emits one Error issue and never calls AITextToSpeechRunner when no TTS model matches', async () => {
@@ -286,7 +331,7 @@ describe('RunNarrationPipeline and ResolveNarrationModelID', () => {
         );
     });
 
-    it('substitutes {BindingKey} placeholders for TTS while preserving authored NarrationLine.Text, and skips lines with unresolved placeholders', async () => {
+    it('substitutes {BindingKey} placeholders for TTS and whole-line fallback captions while preserving authored NarrationLine.Text, and rejects Object.prototype keys', async () => {
         const spec = makeBaseSpec();
         spec.Audio.Narration!.Script = [
             {
@@ -299,16 +344,21 @@ describe('RunNarrationPipeline and ResolveNarrationModelID', () => {
                 BeatKey: 'beat-2',
                 Text: 'Pipeline grew by {kpi.missing}.',
             },
+            {
+                Key: 'line-proto',
+                BeatKey: 'beat-2',
+                Text: 'Total {constructor}',
+            },
         ];
 
+        // Return no Alignment so BuildWebVtt uses the whole-line fallback caption
         mockRunTextToSpeech.mockResolvedValueOnce({
             Success: true,
             PromptRunID: 'pr-resolved',
             SpeechResult: {
                 success: true,
                 content: '',
-                data: Buffer.from('audio-1'),
-                Alignment: makeAlignmentForWord('Revenue', 0.0, 2.5),
+                data: Buffer.alloc(32_000),
             } satisfies SpeechResult,
         });
 
@@ -329,11 +379,21 @@ describe('RunNarrationPipeline and ResolveNarrationModelID', () => {
         expect(result.Spec.Audio.Narration!.Script[0].Text).toBe(
             'Revenue reached {kpi.revenue} this quarter.',
         );
+        expect(result.CaptionsVtt).toContain('Revenue reached $14.2M this quarter.');
+        expect(result.CaptionsVtt).not.toContain('{kpi.revenue}');
         expect(result.Issues).toContainEqual(
             expect.objectContaining({
                 Code: 'UnresolvedPlaceholder',
                 Severity: 'Error',
                 LineKey: 'line-unresolved',
+                BeatKey: 'beat-2',
+            }),
+        );
+        expect(result.Issues).toContainEqual(
+            expect.objectContaining({
+                Code: 'UnresolvedPlaceholder',
+                Severity: 'Error',
+                LineKey: 'line-proto',
                 BeatKey: 'beat-2',
             }),
         );

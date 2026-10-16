@@ -39,6 +39,15 @@ export function FormatWebVttTimestamp(seconds: number): string {
     );
 }
 
+function escapeWebVttCueText(raw: string): string {
+    return raw
+        .replace(/\s+/g, ' ')
+        .trim()
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+}
+
 function flushWordGroup(words: NarrationWordTiming[], cues: VttCue[]): void {
     if (words.length === 0) {
         return;
@@ -48,7 +57,7 @@ function flushWordGroup(words: NarrationWordTiming[], cues: VttCue[]): void {
     cues.push({
         StartSeconds: first.StartSeconds,
         EndSeconds: last.EndSeconds,
-        Text: words.map((w) => w.Word).join(' '),
+        Text: escapeWebVttCueText(words.map((w) => w.Word).join(' ')),
     });
     words.length = 0;
 }
@@ -115,7 +124,7 @@ export function BuildWebVtt(lines: NarrationLine[]): string {
         if (line.WordTimings && line.WordTimings.length > 0) {
             buildCuesFromWordTimings(line.WordTimings, cues);
         } else {
-            const text = line.Text?.trim();
+            const text = escapeWebVttCueText(line.Text ?? '');
             if (text && typeof line.DurationSeconds === 'number' && line.DurationSeconds > 0) {
                 const start = line.StartSeconds ?? 0;
                 cues.push({

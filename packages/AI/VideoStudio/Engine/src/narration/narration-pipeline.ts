@@ -13,7 +13,6 @@ import { DeriveWordTimings, SpeechResult } from '@memberjunction/ai';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { AITextToSpeechRunner } from '@memberjunction/ai-prompts';
 import { IMetadataProvider, UserInfo } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
 import {
     NarrationLine,
     NarrationWordTiming,
@@ -92,114 +91,55 @@ export interface NarrationResult {
     Issues: NarrationIssue[];
 }
 
-interface ModelVendorLike {
-    ModelID?: string;
-    VendorID?: string;
-    Vendor?: string;
-    Status?: string;
-    Type?: string;
-    TypeID?: string;
-}
-
-interface ModelLike {
-    ID: string;
-    Name?: string;
-    IsActive?: boolean;
-    AIModelType?: string;
-    AIModelTypeID?: string;
-    PowerRank?: number | null;
-    ModelVendors?: ModelVendorLike[];
-}
-
 function normalizeVendorKey(name: string): string {
     return name.toLowerCase().replace(/[^a-z0-9]/g, '');
-}
-
-function isTtsModel(model: ModelLike, engine: AIEngineBase): boolean {
-    if (typeof model.AIModelType === 'string' && model.AIModelType.trim().toLowerCase() === 'tts') {
-        return true;
-    }
-    if (model.AIModelTypeID && Array.isArray(engine.ModelTypes)) {
-        const matchedType = engine.ModelTypes.find((mt) => UUIDsEqual(mt.ID, model.AIModelTypeID));
-        if (matchedType?.Name?.trim().toLowerCase() === 'tts') {
-            return true;
-        }
-    }
-    return false;
-}
-
-function isActiveInferenceVendorMatch(
-    mv: ModelVendorLike,
-    targetVendorKey: string,
-    engine: AIEngineBase,
-): boolean {
-    if (mv.Status !== 'Active') {
-        return false;
-    }
-    const canUseEngineInferenceCheck =
-        typeof engine.IsInferenceProvider === 'function' &&
-        Array.isArray(engine.VendorTypeDefinitions) &&
-        engine.VendorTypeDefinitions.length > 0 &&
-        Boolean(mv.TypeID);
-
-    if (canUseEngineInferenceCheck) {
-        if (!engine.IsInferenceProvider(mv as Parameters<AIEngineBase['IsInferenceProvider']>[0])) {
-            return false;
-        }
-    } else if (typeof mv.Type === 'string' && mv.Type.trim().toLowerCase() !== 'inference provider') {
-        return false;
-    }
-
-    let vendorName = mv.Vendor ?? '';
-    if (!vendorName && mv.VendorID && Array.isArray(engine.Vendors)) {
-        vendorName = engine.Vendors.find((v) => UUIDsEqual(v.ID, mv.VendorID))?.Name ?? '';
-    }
-    return normalizeVendorKey(vendorName) === targetVendorKey;
 }
 
 /**
  * Resolves the highest-`PowerRank` active `TTS` model with an active inference vendor matching `provider`.
  *
  * Vendor names are compared after lower-casing and stripping non-alphanumerics so `'ElevenLabs'`
- * matches metadata vendor `'Eleven Labs'`.
+ * matches metadata vendor `'Eleven Labs'`. Ties on `PowerRank` prefer models with a non-empty
+ * `APIName`, then break by `Name` ascending (case-insensitive).
  */
 export function ResolveNarrationModelID(provider: string): string | undefined {
-    const targetVendorKey = normalizeVendorKey(provider);
-    if (!targetVendorKey) {
+    const target = normalizeVendorKey(provider);
+    if (!target) {
         return undefined;
     }
 
     const engine = AIEngineBase.Instance;
-    const models = (engine.Models ?? []) as unknown as ModelLike[];
-    const allModelVendors = (engine.ModelVendors ?? []) as unknown as ModelVendorLike[];
+    const candidates = engine.Models.filter(
+        (m) =>
+            m.IsActive &&
+            m.AIModelType.trim().toLowerCase() === 'tts' &&
+            m.ModelVendors.some(
+                (mv) =>
+                    mv.Status === 'Active' &&
+                    engine.IsInferenceProvider(mv) &&
+                    normalizeVendorKey(mv.Vendor) === target,
+            ),
+    );
 
-    let bestModel: ModelLike | undefined;
-    let bestRank = -Infinity;
-
-    for (const model of models) {
-        if (!model.IsActive || !isTtsModel(model, engine)) {
-            continue;
-        }
-        const vendors =
-            Array.isArray(model.ModelVendors) && model.ModelVendors.length > 0
-                ? model.ModelVendors
-                : allModelVendors.filter((mv) => UUIDsEqual(mv.ModelID, model.ID));
-
-        const hasMatchingVendor = vendors.some((mv) =>
-            isActiveInferenceVendorMatch(mv, targetVendorKey, engine),
-        );
-        if (!hasMatchingVendor) {
-            continue;
-        }
-
-        const rank = typeof model.PowerRank === 'number' ? model.PowerRank : 0;
-        if (rank > bestRank) {
-            bestRank = rank;
-            bestModel = model;
-        }
+    if (candidates.length === 0) {
+        return undefined;
     }
 
-    return bestModel?.ID;
+    candidates.sort((a, b) => {
+        const rankA = a.PowerRank ?? 0;
+        const rankB = b.PowerRank ?? 0;
+        if (rankB !== rankA) {
+            return rankB - rankA;
+        }
+        const hasApiA = Boolean(a.APIName && a.APIName.trim().length > 0);
+        const hasApiB = Boolean(b.APIName && b.APIName.trim().length > 0);
+        if (hasApiA !== hasApiB) {
+            return hasApiA ? -1 : 1;
+        }
+        return (a.Name ?? '').toLowerCase().localeCompare((b.Name ?? '').toLowerCase());
+    });
+
+    return candidates[0].ID;
 }
 
 /**
@@ -215,7 +155,7 @@ function resolveSpokenText(
     let match: RegExpExecArray | null;
     while ((match = NARRATION_PLACEHOLDER_REGEX.exec(rawText)) !== null) {
         const key = match[1].trim();
-        if (!key || !bindingText || !(key in bindingText)) {
+        if (!key || !bindingText || !Object.hasOwn(bindingText, key)) {
             unresolvedKeys.push(key || match[0]);
         }
     }
@@ -226,7 +166,7 @@ function resolveSpokenText(
 
     const spokenText = rawText.replace(NARRATION_PLACEHOLDER_REGEX, (_full, group: string) => {
         const key = group.trim();
-        return bindingText?.[key] ?? '';
+        return bindingText && Object.hasOwn(bindingText, key) ? bindingText[key] : '';
     });
     return { spokenText, unresolvedKeys: [] };
 }
@@ -425,6 +365,8 @@ export async function RunNarrationPipeline(
         runner.Provider = options.Provider;
     }
 
+    const spokenByLineKey = new Map<string, string>();
+
     // ponytail: one line at a time; run a small pool if narration time matters
     for (const line of narration.Script) {
         const { spokenText, unresolvedKeys } = resolveSpokenText(line.Text, options.BindingText);
@@ -438,6 +380,8 @@ export async function RunNarrationPipeline(
             });
             continue;
         }
+
+        spokenByLineKey.set(line.Key, spokenText);
 
         await synthesizeAndStoreLine(
             line,
@@ -471,7 +415,9 @@ export async function RunNarrationPipeline(
     let captionsVtt: string | undefined;
     let captionsFileId: string | undefined;
     if (specCopy.Audio.Captions !== 'None') {
-        captionsVtt = BuildWebVtt(fitResult.Lines);
+        captionsVtt = BuildWebVtt(
+            fitResult.Lines.map((l) => ({ ...l, Text: spokenByLineKey.get(l.Key) ?? l.Text })),
+        );
         captionsFileId = await StoreFile({
             Content: Buffer.from(captionsVtt, 'utf8'),
             FileName: 'captions.vtt',
