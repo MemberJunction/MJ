@@ -106,6 +106,9 @@ export function FormatSubAgentConsultMessage(params: FormatSubAgentConsultMessag
 
     lines.push(`**Child run ID:** ${params.childRunId}`);
     lines.push(
+        `To answer, call ${params.subAgentName} again with resumeRunId: "${params.childRunId}" and your answer as the message.`
+    );
+    lines.push(
         'Answer this question from what you already know, ask your own caller with a Chat step only if they alone can answer, or tell the sub-agent to proceed without it.'
     );
 

@@ -103,7 +103,7 @@ interface LoopAgentResponse {
          * Use `subAgent` for a single sub-agent OR `subAgents` for parallel fan-out.
          * Only one of the two should be set per response.
          */
-        subAgent?: { name: string; message: string; terminateAfter: boolean };
+        subAgent?: { name: string; message: string; terminateAfter: boolean{% if subAgentConsultEnabled %}; resumeRunId?: string{% endif %} };
         /**
          * Multiple sub-agents to run IN PARALLEL (when type='Sub-Agent').
          * Use only when the sub-tasks are genuinely independent — their result
@@ -112,7 +112,7 @@ interface LoopAgentResponse {
          * terminates after the parallel batch regardless of that child's
          * success — same semantics as a single `subAgent` call.
          */
-        subAgents?: Array<{ name: string; message: string; terminateAfter: boolean }>;
+        subAgents?: Array<{ name: string; message: string; terminateAfter: boolean{% if subAgentConsultEnabled %}; resumeRunId?: string{% endif %} }>;
         /** Message index to expand (when type='Retry' and expanding a compacted message) */
         messageIndex?: number;
 {% if __agentTypePromptParams.includeResponseTypeDefinition.forEach != false %}

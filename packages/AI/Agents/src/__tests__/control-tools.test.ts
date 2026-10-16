@@ -70,6 +70,16 @@ describe('sub-agent tools', () => {
         const t = BuildSubAgentTool(agent('A'.repeat(80)));
         expect(t.name.length).toBeLessThanOrEqual(64);
     });
+    it('includes resumeRunId in inputSchema.properties only when consultEnabled is true', () => {
+        const withoutConsult = BuildSubAgentTool(agent('Query Strategist', 'Plans SQL.'), { consultEnabled: false });
+        expect(Object.keys(withoutConsult.inputSchema.properties ?? {}).sort()).toEqual(['message', 'terminateAfter']);
+
+        const withConsult = BuildSubAgentTool(agent('Query Strategist', 'Plans SQL.'), { consultEnabled: true });
+        expect(Object.keys(withConsult.inputSchema.properties ?? {}).sort()).toEqual(['message', 'resumeRunId', 'terminateAfter']);
+        const props = withConsult.inputSchema.properties as Record<string, { type: string; description?: string }>;
+        expect(props.resumeRunId.type).toBe('string');
+        expect(props.resumeRunId.description).toMatch(/earlier run that ended with a question/i);
+    });
 });
 
 describe('buildNativeToolSet', () => {
@@ -82,6 +92,17 @@ describe('buildNativeToolSet', () => {
         expect(set.byToolName.get(PAYLOAD_CHANGE_TOOL)?.kind).toBe('payloadChange');
         expect(set.byToolName.get(ASK_USER_TOOL)?.kind).toBe('askUser');
         expect(set.byToolName.get(COMPLETE_TASK_TOOL)?.kind).toBe('complete');
+    });
+    it('threads subAgentOptions per sub-agent to expose resumeRunId selectively', () => {
+        const set = BuildNativeToolSet(
+            actionSet(),
+            [agent('Copywriter Agent'), agent('Editor Agent')],
+            (sa) => ({ consultEnabled: sa.Name === 'Copywriter Agent' })
+        );
+        const copyTool = set.tools.find((t) => t.name === 'delegate_to_copywriter_agent')!;
+        const editorTool = set.tools.find((t) => t.name === 'delegate_to_editor_agent')!;
+        expect(Object.keys(copyTool.inputSchema.properties ?? {}).sort()).toEqual(['message', 'resumeRunId', 'terminateAfter']);
+        expect(Object.keys(editorTool.inputSchema.properties ?? {}).sort()).toEqual(['message', 'terminateAfter']);
     });
     it('rejects an Action that collides with a reserved name', () => {
         expect(() => BuildNativeToolSet(actionSet('Ask User'), [])).toThrow(/reserved/i);

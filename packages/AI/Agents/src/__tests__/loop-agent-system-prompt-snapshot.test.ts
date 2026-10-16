@@ -136,4 +136,13 @@ describe('Loop Agent Type system prompt — rendered snapshot', () => {
         expect(template).toContain(`<${RUNTIME_STATE_TAG}>`);
         expect(template).toContain(`<${AGENT_SPECIALIZATION_TAG}>`);
     });
+
+    it('renders resumeRunId?: string in both subAgent and subAgents only when subAgentConsultEnabled is true', () => {
+        const def = renderSystemPrompt({ ...DEFAULT_LOOP_AGENT_PROMPT_PARAMS });
+        expect(def).not.toContain('resumeRunId?: string');
+
+        const withConsult = renderSystemPrompt({ ...DEFAULT_LOOP_AGENT_PROMPT_PARAMS }, { subAgentConsultEnabled: true });
+        expect(withConsult).toContain('{ name: string; message: string; terminateAfter: boolean; resumeRunId?: string }');
+        expect(withConsult).toContain('Array<{ name: string; message: string; terminateAfter: boolean; resumeRunId?: string }>');
+    });
 });

@@ -5338,7 +5338,9 @@ export class BaseAgent {
             // set — Actions plus the control-flow tools (one per sub-agent, payload_change_request,
             // ask_user) — and NAMES the control ones. The runner keeps them only when the selected
             // model's LLM.NativeControlFlow resolves to 'implicit'; a hybrid model never sees them.
-            const toolSet = BuildNativeToolSet(actionSet, subAgents);
+            const toolSet = BuildNativeToolSet(actionSet, subAgents, (sa) => ({
+                consultEnabled: this.isSubAgentConsultEnabledForSubAgent(params.agent, sa)
+            }));
             promptParams.tools = toolSet.tools;
             promptParams.controlFlowToolNames = toolSet.controlToolNames;
             promptParams.toolChoice = this.resolveToolChoiceForTurn(params);
@@ -6257,6 +6259,37 @@ export class BaseAgent {
                     };
                 }
             }
+
+            if (req.resumeRunId != null && req.resumeRunId !== '') {
+                const openForSubAgent = Array.from(this._openSubAgentConsults.values())
+                    .filter(c => UUIDsEqual(c.subAgentId, subAgent.ID));
+                const matchingConsult = IsValidUUID(req.resumeRunId)
+                    ? openForSubAgent.find(c => UUIDsEqual(c.childRunId, req.resumeRunId))
+                    : undefined;
+                if (!matchingConsult) {
+                    const openIds = openForSubAgent.length > 0
+                        ? openForSubAgent.map(c => c.childRunId).join(', ')
+                        : 'none';
+                    const errorMessage = `Invalid resumeRunId '${req.resumeRunId}' for sub-agent '${subAgent.Name}'. Open consult run IDs for '${subAgent.Name}': ${openIds}`;
+                    this.logError(errorMessage, {
+                        agent: params.agent,
+                        category: 'SubAgentExecution',
+                        metadata: {
+                            subAgentName: name,
+                            resumeRunId: req.resumeRunId,
+                            openConsultIds: openIds
+                        }
+                    });
+                    if (nextStep.step !== 'Retry') {
+                        this._generalValidationRetryCount++;
+                    }
+                    return {
+                        step: 'Retry',
+                        terminate: false,
+                        errorMessage
+                    };
+                }
+            }
         }
 
         // All requested sub-agents are valid
@@ -6901,6 +6934,27 @@ export class BaseAgent {
             return null;
         }
         return resolved;
+    }
+
+    /**
+     * Side-effect-free check used during prompt and native-tool construction to determine
+     * whether `'Consult'` is active for a specific sub-agent of `parentAgent`.
+     * @private
+     */
+    private isSubAgentConsultEnabledForSubAgent(
+        parentAgent: MJAIAgentEntityExtended,
+        subAgent: MJAIAgentEntityExtended
+    ): boolean {
+        if (this.AgentTypeInstance?.InjectLoopResultsAsMessage === false) {
+            return false;
+        }
+        const isDirectChild = subAgent.ParentID != null && UUIDsEqual(subAgent.ParentID, parentAgent.ID);
+        const relationship = isDirectChild
+            ? undefined
+            : (AIEngine.Instance.AgentRelationships ?? []).find(
+                r => UUIDsEqual(r.AgentID, parentAgent.ID) && UUIDsEqual(r.SubAgentID, subAgent.ID) && r.Status === 'Active'
+            );
+        return this.resolveSubAgentChatHandlingOption(parentAgent, relationship) === 'Consult';
     }
 
     /**
@@ -10349,6 +10403,10 @@ The context is now within limits. Please retry your request with the recovered c
             // The client tools and the app context (per-run, from extraData) — neither under an audience (callerContextSections).
             const { clientToolDetails, appContext } = this.callerContextSections(agent, extraData, withholding?.CallerContext === true);
 
+            const subAgentConsultEnabled = uniqueActiveSubAgents.some(
+                sa => this.isSubAgentConsultEnabledForSubAgent(agent, sa)
+            );
+
             const contextData: AgentContextData = {
                 agentName: agent.Name,
                 agentDescription: agent.Description,
@@ -10362,6 +10420,7 @@ The context is now within limits. Please retry your request with the recovered c
                 skillsCatalog: skillsCatalog,
                 planModeActive: this._planModeActive,
                 planApproved: this._planApproved,
+                ...(subAgentConsultEnabled ? { subAgentConsultEnabled: true } : {}),
                 appContext: appContext,
             };
 
@@ -11808,6 +11867,19 @@ The context is now within limits. Please retry your request with the recovered c
             messages.push(contextMessage);
         }
 
+        // On resume, insert the consult's question as an assistant turn right before the request message
+        if (subAgentRequest.resumeRunId) {
+            const resumeId = subAgentRequest.resumeRunId.trim();
+            const consult = this._openSubAgentConsults.get(resumeId)
+                ?? Array.from(this._openSubAgentConsults.values()).find(c => UUIDsEqual(c.childRunId, resumeId));
+            if (consult?.question) {
+                messages.push({
+                    role: 'assistant',
+                    content: consult.question
+                });
+            }
+        }
+
         if (subAgentRequest.message) {
             messages.push({
                 role: 'user',
@@ -11866,6 +11938,18 @@ The context is now within limits. Please retry your request with the recovered c
                 subAgent,
                 contextMessage
             );
+
+            // Remove the open consult now that it is being answered
+            const resumeRunId = subAgentRequest.resumeRunId?.trim() || undefined;
+            if (resumeRunId) {
+                const consult = this._openSubAgentConsults.get(resumeRunId)
+                    ?? Array.from(this._openSubAgentConsults.values()).find(c => UUIDsEqual(c.childRunId, resumeRunId));
+                if (consult) {
+                    this._openSubAgentConsults.delete(consult.childRunId);
+                } else {
+                    this._openSubAgentConsults.delete(resumeRunId);
+                }
+            }
             
             // Set parent run ID in the sub-agent's execution
             // This would need to be passed through the AgentRunner in a real implementation
@@ -11903,7 +11987,8 @@ The context is now within limits. Please retry your request with the recovered c
                 parentStepCounts: parentStepCountsToPass,
                 parentRun: this._agentRun,
                 parentActivatedSkillIDs: this.activeSkillIDsForRun(params), // the root's active skills reach the sub-agent's actions
-                payload: payload, // pass the payload if provided
+                payload: resumeRunId ? undefined : payload, // on resume, ignore computed/mapped payload so autoPopulateLastRunPayload loads the child's prior FinalPayload
+                ...(resumeRunId ? { lastRunId: resumeRunId, autoPopulateLastRunPayload: true } : {}),
                 configurationId: params.configurationId, // propagate configuration ID to sub-agent
                 effortLevel: params.effortLevel, // propagate effort level to sub-agent
                 apiKeys: params.apiKeys, // propagate API keys to sub-agent
@@ -12761,6 +12846,7 @@ The context is now within limits. Please retry your request with the recovered c
                         const lastPayload = JSON.parse(lastRun.FinalPayload);
                         // Only set payload if not explicitly provided
                         if (!params.payload) {
+                            params.payload = lastPayload;
                             modifiedParams = {
                                 ...params,
                                 payload: lastPayload
@@ -14411,6 +14497,7 @@ The context is now within limits. Please retry your request with the recovered c
             subAgentName: subAgentRequest.name,
             message: subAgentRequest.message,
             terminateAfter: subAgentRequest.terminateAfter,
+            ...(subAgentRequest.resumeRunId ? { resumeRunId: subAgentRequest.resumeRunId } : {}),
             conversationMessages: params.conversationMessages,
             parentAgentHierarchy: this._agentHierarchy
         };
@@ -15108,6 +15195,9 @@ The context is now within limits. Please retry your request with the recovered c
                         lines.push(`* Form:\n${formSummary}`);
                     }
                     lines.push(`* Child run ID: ${execution.consult.childRunId || '(unknown)'}`);
+                    lines.push(
+                        `* To answer, call ${execution.request.name} again with resumeRunId: "${execution.consult.childRunId}" and your answer as the message.`
+                    );
                 } else if (isChat && question?.trim()) {
                     lines.push(`* Question: ${question}`);
                 }
@@ -15169,6 +15259,7 @@ The context is now within limits. Please retry your request with the recovered c
                 subAgentName: request.name,
                 message: request.message,
                 terminateAfter: request.terminateAfter,
+                ...(request.resumeRunId ? { resumeRunId: request.resumeRunId } : {}),
                 conversationMessages: params.conversationMessages,
                 parentAgentHierarchy: this._agentHierarchy,
                 relationshipType: relationship ? 'related' : 'child'
@@ -15638,6 +15729,7 @@ The context is now within limits. Please retry your request with the recovered c
             subAgentName: subAgentRequest.name,
             message: subAgentRequest.message,
             terminateAfter: subAgentRequest.terminateAfter,
+            ...(subAgentRequest.resumeRunId ? { resumeRunId: subAgentRequest.resumeRunId } : {}),
             conversationMessages: params.conversationMessages,
             parentAgentHierarchy: this._agentHierarchy,
             relationshipType: 'related'

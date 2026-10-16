@@ -463,12 +463,19 @@ export class LoopAgentType extends BaseAgentType {
         payloadChangeRequest: AgentPayloadChangeRequest | undefined,
         payloadToolCallId?: string
     ): BaseAgentNextStep {
-        const requests = subAgents.map(({ call, binding }) => ({
-            name: binding.agent.Name,
-            message: typeof call.arguments?.message === 'string' ? call.arguments.message : '',
-            terminateAfter: call.arguments?.terminateAfter === true,
-            toolCallId: call.id
-        }));
+        const requests = subAgents.map(({ call, binding }) => {
+            const rawResumeRunId = call.arguments?.resumeRunId;
+            const resumeRunId = typeof rawResumeRunId === 'string' && rawResumeRunId.trim().length > 0
+                ? rawResumeRunId.trim()
+                : undefined;
+            return {
+                name: binding.agent.Name,
+                message: typeof call.arguments?.message === 'string' ? call.arguments.message : '',
+                terminateAfter: call.arguments?.terminateAfter === true,
+                ...(resumeRunId ? { resumeRunId } : {}),
+                toolCallId: call.id
+            };
+        });
         return this.createNextStep('Sub-Agent', {
             terminate: false,
             ...(requests.length === 1 ? { subAgent: requests[0] } : { subAgents: requests }),
@@ -715,17 +722,28 @@ export class LoopAgentType extends BaseAgentType {
                     else {
                         retVal.step = 'Sub-Agent';
                         if (response.nextStep.subAgents && response.nextStep.subAgents.length > 0) {
-                            retVal.subAgents = response.nextStep.subAgents.map(sa => ({
-                                name: sa.name,
-                                message: sa.message,
-                                terminateAfter: sa.terminateAfter,
-                                templateParameters: sa.templateParameters || {}
-                            }));
+                            retVal.subAgents = response.nextStep.subAgents.map(sa => {
+                                const resumeRunId = typeof sa.resumeRunId === 'string' && sa.resumeRunId.trim().length > 0
+                                    ? sa.resumeRunId.trim()
+                                    : undefined;
+                                return {
+                                    name: sa.name,
+                                    message: sa.message,
+                                    terminateAfter: sa.terminateAfter,
+                                    ...(resumeRunId ? { resumeRunId } : {}),
+                                    templateParameters: sa.templateParameters || {}
+                                };
+                            });
                         } else if (response.nextStep.subAgent) {
+                            const rawResumeRunId = response.nextStep.subAgent.resumeRunId;
+                            const resumeRunId = typeof rawResumeRunId === 'string' && rawResumeRunId.trim().length > 0
+                                ? rawResumeRunId.trim()
+                                : undefined;
                             retVal.subAgent = {
                                 name: response.nextStep.subAgent.name,
                                 message: response.nextStep.subAgent.message,
                                 terminateAfter: response.nextStep.subAgent.terminateAfter,
+                                ...(resumeRunId ? { resumeRunId } : {}),
                                 templateParameters: response.nextStep.subAgent.templateParameters || {}
                             };
                         }

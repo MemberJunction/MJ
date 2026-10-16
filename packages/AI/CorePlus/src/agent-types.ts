@@ -448,6 +448,12 @@ export type AgentSubAgentRequest<TContext = any> = {
     message: string;
     /** Whether to terminate the parent agent after sub-agent completes */
     terminateAfter: boolean;
+    /**
+     * The ID of this sub-agent's earlier run that ended with a question to this agent;
+     * set it only to answer that question; the framework resumes that run (its payload,
+     * its question, then your message).
+     */
+    resumeRunId?: string;
     /** The native tool call (ChatToolCall.id) this dispatch answers — set only on native turns. */
     toolCallId?: string;
     /** Optional template parameters for sub-agent invocation */
@@ -1981,6 +1987,8 @@ export type AgentContextData = {
     planModeActive?: boolean;
     /** Whether Plan Mode's gate has already been satisfied (a prior plan was approved on this run chain) */
     planApproved?: boolean;
+    /** Whether ChatHandlingOption='Consult' is active for at least one listed sub-agent */
+    subAgentConsultEnabled?: boolean;
     /** Markdown formatted snapshot of the user's current application context */
     appContext?: string;
 }

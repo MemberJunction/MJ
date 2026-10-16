@@ -143,8 +143,13 @@ export function BuildCompleteTaskTool(): ChatTool {
     };
 }
 
+export interface SubAgentToolOptions {
+    /** When true, exposes `resumeRunId` in the tool's inputSchema so the parent can resume an open consult. */
+    consultEnabled?: boolean;
+}
+
 /** One tool per sub-agent: `delegate_to_<sanitized name>`, described by the agent's own description. */
-export function BuildSubAgentTool(agent: MJAIAgentEntityExtended): ChatTool {
+export function BuildSubAgentTool(agent: MJAIAgentEntityExtended, options?: SubAgentToolOptions): ChatTool {
     const name = `${SUB_AGENT_TOOL_PREFIX}${SanitizeToolName(agent.Name)}`.slice(0, MAX_TOOL_NAME_LENGTH);
     return {
         name,
@@ -153,7 +158,15 @@ export function BuildSubAgentTool(agent: MJAIAgentEntityExtended): ChatTool {
             type: 'object',
             properties: {
                 message: { type: 'string', description: 'Instructions for the sub-agent — what to do. Not the payload; it receives that separately.' },
-                terminateAfter: { type: 'boolean', description: 'true to end your own run when the sub-agent finishes; false (default) to continue with its result.' }
+                terminateAfter: { type: 'boolean', description: 'true to end your own run when the sub-agent finishes; false (default) to continue with its result.' },
+                ...(options?.consultEnabled === true
+                    ? {
+                        resumeRunId: {
+                            type: 'string',
+                            description: "Optional. The ID of this sub-agent's earlier run that ended with a question to you; set it only to answer that question and resume that run."
+                        }
+                    }
+                    : {})
             },
             required: ['message']
         }
@@ -161,15 +174,19 @@ export function BuildSubAgentTool(agent: MJAIAgentEntityExtended): ChatTool {
 }
 
 /** @deprecated Use {@link BuildSubAgentTool}. */
-export function buildSubAgentTool(agent: MJAIAgentEntityExtended): ChatTool {
-    return BuildSubAgentTool(agent);
+export function buildSubAgentTool(agent: MJAIAgentEntityExtended, options?: SubAgentToolOptions): ChatTool {
+    return BuildSubAgentTool(agent, options);
 }
 
 /**
  * Actions, then sub-agents, then the fixed control tools — one reverse map for all of them.
  * Collisions and reserved-name clashes are hard errors, exactly as Action/Action collisions are.
  */
-export function BuildNativeToolSet(actionSet: ActionToolSet, subAgents: readonly MJAIAgentEntityExtended[]): NativeToolSet {
+export function BuildNativeToolSet(
+    actionSet: ActionToolSet,
+    subAgents: readonly MJAIAgentEntityExtended[],
+    subAgentOptions?: (agent: MJAIAgentEntityExtended) => SubAgentToolOptions | undefined
+): NativeToolSet {
     const byToolName = new Map<string, NativeToolBinding>(actionSet.byToolName);
     const tools: ChatTool[] = [...actionSet.tools];
     const controlToolNames: string[] = [];
@@ -180,7 +197,7 @@ export function BuildNativeToolSet(actionSet: ActionToolSet, subAgents: readonly
         }
     }
     for (const agent of subAgents) {
-        const tool = BuildSubAgentTool(agent);
+        const tool = BuildSubAgentTool(agent, subAgentOptions?.(agent));
         const existing = byToolName.get(tool.name);
         if (existing) {
             const other = existing.kind === 'action' ? `Action '${existing.action.Name}'`
@@ -203,6 +220,10 @@ export function BuildNativeToolSet(actionSet: ActionToolSet, subAgents: readonly
 }
 
 /** @deprecated Use {@link BuildNativeToolSet}. */
-export function buildNativeToolSet(actionSet: ActionToolSet, subAgents: readonly MJAIAgentEntityExtended[]): NativeToolSet {
-    return BuildNativeToolSet(actionSet, subAgents);
+export function buildNativeToolSet(
+    actionSet: ActionToolSet,
+    subAgents: readonly MJAIAgentEntityExtended[],
+    subAgentOptions?: (agent: MJAIAgentEntityExtended) => SubAgentToolOptions | undefined
+): NativeToolSet {
+    return BuildNativeToolSet(actionSet, subAgents, subAgentOptions);
 }

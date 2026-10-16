@@ -187,6 +187,13 @@ export interface LoopAgentResponse<P = any> {
              * true=end parent, false=continue
              */
             terminateAfter: boolean;
+
+            /**
+             * The ID of this sub-agent's earlier run that ended with a question to this agent;
+             * set it only to answer that question; the framework resumes that run (its payload,
+             * its question, then your message).
+             */
+            resumeRunId?: string;
         };
 
         /**
@@ -197,6 +204,12 @@ export interface LoopAgentResponse<P = any> {
             message: string;
             templateParameters?: Record<string, any>;
             terminateAfter: boolean;
+            /**
+             * The ID of this sub-agent's earlier run that ended with a question to this agent;
+             * set it only to answer that question; the framework resumes that run (its payload,
+             * its question, then your message).
+             */
+            resumeRunId?: string;
         }>;
 
         /**
