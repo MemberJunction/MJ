@@ -48,7 +48,7 @@ import {
     VectorSyncRowCandidate,
 } from './vector-management-agent-context';
 import { ValidateStringParam } from '../../../shared/agent-tool-validation';
-import { WithoutSensitiveFields, SensitiveFieldsInTemplate } from './sensitive-fields';
+import { WithoutSensitiveFields, SensitiveFieldsInTemplate, VectorFieldPurpose } from './sensitive-fields';
 import {
     ENTITY_DOCUMENT_TYPE_BY_USE_CASE,
     MAX_TEMPLATE_FIELDS,
@@ -1692,7 +1692,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         // a field the picker never offered. Refuse before anything is written — once values
         // reach the vector index they are retrievable by similarity search, outside the
         // entity permissions that guard the source column, and not fully reversible.
-        const sensitive = SensitiveFieldsInTemplate(templateText);
+        const sensitive = SensitiveFieldsInTemplate(templateText, this.vectorFieldPurpose(this.SuggestUseCase));
         if (sensitive.length > 0) {
             throw new Error(
                 `This template references ${sensitive.length === 1 ? 'a field' : 'fields'} that must not be ` +
@@ -2026,11 +2026,20 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         return prompt;
     }
 
+    /**
+     * What a document for this use case embeds its fields for. Only a duplicate-detection document
+     * may embed a date of birth (see sensitive-fields.ts).
+     */
+    private vectorFieldPurpose(useCase: string): VectorFieldPurpose {
+        return EntityDocumentTypeForUseCase(useCase) === 'Record Duplicate' ? 'duplicate-detection' : 'other';
+    }
+
     /** Build the data payload for the suggestion prompt */
     private buildPromptData(entity: EntityInfo, useCase: string): Record<string, unknown> {
         // LAYER 1 of the sensitive-field refusal: the model never sees these columns, so it
         // cannot suggest them. See sensitive-fields.ts for why this cannot live in the prompt.
-        const fields = WithoutSensitiveFields(entity.Fields).map(f => ({
+        const purpose = this.vectorFieldPurpose(useCase);
+        const fields = WithoutSensitiveFields(entity.Fields, purpose).map(f => ({
             Name: f.Name,
             Type: f.Type,
             IsPrimaryKey: f.IsPrimaryKey,
@@ -2048,7 +2057,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
                 const relatedEntity = md.Entities.find(e => e.Name === r.RelatedEntity);
                 // Layer 1 covers related entities too: their fields reach the model here.
                 const relFields = relatedEntity
-                    ? WithoutSensitiveFields(relatedEntity.Fields)
+                    ? WithoutSensitiveFields(relatedEntity.Fields, purpose)
                         .filter(f => !f.IsPrimaryKey && f.Type !== 'datetimeoffset')
                         .map(f => f.Name)
                     : [];
