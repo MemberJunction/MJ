@@ -323,6 +323,15 @@ jobs:
           PR_BASE_REF: ${{ github.base_ref || 'next' }}
         run: node .github/scripts/check-dynamic-replace.mjs --base "origin/$PR_BASE_REF"
 
+      # API-root guard (#5674). MJAPI is often served under a prefix (MJAPI_BASE_PATH=/api, with
+      # the CDN forwarding only /api/*), so an Express-app route mounted at a root-relative
+      # literal works locally and 404s in every prefixed deployment. Flags `app.use('/x')` /
+      # `context.app.get(`/x`)` in the server packages; mount through ApiRoute() instead. Its
+      # runtime twin is MJServer's apiRootBoot.test.ts, which runs in the unit suite.
+      - name: API-root guard
+        if: ${{ !cancelled() }}
+        run: pnpm run check:api-root
+
       # Browser class-registration manifest server-leakage gate. A server-only package reaching
       # `ng-bootstrap` / `ng-bootstrap-lite` breaks the Angular bundle with esbuild
       # `Could not resolve "crypto"`, and only on a COLD build — warm HMR hides it, so the
