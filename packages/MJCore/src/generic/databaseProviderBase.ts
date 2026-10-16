@@ -309,6 +309,22 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         return undefined;
     }
 
+    /** Instances with a transaction open. A subclass that tracks transactions adds itself at begin and removes itself at the end. */
+    protected static readonly InstancesInTransaction = new Set<DatabaseProviderBase>();
+
+    /**
+     * Whether the calling async scope is in a transaction open on any provider instance, not only the one at hand:
+     * MJAPI saves through a per-request provider while engines load through the global one.
+     */
+    public static CallerInAnyTransaction(): boolean {
+        for (const provider of DatabaseProviderBase.InstancesInTransaction) {
+            if ((provider.CapturePostCommitToken()?.Epoch ?? null) !== null) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /**
      * Await one post-commit task, logging (never rethrowing) its failure. Shared by the immediate
      * path of {@link RunAfterCommit} and by subclasses that drain a queue after commit.

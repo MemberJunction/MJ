@@ -6866,6 +6866,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 await this.BeginPhysicalTransaction();
                 this._affinity.OpenEpoch();
                 this._affinity.Bind(membership);
+                DatabaseProviderBase.InstancesInTransaction.add(this);
                 return;
             }
             if (!this.HasPhysicalTransaction) {
@@ -7110,6 +7111,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
      */
     private clearTransactionState(): void {
         this._affinity.CloseEpoch();
+        DatabaseProviderBase.InstancesInTransaction.delete(this);
         this._transactionDepth = 0;
         this._doomed = false;
         this.clearSavepointState();

@@ -718,7 +718,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             if (forceRefresh) {
                 return this.queueForcedReload([configs, provider, forceRefresh, contextUser, readOptions]);
             }
-            if (this._loaded && this._inFlightReadsOnPool && this.callerInTransaction()) {
+            if (this._loaded && this._inFlightReadsOnPool && DatabaseProviderBase.CallerInAnyTransaction()) {
                 return;
             }
             return this.waitForInFlightLoad();
@@ -789,12 +789,6 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 TelemetryManager.Instance.EndEvent(eventId);
             }
         }
-    }
-
-    /** Whether the calling async scope is in a transaction open on this engine's provider. */
-    private callerInTransaction(): boolean {
-        const provider = this.ProviderToUse;
-        return provider instanceof DatabaseProviderBase && (provider.CapturePostCommitToken()?.Epoch ?? null) !== null;
     }
 
     private waitForInFlightLoad(): Promise<void> {

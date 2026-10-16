@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import { GetGlobalObjectStore } from '@memberjunction/global';
 import { BaseEngine, BaseEnginePropertyConfig } from '../generic/baseEngine';
 import { BaseEntity, BaseEntityEvent } from '../generic/baseEntity';
@@ -101,6 +101,18 @@ function freshEngine(): DatasetEngine {
     return new DatasetEngine();
 }
 
+/** The registry of providers with an open transaction, filled as a transaction-tracking provider fills it. */
+abstract class TransactionRegistry extends DatabaseProviderBase {
+    public static Open(provider: DatabaseProviderBase): void {
+        DatabaseProviderBase.InstancesInTransaction.add(provider);
+    }
+    public static Clear(): void {
+        DatabaseProviderBase.InstancesInTransaction.clear();
+    }
+}
+
+afterEach(() => TransactionRegistry.Clear());
+
 /** A database provider that records can be bound to (what `GenericDatabaseProvider` is). */
 type EntityDatabaseProvider = DatabaseProviderBase & IEntityDataProvider;
 
@@ -122,6 +134,9 @@ function providerAtDepth(depth: number, member: boolean = true): { provider: Ent
     provider.CapturePostCommitToken = (): PostCommitToken =>
         depth > 0 && member ? { Epoch: 1, FrameIds: Array.from({ length: depth }, (_, i) => i + 1) } : { Epoch: null, FrameIds: [] };
     provider.RunAfterCommit = (task: PostCommitTask) => { queued.push(task); };
+    if (depth > 0) {
+        TransactionRegistry.Open(provider);
+    }
     return { provider, commit: async () => { for (const t of queued.splice(0)) await t(); }, queuedCount: () => queued.length };
 }
 
@@ -204,6 +219,12 @@ describe('BaseEngine: event-driven reloads read on the pool', () => {
     it('does not make a plain load inside a transaction wait for an event reload in flight', async () => {
         // the reload's pool read may be waiting on the row locks of the caller's transaction
         expect(await plainLoadSettlesDuringReload(true)).toBe(true);
+    });
+
+    it('does not make a plain load wait for an event reload when the caller\'s transaction is on another provider', async () => {
+        // MJAPI saves through a per-request provider; the engine and its reload use the global one
+        providerAtDepth(1, true);
+        expect(await plainLoadSettlesDuringReload(false)).toBe(true);
     });
 
     it('makes a plain load outside a transaction wait for an event reload in flight', async () => {
