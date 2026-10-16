@@ -14,6 +14,8 @@ export interface PKEvidence {
   namingScore: number;       // 0-1: How well the name matches PK patterns — case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   dataTypeScore: number;     // 0-1: How appropriate the data type is for PK — case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   warnings: string[];        // Any issues found (e.g., "has nulls", "not unique") — case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  /** Name of the existing primary-key or unique index that backs this candidate, when there is one. */
+  backingIndex?: string;  // case-violation-ok-legacy-back-compat: camelCase to match the rest of this exported interface
 }
 
 /**

@@ -315,6 +315,14 @@ export interface RelationshipDiscoveryConfig {
     enabled: boolean;                // Re-analyze after discoveries (default: true)
     maxIterations: number;           // Max discovery iterations (default: 10)
   };
+
+  /**
+   * Use existing primary-key and unique indexes as PK evidence (default true): a declared PK becomes a
+   * candidate at top confidence, a unique index on NOT NULL columns becomes a candidate even when the
+   * statistics can't show uniqueness (e.g. an empty table), and composite unique indexes are always
+   * considered. Needs `analysis.useExistingIndexes` (also default true).
+   */
+  indexBackedCandidates?: boolean;
 }
 
 export interface GuardrailsConfig {

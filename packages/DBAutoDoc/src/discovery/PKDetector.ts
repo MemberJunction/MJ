@@ -9,6 +9,11 @@ import { TableDefinition, ColumnDefinition } from '../types/state.js';
 import { PKCandidate, PKEvidence, ColumnStatistics, CachedColumnStats } from '../types/discovery.js';
 import { RelationshipDiscoveryConfig } from '../types/config.js';
 import { ColumnStatsCache } from './ColumnStatsCache.js';
+import {
+  ClassifySingleColumnKey, CompositeKeyIndexes, IndexKeyKind,
+  INDEX_KEY_BOOST, DECLARED_PK_CONFIDENCE, UNIQUE_COMPOSITE_CONFIDENCE
+} from './IndexKeyEvidence.js';
+import type { AutoDocIndex } from '../types/driver.js';
 
 export class PKDetector {
   constructor(
@@ -50,7 +55,7 @@ export class PKDetector {
       const column = table.columns[colIdx];
       const candidate = await this.analyzeSingleColumnPK(
         schemaName,
-        table.name,
+        table,
         column,
         iteration,
         colIdx
@@ -77,6 +82,12 @@ export class PKDetector {
       candidates.push(...compositeCandidates);
     }
 
+    // Composite keys backed by a PK or unique index are considered even when a surrogate exists:
+    // the database guarantees them, and the composite search above is skipped in that case.
+    if (this.useIndexes()) {
+      this.mergeCandidates(candidates, this.indexBackedCompositeCandidates(schemaName, table, iteration));
+    }
+
     // H11: Progressive discount for later PK-eligible columns
     // When multiple PK-eligible columns exist, later ones get discounted
     // to reduce false positives from FK columns with high uniqueness
@@ -93,6 +104,9 @@ export class PKDetector {
       // Apply progressive discount: 2nd eligible gets 0.85x, 3rd 0.70x, etc.
       const discounts = [1.0, 0.85, 0.70, 0.55, 0.40];
       for (let i = 1; i < singleCols.length; i++) {
+        if (singleCols[i].confidence === DECLARED_PK_CONFIDENCE && singleCols[i].evidence.warnings.some(w => w.startsWith('Declared primary key'))) {
+          continue; // A declared primary key is authoritative wherever the column sits
+        }
         const discount = i < discounts.length ? discounts[i] : 0.40;
         const oldConf = singleCols[i].confidence;
         singleCols[i].confidence = Math.round(singleCols[i].confidence * discount);
@@ -178,11 +192,13 @@ export class PKDetector {
    */
   private async analyzeSingleColumnPK(
     schemaName: string,
-    tableName: string,
+    table: TableDefinition,
     column: ColumnDefinition,
     iteration: number,
     colOrdinal: number = 0
   ): Promise<PKCandidate | null> {
+    const tableName = table.name;
+    const indexKey = this.useIndexes() ? ClassifySingleColumnKey(table, column) : undefined;
     // Get or compute column statistics
     let cachedStats = this.statsCache.getColumnStats(schemaName, tableName, column.name);
 
@@ -232,13 +248,19 @@ export class PKDetector {
       this.statsCache.setColumnStats(cachedStats);
     }
 
-    // Use cached stats for PK analysis
-    const uniqueness = cachedStats.uniqueness;
+    if (indexKey?.Kind === 'DeclaredPrimaryKey') {
+      return this.declaredPrimaryKeyCandidate(schemaName, tableName, [column.name], cachedStats.totalRows, indexKey.Index, iteration);
+    }
+
+    // A unique index on a NOT NULL column guarantees uniqueness whatever the sample shows (even on an empty table).
+    const indexGuaranteesKey = indexKey?.Kind === 'UniqueNotNull';
+    const uniqueness = indexGuaranteesKey ? 1.0 : cachedStats.uniqueness;
 
     // Deterministic eligibility gate — a column is only PK-eligible if it has
     // zero nulls, zero blanks, and 100% unique values. This is the mathematical
     // definition of a primary key and cannot be overridden by the LLM.
-    if (!cachedStats.pkEligible) {
+    // A unique index on a NOT NULL column is the same guarantee from the database itself.
+    if (!cachedStats.pkEligible && !indexGuaranteesKey) {
       const reasons: string[] = [];
       if (cachedStats.nullCount > 0) reasons.push(`${cachedStats.nullCount} nulls`);
       if (cachedStats.uniqueness < 1.0) reasons.push(`${(cachedStats.uniqueness * 100).toFixed(1)}% unique (must be 100%)`);
@@ -262,6 +284,7 @@ export class PKDetector {
     const dataPattern = cachedStats.dataPattern;
 
     // Calculate overall confidence
+    const indexBoost = indexKey ? INDEX_KEY_BOOST[indexKey.Kind as Exclude<IndexKeyKind, 'DeclaredPrimaryKey'>] : 0;
     const confidence = this.calculatePKConfidence({
       uniqueness,
       nullCount: cachedStats.nullCount,
@@ -270,7 +293,7 @@ export class PKDetector {
       namingScore,
       dataTypeScore,
       warnings: []
-    }, tableName, column.name, colOrdinal);
+    }, tableName, column.name, colOrdinal, indexBoost);
 
     // Build evidence
     const evidence: PKEvidence = {
@@ -280,8 +303,12 @@ export class PKDetector {
       dataPattern,
       namingScore,
       dataTypeScore,
-      warnings: []
+      warnings: [],
+      backingIndex: indexKey?.Index.IndexName
     };
+    if (indexKey) {
+      evidence.warnings.push(`Backed by ${indexKey.Kind === 'UniqueNotNull' ? 'a unique index on a NOT NULL column' : 'a unique index on a nullable column'}: ${indexKey.Index.IndexName}`);
+    }
 
     // Add warnings (nulls/blanks are already hard-rejected by eligibility gate)
     if (uniqueness < 1.0) {
@@ -442,7 +469,7 @@ export class PKDetector {
    * - Composite keys: 50-75
    * - Everything else: <50
    */
-  private calculatePKConfidence(evidence: PKEvidence, tableName: string, columnName: string, colOrdinal: number = 0): number {
+  private calculatePKConfidence(evidence: PKEvidence, tableName: string, columnName: string, colOrdinal: number = 0, indexBoost: number = 0): number {
     let score = 0;
 
     // **CRITICAL FIX**: Reject obvious non-PK columns immediately
@@ -550,6 +577,12 @@ export class PKDetector {
       const boost = 20; // Add 20 points for perfect surrogate key
       score += boost;
       console.log(`[PKDetector] ${columnName}: surrogate key boost +${boost} (final: ${Math.round(Math.min(score, 100))})`);
+    }
+
+    // Existing unique index on the column: strong evidence the database itself enforces (see IndexKeyEvidence)
+    if (indexBoost > 0) {
+      score += indexBoost;
+      console.log(`[PKDetector] ${columnName}: unique index boost +${indexBoost}`);
     }
 
     // H9: Position-based multiplier — PKs are almost always first columns
@@ -764,5 +797,90 @@ export class PKDetector {
     }
 
     return candidates;
+  }
+
+  /** Whether index-backed candidates are switched on (default true). */
+  private useIndexes(): boolean {
+    return this.config.indexBackedCandidates !== false;
+  }
+
+  /** A declared primary key: fixed top confidence, no blacklist or scoring. */
+  private declaredPrimaryKeyCandidate(
+    schemaName: string,
+    tableName: string,
+    columns: string[],
+    totalRows: number,
+    index: AutoDocIndex,
+    iteration: number
+  ): PKCandidate {
+    console.log(`[PKDetector] ${tableName} [${columns.join(', ')}]: declared primary key ${index.IndexName}`);
+    return {
+      schemaName,
+      tableName,
+      columnNames: columns,
+      confidence: DECLARED_PK_CONFIDENCE,
+      evidence: {
+        uniqueness: 1.0, nullCount: 0, totalRows, dataPattern: columns.length > 1 ? 'composite' : 'unknown',
+        namingScore: 1.0, dataTypeScore: 1.0, warnings: [`Declared primary key: ${index.IndexName}`], backingIndex: index.IndexName
+      },
+      discoveredInIteration: iteration,
+      validatedByLLM: false,
+      status: 'candidate'
+    };
+  }
+
+  /**
+   * Composite candidates from multi-column PK and unique indexes. A unique index allows repeated NULLs,
+   * so every column must be NOT NULL, or nullable with no nulls in a non-empty table.
+   */
+  private indexBackedCompositeCandidates(schemaName: string, table: TableDefinition, iteration: number): PKCandidate[] {
+    const candidates: PKCandidate[] = [];
+    for (const ix of CompositeKeyIndexes(table)) {
+      const columns = ix.Columns.map((name) => table.columns.find((c) => c.name.toLowerCase() === name.toLowerCase()));
+      if (columns.some((c) => !c)) continue;
+      const cols = columns as ColumnDefinition[];
+      const names = cols.map((c) => c.name);
+      const stats = cols.map((c) => this.statsCache.getColumnStats(schemaName, table.name, c.name));
+      const totalRows = stats.find((s) => s)?.totalRows ?? table.rowCount ?? 0;
+      if (ix.IsPrimaryKey) {
+        candidates.push(this.declaredPrimaryKeyCandidate(schemaName, table.name, names, totalRows, ix, iteration));
+        continue;
+      }
+      const allNotNull = cols.every((c) => !c.isNullable);
+      const noNullsObserved = totalRows > 0 && cols.every((c, i) => !c.isNullable || (stats[i] !== undefined && stats[i]!.nullCount === 0));
+      if (!allNotNull && !noNullsObserved) {
+        console.log(`[PKDetector] ${table.name}: unique index ${ix.IndexName} skipped - nullable columns without evidence of no nulls`);
+        continue;
+      }
+      const confidence = allNotNull ? UNIQUE_COMPOSITE_CONFIDENCE.NotNull : UNIQUE_COMPOSITE_CONFIDENCE.NoNullsObserved;
+      console.log(`[PKDetector] ${table.name} [${names.join(', ')}]: composite key backed by unique index ${ix.IndexName} (confidence ${confidence})`);
+      candidates.push({
+        schemaName,
+        tableName: table.name,
+        columnNames: names,
+        confidence,
+        evidence: {
+          uniqueness: 1.0, nullCount: 0, totalRows, dataPattern: 'composite', namingScore: 0.8, dataTypeScore: 0.9,
+          warnings: [`Backed by unique index ${ix.IndexName}`], backingIndex: ix.IndexName
+        },
+        discoveredInIteration: iteration,
+        validatedByLLM: false,
+        status: 'candidate'
+      });
+    }
+    return candidates;
+  }
+
+  /** Adds candidates, keeping the higher-confidence one when the same column set is already present. */
+  private mergeCandidates(into: PKCandidate[], extra: PKCandidate[]): void {
+    const key = (c: PKCandidate) => c.columnNames.map((n) => n.toLowerCase()).sort().join('\u0000');
+    for (const candidate of extra) {
+      const existing = into.findIndex((c) => key(c) === key(candidate));
+      if (existing < 0) {
+        into.push(candidate);
+      } else if (candidate.confidence > into[existing].confidence) {
+        into[existing] = candidate;
+      }
+    }
   }
 }

@@ -436,7 +436,13 @@ Databases often have indexes where no key is declared: developers index the colu
 - A non-unique index led by an ID- or code-like column often marks a foreign key.
 - In FK pruning, each candidate says whether its target column has a unique index.
 
-They are hints, not proof, and are weighed with names, statistics and value overlap. Turn this off with `"analysis": { "useExistingIndexes": false }`. A resumed run reads indexes for any table whose state has none yet. If a schema's catalog can't be read, the run continues without its indexes.
+They are hints, not proof, and are weighed with names, statistics and value overlap. Turn this off with `"analysis": { "useExistingIndexes": false }`.
+
+Primary-key and unique indexes also feed deterministic PK detection (`relationshipDiscovery.indexBackedCandidates`, default true):
+- a declared primary key becomes a candidate at top confidence;
+- a unique index on NOT NULL columns becomes a candidate even when the statistics can't show uniqueness (an empty table, for example), scored with an index boost, so naming, type, the name blacklist and column position still decide between several unique columns;
+- a unique index on a nullable column only boosts a column that already passes the statistical checks;
+- multi-column PK and unique indexes are always considered as composite keys, even when the table has a surrogate key. A resumed run reads indexes for any table whose state has none yet. If a schema's catalog can't be read, the run continues without its indexes.
 
 ### Organic Key Detection (Optional)
 
