@@ -2,6 +2,7 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { BaseAction } from "@memberjunction/actions";
 import { RegisterClass } from "@memberjunction/global";
 import { LogError, LogStatus } from "@memberjunction/core";
+import { SafeFetch } from "@memberjunction/network-utils";
 import {
     FeedArticle,
     ScoredFeedArticle,
@@ -181,7 +182,9 @@ export class ReadRSSFeedAction extends BaseAction {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), ReadRSSFeedAction.FETCH_TIMEOUT_MS);
         try {
-            const response = await fetch(url, {
+            // Route through the SSRF guard: feed URLs are caller-controlled, so private/loopback/
+            // link-local/reserved targets are blocked and every redirect hop is re-validated.
+            const response = await SafeFetch(url, {
                 signal: controller.signal,
                 headers: {
                     'User-Agent': ReadRSSFeedAction.USER_AGENT,
