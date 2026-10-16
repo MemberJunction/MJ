@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 
 /**
  * Stacking contract between `mj-dialog` and `mj-slide-panel` (LXP P13): the dialog backdrop and
@@ -8,10 +8,16 @@ import { join } from 'node:path';
  * drawer rendered under it. Both now read the shared `--mj-z-*` scale, and the ordering lives in
  * ONE place (`_tokens.scss`, pinned by ng-shared's z-index-scale spec). jsdom has no stacking, so
  * these read the declarations as text — what matters is WHICH rung each selector names.
+ *
+ * Each `var()` carries a literal fallback: a host that loads these sheets without the token sheet
+ * must not drop the backdrop to `z-index: auto`. The fallback has to equal the published rung, so
+ * the last spec reads the token file and pins the two numbers together.
  */
 describe('ui-components stylesheets: dialog vs drawer stacking', () => {
   const dialogCss = readFileSync(join(__dirname, 'dialog', 'dialog.scss'), 'utf8');
   const panelCss = readFileSync(join(__dirname, 'slide-panel', 'slide-panel.component.css'), 'utf8');
+  /** ng-shared-generic's token sheet, read from source so the pin does not depend on a built dist. */
+  const tokensScss = readFileSync(resolve(__dirname, '../../../shared/src/lib/_tokens.scss'), 'utf8');
 
   /** The `z-index` value declared by the rule whose selector list is exactly `selector`, or null. */
   function zIndexOf(css: string, selector: string): string | null {
@@ -25,19 +31,35 @@ describe('ui-components stylesheets: dialog vs drawer stacking', () => {
   }
 
   it('the dialog backdrop sits on the dialog rung', () => {
-    expect(zIndexOf(dialogCss, '.mj-dialog-backdrop')).toBe('var(--mj-z-dialog)');
+    expect(zIndexOf(dialogCss, '.mj-dialog-backdrop')).toBe('var(--mj-z-dialog, 1200)');
   });
 
   it('the slide-panel backdrop sits on the drawer rung', () => {
-    expect(zIndexOf(panelCss, '.sp-backdrop')).toBe('var(--mj-z-drawer)');
+    expect(zIndexOf(panelCss, '.sp-backdrop')).toBe('var(--mj-z-drawer, 1000)');
   });
 
   it('the slide panel and its centered-dialog mode sit one above their own backdrop, still on the drawer rung', () => {
-    expect(zIndexOf(panelCss, '.sp-panel')).toBe('calc(var(--mj-z-drawer) + 1)');
-    expect(zIndexOf(panelCss, '.sp-dialog')).toBe('calc(var(--mj-z-drawer) + 1)');
+    expect(zIndexOf(panelCss, '.sp-panel')).toBe('calc(var(--mj-z-drawer, 1000) + 1)');
+    expect(zIndexOf(panelCss, '.sp-dialog')).toBe('calc(var(--mj-z-drawer, 1000) + 1)');
   });
 
-  it('neither stylesheet hardcodes a stacking number any more', () => {
+  it('every var() fallback equals the rung the token sheet publishes, so the two cannot drift', () => {
+    const published = (token: string): number => {
+      const m = new RegExp(`${token}:\\s*(-?\\d+)\\s*;`).exec(tokensScss);
+      expect(m, `${token} is declared in _tokens.scss`).not.toBeNull();
+      return Number(m![1]);
+    };
+    const fallbacks = (css: string): Array<[string, number]> =>
+      Array.from(css.matchAll(/var\((--mj-z-[a-z-]+),\s*(-?\d+)\)/g)).map((m) => [m[1], Number(m[2])]);
+
+    const seen = [...fallbacks(dialogCss), ...fallbacks(panelCss)];
+    expect(seen.length).toBeGreaterThanOrEqual(4);
+    for (const [token, fallback] of seen) {
+      expect(fallback, `${token} fallback`).toBe(published(token));
+    }
+  });
+
+  it('neither stylesheet hardcodes a stacking number (a fallback inside var() is the one exception)', () => {
     for (const css of [dialogCss, panelCss]) {
       const hardcoded = Array.from(css.matchAll(/z-index\s*:\s*(\d{3,})\s*;/g)).map((m) => m[1]);
       expect(hardcoded).toEqual([]);

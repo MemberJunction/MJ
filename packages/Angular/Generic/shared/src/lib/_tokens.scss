@@ -478,6 +478,8 @@
                                        up to ~1101 also stay under it)
        mobile chrome band .... 9998/9999 (left-nav drawer, bottom sheet)
        mj-window ............. 10000
+       MJDialogService ....... 10001   service-rendered dialog (dialog.service.ts);
+                                       above windows on purpose, unlike <mj-dialog>
        MJConfirmService ...... 20000
        search bar ............ 99999
        toasts ................ 100000

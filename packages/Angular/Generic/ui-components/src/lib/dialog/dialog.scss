@@ -8,8 +8,10 @@
 .mj-dialog-backdrop {
   position: fixed;
   inset: 0;
-  /* Above --mj-z-drawer: a dialog opened FROM a slide panel must land on top of it. */
-  z-index: var(--mj-z-dialog);
+  /* Above --mj-z-drawer: a dialog opened FROM a slide panel must land on top of it.
+     The fallback mirrors the rung in _tokens.scss for hosts that load this sheet
+     without the token sheet; without it the backdrop would lose its stacking entirely. */
+  z-index: var(--mj-z-dialog, 1200);
   display: flex;
   align-items: center;
   justify-content: center;
