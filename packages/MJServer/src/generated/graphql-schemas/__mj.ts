@@ -4676,6 +4676,14 @@ export class MJAIAgentRelationship_ {
     @Field(() => Int, {nullable: true, description: "Maximum number of conversation messages to include when MessageMode is 'Latest' or 'Bookend'. NULL means no limit (ignored for 'None' and 'All' modes). Must be greater than 0 if specified. For 'Latest': keeps most recent N messages. For 'Bookend': keeps first 2 + most recent (N-2) messages."}) 
     MaxMessages?: number;
         
+    @Field({nullable: true, description: "How the parent agent handles a Chat step returned by this sub-agent. Same values as AIAgent.ChatHandlingOption. NULL inherits the parent agent's ChatHandlingOption."}) 
+    @MaxLength(30)
+    ChatHandlingOption?: string;
+        
+    @Field({nullable: true, description: "Default configuration preset (an MJ: AI Agent Configurations row of the sub-agent) the parent uses when it calls this sub-agent. NULL runs the sub-agent under the parent's configuration. A per-call presetName overrides it."}) 
+    @MaxLength(36)
+    ConfigurationPresetID?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Agent?: string;
@@ -4683,6 +4691,10 @@ export class MJAIAgentRelationship_ {
     @Field({nullable: true}) 
     @MaxLength(255)
     SubAgent?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    ConfigurationPreset?: string;
         
     @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
     ReadableFields___?: string[];
@@ -4721,6 +4733,12 @@ export class CreateMJAIAgentRelationshipInput {
     @Field(() => Int, { nullable: true })
     MaxMessages: number | null;
 
+    @Field({ nullable: true })
+    ChatHandlingOption: string | null;
+
+    @Field({ nullable: true })
+    ConfigurationPresetID: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -4757,6 +4775,12 @@ export class UpdateMJAIAgentRelationshipInput {
 
     @Field(() => Int, { nullable: true })
     MaxMessages?: number | null;
+
+    @Field({ nullable: true })
+    ChatHandlingOption?: string | null;
+
+    @Field({ nullable: true })
+    ConfigurationPresetID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -9461,7 +9485,7 @@ export class MJAIAgent_ {
     @Field(() => Int, {nullable: true, description: "Default effort level for all prompts executed by this agent (1-100, where 1=minimal effort, 100=maximum effort). Takes precedence over individual prompt EffortLevel settings but can be overridden by runtime parameters. Inherited by sub-agents unless explicitly overridden."}) 
     DefaultPromptEffortLevel?: number;
         
-    @Field({nullable: true, description: "Controls how Chat next steps are handled. When null (default), Chat propagates to caller. When set to Success, Failed, or Retry, Chat steps are remapped to that value and re-validated."}) 
+    @Field({nullable: true, description: "Controls how Chat next steps are handled. NULL (default): Chat propagates to the caller. Success, Failed or Retry: the Chat is remapped to that step. Consult: when a sub-agent of this agent returns Chat, this agent answers it itself (or asks its own caller) instead of ending its run; this agent's own Chat still goes to its caller. AIAgentRelationship.ChatHandlingOption overrides this per sub-agent."}) 
     @MaxLength(30)
     ChatHandlingOption?: string;
         
@@ -9615,6 +9639,9 @@ export class MJAIAgent_ {
         
     @Field(() => Boolean, {nullable: true, description: "When native tool calling is in effect for a run, whether this agent's Actions are declared as native tools (1, default) or withheld so the agent runs on the envelope path with the prose action catalog (0). Set 0 for coordinator agents whose prompt forbids doing work themselves. Controls supply only: capability and preference on the model and prompt still decide whether declared tools are used."}) 
     DeclareActionsAsNativeTools?: boolean;
+        
+    @Field(() => Int, {nullable: true, description: "Maximum number of Consult rounds this agent answers for a sub-agent before that sub-agent's question propagates to this agent's caller. NULL uses the framework default (3)."}) 
+    MaxSubAgentConsultRounds?: number;
         
     @Field({nullable: true}) 
     @MaxLength(255)
@@ -9927,6 +9954,9 @@ export class CreateMJAIAgentInput {
     @Field(() => Boolean, { nullable: true })
     DeclareActionsAsNativeTools?: boolean;
 
+    @Field(() => Int, { nullable: true })
+    MaxSubAgentConsultRounds: number | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -10173,6 +10203,9 @@ export class UpdateMJAIAgentInput {
 
     @Field(() => Boolean, { nullable: true })
     DeclareActionsAsNativeTools?: boolean;
+
+    @Field(() => Int, { nullable: true })
+    MaxSubAgentConsultRounds?: number | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

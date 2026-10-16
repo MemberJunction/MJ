@@ -158,9 +158,9 @@ export interface AgentSpec {
     DefaultPromptEffortLevel?: number;
 
     /**
-    * Controls how Chat next steps are handled. When null (default), Chat propagates to caller. When set to Success, Failed, or Retry, Chat steps are remapped to that value and re-validated.
+    * Controls how Chat next steps are handled. NULL (default): Chat propagates to the caller. Success, Failed or Retry: the Chat is remapped to that step. Consult: when a sub-agent of this agent returns Chat, this agent answers it itself (or asks its own caller) instead of ending its run; this agent's own Chat still goes to its caller. AIAgentRelationship.ChatHandlingOption overrides this per sub-agent.
     */
-    ChatHandlingOption?: 'Failed' | 'Retry' | 'Success';
+    ChatHandlingOption?: 'Consult' | 'Failed' | 'Retry' | 'Success';
 
     /**
     * Default artifact type produced by this agent. This is the primary artifact type; additional artifact types can be linked via AIAgentArtifactType junction table. Can be NULL if agent does not produce artifacts by default.

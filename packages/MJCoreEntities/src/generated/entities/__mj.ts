@@ -1885,6 +1885,23 @@ export const MJAIAgentRelationshipSchema = z.object({
         * * Display Name: Max Messages
         * * SQL Data Type: int
         * * Description: Maximum number of conversation messages to include when MessageMode is 'Latest' or 'Bookend'. NULL means no limit (ignored for 'None' and 'All' modes). Must be greater than 0 if specified. For 'Latest': keeps most recent N messages. For 'Bookend': keeps first 2 + most recent (N-2) messages.`),
+    ChatHandlingOption: z.union([z.literal('Consult'), z.literal('Failed'), z.literal('Retry'), z.literal('Success')]).nullable().describe(`
+        * * Field Name: ChatHandlingOption
+        * * Display Name: Chat Handling Option
+        * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Consult
+    *   * Failed
+    *   * Retry
+    *   * Success
+        * * Description: How the parent agent handles a Chat step returned by this sub-agent. Same values as AIAgent.ChatHandlingOption. NULL inherits the parent agent's ChatHandlingOption.`),
+    ConfigurationPresetID: z.string().nullable().describe(`
+        * * Field Name: ConfigurationPresetID
+        * * Display Name: Configuration Preset ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agent Configurations (vwAIAgentConfigurations.ID)
+        * * Description: Default configuration preset (an MJ: AI Agent Configurations row of the sub-agent) the parent uses when it calls this sub-agent. NULL runs the sub-agent under the parent's configuration. A per-call presetName overrides it.`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent
@@ -1893,6 +1910,10 @@ export const MJAIAgentRelationshipSchema = z.object({
         * * Field Name: SubAgent
         * * Display Name: Sub Agent
         * * SQL Data Type: nvarchar(255)`),
+    ConfigurationPreset: z.string().nullable().describe(`
+        * * Field Name: ConfigurationPreset
+        * * Display Name: Configuration Preset
+        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type MJAIAgentRelationshipEntityType = z.infer<typeof MJAIAgentRelationshipSchema>;
@@ -4151,16 +4172,17 @@ if this limit is exceeded.`),
         * * Display Name: Default Effort Level
         * * SQL Data Type: int
         * * Description: Default effort level for all prompts executed by this agent (1-100, where 1=minimal effort, 100=maximum effort). Takes precedence over individual prompt EffortLevel settings but can be overridden by runtime parameters. Inherited by sub-agents unless explicitly overridden.`),
-    ChatHandlingOption: z.union([z.literal('Failed'), z.literal('Retry'), z.literal('Success')]).nullable().describe(`
+    ChatHandlingOption: z.union([z.literal('Consult'), z.literal('Failed'), z.literal('Retry'), z.literal('Success')]).nullable().describe(`
         * * Field Name: ChatHandlingOption
         * * Display Name: Chat Handling Option
         * * SQL Data Type: nvarchar(30)
     * * Value List Type: List
     * * Possible Values 
+    *   * Consult
     *   * Failed
     *   * Retry
     *   * Success
-        * * Description: Controls how Chat next steps are handled. When null (default), Chat propagates to caller. When set to Success, Failed, or Retry, Chat steps are remapped to that value and re-validated.`),
+        * * Description: Controls how Chat next steps are handled. NULL (default): Chat propagates to the caller. Success, Failed or Retry: the Chat is remapped to that step. Consult: when a sub-agent of this agent returns Chat, this agent answers it itself (or asks its own caller) instead of ending its run; this agent's own Chat still goes to its caller. AIAgentRelationship.ChatHandlingOption overrides this per sub-agent.`),
     DefaultArtifactTypeID: z.string().nullable().describe(`
         * * Field Name: DefaultArtifactTypeID
         * * Display Name: Default Artifact Type
@@ -4458,6 +4480,11 @@ if this limit is exceeded.`),
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: When native tool calling is in effect for a run, whether this agent's Actions are declared as native tools (1, default) or withheld so the agent runs on the envelope path with the prose action catalog (0). Set 0 for coordinator agents whose prompt forbids doing work themselves. Controls supply only: capability and preference on the model and prompt still decide whether declared tools are used.`),
+    MaxSubAgentConsultRounds: z.number().nullable().describe(`
+        * * Field Name: MaxSubAgentConsultRounds
+        * * Display Name: Max Sub Agent Consult Rounds
+        * * SQL Data Type: int
+        * * Description: Maximum number of Consult rounds this agent answers for a sub-agent before that sub-agent's question propagates to this agent's caller. NULL uses the framework default (3).`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
@@ -43583,6 +43610,39 @@ export class MJAIAgentRelationshipEntity extends BaseEntity<MJAIAgentRelationshi
     }
 
     /**
+    * * Field Name: ChatHandlingOption
+    * * Display Name: Chat Handling Option
+    * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Consult
+    *   * Failed
+    *   * Retry
+    *   * Success
+    * * Description: How the parent agent handles a Chat step returned by this sub-agent. Same values as AIAgent.ChatHandlingOption. NULL inherits the parent agent's ChatHandlingOption.
+    */
+    get ChatHandlingOption(): 'Consult' | 'Failed' | 'Retry' | 'Success' | null {
+        return this.Get('ChatHandlingOption');
+    }
+    set ChatHandlingOption(value: 'Consult' | 'Failed' | 'Retry' | 'Success' | null) {
+        this.Set('ChatHandlingOption', value);
+    }
+
+    /**
+    * * Field Name: ConfigurationPresetID
+    * * Display Name: Configuration Preset ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Configurations (vwAIAgentConfigurations.ID)
+    * * Description: Default configuration preset (an MJ: AI Agent Configurations row of the sub-agent) the parent uses when it calls this sub-agent. NULL runs the sub-agent under the parent's configuration. A per-call presetName overrides it.
+    */
+    get ConfigurationPresetID(): string | null {
+        return this.Get('ConfigurationPresetID');
+    }
+    set ConfigurationPresetID(value: string | null) {
+        this.Set('ConfigurationPresetID', value);
+    }
+
+    /**
     * * Field Name: Agent
     * * Display Name: Agent
     * * SQL Data Type: nvarchar(255)
@@ -43598,6 +43658,15 @@ export class MJAIAgentRelationshipEntity extends BaseEntity<MJAIAgentRelationshi
     */
     get SubAgent(): string | null {
         return this.Get('SubAgent');
+    }
+
+    /**
+    * * Field Name: ConfigurationPreset
+    * * Display Name: Configuration Preset
+    * * SQL Data Type: nvarchar(100)
+    */
+    get ConfigurationPreset(): string | null {
+        return this.Get('ConfigurationPreset');
     }
 }
 
@@ -50107,15 +50176,16 @@ if this limit is exceeded.
     * * SQL Data Type: nvarchar(30)
     * * Value List Type: List
     * * Possible Values 
+    *   * Consult
     *   * Failed
     *   * Retry
     *   * Success
-    * * Description: Controls how Chat next steps are handled. When null (default), Chat propagates to caller. When set to Success, Failed, or Retry, Chat steps are remapped to that value and re-validated.
+    * * Description: Controls how Chat next steps are handled. NULL (default): Chat propagates to the caller. Success, Failed or Retry: the Chat is remapped to that step. Consult: when a sub-agent of this agent returns Chat, this agent answers it itself (or asks its own caller) instead of ending its run; this agent's own Chat still goes to its caller. AIAgentRelationship.ChatHandlingOption overrides this per sub-agent.
     */
-    get ChatHandlingOption(): 'Failed' | 'Retry' | 'Success' | null {
+    get ChatHandlingOption(): 'Consult' | 'Failed' | 'Retry' | 'Success' | null {
         return this.Get('ChatHandlingOption');
     }
-    set ChatHandlingOption(value: 'Failed' | 'Retry' | 'Success' | null) {
+    set ChatHandlingOption(value: 'Consult' | 'Failed' | 'Retry' | 'Success' | null) {
         this.Set('ChatHandlingOption', value);
     }
 
@@ -50766,6 +50836,19 @@ if this limit is exceeded.
     }
     set DeclareActionsAsNativeTools(value: boolean) {
         this.Set('DeclareActionsAsNativeTools', value);
+    }
+
+    /**
+    * * Field Name: MaxSubAgentConsultRounds
+    * * Display Name: Max Sub Agent Consult Rounds
+    * * SQL Data Type: int
+    * * Description: Maximum number of Consult rounds this agent answers for a sub-agent before that sub-agent's question propagates to this agent's caller. NULL uses the framework default (3).
+    */
+    get MaxSubAgentConsultRounds(): number | null {
+        return this.Get('MaxSubAgentConsultRounds');
+    }
+    set MaxSubAgentConsultRounds(value: number | null) {
+        this.Set('MaxSubAgentConsultRounds', value);
     }
 
     /**
