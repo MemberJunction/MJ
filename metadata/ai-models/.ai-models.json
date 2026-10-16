@@ -24794,6 +24794,38 @@
             "checksum": "90e8f9254bfaa3dff4c8430693eb1e4b041911b5a559139c9ae12967845b1707"
           }
         }
+      ],
+      "MJ: AI Model Modalities": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Image",
+            "Direction": "Input",
+            "IsSupported": true,
+            "SupportedFormats": "image/jpeg,image/png,image/gif,image/webp",
+            "MaxSizeBytes": 33554432,
+            "MaxCountPerMessage": 5,
+            "Comments": "Matches AnthropicLLM.GetFileCapabilities in packages/AI/Providers/Anthropic/src/models/anthropic.ts."
+          },
+          "primaryKey": {
+            "ID": "AE716540-1FAE-4DDD-9F62-B1003C0AC0FF"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=File",
+            "Direction": "Input",
+            "IsSupported": true,
+            "SupportedFormats": "application/pdf",
+            "MaxSizeBytes": 33554432,
+            "MaxCountPerMessage": 5,
+            "Comments": "Matches AnthropicLLM.GetFileCapabilities in packages/AI/Providers/Anthropic/src/models/anthropic.ts."
+          },
+          "primaryKey": {
+            "ID": "5F9B92B6-CF8D-4081-B966-6DBE0A9F8F81"
+          }
+        }
       ]
     },
     "primaryKey": {
@@ -25159,6 +25191,68 @@
           "sync": {
             "lastModified": "2026-09-10T17:40:34.449Z",
             "checksum": "c04c5558e327ecb53522adf5d3afabf805f83be22ed7bc23f672a89e20186ca6"
+          }
+        }
+      ],
+      "MJ: AI Model Modalities": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Image",
+            "Direction": "Input",
+            "IsSupported": true,
+            "SupportedFormats": "image/jpeg,image/png,image/gif,image/webp",
+            "MaxSizeBytes": 20971520,
+            "MaxCountPerMessage": 10,
+            "Comments": "Matches GeminiLLM.GetFileCapabilities in packages/AI/Providers/Gemini/src/index.ts."
+          },
+          "primaryKey": {
+            "ID": "1E2AAB59-4075-4C9F-A276-7F20C736DFAB"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+            "Direction": "Input",
+            "IsSupported": true,
+            "SupportedFormats": "audio/mp3,audio/wav,audio/ogg",
+            "MaxSizeBytes": 20971520,
+            "MaxCountPerMessage": 10,
+            "Comments": "Matches GeminiLLM.GetFileCapabilities in packages/AI/Providers/Gemini/src/index.ts."
+          },
+          "primaryKey": {
+            "ID": "F301C48F-BE96-49F5-AF9A-C9BCF2A1C4F4"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Video",
+            "Direction": "Input",
+            "IsSupported": true,
+            "SupportedFormats": "video/mp4,video/webm",
+            "MaxSizeBytes": 20971520,
+            "MaxCountPerMessage": 10,
+            "Comments": "Matches GeminiLLM.GetFileCapabilities in packages/AI/Providers/Gemini/src/index.ts."
+          },
+          "primaryKey": {
+            "ID": "645E6041-270C-443C-9356-E59A48C892ED"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=File",
+            "Direction": "Input",
+            "IsSupported": true,
+            "SupportedFormats": "application/pdf",
+            "MaxSizeBytes": 20971520,
+            "MaxCountPerMessage": 10,
+            "Comments": "Matches GeminiLLM.GetFileCapabilities in packages/AI/Providers/Gemini/src/index.ts."
+          },
+          "primaryKey": {
+            "ID": "8E3003CB-2644-4A55-93B9-48A1FE054703"
           }
         }
       ]
@@ -26451,6 +26545,38 @@
             "checksum": "883069baf372dddcefdc409fe613d9939ed2d6f2ed16def6357eec29b062cbdb"
           }
         }
+      ],
+      "MJ: AI Model Modalities": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Image",
+            "Direction": "Input",
+            "IsSupported": true,
+            "SupportedFormats": "image/jpeg,image/png,image/gif,image/webp",
+            "MaxSizeBytes": 33554432,
+            "MaxCountPerMessage": 5,
+            "Comments": "Matches AnthropicLLM.GetFileCapabilities in packages/AI/Providers/Anthropic/src/models/anthropic.ts."
+          },
+          "primaryKey": {
+            "ID": "4D7FA56D-5EA8-42EC-B680-7460837DBCE2"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=File",
+            "Direction": "Input",
+            "IsSupported": true,
+            "SupportedFormats": "application/pdf",
+            "MaxSizeBytes": 33554432,
+            "MaxCountPerMessage": 5,
+            "Comments": "Matches AnthropicLLM.GetFileCapabilities in packages/AI/Providers/Anthropic/src/models/anthropic.ts."
+          },
+          "primaryKey": {
+            "ID": "7EAD0516-4D00-446B-AB6C-C43C53C10B6F"
+          }
+        }
       ]
     },
     "primaryKey": {
@@ -27670,6 +27796,38 @@
           "sync": {
             "lastModified": "2026-10-02T21:42:02.470Z",
             "checksum": "6cfb406cc94c499b138b25dbcb2eb1bdabdb5d7244d8d2e1c26cd0d5152ca1af"
+          }
+        }
+      ],
+      "MJ: AI Model Modalities": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Image",
+            "Direction": "Input",
+            "IsSupported": true,
+            "SupportedFormats": "image/jpeg,image/png,image/gif,image/webp",
+            "MaxSizeBytes": 33554432,
+            "MaxCountPerMessage": 5,
+            "Comments": "Matches AnthropicLLM.GetFileCapabilities in packages/AI/Providers/Anthropic/src/models/anthropic.ts."
+          },
+          "primaryKey": {
+            "ID": "8B150E82-F4CD-444D-808D-A3B11D15E458"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=File",
+            "Direction": "Input",
+            "IsSupported": true,
+            "SupportedFormats": "application/pdf",
+            "MaxSizeBytes": 33554432,
+            "MaxCountPerMessage": 5,
+            "Comments": "Matches AnthropicLLM.GetFileCapabilities in packages/AI/Providers/Anthropic/src/models/anthropic.ts."
+          },
+          "primaryKey": {
+            "ID": "40033019-353B-40A2-BFF2-0FFF317BA7A6"
           }
         }
       ]
