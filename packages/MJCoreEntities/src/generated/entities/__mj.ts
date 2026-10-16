@@ -10184,6 +10184,16 @@ export const MJArchiveConfigurationSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    StorageMode: z.union([z.literal('Purge'), z.literal('Store')]).describe(`
+        * * Field Name: StorageMode
+        * * Display Name: Storage Mode
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Store
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Purge
+    *   * Store
+        * * Description: Whether runs keep a copy of the data they remove. Store (default): each record's archive document is written to the storage account before the mode changes the source row. Purge: the mode is applied with no copy written, StorageAccountID is not needed, and cleared data cannot be restored. A Purge run refuses entities in ArchiveOnly mode and entities that track Record Changes.`),
     StorageAccount: z.string().nullable().describe(`
         * * Field Name: StorageAccount
         * * Display Name: Storage Account Name
@@ -10376,6 +10386,16 @@ export const MJArchiveRunSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    StorageMode: z.union([z.literal('Purge'), z.literal('Store')]).describe(`
+        * * Field Name: StorageMode
+        * * Display Name: Storage Mode
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Store
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Purge
+    *   * Store
+        * * Description: The configuration's StorageMode when this run started: Store (copies written to storage) or Purge (no copies kept; only failed records get an ArchiveRunDetail row).`),
     ArchiveConfiguration: z.string().describe(`
         * * Field Name: ArchiveConfiguration
         * * Display Name: Configuration Name
@@ -69631,6 +69651,24 @@ export class MJArchiveConfigurationEntity extends BaseEntity<MJArchiveConfigurat
     }
 
     /**
+    * * Field Name: StorageMode
+    * * Display Name: Storage Mode
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Store
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Purge
+    *   * Store
+    * * Description: Whether runs keep a copy of the data they remove. Store (default): each record's archive document is written to the storage account before the mode changes the source row. Purge: the mode is applied with no copy written, StorageAccountID is not needed, and cleared data cannot be restored. A Purge run refuses entities in ArchiveOnly mode and entities that track Record Changes.
+    */
+    get StorageMode(): 'Purge' | 'Store' {
+        return this.Get('StorageMode');
+    }
+    set StorageMode(value: 'Purge' | 'Store') {
+        this.Set('StorageMode', value);
+    }
+
+    /**
     * * Field Name: StorageAccount
     * * Display Name: Storage Account Name
     * * SQL Data Type: nvarchar(200)
@@ -70092,6 +70130,24 @@ export class MJArchiveRunEntity extends BaseEntity<MJArchiveRunEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: StorageMode
+    * * Display Name: Storage Mode
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Store
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Purge
+    *   * Store
+    * * Description: The configuration's StorageMode when this run started: Store (copies written to storage) or Purge (no copies kept; only failed records get an ArchiveRunDetail row).
+    */
+    get StorageMode(): 'Purge' | 'Store' {
+        return this.Get('StorageMode');
+    }
+    set StorageMode(value: 'Purge' | 'Store') {
+        this.Set('StorageMode', value);
     }
 
     /**

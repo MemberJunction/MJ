@@ -71,6 +71,9 @@
           <div class="run-card-header">
             <span class="run-card-name">{{ run.ConfigurationName }}</span>
             <span class="status-badge" [ngClass]="GetStatusClass(run.Status)">{{ run.Status }}</span>
+            @if (run.StorageMode === 'Purge') {
+              <span class="status-badge status-badge-default run-purge-badge">Purge</span>
+            }
           </div>
           <div class="run-card-date">
             <i class="fa-solid fa-calendar"></i>

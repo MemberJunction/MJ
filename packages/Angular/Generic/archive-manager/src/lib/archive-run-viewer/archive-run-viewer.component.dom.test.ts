@@ -104,6 +104,14 @@ describe('ArchiveRunViewerComponent (DOM)', () => {
       expect(query(f, '.run-empty')).not.toBeNull();
       expect(queryAll(f, '.run-card').length).toBe(0);
     });
+
+    it('marks purge runs with a Purge badge', async () => {
+      const f = await renderLoaded([
+        { ...RUNS[0], StorageMode: 'Purge' },
+        { ...RUNS[1], StorageMode: 'Store' },
+      ]);
+      expect(queryAll(f, '.run-purge-badge').length).toBe(1);
+    });
   });
 
   // --- Pure helpers (exercised via a rendered instance; the component injects
