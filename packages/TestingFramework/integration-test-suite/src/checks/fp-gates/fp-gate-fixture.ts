@@ -8,7 +8,7 @@
  * bizapps-common's server package). SQL Server only: the filters select through MJ core views with subqueries.
  */
 import { BaseEntity, EntityDeleteOptions, EntitySaveOptions, RunView } from '@memberjunction/core';
-import type { MJAIPromptModelEntity, MJFeaturePipelineTypeEntity, MJRecordProcessEntity, MJTestEntity } from '@memberjunction/core-entities';
+import type { MJAIPromptModelEntity, MJFeaturePipelineTypeEntity, MJRecordProcessEntity, MJTemplateContentEntity, MJTemplateEntity, MJTestEntity } from '@memberjunction/core-entities';
 import { KnowledgeHubMetadataEngine } from '@memberjunction/core-entities';
 import type { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
@@ -252,7 +252,7 @@ export class FeaturePipelineGateFixtures {
         prompt.ResponseFormat = opts.Prompt.ResponseFormat;
         prompt.Temperature = 0;
         prompt.Seed = 42;
-        prompt.TemplateText = opts.Prompt.TemplateText;
+        prompt.TemplateID = await FeaturePipelineGateFixtures.CreateStubTemplate(ctx, opts.Name, opts.Prompt.TemplateText);
         await FeaturePipelineGateFixtures.SaveOrThrow(prompt, 'prompt');
         const pm = await ctx.Provider.GetEntityObject<MJAIPromptModelEntity>('MJ: AI Prompt Models', ctx.User);
         pm.NewRecord();
@@ -291,6 +291,31 @@ export class FeaturePipelineGateFixtures {
         await KnowledgeHubMetadataEngine.Instance.Config(true, ctx.User, ctx.Provider);
         await AIEngine.Instance.Config(true, ctx.User, ctx.Provider);
         return fixture;
+    }
+
+    /**
+     * Creates the stub prompt's template and its one content row, as a prompt save would, but with the content saved
+     * without AI actions, so its parameter extraction makes no model call. Returns the template's ID.
+     */
+    protected static async CreateStubTemplate(ctx: IntegrationCheckContext, name: string, templateText: string): Promise<string> {
+        const template = await ctx.Provider.GetEntityObject<MJTemplateEntity>('MJ: Templates', ctx.User);
+        template.NewRecord();
+        template.Name = name;
+        template.Description = `Template for AI Prompt: ${name}`;
+        template.UserID = ctx.User.ID;
+        template.IsActive = true;
+        await FeaturePipelineGateFixtures.SaveOrThrow(template, 'template');
+        const content = await ctx.Provider.GetEntityObject<MJTemplateContentEntity>('MJ: Template Contents', ctx.User);
+        content.NewRecord();
+        content.TemplateID = template.ID;
+        content.TypeID = await FeaturePipelineGateFixtures.LookupID(ctx, 'MJ: Template Content Types', `Name = 'Text'`);
+        content.TemplateText = templateText;
+        content.Priority = 1;
+        content.IsActive = true;
+        if (!(await content.Save(FeaturePipelineGateFixtures.ScratchRowSaveOptions()))) {
+            throw new Error(`Feature Pipeline gate fixture: saving the template content failed: ${content.LatestResult?.CompleteMessage || 'unknown error'}`);
+        }
+        return template.ID;
     }
 
     /**
@@ -544,7 +569,7 @@ export class FeaturePipelineGateFixtures {
         table.Answers.set(keyOf(FORCED_INVALID.Both), answer('Grand Poobah', NON_EXISTENT_FUNCTION_ID));
     }
 
-    /** Save options of the fixture's bizapps-common rows: no Entity Actions or AI Actions. */
+    /** Save options of the fixture's bizapps-common rows and template content: no Entity Actions or AI Actions. */
     protected static ScratchRowSaveOptions(): EntitySaveOptions {
         const options = new EntitySaveOptions();
         options.SkipEntityActions = true;

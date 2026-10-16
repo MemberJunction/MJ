@@ -357,6 +357,8 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     private _loadingSubject: BehaviorSubject<boolean> = new BehaviorSubject<boolean>(false);
     /** The one forced load queued behind the load in flight (see {@link Load}). */
     private _queuedForcedReload: { Args: Parameters<BaseEngine<T>['Load']>; Run: Promise<void> } | null = null;
+    /** Whether the load in flight reads on the pool (see {@link Load}). */
+    private _inFlightReadsOnPool = false;
     private _contextUser: UserInfo;
     /**
      * True once {@link ResolveContextUser} has put this engine on the MJ system user. Makes the
@@ -699,9 +701,11 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      * This method should be called by sub-classes to load up their specific metadata requirements. For more complex metadata
      * loading or for post-processing of metadata loading done here, overide the AdditionalLoading method to add your logic.
      *
-     * While another load is in flight, a plain load joins it. A forced load does not (the load in flight may have read
-     * before the change that asked for the reload): it queues one follow-up load, shared by every forced request made
-     * meanwhile, which runs with the latest request's arguments once the load in flight finishes.
+     * While another load is in flight, a plain load joins it, except a loaded engine's plain load during a pool reload,
+     * which returns at once: its caller may hold the transaction the reload's reads wait on. A forced load does not join
+     * (the load in flight may have read before the change that asked for the reload): it queues one follow-up load,
+     * shared by every forced request made meanwhile, which runs with the latest request's arguments once the load in
+     * flight finishes.
      * @param configs
      * @param contextUser
      * @param readOptions where dataset configs read (see {@link DatasetReadOptions})
@@ -711,9 +715,13 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         if (this.ProviderToUse?.ProviderType === ProviderType.Database && !contextUser)
             throw new Error('For server-side use of all engine classes, you must provide the contextUser parameter')
         if (this._loadingSubject.value) {
-            return forceRefresh
-                ? this.queueForcedReload([configs, provider, forceRefresh, contextUser, readOptions])
-                : this.waitForInFlightLoad();
+            if (forceRefresh) {
+                return this.queueForcedReload([configs, provider, forceRefresh, contextUser, readOptions]);
+            }
+            if (this._loaded && this._inFlightReadsOnPool) {
+                return;
+            }
+            return this.waitForInFlightLoad();
         }
 
         if (!this._loaded || forceRefresh) {
@@ -743,6 +751,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 contextUser?.ID
             );
 
+            this._inFlightReadsOnPool = readOptions?.ReadOnPool === true;
             this._loadingSubject.next(true);
             try {
                 this.SetProvider(provider);

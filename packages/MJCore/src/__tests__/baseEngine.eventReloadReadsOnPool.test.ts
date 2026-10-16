@@ -166,6 +166,21 @@ describe('BaseEngine: event-driven reloads read on the pool', () => {
         expect(reads.map((r) => r.ReadOptions)).toEqual([undefined, { ReadOnPool: true }]);
     });
 
+    it('does not make a plain load of a loaded engine wait for an event reload in flight', async () => {
+        // the caller may hold the transaction whose row locks the reload's pool read is waiting on
+        const gate = heldProvider([]);
+        const engine = freshEngine();
+        await engine.Config(false, undefined, gate.Provider);
+        const reload = engine.EventReload(gate.Provider); // holds its read until released
+        await gate.FirstReadStarted;
+        let settled = false;
+        const plain = engine.Config(false, undefined, gate.Provider).then(() => { settled = true; });
+        await new Promise<void>((resolve) => setTimeout(resolve, 0));
+        expect(settled).toBe(true);
+        gate.Release();
+        await Promise.all([reload, plain]);
+    });
+
     it('reads the dataset\'s entity names from the dataset itself, lower-cased and trimmed', async () => {
         const engine = freshEngine();
         expect(engine.EntityNames().size).toBe(0);
