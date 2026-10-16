@@ -245,8 +245,24 @@ async function teardownFixture(ctx: IntegrationCheckContext, fx: RoleFilterFixtu
     await refreshSecurity(ctx).catch(() => undefined);
 }
 
+/**
+ * True when the run's user may create and update row-level-security filters. Lines whose seed
+ * metadata does not grant that to any of the run user's roles cannot write the fixture filter.
+ */
+function canAuthorFilters(ctx: IntegrationCheckContext): boolean {
+    const permissions = entityOf(ctx, 'MJ: Row Level Security Filters').GetUserPermisions(ctx.User);
+    return permissions.CanCreate && permissions.CanUpdate;
+}
+
 /** Runs a check body against a fresh fixture, always tearing it down. */
 async function withFixture(ctx: IntegrationCheckContext, checkId: string, body: (fx: RoleFilterFixture) => Promise<void>): Promise<void> {
+    if (!canAuthorFilters(ctx)) {
+        console.warn(
+            `  ⚠ rls-isolation.${checkId} SKIPPED — ${ctx.User.Email} cannot create and update 'MJ: Row Level Security Filters' ` +
+            `records (no role grants CanCreate + CanUpdate), so the fixture filter cannot be written. Role filter edits not exercised.`
+        );
+        return;
+    }
     const fx: RoleFilterFixture = {
         Tag: `zzz-it-${checkId.toLowerCase()}-${Date.now()}`,
         RoleID: '', FilterID: '', UserIDs: [], PermissionIDs: [], Rows: [], UserA: null, UserB: null
