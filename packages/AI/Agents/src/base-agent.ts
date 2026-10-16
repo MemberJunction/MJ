@@ -8500,6 +8500,22 @@ The context is now within limits. Please retry your request with the recovered c
         }
     }
 
+    private static agentCanOwnConsult(agent: MJAIAgentEntityExtended): boolean {
+        if (agent.ChatHandlingOption === 'Consult') {
+            return true;
+        }
+        const relationships = AIEngine.Instance.AgentRelationships;
+        if (!Array.isArray(relationships)) {
+            return false;
+        }
+        return relationships.some(
+            ar =>
+                ar.Status === 'Active' &&
+                ar.ChatHandlingOption === 'Consult' &&
+                (ar.AgentID === agent.ID || UUIDsEqual(ar.AgentID, agent.ID))
+        );
+    }
+
     /**
      * Loads unanswered sub-agent consultations (`OutputData.consult`) from `params.lastRunId` when that
      * prior run paused with `FinalStep === 'Chat'` (and was not stopped by the user). Runs at any depth
@@ -8507,7 +8523,7 @@ The context is now within limits. Please retry your request with the recovered c
      * @private
      */
     private async loadOpenConsults(params: ExecuteAgentParams): Promise<SubAgentConsultRecord[]> {
-        if (!params.lastRunId || !IsValidUUID(params.lastRunId)) {
+        if (!params.lastRunId || !IsValidUUID(params.lastRunId) || !BaseAgent.agentCanOwnConsult(params.agent)) {
             return [];
         }
         try {
@@ -8667,7 +8683,7 @@ The context is now within limits. Please retry your request with the recovered c
                 subAgentId: typeof c.subAgentId === 'string' ? c.subAgentId : '',
                 subAgentName: c.subAgentName,
                 round: typeof c.round === 'number' ? c.round : 1,
-                question: typeof c.question === 'string' ? c.question : '',
+                question: typeof c.question === 'string' ? c.question : null,
             };
         } catch {
             return null;

@@ -238,7 +238,7 @@ class EscalationLoopHarness {
     public requests: FakeAgentRequest[] = [];
     public priorRuns: PriorRunSeed[] = [];
     public priorRunSteps: PriorRunStepSeed[] = [];
-    public runViewCalls: Array<{ EntityName: string; ExtraFilter?: string; OrderBy?: string }> = [];
+    public runViewCalls: Array<{ EntityName: string; ExtraFilter?: string; OrderBy?: string; Fields?: string[] }> = [];
     public runViewThrowsOnSteps = false;
     public executeSubAgentHandler: (
         request: AgentSubAgentRequest,
@@ -330,7 +330,7 @@ class EscalationLoopHarness {
             }
             throw new Error(`EscalationLoopHarness: unexpected GetEntityObject('${entityName}')`);
         },
-        RunView: async (params: { EntityName: string; ExtraFilter?: string; OrderBy?: string }): Promise<{ Success: boolean; Results: unknown[] }> => {
+        RunView: async (params: { EntityName: string; ExtraFilter?: string; OrderBy?: string; Fields?: string[] }): Promise<{ Success: boolean; Results: unknown[] }> => {
             this.runViewCalls.push(params);
             const filter = params.ExtraFilter ?? '';
             if (params.EntityName === 'MJ: AI Agent Runs') {
@@ -595,7 +595,23 @@ describe('VS-CON-4: FormatReloadedConsultsMessage pure formatting', () => {
             question: 'What tone should the narrator use?',
         };
         expect(FormatReloadedConsultsMessage([record])).toBe(
-            'You asked your caller about a question from sub-agent ScriptwriterSubAgent (run bbbbbbbb-2222-4000-8000-000000000001, round 1): What tone should the narrator use?. Their answer follows. To pass it on, call ScriptwriterSubAgent with resumeRunId: "bbbbbbbb-2222-4000-8000-000000000001".'
+            'You asked your caller about a question from sub-agent ScriptwriterSubAgent (run bbbbbbbb-2222-4000-8000-000000000001, round 1): What tone should the narrator use? Their answer follows. To pass it on, call ScriptwriterSubAgent with resumeRunId: "bbbbbbbb-2222-4000-8000-000000000001".'
+        );
+    });
+
+    it('uses (no message provided) fallback when question is null or blank without rendering ": ."', () => {
+        const nullQuestionRecord: SubAgentConsultRecord = {
+            childRunId: 'bbbbbbbb-2222-4000-8000-000000000001',
+            subAgentId: CHILD_SUB_AGENT_ID,
+            subAgentName: 'ScriptwriterSubAgent',
+            round: 2,
+            question: null,
+        };
+        const formatted = FormatReloadedConsultsMessage([nullQuestionRecord]);
+        expect(formatted).toContain('(no message provided)');
+        expect(formatted).not.toContain(': .');
+        expect(formatted).toBe(
+            'You asked your caller about a question from sub-agent ScriptwriterSubAgent (run bbbbbbbb-2222-4000-8000-000000000001, round 2): (no message provided). Their answer follows. To pass it on, call ScriptwriterSubAgent with resumeRunId: "bbbbbbbb-2222-4000-8000-000000000001".'
         );
     });
 
@@ -619,8 +635,8 @@ describe('VS-CON-4: FormatReloadedConsultsMessage pure formatting', () => {
         const msg = FormatReloadedConsultsMessage(records);
         const lines = msg.split('\n');
         expect(lines).toHaveLength(2);
-        expect(lines[0]).toContain('ScriptwriterSubAgent (run bbbbbbbb-2222-4000-8000-000000000001, round 1): What tone?');
-        expect(lines[1]).toContain('VoiceCastingAgent (run bbbbbbbb-2222-4000-8000-000000000002, round 2): Male or female voice?');
+        expect(lines[0]).toContain('ScriptwriterSubAgent (run bbbbbbbb-2222-4000-8000-000000000001, round 1): What tone? Their answer follows.');
+        expect(lines[1]).toContain('VoiceCastingAgent (run bbbbbbbb-2222-4000-8000-000000000002, round 2): Male or female voice? Their answer follows.');
     });
 });
 
@@ -907,12 +923,118 @@ describe('VS-CON-4: Propagated child Chat request creation and open consult relo
         expect(answerIdx).toBeGreaterThan(-1);
         expect(reminderIdx).toBeLessThan(answerIdx);
         expect(turn1Msgs[reminderIdx].content).toBe(
-            `You asked your caller about a question from sub-agent ScriptwriterSubAgent (run ${openChildRunId}, round 1): What is the brand tagline?. Their answer follows. To pass it on, call ScriptwriterSubAgent with resumeRunId: "${openChildRunId}".`
+            `You asked your caller about a question from sub-agent ScriptwriterSubAgent (run ${openChildRunId}, round 1): What is the brand tagline? Their answer follows. To pass it on, call ScriptwriterSubAgent with resumeRunId: "${openChildRunId}".`
         );
 
         // Verify VS-CON-3 validation accepted resumeRunId because _openSubAgentConsults was populated
         expect(capturedResumeRequest).toBeDefined();
         expect(capturedResumeRequest?.resumeRunId).toBe(openChildRunId);
+    });
+
+    it('non-Consult agent with lastRunId pointing at a Chat-ended run makes zero AI Agent Runs / Run Steps reads from reload, while an Active Consult relationship enables reload', async () => {
+        const childAgent = registerChildSubAgent();
+        const chatEndedRunId = 'aaaaaaaa-2222-4000-8000-000000000091';
+        const openChildRunId = 'bbbbbbbb-2222-4000-8000-000000000091';
+
+        harness.priorRuns.push({
+            ID: chatEndedRunId,
+            FinalStep: 'Chat',
+            Status: 'AwaitingFeedback',
+            CancellationReason: null,
+        });
+        harness.priorRunSteps.push({
+            AgentRunID: chatEndedRunId,
+            StepNumber: 2,
+            StepType: 'Sub-Agent',
+            InputData: JSON.stringify({ subAgentName: 'ScriptwriterSubAgent', message: 'Draft' }),
+            OutputData: JSON.stringify({
+                consult: {
+                    childRunId: openChildRunId,
+                    subAgentId: childAgent.ID,
+                    subAgentName: 'ScriptwriterSubAgent',
+                    round: 1,
+                    question: null,
+                },
+            }),
+        });
+
+        // 1. Agent with ChatHandlingOption = null and no Active Consult relationship -> zero RunView calls
+        harness.agent.ChatHandlingOption = null;
+        harness.relationships = [
+            {
+                ID: 'cccccccc-0000-4000-8000-000000000001',
+                AgentID: AGENT_ID,
+                SubAgentID: CHILD_SUB_AGENT_ID,
+                Status: 'Active',
+                ChatHandlingOption: null,
+            },
+            {
+                ID: 'cccccccc-0000-4000-8000-000000000002',
+                AgentID: AGENT_ID,
+                SubAgentID: CHILD_SUB_AGENT_ID,
+                Status: 'Disabled',
+                ChatHandlingOption: 'Consult',
+            },
+        ];
+
+        {
+            const { agent, flushSteps } = makeAgent([
+                () => llmEnvelope({ taskComplete: true, message: 'Done without consult reload' }),
+            ]);
+            const res = await agent.Execute(
+                makeParams({
+                    lastRunId: chatEndedRunId,
+                    conversationMessages: [{ role: 'user', content: 'Continue' }],
+                })
+            );
+            await flushSteps();
+            expect(res.success).toBe(true);
+            const consultReloadViews = harness.runViewCalls.filter(
+                c =>
+                    (c.EntityName === 'MJ: AI Agent Runs' && c.Fields?.includes('FinalStep')) ||
+                    c.EntityName === 'MJ: AI Agent Run Steps'
+            );
+            expect(consultReloadViews).toHaveLength(0);
+        }
+
+        // 2. Agent with ChatHandlingOption = null BUT an Active relationship with ChatHandlingOption = 'Consult' -> reloads and formats null question as (no message provided)
+        harness.runViewCalls = [];
+        harness.relationships = [
+            {
+                ID: 'cccccccc-0000-4000-8000-000000000003',
+                AgentID: AGENT_ID,
+                SubAgentID: CHILD_SUB_AGENT_ID,
+                Status: 'Active',
+                ChatHandlingOption: 'Consult',
+            },
+        ];
+
+        {
+            const { agent, runner, flushSteps } = makeAgent([
+                () => llmEnvelope({ taskComplete: true, message: 'Done with relationship consult reload' }),
+            ]);
+            const res = await agent.Execute(
+                makeParams({
+                    lastRunId: chatEndedRunId,
+                    conversationMessages: [{ role: 'user', content: 'Continue with answer' }],
+                })
+            );
+            await flushSteps();
+            expect(res.success).toBe(true);
+            const consultReloadViews = harness.runViewCalls.filter(
+                c =>
+                    (c.EntityName === 'MJ: AI Agent Runs' && c.Fields?.includes('FinalStep')) ||
+                    c.EntityName === 'MJ: AI Agent Run Steps'
+            );
+            expect(consultReloadViews).toHaveLength(2);
+            const turn1Msgs = runner.Calls[0].conversationMessages ?? [];
+            const consultMsgs = turn1Msgs.filter(
+                m => (m as { metadata?: { messageType?: string } }).metadata?.messageType === 'sub-agent-consult'
+            );
+            expect(consultMsgs).toHaveLength(1);
+            expect(consultMsgs[0].content).toContain('(no message provided)');
+            expect(consultMsgs[0].content).not.toContain(': .');
+        }
     });
 
     it('does NOT re-inject a consult that was already answered in a later step of the same prior run', async () => {

@@ -128,10 +128,11 @@ export function FormatReloadedConsultsMessage(consults: ReadonlyArray<SubAgentCo
         return '';
     }
     return consults
-        .map(
-            c =>
-                `You asked your caller about a question from sub-agent ${c.subAgentName} (run ${c.childRunId}, round ${c.round}): ${c.question ?? ''}. Their answer follows. To pass it on, call ${c.subAgentName} with resumeRunId: "${c.childRunId}".`
-        )
+        .map(c => {
+            const questionText = c.question?.trim() ? c.question.trim() : '(no message provided)';
+            const sep = /[.?!]$/.test(questionText) ? '' : '.';
+            return `You asked your caller about a question from sub-agent ${c.subAgentName} (run ${c.childRunId}, round ${c.round}): ${questionText}${sep} Their answer follows. To pass it on, call ${c.subAgentName} with resumeRunId: "${c.childRunId}".`;
+        })
         .join('\n');
 }
 
