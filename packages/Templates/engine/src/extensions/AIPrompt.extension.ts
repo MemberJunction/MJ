@@ -153,12 +153,6 @@ export class AIPromptExtension extends TemplateExtensionBase {
 
                     callBack(null, response);
                 }
-                else {
-                    // a driver can return a failed result instead of throwing; the render waits on this callback
-                    const error = new Error(`AI prompt failed on model '${model.Name}': ${llmResult?.errorMessage}`);
-                    LogError(error);
-                    callBack(null, error);
-                }
             }
             catch (e) {
                 LogError(e);

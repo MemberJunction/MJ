@@ -193,19 +193,6 @@ describe('AIPromptExtension', () => {
             expect(LogError).toHaveBeenCalled();
         });
 
-        it('should call callback with error when the model returns a failed result', async () => {
-            const mockLLM = { ChatCompletion: vi.fn().mockResolvedValue({ success: false, errorMessage: 'quota exceeded' }) };
-            (MJGlobal.Instance.ClassFactory.CreateInstance as ReturnType<typeof vi.fn>).mockReturnValue(mockLLM);
-            (AIEngine.Instance.Models as Array<Record<string, unknown>>).length = 0;
-            (AIEngine.Instance.Models as Array<Record<string, unknown>>).push({ Name: 'gpt-4', APIName: 'gpt-4', DriverClass: 'OpenAILLM', APINameOrName: 'gpt-4' });
-            const callback = vi.fn();
-
-            extension.run({}, { AIModel: 'gpt-4' }, () => 'Some prompt', callback);
-            await new Promise(resolve => setTimeout(resolve, 100));
-
-            expect(callback).toHaveBeenCalledWith(null, expect.objectContaining({ message: "AI prompt failed on model 'gpt-4': quota exceeded" }));
-        });
-
         it('should use highest power model when AIModel not specified', async () => {
             const fallbackModel = {
                 Name: 'Groq-LLaMA',

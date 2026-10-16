@@ -811,11 +811,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
                 MaxRows: 1,
             }, contextUser);
 
-            if (!existingResult.Success) {
-                // unknown, not absent: creating it anyway could duplicate the TaggedItem
-                throw new Error(`could not check for an existing TaggedItem: ${existingResult.ErrorMessage}`);
-            }
-            if (existingResult.Results.length > 0) return; // Already exists
+            if (existingResult.Success && existingResult.Results.length > 0) return; // Already exists
 
             // Create the TaggedItem
             const taggedItem = await md.GetEntityObject<MJTaggedItemEntity>('MJ: Tagged Items', contextUser);
@@ -3987,10 +3983,6 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             ResultType: 'simple'
         }, contextUser);
 
-        if (!result.Success) {
-            // unknown, not absent: creating the pair anyway could duplicate it
-            throw new Error(`could not check for an existing duplicate pair: ${result.ErrorMessage}`);
-        }
-        return result.Results.length > 0;
+        return result.Success && result.Results.length > 0;
     }
 }

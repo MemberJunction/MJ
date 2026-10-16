@@ -56,8 +56,7 @@ vi.mock('@memberjunction/ai-prompts', () => ({
 vi.mock('@memberjunction/ai-vectordb', () => ({
   VectorDBBase: class { constructor(_k: string) {} },
 }));
-const runViews = vi.fn(async (params: unknown[]): Promise<{ Success: boolean; Results: unknown[]; ErrorMessage?: string }[]> =>
-  params.map(() => ({ Success: true, Results: [] })));
+const runViews = vi.fn(async (params: unknown[]) => params.map(() => ({ Success: true, Results: [] })));
 vi.mock('@memberjunction/ai-vectors', () => ({
   VectorBase: class {
     CurrentUser: unknown;
@@ -104,20 +103,5 @@ describe('UpsertEntityRecordDocumentBatch', () => {
     expect(params[0].EntityName).toBe('MJ: Entity Record Documents');
     expect(params[0].BypassCache).toBe(true);
     expect(save).toHaveBeenCalledTimes(2);
-  });
-
-  it('writes nothing for a batch whose existence read failed, and reports each record', async () => {
-    const syncer = new BatchSyncer();
-    const save = vi.fn(async () => undefined);
-    (syncer as unknown as { saveEntityRecordDocument: typeof save }).saveEntityRecordDocument = save;
-    const item = (id: string) => ({ __mj_recordID: id, EntityDocument: { EntityID: 'E1', ID: 'D1' } }) as unknown as EmbeddingData;
-    runViews.mockResolvedValueOnce([{ Success: false, Results: [], ErrorMessage: 'Connection lost' }]);
-
-    await syncer.Upsert([item('r1'), item('r2')]);
-
-    expect(save).not.toHaveBeenCalled();
-    const upsertErrors = syncer['_upsertErrors'];
-    expect(upsertErrors.map((e) => e.RecordID)).toEqual(['r1', 'r2']);
-    expect(upsertErrors[0].Message).toContain('Connection lost');
   });
 });

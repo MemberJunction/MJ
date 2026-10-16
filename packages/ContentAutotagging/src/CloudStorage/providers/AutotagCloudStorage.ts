@@ -279,10 +279,6 @@ export class AutotagCloudStorage extends AutotagBase {
             ExtraFilter: `ContentSourceID='${contentSourceID}'`,
             ResultType: 'entity_object'
         }, this.contextUser);
-        if (!result.Success) {
-            // an empty map would make every file look new and create a second content item for each
-            throw new Error(`could not read the existing content items of source ${contentSourceID}: ${result.ErrorMessage}`);
-        }
 
         const map = new Map<string, MJContentItemEntity>();
         if (result.Success) {

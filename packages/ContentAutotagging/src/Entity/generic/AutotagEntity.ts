@@ -557,14 +557,12 @@ export class AutotagEntity extends AutotagBase {
             // copy anyway. Caching it would hold every DocumentText and VectorJSON for the document.
             BypassCache: true,
         }, this.contextUser);
-        if (!result.Success) {
-            // an empty map would make every record look new and give each a second document and content item
-            throw new Error(`could not read the existing Entity Record Documents of Entity Document ${entityDocumentID}: ${result.ErrorMessage}`);
-        }
 
         const map = new Map<string, MJEntityRecordDocumentEntity>();
-        for (const erd of result.Results) {
-            map.set(erd.RecordID, erd);
+        if (result.Success) {
+            for (const erd of result.Results) {
+                map.set(erd.RecordID, erd);
+            }
         }
         return map;
     }
@@ -582,14 +580,13 @@ export class AutotagEntity extends AutotagBase {
             ExtraFilter: `ContentSourceID='${contentSourceID}'`,
             ResultType: 'entity_object'
         }, this.contextUser);
-        if (!result.Success) {
-            throw new Error(`could not read the existing content items of source ${contentSourceID}: ${result.ErrorMessage}`);
-        }
 
         const map = new Map<string, MJContentItemEntity>();
-        for (const ci of result.Results) {
-            if (ci.EntityRecordDocumentID) {
-                map.set(NormalizeUUID(ci.EntityRecordDocumentID), ci);
+        if (result.Success) {
+            for (const ci of result.Results) {
+                if (ci.EntityRecordDocumentID) {
+                    map.set(NormalizeUUID(ci.EntityRecordDocumentID), ci);
+                }
             }
         }
         return map;

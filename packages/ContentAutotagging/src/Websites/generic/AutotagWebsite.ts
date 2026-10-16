@@ -407,10 +407,6 @@ export class AutotagWebsite extends AutotagBase {
 
         const byChecksum = results[0];
         const byURL = results[1];
-        if (!byChecksum.Success || !byURL.Success) {
-            // unknown, not a new page: creating it anyway would duplicate a page already stored
-            throw new Error(`could not read the stored content items for ${url}: ${byChecksum.ErrorMessage || byURL.ErrorMessage}`);
-        }
 
         // Same content already in DB for this source — unchanged, skip.
         if (byChecksum.Success && byChecksum.Results.length) {

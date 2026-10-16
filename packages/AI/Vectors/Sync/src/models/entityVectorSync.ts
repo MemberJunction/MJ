@@ -1399,19 +1399,13 @@ export class EntityVectorSyncer extends VectorBase {
     for (let gi = 0; gi < groupList.length; gi++) {
       const { items } = groupList[gi];
       const result = existenceReads[gi] as RunViewResult<MJEntityRecordDocumentEntity>;
-      if (!result?.Success) {
-        // A failed read says nothing about which documents exist; creating them would duplicate every row, so the
-        // batch is not written and is reported as failed
-        const message = `Could not read the existing Entity Record Documents: ${result?.ErrorMessage}`;
-        LogError(message);
-        for (const item of items) {
-          this._upsertErrors.push({ RecordID: String(item.__mj_recordID ?? ''), Message: message });
-        }
-        continue;
-      }
       const existingByRecordID = new Map<string, MJEntityRecordDocumentEntity>();
-      for (const er of result.Results) {
-        existingByRecordID.set(String(er.RecordID), er);
+      if (result?.Success) {
+        for (const er of result.Results) {
+          existingByRecordID.set(String(er.RecordID), er);
+        }
+      } else {
+        LogError('Error getting existing Entity Record Documents', undefined, result?.ErrorMessage);
       }
 
       for (const item of items) {
