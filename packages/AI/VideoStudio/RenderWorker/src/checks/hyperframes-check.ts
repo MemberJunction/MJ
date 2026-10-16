@@ -1,3 +1,4 @@
+import * as os from 'node:os';
 import type {
     CheckIssue,
     CheckIssueCategory,
@@ -28,9 +29,35 @@ interface HyperFramesCliSection {
 
 interface HyperFramesCliReport {
     ok?: unknown;
+    error?: unknown;
     layout?: HyperFramesCliSection;
     contrast?: HyperFramesCliSection;
     motion?: HyperFramesCliSection;
+}
+
+/**
+ * Builds the strict six-key environment passed to the `hyperframes check --json`
+ * subprocess (VS-RND-5 Step 3 / Round 1 Fix 1):
+ * - `PATH`: `sourceEnv.PATH ?? ''`
+ * - `TMPDIR`: `sourceEnv.TMPDIR ?? os.tmpdir()`
+ * - `HOME`: isolated per-job directory so `~/.cache/puppeteer` and `~/.hyperframes/telemetry.json` are not used
+ * - `HYPERFRAMES_NO_TELEMETRY: '1'`
+ * - `DO_NOT_TRACK: '1'`
+ * - `HYPERFRAMES_BROWSER_PATH`: the worker's resolved headless browser binary path
+ */
+export function BuildReducedCheckCliEnv(
+    sourceEnv: NodeJS.ProcessEnv = process.env,
+    homeDir: string = os.tmpdir(),
+    browserPath = '',
+): NodeJS.ProcessEnv {
+    return {
+        PATH: sourceEnv.PATH ?? '',
+        TMPDIR: sourceEnv.TMPDIR ?? os.tmpdir(),
+        HOME: homeDir,
+        HYPERFRAMES_NO_TELEMETRY: '1',
+        DO_NOT_TRACK: '1',
+        HYPERFRAMES_BROWSER_PATH: browserPath,
+    };
 }
 
 /**
@@ -67,10 +94,14 @@ export function BuildCheckCliUnreadableIssue(reason: string): CheckIssue {
  * - `contrast.findings` → `Contrast`
  * - `motion.findings` → `Lint`
  * - `severity === 'error'` → `'Error'`, anything else → `'Warning'`
+ * - `{"ok":false,"error":"..."}` → one `MJ_CHECK_CLI_FAILED` Warning with that error message
  * - Unparseable output → one `MJ_CHECK_CLI_UNREADABLE` Warning with the reason.
  */
 export function MapHyperFramesCheckOutput(json: string | unknown): CheckIssue[] {
     const parsed = parseCliReport(json);
+    if (parsed.cliError) {
+        return [BuildCheckCliFailedIssue(parsed.cliError)];
+    }
     if (!parsed.report) {
         return [BuildCheckCliUnreadableIssue(parsed.reason ?? 'Unparseable CLI JSON output')];
     }
@@ -87,7 +118,7 @@ export function MapHyperFramesCheckOutput(json: string | unknown): CheckIssue[] 
 
 function parseCliReport(
     input: string | unknown,
-): { report?: HyperFramesCliReport; reason?: string } {
+): { report?: HyperFramesCliReport; cliError?: string; reason?: string } {
     let value: unknown = input;
     if (typeof input === 'string') {
         const trimmed = input.trim();
@@ -113,6 +144,9 @@ function parseCliReport(
         isSectionObject(candidate.contrast) ||
         isSectionObject(candidate.motion);
     if (!hasSection) {
+        if (typeof candidate.error === 'string' && candidate.error.trim().length > 0) {
+            return { cliError: candidate.error.trim() };
+        }
         return {
             reason: 'CLI JSON object does not contain layout, contrast, or motion sections.',
         };

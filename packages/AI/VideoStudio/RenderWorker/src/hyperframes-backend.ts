@@ -28,6 +28,7 @@ import {
     createFileServer,
     createRenderJob,
     executeRenderJob,
+    injectDeterministicFontFaces,
     RenderCancelledError,
     type RenderJob,
 } from '@hyperframes/producer';
@@ -49,12 +50,19 @@ import {
     type MeasuredText,
     type RenderBackend,
 } from './backend.js';
+import { EnsureIndexHtmlForServer } from './bundle.js';
 import {
     BuildCheckCliFailedIssue,
+    BuildReducedCheckCliEnv,
     MJ_CHECK_CLI_UNREADABLE_CODE,
     MapHyperFramesCheckOutput,
 } from './checks/hyperframes-check.js';
 import { BUNDLED_DEFAULT_FONTS } from './preamble.js';
+
+export {
+    BuildReducedCheckCliEnv,
+    EnsureIndexHtmlForServer,
+};
 
 const execFileAsync = promisify(execFile);
 const nodeRequire = createRequire(import.meta.url);
@@ -119,16 +127,17 @@ export class HyperFramesRenderBackend implements RenderBackend {
 
     public async RunCheckCli(job: BackendCheckJob, signal?: AbortSignal): Promise<CheckIssue[]> {
         throwIfAborted(signal);
-        ensureBrowserBinaryEnv();
-        await ensureIndexHtmlForServer(job.RootDir, job.EntryFile);
+        const browserPath = ensureBrowserBinaryEnv();
+        await EnsureIndexHtmlForServer(job.RootDir, job.EntryFile);
 
         const cliBinPath = resolveHyperFramesCliBinPath();
-        const reducedEnv = buildReducedCheckCliEnv();
+        const homeDir = await fs.mkdtemp(path.join(os.tmpdir(), 'mj-video-check-home-'));
+        const reducedEnv = BuildReducedCheckCliEnv(process.env, homeDir, browserPath);
 
         try {
             const { stdout } = await execFileAsync(
                 process.execPath,
-                [cliBinPath, 'check', '--json', '--no-proxy', job.RootDir],
+                [cliBinPath, 'check', '--json', '--no-proxy', '--no-browser-gpu', job.RootDir],
                 {
                     env: reducedEnv,
                     timeout: CHECK_CLI_TIMEOUT_MS,
@@ -148,6 +157,8 @@ export class HyperFramesRenderBackend implements RenderBackend {
             }
             const reason = error instanceof Error ? error.message : String(error);
             return [BuildCheckCliFailedIssue(reason)];
+        } finally {
+            await fs.rm(homeDir, { recursive: true, force: true }).catch(() => undefined);
         }
     }
 
@@ -158,11 +169,24 @@ export class HyperFramesRenderBackend implements RenderBackend {
     ): Promise<MeasuredText[][]> {
         throwIfAborted(signal);
         const browserBinary = ensureBrowserBinaryEnv();
-        await ensureIndexHtmlForServer(job.RootDir, job.EntryFile);
+        const fpsInt = Math.max(1, Math.round(job.Fps ?? 30));
+        await EnsureIndexHtmlForServer(job.RootDir, job.EntryFile);
+
+        const indexHtmlPath = path.join(job.RootDir, 'index.html');
+        const rawIndexHtml = await fs.readFile(indexHtmlPath, 'utf8');
+        const compiledHtml = await injectDeterministicFontFaces(rawIndexHtml, {
+            fetchImpl: async () => {
+                throw new Error('Network disabled in render worker');
+            },
+            allowSystemFontCapture: false,
+        });
+        if (compiledHtml !== rawIndexHtml) {
+            await fs.writeFile(indexHtmlPath, compiledHtml, 'utf8');
+        }
 
         const server = await createFileServer({
             projectDir: job.RootDir,
-            fps: { num: 30, den: 1 },
+            fps: { num: fpsInt, den: 1 },
             stripEmbeddedRuntime: false,
         });
 
@@ -173,7 +197,7 @@ export class HyperFramesRenderBackend implements RenderBackend {
             {
                 width: job.Width,
                 height: job.Height,
-                fps: { num: 30, den: 1 },
+                fps: { num: fpsInt, den: 1 },
                 format: 'png',
                 quality: 90,
             },
@@ -190,7 +214,8 @@ export class HyperFramesRenderBackend implements RenderBackend {
             for (const rawTime of timestampsSeconds) {
                 throwIfAborted(signal);
                 const safeTime = Math.max(0, rawTime);
-                await seekSessionToTimestamp(session, safeTime);
+                const frameIndex = Math.max(0, Math.round(safeTime * fpsInt));
+                await captureFrameToBuffer(session, frameIndex, safeTime);
                 const script = BuildMeasureTextInPageScript(job.Width, job.Height, safeTime);
                 const measured = (await session.page.evaluate(script)) as MeasuredText[];
                 results.push(Array.isArray(measured) ? measured : []);
@@ -256,7 +281,7 @@ export class HyperFramesRenderBackend implements RenderBackend {
         const browserBinary = ensureBrowserBinaryEnv();
         const fpsInt = Math.max(1, Math.round(job.Fps));
 
-        await ensureIndexHtmlForServer(job.RootDir, job.EntryFile);
+        await EnsureIndexHtmlForServer(job.RootDir, job.EntryFile);
 
         const server = await createFileServer({
             projectDir: job.RootDir,
@@ -722,40 +747,9 @@ function throwIfAborted(signal?: AbortSignal): void {
     }
 }
 
-async function ensureIndexHtmlForServer(rootDir: string, entryFile: string): Promise<void> {
-    if (entryFile === 'index.html') {
-        return;
-    }
-    const indexTarget = path.join(rootDir, 'index.html');
-    await fs.copyFile(path.join(rootDir, entryFile), indexTarget);
-}
-
 function resolveHyperFramesCliBinPath(): string {
     const pkgJsonPath = nodeRequire.resolve('hyperframes/package.json');
     return path.join(path.dirname(pkgJsonPath), 'bin', 'hyperframes.mjs');
-}
-
-function buildReducedCheckCliEnv(): NodeJS.ProcessEnv {
-    const env: NodeJS.ProcessEnv = {};
-    if (process.env.PATH !== undefined) {
-        env.PATH = process.env.PATH;
-    }
-    if (process.env.HOME !== undefined) {
-        env.HOME = process.env.HOME;
-    }
-    if (process.env.TMPDIR !== undefined) {
-        env.TMPDIR = process.env.TMPDIR;
-    }
-    if (process.env.CHROME_PATH !== undefined) {
-        env.CHROME_PATH = process.env.CHROME_PATH;
-    }
-    if (process.env.PUPPETEER_EXECUTABLE_PATH !== undefined) {
-        env.PUPPETEER_EXECUTABLE_PATH = process.env.PUPPETEER_EXECUTABLE_PATH;
-    }
-    if (process.env.PUPPETEER_CACHE_DIR !== undefined) {
-        env.PUPPETEER_CACHE_DIR = process.env.PUPPETEER_CACHE_DIR;
-    }
-    return env;
 }
 
 function extractStdoutFromExecError(error: unknown): string | undefined {
@@ -800,20 +794,12 @@ async function warmDocumentFonts(session: CaptureSession): Promise<void> {
     );
 }
 
-async function seekSessionToTimestamp(
-    session: CaptureSession,
-    timestampSeconds: number,
-): Promise<void> {
-    const safeSec = Number.isFinite(timestampSeconds) ? Math.max(0, timestampSeconds) : 0;
-    await session.page.evaluate(
-        `(function(t){if(window.__hf&&typeof window.__hf.seek==="function"){window.__hf.seek(t);}})(${JSON.stringify(safeSec)})`,
-    );
-}
-
 /**
  * Builds the self-contained in-page JavaScript expression (evaluated as source string) that
  * collects `MeasuredText[]` for all visible elements with their own non-empty text (including
- * SVG `<text>`) whose bounding box intersects `[0..width, 0..height]`.
+ * SVG `<text>`) whose tight glyph bounding box (`Range.getClientRects()` union over child text
+ * nodes for HTML elements, or `el.getBoundingClientRect()` for SVG `<text>`) intersects
+ * `[0..width, 0..height]`.
  */
 export function BuildMeasureTextInPageScript(
     frameWidth: number,
@@ -841,6 +827,32 @@ export function BuildMeasureTextInPageScript(
         '      if (n && n.nodeType === 3 && n.nodeValue) parts.push(n.nodeValue);',
         '    }',
         '    return parts.join(" ").replace(/\\s+/g, " ").trim();',
+        '  }',
+        '  function measureTightTextRect(el, tag) {',
+        '    var isSvg = tag === "text" || tag === "tspan" || (typeof SVGElement !== "undefined" && el instanceof SVGElement);',
+        '    if (!isSvg && typeof document.createRange === "function") {',
+        '      var minLeft = Infinity, minTop = Infinity, maxRight = -Infinity, maxBottom = -Infinity;',
+        '      var nodes = el.childNodes;',
+        '      for (var i = 0; i < nodes.length; i++) {',
+        '        var n = nodes[i];',
+        '        if (!n || n.nodeType !== 3 || !n.nodeValue || !n.nodeValue.trim()) continue;',
+        '        var range = document.createRange();',
+        '        range.selectNodeContents(n);',
+        '        var rects = range.getClientRects();',
+        '        for (var j = 0; j < rects.length; j++) {',
+        '          var r = rects[j];',
+        '          if (!r || !(r.width > 0 && r.height > 0)) continue;',
+        '          if (r.left < minLeft) minLeft = r.left;',
+        '          if (r.top < minTop) minTop = r.top;',
+        '          if (r.right > maxRight) maxRight = r.right;',
+        '          if (r.bottom > maxBottom) maxBottom = r.bottom;',
+        '        }',
+        '      }',
+        '      if (minLeft < maxRight && minTop < maxBottom) {',
+        '        return { left: minLeft, top: minTop, right: maxRight, bottom: maxBottom, width: maxRight - minLeft, height: maxBottom - minTop };',
+        '      }',
+        '    }',
+        '    return el.getBoundingClientRect();',
         '  }',
         '  function buildSelector(el) {',
         '    if (el.id) return "#" + el.id;',
@@ -871,7 +883,7 @@ export function BuildMeasureTextInPageScript(
         '    if (typeof el.checkVisibility === "function") {',
         '      if (!el.checkVisibility({ opacityProperty: true, visibilityProperty: true })) continue;',
         '    }',
-        '    var rect = el.getBoundingClientRect();',
+        '    var rect = measureTightTextRect(el, tag);',
         '    if (!(rect.width > 0 && rect.height > 0)) continue;',
         '    if (rect.right <= 0 || rect.bottom <= 0 || rect.left >= frameWidth || rect.top >= frameHeight) continue;',
         '    var style = window.getComputedStyle(el);',

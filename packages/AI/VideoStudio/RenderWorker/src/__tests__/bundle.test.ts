@@ -242,4 +242,33 @@ describe('bundle validation and staging', () => {
         // Second Cleanup() call is idempotent
         await expect(staged.Cleanup()).resolves.toBeUndefined();
     });
+
+    it('EnsureIndexHtmlForServer overwrites an existing index.html when EntryFile is main.html', async () => {
+        const bundle = createValidBundle({
+            EntryFile: 'main.html',
+            Files: [
+                {
+                    Path: 'main.html',
+                    Content: '<!doctype html><html><body><div id="from-main">Main Entry</div></body></html>',
+                },
+                {
+                    Path: 'index.html',
+                    Content: '<!doctype html><html><body><div id="from-decoy">Decoy Index</div></body></html>',
+                },
+            ],
+        });
+        const staged = await StageRenderBundle(bundle, { InjectPreamble: false });
+        try {
+            const { EnsureIndexHtmlForServer } = await import('../index.js');
+            await EnsureIndexHtmlForServer(staged.RootDir, 'main.html');
+            const [mainContent, indexContent] = await Promise.all([
+                fs.readFile(path.join(staged.RootDir, 'main.html'), 'utf8'),
+                fs.readFile(path.join(staged.RootDir, 'index.html'), 'utf8'),
+            ]);
+            expect(indexContent).toBe(mainContent);
+            expect(indexContent).toContain('from-main');
+        } finally {
+            await staged.Cleanup();
+        }
+    });
 });

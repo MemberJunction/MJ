@@ -26,6 +26,7 @@ export {
 
 export {
     ApplyPreambleToStagedBundle,
+    EnsureIndexHtmlForServer,
     MAX_ASPECT_RATIO_TOLERANCE,
     MAX_BUNDLE_ENTRIES,
     MAX_DURATION_SECONDS,
@@ -90,6 +91,7 @@ export {
 export {
     BuildCheckCliFailedIssue,
     BuildCheckCliUnreadableIssue,
+    BuildReducedCheckCliEnv,
     MJ_CHECK_CLI_FAILED_CODE,
     MJ_CHECK_CLI_UNREADABLE_CODE,
     MapHyperFramesCheckOutput,

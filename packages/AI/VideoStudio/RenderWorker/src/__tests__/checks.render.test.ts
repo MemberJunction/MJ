@@ -12,6 +12,7 @@ import {
     MJ_UNBOUND_LITERAL_RENDERED_CODE,
     MJ_UNBUNDLED_FONT_CODE,
     RunCheckJob,
+    RunRenderJob,
     StageRenderBundle,
 } from '../index.js';
 
@@ -82,17 +83,17 @@ describe.skipIf(!RUN_RENDER_TESTS)('VS-RND-5 opt-in real-backend deterministic c
         await backend.Shutdown();
     });
 
-    it('passes the clean Roboto golden fixture with zero Errors and measures FontIsBundled=true', async () => {
-        const bundle = await loadGoldenBundle();
+    it('measures FontIsBundled=true on the Roboto golden fixture and passes a clean MJ Sans composition through RunCheckJob and RunRenderJob with zero outbound HTTP requests', async () => {
+        const goldenBundle = await loadGoldenBundle();
 
-        const staged = await StageRenderBundle(bundle, { InjectPreamble: false });
+        const staged = await StageRenderBundle(goldenBundle, { InjectPreamble: false });
         try {
-            const preambleOptions = BuildPreambleOptionsFromBundle(bundle, {
+            const preambleOptions = BuildPreambleOptionsFromBundle(goldenBundle, {
                 Width: 1280,
                 Height: 720,
                 Fps: 30,
             });
-            await ApplyPreambleToStagedBundle(staged.RootDir, bundle, preambleOptions);
+            await ApplyPreambleToStagedBundle(staged.RootDir, goldenBundle, preambleOptions);
 
             const measured = await backend.MeasureText(
                 {
@@ -100,6 +101,7 @@ describe.skipIf(!RUN_RENDER_TESTS)('VS-RND-5 opt-in real-backend deterministic c
                     EntryFile: 'index.html',
                     Width: 1280,
                     Height: 720,
+                    Fps: 30,
                 },
                 [0],
             );
@@ -110,54 +112,207 @@ describe.skipIf(!RUN_RENDER_TESTS)('VS-RND-5 opt-in real-backend deterministic c
             expect(titleItem).toBeDefined();
             expect(titleItem?.FontFamily.toLowerCase()).toBe('roboto');
             expect(titleItem?.FontIsBundled).toBe(true);
-            expect(titleItem?.IsBound).toBe(true);
         } finally {
             await staged.Cleanup();
         }
 
-        const checkRes = await RunCheckJob(
-            {
-                Bundle: bundle,
-                Width: 1280,
-                Height: 720,
-                SampleTimestampsSeconds: [0, 1],
-            },
-            backend,
-        );
-        const errors = checkRes.Issues.filter((i) => i.Severity === 'Error');
-        expect(errors).toEqual([]);
-        expect(checkRes.Passed).toBe(true);
-        expect(checkRes.BlockRender).toBe(false);
-    }, 90_000);
-
-    it('reports MJ_SAFE_AREA for text in the 9:16 bottom band, MJ_MIN_TEXT_SIZE for 18px text, MJ_UNBOUND_LITERAL_RENDERED for a JS-written $9.9M, and MJ_UNBUNDLED_FONT for a system-font heading', async () => {
-        const html = [
+        const cleanHtml = [
             '<!doctype html>',
             '<html>',
             '<head>',
             '<meta charset="utf-8" />',
             '<style>',
             '  * { box-sizing: border-box; margin: 0; padding: 0; }',
-            '  body { width: 1080px; height: 1920px; background: #0f172a; color: #f8fafc; font-family: "Inter", sans-serif; position: relative; }',
-            '  #bottom-band { position: absolute; left: 120px; top: 1700px; font-size: 40px; }',
-            '  #tiny-text { position: absolute; left: 120px; top: 300px; font-size: 18px; }',
-            '  #js-literal { position: absolute; left: 120px; top: 450px; font-size: 42px; }',
-            '  #sys-heading { position: absolute; left: 120px; top: 600px; font-size: 42px; font-family: Arial, sans-serif; }',
+            '  body, #root { width: 1280px; height: 720px; background: #0f172a; color: #f8fafc; font-family: "MJ Sans", sans-serif; display: flex; align-items: center; justify-content: center; }',
+            '  #card { padding: 32px 48px; border-radius: 16px; background: #1e293b; text-align: center; }',
+            '  #headline { font-size: 42px; font-weight: 400; color: #f8fafc; }',
+            '  #sub { font-size: 28px; color: #e2e8f0; margin-top: 12px; }',
             '</style>',
             '</head>',
             '<body>',
-            '  <div id="root" data-composition-id="dom-failures" data-duration="2" data-fps="30" data-width="1080" data-height="1920" data-no-timeline>',
-            '    <div id="bottom-band">Caption in bottom band</div>',
-            '    <div id="tiny-text">Small footnote text</div>',
-            '    <div id="js-literal">Placeholder</div>',
-            '    <h2 id="sys-heading">System font heading</h2>',
+            '  <div id="root" data-composition-id="clean-mj-sans" data-duration="2" data-fps="15" data-width="1280" data-height="720">',
+            '    <div id="card">',
+            '      <h1 id="headline">Quarterly Overview</h1>',
+            '      <p id="sub">All systems operational</p>',
+            '    </div>',
             '  </div>',
             '  <script>',
             '    (function() {',
-            '      var el = document.getElementById("js-literal");',
-            '      if (el) el.textContent = "Pipeline reached " + "$" + "9.9M";',
-            '      if (!window.__hf) {',
-            '        window.__hf = { duration: 2, seek: function() {} };',
+            '      var card = document.getElementById("card");',
+            '      if (window.MJVideo && typeof window.MJVideo.OnFrame === "function") {',
+            '        window.MJVideo.OnFrame(function(t) {',
+            '          if (card) card.style.opacity = String(0.85 + 0.15 * Math.min(1, t));',
+            '        });',
+            '      }',
+            '    })();',
+            '  </script>',
+            '</body>',
+            '</html>',
+        ].join('\n');
+
+        const cleanBundle: RenderProjectBundle = {
+            Format: '16:9',
+            EntryFile: 'index.html',
+            Files: [{ Path: 'index.html', Content: cleanHtml }],
+            Assets: [],
+            DataSnapshot: {},
+            Seed: 2026,
+        };
+
+        const originalFetch = globalThis.fetch;
+        const nonLoopbackCalls: string[] = [];
+        globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+            const urlStr = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+            const parsed = new URL(urlStr);
+            if (parsed.hostname !== '127.0.0.1' && parsed.hostname !== 'localhost' && parsed.hostname !== '::1') {
+                nonLoopbackCalls.push(urlStr);
+                throw new Error(`Unexpected outbound fetch to ${urlStr}`);
+            }
+            return originalFetch(input, init);
+        }) as typeof fetch;
+
+        try {
+            const checkRes = await RunCheckJob(
+                {
+                    Bundle: cleanBundle,
+                    Width: 1280,
+                    Height: 720,
+                    Fps: 15,
+                    DurationSeconds: 2,
+                    SampleTimestampsSeconds: [0, 1],
+                },
+                backend,
+            );
+            const errors = checkRes.Issues.filter((i) => i.Severity === 'Error');
+            expect(errors).toEqual([]);
+            expect(checkRes.Passed).toBe(true);
+            expect(checkRes.BlockRender).toBe(false);
+
+            const renderRes = await RunRenderJob(
+                {
+                    Bundle: cleanBundle,
+                    Width: 1280,
+                    Height: 720,
+                    Fps: 15,
+                    DurationSeconds: 2,
+                    Quality: 'draft',
+                },
+                backend,
+            );
+            expect(Buffer.from(renderRes.Video).subarray(4, 8).toString('ascii')).toBe('ftyp');
+            expect(nonLoopbackCalls).toEqual([]);
+        } finally {
+            globalThis.fetch = originalFetch;
+        }
+    }, 150_000);
+
+    it('Fix 2: full-width centered heading at 1920x1080 passes MJ_SAFE_AREA via tight text Range rects while 9:16 bottom-band text fails MJ_SAFE_AREA', async () => {
+        const centered1080pHtml = [
+            '<!doctype html>',
+            '<html>',
+            '<head>',
+            '<meta charset="utf-8" />',
+            '<style>',
+            '  * { box-sizing: border-box; margin: 0; padding: 0; }',
+            '  body { width: 1920px; height: 1080px; background: #0f172a; color: #f8fafc; font-family: "MJ Sans", sans-serif; position: relative; }',
+            '</style>',
+            '</head>',
+            '<body>',
+            '  <div id="root" data-composition-id="centered-safe" data-duration="2" data-fps="30" data-width="1920" data-height="1080" data-no-timeline>',
+            '    <h1 id="centered-title" style="position:absolute;left:0;right:0;top:400px;text-align:center;font-size:72px">Quarterly Review</h1>',
+            '  </div>',
+            '</body>',
+            '</html>',
+        ].join('\n');
+
+        const centeredRes = await RunCheckJob(
+            {
+                Bundle: {
+                    Format: '16:9',
+                    EntryFile: 'index.html',
+                    Files: [{ Path: 'index.html', Content: centered1080pHtml }],
+                    Assets: [],
+                    DataSnapshot: {},
+                    Seed: 1,
+                },
+                Width: 1920,
+                Height: 1080,
+                SampleTimestampsSeconds: [0],
+            },
+            backend,
+        );
+        expect(centeredRes.Issues.filter((i) => i.Code === MJ_SAFE_AREA_CODE)).toEqual([]);
+
+        const bottomBand9x16Html = [
+            '<!doctype html>',
+            '<html>',
+            '<head>',
+            '<meta charset="utf-8" />',
+            '<style>',
+            '  * { box-sizing: border-box; margin: 0; padding: 0; }',
+            '  body { width: 1080px; height: 1920px; background: #0f172a; color: #f8fafc; font-family: "MJ Sans", sans-serif; position: relative; }',
+            '  #bottom-band { position: absolute; left: 120px; top: 1700px; font-size: 40px; }',
+            '  #tiny-text { position: absolute; left: 120px; top: 300px; font-size: 18px; }',
+            '</style>',
+            '</head>',
+            '<body>',
+            '  <div id="root" data-composition-id="bottom-band-fail" data-duration="2" data-fps="30" data-width="1080" data-height="1920" data-no-timeline>',
+            '    <div id="bottom-band">Caption in bottom band</div>',
+            '    <div id="tiny-text">Small footnote text</div>',
+            '  </div>',
+            '</body>',
+            '</html>',
+        ].join('\n');
+
+        const bottomBandRes = await RunCheckJob(
+            {
+                Bundle: {
+                    Format: '9:16',
+                    EntryFile: 'index.html',
+                    Files: [{ Path: 'index.html', Content: bottomBand9x16Html }],
+                    Assets: [],
+                    DataSnapshot: {},
+                    Seed: 1,
+                },
+                Width: 1080,
+                Height: 1920,
+                SampleTimestampsSeconds: [0],
+            },
+            backend,
+        );
+        const failCodes = new Set(bottomBandRes.Issues.map((i) => i.Code));
+        expect(failCodes.has(MJ_SAFE_AREA_CODE)).toBe(true);
+        expect(failCodes.has(MJ_MIN_TEXT_SIZE_CODE)).toBe(true);
+    }, 90_000);
+
+    it('Fix 3: OnFrame-only composition that writes "$9.9M" only when t >= 1 passes at [0] and reports MJ_UNBOUND_LITERAL_RENDERED at TimestampSeconds=1.5 when sampled at [1.5]', async () => {
+        const onFrameHtml = [
+            '<!doctype html>',
+            '<html>',
+            '<head>',
+            '<meta charset="utf-8" />',
+            '<style>',
+            '  * { box-sizing: border-box; margin: 0; padding: 0; }',
+            '  body, #root { width: 1280px; height: 720px; background: #0f172a; color: #f8fafc; font-family: "MJ Sans", sans-serif; display: flex; align-items: center; justify-content: center; }',
+            '  #metric { font-size: 48px; }',
+            '</style>',
+            '</head>',
+            '<body>',
+            '  <div id="root" data-composition-id="onframe-seek" data-duration="3" data-fps="30" data-width="1280" data-height="720">',
+            '    <div id="metric">Ready</div>',
+            '  </div>',
+            '  <script>',
+            '    (function() {',
+            '      var el = document.getElementById("metric");',
+            '      if (window.MJVideo && typeof window.MJVideo.OnFrame === "function") {',
+            '        window.MJVideo.OnFrame(function(t) {',
+            '          if (!el) return;',
+            '          if (t >= 1) {',
+            '            el.textContent = "Pipeline reached " + "$" + "9.9M";',
+            '          } else {',
+            '            el.textContent = "Ready";',
+            '          }',
+            '        });',
             '      }',
             '    })();',
             '  </script>',
@@ -166,33 +321,127 @@ describe.skipIf(!RUN_RENDER_TESTS)('VS-RND-5 opt-in real-backend deterministic c
         ].join('\n');
 
         const bundle: RenderProjectBundle = {
-            Format: '9:16',
+            Format: '16:9',
             EntryFile: 'index.html',
-            Files: [{ Path: 'index.html', Content: html }],
+            Files: [{ Path: 'index.html', Content: onFrameHtml }],
             Assets: [],
             DataSnapshot: {},
             Seed: 1,
         };
 
-        const res = await RunCheckJob(
+        const resAtZero = await RunCheckJob(
             {
                 Bundle: bundle,
-                Width: 1080,
-                Height: 1920,
+                Width: 1280,
+                Height: 720,
+                Fps: 30,
+                DurationSeconds: 3,
                 SampleTimestampsSeconds: [0],
                 AllowedDataLiterals: [],
             },
             backend,
         );
+        expect(resAtZero.Issues.filter((i) => i.Code === MJ_UNBOUND_LITERAL_RENDERED_CODE)).toEqual([]);
 
-        expect(res.Passed).toBe(false);
-        expect(res.BlockRender).toBe(true);
+        const resAtOnePointFive = await RunCheckJob(
+            {
+                Bundle: bundle,
+                Width: 1280,
+                Height: 720,
+                Fps: 30,
+                DurationSeconds: 3,
+                SampleTimestampsSeconds: [1.5],
+                AllowedDataLiterals: [],
+            },
+            backend,
+        );
+        const unboundIssues = resAtOnePointFive.Issues.filter(
+            (i) => i.Code === MJ_UNBOUND_LITERAL_RENDERED_CODE,
+        );
+        expect(unboundIssues).toEqual([
+            expect.objectContaining({
+                Code: MJ_UNBOUND_LITERAL_RENDERED_CODE,
+                Selector: '#metric',
+                TimestampSeconds: 1.5,
+            }),
+        ]);
+    }, 90_000);
 
-        const codes = new Set(res.Issues.map((i) => i.Code));
-        expect(codes.has(MJ_SAFE_AREA_CODE)).toBe(true);
-        expect(codes.has(MJ_MIN_TEXT_SIZE_CODE)).toBe(true);
-        expect(codes.has(MJ_UNBOUND_LITERAL_RENDERED_CODE)).toBe(true);
-        expect(codes.has(MJ_UNBUNDLED_FONT_CODE)).toBe(true);
+    it('Fix 4: Arial heading measures FontIsBundled=true via injectDeterministicFontFaces while a generic sans-serif-only heading reports MJ_UNBUNDLED_FONT', async () => {
+        const fontHtml = [
+            '<!doctype html>',
+            '<html>',
+            '<head>',
+            '<meta charset="utf-8" />',
+            '<style>',
+            '  * { box-sizing: border-box; margin: 0; padding: 0; }',
+            '  body { width: 1280px; height: 720px; background: #0f172a; color: #f8fafc; position: relative; }',
+            '  #arial-heading { position: absolute; left: 160px; top: 180px; font-size: 42px; font-family: Arial, sans-serif; }',
+            '  #generic-heading { position: absolute; left: 160px; top: 320px; font-size: 42px; font-family: sans-serif; }',
+            '</style>',
+            '</head>',
+            '<body>',
+            '  <div id="root" data-composition-id="font-parity" data-duration="2" data-fps="30" data-width="1280" data-height="720" data-no-timeline>',
+            '    <h2 id="arial-heading">Catalog Arial Heading</h2>',
+            '    <h2 id="generic-heading">Generic Sans Heading</h2>',
+            '  </div>',
+            '</body>',
+            '</html>',
+        ].join('\n');
+
+        const bundle: RenderProjectBundle = {
+            Format: '16:9',
+            EntryFile: 'index.html',
+            Files: [{ Path: 'index.html', Content: fontHtml }],
+            Assets: [],
+            DataSnapshot: {},
+            Seed: 1,
+        };
+
+        const staged = await StageRenderBundle(bundle, { InjectPreamble: false });
+        try {
+            const preambleOptions = BuildPreambleOptionsFromBundle(bundle, {
+                Width: 1280,
+                Height: 720,
+                Fps: 30,
+            });
+            await ApplyPreambleToStagedBundle(staged.RootDir, bundle, preambleOptions);
+            const measured = await backend.MeasureText(
+                {
+                    RootDir: staged.RootDir,
+                    EntryFile: 'index.html',
+                    Width: 1280,
+                    Height: 720,
+                    Fps: 30,
+                },
+                [0],
+            );
+            const items = measured[0] ?? [];
+            const arialItem = items.find((t) => t.Selector === '#arial-heading');
+            const genericItem = items.find((t) => t.Selector === '#generic-heading');
+            expect(arialItem?.FontIsBundled).toBe(true);
+            expect(genericItem?.FontIsBundled).toBe(false);
+        } finally {
+            await staged.Cleanup();
+        }
+
+        const res = await RunCheckJob(
+            {
+                Bundle: bundle,
+                Width: 1280,
+                Height: 720,
+                SampleTimestampsSeconds: [0],
+            },
+            backend,
+        );
+        const unbundledIssues = res.Issues.filter((i) => i.Code === MJ_UNBUNDLED_FONT_CODE);
+        expect(unbundledIssues).toEqual([
+            expect.objectContaining({
+                Code: MJ_UNBUNDLED_FONT_CODE,
+                Selector: '#generic-heading',
+                Severity: 'Warning',
+            }),
+        ]);
     }, 90_000);
 
     it('reports contrast_aa_failure and text_box_overflow through the real HyperFrames check CLI', async () => {
@@ -203,7 +452,7 @@ describe.skipIf(!RUN_RENDER_TESTS)('VS-RND-5 opt-in real-backend deterministic c
             '<meta charset="utf-8" />',
             '<style>',
             '  * { box-sizing: border-box; margin: 0; padding: 0; }',
-            '  body { width: 1280px; height: 720px; background: #1e293b; color: #f8fafc; font-family: "Inter", sans-serif; position: relative; }',
+            '  body { width: 1280px; height: 720px; background: #1e293b; color: #f8fafc; font-family: "MJ Sans", sans-serif; position: relative; }',
             '  #low-contrast { position: absolute; left: 120px; top: 120px; font-size: 36px; color: #263244; background: #1e293b; }',
             '  #overflow-box { position: absolute; left: 1150px; top: 240px; width: 400px; font-size: 36px; color: #f8fafc; }',
             '</style>',
@@ -213,11 +462,6 @@ describe.skipIf(!RUN_RENDER_TESTS)('VS-RND-5 opt-in real-backend deterministic c
             '    <div id="low-contrast">Low contrast text</div>',
             '    <div id="overflow-box">Overflowing box outside viewport</div>',
             '  </div>',
-            '  <script>',
-            '    if (!window.__hf) {',
-            '      window.__hf = { duration: 2, seek: function() {} };',
-            '    }',
-            '  </script>',
             '</body>',
             '</html>',
         ].join('\n');

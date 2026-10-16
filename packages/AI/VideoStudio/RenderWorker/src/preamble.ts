@@ -41,10 +41,11 @@ export interface PreambleRuntimeOptions {
 
 /**
  * Default SIL OFL font families bundled in the RenderWorker package (`assets/fonts/`)
- * so compositions referencing the sample brand kit (`Inter`, `JetBrains Mono`) render
- * deterministically offline with `FontIsBundled: true` (VS-RND-5 Decision 4).
+ * under `MJ Sans` (`Inter-Regular.ttf`) and `MJ Mono` (`JetBrainsMono-Regular.ttf`) so
+ * HyperFrames' font compiler never maps them to Google Fonts and compositions render
+ * deterministically offline with `FontIsBundled: true` (VS-RND-5 Decision 4 / Round 1).
  */
-export const BUNDLED_DEFAULT_FONTS = ['Inter', 'JetBrains Mono'] as const;
+export const BUNDLED_DEFAULT_FONTS = ['MJ Sans', 'MJ Mono'] as const;
 
 /**
  * Builds the `<meta http-equiv="Content-Security-Policy">` tag injected into every `.html` file.
@@ -54,14 +55,14 @@ export function BuildCspMetaTag(): string {
 }
 
 /**
- * Builds the `<style data-mj-default-fonts>` tag registering the worker's bundled `Inter`
- * and `JetBrains Mono` `@font-face` rules served from `/__mj_fonts/`.
+ * Builds the `<style data-mj-default-fonts>` tag registering the worker's bundled `MJ Sans`
+ * (`Inter-Regular.ttf`) and `MJ Mono` (`JetBrainsMono-Regular.ttf`) `@font-face` rules served from `/__mj_fonts/`.
  */
 export function BuildDefaultFontsStyleTag(): string {
     return [
         '<style data-mj-default-fonts>',
-        "@font-face{font-family:'Inter';src:url('/__mj_fonts/Inter-Regular.ttf') format('truetype');font-weight:100 900;font-style:normal;font-display:block;}",
-        "@font-face{font-family:'JetBrains Mono';src:url('/__mj_fonts/JetBrainsMono-Regular.ttf') format('truetype');font-weight:100 900;font-style:normal;font-display:block;}",
+        "@font-face{font-family:'MJ Sans';src:url('/__mj_fonts/Inter-Regular.ttf') format('truetype');font-weight:100 900;font-style:normal;font-display:block;}",
+        "@font-face{font-family:'MJ Mono';src:url('/__mj_fonts/JetBrainsMono-Regular.ttf') format('truetype');font-weight:100 900;font-style:normal;font-display:block;}",
         '</style>',
     ].join('');
 }

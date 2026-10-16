@@ -84,6 +84,40 @@ export async function RunCheckJob(
     if (!req || typeof req !== 'object' || !req.Bundle) {
         throw new RenderWorkerError('InvalidRequest', 'CheckRequest.Bundle is required.');
     }
+    if (req.SampleTimestampsSeconds !== undefined) {
+        if (!Array.isArray(req.SampleTimestampsSeconds)) {
+            throw new RenderWorkerError(
+                'InvalidRequest',
+                'CheckRequest.SampleTimestampsSeconds must be an array of finite non-negative numbers.',
+            );
+        }
+        if (req.SampleTimestampsSeconds.length > MAX_STILL_POINTS) {
+            throw new RenderWorkerError(
+                'InvalidRequest',
+                `CheckRequest.SampleTimestampsSeconds count (${req.SampleTimestampsSeconds.length}) exceeds maximum allowed (${MAX_STILL_POINTS}).`,
+            );
+        }
+        for (let i = 0; i < req.SampleTimestampsSeconds.length; i++) {
+            const ts = req.SampleTimestampsSeconds[i];
+            if (typeof ts !== 'number' || !Number.isFinite(ts) || ts < 0) {
+                throw new RenderWorkerError(
+                    'InvalidRequest',
+                    `CheckRequest.SampleTimestampsSeconds[${i}] must be a finite number >= 0.`,
+                );
+            }
+        }
+    }
+    if (req.AllowedDataLiterals !== undefined) {
+        if (
+            !Array.isArray(req.AllowedDataLiterals) ||
+            req.AllowedDataLiterals.some((lit) => typeof lit !== 'string')
+        ) {
+            throw new RenderWorkerError(
+                'InvalidRequest',
+                'CheckRequest.AllowedDataLiterals must be an array of strings.',
+            );
+        }
+    }
     ValidateRenderGeometry({
         Format: req.Bundle.Format,
         Width: req.Width,
@@ -681,7 +715,7 @@ function buildContactSheetHtml(spec: ContactSheetRenderSpec, width: number, heig
         '<meta charset="utf-8" />',
         '<style>',
         `  * { box-sizing: border-box; margin: 0; padding: 0; }`,
-        `  body { width: ${width}px; height: ${height}px; background: #0f172a; color: #f8fafc; font-family: sans-serif; padding: 16px; }`,
+        `  body { width: ${width}px; height: ${height}px; background: #0f172a; color: #f8fafc; font-family: 'MJ Sans', sans-serif; padding: 16px; }`,
         `  .header { font-size: 16px; font-weight: 600; margin-bottom: 12px; color: #94a3b8; }`,
         `  .grid { display: grid; grid-template-columns: repeat(${spec.Columns}, 1fr); gap: 16px; }`,
         `  .tile { background: #1e293b; border: 1px solid #334155; border-radius: 6px; overflow: hidden; }`,

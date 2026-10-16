@@ -476,3 +476,17 @@ function expectedAspectRatio(format: VideoFormat): number {
             throw new RenderWorkerError('InvalidBundle', `Unsupported format "${String(format)}".`);
     }
 }
+
+/**
+ * Shared entry helper used by `CaptureStills`, `RunCheckCli`, and `MeasureText` to ensure
+ * `path.join(rootDir, 'index.html')` matches `entryFile` by always overwriting `index.html`
+ * when `entryFile !== 'index.html'` (VS-RND-1 Fix 7b / VS-RND-5 Fix 5).
+ */
+export async function EnsureIndexHtmlForServer(rootDir: string, entryFile: string): Promise<void> {
+    if (entryFile === 'index.html') {
+        return;
+    }
+    const indexTarget = path.join(rootDir, 'index.html');
+    await fs.copyFile(path.join(rootDir, entryFile), indexTarget);
+}
+

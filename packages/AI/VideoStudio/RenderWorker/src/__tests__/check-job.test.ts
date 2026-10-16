@@ -224,4 +224,40 @@ describe('RunCheckJob', () => {
         ]);
         expect(result.Issues.every((i) => i.Severity === 'Warning')).toBe(true);
     });
+
+    it('rejects invalid SampleTimestampsSeconds and AllowedDataLiterals with InvalidRequest before staging', async () => {
+        const backend = new FakeRenderBackend();
+        const bundle = makeCleanBundle();
+
+        const badInputs: Array<Parameters<typeof RunCheckJob>[0]> = [
+            { Bundle: bundle, Width: 1920, Height: 1080, SampleTimestampsSeconds: [-1] },
+            {
+                Bundle: bundle,
+                Width: 1920,
+                Height: 1080,
+                SampleTimestampsSeconds: ['1' as unknown as number],
+            },
+            {
+                Bundle: bundle,
+                Width: 1920,
+                Height: 1080,
+                SampleTimestampsSeconds: new Array<number>(49).fill(0),
+            },
+            {
+                Bundle: bundle,
+                Width: 1920,
+                Height: 1080,
+                AllowedDataLiterals: '$1M' as unknown as string[],
+            },
+        ];
+
+        for (const req of badInputs) {
+            await expect(RunCheckJob(req, backend)).rejects.toMatchObject({
+                Code: 'InvalidRequest',
+            });
+        }
+        expect(backend.LintCallCount).toBe(0);
+        expect(backend.RunCheckCliCallCount).toBe(0);
+        expect(backend.MeasureTextCallCount).toBe(0);
+    });
 });

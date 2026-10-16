@@ -406,11 +406,25 @@ describe('CreateRenderWorkerServer HTTP contract', () => {
     });
 
     it('handles /stills (> 48 -> 400 TooManyStills), /contact-sheet (grid + TransitionStrip, HTML-escaped label, > 4 sheets -> TooManyStills, bad base64/mime/columns -> 400), /check, and /keyframes (with BuildContactSheet: true)', async () => {
+        const backend = new FakeRenderBackend();
         const server = CreateRenderWorkerServer({
-            Backend: new FakeRenderBackend(),
+            Backend: backend,
         });
         serversToClose.push(server);
         const port = await server.Listen(0);
+
+        // 0. /check forwards AbortSignal to both RunCheckCli and MeasureText
+        const checkOkRes = await fetch(`http://127.0.0.1:${port}${RENDER_WORKER_ROUTES.Check}`, {
+            method: 'POST',
+            body: JSON.stringify({
+                Bundle: createCleanBundle(),
+                Width: 1280,
+                Height: 720,
+            }),
+        });
+        expect(checkOkRes.status).toBe(200);
+        expect(backend.LastCheckCliSignal).toBeInstanceOf(AbortSignal);
+        expect(backend.LastMeasureTextSignal).toBeInstanceOf(AbortSignal);
 
         // 1. /stills > 48 -> 400 TooManyStills
         const tooManyPoints = Array.from({ length: 49 }, (_, i) => ({

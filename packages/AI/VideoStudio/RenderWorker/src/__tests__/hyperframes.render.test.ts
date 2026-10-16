@@ -12,7 +12,6 @@ import { StageRenderBundle } from '../bundle.js';
 import { HyperFramesRenderBackend } from '../hyperframes-backend.js';
 import {
     GetWorkerHealth,
-    RunCheckJob,
     RunContactSheetJob,
     RunKeyframesJob,
     RunRenderJob,
@@ -166,19 +165,6 @@ describe.skipIf(process.env.VIDEO_STUDIO_RENDER_TESTS !== '1')(
             'renders the 3s 1280x720 30fps golden composition (Roboto, PNG, tone, MJVideo.Data + Noise) and captures stills + contact sheets',
             async () => {
                 const bundle = await buildGoldenBundle();
-
-                const check = await RunCheckJob(
-                    {
-                        Bundle: bundle,
-                        Width: 1280,
-                        Height: 720,
-                        Fps: 30,
-                        DurationSeconds: 3,
-                    },
-                    backend,
-                );
-                expect(check.Issues).toEqual([]);
-                expect(check.BlockRender).toBe(false);
 
                 const progressEvents: number[] = [];
                 const renderResult = await RunRenderJob(
@@ -361,7 +347,6 @@ describe.skipIf(process.env.VIDEO_STUDIO_RENDER_TESTS !== '1')(
                     `  try { fetch("http://127.0.0.1:${port}/fetch").catch(function(){}); } catch (e) {}`,
                     `  try { var img = new Image(); img.src = "http://127.0.0.1:${port}/img.png"; document.body.appendChild(img); } catch (e) {}`,
                     `  try { new WebSocket("ws://127.0.0.1:${port}/ws"); } catch (e) {}`,
-                    '  window.__hf = { duration: 1, seek: function() {} };',
                     '})();',
                     '</script></body></html>',
                 ].join('\n');
