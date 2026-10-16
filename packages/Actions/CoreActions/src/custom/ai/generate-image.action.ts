@@ -141,6 +141,20 @@ export function BuildImageGenerationAPIKeys(sources: ImageGenerationKeySource[],
     return keys;
 }
 
+/**
+ * A model's active inference vendors, in the order the runner tries them (Priority, highest
+ * first), each with the driver class the runner builds for it.
+ */
+export function InferenceKeySources(model: MJAIModelEntityExtended): ImageGenerationKeySource[] {
+    return model.ModelVendors
+        .filter(mv => mv.Status === 'Active' && AIEngineBase.Instance.IsInferenceProvider(mv) && (mv.DriverClass || model.DriverClass))
+        .sort((a, b) => (b.Priority || 0) - (a.Priority || 0))
+        .map(mv => ({
+            DriverClass: mv.DriverClass || model.DriverClass,
+            VendorName: AIEngineBase.Instance.Vendors.find(v => UUIDsEqual(v.ID, mv.VendorID))?.Name
+        }));
+}
+
 /** The runner options for one action call, and the model the caller named, if any. */
 interface PreparedImageRun {
     PinnedModel?: MJAIModelEntityExtended;
@@ -217,7 +231,7 @@ export class GenerateImageAction extends BaseAction {
         await AIEngineBase.Instance.Config(false, params.ContextUser);
         const imageModels = this.activeImageModels();
         const pinned = modelName ? this.findNamedModel(imageModels, modelName) : undefined;
-        const sources = pinned ? this.pinnedKeySources(pinned) : imageModels.flatMap(m => this.keySources(m));
+        const sources = pinned ? this.pinnedKeySources(pinned) : imageModels.flatMap(m => InferenceKeySources(m));
         const runOptions: AIImageRunOptions = {
             ContextUser: params.ContextUser,
             APIKeys: BuildImageGenerationAPIKeys(sources, params.RuntimeAPIKeyResolver, params.CredentialScope)
@@ -258,25 +272,11 @@ export class GenerateImageAction extends BaseAction {
 
     /** The named model's key sources. A named model with no active inference provider cannot run. */
     private pinnedKeySources(model: MJAIModelEntityExtended): ImageGenerationKeySource[] {
-        const sources = this.keySources(model);
+        const sources = InferenceKeySources(model);
         if (sources.length === 0) {
             throw new Error(`No active inference provider found for model '${model.Name}'`);
         }
         return sources;
-    }
-
-    /**
-     * A model's active inference vendors, in the order the runner tries them (Priority, highest
-     * first), each with the driver class the runner builds for it.
-     */
-    private keySources(model: MJAIModelEntityExtended): ImageGenerationKeySource[] {
-        return model.ModelVendors
-            .filter(mv => mv.Status === 'Active' && AIEngineBase.Instance.IsInferenceProvider(mv) && (mv.DriverClass || model.DriverClass))
-            .sort((a, b) => (b.Priority || 0) - (a.Priority || 0))
-            .map(mv => ({
-                DriverClass: mv.DriverClass || model.DriverClass,
-                VendorName: AIEngineBase.Instance.Vendors.find(v => UUIDsEqual(v.ID, mv.VendorID))?.Name
-            }));
     }
 
     /** The calling agent's ID, which BaseAgent stamps on the action's context. */
