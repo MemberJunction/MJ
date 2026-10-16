@@ -6,7 +6,13 @@ export {
   CompiledValidator,
 } from './library-lint-cache';
 export type { LinterOptions } from './linter-options';
-export { SemanticValidator, SemanticValidatorRegistry } from './schema-validation/semantic-validators';
+export {
+  SemanticValidator,
+  SemanticValidatorRegistry,
+  RequiredWhenValidator,
+  SqlWhereClauseValidator,
+  SubsetOfEntityFieldsValidator,
+} from './schema-validation/semantic-validators';
 export type {
   ValidationContext,
   EntityMetadata,
