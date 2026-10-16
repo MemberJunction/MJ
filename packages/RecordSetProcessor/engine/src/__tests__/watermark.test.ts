@@ -226,15 +226,12 @@ describe('WatermarkService', () => {
         expect(decisions.get('rec-1')?.basisHash).toBe(customHash);
     });
 
-    it('hands the processor the run\'s pipeline and entity when it computes a basis hash, or the context it is given', async () => {
+    it('hands the processor the run\'s pipeline and entity when it computes a basis hash', async () => {
         const mockProcessor = { ProcessRecord: vi.fn(), ComputeBasisHash: vi.fn().mockResolvedValue('h') };
         const record: RecordRef = { EntityID: entityID, RecordID: 'rec-1', Record: { Title: 'Nurse' } };
         const base = { recordProcessID, entityID, records: [record], strategy: 'Checksum' as const, skipUnchanged: true, processor: mockProcessor, contextUser: mockUser };
         await WatermarkService.Instance.CheckBatchWatermarks(base);
         expect(mockProcessor.ComputeBasisHash.mock.calls[0][1]).toMatchObject({ recordProcessID, entityID });
-        const runContext = { contextUser: mockUser, provider: new EntitiesOnlyProvider([]), entityID, recordProcessID, DryRun: true };
-        await WatermarkService.Instance.CheckBatchWatermarks({ ...base, ProcessorContext: runContext });
-        expect(mockProcessor.ComputeBasisHash.mock.calls[1][1]).toBe(runContext);
     });
 
     it('integrates with RecordSetProcessor: skips unchanged records without calling processor', async () => {

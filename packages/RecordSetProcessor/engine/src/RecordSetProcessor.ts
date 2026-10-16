@@ -263,7 +263,6 @@ export class RecordSetProcessor extends BaseSingleton<RecordSetProcessor> {
                     processRunID: ctx.handle.ProcessRunID,
                     maxConcurrency: ctx.maxConcurrency,
                     excludeFields: writeBackFields,
-                    ProcessorContext: recordContext,
                     OverwriteHumanValues: options.overwriteHumanValues === true,
                 });
             } catch (e) {

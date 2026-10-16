@@ -3092,7 +3092,7 @@ export class AIPromptRunner extends BaseModelRunner {
         validationAttempts.push(validationAttempt);
 
         if (refused || attempt === maxRetries) {
-          throw error; // Fatal, or the last attempt: propagate the error
+          throw error; // Refused, or the last attempt: propagate the error
         }
       }
     }

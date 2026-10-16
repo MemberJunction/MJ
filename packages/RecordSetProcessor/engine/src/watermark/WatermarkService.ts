@@ -38,8 +38,6 @@ export interface CheckBatchWatermarksParams {
     processRunID?: string;
     maxConcurrency?: number;
     excludeFields?: string[];
-    /** The run's per-record context, handed to the processor's basis-hash computation; built from the params when absent. */
-    ProcessorContext?: RecordProcessorContext;
     /** The run overwrites human values: no record is skipped (an unchanged record still holds the values to overwrite). */
     OverwriteHumanValues?: boolean;
 }
@@ -133,11 +131,11 @@ export class WatermarkService extends BaseSingleton<WatermarkService> {
     }
 
     /**
-     * The context the processor gets for the batch check: the run's own when given, else one built from the parameters.
+     * The context the processor gets for the batch check, built from the parameters.
      * @param params - The batch check's parameters.
      */
     protected ProcessorContextOf(params: CheckBatchWatermarksParams): RecordProcessorContext {
-        return params.ProcessorContext || {
+        return {
             contextUser: params.contextUser,
             provider: params.provider ?? Metadata.Provider,
             processRunID: params.processRunID,
