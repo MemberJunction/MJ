@@ -67,13 +67,6 @@ export const WHITEBOARD_INTERACTION_TYPE_DEBOUNCE_MS = 800;
  *    (aria-label || name || id || trimmed textContent, ≤40 chars).
  *  - `change` — select / radio / checkbox / text fields: field label + new value
  *    (checkbox → 'checked'/'unchecked').
- *
- * The AUTO-SUBMIT fallback (inert agent HTML still submits) forwards `collectFields`: text,
- * select and textarea values as strings, the checked radio as a string, and every ticked
- * checkbox of a group as an ARRAY of their values under the group's label — one stable shape
- * whatever the count, so the agent can react to a multi-select answer. Its submit-ish button
- * test reads the type ATTRIBUTE: a typeless `<button>` reports `type === 'submit'` as a
- * property, which auto-submitted "Show hint" / "Play" buttons.
  *  - `input` — debounced per-field (800 ms): field label + current value.
  *  - `focusin` / `focusout` — field label only.
  *  - PRIVACY: `type="password"` / `type="hidden"` fields are skipped entirely; every
@@ -88,11 +81,16 @@ export const WHITEBOARD_INTERACTION_TYPE_DEBOUNCE_MS = 800;
  *  - intercepts every `submit` event (preventDefault — the frame never navigates) and
  *    forwards the form's serialized fields as `{ __auto: true, fields }`;
  *  - watches clicks on submit-ish buttons (type=submit, or labeled submit/send/done/…)
- *    and, shortly after, forwards the nearest form's (or document's) fields the same way;
+ *    and, shortly after, forwards the nearest form's (or document's) fields the same way.
+ *    The submit-ish test reads the type ATTRIBUTE: a typeless `<button>` reports
+ *    `type === 'submit'` as a PROPERTY, which auto-submitted "Show hint" / "Play" buttons;
  *  - DEDUPES: an explicit `MJWhiteboard.submit` (or a prior auto-forward) within 600 ms
  *    suppresses the fallback, so well-built widgets never double-submit.
- *  - Serialization respects the recorder's privacy rules (password/hidden skipped,
- *    values clipped) and only checked radios/checkboxes contribute.
+ *  - Serialization (`collectFields`) respects the recorder's privacy rules (password/hidden
+ *    skipped, values clipped) and only checked radios/checkboxes contribute: text, select
+ *    and textarea values as strings, the checked radio as a string, and every ticked
+ *    checkbox of a group as an ARRAY of their values under the group's label — one stable
+ *    shape whatever the count, so the agent can react to a multi-select answer.
  */
 export const WHITEBOARD_SUBMIT_HELPER =
   `<script>window.MJWhiteboard={__lastSubmitAt:0,submit:function(data){window.MJWhiteboard.__lastSubmitAt=Date.now();parent.postMessage({__mjWhiteboardSubmit:true,data:data},'*');}};
