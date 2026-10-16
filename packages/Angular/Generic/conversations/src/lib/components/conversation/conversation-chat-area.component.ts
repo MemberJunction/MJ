@@ -389,6 +389,15 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   /**
+   * Host-level cap for starting conversation forks: Fork from here, and Edit or
+   * Regenerate as a fork. Defaults true (current behavior). Hosts with no forking
+   * experience set false; Edit and Regenerate then change the latest turn in place,
+   * as for a person without the `Conversations: Fork` authorization. UI only: deny
+   * that authorization to a role to stop the server creating forks as well.
+   */
+  @Input() AllowForking = true;
+
+  /**
    * Host-level cap for stopping and continuing agent runs: the composer's Stop and Stop all, the
    * Stop pill on an in-progress reply, the Continue button on a stopped reply, and the "Continue,
    * or tell {agent} what to do differently" placeholder. Defaults true (current behavior). Hosts
@@ -6653,12 +6662,13 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   /**
-   * True when this person may start forks in the open conversation: holds `Conversations: Fork`, has not
-   * switched forking off in My Profile, and may write. When false, no fork action is offered and Edit and
-   * Regenerate change the latest turn in place.
+   * True when this person may start forks in the open conversation: the host allows forking
+   * ({@link AllowForking}), the person holds `Conversations: Fork`, has not switched forking off in My
+   * Profile, and may write. When false, no fork action is offered and Edit and Regenerate change the
+   * latest turn in place.
    */
   public get CanFork(): boolean {
-    return CanForkFrom({
+    return this.AllowForking !== false && CanForkFrom({
       HoldsAuthorization: UserHoldsAuthorization(this.CurrentUser, CONVERSATIONS_FORK_AUTHORIZATION, this.ProviderToUse),
       SettingValue: this.forkingSettingValue(),
       MayWrite: !this.EffectiveReadOnly,
