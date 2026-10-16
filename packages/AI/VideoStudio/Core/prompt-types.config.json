@@ -6,5 +6,9 @@
   {
     "src": "archetype-types.ts",
     "supplementary": null
+  },
+  {
+    "src": "composition-runtime.ts",
+    "supplementary": null
   }
 ]

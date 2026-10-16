@@ -8,16 +8,26 @@
   "files": [
     "/dist"
   ],
+  "bin": {
+    "mj-video-render-worker": "dist/main.js"
+  },
   "engines": {
     "node": ">=22"
   },
   "scripts": {
     "build": "tsc && tsc-alias -f",
     "test": "vitest run",
+    "test:types": "tsc --noEmit",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "browser:install": "node --input-type=module -e \"import { createRequire } from 'node:module'; import { pathToFileURL } from 'node:url'; const req = createRequire(import.meta.resolve('@hyperframes/engine')); process.argv = ['node', 'puppeteer', 'browsers', 'install', 'chrome-headless-shell']; await import(pathToFileURL(req.resolve('puppeteer/lib/puppeteer/node/cli.js')).href);\""
   },
-  "dependencies": {},
+  "dependencies": {
+    "@hyperframes/engine": "0.8.134",
+    "@hyperframes/lint": "0.8.134",
+    "@hyperframes/producer": "0.8.134",
+    "@memberjunction/video-studio-core": "6.2.0-edge.4"
+  },
   "devDependencies": {
     "@types/node": "24.10.11",
     "typescript": "^5.9.3",
