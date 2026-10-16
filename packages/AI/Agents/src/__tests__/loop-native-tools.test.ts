@@ -171,6 +171,18 @@ describe('LoopAgentType — implicit control flow routing (spec §2.1)', () => {
         const step = P().Call(resultWith([{ name: 'complete_task', arguments: { message: 'x', payloadChangeRequest: JSON.stringify(change) } }], 'NativeImplicit'), full);
         expect(step).toMatchObject({ step: 'Success', payloadChangeRequest: change });
     });
+    it('complete_task repairs a payloadChangeRequest whose layout the model wrote as escapes', () => {
+        // Gemini 3.8 Flash on a forced final turn: after a long SQL value the closing braces came
+        // as `\n    }\n  }\n}` escapes. Rejecting it turned a finished answer into a failed run.
+        const encoded = '{\n  "updateElements": {\n    "query": {\n      "sql": "SELECT 1\\nORDER BY 1"\\n    }\\n  }\\n}';
+        const step = P().Call(resultWith([{ name: 'complete_task', arguments: { message: 'Done.', payloadChangeRequest: encoded } }], 'NativeImplicit'), full);
+        expect(step).toMatchObject({ step: 'Success', payloadChangeRequest: { updateElements: { query: { sql: 'SELECT 1\nORDER BY 1' } } } });
+    });
+    it('complete_task with an unparseable payloadChangeRequest → Retry quoting the parse error', () => {
+        const step = P().Call(resultWith([{ name: 'complete_task', arguments: { message: 'x', payloadChangeRequest: '{"updateElements": {"query": }}' } }], 'NativeImplicit'), full);
+        expect(step?.step).toBe('Retry');
+        expect(step?.errorMessage).toMatch(/payloadChangeRequest must be an object.*Problem: .*JSON/);
+    });
     it.each(['', '   ', 'null'])('complete_task with payloadChangeRequest %j → Success, as if it were omitted', (value) => {
         const step = P().Call(resultWith([{ name: 'complete_task', arguments: { message: 'Done.', payloadChangeRequest: value } }], 'NativeImplicit'), full);
         expect(step).toMatchObject({ step: 'Success', message: 'Done.' });
