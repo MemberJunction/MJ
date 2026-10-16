@@ -1,5 +1,59 @@
 # @memberjunction/metadata-sync
 
+## 6.1.6
+
+### Patch Changes
+
+- 24abc10: `mj sync pull` backs up every file it rewrites, restores all of them if the pull fails, and warns
+  when an entity's class isn't registered.
+
+  `pull.backupBeforeUpdate` backups exist so a failed pull can put the files back. Files that only
+  gained new records (`appendRecordsToExistingFile`) weren't backed up at all, so a failure left them
+  half-written, and a backup that couldn't be written was skipped silently.
+  - Every existing file a pull rewrites — updated or appended to — is backed up once, just before the
+    write. As before, the backups are removed once the pull succeeds.
+  - A backup that can't be written stops the pull instead of being skipped silently.
+  - Rollback restores each backup to the file it came from, so a nested `backupDirectory` works.
+  - A `backupDirectory` that points outside the folder of the files it backs up (`../..`) is refused.
+
+  Pull also warns once per entity when the entity's subclass isn't registered in the process (push
+  already did), naming where the class should come from. Records still pull correctly — keys are read
+  through `Get()` — but values the class computes are missing from the files.
+
+- fa699cc: `mj sync push --dry-run` now reports the same counts a real push would (#4529). The dry run used to report every existing record as "Would update". It now runs the same change detection as a real push (dirty fields, `alwaysPush`, checksum) before stopping, so an in-sync record counts as unchanged, and a changed record's field diff appears in the changes recap.
+- fa699cc: `mj sync push` straight after `mj sync pull` no longer reports every record as updated (#4530). Pull hashed a record's `sync.checksum` over `{ fields }` while push hashed the bare fields object, so the first push saw a mismatch on every record and rewrote it. Both now build the payload with `SyncEngine.BuildRecordChecksumPayload`: bare fields for a record with no composition axes, `{ fields, ...axes }` otherwise, with empty collections, embeds and extension omitted on both sides. Checksums in committed metadata already use this shape and do not change.
+- Updated dependencies [f7c03d6]
+- Updated dependencies [d1631cc]
+- Updated dependencies [92950f3]
+- Updated dependencies [8b24792]
+- Updated dependencies [337ac76]
+- Updated dependencies [46dbac9]
+- Updated dependencies [f950aaa]
+- Updated dependencies [6c0b399]
+- Updated dependencies [4904fa1]
+- Updated dependencies [7ad9613]
+- Updated dependencies [e175ac3]
+- Updated dependencies [b2ff821]
+- Updated dependencies [b741252]
+- Updated dependencies [584346f]
+- Updated dependencies [ceff031]
+- Updated dependencies [3a16ad3]
+- Updated dependencies [210155c]
+- Updated dependencies [ae444b4]
+  - @memberjunction/generic-database-provider@6.1.6
+  - @memberjunction/core@6.1.6
+  - @memberjunction/graphql-dataprovider@6.1.6
+  - @memberjunction/sqlserver-dataprovider@6.1.6
+  - @memberjunction/core-entities-server@6.1.6
+  - @memberjunction/global@6.1.6
+  - @memberjunction/sql-dialect@6.1.6
+  - @memberjunction/server-bootstrap-lite@6.1.6
+  - @memberjunction/core-entities@6.1.6
+  - @memberjunction/postgresql-dataprovider@6.1.6
+  - @memberjunction/cli-core@6.1.6
+  - @memberjunction/config@6.1.6
+  - @memberjunction/network-utils@6.1.6
+
 ## 6.1.5
 
 ### Patch Changes

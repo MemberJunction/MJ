@@ -1,5 +1,58 @@
 # @memberjunction/ng-conversations
 
+## 6.1.6
+
+### Patch Changes
+
+- 48df526: Backport #5155: include PCM provider agent audio in realtime recordings, preserve browser-safe diagnostics and resumed Gemini calls, and release recorder setup resources when stopped while retaining mic capture if agent audio cannot be mixed.
+- ceff031: Security: client SQL fragments reach RunView only through the base-view clause screen. The screen moves from MJServer's `ResolverBase` into `@memberjunction/generic-database-provider` as `ClientClauseScreen`, and the provider exposes it as `ScreenClientClause`. It now also guards `RunViewsWithCacheCheck` (which also gets the `view:batch` API-key scope check), every ad-hoc list source by default (client-supplied, from the list and audience actions, or rebuilt from a stored list snapshot), the REST view routes (which also refuse a `ViewEntity` that was not loaded as an entity), and a saved view's stored WhereClause and sort (on save, and again when the view runs). The screen refuses a subquery over an entity the acting user reads under a row filter (role row-level security or an API-key row filter) or with denied fields, the queried entity included, because a subquery reads the base view without them; the ad-hoc SQL screen uses the same rule. Both screens read table references from a walk of the whole parse tree (subqueries in CASE branches, HAVING and window clauses included, and every FROM item even when an alias repeats), refuse SQL whose SELECT keywords the walk does not account for, refuse a table function in FROM unless it is an unqualified built-in that reads only its arguments, and skip only the parse wrapper's own FROM item. `SQLParser.IdentifierAliases` exposes the names a fallback parse renamed, so bracket-quoted CTE names still resolve. The fallback takes those names from a prefix the SQL does not contain and keeps each one a separate token, so every name in that map is one the parser renamed. `SQLParser.IsIdentifierAliasName` reports that name form, and both screens refuse client SQL that uses it. The ad-hoc SQL screen exempts a FROM item as a CTE reference only when it is unqualified (`dbo` counts as a schema), is in the scope of a WITH that declares the name (its own SELECT or an enclosing one; a CTE body sees the CTEs before it, itself on SQL Server, and every CTE of a PostgreSQL WITH RECURSIVE list), and matches by the dialect's identifier rules (case-insensitive on SQL Server; on PostgreSQL unquoted names fold to lower case and quoted names match exactly). The parse-tree walk takes time linear in the size of the parse tree, and the fallback renaming and the forbidden-function check take time linear in the size of the SQL. A schema-qualified table reference, `dbo` included, resolves only to an entity in that schema. Client clauses may no longer call the functions the dialect forbids in caller SQL (`CallerSQLForbiddenFunctions`), and that shared list now also covers `pg_sleep*` on PostgreSQL and `OPENXML` on SQL Server. The conversations UI (the tasks view, task search and the agent artifact lookup) now reads the IDs it filters by with its own RunView instead of a subquery over those views; the conversations Tasks tab rebuilds that filter on every load and refresh. On PostgreSQL the screen reads `[Name]` bracket identifiers as the PostgreSQL provider does. Every RunView caller also gets a bracket- and `E''`-aware check that refuses statement separators and comments in filter, sort and search fragments, and a view ID is spliced into SQL only when it is a GUID. A stacked statement hidden from the keyword denylist by a quote inside a bracket identifier no longer reaches the database on these paths.
+- Updated dependencies [e9cf2a5]
+- Updated dependencies [6a08d8d]
+- Updated dependencies [d1631cc]
+- Updated dependencies [48df526]
+- Updated dependencies [92950f3]
+- Updated dependencies [cddbe85]
+- Updated dependencies [8b24792]
+- Updated dependencies [3da2398]
+- Updated dependencies [337ac76]
+- Updated dependencies [46dbac9]
+- Updated dependencies [60f3af3]
+- Updated dependencies [6c0b399]
+- Updated dependencies [4904fa1]
+- Updated dependencies [7ad9613]
+- Updated dependencies [b2ff821]
+- Updated dependencies [210155c]
+- Updated dependencies [ae444b4]
+  - @memberjunction/ai@6.1.6
+  - @memberjunction/core@6.1.6
+  - @memberjunction/ai-realtime-client@6.1.6
+  - @memberjunction/graphql-dataprovider@6.1.6
+  - @memberjunction/conversations-runtime@6.1.6
+  - @memberjunction/ai-core-plus@6.1.6
+  - @memberjunction/global@6.1.6
+  - @memberjunction/ai-engine-base@6.1.6
+  - @memberjunction/core-entities@6.1.6
+  - @memberjunction/ai-agent-client@6.1.6
+  - @memberjunction/ng-testing@6.1.6
+  - @memberjunction/ng-artifacts@6.1.6
+  - @memberjunction/ng-base-types@6.1.6
+  - @memberjunction/ng-code-editor@6.1.6
+  - @memberjunction/ng-composer@6.1.6
+  - @memberjunction/ng-container-directives@6.1.6
+  - @memberjunction/ng-media-player@6.1.6
+  - @memberjunction/ng-notifications@6.1.6
+  - @memberjunction/ng-resource-permissions@6.1.6
+  - @memberjunction/ng-shared-generic@6.1.6
+  - @memberjunction/ng-task-graph-editor@6.1.6
+  - @memberjunction/ng-tasks@6.1.6
+  - @memberjunction/ng-user-routines@6.1.6
+  - @memberjunction/interactive-component-types@6.1.6
+  - @memberjunction/ng-forms@6.1.6
+  - @memberjunction/ng-agent-client@6.1.6
+  - @memberjunction/ng-whiteboard@6.1.6
+  - @memberjunction/ng-markdown@6.1.6
+  - @memberjunction/ng-ui-components@6.1.6
+
 ## 6.1.5
 
 ### Patch Changes

@@ -1,5 +1,33 @@
 # Change Log - @memberjunction/aiengine
 
+## 6.1.6
+
+### Patch Changes
+
+- Updated dependencies [e9cf2a5]
+- Updated dependencies [2ddd0a1]
+- Updated dependencies [6a08d8d]
+- Updated dependencies [d1631cc]
+- Updated dependencies [48df526]
+- Updated dependencies [8b24792]
+- Updated dependencies [337ac76]
+- Updated dependencies [46dbac9]
+- Updated dependencies [60f3af3]
+- Updated dependencies [6c0b399]
+- Updated dependencies [7ad9613]
+- Updated dependencies [b2ff821]
+- Updated dependencies [210155c]
+- Updated dependencies [ae444b4]
+  - @memberjunction/ai@6.1.6
+  - @memberjunction/storage@6.1.6
+  - @memberjunction/core@6.1.6
+  - @memberjunction/ai-core-plus@6.1.6
+  - @memberjunction/actions-base@6.1.6
+  - @memberjunction/global@6.1.6
+  - @memberjunction/ai-engine-base@6.1.6
+  - @memberjunction/core-entities@6.1.6
+  - @memberjunction/ai-vectors-memory@6.1.6
+
 ## 6.1.5
 
 ### Patch Changes

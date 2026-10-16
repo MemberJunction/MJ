@@ -1,5 +1,66 @@
 # Change Log - @memberjunction/graphql-dataprovider
 
+## 6.1.6
+
+### Patch Changes
+
+- 92950f3: IS-A promotion — an EXISTING parent record gaining a subtype ("this Animal is now also a Dog") —
+  now works over GraphQL. It already worked against a direct database provider, which is what made it
+  expensive to find: every server-side reproduction passed while the browser silently inserted a
+  **second copy of the parent row** (surfacing as a unique-constraint violation on an unrelated column,
+  with a different GUID on every retry).
+
+  Two independent defects, both required:
+  - **Client** (`GraphQLDataProvider.Save`): the create-side field filter admitted a primary key only
+    when the entity was already saved, and an IS-A child's key is ReadOnly (the shared key is the
+    relationship), so on a promotion the key never left the browser. The parent's own save is
+    short-circuited (`IsParentEntitySave`) on the premise that the leaf mutation carries the whole
+    chain — so nothing told the server which parent row this was about. The create input now carries
+    the shared key for a promotion — an unsaved IS-A child whose parent is already saved. A
+    whole-chain create (new parent + new child) still sends no key, so the server keeps minting the
+    root identity and pays no parent lookup on that path.
+  - **Server** (`ResolverBase.CreateRecord`): `NewRecord()` reset the whole chain to "new", so even
+    with the key present the parent saved as a CREATE. When a child create carries a complete key,
+    the resolver now binds the new child to the existing parent row with `AttachToParent` (#3825):
+    the parent saves as an UPDATE and only the child is INSERTed. A key that matches no row is the
+    ordinary whole-chain create and proceeds on the caller's key; non-IS-A entities are untouched.
+
+- 337ac76: Record names now respect field-level security on every server-side lookup, and servers no longer keep a record-name cache shared across users (#4298).
+  - **Server lookups apply field-level security.** `DatabaseProviderBase.InternalGetEntityRecordName(s)` withholds a record's name, without querying, when any field the name is built from is read-denied to the acting user. With no acting user, names on an entity with field-level security on are withheld. Before, only the `GetEntityRecordName` GraphQL resolver checked, and it checked only one name field, so search-result names (`SearchEnricher`) showed a denied name to a restricted user.
+  - **`ProviderBase` no longer caches record names.** On a server that cache was shared by every user in the process, so a name one user was allowed to see could be served from memory to a user who was not. `GetEntityRecordName(s)` now always looks up, `GetCachedRecordName` answers "not cached" unless asked to look the name up, and `SetCachedRecordName` is ignored.
+  - **`GraphQLDataProvider` keeps the cache**, through the new `EntityRecordNameCache` class, so Explorer's tab titles, breadcrumbs and navigation labels behave as before. A GraphQL connection is answered as one user, so its cache cannot cross users.
+  - **`EntityRecordNameResolver`** relies on the provider's check instead of its own, and reports a withheld name with the same status as a missing record.
+
+  Server code that relied on `GetCachedRecordName` (without `loadIfNeeded`) returning a name will now get `undefined`; no MJ server code does.
+
+- 4904fa1: Resolve record display names in search preview and display entity friendly names instead of full schema names.
+  - **Search Record Display Name Resolution**:
+    - In `SearchEngine.ts`, enable enrichment for preview searches on top results so record display names are resolved before preview autocomplete items render.
+    - In `SearchEnricher.ts`, resolve missing record names or sentinel titles (`${EntityName} Record`, `${EntityDisplayName} Record`) via `providerToUse.GetEntityRecordNames()`, setting both `RecordName` and `Title` to the live record name.
+    - Pass `SearchEngine.ProviderToUse` to `SearchEnricher` to ensure multi-provider alignment.
+  - **Entity Display Names**:
+    - Add `EntityDisplayName` to search results across `@memberjunction/search-engine`, `@memberjunction/server`, `@memberjunction/graphql-dataprovider`, and `@memberjunction/ng-search`.
+    - In `search-suggest.component.html` and `search-results.component.html`, display `EntityDisplayName || EntityName` for both preview results and result cards/detail views.
+    - In `SearchService.buildEntityNameFilter`, use entity display names for filter labels and icons while preserving `EntityName` for filtering.
+
+- Updated dependencies [d1631cc]
+- Updated dependencies [8b24792]
+- Updated dependencies [337ac76]
+- Updated dependencies [46dbac9]
+- Updated dependencies [60f3af3]
+- Updated dependencies [6c0b399]
+- Updated dependencies [7ad9613]
+- Updated dependencies [b2ff821]
+- Updated dependencies [210155c]
+- Updated dependencies [ae444b4]
+  - @memberjunction/core@6.1.6
+  - @memberjunction/ai-core-plus@6.1.6
+  - @memberjunction/actions-base@6.1.6
+  - @memberjunction/global@6.1.6
+  - @memberjunction/core-entities@6.1.6
+  - @memberjunction/interactive-component-types@6.1.6
+  - @memberjunction/lists-base@6.1.6
+
 ## 6.1.5
 
 ### Patch Changes

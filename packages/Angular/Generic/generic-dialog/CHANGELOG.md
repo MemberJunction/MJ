@@ -1,5 +1,11 @@
 # Change Log - @memberjunction/ng-generic-dialog
 
+## 6.1.6
+
+### Patch Changes
+
+- @memberjunction/ng-ui-components@6.1.6
+
 ## 6.1.5
 
 ### Patch Changes

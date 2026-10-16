@@ -1,5 +1,42 @@
 # @memberjunction/ng-base-forms
 
+## 6.1.6
+
+### Patch Changes
+
+- 92950f3: The IS-A related-records side panel (`<mj-isa-related-panel>`) now re-discovers a record's subtypes
+  when the form leaves edit mode. Creating a record together with its subtype in one save left the
+  panel empty — the record plainly had a Dog, the panel said it had nothing — until the user pressed
+  the in-app Refresh. The panel only re-asked on a new `Record` object (which the form deliberately
+  does not swap across a save of the same record) or on `Refreshed$` (reached only from the Refresh
+  button). Leaving edit mode is the third trigger; on a disjoint hierarchy it walks the in-memory
+  `ISAChild` chain and issues no query.
+- Updated dependencies [d1631cc]
+- Updated dependencies [8b24792]
+- Updated dependencies [337ac76]
+- Updated dependencies [46dbac9]
+- Updated dependencies [6c0b399]
+- Updated dependencies [7ad9613]
+- Updated dependencies [b2ff821]
+- Updated dependencies [210155c]
+- Updated dependencies [ae444b4]
+  - @memberjunction/core@6.1.6
+  - @memberjunction/global@6.1.6
+  - @memberjunction/core-entities@6.1.6
+  - @memberjunction/ng-base-types@6.1.6
+  - @memberjunction/ng-code-editor@6.1.6
+  - @memberjunction/ng-entity-viewer@6.1.6
+  - @memberjunction/ng-file-storage@6.1.6
+  - @memberjunction/ng-list-management@6.1.6
+  - @memberjunction/ng-notifications@6.1.6
+  - @memberjunction/ng-react@6.1.6
+  - @memberjunction/ng-record-changes@6.1.6
+  - @memberjunction/ng-record-tags@6.1.6
+  - @memberjunction/ng-shared-generic@6.1.6
+  - @memberjunction/interactive-component-types@6.1.6
+  - @memberjunction/ng-markdown@6.1.6
+  - @memberjunction/ng-ui-components@6.1.6
+
 ## 6.1.5
 
 ### Patch Changes

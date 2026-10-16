@@ -1,5 +1,31 @@
 # @memberjunction/react-linter
 
+## 6.1.6
+
+### Patch Changes
+
+- 3b6596b: A semantic validator can now opt in to checking a prop the parent does not pass, by overriding `EvaluatesAbsentProp` to return `true`. It is then also called for a missing prop, with `context.PropertyPresent === false` and `context.propertyValue === undefined`, except when the element spreads props. Validators that do not opt in behave as before and run only for passed props.
+- 43172b6: Export the semantic-validator API from the package root: `SemanticValidator`, `SemanticValidatorRegistry`, and the types `ValidationContext`, `EntityMetadata`, `EntityFieldInfo`, `QueryMetadata`, `QueryParameter`, `DynamicValue` and `ExtractedValue`. Apps that register a custom constraint validator no longer need to deep-import compiled `dist/` paths.
+- Updated dependencies [d1631cc]
+- Updated dependencies [8b24792]
+- Updated dependencies [337ac76]
+- Updated dependencies [46dbac9]
+- Updated dependencies [6c0b399]
+- Updated dependencies [7ad9613]
+- Updated dependencies [e175ac3]
+- Updated dependencies [b2ff821]
+- Updated dependencies [ceff031]
+- Updated dependencies [3a16ad3]
+- Updated dependencies [210155c]
+- Updated dependencies [ae444b4]
+  - @memberjunction/core@6.1.6
+  - @memberjunction/global@6.1.6
+  - @memberjunction/sql-dialect@6.1.6
+  - @memberjunction/sql-parser@6.1.6
+  - @memberjunction/core-entities@6.1.6
+  - @memberjunction/interactive-component-types@6.1.6
+  - @memberjunction/react-runtime@6.1.6
+
 ## 6.1.5
 
 ### Patch Changes

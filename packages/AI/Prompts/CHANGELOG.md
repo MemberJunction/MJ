@@ -1,5 +1,61 @@
 # @memberjunction/ai-prompts
 
+## 6.1.6
+
+### Patch Changes
+
+- 6a08d8d: Replace six regular expressions that CodeQL flagged as polynomial (`js/polynomial-redos`) with linear scans that match exactly the same text. Crafted provider error messages or prompt text could make the old expressions take quadratic time.
+  - `ErrorAnalyzer` (`@memberjunction/ai`): the "missing field/property" checks and the JSON extraction from an error message. A third check, `/\w+\s+is\s+required/`, is removed: it only ran when the message didn't contain "required", so it could never match.
+  - `AIPromptRunner` (`@memberjunction/ai-prompts`): trimming spaces and tabs from each stop sequence (still keeping leading and trailing newlines), and reading the MIME type from an artifact-manifest line.
+
+  No behavior change. Each replacement is tested against the expression it replaces on a generated corpus, and against the repeated-input shapes CodeQL reported.
+
+- 9687d7d: Backport of #5647: a cancelled prompt stops where it is, instead of failing over through every model candidate (#5548).
+  - **No failover walk after a cancel.** `AIPromptRunner`'s failover loop stops before each candidate once the caller's token is aborted, and after any attempt that fails while it is aborted. Real failures before the cancel are still recorded; a timeout still fails over. The runner's own abort error is classified as a cancellation (`canFailover: false`, `request_cancelled`), so it is no longer read as an unknown, failover-eligible error.
+  - **Logged once, recorded as cancelled.** One info line instead of an `[ERROR] [ModelExecution]` with a stack trace per candidate. The prompt run is saved `Cancelled` / `user_requested`, and the result carries `status: 'Cancelled'` and `cancelled: true`.
+  - **Agent runs end Cancelled.** `BaseAgent` checks the token before treating a failed prompt as a failure, and before counting a failed step toward the consecutive-failure limit. A final answer that had already finished when Stop landed still completes the run.
+  - **Failover fields persist.** A prompt run's failover fields were written while its `Running` INSERT could still be in flight, and the INSERT's reload reset them, so a run that failed over could be saved with `FailoverAttempts = 0`. They are now set again in the queued finalize update.
+  - **No leaked listener.** The prompt runner's race no longer leaves an abort listener on the caller's token after each call.
+  - **Bedrock streaming** iterated the response envelope instead of its body, so every streaming call failed with "stream is not async iterable".
+
+- 60f3af3: A run can now be restricted to the credentials its caller supplied, so a customer's work never silently runs on the platform's AI keys. Hand port of #5063 to the 6.1 line.
+
+  Key resolution fell back to the platform for any driver class the run did not key. When a customer's Google key was rejected, failover moved to Vertex, found no customer key, and finished the run on the platform's account — reporting success. Internal prompts that dropped `apiKeys` reached the platform key the same way with no failover at all.
+  - **`CredentialScope: 'Any' | 'RuntimeOnly'`** (`AICredentialScope` in `@memberjunction/ai`) on `ExecuteAgentParams` and `AIPromptParams`. Omitting the parameter means `'Any'`, which resolves keys as before (the fixes below change some defaults regardless). `'RuntimeOnly'` allows only `apiKeys` and a per-request `credentialId`: credential bindings, the vendor's default credential and `AI_VENDOR_API_KEY__*` are skipped.
+  - Every scope decision goes through `CredentialScopeAllows(scope, source)`; its exhaustive switch makes a new scope value a compile error, and an unknown value at runtime throws rather than falling back to the platform.
+  - Enforced in `AIPromptRunner`'s candidate check and credential resolution, so failover stays on vendors the caller keyed and a run they do not cover fails with "No suitable model found … credential scope is RuntimeOnly". A driver is never constructed without a key under that scope (the OpenAI and Anthropic SDKs read `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` themselves when handed none).
+  - `BaseAgent` carries the scope to every prompt, sub-agent and the realtime delegate. JSON repair, the parallel result-selector judge, the summarize-range and message-compaction sub-calls, conversation compaction and conversation naming run under the run's scope (`PickPromptExecutionScope` / `AIPromptExecutionScope`), so they spend the run's keys and configuration instead of the platform's — whatever the scope.
+  - **On this line actions and realtime sessions are never handed the run's keys**, so under `'RuntimeOnly'` they fail rather than spend the platform's: `RunActionParams.CredentialScope` reaches every action; Summarize Content, Run Ad-hoc Query, Execute AI Prompt and Execute Agent forward it to the prompt or agent they run; Generate Image and bridged realtime sessions refuse.
+  - `ErrorAnalyzer` classifies Google's invalid-key and expired-key responses (`API_KEY_INVALID`, `API_KEY_EXPIRED`, HTTP 400) as `Authentication`, so the run stops instead of failing over.
+  - **A failed streaming call keeps its driver's classification.** `BaseLLM` rejects a failed stream with its `ChatResult`, which the runner re-analyzed as `Unknown`/`Transient` with no message: failover continued onto the same dead key, agents retried up to their consecutive-failure limit, and every run recorded "Unknown error". `ErrorAnalyzer` now returns an `errorInfo` the value already carries, and the runner records a rejected value as an `Error` with its real message and classification — read from its `errorMessage` when it carries no `errorInfo`.
+  - Not covered by the scope: retrieval reranking and embeddings outside a prompt run, and agent-harness credential grants.
+  - Run Ad-hoc Query no longer drops a failed analysis: `analysis only` fails (`ANALYSIS_FAILED`, with the reason) instead of returning `SUCCESS` with no analysis, and `data and analysis` returns the data plus an `AnalysisError`.
+
+- Updated dependencies [e9cf2a5]
+- Updated dependencies [6a08d8d]
+- Updated dependencies [d1631cc]
+- Updated dependencies [48df526]
+- Updated dependencies [8b24792]
+- Updated dependencies [337ac76]
+- Updated dependencies [46dbac9]
+- Updated dependencies [60f3af3]
+- Updated dependencies [6c0b399]
+- Updated dependencies [7ad9613]
+- Updated dependencies [5556a48]
+- Updated dependencies [b2ff821]
+- Updated dependencies [210155c]
+- Updated dependencies [ae444b4]
+  - @memberjunction/ai@6.1.6
+  - @memberjunction/core@6.1.6
+  - @memberjunction/ai-core-plus@6.1.6
+  - @memberjunction/global@6.1.6
+  - @memberjunction/templates@6.1.6
+  - @memberjunction/ai-engine-base@6.1.6
+  - @memberjunction/aiengine@6.1.6
+  - @memberjunction/core-entities@6.1.6
+  - @memberjunction/credentials@6.1.6
+  - @memberjunction/templates-base-types@6.1.6
+
 ## 6.1.5
 
 ### Patch Changes

@@ -1,5 +1,19 @@
 # @memberjunction/ai-realtime-client
 
+## 6.1.6
+
+### Patch Changes
+
+- 48df526: Backport #5155: include PCM provider agent audio in realtime recordings, preserve browser-safe diagnostics and resumed Gemini calls, and release recorder setup resources when stopped while retaining mic capture if agent audio cannot be mixed.
+- 3da2398: OpenAI-protocol realtime sessions (OpenAI Realtime, xAI Grok Voice) keep their persona and tools. The client-side `requestedTracks` negotiation hint is no longer sent in `session.update` (OpenAI rejected the whole update with `unknown_parameter`, so the session ran with no instructions and no tools).
+- Updated dependencies [e9cf2a5]
+- Updated dependencies [6a08d8d]
+- Updated dependencies [48df526]
+- Updated dependencies [60f3af3]
+- Updated dependencies [7ad9613]
+  - @memberjunction/ai@6.1.6
+  - @memberjunction/global@6.1.6
+
 ## 6.1.5
 
 ### Patch Changes

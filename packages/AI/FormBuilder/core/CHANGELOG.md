@@ -1,5 +1,37 @@
 # @memberjunction/ai-form-builder
 
+## 6.1.6
+
+### Patch Changes
+
+- Updated dependencies [6706862]
+- Updated dependencies [6a08d8d]
+- Updated dependencies [581494e]
+- Updated dependencies [d1631cc]
+- Updated dependencies [d820b5b]
+- Updated dependencies [9687d7d]
+- Updated dependencies [8b24792]
+- Updated dependencies [337ac76]
+- Updated dependencies [46dbac9]
+- Updated dependencies [60f3af3]
+- Updated dependencies [6c0b399]
+- Updated dependencies [66e28fa]
+- Updated dependencies [7ad9613]
+- Updated dependencies [a603cf8]
+- Updated dependencies [b2ff821]
+- Updated dependencies [210155c]
+- Updated dependencies [ae444b4]
+  - @memberjunction/ai-agents@6.1.6
+  - @memberjunction/ai-prompts@6.1.6
+  - @memberjunction/core@6.1.6
+  - @memberjunction/ai-core-plus@6.1.6
+  - @memberjunction/actions@6.1.6
+  - @memberjunction/global@6.1.6
+  - @memberjunction/ai-engine-base@6.1.6
+  - @memberjunction/aiengine@6.1.6
+  - @memberjunction/core-entities@6.1.6
+  - @memberjunction/interactive-component-types@6.1.6
+
 ## 6.1.5
 
 ### Patch Changes

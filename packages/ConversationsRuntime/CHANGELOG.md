@@ -1,5 +1,35 @@
 # @memberjunction/conversations-runtime
 
+## 6.1.6
+
+### Patch Changes
+
+- cddbe85: `MentionParser` parses a chat message in linear time. Two of its patterns backtracked quadratically on crafted input (CodeQL `js/polynomial-redos` #228 and #231): a message with 80,000 `!` in a mention name, or 60,000 unclosed `@{`, took about 2.5 s to parse.
+  - **JSON mentions** match `@\{[^{}]+\}` instead of `@\{[^}]+\}`, so a match can no longer start at one `@{` and run on through later ones. This also fixes a real miss: an unclosed `@{` earlier in a message no longer swallows a valid JSON mention after it.
+  - **Agent names** lose their trailing punctuation through a loop from the end instead of `/[.,;!?]+$/`, with the same result.
+
+  A JSON mention whose name contains `{` no longer matches. One containing `}` already didn't.
+
+- Updated dependencies [d1631cc]
+- Updated dependencies [92950f3]
+- Updated dependencies [8b24792]
+- Updated dependencies [337ac76]
+- Updated dependencies [46dbac9]
+- Updated dependencies [60f3af3]
+- Updated dependencies [6c0b399]
+- Updated dependencies [4904fa1]
+- Updated dependencies [7ad9613]
+- Updated dependencies [b2ff821]
+- Updated dependencies [210155c]
+- Updated dependencies [ae444b4]
+  - @memberjunction/core@6.1.6
+  - @memberjunction/graphql-dataprovider@6.1.6
+  - @memberjunction/ai-core-plus@6.1.6
+  - @memberjunction/global@6.1.6
+  - @memberjunction/ai-engine-base@6.1.6
+  - @memberjunction/core-entities@6.1.6
+  - @memberjunction/ai-agent-client@6.1.6
+
 ## 6.1.5
 
 ### Patch Changes

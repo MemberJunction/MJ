@@ -1,5 +1,39 @@
 # @memberjunction/task-graph
 
+## 6.1.6
+
+### Patch Changes
+
+- 3da2398: Dispatched workflow steps resolve `data.*` and `context.*` input mappings against the invocation that submitted the graph, for one-shot steps and loop bodies alike, as the in-run walker and branch conditions already did. Previously such references reached the action as literal text (e.g. `RecordID` = `"data.ID"`). A parent task that cannot be read is now logged instead of silently blanking the invocation.
+- Updated dependencies [6706862]
+- Updated dependencies [6a08d8d]
+- Updated dependencies [581494e]
+- Updated dependencies [d1631cc]
+- Updated dependencies [d820b5b]
+- Updated dependencies [9687d7d]
+- Updated dependencies [8b24792]
+- Updated dependencies [337ac76]
+- Updated dependencies [46dbac9]
+- Updated dependencies [60f3af3]
+- Updated dependencies [6c0b399]
+- Updated dependencies [7ad9613]
+- Updated dependencies [a603cf8]
+- Updated dependencies [e175ac3]
+- Updated dependencies [b2ff821]
+- Updated dependencies [ceff031]
+- Updated dependencies [210155c]
+- Updated dependencies [ae444b4]
+  - @memberjunction/ai-agents@6.1.6
+  - @memberjunction/ai-prompts@6.1.6
+  - @memberjunction/core@6.1.6
+  - @memberjunction/ai-core-plus@6.1.6
+  - @memberjunction/actions-base@6.1.6
+  - @memberjunction/global@6.1.6
+  - @memberjunction/sql-dialect@6.1.6
+  - @memberjunction/aiengine@6.1.6
+  - @memberjunction/core-entities@6.1.6
+  - @memberjunction/notifications@6.1.6
+
 ## 6.1.5
 
 ### Patch Changes

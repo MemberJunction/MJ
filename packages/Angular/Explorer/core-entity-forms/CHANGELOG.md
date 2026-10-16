@@ -1,5 +1,65 @@
 # Change Log - @memberjunction/ng-core-entity-forms
 
+## 6.1.6
+
+### Patch Changes
+
+- Updated dependencies [e9cf2a5]
+- Updated dependencies [6a08d8d]
+- Updated dependencies [d1631cc]
+- Updated dependencies [48df526]
+- Updated dependencies [92950f3]
+- Updated dependencies [92950f3]
+- Updated dependencies [8b24792]
+- Updated dependencies [337ac76]
+- Updated dependencies [46dbac9]
+- Updated dependencies [60f3af3]
+- Updated dependencies [6c0b399]
+- Updated dependencies [4904fa1]
+- Updated dependencies [7ad9613]
+- Updated dependencies [b2ff821]
+- Updated dependencies [210155c]
+- Updated dependencies [ae444b4]
+  - @memberjunction/ai@6.1.6
+  - @memberjunction/core@6.1.6
+  - @memberjunction/ng-base-forms@6.1.6
+  - @memberjunction/graphql-dataprovider@6.1.6
+  - @memberjunction/ai-core-plus@6.1.6
+  - @memberjunction/actions-base@6.1.6
+  - @memberjunction/ng-search@6.1.6
+  - @memberjunction/global@6.1.6
+  - @memberjunction/ai-engine-base@6.1.6
+  - @memberjunction/ng-ai-test-harness@6.1.6
+  - @memberjunction/core-entities@6.1.6
+  - @memberjunction/ng-base-application@6.1.6
+  - @memberjunction/ng-link-directives@6.1.6
+  - @memberjunction/ng-shared@6.1.6
+  - @memberjunction/ng-testing@6.1.6
+  - @memberjunction/ng-action-gallery@6.1.6
+  - @memberjunction/ng-actions@6.1.6
+  - @memberjunction/ng-agents@6.1.6
+  - @memberjunction/ng-base-types@6.1.6
+  - @memberjunction/ng-code-editor@6.1.6
+  - @memberjunction/ng-deep-diff@6.1.6
+  - @memberjunction/ng-entity-relationship-diagram@6.1.6
+  - @memberjunction/ng-entity-viewer@6.1.6
+  - @memberjunction/ng-flow-editor@6.1.6
+  - @memberjunction/ng-hierarchy-tree@6.1.6
+  - @memberjunction/ng-join-grid@6.1.6
+  - @memberjunction/ng-list-management@6.1.6
+  - @memberjunction/ng-notifications@6.1.6
+  - @memberjunction/ng-record-process-studio@6.1.6
+  - @memberjunction/ng-resource-permissions@6.1.6
+  - @memberjunction/ng-shared-generic@6.1.6
+  - @memberjunction/ng-task-graph-editor@6.1.6
+  - @memberjunction/ng-timeline@6.1.6
+  - @memberjunction/ng-trees@6.1.6
+  - @memberjunction/ng-versions@6.1.6
+  - @memberjunction/templates-base-types@6.1.6
+  - @memberjunction/ng-tabstrip@6.1.6
+  - @memberjunction/ng-markdown@6.1.6
+  - @memberjunction/ng-ui-components@6.1.6
+
 ## 6.1.5
 
 ### Patch Changes

@@ -1,5 +1,33 @@
 # @memberjunction/testing-cli
 
+## 6.1.6
+
+### Patch Changes
+
+- Updated dependencies [f7c03d6]
+- Updated dependencies [d1631cc]
+- Updated dependencies [8b24792]
+- Updated dependencies [337ac76]
+- Updated dependencies [46dbac9]
+- Updated dependencies [6c0b399]
+- Updated dependencies [7ad9613]
+- Updated dependencies [e175ac3]
+- Updated dependencies [b2ff821]
+- Updated dependencies [b741252]
+- Updated dependencies [ceff031]
+- Updated dependencies [3a16ad3]
+- Updated dependencies [210155c]
+- Updated dependencies [ae444b4]
+  - @memberjunction/generic-database-provider@6.1.6
+  - @memberjunction/core@6.1.6
+  - @memberjunction/sqlserver-dataprovider@6.1.6
+  - @memberjunction/global@6.1.6
+  - @memberjunction/testing-engine@6.1.6
+  - @memberjunction/core-entities@6.1.6
+  - @memberjunction/testing-integration@6.1.6
+  - @memberjunction/testing-engine-base@6.1.6
+  - @memberjunction/dynamic-packages@6.1.6
+
 ## 6.1.5
 
 ### Patch Changes

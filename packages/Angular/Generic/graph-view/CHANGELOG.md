@@ -1,5 +1,13 @@
 # @memberjunction/ng-graph-view
 
+## 6.1.6
+
+### Patch Changes
+
+- Updated dependencies [7ad9613]
+  - @memberjunction/global@6.1.6
+  - @memberjunction/ng-ui-components@6.1.6
+
 ## 6.1.5
 
 ### Patch Changes

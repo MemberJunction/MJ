@@ -1,5 +1,11 @@
 # @memberjunction/installer
 
+## 6.1.6
+
+### Patch Changes
+
+- c7b287a: fix(installer): smoke-test cleanup no longer kills the installer itself on macOS/Linux. `KillByPort` now asks `lsof` for listening sockets only (`-sTCP:LISTEN`); a bare `-ti:<port>` also matched the installer's own health-check connection, so `mj install` exited 137 and left Explorer running.
+
 ## 6.1.5
 
 ## 6.1.4

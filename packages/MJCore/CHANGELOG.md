@@ -1,5 +1,95 @@
 # Change Log - @memberjunction/core
 
+## 6.1.6
+
+### Patch Changes
+
+- d1631cc: Duplicate detection no longer accumulates the whole run in memory, so whole-entity runs can finish.
+
+  `GetDuplicateRecords` batches its work 500 records at a time, but accumulated its **results** for
+  the entire run — O(records), not O(batch). On a 61,671-record entity that alone exhausted an 8 GB
+  heap and the process died mid-run, so whole-entity detection could not complete at all. Three
+  consecutive attempts on one tenant each ended in `FATAL ERROR: Reached heap limit`, while a full
+  re-embed over the same records succeeded every time — the cost was in the detection path, not the
+  vectorization.
+
+  Retaining every result was never load-bearing: `ProcessBatch` already persists each one as
+  `Duplicate Run Detail` / `Duplicate Run Detail Match` rows as it goes, so the array was a second
+  copy of durable data, kept only to feed the post-pass auto-merge and a single `.length` read.
+
+  Retention is now capped at 1,000 results. Auto-merge carries only candidates that can actually
+  merge — a small fraction by definition, since they must clear the absolute threshold — and still
+  runs **once, after the full pass**, so detection continues to see the pre-merge dataset exactly as
+  before.
+
+  `PotentialDuplicateResponse` gains two optional fields: `TotalRecordsWithDuplicates` (never capped,
+  correct at any scale) and `ResultsTruncated`. Small runs are unaffected — under the cap the
+  response is identical to before.
+
+- 8b24792: The SQL Server batched query cache-status check now reads the documented `TotalRows` column as well as `RowCount`, so a validated query written from the docs validates as current. The query cache permission check reads the permissions of the provider that owns the query instead of the global provider's, so a client connection that is not the global one no longer crashes or authorizes against another server's permissions.
+- 337ac76: Record names now respect field-level security on every server-side lookup, and servers no longer keep a record-name cache shared across users (#4298).
+  - **Server lookups apply field-level security.** `DatabaseProviderBase.InternalGetEntityRecordName(s)` withholds a record's name, without querying, when any field the name is built from is read-denied to the acting user. With no acting user, names on an entity with field-level security on are withheld. Before, only the `GetEntityRecordName` GraphQL resolver checked, and it checked only one name field, so search-result names (`SearchEnricher`) showed a denied name to a restricted user.
+  - **`ProviderBase` no longer caches record names.** On a server that cache was shared by every user in the process, so a name one user was allowed to see could be served from memory to a user who was not. `GetEntityRecordName(s)` now always looks up, `GetCachedRecordName` answers "not cached" unless asked to look the name up, and `SetCachedRecordName` is ignored.
+  - **`GraphQLDataProvider` keeps the cache**, through the new `EntityRecordNameCache` class, so Explorer's tab titles, breadcrumbs and navigation labels behave as before. A GraphQL connection is answered as one user, so its cache cannot cross users.
+  - **`EntityRecordNameResolver`** relies on the provider's check instead of its own, and reports a withheld name with the same status as a missing record.
+
+  Server code that relied on `GetCachedRecordName` (without `loadIfNeeded`) returning a name will now get `undefined`; no MJ server code does.
+
+- 46dbac9: Survive a Redis outage: reconnect without giving up, fail fast, say so, and come back correct
+
+  `RedisLocalStorageProvider` could not survive an outage longer than ~11 seconds, and if it could it
+  would have come back with a cache it believed was valid and wasn't. Found operationally: an Azure
+  Cache for Redis instance was unreachable for ~25 minutes and every server already running went
+  permanently cache-blind without saying so.
+
+  **Reconnection no longer surrenders.** `retryStrategy` returned `null` past `maxRetries` (default 10),
+  and `null` tells ioredis to stop reconnecting for the life of the client — no recovery short of a
+  process restart. The backoff was `times * 200`, linear despite a comment claiming otherwise, so ten
+  attempts was ~11 seconds of tolerance: shorter than a Redis restart, an ElastiCache failover or a pod
+  reschedule. The ceiling now sits on the delay between attempts (`maxRetryDelayMs`, default 30s) rather
+  than on the attempt count, and `maxRetries` becomes an opt-in for short-lived scripts that genuinely
+  should fail rather than wait.
+
+  **Reconnecting is no longer mistaken for being correct.** Pub/sub has no replay, so a subscriber that
+  was away receives nothing published during the gap — it resumes holding entries its siblings
+  invalidated minutes ago. The failure is symmetric: invalidations this process published while
+  disconnected never reached its siblings either. A fleet-wide epoch counter, incremented once per
+  mutation and carried on every `CacheChangedEvent`, is compared on reconnect: unchanged means nothing
+  was invalidated anywhere and the local cache is **kept**; advanced means everything local is dropped;
+  a process that mutated while disconnected bumps the epoch so its siblings flush too; and a counter
+  that cannot be read flushes, because an unestablished correctness claim should cost the expensive
+  answer. Keeping the cache when nothing changed is the point — a blind flush-on-reconnect is also
+  correct but discards a valid cache on every connection blip.
+
+  **Commands fail fast instead of accumulating.** With `maxRetriesPerRequest: null` and ioredis's
+  default offline queue, a multi-minute outage queued commands whose promises never settled — unbounded
+  memory plus awaits that hung for the duration. Once a connection has been established and then lost,
+  reads return a miss and writes no-op, both of which are correct and merely slower. Startup is
+  deliberately exempt: before the first connection a brief queue is the difference between a warm cache
+  and a cold one, and nothing can be stale because nothing is cached.
+
+  **The failure is now observable.** Every lifecycle handler was gated behind `enableLogging` and logged
+  via `LogStatus`, which is suppressed when `GetProductionStatus()` is true — so a dead cache client
+  produced no output at all in production. Connection loss and recovery are now public events
+  (`OnConnectionLost`, `OnConnectionRestored`, `OnReconciliationRequired`) so a consumer can degrade
+  deliberately and report health, with error-channel logging as the production-visible fallback.
+
+  `CacheChangedEvent` gains an optional `Epoch`. Transports that do not implement the counter omit it
+  and consumers that do not care about recovery can ignore it. The post-reconnect guarantee is
+  documented in `guides/CACHING_AND_PUBSUB_GUIDE.md`.
+
+- 6c0b399: Servers sharing a Redis cache no longer evict each other's cache entries in a loop when they disagree on an entity's field list, which is the normal state during a rolling deploy that ships a migration. A schema-hash mismatch on a shared store is now a local cache miss: the slot is no longer deleted (a delete is published to every server, whose engines reload and rewrite it). Each slot also records the newest metadata timestamp of its entity, so a server that finds a slot written under newer metadata stops writing that entity's slots until its own metadata changes. For any other mismatch, a server writes the entity's slots at most once a minute, which keeps a peer still running older code from turning each of its reads into a delete. Process-local stores and in-place slot maintenance still delete a mismatched slot. `BaseEngine` now coalesces reloads triggered by peer cache events: events for one property that arrive during a reload share a single follow-up reload. A peer's cache payload whose schema hash differs from the engine's own is no longer loaded into the engine (rows from a server on older metadata lack the new columns, which left them null on every row); the engine reloads instead. The `[CACHE-SCHEMA-STALE]` warning is logged once per entity and hash pair per process.
+- 7ad9613: Security: the SQL screens now read quotes, identifiers and comments the way the database does. A new dialect-aware scanner, `ScanSQLForScreening` in `@memberjunction/global`, replaces the regex behind `StripSQLStringLiterals`. It understands T-SQL `[…]` identifiers, double-quoted identifiers, `''` escapes, PostgreSQL `E'…'` and dollar-quoted strings, and `--` and nested block comments. It rejects text it cannot classify, such as an unterminated literal. Before this change, a quote inside a bracket identifier, a comment, or a PostgreSQL string opened a literal the database never saw, so `ValidateUserProvidedSQLClause` and `SQLExpressionValidator` accepted a stacked statement hidden behind it. Providers now pass their dialect to the clause, aggregate and ad-hoc query screens. `SQLValidationOptions.Dialect` and the optional `dialect` argument of `validateFullQuery` and `StripSQLStringLiterals` let other callers do the same. Without a dialect, SQL must pass under both SQL Server and PostgreSQL rules. A full query must open with the unquoted keyword `SELECT` or `WITH`, compared in ASCII. The GetData resolver screens exactly the text it runs: it trims the query, and it no longer screens a copy in which literal `\n`, `\r` and `\t` sequences are rewritten. A query that passed only because of that rewriting, such as one whose first real line follows a `--` comment ending in a literal `\n`, is now refused.
+- b2ff821: Record-name lookups (`GetEntityRecordName` / `GetEntityRecordNames`) now bind primary-key values as SQL parameters, accept only the entity's primary-key fields as key names, and apply the acting user's read row filter (role RLS and API-key row filters). The GraphQL resolver no longer looks a name up without an acting user. The protected `DatabaseProviderBase.BuildEntityRecordNameSQL` now takes the acting user and returns the SQL together with its parameter values.
+- 210155c: Saves now reach cached RunView slots that other processes wrote on a shared cache (Redis). Previously a process only invalidated the slots in its own index, so an engine slot it had read warm at boot was never updated and peers kept serving the old rows until restart. On a shared store the entity's slots are now listed on every save and merged with the local index; process-local stores (IndexedDB, in-memory) are unchanged.
+- ae444b4: Security hardening across the data layer: escape/validate composite-key values before SQL interpolation, enforce CanRead on subquery/ad-hoc query entity targets, SELECT-only validation on GetData, bracket-safe SQL Server identifier quoting, and JSON-safe codegen description emission.
+- Updated dependencies [7ad9613]
+- Updated dependencies [e175ac3]
+- Updated dependencies [ceff031]
+- Updated dependencies [ae444b4]
+  - @memberjunction/global@6.1.6
+  - @memberjunction/sql-dialect@6.1.6
+
 ## 6.1.5
 
 ### Patch Changes

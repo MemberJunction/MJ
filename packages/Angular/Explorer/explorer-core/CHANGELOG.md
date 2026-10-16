@@ -1,5 +1,90 @@
 # Change Log - @memberjunction/ng-explorer-core
 
+## 6.1.6
+
+### Patch Changes
+
+- 068f575: A url sync no longer overrides an activation that happened after that url was current.
+
+  Opening a new record activates its tab immediately, and the record's own url is written a few milliseconds later. A `NavigationEnd` for the PREVIOUS url is still in flight; when it resolves, `findTabForUrl` matches the nav tab and switching back to it hides the records region — with a fully rendered form inside it — permanently, because the records region cannot re-activate itself once it stops being shown.
+
+  The shell now records when the current url became current, and a sync declines when the active tab was activated after that. It compares TIMES rather than tab kinds, so back/forward navigation still moves the active tab: there the navigation is genuinely newer than the activation.
+
+  Measured before the guard: suppressing exactly this call took a usable form from 12/18 opens to 18/18 (Fisher exact, p = 0.0095).
+
+- 86afe4c: Record tabs restored at boot no longer load their content until the records region is actually shown.
+
+  The records Golden Layout initializes eagerly so the strip and the Records pill stay in step with the workspace, and as it builds GL fires `show` for every stack's active tab — while the region is still hidden behind the main surface. The shell loaded content on those shows, so every restored record hydrated at boot. An open AI Agent Run pulled its whole run tree (every prompt run, action log and step: 27 requests, ~7s on a slow API) before the user had looked at it, and client-side RunView coalescing folded the ACTIVE tab's own reads into those same requests, so the surface the user was looking at waited on records they were not. Measured on one deployment as a 24s boot with two records open against 5s with none.
+  - `TabShown` while `ShowRecordsRegion` is false now PARKS the show (tab id → container) instead of loading.
+  - Parked shows replay when the region becomes visible, against the LIVE container; a tab closed (or torn down by a breakpoint rebuild) while parked is dropped, and one GL already marked loaded is skipped.
+  - No change once the region is visible: shows load exactly as before.
+
+- Updated dependencies [d1631cc]
+- Updated dependencies [48df526]
+- Updated dependencies [92950f3]
+- Updated dependencies [92950f3]
+- Updated dependencies [8b24792]
+- Updated dependencies [337ac76]
+- Updated dependencies [46dbac9]
+- Updated dependencies [60f3af3]
+- Updated dependencies [6c0b399]
+- Updated dependencies [4904fa1]
+- Updated dependencies [7ad9613]
+- Updated dependencies [b2ff821]
+- Updated dependencies [ceff031]
+- Updated dependencies [210155c]
+- Updated dependencies [ae444b4]
+  - @memberjunction/core@6.1.6
+  - @memberjunction/ng-conversations@6.1.6
+  - @memberjunction/ng-base-forms@6.1.6
+  - @memberjunction/graphql-dataprovider@6.1.6
+  - @memberjunction/ai-core-plus@6.1.6
+  - @memberjunction/ng-search@6.1.6
+  - @memberjunction/global@6.1.6
+  - @memberjunction/ai-engine-base@6.1.6
+  - @memberjunction/ng-ai-test-harness@6.1.6
+  - @memberjunction/core-entities@6.1.6
+  - @memberjunction/ng-auth-services@6.1.6
+  - @memberjunction/ng-base-application@6.1.6
+  - @memberjunction/ng-dashboards@6.1.6
+  - @memberjunction/ng-entity-form-dialog@6.1.6
+  - @memberjunction/ng-entity-permissions@6.1.6
+  - @memberjunction/ng-explorer-settings@6.1.6
+  - @memberjunction/ng-list-detail-grid@6.1.6
+  - @memberjunction/ng-shared@6.1.6
+  - @memberjunction/ng-artifacts@6.1.6
+  - @memberjunction/ng-base-types@6.1.6
+  - @memberjunction/ng-composer@6.1.6
+  - @memberjunction/ng-container-directives@6.1.6
+  - @memberjunction/ng-dashboard-viewer@6.1.6
+  - @memberjunction/ng-entity-viewer@6.1.6
+  - @memberjunction/ng-feedback@6.1.6
+  - @memberjunction/ng-file-storage@6.1.6
+  - @memberjunction/ng-list-management@6.1.6
+  - @memberjunction/ng-mj-livekit-room@6.1.6
+  - @memberjunction/ng-notifications@6.1.6
+  - @memberjunction/ng-query-viewer@6.1.6
+  - @memberjunction/ng-react@6.1.6
+  - @memberjunction/ng-record-changes@6.1.6
+  - @memberjunction/ng-record-selector@6.1.6
+  - @memberjunction/ng-record-tags@6.1.6
+  - @memberjunction/ng-resource-permissions@6.1.6
+  - @memberjunction/ng-shared-generic@6.1.6
+  - @memberjunction/ng-user-avatar@6.1.6
+  - @memberjunction/communication-types@6.1.6
+  - @memberjunction/entity-communications-client@6.1.6
+  - @memberjunction/interactive-component-types@6.1.6
+  - @memberjunction/templates-base-types@6.1.6
+  - @memberjunction/ng-export-service@6.1.6
+  - @memberjunction/ng-generic-dialog@6.1.6
+  - @memberjunction/ng-markdown@6.1.6
+  - @memberjunction/ng-ui-components@6.1.6
+  - @memberjunction/ng-word-cloud@6.1.6
+  - @memberjunction/ng-pagination@6.1.6
+  - @memberjunction/lists-base@6.1.6
+  - @memberjunction/export-engine@6.1.6
+  - @memberjunction/theme-engine@6.1.6
+
 ## 6.1.5
 
 ### Patch Changes

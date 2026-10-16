@@ -1,5 +1,40 @@
 # Change Log - @memberjunction/actions-content-autotag
 
+## 6.1.6
+
+### Patch Changes
+
+- d820b5b: Fix vectorization into a colocated vector database (SQL Server 2025 `VECTOR`, pgvector colocated) when the syncer is built without a provider (#4910).
+
+  `VectorBase.Provider` fell back to the `Metadata` wrapper instead of a real `IMetadataProvider`. The wrapper fails `IsColocatedVectorHost`, so `TryWireColocatedHost` never wired a host and every upsert failed with "requires a host connection". The fallback is now `Metadata.Provider`, and the `as unknown as` casts are gone.
+
+  The callers that build an `EntityVectorSyncer` now pass the provider they already hold: `VectorizeEntityResolver` (the request's provider), `KnowledgeAgent` (the tool call's provider, also for `DuplicateRecordDetector`), the `Vectorize Entity` and `Autotag and Vectorize Content` actions (`params.Provider`), and `KnowledgePipeline`, which gains an optional constructor provider.
+
+- Updated dependencies [d1631cc]
+- Updated dependencies [2cfffad]
+- Updated dependencies [3da2398]
+- Updated dependencies [09aa3c2]
+- Updated dependencies [d820b5b]
+- Updated dependencies [8b24792]
+- Updated dependencies [337ac76]
+- Updated dependencies [46dbac9]
+- Updated dependencies [60f3af3]
+- Updated dependencies [6c0b399]
+- Updated dependencies [66e28fa]
+- Updated dependencies [7ad9613]
+- Updated dependencies [b2ff821]
+- Updated dependencies [a55ea8f]
+- Updated dependencies [210155c]
+- Updated dependencies [ae444b4]
+  - @memberjunction/core@6.1.6
+  - @memberjunction/ai-vector-sync@6.1.6
+  - @memberjunction/core-actions@6.1.6
+  - @memberjunction/actions-base@6.1.6
+  - @memberjunction/actions@6.1.6
+  - @memberjunction/global@6.1.6
+  - @memberjunction/content-autotagging@6.1.6
+  - @memberjunction/core-entities@6.1.6
+
 ## 6.1.5
 
 ### Patch Changes

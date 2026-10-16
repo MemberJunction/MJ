@@ -1,5 +1,50 @@
 # Change Log - @memberjunction/sqlserver-dataprovider
 
+## 6.1.6
+
+### Patch Changes
+
+- 8b24792: The SQL Server batched query cache-status check now reads the documented `TotalRows` column as well as `RowCount`, so a validated query written from the docs validates as current. The query cache permission check reads the permissions of the provider that owns the query instead of the global provider's, so a client connection that is not the global one no longer crashes or authorizes against another server's permissions.
+- 7ad9613: Security: the SQL screens now read quotes, identifiers and comments the way the database does. A new dialect-aware scanner, `ScanSQLForScreening` in `@memberjunction/global`, replaces the regex behind `StripSQLStringLiterals`. It understands T-SQL `[…]` identifiers, double-quoted identifiers, `''` escapes, PostgreSQL `E'…'` and dollar-quoted strings, and `--` and nested block comments. It rejects text it cannot classify, such as an unterminated literal. Before this change, a quote inside a bracket identifier, a comment, or a PostgreSQL string opened a literal the database never saw, so `ValidateUserProvidedSQLClause` and `SQLExpressionValidator` accepted a stacked statement hidden behind it. Providers now pass their dialect to the clause, aggregate and ad-hoc query screens. `SQLValidationOptions.Dialect` and the optional `dialect` argument of `validateFullQuery` and `StripSQLStringLiterals` let other callers do the same. Without a dialect, SQL must pass under both SQL Server and PostgreSQL rules. A full query must open with the unquoted keyword `SELECT` or `WITH`, compared in ASCII. The GetData resolver screens exactly the text it runs: it trims the query, and it no longer screens a copy in which literal `\n`, `\r` and `\t` sequences are rewritten. A query that passed only because of that rewriting, such as one whose first real line follows a `--` comment ending in a literal `\n`, is now refused.
+- ae444b4: Security hardening across the data layer: escape/validate composite-key values before SQL interpolation, enforce CanRead on subquery/ad-hoc query entity targets, SELECT-only validation on GetData, bracket-safe SQL Server identifier quoting, and JSON-safe codegen description emission.
+- Updated dependencies [e9cf2a5]
+- Updated dependencies [6a08d8d]
+- Updated dependencies [f7c03d6]
+- Updated dependencies [d1631cc]
+- Updated dependencies [2cfffad]
+- Updated dependencies [d1631cc]
+- Updated dependencies [09aa3c2]
+- Updated dependencies [48df526]
+- Updated dependencies [8b24792]
+- Updated dependencies [337ac76]
+- Updated dependencies [46dbac9]
+- Updated dependencies [60f3af3]
+- Updated dependencies [6c0b399]
+- Updated dependencies [66e28fa]
+- Updated dependencies [7ad9613]
+- Updated dependencies [e175ac3]
+- Updated dependencies [b2ff821]
+- Updated dependencies [b741252]
+- Updated dependencies [ceff031]
+- Updated dependencies [3a16ad3]
+- Updated dependencies [210155c]
+- Updated dependencies [ae444b4]
+  - @memberjunction/ai@6.1.6
+  - @memberjunction/generic-database-provider@6.1.6
+  - @memberjunction/ai-vector-dupe@6.1.6
+  - @memberjunction/core@6.1.6
+  - @memberjunction/actions-base@6.1.6
+  - @memberjunction/actions@6.1.6
+  - @memberjunction/global@6.1.6
+  - @memberjunction/sql-dialect@6.1.6
+  - @memberjunction/aiengine@6.1.6
+  - @memberjunction/core-entities@6.1.6
+  - @memberjunction/queue@6.1.6
+  - @memberjunction/ai-provider-bundle@6.1.6
+  - @memberjunction/ai-vectordb@6.1.6
+  - @memberjunction/encryption@6.1.6
+  - @memberjunction/query-processor@6.1.6
+
 ## 6.1.5
 
 ### Patch Changes

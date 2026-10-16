@@ -1,5 +1,95 @@
 # @memberjunction/integration-test-suite
 
+## 6.1.6
+
+### Patch Changes
+
+- f950aaa: Role row-level-security filters that use subqueries, or that are shared across several entities, can be edited again once permission rows reference them. Editing such a filter's `FilterText` (through the entity layer or `mj sync push`) used to be refused by the checks built for API-key row filters, which treat every word of a subquery as a column and require every referrer to be on one entity. A filter referenced only by role permission rows is now screened for dangerous SQL (subqueries and function calls allowed; DDL/DML/EXEC, comments, semicolons and system catalogs still refused) and compiled against the base view of every entity that references it, so a bad column, table or function is still refused with the database's own error. A filter referenced by any API-key or API-application scope rule keeps the strict API-key rules unchanged. New mutation-gated integration checks RF1–RF3 in the `rls-isolation` bundle cover the edit, the read restriction for users whose only role carries the filter, and both negative cases.
+- Updated dependencies [6706862]
+- Updated dependencies [e9cf2a5]
+- Updated dependencies [2ddd0a1]
+- Updated dependencies [f8105e1]
+- Updated dependencies [6a08d8d]
+- Updated dependencies [581494e]
+- Updated dependencies [f7c03d6]
+- Updated dependencies [d1631cc]
+- Updated dependencies [d820b5b]
+- Updated dependencies [48df526]
+- Updated dependencies [92950f3]
+- Updated dependencies [cddbe85]
+- Updated dependencies [24abc10]
+- Updated dependencies [9687d7d]
+- Updated dependencies [8b24792]
+- Updated dependencies [337ac76]
+- Updated dependencies [46dbac9]
+- Updated dependencies [60f3af3]
+- Updated dependencies [6c0b399]
+- Updated dependencies [4904fa1]
+- Updated dependencies [66e28fa]
+- Updated dependencies [7ad9613]
+- Updated dependencies [5556a48]
+- Updated dependencies [a603cf8]
+- Updated dependencies [e175ac3]
+- Updated dependencies [b2ff821]
+- Updated dependencies [b741252]
+- Updated dependencies [ceff031]
+- Updated dependencies [3a16ad3]
+- Updated dependencies [210155c]
+- Updated dependencies [ae444b4]
+- Updated dependencies [fa699cc]
+- Updated dependencies [fa699cc]
+- Updated dependencies [3da2398]
+- Updated dependencies [e60f032]
+  - @memberjunction/ai-agents@6.1.6
+  - @memberjunction/ai@6.1.6
+  - @memberjunction/storage@6.1.6
+  - @memberjunction/codegen-lib@6.1.6
+  - @memberjunction/ai-prompts@6.1.6
+  - @memberjunction/generic-database-provider@6.1.6
+  - @memberjunction/core@6.1.6
+  - @memberjunction/graphql-dataprovider@6.1.6
+  - @memberjunction/conversations-runtime@6.1.6
+  - @memberjunction/metadata-sync@6.1.6
+  - @memberjunction/sqlserver-dataprovider@6.1.6
+  - @memberjunction/redis-provider@6.1.6
+  - @memberjunction/ai-core-plus@6.1.6
+  - @memberjunction/actions-base@6.1.6
+  - @memberjunction/search-engine@6.1.6
+  - @memberjunction/actions@6.1.6
+  - @memberjunction/global@6.1.6
+  - @memberjunction/templates@6.1.6
+  - @memberjunction/task-graph@6.1.6
+  - @memberjunction/open-app-engine@6.1.6
+  - @memberjunction/ai-agent-harness@6.1.6
+  - @memberjunction/predictive-studio@6.1.6
+  - @memberjunction/record-set-processor@6.1.6
+  - @memberjunction/scheduling-engine@6.1.6
+  - @memberjunction/server-bootstrap-lite@6.1.6
+  - @memberjunction/testing-engine@6.1.6
+  - @memberjunction/ai-engine-base@6.1.6
+  - @memberjunction/aiengine@6.1.6
+  - @memberjunction/ai-bridge-server@6.1.6
+  - @memberjunction/communication-ms-graph@6.1.6
+  - @memberjunction/content-autotagging@6.1.6
+  - @memberjunction/core-entities@6.1.6
+  - @memberjunction/queue@6.1.6
+  - @memberjunction/unit-testing@6.1.6
+  - @memberjunction/notifications@6.1.6
+  - @memberjunction/testing-integration@6.1.6
+  - @memberjunction/ai-bridge-base@6.1.6
+  - @memberjunction/api-keys@6.1.6
+  - @memberjunction/auth-providers@6.1.6
+  - @memberjunction/communication-types@6.1.6
+  - @memberjunction/communication-engine@6.1.6
+  - @memberjunction/communication-expo-push@6.1.6
+  - @memberjunction/communication-gmail@6.1.6
+  - @memberjunction/communication-sendgrid@6.1.6
+  - @memberjunction/communication-twilio@6.1.6
+  - @memberjunction/query-processor@6.1.6
+  - @memberjunction/record-set-processor-base@6.1.6
+  - @memberjunction/templates-base-types@6.1.6
+  - @memberjunction/predictive-studio-core@6.1.6
+
 ## 6.1.5
 
 ### Patch Changes

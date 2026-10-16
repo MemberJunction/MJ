@@ -1,5 +1,7 @@
 # @memberjunction/dynamic-packages
 
+## 6.1.6
+
 ## 6.1.5
 
 ## 6.1.4

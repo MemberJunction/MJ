@@ -1,5 +1,111 @@
 # @memberjunction/ai-agents
 
+## 6.1.6
+
+### Patch Changes
+
+- 6706862: An agent's conversation response no longer stays "In-Progress" after the run finishes.
+
+  `AgentRunner.RunAgentInConversation` saves each progress message to the agent-response conversation detail, then writes the final status when the run ends. It waited for in-flight progress saves with `EnsureSaveComplete()`, which resolves on the entity's `save` event — and `BaseEntity` raises that event before the save finishes committing. A progress save still committing when the run ended was therefore in flight when the final update called `Save()`, and `BaseEntity.Save()` hands a concurrent caller the in-flight save's promise, so the final `Status`/`Message` were never written: the detail kept `Status: 'In-Progress'` and the last progress message. Progress saves now run one at a time on a promise chain that the final update awaits before saving; a failed progress save is logged and does not break the chain.
+
+- 581494e: `complete_task` no longer throws away a finished answer because the model wrote part of its `payloadChangeRequest` layout as escape sequences.
+
+  `payloadChangeRequest` is a JSON string argument, so the model writes JSON inside a string. In long payloads the model sometimes switches, partway through, to writing the document's own newlines as `\n` escapes, usually right after a long string value such as a SQL query (`"…ASC"\n    }\n  }\n}`). `JSON.parse` rejected the whole payload, the step became a Retry, and on the forced final turn the iteration limit then failed a run that had a correct answer in hand. Gemini 3.8 Flash did exactly this.
+  - **Repair.** New `DecodeJSONArgument` (in `native-tools/json-argument.ts`) parses normally first. Only if that fails does it turn `\n`, `\r` and `\t` escapes that sit outside string literals back into whitespace and parse again. A backslash is never valid JSON outside a string, so the repair cannot change the meaning of a document that was already valid, and escapes inside strings are untouched. Each repair is logged.
+  - **A useful retry.** When the payload still cannot be parsed, the Retry message now ends with `Problem: <the parser's error>` instead of only saying the argument must be an object.
+
+- d1631cc: Duplicate detection no longer accumulates the whole run in memory, so whole-entity runs can finish.
+
+  `GetDuplicateRecords` batches its work 500 records at a time, but accumulated its **results** for
+  the entire run — O(records), not O(batch). On a 61,671-record entity that alone exhausted an 8 GB
+  heap and the process died mid-run, so whole-entity detection could not complete at all. Three
+  consecutive attempts on one tenant each ended in `FATAL ERROR: Reached heap limit`, while a full
+  re-embed over the same records succeeded every time — the cost was in the detection path, not the
+  vectorization.
+
+  Retaining every result was never load-bearing: `ProcessBatch` already persists each one as
+  `Duplicate Run Detail` / `Duplicate Run Detail Match` rows as it goes, so the array was a second
+  copy of durable data, kept only to feed the post-pass auto-merge and a single `.length` read.
+
+  Retention is now capped at 1,000 results. Auto-merge carries only candidates that can actually
+  merge — a small fraction by definition, since they must clear the absolute threshold — and still
+  runs **once, after the full pass**, so detection continues to see the pre-merge dataset exactly as
+  before.
+
+  `PotentialDuplicateResponse` gains two optional fields: `TotalRecordsWithDuplicates` (never capped,
+  correct at any scale) and `ResultsTruncated`. Small runs are unaffected — under the cap the
+  response is identical to before.
+
+- d820b5b: Fix vectorization into a colocated vector database (SQL Server 2025 `VECTOR`, pgvector colocated) when the syncer is built without a provider (#4910).
+
+  `VectorBase.Provider` fell back to the `Metadata` wrapper instead of a real `IMetadataProvider`. The wrapper fails `IsColocatedVectorHost`, so `TryWireColocatedHost` never wired a host and every upsert failed with "requires a host connection". The fallback is now `Metadata.Provider`, and the `as unknown as` casts are gone.
+
+  The callers that build an `EntityVectorSyncer` now pass the provider they already hold: `VectorizeEntityResolver` (the request's provider), `KnowledgeAgent` (the tool call's provider, also for `DuplicateRecordDetector`), the `Vectorize Entity` and `Autotag and Vectorize Content` actions (`params.Provider`), and `KnowledgePipeline`, which gains an optional constructor provider.
+
+- 9687d7d: Backport of #5647: a cancelled prompt stops where it is, instead of failing over through every model candidate (#5548).
+  - **No failover walk after a cancel.** `AIPromptRunner`'s failover loop stops before each candidate once the caller's token is aborted, and after any attempt that fails while it is aborted. Real failures before the cancel are still recorded; a timeout still fails over. The runner's own abort error is classified as a cancellation (`canFailover: false`, `request_cancelled`), so it is no longer read as an unknown, failover-eligible error.
+  - **Logged once, recorded as cancelled.** One info line instead of an `[ERROR] [ModelExecution]` with a stack trace per candidate. The prompt run is saved `Cancelled` / `user_requested`, and the result carries `status: 'Cancelled'` and `cancelled: true`.
+  - **Agent runs end Cancelled.** `BaseAgent` checks the token before treating a failed prompt as a failure, and before counting a failed step toward the consecutive-failure limit. A final answer that had already finished when Stop landed still completes the run.
+  - **Failover fields persist.** A prompt run's failover fields were written while its `Running` INSERT could still be in flight, and the INSERT's reload reset them, so a run that failed over could be saved with `FailoverAttempts = 0`. They are now set again in the queued finalize update.
+  - **No leaked listener.** The prompt runner's race no longer leaves an abort listener on the caller's token after each call.
+  - **Bedrock streaming** iterated the response envelope instead of its body, so every streaming call failed with "stream is not async iterable".
+
+- 60f3af3: A run can now be restricted to the credentials its caller supplied, so a customer's work never silently runs on the platform's AI keys. Hand port of #5063 to the 6.1 line.
+
+  Key resolution fell back to the platform for any driver class the run did not key. When a customer's Google key was rejected, failover moved to Vertex, found no customer key, and finished the run on the platform's account — reporting success. Internal prompts that dropped `apiKeys` reached the platform key the same way with no failover at all.
+  - **`CredentialScope: 'Any' | 'RuntimeOnly'`** (`AICredentialScope` in `@memberjunction/ai`) on `ExecuteAgentParams` and `AIPromptParams`. Omitting the parameter means `'Any'`, which resolves keys as before (the fixes below change some defaults regardless). `'RuntimeOnly'` allows only `apiKeys` and a per-request `credentialId`: credential bindings, the vendor's default credential and `AI_VENDOR_API_KEY__*` are skipped.
+  - Every scope decision goes through `CredentialScopeAllows(scope, source)`; its exhaustive switch makes a new scope value a compile error, and an unknown value at runtime throws rather than falling back to the platform.
+  - Enforced in `AIPromptRunner`'s candidate check and credential resolution, so failover stays on vendors the caller keyed and a run they do not cover fails with "No suitable model found … credential scope is RuntimeOnly". A driver is never constructed without a key under that scope (the OpenAI and Anthropic SDKs read `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` themselves when handed none).
+  - `BaseAgent` carries the scope to every prompt, sub-agent and the realtime delegate. JSON repair, the parallel result-selector judge, the summarize-range and message-compaction sub-calls, conversation compaction and conversation naming run under the run's scope (`PickPromptExecutionScope` / `AIPromptExecutionScope`), so they spend the run's keys and configuration instead of the platform's — whatever the scope.
+  - **On this line actions and realtime sessions are never handed the run's keys**, so under `'RuntimeOnly'` they fail rather than spend the platform's: `RunActionParams.CredentialScope` reaches every action; Summarize Content, Run Ad-hoc Query, Execute AI Prompt and Execute Agent forward it to the prompt or agent they run; Generate Image and bridged realtime sessions refuse.
+  - `ErrorAnalyzer` classifies Google's invalid-key and expired-key responses (`API_KEY_INVALID`, `API_KEY_EXPIRED`, HTTP 400) as `Authentication`, so the run stops instead of failing over.
+  - **A failed streaming call keeps its driver's classification.** `BaseLLM` rejects a failed stream with its `ChatResult`, which the runner re-analyzed as `Unknown`/`Transient` with no message: failover continued onto the same dead key, agents retried up to their consecutive-failure limit, and every run recorded "Unknown error". `ErrorAnalyzer` now returns an `errorInfo` the value already carries, and the runner records a rejected value as an `Error` with its real message and classification — read from its `errorMessage` when it carries no `errorInfo`.
+  - Not covered by the scope: retrieval reranking and embeddings outside a prompt run, and agent-harness credential grants.
+  - Run Ad-hoc Query no longer drops a failed analysis: `analysis only` fails (`ANALYSIS_FAILED`, with the reason) instead of returning `SUCCESS` with no analysis, and `data and analysis` returns the data plus an `AnalysisError`.
+
+- a603cf8: Security (C3): the realtime relay no longer takes authority from a session's `Config` JSON, which the session owner can edit through the generic entity API. `ExecuteRealtimeSessionTool` re-checks `CanRun` on the session's target agent for the caller on every call. Direct actions are no longer read from `Config`: the service uses the actions it projected for the session at start, or the target agent's own metadata when it holds no projection for the session. The co-agent, prompt, step and paused run ids in `Config` are used only when they are records of the session at the time of use (new `SessionRunIDVerifier`, which reads the database on every use and keeps no result), on the relay, prompt-run mirror, close and remote-browser goal paths. `BaseAgent` rejects a `lastRunId` that is not a UUID before it reaches a filter.
+
+  Behaviour change: scope-limited callers (anonymous and resource-scoped magic-link sessions, including public web-widget guests) get no direct actions. Their sessions are prepared without direct-action tools (new `PrepareClientSessionInput.ExcludeDirectActions`), and a relayed direct-action call from them is refused before any elevation, so the co-agent delegates through `invoke-target-agent` instead.
+
+- Updated dependencies [e9cf2a5]
+- Updated dependencies [2ddd0a1]
+- Updated dependencies [6a08d8d]
+- Updated dependencies [d1631cc]
+- Updated dependencies [2cfffad]
+- Updated dependencies [d1631cc]
+- Updated dependencies [09aa3c2]
+- Updated dependencies [48df526]
+- Updated dependencies [9687d7d]
+- Updated dependencies [8b24792]
+- Updated dependencies [337ac76]
+- Updated dependencies [46dbac9]
+- Updated dependencies [60f3af3]
+- Updated dependencies [6c0b399]
+- Updated dependencies [4904fa1]
+- Updated dependencies [66e28fa]
+- Updated dependencies [7ad9613]
+- Updated dependencies [5556a48]
+- Updated dependencies [b2ff821]
+- Updated dependencies [210155c]
+- Updated dependencies [ae444b4]
+  - @memberjunction/ai@6.1.6
+  - @memberjunction/storage@6.1.6
+  - @memberjunction/ai-prompts@6.1.6
+  - @memberjunction/ai-vector-dupe@6.1.6
+  - @memberjunction/core@6.1.6
+  - @memberjunction/ai-vector-sync@6.1.6
+  - @memberjunction/ai-core-plus@6.1.6
+  - @memberjunction/actions-base@6.1.6
+  - @memberjunction/search-engine@6.1.6
+  - @memberjunction/actions@6.1.6
+  - @memberjunction/global@6.1.6
+  - @memberjunction/templates@6.1.6
+  - @memberjunction/ai-engine-base@6.1.6
+  - @memberjunction/aiengine@6.1.6
+  - @memberjunction/ai-reranker@6.1.6
+  - @memberjunction/core-entities@6.1.6
+  - @memberjunction/context-crush@6.1.6
+
 ## 6.1.5
 
 ### Patch Changes

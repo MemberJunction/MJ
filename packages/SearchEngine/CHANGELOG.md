@@ -1,5 +1,41 @@
 # @memberjunction/search-engine
 
+## 6.1.6
+
+### Patch Changes
+
+- 4904fa1: Resolve record display names in search preview and display entity friendly names instead of full schema names.
+  - **Search Record Display Name Resolution**:
+    - In `SearchEngine.ts`, enable enrichment for preview searches on top results so record display names are resolved before preview autocomplete items render.
+    - In `SearchEnricher.ts`, resolve missing record names or sentinel titles (`${EntityName} Record`, `${EntityDisplayName} Record`) via `providerToUse.GetEntityRecordNames()`, setting both `RecordName` and `Title` to the live record name.
+    - Pass `SearchEngine.ProviderToUse` to `SearchEnricher` to ensure multi-provider alignment.
+  - **Entity Display Names**:
+    - Add `EntityDisplayName` to search results across `@memberjunction/search-engine`, `@memberjunction/server`, `@memberjunction/graphql-dataprovider`, and `@memberjunction/ng-search`.
+    - In `search-suggest.component.html` and `search-results.component.html`, display `EntityDisplayName || EntityName` for both preview results and result cards/detail views.
+    - In `SearchService.buildEntityNameFilter`, use entity display names for filter labels and icons while preserving `EntityName` for filtering.
+
+- Updated dependencies [e9cf2a5]
+- Updated dependencies [2ddd0a1]
+- Updated dependencies [6a08d8d]
+- Updated dependencies [d1631cc]
+- Updated dependencies [48df526]
+- Updated dependencies [8b24792]
+- Updated dependencies [337ac76]
+- Updated dependencies [46dbac9]
+- Updated dependencies [60f3af3]
+- Updated dependencies [6c0b399]
+- Updated dependencies [7ad9613]
+- Updated dependencies [b2ff821]
+- Updated dependencies [210155c]
+- Updated dependencies [ae444b4]
+  - @memberjunction/ai@6.1.6
+  - @memberjunction/storage@6.1.6
+  - @memberjunction/core@6.1.6
+  - @memberjunction/global@6.1.6
+  - @memberjunction/aiengine@6.1.6
+  - @memberjunction/core-entities@6.1.6
+  - @memberjunction/ai-vectordb@6.1.6
+
 ## 6.1.5
 
 ### Patch Changes

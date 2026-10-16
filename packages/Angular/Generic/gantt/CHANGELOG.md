@@ -1,5 +1,12 @@
 # @memberjunction/ng-gantt
 
+## 6.1.6
+
+### Patch Changes
+
+- Updated dependencies [7ad9613]
+  - @memberjunction/global@6.1.6
+
 ## 6.1.5
 
 ### Patch Changes

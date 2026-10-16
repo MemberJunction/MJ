@@ -1,5 +1,39 @@
 # @memberjunction/query-gen
 
+## 6.1.6
+
+### Patch Changes
+
+- Updated dependencies [e9cf2a5]
+- Updated dependencies [6a08d8d]
+- Updated dependencies [f7c03d6]
+- Updated dependencies [d1631cc]
+- Updated dependencies [48df526]
+- Updated dependencies [9687d7d]
+- Updated dependencies [8b24792]
+- Updated dependencies [337ac76]
+- Updated dependencies [46dbac9]
+- Updated dependencies [60f3af3]
+- Updated dependencies [6c0b399]
+- Updated dependencies [7ad9613]
+- Updated dependencies [e175ac3]
+- Updated dependencies [b2ff821]
+- Updated dependencies [b741252]
+- Updated dependencies [ceff031]
+- Updated dependencies [3a16ad3]
+- Updated dependencies [210155c]
+- Updated dependencies [ae444b4]
+  - @memberjunction/ai@6.1.6
+  - @memberjunction/ai-prompts@6.1.6
+  - @memberjunction/generic-database-provider@6.1.6
+  - @memberjunction/core@6.1.6
+  - @memberjunction/sqlserver-dataprovider@6.1.6
+  - @memberjunction/ai-core-plus@6.1.6
+  - @memberjunction/global@6.1.6
+  - @memberjunction/aiengine@6.1.6
+  - @memberjunction/core-entities@6.1.6
+  - @memberjunction/ai-vectors-memory@6.1.6
+
 ## 6.1.5
 
 ### Patch Changes

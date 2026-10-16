@@ -1,5 +1,39 @@
 # @memberjunction/react-test-harness
 
+## 6.1.6
+
+### Patch Changes
+
+- Updated dependencies [d1631cc]
+- Updated dependencies [8b24792]
+- Updated dependencies [3b6596b]
+- Updated dependencies [43172b6]
+- Updated dependencies [337ac76]
+- Updated dependencies [46dbac9]
+- Updated dependencies [f950aaa]
+- Updated dependencies [60f3af3]
+- Updated dependencies [6c0b399]
+- Updated dependencies [7ad9613]
+- Updated dependencies [e175ac3]
+- Updated dependencies [b2ff821]
+- Updated dependencies [584346f]
+- Updated dependencies [ceff031]
+- Updated dependencies [3a16ad3]
+- Updated dependencies [210155c]
+- Updated dependencies [ae444b4]
+  - @memberjunction/core@6.1.6
+  - @memberjunction/react-linter@6.1.6
+  - @memberjunction/core-entities-server@6.1.6
+  - @memberjunction/ai-core-plus@6.1.6
+  - @memberjunction/global@6.1.6
+  - @memberjunction/sql-dialect@6.1.6
+  - @memberjunction/sql-parser@6.1.6
+  - @memberjunction/aiengine@6.1.6
+  - @memberjunction/core-entities@6.1.6
+  - @memberjunction/ai-vectors-memory@6.1.6
+  - @memberjunction/interactive-component-types@6.1.6
+  - @memberjunction/react-runtime@6.1.6
+
 ## 6.1.5
 
 ### Patch Changes

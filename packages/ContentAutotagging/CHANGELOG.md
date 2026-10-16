@@ -1,5 +1,46 @@
 # Change Log - @memberjunction/content-autotagging
 
+## 6.1.6
+
+### Patch Changes
+
+- Updated dependencies [e9cf2a5]
+- Updated dependencies [2ddd0a1]
+- Updated dependencies [6a08d8d]
+- Updated dependencies [d1631cc]
+- Updated dependencies [2cfffad]
+- Updated dependencies [09aa3c2]
+- Updated dependencies [d820b5b]
+- Updated dependencies [48df526]
+- Updated dependencies [9687d7d]
+- Updated dependencies [8b24792]
+- Updated dependencies [337ac76]
+- Updated dependencies [46dbac9]
+- Updated dependencies [60f3af3]
+- Updated dependencies [6c0b399]
+- Updated dependencies [7ad9613]
+- Updated dependencies [5556a48]
+- Updated dependencies [b2ff821]
+- Updated dependencies [210155c]
+- Updated dependencies [ae444b4]
+  - @memberjunction/ai@6.1.6
+  - @memberjunction/storage@6.1.6
+  - @memberjunction/ai-prompts@6.1.6
+  - @memberjunction/core@6.1.6
+  - @memberjunction/ai-vector-sync@6.1.6
+  - @memberjunction/ai-vectors@6.1.6
+  - @memberjunction/ai-core-plus@6.1.6
+  - @memberjunction/global@6.1.6
+  - @memberjunction/templates@6.1.6
+  - @memberjunction/aiengine@6.1.6
+  - @memberjunction/tag-engine@6.1.6
+  - @memberjunction/core-entities@6.1.6
+  - @memberjunction/ai-provider-bundle@6.1.6
+  - @memberjunction/ai-segmentation@6.1.6
+  - @memberjunction/tag-engine-base@6.1.6
+  - @memberjunction/ai-vectordb@6.1.6
+  - @memberjunction/network-utils@6.1.6
+
 ## 6.1.5
 
 ### Patch Changes

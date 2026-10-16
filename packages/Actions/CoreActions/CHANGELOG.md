@@ -1,5 +1,108 @@
 # Change Log - @memberjunction/core-actions
 
+## 6.1.6
+
+### Patch Changes
+
+- 3da2398: Durable Execute Agent steps complete: the action's `AgentResult` output carries the field values of the agent run and of any injected memory notes and examples instead of the live entities, which could not be serialized onto the Task row ("Converting circular structure to JSON"). The task-graph action runner now refuses any unstorable output param with a message naming the action and the param.
+- d820b5b: Fix vectorization into a colocated vector database (SQL Server 2025 `VECTOR`, pgvector colocated) when the syncer is built without a provider (#4910).
+
+  `VectorBase.Provider` fell back to the `Metadata` wrapper instead of a real `IMetadataProvider`. The wrapper fails `IsColocatedVectorHost`, so `TryWireColocatedHost` never wired a host and every upsert failed with "requires a host connection". The fallback is now `Metadata.Provider`, and the `as unknown as` casts are gone.
+
+  The callers that build an `EntityVectorSyncer` now pass the provider they already hold: `VectorizeEntityResolver` (the request's provider), `KnowledgeAgent` (the tool call's provider, also for `DuplicateRecordDetector`), the `Vectorize Entity` and `Autotag and Vectorize Content` actions (`params.Provider`), and `KnowledgePipeline`, which gains an optional constructor provider.
+
+- 60f3af3: A run can now be restricted to the credentials its caller supplied, so a customer's work never silently runs on the platform's AI keys. Hand port of #5063 to the 6.1 line.
+
+  Key resolution fell back to the platform for any driver class the run did not key. When a customer's Google key was rejected, failover moved to Vertex, found no customer key, and finished the run on the platform's account — reporting success. Internal prompts that dropped `apiKeys` reached the platform key the same way with no failover at all.
+  - **`CredentialScope: 'Any' | 'RuntimeOnly'`** (`AICredentialScope` in `@memberjunction/ai`) on `ExecuteAgentParams` and `AIPromptParams`. Omitting the parameter means `'Any'`, which resolves keys as before (the fixes below change some defaults regardless). `'RuntimeOnly'` allows only `apiKeys` and a per-request `credentialId`: credential bindings, the vendor's default credential and `AI_VENDOR_API_KEY__*` are skipped.
+  - Every scope decision goes through `CredentialScopeAllows(scope, source)`; its exhaustive switch makes a new scope value a compile error, and an unknown value at runtime throws rather than falling back to the platform.
+  - Enforced in `AIPromptRunner`'s candidate check and credential resolution, so failover stays on vendors the caller keyed and a run they do not cover fails with "No suitable model found … credential scope is RuntimeOnly". A driver is never constructed without a key under that scope (the OpenAI and Anthropic SDKs read `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` themselves when handed none).
+  - `BaseAgent` carries the scope to every prompt, sub-agent and the realtime delegate. JSON repair, the parallel result-selector judge, the summarize-range and message-compaction sub-calls, conversation compaction and conversation naming run under the run's scope (`PickPromptExecutionScope` / `AIPromptExecutionScope`), so they spend the run's keys and configuration instead of the platform's — whatever the scope.
+  - **On this line actions and realtime sessions are never handed the run's keys**, so under `'RuntimeOnly'` they fail rather than spend the platform's: `RunActionParams.CredentialScope` reaches every action; Summarize Content, Run Ad-hoc Query, Execute AI Prompt and Execute Agent forward it to the prompt or agent they run; Generate Image and bridged realtime sessions refuse.
+  - `ErrorAnalyzer` classifies Google's invalid-key and expired-key responses (`API_KEY_INVALID`, `API_KEY_EXPIRED`, HTTP 400) as `Authentication`, so the run stops instead of failing over.
+  - **A failed streaming call keeps its driver's classification.** `BaseLLM` rejects a failed stream with its `ChatResult`, which the runner re-analyzed as `Unknown`/`Transient` with no message: failover continued onto the same dead key, agents retried up to their consecutive-failure limit, and every run recorded "Unknown error". `ErrorAnalyzer` now returns an `errorInfo` the value already carries, and the runner records a rejected value as an `Error` with its real message and classification — read from its `errorMessage` when it carries no `errorInfo`.
+  - Not covered by the scope: retrieval reranking and embeddings outside a prompt run, and agent-harness credential grants.
+  - Run Ad-hoc Query no longer drops a failed analysis: `analysis only` fails (`ANALYSIS_FAILED`, with the reason) instead of returning `SUCCESS` with no analysis, and `data and analysis` returns the data plus an `AnalysisError`.
+
+- 66e28fa: Security: the `RunAction` mutation now authorizes each action. Scope-limited sessions (magic-link and widget guests, resource-scoped links) are refused. An Owner may run any action. Any other user needs a role that holds an authorization linked to the action through `MJ: Action Authorizations`; an inactive or denied linked authorization grants nothing, even through its parent. The links, the authorizations and their role grants are all read from the request's provider. An action with no such link runs only when the class that runs it declares `BaseAction.AuthorizesCaller` itself (the Database Designer and interactive-form actions do); a subclass does not inherit the marker. The client can no longer switch off the action execution log (`SkipActionLog` is ignored).
+
+  `Calculate Expression` now evaluates with a number-only math parser (mathjs 15.2.0) and an allowlist of operators, functions and constants instead of `new Function`, and `Conditional` evaluates with `SafeExpressionEvaluator`. `Run Ad-hoc Query` applies the same checks as `ExecuteAdhocQuery`: it refuses scope-limited sessions, runs only on the read-only database login, and its SQL must pass `ExecuteAdhocQuery`'s table check and timeout limit. On this line the table check is new to `ExecuteAdhocQuery` as well: the rendered SQL may read only entity base views the caller can read in full (no row-level filter, no denied fields). MJServer registers both with the action engine at startup (`ActionEngineServer.SetReadOnlyProviderFactory`, `SetAdhocSQLAuthorizer`). Each can be registered once, and a second registration throws. Without them the action refuses.
+
+- a55ea8f: Security hardening.
+  - **SSRF**: the two remaining raw `fetch(url)` calls on caller-controlled URLs in CoreActions — `BaseFileHandlerAction.loadFromURL` (the `FileURL` path every file-handling action shares) and `ReadRSSFeedAction.FetchFeed` — now route through the SSRF-guarded `SafeFetch` from `@memberjunction/network-utils`, matching Web Page Content / HTTP Request / URL Metadata Extractor. Private, loopback, link-local (incl. the 169.254.169.254 cloud-metadata endpoint) and reserved targets are blocked, and every redirect hop is re-validated.
+  - **SQL literal escaping**: three MJServer sites interpolating caller-supplied values into `ExtraFilter` without escaping now use `EscapeSQLString` per the repo standard — `UpdateQueryExtended`'s duplicate-name check (`input.Name` / `finalCategoryID`), `FetchEntityVectorsResolver.loadEntityDocument` (`entityDocumentID`), and the `ExampleNewUserSubClass` template's `Email` lookup (which breaks today on legitimate `O'Brien`-style addresses and is the snippet integrators copy).
+
+- Updated dependencies [6706862]
+- Updated dependencies [e9cf2a5]
+- Updated dependencies [2ddd0a1]
+- Updated dependencies [6a08d8d]
+- Updated dependencies [581494e]
+- Updated dependencies [f7c03d6]
+- Updated dependencies [d1631cc]
+- Updated dependencies [2cfffad]
+- Updated dependencies [09aa3c2]
+- Updated dependencies [d820b5b]
+- Updated dependencies [48df526]
+- Updated dependencies [9687d7d]
+- Updated dependencies [8b24792]
+- Updated dependencies [3b6596b]
+- Updated dependencies [43172b6]
+- Updated dependencies [337ac76]
+- Updated dependencies [46dbac9]
+- Updated dependencies [f950aaa]
+- Updated dependencies [60f3af3]
+- Updated dependencies [6c0b399]
+- Updated dependencies [4904fa1]
+- Updated dependencies [66e28fa]
+- Updated dependencies [7ad9613]
+- Updated dependencies [a603cf8]
+- Updated dependencies [e175ac3]
+- Updated dependencies [b2ff821]
+- Updated dependencies [b741252]
+- Updated dependencies [584346f]
+- Updated dependencies [ceff031]
+- Updated dependencies [3a16ad3]
+- Updated dependencies [210155c]
+- Updated dependencies [ae444b4]
+  - @memberjunction/ai-agents@6.1.6
+  - @memberjunction/ai@6.1.6
+  - @memberjunction/storage@6.1.6
+  - @memberjunction/ai-prompts@6.1.6
+  - @memberjunction/generic-database-provider@6.1.6
+  - @memberjunction/core@6.1.6
+  - @memberjunction/ai-vector-sync@6.1.6
+  - @memberjunction/sqlserver-dataprovider@6.1.6
+  - @memberjunction/react-linter@6.1.6
+  - @memberjunction/core-entities-server@6.1.6
+  - @memberjunction/ai-core-plus@6.1.6
+  - @memberjunction/actions-base@6.1.6
+  - @memberjunction/search-engine@6.1.6
+  - @memberjunction/actions@6.1.6
+  - @memberjunction/global@6.1.6
+  - @memberjunction/sql-dialect@6.1.6
+  - @memberjunction/lists@6.1.6
+  - @memberjunction/ai-agent-manager@6.1.6
+  - @memberjunction/record-set-processor@6.1.6
+  - @memberjunction/ai-engine-base@6.1.6
+  - @memberjunction/aiengine@6.1.6
+  - @memberjunction/ai-betty-bot@6.1.6
+  - @memberjunction/content-autotagging@6.1.6
+  - @memberjunction/core-entities@6.1.6
+  - @memberjunction/esignature@6.1.6
+  - @memberjunction/clustering-engine@6.1.6
+  - @memberjunction/ai-mcp-client@6.1.6
+  - @memberjunction/code-execution@6.1.6
+  - @memberjunction/communication-types@6.1.6
+  - @memberjunction/communication-engine@6.1.6
+  - @memberjunction/external-change-detection@6.1.6
+  - @memberjunction/integration-engine@6.1.6
+  - @memberjunction/interactive-component-types@6.1.6
+  - @memberjunction/record-set-processor-base@6.1.6
+  - @memberjunction/geo-core@6.1.6
+  - @memberjunction/lists-base@6.1.6
+  - @memberjunction/export-engine@6.1.6
+  - @memberjunction/network-utils@6.1.6
+
 ## 6.1.5
 
 ### Patch Changes

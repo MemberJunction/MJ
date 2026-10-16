@@ -1,5 +1,37 @@
 # Change Log - @memberjunction/templates
 
+## 6.1.6
+
+### Patch Changes
+
+- 5556a48: Security (C2): sandbox template rendering, and authorize on-demand template runs.
+  - **Sandboxed templates.** `HardenNunjucksRuntime()` (new export of `@memberjunction/templates`) guards the nunjucks parser, code generator, runtime and environment lookups that every nunjucks environment in the process shares, including templates loaded through `include` and `import`. The template engine applies it when it loads and checks it before each render. A template that breaks one of the rules below fails with `TemplateSandboxError`.
+    - **Before a template compiles**, `AssertTemplateTreeIsSafe()` (new export) checks its parse tree, because the nunjucks compiler copies template-controlled names into the code it generates. Variable, filter, loop, `set`, macro, import and block names must be plain names (letters, combining marks, digits, connector characters such as `_`, and `$`; filter names can contain dots). A test name, and an extension's registered name and method, must not contain a quote, a backslash or a line break, so `is none` and `is not none` still work. A name that every object inherits (such as `toString` or `constructor`), or `prototype`, must not be used as a dictionary key, a keyword argument, a macro or call-block argument, a `set`, loop, import, macro or block name, or a filter or test name; the code generator also refuses it as a dictionary key or keyword argument. Member reads such as `value.toLocaleString()` are not in this rule; they go through the render-time member check. A called member's name must not contain a backslash or a line break. A loop variable must not reuse an identifier that the generated loop code uses (`context`, `frame`, `runtime`, `env`, `cb`, `next`, `tasks`, `undefined`, ...); a unit test checks this list against the code nunjucks 3.2.4 generates for every kind of loop body, including loops inside macros and blocks. A parse tree may hold only nunjucks nodes, plain values and regular expression literals.
+    - **While a template renders**, it can no longer reach `Function` (for example `{{ range.constructor("...")() }}`), `eval`, `Object`, `Reflect`, `globalThis` or `process`, and it can no longer read a member of the render context, an environment, a loader, a frame, a template or a nunjucks module, or get one of them from a lookup or a call. It could use those to run code on the server, or to change the shared environment for later renders. A filter, test or global resolves only to a name the environment registered itself, never to a member that every object inherits; this also covers test names that `select` and `reject` receive while the template renders, which must be text, a number or another simple value, not an object, a function or a symbol. The member names `constructor`, `prototype` and the `__define/lookup Getter/Setter__` accessors read as empty unless they hold an object's own data that is not a function, and `__proto__` always reads as empty, whether the member name is literal or computed while rendering. A bare name resolves only to a template variable, an own key of the render data, or an own environment global, never to an inherited property. A macro or call-block argument that a call leaves out is filled only from a keyword argument of that name that the call itself passes, never from an inherited member, so otherwise it reads as empty; keyword arguments written at a call site must be a plain object literal with ordinary names, and keyword arguments passed as a value are read through a copy of their own keys.
+  - **Authorized template runs.** The `RunTemplate` mutation and the `Template.Run` remote operation now refuse scope-limited sessions (anonymous magic-link and widget guests, resource-scoped magic-link sessions) and callers without read permission on `MJ: Templates` and `MJ: Template Contents`, before they load anything. The rule is the new `GetTemplateRunRefusal()` export.
+
+- Updated dependencies [e9cf2a5]
+- Updated dependencies [6a08d8d]
+- Updated dependencies [d1631cc]
+- Updated dependencies [48df526]
+- Updated dependencies [8b24792]
+- Updated dependencies [337ac76]
+- Updated dependencies [46dbac9]
+- Updated dependencies [60f3af3]
+- Updated dependencies [6c0b399]
+- Updated dependencies [7ad9613]
+- Updated dependencies [b2ff821]
+- Updated dependencies [210155c]
+- Updated dependencies [ae444b4]
+  - @memberjunction/ai@6.1.6
+  - @memberjunction/core@6.1.6
+  - @memberjunction/ai-core-plus@6.1.6
+  - @memberjunction/global@6.1.6
+  - @memberjunction/aiengine@6.1.6
+  - @memberjunction/core-entities@6.1.6
+  - @memberjunction/ai-provider-bundle@6.1.6
+  - @memberjunction/templates-base-types@6.1.6
+
 ## 6.1.5
 
 ### Patch Changes

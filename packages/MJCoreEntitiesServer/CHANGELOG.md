@@ -1,5 +1,74 @@
 # @memberjunction/core-entities-server
 
+## 6.1.6
+
+### Patch Changes
+
+- f950aaa: Role row-level-security filters that use subqueries, or that are shared across several entities, can be edited again once permission rows reference them. Editing such a filter's `FilterText` (through the entity layer or `mj sync push`) used to be refused by the checks built for API-key row filters, which treat every word of a subquery as a column and require every referrer to be on one entity. A filter referenced only by role permission rows is now screened for dangerous SQL (subqueries and function calls allowed; DDL/DML/EXEC, comments, semicolons and system catalogs still refused) and compiled against the base view of every entity that references it, so a bad column, table or function is still refused with the database's own error. A filter referenced by any API-key or API-application scope rule keeps the strict API-key rules unchanged. New mutation-gated integration checks RF1–RF3 in the `rls-isolation` bundle cover the edit, the read restriction for users whose only role carries the filter, and both negative cases.
+- 584346f: Data Context Items of type `sql` no longer run caller-written SQL unchecked (security C7).
+  - **`GetDataContextData` / `GetDataContextItemData`.** A data context's SQL items now run only for its owner or an administrator (Owner-type user), never for a scope-limited (magic-link) session, and only on the read-only provider. The read-write pool is never used for them. Before it runs, each item's SQL must pass the checks `ExecuteAdhocQuery` applies: a single read statement (`RenderPipeline` with `RequireReadStatement`) whose every table is an entity base view the caller may read in full. Both queries reject an ID that is not a UUID, and items now load for the calling user.
+  - **Per-item results.** A SQL item that may not run is refused on its own. `GetDataContextData` still loads the other items and returns one entry per item, in item order, in `Results` (the data, or null) and `ErrorMessages` (null, or the reason). `Success` is true, and `ErrorMessages` null, only when every item loaded, so a client that treats `Success: false` as an error still sees one.
+  - **`DataContextItemServer.LoadFromSQL`** runs the item's SQL through the data source's `RunQuery({ SQL })` ad-hoc path for the context user. It refuses a raw connection pool, a missing context user, and an item with no SQL. `mssql` is no longer used.
+  - **`MJ: Data Context Items`.** A new server entity class, `MJDataContextItemEntityServer`, lets only an Owner-type user save an item that is a SQL item or holds SQL text: create it, change any of its fields, or move it. It reads the item's values, not which fields changed, and refuses a non-Owner's save of an existing item whose `Type` or `SQL` was not loaded. It applies the same rule to `ReplayOnly` saves, which skip `Validate()`.
+  - **`UpdateMJDataContextItem` always loads the stored row.** `ResolverBase.MustLoadTruthFromDatabase` now includes `MJ: Data Context Items`, as it already includes `MJ: Record Changes`. Client-supplied `OldValues___` can no longer decide the item's starting state, so a client cannot hide a SQL item by repeating its new values as old ones or by leaving `Type` and `SQL` out.
+
+  Upgrade note:
+  - Deployments without a read-only database login (`dbReadOnlyUsername` / `dbReadOnlyPassword`) can no longer run SQL data context items. The other items of a data context still load.
+  - Existing SQL items are refused when a non-owner loads them, when their SQL is not a single read over entity base views, or when the ad-hoc path's keyword check refuses it (for example a `REPLACE(` call, which `ExecuteAdhocQuery` already refuses). `GetDataContextItemData` also no longer returns a refused SQL item's cached data.
+  - Users who are not Owner-type can no longer edit any field of a SQL item, including its cached data. They can still delete it, or turn it into another type by removing its SQL.
+
+- ceff031: Security: client SQL fragments reach RunView only through the base-view clause screen. The screen moves from MJServer's `ResolverBase` into `@memberjunction/generic-database-provider` as `ClientClauseScreen`, and the provider exposes it as `ScreenClientClause`. It now also guards `RunViewsWithCacheCheck` (which also gets the `view:batch` API-key scope check), every ad-hoc list source by default (client-supplied, from the list and audience actions, or rebuilt from a stored list snapshot), the REST view routes (which also refuse a `ViewEntity` that was not loaded as an entity), and a saved view's stored WhereClause and sort (on save, and again when the view runs). The screen refuses a subquery over an entity the acting user reads under a row filter (role row-level security or an API-key row filter) or with denied fields, the queried entity included, because a subquery reads the base view without them; the ad-hoc SQL screen uses the same rule. Both screens read table references from a walk of the whole parse tree (subqueries in CASE branches, HAVING and window clauses included, and every FROM item even when an alias repeats), refuse SQL whose SELECT keywords the walk does not account for, refuse a table function in FROM unless it is an unqualified built-in that reads only its arguments, and skip only the parse wrapper's own FROM item. `SQLParser.IdentifierAliases` exposes the names a fallback parse renamed, so bracket-quoted CTE names still resolve. The fallback takes those names from a prefix the SQL does not contain and keeps each one a separate token, so every name in that map is one the parser renamed. `SQLParser.IsIdentifierAliasName` reports that name form, and both screens refuse client SQL that uses it. The ad-hoc SQL screen exempts a FROM item as a CTE reference only when it is unqualified (`dbo` counts as a schema), is in the scope of a WITH that declares the name (its own SELECT or an enclosing one; a CTE body sees the CTEs before it, itself on SQL Server, and every CTE of a PostgreSQL WITH RECURSIVE list), and matches by the dialect's identifier rules (case-insensitive on SQL Server; on PostgreSQL unquoted names fold to lower case and quoted names match exactly). The parse-tree walk takes time linear in the size of the parse tree, and the fallback renaming and the forbidden-function check take time linear in the size of the SQL. A schema-qualified table reference, `dbo` included, resolves only to an entity in that schema. Client clauses may no longer call the functions the dialect forbids in caller SQL (`CallerSQLForbiddenFunctions`), and that shared list now also covers `pg_sleep*` on PostgreSQL and `OPENXML` on SQL Server. The conversations UI (the tasks view, task search and the agent artifact lookup) now reads the IDs it filters by with its own RunView instead of a subquery over those views; the conversations Tasks tab rebuilds that filter on every load and refresh. On PostgreSQL the screen reads `[Name]` bracket identifiers as the PostgreSQL provider does. Every RunView caller also gets a bracket- and `E''`-aware check that refuses statement separators and comments in filter, sort and search fragments, and a view ID is spliced into SQL only when it is a GUID. A stacked statement hidden from the keyword denylist by a quote inside a bracket identifier no longer reaches the database on these paths.
+- Updated dependencies [e9cf2a5]
+- Updated dependencies [6a08d8d]
+- Updated dependencies [f7c03d6]
+- Updated dependencies [d1631cc]
+- Updated dependencies [2cfffad]
+- Updated dependencies [d1631cc]
+- Updated dependencies [09aa3c2]
+- Updated dependencies [48df526]
+- Updated dependencies [9687d7d]
+- Updated dependencies [8b24792]
+- Updated dependencies [337ac76]
+- Updated dependencies [46dbac9]
+- Updated dependencies [60f3af3]
+- Updated dependencies [6c0b399]
+- Updated dependencies [7ad9613]
+- Updated dependencies [5556a48]
+- Updated dependencies [e175ac3]
+- Updated dependencies [b2ff821]
+- Updated dependencies [b741252]
+- Updated dependencies [ceff031]
+- Updated dependencies [3a16ad3]
+- Updated dependencies [210155c]
+- Updated dependencies [ae444b4]
+  - @memberjunction/ai@6.1.6
+  - @memberjunction/ai-prompts@6.1.6
+  - @memberjunction/generic-database-provider@6.1.6
+  - @memberjunction/ai-vector-dupe@6.1.6
+  - @memberjunction/core@6.1.6
+  - @memberjunction/sqlserver-dataprovider@6.1.6
+  - @memberjunction/ai-core-plus@6.1.6
+  - @memberjunction/actions-base@6.1.6
+  - @memberjunction/global@6.1.6
+  - @memberjunction/templates@6.1.6
+  - @memberjunction/sql-dialect@6.1.6
+  - @memberjunction/sql-parser@6.1.6
+  - @memberjunction/scheduling-engine@6.1.6
+  - @memberjunction/ai-engine-base@6.1.6
+  - @memberjunction/aiengine@6.1.6
+  - @memberjunction/tag-engine@6.1.6
+  - @memberjunction/core-entities@6.1.6
+  - @memberjunction/ai-provider-bundle@6.1.6
+  - @memberjunction/ai-vectordb@6.1.6
+  - @memberjunction/ai-vectors-memory@6.1.6
+  - @memberjunction/communication-types@6.1.6
+  - @memberjunction/communication-engine@6.1.6
+  - @memberjunction/doc-utils@6.1.6
+  - @memberjunction/integration-engine@6.1.6
+  - @memberjunction/integration-pk-classifier@6.1.6
+  - @memberjunction/sql-converter@6.1.6
+  - @memberjunction/predictive-studio-core@6.1.6
+
 ## 6.1.5
 
 ### Patch Changes

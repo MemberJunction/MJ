@@ -1,5 +1,17 @@
 # Change Log - @memberjunction/ai-mistral
 
+## 6.1.6
+
+### Patch Changes
+
+- Updated dependencies [e9cf2a5]
+- Updated dependencies [6a08d8d]
+- Updated dependencies [48df526]
+- Updated dependencies [60f3af3]
+- Updated dependencies [7ad9613]
+  - @memberjunction/ai@6.1.6
+  - @memberjunction/global@6.1.6
+
 ## 6.1.5
 
 ### Patch Changes

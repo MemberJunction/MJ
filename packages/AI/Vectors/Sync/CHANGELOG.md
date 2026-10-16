@@ -1,5 +1,54 @@
 # Change Log - @memberjunction/ai-vector-sync
 
+## 6.1.6
+
+### Patch Changes
+
+- 2cfffad: Duplicate detection now queries with the same text vector sync stored (#5198). It rendered each record's template from the record's own fields alone, so every `Entity` template param (a person's Phones, Emails, Addresses...) rendered empty, and dates came through as `Date` objects instead of the view's values. The query vector then described a shorter document than the stored one: duplicates that share contact data fell below the threshold, and records with no contact data over-matched.
+  - **One builder for both sides.** `EntityDocumentTemplateDataBuilder` (new export of `@memberjunction/ai-vector-sync`) loads a batch's related-entity rows and builds each record's template data. `EntityVectorSyncer.GetTemplateData` and `GetRelatedTemplateDataForBatch` keep their signatures and delegate to it.
+  - **Same row as sync.** The detector renders each saved record from its `RunView` row (`ResultType: 'simple'`), one query per sub-batch. An unsaved record renders from its own values with empty related rows, and runs no related-data query.
+  - **Fails loudly.** When a related param's rows can't be loaded, the batch throws instead of rendering the param empty. Rendering skips validation and suppresses its warnings, as sync does, which ends the "Template validation warnings (non-fatal) … Parameter Phones is required" log spam on every run.
+  - A page with no keys (an empty last page) no longer sends `IN ()` to the database for each related param.
+
+- 09aa3c2: An entity document's record filter, `Configuration.recordFilter.extraFilter`, now does what its documentation said (#5199). It was declared, with `IsDeleted = 0` as its example, but nothing read it, so records it was meant to exclude were vectorized and offered as duplicates anyway.
+  - **Vector sync** ANDs the filter into every page it reads, with a list run's membership filter (`BuildRecordPageFilter`).
+  - **Duplicate detection** checks only records that pass it: a whole-entity run ANDs it into the run's `ExtraFilter`, and a list or view run is narrowed to the members that pass it.
+  - **Candidates** that fail it are dropped by `FilterNonExistentMatches`, which now takes the filter: their vectors can predate it. `CheckSingleRecord` applies it to its candidates too, and still checks the record it is given. With a filter set, the query over-fetches three times TopK and trims back to TopK after filtering.
+  - **Fails loudly.** If the filter can't be applied, detection throws instead of failing open; without a filter, a failed existence check still fails open as before.
+  - The candidate existence check now reads with `IgnoreMaxRows`, so an entity whose `UserViewMaxRows` is below the 500-key chunk no longer drops valid matches.
+  - New exports from `@memberjunction/ai-vector-sync`: `ParseEntityDocumentConfiguration`, `GetEntityDocumentRecordFilter`, `CombineExtraFilters` (sync and detection now share it).
+  - The READMEs say which SQL the filter can use so it also runs on PostgreSQL: plain comparisons, not T-SQL such as `ISNULL`, `LEN` or `+` concatenation.
+
+- Updated dependencies [e9cf2a5]
+- Updated dependencies [6a08d8d]
+- Updated dependencies [d1631cc]
+- Updated dependencies [d820b5b]
+- Updated dependencies [48df526]
+- Updated dependencies [9687d7d]
+- Updated dependencies [8b24792]
+- Updated dependencies [337ac76]
+- Updated dependencies [46dbac9]
+- Updated dependencies [60f3af3]
+- Updated dependencies [6c0b399]
+- Updated dependencies [7ad9613]
+- Updated dependencies [5556a48]
+- Updated dependencies [b2ff821]
+- Updated dependencies [210155c]
+- Updated dependencies [ae444b4]
+  - @memberjunction/ai@6.1.6
+  - @memberjunction/ai-prompts@6.1.6
+  - @memberjunction/core@6.1.6
+  - @memberjunction/ai-vectors@6.1.6
+  - @memberjunction/ai-core-plus@6.1.6
+  - @memberjunction/global@6.1.6
+  - @memberjunction/templates@6.1.6
+  - @memberjunction/aiengine@6.1.6
+  - @memberjunction/core-entities@6.1.6
+  - @memberjunction/ai-vectordb@6.1.6
+  - @memberjunction/ai-vectors-pinecone@6.1.6
+  - @memberjunction/credentials@6.1.6
+  - @memberjunction/templates-base-types@6.1.6
+
 ## 6.1.5
 
 ### Patch Changes

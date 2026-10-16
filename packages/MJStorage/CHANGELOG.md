@@ -1,5 +1,25 @@
 # Change Log - @memberjunction/storage
 
+## 6.1.6
+
+### Patch Changes
+
+- 2ddd0a1: The Box storage driver now renews client-credentials tokens. A driver that authenticates with a client ID, secret and enterprise ID (no refresh token) and is reused for more than about an hour no longer fails every read with `Cannot refresh Box token: missing credentials`. It requests a new client-credentials token and rebuilds its Box client. The refresh-token path is unchanged.
+- Updated dependencies [d1631cc]
+- Updated dependencies [8b24792]
+- Updated dependencies [337ac76]
+- Updated dependencies [46dbac9]
+- Updated dependencies [6c0b399]
+- Updated dependencies [7ad9613]
+- Updated dependencies [b2ff821]
+- Updated dependencies [210155c]
+- Updated dependencies [ae444b4]
+  - @memberjunction/core@6.1.6
+  - @memberjunction/global@6.1.6
+  - @memberjunction/core-entities@6.1.6
+  - @memberjunction/credentials@6.1.6
+  - @memberjunction/network-utils@6.1.6
+
 ## 6.1.5
 
 ### Patch Changes
