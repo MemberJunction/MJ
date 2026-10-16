@@ -12,7 +12,7 @@
 
 import {
     VIDEO_STUDIO_SPEC_VERSION,
-} from './index.js';
+} from './video-generation-spec.js';
 import type {
     AudioCueKind,
     DefectSeverity,
@@ -279,12 +279,14 @@ export type VideoSpecErrorCode =
     | 'NonContiguousBeats'
     | 'BeatsDurationMismatch'
     | 'MissingBeatLayoutNote'
+    | 'UnknownOnScreenPlaceholder'
     | 'UnboundNumericOnScreenText'
     | 'UnmetMustUseRequirement'
     | 'GeneratedAssetNotAllowedForRequirement'
     | 'MissingGeneratedAssetProvenance'
     | 'MissingApprovedAssetSourceId'
     | 'MissingGenerationPurpose'
+    | 'MissingGenerationDuration'
     | 'GenerationDurationExceedsLimit'
     | 'UnresolvedReferenceKey'
     | 'MissingNarrationScript'
@@ -313,12 +315,14 @@ export const VIDEO_SPEC_ERROR_CODES = [
     'NonContiguousBeats',
     'BeatsDurationMismatch',
     'MissingBeatLayoutNote',
+    'UnknownOnScreenPlaceholder',
     'UnboundNumericOnScreenText',
     'UnmetMustUseRequirement',
     'GeneratedAssetNotAllowedForRequirement',
     'MissingGeneratedAssetProvenance',
     'MissingApprovedAssetSourceId',
     'MissingGenerationPurpose',
+    'MissingGenerationDuration',
     'GenerationDurationExceedsLimit',
     'UnresolvedReferenceKey',
     'MissingNarrationScript',
@@ -383,6 +387,9 @@ const NUMERIC_LITERAL_REGEX =
     /^[+\-\u2212]?[$€£¥]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?(?:[KMBTx%]|[mM]s|s)?$/i;
 const CURRENCY_PREFIX_NUMERIC_REGEX =
     /^[$€£¥][+\-\u2212]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?[KMBT%]?$/i;
+const GLOBAL_NUMERIC_RUN_REGEX =
+    /\d{4}-\d{2}-\d{2}|\d+\/\d+(?:\/\d+)?|[qQ][1-4]\b|v\d+(?:\.\d+)*|#\d+|\d+(?:st|nd|rd|th)\b|(?:[+\-\u2212]?[$€£¥]|[$€£¥][+\-\u2212]?|[+\-\u2212](?=\d))?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?(?:[KMBTx%]|[mM]s\b|s\b)?/g;
+const ON_SCREEN_PLACEHOLDER_REGEX = /\{([^{}]+)\}/g;
 
 /**
  * Determines whether a whitespace-delimited token represents a quantitative numeric,
@@ -418,23 +425,29 @@ export function IsNumericLiteralToken(rawToken: string): boolean {
 }
 
 /**
- * Extracts all whitespace-delimited tokens from `text` that `IsNumericLiteralToken`
- * classifies as numeric, percentage, or currency literals.
+ * Extracts all numeric, percentage, or currency runs from `text` using a global scan
+ * (including numbers attached directly to text such as `28%YoY`, `$14.2M/qtr`, `up28%`,
+ * `1.2M→3.4M`) and filters them with `IsNumericLiteralToken` to exclude quarters, years,
+ * ISO dates, ratios, and ordinals/versions.
  */
 export function ExtractNumericLiteralTokens(text: string): string[] {
-    if (!text?.trim()) {
+    if (typeof text !== 'string' || !text.trim()) {
         return [];
     }
-    return text
-        .trim()
-        .split(/\s+/)
-        .map((token) => token.replace(WRAPPING_PUNCTUATION_REGEX, ''))
-        .filter((token) => IsNumericLiteralToken(token));
+    const matches = text.match(GLOBAL_NUMERIC_RUN_REGEX);
+    if (!matches) {
+        return [];
+    }
+    return matches.filter((candidate) => IsNumericLiteralToken(candidate));
 }
 
 // ---------------------------------------------------------------------------
 // Main Entry Point
 // ---------------------------------------------------------------------------
+
+function asArray<T>(value: unknown): T[] {
+    return Array.isArray(value) ? (value as T[]) : [];
+}
 
 /**
  * Pure, stage-aware validator for `VideoGenerationSpec`.
@@ -444,37 +457,48 @@ export function ExtractNumericLiteralTokens(text: string): string[] {
  */
 export function ValidateVideoGenerationSpec(
     spec: VideoGenerationSpec,
-    stage: VideoProductionStatus = spec.Status,
+    stage: VideoProductionStatus = spec?.Status,
     options?: VideoSpecValidationOptions,
 ): VideoSpecValidationResult {
+    const safeSpec = (spec ?? {}) as VideoGenerationSpec;
     const errors: VideoSpecValidationError[] = [];
 
     const effectiveStage = isMemberOf(stage, VIDEO_PRODUCTION_STATUSES) ? stage : 'Briefing';
     const requiredSections = new Set<VideoSpecSection>(STAGE_REQUIRED_SECTIONS[effectiveStage]);
 
     const approvedAssetKeys = new Set<string>(
-        (spec.Assets?.Approved ?? []).map((a) => a.Key).filter((k) => Boolean(k?.trim())),
+        asArray<VideoGenerationSpec['Assets']['Approved'][number]>(safeSpec.Assets?.Approved)
+            .map((a) => a?.Key)
+            .filter((k): k is string => typeof k === 'string' && Boolean(k.trim())),
     );
     const referenceableAssetKeys = new Set<string>(approvedAssetKeys);
-    for (const bkKey of options?.BrandKitAssetKeys ?? []) {
-        if (bkKey.trim()) {
+    for (const bkKey of asArray<string>(options?.BrandKitAssetKeys)) {
+        if (typeof bkKey === 'string' && bkKey.trim()) {
             referenceableAssetKeys.add(bkKey);
         }
     }
     const dataBindingKeys = new Set<string>(
-        (spec.DataBindings ?? []).map((b) => b.Key).filter((k) => Boolean(k?.trim())),
+        asArray<VideoGenerationSpec['DataBindings'][number]>(safeSpec.DataBindings)
+            .map((b) => b?.Key)
+            .filter((k): k is string => typeof k === 'string' && Boolean(k.trim())),
     );
     const beatKeys = new Set<string>(
-        (spec.Beats ?? []).map((b) => b.Key).filter((k) => Boolean(k?.trim())),
+        asArray<VideoGenerationSpec['Beats'][number]>(safeSpec.Beats)
+            .map((b) => b?.Key)
+            .filter((k): k is string => typeof k === 'string' && Boolean(k.trim())),
     );
     const narrationLineKeys = new Set<string>(
-        (spec.Audio?.Narration?.Script ?? []).map((n) => n.Key).filter((k) => Boolean(k?.trim())),
+        asArray<NonNullable<VideoGenerationSpec['Audio']['Narration']>['Script'][number]>(
+            safeSpec.Audio?.Narration?.Script,
+        )
+            .map((n) => n?.Key)
+            .filter((k): k is string => typeof k === 'string' && Boolean(k.trim())),
     );
 
-    validateHeaderAndTopLevelEnums(spec, stage, errors);
-    validateFilmAndDeliverables(spec, errors);
+    validateHeaderAndTopLevelEnums(safeSpec, stage, errors);
+    validateFilmAndDeliverables(safeSpec, errors);
     validateAssetsAndGeneration(
-        spec,
+        safeSpec,
         stage,
         requiredSections,
         approvedAssetKeys,
@@ -482,20 +506,20 @@ export function ValidateVideoGenerationSpec(
         options,
         errors,
     );
-    validateStyleSection(spec, requiredSections, approvedAssetKeys, errors);
+    validateStyleSection(safeSpec, requiredSections, approvedAssetKeys, errors);
     validateBeatsSection(
-        spec,
+        safeSpec,
         requiredSections,
         approvedAssetKeys,
         dataBindingKeys,
         narrationLineKeys,
         errors,
     );
-    validateDataSection(spec, requiredSections, errors);
-    validateAudioSection(spec, requiredSections, approvedAssetKeys, beatKeys, errors);
-    validateRenderAndInteraction(spec, errors);
-    validateReviewSection(spec, errors);
-    validateOutputSection(spec, requiredSections, errors);
+    validateDataSection(safeSpec, requiredSections, errors);
+    validateAudioSection(safeSpec, requiredSections, approvedAssetKeys, beatKeys, errors);
+    validateRenderAndInteraction(safeSpec, errors);
+    validateReviewSection(safeSpec, errors);
+    validateOutputSection(safeSpec, requiredSections, errors);
 
     return {
         Valid: errors.length === 0,
@@ -583,28 +607,30 @@ function validateFilmAndDeliverables(
             Message: 'Film.DurationSeconds must be a finite number greater than 0.',
         });
     }
-    if (!spec.Film?.Formats?.length) {
+    const filmFormats = asArray<VideoFormat>(spec.Film?.Formats);
+    if (!filmFormats.length) {
         errors.push({
             Code: 'MissingFilmFormats',
             Path: 'Film.Formats',
             Message: 'Film.Formats must list at least one target aspect ratio.',
         });
     } else {
-        spec.Film.Formats.forEach((fmt, idx) => {
+        filmFormats.forEach((fmt, idx) => {
             if (!isMemberOf(fmt, VIDEO_FORMATS)) {
                 pushEnumError(errors, `Film.Formats[${idx}]`, fmt, VIDEO_FORMATS);
             }
         });
     }
 
-    if (!spec.Deliverables?.Formats?.length) {
+    const deliverableFormats = asArray<VideoFormat>(spec.Deliverables?.Formats);
+    if (!deliverableFormats.length) {
         errors.push({
             Code: 'MissingDeliverableFormats',
             Path: 'Deliverables.Formats',
             Message: 'Deliverables.Formats must list at least one format to deliver.',
         });
     } else {
-        spec.Deliverables.Formats.forEach((fmt, idx) => {
+        deliverableFormats.forEach((fmt, idx) => {
             if (!isMemberOf(fmt, VIDEO_FORMATS)) {
                 pushEnumError(errors, `Deliverables.Formats[${idx}]`, fmt, VIDEO_FORMATS);
             }
@@ -621,12 +647,16 @@ function validateAssetsAndGeneration(
     options: VideoSpecValidationOptions | undefined,
     errors: VideoSpecValidationError[],
 ): void {
+    const approvedAssets = asArray<VideoGenerationSpec['Assets']['Approved'][number]>(spec.Assets?.Approved);
     const approvedByKey = new Map(
-        (spec.Assets?.Approved ?? []).map((asset) => [asset.Key, asset]),
+        approvedAssets.filter((a) => Boolean(a)).map((asset) => [asset.Key, asset]),
     );
     const requiresPreProduction = requiredSections.has('PreProduction');
 
-    (spec.Assets?.Approved ?? []).forEach((asset, idx) => {
+    approvedAssets.forEach((asset, idx) => {
+        if (!asset) {
+            return;
+        }
         if (!isMemberOf(asset.Kind, VIDEO_ASSET_KINDS)) {
             pushEnumError(errors, `Assets.Approved[${idx}].Kind`, asset.Kind, VIDEO_ASSET_KINDS);
         }
@@ -656,7 +686,10 @@ function validateAssetsAndGeneration(
     });
 
     const isBlocked = spec.Status === 'Blocked' || stage === 'Blocked';
-    (spec.Assets?.Required ?? []).forEach((req, idx) => {
+    asArray<VideoGenerationSpec['Assets']['Required'][number]>(spec.Assets?.Required).forEach((req, idx) => {
+        if (!req) {
+            return;
+        }
         if (!isMemberOf(req.Kind, VIDEO_ASSET_KINDS)) {
             pushEnumError(errors, `Assets.Required[${idx}].Kind`, req.Kind, VIDEO_ASSET_KINDS);
         }
@@ -686,7 +719,10 @@ function validateAssetsAndGeneration(
         }
     });
 
-    (spec.Assets?.Generate ?? []).forEach((genReq, idx) => {
+    asArray<VideoGenerationSpec['Assets']['Generate'][number]>(spec.Assets?.Generate).forEach((genReq, idx) => {
+        if (!genReq) {
+            return;
+        }
         if (genReq.Kind !== 'Image' && genReq.Kind !== 'Video') {
             pushEnumError(errors, `Assets.Generate[${idx}].Kind`, genReq.Kind, ['Image', 'Video']);
         }
@@ -702,9 +738,17 @@ function validateAssetsAndGeneration(
                 Message: `Generation request "${genReq.Key}" must specify both Purpose and Prompt.`,
             });
         }
-        if (genReq.DurationSeconds !== undefined) {
+        if (genReq.Kind === 'Video' && genReq.DurationSeconds === undefined) {
+            errors.push({
+                Code: 'MissingGenerationDuration',
+                Path: `Assets.Generate[${idx}].DurationSeconds`,
+                Message: `Video generation request "${genReq.Key}" must specify DurationSeconds.`,
+            });
+        } else if (genReq.DurationSeconds !== undefined) {
             const maxSeconds = options?.MaxGeneratedVideoSeconds;
             if (
+                typeof genReq.DurationSeconds !== 'number' ||
+                !Number.isFinite(genReq.DurationSeconds) ||
                 genReq.DurationSeconds <= 0 ||
                 (maxSeconds !== undefined && genReq.DurationSeconds > maxSeconds)
             ) {
@@ -718,7 +762,7 @@ function validateAssetsAndGeneration(
                 });
             }
         }
-        genReq.ReferenceKeys.forEach((refKey, refIdx) => {
+        asArray<string>(genReq.ReferenceKeys).forEach((refKey, refIdx) => {
             if (!referenceableAssetKeys.has(refKey)) {
                 errors.push({
                     Code: 'UnresolvedReferenceKey',
@@ -727,8 +771,8 @@ function validateAssetsAndGeneration(
                 });
             }
         });
-        (genReq.Keyframes ?? []).forEach((kf, kfIdx) => {
-            if (!referenceableAssetKeys.has(kf.AssetKey)) {
+        asArray<NonNullable<typeof genReq.Keyframes>[number]>(genReq.Keyframes).forEach((kf, kfIdx) => {
+            if (kf && !referenceableAssetKeys.has(kf.AssetKey)) {
                 errors.push({
                     Code: 'UnresolvedReferenceKey',
                     Path: `Assets.Generate[${idx}].Keyframes[${kfIdx}].AssetKey`,
@@ -746,15 +790,19 @@ function validateStyleSection(
     errors: VideoSpecValidationError[],
 ): void {
     const requiresStyle = requiredSections.has('Style');
+    const palette = asArray<VideoGenerationSpec['Style']['Palette'][number]>(spec.Style?.Palette);
+    const typography = asArray<VideoGenerationSpec['Style']['Typography'][number]>(spec.Style?.Typography);
+    const motionRules = asArray<VideoGenerationSpec['Style']['MotionRules'][number]>(spec.Style?.MotionRules);
+
     if (requiresStyle) {
-        if (!spec.Style?.Palette?.length) {
+        if (!palette.length) {
             errors.push({
                 Code: 'MissingStyleSection',
                 Path: 'Style.Palette',
                 Message: 'Style.Palette must define at least one ColorToken from Styled onward.',
             });
         }
-        if (!spec.Style?.Typography?.length) {
+        if (!typography.length) {
             errors.push({
                 Code: 'MissingStyleSection',
                 Path: 'Style.Typography',
@@ -779,7 +827,7 @@ function validateStyleSection(
                 Message: 'Style.Pacing requires AvgSecondsBetweenChanges > 0 and non-empty HoldRules from Styled onward.',
             });
         }
-        if (!spec.Style?.MotionRules?.length) {
+        if (!motionRules.length) {
             errors.push({
                 Code: 'MissingStyleSection',
                 Path: 'Style.MotionRules',
@@ -788,8 +836,8 @@ function validateStyleSection(
         }
     }
 
-    (spec.Style?.Typography ?? []).forEach((typeSpec, idx) => {
-        if (typeSpec.FontAssetKey !== undefined && !approvedAssetKeys.has(typeSpec.FontAssetKey)) {
+    typography.forEach((typeSpec, idx) => {
+        if (typeSpec?.FontAssetKey !== undefined && !approvedAssetKeys.has(typeSpec.FontAssetKey)) {
             errors.push({
                 Code: 'UnresolvedReferenceKey',
                 Path: `Style.Typography[${idx}].FontAssetKey`,
@@ -798,8 +846,8 @@ function validateStyleSection(
         }
     });
 
-    (spec.Style?.MotionRules ?? []).forEach((rule, idx) => {
-        if (!isMemberOf(rule.ObjectClass, MOTION_OBJECT_CLASSES)) {
+    motionRules.forEach((rule, idx) => {
+        if (rule && !isMemberOf(rule.ObjectClass, MOTION_OBJECT_CLASSES)) {
             pushEnumError(errors, `Style.MotionRules[${idx}].ObjectClass`, rule.ObjectClass, MOTION_OBJECT_CLASSES);
         }
     });
@@ -813,7 +861,7 @@ function validateBeatsSection(
     narrationLineKeys: ReadonlySet<string>,
     errors: VideoSpecValidationError[],
 ): void {
-    const beats = spec.Beats ?? [];
+    const beats = asArray<VideoGenerationSpec['Beats'][number]>(spec.Beats);
     if (requiredSections.has('Beats') && beats.length === 0) {
         errors.push({
             Code: 'MissingBeats',
@@ -826,21 +874,26 @@ function validateBeatsSection(
         return;
     }
 
-    if (Math.abs(beats[0].StartSeconds) > BEAT_TIMELINE_TOLERANCE_SECONDS) {
+    const firstStart = beats[0]?.StartSeconds;
+    if (
+        typeof firstStart === 'number' &&
+        Number.isFinite(firstStart) &&
+        Math.abs(firstStart) > BEAT_TIMELINE_TOLERANCE_SECONDS
+    ) {
         errors.push({
             Code: 'BeatsMustStartAtZero',
             Path: 'Beats[0].StartSeconds',
-            Message: `First beat must start at 0s (within ±${BEAT_TIMELINE_TOLERANCE_SECONDS}s), got ${beats[0].StartSeconds}s.`,
+            Message: `First beat must start at 0s (within ±${BEAT_TIMELINE_TOLERANCE_SECONDS}s), got ${firstStart}s.`,
         });
     }
 
-    const deliverableFormats = (spec.Deliverables?.Formats ?? []).filter((f): f is VideoFormat =>
+    const deliverableFormats = asArray<VideoFormat>(spec.Deliverables?.Formats).filter((f): f is VideoFormat =>
         isMemberOf(f, VIDEO_FORMATS),
     );
 
     beats.forEach((beat, idx) => {
         validateSingleBeat(
-            beat,
+            beat ?? ({} as VideoGenerationSpec['Beats'][number]),
             idx,
             idx > 0 ? beats[idx - 1] : undefined,
             deliverableFormats,
@@ -853,16 +906,19 @@ function validateBeatsSection(
 
     const lastIdx = beats.length - 1;
     const lastBeat = beats[lastIdx];
+    const lastEnd = lastBeat?.EndSeconds;
     if (
         typeof spec.Film?.DurationSeconds === 'number' &&
         Number.isFinite(spec.Film.DurationSeconds) &&
         spec.Film.DurationSeconds > 0 &&
-        Math.abs(lastBeat.EndSeconds - spec.Film.DurationSeconds) > BEAT_TIMELINE_TOLERANCE_SECONDS
+        typeof lastEnd === 'number' &&
+        Number.isFinite(lastEnd) &&
+        Math.abs(lastEnd - spec.Film.DurationSeconds) > BEAT_TIMELINE_TOLERANCE_SECONDS
     ) {
         errors.push({
             Code: 'BeatsDurationMismatch',
             Path: `Beats[${lastIdx}].EndSeconds`,
-            Message: `Final beat ends at ${lastBeat.EndSeconds}s, which differs from Film.DurationSeconds (${spec.Film.DurationSeconds}s) by more than ±${BEAT_TIMELINE_TOLERANCE_SECONDS}s.`,
+            Message: `Final beat ends at ${lastEnd}s, which differs from Film.DurationSeconds (${spec.Film.DurationSeconds}s) by more than ±${BEAT_TIMELINE_TOLERANCE_SECONDS}s.`,
         });
     }
 }
@@ -894,7 +950,23 @@ function validateSingleBeat(
         }
     }
 
-    if (beat.EndSeconds <= beat.StartSeconds) {
+    const startFinite = typeof beat.StartSeconds === 'number' && Number.isFinite(beat.StartSeconds);
+    const endFinite = typeof beat.EndSeconds === 'number' && Number.isFinite(beat.EndSeconds);
+    if (!startFinite) {
+        errors.push({
+            Code: 'InvalidBeatTiming',
+            Path: `Beats[${idx}].StartSeconds`,
+            Message: `Beats[${idx}].StartSeconds must be a finite number.`,
+        });
+    }
+    if (!endFinite) {
+        errors.push({
+            Code: 'InvalidBeatTiming',
+            Path: `Beats[${idx}].EndSeconds`,
+            Message: `Beats[${idx}].EndSeconds must be a finite number.`,
+        });
+    }
+    if (startFinite && endFinite && beat.EndSeconds <= beat.StartSeconds) {
         errors.push({
             Code: 'InvalidBeatTiming',
             Path: `Beats[${idx}].EndSeconds`,
@@ -902,8 +974,11 @@ function validateSingleBeat(
         });
     }
 
+    const prevEndFinite = typeof prevBeat?.EndSeconds === 'number' && Number.isFinite(prevBeat.EndSeconds);
     if (
         prevBeat &&
+        startFinite &&
+        prevEndFinite &&
         Math.abs(beat.StartSeconds - prevBeat.EndSeconds) > BEAT_TIMELINE_TOLERANCE_SECONDS
     ) {
         errors.push({
@@ -923,18 +998,40 @@ function validateSingleBeat(
         }
     }
 
-    beat.OnScreenText.forEach((textLine, textIdx) => {
-        const numericTokens = ExtractNumericLiteralTokens(textLine);
-        if (numericTokens.length > 0 && beat.DataRefs.length === 0) {
+    const beatDataRefs = asArray<string>(beat.DataRefs);
+    const beatDataRefSet = new Set<string>(beatDataRefs);
+
+    asArray<string>(beat.OnScreenText).forEach((textLine, textIdx) => {
+        if (typeof textLine !== 'string') {
+            return;
+        }
+        const unknownPlaceholders: string[] = [];
+        for (const match of textLine.matchAll(ON_SCREEN_PLACEHOLDER_REGEX)) {
+            const placeholderKey = match[1].trim();
+            if (!placeholderKey || !beatDataRefSet.has(placeholderKey)) {
+                unknownPlaceholders.push(placeholderKey || '{}');
+            }
+        }
+        if (unknownPlaceholders.length > 0) {
+            errors.push({
+                Code: 'UnknownOnScreenPlaceholder',
+                Path: `Beats[${idx}].OnScreenText[${textIdx}]`,
+                Message: `On-screen text "${textLine}" references placeholder(s) (${unknownPlaceholders.map((p) => `{${p}}`).join(', ')}) not listed in Beats[${idx}].DataRefs.`,
+            });
+        }
+
+        const strippedText = textLine.replace(ON_SCREEN_PLACEHOLDER_REGEX, ' ');
+        const numericTokens = ExtractNumericLiteralTokens(strippedText);
+        if (numericTokens.length > 0) {
             errors.push({
                 Code: 'UnboundNumericOnScreenText',
                 Path: `Beats[${idx}].OnScreenText[${textIdx}]`,
-                Message: `On-screen text "${textLine}" contains numeric literal(s) (${numericTokens.join(', ')}) but Beats[${idx}].DataRefs has no DataBinding reference.`,
+                Message: `On-screen text "${textLine}" contains unbound numeric literal(s) (${numericTokens.join(', ')}); bound values must use {BindingKey} placeholders listed in Beats[${idx}].DataRefs.`,
             });
         }
     });
 
-    beat.AssetRefs.forEach((assetKey, refIdx) => {
+    asArray<string>(beat.AssetRefs).forEach((assetKey, refIdx) => {
         if (!approvedAssetKeys.has(assetKey)) {
             errors.push({
                 Code: 'UnresolvedReferenceKey',
@@ -944,7 +1041,7 @@ function validateSingleBeat(
         }
     });
 
-    beat.DataRefs.forEach((dataKey, refIdx) => {
+    beatDataRefs.forEach((dataKey, refIdx) => {
         if (!dataBindingKeys.has(dataKey)) {
             errors.push({
                 Code: 'UnresolvedReferenceKey',
@@ -968,8 +1065,11 @@ function validateDataSection(
     requiredSections: ReadonlySet<VideoSpecSection>,
     errors: VideoSpecValidationError[],
 ): void {
-    const bindings = spec.DataBindings ?? [];
+    const bindings = asArray<VideoGenerationSpec['DataBindings'][number]>(spec.DataBindings);
     bindings.forEach((binding, idx) => {
+        if (!binding) {
+            return;
+        }
         if (!isMemberOf(binding.Source?.Kind, VIDEO_DATA_SOURCE_KINDS)) {
             pushEnumError(errors, `DataBindings[${idx}].Source.Kind`, binding.Source?.Kind, VIDEO_DATA_SOURCE_KINDS);
         }
@@ -1007,13 +1107,16 @@ function validateAudioSection(
         pushEnumError(errors, 'Audio.Captions', spec.Audio?.Captions, VIDEO_CAPTION_MODES);
     }
 
+    const scriptLines = asArray<NonNullable<VideoGenerationSpec['Audio']['Narration']>['Script'][number]>(
+        spec.Audio?.Narration?.Script,
+    );
     if (requiredSections.has('NarrationScript')) {
         const narration = spec.Audio?.Narration;
         if (
             !narration ||
             !narration.VoiceID?.trim() ||
             !narration.Provider?.trim() ||
-            !narration.Script?.length
+            !scriptLines.length
         ) {
             errors.push({
                 Code: 'MissingNarrationScript',
@@ -1024,8 +1127,8 @@ function validateAudioSection(
     }
 
     if (beatKeys.size > 0) {
-        (spec.Audio?.Narration?.Script ?? []).forEach((line, idx) => {
-            if (!beatKeys.has(line.BeatKey)) {
+        scriptLines.forEach((line, idx) => {
+            if (line && !beatKeys.has(line.BeatKey)) {
                 errors.push({
                     Code: 'UnresolvedReferenceKey',
                     Path: `Audio.Narration.Script[${idx}].BeatKey`,
@@ -1045,11 +1148,16 @@ function validateAudioSection(
 
     const duration = spec.Film?.DurationSeconds;
     const hasValidDuration = typeof duration === 'number' && Number.isFinite(duration) && duration > 0;
-    (spec.Audio?.Cues ?? []).forEach((cue, idx) => {
+    asArray<VideoGenerationSpec['Audio']['Cues'][number]>(spec.Audio?.Cues).forEach((cue, idx) => {
+        if (!cue) {
+            return;
+        }
         if (!isMemberOf(cue.Kind, AUDIO_CUE_KINDS)) {
             pushEnumError(errors, `Audio.Cues[${idx}].Kind`, cue.Kind, AUDIO_CUE_KINDS);
         }
+        const cueTimeFinite = typeof cue.TimestampSeconds === 'number' && Number.isFinite(cue.TimestampSeconds);
         if (
+            !cueTimeFinite ||
             cue.TimestampSeconds < 0 ||
             (hasValidDuration && cue.TimestampSeconds > duration)
         ) {
@@ -1120,7 +1228,10 @@ function validateReviewSection(
     spec: VideoGenerationSpec,
     errors: VideoSpecValidationError[],
 ): void {
-    (spec.Review?.Gates ?? []).forEach((gate, idx) => {
+    asArray<VideoGenerationSpec['Review']['Gates'][number]>(spec.Review?.Gates).forEach((gate, idx) => {
+        if (!gate) {
+            return;
+        }
         if (!isMemberOf(gate.Gate, VIDEO_GATE_IDS)) {
             pushEnumError(errors, `Review.Gates[${idx}].Gate`, gate.Gate, VIDEO_GATE_IDS);
         }
@@ -1129,18 +1240,23 @@ function validateReviewSection(
         }
     });
 
-    (spec.Review?.Rounds ?? []).forEach((round, rIdx) => {
-        (round.Defects ?? []).forEach((defect, dIdx) => {
-            if (defect.Format !== undefined && !isMemberOf(defect.Format, VIDEO_FORMATS)) {
-                pushEnumError(errors, `Review.Rounds[${rIdx}].Defects[${dIdx}].Format`, defect.Format, VIDEO_FORMATS);
-            }
-            if (!isMemberOf(defect.Severity, DEFECT_SEVERITIES)) {
-                pushEnumError(errors, `Review.Rounds[${rIdx}].Defects[${dIdx}].Severity`, defect.Severity, DEFECT_SEVERITIES);
-            }
-            if (!isMemberOf(defect.Status, DEFECT_STATUSES)) {
-                pushEnumError(errors, `Review.Rounds[${rIdx}].Defects[${dIdx}].Status`, defect.Status, DEFECT_STATUSES);
-            }
-        });
+    asArray<VideoGenerationSpec['Review']['Rounds'][number]>(spec.Review?.Rounds).forEach((round, rIdx) => {
+        asArray<VideoGenerationSpec['Review']['Rounds'][number]['Defects'][number]>(round?.Defects).forEach(
+            (defect, dIdx) => {
+                if (!defect) {
+                    return;
+                }
+                if (defect.Format !== undefined && !isMemberOf(defect.Format, VIDEO_FORMATS)) {
+                    pushEnumError(errors, `Review.Rounds[${rIdx}].Defects[${dIdx}].Format`, defect.Format, VIDEO_FORMATS);
+                }
+                if (!isMemberOf(defect.Severity, DEFECT_SEVERITIES)) {
+                    pushEnumError(errors, `Review.Rounds[${rIdx}].Defects[${dIdx}].Severity`, defect.Severity, DEFECT_SEVERITIES);
+                }
+                if (!isMemberOf(defect.Status, DEFECT_STATUSES)) {
+                    pushEnumError(errors, `Review.Rounds[${rIdx}].Defects[${dIdx}].Status`, defect.Status, DEFECT_STATUSES);
+                }
+            },
+        );
     });
 }
 
@@ -1163,7 +1279,7 @@ function validateOutputSection(
     }
 
     if (requiresOutput) {
-        const deliverableFormats = (spec.Deliverables?.Formats ?? []).filter((f): f is VideoFormat =>
+        const deliverableFormats = asArray<VideoFormat>(spec.Deliverables?.Formats).filter((f): f is VideoFormat =>
             isMemberOf(f, VIDEO_FORMATS),
         );
         for (const fmt of deliverableFormats) {
@@ -1197,3 +1313,4 @@ function validateOutputSection(
         }
     }
 }
+

@@ -243,7 +243,7 @@ function makeStoryboardedSpec(): VideoGenerationSpec {
             EntryState: 'Dark slate canvas with brand mark in top-left corner',
             ExitState: 'Headline $14.2M locked at center with Q3 subtitle',
             Purpose: 'Anchor the viewer on the headline Q3 revenue number',
-            OnScreenText: ['Q3 2026 Revenue', '$14.2M'],
+            OnScreenText: ['Q3 2026 Revenue', '{q3-rev}'],
             NarrationKey: 'nar-1',
             AssetRefs: ['brand-logo'],
             DataRefs: ['q3-rev'],
@@ -480,12 +480,17 @@ describe('IsNumericLiteralToken and ExtractNumericLiteralTokens', () => {
         expect(IsNumericLiteralToken(token)).toBe(expected);
     });
 
-    it('extracts only quantitative tokens from mixed on-screen text', () => {
+    it('extracts quantitative tokens from mixed on-screen text and numbers glued to text', () => {
         expect(
             ExtractNumericLiteralTokens(
                 'Q3 2026 Revenue grew 12% to $1.2M with 3,400 users (churn −4.5) #1 24/7',
             ),
         ).toEqual(['12%', '$1.2M', '3,400', '−4.5']);
+        expect(ExtractNumericLiteralTokens('28%YoY')).toEqual(['28%']);
+        expect(ExtractNumericLiteralTokens('$14.2M/qtr')).toEqual(['$14.2M']);
+        expect(ExtractNumericLiteralTokens('up28%')).toEqual(['28%']);
+        expect(ExtractNumericLiteralTokens('1.2M→3.4M')).toEqual(['1.2M', '3.4M']);
+        expect(ExtractNumericLiteralTokens('Q3/2026 24/7 #1 1st v1.2 2026-10-15')).toEqual([]);
         expect(ExtractNumericLiteralTokens('')).toEqual([]);
         expect(ExtractNumericLiteralTokens('   ')).toEqual([]);
     });
@@ -654,6 +659,11 @@ describe('One fixture per VideoSpecErrorCode (each proving that code and ONLY th
             delete spec.Beats[0].LayoutNotes['16:9'];
             return { spec, expectedPath: 'Beats[0].LayoutNotes.16:9' };
         })(),
+        UnknownOnScreenPlaceholder: (() => {
+            const spec = makeStoryboardedSpec();
+            spec.Beats[0].OnScreenText = ['Revenue {unknown-binding}'];
+            return { spec, expectedPath: 'Beats[0].OnScreenText[0]' };
+        })(),
         UnboundNumericOnScreenText: (() => {
             const spec = makeStoryboardedSpec();
             spec.Beats[1].OnScreenText = ['Revenue jumped 12%'];
@@ -733,6 +743,19 @@ describe('One fixture per VideoSpecErrorCode (each proving that code and ONLY th
             ];
             return { spec, expectedPath: 'Assets.Generate[0].Purpose' };
         })(),
+        MissingGenerationDuration: (() => {
+            const spec = makeBriefingSpec();
+            spec.Assets.Generate = [
+                {
+                    Key: 'gen-video-no-dur',
+                    Kind: 'Video',
+                    Purpose: 'Ambient loop',
+                    Prompt: 'Slow particles',
+                    ReferenceKeys: [],
+                },
+            ];
+            return { spec, expectedPath: 'Assets.Generate[0].DurationSeconds' };
+        })(),
         GenerationDurationExceedsLimit: (() => {
             const spec = makeBriefingSpec();
             spec.Assets.Generate = [
@@ -807,7 +830,7 @@ describe('One fixture per VideoSpecErrorCode (each proving that code and ONLY th
     );
 });
 
-describe('Cross-references and multi-error collection', () => {
+describe('Cross-references, review round 1 regressions, and multi-error collection', () => {
     it('reports all five errors when a spec has five unrelated problems', () => {
         const spec = makeStoryboardedSpec();
         // 1. InvalidSpecVersion
@@ -831,6 +854,57 @@ describe('Cross-references and multi-error collection', () => {
             'UnboundNumericOnScreenText',
             'AudioCueOutsideTimeline',
         ]);
+    });
+
+    it('rejects invented numeric literals even when the beat has a bound DataRef placeholder', () => {
+        const spec = makeStoryboardedSpec();
+        spec.Beats[0].OnScreenText = ['Revenue {q3-rev}, churn down 3%, 4,000 new members'];
+        spec.Beats[0].DataRefs = ['q3-rev'];
+
+        const result = ValidateVideoGenerationSpec(spec);
+        expect(result.Valid).toBe(false);
+        expect(result.Errors.map((e) => e.Code)).toEqual(['UnboundNumericOnScreenText']);
+        expect(result.Errors[0].Path).toBe('Beats[0].OnScreenText[0]');
+        expect(result.Errors[0].Message).toContain('3%');
+        expect(result.Errors[0].Message).toContain('4,000');
+    });
+
+    it.each(VIDEO_PRODUCTION_STATUSES)(
+        'never throws on empty {} or partial beat objects at stage %s',
+        (stage) => {
+            expect(() => ValidateVideoGenerationSpec({} as VideoGenerationSpec, stage)).not.toThrow();
+            const emptyResult = ValidateVideoGenerationSpec({} as VideoGenerationSpec, stage);
+            expect(emptyResult.Valid).toBe(false);
+            expect(emptyResult.Errors.length).toBeGreaterThan(0);
+
+            const partialBeatSpec = {
+                ...makeBriefingSpec(),
+                Beats: [{ Key: 'beat-partial' } as unknown as VideoGenerationSpec['Beats'][number]],
+                Assets: {
+                    Approved: [],
+                    Required: [],
+                    Generate: [{ Key: 'gen-partial', Kind: 'Image', Purpose: 'P', Prompt: 'Pr' } as unknown as VideoGenerationSpec['Assets']['Generate'][number]],
+                    NeverInvent: [],
+                },
+            };
+            expect(() => ValidateVideoGenerationSpec(partialBeatSpec, stage)).not.toThrow();
+            const partialResult = ValidateVideoGenerationSpec(partialBeatSpec, stage);
+            expect(partialResult.Valid).toBe(false);
+            expect(partialResult.Errors.some((e) => e.Code === 'InvalidBeatTiming')).toBe(true);
+        },
+    );
+
+    it('reports InvalidBeatTiming on non-finite beat StartSeconds/EndSeconds and AudioCueOutsideTimeline on non-finite cue timestamps', () => {
+        const spec = makeStoryboardedSpec();
+        (spec.Beats[0] as { StartSeconds: unknown }).StartSeconds = undefined;
+        (spec.Beats[1] as { EndSeconds: unknown }).EndSeconds = Number.NaN;
+        (spec.Audio.Cues[0] as { TimestampSeconds: unknown }).TimestampSeconds = undefined;
+
+        const result = ValidateVideoGenerationSpec(spec);
+        const codePaths = result.Errors.map((e) => `${e.Code}@${e.Path}`);
+        expect(codePaths).toContain('InvalidBeatTiming@Beats[0].StartSeconds');
+        expect(codePaths).toContain('InvalidBeatTiming@Beats[1].EndSeconds');
+        expect(codePaths).toContain('AudioCueOutsideTimeline@Audio.Cues[0].TimestampSeconds');
     });
 
     it('checks every cross-reference key across Required, Generate, Typography, Beats, and Audio', () => {
@@ -862,6 +936,7 @@ describe('Cross-references and multi-error collection', () => {
         spec.Style.Typography[0].FontAssetKey = 'missing-font-key';
         spec.Beats[0].AssetRefs = ['missing-beat-asset'];
         spec.Beats[0].DataRefs = ['missing-data-binding'];
+        spec.Beats[0].OnScreenText = ['{missing-data-binding}'];
         spec.Beats[0].NarrationKey = 'missing-narration-key';
         spec.Audio.Narration!.Script[0].BeatKey = 'missing-beat-key';
         spec.Audio.Music!.AssetKey = 'missing-music-key';
@@ -1022,3 +1097,4 @@ describe('Cross-references and multi-error collection', () => {
         expect(paths2).toContain('MissingOutputManifest@Output.Videos.9:16');
     });
 });
+

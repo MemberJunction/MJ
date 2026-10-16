@@ -174,7 +174,7 @@ interface VideoBeat {
     EntryState: string;  // Visual or UI state at the start of the beat.
     ExitState: string;  // Visual or UI state reached by the end of the beat.
     Purpose: string;  // Why this shot exists and what change in viewer understanding it achieves.
-    OnScreenText: string[];  // Exact strings displayed on screen during this beat (numeric tokens must map to `DataRefs`).
+    OnScreenText: string[];  // Exact strings displayed on screen during this beat. Bound values must appear as `{BindingKey}`
     DataRefs: string[];  // Keys in `DataBindings` whose values are rendered during this beat.
     AssetRefs: string[];  // Keys in `Assets.Approved` displayed or heard during this beat.
     NarrationKey?: string;  // Optional key linking this beat to its `NarrationLine` in `Audio.Narration.Script`.

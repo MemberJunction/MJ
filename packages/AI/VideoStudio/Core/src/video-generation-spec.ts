@@ -12,6 +12,11 @@
 // ---------------------------------------------------------------------------
 
 /**
+ * Canonical schema version for `VideoGenerationSpec` documents.
+ */
+export const VIDEO_STUDIO_SPEC_VERSION = '1.0' as const;
+
+/**
  * Lifecycle stage of a Video Studio production from initial briefing through final delivery.
  */
 export type VideoProductionStatus =
@@ -347,7 +352,10 @@ export interface VideoBeat {
     ExitState: string;
     /** Why this shot exists and what change in viewer understanding it achieves. */
     Purpose: string;
-    /** Exact strings displayed on screen during this beat (numeric tokens must map to `DataRefs`). */
+    /**
+     * Exact strings displayed on screen during this beat. Bound values must appear as `{BindingKey}`
+     * placeholders referencing keys in `DataRefs`; any remaining numeric literal is rejected as unbound.
+     */
     OnScreenText: string[];
     /** Keys in `DataBindings` whose values are rendered during this beat. */
     DataRefs: string[];
