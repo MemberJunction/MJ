@@ -952,13 +952,43 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
 
       if (usersNeedingRole.length > 0) {
         const tg = await this.metadata.CreateTransactionGroup();
+        // Each Save() only ENROLS the row in the group — the write is deferred to Submit(). Inside
+        // a TransactionGroup, Save() therefore reports ENROLMENT, not the write's outcome: the
+        // provider queues the item locally and returns true with no round trip
+        // (`GraphQLDataProvider.Save` — "part of a TG always return true").
+        //
+        // So the role-elevation guard is NOT what this check catches. `MJUserRoleEntityServer`
+        // (issue #4282) lives in `@memberjunction/core-entities-server`, which no browser package
+        // depends on, so it never registers here — it refuses on the server, during Submit().
+        //
+        // And today that refusal reaches the user NOWHERE. `ExecuteTransactionGroup` discards the
+        // refused row's `Save()` return, so the row never enrols in the SERVER's group either; an
+        // all-refused batch submits an empty group, whose `Submit()` returns true for having
+        // nothing to do, and the screen closes with no message at all. Verified end to end against
+        // a live server: a non-Owner assigning a role they do not hold is correctly refused (no row
+        // is written) and is reported as success. Tracked as issue #4309 — fixing it belongs in the
+        // resolver, which is the only layer that still knows which row was refused and why.
+        //
+        // What this check DOES catch is a CLIENT-side refusal — a CheckPermissions denial or a
+        // field-rule failure — which really does return false here, leaving that row unenrolled.
+        // Ignoring the return meant an all-refused batch left the group EMPTY, and an empty group's
+        // Submit() returns true for having nothing to do, so the screen reported success having
+        // assigned nothing. That is the failure this guards; keep it.
+        const refusals: string[] = [];
         for (const userId of usersNeedingRole) {
           const userRole = await this.metadata.GetEntityObject<MJUserRoleEntity>('MJ: User Roles');
           userRole.NewRecord();
           userRole.UserID = userId;
           userRole.RoleID = this.bulkRoleId;
           userRole.TransactionGroup = tg;
-          await userRole.Save();
+          if (!await userRole.Save()) {
+            refusals.push(`${this.describeUser(userId)}: ${userRole.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+          }
+        }
+        if (refusals.length > 0) {
+          // Nothing was written: the refused rows never enrolled, and the rest are still only
+          // queued because Submit() is not reached.
+          throw new Error(`Failed to assign roles — nothing was changed.\n${refusals.join('\n')}`);
         }
 
         if (!await tg.Submit()) {
@@ -1042,5 +1072,14 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
   public getUserRoles(userId: string): MJRoleEntity[] {
     const roleIds = this.userRoleMap.get(userId) || [];
     return this.roles.filter(role => roleIds.some(id => UUIDsEqual(id, role.ID)));
+  }
+
+  /**
+   * Names a user for an error message. Falls back to the raw ID rather than to a placeholder so a
+   * refusal for a user who has dropped out of the loaded page is still traceable.
+   */
+  private describeUser(userId: string): string {
+    const user = this.users.find(u => UUIDsEqual(u.ID, userId));
+    return user?.Email ?? user?.Name ?? userId;
   }
 }
