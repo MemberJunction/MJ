@@ -124,6 +124,8 @@ export interface SearchClientResultItem {
     ID: string;
     /** The entity name this result belongs to */
     EntityName: string;
+    /** Human-readable display name for the entity (e.g., "People" instead of "MJ_BizApps_Common: People") */
+    EntityDisplayName?: string;
     /** The primary key of the matched record */
     RecordID: string;
     /** The source type that produced this result (e.g., 'Vector', 'FullText', 'Entity', 'Storage') */
@@ -199,6 +201,7 @@ interface SourceCountsResponse {
 interface SearchResultItemResponse {
     ID: string;
     EntityName: string;
+    EntityDisplayName?: string;
     RecordID: string;
     SourceType: string;
     ResultType: string;
@@ -396,6 +399,7 @@ export class GraphQLSearchClient {
                     Results {
                         ID
                         EntityName
+                        EntityDisplayName
                         RecordID
                         SourceType
                         ResultType
@@ -453,6 +457,7 @@ export class GraphQLSearchClient {
                     Results {
                         ID
                         EntityName
+                        EntityDisplayName
                         RecordID
                         SourceType
                         ResultType
@@ -647,7 +652,7 @@ export class GraphQLSearchClient {
                                 Phase
                                 ProviderName
                                 DurationMs
-                                Results { ID EntityName RecordID SourceType Title Snippet Score Tags MatchedAt ProviderId ProviderLabel ProviderIcon }
+                                Results { ID EntityName EntityDisplayName RecordID SourceType Title Snippet Score Tags MatchedAt ProviderId ProviderLabel ProviderIcon }
                                 SourceCounts { Vector FullText Entity Storage }
                                 ElapsedMs
                                 ErrorMessage
@@ -788,6 +793,7 @@ export class GraphQLSearchClient {
         return {
             ID: item.ID,
             EntityName: item.EntityName,
+            EntityDisplayName: item.EntityDisplayName,
             RecordID: item.RecordID,
             SourceType: item.SourceType,
             ResultType: item.ResultType,
