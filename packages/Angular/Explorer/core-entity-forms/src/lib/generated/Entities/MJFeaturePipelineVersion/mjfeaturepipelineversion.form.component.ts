@@ -15,9 +15,11 @@ export class MJFeaturePipelineVersionFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'pipelineConfiguration', sectionName: 'Pipeline Configuration', isExpanded: true },
-            { sectionKey: 'lifecycleAndStatus', sectionName: 'Lifecycle and Status', isExpanded: true },
-            { sectionKey: 'evaluationAndMetrics', sectionName: 'Evaluation and Metrics', isExpanded: true },
+            { sectionKey: 'versionConfiguration', sectionName: 'Version Configuration', isExpanded: true },
+            { sectionKey: 'promptAndModel', sectionName: 'Prompt and Model', isExpanded: true },
+            { sectionKey: 'statusAndGovernance', sectionName: 'Status and Governance', isExpanded: true },
+            { sectionKey: 'evaluationAndResults', sectionName: 'Evaluation and Results', isExpanded: true },
+            { sectionKey: 'timelineAndStewardship', sectionName: 'Timeline and Stewardship', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

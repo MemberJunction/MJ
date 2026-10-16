@@ -10,10 +10,10 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Pipeline Configuration Section -->
+    <!-- Version Configuration Section -->
     <mj-collapsible-panel
-        SectionKey="pipelineConfiguration"
-        SectionName="Pipeline Configuration"
+        SectionKey="versionConfiguration"
+        SectionName="Version Configuration"
         Icon="fa fa-sliders-h"
         [Form]="this"
         [FormContext]="formContext">
@@ -41,6 +41,16 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Prompt and Model Section -->
+    <mj-collapsible-panel
+        SectionKey="promptAndModel"
+        SectionName="Prompt and Model"
+        Icon="fa fa-robot"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
@@ -78,10 +88,10 @@
 
     </mj-collapsible-panel>
 
-    <!-- Lifecycle and Status Section -->
+    <!-- Status and Governance Section -->
     <mj-collapsible-panel
-        SectionKey="lifecycleAndStatus"
-        SectionName="Lifecycle and Status"
+        SectionKey="statusAndGovernance"
+        SectionName="Status and Governance"
         Icon="fa fa-flag"
         [Form]="this"
         [FormContext]="formContext">
@@ -101,46 +111,13 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ActivatedAt"
-            Type="datepicker"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ApprovedByUserID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-            LinkType="Record"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="RetiredAt"
-            Type="datepicker"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="BackfilledAt"
-            Type="datepicker"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
 
     </mj-collapsible-panel>
 
-    <!-- Evaluation and Metrics Section -->
+    <!-- Evaluation and Results Section -->
     <mj-collapsible-panel
-        SectionKey="evaluationAndMetrics"
-        SectionName="Evaluation and Metrics"
+        SectionKey="evaluationAndResults"
+        SectionName="Evaluation and Results"
         Icon="fa fa-chart-line"
         [Form]="this"
         [FormContext]="formContext">
@@ -215,6 +192,49 @@
             [ShowLabel]="true"
             FieldName="ResultDetails"
             Type="textarea"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Timeline and Stewardship Section -->
+    <mj-collapsible-panel
+        SectionKey="timelineAndStewardship"
+        SectionName="Timeline and Stewardship"
+        Icon="fa fa-history"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="ActivatedAt"
+            Type="datepicker"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="ApprovedByUserID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="RetiredAt"
+            Type="datepicker"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="BackfilledAt"
+            Type="datepicker"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>

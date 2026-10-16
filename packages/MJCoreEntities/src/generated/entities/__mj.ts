@@ -21162,7 +21162,7 @@ export const MJFeaturePipelineVersionSchema = z.object({
         * * Description: SHA-256 of the output-affecting parts of the DataFeatureSpec (Context, Outputs, PipelineType, Escalation, PromptID, ProcessorExtensionKey) and the OutputMapping.`),
     PromptID: z.string().nullable().describe(`
         * * Field Name: PromptID
-        * * Display Name: Prompt ID
+        * * Display Name: Prompt
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
         * * Description: The pipeline prompt this version runs.`),
@@ -21202,13 +21202,13 @@ export const MJFeaturePipelineVersionSchema = z.object({
         * * Description: True when the pipeline declares DataFeatureSpec.Activation: the version can become Active only through a stored golden-set result at or above Threshold.`),
     GoldenSetTestID: z.string().nullable().describe(`
         * * Field Name: GoldenSetTestID
-        * * Display Name: Golden Set Test ID
+        * * Display Name: Golden Set Test
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Tests (vwTests.ID)
         * * Description: The MJ: Tests row holding the golden set this version was evaluated on.`),
     GoldenSetTestRunID: z.string().nullable().describe(`
         * * Field Name: GoldenSetTestRunID
-        * * Display Name: Golden Set Test Run ID
+        * * Display Name: Golden Set Test Run
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Test Runs (vwTestRuns.ID)
         * * Description: The MJ: Test Runs row of the evaluation whose result is stored here.`),
@@ -21242,7 +21242,7 @@ export const MJFeaturePipelineVersionSchema = z.object({
         * * Description: Upper bound of the 95% Wilson interval of ResultValue.`),
     ResultN: z.number().nullable().describe(`
         * * Field Name: ResultN
-        * * Display Name: Result Sample Size
+        * * Display Name: Result Sample Size (N)
         * * SQL Data Type: int
         * * Description: Number of golden cases scored.`),
     ResultDetails: z.string().nullable().describe(`
@@ -21257,7 +21257,7 @@ export const MJFeaturePipelineVersionSchema = z.object({
         * * Description: When the version became Active.`),
     ApprovedByUserID: z.string().nullable().describe(`
         * * Field Name: ApprovedByUserID
-        * * Display Name: Approved By User ID
+        * * Display Name: Approved By User
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
         * * Description: The user whose run activated the version (for an unattended activation, the Feature Pipeline Version Steward job's user).`),
@@ -21287,23 +21287,23 @@ export const MJFeaturePipelineVersionSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
     Prompt: z.string().nullable().describe(`
         * * Field Name: Prompt
-        * * Display Name: Prompt
+        * * Display Name: Prompt Text
         * * SQL Data Type: nvarchar(255)`),
     AIModel: z.string().nullable().describe(`
         * * Field Name: AIModel
-        * * Display Name: AI Model
+        * * Display Name: AI Model Name
         * * SQL Data Type: nvarchar(50)`),
     GoldenSetTest: z.string().nullable().describe(`
         * * Field Name: GoldenSetTest
-        * * Display Name: Golden Set Test
+        * * Display Name: Golden Set Test Name
         * * SQL Data Type: nvarchar(255)`),
     GoldenSetTestRun: z.string().nullable().describe(`
         * * Field Name: GoldenSetTestRun
-        * * Display Name: Golden Set Test Run
+        * * Display Name: Golden Set Test Run Name
         * * SQL Data Type: nvarchar(255)`),
     ApprovedByUser: z.string().nullable().describe(`
         * * Field Name: ApprovedByUser
-        * * Display Name: Approved By User
+        * * Display Name: Approved By User Name
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -21418,11 +21418,11 @@ export const MJFeatureValueCacheSchema = z.object({
         * * Description: SHA-256 of the prompt's inference parameters when this result was computed. Part of the cache key.`),
     RecordProcess: z.string().nullable().describe(`
         * * Field Name: RecordProcess
-        * * Display Name: Record Process
+        * * Display Name: Record Process Name
         * * SQL Data Type: nvarchar(255)`),
     Prompt: z.string().describe(`
         * * Field Name: Prompt
-        * * Display Name: Prompt
+        * * Display Name: Prompt Name
         * * SQL Data Type: nvarchar(255)`),
     AIModel: z.string().nullable().describe(`
         * * Field Name: AIModel
@@ -21614,7 +21614,7 @@ export const MJFeatureValueSchema = z.object({
         * * SQL Data Type: nvarchar(500)`),
     AIModel: z.string().nullable().describe(`
         * * Field Name: AIModel
-        * * Display Name: AI Model
+        * * Display Name: AI Model Details
         * * SQL Data Type: nvarchar(50)`),
 });
 
@@ -98997,7 +98997,7 @@ export class MJFeaturePipelineVersionEntity extends BaseEntity<MJFeaturePipeline
 
     /**
     * * Field Name: PromptID
-    * * Display Name: Prompt ID
+    * * Display Name: Prompt
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
     * * Description: The pipeline prompt this version runs.
@@ -99085,7 +99085,7 @@ export class MJFeaturePipelineVersionEntity extends BaseEntity<MJFeaturePipeline
 
     /**
     * * Field Name: GoldenSetTestID
-    * * Display Name: Golden Set Test ID
+    * * Display Name: Golden Set Test
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Tests (vwTests.ID)
     * * Description: The MJ: Tests row holding the golden set this version was evaluated on.
@@ -99099,7 +99099,7 @@ export class MJFeaturePipelineVersionEntity extends BaseEntity<MJFeaturePipeline
 
     /**
     * * Field Name: GoldenSetTestRunID
-    * * Display Name: Golden Set Test Run ID
+    * * Display Name: Golden Set Test Run
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Test Runs (vwTestRuns.ID)
     * * Description: The MJ: Test Runs row of the evaluation whose result is stored here.
@@ -99181,7 +99181,7 @@ export class MJFeaturePipelineVersionEntity extends BaseEntity<MJFeaturePipeline
 
     /**
     * * Field Name: ResultN
-    * * Display Name: Result Sample Size
+    * * Display Name: Result Sample Size (N)
     * * SQL Data Type: int
     * * Description: Number of golden cases scored.
     */
@@ -99220,7 +99220,7 @@ export class MJFeaturePipelineVersionEntity extends BaseEntity<MJFeaturePipeline
 
     /**
     * * Field Name: ApprovedByUserID
-    * * Display Name: Approved By User ID
+    * * Display Name: Approved By User
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
     * * Description: The user whose run activated the version (for an unattended activation, the Feature Pipeline Version Steward job's user).
@@ -99289,7 +99289,7 @@ export class MJFeaturePipelineVersionEntity extends BaseEntity<MJFeaturePipeline
 
     /**
     * * Field Name: Prompt
-    * * Display Name: Prompt
+    * * Display Name: Prompt Text
     * * SQL Data Type: nvarchar(255)
     */
     get Prompt(): string | null {
@@ -99298,7 +99298,7 @@ export class MJFeaturePipelineVersionEntity extends BaseEntity<MJFeaturePipeline
 
     /**
     * * Field Name: AIModel
-    * * Display Name: AI Model
+    * * Display Name: AI Model Name
     * * SQL Data Type: nvarchar(50)
     */
     get AIModel(): string | null {
@@ -99307,7 +99307,7 @@ export class MJFeaturePipelineVersionEntity extends BaseEntity<MJFeaturePipeline
 
     /**
     * * Field Name: GoldenSetTest
-    * * Display Name: Golden Set Test
+    * * Display Name: Golden Set Test Name
     * * SQL Data Type: nvarchar(255)
     */
     get GoldenSetTest(): string | null {
@@ -99316,7 +99316,7 @@ export class MJFeaturePipelineVersionEntity extends BaseEntity<MJFeaturePipeline
 
     /**
     * * Field Name: GoldenSetTestRun
-    * * Display Name: Golden Set Test Run
+    * * Display Name: Golden Set Test Run Name
     * * SQL Data Type: nvarchar(255)
     */
     get GoldenSetTestRun(): string | null {
@@ -99325,7 +99325,7 @@ export class MJFeaturePipelineVersionEntity extends BaseEntity<MJFeaturePipeline
 
     /**
     * * Field Name: ApprovedByUser
-    * * Display Name: Approved By User
+    * * Display Name: Approved By User Name
     * * SQL Data Type: nvarchar(100)
     */
     get ApprovedByUser(): string | null {
@@ -99615,7 +99615,7 @@ export class MJFeatureValueCacheEntity extends BaseEntity<MJFeatureValueCacheEnt
 
     /**
     * * Field Name: RecordProcess
-    * * Display Name: Record Process
+    * * Display Name: Record Process Name
     * * SQL Data Type: nvarchar(255)
     */
     get RecordProcess(): string | null {
@@ -99624,7 +99624,7 @@ export class MJFeatureValueCacheEntity extends BaseEntity<MJFeatureValueCacheEnt
 
     /**
     * * Field Name: Prompt
-    * * Display Name: Prompt
+    * * Display Name: Prompt Name
     * * SQL Data Type: nvarchar(255)
     */
     get Prompt(): string {
@@ -100093,7 +100093,7 @@ export class MJFeatureValueEntity extends BaseEntity<MJFeatureValueEntityType> {
 
     /**
     * * Field Name: AIModel
-    * * Display Name: AI Model
+    * * Display Name: AI Model Details
     * * SQL Data Type: nvarchar(50)
     */
     get AIModel(): string | null {
