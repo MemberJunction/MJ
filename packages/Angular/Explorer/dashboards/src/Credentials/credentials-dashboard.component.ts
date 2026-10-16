@@ -7,11 +7,11 @@ import { SharedService } from '@memberjunction/ng-shared';
 import { ResourceData } from '@memberjunction/core-entities';
 import { RunView } from '@memberjunction/core';
 import {
-    buildCredentialsAgentContext,
-    isValidCredentialsTab,
+    BuildCredentialsAgentContext,
+    IsValidCredentialsTab,
     VALID_CREDENTIALS_TABS,
 } from './credentials-agent-context';
-import { validateEnumParam, validateStringParam, AgentToolResult } from '../shared/agent-tool-validation';
+import { ValidateEnumParam, ValidateStringParam, AgentToolResult } from '../shared/agent-tool-validation';
 
 interface CredentialsDashboardState {
     activeTab: string;
@@ -27,33 +27,123 @@ interface CredentialsDashboardState {
 @RegisterClass(BaseDashboard, 'CredentialsDashboard')
 export class CredentialsDashboardComponent extends BaseDashboard implements AfterViewInit, OnDestroy {
     public isLoading = false;
-    public activeTab = 'overview';
-    public selectedIndex = 0;
+    public ActiveTab = 'overview';
+
+    /** @deprecated Use {@link ActiveTab}. */
+    public get activeTab() {
+      return this.ActiveTab;
+    }
+    /** @deprecated Use {@link ActiveTab}. */
+    public set activeTab(value) {
+      this.ActiveTab = value;
+    }
+    public SelectedIndex = 0;
+
+    /** @deprecated Use {@link SelectedIndex}. */
+    public get selectedIndex() {
+      return this.SelectedIndex;
+    }
+    /** @deprecated Use {@link SelectedIndex}. */
+    public set selectedIndex(value) {
+      this.SelectedIndex = value;
+    }
 
     // Counts for badges
-    public credentialCount = 0;
-    public typeCount = 0;
-    public categoryCount = 0;
-    public expiringSoonCount = 0;
+    public CredentialCount = 0;
+
+    /** @deprecated Use {@link CredentialCount}. */
+    public get credentialCount() {
+      return this.CredentialCount;
+    }
+    /** @deprecated Use {@link CredentialCount}. */
+    public set credentialCount(value) {
+      this.CredentialCount = value;
+    }
+    public TypeCount = 0;
+
+    /** @deprecated Use {@link TypeCount}. */
+    public get typeCount() {
+      return this.TypeCount;
+    }
+    /** @deprecated Use {@link TypeCount}. */
+    public set typeCount(value) {
+      this.TypeCount = value;
+    }
+    public CategoryCount = 0;
+
+    /** @deprecated Use {@link CategoryCount}. */
+    public get categoryCount() {
+      return this.CategoryCount;
+    }
+    /** @deprecated Use {@link CategoryCount}. */
+    public set categoryCount(value) {
+      this.CategoryCount = value;
+    }
+    public ExpiringSoonCount = 0;
+
+    /** @deprecated Use {@link ExpiringSoonCount}. */
+    public get expiringSoonCount() {
+      return this.ExpiringSoonCount;
+    }
+    /** @deprecated Use {@link ExpiringSoonCount}. */
+    public set expiringSoonCount(value) {
+      this.ExpiringSoonCount = value;
+    }
 
     // Bounded definition names (non-sensitive: schema/organizational definitions,
     // NOT individual credential records or secret values).
-    public typeNames: string[] = [];
-    public categoryNames: string[] = [];
+    public TypeNames: string[] = [];
+
+    /** @deprecated Use {@link TypeNames}. */
+    public get typeNames(): string[] {
+      return this.TypeNames;
+    }
+    /** @deprecated Use {@link TypeNames}. */
+    public set typeNames(value: string[]) {
+      this.TypeNames = value;
+    }
+    public CategoryNames: string[] = [];
+
+    /** @deprecated Use {@link CategoryNames}. */
+    public get categoryNames(): string[] {
+      return this.CategoryNames;
+    }
+    /** @deprecated Use {@link CategoryNames}. */
+    public set categoryNames(value: string[]) {
+      this.CategoryNames = value;
+    }
 
     // Track visited tabs for lazy loading
     private visitedTabs = new Set<string>();
 
     // Navigation items
-    public navigationItems: string[] = ['overview', 'credentials', 'types', 'categories', 'audit'];
+    public NavigationItems: string[] = ['overview', 'credentials', 'types', 'categories', 'audit'];
 
-    public tabLabels: Record<string, string> = {
+    /** @deprecated Use {@link NavigationItems}. */
+    public get navigationItems(): string[] {
+      return this.NavigationItems;
+    }
+    /** @deprecated Use {@link NavigationItems}. */
+    public set navigationItems(value: string[]) {
+      this.NavigationItems = value;
+    }
+
+    public TabLabels: Record<string, string> = {
         'overview': 'Overview',
         'credentials': 'Credentials',
         'types': 'Credential Types',
         'categories': 'Categories',
         'audit': 'Audit Trail'
     };
+
+    /** @deprecated Use {@link TabLabels}. */
+    public get tabLabels(): Record<string, string> {
+      return this.TabLabels;
+    }
+    /** @deprecated Use {@link TabLabels}. */
+    public set tabLabels(value: Record<string, string>) {
+      this.TabLabels = value;
+    }
 
     private stateChangeSubject = new Subject<CredentialsDashboardState>();
 
@@ -67,7 +157,7 @@ export class CredentialsDashboardComponent extends BaseDashboard implements Afte
     }
 
     ngAfterViewInit(): void {
-        this.visitedTabs.add(this.activeTab);
+        this.visitedTabs.add(this.ActiveTab);
         this.registerAgentClientTools();
         this.loadCounts();
         this.emitStateChange();
@@ -104,16 +194,16 @@ export class CredentialsDashboardComponent extends BaseDashboard implements Afte
      * navigation/metadata is exposed — never secret values.
      */
     private publishAgentContext(): void {
-        this.navigationService.SetAgentContext(this, buildCredentialsAgentContext({
-            ActiveTab: isValidCredentialsTab(this.activeTab) ? this.activeTab : 'overview',
-            TabLabel: this.getCurrentTabLabel(),
-            CredentialCount: this.credentialCount,
-            TypeCount: this.typeCount,
-            CategoryCount: this.categoryCount,
-            ExpiringSoonCount: this.expiringSoonCount,
+        this.navigationService.SetAgentContext(this, BuildCredentialsAgentContext({
+            ActiveTab: IsValidCredentialsTab(this.ActiveTab) ? this.ActiveTab : 'overview',
+            TabLabel: this.GetCurrentTabLabel(),
+            CredentialCount: this.CredentialCount,
+            TypeCount: this.TypeCount,
+            CategoryCount: this.CategoryCount,
+            ExpiringSoonCount: this.ExpiringSoonCount,
             IsLoading: this.isLoading,
-            TypeNames: this.typeNames,
-            CategoryNames: this.categoryNames,
+            TypeNames: this.TypeNames,
+            CategoryNames: this.CategoryNames,
         }));
     }
 
@@ -147,11 +237,11 @@ export class CredentialsDashboardComponent extends BaseDashboard implements Afte
     }
 
     private handleSwitchTabTool(params: Record<string, unknown>): AgentToolResult {
-        const v = validateEnumParam(params?.['tabId'], VALID_CREDENTIALS_TABS, 'tabId');
+        const v = ValidateEnumParam(params?.['tabId'], VALID_CREDENTIALS_TABS, 'tabId');
         if (!v.ok) {
             return v.result;
         }
-        this.onTabChange(v.value);
+        this.OnTabChange(v.value);
         return { Success: true };
     }
 
@@ -161,7 +251,7 @@ export class CredentialsDashboardComponent extends BaseDashboard implements Afte
      * tab for viewing; never reveals a credential record or secret value.
      */
     private handleFindCredentialTypeTool(params: Record<string, unknown>): AgentToolResult {
-        const v = validateStringParam(params?.['name'], 'name');
+        const v = ValidateStringParam(params?.['name'], 'name');
         if (!v.ok) {
             return v.result;
         }
@@ -169,13 +259,13 @@ export class CredentialsDashboardComponent extends BaseDashboard implements Afte
         if (!query) {
             return { Success: false, ErrorMessage: 'name must be a non-empty string.' };
         }
-        const exact = this.typeNames.find(n => n.toLowerCase() === query);
-        const match = exact ?? this.typeNames.find(n => n.toLowerCase().includes(query));
+        const exact = this.TypeNames.find(n => n.toLowerCase() === query);
+        const match = exact ?? this.TypeNames.find(n => n.toLowerCase().includes(query));
         if (!match) {
-            const available = this.typeNames.slice(0, 25).join(', ');
+            const available = this.TypeNames.slice(0, 25).join(', ');
             return { Success: false, ErrorMessage: `No credential type matches "${v.value}". Available types: ${available || '(none)'}.` };
         }
-        this.onTabChange('types');
+        this.OnTabChange('types');
         return { Success: true };
     }
 
@@ -230,20 +320,20 @@ export class CredentialsDashboardComponent extends BaseDashboard implements Afte
             ]);
 
             if (credResult.Success) {
-                this.credentialCount = credResult.RowCount;
+                this.CredentialCount = credResult.RowCount;
             }
             if (typeResult.Success) {
                 const rows = typeResult.Results as Array<{ Name?: string }>;
-                this.typeNames = rows.map(r => r.Name ?? '').filter(n => n.length > 0);
-                this.typeCount = rows.length;
+                this.TypeNames = rows.map(r => r.Name ?? '').filter(n => n.length > 0);
+                this.TypeCount = rows.length;
             }
             if (categoryResult.Success) {
                 const rows = categoryResult.Results as Array<{ Name?: string }>;
-                this.categoryNames = rows.map(r => r.Name ?? '').filter(n => n.length > 0);
-                this.categoryCount = rows.length;
+                this.CategoryNames = rows.map(r => r.Name ?? '').filter(n => n.length > 0);
+                this.CategoryCount = rows.length;
             }
             if (expiringResult.Success) {
-                this.expiringSoonCount = expiringResult.RowCount;
+                this.ExpiringSoonCount = expiringResult.RowCount;
             }
 
             this.publishAgentContext();
@@ -253,11 +343,11 @@ export class CredentialsDashboardComponent extends BaseDashboard implements Afte
         }
     }
 
-    public onTabChange(tabId: string): void {
-        this.activeTab = tabId;
-        const index = this.navigationItems.indexOf(tabId);
+    public OnTabChange(tabId: string): void {
+        this.ActiveTab = tabId;
+        const index = this.NavigationItems.indexOf(tabId);
 
-        this.selectedIndex = index >= 0 ? index : 0;
+        this.SelectedIndex = index >= 0 ? index : 0;
 
         setTimeout(() => {
             SharedService.Instance.InvokeManualResize();
@@ -269,8 +359,18 @@ export class CredentialsDashboardComponent extends BaseDashboard implements Afte
         this.cdr.markForCheck();
     }
 
-    public hasVisited(tabId: string): boolean {
+    /** @deprecated Use {@link OnTabChange}. */
+    public onTabChange(tabId: string): void {
+      return this.OnTabChange(tabId);
+    }
+
+    public HasVisited(tabId: string): boolean {
         return this.visitedTabs.has(tabId);
+    }
+
+    /** @deprecated Use {@link HasVisited}. */
+    public hasVisited(tabId: string): boolean {
+      return this.HasVisited(tabId);
     }
 
     private setupStateManagement(): void {
@@ -283,21 +383,26 @@ export class CredentialsDashboardComponent extends BaseDashboard implements Afte
 
     private emitStateChange(): void {
         const state: CredentialsDashboardState = {
-            activeTab: this.activeTab
+            activeTab: this.ActiveTab
         };
 
         this.stateChangeSubject.next(state);
     }
 
-    public loadUserState(state: Partial<CredentialsDashboardState>): void {
+    public LoadUserState(state: Partial<CredentialsDashboardState>): void {
         if (state.activeTab) {
-            this.activeTab = state.activeTab;
-            const index = this.navigationItems.indexOf(state.activeTab);
-            this.selectedIndex = index >= 0 ? index : 0;
+            this.ActiveTab = state.activeTab;
+            const index = this.NavigationItems.indexOf(state.activeTab);
+            this.SelectedIndex = index >= 0 ? index : 0;
             this.visitedTabs.add(state.activeTab);
         }
 
         this.cdr.markForCheck();
+    }
+
+    /** @deprecated Use {@link LoadUserState}. */
+    public loadUserState(state: Partial<CredentialsDashboardState>): void {
+      return this.LoadUserState(state);
     }
 
     initDashboard(): void {
@@ -315,7 +420,7 @@ export class CredentialsDashboardComponent extends BaseDashboard implements Afte
         if (this.Config?.userState) {
             setTimeout(() => {
                 if (this.Config?.userState) {
-                    this.loadUserState(this.Config.userState);
+                    this.LoadUserState(this.Config.userState);
                 }
             }, 0);
         }
@@ -323,7 +428,12 @@ export class CredentialsDashboardComponent extends BaseDashboard implements Afte
         this.NotifyLoadComplete();
     }
 
+    public GetCurrentTabLabel(): string {
+        return this.TabLabels[this.ActiveTab] || 'Credential Management';
+    }
+
+    /** @deprecated Use {@link GetCurrentTabLabel}. */
     public getCurrentTabLabel(): string {
-        return this.tabLabels[this.activeTab] || 'Credential Management';
+      return this.GetCurrentTabLabel();
     }
 }

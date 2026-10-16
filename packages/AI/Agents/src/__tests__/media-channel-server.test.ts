@@ -14,7 +14,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // Mock the media library so we can assert exactly what override the channel resolves and passes.
 const buildNoteMock = vi.fn();
 vi.mock('../realtime/agent-media-library', () => ({
-    buildAgentMediaContextNote: (...args: unknown[]) => buildNoteMock(...args),
+    BuildAgentMediaContextNote: (...args: unknown[]) => buildNoteMock(...args),
+    get buildAgentMediaContextNote() { return this.BuildAgentMediaContextNote; },
 }));
 
 import { BaseRealtimeChannelServer } from '@memberjunction/ai';

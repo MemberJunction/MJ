@@ -77,6 +77,10 @@ Thumbs.db
 
 # Large media files
 *.mp4
+# ...except the two small generated stand-in avatars the fragmented MP4 reader tests read (made by the script beside them)
+!packages/AI/Core/src/__tests__/fixtures/avatar-standin-*.mp4
+# ...and the meeting bot's small generated lip-sync fixture (made by the script beside it)
+!packages/AI/RealtimeBridge/Providers/LiveKitNative/src/__tests__/fixtures/avatar-sync-flash-beep.mp4
 *.tiff
 *.avi
 *.flv
@@ -96,6 +100,11 @@ Thumbs.db
 # .env.* rule above and is tracked by grandfathering; this one needs the explicit
 # negation because git only ignores files it isn't already tracking.)
 !docker/workbench/.env.database.example
+!citizen-builder/.env.example
+# Same file, bundled copy: `mj agent init` copies src/init-templates/citizen-builder/ into the new
+# workspace and creates .env FROM this .env.example. Without the negation the file exists only on
+# the machine that authored it — every clean checkout (and CI) scaffolds a workspace with no .env.
+!packages/MJCLI/src/init-templates/citizen-builder/.env.example
 mj server info.txt
 member_junction_code_for_documentation.pdf
 member_junction_code_for_documentation.txt
@@ -240,3 +249,23 @@ migrations/v*/*__RSU_*.sql
 # .github/scripts/stage-package-licenses.mjs. The root LICENSE is the only
 # source of truth; committing 300 copies would let them drift from it.
 packages/**/LICENSE
+
+# Terraform working directories and state (infrastructure/terraform/**)
+.terraform/
+*.tfstate
+*.tfstate.*
+tfplan
+
+# Standards gate finding dump (CI artifact / local --json output)
+standards-findings.json
+
+# Throwaway output of the strict-template verification config (see
+# packages/Angular/Explorer/core-entity-forms/tsconfig.stricttemplates.json)
+dist-stricttmpl/
+
+# CodeGraph local index
+.codegraph/
+
+# Local one-off verification scripts (e.g. scratch-4946-e2e.mjs). They read a local .env and
+# hard-coded test data, so they never belong in the repo.
+scratch-*.mjs

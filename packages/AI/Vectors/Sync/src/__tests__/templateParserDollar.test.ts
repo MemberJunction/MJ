@@ -10,7 +10,7 @@
  * and silent. This path shipped with no test.
  */
 import { describe, it, expect, beforeEach } from 'vitest';
-import { EntityDocumentTemplateParserBase } from '../generic/EntityDocumenTemplateParserBase';
+import { EntityDocumentTemplateParserBase } from '@memberjunction/entity-documents';
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
 
 /** `$` before an ordinary character is NOT special — that case must keep working. */

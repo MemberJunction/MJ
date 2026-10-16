@@ -4198,7 +4198,7 @@
     "fields": {
       "Name": "Perplexity Search",
       "Type": "Custom",
-      "Description": "Performs AI-powered web search using Perplexity's Search API. Returns comprehensive search results with citations, related questions, and optional images. Supports advanced filtering by domain and recency.",
+      "Description": "Queries Perplexity in one of two modes. 'search' (default) returns structured title/url/snippet web results from Perplexity's /search endpoint - fast and flat-priced. 'answer' returns a synthesised answer with citations from the Sonar models - slower and token-billed.",
       "Status": "Active",
       "DriverClass": "Perplexity Search"
     },
@@ -4227,7 +4227,7 @@
             "ActionID": "@parent:ID",
             "Name": "Model",
             "Type": "Input",
-            "Description": "Perplexity model to use (default: sonar). Options: sonar (fast, grounded search), sonar-pro (deeper retrieval), sonar-reasoning-pro (reasoning over live search), sonar-deep-research (long-form, source-dense reports). The legacy llama-3.1-sonar-* identifiers were retired by Perplexity in February 2025 and now fail with an invalid-model error.",
+            "Description": "answer mode only. Perplexity model: 'sonar' (default), 'sonar-pro', 'sonar-reasoning-pro' or 'sonar-deep-research'. Ignored when Mode is 'search'.",
             "IsRequired": false,
             "DefaultValue": "sonar",
             "ValueType": "Scalar",
@@ -4237,8 +4237,8 @@
             "ID": "C32A123C-B82C-42FC-9AD3-544FD6506567"
           },
           "sync": {
-            "lastModified": "2026-08-20T22:30:04.150Z",
-            "checksum": "0c06f753da0c570bd607bf72ec9e0f33ce0ffbf8b4b51970b5ce815a307a87f8"
+            "lastModified": "2026-09-21T02:45:25.912Z",
+            "checksum": "acf56a4d28a98569d0ff78457f9f1295917f434163d21a65596e7f17da1f9d5e"
           }
         },
         {
@@ -4533,6 +4533,98 @@
             "lastModified": "2025-12-30T23:06:54.968Z",
             "checksum": "71ed660254d1336513a9f071c7cacde47c12d1148b5c848762a7c73aeb4425dc"
           }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Mode",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Which Perplexity product to call. 'search' (default) uses the /search endpoint: structured title/url/snippet results, sub-second, flat-priced per query. 'answer' uses the Sonar chat models: synthesised prose plus citations, slower and billed per token.",
+            "IsRequired": false,
+            "DefaultValue": "search"
+          },
+          "primaryKey": {
+            "ID": "9AB5026D-22E1-4298-B590-B2632F393056"
+          },
+          "sync": {
+            "lastModified": "2026-09-21T02:45:25.932Z",
+            "checksum": "148d2cd8a1b61918bd665b5324e35c0b1c2ab872febc3042ec7bf4a226f4297d"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxResults",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "search mode only. Number of results to return, 1-20. Values above the cap are clamped. Default: 10.",
+            "IsRequired": false,
+            "DefaultValue": "10"
+          },
+          "primaryKey": {
+            "ID": "7F5F0FC7-9A4C-488D-A2EA-0A1A45E5B675"
+          },
+          "sync": {
+            "lastModified": "2026-09-21T02:45:25.953Z",
+            "checksum": "629f19fd3aa98359257c84a2dcfafa078630a03b1208da772802ac8d502804cf"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Country",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "search mode only. Two-letter country code for result localisation, e.g. 'US', 'GB'.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B223FEB0-A800-49F5-9F71-A6B39EE4D7F3"
+          },
+          "sync": {
+            "lastModified": "2026-09-21T02:45:25.975Z",
+            "checksum": "776981603b3bcdb0135b4f4f2ee479c66436fcb07366631129730e6243e73249"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Results",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "search mode only. Ranked results, each with title, url, snippet and (when resolved) date and lastUpdated.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B6F5EEF5-F7E6-4A98-B9DB-AB679F5B2899"
+          },
+          "sync": {
+            "lastModified": "2026-09-21T02:45:25.995Z",
+            "checksum": "8e9b2600aaaf17907a6094440986390bed3bbb012d5f923dcd7e2997e07787cc"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ResultCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "search mode only. Number of results returned.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "CE34759E-F2EC-43F7-9A77-F18E2AF3A16D"
+          },
+          "sync": {
+            "lastModified": "2026-09-21T02:45:26.015Z",
+            "checksum": "8f79c02e6573ab1450214e724049043a9c5e8f5fcb8f32a99099337ff3354a2f"
+          }
         }
       ],
       "MJ: Action Result Codes": [
@@ -4654,8 +4746,8 @@
       "ID": "D4DF539B-F739-4374-949A-01A880BE71EF"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:06:51.283Z",
-      "checksum": "d59766fd59846595f86296ac9e2669032fed436bf51ce461067b62a4b378a7eb"
+      "lastModified": "2026-09-21T02:45:25.878Z",
+      "checksum": "3fe3b7628d0b22b7deb1ba07281513dfef0a9982f439dbe7e08cae18f1344e9b"
     }
   },
   {

@@ -12,12 +12,29 @@
  */
 
 import { AIPromptParams, AIPromptRunResult, BaseAgentNextStep, AgentPayloadChangeRequest, AgentAction, AgentSubAgentRequest, ExecuteAgentParams, AgentConfiguration} from '@memberjunction/ai-core-plus';
+import { CURRENT_PAYLOAD_PLACEHOLDER } from '../constants';
 import type { NativeToolBinding } from '../native-tools/control-tools';
 import { MJAIAgentTypeEntity } from '@memberjunction/core-entities';
 import { MJAIPromptEntityExtended } from "@memberjunction/ai-core-plus";
 import { MJGlobal, JSONValidator } from '@memberjunction/global';
 import { LogError, IsVerboseLoggingEnabled } from '@memberjunction/core';
 import { ActionResult } from '@memberjunction/actions-base';
+
+/**
+ * How an agent type decided to execute a run, recorded on the run as a completed `Decision` step.
+ *
+ * Some agent types can run the same agent in more than one way (a Flow agent runs either in this
+ * process or on the task-graph dispatcher). Which way was taken changes what the run record means,
+ * so it belongs on the record, not only in a log line that is gone by the time someone investigates.
+ */
+export interface AgentTypeExecutionRouting {
+    /** The step name shown in the run timeline, naming the chosen mode. */
+    StepName: string;
+    /** Why this mode was chosen, in words an operator can act on. */
+    Reason: string;
+    /** Stored as the step's output data. */
+    Detail: Record<string, string>;
+}
 
 /**
  * Abstract base class for agent type implementations.
@@ -82,7 +99,7 @@ export abstract class BaseAgentType {
      * Common placeholder for current payload injection
      * @static
      */
-    public static readonly CURRENT_PAYLOAD_PLACEHOLDER = '_CURRENT_PAYLOAD';
+    public static readonly CURRENT_PAYLOAD_PLACEHOLDER = CURRENT_PAYLOAD_PLACEHOLDER;
 
     /**
      * This method allows each agent type to initialize its agent-run-specific state package as required. Not all agent
@@ -553,6 +570,25 @@ export abstract class BaseAgentType {
     }
 
     /**
+     * Whether action calls made under this agent type go through BaseAgent's run-scoped action
+     * circuit breaker (fatal lockout, identical-arguments rule, attempt budget) and receive its
+     * failure directives.
+     *
+     * The breaker exists for MODEL-DRIVEN retries: a model that keeps calling a broken tool needs
+     * to be stopped and told why. An agent type whose action steps are chosen programmatically —
+     * Flow, whose graph carries its own failure paths and may legitimately re-run a node with the
+     * same mapped inputs — has no model in that loop to act on the guidance, so the rules would
+     * only block its retries and the directive would be appended to a history nothing reads.
+     * Such a type returns false and BaseAgent passes `skipCircuitBreaker` for its action steps,
+     * the same exemption the ForEach / While operators and the pipeline registry use.
+     *
+     * Default: true.
+     */
+    public get UsesActionCircuitBreaker(): boolean {
+        return true;
+    }
+
+    /**
      * Provides agent-type-specific guidance for configuration errors related to missing prompts.
      * This allows each agent type to give contextual help based on its architecture.
      *
@@ -596,6 +632,20 @@ export abstract class BaseAgentType {
     ): Promise<BaseAgentNextStep<P> | null> {
         // Default implementation: return null to use base-agent's default behavior
         // (fall back to prompt execution if prompts are configured)
+        return null;
+    }
+
+    /**
+     * Describes how this run is being executed, once {@link DetermineInitialStep} has decided.
+     *
+     * BaseAgent calls this right after `DetermineInitialStep` and, when it returns a value, writes
+     * it to the run as a completed `Decision` step. Default: null, meaning the agent type has only
+     * one way to run and there is nothing to record.
+     *
+     * @param agentTypeState - The state returned by {@link InitializeAgentTypeState}
+     * @since 6.1.3
+     */
+    public DescribeExecutionRouting<ATS>(agentTypeState: ATS): AgentTypeExecutionRouting | null {
         return null;
     }
 

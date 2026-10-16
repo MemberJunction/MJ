@@ -56,7 +56,7 @@ import { IntegrationProgressEmitter, IntegrationProgressReader } from "@memberju
 import type { IntegrationRunSnapshot, IntegrationRunKind } from "@memberjunction/integration-progress-artifacts";
 import { ResolverBase } from "../generic/ResolverBase.js";
 import { IntegrationCustomColumnPromoter } from "../integration/CustomColumnPromoter.js";
-import { ComputeCascadeRemovalSet, ComputeRemovedDependencyWarnings, decideFieldMapReconcile, DisableUnselectedEntityMaps, ReenableFieldMapsForEntityMap, ResetPullWatermarks, SetEntityMapEnabled } from "../integration/EntityMapLifecycle.js";
+import { ComputeCascadeRemovalSet, ComputeRemovedDependencyWarnings, DecideFieldMapReconcile, DisableUnselectedEntityMaps, ReenableFieldMapsForEntityMap, ResetPullWatermarks, SetEntityMapEnabled } from "../integration/EntityMapLifecycle.js";
 import { ComputeInactiveRowWarnings } from "../integration/InactiveRowWarnings.js";
 import { BuildCreateConnectionMessage, BuildDetachedRefreshMessage, BuildReactivateMessage, BuildUpdateConnectionMessage } from "../integration/SchemaRefreshLaunch.js";
 // Type-only: the registered runtime class for 'MJ: Company Integrations'. Lets the create path name the
@@ -6418,7 +6418,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         // The CHOICES live in a pure function (decideFieldMapReconcile — unit-tested); this method
         // applies the EFFECTS. Inline, the decision was untestable: this resolver imports
         // schema-builder and schema-engine, so it cannot be loaded in a unit test at all.
-        const plan = decideFieldMapReconcile(
+        const plan = DecideFieldMapReconcile(
             activeFields.map(f => f.Name),
             existingRows.map(fm => ({ SourceFieldName: fm.SourceFieldName, Status: fm.Status })),
             mapEnabled,

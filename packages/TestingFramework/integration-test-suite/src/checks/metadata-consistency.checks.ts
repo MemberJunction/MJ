@@ -40,7 +40,7 @@ import type sql from 'mssql';
 import { Assert } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import type { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
-import { hasFullCatalogVisibility } from './catalog-visibility';
+import { HasFullCatalogVisibility } from './catalog-visibility';
 
 /**
  * MC6 ratchet ceiling — the number of core-schema columns that today carry no MS_Description.
@@ -107,7 +107,7 @@ async function poolOrSkip(ctx: IntegrationCheckContext, checkId: string): Promis
         console.log(`      → ${checkId} skipped: no mssql pool on this transport (PostgreSQL / client bootstrap)`);
         return null;
     }
-    if (!(await hasFullCatalogVisibility(ctx.Pool))) {
+    if (!(await HasFullCatalogVisibility(ctx.Pool))) {
         console.log(`      → ${checkId} skipped: the login lacks VIEW DEFINITION — catalog audit needs a privileged (db_owner/sa) connection`);
         return null;
     }
@@ -243,23 +243,44 @@ function parseCheckConstraintValues(definition: string, columnName: string): str
     // Normalize N'literal' → 'literal' so one value regex handles both.
     const normalized = definition.replace(/(^|[=(\s])N'([^']*)'/g, "$1'$2'");
     const field = `(?:\\[${escapeForRegex(columnName)}\\]|${escapeForRegex(columnName)})`;
+    // Strings, dates and GUIDs come back quoted; numeric literals come back unquoted and parenthesized —
+    // ([Level]=(3) OR [Level]=(1)) — and a single-value list is a list too (#3978).
+    const literal = `(?:'[^']+'|${NUMERIC_LITERAL})`;
+    const assignment = `${field}=${literal}`;
 
-    const nested = new RegExp(`^\\(${field} IS NULL OR \\(${field}='[^']+'(?: OR ${field}='[^']+?')+\\)\\)$`);
-    const standard = new RegExp(`^\\(${field}='[^']+'(?: OR ${field}='[^']+?')+(?: OR ${field} IS NULL)?\\)$`);
+    const nested = new RegExp(`^\\(${field} IS NULL OR \\(${assignment}(?: OR ${assignment})*\\)\\)$`);
+    const standard = new RegExp(`^\\(${assignment}(?: OR ${assignment})*(?: OR ${field} IS NULL)?\\)$`);
     if (!nested.test(normalized) && !standard.test(normalized)) {
         return null;
     }
 
-    const valueRegex = new RegExp(`${field}='([^']+)'`, 'g');
+    const valueRegex = new RegExp(`${field}=(?:'([^']+)'|(${NUMERIC_LITERAL}))`, 'g');
     const values: string[] = [];
     let match = valueRegex.exec(normalized);
     while (match !== null) {
-        if (match[1]) {
-            values.push(match[1]);
+        const numeric = match[2] ? match[2].slice(1, -1).replace(/\.$/, '') : undefined;
+        const value = match[1] ?? numeric;
+        if (value) {
+            values.push(value);
         }
         match = valueRegex.exec(normalized);
     }
     return values.length > 0 ? values : null;
+}
+
+/** A numeric literal as SQL Server renders it inside a CHECK: `(3)`, `(-1)`, `(1.00)`, `(1.0e+030)`. */
+const NUMERIC_LITERAL = `\\(-?\\d+(?:\\.\\d*)?(?:[eE][+-]?\\d+)?\\)`;
+
+/**
+ * Mirrors CodeGen's valueListForField: a `bit` field never gets a CHECK-derived value list (`IN (0,1)`
+ * is vacuous on a bit), and neither does a primary key carrying a SINGLE value (`CHECK (ID=1)` is a
+ * single-row-table guard). A multi-value list on a natural-key PK IS captured, so it is compared here.
+ */
+function valueListCaptured(field: EntityFieldInfo, physical: string[]): boolean {
+    if (field.Type?.trim().toLowerCase() === 'bit') {
+        return false;
+    }
+    return !(field.IsPrimaryKey && physical.length === 1);
 }
 
 /** Escape regex metacharacters in an identifier so it can be embedded in a pattern. */
@@ -436,6 +457,9 @@ const MC3: NamedCheck = {
             const physical = parseCheckConstraintValues(row.Definition, row.ColumnName);
             if (!physical) {
                 continue; // not a value-list constraint (range/length/etc.)
+            }
+            if (!valueListCaptured(field, physical)) {
+                continue; // CodeGen does not store a value list for this field, so there is nothing to compare
             }
             compared++;
             const expected = normalizeValueList(physical);

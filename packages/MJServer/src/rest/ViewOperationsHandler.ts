@@ -1,7 +1,8 @@
 import { 
-    LogError, Metadata, RunView, RunViewParams, 
-    RunViewResult, UserInfo 
+    BaseEntity, LogError, Metadata, RunView, RunViewParams, 
+    RunViewResult, UserInfo, type IRunViewProvider 
 } from '@memberjunction/core';
+import { ClientClauseScreen } from '@memberjunction/generic-database-provider';
 
 /**
  * View Operations Implementation for REST endpoints
@@ -11,7 +12,7 @@ export class ViewOperationsHandler {
     /**
      * Run a view and return results
      */
-    static async runView(params: RunViewParams, user: UserInfo): Promise<{ success: boolean, result?: RunViewResult, error?: string }> {
+    static async RunView(params: RunViewParams, user: UserInfo): Promise<{ success: boolean, result?: RunViewResult, error?: string }> {
         try {
             // Validate entity exists
             const md = new Metadata(); // global-provider-ok: REST endpoint — no per-request provider injection in REST middleware yet
@@ -32,11 +33,11 @@ export class ViewOperationsHandler {
                 };
             }
             
-            // Sanitize and validate parameters
-            this.sanitizeRunViewParams(params);
+            // Sanitize and validate parameters against the provider that runs the view
+            const runView = new RunView();
+            this.sanitizeRunViewParams(params, md, runView.ProviderToUse, user);
             
             // Execute the view
-            const runView = new RunView();
             const result = await runView.RunView(params, user);
             
             return { success: true, result };
@@ -45,14 +46,20 @@ export class ViewOperationsHandler {
             return { success: false, error: (error as Error)?.message || 'Unknown error' };
         }
     }
+
+    /** @deprecated Use {@link RunView}. */
+    static async runView(params: RunViewParams, user: UserInfo): Promise<{ success: boolean, result?: RunViewResult, error?: string }> {
+        return this.RunView(params, user);
+    }
     
     /**
      * Run multiple views in batch
      */
-    static async runViews(paramsArray: RunViewParams[], user: UserInfo): Promise<{ success: boolean, results?: RunViewResult[], error?: string }> {
+    static async RunViews(paramsArray: RunViewParams[], user: UserInfo): Promise<{ success: boolean, results?: RunViewResult[], error?: string }> {
         try {
-            // Validate and sanitize each set of parameters
+            // Validate and sanitize each set of parameters against the provider that runs the views
             const md = new Metadata(); // global-provider-ok: REST endpoint — no per-request provider injection in REST middleware yet
+            const runView = new RunView();
             for (const params of paramsArray) {
                 // Validate entity exists
                 const entity = md.Entities.find(e => e.Name === params.EntityName);
@@ -73,11 +80,10 @@ export class ViewOperationsHandler {
                 }
                 
                 // Sanitize parameters
-                this.sanitizeRunViewParams(params);
+                this.sanitizeRunViewParams(params, md, runView.ProviderToUse, user);
             }
             
             // Execute the views
-            const runView = new RunView();
             const results = await runView.RunViews(paramsArray, user);
             
             return { success: true, results };
@@ -86,11 +92,16 @@ export class ViewOperationsHandler {
             return { success: false, error: (error as Error)?.message || 'Unknown error' };
         }
     }
+
+    /** @deprecated Use {@link RunViews}. */
+    static async runViews(paramsArray: RunViewParams[], user: UserInfo): Promise<{ success: boolean, results?: RunViewResult[], error?: string }> {
+        return this.RunViews(paramsArray, user);
+    }
     
     /**
      * List entities with optional filtering
      */
-    static async listEntities(params: RunViewParams, user: UserInfo): Promise<RunViewResult> {
+    static async ListEntities(params: RunViewParams, user: UserInfo): Promise<RunViewResult> {
         try {
             // Check entity exists and user has permission
             const md = new Metadata(); // global-provider-ok: REST endpoint — no per-request provider injection in REST middleware yet
@@ -104,22 +115,27 @@ export class ViewOperationsHandler {
                 throw new Error(`User ${user.Name} does not have permission to read ${params.EntityName} records`);
             }
             
-            // Sanitize and validate parameters
-            this.sanitizeRunViewParams(params);
+            // Sanitize and validate parameters against the provider that runs the view
+            const runView = new RunView();
+            this.sanitizeRunViewParams(params, md, runView.ProviderToUse, user);
             
             // Execute the view
-            const runView = new RunView();
             return await runView.RunView(params, user);
         } catch (error) {
             LogError(error);
             throw error;
         }
     }
+
+    /** @deprecated Use {@link ListEntities}. */
+    static async listEntities(params: RunViewParams, user: UserInfo): Promise<RunViewResult> {
+        return this.ListEntities(params, user);
+    }
     
     /**
      * Get available views for an entity
      */
-    static async getEntityViews(entityName: string, user: UserInfo): Promise<{ success: boolean, views?: any[], error?: string }> {
+    static async GetEntityViews(entityName: string, user: UserInfo): Promise<{ success: boolean, views?: any[], error?: string }> {
         try {
             // Validate entity exists
             const md = new Metadata(); // global-provider-ok: REST endpoint — no per-request provider injection in REST middleware yet
@@ -171,14 +187,27 @@ export class ViewOperationsHandler {
             return { success: false, error: (error as Error)?.message || 'Unknown error' };
         }
     }
+
+    /** @deprecated Use {@link GetEntityViews}. */
+    static async getEntityViews(entityName: string, user: UserInfo): Promise<{ success: boolean, views?: any[], error?: string }> {
+        return this.GetEntityViews(entityName, user);
+    }
     
     /**
-     * Sanitize and validate RunViewParams
+     * Sanitize and validate RunViewParams. Client filter and sort text passes the same clause
+     * screen as the GraphQL RunView resolvers, parsed in the dialect of `provider`, the provider
+     * that runs the view.
      */
-    private static sanitizeRunViewParams(params: RunViewParams): void {
+    private static sanitizeRunViewParams(params: RunViewParams, md: Metadata, provider: IRunViewProvider, user: UserInfo): void {
         // Ensure EntityName is provided
         if (!params.EntityName) {
             throw new Error('EntityName is required');
+        }
+
+        // A loaded view entity cannot arrive over JSON; the provider would trust a plain object's
+        // fields (its ID is spliced into view SQL). REST callers name a saved view by ViewID or ViewName.
+        if (params.ViewEntity != null && !(params.ViewEntity instanceof BaseEntity)) {
+            throw new Error('ViewEntity is not accepted over REST; use ViewID or ViewName');
         }
         
         // Convert string arrays if they came in as comma-separated strings
@@ -186,22 +215,32 @@ export class ViewOperationsHandler {
             params.Fields = (params.Fields as string).split(',');
         }
         
-        // Sanitize numeric values
+        // Sanitize numeric values: base-10, integral, and clamped to a sane range so a
+        // negative/garbage value can never reach the SQL layer.
         if (params.MaxRows !== undefined) {
-            params.MaxRows = typeof params.MaxRows === 'string' 
-                ? parseInt(params.MaxRows as string) 
+            const parsed = typeof params.MaxRows === 'string'
+                ? parseInt(params.MaxRows as string, 10)
                 : params.MaxRows;
+            params.MaxRows = Number.isFinite(parsed) ? Math.max(0, Math.floor(parsed as number)) : undefined;
         }
         
         if (params.StartRow !== undefined) {
-            params.StartRow = typeof params.StartRow === 'string' 
-                ? parseInt(params.StartRow as string) 
+            const parsed = typeof params.StartRow === 'string'
+                ? parseInt(params.StartRow as string, 10)
                 : params.StartRow;
+            params.StartRow = Number.isFinite(parsed) ? Math.max(0, Math.floor(parsed as number)) : undefined;
         }
         
         // Default ResultType if not provided
         if (!params.ResultType) {
             params.ResultType = 'simple';
         }
+
+        ClientClauseScreen.ScreenViewClauses(
+            { ExtraFilter: params.ExtraFilter, OrderBy: params.OrderBy, OverrideExcludeFilter: params.OverrideExcludeFilter },
+            md.Entities,
+            ClientClauseScreen.DialectFor(provider),
+            user,
+        );
     }
 }

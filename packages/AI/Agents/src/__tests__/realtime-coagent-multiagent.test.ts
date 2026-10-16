@@ -6,7 +6,7 @@
 import { describe, it, expect } from 'vitest';
 import {
     ResolveEffectiveRealtimeConfig,
-    accumulateAllowedAgents,
+    AccumulateAllowedAgents,
     GetEffectiveDisclosure,
     GetDisclosureForTarget,
     BuildAppRealtimeOverridesJson,
@@ -20,7 +20,7 @@ const layer = (allowedAgents: unknown, extra: Record<string, unknown> = {}): Rec
 
 describe('accumulateAllowedAgents', () => {
     it('unions across layers and dedupes by agentId (case-insensitive)', () => {
-        const result = accumulateAllowedAgents([
+        const result = AccumulateAllowedAgents([
             layer([{ agentId: 'A1', label: 'Sage' }]),
             layer([{ agentId: 'a1' }, { agentId: 'A2', label: 'Skip' }]),
         ]);
@@ -28,7 +28,7 @@ describe('accumulateAllowedAgents', () => {
     });
 
     it('merges per-entry fields, later layer wins on set keys but keeps earlier ones', () => {
-        const result = accumulateAllowedAgents([
+        const result = AccumulateAllowedAgents([
             layer([{ agentId: 'A1', label: 'Sage' }]),
             layer([{ agentId: 'A1', disclosure: 'silent' }]),
         ]);
@@ -39,12 +39,12 @@ describe('accumulateAllowedAgents', () => {
 
     it('accumulates dynamic entries last (highest precedence)', () => {
         const dynamic: RealtimeAllowedAgent[] = [{ agentId: 'A1', disclosure: 'mention' }];
-        const result = accumulateAllowedAgents([layer([{ agentId: 'A1', disclosure: 'silent' }])], dynamic);
+        const result = AccumulateAllowedAgents([layer([{ agentId: 'A1', disclosure: 'silent' }])], dynamic);
         expect(result[0].disclosure).toBe('mention');
     });
 
     it('ignores invalid entries and non-array allowedAgents', () => {
-        const result = accumulateAllowedAgents([
+        const result = AccumulateAllowedAgents([
             layer('not-an-array'),
             layer([{ label: 'no-id' }, { agentId: '' }, 42, { agentId: 'Good' }]),
         ]);
@@ -52,7 +52,7 @@ describe('accumulateAllowedAgents', () => {
     });
 
     it('returns empty when no layers carry allowedAgents', () => {
-        expect(accumulateAllowedAgents([{ realtime: {} }, null, undefined])).toEqual([]);
+        expect(AccumulateAllowedAgents([{ realtime: {} }, null, undefined])).toEqual([]);
     });
 });
 

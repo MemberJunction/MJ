@@ -369,7 +369,7 @@ export class RunViewParams {
      *
      * @internal This property is for framework internal use only.
      */
-    _fromEngine?: boolean;
+    _fromEngine?: boolean;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * When set to true, the RunView will first check the LocalCacheManager for cached results.
@@ -395,6 +395,31 @@ export class RunViewParams {
      * @default false
      */
     BypassCache?: boolean;
+
+    /**
+     * When true, binary fields (SQL Server `binary` / `varbinary` / `image`, PostgreSQL `bytea`)
+     * are included in the results. Their values are base64 strings, the same representation a
+     * `BaseEntity` holds; convert with `Base64ToBytes` / `Base64ToFloat32Vector` from
+     * `@memberjunction/global`.
+     *
+     * Binary columns are left out by default on **every** provider, server-side database
+     * providers included: the provider emits an explicit column list instead of `SELECT *`, so the
+     * values are never read from the database, let alone sent over the wire. They are usually
+     * large and most lists, grids and lookups never need them. A `simple` row then has no key
+     * for the column, and an `entity_object` row marks the field `NotLoaded`, which a later
+     * `Save()` leaves out so the stored value is never wiped.
+     *
+     * To get them, set this flag, or name the binary field in {@link Fields} — the provider sets
+     * the flag for you in that case. A single-record `BaseEntity.Load()` always includes them. An
+     * engine that caches the entity opts in through its config's `IncludeBinaryFields`
+     * (`true`, or `'DatabaseProviderOnly'` to load them on the server but not in the browser).
+     *
+     * The flag is part of the result-cache fingerprint, so a request with it never shares a slot
+     * with one without. See `guides/BINARY_FIELDS_GUIDE.md`.
+     *
+     * @default false
+     */
+    IncludeBinaryFields?: boolean;
 
     /**
      * Optional TTL (time-to-live) in milliseconds for cached results when CacheLocal is true.
@@ -507,6 +532,9 @@ export class RunViewParams {
         if (a.ResultType !== b.ResultType) return false;
         if (a.CacheLocal !== b.CacheLocal) return false;
         if (a.CacheLocalTTL !== b.CacheLocalTTL) return false;
+        // Including binary fields changes the columns returned, so a toggle must trigger a reload.
+        // undefined and false mean the same thing and must not cause a spurious one.
+        if ((a.IncludeBinaryFields === true) !== (b.IncludeBinaryFields === true)) return false;
         // A Live↔Materialized DataSource toggle changes the result set and MUST trigger a reload. Compared via
         // IsMaterializedDataSource so undefined/'Live' are treated as equal (no spurious reload) while a switch to
         // (or from) 'Materialized' is not — matching the read-routing decision everywhere else.

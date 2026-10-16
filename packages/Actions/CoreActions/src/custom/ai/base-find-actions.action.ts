@@ -4,7 +4,7 @@ import { BaseAction } from "@memberjunction/actions";
 import { AIEngine } from "@memberjunction/aiengine";
 import { RunView } from "@memberjunction/core";
 import { MJActionEntity, MJActionParamEntity } from "@memberjunction/core-entities";
-import { runSemanticEntitySearch, getActionParamValue, getActionBooleanParam } from "./semantic-entity-search.helper";
+import { RunSemanticEntitySearch, GetActionParamValue, GetActionBooleanParam } from "./semantic-entity-search.helper";
 
 /**
  * Shared base for the "Find Best Action" / "Find Candidate Actions" wrappers.
@@ -26,10 +26,10 @@ export abstract class BaseFindActionsAction extends BaseAction {
 
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
-            const taskDescription = getActionParamValue(params, 'taskdescription') as string | undefined;
-            const maxResults = parseInt(String(getActionParamValue(params, 'maxresults') ?? '10'));
-            const minimumSimilarityScore = parseFloat(String(getActionParamValue(params, 'minimumsimilarityscore') ?? '0.5'));
-            const excludeAgentManagement = getActionBooleanParam(params, 'excludeagentmanagement', true);
+            const taskDescription = GetActionParamValue(params, 'taskdescription') as string | undefined;
+            const maxResults = parseInt(String(GetActionParamValue(params, 'maxresults') ?? '10'));
+            const minimumSimilarityScore = parseFloat(String(GetActionParamValue(params, 'minimumsimilarityscore') ?? '0.5'));
+            const excludeAgentManagement = GetActionBooleanParam(params, 'excludeagentmanagement', true);
 
             if (!taskDescription || taskDescription.trim().length === 0) {
                 return { Success: false, ResultCode: 'INVALID_INPUT', Message: 'TaskDescription parameter is required and cannot be empty' };
@@ -45,7 +45,7 @@ export abstract class BaseFindActionsAction extends BaseAction {
             }
 
             // Rank via the unified SearchEntity pipeline (over-fetch to allow post-filtering)
-            const search = await runSemanticEntitySearch(params, this.entityName, taskDescription, maxResults * 2, minimumSimilarityScore);
+            const search = await RunSemanticEntitySearch(params, this.entityName, taskDescription, maxResults * 2, minimumSimilarityScore);
             if (!search.ok) {
                 return { Success: false, ResultCode: search.resultCode ?? 'SEARCH_FAILED', Message: search.message ?? 'Semantic search failed' };
             }

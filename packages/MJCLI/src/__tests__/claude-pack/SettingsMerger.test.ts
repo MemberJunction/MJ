@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import {
-    mergeSettings,
-    readManagedMeta,
-    getAtPath,
-    setAtPath,
-    isPlainObject,
+    MergeSettings,
+    ReadManagedMeta,
+    GetAtPath,
+    SetAtPath,
+    IsPlainObject,
     SettingsMergeError,
 } from '../../lib/claude-pack/SettingsMerger.js';
 
@@ -23,7 +23,7 @@ describe('mergeSettings', () => {
             { permissions: { allow: ['Bash(npm install)'] }, env: { MJ_CLAUDE_PACK: '5.1.0' } },
             ['permissions.allow', 'env.MJ_CLAUDE_PACK']
         );
-        const { Result, Changed } = mergeSettings({ Existing: {}, Pack: p });
+        const { Result, Changed } = MergeSettings({ Existing: {}, Pack: p });
         expect(Result.permissions).toEqual({ allow: ['Bash(npm install)'] });
         expect(Result.env).toEqual({ MJ_CLAUDE_PACK: '5.1.0' });
         expect((Result.__mj_managed as { version: string }).version).toBe('5.1.0');
@@ -44,7 +44,7 @@ describe('mergeSettings', () => {
                 allow: ['Bash(my-custom)', 'Bash(git status)'],
             },
         };
-        const { Result } = mergeSettings({ Existing: existing, Pack: p });
+        const { Result } = MergeSettings({ Existing: existing, Pack: p });
         expect(Result.permissions).toEqual({
             allow: ['Bash(my-custom)', 'Bash(git status)', 'Bash(npm install)'],
         });
@@ -61,7 +61,7 @@ describe('mergeSettings', () => {
                 USER_VAR: 'kept',
             },
         };
-        const { Result } = mergeSettings({ Existing: existing, Pack: p });
+        const { Result } = MergeSettings({ Existing: existing, Pack: p });
         // env.MJ_CLAUDE_PACK is a leaf primitive — pack wins.
         // USER_VAR is outside the managed path 'env.MJ_CLAUDE_PACK' so survives.
         expect(Result.env).toEqual({ MJ_CLAUDE_PACK: '5.1.0', USER_VAR: 'kept' });
@@ -79,7 +79,7 @@ describe('mergeSettings', () => {
                 deny: ['Bash(rm -rf /)'],
             },
         };
-        const { Result } = mergeSettings({ Existing: existing, Pack: p });
+        const { Result } = MergeSettings({ Existing: existing, Pack: p });
         expect(Result.customField).toBe('user-owned');
         // permissions.deny is user-owned because it's not in __mj_managed.keys
         expect((Result.permissions as { deny: string[] }).deny).toEqual(['Bash(rm -rf /)']);
@@ -88,7 +88,7 @@ describe('mergeSettings', () => {
     it('replaces __mj_managed wholesale so version bumps refresh the stamp', () => {
         const old = pack({}, ['permissions.allow'], '5.0.0');
         const fresh = pack({}, ['permissions.allow'], '5.2.0');
-        const { Result } = mergeSettings({ Existing: old, Pack: fresh });
+        const { Result } = MergeSettings({ Existing: old, Pack: fresh });
         expect((Result.__mj_managed as { version: string }).version).toBe('5.2.0');
     });
 
@@ -98,7 +98,7 @@ describe('mergeSettings', () => {
             ['permissions.allow']
         );
         const existing = { permissions: { allow: 'not-an-array' } };
-        const { Result } = mergeSettings({ Existing: existing, Pack: p });
+        const { Result } = MergeSettings({ Existing: existing, Pack: p });
         expect(Result.permissions).toEqual({ allow: ['Bash(npm install)'] });
     });
 
@@ -108,7 +108,7 @@ describe('mergeSettings', () => {
             ['env.MJ_CLAUDE_PACK']
         );
         // user has no env at all
-        const { Result } = mergeSettings({ Existing: {}, Pack: p });
+        const { Result } = MergeSettings({ Existing: {}, Pack: p });
         expect(Result.env).toEqual({ MJ_CLAUDE_PACK: '5.1.0' });
     });
 
@@ -119,18 +119,18 @@ describe('mergeSettings', () => {
         );
         // Existing is byte-equivalent to pack already
         const existing = JSON.parse(JSON.stringify(p)) as Record<string, unknown>;
-        const { Changed } = mergeSettings({ Existing: existing, Pack: p });
+        const { Changed } = MergeSettings({ Existing: existing, Pack: p });
         expect(Changed).toBe(false);
     });
 
     it('throws when pack has no __mj_managed block', () => {
         const p = { permissions: { allow: [] } };
-        expect(() => mergeSettings({ Existing: {}, Pack: p })).toThrow(SettingsMergeError);
+        expect(() => MergeSettings({ Existing: {}, Pack: p })).toThrow(SettingsMergeError);
     });
 
     it('throws when pack __mj_managed.keys is missing or wrong type', () => {
         const p = { __mj_managed: { version: '5.1.0' } };
-        expect(() => mergeSettings({ Existing: {}, Pack: p })).toThrow(SettingsMergeError);
+        expect(() => MergeSettings({ Existing: {}, Pack: p })).toThrow(SettingsMergeError);
     });
 
     it('object merge: array elements containing objects are deduped by structural equality', () => {
@@ -147,7 +147,7 @@ describe('mergeSettings', () => {
                 OnStart: [{ matcher: '*', command: 'echo hi' }, { matcher: 'user-only', command: 'x' }],
             },
         };
-        const { Result } = mergeSettings({ Existing: existing, Pack: p });
+        const { Result } = MergeSettings({ Existing: existing, Pack: p });
         const out = (Result.hooks as { OnStart: unknown[] }).OnStart;
         // Existing has 2 entries, pack has 1 (duplicate of the first existing entry) — deduped to 2 total
         expect(out).toHaveLength(2);
@@ -161,51 +161,51 @@ describe('mergeSettings', () => {
         const existing = {
             hooks: { OnStart: [{ b: 2, a: 1 }] }, // same shape, different key order
         };
-        const { Result } = mergeSettings({ Existing: existing, Pack: p });
+        const { Result } = MergeSettings({ Existing: existing, Pack: p });
         expect((Result.hooks as { OnStart: unknown[] }).OnStart).toHaveLength(1);
     });
 });
 
 describe('readManagedMeta', () => {
     it('parses a valid block', () => {
-        const meta = readManagedMeta({
+        const meta = ReadManagedMeta({
             __mj_managed: { version: '5.1.0', mjMajor: '5', keys: ['permissions.allow'] },
         });
-        expect(meta).toEqual({ version: '5.1.0', mjMajor: '5', keys: ['permissions.allow'] });
+        expect(meta).toEqual({ Version: '5.1.0', mjMajor: '5', Keys: ['permissions.allow'] });
     });
 
     it('returns null when the block is absent', () => {
-        expect(readManagedMeta({})).toBeNull();
+        expect(ReadManagedMeta({})).toBeNull();
     });
 
     it('returns null when keys is not an array of strings', () => {
-        expect(readManagedMeta({ __mj_managed: { version: '5', keys: [1, 2] } })).toBeNull();
+        expect(ReadManagedMeta({ __mj_managed: { version: '5', keys: [1, 2] } })).toBeNull();
     });
 
     it('returns null when version is missing', () => {
-        expect(readManagedMeta({ __mj_managed: { keys: [] } })).toBeNull();
+        expect(ReadManagedMeta({ __mj_managed: { keys: [] } })).toBeNull();
     });
 });
 
 describe('getAtPath / setAtPath', () => {
     it('returns the value at a dotted path', () => {
         const obj = { a: { b: { c: 42 } } };
-        expect(getAtPath(obj, 'a.b.c')).toBe(42);
+        expect(GetAtPath(obj, 'a.b.c')).toBe(42);
     });
 
     it('returns undefined for a missing path', () => {
-        expect(getAtPath({ a: 1 }, 'b.c')).toBeUndefined();
+        expect(GetAtPath({ a: 1 }, 'b.c')).toBeUndefined();
     });
 
     it('sets a value at a deep path, creating intermediate objects', () => {
         const obj: Record<string, unknown> = {};
-        setAtPath(obj, 'a.b.c', 'x');
+        SetAtPath(obj, 'a.b.c', 'x');
         expect(obj).toEqual({ a: { b: { c: 'x' } } });
     });
 
     it('overwrites non-object intermediate values', () => {
         const obj: Record<string, unknown> = { a: 'string-here' };
-        setAtPath(obj, 'a.b', 'x');
+        SetAtPath(obj, 'a.b', 'x');
         expect(obj).toEqual({ a: { b: 'x' } });
     });
 });
@@ -221,6 +221,6 @@ describe('isPlainObject', () => {
         [{}, true],
         [{ a: 1 }, true],
     ])('isPlainObject(%s) === %s', (input, expected) => {
-        expect(isPlainObject(input)).toBe(expected);
+        expect(IsPlainObject(input)).toBe(expected);
     });
 });

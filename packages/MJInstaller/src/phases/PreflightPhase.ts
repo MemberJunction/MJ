@@ -30,6 +30,7 @@ import type { PartialInstallConfig } from '../models/InstallConfig.js';
 import { ProcessRunner } from '../adapters/ProcessRunner.js';
 import { FileSystemAdapter } from '../adapters/FileSystemAdapter.js';
 import { SqlServerAdapter } from '../adapters/SqlServerAdapter.js';
+import { PostgresAdapter } from '../adapters/PostgresAdapter.js';
 import { Diagnostics, type DiagnosticCheck, type EnvironmentInfo } from '../models/Diagnostics.js';
 import { resolvePackageManager, type PackageManagerType } from '../models/PackageManager.js';
 
@@ -96,6 +97,10 @@ export class PreflightPhase {
   private processRunner = new ProcessRunner();
   private fileSystem = new FileSystemAdapter();
   private sqlAdapter = new SqlServerAdapter();
+  private pgAdapter = new PostgresAdapter();
+
+  /** Why a `<binary> --version` probe failed, keyed by binary. Feeds the diagnostic message. */
+  private readonly probeFailures = new Map<string, string>();
 
   /**
    * Run all preflight checks and return the results.
@@ -104,11 +109,32 @@ export class PreflightPhase {
    * @returns Result with pass/fail status, diagnostics, and detected OS.
    */
   async Run(context: PreflightContext): Promise<PreflightResult> {
+    this.probeFailures.clear();
+
     const { Emitter: emitter } = context;
     const hardFailures: string[] = [];
 
     // Gather environment info
     const packageManager = resolvePackageManager(context.Config.PackageManager);
+
+    // gatherEnvironment probes `<binary> --version` from the target directory,
+    // because corepack resolves the package-manager version per directory.
+    // Spawning with a cwd that does not exist fails ENOENT, which used to surface
+    // as a flatly wrong "pnpm not found on PATH" (#4562). Create it first — the
+    // install creates it moments later anyway, and `CanWrite` already relied on
+    // doing so as a side effect, just too late to help this probe.
+    //
+    // Deliberately swallow a failure here rather than letting it reject `Run`:
+    // an unwritable parent or a target path that already exists as a file would
+    // otherwise surface as a generic UNEXPECTED_ERROR before any diagnostic ran,
+    // losing checkWritePermissions' own message and SuggestedFix. Leave it to
+    // that check, further down, to report the same failure properly.
+    try {
+      await this.fileSystem.CreateDirectory(context.TargetDir);
+    } catch {
+      // Intentionally ignored — checkWritePermissions (below) re-probes this
+      // directory and reports a clean diagnostic with a SuggestedFix.
+    }
     const environment = await this.gatherEnvironment(packageManager, context.TargetDir);
     const diagnostics = new Diagnostics(environment);
     const detectedOS = this.detectOS();
@@ -143,7 +169,7 @@ export class PreflightPhase {
     this.emitDiagnostic(emitter, explorerPortCheck);
 
     if (!context.SkipDB) {
-      emitter.Emit('step:progress', { Type: 'step:progress', Phase: 'preflight', Message: 'Checking SQL Server connectivity...' });
+      emitter.Emit('step:progress', { Type: 'step:progress', Phase: 'preflight', Message: `Checking ${context.Config.DatabasePlatform === 'postgresql' ? 'PostgreSQL' : 'SQL Server'} connectivity...` });
       const sqlCheck = await this.checkSqlConnectivity(context.Config, context.TargetDir);
       diagnostics.AddCheck(sqlCheck);
       this.emitDiagnostic(emitter, sqlCheck);
@@ -231,11 +257,23 @@ export class PreflightPhase {
     };
   }
 
-  /** Run `<binary> --version` from `cwd`, returning `"not found"` when the binary is missing. */
+  /**
+   * Run `<binary> --version` from `cwd`, returning `"not found"` when the binary
+   * cannot be run.
+   *
+   * `cwd` is the target directory on purpose: corepack resolves the package
+   * manager version per directory, so probing elsewhere can report a version the
+   * install will not actually use. The caller must ensure the directory exists.
+   *
+   * On failure the reason is recorded in {@link probeFailures} so the diagnostic
+   * can say *why* instead of assuming the binary is absent.
+   */
   private async probeVersion(binary: string, cwd: string): Promise<string> {
     try {
       return await this.processRunner.RunSimple(binary, ['--version'], cwd);
-    } catch {
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      this.probeFailures.set(binary, reason);
       return 'not found';
     }
   }
@@ -286,10 +324,13 @@ export class PreflightPhase {
           'To install with npm instead, set PackageManager to "npm" in your install config.'
         : 'npm is included with Node.js. Reinstall Node.js from https://nodejs.org';
 
+      const probeFailure = this.probeFailures.get(packageManager);
       return {
         Name: 'Package manager',
         Status: 'fail',
-        Message: `${packageManager} not found on PATH`,
+        Message: probeFailure
+          ? `${packageManager} could not be run: ${probeFailure}`
+          : `${packageManager} not found on PATH`,
         SuggestedFix: suggestedFix,
       };
     }
@@ -369,34 +410,39 @@ export class PreflightPhase {
   }
 
   /**
-   * Check SQL Server connectivity at the target host/port.
+   * Check database server connectivity (SQL Server, or PostgreSQL when
+   * `config.DatabasePlatform` is `'postgresql'`) at the target host/port.
    *
    * Resolution order for host/port:
    *   1. `.env` in `targetDir` (when present) — this is what MJAPI will actually use at runtime.
    *      Reading .env here keeps `mj doctor` honest: it reports on the same SQL Server the app talks to.
    *   2. Explicit `config.DatabaseHost` / `config.DatabasePort` from `--config` or env vars.
-   *   3. Defaults (`localhost:1433`).
+   *   3. Defaults (`localhost:1433`, or `localhost:5432` for PostgreSQL).
    */
   private async checkSqlConnectivity(config: PartialInstallConfig, targetDir?: string): Promise<DiagnosticCheck> {
     const envValues = targetDir ? await this.readEnvDbTarget(targetDir) : null;
+    const isPostgres = config.DatabasePlatform === 'postgresql';
+    const server = isPostgres ? 'PostgreSQL' : 'SQL Server';
     const host = envValues?.host ?? config.DatabaseHost ?? 'localhost';
-    const port = envValues?.port ?? config.DatabasePort ?? 1433;
+    const port = envValues?.port ?? config.DatabasePort ?? (isPostgres ? 5432 : 1433);
 
-    const result = await this.sqlAdapter.CheckConnectivity(host, port);
+    const result = isPostgres
+      ? await this.pgAdapter.CheckConnectivity(host, port)
+      : await this.sqlAdapter.CheckConnectivity(host, port);
 
     if (result.Reachable) {
       return {
-        Name: 'SQL Server connectivity',
+        Name: `${server} connectivity`,
         Status: 'pass',
-        Message: `SQL Server reachable at ${host}:${port} (${result.LatencyMs}ms)`,
+        Message: `${server} reachable at ${host}:${port} (${result.LatencyMs}ms)`,
       };
     }
 
     return {
-      Name: 'SQL Server connectivity',
+      Name: `${server} connectivity`,
       Status: 'fail',
-      Message: result.ErrorMessage ?? `Cannot reach SQL Server at ${host}:${port}`,
-      SuggestedFix: `Ensure SQL Server is running and accessible at ${host}:${port}. Use --skip-db to skip database checks.`,
+      Message: result.ErrorMessage ?? `Cannot reach ${server} at ${host}:${port}`,
+      SuggestedFix: `Ensure ${server} is running and accessible at ${host}:${port}. Use --skip-db to skip database checks.`,
     };
   }
 

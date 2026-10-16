@@ -22,24 +22,24 @@ import type { ApplyResult, ListDelta } from '@memberjunction/lists-base';
 import {
   ApplyDeltaInput,
   ListSourceInput,
-  fromCoreApplyResult,
-  fromCoreDelta,
-  fromCoreWarning,
-  rebuildDeltaFromInput,
-  toCoreSource,
+  FromCoreApplyResult,
+  FromCoreDelta,
+  FromCoreWarning,
+  RebuildDeltaFromInput,
+  ToCoreSource,
 } from '../resolvers/ListOperationsResolver.js';
 
 describe('ListOperationsResolver — boundary converters', () => {
   describe('toCoreSource', () => {
     it('maps a list-kind input to a core ListSource', () => {
       const input = Object.assign(new ListSourceInput(), { Kind: 'list', ListID: 'list-1' });
-      const result = toCoreSource(input);
+      const result = ToCoreSource(input);
       expect(result).toEqual({ kind: 'list', listId: 'list-1' });
     });
 
     it('maps a view-kind input to a core ListSource', () => {
       const input = Object.assign(new ListSourceInput(), { Kind: 'view', ViewID: 'view-1' });
-      expect(toCoreSource(input)).toEqual({ kind: 'view', viewId: 'view-1' });
+      expect(ToCoreSource(input)).toEqual({ kind: 'view', viewId: 'view-1' });
     });
 
     it('maps an adhoc-kind input to a core ListSource', () => {
@@ -48,7 +48,7 @@ describe('ListOperationsResolver — boundary converters', () => {
         EntityName: 'Contacts',
         ExtraFilter: "Status='Active'",
       });
-      expect(toCoreSource(input)).toEqual({
+      expect(ToCoreSource(input)).toEqual({
         kind: 'adhoc',
         entityName: 'Contacts',
         extraFilter: "Status='Active'",
@@ -57,22 +57,22 @@ describe('ListOperationsResolver — boundary converters', () => {
 
     it('throws when list-kind input has no ListID', () => {
       const input = Object.assign(new ListSourceInput(), { Kind: 'list' });
-      expect(() => toCoreSource(input)).toThrow(/ListID is required/);
+      expect(() => ToCoreSource(input)).toThrow(/ListID is required/);
     });
 
     it('throws when view-kind input has no ViewID', () => {
       const input = Object.assign(new ListSourceInput(), { Kind: 'view' });
-      expect(() => toCoreSource(input)).toThrow(/ViewID is required/);
+      expect(() => ToCoreSource(input)).toThrow(/ViewID is required/);
     });
 
     it('throws when adhoc-kind input lacks EntityName or ExtraFilter', () => {
       const input = Object.assign(new ListSourceInput(), { Kind: 'adhoc', EntityName: 'X' });
-      expect(() => toCoreSource(input)).toThrow(/EntityName and ExtraFilter/);
+      expect(() => ToCoreSource(input)).toThrow(/EntityName and ExtraFilter/);
     });
 
     it('throws on an unknown discriminator', () => {
       const input = Object.assign(new ListSourceInput(), { Kind: 'mystery' as never });
-      expect(() => toCoreSource(input)).toThrow(/Unknown ListSourceInput\.Kind/);
+      expect(() => ToCoreSource(input)).toThrow(/Unknown ListSourceInput\.Kind/);
     });
   });
 
@@ -90,7 +90,7 @@ describe('ListOperationsResolver — boundary converters', () => {
         ],
         DeltaToken: 'abc.def',
       };
-      const output = fromCoreDelta(delta);
+      const output = FromCoreDelta(delta);
       expect(output).toMatchObject({
         TargetListId: 'list-1',
         EntityName: 'Contacts',
@@ -111,7 +111,7 @@ describe('ListOperationsResolver — boundary converters', () => {
 
   describe('fromCoreWarning', () => {
     it('leaves DetailsJSON undefined when no details supplied', () => {
-      const output = fromCoreWarning({ Code: 'EMPTY_SOURCE', Message: 'No records' });
+      const output = FromCoreWarning({ Code: 'EMPTY_SOURCE', Message: 'No records' });
       expect(output.DetailsJSON).toBeUndefined();
     });
   });
@@ -126,7 +126,7 @@ describe('ListOperationsResolver — boundary converters', () => {
         CreatedListId: 'list-1',
         Counts: { Added: 5, Removed: 2, Failed: 0 },
       };
-      const output = fromCoreApplyResult(result);
+      const output = FromCoreApplyResult(result);
       expect(output).toMatchObject({
         Success: true,
         ResultCode: 'SUCCESS',
@@ -145,7 +145,7 @@ describe('ListOperationsResolver — boundary converters', () => {
         Message: 'partial',
         Errors: ['failed record a'],
       };
-      expect(fromCoreApplyResult(result).Errors).toEqual(['failed record a']);
+      expect(FromCoreApplyResult(result).Errors).toEqual(['failed record a']);
     });
   });
 
@@ -165,7 +165,7 @@ describe('ListOperationsResolver — boundary converters', () => {
         DeltaToken: 'tok',
         ConfirmDrops: true,
       });
-      const out = rebuildDeltaFromInput(input);
+      const out = RebuildDeltaFromInput(input);
       expect(out).toMatchObject({
         TargetListId: 'list-1',
         EntityName: 'Contacts',

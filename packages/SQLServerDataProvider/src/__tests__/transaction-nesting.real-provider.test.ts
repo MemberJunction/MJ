@@ -21,7 +21,6 @@ type Surface = {
     _pool: MockConnectionPool;
     _transaction: MockTransaction | null;
     _datetimeOffsetTestComplete: boolean;
-    _deferredTasks: unknown[];
     initializeQueueProcessor(): void;
 };
 
@@ -36,7 +35,7 @@ class NestingProvider extends SQLServerDataProvider {
         return (this as unknown as Surface)._transaction;
     }
     public DeferredCount(): number {
-        return (this as unknown as Surface)._deferredTasks.length;
+        return this.PendingPostCommitTaskCount;
     }
     public EnqueueAI(): void {
         this.EnqueueAfterSaveAIAction(
@@ -214,6 +213,22 @@ describe('SQLServerDataProvider nested transactions (real class, mocked mssql)',
         await provider.BeginTransaction();
         provider.EnqueueAI();
         await provider.RollbackTransaction();
+        expect(provider.DeferredCount()).toBe(0);
+        expect(QueueManager.AddTask).not.toHaveBeenCalled();
+    });
+
+    it('AI tasks enqueued with no transaction are added immediately', async () => {
+        provider.EnqueueAI();
+        expect(provider.DeferredCount()).toBe(0);
+        await Promise.resolve();
+        expect(QueueManager.AddTask).toHaveBeenCalledTimes(1);
+    });
+
+    it('deferred AI tasks never run when the commit fails (server-side abort)', async () => {
+        await provider.BeginTransaction();
+        provider.EnqueueAI();
+        provider.Handle()?.abortServerSide();
+        await expect(provider.CommitTransaction()).rejects.toThrow(/aborted/);
         expect(provider.DeferredCount()).toBe(0);
         expect(QueueManager.AddTask).not.toHaveBeenCalled();
     });

@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import {
-  entityFieldToERDField,
-  entityInfoToERDNode,
-  entitiesToERDNodes,
-  getOriginalEntityFromERDNode,
-  findEntityByNodeId,
-  buildERDDataFromEntities
+  EntityFieldToERDField,
+  EntityInfoToERDNode,
+  EntitiesToERDNodes,
+  GetOriginalEntityFromERDNode,
+  FindEntityByNodeId,
+  BuildERDDataFromEntities
 } from '../lib/utils/entity-to-erd-adapter';
 import type { ERDNode } from '../lib/interfaces/erd-types';
 
@@ -49,7 +49,7 @@ function createMockEntity(overrides: Record<string, unknown> = {}): Record<strin
 describe('entityFieldToERDField', () => {
   it('should convert basic field properties', () => {
     const field = createMockField();
-    const erdField = entityFieldToERDField(field as never);
+    const erdField = EntityFieldToERDField(field as never);
 
     expect(erdField.id).toBe('field-1');
     expect(erdField.name).toBe('TestField');
@@ -68,7 +68,7 @@ describe('entityFieldToERDField', () => {
       RelatedEntity: 'ParentEntity',
       RelatedEntityFieldName: 'ID'
     });
-    const erdField = entityFieldToERDField(field as never);
+    const erdField = EntityFieldToERDField(field as never);
 
     expect(erdField.relatedNodeId).toBe('rel-entity-1');
     expect(erdField.relatedNodeName).toBe('ParentEntity');
@@ -77,7 +77,7 @@ describe('entityFieldToERDField', () => {
 
   it('should not set related info for non-FK fields', () => {
     const field = createMockField({ RelatedEntityID: null });
-    const erdField = entityFieldToERDField(field as never);
+    const erdField = EntityFieldToERDField(field as never);
 
     expect(erdField.relatedNodeId).toBeUndefined();
     expect(erdField.relatedNodeName).toBeUndefined();
@@ -90,7 +90,7 @@ describe('entityFieldToERDField', () => {
         { ID: 'v2', Value: 'Inactive', Code: 'I', Description: 'Inactive status', Sequence: 2 }
       ]
     });
-    const erdField = entityFieldToERDField(field as never);
+    const erdField = EntityFieldToERDField(field as never);
 
     expect(erdField.possibleValues).toHaveLength(2);
     expect(erdField.possibleValues![0].value).toBe('Active');
@@ -104,7 +104,7 @@ describe('entityInfoToERDNode', () => {
     const entity = createMockEntity({
       Fields: [createMockField()]
     });
-    const node = entityInfoToERDNode(entity as never);
+    const node = EntityInfoToERDNode(entity as never);
 
     expect(node.id).toBe('entity-1');
     expect(node.name).toBe('MJTestEntity');
@@ -125,7 +125,7 @@ describe('entityInfoToERDNode', () => {
         createMockField({ ID: 'f3', Name: 'Status' })
       ]
     });
-    const node = entityInfoToERDNode(entity as never);
+    const node = EntityInfoToERDNode(entity as never);
     expect(node.fields).toHaveLength(3);
     expect(node.fields[0].isPrimaryKey).toBe(true);
   });
@@ -137,22 +137,22 @@ describe('entitiesToERDNodes', () => {
       createMockEntity({ ID: 'e1', Name: 'Entity1' }),
       createMockEntity({ ID: 'e2', Name: 'Entity2' })
     ];
-    const nodes = entitiesToERDNodes(entities as never[]);
+    const nodes = EntitiesToERDNodes(entities as never[]);
     expect(nodes).toHaveLength(2);
     expect(nodes[0].name).toBe('Entity1');
     expect(nodes[1].name).toBe('Entity2');
   });
 
   it('should return empty array for empty input', () => {
-    expect(entitiesToERDNodes([])).toEqual([]);
+    expect(EntitiesToERDNodes([])).toEqual([]);
   });
 });
 
 describe('getOriginalEntityFromERDNode', () => {
   it('should extract entity from customData', () => {
     const entity = createMockEntity();
-    const node = entityInfoToERDNode(entity as never);
-    const extracted = getOriginalEntityFromERDNode(node);
+    const node = EntityInfoToERDNode(entity as never);
+    const extracted = GetOriginalEntityFromERDNode(node);
     expect(extracted).toBe(entity);
   });
 
@@ -162,7 +162,7 @@ describe('getOriginalEntityFromERDNode', () => {
       name: 'Test',
       fields: []
     };
-    expect(getOriginalEntityFromERDNode(node)).toBeNull();
+    expect(GetOriginalEntityFromERDNode(node)).toBeNull();
   });
 
   it('should return null when customData has no originalEntity', () => {
@@ -172,7 +172,7 @@ describe('getOriginalEntityFromERDNode', () => {
       fields: [],
       customData: { other: 'data' }
     };
-    expect(getOriginalEntityFromERDNode(node)).toBeNull();
+    expect(GetOriginalEntityFromERDNode(node)).toBeNull();
   });
 });
 
@@ -182,13 +182,13 @@ describe('findEntityByNodeId', () => {
       createMockEntity({ ID: 'e1' }),
       createMockEntity({ ID: 'e2' })
     ];
-    const found = findEntityByNodeId('e2', entities as never[]);
+    const found = FindEntityByNodeId('e2', entities as never[]);
     expect(found).toBe(entities[1]);
   });
 
   it('should return undefined when not found', () => {
     const entities = [createMockEntity({ ID: 'e1' })];
-    expect(findEntityByNodeId('e99', entities as never[])).toBeUndefined();
+    expect(FindEntityByNodeId('e99', entities as never[])).toBeUndefined();
   });
 });
 
@@ -197,7 +197,7 @@ describe('buildERDDataFromEntities', () => {
     const entities = [
       createMockEntity({ ID: 'e1', Name: 'Entity1', Fields: [], RelatedEntities: [] })
     ];
-    const result = buildERDDataFromEntities(entities as never[]);
+    const result = BuildERDDataFromEntities(entities as never[]);
     expect(result.nodes).toHaveLength(1);
     expect(result.links).toHaveLength(0);
   });
@@ -219,7 +219,7 @@ describe('buildERDDataFromEntities', () => {
       RelatedEntities: []
     });
 
-    const result = buildERDDataFromEntities(
+    const result = BuildERDDataFromEntities(
       [childEntity as never],
       { allEntities: [parentEntity as never, childEntity as never], includeOutgoing: true, includeIncoming: false }
     );
@@ -229,6 +229,34 @@ describe('buildERDDataFromEntities', () => {
     expect(result.links[0].sourceNodeId).toBe('child');
     expect(result.links[0].targetNodeId).toBe('parent');
     expect(result.links[0].relationshipType).toBe('many-to-one');
+  });
+
+  it('resolves outgoing related entities case-insensitively, at depth 1 and beyond', () => {
+    // SQL Server returns UUIDs upper-case and PostgreSQL lower-case, so an FK value can differ in
+    // case from the entity ID it points at. Both outgoing loops (depth 1 and the depth > 1 walk)
+    // must still find the related entity.
+    const GRAND = 'cccccccc-0000-0000-0000-000000000003';
+    const PARENT = 'bbbbbbbb-0000-0000-0000-000000000002';
+    const CHILD = 'aaaaaaaa-0000-0000-0000-000000000001';
+    const pk = createMockField({ ID: 'pk', Name: 'ID', IsPrimaryKey: true });
+    const grand = createMockEntity({ ID: GRAND, Name: 'Grand', Fields: [pk], RelatedEntities: [] });
+    const parent = createMockEntity({
+      ID: PARENT, Name: 'Parent', RelatedEntities: [],
+      Fields: [pk, createMockField({ ID: 'fk-g', Name: 'GrandID', RelatedEntityID: GRAND.toUpperCase() })],
+    });
+    const child = createMockEntity({
+      ID: CHILD, Name: 'Child', RelatedEntities: [],
+      Fields: [pk, createMockField({ ID: 'fk-p', Name: 'ParentID', RelatedEntityID: PARENT.toUpperCase() })],
+    });
+
+    const result = BuildERDDataFromEntities(
+      [child as never],
+      { allEntities: [child as never, parent as never, grand as never], includeOutgoing: true, includeIncoming: false, depth: 2 }
+    );
+
+    expect(result.nodes.map(n => n.id).sort()).toEqual([CHILD, PARENT, GRAND].sort());
+    // A link's targetNodeId is the raw FK value, so compare case-insensitively.
+    expect(result.links.map(l => `${l.sourceNodeId}->${l.targetNodeId}`.toLowerCase()).sort()).toEqual([`${CHILD}->${PARENT}`, `${PARENT}->${GRAND}`].sort());
   });
 
   it('should discover incoming relationships', () => {
@@ -250,7 +278,7 @@ describe('buildERDDataFromEntities', () => {
       RelatedEntities: []
     });
 
-    const result = buildERDDataFromEntities(
+    const result = BuildERDDataFromEntities(
       [parentEntity as never],
       { allEntities: [parentEntity as never, childEntity as never], includeOutgoing: false, includeIncoming: true }
     );
@@ -269,7 +297,7 @@ describe('buildERDDataFromEntities', () => {
       RelatedEntities: []
     });
 
-    const result = buildERDDataFromEntities(
+    const result = BuildERDDataFromEntities(
       [entity as never, entity as never],
       { allEntities: [entity as never] }
     );
@@ -287,7 +315,7 @@ describe('buildERDDataFromEntities', () => {
       RelatedEntities: []
     });
 
-    const result = buildERDDataFromEntities(
+    const result = BuildERDDataFromEntities(
       [entity as never],
       { allEntities: [entity as never], includeOutgoing: true }
     );
@@ -296,7 +324,7 @@ describe('buildERDDataFromEntities', () => {
   });
 
   it('should handle empty entities array', () => {
-    const result = buildERDDataFromEntities([]);
+    const result = BuildERDDataFromEntities([]);
     expect(result.nodes).toEqual([]);
     expect(result.links).toEqual([]);
   });

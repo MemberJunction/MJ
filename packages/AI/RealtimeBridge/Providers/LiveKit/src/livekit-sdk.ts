@@ -24,8 +24,8 @@
  * - {@link publishAudioFrame} → publishing PCM on the bot's audio track (the agent's voice).
  * - {@link onAudioTrack} → subscribing each remote participant's audio track; LiveKit delivers tracks
  *   **per participant**, which is the native source of speaker labels for diarization (no extra mixer).
- * - {@link publishVideoFrame} / {@link publishScreenFrame} → publishing the bot's camera / screen-share
- *   tracks (LiveKit does full A/V/screen; the realtime models light audio first).
+ * - {@link publishAvatarMedia} → publishing the agent's live avatar: its face on the bot's camera track and its voice
+ *   on the audio track. That is the bot's only video out: it publishes no raw camera frames and no screen share.
  * - {@link onParticipantJoin} / {@link onParticipantLeave} / {@link getParticipants} → the room's
  *   `ParticipantConnected` / `ParticipantDisconnected` events + the participant list.
  * - {@link sendDataMessage} → the LiveKit **data channel** (reliable data publish) — used for chat.
@@ -76,6 +76,67 @@ export interface LiveKitAudioFrame {
     TimestampMs?: number;
 }
 
+/** Which of a participant's video sources a frame comes from: their camera or a screen they share. */
+export type LiveKitVideoSourceKind = 'camera' | 'screen';
+
+/**
+ * One sampled frame of a person's camera or shared screen, from someone who lets agents see them. Already encoded for
+ * the model (JPEG) and paced to the model's rate by the room client.
+ */
+export interface LiveKitVideoFrame {
+    /** The encoded image. */
+    Bytes: ArrayBuffer;
+    /** The image format. */
+    MimeType: 'image/jpeg';
+    /** The participant whose camera or screen this is. */
+    ParticipantIdentity: string;
+    /** Their display name, when known. */
+    DisplayName?: string;
+    /** Which of their sources this is. */
+    Source: LiveKitVideoSourceKind;
+    /** The encoded image's width in pixels. */
+    Width: number;
+    /** The encoded image's height in pixels. */
+    Height: number;
+    /** Epoch-ms capture timestamp. */
+    TimestampMs: number;
+}
+
+/**
+ * A camera or screen the room client stopped reading: the person opted out, left, stopped sharing or turned it off, or
+ * the client moved the agent's view to another source.
+ */
+export interface LiveKitVideoSourceEnd {
+    /** The participant whose source it was. */
+    ParticipantIdentity: string;
+    /** Their display name, when known. */
+    DisplayName?: string;
+    /** Which of their sources ended. */
+    Source: LiveKitVideoSourceKind;
+}
+
+/**
+ * One piece of the agent's live avatar for the room client to publish: fragmented MP4 (an init segment, or `moof` +
+ * `mdat` fragments) whose video becomes the bot's camera track and whose audio is the agent's voice.
+ */
+export interface LiveKitAvatarMediaChunk {
+    /** The piece's bytes. The room client may take ownership of the buffer (transfer it to another thread). */
+    Bytes: ArrayBuffer;
+    /** Its MIME type, for example `'video/mp4'`. */
+    MimeType: string;
+}
+
+/** Why the room client can no longer show the agent's avatar: its decoders kept failing, or the room refused the track. */
+export type LiveKitAvatarFailure = 'decoder-failed' | 'publish-failed';
+
+/** A change in what the room client shows of the agent's avatar. */
+export interface LiveKitAvatarStatus {
+    /** `'on'`: the avatar's video track is published. `'audio-only'`: the avatar was taken down; the voice goes on. */
+    State: 'on' | 'audio-only';
+    /** Why, when {@link State} is `'audio-only'`. */
+    Reason?: LiveKitAvatarFailure;
+}
+
 /** Arguments to {@link ILiveKitRoomSdk.connect} — what the bot needs to join an MJ-native room. */
 export interface LiveKitConnectArgs {
     /** The LiveKit room server URL (e.g. `wss://livekit.myorg.com`). MJ-owned, self-hosted. */
@@ -110,23 +171,23 @@ export interface ILiveKitRoomSdk {
      * @param args Connect parameters (room URL, signed access token, bot name).
      * @returns The bot identity + room handles.
      */
-    connect(args: LiveKitConnectArgs): Promise<LiveKitConnectResult>;
+    connect(args: LiveKitConnectArgs): Promise<LiveKitConnectResult>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /** Disconnects from the room and releases SDK resources. */
-    disconnect(): Promise<void>;
+    disconnect(): Promise<void>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Publishes one raw PCM audio frame on the bot's audio track (the agent's voice into the room).
      *
      * @param pcm The PCM audio bytes to publish.
      */
-    publishAudioFrame(pcm: ArrayBuffer): void;
+    publishAudioFrame(pcm: ArrayBuffer): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Flushes all pending/queued outbound audio (the agent's voice). Called on barge-in so the agent
      * stops talking immediately instead of draining already-buffered audio after the model is cut off.
      */
-    flushOutboundAudio(): void;
+    flushOutboundAudio(): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Subscribes inbound per-participant audio frames (what the agent hears, carrying the speaker
@@ -135,44 +196,62 @@ export interface ILiveKitRoomSdk {
      *
      * @param cb Invoked with each inbound, per-participant audio frame.
      */
-    onAudioTrack(cb: (frame: LiveKitAudioFrame) => void): void;
+    onAudioTrack(cb: (frame: LiveKitAudioFrame) => void): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
-     * Publishes one raw video frame on the bot's camera track. LiveKit does full video; the realtime
-     * models light audio first, so this is wired but typically unused until a model emits video.
+     * Subscribes sampled camera and screen frames from people who let agents see them (what the agent SEES). Only fires
+     * when the session's configuration asked the room client to watch. Optional: an SDK without inbound video omits it.
+     * "Latest handler wins."
      *
-     * @param frame The encoded/raw video frame bytes to publish.
+     * @param cb Invoked with each sampled frame.
      */
-    publishVideoFrame(frame: ArrayBuffer): void;
+    onVideoTrack?(cb: (frame: LiveKitVideoFrame) => void): void;  // case-violation-ok-legacy-back-compat: a new member of this lower-case seam; the seam's other members are lower-case, and an interface has no runtime carrier for a stub
 
     /**
-     * Publishes one raw screen-share frame on the bot's screen track (e.g. a Remote Browser channel's
-     * viewport). LiveKit does full screen share.
+     * Subscribes the end of a camera or screen the room client was reading. Optional, like {@link onVideoTrack}.
+     * "Latest handler wins."
      *
-     * @param frame The encoded/raw screen frame bytes to publish.
+     * @param cb Invoked with each source that ended.
      */
-    publishScreenFrame(frame: ArrayBuffer): void;
+    onVideoSourceEnded?(cb: (source: LiveKitVideoSourceEnd) => void): void;  // case-violation-ok-legacy-back-compat: a new member of this lower-case seam; the seam's other members are lower-case, and an interface has no runtime carrier for a stub
+
+    /**
+     * Publishes one piece of the agent's live avatar: the room client decodes it, publishes the face on the bot's camera
+     * track (at its first frame) and the voice on its audio track, lip-synced. This is the bot's only video out. Optional:
+     * an SDK without avatar publishing omits it, and the avatar's pieces are dropped.
+     *
+     * @param chunk The avatar piece.
+     */
+    publishAvatarMedia?(chunk: LiveKitAvatarMediaChunk): void;  // case-violation-ok-legacy-back-compat: a new member of this lower-case seam; the seam's other members are lower-case, and an interface has no runtime carrier for a stub
+
+    /**
+     * Subscribes changes in what the room client shows of the avatar (published, or taken down with a reason). Optional,
+     * like {@link publishAvatarMedia}. "Latest handler wins."
+     *
+     * @param cb Invoked with each change.
+     */
+    onAvatarStatus?(cb: (status: LiveKitAvatarStatus) => void): void;  // case-violation-ok-legacy-back-compat: a new member of this lower-case seam; the seam's other members are lower-case, and an interface has no runtime carrier for a stub
 
     /**
      * Registers a callback fired when a participant connects. "Latest handler wins."
      *
      * @param cb Invoked with the participant who joined.
      */
-    onParticipantJoin(cb: (participant: LiveKitParticipant) => void): void;
+    onParticipantJoin(cb: (participant: LiveKitParticipant) => void): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Registers a callback fired when a participant disconnects. "Latest handler wins."
      *
      * @param cb Invoked with the participant identity that left.
      */
-    onParticipantLeave(cb: (participantIdentity: string) => void): void;
+    onParticipantLeave(cb: (participantIdentity: string) => void): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Returns the current participant list (including the bot).
      *
      * @returns The current participants.
      */
-    getParticipants(): Promise<LiveKitParticipant[]>;
+    getParticipants(): Promise<LiveKitParticipant[]>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Sends a text message on the LiveKit data channel (reliable publish to all participants) — the
@@ -180,7 +259,7 @@ export interface ILiveKitRoomSdk {
      *
      * @param text The chat/data message text.
      */
-    sendDataMessage(text: string): Promise<void>;
+    sendDataMessage(text: string): Promise<void>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Registers a callback fired when the room disconnects the bot (SFU closed / bot removed). "Latest
@@ -188,7 +267,7 @@ export interface ILiveKitRoomSdk {
      *
      * @param cb Invoked when the room has disconnected.
      */
-    onDisconnected(cb: () => void): void;
+    onDisconnected(cb: (reason?: string) => void): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**

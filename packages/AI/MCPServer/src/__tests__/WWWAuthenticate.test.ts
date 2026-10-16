@@ -6,34 +6,35 @@ import { describe, it, expect, vi } from 'vitest';
 
 // Mock the OAuthConfig module
 vi.mock('../auth/OAuthConfig.js', () => ({
-    getResourceIdentifier: () => 'http://localhost:3100',
+    GetResourceIdentifier: () => 'http://localhost:3100',
+    get getResourceIdentifier() { return this.GetResourceIdentifier; },
 }));
 
-import { buildWWWAuthenticateHeader } from '../auth/WWWAuthenticate';
+import { BuildWWWAuthenticateHeader } from '../auth/WWWAuthenticate';
 
 describe('buildWWWAuthenticateHeader()', () => {
     it('should build minimal header with resource_metadata', () => {
-        const header = buildWWWAuthenticateHeader();
+        const header = BuildWWWAuthenticateHeader();
         expect(header).toContain('Bearer');
         expect(header).toContain('resource_metadata="http://localhost:3100/.well-known/oauth-protected-resource"');
     });
 
     it('should include error parameter', () => {
-        const header = buildWWWAuthenticateHeader({
+        const header = BuildWWWAuthenticateHeader({
             error: 'insufficient_scope',
         });
         expect(header).toContain('error="insufficient_scope"');
     });
 
     it('should include scope parameter', () => {
-        const header = buildWWWAuthenticateHeader({
+        const header = BuildWWWAuthenticateHeader({
             scope: 'entity:read entity:write',
         });
         expect(header).toContain('scope="entity:read entity:write"');
     });
 
     it('should include error_description', () => {
-        const header = buildWWWAuthenticateHeader({
+        const header = BuildWWWAuthenticateHeader({
             error: 'invalid_token',
             errorDescription: 'Token has expired',
         });
@@ -42,7 +43,7 @@ describe('buildWWWAuthenticateHeader()', () => {
     });
 
     it('should escape quotes in error_description', () => {
-        const header = buildWWWAuthenticateHeader({
+        const header = BuildWWWAuthenticateHeader({
             error: 'invalid_token',
             errorDescription: 'Token "abc" is invalid',
         });
@@ -50,14 +51,14 @@ describe('buildWWWAuthenticateHeader()', () => {
     });
 
     it('should use custom resourceMetadataUrl', () => {
-        const header = buildWWWAuthenticateHeader({
+        const header = BuildWWWAuthenticateHeader({
             resourceMetadataUrl: 'https://api.example.com',
         });
         expect(header).toContain('resource_metadata="https://api.example.com/.well-known/oauth-protected-resource"');
     });
 
     it('should combine all parameters correctly', () => {
-        const header = buildWWWAuthenticateHeader({
+        const header = BuildWWWAuthenticateHeader({
             error: 'insufficient_scope',
             scope: 'entity:write',
             errorDescription: 'Write access required',

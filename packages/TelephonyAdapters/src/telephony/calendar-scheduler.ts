@@ -47,7 +47,7 @@ export interface CalendarSchedulerHandle {
 /**
  * Builds the {@link CalendarSourceResolver} that binds the real calendar clients per identity.
  */
-export function buildCalendarSourceResolver(teamsConfig: TeamsMeetingsConfig): CalendarSourceResolver {
+export function BuildCalendarSourceResolver(teamsConfig: TeamsMeetingsConfig): CalendarSourceResolver {
     return (_identity, provider) => {
         const driver = provider?.DriverClass?.trim();
         if (driver === TEAMS_PROVIDER_DRIVER && teamsConfig.botAccessToken) {
@@ -57,10 +57,15 @@ export function buildCalendarSourceResolver(teamsConfig: TeamsMeetingsConfig): C
     };
 }
 
+/** @deprecated Use {@link BuildCalendarSourceResolver}. */
+export function buildCalendarSourceResolver(teamsConfig: TeamsMeetingsConfig): CalendarSourceResolver {
+    return BuildCalendarSourceResolver(teamsConfig);
+}
+
 /**
  * Builds the {@link ScheduledBridgeSessionFactory} that turns a due bridge into start params.
  */
-export function buildScheduledSessionFactory(teamsService: TeamsMeetingsService): ScheduledBridgeSessionFactory {
+export function BuildScheduledSessionFactory(teamsService: TeamsMeetingsService): ScheduledBridgeSessionFactory {
     return async (ctx) => {
         const joinUrl = ctx.BridgeRow.Address?.trim();
         if (!joinUrl) {
@@ -87,6 +92,11 @@ export function buildScheduledSessionFactory(teamsService: TeamsMeetingsService)
     };
 }
 
+/** @deprecated Use {@link BuildScheduledSessionFactory}. */
+export function buildScheduledSessionFactory(teamsService: TeamsMeetingsService): ScheduledBridgeSessionFactory {
+    return BuildScheduledSessionFactory(teamsService);
+}
+
 /** Loads the `AIAgentSession` to resolve the agent the scheduled bridge belongs to. */
 async function resolveAgentID(
     agentSessionID: string,
@@ -106,12 +116,12 @@ async function resolveAgentID(
  */
 export function StartCalendarScheduler(options: CalendarSchedulerOptions): CalendarSchedulerHandle {
     const watcher = new CalendarWatcher({
-        SourceResolver: buildCalendarSourceResolver(options.TeamsConfig),
+        SourceResolver: BuildCalendarSourceResolver(options.TeamsConfig),
         ContextUser: options.ContextUser,
         MetadataProvider: options.Provider,
     });
     const runner = new ScheduledBridgeRunner({
-        SessionFactory: buildScheduledSessionFactory(options.TeamsService),
+        SessionFactory: BuildScheduledSessionFactory(options.TeamsService),
         ContextUser: options.ContextUser,
         MetadataProvider: options.Provider,
     });

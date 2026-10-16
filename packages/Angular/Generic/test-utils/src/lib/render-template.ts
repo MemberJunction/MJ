@@ -6,9 +6,9 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
  */
 export interface RenderTemplateOptions {
   /** Components to declare in the testing module (e.g. the module-declared components under test). */
-  declarations?: Type<unknown>[];
+  declarations?: Type<unknown>[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Modules to import (e.g. `CommonModule`, or `SomeModule.forRoot()`). */
-  imports?: Array<Type<unknown> | ModuleWithProviders<object>>;
+  imports?: Array<Type<unknown> | ModuleWithProviders<object>>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -35,7 +35,7 @@ export interface RenderTemplateOptions {
  * const tabs = fixture.nativeElement.querySelectorAll('.single-tab');
  * ```
  */
-export async function renderTemplate(
+export async function RenderTemplate(
   template: string,
   options: RenderTemplateOptions = {},
 ): Promise<ComponentFixture<unknown>> {
@@ -54,4 +54,12 @@ export async function renderTemplate(
   fixture.autoDetectChanges();
   await fixture.whenStable();
   return fixture;
+}
+
+/** @deprecated Use {@link RenderTemplate}. */
+export async function renderTemplate(
+  template: string,
+  options: RenderTemplateOptions = {},
+): Promise<ComponentFixture<unknown>> {
+  return RenderTemplate(template, options);
 }

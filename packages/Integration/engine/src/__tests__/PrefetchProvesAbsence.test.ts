@@ -21,7 +21,7 @@ const { CONTENT_HASH_COLUMN } = await import('../ContentHash.js');
 
 type Precheck = { Hashes: Map<string, string>; Present: Set<string>; CoversWholeBatch: boolean };
 type PrefetchHost = {
-    PrefetchContentHashes: (batch: unknown[], user: unknown) => Promise<Precheck | undefined>;
+    prefetchContentHashes: (batch: unknown[], user: unknown) => Promise<Precheck | undefined>;
     extractMappedPrimaryKey: (record: unknown, pkFields: Array<{ Name: string }>) => string | null;
     isProvablyAbsent: (mappedPK: string | null, precheck: Precheck | undefined) => boolean;
 };
@@ -66,14 +66,14 @@ describe('PrefetchContentHashes — presence is separate from hash', () => {
         // A row written before hashing existed, or hashed NULL, is still a row. Treating "absent
         // from the hash map" as "absent from the table" would turn its update into a second insert.
         const host = makeHost([{ id: 'a', [CONTENT_HASH_COLUMN]: null }]);
-        const out = await host.PrefetchContentHashes([updated('a')], {});
+        const out = await host.prefetchContentHashes([updated('a')], {});
         expect(out?.Present.has('a')).toBe(true);
         expect(out?.Hashes.has('a')).toBe(false);
     });
 
     it('asks about CREATE-path keys too, not just matched updates', async () => {
         const host = makeHost([{ id: 'x', [CONTENT_HASH_COLUMN]: 'h' }]);
-        const out = await host.PrefetchContentHashes([created('x'), created('y')], {});
+        const out = await host.prefetchContentHashes([created('x'), created('y')], {});
         expect(out?.Present.has('x')).toBe(true);
         expect(out?.Present.has('y')).toBe(false); // asked about, and genuinely not there
         expect(out?.CoversWholeBatch).toBe(true);
@@ -83,13 +83,13 @@ describe('PrefetchContentHashes — presence is separate from hash', () => {
         // A destination-generated key (identity / server-assigned UUID) cannot be known before the
         // insert, so this batch cannot prove anything absent.
         const host = makeHost([{ id: 'x', [CONTENT_HASH_COLUMN]: 'h' }]);
-        const out = await host.PrefetchContentHashes([created('x'), created(null)], {});
+        const out = await host.prefetchContentHashes([created('x'), created(null)], {});
         expect(out?.CoversWholeBatch).toBe(false);
     });
 
     it('returns nothing at all when the query fails — unknown, never "not there"', async () => {
         const host = makeHost([], false);
-        const out = await host.PrefetchContentHashes([created('x')], {});
+        const out = await host.prefetchContentHashes([created('x')], {});
         expect(out).toBeUndefined();
     });
 });
@@ -114,7 +114,7 @@ describe('the key SHAPES agree end to end (the regression that shipped)', () => 
         // because the derived lookup key was '' — and got a second INSERT. The real key must
         // hit Present, and the decision must say "not absent", forcing the load-then-update.
         const host = makeHost([{ id: 'ext-123', [CONTENT_HASH_COLUMN]: 'h' }]);
-        const out = await host.PrefetchContentHashes([created('ext-123'), created('brand-new')], {});
+        const out = await host.prefetchContentHashes([created('ext-123'), created('brand-new')], {});
         expect(out?.CoversWholeBatch).toBe(true);
         const keyExisting = host.extractMappedPrimaryKey(created('ext-123'), [pkField]);
         const keyNew = host.extractMappedPrimaryKey(created('brand-new'), [pkField]);
@@ -134,7 +134,7 @@ describe('the key SHAPES agree end to end (the regression that shipped)', () => 
             configurable: true,
         });
         const rec = { MJEntityName: 'X', ChangeType: 'Create', MappedFields: { a: 'v1', b: 'v2' }, ExternalRecord: { ExternalID: 'v1' } };
-        const out = await host.PrefetchContentHashes([rec], {});
+        const out = await host.prefetchContentHashes([rec], {});
         expect(host.isProvablyAbsent(host.extractMappedPrimaryKey(rec, pkFields), out)).toBe(false);
     });
 
@@ -145,7 +145,7 @@ describe('the key SHAPES agree end to end (the regression that shipped)', () => 
         // the replay would "prove" it absent again and insert a duplicate. CreateRecord adds the
         // key to Present the moment it creates; this asserts the resulting decision flips.
         const host = makeHost([]);
-        const out = await host.PrefetchContentHashes([created('new-1')], {});
+        const out = await host.prefetchContentHashes([created('new-1')], {});
         const key = host.extractMappedPrimaryKey(created('new-1'), [pkField])!;
         expect(host.isProvablyAbsent(key, out)).toBe(true);    // first pass: genuinely new, elide the load
         out!.Present.add(key);                                  // what CreateRecord does on the create path
@@ -176,7 +176,7 @@ describe('the prefetch is unbounded — its result is what absence proofs are ju
         // and each one is re-INSERTed as a duplicate on every sync. The batch size happening to sit
         // under the default cap is a margin, not a guard.
         const host = makeHost([]);
-        await host.PrefetchContentHashes([created('x')], {});
+        await host.prefetchContentHashes([created('x')], {});
         expect(lastRunViewParams.current?.['IgnoreMaxRows']).toBe(true);
     });
 });

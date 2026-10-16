@@ -1,10 +1,11 @@
 import { Component, ViewEncapsulation, inject } from '@angular/core';
-import { DataSnapshot, Metadata, UserInfo } from '@memberjunction/core';
+import { CompositeKey, DataSnapshot, Metadata, UserInfo } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData, MJEnvironmentEntityExtended } from '@memberjunction/core-entities';
-import { AnalyzeArtifactService, InteractiveFormApplyService } from '@memberjunction/ng-artifacts';
+import { AnalyzeArtifactService, InteractiveFormApplyService, NavigationRequest } from '@memberjunction/ng-artifacts';
 import type { ComponentSpec } from '@memberjunction/interactive-component-types';
+import type { FormAgentContext } from '@memberjunction/ng-base-forms';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 /**
@@ -27,7 +28,9 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
           [canShare]="true"
           [canEdit]="true"
           (analyzeRequested)="onAnalyzeRequested($event)"
-          (applyFormRequested)="onApplyFormRequested($event)">
+          (applyFormRequested)="onApplyFormRequested($event)"
+          (openEntityRecord)="OnOpenEntityRecord($event)"
+          (navigationRequest)="OnNavigationRequest($event)">
         </mj-artifact-viewer-panel>
       }
     </div>
@@ -47,26 +50,56 @@ export class ArtifactResource extends BaseResourceComponent {
   private readonly applyService = inject(InteractiveFormApplyService);
 
   /**
-   * Apply-to-my-form handler — see InteractiveFormApplyService.
-   * Confirms with the user, then routes to Create or Modify depending on
-   * whether an Active override already exists for this entity+user.
+   * Apply-to-my-form handler — see InteractiveFormApplyService. Routes a whole form to
+   * the override actions and a form panel to the contribution actions.
+   *
+   * When the agent context names an open record form (`AdditionalContext.Form`), the service
+   * reads that form's full composition from the `FormCompositionRegistry`, to validate a
+   * panel's placement and spot an installed contribution with the same key before writing
+   * anything.
    */
-  async onApplyFormRequested(event: { spec: unknown; entityName: string }): Promise<void> {
+  async OnApplyFormRequested(event: { spec: unknown; entityName: string }): Promise<void> {
+    const additional = (this.navigationService.AppContextSnapshot$.value?.AdditionalContext ?? null) as
+      { Form?: FormAgentContext } | null;
     await this.applyService.ConfirmAndApply(
       event.spec as ComponentSpec,
       event.entityName,
       this.ProviderToUse,
+      additional?.Form ?? null,
     );
   }
 
-  public currentUser: UserInfo | null = null;
+  /** @deprecated Use {@link OnApplyFormRequested}. */
+  async onApplyFormRequested(event: { spec: unknown; entityName: string }): Promise<void> {
+    return this.OnApplyFormRequested(event);
+  }
+
+  public CurrentUser: UserInfo | null = null;
+
+  /** @deprecated Use {@link CurrentUser}. */
+  public get currentUser(): UserInfo | null {
+    return this.CurrentUser;
+  }
+  /** @deprecated Use {@link CurrentUser}. */
+  public set currentUser(value: UserInfo | null) {
+    this.CurrentUser = value;
+  }
   public artifactId: string = '';
-  public environmentId: string = '';
+  public EnvironmentId: string = '';
+
+  /** @deprecated Use {@link EnvironmentId}. */
+  public get environmentId(): string {
+    return this.EnvironmentId;
+  }
+  /** @deprecated Use {@link EnvironmentId}. */
+  public set environmentId(value: string) {
+    this.EnvironmentId = value;
+  }
 
   ngOnInit() {
     super.ngOnInit();
     const md = this.ProviderToUse;
-    this.currentUser = md.CurrentUser;
+    this.CurrentUser = md.CurrentUser;
 
     // Get artifact ID from resource data
     if (this.Data && this.Data.ResourceRecordID) {
@@ -77,7 +110,7 @@ export class ArtifactResource extends BaseResourceComponent {
     // fall back to the default environment. Must be a valid UUID since
     // downstream saves (e.g. AnalyzeArtifactService creating artifacts)
     // require a non-empty EnvironmentID.
-    this.environmentId = (this.Data?.Configuration?.['environmentId'] as string | undefined)
+    this.EnvironmentId = (this.Data?.Configuration?.['environmentId'] as string | undefined)
         || MJEnvironmentEntityExtended.DefaultEnvironmentID;
 
     setTimeout(() => this.NotifyLoadComplete(), 100);
@@ -88,14 +121,14 @@ export class ArtifactResource extends BaseResourceComponent {
    * Creates a Data Snapshot artifact from the live viewer state, opens a
    * new conversation with it attached as input, and routes the user there.
    */
-  async onAnalyzeRequested(event: { artifactId: string; snapshot: DataSnapshot }): Promise<void> {
-    if (!this.currentUser) return;
+  async OnAnalyzeRequested(event: { artifactId: string; snapshot: DataSnapshot }): Promise<void> {
+    if (!this.CurrentUser) return;
 
     try {
       const result = await this.analyzeService.StartAnalysisConversation({
         snapshot: event.snapshot,
-        currentUser: this.currentUser,
-        environmentId: this.environmentId,
+        currentUser: this.CurrentUser,
+        environmentId: this.EnvironmentId,
       });
 
       // Route to the new conversation in the Conversations nav item
@@ -106,6 +139,35 @@ export class ArtifactResource extends BaseResourceComponent {
       const message = error instanceof Error ? error.message : 'Failed to start analysis conversation';
       MJNotificationService.Instance.CreateSimpleNotification(message, 'error', 5000);
     }
+  }
+
+  /** @deprecated Use {@link OnAnalyzeRequested}. */
+  async onAnalyzeRequested(event: { artifactId: string; snapshot: DataSnapshot }): Promise<void> {
+    return this.OnAnalyzeRequested(event);
+  }
+
+  /**
+   * Opens an entity record requested by the artifact, e.g. an interactive component's
+   * OpenEntityRecord callback. Without this, record links in a standalone artifact tab do nothing.
+   */
+  OnOpenEntityRecord(event: { entityName: string; compositeKey: CompositeKey }): void {
+    this.navigationService.OpenEntityRecord(event.entityName, event.compositeKey);
+  }
+
+  /**
+   * Handles app-level navigation requested by an artifact viewer plugin.
+   * Opens the target nav item (switching apps if needed) then applies query params to the URL.
+   */
+  async OnNavigationRequest(event: NavigationRequest): Promise<void> {
+    const appId = event.appName ? this.resolveAppID(event.appName) : undefined;
+    await this.navigationService.OpenNavItemByName(event.navItemName, undefined, appId, {
+      queryParams: event.queryParams
+    });
+  }
+
+  private resolveAppID(appName: string): string | undefined {
+    const app = this.ProviderToUse.Applications.find(a => a.Name.toLowerCase() === appName.toLowerCase());
+    return app?.ID;
   }
 
   async GetResourceDisplayName(data: ResourceData): Promise<string> {

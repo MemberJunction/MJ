@@ -15,9 +15,9 @@ import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { MJExplorerAppComponent } from './explorer-app.component';
 import { MJLoginSlotDirective } from './login-slot.directive';
-import { MJLoginPickerComponent } from '@memberjunction/ng-auth-services';
+import { MJLoginPickerComponent, MJLoginRegionComponent } from '@memberjunction/ng-auth-services';
 import { MJEnvironmentConfig, MJ_ENVIRONMENT, MJ_STARTUP_VALIDATION } from '@memberjunction/ng-bootstrap';
-import { ShellModule, StartupValidationService, SystemValidationBannerComponent, ServerConnectivityBannerComponent } from '@memberjunction/ng-explorer-core';
+import { ShellModule, StartupValidationService, SystemValidationBannerComponent, ServerConnectivityBannerComponent, TemplateUserBannerComponent } from '@memberjunction/ng-explorer-core';
 import { ConversationsModule } from '@memberjunction/ng-conversations';
 import { FeedbackModule } from '@memberjunction/ng-feedback';
 import { MJServiceWorkerModule, UpdateNotificationComponent } from '@memberjunction/ng-explorer-service-worker';
@@ -32,8 +32,10 @@ import { MJServiceWorkerModule, UpdateNotificationComponent } from '@memberjunct
     ShellModule,
     MJLoginPickerComponent,  // Standalone — shared multi-IdP picker on the login surface
     MJLoginSlotDirective,  // Standalone — host templates for the login screen's slots
+    MJLoginRegionComponent,  // Standalone — draws a sign-in page published in Login Studio
     SystemValidationBannerComponent,  // Standalone component
     ServerConnectivityBannerComponent,  // Standalone component
+    TemplateUserBannerComponent,  // Standalone component
     ConversationsModule,
     UpdateNotificationComponent,  // Standalone — bottom-right "Update available" toast (no-op when SW disabled)
     FeedbackModule.forRoot({
@@ -70,7 +72,7 @@ export class MJExplorerAppModule {
    * Configure the Explorer App module with environment settings.
    * Should be called once in the root application module.
    */
-  static forRoot(environment: MJEnvironmentConfig): ModuleWithProviders<MJExplorerAppModule> {
+  static ForRoot(environment: MJEnvironmentConfig): ModuleWithProviders<MJExplorerAppModule> {
     // Enable Angular's production mode before bootstrap completes. This
     // disables development-only assertions (extra change-detection passes,
     // assert-equality checks) and shaves real time off every digest cycle.
@@ -106,5 +108,10 @@ export class MJExplorerAppModule {
         ...(swModule.providers ?? [])
       ]
     };
+  }
+
+  /** @deprecated Use {@link ForRoot}. */
+  static forRoot(environment: MJEnvironmentConfig): ModuleWithProviders<MJExplorerAppModule> {
+    return this.ForRoot(environment);
   }
 }

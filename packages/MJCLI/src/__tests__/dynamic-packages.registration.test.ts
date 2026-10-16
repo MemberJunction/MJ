@@ -6,7 +6,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { BaseEntity } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
 import { ResetLoadedDynamicPackages } from '@memberjunction/dynamic-packages';
-import { loadDynamicPackagesForCommand } from '../lib/dynamic-packages';
+import { LoadDynamicPackagesForCommand } from '../lib/dynamic-packages';
 
 /**
  * The proof issue #4199 asked for: a package that is NOT statically imported anywhere in the
@@ -47,11 +47,11 @@ describe('dynamic package registration (real ClassFactory, no static imports)', 
   it('mj-app.json discovery loads the workspace members from disk and the server subclass wins', async () => {
     const before = g.__mjFixtureStartupRuns ?? 0;
     const lines: string[] = [];
-    const report = await loadDynamicPackagesForCommand('sync push', {
+    const report = await LoadDynamicPackagesForCommand('sync push', {
       // The anchor only needs a directory; the file itself does not have to exist.
       raw: { config: {}, configFilePath: path.join(fixtureDir, 'mj.config.cjs') },
-      verbose: true,
-      stderr: (l) => lines.push(l),
+      Verbose: true,
+      Stderr: (l) => lines.push(l),
     });
 
     expect(report.Failed).toEqual([]);
@@ -92,7 +92,7 @@ describe('dynamic package registration (real ClassFactory, no static imports)', 
 
     it('imports the package by name from the config anchor, runs the startup export, and the subclass is registered', async () => {
       const before = g.__mjFixtureStartupRuns ?? 0;
-      const report = await loadDynamicPackagesForCommand('sync:push', {
+      const report = await LoadDynamicPackagesForCommand('sync:push', {
         raw: {
           config: {
             dynamicPackages: {
@@ -101,7 +101,7 @@ describe('dynamic package registration (real ClassFactory, no static imports)', 
           },
           configFilePath: hostConfigPath,
         },
-        stderr: () => undefined,
+        Stderr: () => undefined,
       });
 
       expect(report.Failed).toEqual([]);
@@ -120,9 +120,9 @@ describe('dynamic package registration (real ClassFactory, no static imports)', 
         config: { dynamicPackages: { server: [{ PackageName: '@fixture-host/app-server', StartupExport: 'LoadFixtureAppServer' }] } },
         configFilePath: hostConfigPath,
       };
-      await loadDynamicPackagesForCommand('sync:push', { raw, stderr: () => undefined });
+      await LoadDynamicPackagesForCommand('sync:push', { raw, Stderr: () => undefined });
       const runs = g.__mjFixtureStartupRuns;
-      const second = await loadDynamicPackagesForCommand('ai:agents:run', { raw, stderr: () => undefined });
+      const second = await LoadDynamicPackagesForCommand('ai:agents:run', { raw, Stderr: () => undefined });
       expect(second.Loaded[0].RanStartupExport).toBe(false);
       expect(g.__mjFixtureStartupRuns).toBe(runs);
     });
@@ -130,9 +130,9 @@ describe('dynamic package registration (real ClassFactory, no static imports)', 
     it('skips the entry, leaving the ClassFactory untouched, when --no-app-packages / MJ_DYNAMIC_PACKAGES=none is set', async () => {
       process.env.MJ_DYNAMIC_PACKAGES = 'none';
       try {
-        const report = await loadDynamicPackagesForCommand('sync:push', {
+        const report = await LoadDynamicPackagesForCommand('sync:push', {
           raw: { config: { dynamicPackages: { server: [{ PackageName: '@fixture-host/app-server', StartupExport: 'LoadFixtureAppServer' }] } }, configFilePath: hostConfigPath },
-          stderr: () => undefined,
+          Stderr: () => undefined,
         });
         expect(report.Mode).toBe('none');
         expect(report.Loaded).toEqual([]);

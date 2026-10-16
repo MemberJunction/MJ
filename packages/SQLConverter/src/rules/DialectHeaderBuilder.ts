@@ -87,14 +87,24 @@ headerBuilders.set('postgres', new PostgreSQLHeaderBuilder());
 /**
  * Register a custom header builder for a target dialect.
  */
-export function registerHeaderBuilder(builder: DialectHeaderBuilder): void {
+export function RegisterHeaderBuilder(builder: DialectHeaderBuilder): void {
   headerBuilders.set(builder.TargetDialect.toLowerCase(), builder);
+}
+
+/** @deprecated Use {@link RegisterHeaderBuilder}. */
+export function registerHeaderBuilder(builder: DialectHeaderBuilder): void {
+  return RegisterHeaderBuilder(builder);
 }
 
 /**
  * Get the header builder for a given target dialect.
  * Returns undefined if no builder is registered.
  */
-export function getHeaderBuilder(targetDialect: string): DialectHeaderBuilder | undefined {
+export function GetHeaderBuilder(targetDialect: string): DialectHeaderBuilder | undefined {
   return headerBuilders.get(targetDialect.toLowerCase());
+}
+
+/** @deprecated Use {@link GetHeaderBuilder}. */
+export function getHeaderBuilder(targetDialect: string): DialectHeaderBuilder | undefined {
+  return GetHeaderBuilder(targetDialect);
 }

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { RunViewParams } from '@memberjunction/core';
 import { createFakeProvider, useFakeGlobalProvider, query, queryAll, StubEmptyStateComponent, StubLoadingComponent } from '@memberjunction/ng-test-utils';
+import { MJClickableDirective, MJRefreshButtonComponent } from '@memberjunction/ng-ui-components';
 import { AnalyticsRealtimeTranscriptsComponent } from './realtime-transcripts.component';
 
 /**
@@ -9,7 +10,7 @@ import { AnalyticsRealtimeTranscriptsComponent } from './realtime-transcripts.co
  * `reload()` calls `AIEngineBase.Instance.EnsureLoaded()` (harmless against the fake GLOBAL provider)
  * then loads `MJ: Conversations` (Type='Meeting Room') via `LoadMeetingRooms(this.ProviderToUse)`.
  * A `createFakeProvider` returns room rows for the conversations query. No rooms → the "No meeting
- * transcripts yet" empty state; rooms → a clickable room button list, and no room selected → the
+ * transcripts yet" empty state; rooms → a keyboard-accessible room list (`[mjClickable]` rows), and no room selected → the
  * "Select a meeting" transcript-pane placeholder. `selectRoom()` loads that room's transcript lines
  * (`MJ: Conversation Details`) and renders one `.line` per utterance. `mj-loading`/`mj-empty-state` stubbed.
  */
@@ -28,7 +29,10 @@ const transcriptRows = (p: RunViewParams): unknown[] =>
   p.EntityName === 'MJ: Conversations' ? ROOMS : p.EntityName === 'MJ: Conversation Details' ? LINES : [];
 
 async function render(rows: (p: RunViewParams) => unknown[]): Promise<ComponentFixture<AnalyticsRealtimeTranscriptsComponent>> {
-  TestBed.configureTestingModule({ declarations: [AnalyticsRealtimeTranscriptsComponent], imports: [StubLoadingComponent, StubEmptyStateComponent] });
+  TestBed.configureTestingModule({
+    declarations: [AnalyticsRealtimeTranscriptsComponent],
+    imports: [StubLoadingComponent, StubEmptyStateComponent, MJClickableDirective, MJRefreshButtonComponent],
+  });
   const fixture = TestBed.createComponent(AnalyticsRealtimeTranscriptsComponent);
   fixture.componentRef.setInput('Provider', createFakeProvider({ runViewResults: rows }));
   fixture.detectChanges(false);
@@ -56,6 +60,9 @@ describe('AnalyticsRealtimeTranscriptsComponent (DOM)', () => {
     expect(query(fixture, '.room-list__head')?.textContent).toContain('2 meetings');
     const names = queryAll(fixture, '.room__name').map((e) => e.textContent?.trim());
     expect(names).toEqual(expect.arrayContaining(['Standup', 'Design Review']));
+    const rooms = queryAll(fixture, '.room');
+    expect(rooms.every((r) => r.getAttribute('role') === 'button' && r.getAttribute('tabindex') === '0')).toBe(true);
+    expect(rooms.map((r) => r.getAttribute('aria-label'))).toEqual(expect.arrayContaining(['Standup', 'Design Review']));
   });
 
   it('shows the "select a meeting" placeholder while no room is selected', async () => {

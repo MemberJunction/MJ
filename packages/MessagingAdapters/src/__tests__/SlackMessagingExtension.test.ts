@@ -67,19 +67,21 @@ vi.mock('@memberjunction/ai-agents', () => ({
 
 // Mock signature verification
 vi.mock('../slack/slack-routes.js', () => ({
-    verifySlackSignature: vi.fn().mockReturnValue(true)
+    VerifySlackSignature: vi.fn().mockReturnValue(true),
+    get verifySlackSignature() { return this.VerifySlackSignature; }
 }));
 
 // Mock the interaction handler so the Socket Mode routing test observes the call without
 // exercising Slack's modal API.
 vi.mock('../slack/slack-interactivity.js', () => ({
-    handleSlackInteraction: vi.fn().mockResolvedValue(undefined)
+    HandleSlackInteraction: vi.fn().mockResolvedValue(undefined),
+    get handleSlackInteraction() { return this.HandleSlackInteraction; }
 }));
 
 // ─── Import after mocks ─────────────────────────────────────────────────────
 
 import { SlackMessagingExtension } from '../slack/SlackMessagingExtension.js';
-import { verifySlackSignature } from '../slack/slack-routes.js';
+import { VerifySlackSignature } from '../slack/slack-routes.js';
 import { ServerExtensionConfig } from '@memberjunction/server-extensions-core';
 
 // ─── Test helpers ────────────────────────────────────────────────────────────
@@ -120,9 +122,9 @@ describe('SlackMessagingExtension', () => {
         socketMocks.start.mockReset().mockResolvedValue(undefined);
         socketMocks.disconnect.mockReset().mockResolvedValue(undefined);
         socketMocks.on.mockReset();
-        vi.mocked(verifySlackSignature).mockReset().mockReturnValue(true);
-        const { handleSlackInteraction } = await import('../slack/slack-interactivity.js');
-        vi.mocked(handleSlackInteraction).mockReset().mockResolvedValue(undefined);
+        vi.mocked(VerifySlackSignature).mockReset().mockReturnValue(true);
+        const { HandleSlackInteraction } = await import('../slack/slack-interactivity.js');
+        vi.mocked(HandleSlackInteraction).mockReset().mockResolvedValue(undefined);
 
         const { RunView } = await import('@memberjunction/core');
         vi.mocked(RunView).mockImplementation(() => {
@@ -231,7 +233,7 @@ describe('SlackMessagingExtension', () => {
         });
 
         it('routes a Socket Mode interaction payload to the interaction handler', async () => {
-            const { handleSlackInteraction } = await import('../slack/slack-interactivity.js');
+            const { HandleSlackInteraction } = await import('../slack/slack-interactivity.js');
             const app = createMockApp();
             const config = createConfig({ ConnectionMode: 'socket', AppToken: 'xapp-test-token' });
             await extension.Initialize(app, config);
@@ -246,8 +248,8 @@ describe('SlackMessagingExtension', () => {
             await handler({ body: { payload }, ack });
 
             expect(ack).toHaveBeenCalled();
-            expect(vi.mocked(handleSlackInteraction)).toHaveBeenCalled();
-            const raw = vi.mocked(handleSlackInteraction).mock.calls[0][0];
+            expect(vi.mocked(HandleSlackInteraction)).toHaveBeenCalled();
+            const raw = vi.mocked(HandleSlackInteraction).mock.calls[0][0];
             expect(typeof raw).toBe('string');
             expect(JSON.parse(raw as string).actions[0].action_id).toBe('mj:form_modal:open');
         });
@@ -344,7 +346,7 @@ describe('SlackMessagingExtension', () => {
         });
 
         it('should return 401 when signature verification fails', async () => {
-            vi.mocked(verifySlackSignature).mockReturnValueOnce(false);
+            vi.mocked(VerifySlackSignature).mockReturnValueOnce(false);
             const handler = await getWebhookHandler(extension);
 
             const req = {
@@ -404,7 +406,7 @@ describe('SlackMessagingExtension', () => {
 
             await handler(req, res);
 
-            expect(verifySlackSignature).not.toHaveBeenCalled();
+            expect(VerifySlackSignature).not.toHaveBeenCalled();
             expect(res.json).toHaveBeenCalledWith({ challenge: 'test' });
         });
     });

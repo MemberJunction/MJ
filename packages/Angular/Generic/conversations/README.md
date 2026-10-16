@@ -10,8 +10,8 @@ The widget exposes three layers of extension:
 
 | Surface | What it lets you do |
 |---|---|
-| **7 named slots** (`mjChatSlot` directive) | Replace the `header`, `emptyState`, `agentPresence`, `messageRenderer`, `messageExtra`, or `demonstrationSurface` regions with your own templates — or ADD to the default header with `headerActions` (renders inside the default header's action strip, after the stock buttons; suppressed when a full `header` replacement is projected). Three consumption modes: project an ad-hoc template, wrap the exported default for containment, or subclass the default. |
-| **Before/After cancelable events** | `(beforeAgentTurn)`, `(beforeToolInvoked)`, `(beforeResponseFormSubmitted)` let you observe AND veto (`event.Cancel = true`) before the action runs. Plus informational `(sessionStarted)` / `(sessionChannelStateChanged)` / `(sessionEnded)` for realtime lifecycle. |
+| **8 named slots** (`mjChatSlot` directive) | Replace the `header`, `emptyState`, `agentPresence`, `messageRenderer`, `messageExtra`, or `demonstrationSurface` regions with your own templates — or ADD to the default header with `headerActions` (renders inside the default header's action strip, after the stock buttons; suppressed when a full `header` replacement is projected), or above the composer with `composerExtra`. Three consumption modes: project an ad-hoc template, wrap the exported default for containment, or subclass the default. |
+| **Before/After cancelable events** | `(beforeAgentTurn)`, `(beforeToolInvoked)`, `(beforeResponseFormSubmitted)` let you observe AND veto (`event.Cancel = true`) before the action runs. `(beforeAgentTurn)` fires once per agent turn, before any reply row exists, and can also send the turn to another agent (`event.RedirectAgentId`). Plus informational `(sessionStarted)` / `(sessionChannelStateChanged)` / `(sessionEnded)` for realtime lifecycle. |
 | **`--mj-chat-*` design tokens** | Override bubble colors, composer chrome, character accents, and voice-state hues via standard CSS custom-property overrides. Defaults adapt to dark mode through semantic `--mj-*` tokens. |
 
 Slot interfaces + cloneable default components + the `ChatSlotDirective` are exported — see the public API.
@@ -40,7 +40,6 @@ graph TD
     C --> C3[ConversationSidebarComponent]
     C --> C4[ConversationListComponent]
     C --> C5[ConversationChatAreaComponent]
-    C --> C6[ThreadPanelComponent]
 
     D --> D1[CollectionTreeComponent]
     D --> D2[CollectionViewComponent]
@@ -103,11 +102,8 @@ The chat area handles message display, input, and agent interactions:
 <mj-conversation-chat-area
   [conversationId]="conversationId"
   [conversation]="conversation"
-  [threadId]="selectedThreadId"
   [isNewConversation]="isNewConversation"
-  (conversationCreated)="onConversationCreated($event)"
-  (threadOpened)="onThreadOpened($event)"
-  (threadClosed)="onThreadClosed()">
+  (conversationCreated)="onConversationCreated($event)">
 </mj-conversation-chat-area>
 ```
 
@@ -205,6 +201,47 @@ Two gating rules are worth knowing:
 - **`includeTheme` gates only the token AUTO-SNAPSHOT.** An explicitly supplied `brandTokens` map, plus `logoUrl` / `title` / `trademark`, apply whenever `branding` is present. In the modal, "Include branding" is the single user-facing switch for all of it, and it sits with the general options because it affects every format — not just HTML.
 
 `trademark` and `title` are **not** markdown-escaped; a value containing `_`, `]`, `)`, or a newline can break the surrounding markdown. Supply plain text (the HTML and JSON paths are escaped).
+#### Chats with several people
+
+A host that puts several people in one conversation (a team room, a shared chat) sets when agents answer through these inputs, without forking the chat area. Each defaults to today's behavior:
+
+| Input | Default | Effect when set |
+|---|---|---|
+| `AgentReplyMode` | `'Always'` | `'MentionOnly'` starts an agent turn only for a message that tags an agent. Any other message is posted with no turn: no reply row, no placeholder, no turn events |
+| `AllowedAgentIDs` | `null` (every agent) | The agents that may answer. Narrows the `@` list, every route (a tagged agent, continuity, the pinned and host default agents, the conversation manager), the manager's delegation, including each agent step of a workflow it plans, and the pin and voice pickers. An empty list allows none |
+| `MentionPeople` | `null` (the current user only) | The people the `@` list offers, such as the chat's members (`MentionPerson` from `@memberjunction/conversations-runtime`). Each composer keeps its own list |
+| `AgentHistoryFrom` | `null` (the whole conversation) | The first moment of the conversation an agent turn may read. The server loads the agent's history from there, uses no summary of earlier messages, and holds the same floor in the run's other reads of the conversation. Sent only when set, so leaving it null keeps working against an older MJAPI |
+| `AgentTurnHandler` | `null` (MJ's own path) | An async hook that runs each turn on the host's server. The chat area calls it once per turn, after `BeforeAgentTurn` and before any reply row exists, and shows the rows it reports. A reply it reports as `In-Progress` is followed like any other in-progress reply. The host publishes that row's live status with `AgentRunStatusPublisher` from `@memberjunction/server`, on the caller's session: significant-step progress, streamed text, the partial result, and the completion, with the reply row's id on the completion. When the turn throws instead of returning a result, call `PublishFailure` with the reply row's id and the error |
+| `AutoNameConversation` | `true` | `false` stops MJ naming a new conversation from its first message or first voice utterance |
+
+Routing picks one agent per turn, in this order: a tagged agent, then (under `'Always'` only) the last agent that answered other than the conversation manager, the conversation's pinned agent, the host's `DefaultAgentId`, and the conversation manager. An agent `AllowedAgentIDs` leaves out is skipped. `BeforeAgentTurn` then fires once, carrying the resolved `AgentId`, `AgentName`, `Route` and `UserMessageId`: a listener can cancel the turn, which then writes nothing more, or set `RedirectAgentId` to another allowed agent.
+
+#### Read-only
+
+`ReadOnly` hides every composer and shows a banner. `ReadOnlyMessage` is that banner's text; leave it null to use the View-share sentence. `EffectiveReadOnly` is true when the host set `ReadOnly` or the conversation is shared with View access. A View share with `ReadOnly` left false still shows today's disabled composer.
+
+Pin, edit, and delete on the message list, the mode picker, the agent picker, suggested responses, project assignment, and unpinning all follow `EffectiveReadOnly`. Each `mj-message-input` the chat area renders gets `[ReadOnly]="EffectiveReadOnly"`, so send, the initial auto-send, and starting realtime refuse. Ratings close too: `canEdit` is false while that message is read-only. The pins panel's `AllowUnpin` is bound to `!EffectiveReadOnly`. With it false the panel still lists pins and still jumps, and it hides Unpin.
+
+A reply the host reports as `In-Progress` is followed as soon as the chat area takes the row. If that turn already finished, the completion waiting in the replay window is applied then, so the row does not stay in progress until the conversation is opened again.
+
+The `composerExtra` slot renders host UI directly above the composer, wherever the chat area shows one (the new-conversation composer and the empty state's included). Its context is `IMJChatComposerExtraContext`: the conversation as `$implicit`, plus `ConversationId` and `IsProcessing`.
+
+```html
+<mj-conversation-chat-area
+  [conversationId]="conversationId"
+  AgentReplyMode="MentionOnly"
+  [AllowedAgentIDs]="spaceAgentIds"
+  [MentionPeople]="members"
+  [AgentHistoryFrom]="historyFloor"
+  [AgentTurnHandler]="runTurnOnServer"
+  [AutoNameConversation]="false"
+  (BeforeAgentTurn)="onBeforeAgentTurn($event)">
+  <ng-template mjChatSlot="composerExtra" let-busy="IsProcessing">
+    <div class="audience-line">Everyone in this chat sees your message</div>
+  </ng-template>
+</mj-conversation-chat-area>
+```
+
 #### Assistant identity
 
 White-label hosts can brand the AI side of the message feed through the component contract (no CSS on `.message-sender` / `.avatar-circle` internals). Both default to `null` — the engine-resolved agent identity, today's behavior:
@@ -317,7 +354,7 @@ The overlay is generic — it raises events for navigation and tool execution. T
 
 The package hosts the full client UX for MJ's real-time co-agent sessions — live voice calls with the conversation's agent, with interactive channel surfaces (the live Whiteboard) docked beside the call. Architecture background: [guides/REALTIME_CO_AGENTS_GUIDE.md](../../../../guides/REALTIME_CO_AGENTS_GUIDE.md).
 
-**`RealtimeSessionService`** (`services/realtime-session.service.ts`) is the provider-agnostic orchestrator, injectable at root. It drives a **client-direct** session: it calls the `StartRealtimeClientSession` mutation to mint a server-scoped ephemeral credential, resolves the matching `BaseRealtimeClient` driver (from `@memberjunction/ai-realtime-client` — OpenAI, Gemini, ElevenLabs, or AssemblyAI) through the ClassFactory by the server-reported `Provider` key, and connects the browser **directly** to the realtime provider — audio frames never transit the MJ server; only tool calls, final transcripts, channel state, and usage telemetry relay back over GraphQL. It exposes the reactive session state hosts consume: `ConnectionState$` (`connecting | listening | speaking | thinking | error | closed`), `Captions$`, `Active$`, `DelegationProgress$` / `DelegationResult$` / `DelegationNarration$`, `ActiveChannels$`, `ChannelFocus$`, `Minimized$`, plus `SendText` (typed input into the live call), `ToggleMute`, `RegisterClientToolHandler` (prefix-routed, client-executed UI tools), and the explicit delegation cancel channel — `CancelDelegation(callId)` / `CancelInFlightDelegations()` call the `CancelRealtimeSessionTool` mutation and flip the card to "Cancelled by user" (deliberate policy: **true barge-in never aborts delegated work** — only the per-card ✕ does). The client driver's `OnUsage` token deltas are accumulated and relayed onto the co-agent's observability prompt run via `RelayRealtimeUsage`, debounced (10 s) plus a teardown flush.
+**`RealtimeSessionService`** (`services/realtime-session.service.ts`) is the provider-agnostic orchestrator, injectable at root. It drives a **client-direct** session: it calls the `StartRealtimeClientSession` mutation to mint a server-scoped ephemeral credential, resolves the matching `BaseRealtimeClient` driver (from `@memberjunction/ai-realtime-client` — OpenAI, Gemini, ElevenLabs, or AssemblyAI) through the ClassFactory by the server-reported `Provider` key, and connects the browser **directly** to the realtime provider — audio frames never transit the MJ server; only tool calls, final transcripts, channel state, and usage telemetry relay back over GraphQL. It exposes the reactive session state hosts consume: `ConnectionState$` (`connecting | listening | speaking | thinking | error | closed`), `Captions$`, `Active$`, `DelegationProgress$` / `DelegationResult$` / `DelegationNarration$`, `ActiveChannels$`, `ChannelFocus$`, `Minimized$`, `SavingRecording$` (true from the start of a recorded call's teardown until the recording upload settles; the service turns it into a browser `beforeunload` prompt so closing the tab mid-upload asks "Leave site?", on desktop browsers only), plus `SendText` (typed input into the live call), `ToggleMute`, `RegisterClientToolHandler` (prefix-routed, client-executed UI tools), and the explicit delegation cancel channel — `CancelDelegation(callId)` / `CancelInFlightDelegations()` call the `CancelRealtimeSessionTool` mutation and flip the card to "Cancelled by user" (deliberate policy: **true barge-in never aborts delegated work** — only the per-card ✕ does). The client driver's `OnUsage` token deltas are accumulated and relayed onto the co-agent's observability prompt run via `RelayRealtimeUsage`, debounced (10 s) plus a teardown flush.
 
 **Co-agent selection, pairing constraints & authorization-gated overrides**: the composer's voice picker (`mj-voice-agent-picker`, opened by the caret next to the phone button — or automatically on a conversation with no prior agent participation) lets every user choose which **co-agent** (ACTIVE Realtime-type agent, from the same run-permission-filtered cache the @mention routing uses) fronts the call when more than one exists; the choice rides the mint's `coAgentId` and persists cross-device via `UserInfoEngine` (`mj.realtimeVoice.coAgent.v1`), so the friction-free instant start honors it too. A co-agent with rows in `MJ: AI Agent Paired Agents` may only front its paired targets — the picker constrains the target list to those rows (Sequence order, `IsDefault` preselected; pure helpers in `services/voice-pairing.ts`) — while a co-agent with zero rows stays universal (today's flow untouched; pairings constrain a chosen co-agent, they never mandate one). The **voice-model selector** (and any future session-config override, carried as the mint's `configOverridesJson`, e.g. `{"realtime":{"modelPreference":…}}`) renders only for users holding the **`Realtime: Advanced Session Controls`** MJ Authorization — evaluated client-side by the pure `UserHoldsAuthorization` helper (`services/user-authorization.ts`) from cached metadata as a *disclosure* gate; the server independently enforces the authorization on the mint, and unauthorized users silently get server defaults. (The gear popover's interface-density control is UX disclosure, not session config — it is not gated.)
 
@@ -330,7 +367,9 @@ The package hosts the full client UX for MJ's real-time co-agent sessions — li
 
 **Audio-reactive visuals** (`realtime-audio-visuals.ts`): when the active driver meters its audio planes (`BaseRealtimeClient.GetAudioActivity()` — all four current drivers do, both directions), the overlay samples it on a requestAnimationFrame loop *outside Angular* and writes CSS variables directly: the hero orb scales with the smoothed output envelope (speaker-cone attack/decay), the EQ bars render the true 9-bin spectrum, and the visuals recolor by speaking direction (agent = brand, user = green) with hysteresis so syllable gaps never flicker. Un-metered drivers gracefully keep the turn-state-driven animations. See the guide's §11 for the full pipeline.
 
-**Interactive channels are plugins** — the shell is channel-agnostic. `BaseRealtimeChannelClient` (`components/realtime/channels/base-realtime-channel-client.ts`) is the contract: a client-executed tool set declared to the realtime model at session mint, a perception serializer feeding coalesced state deltas into the model as context notes, a dynamically-created Angular surface component the plugin binds itself, a persisted state of record, prior-session restore (`RestoreState`), artifact snapshots (`SaveAsArtifact`), and focus-mode layout requests. Plugins resolve at session start from the `MJ: AI Agent Channels` registry by `ClientPluginClass` key.
+**Interactive channels are plugins** — the shell is channel-agnostic. `BaseRealtimeChannelClient` (`@memberjunction/realtime-runtime`, `src/channels/base-realtime-channel-client.ts`) is the contract: a client-executed tool set declared to the realtime model at session mint, a perception serializer feeding coalesced state deltas into the model as context notes, a dynamically-created Angular surface component the plugin binds itself, a persisted state of record, prior-session restore (`RestoreState`), artifact snapshots (`SaveAsArtifact`), and focus-mode layout requests. Plugins resolve at session start from the `MJ: AI Agent Channels` registry by `ClientPluginClass` key.
+
+**Channel contract v2.** Every channel describes itself with a `RealtimeChannelDescriptor` (`GetDescriptor()`; see `@memberjunction/ai-core-plus`): its nouns, its verbs (parameter schemas, `InvokableBy`), the events it emits, its display policy (`'open-on-start' | 'on-demand' | 'headless'`), its default availability (`'all-sessions' | 'opt-in'`) and the most the model may perceive of it (`'none' | 'state' | 'pixels'`). A channel that implements only the original members is *synthesized* a descriptor (verbs from its tools, conservative defaults), so nothing changes for existing channels; the Whiteboard, Remote Browser, Media and Client Context channels ship authored descriptors with their native tool names unchanged. Which channels a session gets is decided by scoping (code default → agent → app → host-declared) with the registry's `IsActive = false` as a master kill switch; see `@memberjunction/realtime-runtime` for the runtime half. The headless **Client Context** channel's `ContextTool` proxy now accepts `target: { channel, instance? }`: a targeted call is validated by the runtime against the addressed verb's schema (a malformed call returns a structured, model-recoverable error listing each violation and what would have been valid) and an `on-demand` channel is opened with `action: "open"`. The Whiteboard's change-driven frame pump (leading edge, trailing settle, dedupe, negotiated cadence, one confirmation frame after an agent edit) now lives in the base channel (`EnableVisualPerception`), with frames tagged by the change id of the state they describe.
 
 **The live Whiteboard is a thin consumer of [`@memberjunction/ng-whiteboard`](../whiteboard/README.md)** — the board itself (the `WhiteboardState` engine, the `Whiteboard_*` tool API, the host/board/toolbar/zoom/popover/snapshot components, exports, the sandboxed-HTML-widget input bridge, the context menu) lives in that generic package; read its README for whiteboard details. This package contributes only the integration glue (`components/realtime/whiteboard/`): `RealtimeWhiteboardChannel`, the ~200-line channel plugin that declares `WHITEBOARD_TOOL_DEFINITIONS` to the model, routes `Whiteboard_*` calls to the bound host (or the pure engine call when the pane is collapsed), pipes the coalesced `SceneDelta` stream into the model as `[whiteboard]` context notes (with do-not-narrate-minor-edits etiquette inline), forwards widget submissions (`MJWhiteboard.submit` — the tutoring loop) and agent-undo events, persists/restores the board as the channel's state of record, and snapshots it to versioned `MJ: Artifacts`; plus `WhiteboardArtifactViewerPlugin` (`mj-whiteboard-artifact-viewer`), the saved-board artifact viewer rendered through the package's read-only snapshot component.
 
@@ -385,7 +424,6 @@ This package never navigates (no Router): developer links emit a `RealtimeNaviga
 | `ConversationListComponent` | `mj-conversation-list` | Scrollable conversation history |
 | `ConversationChatAreaComponent` | `mj-conversation-chat-area` | Main chat area |
 | `ConversationEmptyStateComponent` | `mj-conversation-empty-state` | Empty state display |
-| `ThreadPanelComponent` | `mj-thread-panel` | Threaded discussion panel |
 
 ### Collection and Library Components
 

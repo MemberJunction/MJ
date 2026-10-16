@@ -335,8 +335,13 @@ export class SystemPlaceholderManager {
      * });
      * ```
      */
-    public static getPlaceholders(): SystemPlaceholder[] {
+    public static GetPlaceholders(): SystemPlaceholder[] {
         return this.placeholders;
+    }
+
+    /** @deprecated Use {@link GetPlaceholders}. */
+    public static getPlaceholders(): SystemPlaceholder[] {
+        return this.GetPlaceholders();
     }
 
     /**
@@ -357,12 +362,17 @@ export class SystemPlaceholderManager {
      * });
      * ```
      */
-    public static addPlaceholder(placeholder: SystemPlaceholder): void {
+    public static AddPlaceholder(placeholder: SystemPlaceholder): void {
         const existing = this.placeholders.find(p => p.name === placeholder.name);
         if (existing) {
             throw new Error(`System placeholder '${placeholder.name}' already exists`);
         }
         this.placeholders.push(placeholder);
+    }
+
+    /** @deprecated Use {@link AddPlaceholder}. */
+    public static addPlaceholder(placeholder: SystemPlaceholder): void {
+        return this.AddPlaceholder(placeholder);
     }
 
     /**
@@ -371,13 +381,18 @@ export class SystemPlaceholderManager {
      * @param {string} name - The name of the placeholder to remove
      * @returns {boolean} True if removed, false if not found
      */
-    public static removePlaceholder(name: string): boolean {
+    public static RemovePlaceholder(name: string): boolean {
         const index = this.placeholders.findIndex(p => p.name === name);
         if (index >= 0) {
             this.placeholders.splice(index, 1);
             return true;
         }
         return false;
+    }
+
+    /** @deprecated Use {@link RemovePlaceholder}. */
+    public static removePlaceholder(name: string): boolean {
+        return this.RemovePlaceholder(name);
     }
 
     /**
@@ -389,7 +404,7 @@ export class SystemPlaceholderManager {
      * 
      * @internal
      */
-    public static async resolveAllPlaceholders(params: AIPromptParams): Promise<Record<string, string>> {
+    public static async ResolveAllPlaceholders(params: AIPromptParams): Promise<Record<string, string>> {
         // Create promise array with placeholder name for mapping
         const resolvePromises = this.placeholders.map(async (placeholder) => {
             try {
@@ -413,21 +428,36 @@ export class SystemPlaceholderManager {
         return resolved;
     }
 
+    /** @deprecated Use {@link ResolveAllPlaceholders}. */
+    public static async resolveAllPlaceholders(params: AIPromptParams): Promise<Record<string, string>> {
+        return this.ResolveAllPlaceholders(params);
+    }
+
     /**
      * Gets a specific placeholder by name.
      * 
      * @param {string} name - The placeholder name
      * @returns {SystemPlaceholder | undefined} The placeholder if found
      */
-    public static getPlaceholder(name: string): SystemPlaceholder | undefined {
+    public static GetPlaceholder(name: string): SystemPlaceholder | undefined {
         return this.placeholders.find(p => p.name === name);
+    }
+
+    /** @deprecated Use {@link GetPlaceholder}. */
+    public static getPlaceholder(name: string): SystemPlaceholder | undefined {
+        return this.GetPlaceholder(name);
     }
 
     /**
      * Clears all custom placeholders and resets to defaults.
      * Useful for testing or resetting state.
      */
-    public static resetToDefaults(): void {
+    public static ResetToDefaults(): void {
         this.placeholders = [...DEFAULT_SYSTEM_PLACEHOLDERS];
+    }
+
+    /** @deprecated Use {@link ResetToDefaults}. */
+    public static resetToDefaults(): void {
+        return this.ResetToDefaults();
     }
 }

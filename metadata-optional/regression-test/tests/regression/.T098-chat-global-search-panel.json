@@ -1,0 +1,57 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T098 - Chat Global Search Panel",
+    "Description": "Exercises the in-app SearchPanelComponent that searches across conversations/messages/artifacts/collections/tasks with scoped filters — distinct from Explorer's global Ctrl+K command palette.",
+    "InputDefinition": "{\n  \"goal\": \"Open the Chat application and wait for the workspace. In the top navigation bar (right side), click the search (magnifying glass) icon. Confirm a search panel opens with an input placeholder like 'Search conversations, messages, artifacts, collections, and tasks...' and a row of filter buttons: All, Conversations, Messages, Artifacts, Collections, Tasks. Type a few characters and click a filter button (e.g. 'Messages') to confirm the filter selection highlights. Then close the panel with the close (X) button or Escape. Seeing the search panel with its scoped filter buttons render is success — results depend on data and are not required. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.\",\n  \"startUrl\": \"http://localhost:4200\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
+    "ExpectedOutcomes": "{\n  \"goalCompleted\": true,\n  \"minConfidence\": 0.7,\n  \"maxSteps\": 35,\n  \"judgeValidationCriteria\": [\n    \"Clicking the nav search icon opens the Chat search panel with the multi-entity placeholder text\",\n    \"Filter buttons (All / Conversations / Messages / Artifacts / Collections / Tasks) render and highlight when selected\",\n    \"Typing produces results or a valid empty/no-results state, and the panel closes via X or Escape\",\n    \"No error messages, blank screens, or crash pages\"\n  ]\n}",
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,chat",
+    "Priority": 0,
+    "EstimatedDurationSeconds": null,
+    "EstimatedCostUSD": null,
+    "RepeatCount": null,
+    "MaxExecutionTimeMS": null,
+    "Variables": null,
+    "Type": "Computer Use",
+    "SkipEmbeddings": false
+  },
+  "primaryKey": {
+    "ID": "EA0CC1B6-8BB9-4A37-A54B-17E39C86A43A"
+  },
+  "sync": {
+    "lastModified": "2026-09-11T21:36:53.801Z",
+    "checksum": "7bd2192dd4681464ff47c87dcab702ab2b4c906af9e56494f3ff79d6c86dea44"
+  }
+}

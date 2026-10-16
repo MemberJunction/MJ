@@ -1,4 +1,4 @@
-import { traverse, NodePath } from '../lint-utils';
+import { Traverse, NodePath } from '../lint-utils';
 import { RegisterClass } from '@memberjunction/global';
 import * as t from '@babel/types';
 import { BaseLintRule } from '../lint-rule';
@@ -35,7 +35,7 @@ export class UnsafeArrayOperationsRule extends BaseLintRule {
     // Track which parameters are from props (likely from queries/RunView)
     const propsParams = new Set<string>();
 
-    traverse(ast, {
+    Traverse(ast, {
       // Find the main component function to identify props
       FunctionDeclaration(path: NodePath<t.FunctionDeclaration>) {
         if (path.node.id?.name === componentName) {

@@ -30,7 +30,7 @@ export class TestHarnessWindowManagerService {
     /**
      * Opens the AI Agent Test Harness in a window
      */
-    openAgentTestHarness(options: {
+    OpenAgentTestHarness(options: {
         agentId?: string;
         agent?: MJAIAgentEntityExtended;
         title?: string;
@@ -53,11 +53,25 @@ export class TestHarnessWindowManagerService {
         
         return this.createWindow(data, options.viewContainerRef);
     }
+
+    /** @deprecated Use {@link OpenAgentTestHarness}. */
+    openAgentTestHarness(options: {
+        agentId?: string;
+        agent?: MJAIAgentEntityExtended;
+        title?: string;
+        width?: string | number;
+        height?: string | number;
+        initialDataContext?: Record<string, any>;
+        initialTemplateData?: Record<string, any>;
+        viewContainerRef?: ViewContainerRef;
+    }): Observable<TestResult> {
+        return this.OpenAgentTestHarness(options);
+    }
     
     /**
      * Opens the AI Prompt Test Harness in a window
      */
-    openPromptTestHarness(options: {
+    OpenPromptTestHarness(options: {
         promptId?: string;
         prompt?: MJAIPromptEntityExtended;
         title?: string;
@@ -79,6 +93,20 @@ export class TestHarnessWindowManagerService {
         };
         
         return this.createWindow(data, options.viewContainerRef);
+    }
+
+    /** @deprecated Use {@link OpenPromptTestHarness}. */
+    openPromptTestHarness(options: {
+        promptId?: string;
+        prompt?: MJAIPromptEntityExtended;
+        title?: string;
+        width?: string | number;
+        height?: string | number;
+        initialTemplateVariables?: Record<string, any>;
+        selectedModelId?: string;
+        viewContainerRef?: ViewContainerRef;
+    }): Observable<TestResult> {
+        return this.OpenPromptTestHarness(options);
     }
     
     /**
@@ -190,9 +218,14 @@ export class TestHarnessWindowManagerService {
     /**
      * Closes all open windows
      */
-    closeAllWindows() {
+    CloseAllWindows() {
         this.openWindows.forEach((windowInfo, id) => {
             this.closeWindow(id);
         });
+    }
+
+    /** @deprecated Use {@link CloseAllWindows}. */
+    closeAllWindows() {
+        return this.CloseAllWindows();
     }
 }

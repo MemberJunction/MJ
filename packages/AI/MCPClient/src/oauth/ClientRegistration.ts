@@ -70,7 +70,7 @@ export class ClientRegistration {
      * @returns Client registration with credentials
      * @throws Error if no valid client credentials can be obtained
      */
-    public async getOrRegisterClient(
+    public async GetOrRegisterClient(
         connectionId: string,
         serverId: string,
         metadata: AuthServerMetadata,
@@ -144,6 +144,23 @@ export class ClientRegistration {
             `credentials are available. Please configure OAuthClientID and OAuthClientSecretEncrypted ` +
             `on the MCP Server.`
         );
+    }
+
+    /** @deprecated Use {@link GetOrRegisterClient}. */
+    public async getOrRegisterClient(
+        connectionId: string,
+        serverId: string,
+        metadata: AuthServerMetadata,
+        options: {
+            redirectUri: string;
+            scopes?: string;
+            serverName?: string;
+            preConfiguredClientId?: string;
+            preConfiguredClientSecret?: string;
+        },
+        contextUser: UserInfo
+    ): Promise<OAuthClientRegistration> {
+        return this.GetOrRegisterClient(connectionId, serverId, metadata, options, contextUser);
     }
 
     /**
@@ -450,7 +467,7 @@ export class ClientRegistration {
     /**
      * Updates a registration's status.
      */
-    public async updateRegistrationStatus(
+    public async UpdateRegistrationStatus(
         registrationId: string,
         status: OAuthClientRegistrationStatus,
         contextUser: UserInfo,
@@ -468,5 +485,15 @@ export class ClientRegistration {
         } catch (error) {
             LogError(`[OAuth] Failed to update registration status: ${error}`);
         }
+    }
+
+    /** @deprecated Use {@link UpdateRegistrationStatus}. */
+    public async updateRegistrationStatus(
+        registrationId: string,
+        status: OAuthClientRegistrationStatus,
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
+    ): Promise<void> {
+        return this.UpdateRegistrationStatus(registrationId, status, contextUser, provider);
     }
 }

@@ -20,6 +20,8 @@ export * from './custom/crud/write-entity-fields.action';
 
 // Data processing
 export * from './custom/data/run-record-process.action';
+export * from './custom/record-cloning/clone-record.action';
+export * from './custom/record-cloning/clone-records.action';
 
 // Demo Actions
 export * from './custom/demo/get-weather.action';
@@ -52,6 +54,7 @@ export * from './custom/web/url-metadata-extractor.action';
 export * from './custom/web/perplexity-search.action';
 export * from './custom/web/google-custom-search.action';
 export * from './custom/web/tavily-search.action';
+export * from './custom/web/brave-search.action';
 export * from './custom/web/rss-feed-read.action';
 export * from './custom/web/rss-feed-parsing';
 
@@ -109,9 +112,11 @@ export * from './custom/workflow/loop.action';
 export * from './custom/workflow/parallel-execute.action';
 export * from './custom/workflow/retry.action';
 export * from './custom/workflow/delay.action';
+export * from './custom/workflow/workflow-run-scope';
 
 // AI Actions
 export * from './custom/ai/execute-ai-prompt.action';
+export * from './custom/ai/run-decision.action';
 export * from './custom/ai/execute-agent.action';
 export * from './custom/ai/create-runtime-action.action';
 export * from './custom/ai/test-runtime-action.action';

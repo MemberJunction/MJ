@@ -7,7 +7,10 @@ import {
     ImageVariationParams,
     ImageModelInfo,
     GeneratedImage,
-    ErrorAnalyzer
+    ErrorAnalyzer,
+    AbortableDelay,
+    IsRequestAborted,
+    ThrowIfAborted
 } from "@memberjunction/ai";
 
 /**
@@ -49,6 +52,10 @@ interface BFLResultResponse {
  * 1. Submit generation request -> get task ID
  * 2. Poll for result until ready
  * 3. Retrieve generated image URL
+ *
+ * A request's `CancellationToken` is handed to every `fetch` (submit, poll and download), and the
+ * wait between polls ends as soon as it aborts, so cancelling a request stops it at once. The call
+ * then resolves as cancelled, never as a failure to fail over.
  */
 @RegisterClass(BaseImageGenerator, 'FLUXImageGenerator')
 export class FLUXImageGenerator extends BaseImageGenerator {
@@ -68,8 +75,13 @@ export class FLUXImageGenerator extends BaseImageGenerator {
     /**
      * Configure polling behavior for async task completion
      */
-    public setPollingConfig(config: Partial<BFLPollingConfig>): void {
+    public SetPollingConfig(config: Partial<BFLPollingConfig>): void {
         this._pollingConfig = { ...this._pollingConfig, ...config };
+    }
+
+    /** @deprecated Use {@link SetPollingConfig}. */
+    public setPollingConfig(config: Partial<BFLPollingConfig>): void {
+        return this.SetPollingConfig(config);
     }
 
     /**
@@ -79,18 +91,19 @@ export class FLUXImageGenerator extends BaseImageGenerator {
         const startTime = new Date();
 
         try {
+            ThrowIfAborted(params.CancellationToken, 'Black Forest Labs');
             const modelEndpoint = this.getModelEndpoint(params.model || 'flux-2-pro');
             const requestBody = this.buildGenerationRequest(params);
 
             // Submit generation task
-            const taskResponse = await this.submitTask(modelEndpoint, requestBody);
+            const taskResponse = await this.submitTask(modelEndpoint, requestBody, params.CancellationToken);
 
             if (!taskResponse.id) {
                 return this.createErrorResult(startTime, 'No task ID returned from BFL API');
             }
 
             // Poll for result
-            const resultResponse = await this.waitForResult(taskResponse.id);
+            const resultResponse = await this.waitForResult(taskResponse.id, params.CancellationToken);
 
             if (resultResponse.status === 'Error' || resultResponse.status === 'Request Moderated' ||
                 resultResponse.status === 'Content Moderated') {
@@ -102,7 +115,7 @@ export class FLUXImageGenerator extends BaseImageGenerator {
             }
 
             // Download image and create result
-            const generatedImage = await this.downloadImage(resultResponse.result.sample, 0);
+            const generatedImage = await this.downloadImage(resultResponse.result.sample, 0, params.CancellationToken);
 
             const result = this.createSuccessResult(startTime, [generatedImage]);
 
@@ -113,7 +126,7 @@ export class FLUXImageGenerator extends BaseImageGenerator {
 
             return result;
         } catch (error) {
-            return this.handleError(error, startTime);
+            return this.handleError(error, startTime, params.CancellationToken);
         }
     }
 
@@ -125,6 +138,7 @@ export class FLUXImageGenerator extends BaseImageGenerator {
         const startTime = new Date();
 
         try {
+            ThrowIfAborted(params.CancellationToken, 'Black Forest Labs');
             // Normalize input images
             const imageInput = await this.normalizeImageInput(params.image);
             const maskInput = params.mask ? await this.normalizeImageInput(params.mask) : undefined;
@@ -143,24 +157,24 @@ export class FLUXImageGenerator extends BaseImageGenerator {
             }
 
             // Submit task
-            const taskResponse = await this.submitTask(endpoint, requestBody);
+            const taskResponse = await this.submitTask(endpoint, requestBody, params.CancellationToken);
 
             if (!taskResponse.id) {
                 return this.createErrorResult(startTime, 'No task ID returned from BFL API');
             }
 
             // Wait for result
-            const resultResponse = await this.waitForResult(taskResponse.id);
+            const resultResponse = await this.waitForResult(taskResponse.id, params.CancellationToken);
 
             if (resultResponse.status !== 'Ready' || !resultResponse.result?.sample) {
                 return this.createErrorResult(startTime, `Edit failed: ${resultResponse.status}`);
             }
 
-            const generatedImage = await this.downloadImage(resultResponse.result.sample, 0);
+            const generatedImage = await this.downloadImage(resultResponse.result.sample, 0, params.CancellationToken);
 
             return this.createSuccessResult(startTime, [generatedImage]);
         } catch (error) {
-            return this.handleError(error, startTime);
+            return this.handleError(error, startTime, params.CancellationToken);
         }
     }
 
@@ -172,6 +186,7 @@ export class FLUXImageGenerator extends BaseImageGenerator {
         const startTime = new Date();
 
         try {
+            ThrowIfAborted(params.CancellationToken, 'Black Forest Labs');
             const imageInput = await this.normalizeImageInput(params.image);
 
             // For variations, we use the Kontext model or img2img endpoint
@@ -186,24 +201,24 @@ export class FLUXImageGenerator extends BaseImageGenerator {
             };
 
             // Submit task
-            const taskResponse = await this.submitTask(endpoint, requestBody);
+            const taskResponse = await this.submitTask(endpoint, requestBody, params.CancellationToken);
 
             if (!taskResponse.id) {
                 return this.createErrorResult(startTime, 'No task ID returned from BFL API');
             }
 
             // Wait for result
-            const resultResponse = await this.waitForResult(taskResponse.id);
+            const resultResponse = await this.waitForResult(taskResponse.id, params.CancellationToken);
 
             if (resultResponse.status !== 'Ready' || !resultResponse.result?.sample) {
                 return this.createErrorResult(startTime, `Variation failed: ${resultResponse.status}`);
             }
 
-            const generatedImage = await this.downloadImage(resultResponse.result.sample, 0);
+            const generatedImage = await this.downloadImage(resultResponse.result.sample, 0, params.CancellationToken);
 
             return this.createSuccessResult(startTime, [generatedImage]);
         } catch (error) {
-            return this.handleError(error, startTime);
+            return this.handleError(error, startTime, params.CancellationToken);
         }
     }
 
@@ -318,14 +333,15 @@ export class FLUXImageGenerator extends BaseImageGenerator {
     /**
      * Submit a task to the BFL API.
      */
-    private async submitTask(endpoint: string, body: Record<string, unknown>): Promise<BFLTaskResponse> {
+    private async submitTask(endpoint: string, body: Record<string, unknown>, signal?: AbortSignal): Promise<BFLTaskResponse> {
         const response = await fetch(`${this._baseUrl}${endpoint}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'X-Key': this.apiKey
             },
-            body: JSON.stringify(body)
+            body: JSON.stringify(body),
+            signal
         });
 
         if (!response.ok) {
@@ -337,9 +353,9 @@ export class FLUXImageGenerator extends BaseImageGenerator {
     }
 
     /**
-     * Poll for task completion.
+     * Poll for task completion. The signal aborts the poll in flight and the wait between polls.
      */
-    private async waitForResult(taskId: string): Promise<BFLResultResponse> {
+    private async waitForResult(taskId: string, signal?: AbortSignal): Promise<BFLResultResponse> {
         const startTime = Date.now();
 
         while (Date.now() - startTime < this._pollingConfig.maxWaitTime) {
@@ -347,7 +363,8 @@ export class FLUXImageGenerator extends BaseImageGenerator {
                 method: 'GET',
                 headers: {
                     'X-Key': this.apiKey
-                }
+                },
+                signal
             });
 
             if (!response.ok) {
@@ -363,8 +380,8 @@ export class FLUXImageGenerator extends BaseImageGenerator {
                 return result;
             }
 
-            // Wait before next poll
-            await this.sleep(this._pollingConfig.pollInterval);
+            // Wait before next poll, ending the wait as soon as the request is cancelled
+            await AbortableDelay(this._pollingConfig.pollInterval, signal);
         }
 
         throw new Error(`Timeout waiting for result after ${this._pollingConfig.maxWaitTime}ms`);
@@ -373,8 +390,8 @@ export class FLUXImageGenerator extends BaseImageGenerator {
     /**
      * Download an image from URL and convert to GeneratedImage.
      */
-    private async downloadImage(url: string, index: number): Promise<GeneratedImage> {
-        const response = await fetch(url);
+    private async downloadImage(url: string, index: number, signal?: AbortSignal): Promise<GeneratedImage> {
+        const response = await fetch(url, { signal });
 
         if (!response.ok) {
             await response.body?.cancel().catch(() => { /* nothing to drain */ });
@@ -396,16 +413,14 @@ export class FLUXImageGenerator extends BaseImageGenerator {
     }
 
     /**
-     * Sleep for specified milliseconds.
+     * Handle errors and create error result. A request its signal aborted is classified by why it was
+     * aborted, not as a provider error: a caller cancellation is reported as cancelled (never failed
+     * over), and an abort caused by a timeout as a retriable network error.
      */
-    private sleep(ms: number): Promise<void> {
-        return new Promise(resolve => setTimeout(resolve, ms));
-    }
-
-    /**
-     * Handle errors and create error result.
-     */
-    private handleError(error: unknown, startTime: Date): ImageGenerationResult {
+    private handleError(error: unknown, startTime: Date, signal?: AbortSignal): ImageGenerationResult {
+        if (IsRequestAborted(error, signal)) {
+            return this.CancelledResult(signal, error);
+        }
         const errorInfo = ErrorAnalyzer.analyzeError(error, 'Black Forest Labs');
         const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
 

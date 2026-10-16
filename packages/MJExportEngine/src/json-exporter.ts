@@ -37,7 +37,8 @@ export class JSONExporter extends BaseExporter {
         outputData = (sampledData as Record<string, unknown>[]).map(row => {
           const filtered: Record<string, unknown> = {};
           for (const col of columns) {
-            filtered[col.displayName || col.name] = row[col.name];
+            const value = row[col.name];
+            filtered[col.displayName || col.name] = col.dataType === 'dateonly' && value != null ? (this.calendarDay(value) ?? value) : value;
           }
           return filtered;
         });

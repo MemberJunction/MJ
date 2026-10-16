@@ -96,7 +96,7 @@ export class ComponentFeedbackPanelComponent extends BaseAngularComponent implem
   SelectComponent(spec: ComponentSpec): void {
     this.SelectedSpec = spec;
     this.ResetForm();
-    this.HighlightComponent(spec.name);
+    this.highlightComponent(spec.name);
   }
 
   IsSelected(spec: ComponentSpec): boolean {
@@ -238,9 +238,9 @@ export class ComponentFeedbackPanelComponent extends BaseAngularComponent implem
 
   // --- Region Highlighting (solid selection) ---
 
-  private HighlightComponent(componentName: string): void {
+  private highlightComponent(componentName: string): void {
     if (!this.ReactContainerElement) {
-      this.ClearHighlight();
+      this.clearHighlight();
       return;
     }
 
@@ -248,7 +248,7 @@ export class ComponentFeedbackPanelComponent extends BaseAngularComponent implem
       `[data-mj-component="${componentName}"]`
     );
     if (!targetEl) {
-      this.ClearHighlight();
+      this.clearHighlight();
       return;
     }
 
@@ -380,7 +380,7 @@ export class ComponentFeedbackPanelComponent extends BaseAngularComponent implem
     return null;
   }
 
-  private ClearHighlight(): void {
+  private clearHighlight(): void {
     this.resizeObserver?.disconnect();
     this.resizeObserver = null;
     if (this.highlightOverlay?.parentNode) {
@@ -392,11 +392,11 @@ export class ComponentFeedbackPanelComponent extends BaseAngularComponent implem
   }
 
   ClosePanel(): void {
-    this.ClearHighlight();
+    this.clearHighlight();
     this.Closed.emit();
   }
 
   ngOnDestroy(): void {
-    this.ClearHighlight();
+    this.clearHighlight();
   }
 }

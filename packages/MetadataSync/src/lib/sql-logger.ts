@@ -11,9 +11,9 @@ import path from 'path';
 import { SyncConfig } from '../config';
 
 export interface SQLLoggerOptions {
-  enabled: boolean;
-  outputDirectory: string;
-  formatAsMigration: boolean;
+  enabled: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  outputDirectory: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  formatAsMigration: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 export class SQLLogger {
@@ -29,14 +29,19 @@ export class SQLLogger {
     };
   }
   
-  get enabled(): boolean {
+  get Enabled(): boolean {
     return this.options.enabled;
+  }
+
+  /** @deprecated Use {@link Enabled}. */
+  get enabled(): boolean {
+    return this.Enabled;
   }
   
   /**
    * Initialize the SQL logger and prepare output directory
    */
-  async initialize(): Promise<void> {
+  async Initialize(): Promise<void> {
     if (!this.options.enabled || this.isInitialized) {
       return;
     }
@@ -45,11 +50,16 @@ export class SQLLogger {
     await fs.ensureDir(this.options.outputDirectory);
     this.isInitialized = true;
   }
+
+  /** @deprecated Use {@link Initialize}. */
+  async initialize(): Promise<void> {
+    return this.Initialize();
+  }
   
   /**
    * Log a SQL statement
    */
-  logStatement(sql: string, params?: any[]): void {
+  LogStatement(sql: string, params?: any[]): void {
     if (!this.options.enabled) {
       return;
     }
@@ -69,27 +79,37 @@ export class SQLLogger {
     
     this.statements.push(formattedSql);
   }
+
+  /** @deprecated Use {@link LogStatement}. */
+  logStatement(sql: string, params?: any[]): void {
+    return this.LogStatement(sql, params);
+  }
   
   /**
    * Log a transaction boundary
    */
-  logTransaction(action: 'BEGIN' | 'COMMIT' | 'ROLLBACK'): void {
+  LogTransaction(action: 'BEGIN' | 'COMMIT' | 'ROLLBACK'): void {
     if (!this.options.enabled) {
       return;
     }
     
     this.statements.push(`${action} TRANSACTION;`);
   }
+
+  /** @deprecated Use {@link LogTransaction}. */
+  logTransaction(action: 'BEGIN' | 'COMMIT' | 'ROLLBACK'): void {
+    return this.LogTransaction(action);
+  }
   
   /**
    * Write the collected SQL statements to file
    */
-  async writeLog(): Promise<string | undefined> {
+  async WriteLog(): Promise<string | undefined> {
     if (!this.options.enabled || this.statements.length === 0) {
       return undefined;
     }
     
-    await this.initialize();
+    await this.Initialize();
     
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     let filename: string;
@@ -131,12 +151,22 @@ export class SQLLogger {
     
     return filePath;
   }
+
+  /** @deprecated Use {@link WriteLog}. */
+  async writeLog(): Promise<string | undefined> {
+    return this.WriteLog();
+  }
   
   /**
    * Clear all logged statements
    */
-  clear(): void {
+  Clear(): void {
     this.statements = [];
+  }
+
+  /** @deprecated Use {@link Clear}. */
+  clear(): void {
+    return this.Clear();
   }
   
   /**

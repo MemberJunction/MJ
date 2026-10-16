@@ -1,8 +1,14 @@
-import { describe, it, expect } from 'vitest';
-import type { BaseEntity, EntityInfo } from '@memberjunction/core';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import type { BaseEntity, EntityInfo, IMetadataProvider } from '@memberjunction/core';
 import { renderComponentFixture, query, queryAll, capture } from '@memberjunction/ng-test-utils';
 import { MjFormToolbarComponent } from './form-toolbar.component';
-import type { BeforeSaveEventArgs, BeforeRefreshEventArgs } from '../types/form-events';
+import { DEFAULT_TOOLBAR_CONFIG } from '../types/toolbar-config';
+import type { BeforeSaveEventArgs, BeforeRefreshEventArgs, BeforeCloneEventArgs } from '../types/form-events';
+import type { FormToolbarItemConfig } from '../types/form-toolbar-item';
+import { RecordCloneService, RecordCloneSlideInComponent } from '@memberjunction/ng-record-clone';
+import { UserInfoEngine } from '@memberjunction/core-entities';
+import { TOOLBAR_PINS_SETTING_KEY } from './form-toolbar.component';
+import type { RecordNavigationEvent } from '../types/navigation-events';
 
 /**
  * DOM coverage for <mj-form-toolbar> — the action bar CodeGen renders on every entity form (~6× direct,
@@ -40,32 +46,41 @@ const render = (inputs: Record<string, unknown> = {}) =>
 
 type Fx = ReturnType<typeof render>;
 const btn = (f: Fx, sel: string) => query(f, sel) as HTMLElement | null;
+/** Opens the More menu, where unpinned actions and Delete live. */
+const openMore = (f: Fx) => { btn(f, 'button[title="More actions"]')?.click(); f.detectChanges(); };
+/** Opens the View menu, where section and layout controls live. */
+const openView = (f: Fx) => { btn(f, 'button[title="Sections and layout"]')?.click(); f.detectChanges(); };
 
 describe('MjFormToolbarComponent (DOM)', () => {
+  afterEach(() => vi.restoreAllMocks());
   describe('view mode', () => {
     it('renders the edit / delete / refresh / favorite / history / list / tags actions', () => {
       const f = render();
       expect(btn(f, 'button[title="Edit this Record"]')).not.toBeNull();
+      openMore(f);
       expect(btn(f, 'button[title="Delete this Record"]')).not.toBeNull();
       expect(btn(f, 'button[title="Refresh record from database"]')).not.toBeNull();
       expect(btn(f, 'button[title="Make Favorite"]')).not.toBeNull();
       expect(btn(f, '.mj-forms-btn--history')).not.toBeNull();
-      expect(btn(f, '.mj-forms-btn--list')).not.toBeNull();
+      expect(btn(f, '.mj-forms-menu-item[title="Add to a list"]')).not.toBeNull();
     });
 
     it('hides the edit button when the user cannot edit, delete when they cannot delete', () => {
       const f = render({ UserCanEdit: false, UserCanDelete: false });
       expect(btn(f, 'button[title="Edit this Record"]')).toBeNull();
+      openMore(f);
       expect(btn(f, 'button[title="Delete this Record"]')).toBeNull();
     });
 
     it('hides the refresh button when ShowRefreshButton is false', () => {
       const f = render({ Config: { ShowRefreshButton: false } });
+      openMore(f);
       expect(btn(f, 'button[title="Refresh record from database"]')).toBeNull();
     });
 
     it('hides the refresh button when record is unsaved', () => {
       const f = render({ Record: { ...RECORD, IsSaved: false } });
+      openMore(f);
       expect(btn(f, 'button[title="Refresh record from database"]')).toBeNull();
     });
 
@@ -83,6 +98,7 @@ describe('MjFormToolbarComponent (DOM)', () => {
 
     it('emits RefreshRequested and BeforeRefresh when refresh is clicked', () => {
       const f = render();
+      openMore(f);
       const refreshOut = capture(f.componentInstance.RefreshRequested);
       const beforeOut = capture(f.componentInstance.BeforeRefresh);
       btn(f, 'button[title="Refresh record from database"]')!.click();
@@ -92,6 +108,7 @@ describe('MjFormToolbarComponent (DOM)', () => {
 
     it('does not emit RefreshRequested when BeforeRefresh handler cancels', () => {
       const f = render();
+      openMore(f);
       f.componentInstance.BeforeRefresh.subscribe((e: BeforeRefreshEventArgs) => (e.Cancel = true));
       const refreshOut = capture(f.componentInstance.RefreshRequested);
       btn(f, 'button[title="Refresh record from database"]')!.click();
@@ -100,6 +117,7 @@ describe('MjFormToolbarComponent (DOM)', () => {
 
     it('disables the refresh button and shows spinner when IsRefreshing is true', () => {
       const f = render({ IsRefreshing: true });
+      openMore(f);
       const refreshBtn = btn(f, 'button[title="Refresh record from database"]');
       expect(refreshBtn).not.toBeNull();
       expect((refreshBtn as HTMLButtonElement).disabled).toBe(true);
@@ -115,6 +133,7 @@ describe('MjFormToolbarComponent (DOM)', () => {
 
     it('emits TagsPanelToggled when the tags button is clicked', () => {
       const f = render();
+      openMore(f);
       const out = capture(f.componentInstance.TagsPanelToggled);
       btn(f, 'button[title="View tags"]')!.click();
       expect(out.length).toBe(1);
@@ -130,13 +149,15 @@ describe('MjFormToolbarComponent (DOM)', () => {
     it('renders the version / list / tag count badges when counts are positive', () => {
       const f = render({ VersionCount: 3, ListCount: 2, TagCount: 5 });
       expect(query(f, '.mj-version-count-badge')?.textContent?.trim()).toBe('v3');
-      expect(query(f, '.mj-list-count-badge')).not.toBeNull();
+      openMore(f);
+      expect(queryAll(f, '.mj-forms-menu-badge').map((b) => b.textContent?.trim())).toEqual(expect.arrayContaining(['2', '5']));
     });
   });
 
   describe('delete confirmation', () => {
     it('opens the delete dialog on Delete click, then emits DeleteRequested on confirm', () => {
       const f = render();
+      openMore(f);
       const out = capture(f.componentInstance.DeleteRequested);
       btn(f, 'button[title="Delete this Record"]')!.click();
       f.detectChanges();
@@ -200,6 +221,7 @@ describe('MjFormToolbarComponent (DOM)', () => {
     it('emits ExpandAll / CollapseAll from the section control buttons', () => {
       // counts chosen so both buttons are enabled (expand disabled when all expanded, collapse when none)
       const f = render({ VisibleSectionCount: 3, ExpandedSectionCount: 1 });
+      openView(f);
       const expand = capture(f.componentInstance.ExpandAllRequested);
       const collapse = capture(f.componentInstance.CollapseAllRequested);
       btn(f, 'button[title="Expand all sections"]')!.click();
@@ -210,20 +232,23 @@ describe('MjFormToolbarComponent (DOM)', () => {
 
     it('hides expand/collapse-all in left-nav chrome', () => {
       const f = render({ ChromeLayout: 'left-nav', VisibleSectionCount: 3, ExpandedSectionCount: 1 });
+      openView(f);
       expect(btn(f, 'button[title="Expand all sections"]')).toBeNull();
       expect(btn(f, 'button[title="Collapse all sections"]')).toBeNull();
     });
 
     it('hides expand/collapse-all in right-nav chrome', () => {
       const f = render({ ChromeLayout: 'right-nav', VisibleSectionCount: 3, ExpandedSectionCount: 1 });
+      openView(f);
       expect(btn(f, 'button[title="Expand all sections"]')).toBeNull();
       expect(btn(f, 'button[title="Collapse all sections"]')).toBeNull();
     });
 
     it('emits FilterChange as the user types in the section filter', () => {
       const f = render();
+      openView(f);
       const out = capture(f.componentInstance.FilterChange);
-      const input = query(f, 'input') as HTMLInputElement;
+      const input = query(f, '.mj-forms-menu-search input') as HTMLInputElement;
       input.value = 'abc';
       input.dispatchEvent(new Event('input'));
       expect(out).toEqual(['abc']);
@@ -231,10 +256,427 @@ describe('MjFormToolbarComponent (DOM)', () => {
 
     it('clears the filter (FilterChange="") via the clear button when a filter is set', () => {
       const f = render({ SearchFilter: 'x' });
+      openView(f);
       const out = capture(f.componentInstance.FilterChange);
       const clear = queryAll(f, '.mj-clear-search')[0] as HTMLElement;
       clear.click();
       expect(out).toEqual(['']);
+    });
+  });
+
+  describe('pinned actions', () => {
+    const pinnedTitles = (f: Fx) =>
+      queryAll(f, '.mj-forms-toolbar > .mj-forms-toolbar-group > button').map((b) => b.getAttribute('title'));
+
+    it('shows Edit as an icon-only button, Favorite and History pinned, everything else in More', () => {
+      vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockReturnValue(undefined);
+      const f = render();
+      const edit = btn(f, 'button[title="Edit this Record"]')!;
+      expect(edit.querySelector('.mj-forms-btn-text')).toBeNull();
+      expect(pinnedTitles(f)).toEqual(['Edit this Record', 'Make Favorite', 'Record Changes']);
+      expect(btn(f, 'button[title="View tags"]')).toBeNull();
+      openMore(f);
+      expect(btn(f, '.mj-forms-menu-item[title="View tags"]')).not.toBeNull();
+    });
+
+    it('uses the pins the user saved', () => {
+      vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockImplementation((key: string) =>
+        key === TOOLBAR_PINS_SETTING_KEY ? JSON.stringify({ Version: 1, Pinned: ['tags'] }) : undefined
+      );
+      const f = render();
+      expect(pinnedTitles(f)).toEqual(['Edit this Record', 'View tags']);
+    });
+
+    it('pins and unpins from the More menu and saves the choice for the user', () => {
+      vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockReturnValue(undefined);
+      const save = vi.spyOn(UserInfoEngine.Instance, 'SetSettingDebounced').mockImplementation(() => undefined);
+      const f = render();
+      openMore(f);
+
+      btn(f, 'button[aria-label="Pin Tags"]')!.click();
+      f.detectChanges();
+      expect(pinnedTitles(f)).toContain('View tags');
+      expect(save).toHaveBeenLastCalledWith(TOOLBAR_PINS_SETTING_KEY, JSON.stringify({ Version: 1, Pinned: ['favorite', 'history', 'tags'] }));
+
+      btn(f, 'button[aria-label="Pin Favorite"][aria-pressed="true"]')!.click();
+      f.detectChanges();
+      expect(pinnedTitles(f)).not.toContain('Make Favorite');
+    });
+
+    it('stops at MaxPinnedActions, the same for every user', () => {
+      vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockReturnValue(undefined);
+      vi.spyOn(UserInfoEngine.Instance, 'SetSettingDebounced').mockImplementation(() => undefined);
+      const f = render({ Config: { ...DEFAULT_TOOLBAR_CONFIG, MaxPinnedActions: 2 } });
+      openMore(f);
+      const pinTags = btn(f, 'button[aria-label="Pin Tags"]') as HTMLButtonElement;
+      // Reachable by keyboard, so its hint can be read, but pinning does nothing at the cap.
+      expect(pinTags.disabled).toBe(false);
+      expect(pinTags.getAttribute('aria-disabled')).toBe('true');
+      pinTags.click();
+      expect(UserInfoEngine.Instance.SetSettingDebounced).not.toHaveBeenCalled();
+    });
+
+    it('keeps custom items inline unless they opt in with Pinnable', () => {
+      vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockReturnValue(undefined);
+      const f = render({
+        RegisteredItems: [
+          { Key: 'confirm-order', Text: 'Confirm Order', Description: 'Confirm this order' },
+          { Key: 'export', Text: 'Export', Description: 'Export record', Pinnable: true },
+        ],
+      });
+      expect(pinnedTitles(f)).toContain('Confirm this order');
+      expect(pinnedTitles(f)).not.toContain('Export record');
+      openMore(f);
+      expect(btn(f, '.mj-forms-menu-item[title="Export record"]')).not.toBeNull();
+    });
+
+    it('does not let pins for actions this form lacks use up slots', () => {
+      vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockImplementation((key: string) =>
+        key === TOOLBAR_PINS_SETTING_KEY ? JSON.stringify({ Version: 1, Pinned: ['clone', 'list', 'tags'] }) : undefined
+      );
+      const save = vi.spyOn(UserInfoEngine.Instance, 'SetSettingDebounced').mockImplementation(() => undefined);
+      const f = render();
+      expect(pinnedTitles(f)).toEqual(['Edit this Record', 'Add to a list', 'View tags']);
+      openMore(f);
+      const pinFav = btn(f, 'button[aria-label="Pin Favorite"]') as HTMLButtonElement;
+      expect(pinFav.getAttribute('aria-disabled')).toBeNull();
+      pinFav.click();
+      expect(save).toHaveBeenLastCalledWith(TOOLBAR_PINS_SETTING_KEY, JSON.stringify({ Version: 1, Pinned: ['clone', 'list', 'tags', 'favorite'] }));
+    });
+
+    it('re-reads pins so a change made in another form shows up', () => {
+      let stored: string | undefined;
+      vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockImplementation(() => stored);
+      const f = render();
+      expect(pinnedTitles(f)).toContain('Make Favorite');
+      stored = JSON.stringify({ Version: 1, Pinned: ['tags'] });
+      f.componentInstance.ngDoCheck(); // the next change-detection pass re-reads the setting
+      expect(f.componentInstance.PinnedActionItems.map((i) => i.Key)).toEqual(['tags']);
+    });
+
+    it('does not render Delete twice when a host makes it an inline button', () => {
+      const f = render({ RegisteredItems: [{ Key: 'delete', Pinnable: false }] });
+      expect(queryAll(f, 'button[title="Delete this Record"]')).toHaveLength(1);
+      openMore(f);
+      expect(queryAll(f, 'button[title="Delete this Record"]')).toHaveLength(1);
+    });
+
+    it('lists Delete last in the More menu, apart from the pinnable actions', () => {
+      const f = render();
+      openMore(f);
+      const items = queryAll(f, '.mj-forms-menu .mj-forms-menu-item');
+      expect(items.at(-1)?.getAttribute('title')).toBe('Delete this Record');
+      expect(btn(f, 'button[aria-label="Pin Delete record"]')).toBeNull();
+    });
+  });
+
+  describe('pins with a provider of their own', () => {
+    const provider = { InstanceConnectionString: 'conn-b', CurrentUser: null } as unknown as IMetadataProvider;
+    const engineFor = (loaded: boolean, pinned: string[]) => ({
+      Loaded: loaded,
+      GetSetting: vi.fn((key: string) => (key === TOOLBAR_PINS_SETTING_KEY ? JSON.stringify({ Version: 1, Pinned: pinned }) : undefined)),
+      SetSettingDebounced: vi.fn(),
+    });
+    const pinnedKeys = (f: Fx) => f.componentInstance.PinnedActionItems.map((i) => i.Key);
+
+    it("reads and saves pins on that provider's engine, not the global one", () => {
+      const own = engineFor(true, ['tags']);
+      const lookup = vi.spyOn(UserInfoEngine, 'GetProviderInstance').mockImplementation((p) => (p === provider ? own : UserInfoEngine.Instance) as unknown as UserInfoEngine);
+      vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockReturnValue(JSON.stringify({ Version: 1, Pinned: ['list'] }));
+      const globalSave = vi.spyOn(UserInfoEngine.Instance, 'SetSettingDebounced').mockImplementation(() => undefined);
+      const f = render({ Provider: provider });
+      expect(pinnedKeys(f)).toEqual(['tags']);
+
+      openMore(f);
+      btn(f, 'button[aria-label="Pin History"]')!.click();
+      f.detectChanges();
+      expect(own.SetSettingDebounced).toHaveBeenLastCalledWith(TOOLBAR_PINS_SETTING_KEY, JSON.stringify({ Version: 1, Pinned: ['tags', 'history'] }));
+      expect(globalSave).not.toHaveBeenCalled();
+      // Resolved once per change-detection pass, not once per read.
+      lookup.mockClear();
+      f.componentInstance.ngDoCheck();
+      void [f.componentInstance.PinnedKeys, f.componentInstance.PinnedKeys, f.componentInstance.IsPinned('tags')];
+      expect(lookup).toHaveBeenCalledTimes(1);
+    });
+
+    it("uses the global engine while that provider's engine hasn't loaded", () => {
+      vi.spyOn(UserInfoEngine, 'GetProviderInstance').mockReturnValue(engineFor(false, ['tags']) as unknown as UserInfoEngine);
+      vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockImplementation((key: string) =>
+        key === TOOLBAR_PINS_SETTING_KEY ? JSON.stringify({ Version: 1, Pinned: ['list'] }) : undefined
+      );
+      const f = render({ Provider: provider });
+      expect(pinnedKeys(f)).toEqual(['list']);
+    });
+  });
+
+  describe('keyboard and screen readers', () => {
+    it('uses a disclosure panel: the trigger controls it by id, and nothing claims the menu role', () => {
+      const f = render();
+      openMore(f);
+      const trigger = btn(f, 'button[title="More actions"]')!;
+      expect(trigger.getAttribute('aria-expanded')).toBe('true');
+      expect(trigger.hasAttribute('aria-haspopup')).toBe(false);
+      const panel = query(f, `#${trigger.getAttribute('aria-controls')}`);
+      expect(panel).not.toBeNull();
+      expect(queryAll(f, '[role="menu"], [role="menuitem"]')).toHaveLength(0);
+    });
+
+    it('moves focus into the panel on open, and back to its trigger on Escape', async () => {
+      const f = render();
+      document.body.appendChild(f.nativeElement);
+      openMore(f);
+      await tick();
+      const panelId = btn(f, 'button[title="More actions"]')!.getAttribute('aria-controls');
+      expect(document.activeElement?.closest(`#${panelId}`)).not.toBeNull();
+
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+      f.detectChanges();
+      expect(document.activeElement).toBe(btn(f, 'button[title="More actions"]'));
+      f.nativeElement.remove();
+    });
+  });
+
+  describe('focus, names and listeners', () => {
+    it('returns focus to the More button after running an item that closes the panel', async () => {
+      const f = render();
+      document.body.appendChild(f.nativeElement);
+      openMore(f);
+      await tick();
+      btn(f, '.mj-forms-menu-item[title="Refresh record from database"]')!.click();
+      f.detectChanges();
+      expect(document.activeElement).toBe(btn(f, 'button[title="More actions"]'));
+      f.nativeElement.remove();
+    });
+
+    it('names an icon-only pinned button by its state, not a fixed label', () => {
+      vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockReturnValue(undefined);
+      const f = render({ IsFavorite: true });
+      const favorite = queryAll(f, '.mj-forms-toolbar-group > .mj-forms-btn').find((b) => (b.getAttribute('aria-label') ?? '').includes('Favorite'));
+      expect(favorite).toBeDefined();
+      expect(favorite!.getAttribute('aria-label')).toBe(favorite!.getAttribute('title'));
+      expect(favorite!.getAttribute('aria-label')).toMatch(/Remove|Unfavorite|Favorited/i);
+      expect(favorite?.getAttribute('aria-label')).not.toBe('Favorite');
+    });
+
+    it('shows a pin past the cap as pinned, not as an unpinned action with a disabled pin', () => {
+      vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockImplementation((key: string) =>
+        key === TOOLBAR_PINS_SETTING_KEY ? JSON.stringify({ Version: 1, Pinned: ['favorite', 'history', 'list', 'tags'] }) : undefined
+      );
+      const f = render();
+      expect(f.componentInstance.PinnedActionItems.map((i) => i.Key)).toEqual(['favorite', 'history', 'list']);
+      openMore(f);
+      const tagsPin = btn(f, 'button[aria-label="Pin Tags"]')!;
+      expect(tagsPin.getAttribute('aria-pressed')).toBe('true');
+      expect(tagsPin.classList).toContain('over-cap');
+      expect(tagsPin.getAttribute('title')).toContain('toolbar is full');
+    });
+
+    it('listens on the document only while a panel is open', () => {
+      const f = render();
+      const onClick = vi.spyOn(f.componentInstance, 'OnDocumentClick');
+      document.body.click();
+      expect(onClick).not.toHaveBeenCalled();
+      openMore(f);
+      onClick.mockClear(); // the More button's own click reaches the new listener
+      document.body.click();
+      f.detectChanges();
+      expect(onClick).toHaveBeenCalledTimes(1);
+      expect(f.componentInstance.MoreMenuOpen).toBe(false);
+      document.body.click();
+      expect(onClick).toHaveBeenCalledTimes(1);
+    });
+
+    it('stops listening on the document when destroyed with a panel open', () => {
+      const f = render();
+      openMore(f);
+      const close = vi.spyOn(f.componentInstance, 'CloseMenus');
+      const onEscape = vi.spyOn(f.componentInstance, 'OnEscape');
+      f.destroy();
+      document.body.click();
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      expect(close).not.toHaveBeenCalled();
+      expect(onEscape).not.toHaveBeenCalled();
+    });
+
+    it('clears the section search on the first Escape and closes the panel on the next', () => {
+      const f = render({ SearchFilter: 'addr' });
+      openView(f);
+      const out = capture(f.componentInstance.FilterChange);
+      const input = query(f, '.mj-forms-menu-search input') as HTMLInputElement;
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      expect(out).toEqual(['']);
+      expect(f.componentInstance.ViewMenuOpen).toBe(true);
+
+      input.value = ''; // what the host's cleared filter binds back
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      expect(f.componentInstance.ViewMenuOpen).toBe(false);
+    });
+
+    it('closes View properly before opening the section manager, and returns focus to View', async () => {
+      const f = render({ Config: { ...DEFAULT_TOOLBAR_CONFIG, ShowSectionManager: true } });
+      document.body.appendChild(f.nativeElement);
+      openView(f);
+      const onClick = vi.spyOn(f.componentInstance, 'OnDocumentClick');
+      const manage = capture(f.componentInstance.ManageSectionsRequested);
+      (queryAll(f, '.mj-forms-menu-item').find((b) => b.textContent?.includes('Reorder sections')) as HTMLElement).click();
+      f.detectChanges();
+      expect(f.componentInstance.ViewMenuOpen).toBe(false);
+      onClick.mockClear();
+      document.body.click();
+      expect(onClick).not.toHaveBeenCalled();
+      expect(document.activeElement).toBe(btn(f, '[data-menu-trigger="view"]'));
+      expect(manage.length).toBe(1);
+      f.nativeElement.remove();
+    });
+
+    it('returns focus to View when the current form variant is picked again', () => {
+      const f = render({ Variants: [{ ID: 'v1', Label: 'Admin layout', Scope: 'Role', Status: 'Active' }], CurrentVariantID: 'v1' });
+      document.body.appendChild(f.nativeElement);
+      btn(f, '[data-menu-trigger="view"]')!.click();
+      f.detectChanges();
+      (queryAll(f, '.mj-form-variant-picker-row')[1] as HTMLElement).click();
+      f.detectChanges();
+      expect(document.activeElement).toBe(btn(f, '[data-menu-trigger="view"]'));
+      f.nativeElement.remove();
+    });
+
+    it('shows a non-default form variant on the View button', () => {
+      const f = render({ Variants: [{ ID: 'v1', Label: 'Admin layout', Scope: 'Role', Status: 'Active' }], CurrentVariantID: 'v1' });
+      expect(query(f, '.mj-forms-variant-tag')?.textContent).toContain('Admin layout');
+    });
+  });
+
+  describe('view menu', () => {
+    it('keeps an active section filter visible, with a clear button, once the menu closes', () => {
+      const f = render({ SearchFilter: 'addr' });
+      expect(query(f, '.mj-forms-filter-chip')?.textContent).toContain('addr');
+      const out = capture(f.componentInstance.FilterChange);
+      btn(f, '.mj-forms-filter-chip-clear')!.click();
+      expect(out).toEqual(['']);
+    });
+
+    it('closes after a form variant is picked', () => {
+      const f = render({ Variants: [{ ID: 'v1', Label: 'Admin layout', Scope: 'Role', Status: 'Active' }] });
+      openView(f);
+      (queryAll(f, '.mj-form-variant-picker-row')[1] as HTMLElement).click();
+      expect(f.componentInstance.ViewMenuOpen).toBe(false);
+    });
+
+    it('hides the View button when nothing inside it would render', () => {
+      const f = render({
+        ChromeLayout: 'left-nav',
+        Config: { ...DEFAULT_TOOLBAR_CONFIG, ShowSectionFilter: false, ShowSectionManager: false, ShowWidthToggle: false, ShowFormVariantPicker: false },
+      });
+      expect(btn(f, 'button[title="Sections and layout"]')).toBeNull();
+    });
+  });
+
+  describe('record cloning', () => {
+    const CLONE_ENTITY = { ...ENTITY_INFO, Name: 'MJ: Users', DisplayNameOrName: 'Users', CloneConfig: { Enabled: true } } as unknown as EntityInfo;
+    const CLONE_RECORD = { ...RECORD, EntityInfo: CLONE_ENTITY } as unknown as BaseEntity;
+    const CLONE_ON = { ShowCloneButton: true, ShowEditButton: true };
+
+    const renderClone = (canClone: boolean, inputs: Record<string, unknown> = {}) => {
+      const service = {
+        DescribeRecord: vi.fn().mockResolvedValue({ CanClone: canClone, Relationships: [] }),
+        PlanClone: vi.fn(),
+        ExecuteClone: vi.fn(),
+        GetLineage: vi.fn(),
+      };
+      const f = renderComponentFixture(MjFormToolbarComponent, {
+        declarations: [MjFormToolbarComponent],
+        imports: [RecordCloneSlideInComponent],
+        providers: [{ provide: RecordCloneService, useValue: service }],
+        inputs: { Record: CLONE_RECORD, EntityInfo: CLONE_ENTITY, UserCanEdit: true, Config: CLONE_ON, ...inputs },
+      });
+      return { f, service };
+    };
+    const settle = async (f: Fx) => { f.detectChanges(); await tick(); f.detectChanges(); };
+    const cloneBtn = (f: Fx) => { if (!btn(f, 'button[title^="Clone this"]')) openMore(f); return btn(f, 'button[title^="Clone this"]'); };
+
+    it('shows Clone when the config turns it on and Describe allows it', async () => {
+      const { f, service } = renderClone(true);
+      await settle(f);
+      expect(service.DescribeRecord.mock.calls[0][0]).toEqual({ EntityName: 'MJ: Users' });
+      expect(cloneBtn(f)).not.toBeNull();
+    });
+
+    it('hides Clone when Describe refuses', async () => {
+      const { f } = renderClone(false);
+      await settle(f);
+      expect(cloneBtn(f)).toBeNull();
+    });
+
+    it('hides Clone and skips the server call when ShowCloneButton is off', async () => {
+      const { f, service } = renderClone(true, { Config: { ShowEditButton: true } });
+      await settle(f);
+      expect(service.DescribeRecord).not.toHaveBeenCalled();
+      expect(cloneBtn(f)).toBeNull();
+    });
+
+    it('skips the server call for entities whose clone config is not enabled', async () => {
+      const entity = { ...CLONE_ENTITY, CloneConfig: null } as unknown as EntityInfo;
+      const { f, service } = renderClone(true, { Record: { ...RECORD, EntityInfo: entity }, EntityInfo: entity });
+      await settle(f);
+      expect(service.DescribeRecord).not.toHaveBeenCalled();
+    });
+
+    it('hides Clone for unsaved records', async () => {
+      const { f } = renderClone(true, { Record: { ...CLONE_RECORD, IsSaved: false } });
+      await settle(f);
+      expect(cloneBtn(f)).toBeNull();
+    });
+
+    it('opens the slide-in on click unless BeforeClone cancels', async () => {
+      const { f } = renderClone(true);
+      await settle(f);
+
+      const sub = f.componentInstance.BeforeClone.subscribe((e: BeforeCloneEventArgs) => (e.Cancel = true));
+      cloneBtn(f)!.click();
+      expect(f.componentInstance.IsClonePanelOpen).toBe(false);
+
+      sub.unsubscribe();
+      cloneBtn(f)!.click();
+      expect(f.componentInstance.IsClonePanelOpen).toBe(true);
+    });
+
+    it('does not reopen the slide-in by itself after the record switches entity', async () => {
+      const { f } = renderClone(true);
+      await settle(f);
+      cloneBtn(f)!.click();
+      expect(f.componentInstance.IsClonePanelOpen).toBe(true);
+
+      const other = { ...CLONE_ENTITY, Name: 'MJ: Roles' } as unknown as EntityInfo;
+      f.componentInstance.Record = { ...RECORD, EntityInfo: other } as unknown as BaseEntity;
+      await settle(f);
+
+      expect(f.componentInstance.IsClonePanelOpen).toBe(false);
+    });
+
+    it('closes the slide-in when the form moves to another record of the same entity', async () => {
+      const { f } = renderClone(true);
+      await settle(f);
+      cloneBtn(f)!.click();
+      expect(f.componentInstance.IsClonePanelOpen).toBe(true);
+
+      f.componentInstance.Record = { ...CLONE_RECORD, PrimaryKey: { ToConcatenatedString: () => 'PK2' } } as unknown as BaseEntity;
+      await settle(f);
+
+      expect(f.componentInstance.IsClonePanelOpen).toBe(false);
+    });
+
+    it('turns a clone navigation request into a record Navigate event', async () => {
+      const { f } = renderClone(true);
+      await settle(f);
+      const out = capture(f.componentInstance.Navigate);
+
+      f.componentInstance.OnCloneNavigate({ Kind: 'record', EntityName: 'MJ: Users', RecordKey: 'ID|u-2' });
+
+      const nav = out[0] as RecordNavigationEvent;
+      expect(nav.Kind).toBe('record');
+      expect(nav.EntityName).toBe('MJ: Users');
+      expect(nav.OpenInNewTab).toBe(true);
+      expect(nav.PrimaryKey.KeyValuePairs).toEqual([{ FieldName: 'ID', Value: 'u-2' }]);
     });
   });
 
@@ -285,7 +727,7 @@ describe('MjFormToolbarComponent (DOM)', () => {
       ];
 
       const f = render({ RegisteredItems: registeredItems });
-      expect(btn(f, 'button:has(.mj-forms-btn-text)')).toBeNull();
+      expect(queryAll(f, 'button').some((b) => b.textContent?.includes('Confirm Order'))).toBe(false);
     });
 
     it('evaluates dynamic Visible predicate function to show items', () => {
@@ -298,7 +740,7 @@ describe('MjFormToolbarComponent (DOM)', () => {
       ];
 
       const f = render({ RegisteredItems: registeredItems });
-      expect(btn(f, 'button:has(.mj-forms-btn-text)')).not.toBeNull();
+      expect(queryAll(f, 'button').some((b) => b.textContent?.includes('Confirm Order'))).toBe(true);
     });
 
     it('evaluates dynamic Disabled reason string predicate and sets tooltip', () => {
@@ -368,4 +810,51 @@ describe('MjFormToolbarComponent (DOM)', () => {
       expect(out[0].ItemKey).toBe('custom-action');
     });
   });
+});
+
+
+/**
+ * `right` and `overflow` were both declared in the public placement type and neither was
+ * drawn — an item registered for either rendered nowhere, with nothing to tell the caller
+ * that had happened. A registered item has to appear somewhere.
+ */
+describe('MjFormToolbarComponent (DOM) — items placed beside the section controls', () => {
+    const item = (over: Partial<FormToolbarItemConfig> = {}): FormToolbarItemConfig => ({
+        Key: 'manage-form-panels',
+        Text: 'Panels',
+        Description: 'Turn off or remove the panels added to this form',
+        Icon: 'fa-solid fa-layer-group',
+        Mode: 'both',
+        Placement: 'right',
+        ...over,
+    });
+
+    const rightButtons = (f: Fx) =>
+        (f.componentInstance.ResolvedRightItems as Array<{ Key: string }>).map((i) => i.Key);
+
+    it('draws an item placed on the right', () => {
+        const f = render({ RegisteredItems: [item()] });
+        expect(rightButtons(f)).toEqual(['manage-form-panels']);
+        expect((f.nativeElement as HTMLElement).textContent).toContain('Panels');
+    });
+
+    // The More menu lists only `actions` items, so those items join the right group rather than vanish.
+    it('draws an item placed in the overflow group there too', () => {
+        const f = render({ RegisteredItems: [item({ Placement: 'overflow' })] });
+        expect(rightButtons(f)).toEqual(['manage-form-panels']);
+    });
+
+    it('keeps it out of the record-action group', () => {
+        const f = render({ RegisteredItems: [item()] });
+        const actions = (f.componentInstance.ResolvedActionItems as Array<{ Key: string }>).map((i) => i.Key);
+        expect(actions).not.toContain('manage-form-panels');
+    });
+
+    it('raises the click like any other toolbar item', async () => {
+        const clicked = vi.fn();
+        const f = render({ RegisteredItems: [item({ OnClick: clicked })] });
+        const right = f.componentInstance.ResolvedRightItems[0];
+        await f.componentInstance.OnToolbarItemClick(right, new MouseEvent('click'));
+        expect(clicked).toHaveBeenCalled();
+    });
 });

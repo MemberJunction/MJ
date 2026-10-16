@@ -11,7 +11,7 @@ export class ReportGenerator {
   /**
    * Generate analysis report
    */
-  public generate(state: DatabaseDocumentation): string {
+  public Generate(state: DatabaseDocumentation): string {
     const lines: string[] = [];
 
     lines.push('# Database Documentation Analysis Report');
@@ -138,6 +138,11 @@ export class ReportGenerator {
     }
 
     return lines.join('\n');
+  }
+
+  /** @deprecated Use {@link Generate}. */
+  public generate(state: DatabaseDocumentation): string {
+    return this.Generate(state);
   }
 
   /**

@@ -27,7 +27,7 @@ export interface AccountSignatureDriverOptions {
  *
  * Credential values take precedence over Configuration, matching the Storage merge order.
  */
-export async function initializeDriverWithAccountCredentials(
+export async function InitializeDriverWithAccountCredentials(
     options: AccountSignatureDriverOptions,
 ): Promise<BaseSignatureProvider> {
     const { accountEntity, providerEntity, contextUser } = options;
@@ -55,6 +55,13 @@ export async function initializeDriverWithAccountCredentials(
     }
 
     return driver;
+}
+
+/** @deprecated Use {@link InitializeDriverWithAccountCredentials}. */
+export async function initializeDriverWithAccountCredentials(
+    options: AccountSignatureDriverOptions,
+): Promise<BaseSignatureProvider> {
+    return InitializeDriverWithAccountCredentials(options);
 }
 
 /** Build the non-secret base config: account identity + merged provider/account Configuration JSON. */

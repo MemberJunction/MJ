@@ -8,7 +8,7 @@ import { LogError, LogStatus } from '@memberjunction/core';
  * BEFORE any request body parsing occurs. This prevents anonymous/unauthorized callers
  * from causing body-parser memory allocations.
  */
-export function requireTicket(req: Request, res: Response, next: NextFunction): void {
+export function RequireTicket(req: Request, res: Response, next: NextFunction): void {
     const ticketId = (req.query['ticket'] as string) || '';
     if (!ticketId) {
         res.status(401).json({ error: 'Unauthorized: missing ticket' });
@@ -26,6 +26,11 @@ export function requireTicket(req: Request, res: Response, next: NextFunction): 
     next();
 }
 
+/** @deprecated Use {@link RequireTicket}. */
+export function requireTicket(req: Request, res: Response, next: NextFunction): void {
+    return RequireTicket(req, res, next);
+}
+
 /**
  * Builds the Express router handling the Realtime WebRTC SDP exchange:
  * `POST /realtime/sdp-exchange?ticket=<ticketId>`
@@ -36,12 +41,12 @@ export function requireTicket(req: Request, res: Response, next: NextFunction): 
  * BEFORE body parsing, delegates to `driver.ExchangeWebRtcSdp` to exchange the SDP offer for an
  * answer with upstream using the server's API key, and returns the answer SDP.
  */
-export function createRealtimeSdpBrokerRouter(): Router {
+export function CreateRealtimeSdpBrokerRouter(): Router {
     const router = express.Router();
 
     router.post(
         '/',
-        requireTicket,
+        RequireTicket,
         express.json({ limit: '2mb' }),
         async (req: Request, res: Response): Promise<void> => {
             const entry = res.locals.ticketEntry as RealtimeProxyTicketEntry;
@@ -95,7 +100,12 @@ export function createRealtimeSdpBrokerRouter(): Router {
     return router;
 }
 
+/** @deprecated Use {@link CreateRealtimeSdpBrokerRouter}. */
+export function createRealtimeSdpBrokerRouter(): Router {
+    return CreateRealtimeSdpBrokerRouter();
+}
+
 /**
  * @deprecated Use `createRealtimeSdpBrokerRouter` instead.
  */
-export const createOpenAILiveBrokerRouter = createRealtimeSdpBrokerRouter;
+export const createOpenAILiveBrokerRouter = CreateRealtimeSdpBrokerRouter;

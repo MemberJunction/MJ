@@ -43,17 +43,22 @@ vi.mock('../Database/manage-metadata', () => ({
     ManageMetadataBase: class { static generatedValidators: unknown[] = []; },
 }));
 vi.mock('../Config/config', () => ({
-    mj_core_schema: '__mj',
+    MjCoreSchema: '__mj',
+    get mj_core_schema() { return this.MjCoreSchema; },
     configInfo: {},
-    resolveEntityPackageName: () => 'mj_generatedentities',
-    resolveEntityImportPackage: () => {
+    ResolveEntityPackageName: () => 'mj_generatedentities',
+    get resolveEntityPackageName() { return this.ResolveEntityPackageName; },
+    ResolveEntityImportPackage: () => {
         throw new Error('resolveEntityImportPackage should not be called without peer embeds/collections');
     },
+    get resolveEntityImportPackage() { return this.ResolveEntityImportPackage; },
 }));
 vi.mock('./sql_logging', () => ({ SQLLogging: class {} }));
 vi.mock('../Misc/util', () => ({
-    makeDir: vi.fn(),
-    sortBySequenceAndCreatedAt: vi.fn((items: unknown[]) => [...items]),
+    MakeDir: vi.fn(),
+    get makeDir() { return this.MakeDir; },
+    SortBySequenceAndCreatedAt: vi.fn((items: unknown[]) => [...items]),
+    get sortBySequenceAndCreatedAt() { return this.SortBySequenceAndCreatedAt; },
 }));
 
 import { EntitySubClassGeneratorBase, RelatedRecordCollectionConfig } from '../Misc/entity_subclasses_codegen';

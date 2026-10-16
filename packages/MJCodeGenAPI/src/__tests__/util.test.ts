@@ -17,7 +17,7 @@ vi.mock('@memberjunction/global', () => ({
   },
 }));
 
-import { timeout, ___initialized, handleServerInit } from '../util';
+import { Timeout, ___initialized, HandleServerInit } from '../util';
 
 describe('MJCodeGenAPI util', () => {
   beforeEach(() => {
@@ -27,7 +27,7 @@ describe('MJCodeGenAPI util', () => {
   describe('timeout', () => {
     it('should reject after the specified time', async () => {
       vi.useFakeTimers();
-      const promise = timeout(1000);
+      const promise = Timeout(1000);
       vi.advanceTimersByTime(1000);
       await expect(promise).rejects.toThrow('Batch operation timed out');
       vi.useRealTimers();
@@ -36,7 +36,7 @@ describe('MJCodeGenAPI util', () => {
     it('should not resolve before timeout', async () => {
       vi.useFakeTimers();
       let rejected = false;
-      timeout(5000).catch(() => { rejected = true; });
+      Timeout(5000).catch(() => { rejected = true; });
       vi.advanceTimersByTime(2000);
       // Flush all pending microtasks
       await vi.advanceTimersByTimeAsync(0);
@@ -56,7 +56,7 @@ describe('MJCodeGenAPI util', () => {
 
   describe('handleServerInit', () => {
     it('should be a function', () => {
-      expect(typeof handleServerInit).toBe('function');
+      expect(typeof HandleServerInit).toBe('function');
     });
   });
 });

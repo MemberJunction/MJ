@@ -45,11 +45,16 @@ export class CodeExecutionService {
      * This must be called before executing any code. It starts the worker processes
      * and waits for them to be ready.
      */
-    async initialize(): Promise<void> {
+    async Initialize(): Promise<void> {
         if (!this.initialized) {
             await this.workerPool.initialize();
             this.initialized = true;
         }
+    }
+
+    /** @deprecated Use {@link Initialize}. */
+    async initialize(): Promise<void> {
+        return this.Initialize();
     }
 
     /**
@@ -62,10 +67,10 @@ export class CodeExecutionService {
      * @param params - Execution parameters (code, language, input data, limits)
      * @returns Execution result with output, logs, or error
      */
-    async execute(params: CodeExecutionParams): Promise<CodeExecutionResult> {
+    async Execute(params: CodeExecutionParams): Promise<CodeExecutionResult> {
         // Auto-initialize if not already done
         if (!this.initialized) {
-            await this.initialize();
+            await this.Initialize();
         }
 
         // Validate parameters
@@ -89,13 +94,23 @@ export class CodeExecutionService {
         return this.workerPool.execute(params);
     }
 
+    /** @deprecated Use {@link Execute}. */
+    async execute(params: CodeExecutionParams): Promise<CodeExecutionResult> {
+        return this.Execute(params);
+    }
+
     /**
      * Get worker pool statistics
      *
      * @returns Pool statistics including worker count and queue length
      */
-    getStats() {
+    GetStats() {
         return this.workerPool.getStats();
+    }
+
+    /** @deprecated Use {@link GetStats}. */
+    getStats() {
+        return this.GetStats();
     }
 
     /**
@@ -104,10 +119,15 @@ export class CodeExecutionService {
      * This should be called during application shutdown to gracefully terminate
      * all workers and reject any pending requests.
      */
-    async shutdown(): Promise<void> {
+    async Shutdown(): Promise<void> {
         if (this.initialized) {
             await this.workerPool.shutdown();
             this.initialized = false;
         }
+    }
+
+    /** @deprecated Use {@link Shutdown}. */
+    async shutdown(): Promise<void> {
+        return this.Shutdown();
     }
 }

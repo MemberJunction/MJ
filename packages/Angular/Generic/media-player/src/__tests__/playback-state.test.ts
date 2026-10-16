@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { MediaStateContext, MediaStateEvent, nextPlaybackState } from '../lib/media-player/playback-state';
+import { MediaStateContext, MediaStateEvent, NextPlaybackState } from '../lib/media-player/playback-state';
 import { MediaPlaybackState } from '../lib/media-player.types';
 
 /** Convenience context builder (HAVE_ENOUGH_DATA readyState by default). */
@@ -8,7 +8,7 @@ function ctx(overrides: Partial<MediaStateContext> = {}): MediaStateContext {
 }
 
 function run(event: MediaStateEvent, current: MediaPlaybackState, c: MediaStateContext = ctx()): MediaPlaybackState {
-  return nextPlaybackState(event, current, c);
+  return NextPlaybackState(event, current, c);
 }
 
 describe('nextPlaybackState', () => {

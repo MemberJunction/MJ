@@ -34,29 +34,44 @@ export class EvaluationPreferencesService {
   }
 
   /** Observable of current evaluation preferences */
-  get preferences$(): Observable<EvaluationPreferences> {
+  get Preferences$(): Observable<EvaluationPreferences> {
     return this._preferences$.asObservable();
   }
 
+  /** @deprecated Use {@link Preferences$}. */
+  get preferences$(): Observable<EvaluationPreferences> {
+    return this.Preferences$;
+  }
+
   /** Current preferences value */
-  get preferences(): EvaluationPreferences {
+  get Preferences(): EvaluationPreferences {
     return this._preferences$.value;
   }
 
+  /** @deprecated Use {@link Preferences}. */
+  get preferences(): EvaluationPreferences {
+    return this.Preferences;
+  }
+
   /** Whether preferences have been loaded */
-  get loaded(): boolean {
+  get Loaded(): boolean {
     return this._loaded;
+  }
+
+  /** @deprecated Use {@link Loaded}. */
+  get loaded(): boolean {
+    return this.Loaded;
   }
 
   constructor() {
     // Auto-load on first access
-    this.load();
+    this.Load();
   }
 
   /**
    * Load preferences from User Settings
    */
-  async load(): Promise<void> {
+  async Load(): Promise<void> {
     if (this._loaded) return;
 
     try {
@@ -81,10 +96,15 @@ export class EvaluationPreferencesService {
     }
   }
 
+  /** @deprecated Use {@link Load}. */
+  async load(): Promise<void> {
+    return this.Load();
+  }
+
   /**
    * Update a single preference
    */
-  async updatePreference<K extends keyof EvaluationPreferences>(
+  async UpdatePreference<K extends keyof EvaluationPreferences>(
     key: K,
     value: EvaluationPreferences[K]
   ): Promise<void> {
@@ -101,10 +121,18 @@ export class EvaluationPreferencesService {
     await this.save(updated);
   }
 
+  /** @deprecated Use {@link UpdatePreference}. */
+  async updatePreference<K extends keyof EvaluationPreferences>(
+    key: K,
+    value: EvaluationPreferences[K]
+  ): Promise<void> {
+    return this.UpdatePreference(key, value);
+  }
+
   /**
    * Update all preferences at once
    */
-  async updateAll(prefs: Partial<EvaluationPreferences>): Promise<void> {
+  async UpdateAll(prefs: Partial<EvaluationPreferences>): Promise<void> {
     const updated = { ...this._preferences$.value, ...prefs };
 
     // Ensure at least one is enabled
@@ -117,10 +145,15 @@ export class EvaluationPreferencesService {
     await this.save(updated);
   }
 
+  /** @deprecated Use {@link UpdateAll}. */
+  async updateAll(prefs: Partial<EvaluationPreferences>): Promise<void> {
+    return this.UpdateAll(prefs);
+  }
+
   /**
    * Toggle a specific preference
    */
-  async toggle(key: keyof EvaluationPreferences): Promise<void> {
+  async Toggle(key: keyof EvaluationPreferences): Promise<void> {
     const current = this._preferences$.value;
     const newValue = !current[key];
 
@@ -135,12 +168,22 @@ export class EvaluationPreferencesService {
     await this.save(updated);
   }
 
+  /** @deprecated Use {@link Toggle}. */
+  async toggle(key: keyof EvaluationPreferences): Promise<void> {
+    return this.Toggle(key);
+  }
+
   /**
    * Reset to default preferences
    */
-  async reset(): Promise<void> {
+  async Reset(): Promise<void> {
     this._preferences$.next(DEFAULT_EVALUATION_PREFERENCES);
     await this.save(DEFAULT_EVALUATION_PREFERENCES);
+  }
+
+  /** @deprecated Use {@link Reset}. */
+  async reset(): Promise<void> {
+    return this.Reset();
   }
 
   /**
@@ -185,21 +228,36 @@ export class EvaluationPreferencesService {
   /**
    * Check if showing any human-related metrics
    */
-  get showingHuman(): boolean {
+  get ShowingHuman(): boolean {
     return this._preferences$.value.showHuman;
+  }
+
+  /** @deprecated Use {@link ShowingHuman}. */
+  get showingHuman(): boolean {
+    return this.ShowingHuman;
   }
 
   /**
    * Check if showing any auto-related metrics
    */
-  get showingAuto(): boolean {
+  get ShowingAuto(): boolean {
     return this._preferences$.value.showAuto;
+  }
+
+  /** @deprecated Use {@link ShowingAuto}. */
+  get showingAuto(): boolean {
+    return this.ShowingAuto;
   }
 
   /**
    * Check if showing execution status
    */
-  get showingExecution(): boolean {
+  get ShowingExecution(): boolean {
     return this._preferences$.value.showExecution;
+  }
+
+  /** @deprecated Use {@link ShowingExecution}. */
+  get showingExecution(): boolean {
+    return this.ShowingExecution;
   }
 }

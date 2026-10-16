@@ -28,6 +28,7 @@ import {
   EntityFieldTSType,
   ProviderType,
   UserInfo,
+  PostCommitToken,
   RecordChange,
   IFileSystemProvider,
   TransactionGroupBase,
@@ -53,6 +54,8 @@ import {
   RunQueryWithCacheCheckParams,
   SaveContext,
   RestoreContext,
+  CloneContext,
+  RecordChangeSource,
   RecordChangePayload,
   EntityDeleteOptions,
 } from '@memberjunction/core';
@@ -78,7 +81,7 @@ import { DuplicateRecordDetector } from '@memberjunction/ai-vector-dupe';
 import type { IColocatedVectorHost } from '@memberjunction/ai-vectordb';
 import type { DatabasePlatform } from '@memberjunction/sql-dialect';
 
-import { UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, IsByteArray, TryBase64ToBytes, UUIDsEqual } from '@memberjunction/global';
 import { SQLServerDialect, SQLDialect } from '@memberjunction/sql-dialect';
 
 /**
@@ -87,8 +90,13 @@ import { SQLServerDialect, SQLDialect } from '@memberjunction/sql-dialect';
  * batch-execution methods that need a live mssql connection, so this is the
  * seam where the behaviour can actually be asserted. See issue #3171.
  */
-export function escapeRegExpLiteral(literal: string): string {
+export function EscapeRegExpLiteral(literal: string): string {
   return literal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** @deprecated Use {@link EscapeRegExpLiteral}. */
+export function escapeRegExpLiteral(literal: string): string {
+  return EscapeRegExpLiteral(literal);
 }
 /**
  * Checks whether an error indicates a stale/dead database connection that
@@ -147,6 +155,43 @@ function buildRequest(
   }
 
   return { request, processedQuery };
+}
+
+/** What one statement run by {@link executeSQLCore} resolves to. */
+type SQLCoreResult = Awaited<ReturnType<typeof executeSQLCore>>;
+
+/** A statement request that can be cancelled while it runs; an `mssql` Request has this shape. */
+export interface CancellableRequest<T> {
+  query(sqlText: string): Promise<T>;  // case-violation-ok-legacy-back-compat: mirrors the mssql driver's Request, which an mssql Request must satisfy as-is
+  cancel(): void;  // case-violation-ok-legacy-back-compat: mirrors the mssql driver's Request, which an mssql Request must satisfy as-is
+}
+
+/**
+ * Runs `sqlText` on `request` and, if it has not finished within `timeoutMs`, cancels it on the
+ * server and rejects with `Query timeout exceeded`. Cancelling, rather than only giving up
+ * waiting, frees the connection and stops the work.
+ */
+export async function QueryWithTimeout<T>(request: CancellableRequest<T>, sqlText: string, timeoutMs: number): Promise<T> {
+  const running = request.query(sqlText);
+  // The cancelled query rejects after the race has settled; that rejection is expected.
+  running.catch(() => undefined);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      running,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => {
+          // Settle first, so the caller sees the timeout rather than the driver's cancellation error.
+          reject(new Error('Query timeout exceeded'));
+          request.cancel();
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer) {
+      clearTimeout(timer);
+    }
+  }
 }
 
 /**
@@ -210,7 +255,7 @@ async function executeSQLCore(
 
     // Execute query and logging in parallel
     const [result] = await Promise.all([
-      request.query(processedQuery),
+      options?.timeoutMs ? QueryWithTimeout<SQLCoreResult>(request, processedQuery, options.timeoutMs) : request.query(processedQuery),
       logPromise
     ]);
 
@@ -317,11 +362,13 @@ export class SQLServerDataProvider
   }
 
   public override QuoteIdentifier(name: string): string {
-    return `[${name}]`;
+    // Double embedded closing brackets so a name containing `]` cannot terminate the
+    // quoting early (mirrors the PostgreSQL dialect's doubling of embedded `"`).
+    return `[${name.replace(/]/g, ']]')}]`;
   }
 
   public override QuoteSchemaAndView(schemaName: string, objectName: string): string {
-    return `[${schemaName}].[${objectName}]`;
+    return `${this.QuoteIdentifier(schemaName)}.${this.QuoteIdentifier(objectName)}`;
   }
 
   private static readonly _sqlServerUUIDPattern: RegExp =
@@ -347,7 +394,12 @@ export class SQLServerDataProvider
 
   // Removed _transactionRequest - creating new Request objects for each query to avoid concurrency issues
   private _fileSystemProvider: IFileSystemProvider;
-  private _bAllowRefresh: boolean = true;
+  /** Saves currently running SQL. Refresh is suspended while any is in flight (a count, since saves overlap). */
+  private _refreshSuspendCount: number = 0;
+  /** Refresh() calls waiting for `_refreshSuspendCount` to reach zero. */
+  private _refreshResumeWaiters: Array<() => void> = [];
+  /** Longest an explicit Refresh() waits for in-flight saves before giving up (returning false). */
+  private static readonly REFRESH_WAIT_TIMEOUT_MS = 30_000;
   private _recordDupeDetector: DuplicateRecordDetector;
   private _needsDatetimeOffsetAdjustment: boolean = false;
   private _datetimeOffsetTestComplete: boolean = false;
@@ -419,7 +471,6 @@ export class SQLServerDataProvider
   
   // Transaction state management
   private _transactionState$ = new BehaviorSubject<boolean>(false);
-  private _deferredTasks: Array<{ type: string; data: any; options: any; user: UserInfo }> = [];
 
 
   /**
@@ -431,8 +482,13 @@ export class SQLServerDataProvider
    *   console.log('Transaction active:', isActive);
    * });
    */
-  public get transactionState$(): Observable<boolean> {
+  public get TransactionState$(): Observable<boolean> {
     return this._transactionState$.asObservable();
+  }
+
+  /** @deprecated Use {@link TransactionState$}. */
+  public get transactionState$(): Observable<boolean> {
+    return this.TransactionState$;
   }
   
   /**
@@ -462,10 +518,15 @@ export class SQLServerDataProvider
   /**
    * Gets whether a transaction is currently active
    */
-  public get isTransactionActive(): boolean {
+  public get IsTransactionActive(): boolean {
     // Always return instance-level state
     // Request-specific state should be accessed via getTransactionContext
     return this._transactionState$.value;
+  }
+
+  /** @deprecated Use {@link IsTransactionActive}. */
+  public get isTransactionActive(): boolean {
+    return this.IsTransactionActive;
   }
 
   /**
@@ -601,10 +662,34 @@ export class SQLServerDataProvider
    * picked up by the subsequent rescan instead of serving a stale column order until restart.
    */
   public override async Refresh(providerToUse?: IMetadataProvider): Promise<boolean> {
-    if (this.AllowRefresh && this._pool) {
+    // An explicit Refresh must really reload: base Refresh() is a silent no-op while a save is in
+    // flight, which left callers (CodeGen after a fire-and-forget prompt-run save) on stale metadata.
+    if (!(await this.waitForSavesToFinish())) {
+      LogError(`SQLServerDataProvider.Refresh: ${this._refreshSuspendCount} save(s) still in flight after ${SQLServerDataProvider.REFRESH_WAIT_TIMEOUT_MS}ms; metadata was NOT refreshed`);
+      return false;
+    }
+    if (this._pool) {
       SQLServerDataProvider.InvalidateViewColumnOrderCache(this._pool);
     }
     return super.Refresh(providerToUse);
+  }
+
+  /** Resolves true once no save is in flight, or false after REFRESH_WAIT_TIMEOUT_MS. */
+  private waitForSavesToFinish(): Promise<boolean> {
+    if (this._refreshSuspendCount === 0) {
+      return Promise.resolve(true);
+    }
+    return new Promise<boolean>((resolve) => {
+      const timer = setTimeout(() => {
+        this._refreshResumeWaiters = this._refreshResumeWaiters.filter((w) => w !== onResume);
+        resolve(false);
+      }, SQLServerDataProvider.REFRESH_WAIT_TIMEOUT_MS);
+      const onResume = (): void => {
+        clearTimeout(timer);
+        resolve(true);
+      };
+      this._refreshResumeWaiters.push(onResume);
+    });
   }
 
   /**
@@ -683,7 +768,7 @@ export class SQLServerDataProvider
    * @internal
    */
   protected get AllowRefresh(): boolean {
-    return this._bAllowRefresh;
+    return this._refreshSuspendCount === 0;
   }
 
   /**
@@ -739,7 +824,7 @@ export class SQLServerDataProvider
     // Build array of SQL statements for batch execution
     const sqlStatements: string[] = [];
     for (const { query } of items) {
-      // CacheValidationSQL should return MaxUpdatedAt and RowCount
+      // CacheValidationSQL returns MaxUpdatedAt and a row count (TotalRows or RowCount)
       sqlStatements.push(query.CacheValidationSQL!);
     }
 
@@ -752,16 +837,8 @@ export class SQLServerDataProvider
         const { index } = items[i];
         const resultSet = resultSets[i];
 
-        if (resultSet && resultSet.length > 0) {
-          const row = resultSet[0] as { MaxUpdatedAt: Date | string | null; RowCount: number };
-          results.set(index, {
-            success: true,
-            rowCount: row.RowCount,
-            maxUpdatedAt: row.MaxUpdatedAt ? new Date(row.MaxUpdatedAt).toISOString() : undefined,
-          });
-        } else {
-          results.set(index, { success: true, rowCount: 0, maxUpdatedAt: undefined });
-        }
+        // Shared reader: accepts the documented `TotalRows` as well as `RowCount`.
+        results.set(index, this.QueryCacheStatusFromRow(resultSet?.[0] as Record<string, unknown> | undefined));
       }
     } catch (e) {
       // If batch fails, mark all items as failed
@@ -821,8 +898,7 @@ export class SQLServerDataProvider
       // unconditional GetEffectiveBaseView) so a Building/DriftHold/Disabled/never-minted snapshot probes the
       // LIVE base view — mirroring the read path — instead of a held or missing materialized_vw wrapper.
       const effectiveView = await this.resolveEffectiveBaseView(entityInfo, item.params, contextUser);
-      const statusSQL = `SELECT COUNT(*) AS TotalRows, MAX(__mj_UpdatedAt) AS MaxUpdatedAt FROM [${entityInfo.SchemaName}].${effectiveView}${whereSQL ? ' WHERE ' + whereSQL : ''}`;
-      sqlStatements.push(statusSQL);
+      sqlStatements.push(this.BuildCacheStatusSQL(entityInfo, effectiveView, whereSQL));
     }
 
     try {
@@ -846,11 +922,15 @@ export class SQLServerDataProvider
         }
       }
     } catch (e) {
-      // If batch fails, mark all items as failed
-      const errorMessage = e instanceof Error ? e.message : String(e);
-      for (const { index } of items) {
-        results.set(index, { success: false, errorMessage });
-      }
+      // One bad statement fails the WHOLE batch on SQL Server, which used to mark every item
+      // failed — so a single problematic entity blinded the sweep for its entire engine. Fall back
+      // to the per-item path, which runs each probe on its own and fails only what deserves it
+      //.
+      LogStatusEx({
+        message: `SQLServerDataProvider.getBatchedServerCacheStatus: batched probe failed (${e instanceof Error ? e.message : String(e)}) — retrying ${items.length} probe(s) individually`,
+        verboseOnly: true,
+      });
+      return await super.getBatchedServerCacheStatus(items, contextUser);
     }
 
     return results;
@@ -990,14 +1070,14 @@ export class SQLServerDataProvider
 
   protected GetRecordDependencyLinkSQL(dep: EntityDependency, entity: EntityInfo, relatedEntity: EntityInfo, CompositeKey: CompositeKey): string {
     const f = relatedEntity.Fields.find((f) => f.Name.trim().toLowerCase() === dep.FieldName?.trim().toLowerCase());
-    const quotes = entity.FirstPrimaryKey.NeedsQuotes ? "'" : ''; // first-pk-ok: a foreign key targets a single column; quoting follows that FK target's type
     if (!f) {
       throw new Error(`Field ${dep.FieldName} not found in Entity ${relatedEntity.Name}`);
     }
 
     if (f.RelatedEntityFieldName?.trim().toLowerCase() === 'id') {
       // simple link to first primary key, most common scenario for linkages
-      return `${quotes}${CompositeKey.GetValueByIndex(0)}${quotes}`;
+      // Key values arrive from remote callers — render through the shared sanitizer.
+      return SQLServerDataProvider.RenderKeyValueLiteral(CompositeKey.GetValueByIndex(0), entity.FirstPrimaryKey.NeedsQuotes, entity.FirstPrimaryKey.Name, entity.Name); // first-pk-ok: a foreign key targets a single column; quoting follows that FK target's type
     } else {
       // The FK points at a non-key column of `entity`, so resolve that column for THE record being
       // checked. The record is identified by its full key — every PK column, not just the first —
@@ -1015,12 +1095,29 @@ export class SQLServerDataProvider
   protected BuildFullPrimaryKeyPredicate(entity: EntityInfo, compositeKey: CompositeKey): string {
     return entity.PrimaryKeys
       .map((pk, index) => {
-        const q = pk.NeedsQuotes ? "'" : '';
         const byName = compositeKey.KeyValuePairs.find((kv) => kv.FieldName?.trim().toLowerCase() === pk.Name.trim().toLowerCase());
         const value = byName ? byName.Value : compositeKey.GetValueByIndex(index);
-        return `${pk.Name}=${q}${value}${q}`;
+        // Key values arrive from remote callers — render through the shared sanitizer so a
+        // crafted value cannot break out of the literal (or, unquoted, splice in SQL text).
+        return `${pk.Name}=${SQLServerDataProvider.RenderKeyValueLiteral(value, pk.NeedsQuotes, pk.Name, entity.Name)}`;
       })
       .join(' AND ');
+  }
+
+  /**
+   * Renders a primary-key value as a safe SQL literal. Quoted (string/date) values are
+   * escaped with {@link EscapeSQLString}; unquoted (numeric) values are validated to be a
+   * plain number, since anything else spliced in bare would execute as SQL text.
+   */
+  protected static RenderKeyValueLiteral(value: unknown, needsQuotes: boolean, fieldName: string, entityName: string): string {
+    if (needsQuotes) {
+      return `'${EscapeSQLString(String(value))}'`;
+    }
+    const raw = String(value);
+    if (!/^-?\d+(\.\d+)?$/.test(raw)) {
+      throw new Error(`Invalid non-numeric value provided for numeric key field ${fieldName} on entity ${entityName}`);
+    }
+    return raw;
   }
 
   /**
@@ -1050,16 +1147,15 @@ export class SQLServerDataProvider
   }
 
   /**
-   * Override to defer AI action tasks when a transaction is active.
-   * When inside a transaction, tasks are queued to _deferredTasks and
-   * processed after transaction commit (see processDeferredTasks).
+   * Queue the AI action task only once the save is durable: through {@link RunAfterCommit}, so it
+   * is added right away outside a transaction, after the outermost commit inside one, and never if
+   * that transaction rolls back. `postCommitToken` ties the task to the save's own transaction:
+   * the base dispatches this after an `await`, by which time that transaction may have settled.
    */
-  protected override EnqueueAfterSaveAIAction(params: EntityAIActionParams, user: UserInfo): void {
-    if (this.isTransactionActive) {
-      this._deferredTasks.push({ type: 'Entity AI Action', data: params, options: null, user });
-    } else {
-      QueueManager.AddTask('Entity AI Action', params, null, user);
-    }
+  protected override EnqueueAfterSaveAIAction(params: EntityAIActionParams, user: UserInfo, postCommitToken?: PostCommitToken): void {
+    this.RunAfterCommit(async () => {
+      await QueueManager.AddTask('Entity AI Action', params, null, user);
+    }, 'Entity AI Action', postCommitToken);
   }
 
 
@@ -1250,7 +1346,20 @@ export class SQLServerDataProvider
     isUpdate: boolean,
     _spName: string,
   ): SaveCallBinding {
-    const uniqueSuffix = this.allocateSaveCallSuffix(entity);
+    return this.renderSaveCallBindingWithSuffix(entity, fieldValues, isUpdate, this.allocateSaveCallSuffix(entity));
+  }
+
+  /**
+   * The binding for a given variable suffix. Split out of RenderSaveCallBinding so the update
+   * replay form can re-render a subset of the fields under the SAME suffix without allocating
+   * another one (inside a TransactionGroup that would consume a `_n` ordinal).
+   */
+  private renderSaveCallBindingWithSuffix(
+    entity: BaseEntity,
+    fieldValues: Map<EntityFieldInfo, unknown>,
+    isUpdate: boolean,
+    uniqueSuffix: string,
+  ): Extract<SaveCallBinding, { kind: 'mssql-declare-exec' }> {
     const declarations: string[] = [];
     const setStatements: string[] = [];
     const execParams: string[] = [];
@@ -1261,11 +1370,15 @@ export class SQLServerDataProvider
       const varName = `@${f.CodeName}${uniqueSuffix}`;
       declarations.push(`${varName} ${f.SQLFullType.toUpperCase()}`);
 
-      if (value !== null && value !== undefined) {
-        setStatements.push(`SET ${varName} = ${this.generateSetStatementValue(f, value)}`);
+      // A binary value is rendered to its hex literal ONCE and reused below: the literal is twice
+      // the size of the bytes, and the SET block and the simple-params form both carry it.
+      const hasValue = value !== null && value !== undefined;
+      const binaryLiteral = hasValue && f.IsBinaryFieldType ? this.FormatBinaryLiteral(f, value) : undefined;
+      if (hasValue) {
+        setStatements.push(`SET ${varName} = ${binaryLiteral ?? this.generateSetStatementValue(f, value)}`);
       }
       execParams.push(`@${f.CodeName}=${varName}`);
-      simpleParams += this.generateSingleSPParam(f, value as string, bFirst);
+      simpleParams += this.generateSingleSPParam(f, value as string, bFirst, binaryLiteral);
       bFirst = false;
 
       if ((value === null || value === undefined) && f.NeedsClearCompanion) {
@@ -1351,6 +1464,37 @@ export class SQLServerDataProvider
     return `${this.renderDeclareSetHead(binding)}${createBranch}${updateBranch}`;
   }
 
+  /**
+   * Replay form of an UPDATE for the SQL log (never executed): `EXEC spUpdate` with only the
+   * fields this save changed, plus the primary key. The update procs keep every column whose
+   * parameter is not passed (`ISNULL(@p, [Col])`), so replaying the recording applies exactly
+   * the change that was made and leaves the target's other columns — including settings a
+   * consumer tuned on an MJ-owned row — alone. A field changed to NULL still carries its
+   * `_Clear` companion (derived from the same map). A save whose changes touch no proc
+   * parameter has nothing to replay, so it is logged as a comment. A hand-written update proc
+   * (spUpdateGenerated off) makes no ISNULL promise, so it keeps the full-row form.
+   */
+  protected override RenderReplayUpdateSQL(
+    binding: SaveCallBinding,
+    entity: BaseEntity,
+    changedFieldValues: Map<EntityFieldInfo, unknown>,
+  ): string | undefined {
+    if (binding.kind !== 'mssql-declare-exec') {
+      throw new Error(`SQLServerDataProvider.RenderReplayUpdateSQL: unexpected binding kind '${binding.kind}'`);
+    }
+    const info = entity.EntityInfo;
+    if (!info.spUpdateGenerated) {
+      return undefined;
+    }
+    if (changedFieldValues.size === 0) {
+      const key = entity.PrimaryKey.ToString().replace(/[\r\n]+/g, ' ');
+      return `-- ${info.Name} (${key}): saved with no field changes; nothing to replay`;
+    }
+    const changed = this.renderSaveCallBindingWithSuffix(entity, changedFieldValues, true, binding.suffix);
+    const spName = this.GetCreateUpdateSPName(entity, false);
+    return `${this.renderDeclareSetHead(changed)}EXEC [${info.SchemaName}].${spName} ${changed.callArgsSQL}`;
+  }
+
   /** `DECLARE ...\n\nSET ...\n\n` when the binding declares variables, else empty. */
   private renderDeclareSetHead(binding: Extract<SaveCallBinding, { kind: 'mssql-declare-exec' }>): string {
     return binding.preambleSQL ? `${binding.preambleSQL}\n\n${binding.setSQL}\n\n` : '';
@@ -1396,21 +1540,25 @@ export class SQLServerDataProvider
 
     // Build the inline `EXEC spCreateRecordChange_Internal` from the payload,
     // referencing `@ID` (set below from the result table).
-    const restoreClause = payload.source === 'Restore'
+    const lineageClause = payload.source === 'Restore'
       ? `,
                                                                                         @Source='Restore',
                                                                                         @RestoredFromID='${payload.restoredFromID}',
                                                                                         @RestoreReason=${payload.restoreReason ? `N'${payload.restoreReason.replace(/'/g, "''")}'` : 'NULL'}`
+      : payload.source === 'Clone'
+      ? `,
+                                                                                        @Source='Clone',
+                                                                                        @ChangeContext=N'${EscapeSQLString(payload.changeContext)}'`
       : '';
-    const recordChangeEXEC = `EXEC [${this.MJCoreSchemaName}].spCreateRecordChange_Internal @EntityName='${entity.EntityInfo.Name}',
+    const recordChangeEXEC = `EXEC [${this.MJCoreSchemaName}].spCreateRecordChange_Internal @EntityName=N'${entity.EntityInfo.Name}',
                                                                                         @RecordID=@ID,
                                                                                         @UserID='${payload.userID}',
                                                                                         @Type='${payload.type}',
-                                                                                        @ChangesJSON='${payload.changesJSON}',
-                                                                                        @ChangesDescription='${payload.changesDescription}',
-                                                                                        @FullRecordJSON='${payload.fullRecordJSON}',
+                                                                                        @ChangesJSON=N'${payload.changesJSON}',
+                                                                                        @ChangesDescription=N'${payload.changesDescription}',
+                                                                                        @FullRecordJSON=N'${payload.fullRecordJSON}',
                                                                                         @Status='Complete',
-                                                                                        @Comments=null${restoreClause}`;
+                                                                                        @Comments=null${lineageClause}`;
 
     const execSQL = `EXEC [${entity.EntityInfo.SchemaName}].${spName} ${binding.callArgsSQL}`;
     const sql = `
@@ -1450,6 +1598,7 @@ export class SQLServerDataProvider
    * @returns SQL value string
    */
   private generateSetStatementValue(f: EntityFieldInfo, value: any): string {
+    if (f.IsBinaryFieldType) return this.FormatBinaryLiteral(f, value);
     let val: any = value;
     
     switch (f.TSType) {
@@ -1501,7 +1650,11 @@ export class SQLServerDataProvider
     }
   }
 
-  private generateSingleSPParam(f: EntityFieldInfo, value: string, isFirst: boolean): string {
+  private generateSingleSPParam(f: EntityFieldInfo, value: string, isFirst: boolean, binaryLiteral?: string): string {
+    if (f.IsBinaryFieldType) {
+      const literal = value === null || value === undefined ? 'NULL' : (binaryLiteral ?? this.FormatBinaryLiteral(f, value));
+      return `${isFirst ? '' : ',\n                '}@${f.CodeName}=${literal}`;
+    }
     let sRet: string = '';
     let quotes: string = '';
     let val: any = value;
@@ -1538,6 +1691,48 @@ export class SQLServerDataProvider
     sRet += `@${f.CodeName}=${this.packageSPParam(val, quotes, f.UnicodePrefix)}`;
 
     return sRet;
+  }
+
+  /**
+   * Renders a binary field value as a T-SQL hexadecimal literal (`0x…`).
+   *
+   * A binary field's value in a `BaseEntity` is a base64 string. SQL Server has no implicit
+   * conversion from a quoted string to `varbinary` — a quoted base64 value would either fail or be
+   * stored as the bytes of its ASCII text — so the value is decoded and written as a hex literal,
+   * which is unambiguous, needs no escaping and works on every SQL Server version. A byte array
+   * (e.g. a Buffer set by server code) is accepted as well.
+   *
+   * @param field - The binary field being written; named in the error message.
+   * @param value - Base64 string or byte array.
+   * @returns The literal, e.g. `0x0A0B` (`0x` for zero bytes).
+   * @throws Error when the value is neither a byte array nor valid base64, so a corrupt value fails
+   *   the save instead of being stored as garbage.
+   */
+  /**
+   * Largest binary value, in decoded bytes, that a save will inline as a `0x…` hex literal.
+   *
+   * A save is one T-SQL batch, and SQL Server caps a batch at 65,536 × the network packet size
+   * (256 MB at the default 4 KB). The batch is UTF-16, so the literal costs 4 bytes per blob byte,
+   * and with Record Changes on an update the same bytes travel again as base64 in `ChangesJSON`
+   * (old and new) and `FullRecordJSON` — about 12 bytes per blob byte, a ceiling near 20 MB. Node
+   * also holds the hex, the batch and those JSON strings at once. Above this limit the save fails
+   * here with a message that says so, instead of a batch-size error from the server.
+   */
+  public static MaxInlineBinaryBytes: number = 32 * 1024 * 1024;
+
+  protected FormatBinaryLiteral(field: EntityFieldInfo, value: unknown): string {
+    const bytes = IsByteArray(value) ? value : TryBase64ToBytes(typeof value === 'string' ? value : null);
+    if (!bytes) {
+      throw new Error(`Field "${field.Name}" is binary (${field.Type}); its value must be a base64 string, but it is not valid base64`);
+    }
+    if (bytes.byteLength > SQLServerDataProvider.MaxInlineBinaryBytes) {
+      throw new Error(
+        `Field "${field.Name}" holds ${bytes.byteLength.toLocaleString()} bytes, more than the ${SQLServerDataProvider.MaxInlineBinaryBytes.toLocaleString()}-byte ` +
+        `limit for a value inlined into a save batch (SQLServerDataProvider.MaxInlineBinaryBytes). Store large binary content through file storage, ` +
+        `or raise the limit if the batch size and Record Changes cost are acceptable.`,
+      );
+    }
+    return `0x${Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength).toString('hex').toUpperCase()}`;
   }
 
   /**
@@ -1581,6 +1776,7 @@ export class SQLServerDataProvider
     user: UserInfo,
     wrapRecordIdInQuotes: boolean,
     restoreContext?: RestoreContext | null,
+    cloneContext?: CloneContext | null,
   ) {
     // Dialect-agnostic payload assembly is hoisted into DatabaseProviderBase
     // so SQL Server and PostgreSQL share one implementation. We only render
@@ -1594,26 +1790,30 @@ export class SQLServerDataProvider
       user,
       restoreContext,
       "'",
+      cloneContext,
     );
     if (!payload) return null;
 
-    const quotes = wrapRecordIdInQuotes ? "'" : '';
-    const restoreClause = payload.source === 'Restore'
+    const lineageClause = payload.source === 'Restore'
       ? `,
                                                                                         @Source='Restore',
                                                                                         @RestoredFromID='${payload.restoredFromID}',
                                                                                         @RestoreReason=${payload.restoreReason ? `N'${payload.restoreReason.replace(/'/g, "''")}'` : 'NULL'}`
+      : payload.source === 'Clone'
+      ? `,
+                                                                                        @Source='Clone',
+                                                                                        @ChangeContext=N'${EscapeSQLString(payload.changeContext)}'`
       : '';
 
-    return `EXEC [${this.MJCoreSchemaName}].spCreateRecordChange_Internal @EntityName='${entityName}',
-                                                                                        @RecordID=${quotes}${recordID}${quotes},
+    return `EXEC [${this.MJCoreSchemaName}].spCreateRecordChange_Internal @EntityName=N'${entityName}',
+                                                                                        @RecordID=${wrapRecordIdInQuotes ? `N'${recordID}'` : recordID},
                                                                                         @UserID='${payload.userID}',
                                                                                         @Type='${payload.type}',
-                                                                                        @ChangesJSON='${payload.changesJSON}',
-                                                                                        @ChangesDescription='${payload.changesDescription}',
-                                                                                        @FullRecordJSON='${payload.fullRecordJSON}',
+                                                                                        @ChangesJSON=N'${payload.changesJSON}',
+                                                                                        @ChangesDescription=N'${payload.changesDescription}',
+                                                                                        @FullRecordJSON=N'${payload.fullRecordJSON}',
                                                                                         @Status='Complete',
-                                                                                        @Comments=null${restoreClause}`;
+                                                                                        @Comments=null${lineageClause}`;
   }
   /**
    * Implements the abstract BuildRecordChangeSQL from DatabaseProviderBase.
@@ -1628,8 +1828,9 @@ export class SQLServerDataProvider
     type: 'Create' | 'Update' | 'Delete',
     user: UserInfo,
     restoreContext?: RestoreContext | null,
+    cloneContext?: CloneContext | null,
   ): { sql: string; parameters?: unknown[] } | null {
-    const sql = this.GetLogRecordChangeSQL(newData, oldData, entityName, recordID, entityInfo, type, user, true, restoreContext);
+    const sql = this.GetLogRecordChangeSQL(newData, oldData, entityName, recordID, entityInfo, type, user, true, restoreContext, cloneContext);
     if (sql) return { sql };
     return null;
   }
@@ -1643,7 +1844,7 @@ export class SQLServerDataProvider
    * @internal
    */
   protected GetDeleteSQL(entity: BaseEntity, user: UserInfo): string {
-    const result = this.GetDeleteSQLWithDetails(entity, user);
+    const result = this.getDeleteSQLWithDetails(entity, user);
     return result.fullSQL;
   }
 
@@ -1651,7 +1852,7 @@ export class SQLServerDataProvider
    * This function generates both the full SQL (with record change metadata) and the simple stored procedure call for delete
    * @returns Object with fullSQL and simpleSQL properties
    */
-  private GetDeleteSQLWithDetails(entity: BaseEntity, user: UserInfo, skipRecordChanges = false): { fullSQL: string; simpleSQL: string } {
+  private getDeleteSQLWithDetails(entity: BaseEntity, user: UserInfo, skipRecordChanges = false): { fullSQL: string; simpleSQL: string } {
     let sSQL: string = '';
     const spName: string = entity.EntityInfo.spDelete ? entity.EntityInfo.spDelete : `spDelete${entity.EntityInfo.BaseTableCodeName}`;
     const sParams = entity.PrimaryKey.KeyValuePairs.map((kv) => {
@@ -1701,7 +1902,7 @@ export class SQLServerDataProvider
                         )
 
                         INSERT INTO @ResultChangesTable
-                        ${this.GetLogRecordChangeSQL(null /*pass in null for new data for deleted records*/, oldData, entity.EntityInfo.Name, sCombinedPrimaryKey, entity.EntityInfo, 'Delete', user, true, entity.RestoreContext)}
+                        ${this.GetLogRecordChangeSQL(null /*pass in null for new data for deleted records*/, oldData, entity.EntityInfo.Name, sCombinedPrimaryKey, entity.EntityInfo, 'Delete', user, true, entity.RestoreContext, entity.CloneContext)}
                     END
 
                     SELECT ${sReturnList}`;
@@ -1726,7 +1927,7 @@ export class SQLServerDataProvider
   // above). See plans/sp-save-builder-generic-layer-refactor.md (rev 4).
 
   protected override GenerateDeleteSQL(entity: BaseEntity, user: UserInfo, options?: EntityDeleteOptions): DeleteSQLResult {
-    const sqlDetails = this.GetDeleteSQLWithDetails(entity, user, options?.SkipRecordChanges === true);
+    const sqlDetails = this.getDeleteSQLWithDetails(entity, user, options?.SkipRecordChanges === true);
     return {
       fullSQL: sqlDetails.fullSQL,
       simpleSQL: sqlDetails.simpleSQL,
@@ -1734,11 +1935,20 @@ export class SQLServerDataProvider
   }
 
   protected override OnSuspendRefresh(): void {
-    this._bAllowRefresh = false;
+    this._refreshSuspendCount++;
   }
 
   protected override OnResumeRefresh(): void {
-    this._bAllowRefresh = true;
+    if (this._refreshSuspendCount === 0) {
+      LogError('SQLServerDataProvider.OnResumeRefresh called with no matching OnSuspendRefresh; ignored');
+      return;
+    }
+    this._refreshSuspendCount--;
+    if (this._refreshSuspendCount === 0) {
+      const waiters = this._refreshResumeWaiters;
+      this._refreshResumeWaiters = [];
+      waiters.forEach((resume) => resume());
+    }
   }
 
   protected override GetTransactionExtraData(_entity: BaseEntity): Record<string, unknown> {
@@ -1776,17 +1986,6 @@ export class SQLServerDataProvider
   /**************************************************************************/
   // START ---- IMetadataProvider
   /**************************************************************************/
-
-  /**
-   * Public backward-compatible wrapper that delegates to PostProcessRows (inherited from GenericDP).
-   * Used by SQLServerTransactionGroup which needs a public entry point for row processing.
-   *
-   * PostProcessRows (GenericDP) handles: AdjustDatetimeFields → encryption decryption.
-   */
-  public async ProcessEntityRows(rows: Record<string, unknown>[], entityInfo: EntityInfo, contextUser?: UserInfo): Promise<Record<string, unknown>[]> {
-    if (!rows || rows.length === 0) return rows;
-    return this.PostProcessRows(rows, entityInfo, contextUser as UserInfo);
-  }
 
   /**
    * SQL Server-specific datetime field adjustments.
@@ -1928,7 +2127,7 @@ export class SQLServerDataProvider
    * @remarks
    * - Always creates a new Request object for each query to avoid "EREQINPROG" errors
    * - Handles both positional (?) and named (@param) parameter styles
-   * - Automatically uses active transaction if one exists, otherwise uses connection pool
+   * - Uses the ambient transaction when the caller is part of it (#4786), otherwise uses connection pool
    * - Handles SQL logging in parallel with query execution
    * - Provides automatic retry with pool connection if transaction fails
    * 
@@ -1946,6 +2145,8 @@ export class SQLServerDataProvider
       contextUser?: UserInfo;
       /** Run on the pool even while an ambient transaction is open (see ExecuteSQLOptions). */
       ignoreAmbientTransaction?: boolean;
+      /** Cancel the statement on the server after this many milliseconds (see ExecuteSQLOptions). */
+      timeoutMs?: number;
     }
   ): Promise<sql.IResult<any>> {
     // Handle the connectionSource parameter for backwards compatibility
@@ -1955,7 +2156,8 @@ export class SQLServerDataProvider
     
     if (connectionSource instanceof sql.Transaction) {
       transaction = connectionSource;
-    } else if (!connectionSource && !loggingOptions?.ignoreAmbientTransaction) {
+    } else if (!connectionSource && !loggingOptions?.ignoreAmbientTransaction && this.IsCallerInAmbientTransaction()) {
+      // A caller outside the open transaction's scope runs on the pool as if none were open (#4786).
       this.AssertAmbientTransactionUsable();
       transaction = this._transaction;
     }
@@ -1976,7 +2178,9 @@ export class SQLServerDataProvider
       ignoreLogging: loggingOptions.ignoreLogging,
       isMutation: loggingOptions.isMutation,
       simpleSQLFallback: loggingOptions.simpleSQLFallback,
-      contextUser: loggingOptions.contextUser
+      contextUser: loggingOptions.contextUser,
+      // A statement inside a transaction follows the transaction's limits (see ExecuteSQLOptions).
+      timeoutMs: transaction ? undefined : loggingOptions.timeoutMs
     } : undefined;
     
     // Delegate to instance method
@@ -2006,6 +2210,7 @@ export class SQLServerDataProvider
         simpleSQLFallback: options?.simpleSQLFallback,
         contextUser: contextUser,
         ignoreAmbientTransaction: options?.ignoreAmbientTransaction,
+        timeoutMs: options?.timeoutMs,
       });
       
       // Return recordset for consistency with TypeORM behavior
@@ -2137,7 +2342,7 @@ export class SQLServerDataProvider
               // See issue #3171.
               const prefixed = `@${paramName}`;
               processedQuery = processedQuery.replace(
-                new RegExp(`@${escapeRegExpLiteral(key)}\\b`, 'g'),
+                new RegExp(`@${EscapeRegExpLiteral(key)}\\b`, 'g'),
                 () => prefixed,
               );
             }
@@ -2222,9 +2427,12 @@ export class SQLServerDataProvider
     contextUser?: UserInfo,
   ): Promise<any[][]> {
     try {
-      // A read that does not join the ambient transaction cannot autocommit anything on the pool,
-      // which is what the doomed-transaction assert protects; skip it for that case (#4514).
-      if (!options?.ignoreAmbientTransaction) {
+      // A batch joins the ambient transaction only when the caller opted in (default) AND is in
+      // its scope (#4786) — a caller outside that scope runs on the pool as if none were open. A
+      // read that does not join it cannot autocommit anything on the pool, which is what the
+      // doomed-transaction assert protects; skip the assert for that case too (#4514).
+      const joinsAmbient = !options?.ignoreAmbientTransaction && this.IsCallerInAmbientTransaction();
+      if (joinsAmbient) {
         this.AssertAmbientTransactionUsable();
       }
       // Build combined batch SQL and parameters (same as static method)
@@ -2264,7 +2472,7 @@ export class SQLServerDataProvider
               // See issue #3171.
               const prefixed = `@${paramName}`;
               processedQuery = processedQuery.replace(
-                new RegExp(`@${escapeRegExpLiteral(key)}\\b`, 'g'),
+                new RegExp(`@${EscapeRegExpLiteral(key)}\\b`, 'g'),
                 () => prefixed,
               );
             }
@@ -2280,7 +2488,7 @@ export class SQLServerDataProvider
       // Create execution context
       const context: SQLExecutionContext = {
         pool: this._pool,
-        transaction: options?.ignoreAmbientTransaction ? null : this._transaction,
+        transaction: joinsAmbient ? this._transaction : null,
         logSqlStatement: this._logSqlStatement.bind(this),
         clearTransaction: () => { 
           this._transaction = null;
@@ -2464,7 +2672,9 @@ export class SQLServerDataProvider
     safeChangesJSON: string,
     safeChangesDesc: string,
     safePKValue: string,
-    safeUserId: string
+    safeUserId: string,
+    source?: RecordChangeSource,
+    changeContext?: string | null,
   ): string {
     const schema = entityInfo.SchemaName || '__mj';
     const view = entityInfo.BaseView;
@@ -2475,6 +2685,12 @@ export class SQLServerDataProvider
       .map(pk => `${pk.CodeName}${CompositeKey.DefaultValueDelimiter}${safePKValue}`)
       .join(CompositeKey.DefaultFieldDelimiter);
 
+    const lineageClause = source === 'Clone'
+      ? `,
+        @Source='Clone',
+        @ChangeContext=N'${EscapeSQLString(changeContext)}'`
+      : '';
+
     return `
 DECLARE ${varName} NVARCHAR(MAX) = (
     SELECT * FROM [${schema}].[${view}] WHERE [${pkName}] = '${safePKValue}'
@@ -2482,15 +2698,15 @@ DECLARE ${varName} NVARCHAR(MAX) = (
 );
 IF ${varName} IS NOT NULL
     EXEC [${this.MJCoreSchemaName}].spCreateRecordChange_Internal
-        @EntityName='${safeEntityName}',
-        @RecordID='${recordID}',
+        @EntityName=N'${safeEntityName}',
+        @RecordID=N'${recordID}',
         @UserID='${safeUserId}',
         @Type='Update',
-        @ChangesJSON='${safeChangesJSON}',
-        @ChangesDescription='${safeChangesDesc}',
+        @ChangesJSON=N'${safeChangesJSON}',
+        @ChangesDescription=N'${safeChangesDesc}',
         @FullRecordJSON=${varName},
         @Status='Complete',
-        @Comments=NULL;`;
+        @Comments=NULL${lineageClause};`;
   }
 
   protected override get HasPhysicalTransaction(): boolean {
@@ -2576,16 +2792,10 @@ IF ${varName} IS NOT NULL
     });
   }
 
-  protected override async AfterPhysicalCommit(): Promise<void> {
-    await this.processDeferredTasks();
-  }
-
   protected override async AbandonPhysicalTransaction(): Promise<void> {
     const stale = this._transaction;
     this._transaction = null;
     this._transactionState$.next(false);
-    const deferredCount = this._deferredTasks.length;
-    this._deferredTasks = [];
     if (stale) {
       try {
         // Through the queue, like commit and rollback: the handle is already nulled above, so any
@@ -2598,9 +2808,6 @@ IF ${varName} IS NOT NULL
           LogError('AbandonPhysicalTransaction: rollback of doomed handle failed', undefined, e);
         }
       }
-    }
-    if (deferredCount > 0) {
-      LogStatus(`Cleared ${deferredCount} deferred tasks after abandoning a doomed transaction`);
     }
   }
 
@@ -2621,11 +2828,6 @@ IF ${varName} IS NOT NULL
     } finally {
       this._transaction = null;
       this._transactionState$.next(false);
-      const deferredCount = this._deferredTasks.length;
-      this._deferredTasks = [];
-      if (deferredCount > 0) {
-        LogStatus(`Cleared ${deferredCount} deferred tasks after transaction rollback`);
-      }
     }
   }
 
@@ -2636,48 +2838,21 @@ IF ${varName} IS NOT NULL
   /**
    * Override RefreshIfNeeded to skip refresh when a transaction is active
    * This prevents conflicts between metadata refresh operations and active transactions
+   * @param providerToUse - passed through to the base implementation
+   * @param bypassMinCheckInterval - passed through; event-driven callers (a metadata change notice
+   *   from another server) set it so the check throttle cannot drop their check. Dropping the
+   *   arguments here used to discard it.
    * @returns Promise<boolean> - true if refresh was performed, false if skipped or no refresh needed
    */
-  public async RefreshIfNeeded(): Promise<boolean> {
+  public async RefreshIfNeeded(providerToUse?: IMetadataProvider, bypassMinCheckInterval?: boolean): Promise<boolean> {
     // Skip refresh if a transaction is active
-    if (this.isTransactionActive) {
+    if (this.IsTransactionActive) {
       LogStatus('Skipping metadata refresh - transaction is active');
       return false;
     }
 
     // Call parent implementation if no transaction
-    return super.RefreshIfNeeded();
-  }
-
-  /**
-   * Process any deferred tasks that were queued during a transaction
-   * This is called after a successful transaction commit
-   * @private
-   */
-  private async processDeferredTasks(): Promise<void> {
-    if (this._deferredTasks.length === 0) return;
-
-    LogStatus(`Processing ${this._deferredTasks.length} deferred tasks after transaction commit`);
-    
-    // Copy and clear the deferred tasks array
-    const tasksToProcess = [...this._deferredTasks];
-    this._deferredTasks = [];
-    
-    // Process each deferred task
-    for (const task of tasksToProcess) {
-      try {
-        if (task.type === 'Entity AI Action') {
-          // Process the AI action now that we're outside the transaction
-          await QueueManager.AddTask('Entity AI Action', task.data, task.options, task.user);
-        }
-        // Add other task types here as needed
-      } catch (error) {
-        LogError(`Failed to process deferred ${task.type} task: ${error}`);
-        // Continue processing other tasks even if one fails
-      }
-    }
-    
-    LogStatus(`Completed processing deferred tasks`);
+    return super.RefreshIfNeeded(providerToUse, bypassMinCheckInterval);
   }
 
   override get FileSystemProvider(): IFileSystemProvider {

@@ -124,7 +124,7 @@ function totalsOf(probe: OpProbe): Set<number> {
  *       If the server emits progress with NEITHER discriminator, (b) skips-as-pass with a loud note
  *       while (a) still stands — never a vacuous pass, never a false failure.
  */
-export async function CheckSi1_RemoteOpChannelIsolation(ctx: IntegrationCheckContext): Promise<void> {
+export async function CheckSi1RemoteOpChannelIsolation(ctx: IntegrationCheckContext): Promise<void> {
     if (!fixture) {
         skipNote('SI1', 'fixture missing (bundle Setup did not run — MJAPI likely unreachable)');
         return;
@@ -179,6 +179,11 @@ export async function CheckSi1_RemoteOpChannelIsolation(ctx: IntegrationCheckCon
     throw new Error('SI1: progress events carried neither Handle nor Total — channel isolation cannot be proven (progress-payload regression)');
 }
 
+/** @deprecated Use {@link CheckSi1RemoteOpChannelIsolation}. */
+export async function CheckSi1_RemoteOpChannelIsolation(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckSi1RemoteOpChannelIsolation(ctx);
+}
+
 /**
  * SI2 — DOCUMENTED OMISSION: the cross-USER `statusUpdates` leak (SEC6) and the unfiltered
  * `cacheInvalidation` broadcast (SEC7) are NOT headlessly reproducible here. This check does not
@@ -206,7 +211,7 @@ export async function CheckSi1_RemoteOpChannelIsolation(ctx: IntegrationCheckCon
  * already exercises the ONE channel (`RemoteOperationProgress`) whose isolation IS reachable over the
  * wire; these two remain a documented live-WS omission.
  */
-export async function CheckSi2_ServerFilterOmission(ctx: IntegrationCheckContext): Promise<void> {
+export async function CheckSi2ServerFilterOmission(ctx: IntegrationCheckContext): Promise<void> {
     skipNote('SI2',
         'cross-user statusUpdates leak (SEC6) + unfiltered cacheInvalidation broadcast (SEC7) require a ' +
         'dual-identity live WebSocket; the single-system-API-key client transport cannot reproduce them, ' +
@@ -215,13 +220,18 @@ export async function CheckSi2_ServerFilterOmission(ctx: IntegrationCheckContext
         'RemoteOperationProgress channel, which IS wire-reachable.');
 }
 
+/** @deprecated Use {@link CheckSi2ServerFilterOmission}. */
+export async function CheckSi2_ServerFilterOmission(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckSi2ServerFilterOmission(ctx);
+}
+
 // ─────────────────────────────────────────────────────────────────────────────────────────
 // registration
 // ─────────────────────────────────────────────────────────────────────────────────────────
 
 export const SubscriptionIsolationChecks: NamedCheck[] = [
-    { Id: 'subscription-isolation.SI1', Name: 'SI1: concurrent RemoteOperationProgress channels stay isolated over the wire (no cross-channel progress leak)', Fn: CheckSi1_RemoteOpChannelIsolation },
-    { Id: 'subscription-isolation.SI2', Name: 'SI2: cross-user statusUpdates + unfiltered cacheInvalidation are a documented live-WS omission (SEC6/SEC7)', Fn: CheckSi2_ServerFilterOmission }
+    { Id: 'subscription-isolation.SI1', Name: 'SI1: concurrent RemoteOperationProgress channels stay isolated over the wire (no cross-channel progress leak)', Fn: CheckSi1RemoteOpChannelIsolation },
+    { Id: 'subscription-isolation.SI2', Name: 'SI2: cross-user statusUpdates + unfiltered cacheInvalidation are a documented live-WS omission (SEC6/SEC7)', Fn: CheckSi2ServerFilterOmission }
 ];
 
 for (const check of SubscriptionIsolationChecks) {

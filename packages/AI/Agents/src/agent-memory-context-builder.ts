@@ -18,8 +18,10 @@ import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { MJAIAgentNoteEntity, MJAIAgentExampleEntity } from '@memberjunction/core-entities';
 import { ChatMessage } from '@memberjunction/ai';
 import { SecondaryScopeConfig, SecondaryScopeValue } from '@memberjunction/ai-core-plus';
+import type { MJAIAgentRunStepEntityExtended } from '@memberjunction/ai-core-plus';
 
 import { AgentContextInjector } from './agent-context-injector';
+import type { NotesObservabilityOptions } from './agent-context-injector';
 import { AgentPreExecutionRAG, AgentPreExecutionRAGResult } from './agent-pre-execution-rag';
 import { RerankerService } from '@memberjunction/ai-reranker';
 
@@ -44,6 +46,11 @@ export interface AgentMemoryObservability {
     agentRunID: string;
     /** Step sequence number for the rerank step. */
     stepNumber: number;
+    /**
+     * Receives each rerank step as soon as it is created, so the agent run can add it to its steps and
+     * count the rerank's cost and tokens. See `RerankObservabilityOptions.OnStepCreated`.
+     */
+    OnStepCreated?: (step: MJAIAgentRunStepEntityExtended) => void;
 }
 
 /**
@@ -71,6 +78,8 @@ export class AgentMemoryContextBuilder {
      * @param secondaryScopeConfig - Optional agent-level scope config for per-dimension inheritance
      * @param observability - Optional observability context for run-step tracking
      * @param logStatus - Optional verbose-aware status logger
+     * @param sharedOnly - Inject only shared notes and examples (no `UserID`): set when the run has an audience
+     *   that adds a reader (`ExecuteAgentParams.Audience`), so one user's memory is not shown to a room
      * @returns Object containing injected notes and examples
      */
     public async InjectContextMemory(
@@ -85,7 +94,8 @@ export class AgentMemoryContextBuilder {
         secondaryScopes?: Record<string, SecondaryScopeValue>,
         secondaryScopeConfig?: SecondaryScopeConfig | null,
         observability?: AgentMemoryObservability,
-        logStatus?: AgentMemoryStatusLogger
+        logStatus?: AgentMemoryStatusLogger,
+        sharedOnly?: boolean
     ): Promise<{ notes: MJAIAgentNoteEntity[]; examples: MJAIAgentExampleEntity[] }> {
         // Check if injection is enabled
         if (!agent.InjectNotes && !agent.InjectExamples) {
@@ -97,6 +107,7 @@ export class AgentMemoryContextBuilder {
         // Parse reranker configuration if present
         const rerankerConfigJson = agent.RerankerConfiguration;
         const rerankerConfig = RerankerService.Instance.parseConfiguration(rerankerConfigJson);
+        const rerankObservability = this.rerankObservability(observability);
 
         // Get notes if injection enabled
         const notes = agent.InjectNotes
@@ -113,11 +124,9 @@ export class AgentMemoryContextBuilder {
                 primaryScopeRecordId,
                 secondaryScopes,
                 secondaryScopeConfig,
+                SharedOnly: sharedOnly,
                 // Pass observability context for run step tracking
-                observability: observability ? {
-                    agentRunID: observability.agentRunID,
-                    stepNumber: observability.stepNumber
-                } : undefined
+                observability: rerankObservability()
             })
             : [];
         logStatus?.(`BaseAgent: Got ${notes.length} notes from injector`, true);
@@ -132,10 +141,15 @@ export class AgentMemoryContextBuilder {
                 strategy: agent.ExampleInjectionStrategy as 'Semantic' | 'Recent' | 'Rated',
                 maxExamples: agent.MaxExamplesToInject || 3,
                 contextUser: contextUser!,
+                // Examples are reranked only when the configuration sets rerankExamples
+                rerankerConfig,
                 primaryScopeEntityId,
                 primaryScopeRecordId,
                 secondaryScopes,
-                secondaryScopeConfig
+                secondaryScopeConfig,
+                SharedOnly: sharedOnly,
+                // Numbered after the notes rerank's step, when there was one
+                observability: rerankObservability()
             })
             : [];
 
@@ -164,6 +178,24 @@ export class AgentMemoryContextBuilder {
     }
 
     /**
+     * The observability context for each rerank, as a function the caller calls just before each one.
+     * Every rerank step is handed on to the caller's `OnStepCreated` and counted, so a later rerank's
+     * step is numbered after the earlier ones'. Returns a function that gives undefined when there is
+     * no observability.
+     */
+    private rerankObservability(observability: AgentMemoryObservability | undefined): () => NotesObservabilityOptions | undefined {
+        let stepsCreated = 0;
+        return () => observability ? {
+            agentRunID: observability.agentRunID,
+            stepNumber: observability.stepNumber + stepsCreated,
+            OnStepCreated: step => {
+                stepsCreated++;
+                observability.OnStepCreated?.(step);
+            }
+        } : undefined;
+    }
+
+    /**
      * Inject pre-execution RAG context for this agent using scoped search.
      *
      * Loads the agent's `AIAgentSearchScope` rows (Phase IN 'PreExecution'|'Both'), renders any
@@ -187,6 +219,9 @@ export class AgentMemoryContextBuilder {
      * @param payload - The agent's current payload (for template rendering).
      * @param logStatus - Optional verbose-aware status logger.
      * @param logError - Optional error logger (used when RAG injection fails non-fatally).
+     * @param activeSkillIDs - The skills active for this run; a lone active skill is the search's skill principal.
+     * @param audienceReaders - The run's audience readers beyond the caller (hydrated users): each must pass the
+     *   scope gate, and the search keeps only results every one of them may read. Empty or omitted: no audience.
      * @returns The structured RAG result, or `null` if no scopes produced results.
      */
     public async InjectPreExecutionRAG(
@@ -200,7 +235,9 @@ export class AgentMemoryContextBuilder {
         secondaryScopes?: Record<string, SecondaryScopeValue>,
         payload?: unknown,
         logStatus?: AgentMemoryStatusLogger,
-        logError?: AgentMemoryErrorLogger
+        logError?: AgentMemoryErrorLogger,
+        activeSkillIDs?: string[],
+        audienceReaders?: UserInfo[]
     ): Promise<AgentPreExecutionRAGResult | null> {
         try {
             if (!contextUser) return null;
@@ -215,7 +252,9 @@ export class AgentMemoryContextBuilder {
                 primaryScopeRecordId,
                 primaryScopeEntityId,
                 secondaryScopes,
-                contextUser
+                contextUser,
+                activeSkillIDs,
+                audienceReaders
             });
 
             if (!result) return null;

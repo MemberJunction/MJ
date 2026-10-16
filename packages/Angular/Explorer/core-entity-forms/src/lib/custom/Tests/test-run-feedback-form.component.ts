@@ -59,9 +59,14 @@ import { MJTestRunFeedbackFormComponent } from '../../generated/Entities/MJTestR
 export class MJTestRunFeedbackFormComponentExtended extends MJTestRunFeedbackFormComponent {
   public override record!: MJTestRunFeedbackEntity;
 
-  openTestRun() {
+  OpenTestRun() {
     if (this.record.TestRunID) {
       SharedService.Instance.OpenEntityRecord('MJ: Test Runs', CompositeKey.FromID(this.record.TestRunID));
     }
+  }
+
+  /** @deprecated Use {@link OpenTestRun}. */
+  openTestRun() {
+    return this.OpenTestRun();
   }
 }

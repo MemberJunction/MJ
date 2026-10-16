@@ -82,11 +82,21 @@ export class ActionBreadcrumbComponent implements OnChanges {
     this.Breadcrumbs.push(...path);
   }
 
-  public selectCategory(id: string): void {
+  public SelectCategory(id: string): void {
     this.CategorySelect.emit(id);
   }
 
-  public isLast(index: number): boolean {
+  /** @deprecated Use {@link SelectCategory}. */
+  public selectCategory(id: string): void {
+    return this.SelectCategory(id);
+  }
+
+  public IsLast(index: number): boolean {
     return index === this.Breadcrumbs.length - 1;
+  }
+
+  /** @deprecated Use {@link IsLast}. */
+  public isLast(index: number): boolean {
+    return this.IsLast(index);
   }
 }

@@ -594,14 +594,14 @@ export class GraphViewComponent implements OnInit, OnChanges, OnDestroy {
     private simulation: d3.Simulation<GraphNode, d3.SimulationLinkDatum<GraphNode>> | null = null;
 
     public ngOnInit(): void {
-        this.InitializePositions();
+        this.initializePositions();
         this.ApplyFilters();
         this.SimulatePhysics();
     }
 
     public ngOnChanges(changes: SimpleChanges): void {
         if (changes['Nodes'] || changes['Edges']) {
-            this.InitializePositions();
+            this.initializePositions();
             this.ApplyFilters();
             this.SimulatePhysics();
         }
@@ -621,9 +621,9 @@ export class GraphViewComponent implements OnInit, OnChanges, OnDestroy {
     }
 
     // ── Positioning & D3 Physics Engine ──────────────────────────────────
-    private InitializePositions(): void {
-        const cx = this.GetContainerWidth() / 2 || 400;
-        const cy = this.GetContainerHeight() / 2 || 250;
+    private initializePositions(): void {
+        const cx = this.getContainerWidth() / 2 || 400;
+        const cy = this.getContainerHeight() / 2 || 250;
         const count = this.Nodes.length || 1;
 
         this.Nodes.forEach((node, idx) => {
@@ -649,7 +649,7 @@ export class GraphViewComponent implements OnInit, OnChanges, OnDestroy {
 
     public SimulatePhysics(): void {
         if (this.LayoutMode === 'circular') {
-            this.ApplyCircularLayout();
+            this.applyCircularLayout();
             if (this.AutoFitOnLoad) {
                 this.AutoFitToView();
             }
@@ -662,8 +662,8 @@ export class GraphViewComponent implements OnInit, OnChanges, OnDestroy {
             this.simulation = null;
         }
 
-        const cx = this.GetContainerWidth() / 2 || 400;
-        const cy = this.GetContainerHeight() / 2 || 250;
+        const cx = this.getContainerWidth() / 2 || 400;
+        const cy = this.getContainerHeight() / 2 || 250;
 
         // Resolve endpoints to node objects so a case-skewed UUID or dangling
         // edge cannot throw "node not found" out of ngOnInit. Raw-string
@@ -700,7 +700,7 @@ export class GraphViewComponent implements OnInit, OnChanges, OnDestroy {
             this.simulation.tick();
         }
 
-        this.SyncCoordinates();
+        this.syncCoordinates();
 
         // Auto-center & fit into view
         if (this.AutoFitOnLoad) {
@@ -709,14 +709,14 @@ export class GraphViewComponent implements OnInit, OnChanges, OnDestroy {
 
         // Attach live tick handler for interactive drag & drop
         this.simulation.on('tick', () => {
-            this.SyncCoordinates();
+            this.syncCoordinates();
             this.cdr.markForCheck();
         });
 
         this.cdr.markForCheck();
     }
 
-    private SyncCoordinates(): void {
+    private syncCoordinates(): void {
         for (const n of this.Nodes) {
             n.X = n.x;
             n.Y = n.y;
@@ -725,9 +725,9 @@ export class GraphViewComponent implements OnInit, OnChanges, OnDestroy {
         }
     }
 
-    private ApplyCircularLayout(): void {
-        const cx = this.GetContainerWidth() / 2 || 400;
-        const cy = this.GetContainerHeight() / 2 || 250;
+    private applyCircularLayout(): void {
+        const cx = this.getContainerWidth() / 2 || 400;
+        const cy = this.getContainerHeight() / 2 || 250;
         const r = Math.min(cx, cy) * 0.7 || 160;
         const count = this.Nodes.length || 1;
 
@@ -743,12 +743,12 @@ export class GraphViewComponent implements OnInit, OnChanges, OnDestroy {
     // ── Public Programmatic Methods ───────────────────────────────────
     public ZoomIn(): void {
         this.Scale = Math.min(this.Scale * 1.2, 3.0);
-        this.EmitViewport();
+        this.emitViewport();
     }
 
     public ZoomOut(): void {
         this.Scale = Math.max(this.Scale / 1.2, 0.3);
-        this.EmitViewport();
+        this.emitViewport();
     }
 
     public FitToView(): void {
@@ -758,8 +758,8 @@ export class GraphViewComponent implements OnInit, OnChanges, OnDestroy {
     public AutoFitToView(padding = 40): void {
         if (!this.Nodes || this.Nodes.length === 0) return;
 
-        const width = this.GetContainerWidth() || 800;
-        const height = this.GetContainerHeight() || 420;
+        const width = this.getContainerWidth() || 800;
+        const height = this.getContainerHeight() || 420;
 
         let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
         for (const n of this.Nodes) {
@@ -785,12 +785,12 @@ export class GraphViewComponent implements OnInit, OnChanges, OnDestroy {
         this.PanX = (width - (minX + maxX) * this.Scale) / 2;
         this.PanY = (height - (minY + maxY) * this.Scale) / 2;
 
-        this.EmitViewport();
+        this.emitViewport();
         this.cdr.markForCheck();
     }
 
     public Rearrange(): void {
-        this.InitializePositions();
+        this.initializePositions();
         this.SimulatePhysics();
     }
 
@@ -892,10 +892,10 @@ export class GraphViewComponent implements OnInit, OnChanges, OnDestroy {
         if (this.IsPanning) {
             this.PanX = event.clientX - this.panStartX;
             this.PanY = event.clientY - this.panStartY;
-            this.EmitViewport();
+            this.emitViewport();
             this.cdr.markForCheck();
         } else if (this.draggedNode) {
-            const coords = this.GetCanvasRelativeCoords(event);
+            const coords = this.getCanvasRelativeCoords(event);
             this.draggedNode.fx = coords.x;
             this.draggedNode.fy = coords.y;
             this.draggedNode.x = coords.x;
@@ -922,7 +922,7 @@ export class GraphViewComponent implements OnInit, OnChanges, OnDestroy {
         event.preventDefault();
         const delta = event.deltaY > 0 ? 0.9 : 1.1;
         this.Scale = Math.min(Math.max(this.Scale * delta, 0.3), 3.0);
-        this.EmitViewport();
+        this.emitViewport();
         this.cdr.markForCheck();
     }
 
@@ -936,12 +936,12 @@ export class GraphViewComponent implements OnInit, OnChanges, OnDestroy {
         }
     }
 
-    private EmitViewport(): void {
+    private emitViewport(): void {
         this.ViewportTransform.emit(new ViewportTransformEventArgs({ Scale: this.Scale, PanX: this.PanX, PanY: this.PanY }));
         this.cdr.markForCheck();
     }
 
-    private GetCanvasRelativeCoords(event: MouseEvent): { x: number; y: number } {
+    private getCanvasRelativeCoords(event: MouseEvent): { x: number; y: number } {
         const canvas = this.CanvasRef?.nativeElement;
         if (!canvas) {
             return {
@@ -958,11 +958,11 @@ export class GraphViewComponent implements OnInit, OnChanges, OnDestroy {
         };
     }
 
-    private GetContainerWidth(): number {
+    private getContainerWidth(): number {
         return this.CanvasRef?.nativeElement?.clientWidth || this.WrapperRef?.nativeElement?.clientWidth || 800;
     }
 
-    private GetContainerHeight(): number {
+    private getContainerHeight(): number {
         return this.CanvasRef?.nativeElement?.clientHeight || this.WrapperRef?.nativeElement?.clientHeight || 420;
     }
 

@@ -5,10 +5,10 @@
 
 import { IOracle } from './IOracle';
 import { OracleInput, OracleConfig, OracleResult } from '../types';
-import { normalizeDecision, type RawTurn } from '../eval/decision';
+import { NormalizeDecision, type RawTurn } from '../eval/decision';
 import { type DecisionExpectation } from '../eval/expectation';
-import { evaluateCorpusExpectation, type CorpusExpectation } from '../eval/corpus';
-import { evaluateWellFormed, type WellFormedConfig } from '../eval/wellFormed';
+import { EvaluateCorpusExpectation, type CorpusExpectation } from '../eval/corpus';
+import { EvaluateWellFormed, type WellFormedConfig } from '../eval/wellFormed';
 
 /**
  * The shape a driver hands oracles as `actualOutput` for a prompt-eval test.
@@ -54,12 +54,12 @@ export class AgentDecisionOracle implements IOracle {
                 return { oracleType: this.type, passed: false, score: 0, message: "Configuration requires a 'kind' (the expected decision)" };
             }
             const actual = readActual(input);
-            const observed = normalizeDecision(actual.turn);
+            const observed = NormalizeDecision(actual.turn);
             // evaluateCorpusExpectation, NOT evaluateDecision: only the former unwraps `anyOf`.
             // `anyOf` is a corpus-level kind — a case that legitimately admits several decisions —
             // and evaluateDecision would compare the literal string 'anyOf' against the observed
             // kind and fail every time, which is a scored failure the model can never avoid.
-            const evaluation = evaluateCorpusExpectation(
+            const evaluation = EvaluateCorpusExpectation(
                 (input.test?.Name ?? 'case'), expectation as unknown as CorpusExpectation, observed);
 
             return {
@@ -114,8 +114,8 @@ export class ResponseWellFormedOracle implements IOracle {
     async evaluate(input: OracleInput, config: OracleConfig): Promise<OracleResult> {
         try {
             const actual = readActual(input);
-            const observed = normalizeDecision(actual.turn);
-            const result = evaluateWellFormed(
+            const observed = NormalizeDecision(actual.turn);
+            const result = EvaluateWellFormed(
                 { decision: observed, finishReason: actual.finishReason, executionError: actual.executionError },
                 config as WellFormedConfig
             );

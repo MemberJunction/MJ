@@ -14,7 +14,7 @@ export class HTMLGenerator {
   /**
    * Generate interactive HTML documentation
    */
-  public generate(
+  public Generate(
     state: DatabaseDocumentation,
     options: HTMLGeneratorOptions = {}
   ): string {
@@ -56,6 +56,14 @@ export class HTMLGenerator {
     htmlLines.push('</html>');
 
     return htmlLines.join('\n');
+  }
+
+  /** @deprecated Use {@link Generate}. */
+  public generate(
+    state: DatabaseDocumentation,
+    options: HTMLGeneratorOptions = {}
+  ): string {
+    return this.Generate(state, options);
   }
 
   private appendHtmlHeader(lines: string[], state: DatabaseDocumentation): void {

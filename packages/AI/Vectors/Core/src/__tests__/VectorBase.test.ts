@@ -1,10 +1,16 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { IsColocatedVectorHost } from '@memberjunction/ai-vectordb';
+import type { IMetadataProvider } from '@memberjunction/core';
 
-const { mockRunView, mockRunViews, mockEntities, mockModels, mockVectorDBs } = vi.hoisted(() => {
+const { mockRunView, mockRunViews, mockEntities, mockModels, mockVectorDBs, mockProvider } = vi.hoisted(() => {
   const mockRunView = vi.fn();
   const mockRunViews = vi.fn();
   const mockEntities = [
     { ID: 'entity-1', Name: 'MJTestEntity', FirstPrimaryKey: { Name: 'ID', NeedsQuotes: true } },
+    { ID: 'entity-sized-pk', Name: 'MJSizedKey', FirstPrimaryKey: { Name: 'Code', Type: 'NVarChar(255)' }, PrimaryKeys: [{ Name: 'Code' }] },
+    { ID: 'entity-scaled-pk', Name: 'MJScaledKey', FirstPrimaryKey: { Name: 'Amount', Type: ' decimal (10, 2) ' }, PrimaryKeys: [{ Name: 'Amount' }] },
+    { ID: 'entity-xml-pk', Name: 'MJXmlKey', FirstPrimaryKey: { Name: 'Doc', Type: 'xml' }, PrimaryKeys: [{ Name: 'Doc' }] },
+    { ID: 'entity-odd-pk', Name: 'MJOddKey', FirstPrimaryKey: { Name: 'Odd', Type: 'int(1)x)' }, PrimaryKeys: [{ Name: 'Odd' }] },
   ];
   const mockModels = [
     { ID: 'model-1', AIModelType: 'Embeddings', DriverClass: 'TestDriver' },
@@ -13,7 +19,15 @@ const { mockRunView, mockRunViews, mockEntities, mockModels, mockVectorDBs } = v
   const mockVectorDBs = [
     { ID: 'vdb-1', ClassKey: 'TestVectorDB' },
   ];
-  return { mockRunView, mockRunViews, mockEntities, mockModels, mockVectorDBs };
+  const mockProvider = {
+    Entities: mockEntities,
+    CurrentUser: { ID: 'user-1', Email: 'test@test.com' },
+    EntityByID: (id: string) => mockEntities.find(e => e.ID === id),
+    ColocatedDialect: 'sqlserver',
+    ColocatedSchema: '__mj',
+    RunColocatedSQL: vi.fn(),
+  };
+  return { mockRunView, mockRunViews, mockEntities, mockModels, mockVectorDBs, mockProvider };
 });
 
 vi.mock('@memberjunction/core', () => {
@@ -21,10 +35,12 @@ vi.mock('@memberjunction/core', () => {
     Entities = mockEntities;
     CurrentUser = { ID: 'user-1', Email: 'test@test.com' };
     EntityByID(id: string) { return mockEntities.find(e => e.ID === id); }
+    static get Provider() { return mockProvider; }
   }
   class MockRunViewClass {
     RunView = mockRunView;
     RunViews = mockRunViews;
+    static FromMetadataProvider = vi.fn().mockImplementation(() => new MockRunViewClass());
   }
   return {
     Metadata: MockMetadata,
@@ -61,6 +77,13 @@ vi.mock('@memberjunction/ai-core-plus', () => ({
 
 import { VectorBase } from '../models/VectorBase';
 
+/** Exposes the protected keyset check. */
+class KeysetProbe extends VectorBase {
+  public CanSeek(entityID: string): boolean {
+    return this.CanUseKeysetPagination(entityID);
+  }
+}
+
 describe('VectorBase', () => {
   let vectorBase: VectorBase;
 
@@ -87,6 +110,34 @@ describe('VectorBase', () => {
       const newUser = { ID: 'user-2', Email: 'new@test.com' } as never;
       vectorBase.CurrentUser = newUser;
       expect(vectorBase.CurrentUser).toBe(newUser);
+    });
+  });
+
+  describe('Provider and colocated host wiring', () => {
+    it('should fall back to Metadata.Provider when no provider is supplied', () => {
+      expect(vectorBase.Provider).toBe(mockProvider);
+      expect(vectorBase.Metadata).toBe(mockProvider);
+    });
+
+    it('should satisfy IsColocatedVectorHost via Provider fallback to colocated host', () => {
+      expect(IsColocatedVectorHost(vectorBase.Provider)).toBe(true);
+      // Contrast with _metadata which is the helper wrapper and does NOT implement IColocatedVectorHost
+      expect(IsColocatedVectorHost(vectorBase._metadata)).toBe(false);
+    });
+
+    it('should use explicit provider when supplied in constructor', () => {
+      const explicitProvider = {
+        Entities: mockEntities,
+        CurrentUser: { ID: 'user-custom', Email: 'custom@test.com' },
+        EntityByID: (id: string) => mockEntities.find(e => e.ID === id),
+        ColocatedDialect: 'postgresql',
+        ColocatedSchema: 'public',
+        RunColocatedSQL: vi.fn(),
+      } as IMetadataProvider;
+      const customBase = new VectorBase(explicitProvider);
+      expect(customBase.Provider).toBe(explicitProvider);
+      expect(customBase.Metadata).toBe(explicitProvider);
+      expect(IsColocatedVectorHost(customBase.Provider)).toBe(true);
     });
   });
 
@@ -282,6 +333,22 @@ describe('VectorBase', () => {
           ResultType: 'simple',
         })
       ).rejects.toThrow('Entity with ID non-existent not found');
+    });
+  });
+
+  describe('CanUseKeysetPagination (protected)', () => {
+    it('drops a size spec from the key type before the allowlist check', () => {
+      const probe = new KeysetProbe();
+      expect(probe.CanSeek('entity-sized-pk')).toBe(true);
+      expect(probe.CanSeek('entity-scaled-pk')).toBe(true);
+    });
+
+    it('rejects a key type that is not orderable', () => {
+      expect(new KeysetProbe().CanSeek('entity-xml-pk')).toBe(false);
+    });
+
+    it('keeps a type whose trailing parenthesis does not close a size spec', () => {
+      expect(new KeysetProbe().CanSeek('entity-odd-pk')).toBe(false);
     });
   });
 });

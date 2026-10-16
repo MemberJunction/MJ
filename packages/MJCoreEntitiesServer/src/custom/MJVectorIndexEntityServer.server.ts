@@ -1,22 +1,37 @@
-import { BaseEntity, LogError, LogStatus, Metadata, RunView } from "@memberjunction/core";
+import { BaseEntity, EntitySaveOptions, LogError, LogStatus, Metadata, RunView } from "@memberjunction/core";
 import { RegisterClass, MJGlobal } from "@memberjunction/global";
 import { MJVectorIndexEntity, MJVectorDatabaseEntity } from "@memberjunction/core-entities";
 import { VectorDBBase, CreateIndexParams, IndexModelMetricEnum } from "@memberjunction/ai-vectordb";
 import { GetAIAPIKey } from "@memberjunction/ai";
+import { AIEngineBase } from "@memberjunction/ai-engine-base";
 
 /**
  * Server-side VectorIndex entity that syncs with the vector database provider.
  * On create: calls vectorDB.CreateIndex() to provision the index in the provider (e.g., Pinecone).
  * On delete: calls vectorDB.DeleteIndex() to remove the index from the provider.
+ *
+ * Provisioning is DETACHED from the save that triggers it: the save returns once the metadata row is
+ * written, and the provider call runs afterwards (see {@link Save}). That call is bounded by
+ * {@link CREATE_INDEX_TIMEOUT_MS}: past it the hook stops waiting, logs, and skips the metadata
+ * write-back. The provider call itself is abandoned, not cancelled (there is no cancellation handle),
+ * so the bound limits how long this record's provisioning stays open, not the provider's work.
+ * Pinecone's createIndex returns as soon as the request is accepted (we never pass waitUntilReady),
+ * so the bound only ever trips on a hung connection, not on a slow index build.
  */
 @RegisterClass(BaseEntity, 'MJ: Vector Indexes')
 export class MJVectorIndexEntityServer extends MJVectorIndexEntity {
+    /** Upper bound on one provider CreateIndex call. */
+    public static readonly CREATE_INDEX_TIMEOUT_MS = 60_000;
+
     /**
      * After saving, if this is a new record, create the index in the provider.
+     * The provider call is deliberately NOT awaited: the client only needs the metadata row, and the
+     * request that triggered the save (an "Auto" index from the UI, or the Config page) must not wait
+     * on the provider. Failures are logged; the record keeps its metadata row either way.
      */
-    public override async Save(): Promise<boolean> {
+    public override async Save(options?: EntitySaveOptions): Promise<boolean> {
         const isNew = this.IsSaved === false;
-        const saveResult = await super.Save();
+        const saveResult = await super.Save(options);
 
         if (saveResult && isNew) {
             this.createIndexInProvider().catch((error) => {
@@ -94,7 +109,11 @@ export class MJVectorIndexEntityServer extends MJVectorIndexEntity {
 
         LogStatus(`Creating index "${sanitizedName}" in vector DB provider...`);
         try {
-            const result = await vectorDB.CreateIndex(params);
+            const result = await MJVectorIndexEntityServer.withTimeout(
+                vectorDB.CreateIndex(params),
+                MJVectorIndexEntityServer.CREATE_INDEX_TIMEOUT_MS,
+                `CreateIndex("${sanitizedName}")`
+            );
             if (result.success) {
                 LogStatus(`Index "${sanitizedName}" created successfully in provider`);
                 await this.saveProviderMetadata(result.data, params, sanitizedName);
@@ -116,8 +135,9 @@ export class MJVectorIndexEntityServer extends MJVectorIndexEntity {
             return;
         }
 
-        // Use ExternalID if available (the sanitized name stored in the provider), fall back to Name
-        const providerIndexName = this.ExternalID || this.sanitizeIndexName(this.Name);
+        // Same rule every read path uses to address the index on its provider (ExternalID, else Name).
+        // An index provisioned through Save() above always has ExternalID set to its sanitized name.
+        const providerIndexName = AIEngineBase.Instance.GetProviderIndexName(this);
         LogStatus(`Deleting index "${providerIndexName}" from vector DB provider...`);
         const result = await vectorDB.DeleteIndex({ id: providerIndexName });
         if (result.success) {
@@ -192,6 +212,26 @@ export class MJVectorIndexEntityServer extends MJVectorIndexEntity {
      */
     private resolveDimensions(): number {
         return this.Dimensions ?? 1536;
+    }
+
+    /**
+     * Resolve `work` or reject after `timeoutMs`, whichever comes first. The timer is cleared when the
+     * work settles, so a fast provider leaves nothing behind. On timeout the provider may still finish
+     * on its side; the record simply does not get its metadata written back, and the log says so.
+     */
+    private static withTimeout<T>(work: Promise<T> | T, timeoutMs: number, label: string): Promise<T> {
+        return new Promise<T>((resolve, reject) => {
+            const timer = setTimeout(() => {
+                reject(new Error(
+                    `${label} timed out after ${timeoutMs}ms; the provider may still finish creating the index, ` +
+                    `but its metadata was not written back to the record`
+                ));
+            }, timeoutMs);
+            Promise.resolve(work).then(
+                (value) => { clearTimeout(timer); resolve(value); },
+                (error) => { clearTimeout(timer); reject(error); }
+            );
+        });
     }
 
     /**

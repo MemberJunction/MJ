@@ -1300,7 +1300,7 @@ export abstract class BaseCommunicationProvider {
      * Override in subclasses to accurately reflect capabilities.
      * Default implementation returns only the core abstract methods.
      */
-    public getSupportedOperations(): ProviderOperation[] {
+    public getSupportedOperations(): ProviderOperation[] {  // case-violation-ok-legacy-back-compat: a subclass overrides this; a stub preserves CALLING the old name but not OVERRIDING it
         return ['SendSingleMessage', 'GetMessages', 'ForwardMessage', 'ReplyToMessage', 'CreateDraft'];
     }
 
@@ -1309,8 +1309,13 @@ export abstract class BaseCommunicationProvider {
      * @param operation - The operation to check
      * @returns true if the operation is supported
      */
-    public supportsOperation(operation: ProviderOperation): boolean {
+    public SupportsOperation(operation: ProviderOperation): boolean {
         return this.getSupportedOperations().includes(operation);
+    }
+
+    /** @deprecated Use {@link SupportsOperation}. */
+    public supportsOperation(operation: ProviderOperation): boolean {
+        return this.SupportsOperation(operation);
     }
 
     /**
@@ -1628,11 +1633,11 @@ export abstract class BaseCommunicationProvider {
 
 @RegisterClass(BaseEntity, 'MJ: Communication Providers') // sub-class to extend the properties of the base entity
 export class MJCommunicationProviderEntityExtended extends MJCommunicationProviderEntity {
-    private _ProviderMessageTypes: MJCommunicationProviderMessageTypeEntity[];
+    private _providerMessageTypes: MJCommunicationProviderMessageTypeEntity[];
     public get MessageTypes(): MJCommunicationProviderMessageTypeEntity[] {
-        return this._ProviderMessageTypes;
+        return this._providerMessageTypes;
     }
     public set MessageTypes(value: MJCommunicationProviderMessageTypeEntity[]) {
-        this._ProviderMessageTypes = value;
+        this._providerMessageTypes = value;
     }
 }

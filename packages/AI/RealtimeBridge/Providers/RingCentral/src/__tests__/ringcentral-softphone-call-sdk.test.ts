@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { RingCentralSoftphoneCallSdk, bufferToArrayBuffer, type SoftphoneCallSource } from '../ringcentral-softphone-call-sdk';
+import { RingCentralSoftphoneCallSdk, BufferToArrayBuffer, type SoftphoneCallSource } from '../ringcentral-softphone-call-sdk';
 import type { RtpConstructors, RtpHeaderInit, RtpPacketInstance, SoftphoneCallSession } from '../softphone-types';
 
 const CODEC = { id: 109, packetSize: 640, timestampInterval: 320, name: 'OPUS/16000' as const };
@@ -194,6 +194,18 @@ describe('RingCentralSoftphoneCallSdk', () => {
         expect(fake.sent).toHaveLength(0);
     });
 
+    it('detach() stops the RTP clock WITHOUT hanging up (a BYE would drop the transferred party)', async () => {
+        const fake = fakeSession();
+        const sdk = new RingCentralSoftphoneCallSdk(fakeSource(fake));
+        await sdk.answer('CALL-1');
+        await sdk.transfer('CALL-1', '+15550001111');
+        await sdk.detach('CALL-1');
+        expect(fake.isHungUp()).toBe(false);
+        sdk.sendAudioFrame(pcm(640));
+        vi.advanceTimersByTime(40);
+        expect(fake.sent).toHaveLength(0);
+    });
+
     it('sendAudioFrame / flushOutbound before a call are safe no-ops', () => {
         const fake = fakeSession();
         const sdk = new RingCentralSoftphoneCallSdk(fakeSource(fake));
@@ -203,7 +215,7 @@ describe('RingCentralSoftphoneCallSdk', () => {
 
     it('bufferToArrayBuffer copies into a standalone ArrayBuffer (no aliasing of a pooled view)', () => {
         const buf = Buffer.from([9, 8, 7]);
-        const ab = bufferToArrayBuffer(buf);
+        const ab = BufferToArrayBuffer(buf);
         expect(new Uint8Array(ab)).toEqual(new Uint8Array([9, 8, 7]));
         expect(ab.byteLength).toBe(3);
     });

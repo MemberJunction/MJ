@@ -16,18 +16,18 @@ import { rateLimit } from 'express-rate-limit';
 import * as crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import {
-  buildAuthorizationServerMetadata,
+  BuildAuthorizationServerMetadata,
   type AuthorizationServerMetadataOptions,
 } from './AuthorizationServerMetadataBuilder.js';
-import { getClientRegistry, type ClientRegistry } from './ClientRegistry.js';
+import { GetClientRegistry, type ClientRegistry } from './ClientRegistry.js';
 import {
-  getAuthorizationStateManager,
+  GetAuthorizationStateManager,
   type AuthorizationStateManager,
 } from './AuthorizationStateManager.js';
-import { createJWTIssuer, type JWTIssuer } from './JWTIssuer.js';
-import { loadActiveScopes, getDefaultScopes } from './ScopeService.js';
-import { renderConsentPage, renderConsentDeniedPage } from './ConsentPage.js';
-import { renderLoginPage, renderErrorPage } from './LoginPage.js';
+import { CreateJWTIssuer, type JWTIssuer } from './JWTIssuer.js';
+import { LoadActiveScopes, GetDefaultScopes } from './ScopeService.js';
+import { RenderConsentPage, RenderConsentDeniedPage } from './ConsentPage.js';
+import { RenderLoginPage, RenderErrorPage } from './LoginPage.js';
 import type { APIScopeInfo } from './types.js';
 import type {
   AuthorizationState,
@@ -80,7 +80,7 @@ function generateCodeChallenge(verifier: string): string {
 const DEFAULT_RATE_LIMIT_WINDOW_MS = 60_000;
 const DEFAULT_RATE_LIMIT_MAX = 60;
 
-export function createOAuthProxyRouter(config: OAuthProxyConfig): Router {
+export function CreateOAuthProxyRouter(config: OAuthProxyConfig): Router {
   const router = Router();
 
   // Every route here is public and performs authorization, token exchange or registration,
@@ -95,13 +95,13 @@ export function createOAuthProxyRouter(config: OAuthProxyConfig): Router {
       message: 'Too many requests. Try again later.',
     })
   );
-  const clientRegistry = getClientRegistry();
-  const stateManager = getAuthorizationStateManager({ stateTtlMs: config.stateTtlMs });
+  const clientRegistry = GetClientRegistry();
+  const stateManager = GetAuthorizationStateManager({ stateTtlMs: config.stateTtlMs });
 
   // Initialize JWT issuer if configured
   let jwtIssuer: JWTIssuer | undefined;
   if (config.jwt?.signingSecret) {
-    jwtIssuer = createJWTIssuer({
+    jwtIssuer = CreateJWTIssuer({
       signingSecret: config.jwt.signingSecret,
       expiresIn: config.jwt.expiresIn,
       issuer: config.jwt.issuer,
@@ -169,6 +169,11 @@ export function createOAuthProxyRouter(config: OAuthProxyConfig): Router {
   return router;
 }
 
+/** @deprecated Use {@link CreateOAuthProxyRouter}. */
+export function createOAuthProxyRouter(config: OAuthProxyConfig): Router {
+  return CreateOAuthProxyRouter(config);
+}
+
 /**
  * Handles the Authorization Server Metadata endpoint.
  */
@@ -182,7 +187,7 @@ function handleMetadataEndpoint(
     scopes: config.upstream.scopes,
   };
 
-  const metadata = buildAuthorizationServerMetadata(options);
+  const metadata = BuildAuthorizationServerMetadata(options);
   res.json(metadata);
 }
 
@@ -381,7 +386,7 @@ async function handleCallbackEndpoint(
   const authState = stateManager.getState(state);
   if (!authState) {
     // Session expired - show error page with guidance
-    const html = renderErrorPage({
+    const html = RenderErrorPage({
       title: 'Session Expired',
       message: 'The authentication session has expired. This can happen if you took too long to sign in. Please start the authorization process again from your application.',
       showRetry: false, // Can't retry without original state
@@ -463,7 +468,7 @@ async function redirectToConsentScreen(
   validatedUser: NonNullable<StoredAuthorizationCode['validatedUser']>
 ): Promise<void> {
   // Load available scopes from database
-  let availableScopes = await loadActiveScopes();
+  let availableScopes = await LoadActiveScopes();
 
   // If client requested specific scopes, filter to only show those (FR-031a)
   // Unknown scopes are silently ignored (FR-031b)
@@ -1051,7 +1056,7 @@ function handleLoginEndpoint(
   continueUrl.searchParams.set('response_type', 'code');
 
   // Render the login page
-  const html = renderLoginPage({
+  const html = RenderLoginPage({
     clientName: client_id ?? 'An application',
     providerName: config.upstream.providerName ?? 'your identity provider',
     continueUrl: continueUrl.toString(),
@@ -1070,7 +1075,7 @@ async function handleScopesEndpoint(
   res: Response
 ): Promise<void> {
   try {
-    const scopes = await loadActiveScopes();
+    const scopes = await LoadActiveScopes();
     res.json({
       scopes: scopes.map((s) => ({
         name: s.Name,
@@ -1110,7 +1115,7 @@ async function handleGetConsentEndpoint(
   }
 
   // Render the consent page
-  const html = renderConsentPage(consentRequest);
+  const html = RenderConsentPage(consentRequest);
   res.type('html').send(html);
 }
 

@@ -27,7 +27,7 @@ export class ArtifactFileService {
      * Returns a pre-authenticated download URL for the given artifact version.
      * Results are cached; pass `forceRefresh=true` to bypass the cache.
      */
-    public async getDownloadUrl(artifactVersionId: string, forceRefresh = false): Promise<string> {
+    public async GetDownloadUrl(artifactVersionId: string, forceRefresh = false): Promise<string> {
         if (!forceRefresh) {
             const cached = this.urlCache.get(artifactVersionId);
             if (cached) {
@@ -49,6 +49,11 @@ export class ArtifactFileService {
         return url;
     }
 
+    /** @deprecated Use {@link GetDownloadUrl}. */
+    public async getDownloadUrl(artifactVersionId: string, forceRefresh = false): Promise<string> {
+        return this.GetDownloadUrl(artifactVersionId, forceRefresh);
+    }
+
     /** Store a URL, evicting the oldest entry if the cache is at capacity. */
     private cacheUrl(key: string, url: string): void {
         if (this.urlCache.size >= CACHE_MAX_SIZE) {
@@ -62,17 +67,22 @@ export class ArtifactFileService {
     }
 
     /** Pre-fetch and cache a URL without awaiting in the calling context. */
-    public prefetch(artifactVersionId: string): void {
-        this.getDownloadUrl(artifactVersionId).catch(() => {
+    public Prefetch(artifactVersionId: string): void {
+        this.GetDownloadUrl(artifactVersionId).catch(() => {
             // Prefetch failures are silently ignored — the component will retry on display
         });
+    }
+
+    /** @deprecated Use {@link Prefetch}. */
+    public prefetch(artifactVersionId: string): void {
+        return this.Prefetch(artifactVersionId);
     }
 
     /**
      * Converts a base64 data URL (data:mime;base64,...) to an ArrayBuffer.
      * Used by viewers to handle inline artifact content (ContentMode='Text').
      */
-    public dataUrlToArrayBuffer(dataUrl: string): ArrayBuffer {
+    public DataUrlToArrayBuffer(dataUrl: string): ArrayBuffer {
         const commaIndex = dataUrl.indexOf(',');
         const base64 = commaIndex >= 0 ? dataUrl.slice(commaIndex + 1) : dataUrl;
         const binary = atob(base64);
@@ -83,13 +93,23 @@ export class ArtifactFileService {
         return bytes.buffer;
     }
 
+    /** @deprecated Use {@link DataUrlToArrayBuffer}. */
+    public dataUrlToArrayBuffer(dataUrl: string): ArrayBuffer {
+        return this.DataUrlToArrayBuffer(dataUrl);
+    }
+
     /**
      * Converts a base64 data URL to an object URL suitable for download/display.
      * Used by viewers to create downloadable links for inline artifacts.
      */
-    public dataUrlToObjectUrl(dataUrl: string, mimeType: string): string {
-        const arrayBuffer = this.dataUrlToArrayBuffer(dataUrl);
+    public DataUrlToObjectUrl(dataUrl: string, mimeType: string): string {
+        const arrayBuffer = this.DataUrlToArrayBuffer(dataUrl);
         const blob = new Blob([arrayBuffer], { type: mimeType });
         return URL.createObjectURL(blob);
+    }
+
+    /** @deprecated Use {@link DataUrlToObjectUrl}. */
+    public dataUrlToObjectUrl(dataUrl: string, mimeType: string): string {
+        return this.DataUrlToObjectUrl(dataUrl, mimeType);
     }
 }

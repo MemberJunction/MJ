@@ -97,34 +97,40 @@ export class RunQueryResultType {
 @InputType()
 export class RunQueryCacheStatusInput {
   @Field(() => String, { description: 'The maximum __mj_UpdatedAt value from cached results' })
-  maxUpdatedAt: string;
+  maxUpdatedAt: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => Int, { description: 'The number of rows in cached results' })
-  rowCount: number;
+  rowCount: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
+
+  @Field(() => String, {
+    nullable: true,
+    description: "The query definition hash the cached results were written under, as this server returned it. When it differs from the server's, the result is 'stale' with fresh rows. Empty string for a slot with no hash; omit to skip the definition check."
+  })
+  definitionHash?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name, matching its siblings
 }
 
 @InputType()
 export class RunQueryWithCacheCheckInput {
   @Field(() => RunQueryInput, { description: 'The RunQuery parameters' })
-  params: RunQueryInput;
+  params: RunQueryInput;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => RunQueryCacheStatusInput, {
     nullable: true,
     description: 'Optional cache status - if provided, server will check if cache is current'
   })
-  cacheStatus?: RunQueryCacheStatusInput;
+  cacheStatus?: RunQueryCacheStatusInput;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 }
 
 @ObjectType()
 export class RunQueryWithCacheCheckResultOutput {
   @Field(() => Int, { description: 'The index of this query in the batch request' })
-  queryIndex: number;
+  queryIndex: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => String, { description: 'The query ID' })
-  queryId: string;
+  queryId: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => String, { description: "'current', 'stale', 'no_validation', or 'error'" })
-  status: string;
+  status: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => String, {
     nullable: true,
@@ -133,25 +139,28 @@ export class RunQueryWithCacheCheckResultOutput {
   Results?: string;
 
   @Field(() => String, { nullable: true, description: 'Max __mj_UpdatedAt from results when stale' })
-  maxUpdatedAt?: string;
+  maxUpdatedAt?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => Int, { nullable: true, description: 'Row count of results when stale' })
-  rowCount?: number;
+  rowCount?: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => String, { nullable: true, description: 'Error message if status is error' })
-  errorMessage?: string;
+  errorMessage?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
+
+  @Field(() => String, { nullable: true, description: "The server's definition hash for the query; store it with the cached results and send it back in cacheStatus.definitionHash" })
+  definitionHash?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name, matching its siblings
 }
 
 @ObjectType()
 export class RunQueriesWithCacheCheckOutput {
   @Field(() => Boolean, { description: 'Whether the overall operation succeeded' })
-  success: boolean;
+  success: boolean;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => [RunQueryWithCacheCheckResultOutput], { description: 'Results for each query in the batch' })
-  results: RunQueryWithCacheCheckResultOutput[];
+  results: RunQueryWithCacheCheckResultOutput[];  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => String, { nullable: true, description: 'Overall error message if success is false' })
-  errorMessage?: string;
+  errorMessage?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 }
 
 @Resolver()
@@ -558,6 +567,7 @@ export class RunQueryResolver extends ResolverBase {
         cacheStatus: item.cacheStatus ? {
           maxUpdatedAt: item.cacheStatus.maxUpdatedAt,
           rowCount: item.cacheStatus.rowCount,
+          definitionHash: item.cacheStatus.definitionHash ?? undefined,
         } : undefined,
       }));
 
@@ -572,6 +582,7 @@ export class RunQueryResolver extends ResolverBase {
         maxUpdatedAt: result.maxUpdatedAt,
         rowCount: result.rowCount,
         errorMessage: result.errorMessage,
+        definitionHash: result.definitionHash,
       }));
 
       return {

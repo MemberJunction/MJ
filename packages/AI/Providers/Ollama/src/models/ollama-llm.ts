@@ -1,19 +1,6 @@
-import { BaseLLM, ChatParams, ChatResult, ChatResultChoice, ChatMessageRole, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, ModelUsage, ChatMessage, ChatMessageContentBlock, parseBase64DataUrl, ErrorAnalyzer } from '@memberjunction/ai';
+import { BaseLLM, ChatParams, ChatResult, ChatResultChoice, ChatMessageRole, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, ModelUsage, ChatMessage, ChatMessageContentBlock, parseBase64DataUrl } from '@memberjunction/ai';
 import { RegisterClass, ToJSONSafe } from '@memberjunction/global';
 import { Ollama, ChatRequest, ChatResponse, GenerateRequest, GenerateResponse, Message, Fetch } from 'ollama';
-
-/**
- * True when `error` represents a client-initiated cancellation rather than a genuine failure.
- * The `ollama` client has no typed cancellation error of its own — aborting the underlying `fetch`
- * surfaces Node's `AbortError` (or `TimeoutError` for an `AbortSignal.timeout()` source).
- */
-function isOllamaCancellationError(error: unknown): boolean {
-    if (!error || typeof error !== 'object') {
-        return false;
-    }
-    const name = (error as { name?: string }).name;
-    return name === 'AbortError' || name === 'TimeoutError';
-}
 
 /**
  * Ollama implementation of the BaseLLM class for local LLM inference
@@ -24,11 +11,6 @@ export class OllamaLLM extends BaseLLM {
     private _client: Ollama;
     private _baseUrl: string = 'http://localhost:11434';
     private _keepAlive: string | number = '5m'; // Default keep model loaded for 5 minutes
-
-    // Cancellation token for the in-flight STREAMING request. The base class's streaming loop
-    // swallows mid-stream iteration errors, so finalizeStreamingResponse() consults this to detect
-    // that the stream ended because the caller aborted rather than because the model finished.
-    private _streamingCancellationToken: AbortSignal | null = null;
 
     constructor(apiKey?: string) {
         super(apiKey || ''); // Ollama doesn't require API key for local usage
@@ -45,8 +27,13 @@ export class OllamaLLM extends BaseLLM {
     /**
      * Read only getter method to get the Ollama client instance
      */
-    public get client(): Ollama {
+    public get Client(): Ollama {
         return this.OllamaClient;
+    }
+
+    /** @deprecated Use {@link Client}. */
+    public get client(): Ollama {
+        return this.Client;
     }
     
     /**
@@ -137,63 +124,6 @@ export class OllamaLLM extends BaseLLM {
         return controller.signal;
     }
 
-    /** Throw immediately (before any socket is opened) when the caller has already cancelled. */
-    private throwIfCancelled(token: AbortSignal | undefined): void {
-        if (token?.aborted) {
-            throw this.createCancellationError(token);
-        }
-    }
-
-    /** The canonical abort error we raise for a pre-aborted request, shaped like fetch's own. */
-    private createCancellationError(token: AbortSignal): Error {
-        const error = new Error(this.describeCancellation(token));
-        error.name = 'AbortError';
-        return error;
-    }
-
-    /** True when this failure is the caller's cancellation rather than a provider/network fault. */
-    private isCancelled(error: unknown, token: AbortSignal | undefined): boolean {
-        return token?.aborted === true || isOllamaCancellationError(error);
-    }
-
-    /** Human-readable reason for a cancellation, preferring the signal's own reason when present. */
-    private describeCancellation(token: AbortSignal | undefined): string {
-        const reason: unknown = token?.reason;
-        if (reason instanceof Error && reason.message) {
-            return `Ollama request cancelled: ${reason.message}`;
-        }
-        if (typeof reason === 'string' && reason.length > 0) {
-            return `Ollama request cancelled: ${reason}`;
-        }
-        return 'Ollama request cancelled by caller';
-    }
-
-    /**
-     * Build the typed ChatResult for a cancelled request — a normal failed ChatResult, the same
-     * shape every other Ollama error path produces, never an unhandled rejection.
-     */
-    private buildCancelledResult(startTime: Date, error: unknown, token: AbortSignal | undefined): ChatResult {
-        const result = new ChatResult(false, startTime, new Date());
-        result.statusText = 'Cancelled';
-        result.errorMessage = this.describeCancellation(token);
-        result.exception = error;
-        result.errorInfo = ErrorAnalyzer.analyzeError(error, 'Ollama');
-        result.data = {
-            choices: [],
-            usage: new ModelUsage(0, 0)
-        };
-        return result;
-    }
-
-    /**
-     * Clear per-request streaming state. Called by the base class at the start of every streaming
-     * request and again in its `finally`, so the cancellation token never leaks across requests.
-     */
-    protected override resetStreamingState(): void {
-        super.resetStreamingState();
-        this._streamingCancellationToken = null;
-    }
-
     /**
      * Convert MJ messages to Ollama format with proper image handling
      * Ollama expects images in a separate 'images' array as base64 strings
@@ -269,9 +199,6 @@ export class OllamaLLM extends BaseLLM {
         const startTime = new Date();
 
         try {
-            // Fail fast if the caller already cancelled before we opened a socket.
-            this.throwIfCancelled(params.cancellationToken);
-
             // Convert MJ messages to Ollama format with proper image handling
             const messages = this.convertToOllamaMessages(params.messages);
 
@@ -406,8 +333,9 @@ export class OllamaLLM extends BaseLLM {
             
             return result;
         } catch (error) {
-            if (this.isCancelled(error, params.cancellationToken)) {
-                return this.buildCancelledResult(startTime, error, params.cancellationToken);
+            // The ollama client has no abort class of its own: an aborted fetch rejects with AbortError.
+            if (this.IsCancellationError(error, params.cancellationToken)) {
+                return this.BuildCancelledChatResult(startTime, { error, signal: params.cancellationToken });
             }
 
             const endTime = new Date();
@@ -437,9 +365,6 @@ export class OllamaLLM extends BaseLLM {
         if (this.supportsThinkingModels()) {
             this.initializeThinkingStreamState();
         }
-
-        this.throwIfCancelled(params.cancellationToken);
-        this._streamingCancellationToken = params.cancellationToken ?? null;
 
         // Convert MJ messages to Ollama format with proper image handling
         const messages = this.convertToOllamaMessages(params.messages);
@@ -575,14 +500,6 @@ export class OllamaLLM extends BaseLLM {
         lastChunk: any | null | undefined,
         usage: any | null | undefined
     ): ChatResult {
-        // A mid-stream abort surfaces as an iteration error that the base class swallows, so the
-        // token is the only reliable signal here. Report cancellation as a clean failure instead of
-        // passing off a truncated stream as a successful completion.
-        const cancellationToken = this._streamingCancellationToken;
-        if (cancellationToken?.aborted) {
-            return this.buildCancelledResult(new Date(), this.createCancellationError(cancellationToken), cancellationToken);
-        }
-
         // Extract finish reason from last chunk if available
         let finishReason = 'stop';
         if (lastChunk?.done === false) {
@@ -646,7 +563,7 @@ export class OllamaLLM extends BaseLLM {
      * Generate endpoint implementation for Ollama (alternative to chat)
      * This can be useful for simple completion tasks
      */
-    public async generate(params: {
+    public async Generate(params: {
         model: string;
         prompt: string;
         temperature?: number;
@@ -672,36 +589,62 @@ export class OllamaLLM extends BaseLLM {
 
         // Handle TypeScript overload by explicitly typing based on stream value
         if (params.stream) {
-            return await this.client.generate({ ...generateRequest, stream: true } as GenerateRequest & { stream: true });
+            return await this.Client.generate({ ...generateRequest, stream: true } as GenerateRequest & { stream: true });
         } else {
-            return await this.client.generate({ ...generateRequest, stream: false } as GenerateRequest & { stream: false });
+            return await this.Client.generate({ ...generateRequest, stream: false } as GenerateRequest & { stream: false });
         }
+    }
+
+    /** @deprecated Use {@link Generate}. */
+    public async generate(params: {
+        model: string;
+        prompt: string;
+        temperature?: number;
+        maxOutputTokens?: number;
+        stream?: boolean;
+    }): Promise<any> {
+        return this.Generate(params);
     }
 
     /**
      * List available models in Ollama
      */
+    public async ListModels(): Promise<any> {
+        return await this.Client.list();
+    }
+
+    /** @deprecated Use {@link ListModels}. */
     public async listModels(): Promise<any> {
-        return await this.client.list();
+        return this.ListModels();
     }
 
     /**
      * Pull a model from Ollama registry
      */
+    public async PullModel(modelName: string): Promise<void> {
+        await this.Client.pull({ model: modelName, stream: false });
+    }
+
+    /** @deprecated Use {@link PullModel}. */
     public async pullModel(modelName: string): Promise<void> {
-        await this.client.pull({ model: modelName, stream: false });
+        return this.PullModel(modelName);
     }
 
     /**
      * Check if a model is available locally
      */
-    public async isModelAvailable(modelName: string): Promise<boolean> {
+    public async IsModelAvailable(modelName: string): Promise<boolean> {
         try {
-            const models = await this.listModels();
+            const models = await this.ListModels();
             return models.models.some((m: any) => m.name === modelName || m.name.startsWith(modelName + ':'));
         } catch {
             return false;
         }
+    }
+
+    /** @deprecated Use {@link IsModelAvailable}. */
+    public async isModelAvailable(modelName: string): Promise<boolean> {
+        return this.IsModelAvailable(modelName);
     }
 
     public async SummarizeText(_params: SummarizeParams): Promise<SummarizeResult> {

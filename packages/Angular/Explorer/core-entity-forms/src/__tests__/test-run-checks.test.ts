@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseCheckResults } from '../lib/custom/Tests/test-run-checks';
+import { ParseCheckResults } from '../lib/custom/Tests/test-run-checks';
 
 describe('parseCheckResults', () => {
   it('maps the engine bare OracleResult[] array (oracleType → name, passed/message carried)', () => {
@@ -21,7 +21,7 @@ describe('parseCheckResults', () => {
       }
     ];
 
-    const checks = parseCheckResults(resultDetails);
+    const checks = ParseCheckResults(resultDetails);
 
     expect(checks).toHaveLength(2);
     expect(checks[0]).toEqual({
@@ -37,7 +37,7 @@ describe('parseCheckResults', () => {
   });
 
   it('treats any non-boolean-true passed value as failed', () => {
-    const checks = parseCheckResults([
+    const checks = ParseCheckResults([
       { oracleType: 'x.A', passed: 'true', message: 'truthy-but-not-boolean' },
       { oracleType: 'x.B', passed: 1, message: 'one' },
       { oracleType: 'x.C', message: 'missing passed' }
@@ -46,7 +46,7 @@ describe('parseCheckResults', () => {
   });
 
   it('does not crash on elements missing a message (message stays undefined)', () => {
-    const checks = parseCheckResults([{ oracleType: 'x.A', passed: true }]);
+    const checks = ParseCheckResults([{ oracleType: 'x.A', passed: true }]);
     expect(checks).toHaveLength(1);
     expect(checks[0].name).toBe('x.A');
     expect(checks[0].passed).toBe(true);
@@ -54,7 +54,7 @@ describe('parseCheckResults', () => {
   });
 
   it('falls back to an empty name when oracleType is absent', () => {
-    const checks = parseCheckResults([{ passed: true, message: 'no type' }]);
+    const checks = ParseCheckResults([{ passed: true, message: 'no type' }]);
     expect(checks[0].name).toBe('');
   });
 
@@ -65,6 +65,6 @@ describe('parseCheckResults', () => {
     ['a string', 'not json'],
     ['a number', 42]
   ])('returns [] for non-array ResultDetails (%s)', (_label, input) => {
-    expect(parseCheckResults(input)).toEqual([]);
+    expect(ParseCheckResults(input)).toEqual([]);
   });
 });

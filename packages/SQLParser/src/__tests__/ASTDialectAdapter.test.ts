@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { SQLServerDialect, PostgreSQLDialect } from '@memberjunction/sql-dialect';
-import { getASTDialectAdapter } from '../ASTDialectAdapter.js';
+import { GetASTDialectAdapter } from '../ASTDialectAdapter.js';
 
 const tsql = new SQLServerDialect();
 const pg = new PostgreSQLDialect();
@@ -11,21 +11,21 @@ const pg = new PostgreSQLDialect();
 
 describe('getASTDialectAdapter', () => {
     it('returns an adapter for the SQL Server dialect', () => {
-        expect(getASTDialectAdapter(tsql)).toBeDefined();
+        expect(GetASTDialectAdapter(tsql)).toBeDefined();
     });
 
     it('returns an adapter for the PostgreSQL dialect', () => {
-        expect(getASTDialectAdapter(pg)).toBeDefined();
+        expect(GetASTDialectAdapter(pg)).toBeDefined();
     });
 
     it('returns an adapter for the MySQL ParserDialect', () => {
         const mysqlish = { ...tsql, ParserDialect: 'MySQL' } as typeof tsql;
-        expect(getASTDialectAdapter(mysqlish)).toBeDefined();
+        expect(GetASTDialectAdapter(mysqlish)).toBeDefined();
     });
 
     it('throws an actionable error for an unregistered ParserDialect', () => {
         const unknown = { ...tsql, ParserDialect: 'OracleSQL' } as typeof tsql;
-        expect(() => getASTDialectAdapter(unknown)).toThrow(/No ASTDialectAdapter registered/);
+        expect(() => GetASTDialectAdapter(unknown)).toThrow(/No ASTDialectAdapter registered/);
     });
 });
 
@@ -34,7 +34,7 @@ describe('getASTDialectAdapter', () => {
 // ════════════════════════════════════════════════════════════════════
 
 describe('TransactSQLAdapter', () => {
-    const adapter = getASTDialectAdapter(tsql);
+    const adapter = GetASTDialectAdapter(tsql);
 
     it('reads a numeric TOP', () => {
         expect(adapter.ReadRowCap({ top: { value: 5, percent: null } }))
@@ -75,7 +75,7 @@ describe('TransactSQLAdapter', () => {
 // ════════════════════════════════════════════════════════════════════
 
 describe('LimitOffsetAdapter', () => {
-    const adapter = getASTDialectAdapter(pg);
+    const adapter = GetASTDialectAdapter(pg);
 
     it('reads a numeric LIMIT', () => {
         expect(adapter.ReadRowCap({ limit: { seperator: '', value: [{ value: 5 }] } }))

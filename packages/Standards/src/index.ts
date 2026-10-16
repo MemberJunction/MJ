@@ -36,3 +36,6 @@ export * from './registry.js';
 export * from './runner.js';
 export * from './scaffold.js';
 export * from './checks/ui-layers.js';
+export * from './checks/naming-conventions.js';
+export * from './lib/markers.js';
+export * from './lib/walk.js';

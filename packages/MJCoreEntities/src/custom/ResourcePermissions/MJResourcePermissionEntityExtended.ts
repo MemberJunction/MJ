@@ -4,7 +4,7 @@ import { MJResourcePermissionEntity, MJUserEntity } from "../../generated/entity
 import { ResourcePermissionEngine } from "./ResourcePermissionEngine";
 import { ConversationEngine } from "../../engines/conversations";
 import { CreateShareNotification } from "../Permissions/shareNotification";
-import { checkShareManagePermission } from "../Permissions/BaseShareEntityExtended";
+import { CheckShareManagePermission } from "../Permissions/BaseShareEntityExtended";
 
 /** `MJ: Resource Types.ID` for Conversations. */
 const CONVERSATIONS_RESOURCE_TYPE_ID = '81D4BC3D-9FEB-EF11-B01A-286B35C04427';
@@ -41,7 +41,7 @@ export class MJResourcePermissionEntityExtended extends MJResourcePermissionEnti
         if (type === EntityPermissionType.Update || type === EntityPermissionType.Delete) {
             if (this._authorizedByOwnerOverride) return true;
             const user = this.ActiveUser;
-            if (user && checkShareManagePermission(user, this.SharedByUserID, (userId) =>
+            if (user && CheckShareManagePermission(user, this.SharedByUserID, (userId) =>
                 this.currentUserOwnsResource(userId) || this.currentUserHasOwnerGrant(userId)
             )) {
                 return true;

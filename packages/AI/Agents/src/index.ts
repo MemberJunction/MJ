@@ -9,10 +9,15 @@
  * @since 2.49.0
  */
 
+import './rubric-evaluation-agent-runner.js';
+
 export * from './agent-types/base-agent-type';
 export * from './agent-types/loop-agent-response-type';
 export * from './agent-types/loop-agent-prompt-params';
 export * from './base-agent';
+export * from './decision-discovery';
+// The opening request, as discovery and catalog narrowing read it: the Decision Eval harness builds its state the same way.
+export { OpeningRequestText, CATALOG_NARROWING_REQUEST_MAX_CHARS } from './catalog-narrowing';
 export * from './prior-turn-tool-result-cache';
 export * from './tool-result-format';
 export * from './prompt-component-resolver';
@@ -23,9 +28,14 @@ export * from './AgentRunner';
 export * from './artifact-target-plan';
 export * from './PayloadManager';
 export * from './ScratchpadManager';
+export * from './constants';
+export * from './runtime-state-fragment';
+export * from './volatile-child-prompt';
 export * from './ArtifactToolManager';
 export * from './ConversationCompactionManager';
 export * from './ConversationToolManager';
+export * from './AgentDecisionService';
+export * from './finish-if-state';
 export * from './MemoryWriteManager';
 export * from './SkillMarkdownConverter';
 export * from './SkillImportExportService';
@@ -48,7 +58,9 @@ export * from './AgentDataPreloader';
 export * from './agent-context-injector';
 export * from './agent-memory-context-builder';
 export * from './agent-pre-execution-rag';
+export * from './agent-audience';
 export * from './memory-manager-agent';
+export * from './memory-note-gate';
 export * from './query-builder-agent';
 export * from './MJAIAgentRequestEntityServer';
 export * from './KnowledgeAgent';
@@ -57,6 +69,7 @@ export * from './ClientToolRequestManager';
 export * from './realtime/realtime-session-runner';
 export * from './realtime/bridge-realtime-session-factory';
 export * from './realtime/bridge-room-transcript-sink';
+export * from './realtime/bridge-session-transcript-sink';
 export * from './realtime/realtime-turn-moderator';
 // Broker-unique exports. The shared tool-execution contract (INVOKE_TARGET_AGENT_TOOL_NAME,
 // DelegateToTargetRequest, DelegatedResult, ToolExecutionResult, loggers) is surfaced via the
@@ -66,10 +79,18 @@ export { RealtimeToolBroker, RealtimeToolBrokerDeps, ExecutedToolCall, Delegated
 export * from './realtime/realtime-client-session-service';
 export * from './realtime/realtime-coagent-config';
 export * from './realtime/realtime-vendor-resolution';
+export * from './realtime/realtime-video-output-gate';
 export * from './realtime/realtime-narration';
+export * from './realtime/realtime-delegation-narrator';
+export * from './realtime/realtime-coagent-resolution';
+export * from './realtime/bridge-host-params';
 export * from './realtime/realtime-channel-server-host';
+export * from './realtime/realtime-channel-policy';
 export * from './realtime/whiteboard-channel-server';
+export * from './realtime/client-only-channel-server';
 export * from './realtime/client-context-channel-server';
+export * from './realtime/identity-verification-channel-server';
+export * from './realtime/interactive-component-channel-server';
 export * from './realtime/meeting-controls-state';
 export * from './realtime/meeting-controls-channel-server';
 export * from './realtime/media-channel-server';
@@ -77,6 +98,8 @@ export * from './realtime/realtime-channel-server-data-context';
 export * from './realtime/agent-media-library';
 export * from './realtime/realtime-recording-capture';
 export * from './realtime/realtime-recording-store';
+export * from './realtime/realtime-recording-ledger';
+export * from './realtime/realtime-recording-opus-assembly';
 
 // Re-export from ai-reranker for backward compatibility
 export {

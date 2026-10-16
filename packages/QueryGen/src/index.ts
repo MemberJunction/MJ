@@ -28,21 +28,21 @@ export * from './data/schema';
 export * from './prompts/PromptNames';
 
 // Export configuration
-export { QueryGenConfig, loadConfig } from './cli/config';
+export { QueryGenConfig, LoadConfig, loadConfig } from './cli/config';
 
 // Export CLI commands
-export { generateCommand } from './cli/commands/generate';
-export { validateCommand } from './cli/commands/validate';
-export { exportCommand } from './cli/commands/export';
+export { GenerateCommand, generateCommand } from './cli/commands/generate';
+export { ValidateCommand, validateCommand } from './cli/commands/validate';
+export { ExportCommand, exportCommand } from './cli/commands/export';
 
 // Export utilities
-export { extractErrorMessage, requireValue, getPropertyOrDefault } from './utils/error-handlers';
+export { ExtractErrorMessage, extractErrorMessage, RequireValue, requireValue, GetPropertyOrDefault, getPropertyOrDefault } from './utils/error-handlers';
 export {
-  formatEntityMetadataForPrompt,
-  formatEntityGroupForPrompt,
-  findEntityById,
-  getPrimaryKeyFields,
-  getForeignKeyFields,
-  hasRelationships,
-  getRelationshipCount
+  FormatEntityMetadataForPrompt, formatEntityMetadataForPrompt,
+  FormatEntityGroupForPrompt, formatEntityGroupForPrompt,
+  FindEntityById, findEntityById,
+  GetPrimaryKeyFields, getPrimaryKeyFields,
+  GetForeignKeyFields, getForeignKeyFields,
+  HasRelationships, hasRelationships,
+  GetRelationshipCount, getRelationshipCount
 } from './utils/entity-helpers';

@@ -2,7 +2,7 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { BaseAction } from "@memberjunction/actions";
 import { RegisterClass } from "@memberjunction/global";
 import { HttpGet, IsHttpError } from "@memberjunction/network-utils";
-import { getApiIntegrationsConfig } from "../../config";
+import { GetApiIntegrationsConfig } from "../../config";
 
 interface GoogleSearchItem {
     title?: string;
@@ -74,7 +74,7 @@ export class GoogleCustomSearchAction extends BaseAction {
             return this.createErrorResult("Query parameter is required", "MISSING_QUERY");
         }
 
-        const apiConfig = getApiIntegrationsConfig();
+        const apiConfig = GetApiIntegrationsConfig();
         const apiKey = apiConfig.google?.customSearch?.apiKey;
         const cx = apiConfig.google?.customSearch?.cx;
 

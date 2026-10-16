@@ -3,7 +3,7 @@ import { QuickBooksBaseAction } from '../quickbooks-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { UserInfo } from '@memberjunction/core';
 import { BaseAction } from '@memberjunction/actions';
-import { ACCOUNTING_VERBS, ERP_INTEGRATION, erpPluginKey } from '../../../constants';
+import { ACCOUNTING_VERBS, ERP_INTEGRATION, ErpPluginKey } from '../../../constants';
 import { AccountBalance } from '../../../types';
 
 export type { AccountBalance } from '../../../types';
@@ -12,17 +12,17 @@ export type { AccountBalance } from '../../../types';
  * Trial balance summary
  */
 export interface TrialBalanceSummary {
-    totalDebits: number;
-    totalCredits: number;
-    isBalanced: boolean;
-    difference: number;
-    asOfDate: Date;
+    totalDebits: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    totalCredits: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    isBalanced: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    difference: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    asOfDate: Date;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
  * Action to retrieve account balances (trial balance) from QuickBooks Online
  */
-@RegisterClass(BaseAction, erpPluginKey(ACCOUNTING_VERBS.GetAccountBalances, ERP_INTEGRATION.QuickBooksOnline))
+@RegisterClass(BaseAction, ErpPluginKey(ACCOUNTING_VERBS.GetAccountBalances, ERP_INTEGRATION.QuickBooksOnline))
 @RegisterClass(BaseAction, 'GetQuickBooksAccountBalancesAction')
 export class GetQuickBooksAccountBalancesAction extends QuickBooksBaseAction {
     

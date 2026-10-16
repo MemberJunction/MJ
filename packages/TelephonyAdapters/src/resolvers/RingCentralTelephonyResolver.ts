@@ -5,8 +5,9 @@
  */
 
 import { Resolver, Mutation, Arg, Ctx, ObjectType, Field } from 'type-graphql';
-import { LogError, IMetadataProvider } from '@memberjunction/core';
-import { TelephonyResolverContext, getUserFromPayload, getReadWriteProvider } from '../types.js';
+import { LogError } from '@memberjunction/core';
+import { TelephonyResolverContext, GetUserFromPayload, GetReadWriteProvider } from '../types.js';
+import { OutboundCallRefusedError } from '../telephony/outboundCallPolicy.js';
 import { GetRingCentralTelephonyService } from '../telephony/ringcentral-runtime.js';
 
 /** Result of an outbound RingCentral place-call attempt. */
@@ -36,7 +37,7 @@ export class RingCentralTelephonyResolver {
     ): Promise<PlaceRingCentralCallResult> {
         const failure = (msg: string): PlaceRingCentralCallResult => ({ Success: false, ErrorMessage: msg, SessionId: '' });
         try {
-            const user = getUserFromPayload(context.userPayload);
+            const user = GetUserFromPayload(context.userPayload);
             if (!user) {
                 return failure('Unable to determine current user.');
             }
@@ -44,7 +45,7 @@ export class RingCentralTelephonyResolver {
             if (!service) {
                 return failure('RingCentral telephony is not configured on this server.');
             }
-            const provider = getReadWriteProvider(context.providers);
+            const provider = GetReadWriteProvider(context.providers);
             if (!provider) {
                 return failure('Database provider is not available.');
             }
@@ -52,7 +53,9 @@ export class RingCentralTelephonyResolver {
             return { Success: true, SessionId: sessionId };
         } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);
-            LogError(`PlaceRingCentralCall failed: ${msg}`);
+            if (!(error instanceof OutboundCallRefusedError)) {
+                LogError(`PlaceRingCentralCall failed: ${msg}`); // a refusal was already logged (masked) by the outbound gate
+            }
             return failure(msg);
         }
     }

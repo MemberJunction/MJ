@@ -6,7 +6,7 @@ import { AgGridModule } from 'ag-grid-angular';
 
 // Import MJ modules
 import { CodeEditorModule } from '@memberjunction/ng-code-editor';
-import { MJReactModule, AngularAdapterService } from '@memberjunction/ng-react';
+import { MJReactModule } from '@memberjunction/ng-react';
 import { MJNotificationsModule } from '@memberjunction/ng-notifications';
 import { QueryViewerModule } from '@memberjunction/ng-query-viewer';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
@@ -36,6 +36,8 @@ import { FileArtifactToolbarComponent } from './components/file-artifact-toolbar
 import { PdfArtifactViewerComponent } from './components/plugins/pdf-artifact-viewer.component';
 import { XlsxArtifactViewerComponent } from './components/plugins/xlsx-artifact-viewer.component';
 import { DocxArtifactViewerComponent } from './components/plugins/docx-artifact-viewer.component';
+import { DocxPreviewComponent } from './components/previews/docx-preview.component';
+import { XlsxPreviewComponent } from './components/previews/xlsx-preview.component';
 import { ImageArtifactViewerComponent } from './components/plugins/image-artifact-viewer.component';
 import { VideoArtifactViewerComponent } from './components/plugins/video-artifact-viewer.component';
 import { AudioArtifactViewerComponent } from './components/plugins/audio-artifact-viewer.component';
@@ -90,6 +92,8 @@ import { ArtifactMessageCardComponent } from './components/artifact-message-card
     PdfArtifactViewerComponent,
     XlsxArtifactViewerComponent,
     DocxArtifactViewerComponent,
+    DocxPreviewComponent,
+    XlsxPreviewComponent,
     ImageArtifactViewerComponent,
     VideoArtifactViewerComponent,
     AudioArtifactViewerComponent,
@@ -141,6 +145,8 @@ import { ArtifactMessageCardComponent } from './components/artifact-message-card
     PdfArtifactViewerComponent,
     XlsxArtifactViewerComponent,
     DocxArtifactViewerComponent,
+    DocxPreviewComponent,
+    XlsxPreviewComponent,
     ImageArtifactViewerComponent,
     VideoArtifactViewerComponent,
     AudioArtifactViewerComponent,
@@ -155,7 +161,7 @@ import { ArtifactMessageCardComponent } from './components/artifact-message-card
   ]
 })
 export class ArtifactsModule {
-  constructor(private adapter: AngularAdapterService) {
+  constructor() {
     // Ensure plugin components are registered on module load by referencing their classes
     // The @RegisterClass decorator on each component handles the actual registration with MJGlobal
     [
@@ -185,10 +191,9 @@ export class ArtifactsModule {
     // trivially satisfied today); the guard protects against future loosening of that invariant.
     ArtifactsModule.warnOnPluginsWithoutRenderTarget();
 
-    // PERF: Eagerly start downloading React, ReactDOM, and Babel from CDN in the background.
-    // By the time a user opens an interactive component artifact, the scripts will already
-    // be cached. The adapter.preload() is non-blocking and deduplicates with initialize().
-    this.adapter.preload();
+    // No React runtime preload here: Angular constructs this module eagerly in every app whose
+    // import graph reaches it (#4802). The component viewer initializes the runtime on demand;
+    // hosts that want a warm cache call AngularAdapterService.Preload() themselves.
   }
 
   /**

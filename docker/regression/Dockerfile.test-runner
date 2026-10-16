@@ -14,25 +14,38 @@ RUN apt-get update && apt-get install -y --no-install-recommends socat && rm -rf
 
 WORKDIR /app
 
+# The monorepo is pnpm (package.json pins packageManager). corepack ships with node 24
+# and the playwright image, so this activates the pinned pnpm without a global install.
+RUN corepack enable
+
 # Copy package manifests for workspace install
-COPY package.json package-lock.json turbo.json tsconfig.angular.json tsconfig.server.json ./
+# pnpm workspace manifests. pnpm-workspace.yaml is load-bearing (linkWorkspacePackages,
+# onlyBuiltDependencies) and patches/ carries the type-graphql patch, so both must be
+# present before install or dependencies resolve from the registry instead of the workspace.
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json tsconfig.angular.json tsconfig.server.json ./
+COPY patches/ ./patches/
 
 # Copy all packages and metadata (metadata needed at build time for prompt sync)
 COPY packages/ ./packages/
 COPY metadata/ ./metadata/
+# The regression suite + its 155 tests live in the opt-in metadata-optional
+# sibling root, kept out of the base instance like integration-test. The
+# entrypoint pushes them via `mj sync push --dir=metadata-optional/regression-test`,
+# and the compose mount overlays the host copy at runtime.
+COPY metadata-optional/ ./metadata-optional/
 
 # Install dependencies
-RUN npm install
+RUN pnpm install --frozen-lockfile
 
 # Build all packages (turbo handles dependency order)
 # --concurrency=2 limits parallel tsc processes to avoid OOM in Docker's memory-constrained environment
-RUN npx turbo build --concurrency=2 --filter="@memberjunction*"
+RUN pnpm exec turbo build --concurrency=2 --filter="@memberjunction*"
 
 # Copy MJ config
 COPY docker/MJAPI/docker.config.cjs ./mj.config.cjs
 
 # Bootstrap: imports ComputerUseTestDriver so @RegisterClass fires before CLI runs
-RUN echo "import '@memberjunction/computer-use-engine';" > /app/bootstrap.mjs
+RUN echo "import '/app/packages/AI/MJComputerUse/dist/index.js';" > /app/bootstrap.mjs
 
 # Create results directory
 RUN mkdir -p /app/test-results

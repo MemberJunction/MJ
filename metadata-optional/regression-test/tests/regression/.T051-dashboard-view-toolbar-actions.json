@@ -1,0 +1,57 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T051 - Dashboard View-Toolbar Actions",
+    "Description": "Opens a dashboard once via the app switcher, then walks its view/edit-toolbar actions (Share dialog, Add Part in edit mode, Open in new tab), verifying each via checkpoints. Consolidates old T113, T116, T117.",
+    "InputDefinition": "{\n  \"goal\": \"Open the application switcher dropdown next to the logo (NOT the Ctrl+K search box), open Data Explorer, then the Dashboards section. Create or open a dashboard you own so you can view it. Then walk these toolbar actions IN ORDER, and as you arrive at each one set \\\"checkpointReached\\\" to the exact checkpoint name shown: (1) dashboard-share-dialog — in the view toolbar (top-right) click the Share button (person-plus / share icon) and confirm a share dialog titled 'Share \\\"<dashboard name>\\\"' opens with an 'Add people by name or email...' search box, a 'People with access' section listing the Owner, per-person permission toggles (view/edit/delete/share), and Save/Cancel buttons; close it; (2) dashboard-add-part — enter edit mode (create a new dashboard which opens in edit mode, or click Edit on an owned one), then click the 'Add Part' button (plus icon) in the edit-mode header and confirm an 'Add Panel' / part-picker dialog opens listing selectable part types (or a clear empty state if none are configured); close it; (3) dashboard-open-new-tab — back in view mode, click the 'Open in its own tab' button (up-right-from-square / external-link icon) in the view toolbar and confirm the dashboard opens in its own dedicated Explorer workspace tab (a new tab appears in the tab strip and the dashboard renders without error). Keep going until every action has been visited. You do NOT need to save or fully add anything. Pages can take 10-30s to load in this resource-constrained environment — wait for content rather than navigating away.\",\n  \"startUrl\": \"http://localhost:4200\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
+    "ExpectedOutcomes": "{\n  \"goalCompleted\": true,\n  \"finalUrlPattern\": \"^http://localhost:4200\",\n  \"minConfidence\": 0.7,\n  \"maxSteps\": 45,\n  \"checkpoints\": [\n    {\n      \"name\": \"dashboard-share-dialog\",\n      \"instruction\": \"open the dashboard Share dialog\",\n      \"visualCriteria\": [\n        \"Clicking Share on an owned dashboard opens a share dialog with a people search input, a 'People with access' section showing the Owner, permission toggle controls (view/edit/delete/share), and Save/Cancel buttons\"\n      ]\n    },\n    {\n      \"name\": \"dashboard-add-part\",\n      \"instruction\": \"open Add Part dialog in edit mode\",\n      \"visualCriteria\": [\n        \"In dashboard edit mode, clicking 'Add Part' opens a part/panel picker dialog listing selectable available part types (or a clear empty state if none are configured)\"\n      ]\n    },\n    {\n      \"name\": \"dashboard-open-new-tab\",\n      \"instruction\": \"open the dashboard in its own tab\",\n      \"visualCriteria\": [\n        \"Clicking the 'open in its own tab' (external-link icon) button opens the dashboard in a dedicated Explorer tab — a new tab representing the dashboard appears in the tab strip and the dashboard renders without error\"\n      ]\n    }\n  ]\n}",
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 45,
+      "maxExecutionTime": 540000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.7,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "url-match",
+          "weight": 0.3,
+          "config": {
+            "pattern": "^http://localhost:4200"
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.7,
+        "url-match": 0.3
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,dashboard",
+    "Priority": 0,
+    "EstimatedDurationSeconds": null,
+    "EstimatedCostUSD": null,
+    "RepeatCount": null,
+    "MaxExecutionTimeMS": null,
+    "Variables": null,
+    "Type": "Computer Use",
+    "SkipEmbeddings": false
+  },
+  "primaryKey": {
+    "ID": "0A683189-636C-41AE-A335-9C2077F1499B"
+  },
+  "sync": {
+    "lastModified": "2026-09-11T21:36:53.329Z",
+    "checksum": "da546f95dcf4740b96df79619f56168c844c2993914f0fe3b6f4ff17e61b3441"
+  }
+}

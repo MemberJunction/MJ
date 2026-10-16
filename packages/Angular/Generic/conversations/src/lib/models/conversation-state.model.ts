@@ -96,6 +96,16 @@ export type ArtifactSortBy = 'name' | 'date' | 'type' | 'modified';
 export type ConversationGroupBy = 'project' | 'date' | 'none';
 
 /**
+ * Field the conversation list is sorted on.
+ */
+export type ConversationSortBy = 'date' | 'name';
+
+/**
+ * Direction of the conversation list sort.
+ */
+export type ConversationSortDirection = 'asc' | 'desc';
+
+/**
  * Type of entity being mentioned
  */
 export type MentionType = 'agent' | 'user' | 'entity' | 'query' | 'skill';

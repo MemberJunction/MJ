@@ -54,8 +54,8 @@ import {
 } from '@memberjunction/server-extensions-core';
 import { SlackAdapter } from './SlackAdapter.js';
 import { MessagingAdapterSettings, RequestWithRawBody } from '../base/types.js';
-import { verifySlackSignature } from './slack-routes.js';
-import { handleSlackInteraction } from './slack-interactivity.js';
+import { VerifySlackSignature } from './slack-routes.js';
+import { HandleSlackInteraction } from './slack-interactivity.js';
 
 /**
  * Server Extension that registers Slack webhook routes and delegates
@@ -261,7 +261,7 @@ export class SlackMessagingExtension extends BaseServerExtension {
      */
     private async handleWebhook(req: Request, res: Response): Promise<void> {
         // 1. Verify signature
-        if (this.signingSecret && !verifySlackSignature(req, this.signingSecret)) {
+        if (this.signingSecret && !VerifySlackSignature(req, this.signingSecret)) {
             res.status(401).send('Invalid signature');
             return;
         }
@@ -332,7 +332,7 @@ export class SlackMessagingExtension extends BaseServerExtension {
                 // hands us the payload already parsed.
                 const payload = body?.['payload'];
                 const raw = typeof payload === 'string' ? payload : JSON.stringify(payload ?? body ?? {});
-                await handleSlackInteraction(raw, this.interactClient, this.adapter);
+                await HandleSlackInteraction(raw, this.interactClient, this.adapter);
             } catch (error) {
                 LogError('Error handling Slack interaction (Socket Mode):', undefined, error);
             }
@@ -377,7 +377,7 @@ export class SlackMessagingExtension extends BaseServerExtension {
         }
 
         try {
-            await handleSlackInteraction(payloadStr, this.interactClient, this.adapter);
+            await HandleSlackInteraction(payloadStr, this.interactClient, this.adapter);
         } catch (error) {
             LogError('Error handling Slack interaction:', undefined, error);
         }

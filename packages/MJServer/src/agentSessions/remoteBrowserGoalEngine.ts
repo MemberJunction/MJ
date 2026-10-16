@@ -34,12 +34,17 @@ import { buildProgressNote, CdpRemoteBrowserSession, type ComputerUseGoalProgres
  * @param agentRunStepID Optional parent agent-run-step id (nests a child prompt step per prompt under it).
  * @returns The MJ-aware params to hand to `MJComputerUseEngine.Run`.
  */
-export function buildMJGoalParams(params: RunComputerUseParams, contextUser?: UserInfo, agentRunID?: string, agentRunStepID?: string): MJRunComputerUseParams {
+export function BuildMJGoalParams(params: RunComputerUseParams, contextUser?: UserInfo, agentRunID?: string, agentRunStepID?: string): MJRunComputerUseParams {
   const mjParams = Object.assign(new MJRunComputerUseParams(), params);
   mjParams.ContextUser = contextUser;
   mjParams.AgentRunId = agentRunID;
   mjParams.AgentRunStepID = agentRunStepID;
   return mjParams;
+}
+
+/** @deprecated Use {@link BuildMJGoalParams}. */
+export function buildMJGoalParams(params: RunComputerUseParams, contextUser?: UserInfo, agentRunID?: string, agentRunStepID?: string): MJRunComputerUseParams {
+  return BuildMJGoalParams(params, contextUser, agentRunID, agentRunStepID);
 }
 
 /**
@@ -75,7 +80,7 @@ export class MJProgressComputerUseEngine extends MJComputerUseEngine implements 
    * @returns The computer-use run result.
    */
   public override async Run(params: RunComputerUseParams): Promise<ComputerUseResult> {
-    return super.Run(buildMJGoalParams(params, this.ContextUser, this.AgentRunID, this.AgentRunStepID));
+    return super.Run(BuildMJGoalParams(params, this.ContextUser, this.AgentRunID, this.AgentRunStepID));
   }
 
   protected override onStepComplete(step: StepRecord, params: MJRunComputerUseParams): void {
@@ -92,7 +97,7 @@ export class MJProgressComputerUseEngine extends MJComputerUseEngine implements 
  * @param configJson The session's `Config_` string.
  * @returns The co-agent run id, or `undefined`.
  */
-export function extractCoAgentRunID(configJson: string | null | undefined): string | undefined {
+export function ExtractCoAgentRunID(configJson: string | null | undefined): string | undefined {
   if (!configJson) {
     return undefined;
   }
@@ -102,6 +107,11 @@ export function extractCoAgentRunID(configJson: string | null | undefined): stri
   } catch {
     return undefined;
   }
+}
+
+/** @deprecated Use {@link ExtractCoAgentRunID}. */
+export function extractCoAgentRunID(configJson: string | null | undefined): string | undefined {
+  return ExtractCoAgentRunID(configJson);
 }
 
 /** Truncates a goal to a step-name-friendly length. */
@@ -122,7 +132,7 @@ function goalStepName(goal: string): string {
  * @param goal The natural-language goal (becomes the step name).
  * @returns The saved parent step (to finalize + nest under), or `null`.
  */
-export async function beginBrowserGoalStep(
+export async function BeginBrowserGoalStep(
   provider: IMetadataProvider,
   contextUser: UserInfo | undefined,
   coAgentRunID: string | undefined,
@@ -152,6 +162,16 @@ export async function beginBrowserGoalStep(
   }
 }
 
+/** @deprecated Use {@link BeginBrowserGoalStep}. */
+export async function beginBrowserGoalStep(
+  provider: IMetadataProvider,
+  contextUser: UserInfo | undefined,
+  coAgentRunID: string | undefined,
+  goal: string,
+): Promise<MJAIAgentRunStepEntity | null> {
+  return BeginBrowserGoalStep(provider, contextUser, coAgentRunID, goal);
+}
+
 /**
  * Finalizes the parent browser-goal step from the goal outcome — `Completed`/`Failed` with an `OutputData`
  * envelope of strategy/status/step-count/url. A no-op when `step` is `null`. Best-effort (logged, never thrown).
@@ -159,7 +179,7 @@ export async function beginBrowserGoalStep(
  * @param step The parent step from {@link beginBrowserGoalStep} (or `null`).
  * @param result The goal outcome.
  */
-export async function finalizeBrowserGoalStep(step: MJAIAgentRunStepEntity | null, result: RemoteBrowserGoalResult): Promise<void> {
+export async function FinalizeBrowserGoalStep(step: MJAIAgentRunStepEntity | null, result: RemoteBrowserGoalResult): Promise<void> {
   if (!step) {
     return;
   }
@@ -175,6 +195,11 @@ export async function finalizeBrowserGoalStep(step: MJAIAgentRunStepEntity | nul
   } catch (err) {
     LogError(`[RemoteBrowserGoalEngine] finalizeBrowserGoalStep threw: ${err instanceof Error ? err.message : String(err)}`);
   }
+}
+
+/** @deprecated Use {@link FinalizeBrowserGoalStep}. */
+export async function finalizeBrowserGoalStep(step: MJAIAgentRunStepEntity | null, result: RemoteBrowserGoalResult): Promise<void> {
+  return FinalizeBrowserGoalStep(step, result);
 }
 
 /**

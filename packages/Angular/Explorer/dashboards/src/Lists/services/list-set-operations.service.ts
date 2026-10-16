@@ -199,7 +199,16 @@ export class ListSetOperationsService {
       return this._provider ?? Metadata.Provider;
   }
   private loadingSubject = new BehaviorSubject<boolean>(false);
-  public loading$: Observable<boolean> = this.loadingSubject.asObservable();
+  public Loading$: Observable<boolean> = this.loadingSubject.asObservable();
+
+  /** @deprecated Use {@link Loading$}. */
+  public get loading$(): Observable<boolean> {
+    return this.Loading$;
+  }
+  /** @deprecated Use {@link Loading$}. */
+  public set loading$(value: Observable<boolean>) {
+    this.Loading$ = value;
+  }
 
   // Cache for list details
   private listDetailsCache = new Map<string, Set<string>>();
@@ -209,7 +218,7 @@ export class ListSetOperationsService {
   /**
    * Load list data and calculate all intersections for Venn visualization
    */
-  async calculateVennData(lists: MJListEntity[]): Promise<VennData> {
+  async CalculateVennData(lists: MJListEntity[]): Promise<VennData> {
     if (lists.length === 0) {
       return { sets: [], intersections: [] };
     }
@@ -280,6 +289,11 @@ export class ListSetOperationsService {
     }
   }
 
+  /** @deprecated Use {@link CalculateVennData}. */
+  async calculateVennData(lists: MJListEntity[]): Promise<VennData> {
+    return this.CalculateVennData(lists);
+  }
+
   /**
    * Generalized Venn-data loader supporting both lists and views.
    *
@@ -292,7 +306,7 @@ export class ListSetOperationsService {
    * The cache deliberately namespaces the kind — a list and a view that
    * shared the same UUID would still hit distinct entries.
    */
-  async calculateVennDataForOperands(operands: SetOperand[]): Promise<VennData> {
+  async CalculateVennDataForOperands(operands: SetOperand[]): Promise<VennData> {
     if (operands.length === 0) return { sets: [], intersections: [] };
     this.loadingSubject.next(true);
     try {
@@ -317,12 +331,17 @@ export class ListSetOperationsService {
     }
   }
 
+  /** @deprecated Use {@link CalculateVennDataForOperands}. */
+  async calculateVennDataForOperands(operands: SetOperand[]): Promise<VennData> {
+    return this.CalculateVennDataForOperands(operands);
+  }
+
   /**
    * Operand-aware sibling of `performOperation`. `operandKeys` are the
    * `OperandCacheKey()` strings produced by `calculateVennDataForOperands`,
    * so callers can stay in operand-key space end-to-end.
    */
-  async performOperationForOperands(
+  async PerformOperationForOperands(
     operation: SetOperation,
     operands: SetOperand[],
     allOperands?: SetOperand[],
@@ -341,6 +360,15 @@ export class ListSetOperationsService {
     } finally {
       this.loadingSubject.next(false);
     }
+  }
+
+  /** @deprecated Use {@link PerformOperationForOperands}. */
+  async performOperationForOperands(
+    operation: SetOperation,
+    operands: SetOperand[],
+    allOperands?: SetOperand[],
+  ): Promise<SetOperationResult> {
+    return this.PerformOperationForOperands(operation, operands, allOperands);
   }
 
   /**
@@ -419,7 +447,7 @@ export class ListSetOperationsService {
   /**
    * Perform a set operation on multiple lists
    */
-  async performOperation(
+  async PerformOperation(
     operation: SetOperation,
     listIds: string[],
     allListIds?: string[]
@@ -485,6 +513,15 @@ export class ListSetOperationsService {
     } finally {
       this.loadingSubject.next(false);
     }
+  }
+
+  /** @deprecated Use {@link PerformOperation}. */
+  async performOperation(
+    operation: SetOperation,
+    listIds: string[],
+    allListIds?: string[]
+  ): Promise<SetOperationResult> {
+    return this.PerformOperation(operation, listIds, allListIds);
   }
 
   /**
@@ -740,14 +777,24 @@ export class ListSetOperationsService {
   /**
    * Get the color for a list by its index
    */
-  getColorForIndex(index: number): string {
+  GetColorForIndex(index: number): string {
     return vennColor(index);
+  }
+
+  /** @deprecated Use {@link GetColorForIndex}. */
+  getColorForIndex(index: number): string {
+    return this.GetColorForIndex(index);
   }
 
   /**
    * Clear the cache
    */
-  clearCache(): void {
+  ClearCache(): void {
     this.listDetailsCache.clear();
+  }
+
+  /** @deprecated Use {@link ClearCache}. */
+  clearCache(): void {
+    return this.ClearCache();
   }
 }

@@ -53,7 +53,7 @@ function environmentPrefix(driverClass: string): string {
  * `buildProviderConfig`, where a blob must not silently redefine a described, reviewable column
  * (`{"scopes": "..."}` in the blob would otherwise clobber the parsed `Scopes` column).
  */
-export function buildGenericEnvironmentOverlay(info: PublicAuthProviderInfo): Record<string, unknown> {
+export function BuildGenericEnvironmentOverlay(info: PublicAuthProviderInfo): Record<string, unknown> {
   const prefix = environmentPrefix(info.driverClass);
   const overlay: Record<string, unknown> = {};
 
@@ -84,6 +84,11 @@ export function buildGenericEnvironmentOverlay(info: PublicAuthProviderInfo): Re
   return overlay;
 }
 
+/** @deprecated Use {@link BuildGenericEnvironmentOverlay}. */
+export function buildGenericEnvironmentOverlay(info: PublicAuthProviderInfo): Record<string, unknown> {
+  return BuildGenericEnvironmentOverlay(info);
+}
+
 /**
  * Produces the environment record to hand a driver for a catalog-selected provider.
  *
@@ -96,7 +101,7 @@ export function buildGenericEnvironmentOverlay(info: PublicAuthProviderInfo): Re
  * @param info The provider selected from the catalog.
  * @param providerClass The resolved `MJAuthBase` subclass, consulted for a custom mapper.
  */
-export function mergeCatalogEnvironment(
+export function MergeCatalogEnvironment(
   environment: Record<string, unknown>,
   info: PublicAuthProviderInfo,
   providerClass?: CatalogEnvironmentMapper
@@ -104,7 +109,16 @@ export function mergeCatalogEnvironment(
   const overlay =
     typeof providerClass?.EnvironmentFromCatalog === 'function'
       ? providerClass.EnvironmentFromCatalog(info)
-      : buildGenericEnvironmentOverlay(info);
+      : BuildGenericEnvironmentOverlay(info);
 
   return { ...environment, ...overlay, AUTH_TYPE: info.driverClass };
+}
+
+/** @deprecated Use {@link MergeCatalogEnvironment}. */
+export function mergeCatalogEnvironment(
+  environment: Record<string, unknown>,
+  info: PublicAuthProviderInfo,
+  providerClass?: CatalogEnvironmentMapper
+): Record<string, unknown> {
+  return MergeCatalogEnvironment(environment, info, providerClass);
 }

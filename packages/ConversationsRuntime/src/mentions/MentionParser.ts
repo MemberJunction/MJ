@@ -42,6 +42,9 @@ export interface MentionParseResult {
     skillMentions: Mention[];
 }
 
+/** Characters `findAgent` strips from the end of a mention name. */
+const TRAILING_PUNCTUATION = '.,;!?';
+
 /**
  * Parses `@`-mentions out of conversation message text.
  *
@@ -52,7 +55,9 @@ export interface MentionParseResult {
  */
 export class MentionParser {
     /** Matches JSON-encoded mentions like `@{"type":"agent","id":"…","name":"…"}`. */
-    private readonly JSON_MENTION_REGEX = /@\{[^}]+\}/g;
+    // `[^{}]` rather than `[^}]`: a match can't start at one `@{` and run on through later ones, so a
+    // message with many unclosed `@{` is scanned in linear time instead of quadratic (CodeQL #228).
+    private readonly JSON_MENTION_REGEX = /@\{[^{}]+\}/g;
 
     /** Matches legacy text mentions — quoted names with spaces or unquoted names. */
     private readonly LEGACY_MENTION_REGEX = /@"([^"]+)"|@(\S+)/g;
@@ -79,7 +84,7 @@ export class MentionParser {
      * }
      * ```
      */
-    public parseMentions(
+    public ParseMentions(
         text: string,
         availableAgents: MJAIAgentEntityExtended[],
         availableUsers?: UserInfo[]
@@ -162,11 +167,20 @@ export class MentionParser {
         return { mentions, agentMention, userMentions, entityMentions, skillMentions };
     }
 
+    /** @deprecated Use {@link ParseMentions}. */
+    public parseMentions(
+        text: string,
+        availableAgents: MJAIAgentEntityExtended[],
+        availableUsers?: UserInfo[]
+    ): MentionParseResult {
+        return this.ParseMentions(text, availableAgents, availableUsers);
+    }
+
     /**
      * Validate every mention in `text`. Returns an array of mention names that could not be
      * resolved to a known agent or user.
      */
-    public validateMentions(
+    public ValidateMentions(
         text: string,
         availableAgents: MJAIAgentEntityExtended[],
         availableUsers?: UserInfo[]
@@ -222,10 +236,19 @@ export class MentionParser {
         return invalidMentions;
     }
 
+    /** @deprecated Use {@link ValidateMentions}. */
+    public validateMentions(
+        text: string,
+        availableAgents: MJAIAgentEntityExtended[],
+        availableUsers?: UserInfo[]
+    ): string[] {
+        return this.ValidateMentions(text, availableAgents, availableUsers);
+    }
+
     /**
      * Extract every raw mention name from `text` (no resolution against agents/users).
      */
-    public extractMentionNames(text: string): string[] {
+    public ExtractMentionNames(text: string): string[] {
         // Check JSON mentions first
         const jsonMatches = Array.from(text.matchAll(this.JSON_MENTION_REGEX));
         if (jsonMatches.length > 0) {
@@ -247,11 +270,16 @@ export class MentionParser {
         return matches.map((match) => match[1] || match[2]).filter(Boolean);
     }
 
+    /** @deprecated Use {@link ExtractMentionNames}. */
+    public extractMentionNames(text: string): string[] {
+        return this.ExtractMentionNames(text);
+    }
+
     /**
      * Rewrite mentions in `text` to a canonical `@Name` format using the proper casing
      * from `mentions`. Useful when normalizing user-typed mentions before storage or display.
      */
-    public formatMentions(text: string, mentions: Mention[]): string {
+    public FormatMentions(text: string, mentions: Mention[]): string {
         let formattedText = text;
 
         for (const mention of mentions) {
@@ -269,6 +297,11 @@ export class MentionParser {
         return formattedText;
     }
 
+    /** @deprecated Use {@link FormatMentions}. */
+    public formatMentions(text: string, mentions: Mention[]): string {
+        return this.FormatMentions(text, mentions);
+    }
+
     /**
      * Convert a message containing JSON-encoded mentions to plain text — `@{…}` blocks
      * become simple `@Name` strings. Delegates to
@@ -280,7 +313,7 @@ export class MentionParser {
      * // Output: '@Sage help me'
      * ```
      */
-    public toPlainText(
+    public ToPlainText(
         text: string,
         agents?: MJAIAgentEntityExtended[],
         users?: UserInfo[]
@@ -302,6 +335,15 @@ export class MentionParser {
         return ConversationUtility.ToPlainText(text, agentInfos, userInfos);
     }
 
+    /** @deprecated Use {@link ToPlainText}. */
+    public toPlainText(
+        text: string,
+        agents?: MJAIAgentEntityExtended[],
+        users?: UserInfo[]
+    ): string {
+        return this.ToPlainText(text, agents, users);
+    }
+
     /**
      * Find an agent by name (case-insensitive). Tries exact match first, then starts-with.
      * Explicitly does NOT do a contains-match — that would be ambiguous when multiple agent
@@ -311,8 +353,13 @@ export class MentionParser {
         name: string,
         agents: MJAIAgentEntityExtended[]
     ): MJAIAgentEntityExtended | null {
-        // Remove trailing punctuation and trim
-        const cleanName = name.replace(/[.,;!?]+$/, '').trim();
+        // Remove trailing punctuation and trim. A loop from the end, not /[.,;!?]+$/: that regex is
+        // quadratic on a long punctuation run that isn't at the end (CodeQL #231).
+        let end = name.length;
+        while (end > 0 && TRAILING_PUNCTUATION.includes(name[end - 1])) {
+            end--;
+        }
+        const cleanName = name.slice(0, end).trim();
         const lowerName = cleanName.toLowerCase();
 
         // Try exact match first

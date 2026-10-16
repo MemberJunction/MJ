@@ -1,0 +1,32 @@
+[
+  {
+    "fields": {
+      "Name": "LLM",
+      "Description": "Runs the pipeline's prompt on a chat model for each record, or once per distinct cache key. It can produce every output constraint (enum, lookup, numeric, money, date, boolean and free text) and every target (field, child record and tags), and it can capture reasoning. Every pipeline that names no type is an LLM pipeline.",
+      "DriverClass": "LLMFeaturePipelineDriver",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "91BD48FA-4BD7-4378-AF4F-0F61734627CB"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:50.670Z",
+      "checksum": "b78b3870b2fe3b0795b1a55ded9bdb9f983466b7d99c7c101ba1326ccb56793a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Decision",
+      "Description": "Runs the pipeline's prompt on a typed decision model for each record, answering Likelihood, Choice, and Score questions together in one call. Produces calibrated per-output confidence scores for field targets, without model reasoning.",
+      "DriverClass": "DecisionFeaturePipelineDriver",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "F67FFBFD-94AA-47CF-9867-C3BDF36F30F9"
+    },
+    "sync": {
+      "lastModified": "2026-10-02T21:42:50.682Z",
+      "checksum": "9041a9c69914bad3bf9a72b40988e5d6135377aa2fa4feecde9aa4e63b6661c1"
+    }
+  }
+]

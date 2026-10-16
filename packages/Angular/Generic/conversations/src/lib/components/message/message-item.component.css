@@ -39,6 +39,17 @@
   100% { box-shadow: none; }
 }
 
+/* Search hit: a highlight applied programmatically for 2 s after a search result opens */
+.message-item.search-hit-highlight {
+  animation: searchHitHighlight 2s ease-out forwards;
+}
+
+@keyframes searchHitHighlight {
+  0%   { background-color: color-mix(in srgb, var(--mj-brand-primary) 18%, transparent); }
+  70%  { background-color: color-mix(in srgb, var(--mj-brand-primary) 12%, transparent); }
+  100% { background-color: transparent; }
+}
+
 .message-item.in-progress {
   background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
   border-left: 3px solid var(--mj-brand-primary);
@@ -61,6 +72,17 @@
   max-height: 150px;
   overflow-y: auto;
   display: block;
+}
+
+/* A streamed reply is not a status line. While the bubble shows streamed reply text the item
+   adds `streaming` (IsStreaming, set by the list's in-place refresh): the cap above would box
+   the growing reply into a 150px scroller of its own, and the status weight would re-wrap every
+   line when the settled message drops it on completion, so the reply is set at its settled weight
+   from the first frame. */
+.message-item.in-progress.streaming .message-text {
+  max-height: none;
+  overflow-y: visible;
+  font-weight: inherit;
 }
 
 
@@ -329,46 +351,61 @@
 }
 
 /* Right-side cluster anchoring.
-   The first of these three siblings that actually renders absorbs the
+   The first of these siblings that actually renders absorbs the
    `margin-left: auto`, pushing the whole cluster right. Subsequent siblings
    then sit next to it (relying on the flex container's `gap`). This used to
    live only on .time-pill, which broke when timePillText returned null after
    agent completion — the gear icon would shift to the left. */
 .time-pill,
 .test-feedback-icon,
-.agent-run-icon,
-.message-edit-icon {
+.message-action-group,
+.agent-run-icon {
   margin-left: auto;
 }
 .time-pill ~ .test-feedback-icon,
+.time-pill ~ .message-action-group,
 .time-pill ~ .agent-run-icon,
+.test-feedback-icon ~ .message-action-group,
 .test-feedback-icon ~ .agent-run-icon,
-.message-edit-icon ~ .test-feedback-icon,
-.message-edit-icon ~ .agent-run-icon {
+.message-action-group ~ .agent-run-icon {
   margin-left: 8px;
 }
 
-/* Edit pencil on user messages — revealed on message hover to keep headers quiet */
-.message-edit-icon {
+/* Message actions: always visible at the right end of the header, in DOM order (no overlay),
+   with the same look as the gear (.agent-run-icon). */
+.message-action-group {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  color: var(--mj-text-muted);
-  cursor: pointer;
-  transition: all 0.2s ease;
-  opacity: 0;
+  gap: var(--mj-space-2);
 }
-.message-item:hover .message-edit-icon,
-.message-edit-icon:focus-visible {
-  opacity: 1;
+/* Labeled actions on the latest turn need more room between them than icons do */
+.message-action-group.labeled {
+  gap: var(--mj-space-4);
 }
-.message-edit-icon:hover {
+.message-header-action {
+  gap: var(--mj-space-2);
+  min-width: 20px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+}
+.message-header-action i {
+  font-size: 13px;
+}
+.message-header-action:focus-visible {
+  outline: none;
+  border-radius: var(--mj-radius-sm);
+  box-shadow: var(--mj-focus-ring);
+}
+/* Inherited rows fade to 70%; the stronger color keeps the header icons at 3:1 against the surface */
+.message-item.fork-rail-inherited .message-header-action:not(:hover),
+.message-item.fork-rail-inherited .agent-run-icon:not(:hover):not(.expanded) {
   color: var(--mj-text-secondary);
 }
-.message-edit-icon i.fa-pen {
-  font-size: 12px;
+.message-action-group .action-label-short {
+  display: none;
 }
 
 /* Time pill - unified styling for all AI message states */
@@ -387,10 +424,48 @@
   font-size: 10px;
 }
 
+/* Stop control beside the in-progress time pill — same pill geometry, error palette so it
+   reads as the one destructive control in the header. */
+.stop-run-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: inherit;
+  cursor: pointer;
+  background: var(--mj-status-error-bg);
+  color: var(--mj-status-error-text);
+  transition: all 0.2s ease;
+}
+
+.stop-run-pill i {
+  font-size: 10px;
+}
+
+.stop-run-pill:hover:not(:disabled) {
+  border-color: var(--mj-status-error);
+}
+
+.stop-run-pill:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
 /* Complete state - light blue (default) */
 .time-pill.complete {
   background: var(--mj-status-info-bg);
   color: var(--mj-status-info-text);
+}
+
+/* Stopped state - neutral: a stopped run is neither a success nor an error, and the error
+   palette belongs to the stalled state. Follows .complete so it wins on equal specificity. */
+.time-pill.stopped {
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-text-secondary);
 }
 
 /* In-progress state - brand color with subtle pulse */
@@ -403,6 +478,24 @@
 .time-pill.active {
   background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
   color: var(--mj-brand-primary);
+}
+
+/* Liveness states (MJ #4222) — the run may no longer be progressing, so the pill stops
+   presenting the elapsed time as healthy progress. These follow .in-progress/.active in the
+   stylesheet so they win on equal specificity. */
+.time-pill.checking {
+  background: var(--mj-status-warning-bg);
+  color: var(--mj-status-warning-text);
+}
+
+.time-pill.stalled {
+  background: var(--mj-status-error-bg);
+  color: var(--mj-status-error-text);
+}
+
+.time-pill .liveness-label {
+  font-weight: 400;
+  opacity: 0.85;
 }
 
 /* Failed state - red */
@@ -418,6 +511,25 @@
   50% {
     opacity: 0.85;
   }
+}
+
+/* A stopped reply: the kept-step line and the Continue control under the reply text */
+.stopped-line {
+  display: flex;
+  align-items: center;
+  gap: var(--mj-space-2);
+  margin-top: var(--mj-space-2);
+  font-size: var(--mj-text-xs);
+  color: var(--mj-text-secondary);
+}
+.stopped-line i {
+  font-size: 10px;
+  color: var(--mj-text-muted);
+}
+.stopped-actions {
+  display: flex;
+  gap: var(--mj-space-2);
+  margin-top: var(--mj-space-2);
 }
 
 /* Deprecated - keeping for backward compatibility but no longer used */
@@ -563,69 +675,6 @@
   line-height: 1.5;
 }
 
-.message-actions {
-  position: absolute;
-  bottom: 8px;
-  right: 8px;
-  display: flex;
-  gap: 2px;
-  opacity: 0;
-  transform: translateY(4px);
-  transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
-  background: var(--mj-bg-surface-card);
-  border: 1px solid var(--mj-border-default);
-  border-radius: 8px;
-  padding: 4px;
-  box-shadow: var(--mj-shadow-md);
-  pointer-events: none;
-}
-
-.message-item:hover .message-actions {
-  opacity: 1;
-  transform: translateY(0);
-  pointer-events: auto;
-}
-
-.message-action-btn {
-  padding: 6px 8px;
-  background: transparent;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  color: var(--mj-text-secondary);
-  font-size: 13px;
-  transition: all 150ms ease;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 32px;
-  height: 32px;
-}
-
-.message-action-btn:hover {
-  background-color: var(--mj-bg-surface-sunken);
-  color: var(--mj-text-primary);
-}
-
-.message-action-btn.danger:hover {
-  background-color: var(--mj-status-error-bg);
-  color: var(--mj-status-error);
-}
-
-.message-action-btn.retry-btn {
-  color: var(--mj-brand-primary);
-  background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
-  font-weight: 600;
-  gap: 6px;
-  padding: 6px 12px;
-  min-width: auto;
-}
-
-.message-action-btn.retry-btn:hover {
-  background-color: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
-  color: var(--mj-brand-primary-hover);
-}
-
 /* Thread indicator badge */
 .thread-indicator {
   display: inline-flex;
@@ -691,39 +740,21 @@
 
 .edit-actions {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
 }
 
-.edit-action-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
-  border: none;
-  border-radius: 6px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 150ms ease;
-}
-
-.edit-action-btn.save {
-  background-color: var(--mj-brand-primary);
-  color: var(--mj-text-inverse);
-}
-
-.edit-action-btn.save:hover {
-  background-color: var(--mj-brand-primary-hover);
-}
-
-.edit-action-btn.cancel {
-  background-color: var(--mj-bg-surface-sunken);
+/* What the save does, at the right end of the button row */
+.edit-note {
+  margin-left: auto;
+  font-size: var(--mj-text-xs);
   color: var(--mj-text-secondary);
 }
 
-.edit-action-btn.cancel:hover {
-  background-color: var(--mj-border-default);
-  color: var(--mj-text-primary);
+/* The answer "Save and resend" will replace dims while that edit is open */
+.message-item.pending-replace .message-body {
+  opacity: 0.6;
 }
 
 .edit-hint {
@@ -785,6 +816,18 @@
 .action-bar-btn i {
   font-size: 16px;
   line-height: 1;
+}
+
+/* A footer button with a text label (Regenerate) */
+.action-bar-btn.labeled {
+  gap: var(--mj-space-2);
+  min-width: 0;
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
+.action-bar-btn.labeled i {
+  font-size: 14px;
 }
 
 .action-bar-btn:hover {
@@ -861,11 +904,11 @@
    Left-margin is governed by the right-side cluster rules above so the gear
    stays right-anchored whether or not the time pill / test-feedback icon
    renders alongside it. */
-.agent-run-icon {
+.agent-run-icon,
+.message-header-action {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
   height: 20px;
   color: var(--mj-text-muted);
   cursor: pointer;
@@ -873,11 +916,16 @@
   user-select: none;
 }
 
+.agent-run-icon {
+  width: 20px;
+}
+
 .agent-run-icon i.fa-cog {
   font-size: 13px;
 }
 
-.agent-run-icon:hover {
+.agent-run-icon:hover,
+.message-header-action:hover {
   color: var(--mj-text-secondary);
 }
 
@@ -1267,15 +1315,13 @@
     padding: 2px 6px;
   }
 
-  .message-actions {
-    gap: 1px;
-    padding: 3px;
+  /* The latest turn's Fork from here shortens to "Fork" */
+  .message-action-group .action-label-long {
+    display: none;
   }
 
-  .message-action-btn {
-    min-width: 28px;
-    height: 28px;
-    font-size: 12px;
+  .message-action-group .action-label-short {
+    display: inline;
   }
 }
 
@@ -1697,4 +1743,126 @@
   border: 1px solid color-mix(in srgb, var(--mj-status-success) 25%, transparent);
   padding: 4px 10px;
   font-size: 12.5px;
+}
+
+/* Fork chips: one per fork placed under the message */
+.message-fork-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--mj-space-2);
+  margin-top: var(--mj-space-2);
+}
+.message-fork-chips > button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--mj-space-2);
+  max-width: 100%;
+  min-width: 0;
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-md);
+  background: var(--mj-bg-surface);
+  color: var(--mj-text-primary);
+  font-size: var(--mj-text-xs);
+}
+.message-fork-chips > button:hover {
+  background: var(--mj-bg-surface-hover);
+}
+.message-fork-chips .fork-chip-icon {
+  color: var(--mj-status-info);
+}
+.message-fork-chips > button[data-kind='Edit'] .fork-chip-icon {
+  color: var(--mj-status-warning);
+}
+.message-fork-chips > button[data-kind='Regenerate'] .fork-chip-icon {
+  color: var(--mj-brand-tertiary);
+}
+.fork-chip-avatars {
+  display: inline-flex;
+}
+.fork-chip-avatar {
+  width: 20px;
+  height: 20px;
+  margin-left: -6px;
+  border: 2px solid var(--mj-bg-surface);
+  border-radius: var(--mj-radius-full);
+  background: var(--mj-bg-surface-sunken);
+  color: var(--mj-text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 600;
+  overflow: hidden;
+}
+.fork-chip-avatar:first-child {
+  margin-left: 0;
+}
+.fork-chip-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.fork-chip-messages {
+  font-weight: 600;
+  color: var(--mj-text-link);
+}
+/* The name is the part of a chip that shrinks: a long name ends in an ellipsis inside a narrow column. */
+.fork-chip-name {
+  font-weight: 500;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fork-chip-time {
+  color: var(--mj-text-muted);
+}
+
+/* Fork view rails: inherited rows faded on a dashed rail, the fork's own rows on a solid rail.
+   The row's children fade, not the row, so the row's fade-in animation ends at the faded state. */
+.message-item.fork-rail-inherited {
+  border-left: 2px dashed var(--mj-border-strong);
+  padding-left: var(--mj-space-4);
+}
+.message-item.fork-rail-inherited > * {
+  opacity: 0.7;
+}
+.message-item.fork-rail-own {
+  border-left: 2px solid var(--mj-brand-primary);
+  padding-left: var(--mj-space-4);
+}
+
+/* Fork marker: a full-opacity divider under the last inherited row of a fork view, outside both rails */
+.fork-marker {
+  display: flex;
+  align-items: center;
+  gap: var(--mj-space-2);
+  padding: var(--mj-space-2) var(--mj-space-6);
+  font-size: var(--mj-text-xs);
+  color: var(--mj-text-secondary);
+}
+.fork-marker i {
+  color: var(--mj-status-info);
+}
+.fork-marker-line {
+  flex: 1;
+  height: 1px;
+  background: var(--mj-border-default);
+}
+/* The marker lines up with the row padding of narrow screens */
+@media (max-width: 768px) {
+  .fork-marker {
+    padding: var(--mj-space-2) var(--mj-space-3);
+  }
+}
+@media (max-width: 480px) {
+  .fork-marker {
+    padding: var(--mj-space-2);
+  }
+
+  /* The editor note wraps under the buttons */
+  .edit-note {
+    flex-basis: 100%;
+    margin-left: 0;
+  }
 }

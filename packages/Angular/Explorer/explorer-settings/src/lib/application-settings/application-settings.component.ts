@@ -86,10 +86,10 @@ export class ApplicationSettingsComponent extends BaseAngularComponent implement
       const userApps: MJUserApplicationEntity[] = userAppsResult.Success ? userAppsResult.Results : [];
 
       // Build app config items
-      this.AllApps = this.BuildAppConfigItems(systemApps, userApps);
+      this.AllApps = this.buildAppConfigItems(systemApps, userApps);
 
       // Separate into active (selected) and available (unselected)
-      this.RefreshAppLists();
+      this.refreshAppLists();
 
     } catch (error) {
       this.ErrorMessage = 'Failed to load app configuration. Please try again.';
@@ -105,7 +105,7 @@ export class ApplicationSettingsComponent extends BaseAngularComponent implement
   /**
    * Builds app config items by matching system apps with user's UserApplication records
    */
-  private BuildAppConfigItems(systemApps: BaseApplication[], userApps: MJUserApplicationEntity[]): AppConfigItem[] {
+  private buildAppConfigItems(systemApps: BaseApplication[], userApps: MJUserApplicationEntity[]): AppConfigItem[] {
     const items: AppConfigItem[] = [];
 
     for (const app of systemApps) {
@@ -126,7 +126,7 @@ export class ApplicationSettingsComponent extends BaseAngularComponent implement
   /**
    * Separates apps into active and available lists based on IsActive state
    */
-  private RefreshAppLists(): void {
+  private refreshAppLists(): void {
     this.ActiveApps = this.AllApps
       .filter(item => item.IsActive)
       .sort((a, b) => a.Sequence - b.Sequence);
@@ -211,7 +211,7 @@ export class ApplicationSettingsComponent extends BaseAngularComponent implement
     item.IsActive = true;
     item.Sequence = this.ActiveApps.length;
     item.IsDirty = true;
-    this.RefreshAppLists();
+    this.refreshAppLists();
   }
 
   /**
@@ -221,7 +221,7 @@ export class ApplicationSettingsComponent extends BaseAngularComponent implement
     item.IsActive = false;
     item.Sequence = 999;
     item.IsDirty = true;
-    this.RefreshAppLists();
+    this.refreshAppLists();
 
     // Resequence remaining active apps
     this.ActiveApps.forEach((activeItem, index) => {
@@ -302,10 +302,10 @@ export class ApplicationSettingsComponent extends BaseAngularComponent implement
 
         if (item.UserAppId) {
           // Update existing UserApplication record
-          await this.UpdateUserApplication(md, item);
+          await this.updateUserApplication(md, item);
         } else if (item.IsActive) {
           // Create new UserApplication record (only if active)
-          await this.CreateUserApplication(md, item);
+          await this.createUserApplication(md, item);
         }
       }
 
@@ -333,7 +333,7 @@ export class ApplicationSettingsComponent extends BaseAngularComponent implement
   /**
    * Updates an existing UserApplication record
    */
-  private async UpdateUserApplication(md: IMetadataProvider, item: AppConfigItem): Promise<void> {
+  private async updateUserApplication(md: IMetadataProvider, item: AppConfigItem): Promise<void> {
     const userApp = await md.GetEntityObject<MJUserApplicationEntity>('MJ: User Applications');
     await userApp.Load(item.UserAppId!);
 
@@ -352,7 +352,7 @@ export class ApplicationSettingsComponent extends BaseAngularComponent implement
   /**
    * Creates a new UserApplication record
    */
-  private async CreateUserApplication(md: IMetadataProvider, item: AppConfigItem): Promise<void> {
+  private async createUserApplication(md: IMetadataProvider, item: AppConfigItem): Promise<void> {
     const userApp = await md.GetEntityObject<MJUserApplicationEntity>('MJ: User Applications');
     userApp.NewRecord();
 

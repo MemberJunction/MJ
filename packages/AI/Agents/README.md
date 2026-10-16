@@ -138,17 +138,35 @@ Abstract base that all agent types extend. Defines the `DetermineNextStep()` int
 
 Conversational agent that runs in a loop: prompt -> decide -> act -> repeat. Best for interactive, chat-based agents. The LLM decides the next step at each iteration by producing a structured JSON response.
 
+##### Decision models
+
+An agent can ask a fast decision model typed questions in six places on its own. One master switch governs all of them: the Loop prompt param **`decisionsEnabled`**, `false` by default. Unless it is `true`, the agent never asks a decision model on its own, whatever the other settings say: their docs stay out of the prompt and the runtime refuses the call. With it `true`, each use still needs its own setting, and each of those is off by default too:
+
+| Use | Its own setting |
+|---|---|
+| Inline `decisions` on a turn | `includeDecisionsDocs: true` |
+| `finishIf` gates on an Actions or Sub-Agent step | `finishIfMode: 'shadow'` or `'on'` |
+| Decision discovery (suggest an agent before the first prompt) | `decisionDiscovery: true` |
+| Payload change check | `payloadFeedbackCheck: true` |
+| Catalog narrowing | `maxActionsInPrompt` / `maxSubAgentsInPrompt` > 0 |
+| Memory Manager note gate | run `data.enableDecisionGate: true` |
+
+Set it in an agent's `AgentTypePromptParams` (`{"decisionsEnabled": true, "finishIfMode": "shadow"}`) or for one run in `data.__agentTypePromptParams`. Uses someone placed explicitly do not read it: a Flow or task-graph Decision step, the Run Decision action, and other direct callers of `AgentDecisionService`. See the [Decision Models guide](./docs/loop-agent-decisions.md).
+
 #### FlowAgentType
 
 Step-based agent that follows a predefined flow graph — steps with explicit conditional paths between them. Best for deterministic workflows where the execution path is known in advance.
 
-**A Flow agent no longer walks its own graph.** `DetermineInitialStep` compiles the agent's `AIAgentStep` + `AIAgentStepPath` rows into a `TaskGraphSpec` and returns a `Tasks` step; `BaseAgent.executeTasksStep` submits it and detaches. From that point the workflow is `Task` rows owned by the durable dispatcher in [`@memberjunction/task-graph`](../../TaskGraph/README.md), with the same claiming, conditions, skip cascade, retry and failure semantics as any other graph — one traversal engine, one set of rules, one place a bug can be fixed.
+**A top-level Flow agent no longer walks its own graph.** `DetermineInitialStep` compiles the agent's `AIAgentStep` + `AIAgentStepPath` rows into a `TaskGraphSpec` and returns a `Tasks` step; `BaseAgent.executeTasksStep` submits it and detaches. From that point the workflow is `Task` rows owned by the durable dispatcher in [`@memberjunction/task-graph`](../../TaskGraph/README.md), with the same claiming, conditions, skip cascade, retry and failure semantics as any other graph — one traversal engine, one set of rules, one place a bug can be fixed.
 
-Three consequences worth knowing before you debug one:
+Consequences worth knowing before you debug one:
 
-- **The run ends at submission.** It returns a handle ("Started — 4 tasks running"), not a result. Per-step detail lives in `Task` rows, not in `AIAgentRunStep`, and cost arrives afterwards via `TotalCostRollup` (see the guide).
-- **The in-run walker is retained but refused.** It stays compiled as the reference implementation the compiler is checked against, and throws at its single choke point if anything reaches it — so a workflow that runs at all provably ran on the dispatcher.
-- **A `Sub-Agent` node starts a new root `AIAgentRun`**, linked from `Task.AgentRunID` rather than nested under the submitting run.
+- **A dispatched run ends at submission.** It returns a handle ("Started — 4 tasks running"), not a result, and parks as `Paused` until the dispatcher settles the graph. Per-step detail lives in `Task` rows, not in `AIAgentRunStep`, and cost arrives afterwards via `TotalCostRollup` (see the guide).
+- **A run that needs the result walks the flow in-process.** A sub-agent run (one with `parentRun`) does this automatically, and a top-level caller opts in with `agentTypeParams.executionMode: 'inRun'` (`FlowAgentExecuteParams`). The run returns the flow's final payload, as in 5.x, and `startAtStep` works. A dispatched run that reaches the walker by mistake is refused at its choke point.
+- **The mode is on the run.** A completed `Decision` step named "Workflow runs in this run" or "Workflow runs on the task-graph dispatcher" records which engine ran it and why.
+- **A dispatched `Sub-Agent` node starts its own `AIAgentRun`**, linked from `Task.AgentRunID` and parented to the submitting run. If that sub-agent is itself a Flow agent, it runs in-process and returns its result to the task.
+- **A `Decision` step routes the same way in both modes.** Paths read its answers only through `decisions.<key>.<question>`; its `stepResult.result` is the payload, which carries no answers. A flow with a Decision step is compiled and validated before its first step in-run too, so an incomplete Choice fork, a decision read before it can answer, or one read through the payload is refused in both modes. An answer below its `minConfidence` stops an in-run flow (the dispatcher holds the fork, and `Retry` on the step asks again). A failed decision call is a failed step: the paths that read its answers are passed over, and a recovery path such as `stepResult.Success === false` is taken whatever its rank.
+- **Answers live in the run, not the payload.** A run started with `startAtStep` past a Decision step has no answers from it, so every path that reads that decision stops the run with the reason. Start at or before the Decision step to route on it.
 
 See the **[Workflows and Task Graphs Guide](../../../guides/WORKFLOW_AND_TASK_GRAPH_GUIDE.md)** for the full model: node kinds, exclusive groups, payload mappings, loops, failure semantics, observability, and a worked configuration example.
 
@@ -222,6 +240,12 @@ Key pieces in this package:
 - **`MediaChannelServer`** (`src/realtime/media-channel-server.ts`, key `'MediaChannelServer'`) — the server channel plugin for the **Media** surface. Like the Whiteboard it canonicalizes the channel's persisted media state, and additionally resolves the agent's **media kit** at session start: it implements `IRealtimeChannelServerDataAware` to receive the session `contextUser`+`provider`, reads a per-session `mediaCollectionID` override out of `RealtimeChannelServerContext.AgentSessionConfig` (the persisted `AIAgentSession.Config_`), and feeds the model a manifest via `SendContextNote`. The kit-resolution logic is the pure, unit-tested `agent-media-library.ts` (`buildAgentMediaContextNote` / `resolveAgentMediaManifest` / `formatAgentMediaManifest`); precedence is `runtime override > AIAgent.DefaultMediaCollectionID > none`. The agent then surfaces items with the existing `Media_ShowMedia` client tool — no new client tool. `LoadMediaChannelServer()` is invoked from MJServer's `agentSessions` module. See the [Real-Time Co-Agents Guide](../../../guides/REALTIME_CO_AGENTS_GUIDE.md).
 - **`AgentMemoryContextBuilder`** (`src/agent-memory-context-builder.ts`) — the memory/RAG injection orchestration extracted out of `BaseAgent` so the co-agent assembles the **same** notes/examples/context a loop agent does, with no duplicated logic.
 
+- **`realtime-channel-policy.ts`** (`BuildSessionChannelPolicy`) — the **server half of channel scoping** for client-direct sessions, pure and unit-tested. At mint the browser reports its channel candidates (`channelCandidatesJson`); `RealtimeClientSessionService` matches each to its `MJ: AI Agent Channels` row *from the server's own registry* (the client's view is never trusted), folds the cascade's `realtime.channels` section (agent layers plus `Application.AgentSettings.Realtime.Channels`) through `ResolveRealtimeChannelScope`, and returns the resolved `RealtimeSessionClientPolicy` (`PrepareClientSession` → `ClientPolicy`; the resolver returns it as `ClientPolicyJson` and persists the in-scope channel keys on the session). The tools the model is told about are narrowed to match: a vetoed channel's native tools never reach the provider, an included `'opt-in'` channel's are added by name, an `'on-demand'` channel declares none (it is opened through `ContextTool`), and tools no candidate owns (the host's own) pass through. Server plugins start before the scope is known, so `RealtimeChannelServerHost.PruneSessionChannels` drops the excluded channels' server halves afterwards. Absent candidates (a client that predates scoping, or a host that mints through its own proxy) ⇒ tools used exactly as declared and no policy.
+- **`ClientOnlyChannelServer`** (`src/realtime/client-only-channel-server.ts`, key `'ClientOnlyChannelServer'`) — the generic server half for any channel that runs entirely in the browser. `MJ: AI Agent Channels.ServerPluginClass` is `NOT NULL`, so a client-only channel (an Open App's form or game channel) sets its row's `ServerPluginClass` to this key instead of writing an empty plugin. It takes its channel name from the registry row it was resolved for (`BindChannelName`, called by `RealtimeChannelServerHost`), contributes no server tools and does not interpret or rewrite saves. It does not decide scope (resolved before any plugin exists) and cannot stop a save (the host persists whatever the client submits when a plugin returns `null`), so persistence is controlled by the client plugin's `SerializeState()`. `LoadClientOnlyChannelServer()` is invoked from MJServer's `agentSessions` module.
+- **`InteractiveComponentChannelServer`** (`src/realtime/interactive-component-channel-server.ts`, key `'InteractiveComponentChannelServer'`) — the deliberately thin server half of the **Interactive Component** channel (`MJ: AI Agent Channels` row `InteractiveComponent`), a `ClientOnlyChannelServer` subclass that keeps its existing registry key: no server tools, and the client plugin saves no state of record, because the channel's actions are derived from the open component's spec and run in the browser. `LoadInteractiveComponentChannelServer()` is invoked from MJServer's `agentSessions` module.
+- **Channel exposure and zero data retention.** `BuildSessionChannelPolicy` also resolves each channel's **exposure** (`min(channel ceiling, agent cap, zero-data-retention ceiling)`; the user's own choice is applied by the browser). The agent cap is `realtime.channels.config.<Key>.maxExposure`; `requireZeroDataRetentionFor: ['state' | 'pixels']` (in the realtime configuration cascade and in `Application.AgentSettings.Realtime.Channels.RequireZeroDataRetentionFor`) lowers exposure when the session model's effective configuration (`AIEngine.GetEffectiveModelConfiguration`) does not declare `Privacy.ZeroDataRetention: true`; a failed model lookup fails closed. The resolved exposure and the reasons for any downgrade ride back in `ClientPolicyJson`. Also in the realtime session tuning section: `session.unverifiedMaxSeconds` / `session.verifiedMaxSeconds` (positive integers, carried through the cascade for the session-deadline logic; never forwarded to the provider driver).
+- **App client tools and the unified resolver.** `Application.AgentSettings.ClientTools` is now actually read by the realtime path: resolved against the tool-definition catalog and layered, through `ResolveClientTools` (`override → session → app → static`), beneath the live surface's manifest in the app-context snapshot the companion prompt renders. The agent's static `MJ: AI Agent Client Tools` junction tools ride the returned policy (so the browser can describe them) but are deliberately not added to the voice prompt — voice prompts are token-sensitive and a tool with no browser handler is noise. The app's `AgentSettings` column is parsed with `ParseAgentSettings` rather than the generated accessor.
+
 Delegated runs link to the co-agent's run via `ParentRunID` and share the session's `AgentSessionID`, so the whole episode — session, co-agent run (with its prompt run + Timeline step), delegated runs, transcript (`ConversationDetail` rows), channel state, usage telemetry (checkpointed server-side, or relayed from the browser via `RelayRealtimeUsage`) — groups under one session record with full standard observability.
 
 The browser-side driver layer lives in [`@memberjunction/ai-realtime-client`](../RealtimeClient/README.md); the model primitive (`BaseRealtimeModel` / `IRealtimeSession`) lives in `@memberjunction/ai`; the Angular UX (call overlay, interactive channels, the live whiteboard) lives in `@memberjunction/ng-conversations`. **The flagship guide — concept, triple-registry plugin architecture, topologies, session lifecycle, channels, narration, security — is [guides/REALTIME_CO_AGENTS_GUIDE.md](../../../guides/REALTIME_CO_AGENTS_GUIDE.md).**
@@ -287,7 +311,7 @@ Handles persistent memory operations for agents:
 - Consolidation, decay, and protection-tier maintenance over the agent note pool (see below)
 - **Hardening pass** over agent-authored provisional notes — runs unconditionally at the start of every cycle (before the consolidation-gated phases): LLM-dedupes each `Status='Provisional'` note against hardened notes (duplicates archived with `ConsolidatedIntoNoteID` lineage), and hardens survivors to `Status='Active'` with `ExpiresAt=NULL` so they join importance scoring, consolidation, contradiction detection, and decay in the same cycle
 
-**Session tuning & resilience (v5.49)**: the effective config's `realtime.session` section (`effortLevel` — MJ-normalized, `parallelToolCalls`, `mcpTools`, `inputTranscriptionModel`) flows into the driver Config bag on both topologies via `GetSessionTuningSettings`. The session runner observes the chained cancellation signal (`AbortSignal` dep), performs bounded transport reconnects on fatal drops (`MaxTransportReconnects`, default 1), and accumulates per-modality usage detail (`RealtimeUsage.Input/OutputTokenDetails`) that the checkpoint persists for multi-channel cost attribution. See `guides/REALTIME_CO_AGENTS_GUIDE.md` § "Session tuning, cost attribution & resilience".
+**Session tuning & resilience (v5.49)**: the effective config's `realtime.session` section (`effortLevel` — MJ-normalized, `parallelToolCalls`, `mcpTools`, `inputTranscriptionModel`, `transcriptionLanguages`) flows into the driver Config bag on both topologies via `GetSessionTuningSettings`. The session runner observes the chained cancellation signal (`AbortSignal` dep), performs bounded transport reconnects on fatal drops (`MaxTransportReconnects`, default 1), and accumulates per-modality usage detail (`RealtimeUsage.Input/OutputTokenDetails`) that the checkpoint persists for multi-channel cost attribution. See `guides/REALTIME_CO_AGENTS_GUIDE.md` § "Session tuning, cost attribution & resilience".
 
 #### Consolidation Pipeline
 
@@ -385,6 +409,21 @@ const result = await runner.ExecuteAgent({
 
 See [`docs/AGENT_MEMORY_SCOPING.md`](./docs/AGENT_MEMORY_SCOPING.md) for the full model — built-in scopes, primary/secondary semantics, inheritance modes, and how scope propagates through sub-agent invocations.
 
+### For an Audience (Shared Conversations)
+
+When an agent answers in a conversation several people share, set `Audience` so the run shows only what the asker **and** every other participant may see. Set it from the host's own participant list, server-side; it is never read from `data`.
+
+```typescript
+const result = await new AgentRunner().RunAgent({
+    agent,
+    conversationMessages: messages,
+    contextUser: asker,
+    Audience: { Mode: 'Intersection', UserIDs: otherParticipantIDs }   // MJ: Users IDs
+});
+```
+
+The run fails before any prompt if the audience is malformed or names an ID no user has (the server's `UserCache` is refreshed once first). Under an audience that adds a reader besides the caller: pre-execution RAG checks every reader's scope permission and searches with `SearchParams.Audience`; only shared notes and examples are injected; data-source preloading and the previous turn's tool results are skipped; task graphs, client tools, the caller's app context, memory writes and realtime sessions are withheld or refused; no out-of-conversation request (`MJ: AI Agent Requests`) is raised, so the run is never resumed without the audience; and every action call carries `RunActionParams.Audience`, which the action engine refuses (`AUDIENCE_UNSUPPORTED`, locked out for the run under its own `'audience'` breaker reason) for any action that does not declare `SupportsAudience` — today only Search and Scoped Search do. Sub-agents inherit the audience. Limits (no persisted audience to resume with; per-reader scope expansion; no `Union` mode) and the full table are in [Searching for an audience](../../../guides/SEARCH_SCOPES_AND_RAG_GUIDE.md#searching-for-an-audience).
+
 ### With Message Lifecycle Management
 
 ```typescript
@@ -459,6 +498,17 @@ The Memory Manager runs on a schedule (every ~15 minutes). `AIEngineBase` alread
 * **Single source of truth for status**: note status filtering reuses `IsInjectableNoteStatus()` from `@memberjunction/core-entities` (Active + Provisional), the same predicate the read-path injection/scoping queries use, so the maintenance set can never drift from the injectable set.
 * **Intentional exceptions** (still hit the DB): the **hardening pass** loads `entity_object` provisional notes *specifically to mutate them*, so it reads fresh, owned entities; the resolved-source-chain loader keeps a targeted `RunView` **only** for note IDs the cache misses; and `MJ: AI Agent Runs` reads stay as queries because runs are transactional and not cached by `AIEngineBase`.
 
+### 6. Trailing Runtime State (prompt-cache layout)
+The Loop agent's volatile per-iteration state — current date/time, Scratchpad State and Payload — is never rendered in the system prompt. `preparePromptParams` builds it into a `<mj-runtime-state>` fragment (`RuntimeStateFragmentBuilder`) appended as the **final user message** of each request, and the system prompt carries a static `## Runtime State` pointer. Provider prompt caching is a prefix match over `tools → system → messages`, so a byte-stable system prompt lets the entire history cache incrementally: measured on Sage, 0% → 78–90% cached on Anthropic and OpenAI, 21% → 91% on xAI, 30–65% → 66–96% on Gemini and Cerebras, with prompt cost per million tokens down 37–80%.
+
+* **Per-provider retention** — providers with a byte-prefix cache (OpenAI, xAI) need prior fragments *retained* and the new one appended; block-cache providers (Anthropic, Gemini, Cerebras) get the previous fragment *replaced*. The choice is the model catalog's `ModelConfiguration.LLM.PrefixPromptCache` flag, set under the vendor row's `Configuration.ModelDefaults` and inherited by every model it serves unless a model-vendor row overrides it (`BaseAgent.resolvePrefixPromptCache` → `AIEngine.GetEffectiveModelConfiguration`, cascade Model Types < Models < Vendors' `Configuration.ModelDefaults` < Model Vendors), decided once per run and frozen. No provider names live in code.
+* **Escaping at send time** — the fragment tag literals are escaped in every non-system message of the outgoing *copy* of the history, so no tool result, user turn or tool-call argument can pose as framework state; the stored history is never mutated.
+* **Delivery gate** — the fragment is only sent when the system prompt template carries the pointer; a template still embedding the old blocks (unsynced database) or one with neither (Flow, custom prompts) gets none. Markers: `VOLATILE_TEMPLATE_MARKERS`, overridable via the protected `volatileTemplateMarkers` getter.
+* **Specialization placement** — `specializationPlacement: auto` relocates a child prompt into the fragment (`<mj-agent-specialization>`) only when its unrendered template references a volatile placeholder, handing the runner the pre-rendered text via `AIPromptParams.PreRenderedChildTemplates`.
+* **Anthropic breakpoint** — `BaseLLM.splitTrailingVolatileState` lets `AnthropicLLM` place its `cache_control` breakpoint on the last real history message and send the fragment uncached.
+
+All placeholder names, tag literals and headings are in [`src/constants.ts`](./src/constants.ts). Full mechanism: [Agent Prompt Caching Guide](../../../guides/AGENT_PROMPT_CACHING_GUIDE.md); numbers: [Performance and Cost Briefing](./docs/PROMPT_CACHE_PERFORMANCE_BRIEFING.md).
+
 ## Cross-Turn Conversation Compaction & History Retrieval
 
 Long conversations no longer grow the agent's context without bound. Two cooperating layers (design: [`plans/agent-conversation-compaction.md`](../../../plans/agent-conversation-compaction.md)) activate **only when a run carries `ExecuteAgentParams.conversationId`** — programmatic runs, sub-agents, and tests without a conversation are untouched:
@@ -471,6 +521,18 @@ Long conversations no longer grow the agent's context without bound. Two coopera
 
 **Prior-turn tool-result carry-forward.** Because each turn rebuilds its messages from the conversation window, a tool result paged in on turn N would be gone on turn N+1. `injectPriorTurnToolResults` re-injects the same agent's immediately previous settled root run's successful read-tool results (eligibility decided by the `toolFamily` stamped in each Tool step's `OutputData`) as one transient, compactable message — one-turn memory by construction, scoped by `AgentID` so parallel agents in one conversation never inherit each other's results. The per-turn prior-run lookup is served by `PriorTurnToolResultCache` (a `BaseSingleton` wrapping `MJLruCache`, keyed by conversation + agent): the settling root run publishes its own Tool-step projections from memory at finalize — an empty array for tool-free runs, so the common case costs **zero DB queries per turn** — and the loader falls back to the original RunView pair only on a cache miss. Both loaders share one entity-typed predicate (`BaseAgent.carryForwardPredicate` + `settledRunStatuses`) so the SQL filter and the in-memory projection cannot drift; freshness semantics and the multi-node staleness bound are documented on the cache class.
 
+## Action Failure Circuit Breaker
+
+`executeActionsStep` now reports an action's real outcome (`ActionResult.Success`, result code, message) — previously a failed action was reported to the model as a success and agents retried unconfigured tools until the run timed out. On top of that, `ExecuteSingleAction` applies a run-scoped breaker before dispatching, checked fatal → identical-arguments → budget:
+
+| Rule | Trigger | Effect |
+|---|---|---|
+| Fatal lockout | One credential / service-configuration failure (`isFatalActionError`; parameter-level "not configured" messages are deliberately non-fatal) | Action disabled for the run, any arguments |
+| Identical arguments | `IDENTICAL_FAILURE_THRESHOLD` (2) failures with the same normalized arguments | Calls with those arguments blocked; other arguments dispatch |
+| Attempt budget | `ACTION_FAILURE_BUDGET` (5) consecutive failures, any arguments | Action disabled for the run |
+
+A success clears both counters. A blocked call returns a `CircuitBreakerActionResult` (carrying `Reason`) in ~0 ms without reaching the action engine, and the model receives a `[CRITICAL/ACTION_UNAVAILABLE | REPEATED_IDENTICAL_CALL | ATTEMPTS_EXHAUSTED]` directive as a user message (a `[WARNING/ACTION_FAILURE]` with an "attempt N of 5" counter otherwise). Argument identity is `normalizeActionParams` (three protected layers: outer → per-entry → recursive value). The pipeline registry and the ForEach / While operators pass `{ skipCircuitBreaker: true }` and bypass every rule, leaving the history untouched. Evidence and thresholds: [Performance and Cost Briefing §4](./docs/PROMPT_CACHE_PERFORMANCE_BRIEFING.md).
+
 ## Documentation
 
 Detailed guides are available in the [`docs/`](./docs/) directory:
@@ -478,6 +540,9 @@ Detailed guides are available in the [`docs/`](./docs/) directory:
 | Guide | Description |
 |---|---|
 | [Actions Guide](./docs/actions-guide.md) | Action discovery, execution, result lifecycle, expiration/compaction, context recovery |
+| [Decision Models](./docs/loop-agent-decisions.md) | The `decisionsEnabled` master switch, then each automatic use: inline decisions, finishIf gates, discovery, the payload change check, catalog narrowing, the Memory Manager note gate |
+| [Prompt-Cache Performance and Cost Briefing](./docs/PROMPT_CACHE_PERFORMANCE_BRIEFING.md) | Before/after cached share and cost per model and topology for the trailing runtime-state layout; the action circuit breaker's before/after; what to re-measure |
+| [Agent Prompt Caching Guide](../../../guides/AGENT_PROMPT_CACHING_GUIDE.md) | Repo-level guide: the trailing-state layout, the `PrefixPromptCache` flag from the model catalog, the Anthropic breakpoint seam, specialization placement, the circuit breaker |
 | [Client Tools Guide](./docs/CLIENT_TOOLS_GUIDE.md) | Browser-side tool invocation, runtime decoration, timeout config, prompt design, security |
 | [Sub-Agents Guide](./docs/sub-agents-guide.md) | Child agents, related agents, payload flow, context propagation, loops |
 | [Human-in-the-Loop](./docs/HUMAN_IN_THE_LOOP.md) | Feedback requests, assignment strategies, request lifecycle |

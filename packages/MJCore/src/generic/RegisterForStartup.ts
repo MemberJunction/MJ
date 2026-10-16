@@ -3,6 +3,7 @@ import { UserInfo } from "./securityInfo";
 import { IMetadataProvider } from "./interfaces";
 import { Metadata } from "./metadata";
 import { LocalCacheManager } from "./localCacheManager";
+import type { LocalCacheManagerConfig } from "./localCacheManager";
 import { LogStatus, LogStatusEx } from "./logging";
 
 /**
@@ -197,7 +198,26 @@ export interface StartupOptions {
      * Not surfaced in user-facing configuration.
      */
     engineFilter?: (reg: StartupRegistration) => boolean;
+
+    /**
+     * Settings for `LocalCacheManager`. Applied whether or not startup is the first to initialize
+     * it — a database provider initializes the manager from inside its own `Config()`, so these
+     * settings usually arrive second and are merged on top (see `LocalCacheManager.Initialize`).
+     */
+    cacheManagerConfig?: Partial<LocalCacheManagerConfig>;
+
+    /**
+     * On a shared cache, servers starting at the same time load their engines one after another
+     * so only the first reads the database; the others find the cache warm (plan: cold-start
+     * herd). This is how long one server may hold the turn, in milliseconds, and how long the
+     * others wait for it. 0 turns the coordination off. Default: 30000.
+     */
+    warmupLeaseMs?: number;
 }
+
+/** Name of the lease that orders engine warm-up across servers sharing a cache. */
+export const STARTUP_WARMUP_LEASE = 'startup-warmup';
+const DEFAULT_WARMUP_LEASE_MS = 30000;
 
 /**
  * Where the resolved startup mode came from, highest precedence first:
@@ -430,8 +450,8 @@ export class StartupManager extends BaseSingleton<StartupManager> {
      */
     public GetRegistrations(): StartupRegistration[] {
         return [...this._registrations].sort((a, b) => {
-            const priorityA = this.ResolvePriority(a.options);
-            const priorityB = this.ResolvePriority(b.options);
+            const priorityA = this.resolvePriority(a.options);
+            const priorityB = this.resolvePriority(b.options);
             return priorityA - priorityB;
         });
     }
@@ -486,7 +506,7 @@ export class StartupManager extends BaseSingleton<StartupManager> {
         }
 
         // Start loading and store the promise so other callers can await it
-        this._loadPromise = this.ExecuteLoad(contextUser, provider, options);
+        this._loadPromise = this.executeLoad(contextUser, provider, options);
 
         try {
             this._lastResult = await this._loadPromise;
@@ -500,13 +520,13 @@ export class StartupManager extends BaseSingleton<StartupManager> {
     /**
      * Internal method that performs the actual startup loading work.
      */
-    private async ExecuteLoad(contextUser?: UserInfo, provider?: IMetadataProvider, options?: StartupOptions): Promise<LoadAllResult> {
+    private async executeLoad(contextUser?: UserInfo, provider?: IMetadataProvider, options?: StartupOptions): Promise<LoadAllResult> {
         // first, init the LocalCacheManager and await its completion — this is
         // provider infrastructure and runs in BOTH startup modes
         // Get the storage provider from the metadata provider (uses IndexedDB)
         const cacheStart = Date.now();
         const storageProvider = (provider ?? Metadata.Provider).LocalStorageProvider;
-        await LocalCacheManager.Instance.Initialize(storageProvider);
+        await LocalCacheManager.Instance.Initialize(storageProvider, options?.cacheManagerConfig);
         LogStatusEx({ message: `LocalCacheManager initialized in ${Date.now() - cacheStart}ms`, verboseOnly: true });
 
 
@@ -516,7 +536,7 @@ export class StartupManager extends BaseSingleton<StartupManager> {
 
         const mode: StartupMode = options?.mode ?? 'full';
         if (mode === 'task') {
-            return this.CompleteTaskModeLoad(allRegistrations, startTime);
+            return this.completeTaskModeLoad(allRegistrations, startTime);
         }
 
         const activeRegistrations = options?.engineFilter
@@ -531,62 +551,33 @@ export class StartupManager extends BaseSingleton<StartupManager> {
         const syncRegistrations = activeRegistrations.filter(r => !r.options.deferred);
         const deferredRegistrations = activeRegistrations.filter(r => r.options.deferred);
 
-        const groups = this.GroupByPriority(syncRegistrations);
-        const results: LoadResult[] = [];
-
-        for (const group of groups) {
-            const groupResults = await Promise.all(
-                group.map(async (reg): Promise<LoadResult> => {
-                    const loadStart = Date.now();
-                    try {
-                        const instance = reg.getInstance();
-                        await instance.HandleStartup(contextUser, provider);
-
-                        reg.loadedAt = new Date();
-                        reg.loadDurationMs = Date.now() - loadStart;
-
-                        return {
-                            className: reg.constructor.name,
-                            success: true,
-                            durationMs: reg.loadDurationMs
-                        };
-                    } catch (error) {
-                        const durationMs = Date.now() - loadStart;
-                        return {
-                            className: reg.constructor.name,
-                            success: false,
-                            error: error as Error,
-                            severity: reg.options.severity || 'error',
-                            durationMs
-                        };
-                    }
-                })
-            );
-
-            results.push(...groupResults);
-
-            // Check for fatal errors - stop immediately
-            const fatal = groupResults.find(r => !r.success && r.severity === 'fatal');
-            if (fatal) {
-                return {
-                    success: false,
-                    results,
-                    totalDurationMs: Date.now() - startTime,
-                    fatalError: fatal.error
-                };
+        const groups = this.groupByPriority(syncRegistrations);
+        const warmupLeaseMs = options?.warmupLeaseMs ?? DEFAULT_WARMUP_LEASE_MS;
+        const warmup = await this.takeWarmupTurn(warmupLeaseMs, syncRegistrations.length);
+        let loaded: { results: LoadResult[]; fatal?: LoadResult };
+        // The lease's TTL doubles as the maximum another server waits for it, so a holder that
+        // takes longer than the TTL to load its engines has already let the others through — the
+        // herd re-forms against a cold database, which is what the lease exists to prevent. Renew
+        // it while the load runs.
+        const renewal = warmup ? this.startWarmupRenewal(warmupLeaseMs) : null;
+        try {
+            loaded = await this.loadSyncGroups(groups, contextUser, provider);
+        } finally {
+            if (renewal) {
+                clearInterval(renewal);
             }
-
-            // Log non-fatal errors
-            for (const result of groupResults) {
-                if (!result.success) {
-                    if (result.severity === 'error') {
-                        console.error(`[StartupManager] Error loading ${result.className}:`, result.error);
-                    } else if (result.severity === 'warn') {
-                        console.warn(`[StartupManager] Warning loading ${result.className}:`, result.error);
-                    }
-                    // 'silent' - do nothing
-                }
+            if (warmup) {
+                await LocalCacheManager.Instance.ReleaseSharedLease(STARTUP_WARMUP_LEASE);
             }
+        }
+        const results = loaded.results;
+        if (loaded.fatal) {
+            return {
+                success: false,
+                results,
+                totalDurationMs: Date.now() - startTime,
+                fatalError: loaded.fatal.error
+            };
         }
 
         this._loadCompleted = true;
@@ -604,7 +595,7 @@ export class StartupManager extends BaseSingleton<StartupManager> {
         // its own .EnsureLoaded() call which dedupes against the in-flight load
         // (BaseEngine._loadingSubject handles concurrent callers).
         if (deferredRegistrations.length > 0) {
-            this.KickOffDeferredEngines(deferredRegistrations, contextUser, provider);
+            this.kickOffDeferredEngines(deferredRegistrations, contextUser, provider);
         }
 
         return {
@@ -615,12 +606,111 @@ export class StartupManager extends BaseSingleton<StartupManager> {
     }
 
     /**
+     * Loads the synchronous engines, priority group by priority group.
+     * @returns Every result so far, and the first fatal failure (loading stops there).
+     */
+    private async loadSyncGroups(groups: StartupRegistration[][], contextUser?: UserInfo, provider?: IMetadataProvider): Promise<{ results: LoadResult[]; fatal?: LoadResult }> {
+        const results: LoadResult[] = [];
+        for (const group of groups) {
+            const groupResults = await Promise.all(group.map(reg => this.loadRegistration(reg, contextUser, provider)));
+            results.push(...groupResults);
+            const fatal = groupResults.find(r => !r.success && r.severity === 'fatal');
+            if (fatal) {
+                return { results, fatal };
+            }
+            this.logLoadFailures(groupResults);
+        }
+        return { results };
+    }
+
+    /** Loads one registered engine and reports how it went. Never throws. */
+    private async loadRegistration(reg: StartupRegistration, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<LoadResult> {
+        const loadStart = Date.now();
+        try {
+            const instance = reg.getInstance();
+            await instance.HandleStartup(contextUser, provider);
+            reg.loadedAt = new Date();
+            reg.loadDurationMs = Date.now() - loadStart;
+            return { className: reg.constructor.name, success: true, durationMs: reg.loadDurationMs };
+        } catch (error) {
+            return {
+                className: reg.constructor.name,
+                success: false,
+                error: error as Error,
+                severity: reg.options.severity || 'error',
+                durationMs: Date.now() - loadStart
+            };
+        }
+    }
+
+    /** Logs non-fatal load failures at their declared severity ('silent' logs nothing). */
+    private logLoadFailures(groupResults: LoadResult[]): void {
+        for (const result of groupResults) {
+            if (result.success) {
+                continue;
+            }
+            if (result.severity === 'error') {
+                console.error(`[StartupManager] Error loading ${result.className}:`, result.error);
+            } else if (result.severity === 'warn') {
+                console.warn(`[StartupManager] Warning loading ${result.className}:`, result.error);
+            }
+        }
+    }
+
+    /**
+     * Keeps this server's warm-up turn alive while its engines load, re-claiming the lease every
+     * third of its TTL. Without it a slow cold-database load loses the turn mid-flight and every
+     * waiting server starts loading too.
+     */
+    private startWarmupRenewal(leaseMs: number): ReturnType<typeof setInterval> {
+        const everyMs = Math.max(1000, Math.floor(leaseMs / 3));
+        const timer = setInterval(() => {
+            LocalCacheManager.Instance.RenewSharedLease(STARTUP_WARMUP_LEASE, leaseMs).catch(() => undefined);
+        }, everyMs);
+        if (typeof timer === 'object' && timer !== null && 'unref' in timer) {
+            (timer as { unref(): void }).unref();
+        }
+        return timer;
+    }
+
+    /**
+     * How many lease TTLs a server waits for another server's warm-up before loading anyway. The
+     * holder renews while it loads, so this bounds a warm-up that is slow, not one that died.
+     */
+    public static WarmupWaitLeaseMultiple: number = 4;
+
+    /**
+     * Waits for this server's turn to warm its engines when other servers share the cache (plan:
+     * cold-start herd). The first server loads from the database and fills the shared cache; the
+     * ones that start alongside it wait, then load from the warm cache. On a private cache the turn
+     * is granted at once. A turn that is not granted within `leaseMs` is taken anyway.
+     * @returns True when this server holds the turn and must release it.
+     */
+    private async takeWarmupTurn(leaseMs: number, engineCount: number): Promise<boolean> {
+        if (leaseMs <= 0 || engineCount === 0) {
+            return false;
+        }
+        // The wait is deliberately LONGER than the lease: the lease's TTL is how long a dead holder
+        // blocks others, while the wait is how long a live one is given to finish. Tying them
+        // together (they were both `leaseMs`) meant every waiter gave up at the moment the holder
+        // renewed, so a warm-up slower than one TTL let the whole herd through at once. A holder
+        // that releases early is picked up on the next poll, so a longer bound costs nothing in the
+        // normal case.
+        const maxWaitMs = leaseMs * StartupManager.WarmupWaitLeaseMultiple;
+        const turn = await LocalCacheManager.Instance.WaitForSharedLease(STARTUP_WARMUP_LEASE, leaseMs, maxWaitMs);
+        if (turn.WaitedMs > 0) {
+            LogStatusEx({ message: `[StartupManager] waited ${turn.WaitedMs}ms for another server to warm the shared cache${turn.Acquired ? '' : ' (gave up waiting)'}`, verboseOnly: true });
+        }
+        return turn.Acquired;
+    }
+
+    /**
      * Completes a 'task'-mode startup: no registered engines execute (sync or
      * deferred); each lazy-loads on first touch via its own Config()/EnsureLoaded().
      * Marks startup completed so idempotency semantics match 'full' mode — the
      * result is cached and repeat Startup() calls return it without re-running.
      */
-    private CompleteTaskModeLoad(registrations: StartupRegistration[], startTime: number): LoadAllResult {
+    private completeTaskModeLoad(registrations: StartupRegistration[], startTime: number): LoadAllResult {
         this._loadCompleted = true;
 
         // One non-verbose line so a slow first AI call is never a debugging mystery
@@ -644,7 +734,7 @@ export class StartupManager extends BaseSingleton<StartupManager> {
      * configured severity but never propagate — the app boot has already
      * returned by the time this runs.
      */
-    private KickOffDeferredEngines(
+    private kickOffDeferredEngines(
         registrations: StartupRegistration[],
         contextUser?: UserInfo,
         provider?: IMetadataProvider
@@ -684,18 +774,18 @@ export class StartupManager extends BaseSingleton<StartupManager> {
     /**
      * Resolve the priority from options, defaulting to 100 if not specified.
      */
-    private ResolvePriority(options: RegisterForStartupOptions): number {
+    private resolvePriority(options: RegisterForStartupOptions): number {
         return options.priority ?? 100;
     }
 
     /**
      * Group registrations by their priority for parallel loading within priority levels.
      */
-    private GroupByPriority(registrations: StartupRegistration[]): StartupRegistration[][] {
+    private groupByPriority(registrations: StartupRegistration[]): StartupRegistration[][] {
         const groups = new Map<number, StartupRegistration[]>();
 
         for (const reg of registrations) {
-            const priority = this.ResolvePriority(reg.options);
+            const priority = this.resolvePriority(reg.options);
             if (!groups.has(priority)) {
                 groups.set(priority, []);
             }

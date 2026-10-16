@@ -587,10 +587,28 @@ interface TestAlert {
 })
 export class TestingDashboardTabComponent implements OnInit, OnDestroy {
 
-  @Input() initialState: Record<string, unknown> | null = null;
+  @Input() InitialState: Record<string, unknown> | null = null;
+
+  /** @deprecated Use {@link InitialState}. */
+  @Input() set initialState(value: Record<string, unknown> | null) {
+    this.InitialState = value;
+  }
+  /** @deprecated Use {@link InitialState}. */
+  get initialState(): Record<string, unknown> | null {
+    return this.InitialState;
+  }
   /** When true, the inner bespoke .page-header is hidden — the parent shell owns the chrome. */
   @Input() HideToolbar = false;
-  @Output() stateChange = new EventEmitter<Record<string, unknown>>();
+  @Output() StateChange = new EventEmitter<Record<string, unknown>>();
+
+  /**
+   * @deprecated Use {@link StateChange}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (stateChange) keeps working. Must stay AFTER StateChange: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() stateChange = this.StateChange;
 
   private destroy$ = new Subject<void>();
 
@@ -763,50 +781,50 @@ export class TestingDashboardTabComponent implements OnInit, OnDestroy {
   }
 
   private buildKpiCards(kpis: TestingDashboardKPIs): KPICardData[] {
-    const trendDir = kpis.passRateTrend > 0
+    const trendDir = kpis.PassRateTrend > 0
       ? 'up' as const
-      : kpis.passRateTrend < 0
+      : kpis.PassRateTrend < 0
         ? 'down' as const
         : 'stable' as const;
 
     return [
       {
         title: 'Active Tests',
-        value: kpis.totalTestsActive,
+        value: kpis.TotalTestsActive,
         icon: 'fa-vial',
         color: 'primary',
-        subtitle: `${kpis.totalTestRuns} runs this period`
+        subtitle: `${kpis.TotalTestRuns} runs this period`
       },
       {
         title: 'Pass Rate',
-        value: `${kpis.passRateThisMonth.toFixed(1)}%`,
+        value: `${kpis.PassRateThisMonth.toFixed(1)}%`,
         icon: 'fa-check-circle',
-        color: kpis.passRateThisMonth >= 90 ? 'success' : kpis.passRateThisMonth >= 75 ? 'warning' : 'danger',
-        trend: kpis.passRateTrend !== 0 ? {
+        color: kpis.PassRateThisMonth >= 90 ? 'success' : kpis.PassRateThisMonth >= 75 ? 'warning' : 'danger',
+        trend: kpis.PassRateTrend !== 0 ? {
           direction: trendDir,
-          percentage: Math.abs(Math.round(kpis.passRateTrend * 10) / 10),
+          percentage: Math.abs(Math.round(kpis.PassRateTrend * 10) / 10),
           period: 'vs previous period'
         } : undefined
       },
       {
         title: 'Total Cost',
-        value: `$${kpis.totalCostThisMonth.toFixed(2)}`,
+        value: `$${kpis.TotalCostThisMonth.toFixed(2)}`,
         icon: 'fa-dollar-sign',
         color: 'warning',
         subtitle: 'This period'
       },
       {
         title: 'Avg Duration',
-        value: this.FormatDuration(kpis.averageDuration),
+        value: this.FormatDuration(kpis.AverageDuration),
         icon: 'fa-clock',
         color: 'info',
         subtitle: 'Per test run'
       },
       {
         title: 'Pending Review',
-        value: kpis.testsPendingReview,
+        value: kpis.TestsPendingReview,
         icon: 'fa-clipboard-check',
-        color: kpis.testsPendingReview > 10 ? 'warning' : 'success',
+        color: kpis.TestsPendingReview > 10 ? 'warning' : 'success',
         subtitle: 'Tests need feedback'
       }
     ];

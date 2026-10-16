@@ -15,6 +15,40 @@ function escapeRegex(value: string): string {
 }
 
 /**
+ * The case rule for every identifier comparison in this module. A name is reduced to its
+ * {@link matchingKey}, and text matches the key with JavaScript's case-insensitive matching
+ * without the `u` flag. That matching never maps a non-ASCII letter onto an ASCII one
+ * (U+212A KELVIN SIGN is not `k`).
+ */
+const IDENTIFIER_CASE_FLAGS = 'i';
+
+/**
+ * A name's key: trimmed and lower-cased. Text is matched against a name's key, and a match is
+ * looked up by its own key.
+ */
+function matchingKey(name: string): string {
+    return name.trim().toLowerCase();
+}
+
+/**
+ * Whether `reference` names the identifier `name` by the rule {@link FindReferencedIdentifiers}
+ * reports with. Both of its steps must pass: the case-insensitive pattern for the name's key
+ * matches all of the trimmed reference, and the reference's own key is the name's key.
+ *
+ * Code that resolves a caller's text to an entity field must use this rule, or a stricter one.
+ * Then it never resolves a reference that the field-level security gate does not report.
+ *
+ * @param reference The identifier as the caller wrote it, without quoting delimiters
+ * @param name The identifier to compare against, such as an entity field name
+ */
+export function IdentifierMatches(reference: string, name: string): boolean {
+    if (typeof reference !== 'string' || typeof name !== 'string') return false;
+    const key = matchingKey(name);
+    if (!key || matchingKey(reference) !== key) return false;
+    return new RegExp(`^(?:${escapeRegex(key)})$`, IDENTIFIER_CASE_FLAGS).test(reference.trim());
+}
+
+/**
  * Finds which of the supplied identifier names are referenced anywhere in a SQL fragment.
  *
  * Built for field-level security, where an `ExtraFilter` or `OrderBy` naming a field the user
@@ -73,8 +107,8 @@ function escapeRegex(value: string): string {
 export function FindReferencedIdentifiers(expression: string, identifiers: Iterable<string>): string[] {
     const candidates = new Map<string, string>();
     for (const name of identifiers) {
-        const normalized = name?.trim();
-        if (normalized) candidates.set(normalized.toLowerCase(), name);
+        const key = typeof name === 'string' ? matchingKey(name) : '';
+        if (key) candidates.set(key, name);
     }
     if (!expression || typeof expression !== 'string' || candidates.size === 0) {
         return [];
@@ -87,12 +121,13 @@ export function FindReferencedIdentifiers(expression: string, identifiers: Itera
     const alternation = names.map(escapeRegex).join('|');
     // Word-character lookarounds rather than \b: \b is defined relative to \w and misbehaves for
     // names whose first or last character is not a word character (`Salary%`, `[Base Salary]`).
-    const pattern = new RegExp(`(?<![A-Za-z0-9_])(${alternation})(?![A-Za-z0-9_])`, 'gi');
+    const pattern = new RegExp(`(?<![A-Za-z0-9_])(${alternation})(?![A-Za-z0-9_])`, `g${IDENTIFIER_CASE_FLAGS}`);
 
     const found = new Set<string>();
     let match: RegExpExecArray | null;
     while ((match = pattern.exec(expression)) !== null) {
-        const original = candidates.get(match[1].trim().toLowerCase());
+        // The second step of the rule IdentifierMatches states: the match's own key must be a candidate's key.
+        const original = candidates.get(matchingKey(match[1]));
         if (original !== undefined) {
             found.add(original);
         }

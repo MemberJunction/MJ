@@ -242,13 +242,21 @@ export interface SelectableSourceField {
  * `null`/`undefined` selection means "all fields", which is not the same as an EMPTY selection —
  * an empty array is a real (if unusual) choice, and still yields the keys.
  */
-export function selectFieldsToMap<T extends SelectableSourceField>(
+export function SelectFieldsToMap<T extends SelectableSourceField>(
     allFields: readonly T[],
     selectedFieldNames: readonly string[] | null | undefined,
 ): T[] {
     if (!selectedFieldNames) return [...allFields];
     const selected = new Set(selectedFieldNames.map(n => n.toLowerCase()));
     return allFields.filter(f => selected.has(f.Name.toLowerCase()) || f.IsPrimaryKey === true);
+}
+
+/** @deprecated Use {@link SelectFieldsToMap}. */
+export function selectFieldsToMap<T extends SelectableSourceField>(
+    allFields: readonly T[],
+    selectedFieldNames: readonly string[] | null | undefined,
+): T[] {
+    return SelectFieldsToMap(allFields, selectedFieldNames);
 }
 
 /** One existing field map, reduced to what the reconciliation decision needs. */
@@ -289,7 +297,7 @@ export interface FieldMapReconcilePlan {
  *    stopped reporting the column, so it returns to the state it had.
  *  - **Vanished column → `Inactive`, never deleted.** Retiring is reversible by the branch above.
  */
-export function decideFieldMapReconcile(
+export function DecideFieldMapReconcile(
     activeFieldNames: readonly string[],
     existing: readonly ExistingFieldMapRead[],
     mapEnabled: boolean,
@@ -319,4 +327,14 @@ export function decideFieldMapReconcile(
         }
     }
     return plan;
+}
+
+/** @deprecated Use {@link DecideFieldMapReconcile}. */
+export function decideFieldMapReconcile(
+    activeFieldNames: readonly string[],
+    existing: readonly ExistingFieldMapRead[],
+    mapEnabled: boolean,
+    autoEnableNewColumns = true,
+): FieldMapReconcilePlan {
+    return DecideFieldMapReconcile(activeFieldNames, existing, mapEnabled, autoEnableNewColumns);
 }

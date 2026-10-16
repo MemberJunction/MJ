@@ -1,0 +1,57 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T115 - Home Add-Pin Panel",
+    "Description": "Opens the Home landing page once, then walks the Add-Pin panel surfaces (panel opens + catalog, search filters catalog, pin round-trip, edit mode, new-group assignment, action-pin configure dialog), verifying each via checkpoints including the pin/group mutations. Consolidates old T276–T279, T282–T283.",
+    "InputDefinition": "{\n  \"goal\": \"Do the shared setup ONCE: you are already logged in at http://localhost:4200 — navigate to the Home landing page using the Home icon/logo or the application switcher dropdown next to the logo. Then walk these sections IN ORDER, and as you arrive at each one set \\\"checkpointReached\\\" to the exact checkpoint name shown: (1) add-pin-panel-opens — in the 'Pinned' section click 'Add Pin' (thumbtack/plus icon) and confirm a slide-in panel titled 'Add Pin' appears with a search box, an 'Add to group' selector, and one or more collapsible accordion sections (Applications, Dashboards, Views, Queries, Quick Actions) with pinnable items; (2) add-pin-search-filters — type a short query into the panel's search box and confirm the accordion sections respond (items narrow to name matches, or non-matching sections disappear, or a clear empty result appears), then clear the search and confirm the fuller list returns; (3) pin-resource-roundtrip — expand 'Applications' and click 'Pin' on any application nav item and confirm a success toast ('\\\"...\\\" pinned to Home') appears AND the item's button flips to a 'Pinned' badge, then close the panel and confirm the newly pinned item appears as a card in the Home 'Pinned' grid; (4) pin-edit-mode — click the 'Edit' (pencil) button in the Pinned section header and confirm edit mode engages (an edit-mode banner, per-pin drag handles and remove (x) controls, and an 'Add Pin' placeholder card), then click 'Done' and confirm edit mode exits; (5) pin-new-group — open 'Add Pin' again, in the 'Add to group' selector choose '+ New group...' and confirm a text input appears, type a group name (e.g. 'Test Group'), then expand 'Applications' and click 'Pin' on any item, close the panel, and confirm the Pinned section renders a group header labeled with your group name (with a pin count) and the card grouped beneath it; (6) configure-action-pin — open 'Add Pin' again and look for a 'Quick Actions' section; if present, expand it and click the 'Configure' (sliders icon) button on any action item and confirm an action-pin configuration dialog opens (you do NOT need to complete it) — if there is no Quick Actions section because no actions are available, the panel rendering cleanly without that section is an acceptable pass. Keep going until every section has been visited. Pages can take 10-30s to load in this resource-constrained environment — wait for content rather than navigating away.\",\n  \"startUrl\": \"http://localhost:4200\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
+    "ExpectedOutcomes": "{\n  \"goalCompleted\": true,\n  \"finalUrlPattern\": \"^http://localhost:4200\",\n  \"minConfidence\": 0.7,\n  \"maxSteps\": 90,\n  \"checkpoints\": [\n    {\n      \"name\": \"add-pin-panel-opens\",\n      \"instruction\": \"Add Pin panel opens with resource catalog\",\n      \"visualCriteria\": [\n        \"The 'Add Pin' slide-in panel opens with a search box and an 'Add to group' selector, and at least one resource accordion section (e.g. Applications, Dashboards, Views, Queries, Quick Actions) renders with pinnable items or a 'Pin'/'Configure' button\"\n      ]\n    },\n    {\n      \"name\": \"add-pin-search-filters\",\n      \"instruction\": \"panel search filters the catalog\",\n      \"visualCriteria\": [\n        \"Typing in the Add Pin panel search box narrows the catalog items to name matches (or collapses non-matching sections / shows an empty result), and clearing the search restores a broader list of pinnable items\"\n      ]\n    },\n    {\n      \"name\": \"pin-resource-roundtrip\",\n      \"instruction\": \"pin an app and see it in the Pinned grid\",\n      \"visualCriteria\": [\n        \"Clicking 'Pin' on a catalog item produces a success toast and the item shows a 'Pinned' badge in the panel, and after closing the panel the pinned item is visible as a card in the Home 'Pinned' section\"\n      ]\n    },\n    {\n      \"name\": \"pin-edit-mode\",\n      \"instruction\": \"toggle Pinned edit mode on and off\",\n      \"visualCriteria\": [\n        \"Clicking 'Edit' shows the edit-mode banner and reveals per-pin drag handles / remove controls and an 'Add Pin' card, and clicking 'Done' exits edit mode so the banner and edit controls disappear\"\n      ]\n    },\n    {\n      \"name\": \"pin-new-group\",\n      \"instruction\": \"pin into a newly-named group\",\n      \"visualCriteria\": [\n        \"Selecting '+ New group...' in the group selector reveals a new-group name input, and after pinning an item into the named group the Pinned section shows a group header with that name and the item grouped under it\"\n      ]\n    },\n    {\n      \"name\": \"configure-action-pin\",\n      \"instruction\": \"action-pin configure dialog or valid empty case\",\n      \"visualCriteria\": [\n        \"If a 'Quick Actions' section is present, clicking 'Configure' on an action opens the action-pin configuration dialog; if no actions are available, the Add Pin panel still renders correctly without a Quick Actions section (valid empty case)\"\n      ]\n    }\n  ]\n}",
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 90,
+      "maxExecutionTime": 1080000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.7,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "url-match",
+          "weight": 0.3,
+          "config": {
+            "pattern": "^http://localhost:4200"
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.7,
+        "url-match": 0.3
+      }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,home",
+    "Priority": 0,
+    "EstimatedDurationSeconds": null,
+    "EstimatedCostUSD": null,
+    "RepeatCount": null,
+    "MaxExecutionTimeMS": null,
+    "Variables": null,
+    "Type": "Computer Use",
+    "SkipEmbeddings": false
+  },
+  "primaryKey": {
+    "ID": "CB720CE0-0F38-4E5C-B40F-5CA2618E0516"
+  },
+  "sync": {
+    "lastModified": "2026-09-11T21:36:53.914Z",
+    "checksum": "d9131546c59c36b69af42993e7735c180b8a492218d9b5ab176a7610bb755ac9"
+  }
+}

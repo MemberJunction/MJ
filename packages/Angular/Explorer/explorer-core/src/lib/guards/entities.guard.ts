@@ -12,15 +12,20 @@ import {EntityPermissionType, Metadata, IMetadataProvider} from "@memberjunction
  */
 let _guardProvider: IMetadataProvider | null = null;
 
-export function setEntitiesGuardProvider(p: IMetadataProvider): void {
+export function SetEntitiesGuardProvider(p: IMetadataProvider): void {
   _guardProvider = p;
+}
+
+/** @deprecated Use {@link SetEntitiesGuardProvider}. */
+export function setEntitiesGuardProvider(p: IMetadataProvider): void {
+  return SetEntitiesGuardProvider(p);
 }
 
 function getGuardProvider(): IMetadataProvider {
   return _guardProvider ?? Metadata.Provider;
 }
 
-export function checkUserEntityPermissions(type: EntityPermissionType): (route: ActivatedRouteSnapshot, state: RouterStateSnapshot) => any {
+export function CheckUserEntityPermissions(type: EntityPermissionType): (route: ActivatedRouteSnapshot, state: RouterStateSnapshot) => any {
     return (route: ActivatedRouteSnapshot, state: RouterStateSnapshot) => {
       const md = getGuardProvider();
       const appName = route.params['appName'];
@@ -60,4 +65,9 @@ export function checkUserEntityPermissions(type: EntityPermissionType): (route: 
       }
     }
   }
+
+/** @deprecated Use {@link CheckUserEntityPermissions}. */
+export function checkUserEntityPermissions(type: EntityPermissionType): (route: ActivatedRouteSnapshot, state: RouterStateSnapshot) => any {
+  return CheckUserEntityPermissions(type);
+}
   

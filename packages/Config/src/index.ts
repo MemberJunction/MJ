@@ -12,24 +12,24 @@
  */
 
 export {
-  loadMJConfig,
-  loadMJConfigSync,
-  buildMJConfig,
+  LoadMJConfig, loadMJConfig,
+  LoadMJConfigSync, loadMJConfigSync,
+  BuildMJConfig, buildMJConfig,
   type LoadConfigOptions,
   type LoadConfigResult
 } from './config-loader';
 
 export {
-  mergeConfigs,
-  validateConfigStructure,
+  MergeConfigs, mergeConfigs,
+  ValidateConfigStructure, validateConfigStructure,
   type MergeOptions
 } from './config-merger';
 
 export {
   type MJConfig,
-  isValidConfig
+  IsValidConfig, isValidConfig
 } from './config-types';
 
 export {
-  parseBooleanEnv
+  ParseBooleanEnv, parseBooleanEnv
 } from './env-utils';

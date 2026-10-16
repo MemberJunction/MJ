@@ -51,35 +51,197 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
   private settingsLoaded = false;
 
   // View state
-  public viewMode: 'grid' | 'list' = 'grid';
+  public ViewMode: 'grid' | 'list' = 'grid';
+
+  /** @deprecated Use {@link ViewMode}. */
+  public get viewMode(): 'grid' | 'list' {
+    return this.ViewMode;
+  }
+  /** @deprecated Use {@link ViewMode}. */
+  public set viewMode(value: 'grid' | 'list') {
+    this.ViewMode = value;
+  }
   public isLoading = true;
-  public showFilters = true;
-  public expandedModelId: string | null = null;
+  public ShowFilters = true;
+
+  /** @deprecated Use {@link ShowFilters}. */
+  public get showFilters() {
+    return this.ShowFilters;
+  }
+  /** @deprecated Use {@link ShowFilters}. */
+  public set showFilters(value) {
+    this.ShowFilters = value;
+  }
+  public ExpandedModelId: string | null = null;
+
+  /** @deprecated Use {@link ExpandedModelId}. */
+  public get expandedModelId(): string | null {
+    return this.ExpandedModelId;
+  }
+  /** @deprecated Use {@link ExpandedModelId}. */
+  public set expandedModelId(value: string | null) {
+    this.ExpandedModelId = value;
+  }
 
   // Data - Keep as MJAIModelEntityExtended to preserve getters
-  public models: MJAIModelEntityExtended[] = [];
-  public filteredModels: MJAIModelEntityExtended[] = [];
-  public vendors: MJAIVendorEntity[] = [];
-  public modelTypes: MJAIModelTypeEntity[] = [];
+  public Models: MJAIModelEntityExtended[] = [];
+
+  /** @deprecated Use {@link Models}. */
+  public get models(): MJAIModelEntityExtended[] {
+    return this.Models;
+  }
+  /** @deprecated Use {@link Models}. */
+  public set models(value: MJAIModelEntityExtended[]) {
+    this.Models = value;
+  }
+  public FilteredModels: MJAIModelEntityExtended[] = [];
+
+  /** @deprecated Use {@link FilteredModels}. */
+  public get filteredModels(): MJAIModelEntityExtended[] {
+    return this.FilteredModels;
+  }
+  /** @deprecated Use {@link FilteredModels}. */
+  public set filteredModels(value: MJAIModelEntityExtended[]) {
+    this.FilteredModels = value;
+  }
+  public Vendors: MJAIVendorEntity[] = [];
+
+  /** @deprecated Use {@link Vendors}. */
+  public get vendors(): MJAIVendorEntity[] {
+    return this.Vendors;
+  }
+  /** @deprecated Use {@link Vendors}. */
+  public set vendors(value: MJAIVendorEntity[]) {
+    this.Vendors = value;
+  }
+  public ModelTypes: MJAIModelTypeEntity[] = [];
+
+  /** @deprecated Use {@link ModelTypes}. */
+  public get modelTypes(): MJAIModelTypeEntity[] {
+    return this.ModelTypes;
+  }
+  /** @deprecated Use {@link ModelTypes}. */
+  public set modelTypes(value: MJAIModelTypeEntity[]) {
+    this.ModelTypes = value;
+  }
 
   // Filtering
-  public searchTerm = '';
+  public SearchTerm = '';
+
+  /** @deprecated Use {@link SearchTerm}. */
+  public get searchTerm() {
+    return this.SearchTerm;
+  }
+  /** @deprecated Use {@link SearchTerm}. */
+  public set searchTerm(value) {
+    this.SearchTerm = value;
+  }
   private searchSubject = new BehaviorSubject<string>('');
-  public selectedVendor = 'all';
-  public selectedType = 'all';
-  public selectedStatus = 'all';
-  public powerRankRange = { min: 0, max: 10 };
-  public speedRankRange = { min: 0, max: 10 };
-  public costRankRange = { min: 0, max: 10 };
+  public SelectedVendor = 'all';
+
+  /** @deprecated Use {@link SelectedVendor}. */
+  public get selectedVendor() {
+    return this.SelectedVendor;
+  }
+  /** @deprecated Use {@link SelectedVendor}. */
+  public set selectedVendor(value) {
+    this.SelectedVendor = value;
+  }
+  public SelectedType = 'all';
+
+  /** @deprecated Use {@link SelectedType}. */
+  public get selectedType() {
+    return this.SelectedType;
+  }
+  /** @deprecated Use {@link SelectedType}. */
+  public set selectedType(value) {
+    this.SelectedType = value;
+  }
+  public SelectedStatus = 'all';
+
+  /** @deprecated Use {@link SelectedStatus}. */
+  public get selectedStatus() {
+    return this.SelectedStatus;
+  }
+  /** @deprecated Use {@link SelectedStatus}. */
+  public set selectedStatus(value) {
+    this.SelectedStatus = value;
+  }
+  public PowerRankRange = { min: 0, max: 10 };
+
+  /** @deprecated Use {@link PowerRankRange}. */
+  public get powerRankRange() {
+    return this.PowerRankRange;
+  }
+  /** @deprecated Use {@link PowerRankRange}. */
+  public set powerRankRange(value) {
+    this.PowerRankRange = value;
+  }
+  public SpeedRankRange = { min: 0, max: 10 };
+
+  /** @deprecated Use {@link SpeedRankRange}. */
+  public get speedRankRange() {
+    return this.SpeedRankRange;
+  }
+  /** @deprecated Use {@link SpeedRankRange}. */
+  public set speedRankRange(value) {
+    this.SpeedRankRange = value;
+  }
+  public CostRankRange = { min: 0, max: 10 };
+
+  /** @deprecated Use {@link CostRankRange}. */
+  public get costRankRange() {
+    return this.CostRankRange;
+  }
+  /** @deprecated Use {@link CostRankRange}. */
+  public set costRankRange(value) {
+    this.CostRankRange = value;
+  }
 
   // Detail panel
-  public selectedModel: ModelDisplayData | null = null;
-  public detailPanelVisible = false;
+  public SelectedModel: ModelDisplayData | null = null;
+
+  /** @deprecated Use {@link SelectedModel}. */
+  public get selectedModel(): ModelDisplayData | null {
+    return this.SelectedModel;
+  }
+  /** @deprecated Use {@link SelectedModel}. */
+  public set selectedModel(value: ModelDisplayData | null) {
+    this.SelectedModel = value;
+  }
+  public DetailPanelVisible = false;
+
+  /** @deprecated Use {@link DetailPanelVisible}. */
+  public get detailPanelVisible() {
+    return this.DetailPanelVisible;
+  }
+  /** @deprecated Use {@link DetailPanelVisible}. */
+  public set detailPanelVisible(value) {
+    this.DetailPanelVisible = value;
+  }
 
   // Sorting
-  public sortBy = 'name';
-  public sortDirection: 'asc' | 'desc' = 'asc';
-  public sortOptions = [
+  public SortBy = 'name';
+
+  /** @deprecated Use {@link SortBy}. */
+  public get sortBy() {
+    return this.SortBy;
+  }
+  /** @deprecated Use {@link SortBy}. */
+  public set sortBy(value) {
+    this.SortBy = value;
+  }
+  public SortDirection: 'asc' | 'desc' = 'asc';
+
+  /** @deprecated Use {@link SortDirection}. */
+  public get sortDirection(): 'asc' | 'desc' {
+    return this.SortDirection;
+  }
+  /** @deprecated Use {@link SortDirection}. */
+  public set sortDirection(value: 'asc' | 'desc') {
+    this.SortDirection = value;
+  }
+  public SortOptions = [
     { value: 'name', label: 'Name' },
     { value: 'vendor', label: 'Vendor' },
     { value: 'type', label: 'Type' },
@@ -90,19 +252,73 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
     { value: 'updated', label: 'Updated Date' }
   ];
 
+  /** @deprecated Use {@link SortOptions}. */
+  public get sortOptions() {
+    return this.SortOptions;
+  }
+  /** @deprecated Use {@link SortOptions}. */
+  public set sortOptions(value) {
+    this.SortOptions = value;
+  }
+
   // Max rank values calculated from all models
-  public maxPowerRank = 10;
-  public maxSpeedRank = 10;
-  public maxCostRank = 10;
+  public MaxPowerRank = 10;
+
+  /** @deprecated Use {@link MaxPowerRank}. */
+  public get maxPowerRank() {
+    return this.MaxPowerRank;
+  }
+  /** @deprecated Use {@link MaxPowerRank}. */
+  public set maxPowerRank(value) {
+    this.MaxPowerRank = value;
+  }
+  public MaxSpeedRank = 10;
+
+  /** @deprecated Use {@link MaxSpeedRank}. */
+  public get maxSpeedRank() {
+    return this.MaxSpeedRank;
+  }
+  /** @deprecated Use {@link MaxSpeedRank}. */
+  public set maxSpeedRank(value) {
+    this.MaxSpeedRank = value;
+  }
+  public MaxCostRank = 10;
+
+  /** @deprecated Use {@link MaxCostRank}. */
+  public get maxCostRank() {
+    return this.MaxCostRank;
+  }
+  /** @deprecated Use {@link MaxCostRank}. */
+  public set maxCostRank(value) {
+    this.MaxCostRank = value;
+  }
 
   // Loading messages
-  public loadingMessages = [
+  public LoadingMessages = [
     'Loading AI models...',
     'Fetching vendor information...',
     'Calculating rankings...',
     'Almost ready...'
   ];
-  public currentLoadingMessage = this.loadingMessages[0];
+
+  /** @deprecated Use {@link LoadingMessages}. */
+  public get loadingMessages() {
+    return this.LoadingMessages;
+  }
+  /** @deprecated Use {@link LoadingMessages}. */
+  public set loadingMessages(value) {
+    this.LoadingMessages = value;
+  }
+  public CurrentLoadingMessage = this.LoadingMessages[0];
+
+  /** @deprecated Use {@link CurrentLoadingMessage}. */
+  public get currentLoadingMessage() {
+    return this.CurrentLoadingMessage;
+  }
+  /** @deprecated Use {@link CurrentLoadingMessage}. */
+  public set currentLoadingMessage(value) {
+    this.CurrentLoadingMessage = value;
+  }
   private loadingMessageIndex = 0;
   private loadingMessageInterval: any;
 
@@ -168,16 +384,16 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
 
   private refreshDataFromEngine(): void {
     const models = AIEngineBase.Instance.Models;
-    this.vendors = AIEngineBase.Instance.Vendors;
-    this.modelTypes = AIEngineBase.Instance.ModelTypes;
+    this.Vendors = AIEngineBase.Instance.Vendors;
+    this.ModelTypes = AIEngineBase.Instance.ModelTypes;
 
-    const vendorMap = new Map(this.vendors.map(v => [v.ID, v.Name]));
-    const typeMap = new Map(this.modelTypes.map(t => [t.ID, t.Name]));
+    const vendorMap = new Map(this.Vendors.map(v => [v.ID, v.Name]));
+    const typeMap = new Map(this.ModelTypes.map(t => [t.ID, t.Name]));
 
-    this.models = models.map((model) => {
+    this.Models = models.map((model) => {
       let vendorId: string | undefined;
       if (model.Vendor) {
-        const vendor = this.vendors.find(v => v.Name === model.Vendor);
+        const vendor = this.Vendors.find(v => v.Name === model.Vendor);
         vendorId = vendor?.ID;
       }
       const modelWithDisplay = model as ModelDisplayData;
@@ -187,9 +403,9 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
       return model;
     });
 
-    this.filteredModels = [...this.models];
+    this.FilteredModels = [...this.Models];
     this.sortModels();
-    this.applyFilters();
+    this.ApplyFilters();
     this.cdr.detectChanges();
   }
 
@@ -199,8 +415,8 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
       distinctUntilChanged(),
       takeUntil(this.destroy$)
     ).subscribe(searchTerm => {
-      this.searchTerm = searchTerm;
-      this.applyFilters();
+      this.SearchTerm = searchTerm;
+      this.ApplyFilters();
       this.saveUserPreferencesDebounced();
     });
   }
@@ -231,28 +447,28 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
    */
   private applyUserPreferencesFromStorage(prefs: ModelManagementUserPreferences): void {
     if (prefs.viewMode) {
-      this.viewMode = prefs.viewMode;
+      this.ViewMode = prefs.viewMode;
     }
     if (prefs.showFilters !== undefined) {
-      this.showFilters = prefs.showFilters;
+      this.ShowFilters = prefs.showFilters;
     }
     if (prefs.searchTerm) {
-      this.searchTerm = prefs.searchTerm;
+      this.SearchTerm = prefs.searchTerm;
     }
     if (prefs.selectedVendor) {
-      this.selectedVendor = prefs.selectedVendor;
+      this.SelectedVendor = prefs.selectedVendor;
     }
     if (prefs.selectedType) {
-      this.selectedType = prefs.selectedType;
+      this.SelectedType = prefs.selectedType;
     }
     if (prefs.selectedStatus) {
-      this.selectedStatus = prefs.selectedStatus;
+      this.SelectedStatus = prefs.selectedStatus;
     }
     if (prefs.sortBy) {
-      this.sortBy = prefs.sortBy;
+      this.SortBy = prefs.sortBy;
     }
     if (prefs.sortDirection) {
-      this.sortDirection = prefs.sortDirection;
+      this.SortDirection = prefs.sortDirection;
     }
   }
 
@@ -261,14 +477,14 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
    */
   private getCurrentPreferences(): ModelManagementUserPreferences {
     return {
-      viewMode: this.viewMode,
-      showFilters: this.showFilters,
-      searchTerm: this.searchTerm,
-      selectedVendor: this.selectedVendor,
-      selectedType: this.selectedType,
-      selectedStatus: this.selectedStatus,
-      sortBy: this.sortBy,
-      sortDirection: this.sortDirection
+      viewMode: this.ViewMode,
+      showFilters: this.ShowFilters,
+      searchTerm: this.SearchTerm,
+      selectedVendor: this.SelectedVendor,
+      selectedType: this.SelectedType,
+      selectedStatus: this.SelectedStatus,
+      sortBy: this.SortBy,
+      sortDirection: this.SortDirection
     };
   }
 
@@ -294,8 +510,8 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
 
   private startLoadingMessages(): void {
     this.loadingMessageInterval = setInterval(() => {
-      this.loadingMessageIndex = (this.loadingMessageIndex + 1) % this.loadingMessages.length;
-      this.currentLoadingMessage = this.loadingMessages[this.loadingMessageIndex];
+      this.loadingMessageIndex = (this.loadingMessageIndex + 1) % this.LoadingMessages.length;
+      this.CurrentLoadingMessage = this.LoadingMessages[this.loadingMessageIndex];
     }, 2000);
   }
 
@@ -306,22 +522,22 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
 
       // Get cached data from AIEngineBase
       const models = AIEngineBase.Instance.Models;
-      this.vendors = AIEngineBase.Instance.Vendors;
-      this.modelTypes = AIEngineBase.Instance.ModelTypes;
+      this.Vendors = AIEngineBase.Instance.Vendors;
+      this.ModelTypes = AIEngineBase.Instance.ModelTypes;
       
       // Log summary data
       
       // Create lookup maps
-      const vendorMap = new Map(this.vendors.map(v => [v.ID, v.Name]));
-      const typeMap = new Map(this.modelTypes.map(t => [t.ID, t.Name]));
+      const vendorMap = new Map(this.Vendors.map(v => [v.ID, v.Name]));
+      const typeMap = new Map(this.ModelTypes.map(t => [t.ID, t.Name]));
 
       // Transform models to display format
-      this.models = models.map((model) => {
+      this.Models = models.map((model) => {
         
         // Find vendor ID by matching vendor name
         let vendorId: string | undefined;
         if (model.Vendor) {
-          const vendor = this.vendors.find(v => v.Name === model.Vendor);
+          const vendor = this.Vendors.find(v => v.Name === model.Vendor);
           vendorId = vendor?.ID;
         }
         
@@ -336,18 +552,18 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
       });
 
       // Calculate max values for each rank type from ALL models
-      this.maxPowerRank = Math.max(...this.models.map(m => m.PowerRank || 0), 10);
-      this.maxSpeedRank = Math.max(...this.models.map(m => m.SpeedRank || 0), 10);
-      this.maxCostRank = Math.max(...this.models.map(m => m.CostRank || 0), 10);
+      this.MaxPowerRank = Math.max(...this.Models.map(m => m.PowerRank || 0), 10);
+      this.MaxSpeedRank = Math.max(...this.Models.map(m => m.SpeedRank || 0), 10);
+      this.MaxCostRank = Math.max(...this.Models.map(m => m.CostRank || 0), 10);
 
       // Update filter ranges based on actual max values
-      this.powerRankRange = { min: 0, max: this.maxPowerRank };
-      this.speedRankRange = { min: 0, max: this.maxSpeedRank };
-      this.costRankRange = { min: 0, max: this.maxCostRank };
+      this.PowerRankRange = { min: 0, max: this.MaxPowerRank };
+      this.SpeedRankRange = { min: 0, max: this.MaxSpeedRank };
+      this.CostRankRange = { min: 0, max: this.MaxCostRank };
 
-      this.filteredModels = [...this.models];
+      this.FilteredModels = [...this.Models];
       this.sortModels();
-      this.applyFilters();
+      this.ApplyFilters();
     } catch (error) {
       console.error('Error loading model data:', error);
       this.sharedService.CreateSimpleNotification('Error loading models', 'error', 3000);
@@ -361,65 +577,95 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
     }
   }
 
-  public formatRank(rank: number | null, rankType?: 'power' | 'speed' | 'cost'): string {
+  public FormatRank(rank: number | null, rankType?: 'power' | 'speed' | 'cost'): string {
     if (rank === null) return 'N/A';
     
     // Determine which max value to use
     let maxValue = 10;
     if (rankType === 'power') {
-      maxValue = this.maxPowerRank;
+      maxValue = this.MaxPowerRank;
     } else if (rankType === 'speed') {
-      maxValue = this.maxSpeedRank;
+      maxValue = this.MaxSpeedRank;
     } else if (rankType === 'cost') {
-      maxValue = this.maxCostRank;
+      maxValue = this.MaxCostRank;
     }
     
     return `${rank}/${maxValue}`;
   }
 
-  private applyInitialState(state: any): void {
-    if (state.viewMode) this.viewMode = state.viewMode;
-    if (state.showFilters !== undefined) this.showFilters = state.showFilters;
-    if (state.searchTerm) this.searchTerm = state.searchTerm;
-    if (state.selectedVendor) this.selectedVendor = state.selectedVendor;
-    if (state.selectedType) this.selectedType = state.selectedType;
-    if (state.selectedStatus) this.selectedStatus = state.selectedStatus;
-    if (state.sortBy) this.sortBy = state.sortBy;
-    if (state.powerRankRange) this.powerRankRange = state.powerRankRange;
-    if (state.speedRankRange) this.speedRankRange = state.speedRankRange;
-    if (state.costRankRange) this.costRankRange = state.costRankRange;
+  /** @deprecated Use {@link FormatRank}. */
+  public formatRank(rank: number | null, rankType?: 'power' | 'speed' | 'cost'): string {
+    return this.FormatRank(rank, rankType);
   }
 
-  public onSearchChange(value: string): void {
+  private applyInitialState(state: any): void {
+    if (state.viewMode) this.ViewMode = state.viewMode;
+    if (state.showFilters !== undefined) this.ShowFilters = state.showFilters;
+    if (state.searchTerm) this.SearchTerm = state.searchTerm;
+    if (state.selectedVendor) this.SelectedVendor = state.selectedVendor;
+    if (state.selectedType) this.SelectedType = state.selectedType;
+    if (state.selectedStatus) this.SelectedStatus = state.selectedStatus;
+    if (state.sortBy) this.SortBy = state.sortBy;
+    if (state.powerRankRange) this.PowerRankRange = state.powerRankRange;
+    if (state.speedRankRange) this.SpeedRankRange = state.speedRankRange;
+    if (state.costRankRange) this.CostRankRange = state.costRankRange;
+  }
+
+  public OnSearchChange(value: string): void {
     this.searchSubject.next(value);
   }
 
+  /** @deprecated Use {@link OnSearchChange}. */
+  public onSearchChange(value: string): void {
+    return this.OnSearchChange(value);
+  }
+
+  public ToggleFilters(): void {
+    this.ShowFilters = !this.ShowFilters;
+    this.saveUserPreferencesDebounced();
+  }
+
+  /** @deprecated Use {@link ToggleFilters}. */
   public toggleFilters(): void {
-    this.showFilters = !this.showFilters;
+    return this.ToggleFilters();
+  }
+
+  public ToggleFilterPanel(): void {
+    this.ShowFilters = !this.ShowFilters;
     this.saveUserPreferencesDebounced();
   }
 
+  /** @deprecated Use {@link ToggleFilterPanel}. */
   public toggleFilterPanel(): void {
-    this.showFilters = !this.showFilters;
+    return this.ToggleFilterPanel();
+  }
+
+  public SetViewMode(mode: 'grid' | 'list'): void {
+    this.ViewMode = mode;
+    this.ExpandedModelId = null;
     this.saveUserPreferencesDebounced();
   }
 
+  /** @deprecated Use {@link SetViewMode}. */
   public setViewMode(mode: 'grid' | 'list'): void {
-    this.viewMode = mode;
-    this.expandedModelId = null;
-    this.saveUserPreferencesDebounced();
+    return this.SetViewMode(mode);
   }
 
+  public ToggleModelExpansion(modelId: string): void {
+    this.ExpandedModelId = this.ExpandedModelId === modelId ? null : modelId;
+  }
+
+  /** @deprecated Use {@link ToggleModelExpansion}. */
   public toggleModelExpansion(modelId: string): void {
-    this.expandedModelId = this.expandedModelId === modelId ? null : modelId;
+    return this.ToggleModelExpansion(modelId);
   }
 
-  public applyFilters(): void {
-    this.filteredModels = this.models.filter(m => {
+  public ApplyFilters(): void {
+    this.FilteredModels = this.Models.filter(m => {
       const model = m as ModelDisplayData;
       // Search filter
-      if (this.searchTerm) {
-        const searchLower = this.searchTerm.toLowerCase();
+      if (this.SearchTerm) {
+        const searchLower = this.SearchTerm.toLowerCase();
         const matchesSearch = 
           model.Name?.toLowerCase().includes(searchLower) ||
           model.Description?.toLowerCase().includes(searchLower) ||
@@ -430,30 +676,30 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
       }
 
       // Vendor filter
-      if (this.selectedVendor !== 'all' && !UUIDsEqual(model.VendorID, this.selectedVendor)) {
+      if (this.SelectedVendor !== 'all' && !UUIDsEqual(model.VendorID, this.SelectedVendor)) {
         return false;
       }
 
       // Type filter
-      if (this.selectedType !== 'all' && !UUIDsEqual(model.AIModelTypeID, this.selectedType)) {
+      if (this.SelectedType !== 'all' && !UUIDsEqual(model.AIModelTypeID, this.SelectedType)) {
         return false;
       }
 
       // Status filter
-      if (this.selectedStatus !== 'all') {
+      if (this.SelectedStatus !== 'all') {
         const isActive = model.IsActive === true;
-        if (this.selectedStatus === 'active' && !isActive) return false;
-        if (this.selectedStatus === 'inactive' && isActive) return false;
+        if (this.SelectedStatus === 'active' && !isActive) return false;
+        if (this.SelectedStatus === 'inactive' && isActive) return false;
       }
 
       // Rank filters
-      if (model.PowerRank !== null && (model.PowerRank < this.powerRankRange.min || model.PowerRank > this.powerRankRange.max)) {
+      if (model.PowerRank !== null && (model.PowerRank < this.PowerRankRange.min || model.PowerRank > this.PowerRankRange.max)) {
         return false;
       }
-      if (model.SpeedRank !== null && (model.SpeedRank < this.speedRankRange.min || model.SpeedRank > this.speedRankRange.max)) {
+      if (model.SpeedRank !== null && (model.SpeedRank < this.SpeedRankRange.min || model.SpeedRank > this.SpeedRankRange.max)) {
         return false;
       }
-      if (model.CostRank !== null && (model.CostRank < this.costRankRange.min || model.CostRank > this.costRankRange.max)) {
+      if (model.CostRank !== null && (model.CostRank < this.CostRankRange.min || model.CostRank > this.CostRankRange.max)) {
         return false;
       }
 
@@ -463,13 +709,18 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
     this.sortModels();
   }
 
+  /** @deprecated Use {@link ApplyFilters}. */
+  public applyFilters(): void {
+    return this.ApplyFilters();
+  }
+
   private sortModels(): void {
-    this.filteredModels.sort((a, b) => {
+    this.FilteredModels.sort((a, b) => {
       const modelA = a as ModelDisplayData;
       const modelB = b as ModelDisplayData;
       let comparison = 0;
 
-      switch (this.sortBy) {
+      switch (this.SortBy) {
         case 'name':
           comparison = (modelA.Name || '').localeCompare(modelB.Name || '');
           break;
@@ -498,42 +749,62 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
           comparison = 0;
       }
 
-      return this.sortDirection === 'desc' ? -comparison : comparison;
+      return this.SortDirection === 'desc' ? -comparison : comparison;
     });
   }
 
+  public OnVendorChange(vendorId: string): void {
+    this.SelectedVendor = vendorId;
+    this.ApplyFilters();
+    this.saveUserPreferencesDebounced();
+  }
+
+  /** @deprecated Use {@link OnVendorChange}. */
   public onVendorChange(vendorId: string): void {
-    this.selectedVendor = vendorId;
-    this.applyFilters();
+    return this.OnVendorChange(vendorId);
+  }
+
+  public OnTypeChange(typeId: string): void {
+    this.SelectedType = typeId;
+    this.ApplyFilters();
     this.saveUserPreferencesDebounced();
   }
 
+  /** @deprecated Use {@link OnTypeChange}. */
   public onTypeChange(typeId: string): void {
-    this.selectedType = typeId;
-    this.applyFilters();
+    return this.OnTypeChange(typeId);
+  }
+
+  public OnStatusChange(status: string): void {
+    this.SelectedStatus = status;
+    this.ApplyFilters();
     this.saveUserPreferencesDebounced();
   }
 
+  /** @deprecated Use {@link OnStatusChange}. */
   public onStatusChange(status: string): void {
-    this.selectedStatus = status;
-    this.applyFilters();
-    this.saveUserPreferencesDebounced();
+    return this.OnStatusChange(status);
   }
 
-  public onSortChange(sortBy: string): void {
-    if (this.sortBy === sortBy) {
+  public OnSortChange(sortBy: string): void {
+    if (this.SortBy === sortBy) {
       // Toggle direction if same column
-      this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+      this.SortDirection = this.SortDirection === 'asc' ? 'desc' : 'asc';
     } else {
       // New column, default to ascending
-      this.sortBy = sortBy;
-      this.sortDirection = 'asc';
+      this.SortBy = sortBy;
+      this.SortDirection = 'asc';
     }
     this.sortModels();
     this.saveUserPreferencesDebounced();
   }
 
-  public async toggleModelStatus(model: ModelDisplayData, event: Event): Promise<void> {
+  /** @deprecated Use {@link OnSortChange}. */
+  public onSortChange(sortBy: string): void {
+    return this.OnSortChange(sortBy);
+  }
+
+  public async ToggleModelStatus(model: ModelDisplayData, event: Event): Promise<void> {
     event.stopPropagation();
     
     try {
@@ -555,48 +826,73 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
     }
   }
 
-  public openModel(modelId: string): void {
+  /** @deprecated Use {@link ToggleModelStatus}. */
+  public async toggleModelStatus(model: ModelDisplayData, event: Event): Promise<void> {
+    return this.ToggleModelStatus(model, event);
+  }
+
+  public OpenModel(modelId: string): void {
     this.navigationService.OpenEntityRecord('MJ: AI Models', CompositeKey.FromID(modelId));
+  }
+
+  /** @deprecated Use {@link OpenModel}. */
+  public openModel(modelId: string): void {
+    return this.OpenModel(modelId);
   }
 
   /**
    * Show the detail panel for a model
    */
-  public showModelDetails(model: MJAIModelEntityExtended, event?: Event): void {
+  public ShowModelDetails(model: MJAIModelEntityExtended, event?: Event): void {
     if (event) {
       event.stopPropagation();
     }
-    this.selectedModel = model as ModelDisplayData;
-    this.detailPanelVisible = true;
+    this.SelectedModel = model as ModelDisplayData;
+    this.DetailPanelVisible = true;
+  }
+
+  /** @deprecated Use {@link ShowModelDetails}. */
+  public showModelDetails(model: MJAIModelEntityExtended, event?: Event): void {
+    return this.ShowModelDetails(model, event);
   }
 
   /**
    * Close the detail panel
    */
-  public closeDetailPanel(): void {
-    this.detailPanelVisible = false;
+  public CloseDetailPanel(): void {
+    this.DetailPanelVisible = false;
     // Delay clearing selectedModel for smoother animation
     setTimeout(() => {
-      if (!this.detailPanelVisible) {
-        this.selectedModel = null;
+      if (!this.DetailPanelVisible) {
+        this.SelectedModel = null;
       }
     }, 300);
+  }
+
+  /** @deprecated Use {@link CloseDetailPanel}. */
+  public closeDetailPanel(): void {
+    return this.CloseDetailPanel();
   }
 
   /**
    * Open the full entity record from the detail panel
    */
-  public openModelFromPanel(): void {
-    if (this.selectedModel) {
-      this.openModel(this.selectedModel.ID);
+  public OpenModelFromPanel(): void {
+    if (this.SelectedModel) {
+      this.OpenModel(this.SelectedModel.ID);
       // The user's intent has moved to the full record — leaving the panel
       // open would paint it over the records view and greet them with stale
       // chrome when they return to this page.
-      this.closeDetailPanel();
+      this.CloseDetailPanel();
     }
   }
 
-  public async createNewModel(): Promise<void> {
+  /** @deprecated Use {@link OpenModelFromPanel}. */
+  public openModelFromPanel(): void {
+    return this.OpenModelFromPanel();
+  }
+
+  public async CreateNewModel(): Promise<void> {
     try {
       const md = this.ProviderToUse;
       const newModel = await md.GetEntityObject<MJAIModelEntityExtended>('MJ: AI Models');
@@ -619,7 +915,12 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
     }
   }
 
-  public getModelIcon(model: ModelDisplayData): string {
+  /** @deprecated Use {@link CreateNewModel}. */
+  public async createNewModel(): Promise<void> {
+    return this.CreateNewModel();
+  }
+
+  public GetModelIcon(model: ModelDisplayData): string {
     const typeName = model.ModelTypeName?.toLowerCase();
     if (typeName?.includes('chat') || typeName?.includes('conversation')) {
       return 'fa-solid fa-comments';
@@ -633,17 +934,22 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
     return 'fa-solid fa-microchip';
   }
 
-  public getRankClass(rank: number | null, rankType?: 'power' | 'speed' | 'cost'): string {
+  /** @deprecated Use {@link GetModelIcon}. */
+  public getModelIcon(model: ModelDisplayData): string {
+    return this.GetModelIcon(model);
+  }
+
+  public GetRankClass(rank: number | null, rankType?: 'power' | 'speed' | 'cost'): string {
     if (rank === null || rank === 0) return 'rank-none';
     
     // Determine which max value to use
     let maxValue = 10;
     if (rankType === 'power') {
-      maxValue = this.maxPowerRank;
+      maxValue = this.MaxPowerRank;
     } else if (rankType === 'speed') {
-      maxValue = this.maxSpeedRank;
+      maxValue = this.MaxSpeedRank;
     } else if (rankType === 'cost') {
-      maxValue = this.maxCostRank;
+      maxValue = this.MaxCostRank;
     }
     
     // Calculate percentage of max
@@ -654,96 +960,131 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
     return 'rank-low';
   }
 
-  public get hasActiveFilters(): boolean {
-    return this.searchTerm !== '' || 
-           this.selectedVendor !== 'all' || 
-           this.selectedType !== 'all' || 
-           this.selectedStatus !== 'all' ||
-           this.powerRankRange.min > 0 ||
-           this.powerRankRange.max < this.maxPowerRank ||
-           this.speedRankRange.min > 0 ||
-           this.speedRankRange.max < this.maxSpeedRank ||
-           this.costRankRange.min > 0 ||
-           this.costRankRange.max < this.maxCostRank;
+  /** @deprecated Use {@link GetRankClass}. */
+  public getRankClass(rank: number | null, rankType?: 'power' | 'speed' | 'cost'): string {
+    return this.GetRankClass(rank, rankType);
   }
 
-  public clearFilters(): void {
-    this.searchTerm = '';
-    this.selectedVendor = 'all';
-    this.selectedType = 'all';
-    this.selectedStatus = 'all';
-    this.powerRankRange = { min: 0, max: this.maxPowerRank };
-    this.speedRankRange = { min: 0, max: this.maxSpeedRank };
-    this.costRankRange = { min: 0, max: this.maxCostRank };
+  public get HasActiveFilters(): boolean {
+    return this.SearchTerm !== '' || 
+           this.SelectedVendor !== 'all' || 
+           this.SelectedType !== 'all' || 
+           this.SelectedStatus !== 'all' ||
+           this.PowerRankRange.min > 0 ||
+           this.PowerRankRange.max < this.MaxPowerRank ||
+           this.SpeedRankRange.min > 0 ||
+           this.SpeedRankRange.max < this.MaxSpeedRank ||
+           this.CostRankRange.min > 0 ||
+           this.CostRankRange.max < this.MaxCostRank;
+  }
+
+  /** @deprecated Use {@link HasActiveFilters}. */
+  public get hasActiveFilters(): boolean {
+    return this.HasActiveFilters;
+  }
+
+  public ClearFilters(): void {
+    this.SearchTerm = '';
+    this.SelectedVendor = 'all';
+    this.SelectedType = 'all';
+    this.SelectedStatus = 'all';
+    this.PowerRankRange = { min: 0, max: this.MaxPowerRank };
+    this.SpeedRankRange = { min: 0, max: this.MaxSpeedRank };
+    this.CostRankRange = { min: 0, max: this.MaxCostRank };
     this.searchSubject.next('');
-    this.applyFilters();
+    this.ApplyFilters();
     this.saveUserPreferencesDebounced();
+  }
+
+  /** @deprecated Use {@link ClearFilters}. */
+  public clearFilters(): void {
+    return this.ClearFilters();
   }
 
   /** Empty-state CTA: clear filters when the list is narrowed, otherwise create. */
-  public onEmptyStateAction(): void {
-    if (this.hasActiveFilters) {
-      this.clearFilters();
+  public OnEmptyStateAction(): void {
+    if (this.HasActiveFilters) {
+      this.ClearFilters();
     } else {
-      this.createNewModel();
+      this.CreateNewModel();
     }
   }
 
+  /** @deprecated Use {@link OnEmptyStateAction}. */
+  public onEmptyStateAction(): void {
+    return this.OnEmptyStateAction();
+  }
+
   /** Reset only the popover filters — leave searchTerm (toolbar) untouched. */
-  public resetPopoverFilters(): void {
-    this.selectedVendor = 'all';
-    this.selectedType = 'all';
-    this.selectedStatus = 'all';
-    this.powerRankRange = { min: 0, max: this.maxPowerRank };
-    this.applyFilters();
+  public ResetPopoverFilters(): void {
+    this.SelectedVendor = 'all';
+    this.SelectedType = 'all';
+    this.SelectedStatus = 'all';
+    this.PowerRankRange = { min: 0, max: this.MaxPowerRank };
+    this.ApplyFilters();
     this.saveUserPreferencesDebounced();
+  }
+
+  /** @deprecated Use {@link ResetPopoverFilters}. */
+  public resetPopoverFilters(): void {
+    return this.ResetPopoverFilters();
   }
 
   /** Number of active filter criteria inside the popover (excludes searchTerm + sortBy). */
   public get ActiveFilterCount(): number {
     let n = 0;
-    if (this.selectedVendor && this.selectedVendor !== 'all') n++;
-    if (this.selectedType && this.selectedType !== 'all') n++;
-    if (this.selectedStatus && this.selectedStatus !== 'all') n++;
-    if (this.powerRankRange.min > 0 || this.powerRankRange.max < this.maxPowerRank) n++;
+    if (this.SelectedVendor && this.SelectedVendor !== 'all') n++;
+    if (this.SelectedType && this.SelectedType !== 'all') n++;
+    if (this.SelectedStatus && this.SelectedStatus !== 'all') n++;
+    if (this.PowerRankRange.min > 0 || this.PowerRankRange.max < this.MaxPowerRank) n++;
     return n;
   }
 
   /** View-mode options for the shared <mj-view-toggle>. */
-  public readonly modelViewOptions = [
+  public readonly ModelViewOptions = [
     { key: 'grid', icon: 'fa-solid fa-grip', title: 'Grid View' },
     { key: 'list', icon: 'fa-solid fa-list', title: 'List View' },
   ];
 
+  /** @deprecated Use {@link ModelViewOptions}. */
+  public get modelViewOptions() {
+    return this.ModelViewOptions;
+  }
+
   /** Values record consumed by the centralized <mj-filter-panel>. */
-  public get modelFilterValues(): Record<string, unknown> {
+  public get ModelFilterValues(): Record<string, unknown> {
     return {
-      sortBy:         this.sortBy,
-      selectedVendor: this.selectedVendor,
-      selectedType:   this.selectedType,
-      selectedStatus: this.selectedStatus,
+      sortBy:         this.SortBy,
+      selectedVendor: this.SelectedVendor,
+      selectedType:   this.SelectedType,
+      selectedStatus: this.SelectedStatus,
     };
   }
 
+  /** @deprecated Use {@link ModelFilterValues}. */
+  public get modelFilterValues(): Record<string, unknown> {
+    return this.ModelFilterValues;
+  }
+
   /** Field config consumed by the centralized <mj-filter-panel>. */
-  public get modelFilterFields(): FilterFieldConfig[] {
+  public get ModelFilterFields(): FilterFieldConfig[] {
     return [
       {
         key: 'sortBy',
         type: 'dropdown',
         label: 'Sort By',
         icon: 'fa-solid fa-sort',
-        options: this.sortOptions.map(o => ({ text: o.label, value: o.value })),
+        options: this.SortOptions.map(o => ({ text: o.label, value: o.value })),
       },
       {
         key: 'selectedVendor',
         type: 'dropdown',
         label: 'Vendor',
         icon: 'fa-solid fa-building',
-        filterable: this.vendors.length > 10,
+        filterable: this.Vendors.length > 10,
         options: [
           { text: 'All Vendors', value: 'all' },
-          ...this.vendors.map(v => ({ text: v.Name ?? '', value: v.ID })),
+          ...this.Vendors.map(v => ({ text: v.Name ?? '', value: v.ID })),
         ],
       },
       {
@@ -753,7 +1094,7 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
         icon: 'fa-solid fa-microchip',
         options: [
           { text: 'All Types', value: 'all' },
-          ...this.modelTypes.map(t => ({ text: t.Name ?? '', value: t.ID })),
+          ...this.ModelTypes.map(t => ({ text: t.Name ?? '', value: t.ID })),
         ],
       },
       {
@@ -770,17 +1111,27 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
     ];
   }
 
+  /** @deprecated Use {@link ModelFilterFields}. */
+  public get modelFilterFields(): FilterFieldConfig[] {
+    return this.ModelFilterFields;
+  }
+
   /** Receive the updated values record from <mj-filter-panel> and apply it. */
-  public onFilterValuesChange(values: Record<string, unknown>): void {
-    this.sortBy         = (values['sortBy']         as string) ?? this.sortBy;
-    this.selectedVendor = (values['selectedVendor'] as string) ?? 'all';
-    this.selectedType   = (values['selectedType']   as string) ?? 'all';
-    this.selectedStatus = (values['selectedStatus'] as string) ?? 'all';
-    this.applyFilters();
+  public OnFilterValuesChange(values: Record<string, unknown>): void {
+    this.SortBy         = (values['sortBy']         as string) ?? this.SortBy;
+    this.SelectedVendor = (values['selectedVendor'] as string) ?? 'all';
+    this.SelectedType   = (values['selectedType']   as string) ?? 'all';
+    this.SelectedStatus = (values['selectedStatus'] as string) ?? 'all';
+    this.ApplyFilters();
     this.saveUserPreferencesDebounced();
   }
 
-  public formatTokenLimit(limit: number): string {
+  /** @deprecated Use {@link OnFilterValuesChange}. */
+  public onFilterValuesChange(values: Record<string, unknown>): void {
+    return this.OnFilterValuesChange(values);
+  }
+
+  public FormatTokenLimit(limit: number): string {
     if (limit >= 1000000) {
       return Math.floor(limit / 1000000) + 'M';
     } else if (limit >= 1000) {
@@ -789,15 +1140,20 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
     return limit.toString();
   }
 
-  public validateAndApplyRankFilters(rankType: 'power' | 'speed' | 'cost'): void {
-    // Get the appropriate range and max value based on type
-    let range = rankType === 'power' ? this.powerRankRange :
-                 rankType === 'speed' ? this.speedRankRange :
-                 this.costRankRange;
+  /** @deprecated Use {@link FormatTokenLimit}. */
+  public formatTokenLimit(limit: number): string {
+    return this.FormatTokenLimit(limit);
+  }
 
-    let maxValue = rankType === 'power' ? this.maxPowerRank :
-                   rankType === 'speed' ? this.maxSpeedRank :
-                   this.maxCostRank;
+  public ValidateAndApplyRankFilters(rankType: 'power' | 'speed' | 'cost'): void {
+    // Get the appropriate range and max value based on type
+    let range = rankType === 'power' ? this.PowerRankRange :
+                 rankType === 'speed' ? this.SpeedRankRange :
+                 this.CostRankRange;
+
+    let maxValue = rankType === 'power' ? this.MaxPowerRank :
+                   rankType === 'speed' ? this.MaxSpeedRank :
+                   this.MaxCostRank;
 
     // Ensure min is not greater than max
     if (range.min > range.max) {
@@ -812,7 +1168,12 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
     range.max = Math.max(0, Math.min(maxValue, range.max));
 
     // Apply the filters
-    this.applyFilters();
+    this.ApplyFilters();
+  }
+
+  /** @deprecated Use {@link ValidateAndApplyRankFilters}. */
+  public validateAndApplyRankFilters(rankType: 'power' | 'speed' | 'cost'): void {
+    return this.ValidateAndApplyRankFilters(rankType);
   }
 
   // BaseResourceComponent abstract method implementations

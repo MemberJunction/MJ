@@ -76,7 +76,7 @@ interface GeneratedActionRecord {
 export class IntegrationActionGenerator {
 
     /** All verbs in canonical order, used by GenerateActionsForObject */
-    private static readonly AllVerbs: IntegrationActionVerb[] = [
+    private static readonly allVerbs: IntegrationActionVerb[] = [
         'Get', 'Create', 'Update', 'Delete', 'Upsert', 'Search', 'List',
     ];
 
@@ -145,7 +145,7 @@ export class IntegrationActionGenerator {
     }
 
     private applicableVerbs(supportsWrite: boolean): IntegrationActionVerb[] {
-        return IntegrationActionGenerator.AllVerbs.filter(v => {
+        return IntegrationActionGenerator.allVerbs.filter(v => {
             if (v === 'Create' || v === 'Update' || v === 'Delete' || v === 'Upsert') return supportsWrite;
             return true; // Get, Search, List always
         });

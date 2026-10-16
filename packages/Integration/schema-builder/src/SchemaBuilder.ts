@@ -38,10 +38,10 @@ import { GetDialect } from '@memberjunction/sql-dialect';
  * integration-specific artifacts (sync columns, soft FKs, metadata files).
  */
 export class SchemaBuilder {
-    private readonly Engine = new SchemaEngine();
-    private readonly SoftFKEmitter = new SoftFKConfigEmitter();
-    private readonly MetaEmitter = new MetadataEmitter();
-    private readonly Evolution = new SchemaEvolution();
+    private readonly engine = new SchemaEngine();
+    private readonly softFKEmitter = new SoftFKConfigEmitter();
+    private readonly metaEmitter = new MetadataEmitter();
+    private readonly evolution = new SchemaEvolution();
 
     /**
      * Build all artifacts for a set of integration target tables.
@@ -56,26 +56,26 @@ export class SchemaBuilder {
         };
 
         // Step 1: Validate access control
-        const accessErrors = this.ValidateAccessControl(input);
+        const accessErrors = this.validateAccessControl(input);
         if (accessErrors.length > 0) {
             output.Errors.push(...accessErrors);
             return output;
         }
 
         // Step 2: Pre-flight collision checks
-        const collisionWarnings = this.CheckCollisions(input);
+        const collisionWarnings = this.checkCollisions(input);
         output.Warnings.push(...collisionWarnings);
 
         // Step 3: Separate new tables vs evolution
-        const { newConfigs, evolutionConfigs } = this.ClassifyConfigs(input);
+        const { newConfigs, evolutionConfigs } = this.classifyConfigs(input);
 
         // Step 4: Generate DDL using SchemaEngine
         const ddlParts: string[] = [];
 
         // Schema creation statements (deduplicate by schema name)
-        const schemasToCreate = this.GetUniqueSchemas(newConfigs);
+        const schemasToCreate = this.getUniqueSchemas(newConfigs);
         for (const schemaName of schemasToCreate) {
-            ddlParts.push(this.Engine.GenerateCreateSchema(schemaName, input.Platform));
+            ddlParts.push(this.engine.GenerateCreateSchema(schemaName, input.Platform));
             ddlParts.push(''); // blank line separator
         }
 
@@ -89,8 +89,8 @@ export class SchemaBuilder {
             // ~8060 bytes) makes very wide tables (600+ columns) impossible to INSERT into — cap to a
             // fitting core subset + warn, rather than emit a doomed table. No-op on dialects with no
             // in-row limit (PostgreSQL/TOAST). Mutates config.Columns.
-            output.Warnings.push(...this.CapColumnsForRowSize(config, input.Platform));
-            const tableDef = this.ConvertToTableDefinition(config, input.Platform);
+            output.Warnings.push(...this.capColumnsForRowSize(config, input.Platform));
+            const tableDef = this.convertToTableDefinition(config, input.Platform);
             // IfNotExists: integration Create-Tables must be idempotent — a physical table
             // may already exist with no MJ entity yet (e.g. a prior run created the table but
             // CodeGen hadn't created the entity), and re-running must not collide.
@@ -103,7 +103,7 @@ export class SchemaBuilder {
             const sourceObj = input.SourceSchema.Objects.find(o => o.ExternalName === config.SourceObjectName);
             if (!sourceObj) continue;
 
-            const diff = this.Evolution.DiffSchema(sourceObj, config, existing, input.Platform);
+            const diff = this.evolution.DiffSchema(sourceObj, config, existing, input.Platform);
             if (diff.Warnings.length > 0) {
                 output.Warnings.push(...diff.Warnings);
             }
@@ -111,7 +111,7 @@ export class SchemaBuilder {
                 continue; // No changes
             }
 
-            ddlParts.push(this.Evolution.GenerateEvolutionMigration(diff, config.SchemaName, config.TableName, input.Platform));
+            ddlParts.push(this.evolution.GenerateEvolutionMigration(diff, config.SchemaName, config.TableName, input.Platform));
             ddlParts.push(''); // blank line separator
         }
 
@@ -139,21 +139,21 @@ export class SchemaBuilder {
 
         // Step 5: Generate soft PK and FK config
         const allConfigs = [...newConfigs, ...evolutionConfigs.map(ec => ec.config)];
-        const allSoftFKs = this.CollectSoftFKs(input, evolutionConfigs);
+        const allSoftFKs = this.collectSoftFKs(input, evolutionConfigs);
         // Always emit additionalSchemaInfo — every integration table needs a soft PK
         if (allConfigs.length > 0) {
-            const existingContent = this.ReadFileIfExists(input.AdditionalSchemaInfoPath);
-            const existingConfig = this.SoftFKEmitter.ParseExistingConfig(existingContent);
-            const withPKs = this.SoftFKEmitter.MergeSoftPKs(existingConfig, allConfigs);
+            const existingContent = this.readFileIfExists(input.AdditionalSchemaInfoPath);
+            const existingConfig = this.softFKEmitter.ParseExistingConfig(existingContent);
+            const withPKs = this.softFKEmitter.MergeSoftPKs(existingConfig, allConfigs);
             // This run's PK/FK resolution REPLACES the prior run's entries for the
             // tables it covers (adds new, removes gone) — clear their FKs before the rebuild so
             // a stale FK never outlives the resolution that once declared it. Clearing happens
             // even when allSoftFKs is empty (a table that lost every FK ends clear).
-            const cleared = this.SoftFKEmitter.ClearForeignKeysForTables(withPKs, allConfigs);
+            const cleared = this.softFKEmitter.ClearForeignKeysForTables(withPKs, allConfigs);
             const merged = allSoftFKs.length > 0
-                ? this.SoftFKEmitter.MergeSchemaConfig(cleared, allSoftFKs)
+                ? this.softFKEmitter.MergeSchemaConfig(cleared, allSoftFKs)
                 : cleared;
-            output.AdditionalSchemaInfoUpdate = this.SoftFKEmitter.EmitConfigFile(
+            output.AdditionalSchemaInfoUpdate = this.softFKEmitter.EmitConfigFile(
                 input.AdditionalSchemaInfoPath, merged
             );
         }
@@ -163,10 +163,10 @@ export class SchemaBuilder {
         if (mjTargets.length > 0) {
             const entityNames = mjTargets.map(c => c.EntityName);
             output.MetadataFiles.push(
-                this.MetaEmitter.EmitEntitySettingsFile(entityNames, input.MetadataDir)
+                this.metaEmitter.EmitEntitySettingsFile(entityNames, input.MetadataDir)
             );
             output.MetadataFiles.push(
-                this.MetaEmitter.EmitMjSyncConfig(input.MetadataDir)
+                this.metaEmitter.EmitMjSyncConfig(input.MetadataDir)
             );
         }
 
@@ -284,20 +284,20 @@ export class SchemaBuilder {
      * Convert an integration TargetTableConfig to a generic TableDefinition.
      * Adds integration-specific sync columns via AdditionalColumns.
      */
-    private ConvertToTableDefinition(config: TargetTableConfig, platform: DatabasePlatform): TableDefinition {
+    private convertToTableDefinition(config: TargetTableConfig, platform: DatabasePlatform): TableDefinition {
         return {
             SchemaName: config.SchemaName,
             TableName: config.TableName,
             EntityName: config.EntityName,
             Description: config.Description,
-            Columns: config.Columns.map(c => this.ConvertColumn(c)),
+            Columns: config.Columns.map(c => this.convertColumn(c)),
             SoftPrimaryKeys: config.PrimaryKeyFields,
-            AdditionalColumns: this.IntegrationSyncColumns(platform),
+            AdditionalColumns: this.integrationSyncColumns(platform),
         };
     }
 
     /** Convert a TargetColumnConfig to a generic ColumnDefinition. */
-    private ConvertColumn(col: TargetColumnConfig): ColumnDefinition {
+    private convertColumn(col: TargetColumnConfig): ColumnDefinition {
         return {
             Name: col.TargetColumnName,
             Type: 'string' as SchemaFieldType, // Overridden by RawSqlType
@@ -326,7 +326,7 @@ export class SchemaBuilder {
      * so there is no platform branching here. Mutates config.Columns in place to the kept subset so all
      * downstream steps (DDL, soft FK, metadata) operate on the columns that actually exist.
      */
-    private CapColumnsForRowSize(config: TargetTableConfig, platform: DatabasePlatform): string[] {
+    private capColumnsForRowSize(config: TargetTableConfig, platform: DatabasePlatform): string[] {
         const dialect = GetDialect(platform);
         const maxRowBytes = dialect.MaxInRowSizeBytes;
         const maxCols = dialect.MaxColumnCount;
@@ -383,7 +383,7 @@ export class SchemaBuilder {
     }
 
     /** Integration-specific sync columns added to every integration table. */
-    private IntegrationSyncColumns(platform: DatabasePlatform): ColumnDefinition[] {
+    private integrationSyncColumns(platform: DatabasePlatform): ColumnDefinition[] {
         return [
             {
                 Name: '__mj_integration_SyncStatus',
@@ -480,7 +480,7 @@ export class SchemaBuilder {
      * SchemaEngine wraps DDL in a migration header — we need just the DDL
      * since we produce our own single consolidated migration file.
      */
-    private ReadFileIfExists(filePath: string): string | null {
+    private readFileIfExists(filePath: string): string | null {
         try {
             if (existsSync(filePath)) {
                 return readFileSync(filePath, 'utf-8');
@@ -491,7 +491,7 @@ export class SchemaBuilder {
 
     // ─── Validation & Classification ────────────────────────────────────
 
-    private ValidateAccessControl(input: SchemaBuilderInput): string[] {
+    private validateAccessControl(input: SchemaBuilderInput): string[] {
         const errors: string[] = [];
         for (const config of input.TargetConfigs) {
             if (config.SchemaName === '__mj') {
@@ -505,7 +505,7 @@ export class SchemaBuilder {
         return errors;
     }
 
-    private CheckCollisions(input: SchemaBuilderInput): string[] {
+    private checkCollisions(input: SchemaBuilderInput): string[] {
         const warnings: string[] = [];
         const existingNames = new Set(input.ExistingTables.map(t => `${t.SchemaName}.${t.TableName}`.toLowerCase()));
 
@@ -519,7 +519,7 @@ export class SchemaBuilder {
         return warnings;
     }
 
-    private ClassifyConfigs(input: SchemaBuilderInput): {
+    private classifyConfigs(input: SchemaBuilderInput): {
         newConfigs: TargetTableConfig[];
         evolutionConfigs: Array<{ config: TargetTableConfig; existing: ExistingTableInfo }>;
     } {
@@ -544,7 +544,7 @@ export class SchemaBuilder {
         return { newConfigs, evolutionConfigs };
     }
 
-    private GetUniqueSchemas(configs: TargetTableConfig[]): string[] {
+    private getUniqueSchemas(configs: TargetTableConfig[]): string[] {
         const schemas = new Set<string>();
         for (const config of configs) {
             schemas.add(config.SchemaName);
@@ -552,19 +552,19 @@ export class SchemaBuilder {
         return Array.from(schemas);
     }
 
-    private CollectSoftFKs(
+    private collectSoftFKs(
         input: SchemaBuilderInput,
         evolutionConfigs: Array<{ config: TargetTableConfig; existing: ExistingTableInfo }>
     ): SoftFKEntry[] {
         // From source relationships
-        const fromSource = this.SoftFKEmitter.GenerateConfigEntries(input.SourceSchema, input.TargetConfigs);
+        const fromSource = this.softFKEmitter.GenerateConfigEntries(input.SourceSchema, input.TargetConfigs);
 
         // From evolution (new FK columns)
         for (const { config, existing } of evolutionConfigs) {
             const sourceObj = input.SourceSchema.Objects.find(o => o.ExternalName === config.SourceObjectName);
             if (!sourceObj) continue;
-            const diff = this.Evolution.DiffSchema(sourceObj, config, existing, input.Platform);
-            const newFKs = this.Evolution.GenerateEvolutionSoftFKUpdates(diff, config);
+            const diff = this.evolution.DiffSchema(sourceObj, config, existing, input.Platform);
+            const newFKs = this.evolution.GenerateEvolutionSoftFKUpdates(diff, config);
             fromSource.push(...newFKs);
         }
 

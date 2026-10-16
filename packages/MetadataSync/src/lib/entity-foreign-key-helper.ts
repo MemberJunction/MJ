@@ -24,7 +24,7 @@ export class EntityForeignKeyHelper {
      * @param metadata The metadata instance
      * @returns Map of entity name to list of reverse FK references
      */
-    static buildReverseFKMap(metadata: Metadata): Map<string, ReverseFKInfo[]> {
+    static BuildReverseFKMap(metadata: Metadata): Map<string, ReverseFKInfo[]> {
         const reverseMap = new Map<string, ReverseFKInfo[]>();
 
         for (const entity of metadata.Entities) {
@@ -59,6 +59,11 @@ export class EntityForeignKeyHelper {
         return reverseMap;
     }
 
+    /** @deprecated Use {@link BuildReverseFKMap}. */
+    static buildReverseFKMap(metadata: Metadata): Map<string, ReverseFKInfo[]> {
+        return this.BuildReverseFKMap(metadata);
+    }
+
     /**
      * Get entity dependencies using the Metadata API
      * Returns all entities that have foreign keys pointing to the specified entity
@@ -67,11 +72,19 @@ export class EntityForeignKeyHelper {
      * @param entityName The entity to check dependencies for
      * @returns Array of entity dependencies
      */
-    static async getEntityDependencies(
+    static async GetEntityDependencies(
         metadata: Metadata,
         entityName: string
     ): Promise<EntityDependency[]> {
         return await metadata.GetEntityDependencies(entityName);
+    }
+
+    /** @deprecated Use {@link GetEntityDependencies}. */
+    static async getEntityDependencies(
+        metadata: Metadata,
+        entityName: string
+    ): Promise<EntityDependency[]> {
+        return this.GetEntityDependencies(metadata, entityName);
     }
 
     /**
@@ -81,12 +94,20 @@ export class EntityForeignKeyHelper {
      * @param entityName The entity to check
      * @returns True if other entities reference this entity
      */
-    static async hasDependentEntities(
+    static async HasDependentEntities(
         metadata: Metadata,
         entityName: string
     ): Promise<boolean> {
         const deps = await metadata.GetEntityDependencies(entityName);
         return deps.length > 0;
+    }
+
+    /** @deprecated Use {@link HasDependentEntities}. */
+    static async hasDependentEntities(
+        metadata: Metadata,
+        entityName: string
+    ): Promise<boolean> {
+        return this.HasDependentEntities(metadata, entityName);
     }
 
     /**
@@ -96,12 +117,17 @@ export class EntityForeignKeyHelper {
      * @param entityName The entity name
      * @returns Array of foreign key field names
      */
-    static getForeignKeyFields(metadata: Metadata, entityName: string): string[] {
+    static GetForeignKeyFields(metadata: Metadata, entityName: string): string[] {
         const entity = metadata.Entities.find(e => e.Name === entityName);
         if (!entity) {
             return [];
         }
 
         return entity.ForeignKeys.map(fk => fk.Name);
+    }
+
+    /** @deprecated Use {@link GetForeignKeyFields}. */
+    static getForeignKeyFields(metadata: Metadata, entityName: string): string[] {
+        return this.GetForeignKeyFields(metadata, entityName);
     }
 }

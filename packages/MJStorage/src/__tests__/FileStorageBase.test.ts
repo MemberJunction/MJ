@@ -235,6 +235,21 @@ describe('FileStorageBase', () => {
       expect(driver.IsConfigured).toBe(true);
     });
   });
+
+  describe('Dispose', () => {
+    it('defaults to a no-op that does not throw', () => {
+      expect(() => driver.Dispose()).not.toThrow();
+    });
+
+    it('is safe to call multiple times', async () => {
+      await driver.initialize({ accountId: 'test' });
+
+      expect(() => {
+        driver.Dispose();
+        driver.Dispose();
+      }).not.toThrow();
+    });
+  });
 });
 
 describe('StorageProviderConfig interface', () => {

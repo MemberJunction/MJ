@@ -17,7 +17,7 @@ type Selector =
     | { kind: 'recursive'; name: string | null }; // name === null => `..*`
 
 /** Parse a JSONPath string into a flat list of selectors. Throws on unsupported syntax. */
-export function parseJsonPath(path: string): Selector[] {
+export function ParseJsonPath(path: string): Selector[] {
     const trimmed = path.trim();
     if (trimmed !== '$' && !trimmed.startsWith('$.') && !trimmed.startsWith('$[')) {
         throw new Error(`JSONPath must start with "$" (got "${path}")`);
@@ -31,6 +31,11 @@ export function parseJsonPath(path: string): Selector[] {
         i = parseNextSelector(trimmed, i, selectors);
     }
     return selectors;
+}
+
+/** @deprecated Use {@link ParseJsonPath}. */
+export function parseJsonPath(path: string): Selector[] {
+    return ParseJsonPath(path);
 }
 
 /** Parse one selector starting at `i`; push it onto `out`; return the next index. */
@@ -95,8 +100,13 @@ function parseBracket(s: string, i: number, out: Selector[]): number {
 }
 
 /** Evaluate parsed selectors against a root value, returning all matched values. */
-export function evaluateJsonPath(selectors: Selector[], root: unknown): unknown[] {
+export function EvaluateJsonPath(selectors: Selector[], root: unknown): unknown[] {
     return selectors.reduce<unknown[]>((current, selector) => applySelector(selector, current), [root]);
+}
+
+/** @deprecated Use {@link EvaluateJsonPath}. */
+export function evaluateJsonPath(selectors: Selector[], root: unknown): unknown[] {
+    return EvaluateJsonPath(selectors, root);
 }
 
 /** Apply one selector across the current set of matched values. */

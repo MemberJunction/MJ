@@ -3,7 +3,7 @@ import { Subject, ReplaySubject, Observable } from 'rxjs';
 import { ClassFactory } from './ClassFactory'
 import { ObjectCache } from './ObjectCache';
 import { BaseSingleton } from './BaseSingleton';
-import { uuidv4 } from './util';
+import { Uuidv4 } from './util';
 
 /**
  * Global class used for coordinating events, creating class instances, and managing components across MemberJunction
@@ -51,7 +51,7 @@ export class MJGlobal extends BaseSingleton<MJGlobal> {
      */
     public get ProcessUUID(): string {
         if (!this._processUUID) {
-            this._processUUID = uuidv4();
+            this._processUUID = Uuidv4();
         }
         return this._processUUID;
     }

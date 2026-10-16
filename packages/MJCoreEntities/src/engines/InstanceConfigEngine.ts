@@ -104,7 +104,7 @@ export class InstanceConfigEngine extends BaseEngine<InstanceConfigEngine> {
     public Get(featureKey: string): string | undefined {
         const config = this.GetConfigByKey(featureKey);
         if (!config) return undefined;
-        return this.ResolveValue(config);
+        return this.resolveValue(config);
     }
 
     /**
@@ -194,7 +194,7 @@ export class InstanceConfigEngine extends BaseEngine<InstanceConfigEngine> {
      * Resolve the effective value for a configuration record. Returns Value if
      * it is non-empty, otherwise falls back to DefaultValue.
      */
-    private ResolveValue(config: MJInstanceConfigurationEntity): string {
+    private resolveValue(config: MJInstanceConfigurationEntity): string {
         const val = config.Value;
         if (val != null && val.trim().length > 0) {
             return val;

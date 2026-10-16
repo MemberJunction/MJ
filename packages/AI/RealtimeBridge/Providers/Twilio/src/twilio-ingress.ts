@@ -15,7 +15,7 @@
  */
 
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import { buildConnectStreamTwiML } from './real-twilio-bindings';
+import { BuildConnectStreamTwiML } from './real-twilio-bindings';
 
 /**
  * Verifies a Twilio webhook request signature per Twilio's documented scheme:
@@ -35,7 +35,7 @@ import { buildConnectStreamTwiML } from './real-twilio-bindings';
  * @param params The POST form parameters Twilio sent.
  * @returns `true` when the signature is valid; `false` otherwise (including a missing header).
  */
-export function verifyTwilioSignature(
+export function VerifyTwilioSignature(
     authToken: string,
     signatureHeader: string | undefined,
     url: string,
@@ -44,8 +44,18 @@ export function verifyTwilioSignature(
     if (!signatureHeader) {
         return false;
     }
-    const expected = computeTwilioSignature(authToken, url, params);
+    const expected = ComputeTwilioSignature(authToken, url, params);
     return constantTimeEquals(expected, signatureHeader);
+}
+
+/** @deprecated Use {@link VerifyTwilioSignature}. */
+export function verifyTwilioSignature(
+    authToken: string,
+    signatureHeader: string | undefined,
+    url: string,
+    params: Record<string, string>,
+): boolean {
+    return VerifyTwilioSignature(authToken, signatureHeader, url, params);
 }
 
 /**
@@ -57,9 +67,14 @@ export function verifyTwilioSignature(
  * @param params The POST form parameters.
  * @returns The base64-encoded HMAC-SHA1 signature.
  */
-export function computeTwilioSignature(authToken: string, url: string, params: Record<string, string>): string {
+export function ComputeTwilioSignature(authToken: string, url: string, params: Record<string, string>): string {
     const data = url + concatSortedParams(params);
     return createHmac('sha1', authToken).update(data, 'utf8').digest('base64');
+}
+
+/** @deprecated Use {@link ComputeTwilioSignature}. */
+export function computeTwilioSignature(authToken: string, url: string, params: Record<string, string>): string {
+    return ComputeTwilioSignature(authToken, url, params);
 }
 
 /**
@@ -68,10 +83,16 @@ export function computeTwilioSignature(authToken: string, url: string, params: R
  * inbound and outbound legs share one media contract.
  *
  * @param streamWssUrl The `wss://…/telephony/twilio/media` endpoint to connect the inbound call's audio to.
+ * @param parameters Optional custom `<Parameter>`s Twilio echoes on the `start` frame (the per-call media token).
  * @returns The TwiML document string to return to Twilio as the webhook response.
  */
+export function BuildInboundVoiceTwiML(streamWssUrl: string, parameters?: Record<string, string>): string {
+    return BuildConnectStreamTwiML(streamWssUrl, parameters);
+}
+
+/** @deprecated Use {@link BuildInboundVoiceTwiML}. */
 export function buildInboundVoiceTwiML(streamWssUrl: string): string {
-    return buildConnectStreamTwiML(streamWssUrl);
+    return BuildInboundVoiceTwiML(streamWssUrl);
 }
 
 /** The resolved identity of an inbound Twilio call, mapped from the voice-webhook params. */
@@ -93,7 +114,7 @@ export interface ResolvedInboundCall {
  * @returns The `{ callSid, from, to }` mapping.
  * @throws When `CallSid`, `From`, or `To` is missing.
  */
-export function resolveInboundCall(params: Record<string, string>): ResolvedInboundCall {
+export function ResolveInboundCall(params: Record<string, string>): ResolvedInboundCall {
     const callSid = params['CallSid'];
     const from = params['From'];
     const to = params['To'];
@@ -104,6 +125,41 @@ export function resolveInboundCall(params: Record<string, string>): ResolvedInbo
         );
     }
     return { callSid, from, to };
+}
+
+/** @deprecated Use {@link ResolveInboundCall}. */
+export function resolveInboundCall(params: Record<string, string>): ResolvedInboundCall {
+    return ResolveInboundCall(params);
+}
+
+/** Twilio call-status values that mean the call is over and will never carry media again. */
+const TWILIO_TERMINAL_CALL_STATUSES: ReadonlySet<string> = new Set(['completed', 'busy', 'failed', 'no-answer', 'canceled']);
+
+/**
+ * Whether a Twilio `CallStatus` is terminal (`completed`, `busy`, `failed`, `no-answer`, `canceled`). Pure.
+ * An unknown or missing status is NOT terminal — an unrecognized value must never tear down a live call.
+ *
+ * @param status The `CallStatus` param from a status-callback webhook.
+ * @returns `true` when the call has ended.
+ */
+export function IsTerminalTwilioCallStatus(status: string | undefined): boolean {
+    return status !== undefined && TWILIO_TERMINAL_CALL_STATUSES.has(status.trim().toLowerCase());
+}
+
+/**
+ * Whether an async-AMD `AnsweredBy` verdict means a machine (or fax) picked up rather than a person:
+ * `machine_start`, `machine_end_beep`, `machine_end_silence`, `machine_end_other`, `fax`. `human` and
+ * `unknown` are NOT machines — an inconclusive verdict must never hang up on a possible human. Pure.
+ *
+ * @param answeredBy The `AnsweredBy` param from the async-AMD callback.
+ * @returns `true` when the verdict is a machine or fax.
+ */
+export function IsMachineAnsweredBy(answeredBy: string | undefined): boolean {
+    if (!answeredBy) {
+        return false;
+    }
+    const value = answeredBy.trim().toLowerCase();
+    return value.startsWith('machine') || value === 'fax';
 }
 
 /** Concatenates params sorted by key as `key + value` (Twilio's signature input), with no separators. */

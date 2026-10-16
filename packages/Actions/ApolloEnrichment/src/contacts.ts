@@ -1,10 +1,10 @@
-import { BaseAction } from "@memberjunction/actions";
-import { RegisterClass } from "@memberjunction/global";
+import { BaseAction } from '@memberjunction/actions';
+import { EscapeSQLString, RegisterClass } from '@memberjunction/global';
+import { BaseEntity, CompositeKey, EntityInfo, IMetadataProvider, LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import * as Config from './config';
-import { BaseEntity, IMetadataProvider, LogError, LogStatus, Metadata, RunView, RunViewResult, UserInfo, CompositeKey } from "@memberjunction/core";
-import { HttpError, HttpGet, HttpPost, HttpRequestConfig, HttpResponse, IsHttpError } from '@memberjunction/network-utils';
-import { ApolloBulkPeopleRequest, ApolloBulkPeopleResponse, ProcessPersonRecordGroupParams, SearchPeopleResponse, SearchPeopleResponsePerson } from "./generic/apollo.types";
-import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
+import { ApolloAuthError, ApolloRateLimitError } from './http/ApolloHttp';
+import { ApolloEducationEntry, ApolloEmploymentEntry, ApolloPeopleClient, ApolloPersonMatch, ApolloPersonMatchInput } from './people/ApolloPeopleClient';
 
 /**
  * Configuration parameters for contact enrichment action
@@ -24,943 +24,527 @@ interface ContactEnrichmentParams {
     LinkedInField?: string;
     TwitterField?: string;
     FacebookField?: string;
+    /** Resolve the Apollo key from this company's credential; null means the environment key. */
+    CompanyID: string | null;
 }
 
 /**
- * Mappings for employment and education history entity fields
- * Used to create related history records for enriched contacts
+ * Field mappings for the employment history entity (`EmploymentHistoryFieldMappings`).
+ * Only the four required keys are written unconditionally; a date or current-flag column is
+ * written only when its key is present, so nothing is ever set on a column that was not named.
  */
-interface HistoryMappings {
-    education: Record<string, string>;
-    employment: Record<string, string>;
-}
-
-/**
- * Parameters for paginated record retrieval
- * Used to process large datasets in manageable chunks
- */
-type PageRecordsParams = {
+export interface EmploymentHistoryMapping {
     EntityName: string;
-    PageNumber: number;
-    PageSize: number;
-    Filter?: string;
-};
+    ContactIDFieldName: string;
+    OrganizationFieldName: string;
+    TitleFieldName: string;
+    StartDateFieldName?: string;
+    EndDateFieldName?: string;
+    IsCurrentFieldName?: string;
+}
+
+/** Field mappings for the education history entity (`EducationHistoryFieldMappings`). Same rule as employment. */
+export interface EducationHistoryMapping {
+    EntityName: string;
+    ContactIDFieldName: string;
+    InstitutionFieldName: string;
+    DegreeFieldName: string;
+    GradeLevelFieldName?: string;
+    StartDateFieldName?: string;
+    EndDateFieldName?: string;
+}
+
+/** Mappings for employment and education history entity fields; null when the param was not given or was incomplete. */
+interface HistoryMappings {
+    education: EducationHistoryMapping | null;
+    employment: EmploymentHistoryMapping | null;
+}
+
+/** Everything one run needs, resolved once in InternalRunAction and threaded through. */
+interface ContactRunContext {
+    Client: ApolloPeopleClient;
+    Md: IMetadataProvider;
+    Entity: EntityInfo;
+    User: UserInfo;
+    Params: ContactEnrichmentParams;
+    History: HistoryMappings;
+    /** When the run started; composite-key paging re-reads rows stamped before this. */
+    StartedAt: Date;
+}
+
+/** What happened, for the result message. */
+interface ContactRunTally {
+    Sent: number;
+    Matched: number;
+    Unmatched: number;
+    /** Rows nothing identifies (no email, and not first + last name + an organization); stamped, not sent. */
+    Unidentifiable: number;
+    SaveFailures: number;
+    GroupFailures: number;
+    CreditsConsumed: number;
+}
+
+/** The single-column key of a contact, for the history entities' FK filters. */
+interface ContactKey {
+    Value: unknown;
+    /** `ContactIDFieldName = <quoted value>` */
+    Predicate: (fieldName: string) => string;
+}
+
+const PAGE_SIZE = 500;
 
 /**
- * Action that enriches contact records using Apollo.io's people matching and search APIs
- * 
- * This action performs contact enrichment by:
- * 1. Bulk matching existing contacts against Apollo's database
- * 2. Updating contact records with enriched social profiles and company data
- * 3. Creating employment and education history records
- * 4. Processing contacts in configurable batch sizes for optimal performance
- * 
- * @example
- * ```typescript
- * // Basic contact enrichment
- * await runAction({
- *   ActionName: 'ApolloEnrichmentContactsAction',
- *   Params: [{
- *     Name: 'EntityName',
- *     Value: 'Contacts'
- *   }, {
- *     Name: 'EmailField',
- *     Value: 'Email'
- *   }, {
- *     Name: 'FirstNameField',
- *     Value: 'FirstName'
- *   }, {
- *     Name: 'LastNameField',
- *     Value: 'LastName'
- *   }, {
- *     Name: 'TitleField',
- *     Value: 'Title'
- *   }, {
- *     Name: 'EnrichedAtField',
- *     Value: 'EnrichedAt'
- *   }, {
- *     Name: 'Filter',
- *     Value: 'Email IS NOT NULL AND EnrichedAt IS NULL'
- *   }]
- * });
- * 
- * // Full enrichment with history tracking
- * await runAction({
- *   ActionName: 'ApolloEnrichmentContactsAction',
- *   Params: [
- *     // ... basic params ...
- *     {
- *       Name: 'EmploymentHistoryFieldMappings',
- *       Value: JSON.stringify({
- *         EmploymentHistoryEntityName: 'Contact Employment Histories',
- *         EmploymentHistoryContactIDFieldName: 'ContactID',
- *         EmploymentHistoryOrganizationFieldName: 'Organization',
- *         EmploymentHistoryTitleFieldName: 'Title'
- *       })
- *     }
- *   ]
- * });
- * ```
+ * Apollo.io Contact Enrichment Action
+ *
+ * Enriches contact records with data from Apollo.io, including verified email addresses,
+ * employment history, education details and social profiles. Records are read in pages
+ * (keyset paging on a single-column key, see {@link processAllContactRecords}) and sent to
+ * `people/bulk_match` ten at a time through {@link ApolloPeopleClient}.
+ *
+ * Every record sent to Apollo is stamped with `EnrichedAtField`, matched or not, so a filter
+ * on that stamp never re-selects (and never pays for) the same miss twice.
+ *
+ * Params: EntityName, EmailField, FirstNameField, LastNameField, TitleField, EnrichedAtField,
+ * Filter (required); ProfilePictureURLField, AccountNameField, DomainField, LinkedInField,
+ * TwitterField, FacebookField, CompanyID, EmploymentHistoryFieldMappings,
+ * EducationHistoryFieldMappings (optional). The mapping params take the keys of
+ * {@link EmploymentHistoryMapping} and {@link EducationHistoryMapping}, as an object or a JSON string.
+ *
+ * Result codes: SUCCESS, VALIDATION_ERROR, CONFIGURATION_ERROR, RATE_LIMIT_EXCEEDED, FAILED.
  */
-@RegisterClass(BaseAction, "ApolloEnrichmentContactsAction")
+@RegisterClass(BaseAction, 'ApolloEnrichmentContactsAction')
 export class ApolloEnrichmentContactsAction extends BaseAction {
-    /**
-     * Job titles to exclude when processing contacts
-     * These are typically not business decision-makers
-     */
-    private readonly ExcludeTitles: string[] = ['member', 'student member', 'student','volunteer'];
-
-    /**
-     * Main entry point for the Apollo contact enrichment action
-     * 
-     * @param params - The action parameters containing:
-     *   - EntityName: Required - Name of the contact entity to enrich
-     *   - EmailField: Required - Field name containing email addresses
-     *   - FirstNameField: Required - Field name containing first names
-     *   - LastNameField: Required - Field name containing last names
-     *   - TitleField: Required - Field name containing job titles
-     *   - EnrichedAtField: Required - Field to track enrichment timestamp
-     *   - Filter: Required - SQL filter to select contacts for enrichment
-     *   - ProfilePictureURLField: Optional - Field for profile picture URLs
-     *   - AccountNameField: Optional - Field for company/account names
-     *   - DomainField: Optional - Field for email domains
-     *   - LinkedInField: Optional - Field for LinkedIn profile URLs
-     *   - TwitterField: Optional - Field for Twitter profile URLs
-     *   - FacebookField: Optional - Field for Facebook profile URLs
-     *   - EmploymentHistoryFieldMappings: Optional - JSON mapping for employment history entity
-     *   - EducationHistoryFieldMappings: Optional - JSON mapping for education history entity
-     * 
-     * @returns Promise<ActionResultSimple> indicating success/failure and any error messages
-     */
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
+        const parsed = this.extractAndValidateParameters(params);
+        if (parsed.success === false) return parsed.error;
+        const { actionParams, historyMappings } = parsed.data;
+
+        const md = params.Provider ?? Metadata.Provider;
+        const entity = md.EntityByName(actionParams.EntityName);
+        if (!entity) return Failure('VALIDATION_ERROR', `Entity '${actionParams.EntityName}' was not found`);
+
+        let client: ApolloPeopleClient;
         try {
-            // Validate API configuration
-            const configValidation = this.validateConfiguration();
-            if (!configValidation.success) {
-                return configValidation.error!;
-            }
-
-            // Extract and validate parameters
-            const paramValidation = this.extractAndValidateParameters(params);
-            if (!paramValidation.success) {
-                return paramValidation.error!;
-            }
-
-            const { actionParams, historyMappings } = paramValidation.data!;
-
-            // Process all contact records
-            return await this.processAllContactRecords(actionParams, historyMappings, params.ContextUser, params.Provider);
+            const resolved = await this.CreateClient(actionParams.CompanyID, params.ContextUser);
+            if (!resolved) return Failure('CONFIGURATION_ERROR', 'Apollo.io API key not found in configuration');
+            client = resolved;
         } catch (error) {
-            LogError('Unexpected error in ApolloContactsEnrichmentAction', undefined, error);
-            return {
-                Success: false,
-                Message: `Unexpected error: ${error instanceof Error ? error.message : 'Unknown error'}`,
-                ResultCode: "FAILED"
-            };
+            return Failure('CONFIGURATION_ERROR', MessageOf(error));
         }
+
+        const ctx: ContactRunContext = { Client: client, Md: md, Entity: entity, User: params.ContextUser, Params: actionParams, History: historyMappings, StartedAt: new Date() };
+        const tally: ContactRunTally = { Sent: 0, Matched: 0, Unmatched: 0, Unidentifiable: 0, SaveFailures: 0, GroupFailures: 0, CreditsConsumed: 0 };
+        try {
+            await this.processAllContactRecords(ctx, tally);
+        } catch (error) {
+            return this.failureFor(error, tally);
+        }
+        const summary = Summarize(tally);
+        if (tally.GroupFailures > 0 || tally.SaveFailures > 0) return Failure('FAILED', `ApolloContactsEnrichment finished with errors. ${summary}`);
+        return { Success: true, Message: `ApolloContactsEnrichment executed successfully. ${summary}`, ResultCode: 'SUCCESS' };
     }
 
     /**
-     * Validates that the Apollo.io API key is configured properly
-     * @returns Validation result with success flag and potential error details
+     * Resolve the key (company credential first, then `APOLLO_API_KEY`) and build the client.
+     * A protected seam so tests can substitute a client that never reaches api.apollo.io.
      */
-    private validateConfiguration(): { success: boolean; error?: ActionResultSimple } {
-        if (!Config.ApolloAPIKey) {
-            return {
-                success: false,
-                error: {
-                    Success: false,
-                    Message: 'Apollo.io API key not found in configuration',
-                    ResultCode: "CONFIGURATION_ERROR"
-                }
-            };
+    protected async CreateClient(companyID: string | null, contextUser: UserInfo): Promise<ApolloPeopleClient | null> {
+        const resolved = await ApolloPeopleClient.ForCompany(companyID, contextUser);
+        return resolved ? resolved.Client : null;
+    }
+
+    private failureFor(error: unknown, tally: ContactRunTally): ActionResultSimple {
+        const summary = Summarize(tally);
+        if (error instanceof ApolloRateLimitError) {
+            LogStatus(`ApolloContactsEnrichment stopped at Apollo's ${error.Window} rate limit. ${summary}`);
+            return Failure('RATE_LIMIT_EXCEEDED', `Apollo.io rate limit (${error.Window}) reached; run again later. ${summary}`);
         }
-        return { success: true };
+        if (error instanceof ApolloAuthError) return Failure('CONFIGURATION_ERROR', `${error.message} ${summary}`);
+        LogError('Unexpected error in ApolloContactsEnrichment', undefined, error);
+        return Failure('FAILED', `Unexpected error: ${MessageOf(error)}. ${summary}`);
     }
 
     /**
      * Extracts and validates all action parameters from the request
      * Processes both required and optional parameters for contact enrichment
-     * 
-     * @param params - The action parameters containing entity and field configurations
-     * @returns Object with success flag, validated parameters, or error details
      */
-    private extractAndValidateParameters(params: RunActionParams): { 
-        success: boolean; 
-        data?: { actionParams: ContactEnrichmentParams; historyMappings: HistoryMappings }; 
-        error?: ActionResultSimple 
-    } {
-        // Extract required parameters
-        const entityName = this.getParamValue(params, 'EntityName');
-        const emailField = this.getParamValue(params, 'EmailField');
-        const firstNameField = this.getParamValue(params, 'FirstNameField');
-        const lastNameField = this.getParamValue(params, 'LastNameField');
-        const titleField = this.getParamValue(params, 'TitleField');
-        const enrichedAtField = this.getParamValue(params, 'EnrichedAtField');
-        const filter = this.getParamValue(params, 'Filter');
-
-        // Check for any missing required parameters
-        const missingParams = [];
-        if (!entityName) missingParams.push('EntityName');
-        if (!emailField) missingParams.push('EmailField');
-        if (!firstNameField) missingParams.push('FirstNameField');
-        if (!lastNameField) missingParams.push('LastNameField');
-        if (!titleField) missingParams.push('TitleField');
-        if (!enrichedAtField) missingParams.push('EnrichedAtField');
-        if (!filter) missingParams.push('Filter');
-
-        if (missingParams.length > 0) {
-                return {
-                success: false,
-                error: {
-                    Success: false,
-                    Message: `Missing required parameters: ${missingParams.join(', ')}`,
-                    ResultCode: "VALIDATION_ERROR"
-                }
-                };
-            }
-
-        // Extract optional parameters
-        const profilePictureURLField = this.getParamValue(params, 'ProfilePictureURLField');
-        const accountNameField = this.getParamValue(params, 'AccountNameField');
-        const domainField = this.getParamValue(params, 'DomainField');
-        const linkedInField = this.getParamValue(params, 'LinkedInField');
-        const twitterField = this.getParamValue(params, 'TwitterField');
-        const facebookField = this.getParamValue(params, 'FacebookField');
-
-        // Extract history mappings
-        const educationHistoryMappings = this.parseHistoryMappings(params, 'EducationHistoryFieldMappings');
-        const employmentHistoryMappings = this.parseHistoryMappings(params, 'EmploymentHistoryFieldMappings');
-
+    private extractAndValidateParameters(params: RunActionParams): { success: true; data: { actionParams: ContactEnrichmentParams; historyMappings: HistoryMappings } } | { success: false; error: ActionResultSimple } {
+        const required = ['EntityName', 'EmailField', 'FirstNameField', 'LastNameField', 'TitleField', 'EnrichedAtField', 'Filter'];
+        const values = new Map(required.map((name) => [name, StringOrNull(this.getParamValue(params, name))]));
+        const missing = required.filter((name) => !values.get(name));
+        if (missing.length > 0) {
+            return { success: false, error: Failure('VALIDATION_ERROR', `Missing required parameters: ${missing.join(', ')}`) };
+        }
+        const optional = (name: string): string | undefined => StringOrNull(this.getParamValue(params, name)) ?? undefined;
         const actionParams: ContactEnrichmentParams = {
-            EntityName: entityName,
-            EmailField: emailField,
-            FirstNameField: firstNameField,
-            LastNameField: lastNameField,
-            TitleField: titleField,
-            EnrichedAtField: enrichedAtField,
-            Filter: filter,
-            ProfilePictureURLField: profilePictureURLField,
-            AccountNameField: accountNameField,
-            DomainField: domainField,
-            LinkedInField: linkedInField,
-            TwitterField: twitterField,
-            FacebookField: facebookField
+            EntityName: values.get('EntityName') as string,
+            EmailField: values.get('EmailField') as string,
+            FirstNameField: values.get('FirstNameField') as string,
+            LastNameField: values.get('LastNameField') as string,
+            TitleField: values.get('TitleField') as string,
+            EnrichedAtField: values.get('EnrichedAtField') as string,
+            Filter: values.get('Filter') as string,
+            ProfilePictureURLField: optional('ProfilePictureURLField'),
+            AccountNameField: optional('AccountNameField'),
+            DomainField: optional('DomainField'),
+            LinkedInField: optional('LinkedInField'),
+            TwitterField: optional('TwitterField'),
+            FacebookField: optional('FacebookField'),
+            CompanyID: optional('CompanyID') ?? null,
         };
-
         const historyMappings: HistoryMappings = {
-            education: educationHistoryMappings,
-            employment: employmentHistoryMappings
+            employment: ParseEmploymentMapping(this.parseHistoryMappings(params, 'EmploymentHistoryFieldMappings')),
+            education: ParseEducationMapping(this.parseHistoryMappings(params, 'EducationHistoryFieldMappings')),
         };
-
         return { success: true, data: { actionParams, historyMappings } };
     }
 
     /**
      * Extract parameter value by name (case-insensitive)
      * Handles special case where 'null' string should be treated as null value
-     * 
-     * @param params - The action parameters
-     * @param paramName - Name of the parameter to extract
-     * @returns Parameter value or null if not found or explicitly 'null'
      */
-    protected getParamValue(params: RunActionParams, paramName: string): any {
-        const param = params.Params.find(p => p.Name.trim().toLowerCase() === paramName.toLowerCase());
-        if (param && param.Value && param.Value === 'null') {
-            return null;
-        }
-        else {
-            return param?.Value;
-        }
+    protected getParamValue(params: RunActionParams, paramName: string): unknown {
+        const param = params.Params.find((p) => p.Name.trim().toLowerCase() === paramName.toLowerCase());
+        if (param && param.Value === 'null') return null;
+        return param?.Value;
     }
 
     /**
      * Parses JSON field mappings for employment/education history entities
-     * Used to configure how history records should be created and updated
-     * 
-     * @param params - The action parameters
-     * @param paramName - Name of the history mapping parameter
-     * @returns Parsed field mappings or empty object if invalid/missing
+     * Accepts an object or a JSON string; the param name is matched case-insensitively.
      */
-    private parseHistoryMappings(params: RunActionParams, paramName: string): Record<string, string> {
-        const param = params.Params.find(p => p.Name === paramName);
-        if (!param || !param.Value) {
-            return {};
-        }
-        
-        // If it's already an object, use it directly
-        if (typeof param.Value === 'object' && param.Value !== null) {
-            return param.Value as Record<string, string>;
-        }
-        
-        // If it's a string, try to parse it as JSON
-        if (typeof param.Value === 'string') {
+    private parseHistoryMappings(params: RunActionParams, paramName: string): Record<string, unknown> {
+        const value = this.getParamValue(params, paramName);
+        if (typeof value === 'object' && value !== null) return value as Record<string, unknown>;
+        if (typeof value === 'string' && value.trim().length > 0) {
             try {
-                return JSON.parse(param.Value) || {};
+                const parsed: unknown = JSON.parse(value);
+                return typeof parsed === 'object' && parsed !== null ? (parsed as Record<string, unknown>) : {};
             } catch (error) {
                 LogError(`Error parsing ${paramName}`, undefined, error);
-                return {};
             }
         }
-        
         return {};
     }
 
+    // ─── Paging ──────────────────────────────────────────────────────────────
+
     /**
-     * Processes all contact records using paginated queries
-     * Continues processing until all matching records have been enriched
-     * 
-     * @param actionParams - Configuration parameters for contact enrichment
-     * @param historyMappings - Field mappings for employment/education history
-     * @param contextUser - User context for data access and security
-     * @returns Promise indicating overall success/failure of the enrichment
+     * Reads every record the filter selects and processes it exactly once.
+     *
+     * A single-column key pages by keyset (`AfterKey`): each page starts after the last key of the
+     * previous one, so stamping rows out of the filter as we go cannot skip anything. A composite
+     * key cannot use `AfterKey`, so it re-reads the first page with an extra predicate that excludes
+     * rows this run already stamped; rows that failed to save are remembered and skipped so a save
+     * failure cannot loop.
      */
-    private async processAllContactRecords(
-        actionParams: ContactEnrichmentParams,
-        historyMappings: HistoryMappings,
-        contextUser: UserInfo,
-        provider?: IMetadataProvider
-    ): Promise<ActionResultSimple> {
-        let pageNumber = 0;
-        let hasMore = true;
-        const md: IMetadataProvider = provider ?? (new Metadata() as unknown as IMetadataProvider);
+    private async processAllContactRecords(ctx: ContactRunContext, tally: ContactRunTally): Promise<void> {
+        const keyset = ctx.Entity.PrimaryKeys.length === 1;
+        const seen = new Set<string>();
+        let afterKey: CompositeKey | null = null;
+        for (;;) {
+            const rows = await this.readPage(ctx, keyset, afterKey);
+            const fresh = rows.filter((row) => !seen.has(RowKey(ctx.Entity, row)));
+            if (fresh.length === 0) break;
+            fresh.forEach((row) => seen.add(RowKey(ctx.Entity, row)));
+            LogStatus(`Fetched ${fresh.length} records to enrich`);
+            await this.processRecordGroups(ctx, fresh, tally);
+            if (rows.length < PAGE_SIZE) break;
+            if (keyset) afterKey = CompositeKey.FromEntityRecord(ctx.Entity, rows[rows.length - 1]);
+        }
+    }
 
-        while (hasMore) {
-            LogStatus(`Fetching page ${pageNumber + 1} of records...`);
+    private async readPage(ctx: ContactRunContext, keyset: boolean, afterKey: CompositeKey | null): Promise<Record<string, unknown>[]> {
+        const rv = RunView.FromMetadataProvider(ctx.Md);
+        const orderBy = ctx.Entity.PrimaryKeys.map((pk) => `[${pk.Name}]`).join(', ');
+        const stamp = ctx.Params.EnrichedAtField;
+        const filter = keyset
+            ? `(${ctx.Params.Filter})`
+            : `(${ctx.Params.Filter}) AND ([${stamp}] IS NULL OR [${stamp}] < '${ctx.StartedAt.toISOString()}')`;
+        const result = await rv.RunView<Record<string, unknown>>({
+            EntityName: ctx.Params.EntityName,
+            ExtraFilter: filter,
+            OrderBy: orderBy,
+            MaxRows: PAGE_SIZE,
+            IgnoreMaxRows: true,
+            ...(keyset && afterKey ? { AfterKey: afterKey } : {}),
+        }, ctx.User);
+        if (!result.Success) throw new Error(`Error querying entity '${ctx.Params.EntityName}': ${result.ErrorMessage}`);
+        return result.Results;
+    }
 
-            const pageResult = await this.processContactRecordsPage(
-                actionParams, 
-                historyMappings, 
-                pageNumber, 
-                md, 
-                contextUser
-            );
+    /** Sends the rows to Apollo in groups of {@link ApolloPeopleClient.MaxBatchSize}, one group at a time. */
+    private async processRecordGroups(ctx: ContactRunContext, rows: Record<string, unknown>[], tally: ContactRunTally): Promise<void> {
+        const size = Math.min(Config.GroupSize, ApolloPeopleClient.MaxBatchSize);
+        for (let i = 0; i < rows.length; i += size) {
+            await this.ProcessPersonRecordGroup(ctx, rows.slice(i, i + size), tally);
+        }
+    }
 
-            if (!pageResult.success) {
-                return pageResult.error!;
+    // ─── One group ───────────────────────────────────────────────────────────
+
+    /**
+     * Matches one group through `people/bulk_match` and writes every row of it. A row nothing
+     * identifies is stamped and skipped before the call. A rate-limit or auth error stops the run
+     * (it is rethrown); any other Apollo error fails this group only.
+     */
+    protected async ProcessPersonRecordGroup(ctx: ContactRunContext, rows: Record<string, unknown>[], tally: ContactRunTally): Promise<void> {
+        const inputs: ApolloPersonMatchInput[] = [];
+        const sendable: Record<string, unknown>[] = [];
+        for (const [index, row] of rows.entries()) {
+            const input = BuildMatchInput(ctx.Params, row, String(index));
+            if (input) {
+                inputs.push(input);
+                sendable.push(row);
+            } else {
+                tally.Unidentifiable++;
+                await this.writeContact(ctx, row, null, tally);
             }
-
-            hasMore = pageResult.hasMore;
-            pageNumber++;
         }
+        if (inputs.length === 0) return;
 
-        return {
-            Success: true,
-            Message: "ApolloContactsEnrichment executed successfully.",
-            ResultCode: "SUCCESS"
-        };
+        let matches: ApolloPersonMatch[];
+        try {
+            const result = await ctx.Client.BulkMatch(inputs, { RevealPersonalEmails: true });
+            matches = result.Matches;
+            tally.CreditsConsumed += result.CreditsConsumed;
+        } catch (error) {
+            if (error instanceof ApolloRateLimitError || error instanceof ApolloAuthError) throw error;
+            LogError('Apollo.io bulk match failed for a group of contacts', undefined, error);
+            tally.GroupFailures++;
+            return;
+        }
+        tally.Sent += inputs.length;
+        for (const [index, match] of matches.entries()) {
+            await this.writeContact(ctx, sendable[index], match, tally);
+        }
     }
 
     /**
-     * Processes a single page of contact records for enrichment
-     * Retrieves records using pagination and processes them in concurrent groups
-     * 
-     * @param actionParams - Configuration parameters for contact enrichment
-     * @param historyMappings - Field mappings for employment/education history
-     * @param pageNumber - Current page number (zero-based)
-     * @param md - Metadata instance for entity operations
-     * @param contextUser - User context for data access
-     * @returns Object indicating success, whether more pages exist, and any errors
+     * Writes one contact: the matched fields when there is a match, and the `EnrichedAtField`
+     * stamp either way. The save always runs; a failure is counted, never allowed to skip the
+     * rows after it.
      */
-    private async processContactRecordsPage(
-        actionParams: ContactEnrichmentParams,
-        historyMappings: HistoryMappings,
-        pageNumber: number,
-        md: IMetadataProvider,
-        contextUser: UserInfo
-    ): Promise<{ success: boolean; hasMore: boolean; error?: ActionResultSimple }> {
-        const pageConfig = {
-            EntityName: actionParams.EntityName,
-            PageNumber: pageNumber,
-            PageSize: 500,
-            Filter: actionParams.Filter
-        };
-
-        const results = await this.PageRecordsByEntityName<Record<string, any>>(pageConfig, contextUser);
-        if (!results) {
-            return {
-                success: false,
-                hasMore: false,
-                error: {
-                    Success: false,
-                    Message: "Error querying entity records",
-                    ResultCode: "FAILED"
-                }
-            };
+    private async writeContact(ctx: ContactRunContext, row: Record<string, unknown>, match: ApolloPersonMatch | null, tally: ContactRunTally): Promise<void> {
+        const contact = await ctx.Md.GetEntityObject<BaseEntity>(ctx.Params.EntityName, CompositeKey.FromEntityRecord(ctx.Entity, row), ctx.User);
+        const matched = match?.Matched === true;
+        if (match && matched) {
+            ApplyMatch(contact, match, ctx.Params);
+            tally.Matched++;
+        } else if (match) {
+            tally.Unmatched++;
         }
-
-        LogStatus(`Fetched ${results.length} records with max page size of ${pageConfig.PageSize}`);
-
-        // Process records in concurrent groups
-        await this.processRecordGroups(results, actionParams, historyMappings, md, contextUser);
-
-        const hasMore = results.length >= pageConfig.PageSize;
-        return { success: true, hasMore };
+        contact.Set(ctx.Params.EnrichedAtField, new Date());
+        const saved = await contact.Save();
+        if (!saved) {
+            LogError(`Error updating contact record with enriched data: ${contact.LatestResult?.CompleteMessage ?? 'no details'}`);
+            tally.SaveFailures++;
+            return;
+        }
+        if (match && matched) await this.UpsertContactHistory(ctx, contact, match, tally);
     }
 
+    // ─── History ─────────────────────────────────────────────────────────────
+
     /**
-     * Processes contact records in concurrent groups for optimal performance
-     * Respects configured group size and concurrency limits
-     * 
-     * @param results - Array of contact records to process
-     * @param actionParams - Configuration parameters for enrichment
-     * @param historyMappings - Field mappings for history entities
-     * @param md - Metadata instance for entity operations
-     * @param contextUser - User context for data access
+     * Writes employment rows when `EmploymentHistoryFieldMappings` is configured and education rows
+     * when `EducationHistoryFieldMappings` is, independently of each other. The history entities'
+     * contact FK column references the contact's key, so that key must be a single column.
      */
-    private async processRecordGroups(
-        results: Record<string, any>[],
-        actionParams: ContactEnrichmentParams,
-        historyMappings: HistoryMappings,
-        md: IMetadataProvider,
-        contextUser: UserInfo
-    ): Promise<void> {
-        const tasks = [];
-
-        for (let i = 0; i < results.length; i += Config.GroupSize) {
-            const processParams: ProcessPersonRecordGroupParams = {
-                Records: results,
-                Startrow: i,
-                GroupLength: Config.GroupSize,
-                Md: md,
-                CurrentUser: contextUser,
-                EmailField: actionParams.EmailField,
-                FirstNameField: actionParams.FirstNameField,
-                LastNameField: actionParams.LastNameField,
-                TitleField: actionParams.TitleField,
-                EntityName: actionParams.EntityName,
-                EnrichedAtField: actionParams.EnrichedAtField,
-                ProfilePictureURLField: actionParams.ProfilePictureURLField,
-                AccountNameField: actionParams.AccountNameField,
-                DomainField: actionParams.DomainField,
-                LinkedInField: actionParams.LinkedInField,
-                TwitterField: actionParams.TwitterField,
-                FacebookField: actionParams.FacebookField,
-                EmploymentHistoryEntityName: historyMappings.employment.EntityName,
-                EmploymentHistoryContactIDFieldName: historyMappings.employment.ContactIDFieldName,
-                EmploymentHistoryOrganizationFieldName: historyMappings.employment.OrganizationFieldName,
-                EmploymentHistoryTitleFieldName: historyMappings.employment.TitleFieldName,
-                EducationHistoryEntityName: historyMappings.education.EntityName,
-                EducationHistoryContactIDFieldName: historyMappings.education.ContactIDFieldName,
-                EducationHistoryInstitutionFieldName: historyMappings.education.InstitutionFieldName,
-                EducationHistoryDegreeFieldName: historyMappings.education.DegreeFieldName
-            };
-
-            const task = this.ProcessPersonRecordGroup(processParams);
-            tasks.push(task);
-        
-            if (tasks.length === Config.ConcurrentGroups || i + Config.GroupSize >= results.length) {
-                await Promise.all(tasks);
-                tasks.length = 0;
+    protected async UpsertContactHistory(ctx: ContactRunContext, contact: BaseEntity, match: ApolloPersonMatch, tally: ContactRunTally): Promise<void> {
+        const { employment, education } = ctx.History;
+        if (!employment && !education) return;
+        const key = ContactKeyOf(contact);
+        if (!key) {
+            LogError(`Unable to upsert contact history: entity '${contact.EntityInfo.Name}' has a composite primary key, which a single foreign key column cannot reference`);
+            return;
+        }
+        if (employment) {
+            for (const entry of match.Employment) {
+                const ok = await this.upsertEmployment(ctx, employment, key, entry);
+                if (!ok) tally.SaveFailures++;
+            }
+        }
+        if (education) {
+            for (const entry of match.Education) {
+                const ok = await this.upsertEducation(ctx, education, key, entry);
+                if (!ok) tally.SaveFailures++;
             }
         }
     }
 
-    /**
-     * Retrieves a page of records from a specified entity using RunView
-     * Supports pagination with configurable page size and filtering
-     * 
-     * @param params - Parameters defining entity, page, and filter criteria
-     * @param currentUser - User context for data access
-     * @returns Array of records or null if query failed
-     */
-    protected async PageRecordsByEntityName<T>(params: PageRecordsParams, currentUser: UserInfo): Promise<T[] | null> {
+    private async upsertEmployment(ctx: ContactRunContext, m: EmploymentHistoryMapping, key: ContactKey, entry: ApolloEmploymentEntry): Promise<boolean> {
+        const info = ctx.Md.EntityByName(m.EntityName);
+        if (!info) {
+            LogError(`Employment history entity '${m.EntityName}' was not found`);
+            return false;
+        }
+        const organization = FitToColumn(info, m.OrganizationFieldName, entry.OrganizationName);
+        const title = FitToColumn(info, m.TitleFieldName, entry.Title ?? '');
+        const filter = `${key.Predicate(m.ContactIDFieldName)} AND [${m.OrganizationFieldName}] = '${EscapeSQLString(organization)}' AND [${m.TitleFieldName}] = '${EscapeSQLString(title)}'`;
+        const row = await this.loadOrNewHistoryRow(ctx, m.EntityName, m.ContactIDFieldName, key, filter);
+        if (!row) return false;
+        row.Set(m.OrganizationFieldName, organization);
+        row.Set(m.TitleFieldName, title);
+        SetIfMapped(row, m.StartDateFieldName, ToDate(entry.StartDate));
+        SetIfMapped(row, m.EndDateFieldName, ToDate(entry.EndDate));
+        SetIfMapped(row, m.IsCurrentFieldName, entry.IsCurrent);
+        return this.saveHistoryRow(row, 'employment');
+    }
 
-        const rv: RunView = new RunView();
-        const rvResult: RunViewResult<T> = await rv.RunView<T>({
-            EntityName: params.EntityName,
-            MaxRows: params.PageSize,
-            StartRow: Math.max(0, (params.PageNumber - 1) * params.PageSize),
-            ExtraFilter: params.Filter
-        }, currentUser);
-    
-        if (!rvResult.Success) {
-            LogError('Error querying entity: ', undefined, rvResult.ErrorMessage);
+    private async upsertEducation(ctx: ContactRunContext, m: EducationHistoryMapping, key: ContactKey, entry: ApolloEducationEntry): Promise<boolean> {
+        const info = ctx.Md.EntityByName(m.EntityName);
+        if (!info) {
+            LogError(`Education history entity '${m.EntityName}' was not found`);
+            return false;
+        }
+        const institution = FitToColumn(info, m.InstitutionFieldName, entry.InstitutionName);
+        const degree = FitToColumn(info, m.DegreeFieldName, entry.Degree ?? '');
+        const filter = `${key.Predicate(m.ContactIDFieldName)} AND [${m.InstitutionFieldName}] = '${EscapeSQLString(institution)}' AND [${m.DegreeFieldName}] = '${EscapeSQLString(degree)}'`;
+        const row = await this.loadOrNewHistoryRow(ctx, m.EntityName, m.ContactIDFieldName, key, filter);
+        if (!row) return false;
+        row.Set(m.InstitutionFieldName, institution);
+        row.Set(m.DegreeFieldName, degree);
+        SetIfMapped(row, m.GradeLevelFieldName, entry.GradeLevel);
+        SetIfMapped(row, m.StartDateFieldName, ToDate(entry.StartDate));
+        SetIfMapped(row, m.EndDateFieldName, ToDate(entry.EndDate));
+        return this.saveHistoryRow(row, 'education');
+    }
+
+    /** The existing row the filter finds, or a new one keyed to the contact. Null when the lookup fails. */
+    private async loadOrNewHistoryRow(ctx: ContactRunContext, entityName: string, contactIDField: string, key: ContactKey, filter: string): Promise<BaseEntity | null> {
+        const rv = RunView.FromMetadataProvider(ctx.Md);
+        const existing = await rv.RunView<Record<string, unknown>>({ EntityName: entityName, ExtraFilter: filter }, ctx.User);
+        if (!existing.Success) {
+            LogError(`Error querying history entity '${entityName}': ${existing.ErrorMessage}`);
             return null;
         }
-    
-        return rvResult.Results;
+        if (existing.Results.length > 0) {
+            const info = ctx.Md.EntityByName(entityName) as EntityInfo;
+            return ctx.Md.GetEntityObject<BaseEntity>(entityName, CompositeKey.FromEntityRecord(info, existing.Results[0]), ctx.User);
+        }
+        const row = await ctx.Md.GetEntityObject<BaseEntity>(entityName, ctx.User);
+        row.NewRecord();
+        row.Set(contactIDField, key.Value);
+        return row;
     }
 
-    /**
-     * Processes a group of contact records using Apollo's bulk people matching API
-     * Enriches contacts with social profiles, company data, and employment history
-     * 
-     * @param params - Group processing parameters with contact data and entity mappings
-     * @returns Promise<boolean> indicating success/failure of the group processing
-     */
-    protected async ProcessPersonRecordGroup(params: ProcessPersonRecordGroupParams): Promise<boolean> {
-        try {
-            const md: IMetadataProvider = params.Md;
-
-            const ApolloParams: ApolloBulkPeopleRequest = {
-                api_key: Config.ApolloAPIKey,
-                reveal_personal_emails: true,
-                details: params.Records.slice(params.Startrow, params.Startrow + params.GroupLength).map((record: any) => {
-                    const first_name: string = record[params.FirstNameField];
-                    const last_name: string = record[params.LastNameField];
-                    const email: string = record[params.EmailField];
-                    let domain: string | undefined = params.DomainField ? record[params.DomainField] : undefined;
-                    const detail = {first_name, last_name, email, domain};
-                    return detail;
-                })   
-            };
-    
-            const headers = {
-                'Cache-Control': 'no-cache',
-                'Content-Type': 'application/json'
-            };
-    
-            const response = await this.WrapApolloCall<ApolloBulkPeopleResponse>('post', 'people/bulk_match', ApolloParams,  { Headers: headers });
-    
-            if (response.Status === 200) {
-                // here we want to iterate through all the results and update the contacts with the enriched data if
-                // the API returned a match
-                const result: ApolloBulkPeopleResponse = response.Data;
-                let bSuccess: boolean = true;
-                if (result && result.missing_records <= ApolloParams.details.length) {
-                    if (result.status.trim().toLowerCase() === 'success' ) {
-                        // iterate through the matches array
-                        for(const [index, match] of result.matches.entries()){
-                            if(!match){
-                                LogStatus('No match found for record at index ' + params.Startrow + index);
-                                continue;
-                            }
-
-                            const email: string = match.email;
-
-                            if(email && email.trim().length > 0){
-                                // update the contact record
-                                let entityRecord: Record<string, any> = params.Records[index + params.Startrow];
-                                
-                                if(!entityRecord){
-                                    LogError('Error updating contact record with enriched data, entity record not found', undefined, entityRecord);
-                                    bSuccess = false;
-                                    continue;
-                                }
-                                
-                                // The contact entity is configured, not fixed — build the key from its real primary key column(s).
-                                const contactEntity: BaseEntity = await md.GetEntityObject<BaseEntity>(params.EntityName, CompositeKey.FromEntityRecord(md.EntityByName(params.EntityName)!, entityRecord), params.CurrentUser);
-
-                                contactEntity.Set(params.EmailField, match.email);
-                                contactEntity.Set(params.EnrichedAtField, new Date());
-
-                                if (params.TitleField && match.title) {
-                                    contactEntity.Set(params.TitleField, match.title);
-                                }
-  
-                                if (params.AccountNameField && match.organization && match.organization.name) {    
-                                    contactEntity.Set(params.AccountNameField, match.organization.name);
-                                }
-                            
-                                if (params.ProfilePictureURLField && match.photo_url) {
-                                    contactEntity.Set(params.ProfilePictureURLField, match.photo_url);
-                                }
-
-                                if(params.LinkedInField && match.linkedin_url){
-                                    contactEntity.Set(params.LinkedInField, match.linkedin_url);
-                                }
-
-                                if (params.TwitterField && match.twitter_url) {  
-                                    contactEntity.Set(params.TwitterField, match.twitter_url);
-                                }                                    
-                                    
-                                if (params.FacebookField && match.facebook_url) {  
-                                    contactEntity.Set(params.FacebookField, match.facebook_url);
-                                }     
-
-                                bSuccess = bSuccess && (await contactEntity.Save());
-
-                                if(!bSuccess){
-                                    LogError('Error updating contact record with enriched data', undefined, contactEntity.LatestResult);
-                                }
-
-                                if(match.employment_history && params.EmploymentHistoryEntityName){
-                                    LogStatus('Upserting contact employment and education history...');
-                                    await this.UpsertContactEmploymentAndEducationHistory(match, contactEntity, params);
-                                }
-                            }
-                            else{
-                                LogStatus("Match does not contain an email");
-                            }
-                        }
-
-                        if(bSuccess){
-                            console.log('Successfully processed group ' + params.Startrow + ' to ' + (params.Startrow + params.GroupLength));
-                        }
-                        else{
-                            LogStatus('Processed group ' + params.Startrow + ' to ' + (params.Startrow + params.GroupLength) + 'but with errors');
-                        }
-
-                        return bSuccess;
-                    }
-                    else{
-                        LogStatus('Apollo.io API response did not return a success status');
-                    }
-                }
-                else {
-                    // missing records == details.length means no matches were found
-                    console.log('No matches found for this group of records ' + params.Startrow + ' to ' + (params.Startrow + params.GroupLength));
-                }
-            }
-            return false;
-        } catch (error: any) {
-            console.error('Error occurred:', error);
-            if (error && error.code && error.code === 429) 
-                throw error; // we want this exception to bubble up so we can catch it and stop the process
-            else
-                return false;
-        }
+    private async saveHistoryRow(row: BaseEntity, kind: string): Promise<boolean> {
+        const saved = await row.Save();
+        if (!saved) LogError(`Error upserting contact ${kind} history: ${row.LatestResult?.CompleteMessage ?? 'no details'}`);
+        return saved;
     }
+}
 
-    /**
-     * Enriches contacts by searching for people at a specific organization domain
-     * Uses Apollo's people search to find contacts and update their employment/education history
-     * 
-     * @param domain - Organization domain to search for people
-     * @param params - Processing parameters with entity configurations
-     */
-    protected async UpsertContactEmploymentAndEducationHistoryByOrganizationID(domain: string, params: ProcessPersonRecordGroupParams): Promise<void> {
-        try{
-            const api_params = {
-                api_key: process.env.APOLLO_API_KEY,
-                reveal_personal_emails: true,
-                q_organization_domains: domain,
-                page: 1
-            }
-    
-            const headers = {
-                'Cache-Control': 'no-cache',
-                'Content-Type': 'application/json' 
-            };
-    
-            const response = await this.WrapApolloCall<SearchPeopleResponse>('post', 'mixed_people/search', api_params, { Headers: headers });
+// ─── Pure helpers ────────────────────────────────────────────────────────────
 
-            if(response.Status !== 200){
-                console.error(`Error fetching mixed_people data from Apollo.io: ${response.StatusText}`);
-                return;
-            }
+function Failure(code: string, message: string): ActionResultSimple {
+    return { Success: false, Message: message, ResultCode: code };
+}
 
-            // here we want to iterate through all the results and update the contacts with the enriched data if
-            // the API returned a match
-            const result = response.Data
-            const allPeople = result.people;
+function MessageOf(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
+}
 
-            for (let i = 1; i < result.pagination.total_pages && i < (Config.MaxPeopleToEnrichPerOrg / 10); i++) {
-                // get additional pages
-                api_params.page = i + 1;
-                LogStatus(`Fetching page ${i + 1} of ${result.pagination.total_pages} people for domain: ${domain}`);
-                const nextResponse = await this.WrapApolloCall<SearchPeopleResponse>('post', 'mixed_people/search', api_params, { Headers: headers });
-                if (nextResponse.Status !== 200) {
-                    console.error(`Error fetching mixed_people data from Apollo.io: ${nextResponse.StatusText}`);
-                    return;
-                }
-                else {
-                    // here we want to iterate through all the results and update the contacts with the enriched data if
-                    // the API returned a match
-                    const nextResult = nextResponse.Data
-                    allPeople.push(...nextResult.people);
-                }
-            }
+function StringOrNull(value: unknown): string | null {
+    return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
+}
 
-            if (allPeople && allPeople.length > 0) {
-                let i: number = 0;
-                for (let p of allPeople) {
-                    // first, check to make sure that the person has an email and the domain matches the 
-                    // account domain, we don't want people who's primary email doesn't match the domain
-                    if (!p.last_name || p.last_name.trim().length === 0 ||
-                        !p.email || p.email.trim().length === 0 || p.email.split('@')[1] !== domain) {
-                        // skip this person
-                        console.log('      * Skipping person: ' + p.first_name + ' ' + p.last_name + ' because email is missing or does not match domain')
-                    }
-                    else if (this.IsExcludedTitle(p.title)){
-                        console.log('      * Skipping person: ' + p.first_name + ' ' + p.last_name + ' because ' + p.title + ' is an excluded title')
-                    }  
-                    else {
-                        const rv: RunView = new RunView();
-                        const rvContactResults: RunViewResult = await rv.RunView({
-                            EntityName: params.EntityName,
-                            ExtraFilter: `${params.EmailField} = '${p.email}' AND ${params.FirstNameField} = '${p.first_name}'`
-                        }, params.CurrentUser);
+function Summarize(t: ContactRunTally): string {
+    return `Sent ${t.Sent} to Apollo (${t.Matched} matched, ${t.Unmatched} not matched, ${t.CreditsConsumed} credits); ` +
+        `${t.Unidentifiable} stamped without a lookup (nothing to match on); ${t.SaveFailures} save failures; ${t.GroupFailures} failed groups.`;
+}
 
-                        if (!rvContactResults.Success) {
-                            LogError('Error querying contact entity: ', undefined, rvContactResults.ErrorMessage);
-                            i++;
-                            continue;
-                        }
+/** A string key for a row, from its real primary key column(s). */
+function RowKey(entity: EntityInfo, row: Record<string, unknown>): string {
+    return entity.PrimaryKeys.map((pk) => String(row[pk.Name])).join('|');
+}
 
-                        if(rvContactResults.Results.length === 0){
-                            console.log('      * Skipping person: ' + p.first_name + ' ' + p.last_name + ' because no matching contact record was found')
-                            i++;
-                            continue;
-                        }
+/**
+ * The bulk_match `details` entry for a row, or null when the row carries nothing Apollo can
+ * match on: an email, or a first and last name with a domain or an account name.
+ */
+export function BuildMatchInput(p: ContactEnrichmentParams, row: Record<string, unknown>, key: string): ApolloPersonMatchInput | null {
+    const text = (field: string | undefined): string | undefined => (field ? StringOrNull(row[field]) ?? undefined : undefined);
+    const input: ApolloPersonMatchInput = {
+        Key: key,
+        Email: text(p.EmailField),
+        FirstName: text(p.FirstNameField),
+        LastName: text(p.LastNameField),
+        OrganizationDomain: text(p.DomainField),
+        OrganizationName: text(p.AccountNameField),
+    };
+    const byName = !!input.FirstName && !!input.LastName && (!!input.OrganizationDomain || !!input.OrganizationName);
+    return input.Email || byName ? input : null;
+}
 
-                        // Load the matched contact from its row so its primary key (any column name/type) is populated for the history FK filters.
-                        const contactEntity: BaseEntity = await params.Md.GetEntityObject<BaseEntity>(params.EntityName, CompositeKey.FromEntityRecord(params.Md.EntityByName(params.EntityName)!, rvContactResults.Results[0]), params.CurrentUser);
-                        await this.UpsertContactEmploymentAndEducationHistory(p, contactEntity, params);
-                    }
+/** Copies the matched values onto the mapped columns. Values are stored as Apollo sent them. */
+function ApplyMatch(contact: BaseEntity, match: ApolloPersonMatch, p: ContactEnrichmentParams): void {
+    SetIfMapped(contact, p.EmailField, match.Email);
+    SetIfMapped(contact, p.TitleField, match.Title);
+    SetIfMapped(contact, p.AccountNameField, match.Organization?.Name ?? null);
+    SetIfMapped(contact, p.ProfilePictureURLField, match.PhotoURL);
+    SetIfMapped(contact, p.LinkedInField, match.LinkedInURL);
+    SetIfMapped(contact, p.TwitterField, match.TwitterURL);
+    SetIfMapped(contact, p.FacebookField, match.FacebookURL);
+}
 
-                    i++;
-                }
-            }
-            else {
-                // missing records == details.length means no matches were found
-                console.log('No matches found for this domain: ' + domain);
-            }
-        }
-        catch(ex){
-            LogError('Error upserting contact education and employment history by organization ID: ', undefined, ex);
-        }
+/** Sets a column only when it was mapped and the value is present. Never touches an unnamed column. */
+function SetIfMapped(entity: BaseEntity, fieldName: string | undefined, value: unknown): void {
+    if (fieldName && value !== null && value !== undefined && value !== '') entity.Set(fieldName, value);
+}
+
+/** Truncates to the column's declared length so a long vendor value fails nothing; unchanged when the length is unknown. */
+export function FitToColumn(entity: EntityInfo, fieldName: string, value: string): string {
+    const length = entity.Fields.find((f) => f.Name.toLowerCase() === fieldName.toLowerCase())?.Length ?? 0;
+    return length > 0 && value.length > length ? value.slice(0, length) : value;
+}
+
+/** A `YYYY-MM-DD` string to a Date; null for anything that does not parse. */
+export function ToDate(value: string | null): Date | null {
+    if (!value) return null;
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date;
+}
+
+/**
+ * The contact's single-column key and a predicate builder for the history FK filters, quoted
+ * per the key column's type. Null for a composite key, which a single FK column cannot reference.
+ */
+export function ContactKeyOf(contact: BaseEntity): ContactKey | null {
+    if (contact.PrimaryKeys.length !== 1) return null;
+    const pk = contact.FirstPrimaryKey; // first-pk-ok: FK target — the history entities' contact FK column references the contact's single-column key (guarded above)
+    const literal = pk.NeedsQuotes ? `'${EscapeSQLString(String(pk.Value))}'` : String(pk.Value);
+    return { Value: pk.Value, Predicate: (fieldName) => `[${fieldName}] = ${literal}` };
+}
+
+function MappedString(raw: Record<string, unknown>, key: string): string | undefined {
+    const entry = Object.entries(raw).find(([k]) => k.toLowerCase() === key.toLowerCase());
+    return entry ? StringOrNull(entry[1]) ?? undefined : undefined;
+}
+
+export function ParseEmploymentMapping(raw: Record<string, unknown>): EmploymentHistoryMapping | null {
+    const get = (key: string): string | undefined => MappedString(raw, key);
+    const entityName = get('EntityName');
+    const contactID = get('ContactIDFieldName');
+    const organization = get('OrganizationFieldName');
+    const title = get('TitleFieldName');
+    if (!entityName || !contactID || !organization || !title) {
+        if (Object.keys(raw).length > 0) LogStatus('EmploymentHistoryFieldMappings is missing EntityName, ContactIDFieldName, OrganizationFieldName or TitleFieldName; employment history will not be written');
+        return null;
     }
+    return { EntityName: entityName, ContactIDFieldName: contactID, OrganizationFieldName: organization, TitleFieldName: title, StartDateFieldName: get('StartDateFieldName'), EndDateFieldName: get('EndDateFieldName'), IsCurrentFieldName: get('IsCurrentFieldName') };
+}
 
-    /**
-     * Creates or updates employment and education history records for a contact
-     * Processes Apollo employment history data to create both employment and education records
-     * 
-     * @param contact - Apollo person data containing employment history
-     * @param contactEntity - Contact entity to create history for
-     * @param params - Processing parameters with history entity configurations
-     */
-    protected async UpsertContactEmploymentAndEducationHistory(contact: SearchPeopleResponsePerson, contactEntity: BaseEntity, params: ProcessPersonRecordGroupParams): Promise<void> {
-        try{
-            // loop through the person.employment_history array and create/update the employment history records
-            if(!contact || !contact.employment_history || !params.EmploymentHistoryEntityName || !params.EmploymentHistoryContactIDFieldName || !params.EmploymentHistoryOrganizationFieldName || !params.EmploymentHistoryTitleFieldName){
-                LogStatus('Unable to upsert contact employment history: missing one or many required parameters');
-                return;
-            }
-
-            // The history entities' contact FK column references the contact's key, so that key must be a single column.
-            if (contactEntity.PrimaryKeys.length !== 1) {
-                LogError(`Unable to upsert contact employment history: entity '${contactEntity.EntityInfo.Name}' has a composite primary key, which the single ${params.EmploymentHistoryContactIDFieldName} foreign key column cannot reference`);
-                return;
-            }
-            const contactPK = contactEntity.FirstPrimaryKey; // first-pk-ok: FK target — the history entities' contact FK column references the contact's single-column key (guarded above)
-            const quotes = contactPK.NeedsQuotes ? "'" : "";
-            const contactID: unknown = contactPK.Value;
-            const rv: RunView = new RunView();
-
-            for(const employment of contact.employment_history){
-                const rvResults: RunViewResult = await rv.RunView({
-                    EntityName: params.EmploymentHistoryEntityName,
-                    ExtraFilter: `${params.EmploymentHistoryContactIDFieldName} = ${quotes}${contactID}${quotes} 
-                    AND ${params.EmploymentHistoryOrganizationFieldName} = '${this.EscapeSingleQuotes(employment.organization_name)}'
-                    AND Title = '${this.EscapeSingleQuotes(employment.title)}'`,
-                }, params.CurrentUser);
-
-                if(!rvResults.Success){
-                    LogError('Error querying employment history entity: ', undefined, rvResults.ErrorMessage);
-                    continue;
-                }
-
-                const results: Record<string, any>[] = rvResults.Results;
-                let historyEntity: BaseEntity | null = null;
-                
-                if(results.length > 0) {
-                    // update the existing record
-                    historyEntity = await params.Md.GetEntityObject<BaseEntity>(params.EmploymentHistoryEntityName, CompositeKey.FromEntityRecord(params.Md.EntityByName(params.EmploymentHistoryEntityName)!, results[0]), params.CurrentUser);
-                }
-                else {
-                    historyEntity = await params.Md.GetEntityObject<BaseEntity>(params.EmploymentHistoryEntityName, params.CurrentUser);
-                    historyEntity.NewRecord();
-                    historyEntity.Set(params.EmploymentHistoryContactIDFieldName, contactID);
-                    historyEntity.Set("CreatedAt", new Date());
-                }
-
-                historyEntity.Set(params.EmploymentHistoryOrganizationFieldName, this.EscapeSingleQuotes(employment.organization_name).substring(0, 50));
-                historyEntity.Set(params.EmploymentHistoryTitleFieldName, this.EscapeSingleQuotes(employment.title));
-
-                if(this.IsValidDate(employment.start_date)){
-                    historyEntity.Set('StartedAt', employment.start_date);
-                }
-
-                if(this.IsValidDate(employment.end_date)){
-                    historyEntity.Set('EndedAt', employment.end_date);
-                }
-
-                historyEntity.Set("UpdatedAt", new Date());
-                historyEntity.Set("IsCurrent", employment.current);
-
-                const saveResult = await historyEntity.Save();
-                if(!saveResult){
-                    LogError('Error upserting contact employment history', undefined, historyEntity.LatestResult);
-                }
-
-                if(employment.degree){
-                    if(!params.EducationHistoryEntityName || !params.EducationHistoryContactIDFieldName || !params.EducationHistoryInstitutionFieldName || !params.EducationHistoryDegreeFieldName){
-                        LogStatus('Unable to upsert contact education history, missing one or many required parameters');
-                        continue;
-                    }
-
-                    const rvEducationResults: RunViewResult = await rv.RunView({
-                        EntityName: params.EducationHistoryEntityName,
-                        ExtraFilter: `${params.EducationHistoryContactIDFieldName} = ${quotes}${contactID}${quotes}
-                        AND ${params.EducationHistoryInstitutionFieldName} = '${this.EscapeSingleQuotes(employment.organization_name)}'
-                        AND ${params.EducationHistoryDegreeFieldName} = '${this.EscapeSingleQuotes(employment.degree)}'`,
-                    }, params.CurrentUser);
-
-                    if(!rvEducationResults.Success){
-                        LogError('Error querying education history entity: ', undefined, rvEducationResults.ErrorMessage);
-                        continue;
-                    }
-
-                    const educationResults: Record<string, any>[] = rvEducationResults.Results;
-                    let educationEntity: BaseEntity | null = null;
-                    
-                    if(educationResults.length > 0){
-                        // update the existing record
-                        educationEntity = await params.Md.GetEntityObject<BaseEntity>(params.EducationHistoryEntityName, CompositeKey.FromEntityRecord(params.Md.EntityByName(params.EducationHistoryEntityName)!, educationResults[0]), params.CurrentUser);
-                    }
-                    else {
-                        educationEntity= await params.Md.GetEntityObject<BaseEntity>(params.EducationHistoryEntityName, params.CurrentUser);
-                        educationEntity.NewRecord();
-                        educationEntity.Set(params.EducationHistoryContactIDFieldName, contactID);
-                        educationEntity.Set("CreatedAt", new Date());
-                    }
-
-                    educationEntity.Set(params.EducationHistoryInstitutionFieldName, this.EscapeSingleQuotes(employment.organization_name));
-                    educationEntity.Set(params.EducationHistoryDegreeFieldName, this.EscapeSingleQuotes(employment.degree));
-                    
-                    //TODO - add this to mapping
-                    educationEntity.Set("GradeLevel", employment.grade_level);
-                    educationEntity.Set("UpdatedAt", new Date());
-                    
-                    if(this.IsValidDate(employment.start_date)){
-                        educationEntity.Set('StartedAt', employment.start_date);
-                    }
-    
-                    if(this.IsValidDate(employment.end_date)){
-                        educationEntity.Set('EndedAt', employment.end_date);
-                    }
-
-                    const saveResult = await educationEntity.Save();
-                    if(!saveResult){
-                        LogError('Error upserting contact education history: ', undefined, educationEntity.LatestResult);
-                    }
-                }
-
-            }
-        }
-        catch(ex){
-            LogError('Error upserting contact education and employment history: ', undefined, ex);
-        }
+export function ParseEducationMapping(raw: Record<string, unknown>): EducationHistoryMapping | null {
+    const get = (key: string): string | undefined => MappedString(raw, key);
+    const entityName = get('EntityName');
+    const contactID = get('ContactIDFieldName');
+    const institution = get('InstitutionFieldName');
+    const degree = get('DegreeFieldName');
+    if (!entityName || !contactID || !institution || !degree) {
+        if (Object.keys(raw).length > 0) LogStatus('EducationHistoryFieldMappings is missing EntityName, ContactIDFieldName, InstitutionFieldName or DegreeFieldName; education history will not be written');
+        return null;
     }
-
-    /**
-     * Escapes single quotes in strings for SQL query safety
-     * Prevents SQL injection in dynamic filter construction
-     * 
-     * @param str - String to escape
-     * @returns Escaped string with doubled single quotes
-     */
-    protected EscapeSingleQuotes(str: string) {
-        if (str){
-            return str.replace(/'/g, "''");
-        }
-
-        return '';
-    }
-
-    /**
-     * Validates if a date string represents a valid date
-     * Used for employment/education history date validation
-     * 
-     * @param dateString - Date string to validate
-     * @returns boolean - true if valid date
-     */
-    protected IsValidDate(dateString: string): boolean {
-        if (dateString && dateString.length > 0) {
-            const date = new Date(dateString);
-            return date instanceof Date && !isNaN(date.getTime());    
-        }
-
-        return false;
-    }
-    
-    /**
-     * Wraps Apollo.io API calls with intelligent retry logic for rate limiting
-     * Handles both per-minute and hourly rate limits with appropriate backoff
-     * 
-     * @param method - HTTP method ('get' or 'post')
-     * @param endpoint - Apollo API endpoint path
-     * @param data - Request payload for POST requests
-     * @param config - request configuration (headers / query params)
-     * @param retryAttempts - Number of retry attempts remaining (default: 1)
-     * @returns Promise<HttpResponse> - Apollo API response
-     * @throws Error if rate limit exceeded or other API errors
-     */
-    protected async WrapApolloCall<T = unknown>(method: 'get' | 'post', endpoint: string, data: unknown, config: Omit<HttpRequestConfig, 'Url' | 'Method' | 'Body'>, retryAttempts: number = 1): Promise<HttpResponse<T>> {
-        try {
-            const url = `${Config.ApolloAPIEndpoint}/${endpoint}`;  
-            
-            // ThrowOnError stays on by default, so a 429 surfaces in the catch below;
-            // the explicit status check here mirrors the original belt-and-braces handling.
-            const response: HttpResponse<T> = method === 'get' ? await HttpGet<T>(url, config) : await HttpPost<T>(url, data, config);
-            if (response.Status === 429) {
-                if (retryAttempts > 0) {
-                    LogStatus('   >>> Too many requests to Apollo.io API, waiting 1 minute and trying again...')
-                    await this.Timeout(60000); // wait 1 minute
-                    return await this.WrapApolloCall<T>(method, endpoint, data, config, retryAttempts - 1);
-                }
-                else{
-                    throw {message: 'Too many requests to Apollo.io API', code: 429};
-                }
-            }
-
-            return response;    
-        }
-        catch (apolloError: unknown) {
-            // A 429 arrives as a thrown HttpError rather than a returned response, so handle it here too
-            if (IsHttpError(apolloError) && apolloError.Status === 429) {
-                let waitTime: number = 60000; // default to 1 minute
-                //this is a rough guesstimate, check the response headers for more accurate info
-                if(apolloError.Data){
-                    const errorMessage: string = typeof apolloError.Data === 'string' 
-                        ? apolloError.Data 
-                        : JSON.stringify(apolloError.Data);
-                    if(errorMessage.includes('times per hour')){
-                        LogStatus("   >>> Hourly rate limit reached")
-                        //we reached out hourly rate limit, so wait an hour 
-                        waitTime = 3600000; // wait 1 hour
-                    }
-                }
-                if (retryAttempts > 0) {
-                    LogStatus(`   >>> Too many requests to Apollo.io API, waiting ${waitTime / 60000} minute(s) and trying again...`)
-                    await this.Timeout(waitTime); // wait 1 minute
-                    return await this.WrapApolloCall<T>(method, endpoint, data, config, retryAttempts - 1);
-                }
-                else {
-                    throw {message: 'Too many requests to Apollo.io API', code: 429};
-                }
-            }
-            else {
-                throw apolloError;
-            }
-        }
-    }
-    
-    /**
-     * Utility method for creating delays in async operations
-     * Used for rate limit backoff and API throttling
-     * 
-     * @param ms - Number of milliseconds to wait
-     * @returns Promise that resolves after the specified delay
-     */
-    private async Timeout(ms: number) {
-        return new Promise(resolve => setTimeout(resolve, ms));
-    }
-
-    /**
-     * Checks if a job title should be excluded from contact processing
-     * Filters out non-business contacts like students and volunteers
-     * 
-     * @param title - Job title to check
-     * @returns boolean - true if title should be excluded
-     */
-    protected IsExcludedTitle(title: string): boolean {
-        if(!title){
-            return false;
-        }
-
-        return this.ExcludeTitles.includes(title.trim().toLowerCase());
-    }
+    return { EntityName: entityName, ContactIDFieldName: contactID, InstitutionFieldName: institution, DegreeFieldName: degree, GradeLevelFieldName: get('GradeLevelFieldName'), StartDateFieldName: get('StartDateFieldName'), EndDateFieldName: get('EndDateFieldName') };
 }

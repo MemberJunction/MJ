@@ -253,51 +253,209 @@ import { Component, Input, Output, EventEmitter, ChangeDetectionStrategy } from 
 })
 export class FileArtifactToolbarComponent {
   /** Display name shown in the center of the toolbar. */
-  @Input() fileName = '';
+  @Input() FileName = '';
+
+  /** @deprecated Use {@link FileName}. */
+  @Input() set fileName(value: FileArtifactToolbarComponent['FileName']) {
+    this.FileName = value;
+  }
+  /** @deprecated Use {@link FileName}. */
+  get fileName(): FileArtifactToolbarComponent['FileName'] {
+    return this.FileName;
+  }
 
   /** Current page number (1-based). Only shown when totalPages > 1. */
-  @Input() currentPage = 1;
+  @Input() CurrentPage = 1;
+
+  /** @deprecated Use {@link CurrentPage}. */
+  @Input() set currentPage(value: FileArtifactToolbarComponent['CurrentPage']) {
+    this.CurrentPage = value;
+  }
+  /** @deprecated Use {@link CurrentPage}. */
+  get currentPage(): FileArtifactToolbarComponent['CurrentPage'] {
+    return this.CurrentPage;
+  }
 
   /** Total page count. Pass 1 (default) to hide navigation arrows. */
-  @Input() totalPages = 1;
+  @Input() TotalPages = 1;
+
+  /** @deprecated Use {@link TotalPages}. */
+  @Input() set totalPages(value: FileArtifactToolbarComponent['TotalPages']) {
+    this.TotalPages = value;
+  }
+  /** @deprecated Use {@link TotalPages}. */
+  get totalPages(): FileArtifactToolbarComponent['TotalPages'] {
+    return this.TotalPages;
+  }
 
   /** Whether the download button should show a spinner. */
-  @Input() isDownloading = false;
+  @Input() IsDownloading = false;
+
+  /** @deprecated Use {@link IsDownloading}. */
+  @Input() set isDownloading(value: FileArtifactToolbarComponent['IsDownloading']) {
+    this.IsDownloading = value;
+  }
+  /** @deprecated Use {@link IsDownloading}. */
+  get isDownloading(): FileArtifactToolbarComponent['IsDownloading'] {
+    return this.IsDownloading;
+  }
 
   /** Whether to show the Print button (e.g. hide for binary spreadsheets). */
-  @Input() showPrint = true;
+  @Input() ShowPrint = true;
+
+  /** @deprecated Use {@link ShowPrint}. */
+  @Input() set showPrint(value: FileArtifactToolbarComponent['ShowPrint']) {
+    this.ShowPrint = value;
+  }
+  /** @deprecated Use {@link ShowPrint}. */
+  get showPrint(): FileArtifactToolbarComponent['ShowPrint'] {
+    return this.ShowPrint;
+  }
 
   /** Whether to show zoom in/out/reset controls. Only PDF needs this. */
-  @Input() showZoom = false;
+  @Input() ShowZoom = false;
+
+  /** @deprecated Use {@link ShowZoom}. */
+  @Input() set showZoom(value: FileArtifactToolbarComponent['ShowZoom']) {
+    this.ShowZoom = value;
+  }
+  /** @deprecated Use {@link ShowZoom}. */
+  get showZoom(): FileArtifactToolbarComponent['ShowZoom'] {
+    return this.ShowZoom;
+  }
 
   /** Current zoom level as a percentage integer (e.g. 100 = 100%). */
-  @Input() zoomPercent = 100;
+  @Input() ZoomPercent = 100;
+
+  /** @deprecated Use {@link ZoomPercent}. */
+  @Input() set zoomPercent(value: FileArtifactToolbarComponent['ZoomPercent']) {
+    this.ZoomPercent = value;
+  }
+  /** @deprecated Use {@link ZoomPercent}. */
+  get zoomPercent(): FileArtifactToolbarComponent['ZoomPercent'] {
+    return this.ZoomPercent;
+  }
 
   /** Whether zooming in further is possible. */
-  @Input() canZoomIn = true;
+  @Input() CanZoomIn = true;
+
+  /** @deprecated Use {@link CanZoomIn}. */
+  @Input() set canZoomIn(value: FileArtifactToolbarComponent['CanZoomIn']) {
+    this.CanZoomIn = value;
+  }
+  /** @deprecated Use {@link CanZoomIn}. */
+  get canZoomIn(): FileArtifactToolbarComponent['CanZoomIn'] {
+    return this.CanZoomIn;
+  }
 
   /** Whether zooming out further is possible. */
-  @Input() canZoomOut = true;
+  @Input() CanZoomOut = true;
 
-  @Output() download = new EventEmitter<void>();
-  @Output() print = new EventEmitter<void>();
-  @Output() prevPage = new EventEmitter<void>();
-  @Output() nextPage = new EventEmitter<void>();
+  /** @deprecated Use {@link CanZoomOut}. */
+  @Input() set canZoomOut(value: FileArtifactToolbarComponent['CanZoomOut']) {
+    this.CanZoomOut = value;
+  }
+  /** @deprecated Use {@link CanZoomOut}. */
+  get canZoomOut(): FileArtifactToolbarComponent['CanZoomOut'] {
+    return this.CanZoomOut;
+  }
+
+  @Output() Download = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link Download}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (download) keeps working. Must stay AFTER Download: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() download = this.Download;
+  @Output() Print = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link Print}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (print) keeps working. Must stay AFTER Print: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() print = this.Print;
+  @Output() PrevPage = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link PrevPage}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (prevPage) keeps working. Must stay AFTER PrevPage: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() prevPage = this.PrevPage;
+  @Output() NextPage = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link NextPage}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (nextPage) keeps working. Must stay AFTER NextPage: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() nextPage = this.NextPage;
   /** Emits the validated target page number when the user edits the page input. */
-  @Output() pageChange = new EventEmitter<number>();
-  @Output() zoomIn = new EventEmitter<void>();
-  @Output() zoomOut = new EventEmitter<void>();
-  /** Emitted when the user clicks the zoom-level badge to reset to 100%. */
-  @Output() zoomReset = new EventEmitter<void>();
+  @Output() PageChange = new EventEmitter<number>();
 
-  public onPageInputChange(event: Event): void {
+  /**
+   * @deprecated Use {@link PageChange}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (pageChange) keeps working. Must stay AFTER PageChange: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() pageChange = this.PageChange;
+  @Output() ZoomIn = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link ZoomIn}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (zoomIn) keeps working. Must stay AFTER ZoomIn: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() zoomIn = this.ZoomIn;
+  @Output() ZoomOut = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link ZoomOut}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (zoomOut) keeps working. Must stay AFTER ZoomOut: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() zoomOut = this.ZoomOut;
+  /** Emitted when the user clicks the zoom-level badge to reset to 100%. */
+  @Output() ZoomReset = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link ZoomReset}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (zoomReset) keeps working. Must stay AFTER ZoomReset: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() zoomReset = this.ZoomReset;
+
+  public OnPageInputChange(event: Event): void {
     const input = event.target as HTMLInputElement;
     const value = parseInt(input.value, 10);
-    if (!isNaN(value) && value >= 1 && value <= this.totalPages) {
-      this.pageChange.emit(value);
+    if (!isNaN(value) && value >= 1 && value <= this.TotalPages) {
+      this.PageChange.emit(value);
     } else {
       // Snap back to current valid page
-      input.value = String(this.currentPage);
+      input.value = String(this.CurrentPage);
     }
+  }
+
+  /** @deprecated Use {@link OnPageInputChange}. */
+  public onPageInputChange(event: Event): void {
+    return this.OnPageInputChange(event);
   }
 }

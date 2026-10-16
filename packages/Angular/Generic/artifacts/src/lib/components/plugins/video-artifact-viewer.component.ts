@@ -82,7 +82,16 @@ export class VideoArtifactViewerComponent extends BaseArtifactViewerPluginCompon
     private readonly fileService = inject(ArtifactFileService);
     private readonly cdr = inject(ChangeDetectorRef);
 
-    public videoUrl = '';
+    public VideoUrl = '';
+
+    /** @deprecated Use {@link VideoUrl}. */
+    public get videoUrl() {
+        return this.VideoUrl;
+    }
+    /** @deprecated Use {@link VideoUrl}. */
+    public set videoUrl(value) {
+        this.VideoUrl = value;
+    }
     public errorMessage = '';
 
     /**
@@ -94,7 +103,7 @@ export class VideoArtifactViewerComponent extends BaseArtifactViewerPluginCompon
 
     /** Set the resolved URL and recompute the single-element {@link MediaTracks} array in lockstep. */
     private setVideoUrl(url: string): void {
-        this.videoUrl = url;
+        this.VideoUrl = url;
         this.MediaTracks = url
             ? [
                   {
@@ -145,15 +154,25 @@ export class VideoArtifactViewerComponent extends BaseArtifactViewerPluginCompon
         this.cdr.markForCheck();
     }
 
-    public onMediaError(): void {
+    public OnMediaError(): void {
         this.errorMessage = 'The video could not be played. It may be corrupt or in an unsupported format.';
         this.setVideoUrl('');
         this.cdr.markForCheck();
     }
 
+    /** @deprecated Use {@link OnMediaError}. */
+    public onMediaError(): void {
+        return this.OnMediaError();
+    }
+
     /** Fired when the generic player reaches the end of the track. No-op affordance hook. */
-    public onMediaEnded(): void {
+    public OnMediaEnded(): void {
         // Playback finished — nothing to persist for a one-shot artifact viewer.
+    }
+
+    /** @deprecated Use {@link OnMediaEnded}. */
+    public onMediaEnded(): void {
+        return this.OnMediaEnded();
     }
 
     public override GetCurrentStateSnapshot(): DataSnapshot | null {

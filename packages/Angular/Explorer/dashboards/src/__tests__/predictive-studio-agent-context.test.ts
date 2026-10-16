@@ -1,25 +1,25 @@
 import { describe, it, expect } from 'vitest';
 import {
   PS_AGENT_CONTEXT_NAME_LIST_CAP,
-  capPSNames,
-  resolvePSRecord,
-  buildPSNotFoundError,
-  buildPredictionsAgentContext,
-  buildStudioAgentContext,
-  buildModelsAgentContext,
+  CapPSNames,
+  ResolvePSRecord,
+  BuildPSNotFoundError,
+  BuildPredictionsAgentContext,
+  BuildStudioAgentContext,
+  BuildModelsAgentContext,
 } from '../PredictiveStudio/predictive-studio-agent-context';
 
 describe('capPSNames', () => {
   it('caps to PS_AGENT_CONTEXT_NAME_LIST_CAP without mutating the input', () => {
     const input = Array.from({ length: 40 }, (_, i) => `n${i}`);
-    const out = capPSNames(input);
+    const out = CapPSNames(input);
     expect(out).toHaveLength(PS_AGENT_CONTEXT_NAME_LIST_CAP);
     expect(input).toHaveLength(40); // untouched
     expect(out[0]).toBe('n0');
   });
 
   it('returns short lists unchanged', () => {
-    expect(capPSNames(['a', 'b'])).toEqual(['a', 'b']);
+    expect(CapPSNames(['a', 'b'])).toEqual(['a', 'b']);
   });
 });
 
@@ -30,38 +30,38 @@ describe('resolvePSRecord', () => {
   ];
 
   it('matches by exact ID case-insensitively (UUID casing tolerance)', () => {
-    expect(resolvePSRecord('aaa', cards)?.Name).toBe('Renewal Risk');
+    expect(ResolvePSRecord('aaa', cards)?.Name).toBe('Renewal Risk');
   });
 
   it('matches by exact name (trimmed, case-insensitive)', () => {
-    expect(resolvePSRecord('  lapse likelihood ', cards)?.ID).toBe('BBB');
+    expect(ResolvePSRecord('  lapse likelihood ', cards)?.ID).toBe('BBB');
   });
 
   it('falls back to a contains match on the name — but only when unambiguous', () => {
-    expect(resolvePSRecord('renewal', cards)?.ID).toBe('AAA');
+    expect(ResolvePSRecord('renewal', cards)?.ID).toBe('AAA');
   });
 
   it('returns null (never a silent first-match) when the needle matches several names', () => {
     const many = [...cards, { ID: 'CCC', Name: 'Renewal Amount' }];
-    expect(resolvePSRecord('renewal', many)).toBeNull();
+    expect(ResolvePSRecord('renewal', many)).toBeNull();
   });
 
   it('returns null on a miss or empty input', () => {
-    expect(resolvePSRecord('nope', cards)).toBeNull();
-    expect(resolvePSRecord('', cards)).toBeNull();
+    expect(ResolvePSRecord('nope', cards)).toBeNull();
+    expect(ResolvePSRecord('', cards)).toBeNull();
   });
 });
 
 describe('buildPSNotFoundError', () => {
   it('samples available names', () => {
-    const msg = buildPSNotFoundError('xyz', [{ ID: '1', Name: 'Alpha' }, { ID: '2', Name: 'Beta' }], 'prediction');
+    const msg = BuildPSNotFoundError('xyz', [{ ID: '1', Name: 'Alpha' }, { ID: '2', Name: 'Beta' }], 'prediction');
     expect(msg).toContain('"xyz"');
     expect(msg).toContain('Alpha');
     expect(msg).toContain('Beta');
   });
 
   it('handles an empty candidate set', () => {
-    expect(buildPSNotFoundError('x', [], 'section')).toContain('(none)');
+    expect(BuildPSNotFoundError('x', [], 'section')).toContain('(none)');
   });
 
   it('becomes a "did you mean" listing exactly the contenders on an ambiguous partial match', () => {
@@ -70,7 +70,7 @@ describe('buildPSNotFoundError', () => {
       { ID: '2', Name: 'Renewal Amount' },
       { ID: '3', Name: 'Lapse Likelihood' },
     ];
-    const msg = buildPSNotFoundError('renewal', many, 'prediction');
+    const msg = BuildPSNotFoundError('renewal', many, 'prediction');
     expect(msg).toContain('did you mean');
     expect(msg).toContain('Renewal Risk');
     expect(msg).toContain('Renewal Amount');
@@ -80,7 +80,7 @@ describe('buildPSNotFoundError', () => {
 
 describe('buildPredictionsAgentContext', () => {
   it('publishes catalog counts + bounded names, and omits workspace/at-risk fields in catalog view', () => {
-    const ctx = buildPredictionsAgentContext({
+    const ctx = BuildPredictionsAgentContext({
       View: 'catalog',
       PredictionCount: 3,
       ReadyPredictionCount: 2,
@@ -95,13 +95,13 @@ describe('buildPredictionsAgentContext', () => {
 
   it('surfaces a companion count when the visible name list is truncated', () => {
     const names = Array.from({ length: 30 }, (_, i) => `p${i}`);
-    const ctx = buildPredictionsAgentContext({ View: 'catalog', PredictionCount: 30, ReadyPredictionCount: 30, VisiblePredictionNames: names, ChatOpen: false });
+    const ctx = BuildPredictionsAgentContext({ View: 'catalog', PredictionCount: 30, ReadyPredictionCount: 30, VisiblePredictionNames: names, ChatOpen: false });
     expect((ctx['VisiblePredictionNames'] as string[]).length).toBe(PS_AGENT_CONTEXT_NAME_LIST_CAP);
     expect(ctx['VisiblePredictionNameCount']).toBe(30);
   });
 
   it('publishes the selection + at-risk breakdown + drivers in workspace view once loaded', () => {
-    const ctx = buildPredictionsAgentContext({
+    const ctx = BuildPredictionsAgentContext({
       View: 'workspace',
       PredictionCount: 1,
       ReadyPredictionCount: 1,
@@ -126,7 +126,7 @@ describe('buildPredictionsAgentContext', () => {
   });
 
   it('never fabricates at-risk counts before the list has loaded', () => {
-    const ctx = buildPredictionsAgentContext({
+    const ctx = BuildPredictionsAgentContext({
       View: 'workspace',
       PredictionCount: 1,
       ReadyPredictionCount: 1,
@@ -143,7 +143,7 @@ describe('buildPredictionsAgentContext', () => {
 
 describe('buildStudioAgentContext', () => {
   it('publishes the active section, section labels, and workbench counts', () => {
-    const ctx = buildStudioAgentContext({
+    const ctx = BuildStudioAgentContext({
       ActiveSection: 'pipelines',
       ActiveSectionLabel: 'Training Pipelines',
       SectionLabels: ['Overview', 'Training Pipelines', 'Algorithm Catalog'],
@@ -168,7 +168,7 @@ describe('buildStudioAgentContext', () => {
 
 describe('buildModelsAgentContext', () => {
   it('publishes the active section + lifecycle counts', () => {
-    const ctx = buildModelsAgentContext({
+    const ctx = BuildModelsAgentContext({
       ActiveSection: 'production',
       ActiveSectionLabel: 'Models in Production',
       SectionLabels: ['Model Registry', 'Models in Production'],

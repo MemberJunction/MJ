@@ -19,7 +19,7 @@
         "kind": "action",
         "actions": [
           {
-            "name": "Google Custom Search"
+            "name": "Web Search"
           }
         ],
         "allowAdditionalActions": true
@@ -45,7 +45,7 @@
             "kind": "action",
             "actions": [
               {
-                "name": "Google Custom Search"
+                "name": "Web Search"
               }
             ],
             "allowAdditionalActions": true

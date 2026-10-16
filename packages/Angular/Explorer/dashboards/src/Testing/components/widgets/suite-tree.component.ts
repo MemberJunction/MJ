@@ -130,24 +130,71 @@ import { SuiteHierarchyNode } from '../../services/testing-instrumentation.servi
   `]
 })
 export class SuiteTreeComponent {
-  @Input() suites: SuiteHierarchyNode[] = [];
-  @Input() selectedSuiteId: string | null = null;
-  @Output() suiteSelect = new EventEmitter<string>();
+  @Input() Suites: SuiteHierarchyNode[] = [];
 
-  onNodeClick(suiteId: string): void {
-    this.suiteSelect.emit(suiteId);
+  /** @deprecated Use {@link Suites}. */
+  @Input() set suites(value: SuiteHierarchyNode[]) {
+    this.Suites = value;
+  }
+  /** @deprecated Use {@link Suites}. */
+  get suites(): SuiteHierarchyNode[] {
+    return this.Suites;
+  }
+  @Input() SelectedSuiteId: string | null = null;
+
+  /** @deprecated Use {@link SelectedSuiteId}. */
+  @Input() set selectedSuiteId(value: string | null) {
+    this.SelectedSuiteId = value;
+  }
+  /** @deprecated Use {@link SelectedSuiteId}. */
+  get selectedSuiteId(): string | null {
+    return this.SelectedSuiteId;
+  }
+  @Output() SuiteSelect = new EventEmitter<string>();
+
+  /**
+   * @deprecated Use {@link SuiteSelect}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (suiteSelect) keeps working. Must stay AFTER SuiteSelect: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() suiteSelect = this.SuiteSelect;
+
+  OnNodeClick(suiteId: string): void {
+    this.SuiteSelect.emit(suiteId);
   }
 
-  onToggleExpand(node: SuiteHierarchyNode): void {
+  /** @deprecated Use {@link OnNodeClick}. */
+  onNodeClick(suiteId: string): void {
+    return this.OnNodeClick(suiteId);
+  }
+
+  OnToggleExpand(node: SuiteHierarchyNode): void {
     node.expanded = !node.expanded;
   }
 
-  expandAll(): void {
-    this.setExpandedRecursive(this.suites, true);
+  /** @deprecated Use {@link OnToggleExpand}. */
+  onToggleExpand(node: SuiteHierarchyNode): void {
+    return this.OnToggleExpand(node);
   }
 
+  ExpandAll(): void {
+    this.setExpandedRecursive(this.Suites, true);
+  }
+
+  /** @deprecated Use {@link ExpandAll}. */
+  expandAll(): void {
+    return this.ExpandAll();
+  }
+
+  CollapseAll(): void {
+    this.setExpandedRecursive(this.Suites, false);
+  }
+
+  /** @deprecated Use {@link CollapseAll}. */
   collapseAll(): void {
-    this.setExpandedRecursive(this.suites, false);
+    return this.CollapseAll();
   }
 
   private setExpandedRecursive(nodes: SuiteHierarchyNode[], expanded: boolean): void {
@@ -321,25 +368,85 @@ export class SuiteTreeComponent {
   `]
 })
 export class SuiteTreeNodeComponent {
-  @Input() node!: SuiteHierarchyNode;
-  @Input() level = 0;
-  @Input() selectedId: string | null = null;
-  @Output() nodeClick = new EventEmitter<string>();
-  @Output() toggleExpand = new EventEmitter<SuiteHierarchyNode>();
+  @Input() Node!: SuiteHierarchyNode;
 
+  /** @deprecated Use {@link Node}. */
+  @Input() set node(value: SuiteHierarchyNode) {
+    this.Node = value;
+  }
+  /** @deprecated Use {@link Node}. */
+  get node(): SuiteHierarchyNode {
+    return this.Node;
+  }
+  @Input() Level = 0;
+
+  /** @deprecated Use {@link Level}. */
+  @Input() set level(value: SuiteTreeNodeComponent['Level']) {
+    this.Level = value;
+  }
+  /** @deprecated Use {@link Level}. */
+  get level(): SuiteTreeNodeComponent['Level'] {
+    return this.Level;
+  }
+  @Input() SelectedId: string | null = null;
+
+  /** @deprecated Use {@link SelectedId}. */
+  @Input() set selectedId(value: string | null) {
+    this.SelectedId = value;
+  }
+  /** @deprecated Use {@link SelectedId}. */
+  get selectedId(): string | null {
+    return this.SelectedId;
+  }
+  @Output() NodeClick = new EventEmitter<string>();
+
+  /**
+   * @deprecated Use {@link NodeClick}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (nodeClick) keeps working. Must stay AFTER NodeClick: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() nodeClick = this.NodeClick;
+  @Output() ToggleExpand = new EventEmitter<SuiteHierarchyNode>();
+
+  /**
+   * @deprecated Use {@link ToggleExpand}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (toggleExpand) keeps working. Must stay AFTER ToggleExpand: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() toggleExpand = this.ToggleExpand;
+
+  OnClick(): void {
+    this.NodeClick.emit(this.Node.id);
+  }
+
+  /** @deprecated Use {@link OnClick}. */
   onClick(): void {
-    this.nodeClick.emit(this.node.id);
+    return this.OnClick();
   }
 
-  onToggle(event: Event): void {
+  OnToggle(event: Event): void {
     event.stopPropagation();
-    this.toggleExpand.emit(this.node);
+    this.ToggleExpand.emit(this.Node);
   }
 
-  getPassRateClass(passRate: number): string {
+  /** @deprecated Use {@link OnToggle}. */
+  onToggle(event: Event): void {
+    return this.OnToggle(event);
+  }
+
+  GetPassRateClass(passRate: number): string {
     if (passRate >= 90) return 'excellent';
     if (passRate >= 75) return 'good';
     if (passRate >= 50) return 'fair';
     return 'poor';
+  }
+
+  /** @deprecated Use {@link GetPassRateClass}. */
+  getPassRateClass(passRate: number): string {
+    return this.GetPassRateClass(passRate);
   }
 }

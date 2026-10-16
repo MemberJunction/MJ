@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
-  findSchemaOutputOverride,
-  partitionEntitiesByOutputDirectory,
-  resolveSchemaOutputDirectory,
+  FindSchemaOutputOverride,
+  PartitionEntitiesByOutputDirectory,
+  ResolveSchemaOutputDirectory,
 } from '../Config/schema-output';
 
 const overrides = [
@@ -12,19 +12,19 @@ const overrides = [
 
 describe('schema-output', () => {
   it('finds the first matching override, including wildcards', () => {
-    expect(findSchemaOutputOverride('bsd_crm', overrides)?.EntitySubClasses).toBe('/demo/entities');
-    expect(findSchemaOutputOverride('legacy', overrides)?.skip).toEqual(['EntitySubClasses']);
-    expect(findSchemaOutputOverride('dbo', overrides)).toBeUndefined();
+    expect(FindSchemaOutputOverride('bsd_crm', overrides)?.EntitySubClasses).toBe('/demo/entities');
+    expect(FindSchemaOutputOverride('legacy', overrides)?.skip).toEqual(['EntitySubClasses']);
+    expect(FindSchemaOutputOverride('dbo', overrides)).toBeUndefined();
   });
 
   it('resolves skip as null and a missing kind as undefined (use default)', () => {
-    expect(resolveSchemaOutputDirectory('bsd_crm', 'Angular', overrides)).toBeNull();
-    expect(resolveSchemaOutputDirectory('bsd_crm', 'GraphQLServer', overrides)).toBeUndefined();
-    expect(resolveSchemaOutputDirectory('legacy', 'EntitySubClasses', overrides)).toBeNull();
+    expect(ResolveSchemaOutputDirectory('bsd_crm', 'Angular', overrides)).toBeNull();
+    expect(ResolveSchemaOutputDirectory('bsd_crm', 'GraphQLServer', overrides)).toBeUndefined();
+    expect(ResolveSchemaOutputDirectory('legacy', 'EntitySubClasses', overrides)).toBeNull();
   });
 
   it('partitions entities into destination directories and drops skipped schemas', () => {
-    const groups = partitionEntitiesByOutputDirectory(
+    const groups = PartitionEntitiesByOutputDirectory(
       [
         { SchemaName: 'bsd_crm', Name: 'Customers' },
         { SchemaName: 'legacy', Name: 'OldThing' },
@@ -40,13 +40,13 @@ describe('schema-output', () => {
   });
 
   it('keeps the default directory with an empty group when there are no entities (fresh install, #4477)', () => {
-    const groups = partitionEntitiesByOutputDirectory([], 'EntitySubClasses', '/default', overrides);
+    const groups = PartitionEntitiesByOutputDirectory([], 'EntitySubClasses', '/default', overrides);
     expect([...groups.keys()]).toEqual(['/default']);
     expect(groups.get('/default')).toEqual([]);
   });
 
   it('keeps the default directory when every entity is overridden elsewhere', () => {
-    const groups = partitionEntitiesByOutputDirectory(
+    const groups = PartitionEntitiesByOutputDirectory(
       [{ SchemaName: 'bsd_crm', Name: 'Customers' }],
       'EntitySubClasses',
       '/default',
@@ -57,7 +57,7 @@ describe('schema-output', () => {
   });
 
   it('emits no default group when no default directory is configured', () => {
-    const groups = partitionEntitiesByOutputDirectory([], 'EntitySubClasses', null, overrides);
+    const groups = PartitionEntitiesByOutputDirectory([], 'EntitySubClasses', null, overrides);
     expect(groups.size).toBe(0);
   });
 
@@ -66,7 +66,7 @@ describe('schema-output', () => {
       { schema: 'bsd_crm', EntitySubClasses: '/exact' },
       { schema: 'bsd_%', EntitySubClasses: '/wildcard' },
     ];
-    expect(resolveSchemaOutputDirectory('bsd_crm', 'EntitySubClasses', overlapping)).toBe('/exact');
-    expect(resolveSchemaOutputDirectory('bsd_billing', 'EntitySubClasses', overlapping)).toBe('/wildcard');
+    expect(ResolveSchemaOutputDirectory('bsd_crm', 'EntitySubClasses', overlapping)).toBe('/exact');
+    expect(ResolveSchemaOutputDirectory('bsd_billing', 'EntitySubClasses', overlapping)).toBe('/wildcard');
   });
 });

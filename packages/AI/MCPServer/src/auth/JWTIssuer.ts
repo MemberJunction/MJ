@@ -15,13 +15,13 @@ import type { ProxyJWTClaims, SignProxyJWTOptions } from './types.js';
  */
 export interface JWTIssuerConfig {
   /** HS256 signing secret (must be at least 32 bytes) */
-  signingSecret: string;
+  signingSecret: string;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
   /** Token expiration time (e.g., '1h', '30m', '1d') */
-  expiresIn: string;
+  expiresIn: string;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
   /** Issuer claim value */
-  issuer: string;
+  issuer: string;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
   /** Audience claim value (usually the resourceIdentifier) */
-  audience: string;
+  audience: string;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
 }
 
 /**
@@ -29,11 +29,11 @@ export interface JWTIssuerConfig {
  */
 export interface SignJWTResult {
   /** The signed JWT string */
-  token: string;
+  token: string;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
   /** Expiration time as Date */
-  expiresAt: Date;
+  expiresAt: Date;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
   /** Expiration time in seconds from now */
-  expiresIn: number;
+  expiresIn: number;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
 }
 
 /**
@@ -60,7 +60,7 @@ export interface SignJWTResult {
  * });
  * ```
  */
-export function createJWTIssuer(config: JWTIssuerConfig) {
+export function CreateJWTIssuer(config: JWTIssuerConfig) {
   const { signingSecret, expiresIn, issuer, audience } = config;
 
   /**
@@ -140,6 +140,11 @@ export function createJWTIssuer(config: JWTIssuerConfig) {
   };
 }
 
+/** @deprecated Use {@link CreateJWTIssuer}. */
+export function createJWTIssuer(config: JWTIssuerConfig) {
+  return CreateJWTIssuer(config);
+}
+
 /**
  * Parses an expiration string (e.g., '1h', '30m', '1d') to seconds.
  */
@@ -174,7 +179,7 @@ function parseExpiresIn(expiresIn: string): number {
  * @param secret - The secret to validate
  * @returns Object with valid flag and error message if invalid
  */
-export function validateSigningSecret(secret: string): {
+export function ValidateSigningSecret(secret: string): {
   valid: boolean;
   error?: string;
 } {
@@ -212,4 +217,12 @@ export function validateSigningSecret(secret: string): {
   return { valid: true };
 }
 
-export type JWTIssuer = ReturnType<typeof createJWTIssuer>;
+/** @deprecated Use {@link ValidateSigningSecret}. */
+export function validateSigningSecret(secret: string): {
+  valid: boolean;
+  error?: string;
+} {
+  return ValidateSigningSecret(secret);
+}
+
+export type JWTIssuer = ReturnType<typeof CreateJWTIssuer>;

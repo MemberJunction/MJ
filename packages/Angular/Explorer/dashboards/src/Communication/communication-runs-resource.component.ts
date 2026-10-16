@@ -212,13 +212,31 @@ import { RunView } from '@memberjunction/core';
   `]
 })
 export class CommunicationRunsResourceComponent extends BaseResourceComponent implements OnInit, OnDestroy {
-    public runs: MJCommunicationRunEntity[] = [];
+    public Runs: MJCommunicationRunEntity[] = [];
+
+    /** @deprecated Use {@link Runs}. */
+    public get runs(): MJCommunicationRunEntity[] {
+      return this.Runs;
+    }
+    /** @deprecated Use {@link Runs}. */
+    public set runs(value: MJCommunicationRunEntity[]) {
+      this.Runs = value;
+    }
     public isLoading = false;
-    public summary = {
+    public Summary = {
         active: 0,
         completed: 0,
         successRate: 0
     };
+
+    /** @deprecated Use {@link Summary}. */
+    public get summary() {
+      return this.Summary;
+    }
+    /** @deprecated Use {@link Summary}. */
+    public set summary(value) {
+      this.Summary = value;
+    }
 
     constructor(private cdr: ChangeDetectorRef) {
         super();
@@ -269,15 +287,15 @@ export class CommunicationRunsResourceComponent extends BaseResourceComponent im
             ]);
 
             if (runsResult.Success) {
-                this.runs = runsResult.Results;
+                this.Runs = runsResult.Results;
             }
 
-            if (activeResult.Success) this.summary.active = activeResult.TotalRowCount;
-            if (completedResult.Success) this.summary.completed = completedResult.TotalRowCount;
+            if (activeResult.Success) this.Summary.active = activeResult.TotalRowCount;
+            if (completedResult.Success) this.Summary.completed = completedResult.TotalRowCount;
 
-            const totalCompleted = this.summary.completed + (failedResult.Success ? failedResult.TotalRowCount : 0);
-            this.summary.successRate = totalCompleted > 0
-                ? Math.round((this.summary.completed / totalCompleted) * 100)
+            const totalCompleted = this.Summary.completed + (failedResult.Success ? failedResult.TotalRowCount : 0);
+            this.Summary.successRate = totalCompleted > 0
+                ? Math.round((this.Summary.completed / totalCompleted) * 100)
                 : 100;
 
         } catch (error) {
@@ -288,7 +306,7 @@ export class CommunicationRunsResourceComponent extends BaseResourceComponent im
         }
     }
 
-    public getRunDotClass(status: string): string {
+    public GetRunDotClass(status: string): string {
         const s = (status || '').toLowerCase();
         if (s === 'complete') return 'complete';
         if (s === 'failed') return 'failed';
@@ -296,12 +314,22 @@ export class CommunicationRunsResourceComponent extends BaseResourceComponent im
         return 'pending';
     }
 
-    public getStatusClass(status: string): string {
+    /** @deprecated Use {@link GetRunDotClass}. */
+    public getRunDotClass(status: string): string {
+      return this.GetRunDotClass(status);
+    }
+
+    public GetStatusClass(status: string): string {
         const s = (status || '').toLowerCase();
         if (s === 'complete') return 'complete';
         if (s === 'failed') return 'failed';
         if (s === 'in-progress') return 'in-progress';
         return 'pending';
+    }
+
+    /** @deprecated Use {@link GetStatusClass}. */
+    public getStatusClass(status: string): string {
+      return this.GetStatusClass(status);
     }
 
     async GetResourceDisplayName(data: ResourceData): Promise<string> {

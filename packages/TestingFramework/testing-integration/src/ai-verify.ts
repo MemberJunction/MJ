@@ -78,7 +78,7 @@ async function fetchById(entity: string, id: string, user: UserInfo, until?: { P
  * Verifies an `MJ: AI Prompt Runs` row finalized correctly: terminal Status, **CompletedAt set** (the
  * "stuck at Running" guard the save queue prevents), and on success a non-empty Result + recorded timing.
  */
-export async function verifyPromptRun(promptRunID: string, user: UserInfo): Promise<Row> {
+export async function VerifyPromptRun(promptRunID: string, user: UserInfo): Promise<Row> {
     const row = await fetchById('MJ: AI Prompt Runs', promptRunID, user);
     Assert(TERMINAL.has(String(row.Status)), `Prompt run ${promptRunID}: non-terminal Status '${row.Status}' (stuck at Running?)`);
     Assert(row.CompletedAt != null, `Prompt run ${promptRunID}: CompletedAt is null while Status='${row.Status}' (finalize save lost)`);
@@ -89,8 +89,13 @@ export async function verifyPromptRun(promptRunID: string, user: UserInfo): Prom
     return row;
 }
 
+/** @deprecated Use {@link VerifyPromptRun}. */
+export async function verifyPromptRun(promptRunID: string, user: UserInfo): Promise<Row> {
+    return VerifyPromptRun(promptRunID, user);
+}
+
 /** Verifies an `MJ: Action Execution Logs` row finalized: **EndedAt set** + a ResultCode recorded. */
-export async function verifyActionLog(logID: string, user: UserInfo): Promise<Row> {
+export async function VerifyActionLog(logID: string, user: UserInfo): Promise<Row> {
     // The log is written by TWO queued saves: a 'started' INSERT (EndedAt NULL) then an 'ended'
     // UPDATE. Polling on existence alone returns the started row and asserts on a write that is
     // still in flight — so gate the poll on EndedAt, and let the assertion below speak only to a
@@ -102,6 +107,11 @@ export async function verifyActionLog(logID: string, user: UserInfo): Promise<Ro
     Assert(row.EndedAt != null, `Action log ${logID}: EndedAt is null (stuck 'Running' — the action-log finalize bug class)`);
     Assert(row.ResultCode != null && String(row.ResultCode).length > 0, `Action log ${logID}: no ResultCode recorded`);
     return row;
+}
+
+/** @deprecated Use {@link VerifyActionLog}. */
+export async function verifyActionLog(logID: string, user: UserInfo): Promise<Row> {
+    return VerifyActionLog(logID, user);
 }
 
 export interface AgentRunVerification {
@@ -118,7 +128,7 @@ export interface AgentRunVerification {
  * TargetLogID — Prompt steps → AI Prompt Runs, Actions/Tool steps → Action Execution Logs, Sub-Agent steps
  * → child AI Agent Runs (recursively). `expectSuccess` asserts the run reached 'Completed'.
  */
-export async function verifyAgentRun(agentRunID: string, user: UserInfo, expectSuccess = true, opts: { skipActionLogs?: boolean } = {}): Promise<AgentRunVerification> {
+export async function VerifyAgentRun(agentRunID: string, user: UserInfo, expectSuccess = true, opts: { skipActionLogs?: boolean } = {}): Promise<AgentRunVerification> {
     const run = await fetchById('MJ: AI Agent Runs', agentRunID, user);
     const status = String(run.Status);
     // The actual "stuck at Running" guard: a finalized run is anything except still-Running.
@@ -155,20 +165,25 @@ export async function verifyAgentRun(agentRunID: string, user: UserInfo, expectS
             continue;
         }
         if (step.StepType === 'Prompt') {
-            await verifyPromptRun(target, user);
+            await VerifyPromptRun(target, user);
             promptRunsVerified++;
         } else if (step.StepType === 'Actions' || step.StepType === 'Tool') {
             // Action Execution Logs are written by the fire-and-forget queue and can land
             // arbitrarily late relative to a run handle returning (esp. server-in-process).
             // Callers that only care about run/step terminality pass skipActionLogs.
             if (opts.skipActionLogs) { continue; }
-            await verifyActionLog(target, user);
+            await VerifyActionLog(target, user);
             actionLogsVerified++;
         } else if (step.StepType === 'Sub-Agent') {
-            await verifyAgentRun(target, user, false); // child success is the child's own concern
+            await VerifyAgentRun(target, user, false); // child success is the child's own concern
             subAgentRunsVerified++;
         }
     }
 
     return { run, stepCount: steps.length, promptRunsVerified, actionLogsVerified, subAgentRunsVerified };
+}
+
+/** @deprecated Use {@link VerifyAgentRun}. */
+export async function verifyAgentRun(agentRunID: string, user: UserInfo, expectSuccess = true, opts: { skipActionLogs?: boolean } = {}): Promise<AgentRunVerification> {
+    return VerifyAgentRun(agentRunID, user, expectSuccess, opts);
 }

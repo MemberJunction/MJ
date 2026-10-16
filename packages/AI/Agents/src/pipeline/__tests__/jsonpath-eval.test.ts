@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { parseJsonPath, evaluateJsonPath } from '../jsonpath-eval';
+import { ParseJsonPath, EvaluateJsonPath } from '../jsonpath-eval';
 
 function query(doc: unknown, path: string): unknown[] {
-    return evaluateJsonPath(parseJsonPath(path), doc);
+    return EvaluateJsonPath(ParseJsonPath(path), doc);
 }
 
 describe('jsonpath-eval', () => {
@@ -45,12 +45,12 @@ describe('jsonpath-eval', () => {
     });
 
     it('rejects a path that does not start with $', () => {
-        expect(() => parseJsonPath('store.book')).toThrow(/must start with/);
+        expect(() => ParseJsonPath('store.book')).toThrow(/must start with/);
     });
     it('rejects filter expressions (no eval)', () => {
-        expect(() => parseJsonPath('$.store.book[?(@.price>10)]')).toThrow(/not supported/);
+        expect(() => ParseJsonPath('$.store.book[?(@.price>10)]')).toThrow(/not supported/);
     });
     it('rejects unsupported bracket selectors', () => {
-        expect(() => parseJsonPath('$.store.book[1:2]')).toThrow(/Unsupported bracket/);
+        expect(() => ParseJsonPath('$.store.book[1:2]')).toThrow(/Unsupported bracket/);
     });
 });

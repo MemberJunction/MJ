@@ -26,6 +26,8 @@ import { DiscoveryTriggerAnalyzer } from '../discovery/DiscoveryTriggerAnalyzer.
 import { DiscoveryEngine } from '../discovery/DiscoveryEngine.js';
 import { OrganicKeyDetector } from '../discovery/OrganicKeyDetector.js';
 import { DetectedOrganicKeysOutput } from '../discovery/OrganicKeyTranslator.js';
+import { PluginManager } from '../plugins/PluginManager.js';
+import type { AutoDocPluginHook } from '../plugins/types.js';
 
 export interface AnalysisOptions {
   config: DBAutoDocConfig;
@@ -63,7 +65,7 @@ export class AnalysisOrchestrator {
   /**
    * Execute the full analysis workflow
    */
-  public async execute(): Promise<OrchestratorResult> {
+  public async Execute(): Promise<OrchestratorResult> {
     let db: DatabaseConnection | undefined;
     try {
       // Create run folder
@@ -107,6 +109,13 @@ export class AnalysisOrchestrator {
       stateManager.updateSummary(state);
       await stateManager.save(state);
 
+      // Load plugins (built-ins + config entries). An unknown plugin name fails the run here.
+      const plugins = new PluginManager();
+      await plugins.Load(this.config.plugins);
+      const runHook = (hook: AutoDocPluginHook): Promise<void> =>
+        this.runPluginHook(plugins, hook, state, stateManager, runFolder, db);
+      await runHook('PreRun');
+
       // Connect to database
       this.onProgress('Connecting to database');
       const driverConfig: AutoDocConnectionConfig = {
@@ -133,6 +142,7 @@ export class AnalysisOrchestrator {
         throw new Error(`Database connection failed: ${testResult.message}`);
       }
       this.onProgress('Connected to database', { database: this.config.database.database });
+      state.database.provider = driverConfig.provider;
 
       // Introspect database (unless resuming with existing schema data)
       if (!this.resumeFromState || state.schemas.length === 0) {
@@ -181,6 +191,7 @@ export class AnalysisOrchestrator {
         await stateManager.save(state);
 
       }
+      await runHook('AfterIntrospection');
 
       // Relationship Discovery Phase (if enabled)
       // Runs on both fresh and resumed runs; resumes from partial progress if interrupted
@@ -192,7 +203,7 @@ export class AnalysisOrchestrator {
 
         const triggerAnalysis = DiscoveryTriggerAnalyzer.analyzeSchemas(state.schemas);
 
-        if (triggerAnalysis.shouldRun) {
+        if (triggerAnalysis.ShouldRun) {
           const isResume = state.phases?.keyDetection?.progress != null;
           if (isResume) {
             this.onProgress('Resuming incomplete relationship discovery', {
@@ -204,19 +215,19 @@ export class AnalysisOrchestrator {
           } else {
             this.onProgress('Relationship discovery triggered', {
               reason: triggerAnalysis.reason,
-              tablesWithoutPK: triggerAnalysis.details.tablesWithoutPK,
-              actualFKs: triggerAnalysis.details.totalFKs,
-              expectedMinFKs: triggerAnalysis.details.expectedMinFKs
+              tablesWithoutPK: triggerAnalysis.Details.tablesWithoutPK,
+              actualFKs: triggerAnalysis.Details.totalFKs,
+              expectedMinFKs: triggerAnalysis.Details.expectedMinFKs
             });
           }
 
           const discoveryEngine = new DiscoveryEngine({
-            driver,
-            config: this.config.analysis.relationshipDiscovery,
-            aiConfig: this.config.ai,
+            Driver: driver,
+            Config: this.config.analysis.relationshipDiscovery,
+            AiConfig: this.config.ai,
             schemas: state.schemas,
-            onProgress: this.onProgress,
-            onCheckpoint: async (phase) => {
+            OnProgress: this.onProgress,
+            OnCheckpoint: async (phase) => {
               state.phases.keyDetection = phase;
               discoveryEngine.applyDiscoveriesToState(state, phase);
               stateManager.updateSummary(state);
@@ -239,18 +250,18 @@ export class AnalysisOrchestrator {
           );
 
           // Save to new phases structure
-          state.phases.keyDetection = discoveryResult.phase;
+          state.phases.keyDetection = discoveryResult.Phase;
 
           // Apply discovered relationships to schema
-          discoveryEngine.applyDiscoveriesToState(state, discoveryResult.phase);
+          discoveryEngine.applyDiscoveriesToState(state, discoveryResult.Phase);
 
           // Merge column statistics into schema columns
-          discoveryResult.statsCache.mergeIntoSchemas(state.schemas);
+          discoveryResult.StatsCache.mergeIntoSchemas(state.schemas);
 
           this.onProgress('Relationship discovery complete', {
-            primaryKeysDiscovered: discoveryResult.phase.discovered.primaryKeys.length,
-            foreignKeysDiscovered: discoveryResult.phase.discovered.foreignKeys.length,
-            tokensUsed: discoveryResult.phase.tokenBudget.used,
+            primaryKeysDiscovered: discoveryResult.Phase.discovered.primaryKeys.length,
+            foreignKeysDiscovered: discoveryResult.Phase.discovered.foreignKeys.length,
+            tokensUsed: discoveryResult.Phase.tokenBudget.used,
             guardrailsReached: discoveryResult.guardrailsReached,
             totalSchemas: state.schemas.length
           });
@@ -266,6 +277,7 @@ export class AnalysisOrchestrator {
       } else if (discoveryComplete) {
         this.onProgress('Relationship discovery: using completed results from prior run');
       }
+      await runHook('AfterDiscovery');
 
       // Topological sort
       this.onProgress('Computing dependency graph');
@@ -344,6 +356,7 @@ export class AnalysisOrchestrator {
           this.onProgress('Analysis converged');
         }
       }
+      await runHook('AfterDescriptions');
 
       // Sanity checks
       // FUTURE FEATURE: Schema/cross-schema sanity checks disabled.
@@ -381,6 +394,7 @@ export class AnalysisOrchestrator {
         stateManager.updateSummary(state);
         await stateManager.save(state);
       }
+      await runHook('AfterPruning');
 
       // Complete run
       if (!converged) {
@@ -415,21 +429,24 @@ export class AnalysisOrchestrator {
             this.config.database.provider,
           );
           const okResult = await detector.detect(state, {
-            onProgress: (msg) => this.onProgress(msg),
+            OnProgress: (msg) => this.onProgress(msg),
           });
           state.organicKeyClusters = okResult.clusters;
-          state.phases.organicKeyDetection = okResult.phase;
+          state.phases.organicKeyDetection = okResult.Phase;
           organicKeyOutput = okResult.output;
           this.onProgress('Organic-key detection complete', {
-            clustersFound: okResult.summary.clustersFound,
-            clustersEmitted: okResult.summary.clustersEmitted,
-            outputKeys: okResult.summary.outputKeys,
+            clustersFound: okResult.Summary.clustersFound,
+            clustersEmitted: okResult.Summary.clustersEmitted,
+            outputKeys: okResult.Summary.outputKeys,
           });
         } catch (err) {
           // Non-fatal — organic-key detection is optional enrichment. Log and continue.
           this.onProgress(`Organic-key detection failed (continuing): ${(err as Error).message}`);
         }
       }
+
+      // Last plugin hook, while the database connection is still open
+      await runHook('PostRun');
 
       // Final state update
       stateManager.updateSummary(state);
@@ -449,7 +466,7 @@ export class AnalysisOrchestrator {
 
       // Generate additionalSchemaInfo.json for CodeGen soft FK/PK + organic key support
       const schemaInfoGen = new AdditionalSchemaInfoGenerator();
-      const schemaInfo = schemaInfoGen.generate(state, { organicKeys: organicKeyOutput });
+      const schemaInfo = schemaInfoGen.generate(state, { OrganicKeys: organicKeyOutput });
       const schemaInfoPath = path.join(runFolder, 'additionalSchemaInfo.json');
       await fs.writeFile(schemaInfoPath, schemaInfo, 'utf-8');
 
@@ -481,6 +498,38 @@ export class AnalysisOrchestrator {
         message: (error as Error).message
       };
     }
+  }
+
+  /** @deprecated Use {@link Execute}. */
+  public async execute(): Promise<OrchestratorResult> {
+    return this.Execute();
+  }
+
+  /**
+   * Runs one plugin hook and persists whatever the plugins recorded. A no-op when no plugins
+   * are loaded, so runs without plugins write exactly the state files they did before.
+   */
+  private async runPluginHook(
+    plugins: PluginManager,
+    hook: AutoDocPluginHook,
+    state: DatabaseDocumentation,
+    stateManager: StateManager,
+    runFolder: string,
+    db: DatabaseConnection | undefined
+  ): Promise<void> {
+    if (plugins.Plugins.length === 0) {
+      return;
+    }
+    this.onProgress(`Running plugins: ${hook}`);
+    await plugins.RunHook(hook, {
+      State: state,
+      Config: this.config,
+      Driver: db?.getDriver(),
+      RunFolder: runFolder,
+      Log: (message: string) => this.onProgress(message)
+    });
+    stateManager.updateSummary(state);
+    await stateManager.save(state);
   }
 
   /**
@@ -713,18 +762,18 @@ export class AnalysisOrchestrator {
     try {
       const result = await generator.generateQueries(state.schemas);
 
-      if (result.success) {
+      if (result.Success) {
         // Phase already updated in state by generator - just report progress
         this.onProgress('Sample queries generated', {
-          total: result.summary.totalQueriesGenerated,
-          validated: result.summary.queriesValidated,
-          tokens: result.summary.tokensUsed,
-          cost: result.summary.estimatedCost
+          total: result.Summary.totalQueriesGenerated,
+          validated: result.Summary.queriesValidated,
+          tokens: result.Summary.tokensUsed,
+          cost: result.Summary.estimatedCost
         });
       } else {
         // Phase already marked as failed in state by generator
         this.onProgress('Sample query generation failed', {
-          error: result.errorMessage
+          error: result.ErrorMessage
         });
       }
     } catch (error) {

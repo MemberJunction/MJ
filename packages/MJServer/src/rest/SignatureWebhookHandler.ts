@@ -21,7 +21,7 @@ import { SignatureEngine } from '@memberjunction/esignature/server';
  * Build an Express router exposing the eSignature webhook. Mount it unauthenticated:
  * `app.use('/esignature', createSignatureWebhookHandler())`.
  */
-export function createSignatureWebhookHandler(): express.Router {
+export function CreateSignatureWebhookHandler(): express.Router {
     const router = express.Router();
 
     // Capture the raw body so drivers that HMAC-verify over the exact bytes can do so.
@@ -34,6 +34,11 @@ export function createSignatureWebhookHandler(): express.Router {
     );
 
     return router;
+}
+
+/** @deprecated Use {@link CreateSignatureWebhookHandler}. */
+export function createSignatureWebhookHandler(): express.Router {
+    return CreateSignatureWebhookHandler();
 }
 
 /** Stash the raw request bytes on the request for signature verification by the driver. */

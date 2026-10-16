@@ -21,14 +21,23 @@ import { ToastService, Toast } from '../../services/toast.service';
   ]
 })
 export class ToastComponent implements OnInit, OnDestroy {
-  public toasts: Toast[] = [];
+  public Toasts: Toast[] = [];
+
+  /** @deprecated Use {@link Toasts}. */
+  public get toasts(): Toast[] {
+    return this.Toasts;
+  }
+  /** @deprecated Use {@link Toasts}. */
+  public set toasts(value: Toast[]) {
+    this.Toasts = value;
+  }
   private subscription: Subscription | null = null;
 
   constructor(private toastService: ToastService) {}
 
   ngOnInit(): void {
     this.subscription = this.toastService.toasts$.subscribe(toasts => {
-      this.toasts = toasts;
+      this.Toasts = toasts;
     });
   }
 
@@ -41,7 +50,7 @@ export class ToastComponent implements OnInit, OnDestroy {
   /**
    * Get the icon class for a toast type
    */
-  public getIconClass(type: string): string {
+  public GetIconClass(type: string): string {
     switch (type) {
       case 'success':
         return 'fa-solid fa-circle-check';
@@ -56,17 +65,32 @@ export class ToastComponent implements OnInit, OnDestroy {
     }
   }
 
+  /** @deprecated Use {@link GetIconClass}. */
+  public getIconClass(type: string): string {
+    return this.GetIconClass(type);
+  }
+
   /**
    * Dismiss a toast
    */
-  public dismiss(toastId: string): void {
+  public Dismiss(toastId: string): void {
     this.toastService.dismiss(toastId);
+  }
+
+  /** @deprecated Use {@link Dismiss}. */
+  public dismiss(toastId: string): void {
+    return this.Dismiss(toastId);
   }
 
   /**
    * Track toasts by ID for performance
    */
-  public trackByToastId(index: number, toast: Toast): string {
+  public TrackByToastId(index: number, toast: Toast): string {
     return toast.id;
+  }
+
+  /** @deprecated Use {@link TrackByToastId}. */
+  public trackByToastId(index: number, toast: Toast): string {
+    return this.TrackByToastId(index, toast);
   }
 }

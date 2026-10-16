@@ -4,21 +4,21 @@ export type {
   OutputGroups, StatementType,
 } from './types.js';
 export {
-  createConversionContext, createConversionStats, createOutputGroups, CONVERSION_GAP_MARKERS, GAP_MARKER_UNPARSED, GAP_MARKER_BATCH_ERROR,
+  CreateConversionContext, createConversionContext, CreateConversionStats, createConversionStats, CreateOutputGroups, createOutputGroups, CONVERSION_GAP_MARKERS, GAP_MARKER_UNPARSED, GAP_MARKER_BATCH_ERROR,
 } from './types.js';
 
 // Statement classifier
-export { classifyBatch } from './StatementClassifier.js';
+export { ClassifyBatch, classifyBatch } from './StatementClassifier.js';
 
 // Sub-splitter for compound batches
-export { subSplitCompoundBatch } from './SubSplitter.js';
+export { SubSplitCompoundBatch, subSplitCompoundBatch } from './SubSplitter.js';
 
 // Expression helpers
 export {
-  convertIdentifiers, convertDateFunctions, convertCharIndex,
-  convertStuff, convertStringConcat, convertIIF, convertTopToLimit,
-  convertCastTypes, convertConvertFunction, removeNPrefix,
-  removeCollate, convertCommonFunctions, transformCodeOnly,
+  ConvertIdentifiers, convertIdentifiers, ConvertDateFunctions, convertDateFunctions, ConvertCharIndex, convertCharIndex,
+  ConvertStuff, convertStuff, ConvertStringConcat, convertStringConcat, ConvertIIF, convertIIF, ConvertTopToLimit, convertTopToLimit,
+  ConvertCastTypes, convertCastTypes, ConvertConvertFunction, convertConvertFunction, RemoveNPrefix, removeNPrefix,
+  RemoveCollate, removeCollate, ConvertCommonFunctions, convertCommonFunctions, TransformCodeOnly, transformCodeOnly,
 } from './ExpressionHelpers.js';
 
 // Individual conversion rules
@@ -40,22 +40,22 @@ export { DeclareDmlBlockRule } from './DeclareDmlBlockRule.js';
 // Rule registry (central + T-SQL -> Postgres convenience)
 export { RuleRegistry } from './RuleRegistry.js';
 export type { DialectCombination } from './RuleRegistry.js';
-export { getTSQLToPostgresRules, getRulesForDialects } from './TSQLToPostgresRules.js';
+export { GetTSQLToPostgresRules, getTSQLToPostgresRules, GetRulesForDialects, getRulesForDialects } from './TSQLToPostgresRules.js';
 
 // Dialect header builders
-export { PostgreSQLHeaderBuilder, getHeaderBuilder, registerHeaderBuilder } from './DialectHeaderBuilder.js';
+export { PostgreSQLHeaderBuilder, GetHeaderBuilder, getHeaderBuilder, RegisterHeaderBuilder, registerHeaderBuilder } from './DialectHeaderBuilder.js';
 export type { DialectHeaderBuilder } from './DialectHeaderBuilder.js';
 
 // Centralized type resolution
-export { resolveType, resolveInlineType, parseTypeString, MJ_OVERRIDES } from './TypeResolver.js';
+export { ResolveType, resolveType, ResolveInlineType, resolveInlineType, ParseTypeString, parseTypeString, MJ_OVERRIDES } from './TypeResolver.js';
 export type { ParsedType } from './TypeResolver.js';
 
 // Post-processor
-export { postProcess } from './PostProcessor.js';
+export { PostProcess, postProcess } from './PostProcessor.js';
 
 // Batch converter (main orchestrator)
-export { convertFile, printReport } from './BatchConverter.js';
+export { ConvertFile, convertFile, PrintReport, printReport } from './BatchConverter.js';
 export type { BatchConverterConfig, BatchConverterResult } from './BatchConverter.js';
 
 // EntityField sequence deduplicator (post-conversion fixup for UQ_EntityField_EntityID_Sequence)
-export { deduplicateEntityFieldSequences } from './SequenceDeduplicator.js';
+export { DeduplicateEntityFieldSequences, deduplicateEntityFieldSequences } from './SequenceDeduplicator.js';

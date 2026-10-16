@@ -34,7 +34,7 @@ type TraverseModule = typeof _traverse & { default?: typeof _traverse };
 const traverse = (((_traverse as TraverseModule).default) ?? _traverse) as typeof _traverse;
 import * as t from '@babel/types';
 import { ComponentSpec, PropertyConstraint } from '@memberjunction/interactive-component-types';
-import { PropValueExtractor } from '../prop-value-extractor';
+import { PropValueExtractor, ExtractedValue } from '../prop-value-extractor';
 import { SemanticValidator } from './semantic-validators/semantic-validator';
 import { SemanticValidatorRegistry } from './semantic-validators/semantic-validator-registry';
 import { ValidationContext } from './semantic-validators/validation-context';
@@ -54,20 +54,30 @@ export interface Violation {
   };
 }
 
+/** What a property's constraints are checked against on one JSX element. */
+interface ConstraintTarget {
+  /** The prop's attribute when passed, otherwise the element's opening tag (used for location). */
+  Node: t.Node;
+  /** The prop's statically extracted value; `undefined` when the prop is not passed. */
+  Value: ExtractedValue;
+  /** Whether the element passes the prop. */
+  Present: boolean;
+}
+
 export interface LintContext {
-  componentName: string;
-  componentSpec?: ComponentSpec;
-  typeContext: any; // TypeContext - avoiding import for now
-  typeEngine: any; // TypeInferenceEngine
-  controlFlowAnalyzer: any; // ControlFlowAnalyzer
+  componentName: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  componentSpec?: ComponentSpec;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  typeContext: any; // TypeContext - avoiding import for now — case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  typeEngine: any; // TypeInferenceEngine — case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  controlFlowAnalyzer: any; // ControlFlowAnalyzer — case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
   /** SQL dialect for WHERE clause parsing in semantic validators */
-  sqlDialect?: import('@memberjunction/sql-dialect').SQLParserDialect;
+  sqlDialect?: import('@memberjunction/sql-dialect').SQLParserDialect;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
   /**
    * Resolver for registry-located dependency components. Caller-supplied
    * (see LinterOptions.componentResolver). Optional — rules degrade
    * gracefully when absent.
    */
-  componentResolver?: (name: string, namespace?: string, registry?: string) => ComponentSpec | undefined;
+  componentResolver?: (name: string, namespace?: string, registry?: string) => ComponentSpec | undefined;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
 }
 
 /**
@@ -81,8 +91,26 @@ export interface LintContext {
  * 5. Unknown props warning
  */
 export class ComponentPropRule {
-  name = 'component-props';
-  appliesTo: 'all' | 'child' | 'root' = 'all';
+  Name = 'component-props';
+
+  /** @deprecated Use {@link Name}. */
+  get name() {
+    return this.Name;
+  }
+  /** @deprecated Use {@link Name}. */
+  set name(value) {
+    this.Name = value;
+  }
+  AppliesTo: 'all' | 'child' | 'root' = 'all';
+
+  /** @deprecated Use {@link AppliesTo}. */
+  get appliesTo(): 'all' | 'child' | 'root' {
+    return this.AppliesTo;
+  }
+  /** @deprecated Use {@link AppliesTo}. */
+  set appliesTo(value: 'all' | 'child' | 'root') {
+    this.AppliesTo = value;
+  }
 
   // Standard props that are always allowed on any component
   private readonly standardProps = new Set([
@@ -113,7 +141,7 @@ export class ComponentPropRule {
   /**
    * Validate component props
    */
-  validate(ast: t.File, context: LintContext): Violation[] {
+  Validate(ast: t.File, context: LintContext): Violation[] {
     this._sqlDialect = context.sqlDialect;
     const violations: Violation[] = [];
 
@@ -173,6 +201,11 @@ export class ComponentPropRule {
     });
 
     return violations;
+  }
+
+  /** @deprecated Use {@link Validate}. */
+  validate(ast: t.File, context: LintContext): Violation[] {
+    return this.Validate(ast, context);
   }
 
   /**
@@ -655,7 +688,11 @@ export class ComponentPropRule {
   }
 
   /**
-   * Validate semantic constraints on props
+   * Validate semantic constraints on props.
+   *
+   * A constraint runs against a prop the element passes, unless its value can only be known at
+   * runtime. For a prop the element does not pass, only validators that opt in through
+   * {@link SemanticValidator.EvaluatesAbsentProp} run, and none run when the element spreads props.
    */
   private validateSemanticConstraints(
     elementName: string,
@@ -666,69 +703,34 @@ export class ComponentPropRule {
   ): Violation[] {
     const violations: Violation[] = [];
 
-    // Check if this component has any properties with constraints
-    if (!depSpec.properties) return violations;
+    if (!depSpec.properties?.some((p) => p.constraints && p.constraints.length > 0)) return violations;
 
-    const hasConstraints = depSpec.properties.some((p) => p.constraints && p.constraints.length > 0);
-    if (!hasConstraints) return violations;
+    const siblingProps = this.extractSiblingProps(openingElement);
+    const hasSpread = openingElement.attributes.some((attr) => t.isJSXSpreadAttribute(attr));
 
-    // Extract all props into a map for sibling prop lookups
-    const siblingProps = new Map<string, any>();
-    for (const attr of openingElement.attributes) {
-      if (t.isJSXAttribute(attr) && t.isJSXIdentifier(attr.name)) {
-        const extractedValue = PropValueExtractor.extract(attr);
-        siblingProps.set(attr.name.name, extractedValue);
-      }
-    }
-
-    // Iterate through all properties with constraints
     for (const property of depSpec.properties) {
-      if (!property.constraints || property.constraints.length === 0) {
-        continue;
-      }
+      if (!property.constraints || property.constraints.length === 0) continue;
 
-      // Find the JSX attribute for this property
-      const propAttr = openingElement.attributes.find(
-        (attr) => t.isJSXAttribute(attr) && t.isJSXIdentifier(attr.name) && attr.name.name === property.name,
-      );
+      const target = this.resolveConstraintTarget(property.name, openingElement, hasSpread);
+      if (!target) continue;
 
-      if (!propAttr || !t.isJSXAttribute(propAttr)) {
-        continue;
-      }
-
-      // Extract the property value
-      const propValue = PropValueExtractor.extract(propAttr);
-
-      // Skip dynamic values
-      if (PropValueExtractor.isDynamicValue(propValue)) {
-        continue;
-      }
-
-      // Run all validators for this property's constraints
       for (const constraint of property.constraints) {
-        // Get validator from registry
-        const registry = SemanticValidatorRegistry.getInstance();
-        const validator = registry.get(constraint.type);
+        const validator = this.getConstraintValidator(constraint);
+        if (!validator || (!target.Present && !validator.EvaluatesAbsentProp)) continue;
 
-        if (!validator) {
-          // Validator not registered for this constraint type
-          console.warn(`No validator registered for constraint type: ${constraint.type}`);
-          continue;
-        }
-
-        // Build ValidationContext
         const validationCtx: ValidationContext = {
-          node: propAttr,
-          path: path as any,
-          componentName: elementName,
-          componentSpec: depSpec,
+          Node: target.Node,
+          Path: path as any,
+          ComponentName: elementName,
+          ComponentSpec: depSpec,
           propertyName: property.name,
-          propertyValue: propValue,
+          propertyValue: target.Value,
+          PropertyPresent: target.Present,
           siblingProps,
-          entities: new Map(),
-          queries: new Map(),
-          typeEngine: null as never,
-          dialect: this._sqlDialect,
+          Entities: new Map(),
+          Queries: new Map(),
+          TypeEngine: null as never,
+          Dialect: this._sqlDialect,
 
           getEntityFields: validationHelpers.getEntityFields,
           getEntityFieldType: validationHelpers.getEntityFieldType,
@@ -738,25 +740,75 @@ export class ComponentPropRule {
           hasEntity: validationHelpers.hasEntity,
         };
 
-        // Run the validator
-        try {
-          const constraintViolations = validator.validate(validationCtx, constraint);
-          for (const cv of constraintViolations) {
-            violations.push({
-              rule: 'component-props',
-              severity: cv.severity,
-              line: propAttr.loc?.start.line || 0,
-              column: propAttr.loc?.start.column || 0,
-              message: cv.message,
-              code: cv.suggestion || '',
-            });
-          }
-        } catch (error) {
-          console.error(`Error validating ${property.name} constraint (${constraint.type}):`, error);
-        }
+        violations.push(...this.runConstraintValidator(validator, validationCtx, constraint));
       }
     }
 
     return violations;
+  }
+
+  /** Extracts every named prop on the element, for constraints that read sibling props. */
+  private extractSiblingProps(openingElement: t.JSXOpeningElement): Map<string, ExtractedValue> {
+    const siblingProps = new Map<string, ExtractedValue>();
+    for (const attr of openingElement.attributes) {
+      if (t.isJSXAttribute(attr) && t.isJSXIdentifier(attr.name)) {
+        siblingProps.set(attr.name.name, PropValueExtractor.extract(attr));
+      }
+    }
+    return siblingProps;
+  }
+
+  /**
+   * Decides what a property's constraints are checked against: the passed attribute and its
+   * static value, or — when the prop is not passed and no spread could supply it — the opening
+   * element with no value. Returns null when nothing can be checked: the value is only known at
+   * runtime, or the prop is absent next to a spread.
+   */
+  private resolveConstraintTarget(
+    propertyName: string,
+    openingElement: t.JSXOpeningElement,
+    hasSpread: boolean,
+  ): ConstraintTarget | null {
+    const propAttr = openingElement.attributes.find(
+      (attr): attr is t.JSXAttribute => t.isJSXAttribute(attr) && t.isJSXIdentifier(attr.name) && attr.name.name === propertyName,
+    );
+
+    if (!propAttr) {
+      return hasSpread ? null : { Node: openingElement, Value: undefined, Present: false };
+    }
+
+    const value = PropValueExtractor.extract(propAttr);
+    if (PropValueExtractor.isDynamicValue(value)) return null;
+    return { Node: propAttr, Value: value, Present: true };
+  }
+
+  /** Looks up the validator for a constraint type, warning when none is registered. */
+  private getConstraintValidator(constraint: PropertyConstraint): SemanticValidator | undefined {
+    const validator = SemanticValidatorRegistry.GetInstance().Get(constraint.type);
+    if (!validator) {
+      console.warn(`No validator registered for constraint type: ${constraint.type}`);
+    }
+    return validator;
+  }
+
+  /** Runs one validator and converts its constraint violations into lint violations at the context's node. */
+  private runConstraintValidator(
+    validator: SemanticValidator,
+    validationCtx: ValidationContext,
+    constraint: PropertyConstraint,
+  ): Violation[] {
+    try {
+      return validator.validate(validationCtx, constraint).map((cv) => ({
+        rule: 'component-props',
+        severity: cv.severity,
+        line: validationCtx.Node.loc?.start.line || 0,
+        column: validationCtx.Node.loc?.start.column || 0,
+        message: cv.message,
+        code: cv.suggestion || '',
+      }));
+    } catch (error) {
+      console.error(`Error validating ${validationCtx.propertyName} constraint (${constraint.type}):`, error);
+      return [];
+    }
   }
 }

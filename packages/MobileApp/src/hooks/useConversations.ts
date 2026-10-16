@@ -8,15 +8,15 @@
  */
 import { useCallback, useEffect, useState } from 'react';
 import { useMJ } from '@/providers/mj-provider';
-import { loadConversations, loadConversation, type ConversationListItem, type ConversationDetailLoad } from '@/data/services/conversations';
-import { loadArtifact, loadConversationArtifacts, type LoadedArtifact, type ArtifactSummary } from '@/data/services/artifacts';
+import { LoadConversations, LoadConversation, type ConversationListItem, type ConversationDetailLoad } from '@/data/services/conversations';
+import { LoadArtifact, LoadConversationArtifacts, type LoadedArtifact, type ArtifactSummary } from '@/data/services/artifacts';
 
 /** Returned state shape for {@link useConversations} (the list screen). */
 export type UseConversationsState = {
-    conversations: ConversationListItem[] | null;
-    loading: boolean;
-    error: Error | null;
-    refresh: () => Promise<void>;
+    Conversations: ConversationListItem[] | null;
+    Loading: boolean;
+    Error: Error | null;
+    Refresh: () => Promise<void>;
 };
 
 /**
@@ -24,7 +24,7 @@ export type UseConversationsState = {
  *
  * Behavior:
  * - When the MJ provider is `ready`, fetches real conversations via
- *   `loadConversations` (RunView over the Conversations entity).
+ *   `LoadConversations` (RunView over the Conversations entity).
  * - In any other provider state, `conversations` stays `null` so the caller
  *   can fall back to mocks — keeps the design visible before a JWT is set.
  *
@@ -34,7 +34,7 @@ export type UseConversationsState = {
  * @returns {@link UseConversationsState} — the list (or `null`), `loading`,
  *   `error`, and a `refresh` handler that re-runs the fetch.
  */
-export function useConversations(): UseConversationsState {
+export function UseConversations(): UseConversationsState {
     const { status } = useMJ();
     const [conversations, setConversations] = useState<ConversationListItem[] | null>(null);
     const [loading, setLoading] = useState(false);
@@ -45,7 +45,7 @@ export function useConversations(): UseConversationsState {
         setLoading(true);
         setError(null);
         try {
-            const list = await loadConversations();
+            const list = await LoadConversations();
             setConversations(list);
         } catch (e) {
             setError(e instanceof Error ? e : new Error(String(e)));
@@ -56,20 +56,25 @@ export function useConversations(): UseConversationsState {
 
     useEffect(() => { void refresh(); }, [refresh]);
 
-    return { conversations, loading, error, refresh };
+    return { Conversations: conversations, Loading: loading, Error: error, Refresh: refresh };
+}
+
+/** @deprecated Use {@link UseConversations}. */
+export function useConversations(): UseConversationsState {
+    return UseConversations();
 }
 
 /** Returned state shape for {@link useConversation} (a single thread). */
 export type UseConversationState = {
-    data: ConversationDetailLoad | null;
-    loading: boolean;
-    error: Error | null;
-    refresh: () => Promise<void>;
+    Data: ConversationDetailLoad | null;
+    Loading: boolean;
+    Error: Error | null;
+    Refresh: () => Promise<void>;
 };
 
 /**
  * Hook for a single conversation thread plus its associated artifacts.
- * Loads via `loadConversation` (RunView over messages/details for the given
+ * Loads via `LoadConversation` (RunView over messages/details for the given
  * conversation) once the provider is `ready` and an id is supplied.
  *
  * @param conversationId The conversation to load; when `undefined` the hook
@@ -77,7 +82,7 @@ export type UseConversationState = {
  * @returns {@link UseConversationState} — the loaded detail bundle (or `null`),
  *   `loading`, `error`, and a `refresh` handler.
  */
-export function useConversation(conversationId: string | undefined): UseConversationState {
+export function UseConversation(conversationId: string | undefined): UseConversationState {
     const { status } = useMJ();
     const [data, setData] = useState<ConversationDetailLoad | null>(null);
     const [loading, setLoading] = useState(false);
@@ -88,7 +93,7 @@ export function useConversation(conversationId: string | undefined): UseConversa
         setLoading(true);
         setError(null);
         try {
-            const result = await loadConversation(conversationId);
+            const result = await LoadConversation(conversationId);
             setData(result);
         } catch (e) {
             setError(e instanceof Error ? e : new Error(String(e)));
@@ -99,12 +104,17 @@ export function useConversation(conversationId: string | undefined): UseConversa
 
     useEffect(() => { void refresh(); }, [refresh]);
 
-    return { data, loading, error, refresh };
+    return { Data: data, Loading: loading, Error: error, Refresh: refresh };
+}
+
+/** @deprecated Use {@link UseConversation}. */
+export function useConversation(conversationId: string | undefined): UseConversationState {
+    return UseConversation(conversationId);
 }
 
 /**
  * Loads a single artifact (its latest version content + classification) via
- * `loadArtifact`. Uses a cancellation flag so a late-resolving fetch can't set
+ * `LoadArtifact`. Uses a cancellation flag so a late-resolving fetch can't set
  * state after the id changes or the component unmounts.
  *
  * @param artifactId The artifact to load; `undefined` keeps the hook idle.
@@ -112,7 +122,7 @@ export function useConversation(conversationId: string | undefined): UseConversa
  *   in-flight flag, and last error. No manual refresh handler (re-fetches when
  *   `artifactId` or provider status changes).
  */
-export function useArtifact(artifactId: string | undefined) {
+export function UseArtifact(artifactId: string | undefined) {
     const { status } = useMJ();
     const [artifact, setArtifact] = useState<LoadedArtifact | null>(null);
     const [loading, setLoading] = useState(false);
@@ -125,7 +135,7 @@ export function useArtifact(artifactId: string | undefined) {
         setError(null);
         (async () => {
             try {
-                const a = await loadArtifact(artifactId);
+                const a = await LoadArtifact(artifactId);
                 if (!cancelled) setArtifact(a);
             } catch (e) {
                 if (!cancelled) setError(e instanceof Error ? e : new Error(String(e)));
@@ -139,17 +149,22 @@ export function useArtifact(artifactId: string | undefined) {
     return { artifact, loading, error };
 }
 
+/** @deprecated Use {@link UseArtifact}. */
+export function useArtifact(artifactId: string | undefined) {
+    return UseArtifact(artifactId);
+}
+
 /**
  * Loads the artifact summaries for a conversation (the artifact dock view):
  * category, preview snippet, and best-effort agent attribution, via
- * `loadConversationArtifacts`. Guarded by a cancellation flag.
+ * `LoadConversationArtifacts`. Guarded by a cancellation flag.
  *
  * @param conversationId The conversation whose artifacts to summarize;
  *   `undefined` keeps the hook idle.
  * @returns `{ artifacts, loading, error }` — the {@link ArtifactSummary}[]
  *   (or `null`), in-flight flag, and last error.
  */
-export function useConversationArtifacts(conversationId: string | undefined) {
+export function UseConversationArtifacts(conversationId: string | undefined) {
     const { status } = useMJ();
     const [artifacts, setArtifacts] = useState<ArtifactSummary[] | null>(null);
     const [loading, setLoading] = useState(false);
@@ -162,7 +177,7 @@ export function useConversationArtifacts(conversationId: string | undefined) {
         setError(null);
         (async () => {
             try {
-                const list = await loadConversationArtifacts(conversationId);
+                const list = await LoadConversationArtifacts(conversationId);
                 if (!cancelled) setArtifacts(list);
             } catch (e) {
                 if (!cancelled) setError(e instanceof Error ? e : new Error(String(e)));
@@ -174,4 +189,9 @@ export function useConversationArtifacts(conversationId: string | undefined) {
     }, [status, conversationId]);
 
     return { artifacts, loading, error };
+}
+
+/** @deprecated Use {@link UseConversationArtifacts}. */
+export function useConversationArtifacts(conversationId: string | undefined) {
+    return UseConversationArtifacts(conversationId);
 }

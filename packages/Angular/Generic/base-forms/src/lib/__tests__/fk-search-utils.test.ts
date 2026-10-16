@@ -3,7 +3,13 @@
  * cell formatting and the in-memory cached-entity filter / focus-show.
  */
 import { describe, it, expect } from 'vitest';
-import { FormatFKCell, FilterCachedFKRows } from '../field/fk-search-utils';
+import {
+  FormatFKCell,
+  FilterCachedFKRows,
+  RankByPrefix,
+  EscapeSqlLikeValue,
+  QuoteSqlIdList,
+} from '../field/fk-search-utils';
 
 describe('FormatFKCell', () => {
   it('returns empty string for null and undefined', () => {
@@ -111,5 +117,64 @@ describe('FilterCachedFKRows — non-empty query', () => {
     const numbered = [{ name: 100 }, { name: 200 }] as unknown as Row[];
     const result = FilterCachedFKRows(numbered, '20', 50, (r) => (r as { name: number }).name);
     expect(result).toHaveLength(1);
+  });
+});
+
+describe('RankByPrefix', () => {
+  const rows = [
+    { Values: { Name: 'Executive Summary Report' } },
+    { Values: { Name: 'Summit Ticket' } },
+    { Values: { Name: 'summer camp' } },
+  ];
+
+  it('puts starts-with matches before contains matches, alphabetical within a tier', () => {
+    expect(RankByPrefix(rows, 'sum', 'Name').map((r) => r.Values.Name)).toEqual([
+      'summer camp',
+      'Summit Ticket',
+      'Executive Summary Report',
+    ]);
+  });
+
+  it('leaves order alphabetical for an empty query', () => {
+    expect(RankByPrefix(rows, '', 'Name').map((r) => r.Values.Name)).toEqual([
+      'Executive Summary Report',
+      'summer camp',
+      'Summit Ticket',
+    ]);
+  });
+
+  it('does not mutate the input', () => {
+    const original = rows.map((r) => r.Values.Name);
+    RankByPrefix(rows, 'sum', 'Name');
+    expect(rows.map((r) => r.Values.Name)).toEqual(original);
+  });
+
+  it('treats a row missing the name field as an empty name rather than throwing', () => {
+    const withGap = [{ Values: { Other: 'x' } }, { Values: { Name: 'Summit' } }];
+    expect(RankByPrefix(withGap, 'sum', 'Name').map((r) => r.Values.Name)).toEqual(['Summit', undefined]);
+  });
+});
+
+describe('EscapeSqlLikeValue', () => {
+  it('doubles quotes and brackets LIKE wildcards', () => {
+    expect(EscapeSqlLikeValue(`O'Neil 100% [a]_b`)).toBe(`O''Neil 100[%] [[]a][_]b`);
+  });
+
+  it('leaves ordinary text alone', () => {
+    expect(EscapeSqlLikeValue('Northwind Institute')).toBe('Northwind Institute');
+  });
+});
+
+describe('QuoteSqlIdList', () => {
+  it('quotes and joins, dropping blanks and case-insensitive duplicates', () => {
+    expect(QuoteSqlIdList(['a', 'B', '  ', 'A'])).toBe(`'a','B'`);
+  });
+
+  it('doubles quotes inside a value', () => {
+    expect(QuoteSqlIdList([`O'Neil`])).toBe(`'O''Neil'`);
+  });
+
+  it('returns an empty string for no usable ids', () => {
+    expect(QuoteSqlIdList([])).toBe('');
   });
 });

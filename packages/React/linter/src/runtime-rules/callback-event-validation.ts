@@ -1,4 +1,4 @@
-import { traverse, NodePath } from '../lint-utils';
+import { Traverse, NodePath } from '../lint-utils';
 import * as t from '@babel/types';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseLintRule } from '../lint-rule';
@@ -38,7 +38,7 @@ export class CallbackEventValidationRule extends BaseLintRule {
     const violations: Violation[] = [];
     const componentEvents = buildComponentEventsSet(componentSpec);
 
-    traverse(ast, {
+    Traverse(ast, {
       CallExpression: (path: NodePath<t.CallExpression>) => {
         checkCallbackParameterValidation(path, violations);
         checkObjectAssignOnCallbacks(path, violations);

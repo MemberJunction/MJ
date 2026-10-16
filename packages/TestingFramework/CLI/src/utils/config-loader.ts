@@ -28,16 +28,16 @@ export interface MJConfig {
      * behaviour; `initializeMJProvider` falls back to the DB_PLATFORM env var when this is unset,
      * which is how a repo whose mj.config.cjs predates this key still switches platform.
      */
-    dbPlatform?: 'sqlserver' | 'postgresql';
-    dbHost?: string;
-    dbDatabase?: string;
-    dbPort?: number | string;
-    dbUsername?: string;
-    dbPassword?: string;
-    coreSchema?: string;
+    dbPlatform?: 'sqlserver' | 'postgresql';  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    dbHost?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    dbDatabase?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    dbPort?: number | string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    dbUsername?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    dbPassword?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    coreSchema?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     // Testing CLI specific settings
-    testing?: {
+    testing?: {  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
         /**
          * Module specifiers side-effect-imported before `mj test` resolves any integration
          * bundle — each import registers its check bundles on the IntegrationCheckRegistry.
@@ -54,7 +54,7 @@ export interface MJConfig {
     };
 
     // Legacy format database config
-    database?: {
+    database?: {  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
         host?: string;
         name?: string;
         port?: number;
@@ -71,7 +71,7 @@ let cachedConfig: MJConfig | null = null;
  *
  * @returns Full MJ configuration
  */
-export async function loadMJConfig(): Promise<MJConfig> {
+export async function LoadMJConfig(): Promise<MJConfig> {
     if (cachedConfig) {
         return cachedConfig;
     }
@@ -97,12 +97,17 @@ export async function loadMJConfig(): Promise<MJConfig> {
     return cachedConfig;
 }
 
+/** @deprecated Use {@link LoadMJConfig}. */
+export async function loadMJConfig(): Promise<MJConfig> {
+    return LoadMJConfig();
+}
+
 /**
  * Load testing CLI configuration with defaults
  *
  * @returns CLI configuration
  */
-export function loadCLIConfig(): CLIConfig {
+export function LoadCLIConfig(): CLIConfig {
     // Synchronous version for backward compatibility
     // Uses cached config if available, otherwise returns defaults
     const testingConfig = cachedConfig?.testing || {};
@@ -123,4 +128,9 @@ export function loadCLIConfig(): CLIConfig {
             schema: cachedConfig?.coreSchema || '__mj'
         }
     };
+}
+
+/** @deprecated Use {@link LoadCLIConfig}. */
+export function loadCLIConfig(): CLIConfig {
+    return LoadCLIConfig();
 }

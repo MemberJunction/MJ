@@ -29,7 +29,7 @@ import {
   inject,
 } from '@angular/core';
 import { Subject, takeUntil } from 'rxjs';
-import type { RemoteOpResult, IRemoteOperationProvider } from '@memberjunction/core';
+import { CompositeKey, type RemoteOpResult, type IRemoteOperationProvider } from '@memberjunction/core';
 import {
   ResourceData,
   MJRecordProcessEntity,
@@ -46,11 +46,11 @@ import {
   type FeaturePipelineRunStatus,
 } from './feature-pipeline.engine';
 import {
-  buildFeaturePipelinesAgentContext,
-  resolvePipeline,
-  buildPipelineNotFoundError,
+  BuildFeaturePipelinesAgentContext,
+  ResolvePipeline,
+  BuildPipelineNotFoundError,
 } from './feature-pipelines-agent-context';
-import { validateStringParam, AgentToolResult } from '../../../shared/agent-tool-validation';
+import { ValidateStringParam, AgentToolResult } from '../../../shared/agent-tool-validation';
 
 /** Stable operation key of the Run Feature Pipeline Remote Operation. */
 const RUN_FEATURE_PIPELINE_OP = 'PredictiveStudio.RunFeaturePipeline';
@@ -100,12 +100,6 @@ export class FeaturePipelinesResourceComponent
 
   /** Ids of pipelines with a Run currently in flight (disables their Run button). */
   public RunningIDs = new Set<string>();
-
-  /** Authoring dialog state. */
-  public ShowEditor = false;
-
-  /** Record Process id being authored, or null for a new draft. */
-  public EditingPipelineID: string | null = null;
 
   // ================================================================
   // Computed
@@ -160,22 +154,18 @@ export class FeaturePipelinesResourceComponent
     this.cdr.detectChanges();
   }
 
-  /** Open the authoring editor for a brand-new feature pipeline draft. */
+  /** Open the entity record form to create a new record process. */
   public OnNewPipeline(): void {
-    this.EditingPipelineID = null;
-    this.ShowEditor = true;
-    this.cdr.detectChanges();
+    this.navigationService.OpenEntityRecord('MJ: Record Processes', new CompositeKey());
   }
 
   // ================================================================
   // Public Methods — Card Actions
   // ================================================================
 
-  /** Open the authoring editor for an existing feature pipeline. */
-  public OnEditPipeline(pipeline: FeaturePipelineSummary): void {
-    this.EditingPipelineID = pipeline.ID;
-    this.ShowEditor = true;
-    this.cdr.detectChanges();
+  /** Open the entity record form in a new tab for an existing feature pipeline. */
+  public OnViewPipeline(pipeline: FeaturePipelineSummary): void {
+    this.navigationService.OpenEntityRecord('MJ: Record Processes', CompositeKey.FromID(pipeline.ID));
   }
 
   /**
@@ -218,24 +208,6 @@ export class FeaturePipelinesResourceComponent
   /** Whether a given pipeline currently has a Run in flight. */
   public IsRunning(pipelineID: string): boolean {
     return this.RunningIDs.has(pipelineID);
-  }
-
-  // ================================================================
-  // Public Methods — Authoring Dialog
-  // ================================================================
-
-  /** Called when the editor saves — refresh and close. */
-  public async OnEditorSaved(_record: MJRecordProcessEntity): Promise<void> {
-    this.ShowEditor = false;
-    this.EditingPipelineID = null;
-    await this.loadData(true);
-  }
-
-  /** Called when the editor is cancelled — just close. */
-  public OnEditorCancelled(): void {
-    this.ShowEditor = false;
-    this.EditingPipelineID = null;
-    this.cdr.detectChanges();
   }
 
   // ================================================================
@@ -377,7 +349,7 @@ export class FeaturePipelinesResourceComponent
   // dialog). The agent may *open* the editor, never commit it.
 
   private emitAgentContext(): void {
-    this.navigationService.SetAgentContext(this, buildFeaturePipelinesAgentContext({
+    this.navigationService.SetAgentContext(this, BuildFeaturePipelinesAgentContext({
       AllPipelines: this.AllPipelines,
       FilteredPipelines: this.FilteredPipelines,
       SearchQuery: this.SearchQuery,
@@ -390,15 +362,15 @@ export class FeaturePipelinesResourceComponent
   private resolvePipelineOrFail(
     raw: unknown,
   ): { ok: true; pipeline: FeaturePipelineSummary } | { ok: false; result: AgentToolResult } {
-    const v = validateStringParam(raw, 'pipeline');
+    const v = ValidateStringParam(raw, 'pipeline');
     if (!v.ok) return { ok: false, result: v.result };
-    const match = resolvePipeline(v.value, this.AllPipelines);
+    const match = ResolvePipeline(v.value, this.AllPipelines);
     if (!match) {
       return {
         ok: false,
         result: {
           Success: false,
-          ErrorMessage: buildPipelineNotFoundError(v.value, this.AllPipelines.map((p) => p.Name)),
+          ErrorMessage: BuildPipelineNotFoundError(v.value, this.AllPipelines.map((p) => p.Name)),
         },
       };
     }
@@ -435,7 +407,7 @@ export class FeaturePipelinesResourceComponent
           required: ['query'],
         },
         Handler: async (params: Record<string, unknown>) => {
-          const v = validateStringParam(params['query'], 'query');
+          const v = ValidateStringParam(params['query'], 'query');
           if (!v.ok) return v.result;
           this.SearchQuery = v.value;
           this.OnSearchChanged();
@@ -454,7 +426,7 @@ export class FeaturePipelinesResourceComponent
       },
       {
         Name: 'OpenFeaturePipelineEditor',
-        Description: 'Open the authoring editor for a feature pipeline by id or name (UI dialog — does NOT auto-save). Use to inspect or edit a pipeline definition.',
+        Description: 'Open the entity record form for a feature pipeline by id or name to inspect or edit its definition.',
         ParameterSchema: {
           type: 'object',
           properties: { pipeline: { type: 'string', description: 'The feature pipeline id or name' } },
@@ -463,7 +435,7 @@ export class FeaturePipelinesResourceComponent
         Handler: async (params: Record<string, unknown>) => {
           const r = this.resolvePipelineOrFail(params['pipeline'] ?? params['name']);
           if (!r.ok) return r.result;
-          this.OnEditPipeline(r.pipeline);
+          this.OnViewPipeline(r.pipeline);
           return { Success: true, Data: { Pipeline: r.pipeline.Name } };
         },
       },

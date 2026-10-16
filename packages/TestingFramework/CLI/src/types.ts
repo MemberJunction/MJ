@@ -63,6 +63,8 @@ export interface RunFlags extends CommonFlags {
      * Can be specified multiple times for multiple variables
      */
     var?: string[];
+    /** `name|id` or `name|id@version`. Overrides the rubric for this run. */
+    rubric?: string;
 }
 
 /**
@@ -93,11 +95,25 @@ export interface SuiteFlags extends CommonFlags {
      * Recommended: 3 (statistical minimum), 5 (more reliable detection).
      */
     flakyCheck?: number;
+    /** `name|id` or `name|id@version`. Overrides the rubric for every test in the suite. */
+    rubric?: string;
 }
 
 /**
  * Flags for list command
  */
+/** Flags for `mj test scripts` — replay-script review and promotion. */
+export interface ScriptsFlags extends CommonFlags {
+    /** Narrow to one test by name or ID. */
+    test?: string;
+    /** Promote the pending script(s) into the slot replay uses. */
+    promote?: boolean;
+    /** Drop the pending script(s), leaving the promoted one in place. */
+    discard?: boolean;
+    /** Confirm a bulk --promote/--discard that was not narrowed to one test. */
+    yes?: boolean;
+}
+
 export interface ListFlags extends CommonFlags {
     type?: string;
     suites?: boolean;

@@ -2,14 +2,14 @@ import { RegisterClass } from '@memberjunction/global';
 import { BusinessCentralBaseAction } from '../business-central-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { BaseAction } from '@memberjunction/actions';
-import { ACCOUNTING_VERBS, ERP_INTEGRATION, erpPluginKey } from '../../../constants';
+import { ACCOUNTING_VERBS, ERP_INTEGRATION, ErpPluginKey } from '../../../constants';
 import { AccountBalance } from '../../../types';
 
 /**
  * Account balances from Business Central generalLedgerAccounts.
  * accountCode is the ERP account number (AM-4).
  */
-@RegisterClass(BaseAction, erpPluginKey(ACCOUNTING_VERBS.GetAccountBalances, ERP_INTEGRATION.BusinessCentral))
+@RegisterClass(BaseAction, ErpPluginKey(ACCOUNTING_VERBS.GetAccountBalances, ERP_INTEGRATION.BusinessCentral))
 export class GetBusinessCentralAccountBalancesAction extends BusinessCentralBaseAction {
 
     public get Description(): string {

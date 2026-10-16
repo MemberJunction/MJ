@@ -23,13 +23,13 @@
         } @else {
           <div class="nav-scroll">
             @for (favorite of favoriteEntities; track favorite.entityName) {
-              <div class="nav-item" (click)="onFavoriteClick(favorite)" [title]="favorite.entityName ? favorite.entityName + ' - ' + favorite.displayName : favorite.displayName">
+              <div class="nav-item" (click)="onFavoriteClick(favorite)" [title]="favorite.entityName ? getEntityDisplayName(favorite.entityName) + ' - ' + favorite.displayName : favorite.displayName">
                 <i [class]="getFavoriteIcon(favorite)"></i>
                 <span class="nav-item-label">{{ favorite.displayName }}</span>
               </div>
             }
             @for (favorite of favoriteRecords; track favorite.entityName + '|' + favorite.compositeKeyString) {
-              <div class="nav-item" (click)="onFavoriteClick(favorite)" [title]="favorite.entityName ? favorite.entityName + ' - ' + favorite.displayName : favorite.displayName">
+              <div class="nav-item" (click)="onFavoriteClick(favorite)" [title]="favorite.entityName ? getEntityDisplayName(favorite.entityName) + ' - ' + favorite.displayName : favorite.displayName">
                 <i [class]="getFavoriteIcon(favorite)"></i>
                 <span class="nav-item-label">{{ favorite.displayName }}</span>
               </div>
@@ -55,7 +55,7 @@
         } @else {
           <div class="nav-scroll">
             @for (item of filteredRecentItems; track item.entityName + '|' + item.compositeKeyString) {
-              <div class="nav-item" (click)="onRecentClick(item)" [title]="item.entityName + ' - ' + item.displayName">
+              <div class="nav-item" (click)="onRecentClick(item)" [title]="getEntityDisplayName(item.entityName) + ' - ' + item.displayName">
                 <i [class]="getRecentItemIcon(item)"></i>
                 <div class="nav-item-content">
                   <span class="nav-item-label">{{ item.displayName }}</span>
@@ -72,7 +72,7 @@
         [Expanded]="entitiesSectionExpanded" (ExpandedChange)="onSectionToggle('entities')">
         <ng-template mjAccordionTitle>
           <i class="fa-solid fa-database section-icon"></i>
-          <span class="section-title">Entities</span>
+          <span class="section-title">Record Types</span>
           <span class="mj-accordion-badge mj-accordion-badge--right">{{ entities.length }}</span>
         </ng-template>
 
@@ -83,7 +83,7 @@
             <input
               type="text"
               class="search-input"
-              placeholder="Search entities..."
+              placeholder="Search record types..."
               [(ngModel)]="entitySearchTerm"
               (ngModelChange)="onEntitySearchChanged()"
             />

@@ -7,7 +7,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach, MockInstance } from 'vitest';
 import sql from 'mssql';
 import { StartupManager, StartupOptions, UserInfo } from '@memberjunction/core';
-import { setupSQLServerClient } from '../config';
+import { SetupSQLServerClient } from '../config';
 import { SQLServerDataProvider } from '../SQLServerDataProvider';
 import { SQLServerProviderConfigData } from '../types';
 import { UserCache } from '@memberjunction/generic-database-provider';
@@ -40,7 +40,7 @@ describe('setupSQLServerClient startup-options threading', () => {
     it('forwards provided startup options to StartupManager.Startup()', async () => {
         const options: StartupOptions = { mode: 'task' };
 
-        await setupSQLServerClient(makeConfig(), options);
+        await SetupSQLServerClient(makeConfig(), options);
 
         expect(startupSpy).toHaveBeenCalledTimes(1);
         const [forceRefresh, contextUser, provider, forwarded] = startupSpy.mock.calls[0];
@@ -51,7 +51,7 @@ describe('setupSQLServerClient startup-options threading', () => {
     });
 
     it('passes undefined options when omitted (pre-change behavior ⇒ full mode)', async () => {
-        await setupSQLServerClient(makeConfig());
+        await SetupSQLServerClient(makeConfig());
 
         expect(startupSpy).toHaveBeenCalledTimes(1);
         expect(startupSpy.mock.calls[0][3]).toBeUndefined();

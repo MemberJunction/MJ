@@ -3,10 +3,10 @@ import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 
 import { MJCollectionPermissionEntity } from '../../generated/entity_subclasses';
 import {
-    assertCallerMayCreateShare,
-    buildActionsSummary,
-    checkShareManagePermission,
-    dispatchShareNotificationAfterSave,
+    AssertCallerMayCreateShare,
+    BuildActionsSummary,
+    CheckShareManagePermission,
+    DispatchShareNotificationAfterSave,
 } from './BaseShareEntityExtended';
 
 /**
@@ -23,14 +23,14 @@ export class MJCollectionPermissionEntityExtended extends MJCollectionPermission
     override CheckPermissions(type: EntityPermissionType, throwError: boolean): boolean {
         if (type === EntityPermissionType.Update || type === EntityPermissionType.Delete) {
             const user = this.ActiveUser;
-            if (user && checkShareManagePermission(user, this.SharedByUserID)) return true;
+            if (user && CheckShareManagePermission(user, this.SharedByUserID)) return true;
         }
         return super.CheckPermissions(type, throwError);
     }
 
     override async Save(options?: EntitySaveOptions): Promise<boolean> {
         const isNewShare = !this.IsSaved;
-        const allowed = await assertCallerMayCreateShare(
+        const allowed = await AssertCallerMayCreateShare(
             this,
             isNewShare,
             () => this.callerMayShareCollection(),
@@ -40,7 +40,7 @@ export class MJCollectionPermissionEntityExtended extends MJCollectionPermission
 
         const saved = await super.Save(options);
         if (saved) {
-            await dispatchShareNotificationAfterSave(this, isNewShare, this.SharedByUserID, (provider, grantorId) => ({
+            await DispatchShareNotificationAfterSave(this, isNewShare, this.SharedByUserID, (provider, grantorId) => ({
                 Provider: provider,
                 ContextUser: this.ContextCurrentUser,
                 GrantorUserID: grantorId,
@@ -57,7 +57,7 @@ export class MJCollectionPermissionEntityExtended extends MJCollectionPermission
     }
 
     private actionsSummary(): string {
-        return buildActionsSummary({
+        return BuildActionsSummary({
             view: this.CanRead,
             edit: this.CanEdit,
             delete: this.CanDelete,

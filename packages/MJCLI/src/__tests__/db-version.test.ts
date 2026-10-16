@@ -4,7 +4,7 @@
  * the current version). The Skyway provider is stubbed; no real database is touched.
  */
 import { describe, it, expect, vi } from 'vitest';
-import { readCurrentDbVersion, type MigrationHistoryProvider } from '../lib/db-version';
+import { ReadCurrentDbVersion, type MigrationHistoryProvider } from '../lib/db-version';
 
 interface TestRecord {
   Version: string | null;
@@ -29,7 +29,7 @@ function makeProvider(exists: boolean, records: TestRecord[] = []) {
 describe('readCurrentDbVersion', () => {
   it('returns null for a fresh DB (no history table) and still disconnects', async () => {
     const { provider, connect, disconnect } = makeProvider(false);
-    const version = await readCurrentDbVersion(provider, '__mj', 'flyway_schema_history');
+    const version = await ReadCurrentDbVersion(provider, '__mj', 'flyway_schema_history');
     expect(version).toBeNull();
     expect(connect).toHaveBeenCalledOnce();
     expect(disconnect).toHaveBeenCalledOnce();
@@ -41,7 +41,7 @@ describe('readCurrentDbVersion', () => {
       { Version: '202605250000', Type: 'SQL', Success: true },
       { Version: '202605150000', Type: 'SQL', Success: true },
     ]);
-    expect(await readCurrentDbVersion(provider, '__mj', 'flyway_schema_history')).toBe('202605250000');
+    expect(await ReadCurrentDbVersion(provider, '__mj', 'flyway_schema_history')).toBe('202605250000');
   });
 
   it('ignores SCHEMA markers, failed rows, and null versions', async () => {
@@ -50,17 +50,17 @@ describe('readCurrentDbVersion', () => {
       { Version: '202699999999', Type: 'SQL', Success: false }, // failed → must not count
       { Version: '202605250000', Type: 'SQL', Success: true },
     ]);
-    expect(await readCurrentDbVersion(provider, '__mj', 'flyway_schema_history')).toBe('202605250000');
+    expect(await ReadCurrentDbVersion(provider, '__mj', 'flyway_schema_history')).toBe('202605250000');
   });
 
   it('counts a successful baseline row as the current version', async () => {
     const { provider } = makeProvider(true, [{ Version: '202605241137', Type: 'SQL_BASELINE', Success: true }]);
-    expect(await readCurrentDbVersion(provider, '__mj', 'flyway_schema_history')).toBe('202605241137');
+    expect(await ReadCurrentDbVersion(provider, '__mj', 'flyway_schema_history')).toBe('202605241137');
   });
 
   it('treats a row with no Success flag as applied', async () => {
     const { provider } = makeProvider(true, [{ Version: '202605250000', Type: 'SQL' }]);
-    expect(await readCurrentDbVersion(provider, '__mj', 'flyway_schema_history')).toBe('202605250000');
+    expect(await ReadCurrentDbVersion(provider, '__mj', 'flyway_schema_history')).toBe('202605250000');
   });
 
   it('disconnects even when reading records throws', async () => {
@@ -75,7 +75,7 @@ describe('readCurrentDbVersion', () => {
         },
       },
     };
-    await expect(readCurrentDbVersion(provider, '__mj', 'flyway_schema_history')).rejects.toThrow('boom');
+    await expect(ReadCurrentDbVersion(provider, '__mj', 'flyway_schema_history')).rejects.toThrow('boom');
     expect(disconnect).toHaveBeenCalledOnce();
   });
 });

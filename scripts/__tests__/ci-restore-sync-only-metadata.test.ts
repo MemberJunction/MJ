@@ -60,6 +60,38 @@ describe('ci-restore-sync-only-metadata', () => {
     it('throws rather than guessing when a side is unparseable', () => {
       expect(() => isSyncOnlyChange('NOT JSON {{{', '{"a":1}')).toThrow();
     });
+
+    // A `deleteRecord` directive gets a `deletedAt` stamped onto it once the delete has run.
+    // That stamp is per-environment bookkeeping the gate must ignore: committing one would make
+    // the release push skip the delete, so no DELETE would reach the SQL log and every other
+    // database would keep the rows the directive exists to remove.
+    it('ignores a deletedAt stamp the push wrote back', () => {
+      expect(
+        isSyncOnlyChange(
+          '{"primaryKey":{"ID":"X"},"deleteRecord":{"delete":true,"deletedAt":"2026-09-15T15:31:23.238Z"}}',
+          '{"primaryKey":{"ID":"X"},"deleteRecord":{"delete":true}}',
+        ),
+      ).toBe(true);
+    });
+
+    it('still sees the delete flag itself as real content', () => {
+      expect(
+        isSyncOnlyChange(
+          '{"deleteRecord":{"delete":true,"deletedAt":"2026-09-15T15:31:23.238Z"}}',
+          '{"deleteRecord":{}}',
+        ),
+      ).toBe(false);
+    });
+
+    it('does not report drift for a deletedAt that was already committed', () => {
+      // The auto-generated integration action files carry many of these.
+      expect(
+        isSyncOnlyChange(
+          '{"deleteRecord":{"delete":true,"deletedAt":"2026-01-02T00:00:00.000Z"},"sync":{"c":"new"}}',
+          '{"deleteRecord":{"delete":true,"deletedAt":"2026-01-02T00:00:00.000Z"},"sync":{"c":"old"}}',
+        ),
+      ).toBe(true);
+    });
   });
 
   it('restores a file whose only delta is refreshed sync blocks, and the gate goes clean', () => {

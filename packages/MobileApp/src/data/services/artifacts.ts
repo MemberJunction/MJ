@@ -8,39 +8,57 @@
  */
 
 import { Metadata, RunView, type UserInfo } from '@memberjunction/core';
-import type {
-    MJConversationArtifactEntity,
-    MJConversationArtifactVersionEntity,
+import {
+    ConversationEngine,
+    type MJConversationArtifactEntity,
+    type MJConversationArtifactVersionEntity,
 } from '@memberjunction/core-entities';
+import { EscapeSQLString } from '@memberjunction/global';
 import type { ComponentSpec } from '@memberjunction/react-runtime';
-import { parseChartSpec, type ChartSpec } from '@/components/charts/chart-spec';
-import { toInteractiveSpec } from '@/data/services/interactive-components';
+import { ParseChartSpec, type ChartSpec } from '@/components/charts/chart-spec';
+import { ToInteractiveSpec } from '@/data/services/interactive-components';
+import {
+    ArtifactAgentInScope,
+    ArtifactLinkQueries,
+    BuildArtifactLinks,
+    IsArtifactVersionVisible,
+    IsArtifactVisible,
+    type ArtifactLinks,
+} from '@/data/services/artifact-scope';
 
 /** The renderer the UI should use for an artifact's content, chosen by {@link classify}. */
 export type ArtifactRenderKind = 'json-table' | 'json' | 'markdown' | 'code' | 'html' | 'chart' | 'interactive' | 'text';
 
 /** A fully-loaded artifact: metadata, latest-version content, and any parsed payload the chosen renderer needs. */
 export type LoadedArtifact = {
-    id: string;
-    name: string;
-    description: string | null;
-    typeName: string;
-    version: number;
-    versionCount: number;
+    id: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    name: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    description: string | null;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    TypeName: string;
+    Version: number;
+    VersionCount: number;
     /** Raw version content. */
-    content: string;
+    content: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    /**
+     * The version's MIME type, when the record carries one.
+     *
+     * Always null for `MJ: Conversation Artifact Versions`, which has no such column — the type
+     * name is its only classifier. Kept on the shape because a registered renderer matches on
+     * EITHER, and the newer `MJ: Artifact Versions` model does record a MIME type.
+     */
+    ContentType: string | null;
     /** How the UI should render `content`. */
-    kind: ArtifactRenderKind;
+    kind: ArtifactRenderKind;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** When kind is json-table, parsed rows. */
-    rows?: Record<string, unknown>[];
+    Rows?: Record<string, unknown>[];
     /** When kind is json (object), parsed object. */
-    json?: unknown;
+    Json?: unknown;
     /** When kind is chart, the normalized chart spec. */
-    chart?: ChartSpec;
+    chart?: ChartSpec;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
     /** When kind is interactive, the parsed react-runtime component spec. */
-    spec?: ComponentSpec;
+    Spec?: ComponentSpec;
     /** When kind is code, a best-effort source language hint for highlighting. */
-    language?: string;
+    Language?: string;
 };
 
 /** Classified content: the render kind plus any parsed payload the UI needs. */
@@ -84,12 +102,12 @@ function classify(typeName: string, content: string): Classification {
     if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
         try {
             const parsed: unknown = JSON.parse(trimmed);
-            const chart = parseChartSpec(parsed);
+            const chart = ParseChartSpec(parsed);
             if (chart) return { kind: 'chart', chart, json: parsed };
             // Interactive react-runtime component specs carry both a `name` and a
             // `code` body — charts (chartType/data) and plain data JSON never do,
             // so this branch can't reclassify them.
-            const spec = toInteractiveSpec(parsed, typeName);
+            const spec = ToInteractiveSpec(parsed, typeName);
             if (spec) return { kind: 'interactive', spec };
             if (Array.isArray(parsed) && parsed.length > 0 && typeof parsed[0] === 'object' && parsed[0] !== null) {
                 return { kind: 'json-table', rows: parsed as Record<string, unknown>[] };
@@ -112,15 +130,16 @@ function classify(typeName: string, content: string): Classification {
 /**
  * Load an artifact and its latest version content, classified for rendering.
  *
- * Loads the `MJ: Conversation Artifacts` row via `GetEntityObject().Load()`, then
- * `RunView`s `MJ: Conversation Artifact Versions` (ordered `Version DESC`) to get
- * the newest content, and runs {@link classify} to pick a render kind + payload.
+ * Loads the `MJ: Conversation Artifacts` row via `GetEntityObject().Load()`, then reads its
+ * versions visible in Main of the conversation it belongs to (see {@link loadVisibleVersions}), and
+ * runs {@link classify} on the newest one to pick a render kind + payload.
  *
  * @param artifactId  The `MJ: Conversation Artifacts` record id.
  * @param contextUser Optional acting user (server-side scoping); defaults to `Metadata.CurrentUser`.
  * @returns A {@link LoadedArtifact}, or `null` if the artifact can't be loaded.
+ * @throws When the message links of the artifact's conversation cannot be read.
  */
-export async function loadArtifact(artifactId: string, contextUser?: UserInfo): Promise<LoadedArtifact | null> {
+export async function LoadArtifact(artifactId: string, contextUser?: UserInfo): Promise<LoadedArtifact | null> {
     const md = new Metadata();  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
     const currentUser = contextUser ?? md.CurrentUser;
 
@@ -128,19 +147,7 @@ export async function loadArtifact(artifactId: string, contextUser?: UserInfo): 
     const loaded = await artifact.Load(artifactId);
     if (!loaded) return null;
 
-    const rv = new RunView();
-    const versionsResult = await rv.RunView<MJConversationArtifactVersionEntity>(
-        {
-            EntityName: 'MJ: Conversation Artifact Versions',
-            ExtraFilter: `ConversationArtifactID='${artifactId}'`,
-            OrderBy: 'Version DESC',
-            MaxRows: 50,
-            ResultType: 'entity_object',
-        },
-        currentUser,
-    );
-
-    const versions = versionsResult.Success ? (versionsResult.Results ?? []) : [];
+    const versions = await loadVisibleVersions(artifact, currentUser);
     const latest = versions[0];
     const content = latest?.Content ?? '';
     const { kind, rows, json, chart, spec, language } = classify(artifact.ArtifactType ?? '', content);
@@ -149,17 +156,51 @@ export async function loadArtifact(artifactId: string, contextUser?: UserInfo): 
         id: artifact.ID,
         name: artifact.Name,
         description: artifact.Description,
-        typeName: artifact.ArtifactType ?? 'Artifact',
-        version: latest?.Version ?? 1,
-        versionCount: versions.length,
+        TypeName: artifact.ArtifactType ?? 'Artifact',
+        // Always null for this entity: `MJ: Conversation Artifact Versions` has no content-type
+        // column — the type name is the only classifier it carries. Kept on the shape because a
+        // registered renderer matches on EITHER, and the newer `MJ: Artifact Versions` model does
+        // record a MIME type.
+        ContentType: null,
+        Version: latest?.Version ?? 1,
+        VersionCount: versions.length,
         content,
         kind,
-        rows,
-        json,
+        Rows: rows,
+        Json: json,
         chart,
-        spec,
-        language,
+        Spec: spec,
+        Language: language,
     };
+}
+
+/**
+ * The artifact's versions visible in Main of the conversation it belongs to, newest first: the
+ * versions a Main message links to, plus those no message links to.
+ *
+ * @throws When the message links cannot be read.
+ */
+async function loadVisibleVersions(
+    artifact: MJConversationArtifactEntity,
+    user: UserInfo,
+): Promise<MJConversationArtifactVersionEntity[]> {
+    const scope = ConversationEngine.TrunkScope(artifact.ConversationID);
+    const [versionsResult, inScopeLinks, anyPathLinks] = await new RunView().RunViews(
+        [
+            {
+                EntityName: 'MJ: Conversation Artifact Versions',
+                ExtraFilter: `ConversationArtifactID='${EscapeSQLString(artifact.ID)}'`,
+                OrderBy: 'Version DESC',
+                MaxRows: 50,
+                ResultType: 'entity_object',
+            },
+            ...ArtifactLinkQueries(scope),
+        ],
+        user,
+    );
+    const links = BuildArtifactLinks(inScopeLinks, anyPathLinks);
+    const versions: MJConversationArtifactVersionEntity[] = versionsResult.Success ? (versionsResult.Results ?? []) : [];
+    return versions.filter((v) => IsArtifactVersionVisible(links, v.ID));
 }
 
 // ---------------------------------------------------------------------------
@@ -171,18 +212,18 @@ export type ArtifactTypeCategory = 'table' | 'chart' | 'document';
 
 /** Lightweight artifact summary for the conversation artifact dock. */
 export type ArtifactSummary = {
-    id: string;
-    name: string;
-    description: string | null;
-    typeName: string;
+    id: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    name: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    description: string | null;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    TypeName: string;
     /** Bucket for the Tables / Charts / Documents filter chips. */
-    category: ArtifactTypeCategory;
+    Category: ArtifactTypeCategory;
     /** Short preview snippet (from description, else the content head). */
-    preview: string;
+    Preview: string;
     /** Attributed agent id (the agent whose message produced the version), if known. */
-    agentId: string | null;
+    AgentId: string | null;
     /** Attributed agent display name, if known. */
-    agentName: string | null;
+    AgentName: string | null;
 };
 
 /** Bucket an artifact into a dock category using its type + latest content. */
@@ -209,57 +250,69 @@ function quotedIdList(ids: string[]): string {
 }
 
 /**
- * Load the artifacts of a conversation as dock summaries — including a coarse
+ * Load the artifacts of a conversation visible in Main as dock summaries — including a coarse
  * category, a preview snippet, and best-effort agent attribution.
  *
- * Attribution comes from the conversation detail (message) that references the
- * artifact (`ConversationDetail.ArtifactID` → `AgentID`); the preview/category
- * come from the artifact's latest version content.
+ * An artifact is visible when a Main message links to it (`ConversationDetail.ArtifactID`), or when
+ * no message links to it. Attribution comes from the first Main message that links the artifact and
+ * has an agent; the preview/category come from the newest version visible in Main.
  *
  * @param conversationId The conversation whose artifacts to load.
  * @param contextUser    Optional acting user (server-side scoping).
+ * @throws When the message links cannot be read.
  */
-export async function loadConversationArtifacts(conversationId: string, contextUser?: UserInfo): Promise<ArtifactSummary[]> {
+export async function LoadConversationArtifacts(conversationId: string, contextUser?: UserInfo): Promise<ArtifactSummary[]> {
     const md = new Metadata();  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
     const currentUser = contextUser ?? md.CurrentUser;
     const rv = new RunView();
 
-    const artifactsResult = await rv.RunView<MJConversationArtifactEntity>(
-        {
-            EntityName: 'MJ: Conversation Artifacts',
-            ExtraFilter: `ConversationID='${conversationId}'`,
-            OrderBy: '__mj_UpdatedAt DESC',
-            MaxRows: 200,
-            ResultType: 'entity_object',
-        },
+    const scope = ConversationEngine.TrunkScope(conversationId);
+    const [artifactsResult, inScopeLinks, anyPathLinks] = await rv.RunViews(
+        [
+            {
+                // Every artifact row of the conversation; the message links decide which are visible.
+                EntityName: 'MJ: Conversation Artifacts',
+                ExtraFilter: `ConversationID='${EscapeSQLString(conversationId)}'`,
+                OrderBy: '__mj_UpdatedAt DESC',
+                MaxRows: 200,
+                ResultType: 'entity_object',
+            },
+            ...ArtifactLinkQueries(scope),
+        ],
         currentUser,
     );
-    const artifacts = artifactsResult.Success ? (artifactsResult.Results ?? []) : [];
+    const links = BuildArtifactLinks(inScopeLinks, anyPathLinks);
+    const rows: MJConversationArtifactEntity[] = artifactsResult.Success ? (artifactsResult.Results ?? []) : [];
+    const artifacts = rows.filter((a) => IsArtifactVisible(links, a.ID));
     if (artifacts.length === 0) return [];
 
-    const contentByArtifact = await loadLatestContent(rv, artifacts.map((a) => a.ID), currentUser);
-    const agentByArtifact = await loadAgentByArtifact(rv, conversationId, currentUser);
+    const contentByArtifact = await loadLatestContent(rv, artifacts.map((a) => a.ID), links, currentUser);
     const agentNameById = await loadAgentNames(rv, currentUser);
 
     return artifacts.map((artifact) => {
         const content = contentByArtifact.get(artifact.ID) ?? '';
-        const agentId = agentByArtifact.get(artifact.ID) ?? null;
+        const agentId = ArtifactAgentInScope(links, artifact.ID);
         const typeName = artifact.ArtifactType ?? 'Artifact';
         return {
             id: artifact.ID,
             name: artifact.Name,
             description: artifact.Description,
-            typeName,
-            category: categorize(typeName, content),
-            preview: previewOf(artifact.Description, content),
-            agentId,
-            agentName: agentId ? (agentNameById.get(agentId) ?? null) : null,
+            TypeName: typeName,
+            Category: categorize(typeName, content),
+            Preview: previewOf(artifact.Description, content),
+            AgentId: agentId,
+            AgentName: agentId ? (agentNameById.get(agentId) ?? null) : null,
         } satisfies ArtifactSummary;
     });
 }
 
-/** Load the latest version content for each artifact id. */
-async function loadLatestContent(rv: RunView, artifactIds: string[], user: UserInfo | undefined): Promise<Map<string, string>> {
+/** Load the content of each artifact's newest version visible in scope. */
+async function loadLatestContent(
+    rv: RunView,
+    artifactIds: string[],
+    links: ArtifactLinks,
+    user: UserInfo | undefined,
+): Promise<Map<string, string>> {
     const out = new Map<string, string>();
     if (artifactIds.length === 0) return out;
     const result = await rv.RunView<MJConversationArtifactVersionEntity>(
@@ -267,7 +320,7 @@ async function loadLatestContent(rv: RunView, artifactIds: string[], user: UserI
             EntityName: 'MJ: Conversation Artifact Versions',
             ExtraFilter: `ConversationArtifactID IN (${quotedIdList(artifactIds)})`,
             OrderBy: 'Version DESC',
-            Fields: ['ConversationArtifactID', 'Content', 'Version'],
+            Fields: ['ID', 'ConversationArtifactID', 'Content', 'Version'],
             MaxRows: 500,
             ResultType: 'simple',
         },
@@ -275,29 +328,9 @@ async function loadLatestContent(rv: RunView, artifactIds: string[], user: UserI
     );
     if (!result.Success) return out;
     for (const row of result.Results ?? []) {
-        // Rows are Version DESC, so the first seen per artifact is the latest.
+        // Rows are Version DESC, so the first visible one per artifact is the newest in scope.
+        if (!IsArtifactVersionVisible(links, row.ID)) continue;
         if (!out.has(row.ConversationArtifactID)) out.set(row.ConversationArtifactID, row.Content ?? '');
-    }
-    return out;
-}
-
-/** Map artifact id → attributed agent id via the referencing message. */
-async function loadAgentByArtifact(rv: RunView, conversationId: string, user: UserInfo | undefined): Promise<Map<string, string>> {
-    const out = new Map<string, string>();
-    const result = await rv.RunView<{ ArtifactID: string | null; AgentID: string | null }>(
-        {
-            EntityName: 'MJ: Conversation Details',
-            ExtraFilter: `ConversationID='${conversationId}' AND ArtifactID IS NOT NULL`,
-            Fields: ['ArtifactID', 'AgentID'],
-            MaxRows: 500,
-            ResultType: 'simple',
-        },
-        user,
-    );
-    if (result.Success) {
-        for (const row of result.Results ?? []) {
-            if (row.ArtifactID && row.AgentID && !out.has(row.ArtifactID)) out.set(row.ArtifactID, row.AgentID);
-        }
     }
     return out;
 }

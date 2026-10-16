@@ -236,13 +236,28 @@ import { UpdateNotificationService } from './update-notification.service';
     `]
 })
 export class UpdateNotificationComponent {
-    public readonly updateService = inject(UpdateNotificationService);
+    public readonly UpdateService = inject(UpdateNotificationService);
 
-    onReload(): void {
-        this.updateService.applyUpdate();
+    /** @deprecated Use {@link UpdateService}. */
+    public get updateService() {
+        return this.UpdateService;
     }
 
+    OnReload(): void {
+        this.UpdateService.applyUpdate();
+    }
+
+    /** @deprecated Use {@link OnReload}. */
+    onReload(): void {
+        return this.OnReload();
+    }
+
+    OnDismiss(): void {
+        this.UpdateService.dismissForSession();
+    }
+
+    /** @deprecated Use {@link OnDismiss}. */
     onDismiss(): void {
-        this.updateService.dismissForSession();
+        return this.OnDismiss();
     }
 }

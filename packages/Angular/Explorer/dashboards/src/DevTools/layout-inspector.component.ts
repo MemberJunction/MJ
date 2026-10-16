@@ -4,8 +4,8 @@ import { RegisterClass } from '@memberjunction/global';
 import { TabConfig } from '@memberjunction/ng-ui-components';
 import { WorkspaceStateManager, GoldenLayoutManager } from '@memberjunction/ng-base-application';
 import { DevToolsPrefs } from './dev-tools-prefs';
-import { buildLayoutInspectorAgentContext } from './dev-tools-agent-context';
-import { AgentToolResult, validateEnumParam } from '../shared/agent-tool-validation';
+import { BuildLayoutInspectorAgentContext } from './dev-tools-agent-context';
+import { AgentToolResult, ValidateEnumParam } from '../shared/agent-tool-validation';
 
 interface LayoutSection {
     id: 'workspace' | 'golden';
@@ -49,7 +49,7 @@ export class LayoutInspectorComponent extends BaseResourceComponent implements O
     public ngOnInit(): void {
         const p = DevToolsPrefs.Get<{ activeSection?: 'workspace' | 'golden' }>('layoutInspector');
         if (p?.activeSection) this.ActiveSection = p.activeSection;
-        this.refresh();
+        this.Refresh();
         this.NotifyLoadComplete();
     }
 
@@ -69,7 +69,7 @@ export class LayoutInspectorComponent extends BaseResourceComponent implements O
     public override async GetResourceIconClass(): Promise<string> { return 'fa-solid fa-table-columns'; }
 
     /** Sections rendered as horizontal tabs in the chrome's [toolbar] slot. */
-    public get tabsConfig(): TabConfig[] {
+    public get TabsConfig(): TabConfig[] {
         return this.Sections.map(s => ({
             key: s.id,
             label: s.label,
@@ -77,26 +77,41 @@ export class LayoutInspectorComponent extends BaseResourceComponent implements O
         }));
     }
 
+    /** @deprecated Use {@link TabsConfig}. */
+    public get tabsConfig(): TabConfig[] {
+        return this.TabsConfig;
+    }
+
     /** Adapter for `<mj-tab-nav>`'s string-typed `(TabChange)` output. */
-    public onTabChange(key: string): void {
+    public OnTabChange(key: string): void {
         const section = this.Sections.find(s => s.id === key);
         if (section) {
             this.OnSectionClick(section);
         }
     }
 
+    /** @deprecated Use {@link OnTabChange}. */
+    public onTabChange(key: string): void {
+        return this.OnTabChange(key);
+    }
+
     public OnSectionClick(section: LayoutSection): void {
         if (this.ActiveSection === section.id) return;
         this.ActiveSection = section.id;
         DevToolsPrefs.Save('layoutInspector', { activeSection: this.ActiveSection });
-        this.refresh();
+        this.Refresh();
     }
 
-    public refresh(): void {
+    public Refresh(): void {
         this.LayoutJson = JSON.stringify(this.computeData(), this.jsonReplacer, 2);
         this.LastRefreshed = new Date();
         this.cdr.markForCheck();
         this.publishAgentContext();
+    }
+
+    /** @deprecated Use {@link Refresh}. */
+    public refresh(): void {
+        return this.Refresh();
     }
 
     public async OnCopy(): Promise<void> {
@@ -169,7 +184,7 @@ export class LayoutInspectorComponent extends BaseResourceComponent implements O
 
     /** Publish the current Layout Inspector selection to the AI agent. */
     private publishAgentContext(): void {
-        const context = buildLayoutInspectorAgentContext({
+        const context = BuildLayoutInspectorAgentContext({
             SelectedSection: this.ActiveSection,
             SelectedSectionLabel: this.SectionLabel,
             SectionCount: this.Sections.length,
@@ -191,7 +206,7 @@ export class LayoutInspectorComponent extends BaseResourceComponent implements O
                 Description: 'Re-read the current workspace / Golden Layout configuration snapshot.',
                 ParameterSchema: { type: 'object', properties: {} },
                 Handler: async () => {
-                    this.refresh();
+                    this.Refresh();
                     return { Success: true };
                 },
             },
@@ -210,7 +225,7 @@ export class LayoutInspectorComponent extends BaseResourceComponent implements O
 
     /** Switch the inspected section (the inspector's "elements") by id. */
     private toolInspectElement(params: Record<string, unknown>): AgentToolResult {
-        const validated = validateEnumParam<'workspace' | 'golden'>(
+        const validated = ValidateEnumParam<'workspace' | 'golden'>(
             params['section'],
             ['workspace', 'golden'],
             'section',

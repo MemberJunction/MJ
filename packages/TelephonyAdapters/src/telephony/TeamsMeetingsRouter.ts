@@ -27,7 +27,7 @@ interface GraphNotificationBatch {
  * Builds the Teams meetings handler: the public Graph change-notification router + the shared ACS media
  * registry + the meetings service.
  */
-export function createTeamsMeetingsHandler(
+export function CreateTeamsMeetingsHandler(
     config: TeamsMeetingsConfig,
 ): {
     publicRouter: Router;
@@ -43,6 +43,17 @@ export function createTeamsMeetingsHandler(
     });
 
     return { publicRouter, registry, service };
+}
+
+/** @deprecated Use {@link CreateTeamsMeetingsHandler}. */
+export function createTeamsMeetingsHandler(
+    config: TeamsMeetingsConfig,
+): {
+    publicRouter: Router;
+    registry: TeamsAcsMediaRegistry;
+    service: TeamsMeetingsService;
+} {
+    return CreateTeamsMeetingsHandler(config);
 }
 
 /** Handles the Graph webhook: echo the validation token, else verify clientState + drive the service. */

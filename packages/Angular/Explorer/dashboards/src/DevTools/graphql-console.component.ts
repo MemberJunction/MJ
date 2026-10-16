@@ -98,7 +98,16 @@ query GetCurrentUser {
 })
 export class GraphQLConsoleComponent extends BaseResourceComponent implements OnInit, OnDestroy {
 
-    @ViewChild('queryEditor') queryEditor?: ElementRef<HTMLTextAreaElement>;
+    @ViewChild('queryEditor') QueryEditor?: ElementRef<HTMLTextAreaElement>;
+
+    /** @deprecated Use {@link QueryEditor}. */
+    get queryEditor(): ElementRef<HTMLTextAreaElement> | undefined {
+      return this.QueryEditor;
+    }
+    /** @deprecated Use {@link QueryEditor}. */
+    set queryEditor(value: ElementRef<HTMLTextAreaElement> | undefined) {
+      this.QueryEditor = value;
+    }
 
     public Query = SAMPLE_QUERY;
     public Variables = '{}';

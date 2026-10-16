@@ -78,7 +78,7 @@ vi.mock('@memberjunction/core', () => {
 });
 
 import { AuthProviderEngine } from '../auth/AuthProviderEngine.js';
-import { refreshAuthProviders } from '../auth/initializeProviders.js';
+import { RefreshAuthProviders } from '../auth/initializeProviders.js';
 
 /** Minimal stand-in for a generated MJAuthenticationProviderEntity row. */
 function metadataRow(name: string, driverClass: string) {
@@ -106,7 +106,7 @@ beforeEach(() => {
 
 describe('refreshAuthProviders', () => {
   it('re-registers the config-declared providers after clearing, so a refresh cannot lock config-path users out', async () => {
-    await refreshAuthProviders();
+    await RefreshAuthProviders();
 
     expect(clearMock).toHaveBeenCalledTimes(1);
     expect(createProviderMock).toHaveBeenCalledWith(expect.objectContaining({ name: 'config-okta' }));
@@ -124,7 +124,7 @@ describe('refreshAuthProviders', () => {
     });
 
     try {
-      await expect(refreshAuthProviders()).rejects.toThrow('PermissionConstrainedError');
+      await expect(RefreshAuthProviders()).rejects.toThrow('PermissionConstrainedError');
       expect(clearMock).not.toHaveBeenCalled();
       expect(registerMock).not.toHaveBeenCalled();
     } finally {
@@ -135,7 +135,7 @@ describe('refreshAuthProviders', () => {
   it('layers the metadata rows on top of the config-declared providers, in that order', async () => {
     (AuthProviderEngine.Instance as unknown as { _providers: unknown[] })._providers = [metadataRow('Catalog WorkOS', 'workos')];
 
-    const count = await refreshAuthProviders();
+    const count = await RefreshAuthProviders();
 
     expect(count).toBe(1);
     expect(registerMock).toHaveBeenCalledTimes(2);

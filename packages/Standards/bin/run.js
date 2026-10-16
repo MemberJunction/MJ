@@ -12,7 +12,7 @@
  * Argument handling is deliberately minimal — anyone who wants rich flags can install the CLI.
  */
 import { LoadConfig, HasConfig, RunStandards, FormatSummary, ExitCodeFor, Adopt, STANDARD_CHECKS, IsNewerThan } from '../dist/index.js';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -35,6 +35,7 @@ function usage() {
   check                       run the standards this repo has adopted
     --strict                  treat warnings as errors
     --quiet                   summary line only
+    --json <file>             also write every finding to <file> as JSON
 
   adopt                       write .mj-standards.json and optional scaffolding
     --ci github               also write a GitHub Actions workflow
@@ -58,6 +59,25 @@ if (command === 'check') {
     const config = LoadConfig(repoRoot);
     const summary = await RunStandards(repoRoot, config);
     if (!flag('quiet')) console.log(FormatSummary(summary, config));
+
+    // The terminal view is capped on purpose, so a standard adopted against a large codebase needs
+    // somewhere the COMPLETE list still lives — a worklist to burn down, and something CI can keep
+    // as an artifact rather than asking a reader to scroll a truncated log.
+    const jsonPath = value('json');
+    if (jsonPath) {
+        const findings = summary.Outcomes.flatMap((o) =>
+            o.Violations.map((v) => ({
+                Check: o.Check.Id,
+                Severity: v.Severity ?? o.Severity,
+                File: v.File,
+                Line: v.Line,
+                Package: v.Package ?? null,
+                Message: v.Message,
+            })),
+        );
+        writeFileSync(jsonPath, `${JSON.stringify({ ErrorCount: summary.ErrorCount, WarningCount: summary.WarningCount, Findings: findings }, null, 2)}\n`);
+        if (!flag('quiet')) console.log(`\nWrote ${findings.length} finding(s) to ${jsonPath}`);
+    }
     const failed = ExitCodeFor(summary) !== 0 || (flag('strict') && summary.WarningCount > 0);
     process.exit(failed ? 1 : 0);
 } else if (command === 'adopt') {

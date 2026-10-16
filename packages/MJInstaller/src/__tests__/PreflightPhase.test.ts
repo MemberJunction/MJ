@@ -1,4 +1,4 @@
-import { createMockFileSystem, createMockProcessRunner, createMockSqlAdapter } from './mocks/adapters.js';
+import { createMockFileSystem, createMockProcessRunner, createMockSqlAdapter, createMockPgAdapter } from './mocks/adapters.js';
 import { createMockEmitter, emittedEvents } from './mocks/emitter.js';
 import { samplePartialConfig } from './mocks/fixtures.js';
 import type { PreflightContext } from '../phases/PreflightPhase.js';
@@ -25,6 +25,13 @@ const mockSql = createMockSqlAdapter();
 vi.mock('../adapters/SqlServerAdapter.js', () => {
   return {
     SqlServerAdapter: function SqlServerAdapter() { return mockSql; },
+  };
+});
+
+const mockPg = createMockPgAdapter();
+vi.mock('../adapters/PostgresAdapter.js', () => {
+  return {
+    PostgresAdapter: function PostgresAdapter() { return mockPg; },
   };
 });
 
@@ -132,6 +139,7 @@ describe('PreflightPhase', () => {
       mockProcess[key].mockReset();
     }
     mockSql.CheckConnectivity.mockReset();
+    mockPg.CheckConnectivity.mockReset().mockResolvedValue({ Reachable: true, LatencyMs: 7 });
 
     phase = new PreflightPhase();
 
@@ -352,6 +360,19 @@ describe('PreflightPhase', () => {
       expect(sqlCheck!.Status).toBe('fail');
       expect(sqlCheck!.Message).toContain('Connection refused');
       expect(result.Passed).toBe(false);
+    });
+
+    it('checks PostgreSQL (default port 5432) when the platform is postgresql', async () => {
+      mockFs.FileExists.mockImplementation(async (p: string) => !p.endsWith('.env'));
+      const ctx = makeContext();
+      ctx.Config = { ...ctx.Config, DatabasePlatform: 'postgresql', DatabasePort: undefined };
+      const result = await phase.Run(ctx);
+      const pgCheck = result.Diagnostics.Checks.find(c => c.Name === 'PostgreSQL connectivity');
+      expect(pgCheck).toBeDefined();
+      expect(pgCheck!.Status).toBe('pass');
+      expect(pgCheck!.Message).toContain('PostgreSQL reachable at');
+      expect(mockPg.CheckConnectivity).toHaveBeenCalledWith(expect.any(String), 5432);
+      expect(mockSql.CheckConnectivity).not.toHaveBeenCalled();
     });
 
     it('should skip SQL check when SkipDB is true', async () => {
@@ -645,6 +666,37 @@ describe('PreflightPhase', () => {
 
       const progressEvents = emittedEvents(emitSpy, 'step:progress');
       expect(progressEvents.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('target directory that does not exist yet', () => {
+    it('creates the target directory before probing package manager versions', async () => {
+      // Regression guard: `mj install --dir <new-dir>` failed preflight with
+      // "pnpm not found on PATH" because probeVersion spawned `<pm> --version`
+      // with cwd set to a directory nothing had created yet. Found reproducing #4562.
+      const order: string[] = [];
+      mockFs.CreateDirectory.mockImplementation(async () => { order.push('mkdir'); });
+      mockProcess.RunSimple.mockImplementation(async () => { order.push('probe'); return '10.9.0'; });
+
+      await phase.Run(makeContext({ TargetDir: '/test/does-not-exist-yet' }));
+
+      expect(mockFs.CreateDirectory).toHaveBeenCalledWith('/test/does-not-exist-yet');
+      expect(order.indexOf('mkdir')).toBeGreaterThan(-1);
+      expect(order.indexOf('mkdir')).toBeLessThan(order.indexOf('probe'));
+    });
+
+    it('reports the real reason when a version probe fails', async () => {
+      // A bare `catch { return 'not found' }` told users pnpm was missing on
+      // machines where it was installed and working.
+      mockProcess.RunSimple.mockRejectedValue(new Error('spawn pnpm ENOENT'));
+
+      const result = await phase.Run(makeContext());
+
+      expect(result.Passed).toBe(false);
+      const pmCheck = result.Diagnostics.Checks.find((c) => c.Name === 'Package manager');
+      expect(pmCheck).toBeDefined();
+      expect(pmCheck!.Status).toBe('fail');
+      expect(pmCheck!.Message).toContain('spawn pnpm ENOENT');
     });
   });
 });

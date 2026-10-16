@@ -13,7 +13,7 @@
  *
  * @param content The assistant message content — a string, or an array of content blocks
  */
-export function looksLikeLoopEnvelope(content: unknown): boolean {
+export function LooksLikeLoopEnvelope(content: unknown): boolean {
     let text: string;
     if (typeof content === 'string') {
         text = content;
@@ -39,4 +39,9 @@ export function looksLikeLoopEnvelope(content: unknown): boolean {
     } catch {
         return false;
     }
+}
+
+/** @deprecated Use {@link LooksLikeLoopEnvelope}. */
+export function looksLikeLoopEnvelope(content: unknown): boolean {
+    return LooksLikeLoopEnvelope(content);
 }

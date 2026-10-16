@@ -23,7 +23,7 @@ import {
     TaxonomySubTab, TaxTreeNode, TaxDuplicatePair, TaxOrphanCard,
     TaxTreemapCell, TaxAuditAction, TaxAuditEvent, TaxHealthStat
 } from '../shared/classify.types';
-import { formatShortDate, formatDate } from '../shared/classify.format';
+import { FormatShortDate, FormatDate } from '../shared/classify.format';
 
 @Component({
     standalone: false,
@@ -192,7 +192,7 @@ export class ClassifyTaxonomyTabComponent extends BaseAngularComponent implement
     }
 
     /** Taxonomy sub-tabs as `TabConfig[]` for `<mj-tab-nav>`. */
-    public get taxSubTabsConfig(): TabConfig[] {
+    public get TaxSubTabsConfig(): TabConfig[] {
         return [
             { key: 'tree',       label: 'Tree View',  icon: 'fa-solid fa-sitemap' },
             { key: 'duplicates', label: 'Duplicates', icon: 'fa-solid fa-link',
@@ -206,11 +206,21 @@ export class ClassifyTaxonomyTabComponent extends BaseAngularComponent implement
         ];
     }
 
+    /** @deprecated Use {@link TaxSubTabsConfig}. */
+    public get taxSubTabsConfig(): TabConfig[] {
+        return this.TaxSubTabsConfig;
+    }
+
     /** Adapter for `<mj-tab-nav>`'s string-typed `(TabChange)` output. */
-    public onTaxSubTabChange(key: string): void {
+    public OnTaxSubTabChange(key: string): void {
         if (key === 'tree' || key === 'duplicates' || key === 'orphans' || key === 'treemap' || key === 'audit') {
             this.SwitchTaxSubTab(key);
         }
+    }
+
+    /** @deprecated Use {@link OnTaxSubTabChange}. */
+    public onTaxSubTabChange(key: string): void {
+        return this.OnTaxSubTabChange(key);
     }
 
     public SwitchTaxSubTab(sub: TaxonomySubTab): void {
@@ -283,7 +293,7 @@ export class ClassifyTaxonomyTabComponent extends BaseAngularComponent implement
                 HealthColor: this.computeTagHealth(itemCount, avgWeight),
                 IsExpanded: false,
                 IsSelected: false,
-                FirstSeen: formatShortDate((tag['__mj_CreatedAt'] as string) ?? '')
+                FirstSeen: FormatShortDate((tag['__mj_CreatedAt'] as string) ?? '')
             });
         }
 
@@ -505,7 +515,7 @@ export class ClassifyTaxonomyTabComponent extends BaseAngularComponent implement
         this.TaxRecentItems = matchingTags.map(cit => ({
             Name: (cit['Item'] as string) ?? 'Unnamed Item',
             Weight: Number(cit['Weight'] ?? 0.5),
-            Date: formatShortDate((cit['__mj_CreatedAt'] as string) ?? ''),
+            Date: FormatShortDate((cit['__mj_CreatedAt'] as string) ?? ''),
             Icon: 'fa-solid fa-file-lines'
         }));
     }
@@ -1451,8 +1461,8 @@ export class ClassifyTaxonomyTabComponent extends BaseAngularComponent implement
                     Name: (t['Name'] as string) ?? 'Unnamed',
                     UsageCount: itemCount,
                     AvgWeight: tagAvgWeights.get(normalizedId) ?? 0,
-                    FirstSeen: formatShortDate((t['__mj_CreatedAt'] as string) ?? ''),
-                    LastSeen: formatShortDate((t['__mj_UpdatedAt'] as string) ?? ''),
+                    FirstSeen: FormatShortDate((t['__mj_CreatedAt'] as string) ?? ''),
+                    LastSeen: FormatShortDate((t['__mj_UpdatedAt'] as string) ?? ''),
                     IsSelected: false
                 };
             })
@@ -1679,7 +1689,7 @@ export class ClassifyTaxonomyTabComponent extends BaseAngularComponent implement
                 Description: this.buildAuditDescription(type, tagName, relatedTag, details),
                 TagRef: tagName,
                 User: user,
-                Timestamp: formatDate(createdAt),
+                Timestamp: FormatDate(createdAt),
                 DayHeader: this.formatDayHeader(createdAt)
             });
         }
@@ -1702,7 +1712,7 @@ export class ClassifyTaxonomyTabComponent extends BaseAngularComponent implement
                     Description: 'Tag created',
                     TagRef: name,
                     User: 'System',
-                    Timestamp: formatDate(createdAt),
+                    Timestamp: FormatDate(createdAt),
                     DayHeader: this.formatDayHeader(createdAt)
                 });
             }
@@ -1780,7 +1790,7 @@ export class ClassifyTaxonomyTabComponent extends BaseAngularComponent implement
             Description: this.buildAuditDescription(type, tagRef, '', {}),
             TagRef: tagRef,
             User: 'You',
-            Timestamp: formatDate(now),
+            Timestamp: FormatDate(now),
             DayHeader: 'Today'
         });
     }

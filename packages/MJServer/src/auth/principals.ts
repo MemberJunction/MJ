@@ -116,7 +116,7 @@ function lowestActiveById<T extends ResolvablePrincipal>(matches: readonly T[]):
  * @param users      the candidate pool, normally `UserCache.Users`
  * @param systemUserId the deployment's system user ID (`UserCache.Instance.SYSTEM_USER_ID`)
  */
-export function resolvePrincipalFrom<T extends ResolvablePrincipal>(
+export function ResolvePrincipalFrom<T extends ResolvablePrincipal>(
     candidate: string | undefined,
     users: readonly T[],
     systemUserId: string,
@@ -154,6 +154,15 @@ export function resolvePrincipalFrom<T extends ResolvablePrincipal>(
             `Configured user '${candidate}' ${describeMiss(users, wanted)}; ` +
             `falling back to ${describeFallback(fallback.reason)}.`,
     };
+}
+
+/** @deprecated Use {@link ResolvePrincipalFrom}. */
+export function resolvePrincipalFrom<T extends ResolvablePrincipal>(
+    candidate: string | undefined,
+    users: readonly T[],
+    systemUserId: string,
+): PrincipalResolution<T> {
+    return ResolvePrincipalFrom(candidate, users, systemUserId);
 }
 
 /**
@@ -230,7 +239,7 @@ export function ReportedMisconfigurationCount(): number {
  *          handle null rather than assume a principal is always available
  */
 export function ResolveConfiguredPrincipal(candidate: string | undefined, purpose: string): UserInfo | null {
-    const resolution = resolvePrincipalFrom(candidate, UserCache.Instance.Users, UserCache.Instance.SYSTEM_USER_ID);
+    const resolution = ResolvePrincipalFrom(candidate, UserCache.Instance.Users, UserCache.Instance.SYSTEM_USER_ID);
 
     if (resolution.warning) {
         const key = `${purpose} :: ${candidate ?? ''}`;

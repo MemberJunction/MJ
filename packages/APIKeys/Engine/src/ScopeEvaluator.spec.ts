@@ -4,7 +4,7 @@
  */
 
 import { ScopeEvaluator } from './ScopeEvaluator';
-import { UserInfo, setMockRunViewResult, clearMockRunViewResults } from './__mocks__/core';
+import { UserInfo, SetMockRunViewResult, ClearMockRunViewResults } from './__mocks__/core';
 import { AuthorizationRequest } from './interfaces';
 
 // Note: Mocking is handled by resolve.alias in vitest.config.ts
@@ -22,7 +22,7 @@ describe('ScopeEvaluator', () => {
     beforeEach(() => {
         evaluator = new ScopeEvaluator(60000, 'allow');
         contextUser = new UserInfo({ ID: 'test-user', Name: 'Test User' });
-        clearMockRunViewResults();
+        ClearMockRunViewResults();
     });
 
     afterEach(() => {
@@ -55,7 +55,7 @@ describe('ScopeEvaluator', () => {
         describe('application binding check', () => {
             it('should deny if key is bound to different application', async () => {
                 // Key is bound to a different app
-                setMockRunViewResult('MJ: API Key Applications', {
+                SetMockRunViewResult('MJ: API Key Applications', {
                     Success: true,
                     Results: [{ APIKeyID: 'test-key-id', ApplicationID: 'other-app-id' }]
                 });
@@ -68,19 +68,19 @@ describe('ScopeEvaluator', () => {
 
             it('should allow if key is bound to requested application', async () => {
                 // Key is bound to the requested app
-                setMockRunViewResult('MJ: API Key Applications', {
+                SetMockRunViewResult('MJ: API Key Applications', {
                     Success: true,
                     Results: [{ APIKeyID: 'test-key-id', ApplicationID: 'test-app-id' }]
                 });
 
                 // Mock scope to pass app ceiling
-                setMockRunViewResult('MJ: API Scopes', {
+                SetMockRunViewResult('MJ: API Scopes', {
                     Success: true,
                     Results: [{ ID: 'scope-id', FullPath: 'entity:read', IsActive: true }]
                 });
 
                 // Mock app ceiling - allow entity:read for Users
-                setMockRunViewResult('MJ: API Application Scopes', {
+                SetMockRunViewResult('MJ: API Application Scopes', {
                     Success: true,
                     Results: [{
                         ID: 'app-scope-id',
@@ -100,19 +100,19 @@ describe('ScopeEvaluator', () => {
 
             it('should allow global keys (no application bindings)', async () => {
                 // Key has no bindings (global)
-                setMockRunViewResult('MJ: API Key Applications', {
+                SetMockRunViewResult('MJ: API Key Applications', {
                     Success: true,
                     Results: []
                 });
 
                 // Mock scope
-                setMockRunViewResult('MJ: API Scopes', {
+                SetMockRunViewResult('MJ: API Scopes', {
                     Success: true,
                     Results: [{ ID: 'scope-id', FullPath: 'entity:read', IsActive: true }]
                 });
 
                 // Mock app ceiling
-                setMockRunViewResult('MJ: API Application Scopes', {
+                SetMockRunViewResult('MJ: API Application Scopes', {
                     Success: true,
                     Results: [{
                         ID: 'app-scope-id',
@@ -132,18 +132,18 @@ describe('ScopeEvaluator', () => {
         describe('application ceiling evaluation', () => {
             beforeEach(() => {
                 // Global key
-                setMockRunViewResult('MJ: API Key Applications', { Success: true, Results: [] });
+                SetMockRunViewResult('MJ: API Key Applications', { Success: true, Results: [] });
             });
 
             it('should deny if application has no scope rules for requested scope', async () => {
                 // Scope exists
-                setMockRunViewResult('MJ: API Scopes', {
+                SetMockRunViewResult('MJ: API Scopes', {
                     Success: true,
                     Results: [{ ID: 'scope-id', FullPath: 'entity:read', IsActive: true }]
                 });
 
                 // No app scope rules
-                setMockRunViewResult('MJ: API Application Scopes', {
+                SetMockRunViewResult('MJ: API Application Scopes', {
                     Success: true,
                     Results: []
                 });
@@ -155,12 +155,12 @@ describe('ScopeEvaluator', () => {
             });
 
             it('should allow if application ceiling includes the resource', async () => {
-                setMockRunViewResult('MJ: API Scopes', {
+                SetMockRunViewResult('MJ: API Scopes', {
                     Success: true,
                     Results: [{ ID: 'scope-id', FullPath: 'entity:read', IsActive: true }]
                 });
 
-                setMockRunViewResult('MJ: API Application Scopes', {
+                SetMockRunViewResult('MJ: API Application Scopes', {
                     Success: true,
                     Results: [{
                         ID: 'app-scope-id',
@@ -179,12 +179,12 @@ describe('ScopeEvaluator', () => {
             });
 
             it('should deny if application has deny rule', async () => {
-                setMockRunViewResult('MJ: API Scopes', {
+                SetMockRunViewResult('MJ: API Scopes', {
                     Success: true,
                     Results: [{ ID: 'scope-id', FullPath: 'entity:read', IsActive: true }]
                 });
 
-                setMockRunViewResult('MJ: API Application Scopes', {
+                SetMockRunViewResult('MJ: API Application Scopes', {
                     Success: true,
                     Results: [{
                         ID: 'app-scope-id',
@@ -205,16 +205,16 @@ describe('ScopeEvaluator', () => {
         describe('key scope evaluation', () => {
             beforeEach(() => {
                 // Global key
-                setMockRunViewResult('MJ: API Key Applications', { Success: true, Results: [] });
+                SetMockRunViewResult('MJ: API Key Applications', { Success: true, Results: [] });
 
                 // Scope exists
-                setMockRunViewResult('MJ: API Scopes', {
+                SetMockRunViewResult('MJ: API Scopes', {
                     Success: true,
                     Results: [{ ID: 'scope-id', FullPath: 'entity:read', IsActive: true }]
                 });
 
                 // App ceiling allows
-                setMockRunViewResult('MJ: API Application Scopes', {
+                SetMockRunViewResult('MJ: API Application Scopes', {
                     Success: true,
                     Results: [{
                         ID: 'app-scope-id',
@@ -227,7 +227,7 @@ describe('ScopeEvaluator', () => {
             });
 
             it('should allow if key has no scope rules (default: allow)', async () => {
-                setMockRunViewResult('MJ: API Key Scopes', {
+                SetMockRunViewResult('MJ: API Key Scopes', {
                     Success: true,
                     Results: []
                 });
@@ -241,7 +241,7 @@ describe('ScopeEvaluator', () => {
             it('should deny if key has no scope rules and default is deny', async () => {
                 const denyEvaluator = new ScopeEvaluator(60000, 'deny');
 
-                setMockRunViewResult('MJ: API Key Scopes', {
+                SetMockRunViewResult('MJ: API Key Scopes', {
                     Success: true,
                     Results: []
                 });
@@ -252,7 +252,7 @@ describe('ScopeEvaluator', () => {
             });
 
             it('should allow if key scope includes the resource', async () => {
-                setMockRunViewResult('MJ: API Key Scopes', {
+                SetMockRunViewResult('MJ: API Key Scopes', {
                     Success: true,
                     Results: [{
                         ID: 'key-scope-id',
@@ -272,7 +272,7 @@ describe('ScopeEvaluator', () => {
             });
 
             it('should deny if key scope has deny rule', async () => {
-                setMockRunViewResult('MJ: API Key Scopes', {
+                SetMockRunViewResult('MJ: API Key Scopes', {
                     Success: true,
                     Results: [{
                         ID: 'key-scope-id',
@@ -292,12 +292,12 @@ describe('ScopeEvaluator', () => {
 
         describe('pattern matching', () => {
             beforeEach(() => {
-                setMockRunViewResult('MJ: API Key Applications', { Success: true, Results: [] });
-                setMockRunViewResult('MJ: API Scopes', {
+                SetMockRunViewResult('MJ: API Key Applications', { Success: true, Results: [] });
+                SetMockRunViewResult('MJ: API Scopes', {
                     Success: true,
                     Results: [{ ID: 'scope-id', FullPath: 'agent:execute', IsActive: true }]
                 });
-                setMockRunViewResult('MJ: API Application Scopes', {
+                SetMockRunViewResult('MJ: API Application Scopes', {
                     Success: true,
                     Results: [{
                         ID: 'app-scope-id',
@@ -310,7 +310,7 @@ describe('ScopeEvaluator', () => {
             });
 
             it('should match wildcard patterns', async () => {
-                setMockRunViewResult('MJ: API Key Scopes', {
+                SetMockRunViewResult('MJ: API Key Scopes', {
                     Success: true,
                     Results: [{
                         ID: 'key-scope-id',
@@ -335,7 +335,7 @@ describe('ScopeEvaluator', () => {
             it('should not match non-matching wildcards', async () => {
                 const denyEvaluator = new ScopeEvaluator(60000, 'deny');
 
-                setMockRunViewResult('MJ: API Key Scopes', {
+                SetMockRunViewResult('MJ: API Key Scopes', {
                     Success: true,
                     Results: [{
                         ID: 'key-scope-id',
@@ -360,12 +360,12 @@ describe('ScopeEvaluator', () => {
 
         describe('priority ordering', () => {
             beforeEach(() => {
-                setMockRunViewResult('MJ: API Key Applications', { Success: true, Results: [] });
-                setMockRunViewResult('MJ: API Scopes', {
+                SetMockRunViewResult('MJ: API Key Applications', { Success: true, Results: [] });
+                SetMockRunViewResult('MJ: API Scopes', {
                     Success: true,
                     Results: [{ ID: 'scope-id', FullPath: 'entity:read', IsActive: true }]
                 });
-                setMockRunViewResult('MJ: API Application Scopes', {
+                SetMockRunViewResult('MJ: API Application Scopes', {
                     Success: true,
                     Results: [{
                         ID: 'app-scope-id',
@@ -378,7 +378,7 @@ describe('ScopeEvaluator', () => {
             });
 
             it('should respect priority (higher priority wins)', async () => {
-                setMockRunViewResult('MJ: API Key Scopes', {
+                SetMockRunViewResult('MJ: API Key Scopes', {
                     Success: true,
                     Results: [
                         {
@@ -404,7 +404,7 @@ describe('ScopeEvaluator', () => {
             });
 
             it('should prefer deny rules at same priority', async () => {
-                setMockRunViewResult('MJ: API Key Scopes', {
+                SetMockRunViewResult('MJ: API Key Scopes', {
                     Success: true,
                     Results: [
                         {
@@ -433,7 +433,7 @@ describe('ScopeEvaluator', () => {
 
     describe('GetKeyApplications()', () => {
         it('should return key applications', async () => {
-            setMockRunViewResult('MJ: API Key Applications', {
+            SetMockRunViewResult('MJ: API Key Applications', {
                 Success: true,
                 Results: [
                     { APIKeyID: 'key-1', ApplicationID: 'app-1' },
@@ -447,7 +447,7 @@ describe('ScopeEvaluator', () => {
         });
 
         it('should return empty array for global keys', async () => {
-            setMockRunViewResult('MJ: API Key Applications', {
+            SetMockRunViewResult('MJ: API Key Applications', {
                 Success: true,
                 Results: []
             });

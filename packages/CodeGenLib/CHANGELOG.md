@@ -1,5 +1,681 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 6.2.0-edge.4
+
+### Patch Changes
+
+- 1a091ac: Per-table `Entities` entries in the additionalSchemaInfo config now apply their entity flags (`TrackRecordChanges`, `AllowCaching`, the `Allow*API` flags, `UserViewMaxRows`, …) when CodeGen first creates the entity, not only in a later pass. A table declared `TrackRecordChanges: false` no longer gets `__mj_CreatedAt` / `__mj_UpdatedAt` columns on its first CodeGen run.
+- 88e6902: `EntityInfo.ConfigurableAtCreationAttributes` (with the `EntityConfigurableAtCreationAttribute` type) lists the entity flags a per-table CodeGen config entry may set when the entity is first created. It is typed against `EntityInfo`, so a misspelled name fails to compile. CodeGenLib now uses it instead of its own copy.
+- 33bd959: Read PostgreSQL's CHECK-constraint value lists, and stop producing partial ones (#4713).
+
+  #3978 taught CodeGen to read SQL Server's unquoted numeric `IN (...)` renderings. PostgreSQL writes
+  the same constraints differently and none of those forms were read: a numeric list produced no
+  `EntityFieldValue` rows, and a single-value list produced none for any type, so the field lost its
+  dropdown in Explorer and its runtime validation.
+
+  Two shapes were worse than empty. PostgreSQL may quote one element of an array and parenthesize
+  another — `ARRAY['100000000000'::bigint, (2)::bigint]`, `ARRAY['-1.50'::numeric, 2.25]` — and the
+  old extractor read only the quoted ones. That produced a value list missing a legal value, so
+  `EntityField.Validate()` refused a value the database accepts. Element reading is now
+  all-or-nothing: an array containing anything it cannot read yields no list at all rather than a
+  partial one.
+
+  The PostgreSQL parse is now **anchored on the whole constraint** instead of searching for
+  `ARRAY[...]` anywhere in the definition. That matters because `(x <> ALL (ARRAY[1, 2]))` (NOT IN)
+  and `((x = ANY (ARRAY[1, 2])) OR (x > 100))` both contain an array whose elements are _not_ the
+  field's legal values — the first inverts the meaning, the second is a subset. Both were previously
+  safe only because unquoted elements were unreadable, so reading them without anchoring would have
+  introduced exactly that bug.
+
+  Shapes now parsed, every one captured from a live PostgreSQL 16 via `pg_get_constraintdef()` — the
+  same function the `vwEntityFieldsWithCheckConstraints` PG view feeds CodeGen: multi-value numeric
+  (`= ANY (ARRAY[1, 2, 3])`), mixed quoting and nested casts, the nullable `(x IS NULL) OR …` form,
+  and single-value lists (`(one = 7)`, `((s)::text = 'OnlyOne'::text)`, uuid, text). Booleans stay
+  out, matching the `bit` exclusion on SQL Server: `true`/`false` are neither quoted nor numeric
+  literals, and `boolean`/`bool` are also named in the field-level exclusion.
+
+  SQL Server parsing is unchanged.
+
+- b8a9e5e: Remove nested `UUIDsEqual` scans where both lists grow with the data or the code runs on every render. Fix one cross-database lookup bug.
+  - **Rubric publish validation could miss advisory parents.** `ValidateRubricTree` looked a raw `parentId` up in a map with normalized keys. On SQL Server (upper-case IDs) the advisory-ancestor walk silently stopped, so a non-advisory criterion under an advisory group was not reported. The map is now a `UUIDMap`.
+  - **Per-render getters no longer rescan the entity list.** The Entity form's `FormChromeCandidates`, the Data Explorer's `RecentEntities` / `FavoriteEntities` and the storage admin's `FilteredAccountRows` now read cached or once-built indexes.
+  - **Entity lookups by ID** in the ERD, the get-entity-details and list-entities actions, recent-access and the form builder now use the provider's indexed `EntityByID`. The application dialog uses a once-built index.
+  - **Other once-built indexes:** tag lookups, permission grantee names, orphaned-conversation owners and flow-editor node moves.
+  - `createFakeProvider` (`ng-test-utils`) now implements `EntityByID`, like a real provider.
+  - **New helper:** `GroupByUUID(items, getId?)` in `@memberjunction/global` groups items by a UUID in one pass, each group in input order.
+  - **Server sites that matched two growing lists:** the user cache (users × user roles), resource-permission deduplication, user/role sync, default-app user applications, scheduled-job statistics, MCP action discovery, REST connector schema introspection and rubric calibration.
+  - **Offline tools:** CodeGen relationship sync and CHECK-constraint value lists, CodeGen's related-entity form lookups, and `mj artifacts reclassify`.
+  - **Angular screens that scale with the data:** the AI Agent form's linked prompts and actions, the prompt priority matrix, the Testing explorer, the conversations message cache, the Query Browser tree, the Actions overview and categories, the dashboard browser, list-form bulk remove and credentials bulk actions.
+
+  Behaviour is unchanged otherwise, and each site has a test that also passes against the old code.
+
+- Updated dependencies [96d6ec2]
+- Updated dependencies [a709bb6]
+- Updated dependencies [d17de94]
+- Updated dependencies [7ada797]
+- Updated dependencies [432cb73]
+- Updated dependencies [293c316]
+- Updated dependencies [155aa45]
+- Updated dependencies [6cd23e1]
+- Updated dependencies [51634e7]
+- Updated dependencies [1d6e3e8]
+- Updated dependencies [de2dc2f]
+- Updated dependencies [1da00cb]
+- Updated dependencies [b699a37]
+- Updated dependencies [dde482c]
+- Updated dependencies [a4b23b7]
+- Updated dependencies [49f26d9]
+- Updated dependencies [961d529]
+- Updated dependencies [10c2311]
+- Updated dependencies [7384dd6]
+- Updated dependencies [88e6902]
+- Updated dependencies [bb3028a]
+- Updated dependencies [6dc3aa9]
+- Updated dependencies [c87f87a]
+- Updated dependencies [0a7c255]
+- Updated dependencies [64b6fa5]
+- Updated dependencies [fcf8e1c]
+- Updated dependencies [d86bcbc]
+- Updated dependencies [af6f892]
+- Updated dependencies [432fe69]
+- Updated dependencies [4889fb2]
+- Updated dependencies [b2441c3]
+- Updated dependencies [69e19c5]
+- Updated dependencies [7316ac3]
+- Updated dependencies [91be34f]
+- Updated dependencies [8ef5e86]
+- Updated dependencies [596855c]
+- Updated dependencies [fdf6669]
+- Updated dependencies [4c682c1]
+- Updated dependencies [f325baa]
+- Updated dependencies [0c68021]
+- Updated dependencies [08a4cfc]
+- Updated dependencies [b09fe34]
+- Updated dependencies [6d5c6ad]
+- Updated dependencies [8bac4d6]
+- Updated dependencies [c0ebd97]
+- Updated dependencies [7dc604e]
+- Updated dependencies [08b3d7b]
+- Updated dependencies [20650af]
+- Updated dependencies [5a3de97]
+- Updated dependencies [0d0ba18]
+- Updated dependencies [b6fcb30]
+- Updated dependencies [f73e192]
+- Updated dependencies [8704df6]
+- Updated dependencies [5345e3d]
+- Updated dependencies [1ea4085]
+- Updated dependencies [975948b]
+- Updated dependencies [22c9074]
+- Updated dependencies [88b85fc]
+- Updated dependencies [aee2d53]
+- Updated dependencies [5dc3752]
+- Updated dependencies [6c8798b]
+- Updated dependencies [f0c78c3]
+- Updated dependencies [25f7b82]
+- Updated dependencies [35ed7b5]
+- Updated dependencies [d853bf8]
+- Updated dependencies [e293b68]
+- Updated dependencies [02bb563]
+- Updated dependencies [afe9eb4]
+- Updated dependencies [90829e3]
+- Updated dependencies [57096ab]
+- Updated dependencies [aac148b]
+- Updated dependencies [a28ce42]
+- Updated dependencies [e1942c7]
+- Updated dependencies [d2cb42e]
+- Updated dependencies [cbddadb]
+- Updated dependencies [bdea87a]
+- Updated dependencies [d52f9ba]
+- Updated dependencies [0e5a4cd]
+- Updated dependencies [b968642]
+- Updated dependencies [68a7e3b]
+- Updated dependencies [b653746]
+- Updated dependencies [57fea6a]
+- Updated dependencies [1ba9315]
+- Updated dependencies [b8a9e5e]
+- Updated dependencies [e8258a1]
+- Updated dependencies [6b487b8]
+  - @memberjunction/ai-core-plus@6.2.0-edge.4
+  - @memberjunction/core-entities@6.2.0-edge.4
+  - @memberjunction/aiengine@6.2.0-edge.4
+  - @memberjunction/ai@6.2.0-edge.4
+  - @memberjunction/core-entities-server@6.2.0-edge.4
+  - @memberjunction/generic-database-provider@6.2.0-edge.4
+  - @memberjunction/core@6.2.0-edge.4
+  - @memberjunction/ai-prompts@6.2.0-edge.4
+  - @memberjunction/ai-provider-bundle@6.2.0-edge.4
+  - @memberjunction/server-bootstrap-lite@6.2.0-edge.4
+  - @memberjunction/sqlserver-dataprovider@6.2.0-edge.4
+  - @memberjunction/sql-dialect@6.2.0-edge.4
+  - @memberjunction/global@6.2.0-edge.4
+  - @memberjunction/actions@6.2.0-edge.4
+  - @memberjunction/sql-parser@6.2.0-edge.4
+  - @memberjunction/postgresql-dataprovider@6.2.0-edge.4
+  - @memberjunction/actions-base@6.2.0-edge.4
+  - @memberjunction/external-data-sources@6.2.0-edge.4
+  - @memberjunction/external-data-source-databricks@6.2.0-edge.4
+  - @memberjunction/external-data-source-mongodb@6.2.0-edge.4
+  - @memberjunction/external-data-source-mysql@6.2.0-edge.4
+  - @memberjunction/external-data-source-oracle@6.2.0-edge.4
+  - @memberjunction/external-data-source-postgres@6.2.0-edge.4
+  - @memberjunction/external-data-source-sqlserver@6.2.0-edge.4
+  - @memberjunction/external-data-source-snowflake@6.2.0-edge.4
+  - @memberjunction/query-processor@6.2.0-edge.4
+  - @memberjunction/cli-core@6.2.0-edge.4
+  - @memberjunction/config@6.2.0-edge.4
+
+## 6.2.0-edge.3
+
+### Minor Changes
+
+- dfe40a4: Binary fields work end to end, and persisted embeddings gain a binary float32 copy that loads about 14× faster than the JSON one.
+
+  **Binary fields (varbinary / binary / image on SQL Server, bytea on PostgreSQL).** Previously a binary column reached `BaseEntity` as whatever the driver returned. A Node `Buffer` then serialized over GraphQL as `{"type":"Buffer","data":[…]}`, and saves wrote the base64 text into the column. Now a binary field's value is a **base64 string** everywhere above the database: in `BaseEntity`, every cache, RunView results and the GraphQL wire. Providers convert at the boundary. SQL Server binds a `0x…` hex literal, PostgreSQL binds a `Buffer`, and rows read back become base64, including rows returned from a transaction group save. CodeGen now declares a length-less `varbinary` parameter as `varbinary(MAX)`; it used to emit `varbinary`, which T-SQL truncates to one byte. Generated getters document the encoding, and generated forms skip binary fields.
+  - **`RunView` omits binary fields by default.** Set `IncludeBinaryFields: true`, or name a binary field in `Fields`, which sets it for you. The flag is part of the cache fingerprint, so the two shapes never share an entry. A single-record `Load()` always includes binary fields. Engine configs take `IncludeBinaryFields: true | 'DatabaseProviderOnly'`; the second loads binary fields only in server processes.
+  - **Validation.** Saving a value that is not canonical base64 into a binary field fails `Validate()` with a message naming base64. A value whose decoded length exceeds a fixed-length column also fails.
+  - **`@memberjunction/global` codecs.** `BytesToBase64` / `Base64ToBytes` / `TryBase64ToBytes` pick the fastest host implementation: native `Uint8Array.fromBase64`, then Node `Buffer`, then `atob`. On Node, validation is fused into the decode and is fuzz-tested to accept exactly what `IsValidBase64` accepts. `Float32VectorToBase64` / `Base64ToFloat32Vector` handle little-endian float32 vectors. `ReplaceByteArraysWithBase64` makes any raw query row JSON-safe.
+
+  **Binary vector columns (migration `V202610021716`).** These nullable `varbinary(MAX)` companions of the JSON vector columns are added:
+  - `EntityRecordDocument.VectorBinary`
+  - `EmbeddingVectorBinary` on `AIAgentNote`, `AIAgentExample`, `Query` and `Tag`
+  - `Component.FunctionalRequirementsVectorBinary` and `Component.TechnicalDesignVectorBinary`
+
+  Every writer now fills both columns: `BaseEntity.GenerateEmbedding*` (new optional binary field parameter), the note, example, component, query and tag entity servers, `TagEngine`, and the entity vectorizer (`EntityVectorSyncer`). Readers prefer the binary column through the new `ReadStoredVector` and `DecodeVectorBinary` in `@memberjunction/ai-vectors-memory`, and fall back to JSON for rows written before the column existed or for invalid binary values. The readers are `SimpleVectorServiceProvider`, `SimpleVectorDatabase` (new `binaryVectorField` ProviderConfig key), `AIEngine`, `TagEngine`, `TagHealthJob`, `QueryEngineServer` and clustering. For 20,000 × 1,536 vectors, decoding takes 0.28 s, against 3.9 s to parse the JSON.
+
+  Fixes found along the way:
+  - Clustering no longer counts a binary-only row as having no vector.
+  - A note, example or tag whose stored JSON vector is malformed is now dropped from the in-memory index instead of throwing.
+  - A PostgreSQL transaction group post-processes each row with its entity's own provider rather than the process-global one.
+
+- 0f04590: JSONType accessors are now live views, and JSONTypes can opt in to validation.
+
+  **Bug fix (silent data loss).** The generated `<Field>Object` accessor parsed the JSON once and only re-serialized in its setter, so `rec.ConfigObject.Pct = 5` or `rec.ItemsObject.push(x)` edited a throwaway copy and `Save()` wrote nothing. Accessors now delegate to new `BaseEntity.GetJSONFieldObject` / `SetJSONFieldObject` (backed by `JSONFieldBinding`): in-place edits at any depth dirty the raw field and persist, no-op writes stay clean, references re-parse and detach when the raw text is replaced by `Load`/`Set`/`Revert`, and a pre-`Validate()`/`Save()` flush catches edits made through the caller's own reference after assignment.
+
+  **`ToPlainJSON<T>`** (`@memberjunction/core`) returns a plain deep copy. `structuredClone`, `postMessage` and IndexedDB reject a live value, so `MJComputerUse` `LoadScript` and `BaseAgent.cloneSubAgentPayload` now use it (the latter falls back to a JSON clone instead of returning the original).
+
+  **Opt-in validation (CodeGen).** `@mjValidate [warn]` on a JSONType's root interface emits a structural Zod schema and a generated `Validate()` check; JSON-Schema-style tags (`@minimum`, `@pattern`, `@format`, ...) and `@CHECK ts:(...)` / `@CHECK (SQL)` rules refine it. SQL rules are translated by the new `CodeGen: JSON Check Parser` prompt, compile-checked, and cached in `GeneratedCode` under the new `CodeGen: JSON Validators` category. Untagged JSONTypes generate exactly what they did, apart from the accessor delegation.
+
+  Ships new metadata (prompt, template, GeneratedCode category) and two integration tests (IT99, IT100). See `guides/JSONTYPE_GUIDE.md`.
+
+  **Hardening from local verification.** Opted-in schemas compile in non-strict packages (`z.lazy(...) as z.ZodType<T>`; MJCoreEntities builds without `strictNullChecks`, where the annotation form failed). `@CHECK ts:` expressions are type-checked at CodeGen time and skipped with an error instead of breaking the build. Enum references are prefixed. Shared helper schemas and a definition bound to both an opted-in and an untagged root are emitted once. An invalid `@pattern` is reported at CodeGen time. The test-case sandbox bounds microtasks. The translation cache key includes the value's shape (and the entity for `row.` rules). A newly translated rule is emitted in the same full run.
+
+  **`SQLServerDataProvider.Refresh()` now really reloads.** It was a silent no-op while any save was in flight, so a caller refreshing right after a fire-and-forget save kept stale metadata. Refresh now waits (bounded) for in-flight saves, saves are counted instead of toggling one flag, and `DatabaseProviderBase.Save` resumes exactly once per suspend.
+
+  **Entity viewer:** grid state handed to the grid and config panel is a detached copy, so reordering aggregates no longer dirties the view on Cancel.
+
+- 60bd774: Form contributions can be metadata rows, not only compiled panels, and users can place, share, hide and remove them from the form itself.
+
+  **Contributions from metadata.** A `MJ: Entity Form Contributions` row (migration `V202610051244__v6.2.x__Entity_Form_Contributions`) mounts a `MJ: Components` row (`Type='Widget'`, spec `componentRole: 'form-panel'`) on an entity's form. It carries the same registration bag as `@RegisterClassEx` plus `Presentation`, `Title`, `Icon`, `Configuration`, `Precedence` and User/Role/Global scope. `CollectFormContributionRegistrations` merges rows with class registrations, and the form collapses the list once per resolve (`ResolveFormContributionWinners`): one winner per `ContributionKey`, the higher rank wins, a compiled panel wins a tie against any row, and between rows `User` beats `Role` beats `Global` (`FormContributionOutranks`). `CollectFormPanelRegistrations` stays as a deprecated wrapper that returns compiled registrations only. Wildcard (`'*'`) registrations take part on every form, but their place claims are ignored: one that claims a grid, a section or a tab replaces nothing, and one that names a section to draw in draws at its slot. `InteractiveFormsEngine` caches the rows and the full custom forms (in the browser, the shared ones and the signed-in user's own) and fetches each panel component by ID once (`GetComponentByID`); `InteractiveFormPanelComponent` renders them, and a panel can change only the fields it claims, in edit mode. On the 11 identity, permission and form-metadata entities in `RESTRICTED_FORM_ENTITIES`, only `User` rows and full custom forms render.
+
+  **One rule set, shared by the browser and the server.** The contribution key is derived once (`ResolveContributionWriteKey` in `@memberjunction/interactive-component-types/forms`). `@memberjunction/core-entities` `custom/FormScope/` holds the spec-to-row mapper (`ApplyContributionSpecToRow`), the claim validator (`ContributionClaimRefusal`), the scope rules (`FormScopeWriteRefusal`, which normalizes Scope and fails closed, `ComponentWriteRefusal`, `FormRowComponentRefusal`, `ComponentNameCollisionRefusal`, `IsCallersOwnComponent`, `IsCanonicalFormScope`, `ContributionScopeRank`, `FormContributionOutranks`, `IsSelectableFormOverride`, `FormScopeAllowedOnEntity`, `UserCanManageFormDefaults`), the hide-setting key helpers, and the retire rule (`ActiveContributionSiblings`, which compares keys ignoring case as the SQL Server unique index does).
+
+  **What a panel can stand in for.** One claim per row, enforced by the database: a related grid, one or several field sections (`ReplacesSectionKey`, `ReplacesSectionKeys`), a group of fields (`ReplacesFieldNames`, rendered once inside that section), or a place inside a section (`InSectionKey` + `SectionPosition`). A compiled panel renders at the slot it registered for, and a panel standing in for something takes its place. The `top-area` slot is accepted by the CHECK constraint but no form emits it, so the placement dialog does not offer it.
+
+  **Authoring.** New actions `Create Form Contribution`, `Modify Form Contribution`, `Activate Form Contribution Version`, `Get Form Contributions For Entity` and `Get Form Composition For Entity`. The write actions, and the existing Modify / Activate / Revert Interactive Form actions, change only the caller's own `User` rows; a `Role` or `Global` row returns `FORBIDDEN` for every caller. A spec with more than one claim returns `INVALID_CLAIM` before any write. The contribution actions write the Component and the row in one transaction, and so do the Modify and Activate Interactive Form paths for a full form's Component and override; Create and Revert Interactive Form do not. Modify and Activate Interactive Form set the prior version aside after that transaction, and Activate returns `PERSIST_FAILED`, with the new form already Active, when it cannot. Activating a target that is already Active also sets aside the caller's other Active personal forms for that entity. `Modify Form Contribution` accepts an optional `Precedence`. `Get Form Composition For Entity` answers for the form the user sees as far as metadata can tell (hidden panels, restricted entities, the same collapse; no compiled panels, and no rows while the kill switch is off) and returns `QUERY_FAILED` when a query fails. The artifact viewer previews a form-panel spec and offers **Add to my form**, which opens a placement dialog: the entity's real form, read-only and scaled, with the panel drawn where it will go, the positions the form actually has, order within a position, what it replaces, and draft or active. The dialog starts from the claims the panel proposes that it offers on the open form, and on a full custom form the panel starts as a draft. New `mj-icon-picker` (`@memberjunction/ng-ui-components`) chooses a Font Awesome solid or regular icon by looking at it.
+
+  **Managing a form.** A "Manage this form" drawer lists the form choice and every panel; Escape closes it and focus stays inside it. Any user can hide a panel shared with them and remove their own. Hide and Show change the open form at once: its slot-mounted panels remount, and a stock grid comes back when the panel that took it over is hidden. Publishing a panel or a full custom form to a role or everyone needs the new `Manage Form Defaults` authorization (Developer and Integration; owners count). `MJEntityFormContributionEntityServer` and `MJEntityFormOverrideEntityServer` enforce it on every save, replayed save and delete. Turning a panel on, or publishing it, retires the Active sibling for the same audience and key in the same transaction and sets the panel component's status. The stock UI role can create and update `MJ: Components` (not delete), so any user can create or change their own panel through the actions and turn it on, off or to a draft in the drawer. Without `Manage Form Defaults` the server requires the component to be the caller's own (`IsCallersOwnComponent`): used only by their own personal rows, or used by no row and created by them, as its Internal `Create` record in `MJ: Record Changes` shows. That applies to any update or delete of the component, whatever columns it changes (`MJComponentEntityServer`, `ComponentWriteRefusal`), to a contribution or override row created or re-pointed at it (`FormRowComponentRefusal`), and to reusing its name (`ComponentNameCollisionRefusal`, names compared trimmed and lower-cased, in any namespace, and sent as a Unicode literal on SQL Server); a form can also load a component by name, so a component no row uses still matters. With the grant, a delete or a change to a component's specification, status, name, namespace or type, and pointing a row at it, are refused only when another user's personal row uses the component. The reads run as the caller in one batch, the changed columns come from the stored row, and a failed read refuses the write. Publishing a draft, an off panel or a set-aside form turns it on, and the chooser says so. A set-aside (`Inactive`) shared form is retracted; a set-aside personal form stays in its owner's picker. The placement preview never saves form state.
+
+  **Form context.** The record container publishes its full composition snapshot to `FormCompositionRegistry` (`@memberjunction/ng-base-forms`), where the apply path reads it. Agents get a compact `FormAgentContext` in `AdditionalContext.Form` (entity, record key, form choice, and each section's key, title, variant, hidden flag and holding contribution), published by the record tab while it is the tab on screen. `RecordPrimaryKey` is a `CompositeKey.ToURLSegment()` string, or null for an unsaved record. The `SkipFormContext` mirror in `@askskip/types` must follow this shape.
+
+  **Kill switch.** On a Node host, `MJ_FORMS_METADATA_CONTRIBUTIONS=false` makes the engine on that process load no row. In Explorer, the `MJ: Instance Configurations` key `Forms.MetadataContributions.Enabled` set to `false` turns rows off on every form; the shell applies it after `InstanceConfigEngine.Config()` and before any form opens, it can only turn the source off, and the source stays on when Instance Config fails to load. `Get Form Contributions For Entity` and `Get Form Composition For Entity` list no row when either setting is off and report `MetadataContributionsEnabled`. The write actions still write rows. The seed row reaches a database through `mj sync push`.
+
+  **Section counts and empty sections.** A saved record fetches every related-section count and the tag, attachment and version badges in one `RunViews` call; an all-`count_only` batch runs as one `UNION ALL` statement in `GenericDatabaseProvider`, with each view's security path intact. New `whenEmpty` (`'show'` default | `'hide'` | `'more'`) and `showCount` on `EntityRelationship.Configuration.UI` and on contributions, with entity defaults `UI.Form.RelatedWhenEmpty` and `UI.Form.ShowRelatedCounts`.
+
+  **Fixes.** Eleven compiled panel registrations named their entity without the `MJ: ` prefix: the five overview cards and the realtime panel mounted only through the slot host's loose name match, which the rail did not apply, and the five header panels also used `slot: 'header'`, which is not a `FormPanelSlot`, so they never rendered. All eleven now use `MJ: ` names and the slot host matches names exactly, so the hero headers render above the overview cards on `MJ: Users`, `MJ: Companies`, `MJ: Employees`, `MJ: Conversations` and `MJ: AI Agent Categories`. The overview cards query `MJ: ` entity names (four of them queried unprefixed names and showed empty states), the overview cards and the realtime panel show a load error instead of an empty state when a query fails, and conversation turn pills and counts use the stored `User`/`AI` roles. CodeGen no longer corrupts generated validators that contain escapes, and a table-level validator's metadata guard includes the validator's `Name`.
+
+  **Behaviour changes to know about.** `BaseFormPanel.Validate()` now runs on Save (through `BaseFormComponent.ValidateAsync()`) and may return a Promise. A React panel whose `Validate` throws does not block the save and shows the failure in the panel, as it does an error from `<mj-react-component>`; a field edit from a panel that the record refuses is logged and dropped. After upgrade, editing or deleting an existing `Role` or `Global` full custom form needs `Manage Form Defaults`, and an `mj sync push` of `Global` rows needs a sync user who holds it or is an Owner. The UI role gains Create and Update on `MJ: Components`. Without `Manage Form Defaults`, whatever role grants component rights, a caller can change or delete a component, on any column, only when it is their own (used only by their own personal rows, or used by none and created by them), and two such users cannot give components the same name. With the grant, a delete or a change to one of the five guarded columns (specification, status, name, namespace or type) is refused only when another user's personal row uses the component, and a change to any other column passes. `MJRecordChangeEntityServer` refuses a caller creating a record change whose `Source` is `Internal` and `Type` is `Create` through the API; other record changes, such as version-label snapshots, are unchanged. `mj sync push` runs as the `System` user, which must hold the Developer role and so holds the grant by default; a sync user that is neither an Owner nor a holder of the grant can push changes only to components of its own. Every `mj-form-field` carries `data-field-name` and `data-field-label`. Collapsible-panel move up/down follows the visual order. New user setting `mj.formPanels.hidden.<entity>`; the existing `mj.formVariant.<entity>` is also read by `Get Form Composition For Entity`. `ng-conversations` gains a type-only dependency on `ng-base-forms`. `Get Active Form For Entity` applies the restricted-entity rule, so a Role or Global form on one of those entities is neither active nor listed. A `form-panel` spec must set `entityName`; the artifact viewer no longer falls back to `dataRequirements` for a panel.
+
+  **PostgreSQL.** `UQ_EntityFormContribution_Key` and `UQ_EntityFormContribution_RelatedClaim` include nullable columns (`UserID`, `RoleID`, `RelatedJoinField`). SQL Server treats NULLs as equal in a unique index; PostgreSQL does not, so the converted indexes need `NULLS NOT DISTINCT` (PostgreSQL 15+) or a `COALESCE` expression index to refuse the same duplicates. PostgreSQL also compares the key case-sensitively, so there the case-insensitive retire rule is stricter than the index.
+
+  **Deploy order:** deploy the server code before pushing the metadata. The UI role's grants ship as metadata only: write access to `MJ: Entity Form Contributions` and `MJ: Entity Form Overrides`, and Create and Update on `MJ: Components`. Only the new server subclasses keep that access to the user's own rows and components, so the component guard must be live before the UI role gains Update: apply the release build's consolidated metadata-sync migration together with the server deploy, never before it. A development database that already ran an earlier copy of the migration needs a Flyway repair or a rebuild.
+
+### Patch Changes
+
+- CodeGen no longer ticks green when zero system integrity checks ran.
+
+  `runCodeGen` consumes `RunIntegrityChecks`'s results and fails the run on a failure — that landed
+  separately. It still had two outcomes where there are three: an **empty** result array satisfies
+  "no failures" and so printed the same success tick as a real pass. `RunIntegrityChecks(conn, true)`
+  runs only the checks whose `Enabled` is true, so it returns `[]` whenever
+  `integrityChecks.enabled` or `integrityChecks.entityFieldsSequenceCheck` is false — which is the
+  obvious way to quiet a check that is failing. A green tick over nothing measured is the same defect
+  as discarding the results, one line further along.
+  - New `SystemIntegrityBase.ClassifyResults()` returns `none-ran` / `passed` / `failed`. It is pure
+    and unit-tested, so the distinction is pinned somewhere that does not require booting the
+    pipeline — the previous inline version could not be tested at all.
+  - `none-ran` warns and writes a `reporter.note` (it is not a failure: disabling the checks is a
+    legitimate, deliberate configuration).
+  - A failure now names the failing checks in the spinner line instead of counting them, and the
+    success line reports how many checks actually ran.
+
+  No `failOnError`-style opt-out is offered: a failing integrity check reports `EntityField` Sequence
+  drift, which corrupts the column ordering `spCreate`/`spUpdate` depend on, so there is no state of
+  the world in which the finding should be reported and the run still green. A test pins the absence
+  of that knob, because adding one in good faith would silently stop every existing repo from failing.
+
+- 49e0bd8: fix(codegen-lib): the class-registration manifest scanner resolved a package's `types: ./src/index.ts` entry by replacing the first `/src/` in the absolute path. On a checkout that itself lives under a `src` folder that rewrote a parent directory, the scanner fell back to parsing the raw `.ts` entry, and every class reached through `export * from` was silently dropped from the generated manifest — so a locally regenerated manifest disagreed with CI's. The rewrite now applies only to the package-relative `src/` segment.
+- fe39606: Memory-leak audit round 17 fixes.
+  - **Core entity forms:** twelve custom form components (Lists, Tests, Entities, Templates, AI Agent Runs, Search Scopes, AI Agents, AI Prompt Runs, Queries) overrode `ngOnDestroy` without calling `super.ngOnDestroy()`, so every opened form stayed subscribed to the root-singleton form-state stream. They now call `super`.
+  - **Testing engine:** the per-suite rubric version pins and labels grew on every run on a process-lifetime driver. They are now bounded LRU caches with a TTL.
+  - **CodeGen:** `RunCommand` now clears its timeout timer when the command finishes first, so it no longer kills a recycled PID later or holds the event loop open.
+  - **Code execution:** a sandbox worker that fails to start is now killed instead of orphaned, and `Shutdown()` decides whether a worker has exited from `exitCode`/`signalCode` rather than `killed`.
+
+- 35da130: Security hardening across the data layer: escape/validate composite-key values before SQL interpolation, enforce CanRead on subquery/ad-hoc query entity targets, SELECT-only validation on GetData, bracket-safe SQL Server identifier quoting, and JSON-safe codegen description emission.
+- Updated dependencies [25bb295]
+- Updated dependencies [dfe40a4]
+- Updated dependencies [131f3c4]
+- Updated dependencies [0f04590]
+- Updated dependencies [0a75bb2]
+- Updated dependencies [41c2c08]
+- Updated dependencies [29b6ec3]
+- Updated dependencies [b545842]
+- Updated dependencies [279b93e]
+- Updated dependencies [66fd011]
+- Updated dependencies [196160a]
+- Updated dependencies [801036d]
+- Updated dependencies [bea2386]
+- Updated dependencies [60bd774]
+- Updated dependencies [35da130]
+- Updated dependencies [28c92e0]
+- Updated dependencies [3204a32]
+- Updated dependencies [ec97ad4]
+- Updated dependencies [28df136]
+- Updated dependencies [49e0bd8]
+  - @memberjunction/ai@6.2.0-edge.3
+  - @memberjunction/aiengine@6.2.0-edge.3
+  - @memberjunction/core-entities@6.2.0-edge.3
+  - @memberjunction/global@6.2.0-edge.3
+  - @memberjunction/core@6.2.0-edge.3
+  - @memberjunction/core-entities-server@6.2.0-edge.3
+  - @memberjunction/generic-database-provider@6.2.0-edge.3
+  - @memberjunction/sqlserver-dataprovider@6.2.0-edge.3
+  - @memberjunction/postgresql-dataprovider@6.2.0-edge.3
+  - @memberjunction/ai-prompts@6.2.0-edge.3
+  - @memberjunction/ai-core-plus@6.2.0-edge.3
+  - @memberjunction/actions-base@6.2.0-edge.3
+  - @memberjunction/server-bootstrap-lite@6.2.0-edge.3
+  - @memberjunction/sql-dialect@6.2.0-edge.3
+  - @memberjunction/sql-parser@6.2.0-edge.3
+  - @memberjunction/query-processor@6.2.0-edge.3
+  - @memberjunction/actions@6.2.0-edge.3
+  - @memberjunction/external-data-sources@6.2.0-edge.3
+  - @memberjunction/external-data-source-databricks@6.2.0-edge.3
+  - @memberjunction/external-data-source-mongodb@6.2.0-edge.3
+  - @memberjunction/external-data-source-mysql@6.2.0-edge.3
+  - @memberjunction/external-data-source-oracle@6.2.0-edge.3
+  - @memberjunction/external-data-source-postgres@6.2.0-edge.3
+  - @memberjunction/external-data-source-sqlserver@6.2.0-edge.3
+  - @memberjunction/external-data-source-snowflake@6.2.0-edge.3
+  - @memberjunction/cli-core@6.2.0-edge.3
+  - @memberjunction/ai-provider-bundle@6.2.0-edge.3
+  - @memberjunction/config@6.2.0-edge.3
+
+## 6.2.0-edge.2
+
+### Minor Changes
+
+- 8fd1c46: Moves the seven CodeGen AI prompts to current models, and makes AI model catalog ranks consistent within each model's version lineage. Metadata only, plus a new CI guard. (#4912)
+  - **CodeGen prompts** (Check Constraint Parser, Entity Description Generation, Entity Name Generation, Transitive Join Intelligence, Virtual Entity Field Decoration, Form Layout Generation, Smart Field Identification):
+    - Gemini 3.5 Flash → **Gemini 3.8 Flash**, on the same Google and Vertex AI routes.
+    - Gemini 3.1 Flash-Lite → **Gemini 3.5 Flash-Lite** (Form Layout Generation, Smart Field Identification). Google now comes before Vertex AI, matching Flash.
+    - GPT 5.5 Instant → **GPT-6 Luna** on OpenAI. GPT 5.5 Instant only ever called `gpt-5.5`.
+    - Claude Haiku 4.5 and GPT-OSS-120B are unchanged; they are still the newest in their families. The failover order is unchanged.
+  - **Review regenerated output.** CodeGen commits its AI output into each app: `Validate*()` methods parsed from CHECK constraints, entity and field descriptions, display names and form layouts. Apps that regenerate after upgrading may see different AI-written output and should review it before committing.
+  - **Catalog PowerRank fixes.** Within a lineage, a newer model no longer ranks below the model it replaces, and ranks above it where it is the more capable one (rank-based selection does not break ties):
+    - The GPT-5 generation (GPT 5, 5-mini, 5-nano) was ranked above its successors and now ranks 10, 9 and 8.
+    - GPT 5.5 → 15, GPT 5.5 Instant → 15 (the same `gpt-5.5` API model), GPT 5.5 Pro → 16, GPT 5.6 → 16, o3-mini → 9, o4-mini → 10, Claude Sonnet 5 → 21, MiniMax-M3 → 21 (ties M2.7, which it complements rather than replaces), Grok 4.3 → 23, Qwen3.8-Flash → 16.
+    - Prompts and agents that choose models by rank can pick a different model as a result.
+  - **`PriorVersionID` lineage.** Two links that pointed across tiers are corrected (Gemini 3.1 Flash-Lite, Qwen3.8-Flash). Three variants with no earlier version in the catalog are cleared (GLM-5.3-Flash, GLM 5V Turbo, Mercury Edit 2). Missing links are added for the GPT 5, GPT mini/nano, o-series mini and Gemini Flash lines.
+  - **New guard:** `.github/scripts/check-ai-model-ranks.mjs` (`pnpm run check:ai-model-ranks`, run in the Source guards CI job) fails when a model ranks below the prior version it names, or names a prior version that doesn't exist.
+
+### Patch Changes
+
+- 1580f34: CodeGen applies the `PrimaryKey` and `ForeignKeys` declared on `VirtualEntities` entries in `additionalSchemaInfo`, and finishes a config-declared virtual entity in one run.
+
+  Before, only `PrimaryKey[0]` was used (composite keys collapsed to one column), `ForeignKeys` were parsed and dropped, and the entity never joined `NewEntityList`, so its keys, relationships, entity class and GraphQL type appeared only on a second run. Users worked around it with a duplicate schema-key table entry naming the view.
+  - New `applyVirtualEntitySoftKeys` applies `VirtualEntities` keys on every run, right after the view-column sync (view name as `TableName`, string `PrimaryKey` normalized). Relationships are rebuilt in the same run when a key changed. `applySoftPKFKConfig` keeps handling table entries only.
+  - `processVirtualEntityConfig` creates the entity with logged INSERT statements (fixed CodeGen-generated ID, `Description` kept) instead of the unlogged `spCreateVirtualEntity` call, so the CodeGen_Run capture replays on other databases; it registers the entity in `NewEntityList`; `SchemaName` defaults to `dbo` as documented (was the core schema).
+  - An `EntityName` already in use (compared without case) skips the entry with an error before anything is captured; a name derived from the view gets the `__<schema>` suffix, like table-backed entities.
+  - The soft key writer skips a configured column that does not exist instead of writing an UPDATE that matches no row, and clears `IsUnique` on the columns of a composite `VirtualEntities` key.
+  - `manageSingleVirtualEntity` no longer counts fields it just removed when it checks for a primary key, so a view without an `ID` column and without a configured key no longer aborts SQL generation. It matches view columns without case and sets the field name to the view's casing, so a key named in different case is not deleted and re-added.
+  - Docs: Method 2 SQL includes the required `@PrimaryKeyFieldName`; the config template names the schema explicitly.
+
+- d4e30c3: PostgreSQL migration conversion fixes found while converting the v6.2.0-edge.2 migrations.
+  - sql-converter: BIT literals in `INSERT INTO t (...) SELECT ...` (CodeGen's EntityPermission grants) and in `COALESCE(<boolean column>, 0|1) = 0|1` (CodeGen's search-flag hygiene) are rewritten to TRUE/FALSE.
+  - cli: `migrate convert --bake-codegen` and `migrate rebake` disable SQLOutput while baking, so CodeGen's no-artifact guard no longer silently refuses the capture's metadata SQL; forward baking now applies the captured CodeGen to the working database (the generator never executed it), so later migrations bake against the objects earlier ones created.
+  - codegen-lib: a layered entity's base-view GRANTs are guarded once, not twice (the nested `DO $if_view_exists$` did not parse on PostgreSQL); the PostgreSQL view-regeneration fallback now restores dependents of dependents and their functions after DROP ... CASCADE.
+
+- Updated dependencies [f555162]
+- Updated dependencies [043f418]
+- Updated dependencies [e97d95c]
+- Updated dependencies [ff3097d]
+- Updated dependencies [79279f2]
+- Updated dependencies [3fbda62]
+- Updated dependencies [eaa9455]
+- Updated dependencies [ff00d60]
+- Updated dependencies [2552b1e]
+- Updated dependencies [660ef45]
+- Updated dependencies [8fd1c46]
+- Updated dependencies [21f9e15]
+- Updated dependencies [28fdf22]
+- Updated dependencies [4248fb3]
+- Updated dependencies [f3c6161]
+- Updated dependencies [01fafc6]
+- Updated dependencies [35ffb95]
+- Updated dependencies [5148534]
+- Updated dependencies [0adaf76]
+- Updated dependencies [ce1a5c3]
+- Updated dependencies [513e608]
+- Updated dependencies [ef43cf3]
+- Updated dependencies [b44c7cf]
+- Updated dependencies [26c0178]
+- Updated dependencies [594f2e0]
+- Updated dependencies [861cbf0]
+- Updated dependencies [705ab4e]
+- Updated dependencies [e51ce8a]
+- Updated dependencies [96daca8]
+- Updated dependencies [aa912ca]
+- Updated dependencies [7e57b48]
+- Updated dependencies [2ceedb4]
+- Updated dependencies [7e57b48]
+- Updated dependencies [14e2a3a]
+- Updated dependencies [5986939]
+- Updated dependencies [200e634]
+- Updated dependencies [7408dbb]
+- Updated dependencies [4d647e6]
+- Updated dependencies [c35f7e5]
+- Updated dependencies [7e57b48]
+- Updated dependencies [369e229]
+- Updated dependencies [d13cf6b]
+- Updated dependencies [2854a2e]
+  - @memberjunction/ai-core-plus@6.2.0-edge.2
+  - @memberjunction/core@6.2.0-edge.2
+  - @memberjunction/ai@6.2.0-edge.2
+  - @memberjunction/ai-prompts@6.2.0-edge.2
+  - @memberjunction/aiengine@6.2.0-edge.2
+  - @memberjunction/core-entities@6.2.0-edge.2
+  - @memberjunction/core-entities-server@6.2.0-edge.2
+  - @memberjunction/server-bootstrap-lite@6.2.0-edge.2
+  - @memberjunction/generic-database-provider@6.2.0-edge.2
+  - @memberjunction/sqlserver-dataprovider@6.2.0-edge.2
+  - @memberjunction/postgresql-dataprovider@6.2.0-edge.2
+  - @memberjunction/actions@6.2.0-edge.2
+  - @memberjunction/global@6.2.0-edge.2
+  - @memberjunction/actions-base@6.2.0-edge.2
+  - @memberjunction/external-data-sources@6.2.0-edge.2
+  - @memberjunction/external-data-source-databricks@6.2.0-edge.2
+  - @memberjunction/external-data-source-mongodb@6.2.0-edge.2
+  - @memberjunction/external-data-source-mysql@6.2.0-edge.2
+  - @memberjunction/external-data-source-oracle@6.2.0-edge.2
+  - @memberjunction/external-data-source-postgres@6.2.0-edge.2
+  - @memberjunction/external-data-source-sqlserver@6.2.0-edge.2
+  - @memberjunction/external-data-source-snowflake@6.2.0-edge.2
+  - @memberjunction/query-processor@6.2.0-edge.2
+  - @memberjunction/ai-provider-bundle@6.2.0-edge.2
+  - @memberjunction/cli-core@6.2.0-edge.2
+  - @memberjunction/config@6.2.0-edge.2
+  - @memberjunction/sql-dialect@6.2.0-edge.2
+  - @memberjunction/sql-parser@6.2.0-edge.2
+
+## 6.2.0-edge.1
+
+### Patch Changes
+
+- 17cc774: Capture a numeric or single-value `IN (...)` CHECK constraint as an entity field value list (#3978).
+
+  SQL Server renders a numeric or `bit` `IN (...)` CHECK with unquoted literals —
+  `([Level]=(3) OR [Level]=(2) OR [Level]=(1))` — where a string list comes back quoted.
+  `parseCheckConstraintValues` matched only the quoted form, so a numeric IN-list produced no
+  `EntityFieldValue` rows and no `ValueListType='List'`: the field lost its validation _and_ its
+  dropdown in Explorer, and with AI codegen off the constraint yielded nothing at all. The same
+  regexes required at least two values, so a single-value list was never captured for any type.
+
+  CodeGen now matches both literal forms and single-value lists, sorts an all-numeric list
+  numerically, and returns no list rather than an empty one. Two field shapes are excluded after
+  parsing, each no broader than its reason: a `bit` field (`IN (0,1)` is vacuous and `= 1` is a
+  validator, not a dropdown) and a primary key carrying a _single_ value (`CHECK (ID=1)` is a
+  single-row-table guard). A multi-value list on a natural-key primary key is still captured, as
+  it was before.
+
+  `@memberjunction/core` compares a numeric column's value list by numeric value rather than by
+  string form, so `CHECK (Price IN (0.50, 1.00))` accepts the runtime value `1`. Without it the
+  CodeGen change would make `Validate()` refuse values the database accepts.
+
+  **If you regenerate against a schema that has one of these constraints, the generated property
+  narrows.** A value list emits a literal union, so a numeric list now types the property as
+  `1 | 2 | 3` (and its Zod schema as `z.union([z.literal(1), ...])`) instead of `number` — which
+  means `entity.Level = someNumber` stops compiling until the value is a literal or the variable is
+  typed to the union. This is what string value lists have always done; it is newly reachable for
+  numeric and single-value constraints. Nothing in MJ's own generated code changes: across every
+  migration MJ ships there are 292 string `IN (...)` CHECKs and no numeric or single-value ones.
+  `ValueListType='ListOrUserEntry'` is unaffected — it keeps the widened base type.
+
+  **SQL Server only.** PostgreSQL renders these constraints differently (`ARRAY[1, 2, 3]` for a
+  numeric list, and spaced, cast equality such as `((one = 7))` for a single-value one), and
+  `parsePgArrayConstraint` still extracts quoted elements only — so on PostgreSQL a numeric or
+  single-value `IN (...)` CHECK continues to produce no value list. Tracked as #4713.
+
+- 80905a1: Rename public class members and exported functions to PascalCase, per MJ's naming convention,
+  **without breaking a single consumer**.
+
+  Every renamed symbol keeps its old name beside the new one as a `@deprecated` stub that forwards to
+  it — a delegating method or function, a getter/setter pair for a property, and for Angular a
+  readable accessor pair for an `@Input` and a second `@Output` sharing the same `EventEmitter`, so a
+  template still binding the old name keeps receiving events. Old names still compile, still resolve,
+  and still behave identically; the deprecation tag rides through to the published `.d.ts`, so editors
+  point callers at the replacement. Where a package re-exports through an explicit `export { … }`
+  list, the new name is added alongside the old, so the correct name is actually on the public surface
+  rather than merely declared.
+
+  The rename is deliberately refused wherever a mechanical stub would not be equivalent, because
+  several of those shapes change a type contract while still compiling in the package that declares
+  them:
+  - an **optional** property or parameter property — TypeScript has no optional accessor, so a stub
+    would promote `foo?` to a required member and break every object literal that omits it;
+  - a class that is a **data shape** (no methods, or `@ObjectType`/`@InputType`) — object literals are
+    assigned to it, and an accessor stub changes what they must supply;
+  - a property whose **subclass redeclares it**, since TypeScript forbids a property overriding an
+    accessor (TS2610);
+  - a name whose PascalCase form is **already bound** in that file or class;
+  - decorated members, `get`/`set` pairs behind a decorator, generators, destructured parameters,
+    overload sets and abstract members.
+
+  **One wire-visible consequence, for version skew only.** `BaseInfo.toJSON` walks `_`-prefixed
+  backing fields and emits them through their public getter, preferring the PascalCase one. Renaming
+  the 23 field aliases in `MJCore/src/generic` therefore changes what `AllMetadata` carries:
+  `EntityInfo.spCreate` and friends now serialize as `SpCreate`. A same-version client is unaffected —
+  `copyInitData` accepts a value through a settable accessor, so either spelling lands on the right
+  field. An OLDER client against a newer server has no such path in its `copyInitData` and drops those
+  fields silently. Same-version deployments, which is the supported configuration, see no change.
+
+  Each package was verified against its own pre-change baseline rather than against zero, because
+  several packages in this repo do not typecheck cleanly to begin with. Angular packages were verified
+  with `ngc`, not `tsc`: a plain typecheck does not compile templates, and an earlier write-only
+  `@Input` alias passed `tsc` while breaking six template reads.
+
+- Updated dependencies [ddcd666]
+- Updated dependencies [a50948e]
+- Updated dependencies [0eeb89d]
+- Updated dependencies [15a4333]
+- Updated dependencies [48f77ea]
+- Updated dependencies [a3539d2]
+- Updated dependencies [41274aa]
+- Updated dependencies [5da3ad2]
+- Updated dependencies [67f6c85]
+- Updated dependencies [eb3a8d3]
+- Updated dependencies [e1dd673]
+- Updated dependencies [9b8a84e]
+- Updated dependencies [c261eb8]
+- Updated dependencies [520bd09]
+- Updated dependencies [520bd09]
+- Updated dependencies [307da67]
+- Updated dependencies [7110019]
+- Updated dependencies [a7da50b]
+- Updated dependencies [1d43161]
+- Updated dependencies [7110019]
+- Updated dependencies [f2a4171]
+- Updated dependencies [e482249]
+- Updated dependencies [37e2f6b]
+- Updated dependencies [17cc774]
+- Updated dependencies [80905a1]
+- Updated dependencies [6b08ebf]
+- Updated dependencies [351ba9f]
+  - @memberjunction/aiengine@6.2.0-edge.1
+  - @memberjunction/ai@6.2.0-edge.1
+  - @memberjunction/core-entities@6.2.0-edge.1
+  - @memberjunction/ai-provider-bundle@6.2.0-edge.1
+  - @memberjunction/ai-core-plus@6.2.0-edge.1
+  - @memberjunction/ai-prompts@6.2.0-edge.1
+  - @memberjunction/core-entities-server@6.2.0-edge.1
+  - @memberjunction/server-bootstrap-lite@6.2.0-edge.1
+  - @memberjunction/core@6.2.0-edge.1
+  - @memberjunction/actions-base@6.2.0-edge.1
+  - @memberjunction/actions@6.2.0-edge.1
+  - @memberjunction/config@6.2.0-edge.1
+  - @memberjunction/external-data-source-mongodb@6.2.0-edge.1
+  - @memberjunction/external-data-sources@6.2.0-edge.1
+  - @memberjunction/generic-database-provider@6.2.0-edge.1
+  - @memberjunction/global@6.2.0-edge.1
+  - @memberjunction/postgresql-dataprovider@6.2.0-edge.1
+  - @memberjunction/query-processor@6.2.0-edge.1
+  - @memberjunction/sql-dialect@6.2.0-edge.1
+  - @memberjunction/sql-parser@6.2.0-edge.1
+  - @memberjunction/sqlserver-dataprovider@6.2.0-edge.1
+  - @memberjunction/external-data-source-databricks@6.2.0-edge.1
+  - @memberjunction/external-data-source-mysql@6.2.0-edge.1
+  - @memberjunction/external-data-source-oracle@6.2.0-edge.1
+  - @memberjunction/external-data-source-postgres@6.2.0-edge.1
+  - @memberjunction/external-data-source-sqlserver@6.2.0-edge.1
+  - @memberjunction/external-data-source-snowflake@6.2.0-edge.1
+  - @memberjunction/cli-core@6.2.0-edge.1
+
+## 6.2.0-edge.0
+
+### Minor Changes
+
+- 58faa68: Ship the CodeGen validator for `AIAgentRunStep.NativeToolCallCount` as data (#4647).
+
+  The migration that added the column and its CHECK constraint did not ship the `GeneratedCode` row CodeGen reads to emit the field's `Validate...` method. CodeGen only skips the LLM when a stored row's `Source` matches the live constraint definition exactly, so on a fresh database — which is what `CodeGen drift gate` builds, with AI disabled — no validator was emitted, while the committed `__mj.ts` contained one. That is a permanent drift no rerun can clear; it has been red on `next` since 2026-09-18.
+
+  This adds the row, following the same pattern every other field-level validator already uses. No schema change and no runtime behaviour change.
+
+### Patch Changes
+
+- ee5c033: Fix a fresh `mj install` that could not boot MJAPI or Explorer (MemberJunction/MJ#4477). Since the schema-scale emit change, CodeGen produced the entity-subclass, GraphQL and Angular outputs by iterating a per-directory partition of the non-core entities. On a fresh database that list is empty, the partition was empty, and the generators were never called, so `packages/GeneratedEntities/src/generated/entity_subclasses.ts` and the Angular generated-forms module were never written while CodeGen still reported "complete". `partitionEntitiesByOutputDirectory` now always includes the default directory with an empty group when one is configured, restoring the pre-change behaviour of emitting an empty barrel. The installer's post-CodeGen artifact check now treats a missing `entity_subclasses.ts` as critical and names the missing file in the failure, instead of trusting the exit code.
+- ce55864: Stop a working install from reporting itself as failed.
+
+  The CodeGen AFTER commands end with a boot check that runs `npm start` in MJAPI with a 30-second timeout. `npm start` is a server — it cannot exit on its own, so the timeout is the only way it can ever end, and `runCommand` hardcoded `success: false` on that path. `runCodeGen` fails the pipeline on any unsuccessful command, so every distribution install that reached CodeGen printed `Installation failed` and exited 1 on a system where the API had booted fine (verified: 390 tables, 388 entities, 87 migrations, API answering `401 Authentication required`).
+
+  `CommandInfo` gains `isDaemon`, which declares that staying up for the whole timeout is the pass. Exiting before the timeout is still a failure — a service that comes down on its own crashed — and `isDaemon` without a positive `timeout` is rejected up front rather than making CodeGen wait forever. Applied to the MJAPI boot check in both the shipped distribution config and the built-in default.
+
+- 662d47e: CodeGen no longer leaves entities flagged searchable with nothing searchable on them.
+
+  `createNewEntityInsertSQL` inserts every new entity with `AllowUserSearchAPI = 1`, but the per-field `IncludeInUserSearchAPI` flags are only ever set by the smart-field pipeline — which runs under `AdvancedGeneration.enabled`, i.e. `enableAdvancedGeneration ?? false`. **Advanced generation is off by default**, so on a default configuration that pipeline never runs and every entity lands flagged searchable with nothing flagged on it.
+
+  That is not a harmless default. `UserSearchString` against such an entity is a documented no-op (#4581/#4582): the data provider ignores the term and returns the **unfiltered** table. Global search fans out to it on every keystroke and discards every row it gets back.
+
+  A new deterministic pass runs after advanced generation and, deliberately, _regardless of whether it is enabled_:
+  1. **Seed** — an entity with no searchable field gets its name-like columns flagged (`NAME_LIKE_FIELD_NAMES`: Name, Title, FirstName, LastName, …), capped at the existing per-entity maximum. Only fires when the entity has nothing flagged at all, so it fills a gap rather than overriding the model or a human.
+  2. **Clear** — an entity _still_ left with no searchable field has `AllowUserSearchAPI` turned off, so it drops out of the fan-out instead of contributing noise.
+
+  Order matters: seeding first means an entity whose name column was just flagged is no longer a candidate for being disabled. Both honor the `AutoUpdate*` opt-outs, which is how an operator pins a hand-made decision — and how the curated entries in `metadata/entities/.entity-search-exclusions.json` already protect themselves.
+
+  **The seed keys on the field's NAME, not on `IsNameField`.** That flag is the obvious source and the wrong one. Measured against a real database, seeding from it selects 54 fields of which **41 are virtual** — the denormalized FK display columns CodeGen puts on views (`Action`, `Agent`, `Artifact`). Those are computed by JOIN, so a `LIKE` against them cannot seek any index, and flagging them would push 49 junction entities into the fan-out with unindexable predicates: exactly the cost `search-guardrails.ts` exists to prevent. It also selected identifiers (`RecordID`, `Token`, `ExternalSystemRecordID`) and a `Description`, which `isNarrativeFieldName` rejects on the LLM path. And it would not have fixed `MJ: Employees` — the entity behind the original report — whose only `IsNameField` is the virtual `FirstLast`. Keying on the name reaches its real `FirstName` / `LastName` columns.
+
+  Seeded fields also get `UserSearchPredicateAPI = 'BeginsWith'`. `EntityField.UserSearchPredicateAPI` defaults to `'Contains'` in the database — `LIKE '%term%'`, the unindexable scan the guardrails exist to prevent — so flagging a field without setting the predicate would have made every seeded entity a full scan per keystroke.
+
+  The seed also applies the entity-shape guardrails the LLM path uses (`entityLevelEnableBlockedReason`): log / audit / run-history tables and detail / line-item / step / param children are never seeded, whichever columns they carry. And it only touches entities where `AllowUserSearchAPI` is already on, so it cannot write flags into a curated exclusion and thereby disarm the clear.
+
+  **Those shape guardrails match the final WORD, not a bare suffix**, and the distinction is load-bearing. The clear deliberately carries no shape filter — a genuine log table is exactly what should drop out of the fan-out — so the shapes the seed refuses are the shapes the clear disables. That means the list does not merely withhold help; it decides which entities lose search. A raw `LIKE '%Lines'` is a case-insensitive `endsWith` under the default collation, so it also caught `Pipelines`, `Guidelines`, `Timelines`, `Airlines`, `Deadlines` and `Baselines`; `'%Logs'` caught `Catalogs`, `Dialogs` and `Blogs`; `'%Audit%'` caught `Auditors`. MJ's own metadata was not exempt — `MJ: ML Training Pipelines` was caught by `'%Lines'`. Each of those would have been skipped by the seed and then disabled by the clear. Matching the trailing word keeps every intended shape (`Order Details`, `Audit Logs`, `MJ: AI Agent Runs`) while letting those fall through to the seed as ordinary entities.
+
+  **The clear names what it disables.** `AutoUpdateAllowUserSearchAPI` defaults to `1`, so every entity is in scope unless an operator pinned it, and recovery is manual — flag a field by hand _and_ pin the flag, or the next run undoes the repair. The run output therefore lists the entities being turned off rather than reporting a count, because it is the only place that change is visible.
+
+  **A failure of this pass now fails the run.** It compares before it writes, so when the probes cannot run nothing is written — which makes a broken pass indistinguishable from a pass with nothing to do: no SQL, no artifact, every gate green, and search flags silently never reconciled. Advanced generation can degrade quietly because it only ever adds model-suggested metadata; this one turns search off and is the only thing keeping `AllowUserSearchAPI` honest, so a run where it did not execute is not reported as a clean run.
+
+  Full-text-search entities are exempt from both statements: an FTS entity is searchable through its index, and `createViewUserSearchSQL` takes the full-text branch before it ever reads `IncludeInUserSearchAPI`.
+
+  `isNameLikeFieldName` now derives its pattern from the exported `NAME_LIKE_FIELD_NAMES`, so the generated SQL and the LLM-path predicate cannot drift apart.
+
+  Both statements use `UPDATE ... WHERE <key> IN (subquery)` rather than the T-SQL-only `UPDATE ... FROM ... JOIN`, and go through the dialect helpers (`this.coalesce()`, not a literal `ISNULL`), so they run unchanged on PostgreSQL.
+
+  The pass **compares before it writes**, the contract every-run config writers are held to. Each statement is emitted only when its own `COUNT` probe — built from the same candidate `SELECT` the `UPDATE` uses, so the two cannot drift — finds work, and the clear is probed _after_ the seed has run, since seeding changes which entities still have nothing searchable. This matters beyond tidiness: the two `UPDATE`s already converged on their own, but `LogSQLBatchAndExecute` writes whatever it is handed into the run's `CodeGen_Run_*.sql` capture whether or not a row moves. Emitting unconditionally left a capture file behind on every run, which is precisely what the drift gate's warm-twice stage fails on — the data was idempotent, the log was not. CodeGen now writes nothing at all once the database is already hygienic.
+
+  **Known gap:** the clear is unconditional while the seed only repairs name-like columns. An entity whose only plausible search target is identifier-shaped (`Email`, `SKU`, `*Code`, `*Number` — shapes `isIdentifierFieldName` accepts) is disabled with no deterministic path back; an admin can still flag a field by hand and pin it with `AutoUpdateAllowUserSearchAPI = 0`. Measured against a live database this affects zero entities today — the only match, `MJ: Employees`, is already repaired by the name-shape seed.
+
+- e6c8f53: CodeGen now creates organic-key `TransitiveView` bridge views on PostgreSQL (#4409).
+
+  The DDL was hardcoded as SQL Server's `CREATE OR ALTER VIEW`, which PostgreSQL rejects, so any
+  PostgreSQL deployment declaring a `TransitiveView` got neither the view nor the organic key it
+  backs — and the run still reported success, because the failure is caught per key and logged.
+
+  The statement now comes from a new provider hook, `CodeGenDatabaseProvider.generateCreateOrReplaceViewSQL`:
+  - **SQL Server** — `CREATE OR ALTER VIEW`, unchanged in behavior.
+  - **PostgreSQL** — `CREATE OR REPLACE VIEW`, falling back to drop-and-recreate when the body changes
+    the column list (SQLSTATE `42P16`). The drop is not `CASCADE`: if a user-owned object depends on
+    the view, the run fails with PostgreSQL's dependency error instead of silently destroying it.
+
+  Also fixed: on SQL Server the view was logged to the `CodeGen_Run_*.sql` migration without a `GO`
+  after it, so replaying that migration failed on the next statement. The view body is now documented
+  as dialect-specific — on PostgreSQL it is not auto-quoted, so mixed-case identifiers must be quoted.
+
+- Updated dependencies [abf8778]
+- Updated dependencies [38c4a81]
+- Updated dependencies [e51296c]
+- Updated dependencies [b518dfa]
+- Updated dependencies [37891d3]
+- Updated dependencies [6ad6434]
+- Updated dependencies [7be1684]
+- Updated dependencies [e1fd4c1]
+- Updated dependencies [d122a41]
+- Updated dependencies [6e6e3f1]
+- Updated dependencies [9b5b489]
+- Updated dependencies [683f652]
+- Updated dependencies [a8be410]
+- Updated dependencies [b87e4ac]
+- Updated dependencies [f48dffc]
+- Updated dependencies [630bb88]
+- Updated dependencies [7658d68]
+- Updated dependencies [44faf83]
+- Updated dependencies [bfd67c6]
+- Updated dependencies [575bfae]
+- Updated dependencies [a17a228]
+- Updated dependencies [ee1f0d9]
+- Updated dependencies [104125c]
+- Updated dependencies [5513c2a]
+- Updated dependencies [8a5d2c0]
+- Updated dependencies [3d633ed]
+- Updated dependencies [e962151]
+- Updated dependencies [2c590b0]
+- Updated dependencies [fc3da91]
+  - @memberjunction/actions-base@6.2.0-edge.0
+  - @memberjunction/ai@6.2.0-edge.0
+  - @memberjunction/aiengine@6.2.0-edge.0
+  - @memberjunction/core-entities@6.2.0-edge.0
+  - @memberjunction/ai-prompts@6.2.0-edge.0
+  - @memberjunction/ai-core-plus@6.2.0-edge.0
+  - @memberjunction/core@6.2.0-edge.0
+  - @memberjunction/generic-database-provider@6.2.0-edge.0
+  - @memberjunction/sqlserver-dataprovider@6.2.0-edge.0
+  - @memberjunction/postgresql-dataprovider@6.2.0-edge.0
+  - @memberjunction/server-bootstrap-lite@6.2.0-edge.0
+  - @memberjunction/actions@6.2.0-edge.0
+  - @memberjunction/sql-parser@6.2.0-edge.0
+  - @memberjunction/core-entities-server@6.2.0-edge.0
+  - @memberjunction/external-data-sources@6.2.0-edge.0
+  - @memberjunction/external-data-source-databricks@6.2.0-edge.0
+  - @memberjunction/external-data-source-mongodb@6.2.0-edge.0
+  - @memberjunction/external-data-source-mysql@6.2.0-edge.0
+  - @memberjunction/external-data-source-oracle@6.2.0-edge.0
+  - @memberjunction/external-data-source-postgres@6.2.0-edge.0
+  - @memberjunction/external-data-source-sqlserver@6.2.0-edge.0
+  - @memberjunction/external-data-source-snowflake@6.2.0-edge.0
+  - @memberjunction/query-processor@6.2.0-edge.0
+  - @memberjunction/ai-provider-bundle@6.2.0-edge.0
+  - @memberjunction/cli-core@6.2.0-edge.0
+  - @memberjunction/config@6.2.0-edge.0
+  - @memberjunction/global@6.2.0-edge.0
+  - @memberjunction/sql-dialect@6.2.0-edge.0
+
 ## 6.1.0
 
 ### Minor Changes

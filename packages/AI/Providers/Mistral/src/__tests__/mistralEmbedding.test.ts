@@ -45,3 +45,49 @@ describe('MistralEmbedding.EmbedTexts (real BaseEmbeddings dispatch → embedBat
         await expect(e.EmbedTexts({ texts: ['a', 'b', 'c'], model: 'm' })).rejects.toThrow(/1:1|misaligned/i);
     });
 });
+
+/** Builds the error `fetch` and the SDKs reject an aborted request with. */
+function abortError(): Error {
+    const error = new Error('This operation was aborted');
+    error.name = 'AbortError';
+    return error;
+}
+
+/** The classification a cancellation error carries, read from the error a call rejected with. */
+async function rejectionTypeOf(operation: Promise<unknown>): Promise<string | undefined> {
+    try {
+        await operation;
+    } catch (error) {
+        const info: { errorType?: string } | undefined = (error as { errorInfo?: { errorType?: string } }).errorInfo;
+        return info?.errorType;
+    }
+    throw new Error('expected the call to reject');
+}
+
+describe('MistralEmbedding cancellation', () => {
+    beforeEach(() => {
+        mockCreate.mockReset(); // braces: a function returned from beforeEach would run as its teardown
+    });
+
+    it('forwards the CancellationToken to embeddings.create as its request signal', async () => {
+        mockCreate.mockResolvedValue(embedResponse([[1, 0]]));
+        const controller = new AbortController();
+        const e = new MistralEmbedding('k');
+        await e.EmbedTexts({ texts: ['a'], model: 'm', CancellationToken: controller.signal });
+        await e.EmbedText({ text: 'a', model: 'm', CancellationToken: controller.signal });
+        expect(mockCreate.mock.calls[0][1]).toEqual({ signal: controller.signal });
+        expect(mockCreate.mock.calls[1][1]).toEqual({ signal: controller.signal });
+    });
+
+    it('reports an aborted request as cancelled rather than as an empty result', async () => {
+        const controller = new AbortController();
+        mockCreate.mockImplementation(async () => {
+            controller.abort('stop');
+            const aborted = new Error('Request aborted by client');
+            aborted.name = 'RequestAbortedError';
+            throw aborted;
+        });
+        const e = new MistralEmbedding('k');
+        expect(await rejectionTypeOf(e.EmbedTexts({ texts: ['a', 'b'], model: 'm', CancellationToken: controller.signal }))).toBe('Cancelled');
+    });
+});

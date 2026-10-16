@@ -5,9 +5,9 @@
 import { describe, expect, it } from 'vitest';
 import { ContrastCheck, derive, hexToOKLCH, MJ_DEFAULT_SEEDS } from '@memberjunction/theme-engine';
 import {
-  buildCssWarnings,
-  parseOverridesJson,
-  pickWorstOnPrimary,
+  BuildCssWarnings,
+  ParseOverridesJson,
+  PickWorstOnPrimary,
   THEME_RECIPES,
   TOKEN_CATEGORIES,
 } from '../ThemeStudio/theme-studio.constants';
@@ -17,7 +17,7 @@ function check(overrides: Partial<ContrastCheck>): ContrastCheck {
 }
 
 function firstCategory(token: string): string | undefined {
-  return TOKEN_CATEGORIES.find((c) => c.match.test(token))?.key;
+  return TOKEN_CATEGORIES.find((c) => c.Match.test(token))?.Key;
 }
 
 describe('TOKEN_CATEGORIES', () => {
@@ -96,12 +96,12 @@ describe('THEME_RECIPES', () => {
 
 describe('parseOverridesJson', () => {
   it('returns an empty map for null or invalid JSON', () => {
-    expect(parseOverridesJson(null)).toEqual({});
-    expect(parseOverridesJson('not json')).toEqual({});
+    expect(ParseOverridesJson(null)).toEqual({});
+    expect(ParseOverridesJson('not json')).toEqual({});
   });
 
   it('trims keys, drops blank keys, and coerces values to strings', () => {
-    expect(parseOverridesJson('{" --mj-a ": "#fff", "  ": "dropped", "--mj-b": 4}')).toEqual({
+    expect(ParseOverridesJson('{" --mj-a ": "#fff", "  ": "dropped", "--mj-b": 4}')).toEqual({
       '--mj-a': '#fff',
       '--mj-b': '4',
     });
@@ -110,28 +110,28 @@ describe('parseOverridesJson', () => {
 
 describe('pickWorstOnPrimary', () => {
   it('returns undefined when neither mode has a check', () => {
-    expect(pickWorstOnPrimary(undefined, undefined)).toBeUndefined();
+    expect(PickWorstOnPrimary(undefined, undefined)).toBeUndefined();
   });
 
   it('falls back to the only available mode', () => {
     const light = check({ ratio: 6 });
-    expect(pickWorstOnPrimary(light, undefined)).toEqual({ check: light, mode: 'light' });
+    expect(PickWorstOnPrimary(light, undefined)).toEqual({ check: light, mode: 'light' });
     const dark = check({ ratio: 3, passes: false });
-    expect(pickWorstOnPrimary(undefined, dark)).toEqual({ check: dark, mode: 'dark' });
+    expect(PickWorstOnPrimary(undefined, dark)).toEqual({ check: dark, mode: 'dark' });
   });
 
   it('a failing mode always beats a passing one, regardless of ratio', () => {
     const light = check({ ratio: 2, passes: false });
     const dark = check({ ratio: 8 });
-    expect(pickWorstOnPrimary(light, dark)).toEqual({ check: light, mode: 'light' });
-    expect(pickWorstOnPrimary(dark, light)).toEqual({ check: light, mode: 'dark' });
+    expect(PickWorstOnPrimary(light, dark)).toEqual({ check: light, mode: 'light' });
+    expect(PickWorstOnPrimary(dark, light)).toEqual({ check: light, mode: 'dark' });
   });
 
   it('between two of the same outcome, the lower ratio wins', () => {
     const light = check({ ratio: 5 });
     const dark = check({ ratio: 7 });
-    expect(pickWorstOnPrimary(light, dark)?.mode).toBe('light');
-    expect(pickWorstOnPrimary(dark, light)?.mode).toBe('dark');
+    expect(PickWorstOnPrimary(light, dark)?.mode).toBe('light');
+    expect(PickWorstOnPrimary(dark, light)?.mode).toBe('dark');
   });
 });
 
@@ -139,22 +139,22 @@ describe('buildCssWarnings', () => {
   const known = new Set(['--mj-brand-primary', '--mj-bg-surface']);
 
   it('returns no warnings for clean CSS using known tokens', () => {
-    expect(buildCssWarnings('mj-shell { color: var(--mj-brand-primary); }', known)).toEqual([]);
+    expect(BuildCssWarnings('mj-shell { color: var(--mj-brand-primary); }', known)).toEqual([]);
   });
 
   it('flags @import case-insensitively', () => {
-    const warnings = buildCssWarnings('@IMPORT url("x.css");', known);
+    const warnings = BuildCssWarnings('@IMPORT url("x.css");', known);
     expect(warnings).toHaveLength(1);
     expect(warnings[0]).toContain('@import');
   });
 
   it('lists unknown tokens, deduplicated, capping the display at 4', () => {
     const css = '.a { c: var(--mj-nope-1); d: var(--mj-nope-1); }';
-    expect(buildCssWarnings(css, known)[0]).toBe(
+    expect(BuildCssWarnings(css, known)[0]).toBe(
       'Unknown token: --mj-nope-1 — check the token browser for exact names.',
     );
     const many = [1, 2, 3, 4, 5, 6].map((i) => `var(--mj-nope-${i})`).join(' ');
-    const warning = buildCssWarnings(`.a { c: ${many}; }`, known)[0];
+    const warning = BuildCssWarnings(`.a { c: ${many}; }`, known)[0];
     expect(warning).toContain('Unknown tokens:');
     expect(warning).toContain('(+2 more)');
   });

@@ -22,7 +22,7 @@
  * VALUES, query results, or any secret. No such value is passed INTO this helper.
  */
 
-import { boundNameList } from '../shared/agent-tool-validation';
+import { BoundNameList } from '../shared/agent-tool-validation';
 
 /** The four top-level sections the diagnostics dashboard exposes. */
 export const VALID_DIAGNOSTICS_SECTIONS = ['engines', 'redundant', 'performance', 'cache'] as const;
@@ -40,13 +40,23 @@ export const VALID_TELEMETRY_CATEGORIES = ['all', 'RunView', 'RunQuery', 'Engine
 export type TelemetryCategoryFilter = (typeof VALID_TELEMETRY_CATEGORIES)[number];
 
 /** Type-guard for a diagnostics section string. */
-export function isValidDiagnosticsSection(section: unknown): section is DiagnosticsSection {
+export function IsValidDiagnosticsSection(section: unknown): section is DiagnosticsSection {
     return typeof section === 'string' && (VALID_DIAGNOSTICS_SECTIONS as readonly string[]).includes(section);
 }
 
+/** @deprecated Use {@link IsValidDiagnosticsSection}. */
+export function isValidDiagnosticsSection(section: unknown): section is DiagnosticsSection {
+    return IsValidDiagnosticsSection(section);
+}
+
 /** Type-guard for a performance sub-tab string. */
-export function isValidPerfTab(tab: unknown): tab is PerfTab {
+export function IsValidPerfTab(tab: unknown): tab is PerfTab {
     return typeof tab === 'string' && (VALID_PERF_TABS as readonly string[]).includes(tab);
+}
+
+/** @deprecated Use {@link IsValidPerfTab}. */
+export function isValidPerfTab(tab: unknown): tab is PerfTab {
+    return IsValidPerfTab(tab);
 }
 
 /** One read-only telemetry-category breakdown row. */
@@ -126,9 +136,9 @@ export interface SystemDiagnosticsAgentContextInput {
  * companion truncation flag. Pure (no `this`) so the shape is unit-testable and
  * the test can assert no secret-bearing key can ever appear.
  */
-export function buildSystemDiagnosticsAgentContext(input: SystemDiagnosticsAgentContextInput): Record<string, unknown> {
-    const engineNames = boundNameList(input.EngineNames);
-    const redundantNames = boundNameList(input.RedundantEntityNames);
+export function BuildSystemDiagnosticsAgentContext(input: SystemDiagnosticsAgentContextInput): Record<string, unknown> {
+    const engineNames = BoundNameList(input.EngineNames);
+    const redundantNames = BoundNameList(input.RedundantEntityNames);
 
     return {
         // Navigation
@@ -181,4 +191,9 @@ export function buildSystemDiagnosticsAgentContext(input: SystemDiagnosticsAgent
         CacheRunViewCount: input.CacheRunViewCount,
         CacheRunQueryCount: input.CacheRunQueryCount,
     };
+}
+
+/** @deprecated Use {@link BuildSystemDiagnosticsAgentContext}. */
+export function buildSystemDiagnosticsAgentContext(input: SystemDiagnosticsAgentContextInput): Record<string, unknown> {
+    return BuildSystemDiagnosticsAgentContext(input);
 }

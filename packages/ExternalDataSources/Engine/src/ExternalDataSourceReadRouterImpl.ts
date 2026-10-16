@@ -13,7 +13,7 @@ import {
 } from "@memberjunction/core";
 import { MJExternalDataSourceEntity } from "@memberjunction/core-entities";
 import { ExternalDataSourceRouter } from "./ExternalDataSourceRouter";
-import { ExternalQueryParameter, ExternalRow, ExternalViewParams, redactConnectionSecrets } from "./types";
+import { ExternalQueryParameter, ExternalRow, ExternalViewParams, RedactConnectionSecrets } from "./types";
 
 /** Fallback cache TTL (seconds) when a data source has no DefaultCacheTTLSeconds configured. Matches the plan's default. */
 const DEFAULT_EXTERNAL_CACHE_TTL_SECONDS = 300;
@@ -264,6 +264,6 @@ export class ExternalDataSourceReadRouterImpl extends ExternalDataSourceReadRout
   private errorText(e: unknown): string {
     // Redact inline credentials (scheme://user:pass@host) that a driver SDK may echo — a connection-phase
     // error must not leak secrets into RunViewResult.ErrorMessage. Same scrub the base driver applies.
-    return redactConnectionSecrets(e instanceof Error ? e.message : String(e));
+    return RedactConnectionSecrets(e instanceof Error ? e.message : String(e));
   }
 }

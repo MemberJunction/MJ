@@ -16,6 +16,7 @@ function makeQueryInfo(overrides: Partial<{
     CacheTTLMinutes: number;
     UsesTemplate: boolean;
     SQLDialectID: string;
+    Configuration: string | null;
 }>): QueryInfo {
     const q = new QueryInfo();
     q.ID = overrides.ID ?? 'q-1';
@@ -28,6 +29,7 @@ function makeQueryInfo(overrides: Partial<{
     q.CacheTTLMinutes = overrides.CacheTTLMinutes ?? null;
     q.UsesTemplate = overrides.UsesTemplate ?? false;
     q.SQLDialectID = overrides.SQLDialectID ?? null;
+    q.Configuration = overrides.Configuration ?? null;
     return q;
 }
 
@@ -263,6 +265,66 @@ describe('QueryInfo', () => {
 
             const q = makeQueryInfo({ CacheEnabled: false });
             expect(q.CacheConfig.enabled).toBe(false);
+        });
+    });
+
+    // ================================================================
+    // Configuration and Semantic Attributes
+    // ================================================================
+    describe('Configuration and Semantic Attributes', () => {
+        it('should return null ConfigurationObject and sensible defaults when Configuration is null', () => {
+            const q = makeQueryInfo({ Configuration: null });
+            expect(q.ConfigurationObject).toBeNull();
+            expect(q.Priority).toBe(50);
+            expect(q.LogExecution).toBe(true);
+            expect(q.IsCanonical).toBe(false);
+            expect(q.AlternativeQuestions).toEqual([]);
+            expect(q.UsageGuidance).toBeNull();
+            expect(q.WhenNotToUse).toBeNull();
+            expect(q.DomainScope).toEqual([]);
+        });
+
+        it('should parse valid JSON Configuration and expose typed fields', () => {
+            const config = {
+                Priority: 95,
+                LogExecution: false,
+                IsCanonical: true,
+                AlternativeQuestions: ['What are the sales?', 'Total revenue by quarter'],
+                UsageGuidance: 'Use for enterprise revenue calculations only.',
+                WhenNotToUse: 'Do not use for unbilled orders.',
+                DomainScope: ['Sales', 'Finance']
+            };
+            const q = makeQueryInfo({ Configuration: JSON.stringify(config) });
+
+            expect(q.ConfigurationObject).toEqual(config);
+            expect(q.Priority).toBe(95);
+            expect(q.LogExecution).toBe(false);
+            expect(q.IsCanonical).toBe(true);
+            expect(q.AlternativeQuestions).toEqual(['What are the sales?', 'Total revenue by quarter']);
+            expect(q.UsageGuidance).toBe('Use for enterprise revenue calculations only.');
+            expect(q.WhenNotToUse).toBe('Do not use for unbilled orders.');
+            expect(q.DomainScope).toEqual(['Sales', 'Finance']);
+        });
+
+        it('should handle corrupted or invalid JSON gracefully', () => {
+            const q = makeQueryInfo({ Configuration: '{invalid-json' });
+            expect(q.ConfigurationObject).toBeNull();
+            expect(q.Priority).toBe(50);
+            expect(q.LogExecution).toBe(true);
+            expect(q.IsCanonical).toBe(false);
+            expect(q.AlternativeQuestions).toEqual([]);
+        });
+
+        it('should invalidate cache when Configuration string changes', () => {
+            const q = makeQueryInfo({ Configuration: JSON.stringify({ Priority: 80 }) });
+            expect(q.Priority).toBe(80);
+
+            q.Configuration = JSON.stringify({ Priority: 20 });
+            expect(q.Priority).toBe(20);
+
+            q.Configuration = null;
+            expect(q.ConfigurationObject).toBeNull();
+            expect(q.Priority).toBe(50);
         });
     });
 });

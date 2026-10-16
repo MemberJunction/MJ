@@ -190,7 +190,7 @@ export class MLSidecar {
    *
    * If already running, this is a no-op.
    */
-  async start(): Promise<void> {
+  async Start(): Promise<void> {
     if (this.IsRemote) {
       await this.waitForReady();
       return;
@@ -206,6 +206,11 @@ export class MLSidecar {
       this.startPromise = null;
     });
     return this.startPromise;
+  }
+
+  /** @deprecated Use {@link Start}. */
+  async start(): Promise<void> {
+    return this.Start();
   }
 
   private async spawnManaged(): Promise<void> {
@@ -293,7 +298,7 @@ export class MLSidecar {
    * Stop the managed Python service. Resolves once the process has exited. In
    * remote mode this is a no-op (the client never owned the process).
    */
-  async stop(): Promise<void> {
+  async Stop(): Promise<void> {
     if (!this.process) {
       return;
     }
@@ -317,31 +322,51 @@ export class MLSidecar {
     });
   }
 
+  /** @deprecated Use {@link Stop}. */
+  async stop(): Promise<void> {
+    return this.Stop();
+  }
+
   /**
    * Train a model by POSTing the assembled feature matrix to `/train`.
    * @throws {SidecarError} when the sidecar responds with a non-2xx status
    */
-  async train(req: TrainRequest): Promise<TrainResponse> {
+  async Train(req: TrainRequest): Promise<TrainResponse> {
     this.assertRunning();
     return this.httpPost<TrainRequest, TrainResponse>('/train', req);
+  }
+
+  /** @deprecated Use {@link Train}. */
+  async train(req: TrainRequest): Promise<TrainResponse> {
+    return this.Train(req);
   }
 
   /**
    * Score 1..N rows by POSTing the artifact + frozen preprocessing to `/predict`.
    * @throws {SidecarError} when the sidecar responds with a non-2xx status
    */
-  async predict(req: PredictRequest): Promise<PredictResponse> {
+  async Predict(req: PredictRequest): Promise<PredictResponse> {
     this.assertRunning();
     return this.httpPost<PredictRequest, PredictResponse>('/predict', req);
+  }
+
+  /** @deprecated Use {@link Predict}. */
+  async predict(req: PredictRequest): Promise<PredictResponse> {
+    return this.Predict(req);
   }
 
   /**
    * Check sidecar liveness via `GET /health`.
    * @throws {SidecarError} when the sidecar responds with a non-2xx status
    */
-  async health(): Promise<SidecarHealthResponse> {
+  async Health(): Promise<SidecarHealthResponse> {
     this.assertRunning();
     return this.httpGet<SidecarHealthResponse>('/health');
+  }
+
+  /** @deprecated Use {@link Health}. */
+  async health(): Promise<SidecarHealthResponse> {
+    return this.Health();
   }
 
   private assertRunning(): void {

@@ -434,13 +434,42 @@ export async function checkSingleColumn({ noAI = false, skipWarm = false, keepCo
     if (!keepColumn) {
       log('Cleaning up probe column and restoring database view...');
       try {
+        // Leave the database EXACTLY as we found it — Sequence included.
+        //
+        // The probe is a real table column, so CodeGen slots it after the last real column of
+        // MJ: Entities and pushes every view-only virtual field (CodeName, ClassName,
+        // ParentEntity, ...) up by one. Dropping the column and deleting its EntityField row
+        // left those virtuals where they were, with a hole where the probe had sat. The restore
+        // run below is `--skipdb`, so CodeGen is forbidden from renumbering — and once 6805744ae4
+        // made integrity failures fatal, entityFieldsSequenceCheck failed the cleanup, the cleanup
+        // failed the stage, and the stage failed the gate on every PR. #4386 documents the same
+        // hole from when it was merely cosmetic.
+        //
+        // So: note where the probe sat, remove it, pull everything above it down by one. One
+        // transaction, because a half-applied cleanup is worse than a failed one. The set-based
+        // decrement is safe under UQ_EntityField_EntityID_Sequence — SQL Server checks the
+        // constraint once the statement completes, not row by row.
         await pool.request().query(`
+          SET XACT_ABORT ON;
+          BEGIN TRAN;
           IF COL_LENGTH('[__mj].[Entity]', '${probeColumn}') IS NOT NULL
           BEGIN
             ALTER TABLE [__mj].[Entity] DROP COLUMN [${probeColumn}];
           END
+          DECLARE @probeEntityID UNIQUEIDENTIFIER, @probeSequence INT;
+          SELECT @probeEntityID = EntityID, @probeSequence = Sequence
+          FROM [__mj].[EntityField]
+          WHERE Name = '${probeColumn}'
+            AND EntityID = (SELECT ID FROM [__mj].[Entity] WHERE Name = 'MJ: Entities');
           DELETE FROM [__mj].[EntityField] WHERE Name = '${probeColumn}';
+          IF @probeSequence IS NOT NULL
+          BEGIN
+            UPDATE [__mj].[EntityField]
+              SET Sequence = Sequence - 1
+            WHERE EntityID = @probeEntityID AND Sequence > @probeSequence;
+          END
           EXEC sp_refreshview '[__mj].[vwEntities]';
+          COMMIT;
         `);
         if (probeCaptureFile && existsSync(probeCaptureFile)) {
           unlinkSync(probeCaptureFile);

@@ -163,8 +163,8 @@ The weighted scores combine into a final test score (0.0 to 1.0). A test passes 
 
 ### Adding New Tests
 
-1. Create a new `.json` file in `metadata/tests/regression/` following the T01 pattern
-2. Add a `relatedEntities` entry in `metadata/test-suites/.regression-suite.json` linking the test
+1. Create a new `.json` file in `metadata-optional/regression-test/tests/regression/` following the T001 pattern
+2. Add a `relatedEntities` entry in `metadata-optional/regression-test/test-suites/.regression-suite.json` linking the test
 3. The test runner automatically syncs metadata on each run -- no rebuild needed
 4. Metadata files are bind-mounted from the host, so edits are picked up immediately
 

@@ -14,7 +14,7 @@ export class StateValidator {
   /**
    * Validate state file
    */
-  public validate(state: DatabaseDocumentation): ValidationResult {
+  public Validate(state: DatabaseDocumentation): ValidationResult {
     const errors: string[] = [];
     const warnings: string[] = [];
 
@@ -122,6 +122,11 @@ export class StateValidator {
     };
   }
 
+  /** @deprecated Use {@link Validate}. */
+  public validate(state: DatabaseDocumentation): ValidationResult {
+    return this.Validate(state);
+  }
+
   /**
    * Check if a table exists in the state
    */
@@ -141,8 +146,8 @@ export class StateValidator {
   /**
    * Validate and repair if possible
    */
-  public validateAndRepair(state: DatabaseDocumentation): ValidationResult {
-    const result = this.validate(state);
+  public ValidateAndRepair(state: DatabaseDocumentation): ValidationResult {
+    const result = this.Validate(state);
 
     // Attempt simple repairs
     if (!state.phases.descriptionGeneration) {
@@ -175,6 +180,11 @@ export class StateValidator {
     }
 
     // Re-validate after repairs
-    return this.validate(state);
+    return this.Validate(state);
+  }
+
+  /** @deprecated Use {@link ValidateAndRepair}. */
+  public validateAndRepair(state: DatabaseDocumentation): ValidationResult {
+    return this.ValidateAndRepair(state);
   }
 }

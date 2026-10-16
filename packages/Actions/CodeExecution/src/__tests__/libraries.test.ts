@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { ALLOWED_MODULES, isModuleAllowed, getAllowedModuleNames, getLibrarySource } from '../libraries';
+import { ALLOWED_MODULES, IsModuleAllowed, GetAllowedModuleNames, GetLibrarySource } from '../libraries';
 
 // Mock fs for bundled library loading
 vi.mock('fs', () => ({
@@ -41,38 +41,38 @@ describe('Libraries', () => {
   describe('isModuleAllowed', () => {
     it('should return true for all allowed modules', () => {
       for (const mod of ALLOWED_MODULES) {
-        expect(isModuleAllowed(mod)).toBe(true);
+        expect(IsModuleAllowed(mod)).toBe(true);
       }
     });
 
     it('should return false for blocked modules', () => {
-      expect(isModuleAllowed('fs')).toBe(false);
-      expect(isModuleAllowed('http')).toBe(false);
-      expect(isModuleAllowed('child_process')).toBe(false);
-      expect(isModuleAllowed('net')).toBe(false);
-      expect(isModuleAllowed('os')).toBe(false);
-      expect(isModuleAllowed('process')).toBe(false);
+      expect(IsModuleAllowed('fs')).toBe(false);
+      expect(IsModuleAllowed('http')).toBe(false);
+      expect(IsModuleAllowed('child_process')).toBe(false);
+      expect(IsModuleAllowed('net')).toBe(false);
+      expect(IsModuleAllowed('os')).toBe(false);
+      expect(IsModuleAllowed('process')).toBe(false);
     });
 
     it('should return false for arbitrary module names', () => {
-      expect(isModuleAllowed('express')).toBe(false);
-      expect(isModuleAllowed('axios')).toBe(false);
-      expect(isModuleAllowed('shell')).toBe(false);
+      expect(IsModuleAllowed('express')).toBe(false);
+      expect(IsModuleAllowed('axios')).toBe(false);
+      expect(IsModuleAllowed('shell')).toBe(false);
     });
 
     it('should return false for empty string', () => {
-      expect(isModuleAllowed('')).toBe(false);
+      expect(IsModuleAllowed('')).toBe(false);
     });
 
     it('should be case-sensitive', () => {
-      expect(isModuleAllowed('Lodash')).toBe(false);
-      expect(isModuleAllowed('LODASH')).toBe(false);
-      expect(isModuleAllowed('UUID')).toBe(false);
+      expect(IsModuleAllowed('Lodash')).toBe(false);
+      expect(IsModuleAllowed('LODASH')).toBe(false);
+      expect(IsModuleAllowed('UUID')).toBe(false);
     });
 
     it('should act as a type guard', () => {
       const moduleName: string = 'lodash';
-      if (isModuleAllowed(moduleName)) {
+      if (IsModuleAllowed(moduleName)) {
         // Inside this block, moduleName should be typed as AllowedModule
         const allowed: typeof ALLOWED_MODULES[number] = moduleName;
         expect(allowed).toBe('lodash');
@@ -82,7 +82,7 @@ describe('Libraries', () => {
 
   describe('getAllowedModuleNames', () => {
     it('should return an array of all allowed module names', () => {
-      const names = getAllowedModuleNames();
+      const names = GetAllowedModuleNames();
       expect(names).toHaveLength(7);
       expect(names).toContain('lodash');
       expect(names).toContain('date-fns');
@@ -91,14 +91,14 @@ describe('Libraries', () => {
     });
 
     it('should return a copy, not the original array', () => {
-      const names1 = getAllowedModuleNames();
-      const names2 = getAllowedModuleNames();
+      const names1 = GetAllowedModuleNames();
+      const names2 = GetAllowedModuleNames();
       expect(names1).not.toBe(names2);
       expect(names1).toEqual(names2);
     });
 
     it('should return string array', () => {
-      const names = getAllowedModuleNames();
+      const names = GetAllowedModuleNames();
       for (const name of names) {
         expect(typeof name).toBe('string');
       }
@@ -107,13 +107,13 @@ describe('Libraries', () => {
 
   describe('getLibrarySource', () => {
     it('should return null for non-allowed modules', () => {
-      expect(getLibrarySource('fs')).toBeNull();
-      expect(getLibrarySource('http')).toBeNull();
-      expect(getLibrarySource('nonexistent')).toBeNull();
+      expect(GetLibrarySource('fs')).toBeNull();
+      expect(GetLibrarySource('http')).toBeNull();
+      expect(GetLibrarySource('nonexistent')).toBeNull();
     });
 
     it('should return a string for lodash', () => {
-      const source = getLibrarySource('lodash');
+      const source = GetLibrarySource('lodash');
       expect(source).not.toBeNull();
       expect(typeof source).toBe('string');
     });
@@ -125,7 +125,7 @@ describe('Libraries', () => {
       // (proves we switched away from the old hand-coded subset). End-to-end
       // behavior of real lodash is exercised by Runtime action integration
       // tests, not here.
-      const source = getLibrarySource('lodash')!;
+      const source = GetLibrarySource('lodash')!;
       expect(source).toContain('const module = { exports: {} }');
       expect(source).toContain('return module.exports');
       // Old subset signature absent — we no longer wire up getLodashSource().
@@ -133,7 +133,7 @@ describe('Libraries', () => {
     });
 
     it('should return date-fns source with expected functions', () => {
-      const source = getLibrarySource('date-fns')!;
+      const source = GetLibrarySource('date-fns')!;
       expect(source).not.toBeNull();
       expect(source).toContain('format');
       expect(source).toContain('addDays');
@@ -148,14 +148,14 @@ describe('Libraries', () => {
     });
 
     it('should return uuid source with v4 function', () => {
-      const source = getLibrarySource('uuid')!;
+      const source = GetLibrarySource('uuid')!;
       expect(source).not.toBeNull();
       expect(source).toContain('v4');
       expect(source).toContain('xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx');
     });
 
     it('should return validator source with validation functions', () => {
-      const source = getLibrarySource('validator')!;
+      const source = GetLibrarySource('validator')!;
       expect(source).not.toBeNull();
       expect(source).toContain('isEmail');
       expect(source).toContain('isURL');
@@ -168,36 +168,36 @@ describe('Libraries', () => {
     });
 
     it('should return wrapped IIFE for inline libraries', () => {
-      const lodashSource = getLibrarySource('lodash')!;
+      const lodashSource = GetLibrarySource('lodash')!;
       // Lodash is now the bundled UMD wrapped in our module-shim IIFE.
       expect(lodashSource).toMatch(/^\(function\(\)/);
       expect(lodashSource).toContain('return module.exports');
 
-      const dateFnsSource = getLibrarySource('date-fns')!;
+      const dateFnsSource = GetLibrarySource('date-fns')!;
       expect(dateFnsSource).toMatch(/^\(function\(\)/);
       expect(dateFnsSource).toContain('return dateFns');
     });
 
     it('should return wrapped IIFE for bundled mathjs', () => {
-      const source = getLibrarySource('mathjs');
+      const source = GetLibrarySource('mathjs');
       expect(source).not.toBeNull();
       expect(source).toContain('return math');
     });
 
     it('should return wrapped IIFE for bundled papaparse', () => {
-      const source = getLibrarySource('papaparse');
+      const source = GetLibrarySource('papaparse');
       expect(source).not.toBeNull();
       expect(source).toContain('return Papa');
     });
 
     it('should return wrapped IIFE for bundled jstat', () => {
-      const source = getLibrarySource('jstat');
+      const source = GetLibrarySource('jstat');
       expect(source).not.toBeNull();
       expect(source).toContain('return jStat');
     });
 
     it('should return null for empty string', () => {
-      expect(getLibrarySource('')).toBeNull();
+      expect(GetLibrarySource('')).toBeNull();
     });
   });
 });

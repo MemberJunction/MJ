@@ -3,26 +3,31 @@ import { RegisterClass, UUIDsEqual, ordinalCompare } from '@memberjunction/globa
 import fs from 'fs';
 import path from 'path';
 import ts from 'typescript';
-import { makeDir, sortBySequenceAndCreatedAt } from '../Misc/util';
-import { logError, logStatus, logWarning } from './status_logging';
+import { MakeDir, SortBySequenceAndCreatedAt } from '../Misc/util';
+import { logError, logStatus, LogWarning } from './status_logging';
 import { ValidatorResult, ManageMetadataBase } from '../Database/manage-metadata';
-import { configInfo, dbPlatform, mj_core_schema, resolveEntityImportPackage, type ConfigInfo } from '../Config/config';
+import type { JSONValidatorResult } from '../Database/json-check-validators';
+import { FindUnattachedTagComments, JSONTypeModel, ParseJSONTypeDefinition, RewriteJSONTypeDefinition } from './json-type-model';
+import { GenerateJSONTypeZod, JSONSchemaConstName } from './json-type-zod';
+import { BuildJSONRuleSet, JSONCheckTranslation } from './json-type-rules';
+import { configInfo, DbPlatform, MjCoreSchema, ResolveEntityImportPackage, type ConfigInfo } from '../Config/config';
 import { SQLLogging } from './sql_logging';
-import { CodeGenConnection, resolveCodeGenDatabaseProvider } from '../Database/codeGenDatabaseProvider';
+import { CodeGenConnection, ResolveCodeGenDatabaseProvider } from '../Database/codeGenDatabaseProvider';
 import { CodeGenReporter } from './codegen-reporter';
+import { NormalizeGeneratedValidatorText } from './validator-text';
 import { v4 as uuidv4 } from 'uuid';
-import { writeFileIfChanged } from './file-write';
+import { WriteFileIfChanged } from './file-write';
 import { EmitStats } from './emit-stats';
 import {
   SchemaEmitOptions,
-  buildSchemaBarrel,
-  groupEntitiesBySchema,
-  mapLimit,
-  emitSchemaFile,
-  pruneOrphanedSchemaFiles,
-  resolveSchemaEmitOptions,
-  sanitizeSchemaFileName,
-  schemasToEmit,
+  BuildSchemaBarrel,
+  GroupEntitiesBySchema,
+  MapLimit,
+  EmitSchemaFile,
+  PruneOrphanedSchemaFiles,
+  ResolveSchemaEmitOptions,
+  SanitizeSchemaFileName,
+  SchemasToEmit,
 } from './schema-emit';
 
 /**
@@ -202,7 +207,7 @@ export class EntitySubClassGeneratorBase {
    * @param options - per-schema emit / dirty-schema / parallelism. Defaults come from `configInfo.fileEmit`.
    * @returns
    */
-  public async generateAllEntitySubClasses(
+  public async GenerateAllEntitySubClasses(
     pool: CodeGenConnection,
     entities: EntityInfo[],
     directory: string,
@@ -211,21 +216,21 @@ export class EntitySubClassGeneratorBase {
   ): Promise<boolean> {
     try {
       const emit = this.resolveEmitOptions(options);
-      makeDir(directory);
+      MakeDir(directory);
 
       if (!emit.perSchema) {
-        const allContent = await this.assembleEntitySubclassFile(pool, entities, skipDBUpdate, true);
+        const allContent = await this.AssembleEntitySubclassFile(pool, entities, skipDBUpdate, true);
         this.emitFile(path.join(directory, 'entity_subclasses.ts'), allContent, emit.writeIfChanged);
         return true;
       }
 
-      const grouped = groupEntitiesBySchema(entities);
+      const grouped = GroupEntitiesBySchema(entities);
       const schemas = [...grouped.keys()].sort((a, b) => ordinalCompare(a, b));
       const schemasDir = path.join(directory, 'entities');
-      makeDir(schemasDir);
+      MakeDir(schemasDir);
 
-      const toEmit = schemasToEmit(schemas, emit.dirtySchemas, (schemaName) =>
-        fs.existsSync(path.join(schemasDir, `${sanitizeSchemaFileName(schemaName)}.ts`)),
+      const toEmit = SchemasToEmit(schemas, emit.dirtySchemas, (schemaName) =>
+        fs.existsSync(path.join(schemasDir, `${SanitizeSchemaFileName(schemaName)}.ts`)),
       );
       const emitSet = new Set(toEmit);
       for (const schemaName of schemas) {
@@ -234,21 +239,21 @@ export class EntitySubClassGeneratorBase {
 
       const concurrency = emit.parallel ? emit.concurrency : 1;
       const assembleStarted = Date.now();
-      await mapLimit(toEmit, concurrency, async (schemaName) => {
+      await MapLimit(toEmit, concurrency, async (schemaName) => {
         const schemaEntities = grouped.get(schemaName) ?? [];
-        const content = await this.assembleEntitySubclassFile(pool, schemaEntities, skipDBUpdate, false);
-        const filePath = path.join(schemasDir, `${sanitizeSchemaFileName(schemaName)}.ts`);
+        const content = await this.AssembleEntitySubclassFile(pool, schemaEntities, skipDBUpdate, false);
+        const filePath = path.join(schemasDir, `${SanitizeSchemaFileName(schemaName)}.ts`);
         this.emitFile(filePath, content, emit.writeIfChanged);
       });
       EmitStats.AddAssembleMs(Date.now() - assembleStarted);
 
       // Before the barrel, so the directory and the barrel always agree.
-      const pruned = pruneOrphanedSchemaFiles(schemasDir, schemas);
+      const pruned = PruneOrphanedSchemaFiles(schemasDir, schemas);
       if (pruned.length > 0) {
         logStatus(`   Removed ${pruned.length} orphaned entity schema file(s): ${pruned.join(', ')}`);
       }
 
-      const barrel = buildSchemaBarrel(
+      const barrel = BuildSchemaBarrel(
         schemas,
         'entities',
         `export const loadModule = () => {
@@ -267,6 +272,17 @@ export class EntitySubClassGeneratorBase {
     }
   }
 
+  /** @deprecated Use {@link GenerateAllEntitySubClasses}. */
+  public async generateAllEntitySubClasses(
+    pool: CodeGenConnection,
+    entities: EntityInfo[],
+    directory: string,
+    skipDBUpdate: boolean,
+    options?: SchemaEmitOptions,
+  ): Promise<boolean> {
+    return this.GenerateAllEntitySubClasses(pool, entities, directory, skipDBUpdate, options);
+  }
+
   /**
    * Build the TypeScript source for one emit file (one schema, or the legacy monolith).
    * Hoists and de-duplicates two kinds of import into the file header: the generated
@@ -278,7 +294,7 @@ export class EntitySubClassGeneratorBase {
    * emits nothing for them; hoisting their imports would leave an unused import that
    * fails a downstream consumer's `noUnusedLocals`.
    */
-  public async assembleEntitySubclassFile(
+  public async AssembleEntitySubclassFile(
     pool: CodeGenConnection,
     entities: EntityInfo[],
     skipDBUpdate: boolean,
@@ -287,7 +303,7 @@ export class EntitySubClassGeneratorBase {
     const zodContent: string = entities.map((entity: EntityInfo) => this.GenerateSchemaAndType(entity)).join('');
     let sContent = '';
     for (const e of entities) {
-      sContent += await this.generateEntitySubClass(pool, e, false, skipDBUpdate);
+      sContent += await this.GenerateEntitySubClass(pool, e, false, skipDBUpdate);
     }
     // Only entities that actually emit a class: generateEntitySubClass skips PK-less entities
     // (returns ''), so hoisting their imports would leave a dangling/unused import that fails a
@@ -309,20 +325,30 @@ export class EntitySubClassGeneratorBase {
     );
     const peerImportStatements = EntitySubClassGeneratorBase.FormatPeerImportStatements(peerImports).join('');
     const subclassImports = `${baseClassImports}${peerImportStatements}`;
-    return `${this.generateEntitySubClassFileHeader(includeLoadModule)} \n ${subclassImports}${zodContent} \n ${sContent}`;
+    return `${this.GenerateEntitySubClassFileHeader(includeLoadModule)} \n ${subclassImports}${zodContent} \n ${sContent}`;
+  }
+
+  /** @deprecated Use {@link AssembleEntitySubclassFile}. */
+  public async assembleEntitySubclassFile(
+    pool: CodeGenConnection,
+    entities: EntityInfo[],
+    skipDBUpdate: boolean,
+    includeLoadModule: boolean,
+  ): Promise<string> {
+    return this.AssembleEntitySubclassFile(pool, entities, skipDBUpdate, includeLoadModule);
   }
 
   /** Delegates so both generators share one set of defaults; override to change them. */
   protected resolveEmitOptions(options?: SchemaEmitOptions): Required<SchemaEmitOptions> {
-    return resolveSchemaEmitOptions(options, configInfo?.fileEmit);
+    return ResolveSchemaEmitOptions(options, configInfo?.fileEmit);
   }
 
   /** Delegates so both generators write identically; override to change that. */
   protected emitFile(filePath: string, content: string, useWriteIfChanged: boolean): void {
-    emitSchemaFile(filePath, content, useWriteIfChanged);
+    EmitSchemaFile(filePath, content, useWriteIfChanged);
   }
 
-  public generateEntitySubClassFileHeader(includeLoadModule: boolean = true): string {
+  public GenerateEntitySubClassFileHeader(includeLoadModule: boolean = true): string {
     const loadModule = includeLoadModule
       ? `
 export const loadModule = () => {
@@ -335,6 +361,11 @@ import { RegisterClass } from "@memberjunction/global";
 import { z } from "zod";
 ${loadModule}
     `;
+  }
+
+  /** @deprecated Use {@link GenerateEntitySubClassFileHeader}. */
+  public generateEntitySubClassFileHeader(includeLoadModule: boolean = true): string {
+    return this.GenerateEntitySubClassFileHeader(includeLoadModule);
   }
 
   /**
@@ -356,7 +387,86 @@ ${loadModule}
     return { baseClass: 'BaseEntity', importStatement: '' };
   }
 
-  public async generateEntitySubClass(pool: CodeGenConnection, entity: EntityInfo, includeFileHeader: boolean = false, skipDBUpdate: boolean = false): Promise<string> {
+  /**
+   * Collects and de-duplicates the JSONTypeDefinitions of this entity into the block of interface
+   * declarations emitted above the entity class (a Set, because several fields may share one
+   * definition). Each definition is validated through the TypeScript compiler API first; an invalid
+   * one is logged and its field is demoted to a plain string getter/setter (`JSONType` is nulled).
+   *
+   * Type names are prefixed with the entity class name so entities can reuse a JSONType name. An
+   * opted-in definition (`@mjValidate`) is prefixed through the AST so words inside its JSDoc tag
+   * bodies are never rewritten; every other definition keeps the historical whole-text rewrite, so
+   * untagged output is unchanged byte for byte.
+   */
+  protected static CollectJSONTypeBlock(entity: EntityInfo, sortedFields: EntityFieldInfo[], sClassName: string): string {
+      const jsonTypeDefinitions = new Set<string>();
+      for (const field of sortedFields) {
+          if (field.JSONTypeDefinition && field.JSONTypeDefinition.trim().length > 0) {
+              const definition = field.JSONTypeDefinition.trim();
+              if (field.JSONType && field.JSONType.trim().length > 0) {
+                  const validation = EntitySubClassGeneratorBase.ValidateJSONTypeDefinition(
+                      definition, field.JSONType.trim(), entity.Name, field.Name
+                  );
+                  if (!validation.valid) {
+                      for (const err of validation.errors) {
+                          logError(err);
+                      }
+                      logError(`[JSONType] Skipping JSONTypeDefinition for ${entity.Name}.${field.Name} due to validation errors. The field will use a plain string getter/setter instead.`);
+                      (field as unknown as Record<string, unknown>).JSONType = null;
+                      continue;
+                  }
+              }
+              jsonTypeDefinitions.add(EntitySubClassGeneratorBase.PrefixJSONTypeDefinition(definition, field.JSONType, sClassName));
+          }
+      }
+      return jsonTypeDefinitions.size > 0
+          ? '\n' + Array.from(jsonTypeDefinitions).join('\n\n') + '\n'
+          : '';
+  }
+
+  /** Prefixes a definition's type names with the entity class name (see {@link CollectJSONTypeBlock}). */
+  protected static PrefixJSONTypeDefinition(definition: string, jsonType: string | null, sClassName: string): string {
+      const model = jsonType && jsonType.trim().length > 0 ? ParseJSONTypeDefinition(definition, jsonType.trim()) : null;
+      // AST rewrite whenever ANY declaration opts in, not only the bound root: the same definition can be
+      // bound to an opted-in root on one field and an untagged root on another, and both bindings must
+      // produce identical text so the block emits the declarations once.
+      const anyOptIn = model !== null && Array.from(model.Declarations.values()).some((d) => d.Tags.some((t) => t.Name === 'mjValidate'));
+      if (anyOptIn) {
+          return RewriteJSONTypeDefinition(definition, sClassName);
+      }
+      // Historical rewrite: every top-level declared name, `\b`-matched over the whole text.
+      let rewrittenDef = definition;
+      const sourceFile = ts.createSourceFile('temp.ts', definition, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+      ts.forEachChild(sourceFile, (node) => {
+          if ((ts.isInterfaceDeclaration(node) || ts.isTypeAliasDeclaration(node) ||
+               ts.isEnumDeclaration(node) || ts.isClassDeclaration(node)) && node.name) {
+              const originalName = node.name.text;
+              const prefixedName = `${sClassName}_${originalName}`;
+              rewrittenDef = rewrittenDef.replace(new RegExp('\\b' + originalName + '\\b', 'g'), () => prefixedName);
+          }
+      });
+      return rewrittenDef;
+  }
+
+  /**
+   * The parsed model of a field's JSONTypeDefinition when — and only when — the field is bound to an
+   * opted-in (`@mjValidate`) type whose definition is valid TypeScript. Silent: validity problems are
+   * reported once, by {@link CollectJSONTypeBlock}.
+   */
+  protected static GetOptedInJSONModel(field: EntityFieldInfo, entityName: string): JSONTypeModel | null {
+      const name = field.JSONType?.trim();
+      const definition = field.JSONTypeDefinition?.trim();
+      if (!name || !definition) {
+          return null;
+      }
+      if (!EntitySubClassGeneratorBase.ValidateJSONTypeDefinition(definition, name, entityName, field.Name).valid) {
+          return null;
+      }
+      const model = ParseJSONTypeDefinition(definition, name);
+      return model?.OptedIn ? model : null;
+  }
+
+  public async GenerateEntitySubClass(pool: CodeGenConnection, entity: EntityInfo, includeFileHeader: boolean = false, skipDBUpdate: boolean = false): Promise<string> {
     if (entity.PrimaryKeys.length === 0) {
       console.warn(`SKIPPING TYPESCRIPT GENERATION: Entity ${entity.Name} has no primary keys in metadata. If using soft primary keys, ensure metadata was refreshed after applySoftPKFKConfig().`);
       return '';
@@ -364,13 +474,16 @@ ${loadModule}
 
     const sClassName: string = `${entity.ClassName}Entity`;
     // Sort fields by Sequence, then by __mj_CreatedAt for consistent ordering
-    const sortedFields = sortBySequenceAndCreatedAt(entity.Fields);
+    const sortedFields = SortBySequenceAndCreatedAt(entity.Fields);
+    // Validated BEFORE the accessors are emitted: a field whose JSONTypeDefinition does not parse is
+    // demoted to a plain string here, so it never gets a typed accessor naming a type that is not emitted.
+    const jsonTypeBlock: string = EntitySubClassGeneratorBase.CollectJSONTypeBlock(entity, sortedFields, sClassName);
     const fields: string = sortedFields.map((e) => {
         let values: string = '';
         let valueList: string = '';
         if (e.ValueListType && e.ValueListType.length > 0 && e.ValueListType.trim().toLowerCase() !== 'none') {
           // Sort by Sequence to ensure consistent ordering in comments
-          const sortedValues = sortBySequenceAndCreatedAt([...e.EntityFieldValues]);
+          const sortedValues = SortBySequenceAndCreatedAt([...e.EntityFieldValues]);
           values = sortedValues.map(
             (v) => `\n    *   * ${v.Value}${v.Description && v.Description.length > 0 ? ' - ' + EntitySubClassGeneratorBase.SanitizeDescription(v.Description) : ''}`
           ).join('');
@@ -395,7 +508,7 @@ ${loadModule}
           // construct a typeString that is a union of the possible values
           const quotes = e.NeedsQuotes ? "'" : '';
           // Sort deterministically by Sequence, CreatedAt, then Value to prevent flip-flopping across runs
-          const sortedValues = sortBySequenceAndCreatedAt([...e.EntityFieldValues]);
+          const sortedValues = SortBySequenceAndCreatedAt([...e.EntityFieldValues]);
           typeString = sortedValues.map((v) => `${quotes}${v.Value}${quotes}`).join(' | ');
           if (e.ValueListTypeEnum === EntityFieldValueListType.ListOrUserEntry) {
             // special case becuase a user can enter whatever they want
@@ -432,7 +545,7 @@ ${loadModule}
 
         let sRet: string = `    /**
     * * Field Name: ${e.Name}${e.DisplayName && e.DisplayName.length > 0 ? '\n    * * Display Name: ' + e.DisplayName : ''}
-    * * ${fieldDeprecatedFlag}${fieldDisabledFlag}SQL Data Type: ${e.SQLFullType}${e.RelatedEntity ? '\n    * * Related Entity/Foreign Key: ' + e.RelatedEntity + ' (' + e.RelatedEntityBaseView + '.' + e.RelatedEntityFieldName + ')' : ''}${e.DefaultValue && e.DefaultValue.length > 0 ? '\n    * * Default Value: ' + e.DefaultValue : ''}${valueList}${jsonTypeComment}${e.Description && e.Description.length > 0 ? '\n    * * Description: ' + EntitySubClassGeneratorBase.SanitizeDescription(e.Description) : ''}${isaSourceComment}${conflictNote}
+    * * ${fieldDeprecatedFlag}${fieldDisabledFlag}SQL Data Type: ${e.SQLFullType}${e.IsBinaryFieldType ? '\n    * * Binary Value: base64-encoded string. Decode with Base64ToBytes() — or Base64ToFloat32Vector() for an embedding — from @memberjunction/global.' : ''}${e.RelatedEntity ? '\n    * * Related Entity/Foreign Key: ' + e.RelatedEntity + ' (' + e.RelatedEntityBaseView + '.' + e.RelatedEntityFieldName + ')' : ''}${e.DefaultValue && e.DefaultValue.length > 0 ? '\n    * * Default Value: ' + e.DefaultValue : ''}${valueList}${jsonTypeComment}${e.Description && e.Description.length > 0 ? '\n    * * Description: ' + EntitySubClassGeneratorBase.SanitizeDescription(e.Description) : ''}${isaSourceComment}${conflictNote}
     */
     get ${safeName}(): ${typeString} {
         ${getterBody}
@@ -444,34 +557,29 @@ ${loadModule}
     }`;
         }
 
-        // JSONType: emit additional typed "Object" accessor with caching
+        // JSONType: emit additional typed "Object" accessor. Both halves delegate to the framework
+        // (BaseEntity.GetJSONFieldObject / SetJSONFieldObject) so the object <-> string logic lives once,
+        // in core, and edits made in place (obj.a.b = 1, arr.push(x)) are written back to the field.
         if (hasJSONType && jsonTypeAccessorInfo) {
           const objName = `${safeName}Object`;
-          const cachedField = `_${objName}_cached`;
-          const lastRawField = `_${objName}_lastRaw`;
           const ft = jsonTypeAccessorInfo.fullTypeString;
+          const elementType = jsonTypeAccessorInfo.isArray ? `Array<${jsonTypeAccessorInfo.prefixedTypeName}>` : jsonTypeAccessorInfo.prefixedTypeName;
 
           sRet += `
 
-    private ${cachedField}: ${ft} | undefined = undefined;
-    private ${lastRawField}: string | null = null;
     /**
-    * Typed accessor for ${e.Name} — returns parsed JSON as ${jsonTypeAccessorInfo.isArray ? `Array<${jsonTypeAccessorInfo.prefixedTypeName}>` : jsonTypeAccessorInfo.prefixedTypeName}.
-    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    * Typed accessor for ${e.Name} — a live view of the parsed JSON as ${elementType}.
+    * Edits made through it, at any depth (\`obj.a.b = 1\`, \`arr.push(x)\`, \`delete obj.k\`), update the
+    * underlying ${e.Name} field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
     */
     get ${objName}(): ${ft} {
-        const raw = this.${safeName};
-        if (raw !== this.${lastRawField}) {
-            this.${cachedField} = raw ? JSON.parse(raw) : null;
-            this.${lastRawField} = raw;
-        }
-        return this.${cachedField}!;
+        return this.GetJSONFieldObject<${elementType}>('${e.Name}')${e.AllowsNull ? '' : '!'};
     }
     set ${objName}(value: ${ft}) {
-        const raw = value ? JSON.stringify(value) : null;
-        this.${safeName} = raw;
-        this.${cachedField} = value;
-        this.${lastRawField} = raw;
+        this.SetJSONFieldObject<${elementType}>('${e.Name}', value);
     }`;
         }
 
@@ -587,47 +695,6 @@ ${loadModule}
         `\n * @deprecated This entity is deprecated and will be removed in a future version. Using it will result in console warnings.` : '';
     const disabledFlag: string = status === 'disabled' ? 
         `\n * @disabled This entity is disabled and will not be available in the application. Attempting to use it will result in exceptions being thrown` : '';
-      // Collect and deduplicate JSONTypeDefinitions for this entity.
-      // These are raw TypeScript interface/type definitions (from EntityField.JSONTypeDefinition)
-      // that get emitted above the entity class so the typed getters/setters can reference them.
-      // A Set is used because multiple fields may share the same definition (e.g., a shared config type).
-      // Each definition is validated via the TypeScript compiler API before inclusion.
-      const jsonTypeDefinitions = new Set<string>();
-      for (const field of sortedFields) {
-          if (field.JSONTypeDefinition && field.JSONTypeDefinition.trim().length > 0) {
-              const definition = field.JSONTypeDefinition.trim();
-              if (field.JSONType && field.JSONType.trim().length > 0) {
-                  const validation = EntitySubClassGeneratorBase.ValidateJSONTypeDefinition(
-                      definition, field.JSONType.trim(), entity.Name, field.Name
-                  );
-                  if (!validation.valid) {
-                      for (const err of validation.errors) {
-                          logError(err);
-                      }
-                      logError(`[JSONType] Skipping JSONTypeDefinition for ${entity.Name}.${field.Name} due to validation errors. The field will use a plain string getter/setter instead.`);
-                      (field as unknown as Record<string, unknown>).JSONType = null;
-                      continue;
-                  }
-              }
-              // Prefix all type names defined in this definition block with the entity class name
-              // to avoid naming conflicts across entities. Uses AST to find all defined type names.
-              let rewrittenDef = definition;
-              const sourceFile = ts.createSourceFile('temp.ts', definition, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
-              ts.forEachChild(sourceFile, (node) => {
-                  if ((ts.isInterfaceDeclaration(node) || ts.isTypeAliasDeclaration(node) ||
-                       ts.isEnumDeclaration(node) || ts.isClassDeclaration(node)) && node.name) {
-                      const originalName = node.name.text;
-                      const prefixedName = `${sClassName}_${originalName}`;
-                      rewrittenDef = rewrittenDef.replace(new RegExp('\\b' + originalName + '\\b', 'g'), prefixedName);
-                  }
-              });
-              jsonTypeDefinitions.add(rewrittenDef);
-          }
-      }
-      const jsonTypeBlock = jsonTypeDefinitions.size > 0
-          ? '\n' + Array.from(jsonTypeDefinitions).join('\n\n') + '\n'
-          : '';
-
       const relatedRecordCollections = EntitySubClassGeneratorBase.GenerateRelatedRecordCollections(entity);
       const embeddedRecords = EntitySubClassGeneratorBase.GenerateEmbeddedRecords(entity);
       const hierarchyMethods = EntitySubClassGeneratorBase.GenerateHierarchyMethods(entity, sClassName);
@@ -650,9 +717,14 @@ export class ${sClassName} extends ${sBaseClass}<${sClassName}Type> {${relatedRe
 ${fields}
 }
 `;
-      if (includeFileHeader) sRet = this.generateEntitySubClassFileHeader() + sRet;
+      if (includeFileHeader) sRet = this.GenerateEntitySubClassFileHeader() + sRet;
 
       return sRet;
+  }
+
+  /** @deprecated Use {@link GenerateEntitySubClass}. */
+  public async generateEntitySubClass(pool: CodeGenConnection, entity: EntityInfo, includeFileHeader: boolean = false, skipDBUpdate: boolean = false): Promise<string> {
+    return this.GenerateEntitySubClass(pool, entity, includeFileHeader, skipDBUpdate);
   }
 
   /**
@@ -1012,7 +1084,7 @@ ${fields}
     }
 
     if (entity.PrimaryKeys.length !== 1) {
-      logWarning(
+      LogWarning(
         `[Hierarchy] Entity '${entity.Name}' has ${recursiveFKs.length} hierarchy foreign key(s) ` +
         `(${recursiveFKs.map(f => f.Name).join(', ')}), but has ${entity.PrimaryKeys.length} primary key fields. ` +
         `MemberJunction hierarchy traversal requires a single-column primary key; skipping subclass hierarchy methods.`
@@ -1100,7 +1172,7 @@ ${fields}
           `CodeGen cannot pick an npm package to import it from.`,
         );
       }
-      const packageName = resolveEntityImportPackage(schema, owningSchema, config);
+      const packageName = ResolveEntityImportPackage(schema, owningSchema, config);
       const existing = byClass.get(className);
       if (existing && existing !== packageName) {
         throw new Error(
@@ -1316,8 +1388,8 @@ ${fields}
         const qi = (n: string) => dialect.QuoteIdentifier(n);
         const lit = (v: string) => dialect.QuoteStringLiteral(v);
         const utcNow = dialect.CurrentTimestampUTC();
-        const generatedCodeTbl = dialect.QuoteSchema(mj_core_schema(), 'GeneratedCode');
-        const generatedCodeCatsView = dialect.QuoteSchema(mj_core_schema(), 'vwGeneratedCodeCategories');
+        const generatedCodeTbl = dialect.QuoteSchema(MjCoreSchema(), 'GeneratedCode');
+        const generatedCodeCatsView = dialect.QuoteSchema(MjCoreSchema(), 'vwGeneratedCodeCategories');
         const validatorCodeCategoryID = `(SELECT ${qi('ID')} FROM ${generatedCodeCatsView} WHERE ${qi('Name')}=${lit('CodeGen: Validators')})`;
 
         let sSQL: string  = '';
@@ -1325,7 +1397,7 @@ ${fields}
         if (justGenerated.length > 0) {
           CodeGenReporter.Instance.counter('ai.validatorCalls', justGenerated.length);
         }
-        const provider = resolveCodeGenDatabaseProvider(dbPlatform());
+        const provider = ResolveCodeGenDatabaseProvider(DbPlatform());
         for (const v of justGenerated) {
           // only update the DB for the fields that were actually generated/regenerated, otherwise not needed
           const f = entity.Fields.find((f) => f.Name.trim().toLowerCase() === v.fieldName?.trim().toLowerCase());
@@ -1348,7 +1420,9 @@ ${fields}
             const linkedRecordPK = f ? f.ID : entity.ID;
             const newGeneratedCodeId = uuidv4();
             v.generatedCodeId = newGeneratedCodeId;
-            const checkQuery = `SELECT 1 FROM ${generatedCodeTbl} WHERE ${qi('CategoryID')} = ${validatorCodeCategoryID} AND ${qi('LinkedEntityID')} = ${lit(linkedEntityID ?? '')} AND ${qi('LinkedRecordPrimaryKey')} = ${lit(linkedRecordPK)}`;
+            // Every table-level validator links to the entity row, so its guard also names the validator.
+            const nameMatch = f ? '' : ` AND ${qi('Name')} = ${lit(v.functionName)}`;
+            const checkQuery = `SELECT 1 FROM ${generatedCodeTbl} WHERE ${qi('CategoryID')} = ${validatorCodeCategoryID} AND ${qi('LinkedEntityID')} = ${lit(linkedEntityID ?? '')} AND ${qi('LinkedRecordPrimaryKey')} = ${lit(linkedRecordPK)}${nameMatch}`;
             const insertSQL = `INSERT INTO ${generatedCodeTbl} (${qi('ID')}, ${qi('CategoryID')}, ${qi('GeneratedByModelID')}, ${qi('GeneratedAt')}, ${qi('Language')}, ${qi('Status')}, ${qi('Source')}, ${qi('Code')}, ${qi('Description')}, ${qi('Name')}, ${qi('LinkedEntityID')}, ${qi('LinkedRecordPrimaryKey')})
 VALUES (${lit(newGeneratedCodeId)}, ${validatorCodeCategoryID}, ${lit(v.aiModelID)}, ${utcNow}, ${lit('TypeScript')}, ${lit('Approved')}, ${lit(v.sourceCheckConstraint)}, ${lit(v.functionText)}, ${lit(v.functionDescription)}, ${lit(v.functionName)}, ${lit(linkedEntityID ?? '')}, ${lit(linkedRecordPK)})`;
             sSQL += `${provider.conditionalInsertSQL(checkQuery, insertSQL)};\n\n`;
@@ -1372,6 +1446,48 @@ VALUES (${lit(newGeneratedCodeId)}, ${validatorCodeCategoryID}, ${lit(v.aiModelI
       return null;
     }
   }
+  /**
+   * The `Validate()` contributions of an entity's opted-in JSONType fields: one
+   * `this.ValidateJSONField(...)` call per field (structural Zod schema, then the field's `@CHECK`
+   * rules) and one doc line per field. Empty when no field is opted in — the common case, in which
+   * generated output is exactly what it was before JSONType validation existed.
+   *
+   * Fields that are read-only, or that are IS-A parent fields mirrored onto a child, are skipped: the
+   * former cannot be written, and the latter are validated by the parent's own generated `Validate()`.
+   *
+   * SQL `@CHECK` rules are emitted from translations already resolved by CodeGen's metadata phase
+   * (`ManageMetadataBase.GeneratedJSONValidators`); one with no translation is skipped with a warning.
+   */
+  protected buildJSONValidation(entity: EntityInfo): { Calls: string[]; DocLines: string[] } {
+    const calls: string[] = [];
+    const docLines: string[] = [];
+    const prefix = `${entity.ClassName}Entity`;
+    const translations = this.collectJSONTranslations();
+    for (const field of SortBySequenceAndCreatedAt(entity.Fields)) {
+      const isISAParentField = field.IsVirtual && field.AllowUpdateAPI && entity.IsChildType;
+      const model = field.ReadOnly || isISAParentField ? null : EntitySubClassGeneratorBase.GetOptedInJSONModel(field, entity.Name);
+      if (!model) {
+        continue;
+      }
+      const isArray = field.JSONTypeIsArray === true;
+      const ruleSet = BuildJSONRuleSet(model, prefix, prefix, isArray, translations, entity.Name);
+      ruleSet.Errors.forEach((message) => logError(`[JSONType] ${entity.Name}.${field.Name}: ${message}`));
+      ruleSet.Missing.forEach((rule) => LogWarning(`[JSONType] ${entity.Name}.${field.Name}: SQL @CHECK on ${rule.Path} ('${rule.NormalizedText}') has no generated validator and is not emitted`));
+      const root = JSONSchemaConstName(prefix, model.RootName);
+      const schema = isArray ? `z.array(${root})` : root;
+      const rules = ruleSet.Source ? ruleSet.Source.split('\n').map((l, i) => (i === 0 ? l : `        ${l}`)).join('\n') : 'null';
+      calls.push(`        this.ValidateJSONField(${JSON.stringify(field.Name)}, ${schema}, ${rules}, '${model.Severity}', result);`);
+      docLines.push(`    * * ${field.Name}: JSON structure${ruleSet.Source ? ' and @CHECK rules' : ''} (@mjValidate${model.Severity === 'Warning' ? ' warn' : ''})`);
+    }
+    return { Calls: calls, DocLines: docLines };
+  }
+
+  /** Key → translation for every resolved SQL `@CHECK` of the run. Tolerates a manage-metadata that predates them. */
+  private collectJSONTranslations(): Map<string, JSONCheckTranslation> {
+    const resolved: JSONValidatorResult[] = ManageMetadataBase.GeneratedJSONValidators ?? [];
+    return new Map(resolved.map((r) => [r.Key, { Description: r.FunctionDescription, Body: r.FunctionText }]));
+  }
+
   public GenerateValidateFunction(entity: EntityInfo): null | { code: string, validators: ValidatorResult[] } {
     // go through the ManageMetadataBase.generatedFieldValidators to see if we have anything to generate
     const unsortedValidators = ManageMetadataBase.generatedValidators.filter((f) => f.entityName.trim().toLowerCase() === entity.Name.trim().toLowerCase());
@@ -1404,15 +1520,16 @@ VALUES (${lit(newGeneratedCodeId)}, ${validatorCodeCategoryID}, ${lit(v.aiModelI
       return true;
     });
 
-    if (validators.length === 0) {
+    const jsonValidation = this.buildJSONValidation(entity);
+
+    if (validators.length === 0 && jsonValidation.Calls.length === 0) {
       return null;
     }
     else {
       const validationFunctions = validators.map((f) => {
         // output the function text and the function description in a JSDoc block
 
-        // first format the function text to ensure that escaped \n, \t, and \" are replaced with actual characters
-        const cleansedText = f.functionText.replace(/\\n/g, '\n').replace(/\\t/g, '\t').replace(/\\"/g, '"');
+        const cleansedText = NormalizeGeneratedValidatorText(f.functionText);
         // next up, format the function text to have proper indentation with 4 spaces preceding the start of each line
         const formattedText = cleansedText.split('\n').map((l) => `    ${l}`).join('\n');
 
@@ -1427,23 +1544,56 @@ ${formattedText}`
 
       const ret = `    /**
     * Validate() method override for ${entity.Name} entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-${validators.map((f) => `    * * ${f.fieldName ? f.fieldName : 'Table-Level'}: ${EntitySubClassGeneratorBase.SanitizeDescription(f.functionDescription)}`).join('\n')}
+${[...validators.map((f) => `    * * ${f.fieldName ? f.fieldName : 'Table-Level'}: ${EntitySubClassGeneratorBase.SanitizeDescription(f.functionDescription)}`), ...jsonValidation.DocLines].join('\n')}
     * @public
     * @method
     * @override
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
-${validators.map((f) => `        this.${f.functionName}(result);`).join('\n')}
-        result.Success = result.Success && (result.Errors.length === 0);
+${[...validators.map((f) => `        this.${f.functionName}(result);`), ...jsonValidation.Calls].join('\n')}
+        result.Success = result.Success && ${jsonValidation.Calls.length > 0 ? '!result.Errors.some((e) => e.Type === ValidationErrorType.Failure)' : '(result.Errors.length === 0)'};
 
         return result;
     }
-
-${validationFunctions}`
+${validationFunctions.length > 0 ? '\n' + validationFunctions : ''}`
       return {code: ret, validators: validators};
   }
 }
+
+  /**
+   * Collects the exported structural Zod consts of a field bound to an opted-in JSONType (nothing for
+   * a field that is not opted in). The consts are used ONLY by the generated `Validate()` and by
+   * consumers that want to `z.infer` / `safeParse` the object shape; the field's own column entry in
+   * `<Entity>Schema` stays `z.any()` because the column's value everywhere (Get, GetAll, LoadFromData,
+   * GraphQL, raw rows) is JSON TEXT, and the typed object view is the `<Field>Object` accessor. `consts`
+   * is keyed by const name, so a declaration reached from several fields or definitions is emitted
+   * once. Constructs Zod cannot express are reported here as warnings and become unchecked sub-trees;
+   * they never fail the run.
+   */
+  protected collectStructuralJSONSchema(entity: EntityInfo, field: EntityFieldInfo, consts: Map<string, string>): void {
+    const model = EntitySubClassGeneratorBase.GetOptedInJSONModel(field, entity.Name);
+    if (!model) {
+      return;
+    }
+    const prefix = `${entity.ClassName}Entity`;
+    const converted = GenerateJSONTypeZod(model, prefix);
+    for (const warning of converted.Warnings) {
+      LogWarning(`[JSONType] ${entity.Name}.${field.Name}: ${warning}`);
+    }
+    for (const orphan of FindUnattachedTagComments(model)) {
+      LogWarning(`[JSONType] ${entity.Name}.${field.Name}: a comment carrying tags is attached to nothing and its tags are ignored — start the comment on its own line, not on the line of the opening '{' (${orphan})`);
+    }
+    for (const [name, source] of converted.Consts) {
+      const existing = consts.get(name);
+      if (existing === undefined) {
+        consts.set(name, source);
+      } else if (existing !== source) {
+        // Same prefixed name, different shape: two definitions on this entity declare the type differently.
+        logError(`[JSONType] ${entity.Name}.${field.Name}: '${name}' is declared differently by another JSONType definition on this entity; the first declaration's schema is used. Give the types distinct names.`);
+      }
+    }
+  }
 
   public GenerateSchemaAndType(entity: EntityInfo): string {
     let content: string = '';
@@ -1451,30 +1601,33 @@ ${validationFunctions}`
       logStatus(`SKIPPING SCHEMA GENERATION: Entity ${entity.Name} has no primary keys in metadata. If using soft primary keys, ensure metadata was refreshed after applySoftPKFKConfig().`);
     } else {
       // Sort fields by Sequence, then by __mj_CreatedAt for consistent ordering
-      const sortedFields = sortBySequenceAndCreatedAt(entity.Fields);
+      const sortedFields = SortBySequenceAndCreatedAt(entity.Fields);
       
+      const jsonSchemaConsts = new Map<string, string>();
       const fields: string = sortedFields.map((e) => {
         let values: string = '';
         let valueList: string = '';
         if (e.ValueListType && e.ValueListType.length > 0 && e.ValueListType.trim().toLowerCase() !== 'none') {
           // Sort by Sequence to ensure consistent ordering in comments
-          const sortedValues = sortBySequenceAndCreatedAt([...e.EntityFieldValues]);
+          const sortedValues = SortBySequenceAndCreatedAt([...e.EntityFieldValues]);
           values = sortedValues.map(
             (v) => `\n    *   * ${v.Value}${v.Description && v.Description.length > 0 ? ' - ' + v.Description : ''}`
           ).join('');
           valueList = `\n    * * Value List Type: ${e.ValueListType}\n    * * Possible Values ` + values;
         }
-        // JSONType fields use z.any() in the Zod schema since the actual validation is
-        // handled by the TypeScript interface (full Zod schema generation is a future phase).
+        // JSONType fields ALWAYS use z.any() in the entity Zod schema (the column value is JSON text).
+        // A type that opted in with @mjValidate additionally gets exported structural schema consts,
+        // converted from the type's AST, that Validate() uses to check the parsed shape.
         const hasJSONType = e.JSONType && e.JSONType.trim().length > 0;
         let typeString: string = `${TypeScriptTypeFromSQLType(e.Type).toLowerCase()}()` + (e.AllowsNull ? '.nullable()' : '');
         if (hasJSONType) {
           typeString = `any()${e.AllowsNull ? '.nullable()' : ''}`;
+          this.collectStructuralJSONSchema(entity, e, jsonSchemaConsts);
         } else if (e.ValueListTypeEnum !== EntityFieldValueListType.None && e.EntityFieldValues && e.EntityFieldValues.length > 0) {
           // construct a typeString that is a union of the possible values
           const quotes = e.NeedsQuotes ? "'" : '';
           // Sort deterministically by Sequence, CreatedAt, then Value to prevent flip-flopping across runs
-          const sortedValues = sortBySequenceAndCreatedAt([...e.EntityFieldValues]);
+          const sortedValues = SortBySequenceAndCreatedAt([...e.EntityFieldValues]);
           // z.union() requires at least 2 members. When there's only one allowed
           // value (single-value CHECK constraint), emit z.literal() directly.
           const literals = sortedValues.map((v) => `z.literal(${quotes}${v.Value}${quotes})`);
@@ -1496,7 +1649,8 @@ ${validationFunctions}`
       }).join('\n');
 
       const schemaName: string = `${entity.ClassName}Schema`;
-      content = `
+      const jsonSchemaBlock = jsonSchemaConsts.size > 0 ? `\n${Array.from(jsonSchemaConsts.values()).join('\n\n')}\n` : '';
+      content = `${jsonSchemaBlock}
 /**
  * zod schema definition for the entity ${entity.Name}
  */
@@ -1524,7 +1678,7 @@ export type ${entity.ClassName}EntityType = z.infer<typeof ${schemaName}>;
     let valueList: string = '';
     if (entityField.ValueListType && entityField.ValueListType.length > 0 && entityField.ValueListType.trim().toLowerCase() !== 'none') {
       // Sort by Sequence to ensure consistent ordering in comments
-      const sortedValues = sortBySequenceAndCreatedAt([...entityField.EntityFieldValues]);
+      const sortedValues = SortBySequenceAndCreatedAt([...entityField.EntityFieldValues]);
       let values = sortedValues.map(
         (v) => `\n    *   * ${v.Value}${v.Description && v.Description.length > 0 ? ' - ' + EntitySubClassGeneratorBase.SanitizeDescription(v.Description) : ''}`
       ).join('');

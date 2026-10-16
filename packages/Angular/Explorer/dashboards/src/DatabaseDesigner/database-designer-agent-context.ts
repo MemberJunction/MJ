@@ -43,8 +43,13 @@ export const DATABASE_DESIGNER_NAME_LIST_CAP = 25;
  * Strip the leading "MJ: " schema prefix from an entity Name, if present.
  * Pure + deterministic. Returns the input unchanged when the prefix is absent.
  */
-export function stripMJPrefix(name: string): string {
+export function StripMJPrefix(name: string): string {
     return name.startsWith(MJ_ENTITY_NAME_PREFIX) ? name.slice(MJ_ENTITY_NAME_PREFIX.length) : name;
+}
+
+/** @deprecated Use {@link StripMJPrefix}. */
+export function stripMJPrefix(name: string): string {
+    return StripMJPrefix(name);
 }
 
 /**
@@ -52,11 +57,16 @@ export function stripMJPrefix(name: string): string {
  * else the registered Name with the "MJ: " schema prefix stripped. This is what the user
  * reads on screen and therefore what they say ("AI Models", not "MJ: AI Models").
  */
-export function entityDisplayName(name: string, displayName?: string | null): string {
+export function EntityDisplayName(name: string, displayName?: string | null): string {
     if (displayName) {
         return displayName;
     }
-    return stripMJPrefix(name);
+    return StripMJPrefix(name);
+}
+
+/** @deprecated Use {@link EntityDisplayName}. */
+export function entityDisplayName(name: string, displayName?: string | null): string {
+    return EntityDisplayName(name, displayName);
 }
 
 /**
@@ -91,7 +101,7 @@ export interface EntityNameCandidate {
  * @param candidates - the entities available in the designer
  * @returns the matched candidate, or null on a miss
  */
-export function resolveEntityByIdOrName<T extends EntityNameCandidate>(input: string, candidates: readonly T[]): T | null {
+export function ResolveEntityByIdOrName<T extends EntityNameCandidate>(input: string, candidates: readonly T[]): T | null {
     const needle = input.trim().toLowerCase();
     if (!needle) {
         return null;
@@ -107,36 +117,46 @@ export function resolveEntityByIdOrName<T extends EntityNameCandidate>(input: st
         return byName;
     }
     // 3. display name (DisplayName, else prefix-stripped Name)
-    const byDisplay = candidates.find(c => entityDisplayName(c.Name, c.DisplayName).toLowerCase() === needle);
+    const byDisplay = candidates.find(c => EntityDisplayName(c.Name, c.DisplayName).toLowerCase() === needle);
     if (byDisplay) {
         return byDisplay;
     }
     // 4. display name ignoring the "MJ: " prefix (covers an input that itself carries the prefix)
-    const strippedNeedle = stripMJPrefix(input.trim()).toLowerCase();
+    const strippedNeedle = StripMJPrefix(input.trim()).toLowerCase();
     if (strippedNeedle !== needle) {
-        const byStripped = candidates.find(c => entityDisplayName(c.Name, c.DisplayName).toLowerCase() === strippedNeedle);
+        const byStripped = candidates.find(c => EntityDisplayName(c.Name, c.DisplayName).toLowerCase() === strippedNeedle);
         if (byStripped) {
             return byStripped;
         }
     }
     // 5. partial (contains) match on the display name
-    const byContains = candidates.find(c => entityDisplayName(c.Name, c.DisplayName).toLowerCase().includes(needle));
+    const byContains = candidates.find(c => EntityDisplayName(c.Name, c.DisplayName).toLowerCase().includes(needle));
     if (byContains) {
         return byContains;
     }
     return null;
 }
 
+/** @deprecated Use {@link ResolveEntityByIdOrName}. */
+export function resolveEntityByIdOrName<T extends EntityNameCandidate>(input: string, candidates: readonly T[]): T | null {
+    return ResolveEntityByIdOrName(input, candidates);
+}
+
 /**
  * Build a tolerant "not found" error for an ID-or-name lookup miss, listing a bounded
  * sample of available entity DISPLAY names so the agent can correct itself.
  */
-export function buildEntityNotFoundError(input: string, candidates: readonly EntityNameCandidate[]): string {
+export function BuildEntityNotFoundError(input: string, candidates: readonly EntityNameCandidate[]): string {
     const sample = candidates
         .slice(0, DATABASE_DESIGNER_NAME_LIST_CAP)
-        .map(c => entityDisplayName(c.Name, c.DisplayName))
+        .map(c => EntityDisplayName(c.Name, c.DisplayName))
         .join(', ');
     return `No entity matches "${input}". Available entities include: ${sample || '(none)'}.`;
+}
+
+/** @deprecated Use {@link BuildEntityNotFoundError}. */
+export function buildEntityNotFoundError(input: string, candidates: readonly EntityNameCandidate[]): string {
+    return BuildEntityNotFoundError(input, candidates);
 }
 
 /** Cap an array of names to {@link DATABASE_DESIGNER_NAME_LIST_CAP} entries. Pure + deterministic. */
@@ -244,7 +264,7 @@ export interface DatabaseDesignerAgentContextInput {
  * @param input - the component's current browse-state snapshot
  * @returns a flat key-value object suitable for `SetAgentContext`
  */
-export function buildDatabaseDesignerAgentContext(
+export function BuildDatabaseDesignerAgentContext(
     input: DatabaseDesignerAgentContextInput,
 ): Record<string, unknown> {
     const hasSearch = input.SearchText.trim().length > 0;
@@ -308,4 +328,11 @@ export function buildDatabaseDesignerAgentContext(
     }
 
     return context;
+}
+
+/** @deprecated Use {@link BuildDatabaseDesignerAgentContext}. */
+export function buildDatabaseDesignerAgentContext(
+    input: DatabaseDesignerAgentContextInput,
+): Record<string, unknown> {
+    return BuildDatabaseDesignerAgentContext(input);
 }

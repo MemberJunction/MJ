@@ -10,7 +10,7 @@
 import { describe, it, expect } from 'vitest';
 
 import type { PublicAuthProviderInfo } from '@memberjunction/core';
-import { buildGenericEnvironmentOverlay, mergeCatalogEnvironment, type CatalogEnvironmentMapper } from '../catalog-environment';
+import { BuildGenericEnvironmentOverlay, MergeCatalogEnvironment, type CatalogEnvironmentMapper } from '../catalog-environment';
 
 function info(overrides: Partial<PublicAuthProviderInfo> & { driverClass: string }): PublicAuthProviderInfo {
   return {
@@ -24,7 +24,7 @@ function info(overrides: Partial<PublicAuthProviderInfo> & { driverClass: string
 
 describe('buildGenericEnvironmentOverlay', () => {
   it('projects the modelled columns onto the prefixed keys the drivers read', () => {
-    const overlay = buildGenericEnvironmentOverlay(
+    const overlay = BuildGenericEnvironmentOverlay(
       info({ driverClass: 'auth0', clientId: 'cid_123', domain: 'tenant.us.auth0.com', issuer: 'https://tenant.us.auth0.com/' })
     );
 
@@ -36,25 +36,25 @@ describe('buildGenericEnvironmentOverlay', () => {
   });
 
   it('upper-snakes a multi-word driver class for the prefix', () => {
-    const overlay = buildGenericEnvironmentOverlay(info({ driverClass: 'magic-link', clientId: 'cid' }));
+    const overlay = BuildGenericEnvironmentOverlay(info({ driverClass: 'magic-link', clientId: 'cid' }));
     expect(overlay).toEqual({ MAGIC_LINK_CLIENTID: 'cid' });
   });
 
   it('emits nothing for absent columns, so compiled environment keys are never blanked', () => {
-    const overlay = buildGenericEnvironmentOverlay(info({ driverClass: 'okta' }));
+    const overlay = BuildGenericEnvironmentOverlay(info({ driverClass: 'okta' }));
     expect(overlay).toEqual({});
   });
 
   it('passes the pre-parsed scopes array through to the prefixed key', () => {
     // Okta's OktaAuthOptions.scopes and Amplify's oauth.scopes are string[] — the server splits
     // the delimited column at the trust boundary, and the overlay must not re-derive it.
-    const overlay = buildGenericEnvironmentOverlay(info({ driverClass: 'okta', scopes: ['openid', 'profile', 'email'] }));
+    const overlay = BuildGenericEnvironmentOverlay(info({ driverClass: 'okta', scopes: ['openid', 'profile', 'email'] }));
     expect(overlay['OKTA_SCOPES']).toEqual(['openid', 'profile', 'email']);
   });
 
   it('does not emit a scopes key for an empty scopes list', () => {
     // Emitting [] would defeat the drivers' `|| [defaults]` fallback (an empty array is truthy).
-    const overlay = buildGenericEnvironmentOverlay(info({ driverClass: 'okta', scopes: [] }));
+    const overlay = BuildGenericEnvironmentOverlay(info({ driverClass: 'okta', scopes: [] }));
     expect(overlay).not.toHaveProperty('OKTA_SCOPES');
   });
 
@@ -62,12 +62,12 @@ describe('buildGenericEnvironmentOverlay', () => {
     // This module runs at bootstrap, before any error boundary — the catalog contract is
     // degrade-to-compiled-environment, never white-screen the app.
     const malformed = { ...info({ driverClass: 'okta' }), scopes: 'openid profile' as unknown as string[] };
-    const overlay = buildGenericEnvironmentOverlay(malformed);
+    const overlay = BuildGenericEnvironmentOverlay(malformed);
     expect(overlay).not.toHaveProperty('OKTA_SCOPES');
   });
 
   it('projects ClientConfiguration entries through camelCase → UPPER_SNAKE', () => {
-    const overlay = buildGenericEnvironmentOverlay(
+    const overlay = BuildGenericEnvironmentOverlay(
       info({
         driverClass: 'workos',
         clientConfiguration: { redirectUri: 'https://app.example.com/callback', apiHostname: 'api.workos.com', devMode: false }
@@ -82,7 +82,7 @@ describe('buildGenericEnvironmentOverlay', () => {
   });
 
   it('skips null ClientConfiguration values rather than emitting them', () => {
-    const overlay = buildGenericEnvironmentOverlay(info({ driverClass: 'workos', clientConfiguration: { redirectUri: null } }));
+    const overlay = BuildGenericEnvironmentOverlay(info({ driverClass: 'workos', clientConfiguration: { redirectUri: null } }));
     expect(overlay).toEqual({});
   });
 
@@ -90,7 +90,7 @@ describe('buildGenericEnvironmentOverlay', () => {
     // Same precedence the server enforces in buildProviderConfig: the described, reviewable
     // columns must not be silently redefined by a JSON blob. A blob `scopes` string would
     // otherwise clobber the parsed array and reintroduce the string-where-string[]-expected bug.
-    const overlay = buildGenericEnvironmentOverlay(
+    const overlay = BuildGenericEnvironmentOverlay(
       info({
         driverClass: 'okta',
         issuer: 'https://column.example.com',
@@ -109,7 +109,7 @@ describe('mergeCatalogEnvironment', () => {
   const base = { GRAPHQL_URI: 'https://api.example.com/', AUTH_TYPE: 'auth0', OKTA_CLIENTID: 'compiled-cid' };
 
   it('overlays the catalog on the compiled environment and stamps AUTH_TYPE with the driver class', () => {
-    const merged = mergeCatalogEnvironment(base, info({ driverClass: 'okta', clientId: 'catalog-cid' }));
+    const merged = MergeCatalogEnvironment(base, info({ driverClass: 'okta', clientId: 'catalog-cid' }));
 
     expect(merged['GRAPHQL_URI']).toBe('https://api.example.com/'); // app-wide settings survive
     expect(merged['OKTA_CLIENTID']).toBe('catalog-cid'); // metadata wins over the compiled value
@@ -117,7 +117,7 @@ describe('mergeCatalogEnvironment', () => {
   });
 
   it('leaves compiled provider keys intact when the catalog row does not restate them', () => {
-    const merged = mergeCatalogEnvironment(base, info({ driverClass: 'okta' }));
+    const merged = MergeCatalogEnvironment(base, info({ driverClass: 'okta' }));
     expect(merged['OKTA_CLIENTID']).toBe('compiled-cid');
   });
 
@@ -125,7 +125,7 @@ describe('mergeCatalogEnvironment', () => {
     const providerClass: CatalogEnvironmentMapper = {
       EnvironmentFromCatalog: (row) => ({ CLIENT_ID: row.clientId })
     };
-    const merged = mergeCatalogEnvironment(base, info({ driverClass: 'msal', clientId: 'entra-cid' }), providerClass);
+    const merged = MergeCatalogEnvironment(base, info({ driverClass: 'msal', clientId: 'entra-cid' }), providerClass);
 
     expect(merged['CLIENT_ID']).toBe('entra-cid');
     expect(merged).not.toHaveProperty('MSAL_CLIENTID'); // generic overlay must not also run
@@ -133,7 +133,7 @@ describe('mergeCatalogEnvironment', () => {
   });
 
   it('falls back to the generic projection when the provider class has no mapper', () => {
-    const merged = mergeCatalogEnvironment(base, info({ driverClass: 'msal', clientId: 'entra-cid' }), {});
+    const merged = MergeCatalogEnvironment(base, info({ driverClass: 'msal', clientId: 'entra-cid' }), {});
     expect(merged['MSAL_CLIENTID']).toBe('entra-cid');
   });
 });

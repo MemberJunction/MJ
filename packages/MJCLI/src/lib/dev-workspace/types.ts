@@ -13,10 +13,10 @@
 
 /** One pnpm packageExtensions value: the sections pnpm merges into the target package's manifest. */
 export interface PackageExtension {
-  dependencies?: Record<string, string>;
-  optionalDependencies?: Record<string, string>;
-  peerDependencies?: Record<string, string>;
-  peerDependenciesMeta?: Record<string, { optional?: boolean }>;
+  dependencies?: Record<string, string>;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  optionalDependencies?: Record<string, string>;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  peerDependencies?: Record<string, string>;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  peerDependenciesMeta?: Record<string, { optional?: boolean }>;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
 }
 
 /**
@@ -28,22 +28,22 @@ export interface PackageExtension {
  * 14-member workspace ran unpatched type-graphql and lost MJ's 26 pins).
  */
 export interface MemberPnpmBlock {
-  overrides?: Record<string, string>;
+  overrides?: Record<string, string>;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
   /** `pkg@version` -> patch file path RELATIVE TO THE MEMBER REPO ROOT — re-rooted on hoist. */
-  patchedDependencies?: Record<string, string>;
-  packageExtensions?: Record<string, PackageExtension>;
-  peerDependencyRules?: { allowedVersions?: Record<string, string>; ignoreMissing?: string[] };
+  patchedDependencies?: Record<string, string>;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  packageExtensions?: Record<string, PackageExtension>;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  peerDependencyRules?: { allowedVersions?: Record<string, string>; ignoreMissing?: string[] };  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
 }
 
 /** The root-level package.json fields the workspace generator reads from member repos. */
 export interface MemberPackageJson {
-  name?: string;
-  version?: string;
-  packageManager?: string;
-  dependencies?: Record<string, string>;
-  devDependencies?: Record<string, string>;
-  peerDependencies?: Record<string, string>;
-  pnpm?: MemberPnpmBlock;
+  name?: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  version?: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  packageManager?: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  dependencies?: Record<string, string>;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  devDependencies?: Record<string, string>;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  peerDependencies?: Record<string, string>;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  pnpm?: MemberPnpmBlock;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
 }
 
 /** One package.json found under a member repo's workspace globs. */
@@ -55,14 +55,14 @@ export interface MemberPackageInfo {
 
 /** One `packages.client[]` / `server[]` / `shared[]` entry in a member's committed `mj-app.json`. */
 export interface MjAppPackageEntry {
-  name: string;
+  name: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
   /**
    * One of the manifest schema's seven roles (`bootstrap`, `actions`, `engine`, `provider`, `module`,
    * `components`, `library`). Read for reporting only — the host's client emitter applies NO role
    * filter, so role never decides whether a package must be linked. See `readShellImportedEntries`.
    */
-  role?: string;
-  startupExport?: string;
+  role?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
+  startupExport?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
 }
 
 /**
@@ -76,8 +76,8 @@ export interface MjAppPackageEntry {
  * not a host has registered it.
  */
 export interface MjAppJson {
-  name?: string;
-  packages?: {
+  name?: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  packages?: {  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
     client?: MjAppPackageEntry[];
     server?: MjAppPackageEntry[];
     shared?: MjAppPackageEntry[];
@@ -405,11 +405,11 @@ export interface WriteResult {
  */
 export interface WorkspaceSentinel {
   /** Fixed marker identifying the writer — what `clean` checks before deleting. */
-  generatedBy: string;
+  generatedBy: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
   /** Every file name (relative to the parent) the generator wrote, sorted. */
-  files: string[];
+  files: string[];  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
   /** Member repo directory names the workspace was generated for, sorted. */
-  members: string[];
+  members: string[];  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
 }
 
 /** Outcome of reading the sentinel: ours, not there, or there but not ours. */

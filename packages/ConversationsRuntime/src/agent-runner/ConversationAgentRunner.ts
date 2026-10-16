@@ -89,6 +89,35 @@ export interface ProcessMessageInput {
      * Settings beat the global default.
      */
     applicationId?: string | null;
+    /**
+     * The agents the conversation manager may delegate to. When set, `ALL_AVAILABLE_AGENTS`
+     * (the list the manager routes from) is narrowed to these. Null or omitted keeps every agent
+     * the user can run.
+     */
+    AllowedAgentIDs?: readonly string[] | null;
+    /**
+     * The first moment of the conversation this turn may read. Sent to the server only when set;
+     * the server then loads the agent's history from there and skips its summary of earlier
+     * messages.
+     */
+    AgentHistoryFrom?: Date | null;
+}
+
+/**
+ * Narrows the agents the conversation manager may route to. A null or undefined list keeps them
+ * all; an empty list leaves none, so the manager can only answer itself.
+ *
+ * @param agents The permission-filtered routing candidates.
+ * @param allowedAgentIDs The host's allowed list.
+ */
+export function NarrowToAllowedAgents<T extends { ID: string }>(
+    agents: T[],
+    allowedAgentIDs: readonly string[] | null | undefined
+): T[] {
+    if (allowedAgentIDs == null) {
+        return agents;
+    }
+    return agents.filter((agent) => allowedAgentIDs.some((id) => UUIDsEqual(id, agent.ID)));
 }
 
 /**
@@ -110,7 +139,12 @@ export class ConversationAgentRunner {
     private _provider: IMetadataProvider | null = null;
 
     /** Emits `true` while one or more agent runs are in flight, `false` otherwise. */
-    public readonly isProcessing$: Observable<boolean> = this._isProcessing$.asObservable();
+    public readonly IsProcessing$: Observable<boolean> = this._isProcessing$.asObservable();
+
+    /** @deprecated Use {@link IsProcessing$}. */
+    public get isProcessing$(): Observable<boolean> {
+        return this.IsProcessing$;
+    }
 
     /**
      * @param context Runtime context — used for notifications. Read on each call
@@ -151,7 +185,7 @@ export class ConversationAgentRunner {
      * @returns The agent's `ExecuteAgentResult`, or `null` if the agent failed and
      *     a notification was surfaced.
      */
-    public async processMessage(input: ProcessMessageInput): Promise<ExecuteAgentResult | null> {
+    public async ProcessMessage(input: ProcessMessageInput): Promise<ExecuteAgentResult | null> {
         const agent = await this.resolveAgent(input);
         if (!agent) return null;
 
@@ -174,9 +208,10 @@ export class ConversationAgentRunner {
                     a.InvocationMode !== 'Sub-Agent'
             );
 
-            const availableAgents = currentUser
+            const permittedAgents = currentUser
                 ? await this.filterAgentsByPermissions(candidateAgents, currentUser)
                 : candidateAgents;
+            const availableAgents = NarrowToAllowedAgents(permittedAgents, input.AllowedAgentIDs);
 
             console.log(
                 `[ConversationAgentRunner] Available agents for routing: ${availableAgents.length} (filtered from ${candidateAgents.length} candidates)`
@@ -206,6 +241,7 @@ export class ConversationAgentRunner {
                 },
                 ...(input.planMode ? { PlanMode: true } : {}),
                 ...(input.requestedSkillIDs?.length ? { RequestedSkillIDs: input.requestedSkillIDs } : {}),
+                ...(input.AgentHistoryFrom ? { AgentHistoryFrom: input.AgentHistoryFrom } : {}),
                 CreateArtifacts: true,
                 CreateNotification: true,
                 OnProgress: input.onProgress
@@ -249,6 +285,11 @@ export class ConversationAgentRunner {
             this._activeRunCount = Math.max(0, this._activeRunCount - 1);
             this._isProcessing$.next(this._activeRunCount > 0);
         }
+    }
+
+    /** @deprecated Use {@link ProcessMessage}. */
+    public async processMessage(input: ProcessMessageInput): Promise<ExecuteAgentResult | null> {
+        return this.ProcessMessage(input);
     }
 
     /**

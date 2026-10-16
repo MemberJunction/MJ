@@ -207,19 +207,29 @@ export const TOOLBAR_BUTTONS = {
 /**
  * Helper function to create a simple copy button configuration
  */
-export function createCopyButton(customLabel?: string): ToolbarButton {
+export function CreateCopyButton(customLabel?: string): ToolbarButton {
   return {
     ...TOOLBAR_BUTTONS.COPY,
     label: customLabel
   };
 }
 
+/** @deprecated Use {@link CreateCopyButton}. */
+export function createCopyButton(customLabel?: string): ToolbarButton {
+  return CreateCopyButton(customLabel);
+}
+
 /**
  * Helper function to create a toolbar with just a copy button
  */
-export function createCopyOnlyToolbar(): ToolbarConfig {
+export function CreateCopyOnlyToolbar(): ToolbarConfig {
   return {
     enabled: true,
     buttons: [TOOLBAR_BUTTONS.COPY]
   };
+}
+
+/** @deprecated Use {@link CreateCopyOnlyToolbar}. */
+export function createCopyOnlyToolbar(): ToolbarConfig {
+  return CreateCopyOnlyToolbar();
 }

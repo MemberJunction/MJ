@@ -107,6 +107,7 @@ Every registered standard, when it was introduced, and what this repo does with 
 | Id | Since | What it enforces |
 |---|---|---|
 | `ui-layers` | 6.0.0 | The four-layer UI architecture — [guide](https://github.com/MemberJunction/MJ/blob/next/guides/UI_LAYERING_GUIDE.md). Widgets may not import `@angular/router` or MJ Explorer, and may not construct a global-provider `RunView`/`Metadata`. Packages opt in with `"mjUILayer"` in their own `package.json`. |
+| `naming-conventions` | 6.2.0 | MJ's inverted naming convention — [guide](https://github.com/MemberJunction/MJ/blob/next/guides/NAMING_CONVENTIONS_GUIDE.md). Public class members and the whole exported API surface are PascalCase — including the members of an exported interface, type literal or enum, and public constructor parameter properties; `private` members are camelCase. `protected` is exempt (MJ base classes declare PascalCase extension points). Framework contracts — Angular `ng*` hooks, oclif command members, base-class overrides, SCREAMING_SNAKE constants — are exempt automatically. Severity says whether a compatible fix exists: anything a `@deprecated` delegating stub can fix is an error; members of an exported data shape are a warn, since an interface has no runtime carrier for a stub (`enforceTypeMembers` opts into the type-only break). Anything tagged `@deprecated` is exempt. Marker: `case-violation-ok-legacy-back-compat`. |
 
 ## Adding a standard
 
@@ -123,6 +124,19 @@ Every registered standard, when it was introduced, and what this repo does with 
 **No runtime dependencies.** This gets installed into client repos and run in CI; every dependency
 is one more thing that can conflict with their tree. The only non-trivial thing it needed was
 semver comparison, which is twenty lines.
+
+The one exception is `typescript`, declared as an **optional peer** for `naming-conventions`, which
+needs a real parser: the naming rule turns on visibility modifiers, decorators and heritage clauses,
+and a text-matching version of it produces false positives in both directions. Optional-peer rather
+than a hard dependency so the host repo pins its own version — any repo with TypeScript source
+already has the compiler, and one without it has nothing for that check to read, so it reports a
+skip instead of failing to install. Every other check stays dependency-free.
+
+**Severity can vary within one check.** A `Violation` may carry its own `Severity`, overriding the
+check's configured one. `naming-conventions` uses it to hard-fail the packages a repo has already
+cleaned while only reporting the rest — a rule with a five-figure tail has no usable single
+severity, because `error` is unadoptable until the tail is gone and `warn` does nothing to stop it
+growing. Omit the field and a finding takes its check's severity, which is what `ui-layers` does.
 
 **Comments are stripped before matching.** MJ source documents itself heavily — a JSDoc block
 explaining "this calls `new RunView()` on the global provider" is a comment about a violation, not

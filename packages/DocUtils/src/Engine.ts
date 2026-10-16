@@ -53,8 +53,8 @@ export class DocumentationEngine extends BaseEngine<DocumentationEngine> {
 
  
     // internal instance properties used for the singleton pattern
-    private _Libraries: MJLibraryEntityExtended[] = [];
-    private _LibraryItems: MJLibraryItemEntityExtended[] = [];
+    private _libraries: MJLibraryEntityExtended[] = [];
+    private _libraryItems: MJLibraryItemEntityExtended[] = [];
 
     /**
      * This method is called to configure the ActionEngine. It loads the metadata for the actions, filters, and result codes and caches them in the GlobalObjectStore. You must call this method before running any actions.
@@ -66,12 +66,12 @@ export class DocumentationEngine extends BaseEngine<DocumentationEngine> {
         const configs: Partial<BaseEnginePropertyConfig>[] = [
             {
                 EntityName: 'MJ: Libraries',
-                PropertyName: '_Libraries',
+                PropertyName: '_libraries',
                 CacheLocal: true
             },
             {
                 EntityName: 'MJ: Library Items',
-                PropertyName: '_LibraryItems',
+                PropertyName: '_libraryItems',
                 CacheLocal: true
             },
         ]; 
@@ -123,13 +123,13 @@ export class DocumentationEngine extends BaseEngine<DocumentationEngine> {
      * List of all the Entity Action objects that are available for use in the system. Make sure you call Config() before any other methods on this class.
      */
     public get Libraries(): MJLibraryEntityExtended[] {
-        return this._Libraries;
+        return this._libraries;
     }
 
      /** 
      * List of all the Entity Action objects that are available for use in the system. Make sure you call Config() before any other methods on this class.
      */
      public get LibraryItems(): MJLibraryItemEntityExtended[] {
-        return this._LibraryItems;
+        return this._libraryItems;
     }
 }

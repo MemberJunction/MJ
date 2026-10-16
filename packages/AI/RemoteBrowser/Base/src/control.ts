@@ -47,7 +47,7 @@ export type RemoteBrowserControlStrategy = 'ComputerUse' | 'NativeAI';
  * @param features The backend's capability flags.
  * @returns `true` when the backend can support the mode, `false` otherwise.
  */
-export function isControlModeSupported(
+export function IsControlModeSupported(
     mode: RemoteBrowserControlMode,
     features: IRemoteBrowserProviderFeatures,
 ): boolean {
@@ -62,6 +62,14 @@ export function isControlModeSupported(
             // Exhaustive — `mode` is `never` here; any unhandled member is a compile error above.
             return false;
     }
+}
+
+/** @deprecated Use {@link IsControlModeSupported}. */
+export function isControlModeSupported(
+    mode: RemoteBrowserControlMode,
+    features: IRemoteBrowserProviderFeatures,
+): boolean {
+    return IsControlModeSupported(mode, features);
 }
 
 /**
@@ -84,7 +92,7 @@ export function isControlModeSupported(
  *  suppresses native delegation even when the backend supports it.
  * @returns The resolved control strategy.
  */
-export function resolveControlStrategy(
+export function ResolveControlStrategy(
     features: IRemoteBrowserProviderFeatures,
     preferred?: RemoteBrowserControlStrategy,
 ): RemoteBrowserControlStrategy {
@@ -92,4 +100,12 @@ export function resolveControlStrategy(
         return 'NativeAI';
     }
     return 'ComputerUse';
+}
+
+/** @deprecated Use {@link ResolveControlStrategy}. */
+export function resolveControlStrategy(
+    features: IRemoteBrowserProviderFeatures,
+    preferred?: RemoteBrowserControlStrategy,
+): RemoteBrowserControlStrategy {
+    return ResolveControlStrategy(features, preferred);
 }

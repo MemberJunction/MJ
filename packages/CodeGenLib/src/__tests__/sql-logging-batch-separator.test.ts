@@ -17,10 +17,14 @@ vi.mock('../Config/config', () => ({
         },
     },
     currentWorkingDirectory: '/tmp',
-    getSettingValue: vi.fn(),
-    mj_core_schema: () => '__mj',
-    dbPlatform: () => 'sqlserver',
-    outputDir: '/tmp',
+    GetSettingValue: vi.fn(),
+    get getSettingValue() { return this.GetSettingValue; },
+    MjCoreSchema: () => '__mj',
+    get mj_core_schema() { return this.MjCoreSchema; },
+    DbPlatform: () => 'sqlserver',
+    get dbPlatform() { return this.DbPlatform; },
+    OutputDir: '/tmp',
+    get outputDir() { return this.OutputDir; },
 }));
 vi.mock('../Misc/status_logging', () => ({ logError: vi.fn(), logStatus: vi.fn() }));
 

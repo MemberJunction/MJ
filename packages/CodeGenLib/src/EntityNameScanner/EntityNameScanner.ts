@@ -218,7 +218,7 @@ export interface MultiWordNameRule {
  *
  * Uses negative lookbehind for / and . to avoid matching inside file paths.
  */
-export function buildClassRenameRules(
+export function BuildClassRenameRules(
     entries: EntityRenameEntry[],
     subclassMap?: SubclassRenameEntry[]
 ): RegexRule[] {
@@ -258,12 +258,20 @@ export function buildClassRenameRules(
     return rules;
 }
 
+/** @deprecated Use {@link BuildClassRenameRules}. */
+export function buildClassRenameRules(
+    entries: EntityRenameEntry[],
+    subclassMap?: SubclassRenameEntry[]
+): RegexRule[] {
+    return BuildClassRenameRules(entries, subclassMap);
+}
+
 /**
  * Builds multi-word entity name regex rules.
  * For each entry with nameChanged=true AND a multi-word old name,
  * creates patterns that match the old name inside quotes.
  */
-export function buildMultiWordNameRules(entries: EntityRenameEntry[]): MultiWordNameRule[] {
+export function BuildMultiWordNameRules(entries: EntityRenameEntry[]): MultiWordNameRule[] {
     const rules: MultiWordNameRule[] = [];
     for (const entry of entries) {
         if (!entry.nameChanged) continue;
@@ -283,11 +291,16 @@ export function buildMultiWordNameRules(entries: EntityRenameEntry[]): MultiWord
     return rules;
 }
 
+/** @deprecated Use {@link BuildMultiWordNameRules}. */
+export function buildMultiWordNameRules(entries: EntityRenameEntry[]): MultiWordNameRule[] {
+    return BuildMultiWordNameRules(entries);
+}
+
 /**
  * Builds an entity name rename map (old → new) from the embedded data.
  * This is the simple entity-name-only map used by the HTML and metadata scanners.
  */
-export function loadEmbeddedRenameMap(): Map<string, string> {
+export function LoadEmbeddedRenameMap(): Map<string, string> {
     const map = new Map<string, string>();
     for (const entry of ENTITY_RENAME_MAP) {
         if (entry.nameChanged) {
@@ -297,6 +310,11 @@ export function loadEmbeddedRenameMap(): Map<string, string> {
     return map;
 }
 
+/** @deprecated Use {@link LoadEmbeddedRenameMap}. */
+export function loadEmbeddedRenameMap(): Map<string, string> {
+    return LoadEmbeddedRenameMap();
+}
+
 /**
  * Parses entity_subclasses.ts to build a map of old entity names to new
  * (MJ:-prefixed) entity names.
@@ -304,7 +322,7 @@ export function loadEmbeddedRenameMap(): Map<string, string> {
  * Scans for `@RegisterClass(BaseEntity, 'MJ: SomeName')` decorators and
  * creates a mapping: `'SomeName' -> 'MJ: SomeName'`.
  */
-export function buildEntityNameMap(entitySubclassesPath: string): Map<string, string> {
+export function BuildEntityNameMap(entitySubclassesPath: string): Map<string, string> {
     const renameMap = new Map<string, string>();
 
     if (!fs.existsSync(entitySubclassesPath)) {
@@ -373,6 +391,11 @@ export function buildEntityNameMap(entitySubclassesPath: string): Map<string, st
     return renameMap;
 }
 
+/** @deprecated Use {@link BuildEntityNameMap}. */
+export function buildEntityNameMap(entitySubclassesPath: string): Map<string, string> {
+    return BuildEntityNameMap(entitySubclassesPath);
+}
+
 // ============================================================================
 // Rename Map Resolution
 // ============================================================================
@@ -410,14 +433,14 @@ function resolveEntitySubclassesPath(basePath: string, explicitPath?: string): s
  * Builds the entity name rename map, trying entity_subclasses.ts first and
  * falling back to the embedded rename map compiled into this package.
  */
-export function resolveEntityNameMap(basePath: string, explicitPath: string | undefined, verbose: boolean): Map<string, string> {
+export function ResolveEntityNameMap(basePath: string, explicitPath: string | undefined, verbose: boolean): Map<string, string> {
     const entitySubclassesPath = resolveEntitySubclassesPath(basePath, explicitPath);
 
     if (entitySubclassesPath) {
         if (verbose) {
             console.log(`Building rename map from: ${entitySubclassesPath}`);
         }
-        const renameMap = buildEntityNameMap(entitySubclassesPath);
+        const renameMap = BuildEntityNameMap(entitySubclassesPath);
         if (verbose) {
             console.log(`Loaded ${renameMap.size} entity name mappings`);
         }
@@ -428,11 +451,16 @@ export function resolveEntityNameMap(basePath: string, explicitPath: string | un
     if (verbose) {
         console.log(`entity_subclasses.ts not found on disk, using embedded rename map`);
     }
-    const renameMap = loadEmbeddedRenameMap();
+    const renameMap = LoadEmbeddedRenameMap();
     if (verbose) {
         console.log(`Loaded ${renameMap.size} entity name mappings from embedded data`);
     }
     return renameMap;
+}
+
+/** @deprecated Use {@link ResolveEntityNameMap}. */
+export function resolveEntityNameMap(basePath: string, explicitPath: string | undefined, verbose: boolean): Map<string, string> {
+    return ResolveEntityNameMap(basePath, explicitPath, verbose);
 }
 
 // ============================================================================
@@ -625,7 +653,7 @@ function isEntitiesArrayCallback(binaryExpr: ts.BinaryExpression): boolean {
  * 2. Regex-based multi-word entity name scanning
  * 3. AST-based single-word entity name scanning
  */
-export function scanFile(
+export function ScanFile(
     filePath: string,
     sourceText: string,
     renameMap: Map<string, string>,
@@ -773,6 +801,17 @@ export function scanFile(
     return findings;
 }
 
+/** @deprecated Use {@link ScanFile}. */
+export function scanFile(
+    filePath: string,
+    sourceText: string,
+    renameMap: Map<string, string>,
+    classRules?: RegexRule[],
+    multiWordRules?: MultiWordNameRule[]
+): EntityNameFinding[] {
+    return ScanFile(filePath, sourceText, renameMap, classRules, multiWordRules);
+}
+
 // ============================================================================
 // Fixer
 // ============================================================================
@@ -818,7 +857,7 @@ function deduplicateFindings(findings: EntityNameFinding[]): EntityNameFinding[]
  *
  * Processes findings from end to start to preserve byte offsets.
  */
-export function fixFile(sourceText: string, findings: EntityNameFinding[]): string {
+export function FixFile(sourceText: string, findings: EntityNameFinding[]): string {
     if (findings.length === 0) return sourceText;
 
     // Deduplicate overlapping findings to prevent output corruption.
@@ -851,6 +890,11 @@ export function fixFile(sourceText: string, findings: EntityNameFinding[]): stri
     }
 
     return result;
+}
+
+/** @deprecated Use {@link FixFile}. */
+export function fixFile(sourceText: string, findings: EntityNameFinding[]): string {
+    return FixFile(sourceText, findings);
 }
 
 // ============================================================================
@@ -891,7 +935,7 @@ function getColumnNumber(text: string, pos: number): number {
  * 2. Multi-word entity name renames (regex): 'AI Models' → 'MJ: AI Models'
  * 3. Single-word entity name renames (AST): 'Actions' → 'MJ: Actions' (context-verified)
  */
-export async function scanEntityNames(options: EntityNameScanOptions): Promise<EntityNameScanResult> {
+export async function ScanEntityNames(options: EntityNameScanOptions): Promise<EntityNameScanResult> {
     const errors: string[] = [];
     const verbose = options.Verbose !== false;
 
@@ -910,8 +954,8 @@ export async function scanEntityNames(options: EntityNameScanOptions): Promise<E
 
     // Build rename maps from embedded data + subclass overrides
     const renameEntries = ENTITY_RENAME_MAP;
-    const classRules = buildClassRenameRules(renameEntries, SUBCLASS_RENAME_MAP);
-    const multiWordRules = buildMultiWordNameRules(renameEntries);
+    const classRules = BuildClassRenameRules(renameEntries, SUBCLASS_RENAME_MAP);
+    const multiWordRules = BuildMultiWordNameRules(renameEntries);
 
     // The entity name map for AST scanning — SINGLE-WORD ONLY to avoid duplicate
     // findings with Strategy 2 (multi-word names are handled exclusively by regex).
@@ -919,7 +963,7 @@ export async function scanEntityNames(options: EntityNameScanOptions): Promise<E
     // (including multi-word). We filter to single-word to prevent overlapping matches.
     let entityNameMap: Map<string, string>;
     try {
-        const fullMap = resolveEntityNameMap(targetPath, options.EntitySubclassesPath, verbose);
+        const fullMap = ResolveEntityNameMap(targetPath, options.EntitySubclassesPath, verbose);
         // Filter to single-word names only for AST scanning
         entityNameMap = new Map<string, string>();
         for (const [oldName, newName] of fullMap) {
@@ -972,13 +1016,13 @@ export async function scanEntityNames(options: EntityNameScanOptions): Promise<E
     for (const filePath of tsFiles) {
         try {
             const sourceText = fs.readFileSync(filePath, 'utf-8');
-            const findings = scanFile(filePath, sourceText, entityNameMap, classRules, multiWordRules);
+            const findings = ScanFile(filePath, sourceText, entityNameMap, classRules, multiWordRules);
 
             if (findings.length > 0) {
                 allFindings.push(...findings);
 
                 if (options.Fix) {
-                    const fixedText = fixFile(sourceText, findings);
+                    const fixedText = FixFile(sourceText, findings);
                     fs.writeFileSync(filePath, fixedText, 'utf-8');
                     fixedFiles.push(filePath);
                     if (verbose) {
@@ -1005,4 +1049,9 @@ export async function scanEntityNames(options: EntityNameScanOptions): Promise<E
         RenameMapSize: renameEntries.length,
         Errors: errors,
     };
+}
+
+/** @deprecated Use {@link ScanEntityNames}. */
+export async function scanEntityNames(options: EntityNameScanOptions): Promise<EntityNameScanResult> {
+    return ScanEntityNames(options);
 }

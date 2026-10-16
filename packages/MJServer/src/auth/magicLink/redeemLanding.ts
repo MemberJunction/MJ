@@ -5,13 +5,18 @@
  */
 
 /** Minimal HTML-escape for safe interpolation into attribute/text content. */
-export function escapeHtml(s: string): string {
+export function EscapeHtml(s: string): string {
   return s
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+/** @deprecated Use {@link EscapeHtml}. */
+export function escapeHtml(s: string): string {
+  return EscapeHtml(s);
 }
 
 /**
@@ -27,9 +32,9 @@ export function escapeHtml(s: string): string {
  * @param token       the raw magic-link token (embedded in a hidden field)
  * @param actionPath  the same-origin path the form POSTs to (e.g. `/magic-link/redeem`)
  */
-export function buildRedeemLandingHtml(token: string, actionPath: string): string {
-  const t = escapeHtml(token);
-  const action = escapeHtml(actionPath);
+export function BuildRedeemLandingHtml(token: string, actionPath: string): string {
+  const t = EscapeHtml(token);
+  const action = EscapeHtml(actionPath);
   // Hardcoded colors are intentional here — this is a standalone server-rendered
   // HTML response, not Angular component CSS, so the design-token rule doesn't apply.
   return `<!doctype html>
@@ -59,4 +64,9 @@ export function buildRedeemLandingHtml(token: string, actionPath: string): strin
   </div>
 </body>
 </html>`;
+}
+
+/** @deprecated Use {@link BuildRedeemLandingHtml}. */
+export function buildRedeemLandingHtml(token: string, actionPath: string): string {
+  return BuildRedeemLandingHtml(token, actionPath);
 }

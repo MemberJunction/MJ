@@ -24,7 +24,7 @@
  * @module @memberjunction/ai-prompts
  */
 
-import { AIModelConfiguration, AIPromptConfiguration, ChatParams, ChatResult, ResolveEffectiveModelConfiguration } from '@memberjunction/ai';
+import { AIModelConfiguration, AIPromptConfiguration, ChatParams, ChatResult, ChatTool, ChatToolChoice, ResolveEffectiveModelConfiguration } from '@memberjunction/ai';
 import { MJAIPromptRunEntity } from '@memberjunction/core-entities';
 
 /**
@@ -141,6 +141,35 @@ export function ResolveNativeToolCalling(input: NativeToolCallingGateInput): Nat
         toolResults: useNativeTools && catalog?.LLM?.NativeToolResults === true,
         mode: !useNativeTools ? 'Envelope' : controlFlow === 'implicit' ? 'NativeImplicit' : 'Native'
     };
+}
+
+/**
+ * The caller's tool choice, made valid for the tools going out and for the selected model.
+ *
+ * - A choice that names a tool must name one on the request; every provider rejects a forced call
+ *   to an undeclared tool. The agent forces `complete_task` on its final turn without knowing the
+ *   selected model's control flow, and under the hybrid that control tool is stripped, so the
+ *   choice becomes `'none'`: the envelope turn the hybrid owes.
+ * - A model whose catalog sets `LLM.SupportsForcedToolChoice` to `false` rejects any forced choice
+ *   (a named tool or `'required'`), so it gets `'auto'` and the prompt is what steers it.
+ *
+ * @param choice The caller's tool choice
+ * @param sentTools The tools actually on the request
+ * @param catalogConfiguration The merged catalog configuration for the selected model and vendor
+ * @returns The tool choice to send
+ */
+export function ResolveToolChoiceForRequest(
+    choice: ChatToolChoice | undefined,
+    sentTools: readonly ChatTool[] | undefined,
+    catalogConfiguration: AIModelConfiguration | null | undefined
+): ChatToolChoice | undefined {
+    if (choice === undefined || choice === 'auto' || choice === 'none') {
+        return choice;
+    }
+    if (choice !== 'required' && !(sentTools ?? []).some((t) => t.name === choice.name)) {
+        return 'none';
+    }
+    return catalogConfiguration?.LLM?.SupportsForcedToolChoice === false ? 'auto' : choice;
 }
 
 // =============================================================================

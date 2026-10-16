@@ -4,7 +4,7 @@ import { MJUserNotificationEntity, MJUserNotificationTypeEntity, UserInfoEngine 
 import { CompositeKey, TransactionGroupBase } from '@memberjunction/core';
 import { SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
-import { ApplicationManager } from '@memberjunction/ng-base-application';
+import { ApplicationManager, NavItem } from '@memberjunction/ng-base-application';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
 /**
@@ -93,11 +93,56 @@ const RELATIVE_REFRESH_MS = 60_000;
 export class UserNotificationsComponent extends BaseAngularComponent implements OnInit, AfterViewInit, OnDestroy {
   private cdr = inject(ChangeDetectorRef);
 
-  public radioSelected: ReadFilterOption = 'All';
-  public currentFilter: string = '';
-  public notificationTypes: MJUserNotificationTypeEntity[] = [];
-  public selectedTypeFilter: string | null = null;
-  public loadingTypes: boolean = true;
+  public RadioSelected: ReadFilterOption = 'All';
+
+  /** @deprecated Use {@link RadioSelected}. */
+  public get radioSelected(): ReadFilterOption {
+    return this.RadioSelected;
+  }
+  /** @deprecated Use {@link RadioSelected}. */
+  public set radioSelected(value: ReadFilterOption) {
+    this.RadioSelected = value;
+  }
+  public CurrentFilter: string = '';
+
+  /** @deprecated Use {@link CurrentFilter}. */
+  public get currentFilter(): string {
+    return this.CurrentFilter;
+  }
+  /** @deprecated Use {@link CurrentFilter}. */
+  public set currentFilter(value: string) {
+    this.CurrentFilter = value;
+  }
+  public NotificationTypes: MJUserNotificationTypeEntity[] = [];
+
+  /** @deprecated Use {@link NotificationTypes}. */
+  public get notificationTypes(): MJUserNotificationTypeEntity[] {
+    return this.NotificationTypes;
+  }
+  /** @deprecated Use {@link NotificationTypes}. */
+  public set notificationTypes(value: MJUserNotificationTypeEntity[]) {
+    this.NotificationTypes = value;
+  }
+  public SelectedTypeFilter: string | null = null;
+
+  /** @deprecated Use {@link SelectedTypeFilter}. */
+  public get selectedTypeFilter(): string | null {
+    return this.SelectedTypeFilter;
+  }
+  /** @deprecated Use {@link SelectedTypeFilter}. */
+  public set selectedTypeFilter(value: string | null) {
+    this.SelectedTypeFilter = value;
+  }
+  public LoadingTypes: boolean = true;
+
+  /** @deprecated Use {@link LoadingTypes}. */
+  public get loadingTypes(): boolean {
+    return this.LoadingTypes;
+  }
+  /** @deprecated Use {@link LoadingTypes}. */
+  public set loadingTypes(value: boolean) {
+    this.LoadingTypes = value;
+  }
 
   /** IDs of cards currently expanded to their full rendered content. */
   public Expanded = new Set<string>();
@@ -108,11 +153,20 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
   private relativeTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor (
-    public sharedService: SharedService,
+    public SharedService: SharedService,
     private navigationService: NavigationService,
     private appManager: ApplicationManager
   ) {
     super();
+  }
+
+  /** @deprecated Use {@link SharedService}. */
+  public get sharedService(): SharedService {
+    return this.SharedService;
+  }
+  /** @deprecated Use {@link SharedService}. */
+  public set sharedService(value: SharedService) {
+    this.SharedService = value;
   }
 
   async ngOnInit() {
@@ -128,7 +182,7 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
   }
 
   ngAfterViewInit(): void {
-    this.sharedService.InvokeManualResize(); // make sure the notifications component is sized correctly
+    this.SharedService.InvokeManualResize(); // make sure the notifications component is sized correctly
   }
 
   ngOnDestroy(): void {
@@ -140,7 +194,7 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
   private loadNotificationTypes() {
     // Get notification types from UserInfoEngine cache, sorted client-side
     // UserInfoEngine is auto-configured via @RegisterForStartup()
-    this.notificationTypes = [...UserInfoEngine.Instance.NotificationTypes].sort((a, b) => {
+    this.NotificationTypes = [...UserInfoEngine.Instance.NotificationTypes].sort((a, b) => {
       const priorityA = a.Priority ?? 999;
       const priorityB = b.Priority ?? 999;
       if (priorityA !== priorityB) {
@@ -148,7 +202,7 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
       }
       return a.Name.localeCompare(b.Name);
     });
-    this.loadingTypes = false;
+    this.LoadingTypes = false;
   }
 
   // ========================================================================
@@ -157,7 +211,7 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
 
   public get NotificationsToShow(): MJUserNotificationEntity[] {
     let temp: MJUserNotificationEntity[] = [];
-    switch (this.radioSelected) {
+    switch (this.RadioSelected) {
       case 'All':
         temp = this.AllNotifications;
         break;
@@ -170,15 +224,15 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
     }
 
     // Apply type filter if selected
-    if (this.selectedTypeFilter) {
-      temp = temp.filter(n => UUIDsEqual(n.NotificationTypeID, this.selectedTypeFilter));
+    if (this.SelectedTypeFilter) {
+      temp = temp.filter(n => UUIDsEqual(n.NotificationTypeID, this.SelectedTypeFilter));
     }
 
     // Apply text filter if it is not empty
-    if (this.currentFilter.trim().length > 0) {
+    if (this.CurrentFilter.trim().length > 0) {
       // check for inclusion of filter value in title or message
-      temp = temp.filter(n => n.Title?.toLowerCase().includes(this.currentFilter.trim().toLowerCase()) ||
-                              n.Message?.toLowerCase().includes(this.currentFilter.trim().toLowerCase())
+      temp = temp.filter(n => n.Title?.toLowerCase().includes(this.CurrentFilter.trim().toLowerCase()) ||
+                              n.Message?.toLowerCase().includes(this.CurrentFilter.trim().toLowerCase())
                         );
     }
 
@@ -193,7 +247,7 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
   public get Groups(): NotificationGroup[] {
     const list = this.NotificationsToShow;
     const unread = list.filter(n => n.Unread).length;
-    const key = `${list.length}|${unread}|${this.radioSelected}|${this.selectedTypeFilter}|${this.currentFilter}|${list[0]?.ID ?? ''}|${list[list.length - 1]?.ID ?? ''}`;
+    const key = `${list.length}|${unread}|${this.RadioSelected}|${this.SelectedTypeFilter}|${this.CurrentFilter}|${list[0]?.ID ?? ''}|${list[list.length - 1]?.ID ?? ''}`;
     if (key !== this.groupsKey) {
       this.groups = this.buildGroups(list);
       this.groupsKey = key;
@@ -219,7 +273,7 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
     const cached = this.vmCache.get(n.ID);
     if (cached) {
       cached.N = n;
-      cached.Clickable = this.isNotificationClickable(n);
+      cached.Clickable = this.IsNotificationClickable(n);
       return cached;
     }
     const { kind, body, preview, expandable } = this.classifyMessage(n.Message ?? '');
@@ -230,7 +284,7 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
       Preview: preview,
       Expandable: expandable,
       Relative: this.relativeTime(n.__mj_CreatedAt),
-      Clickable: this.isNotificationClickable(n),
+      Clickable: this.IsNotificationClickable(n),
     };
     this.vmCache.set(n.ID, vm);
     return vm;
@@ -328,7 +382,7 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
       this.Expanded.add(vm.N.ID);
       // Reading the full content is reading — mark it as such.
       if (vm.N.Unread) {
-        void this.markAsRead(vm.N, true, null);
+        void this.MarkAsRead(vm.N, true, null);
       }
     }
     this.cdr.markForCheck();
@@ -338,7 +392,7 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
   // Clickability + navigation (unchanged behavior)
   // ========================================================================
 
-  public isNotificationClickable(notification: MJUserNotificationEntity): boolean {
+  public IsNotificationClickable(notification: MJUserNotificationEntity): boolean {
     // Check for special types navigated via NavigationService (not a URL)
     if (notification.ResourceConfiguration && notification.ResourceConfiguration.trim().length > 0) {
       const config = SafeJSONParse<AgentRequestResourceConfig>(notification.ResourceConfiguration);
@@ -351,21 +405,26 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
       }
     }
 
-    const info = this.notificationUrl(notification);
+    const info = this.NotificationUrl(notification);
     return (info !== null && info.urlParts && info.urlParts.length > 0);
   }
 
-  public notificationUrl(notification: MJUserNotificationEntity): NotificationUrlInfo {
+  /** @deprecated Use {@link IsNotificationClickable}. */
+  public isNotificationClickable(notification: MJUserNotificationEntity): boolean {
+    return this.IsNotificationClickable(notification);
+  }
+
+  public NotificationUrl(notification: MJUserNotificationEntity): NotificationUrlInfo {
     const url: string[] = [];
     let queryString = '';
     if (notification.ResourceRecordID && notification.ResourceRecordID.length > 0 &&
         notification.ResourceTypeID && notification.ResourceTypeID.length > 0) {
       // we have a resource here, like a Report, Dashboard, etc
       // we can generate a url to navigate to it
-      const rt = this.sharedService.ResourceTypeByID(notification.ResourceTypeID);
+      const rt = this.SharedService.ResourceTypeByID(notification.ResourceTypeID);
       let routeSegment: string | null | undefined;
       if (rt)
-        routeSegment = this.sharedService.mapResourceTypeNameToRouteSegment(rt.Name);
+        routeSegment = this.SharedService.mapResourceTypeNameToRouteSegment(rt.Name);
 
       if (rt && routeSegment && routeSegment.trim().length > 0) {
         url.push('resource');
@@ -405,6 +464,11 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
     return { urlParts: url, queryString };
   }
 
+  /** @deprecated Use {@link NotificationUrl}. */
+  public notificationUrl(notification: MJUserNotificationEntity): NotificationUrlInfo {
+    return this.NotificationUrl(notification);
+  }
+
   public get AllNotifications(): MJUserNotificationEntity[] {
     return SharedService.UserNotifications;
   }
@@ -417,15 +481,25 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
     return this.AllNotifications.filter(n => !n.Unread);
   }
 
+  SelectReadOption(option: ReadFilterOption): void {
+    this.RadioSelected = option;
+  }
+
+  /** @deprecated Use {@link SelectReadOption}. */
   selectReadOption(option: ReadFilterOption): void {
-    this.radioSelected = option;
+    return this.SelectReadOption(option);
   }
 
+  OnFilterChanged(value: string): void {
+    this.CurrentFilter = value;
+  }
+
+  /** @deprecated Use {@link OnFilterChanged}. */
   onFilterChanged(value: string): void {
-    this.currentFilter = value;
+    return this.OnFilterChanged(value);
   }
 
-  async markAsRead(notification: MJUserNotificationEntity, bRead: boolean, transGroup: TransactionGroupBase | null): Promise<boolean> {
+  async MarkAsRead(notification: MJUserNotificationEntity, bRead: boolean, transGroup: TransactionGroupBase | null): Promise<boolean> {
     if (notification) {
       const notificationId = notification.ID;
       notification.Unread = !bRead;
@@ -461,15 +535,30 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
     }
   }
 
+  /** @deprecated Use {@link MarkAsRead}. */
+  async markAsRead(notification: MJUserNotificationEntity, bRead: boolean, transGroup: TransactionGroupBase | null): Promise<boolean> {
+    return this.MarkAsRead(notification, bRead, transGroup);
+  }
+
+  public async MarkAllAsRead() {
+    await this.MarkAll(true);
+  }
+
+  /** @deprecated Use {@link MarkAllAsRead}. */
   public async markAllAsRead() {
-    await this.markAll(true);
+    return this.MarkAllAsRead();
   }
 
+  public async MarkAllAsUnread() {
+    await this.MarkAll(false);
+  }
+
+  /** @deprecated Use {@link MarkAllAsUnread}. */
   public async markAllAsUnread() {
-    await this.markAll(false);
+    return this.MarkAllAsUnread();
   }
 
-  public async markAll(bRead: boolean) {
+  public async MarkAll(bRead: boolean) {
     // Use transaction group for batching - all saves are queued and sent in one round-trip
     const md = this.ProviderToUse;
     const transGroup = await md.CreateTransactionGroup();
@@ -478,21 +567,26 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
     for (const notification of this.AllNotifications) {
       if (notification.Unread && bRead || !notification.Unread && !bRead) {
         // Don't await - Save() with transaction group queues the operation immediately
-        this.markAsRead(notification, bRead, transGroup);
+        this.MarkAsRead(notification, bRead, transGroup);
       }
     }
 
     // Submit transaction group - this is where the actual network call happens
     if (!await transGroup.Submit())
-      this.sharedService.CreateSimpleNotification('Unable to mark all notifications as read', 'error', 5000);
+      this.SharedService.CreateSimpleNotification('Unable to mark all notifications as read', 'error', 5000);
     else
       SharedService.RefreshUserNotifications();
   }
 
-  notificationClicked(notification: MJUserNotificationEntity): void {
-    if (this.isNotificationClickable(notification)) {
+  /** @deprecated Use {@link MarkAll}. */
+  public async markAll(bRead: boolean) {
+    return this.MarkAll(bRead);
+  }
+
+  NotificationClicked(notification: MJUserNotificationEntity): void {
+    if (this.IsNotificationClickable(notification)) {
       // also mark this as read when we click it
-      this.markAsRead(notification, true, null);
+      this.MarkAsRead(notification, true, null);
 
       // Check for special navigation types that use NavigationService (not router)
       if (this.navigateToAgentRequest(notification)) {
@@ -504,9 +598,20 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
       if (this.navigateToMeetRoom(notification)) {
         return;
       }
+      if (this.navigateToHandoffConsole(notification)) {
+        return;
+      }
+      if (this.navigateToMeeting(notification)) {
+        return;
+      }
 
       this.navigateToResource(notification);
     }
+  }
+
+  /** @deprecated Use {@link NotificationClicked}. */
+  notificationClicked(notification: MJUserNotificationEntity): void {
+    return this.NotificationClicked(notification);
   }
 
   /**
@@ -535,13 +640,78 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
   }
 
   /**
+   * Opens the Conversation Console for a `handoff-offer` notification (the `{ type:'handoff-offer', offerId, room }`
+   * ResourceConfiguration the server sends when an AI agent offers a conversation to this person). The nav item is built here
+   * rather than looked up, so it works without an application metadata row; it lands in the Meet app when present, otherwise
+   * in whichever app the person is in. Returns `false` (not handled) for any other notification or when there is no app to host it.
+   */
+  private navigateToHandoffConsole(notification: MJUserNotificationEntity): boolean {
+    if (!notification.ResourceConfiguration || notification.ResourceConfiguration.trim().length === 0) {
+      return false;
+    }
+    const config = SafeJSONParse<{ type?: string; offerId?: string }>(notification.ResourceConfiguration);
+    if (!config || config.type?.trim().toLowerCase() !== 'handoff-offer') {
+      return false;
+    }
+    const app = this.appManager.GetAppByName('Meet') ?? this.appManager.GetActiveApp();
+    if (!app) {
+      return false;
+    }
+    const consoleItem: NavItem = {
+      Label: 'Conversation Console',
+      Icon: 'fa-solid fa-headset',
+      ResourceType: 'Custom',
+      DriverClass: 'HumanHandoffConsoleResource',
+      Configuration: config.offerId ? { offer: config.offerId } : {},
+    };
+    this.navigationService.OpenNavItem(app.ID, consoleItem, app.GetColor());
+    return true;
+  }
+
+  /**
+   * Opens the Meet app's Meetings resource for a `meeting` or `meeting-invitation` notification (the
+   * `{ type:'meeting', meetingId }` ResourceConfiguration), or when NotificationType is 'Meeting Invitation'.
+   * Returns `false` (not handled) when the config isn't a meeting invite or the Meet app is absent.
+   */
+  private navigateToMeeting(notification: MJUserNotificationEntity): boolean {
+    let meetingId: string | undefined;
+    if (notification.ResourceConfiguration && notification.ResourceConfiguration.trim().length > 0) {
+      const config = SafeJSONParse<{ type?: string; meetingId?: string }>(notification.ResourceConfiguration);
+      if (
+        config &&
+        (config.type?.trim().toLowerCase() === 'meeting' ||
+          config.type?.trim().toLowerCase() === 'meeting-invitation')
+      ) {
+        meetingId = config.meetingId;
+      }
+    }
+    const typeName = notification.NotificationType?.trim();
+    if (!meetingId && typeName !== 'Meeting Invitation') {
+      return false;
+    }
+    const app = this.appManager.GetAppByName('Meet') ?? this.appManager.GetActiveApp();
+    if (!app) {
+      return false;
+    }
+    const meetingItem: NavItem = {
+      Label: 'Meetings',
+      Icon: 'fa-solid fa-users',
+      ResourceType: 'Custom',
+      DriverClass: 'MeetingsResource',
+      Configuration: meetingId ? { meeting: meetingId } : {},
+    };
+    this.navigationService.OpenNavItem(app.ID, meetingItem, app.GetColor());
+    return true;
+  }
+
+  /**
    * Navigate to a resource-based notification using NavigationService methods.
    * Routes to the correct resource based on the notification's ResourceType.
    */
   private navigateToResource(notification: MJUserNotificationEntity): void {
     if (!notification.ResourceRecordID || !notification.ResourceTypeID) return;
 
-    const rt = this.sharedService.ResourceTypeByID(notification.ResourceTypeID);
+    const rt = this.SharedService.ResourceTypeByID(notification.ResourceTypeID);
     if (!rt) return;
 
     const recordId = notification.ResourceRecordID.toString();
@@ -643,27 +813,52 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
     return true;
   }
 
-  public getNotificationType(typeId: string | null): MJUserNotificationTypeEntity | null {
+  public GetNotificationType(typeId: string | null): MJUserNotificationTypeEntity | null {
     if (!typeId) return null;
-    return this.notificationTypes.find(t => UUIDsEqual(t.ID, typeId)) || null;
+    return this.NotificationTypes.find(t => UUIDsEqual(t.ID, typeId)) || null;
   }
 
-  public getTypeIcon(notification: MJUserNotificationEntity): string {
-    const type = this.getNotificationType(notification.NotificationTypeID);
+  /** @deprecated Use {@link GetNotificationType}. */
+  public getNotificationType(typeId: string | null): MJUserNotificationTypeEntity | null {
+    return this.GetNotificationType(typeId);
+  }
+
+  public GetTypeIcon(notification: MJUserNotificationEntity): string {
+    const type = this.GetNotificationType(notification.NotificationTypeID);
     return type?.Icon || 'fa-bell';
   }
 
-  public getTypeColor(notification: MJUserNotificationEntity): string {
-    const type = this.getNotificationType(notification.NotificationTypeID);
+  /** @deprecated Use {@link GetTypeIcon}. */
+  public getTypeIcon(notification: MJUserNotificationEntity): string {
+    return this.GetTypeIcon(notification);
+  }
+
+  public GetTypeColor(notification: MJUserNotificationEntity): string {
+    const type = this.GetNotificationType(notification.NotificationTypeID);
     return type?.Color || 'var(--mj-text-muted)';
   }
 
-  public getTypeName(notification: MJUserNotificationEntity): string {
-    const type = this.getNotificationType(notification.NotificationTypeID);
+  /** @deprecated Use {@link GetTypeColor}. */
+  public getTypeColor(notification: MJUserNotificationEntity): string {
+    return this.GetTypeColor(notification);
+  }
+
+  public GetTypeName(notification: MJUserNotificationEntity): string {
+    const type = this.GetNotificationType(notification.NotificationTypeID);
     return type ? type.Name : 'Notification';
   }
 
+  /** @deprecated Use {@link GetTypeName}. */
+  public getTypeName(notification: MJUserNotificationEntity): string {
+    return this.GetTypeName(notification);
+  }
+
+  public OnTypeFilterChange(typeId: string | null): void {
+    this.SelectedTypeFilter = typeId;
+  }
+
+  /** @deprecated Use {@link OnTypeFilterChange}. */
   public onTypeFilterChange(typeId: string | null): void {
-    this.selectedTypeFilter = typeId;
+    return this.OnTypeFilterChange(typeId);
   }
 }

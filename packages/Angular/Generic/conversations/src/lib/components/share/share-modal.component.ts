@@ -137,22 +137,103 @@ interface SharePermission {
   `]
 })
 export class ShareModalComponent extends BaseAngularComponent implements OnInit  {
-  @Input() conversation!: MJConversationEntity;
-  @Input() currentUser!: UserInfo;
-  @Input() isOpen: boolean = false;
+  @Input() Conversation!: MJConversationEntity;
 
-  @Output() closed = new EventEmitter<void>();
+  /** @deprecated Use {@link Conversation}. */
+  @Input() set conversation(value: MJConversationEntity) {
+    this.Conversation = value;
+  }
+  /** @deprecated Use {@link Conversation}. */
+  get conversation(): MJConversationEntity {
+    return this.Conversation;
+  }
+  @Input() CurrentUser!: UserInfo;
 
-  public permissions: SharePermission[] = [];
-  public newUserEmail: string = '';
-  public isPublicLink: boolean = false;
-  public shareLink: string = '';
+  /** @deprecated Use {@link CurrentUser}. */
+  @Input() set currentUser(value: UserInfo) {
+    this.CurrentUser = value;
+  }
+  /** @deprecated Use {@link CurrentUser}. */
+  get currentUser(): UserInfo {
+    return this.CurrentUser;
+  }
+  @Input() IsOpen: boolean = false;
 
-  public accessLevels = [
+  /** @deprecated Use {@link IsOpen}. */
+  @Input() set isOpen(value: boolean) {
+    this.IsOpen = value;
+  }
+  /** @deprecated Use {@link IsOpen}. */
+  get isOpen(): boolean {
+    return this.IsOpen;
+  }
+
+  @Output() Closed = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link Closed}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (closed) keeps working. Must stay AFTER Closed: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() closed = this.Closed;
+
+  public Permissions: SharePermission[] = [];
+
+  /** @deprecated Use {@link Permissions}. */
+  public get permissions(): SharePermission[] {
+    return this.Permissions;
+  }
+  /** @deprecated Use {@link Permissions}. */
+  public set permissions(value: SharePermission[]) {
+    this.Permissions = value;
+  }
+  public NewUserEmail: string = '';
+
+  /** @deprecated Use {@link NewUserEmail}. */
+  public get newUserEmail(): string {
+    return this.NewUserEmail;
+  }
+  /** @deprecated Use {@link NewUserEmail}. */
+  public set newUserEmail(value: string) {
+    this.NewUserEmail = value;
+  }
+  public IsPublicLink: boolean = false;
+
+  /** @deprecated Use {@link IsPublicLink}. */
+  public get isPublicLink(): boolean {
+    return this.IsPublicLink;
+  }
+  /** @deprecated Use {@link IsPublicLink}. */
+  public set isPublicLink(value: boolean) {
+    this.IsPublicLink = value;
+  }
+  public ShareLink: string = '';
+
+  /** @deprecated Use {@link ShareLink}. */
+  public get shareLink(): string {
+    return this.ShareLink;
+  }
+  /** @deprecated Use {@link ShareLink}. */
+  public set shareLink(value: string) {
+    this.ShareLink = value;
+  }
+
+  public AccessLevels = [
     { label: 'Can View', value: 'View' },
     { label: 'Can Edit', value: 'Edit' },
     { label: 'Owner', value: 'Owner' }
   ];
+
+  /** @deprecated Use {@link AccessLevels}. */
+  public get accessLevels() {
+    return this.AccessLevels;
+  }
+  /** @deprecated Use {@link AccessLevels}. */
+  public set accessLevels(value) {
+    this.AccessLevels = value;
+  }
 
   private readonly CONVERSATIONS_RESOURCE_TYPE_ID = '81D4BC3D-9FEB-EF11-B01A-286B35C04427';
 
@@ -164,7 +245,7 @@ export class ShareModalComponent extends BaseAngularComponent implements OnInit 
   super();}
 
   ngOnInit() {
-    if (this.conversation) {
+    if (this.Conversation) {
       this.loadPermissions();
       this.updateShareLink();
     }
@@ -175,7 +256,7 @@ export class ShareModalComponent extends BaseAngularComponent implements OnInit 
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView<MJResourcePermissionEntity>({
         EntityName: 'MJ: Resource Permissions',
-        ExtraFilter: `ResourceTypeID='${this.CONVERSATIONS_RESOURCE_TYPE_ID}' AND ResourceRecordID='${this.conversation.ID}' AND Status='Approved'`,
+        ExtraFilter: `ResourceTypeID='${this.CONVERSATIONS_RESOURCE_TYPE_ID}' AND ResourceRecordID='${this.Conversation.ID}' AND Status='Approved'`,
         ResultType: 'entity_object'
       });
 
@@ -204,7 +285,7 @@ export class ShareModalComponent extends BaseAngularComponent implements OnInit 
         });
 
         const resolvedPermissions = await Promise.all(permissionPromises);
-        this.permissions = resolvedPermissions.filter(p => p !== null) as SharePermission[];
+        this.Permissions = resolvedPermissions.filter(p => p !== null) as SharePermission[];
       }
     } catch (error) {
       console.error('Failed to load permissions:', error);
@@ -213,17 +294,27 @@ export class ShareModalComponent extends BaseAngularComponent implements OnInit 
     }
   }
 
-  getAccessLevel(permission: SharePermission): string {
+  GetAccessLevel(permission: SharePermission): string {
     return permission.permissionLevel;
   }
 
-  async onAccessLevelChange(permission: SharePermission, level: 'View' | 'Edit' | 'Owner'): Promise<void> {
+  /** @deprecated Use {@link GetAccessLevel}. */
+  getAccessLevel(permission: SharePermission): string {
+    return this.GetAccessLevel(permission);
+  }
+
+  async OnAccessLevelChange(permission: SharePermission, level: 'View' | 'Edit' | 'Owner'): Promise<void> {
     permission.permissionLevel = level;
     await this.savePermission(permission);
   }
 
-  async onAddUser(): Promise<void> {
-    const email = this.newUserEmail.trim();
+  /** @deprecated Use {@link OnAccessLevelChange}. */
+  async onAccessLevelChange(permission: SharePermission, level: 'View' | 'Edit' | 'Owner'): Promise<void> {
+    return this.OnAccessLevelChange(permission, level);
+  }
+
+  async OnAddUser(): Promise<void> {
+    const email = this.NewUserEmail.trim();
     if (!email) return;
 
     // Simple email validation
@@ -233,7 +324,7 @@ export class ShareModalComponent extends BaseAngularComponent implements OnInit 
     }
 
     // Check if user already has access
-    if (this.permissions.some(p => p.userEmail === email)) {
+    if (this.Permissions.some(p => p.userEmail === email)) {
       await this.dialogService.alert('User Already Has Access', 'This user already has access');
       return;
     }
@@ -262,8 +353,8 @@ export class ShareModalComponent extends BaseAngularComponent implements OnInit 
       };
 
       await this.savePermission(newPermission);
-      this.permissions.push(newPermission);
-      this.newUserEmail = '';
+      this.Permissions.push(newPermission);
+      this.NewUserEmail = '';
       this.toastService.success(`Access granted to ${user.Email}`);
       this.cdr.detectChanges();
     } catch (error) {
@@ -272,7 +363,12 @@ export class ShareModalComponent extends BaseAngularComponent implements OnInit 
     }
   }
 
-  async onRemoveUser(permission: SharePermission): Promise<void> {
+  /** @deprecated Use {@link OnAddUser}. */
+  async onAddUser(): Promise<void> {
+    return this.OnAddUser();
+  }
+
+  async OnRemoveUser(permission: SharePermission): Promise<void> {
     const confirmed = await this.dialogService.confirm({
       title: 'Remove Access',
       message: `Remove access for ${permission.userEmail}?`,
@@ -294,12 +390,17 @@ export class ShareModalComponent extends BaseAngularComponent implements OnInit 
         }
       }
 
-      this.permissions = this.permissions.filter(p => p.userId !== permission.userId);
+      this.Permissions = this.Permissions.filter(p => p.userId !== permission.userId);
       this.toastService.success(`Access removed for ${permission.userEmail}`);
     } catch (error) {
       console.error('Failed to remove user:', error);
       this.toastService.error('Failed to remove user');
     }
+  }
+
+  /** @deprecated Use {@link OnRemoveUser}. */
+  async onRemoveUser(permission: SharePermission): Promise<void> {
+    return this.OnRemoveUser(permission);
   }
 
   private async savePermission(permission: SharePermission): Promise<void> {
@@ -314,7 +415,7 @@ export class ShareModalComponent extends BaseAngularComponent implements OnInit 
       } else {
         // Create new permission
         permEntity.ResourceTypeID = this.CONVERSATIONS_RESOURCE_TYPE_ID;
-        permEntity.ResourceRecordID = this.conversation.ID;
+        permEntity.ResourceRecordID = this.Conversation.ID;
         permEntity.Type = 'User';
         permEntity.UserID = permission.userId;
         permEntity.PermissionLevel = permission.permissionLevel;
@@ -336,7 +437,7 @@ export class ShareModalComponent extends BaseAngularComponent implements OnInit 
     }
   }
 
-  async onTogglePublicLink(): Promise<void> {
+  async OnTogglePublicLink(): Promise<void> {
     try {
       // Note: Public link functionality uses the conversation ID directly.
       // For enhanced security with unique tokens, password protection, and expiration,
@@ -348,19 +449,24 @@ export class ShareModalComponent extends BaseAngularComponent implements OnInit 
     }
   }
 
+  /** @deprecated Use {@link OnTogglePublicLink}. */
+  async onTogglePublicLink(): Promise<void> {
+    return this.OnTogglePublicLink();
+  }
+
   private updateShareLink(): void {
-    if (this.isPublicLink && this.conversation) {
+    if (this.IsPublicLink && this.Conversation) {
       // Generate shareable link
       const baseUrl = window.location.origin;
-      this.shareLink = `${baseUrl}/chat/${this.conversation.ID}`;
+      this.ShareLink = `${baseUrl}/chat/${this.Conversation.ID}`;
     } else {
-      this.shareLink = '';
+      this.ShareLink = '';
     }
   }
 
-  async onCopyLink(): Promise<void> {
+  async OnCopyLink(): Promise<void> {
     try {
-      await navigator.clipboard.writeText(this.shareLink);
+      await navigator.clipboard.writeText(this.ShareLink);
       this.toastService.success('Link copied to clipboard');
     } catch (err) {
       console.error('Failed to copy link:', err);
@@ -368,7 +474,17 @@ export class ShareModalComponent extends BaseAngularComponent implements OnInit 
     }
   }
 
+  /** @deprecated Use {@link OnCopyLink}. */
+  async onCopyLink(): Promise<void> {
+    return this.OnCopyLink();
+  }
+
+  OnClose(): void {
+    this.Closed.emit();
+  }
+
+  /** @deprecated Use {@link OnClose}. */
   onClose(): void {
-    this.closed.emit();
+    return this.OnClose();
   }
 }

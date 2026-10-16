@@ -36,7 +36,7 @@ export interface PermissionsDomainGroup {
  * Load every user from `MJ: Users` with just the columns the Permissions admin
  * dropdowns need. Sorted by Name.
  */
-export async function loadPermissionsUsers(provider?: IMetadataProvider): Promise<PermissionsUserOption[]> {
+export async function LoadPermissionsUsers(provider?: IMetadataProvider): Promise<PermissionsUserOption[]> {
     const rv = provider ? RunView.FromMetadataProvider(provider) : new RunView();
     const result = await rv.RunView<PermissionsUserOption>({
         EntityName: 'MJ: Users',
@@ -50,6 +50,11 @@ export async function loadPermissionsUsers(provider?: IMetadataProvider): Promis
     return result.Results ?? [];
 }
 
+/** @deprecated Use {@link LoadPermissionsUsers}. */
+export async function loadPermissionsUsers(provider?: IMetadataProvider): Promise<PermissionsUserOption[]> {
+    return LoadPermissionsUsers(provider);
+}
+
 /**
  * Hydrate a full `UserInfo` for the user we want to report against. When the target
  * is the current user we reuse `Metadata.CurrentUser` directly (it already has
@@ -57,7 +62,7 @@ export async function loadPermissionsUsers(provider?: IMetadataProvider): Promis
  * object with the target user's roles attached, because every provider needs roles
  * to evaluate access correctly.
  */
-export async function resolvePermissionsUser(
+export async function ResolvePermissionsUser(
     userId: string,
     userDropdown: PermissionsUserOption[],
     provider?: IMetadataProvider
@@ -101,6 +106,15 @@ export async function resolvePermissionsUser(
     });
 }
 
+/** @deprecated Use {@link ResolvePermissionsUser}. */
+export async function resolvePermissionsUser(
+    userId: string,
+    userDropdown: PermissionsUserOption[],
+    provider?: IMetadataProvider
+): Promise<UserInfo | null> {
+    return ResolvePermissionsUser(userId, userDropdown, provider);
+}
+
 /**
  * Normalized, validated string filter values for the Audit Log timeline query,
  * derived from raw (untrusted) AI-agent tool params. All fields are the same
@@ -127,7 +141,7 @@ export interface AuditFilterParams {
  *
  * @param raw the untrusted tool params object (may have missing/non-string fields)
  */
-export function parseAuditFilterParams(
+export function ParseAuditFilterParams(
     raw: Record<string, unknown> | null | undefined
 ): { ok: true; value: AuditFilterParams } | { ok: false; error: string } {
     const asString = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
@@ -155,6 +169,13 @@ export function parseAuditFilterParams(
     };
 }
 
+/** @deprecated Use {@link ParseAuditFilterParams}. */
+export function parseAuditFilterParams(
+    raw: Record<string, unknown> | null | undefined
+): { ok: true; value: AuditFilterParams } | { ok: false; error: string } {
+    return ParseAuditFilterParams(raw);
+}
+
 /**
  * Returns the epoch-ms for a `YYYY-MM-DD` string, or `null` if the string is
  * empty or not a valid calendar date. Used by {@link parseAuditFilterParams}.
@@ -173,7 +194,7 @@ function validateAuditDate(value: string): number | null {
  * @param domainOrderMap map of domain name → DisplayOrder, typically built from
  *        `PermissionEngine.Instance.Domains`.
  */
-export function groupPermissionsByDomain(
+export function GroupPermissionsByDomain(
     rows: NormalizedPermission[],
     domainOrderMap: Map<string, number>
 ): PermissionsDomainGroup[] {
@@ -197,4 +218,12 @@ export function groupPermissionsByDomain(
 
     groups.sort((a, b) => (domainOrderMap.get(a.DomainName) ?? 999) - (domainOrderMap.get(b.DomainName) ?? 999));
     return groups;
+}
+
+/** @deprecated Use {@link GroupPermissionsByDomain}. */
+export function groupPermissionsByDomain(
+    rows: NormalizedPermission[],
+    domainOrderMap: Map<string, number>
+): PermissionsDomainGroup[] {
+    return GroupPermissionsByDomain(rows, domainOrderMap);
 }

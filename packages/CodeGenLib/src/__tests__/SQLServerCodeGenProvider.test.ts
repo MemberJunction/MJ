@@ -12,7 +12,10 @@ import { describe, it, expect, vi } from 'vitest';
  */
 vi.mock('mssql', () => ({}));
 vi.mock('../Misc/status_logging', () => ({
-    logError: vi.fn(), logStatus: vi.fn(), logWarning: vi.fn(), startSpinner: vi.fn(), succeedSpinner: vi.fn(),
+    logError: vi.fn(), logStatus: vi.fn(), LogWarning: vi.fn(),
+    get logWarning() { return this.LogWarning; }, StartSpinner: vi.fn(),
+    get startSpinner() { return this.StartSpinner; }, SucceedSpinner: vi.fn(),
+    get succeedSpinner() { return this.SucceedSpinner; },
 }));
 
 import { EntityInfo, EntityFieldInfo } from '@memberjunction/core';

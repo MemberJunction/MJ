@@ -7,12 +7,12 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-    buildSchedulingAgentContext,
-    buildSchedulingNotFoundError,
-    capSchedulingList,
-    isValidSchedulingTab,
-    resolveSchedulingItem,
-    schedulingTabLabel,
+    BuildSchedulingAgentContext,
+    BuildSchedulingNotFoundError,
+    CapSchedulingList,
+    IsValidSchedulingTab,
+    ResolveSchedulingItem,
+    SchedulingTabLabel,
     SchedulingAgentContextInput,
     SchedulingExecutionSnapshot,
     SchedulingItemCandidate,
@@ -69,46 +69,46 @@ function makeInput(overrides: Partial<SchedulingAgentContextInput> = {}): Schedu
 
 describe('isValidSchedulingTab', () => {
     it('accepts the three known tabs', () => {
-        expect(isValidSchedulingTab('dashboard')).toBe(true);
-        expect(isValidSchedulingTab('jobs')).toBe(true);
-        expect(isValidSchedulingTab('activity')).toBe(true);
+        expect(IsValidSchedulingTab('dashboard')).toBe(true);
+        expect(IsValidSchedulingTab('jobs')).toBe(true);
+        expect(IsValidSchedulingTab('activity')).toBe(true);
     });
 
     it('rejects unknown / mis-cased strings', () => {
-        expect(isValidSchedulingTab('overview')).toBe(false);
-        expect(isValidSchedulingTab('Jobs')).toBe(false); // case-sensitive
-        expect(isValidSchedulingTab('')).toBe(false);
+        expect(IsValidSchedulingTab('overview')).toBe(false);
+        expect(IsValidSchedulingTab('Jobs')).toBe(false); // case-sensitive
+        expect(IsValidSchedulingTab('')).toBe(false);
     });
 
     it('rejects non-string input without throwing', () => {
-        expect(isValidSchedulingTab(undefined)).toBe(false);
-        expect(isValidSchedulingTab(null)).toBe(false);
-        expect(isValidSchedulingTab(42)).toBe(false);
-        expect(isValidSchedulingTab({ tab: 'jobs' })).toBe(false);
+        expect(IsValidSchedulingTab(undefined)).toBe(false);
+        expect(IsValidSchedulingTab(null)).toBe(false);
+        expect(IsValidSchedulingTab(42)).toBe(false);
+        expect(IsValidSchedulingTab({ tab: 'jobs' })).toBe(false);
     });
 });
 
 describe('schedulingTabLabel', () => {
     it('returns the human-readable label for known tabs', () => {
-        expect(schedulingTabLabel('dashboard')).toBe('Dashboard');
-        expect(schedulingTabLabel('jobs')).toBe('Jobs');
-        expect(schedulingTabLabel('activity')).toBe('Activity');
+        expect(SchedulingTabLabel('dashboard')).toBe('Dashboard');
+        expect(SchedulingTabLabel('jobs')).toBe('Jobs');
+        expect(SchedulingTabLabel('activity')).toBe('Activity');
     });
 
     it('falls back to a default for unknown tabs', () => {
-        expect(schedulingTabLabel('bogus')).toBe('Scheduling');
+        expect(SchedulingTabLabel('bogus')).toBe('Scheduling');
     });
 });
 
 describe('capSchedulingList', () => {
     it('returns the list unchanged when under the cap', () => {
         const list = ['a', 'b', 'c'];
-        expect(capSchedulingList(list)).toEqual(list);
+        expect(CapSchedulingList(list)).toEqual(list);
     });
 
     it('truncates to the cap and never mutates the input', () => {
         const list = Array.from({ length: SCHEDULING_CONTEXT_LIST_CAP + 10 }, (_, i) => `j${i}`);
-        const capped = capSchedulingList(list);
+        const capped = CapSchedulingList(list);
         expect(capped.length).toBe(SCHEDULING_CONTEXT_LIST_CAP);
         expect(list.length).toBe(SCHEDULING_CONTEXT_LIST_CAP + 10); // unchanged
     });
@@ -122,23 +122,23 @@ describe('resolveSchedulingItem', () => {
     ];
 
     it('matches by exact id, case-insensitively', () => {
-        expect(resolveSchedulingItem('aaaa-1111', candidates)?.Name).toBe('Nightly Sync');
-        expect(resolveSchedulingItem('AAAA-1111', candidates)?.ID).toBe('AAAA-1111');
+        expect(ResolveSchedulingItem('aaaa-1111', candidates)?.Name).toBe('Nightly Sync');
+        expect(ResolveSchedulingItem('AAAA-1111', candidates)?.ID).toBe('AAAA-1111');
     });
 
     it('matches by exact name, case-insensitively', () => {
-        expect(resolveSchedulingItem('hourly cleanup', candidates)?.ID).toBe('BBBB-2222');
+        expect(ResolveSchedulingItem('hourly cleanup', candidates)?.ID).toBe('BBBB-2222');
     });
 
     it('falls back to a partial (contains) name match', () => {
-        expect(resolveSchedulingItem('report', candidates)?.ID).toBe('CCCC-3333');
-        expect(resolveSchedulingItem('sync', candidates)?.Name).toBe('Nightly Sync');
+        expect(ResolveSchedulingItem('report', candidates)?.ID).toBe('CCCC-3333');
+        expect(ResolveSchedulingItem('sync', candidates)?.Name).toBe('Nightly Sync');
     });
 
     it('returns null on a miss and on empty/whitespace input', () => {
-        expect(resolveSchedulingItem('nonexistent', candidates)).toBeNull();
-        expect(resolveSchedulingItem('', candidates)).toBeNull();
-        expect(resolveSchedulingItem('   ', candidates)).toBeNull();
+        expect(ResolveSchedulingItem('nonexistent', candidates)).toBeNull();
+        expect(ResolveSchedulingItem('', candidates)).toBeNull();
+        expect(ResolveSchedulingItem('   ', candidates)).toBeNull();
     });
 
     it('prefers an id match over a contains-name match', () => {
@@ -147,7 +147,7 @@ describe('resolveSchedulingItem', () => {
             { ID: 'X', Name: 'Nightly Sync' },
         ];
         // "sync" is an exact id of the first AND a contains-name of the second → id wins
-        expect(resolveSchedulingItem('sync', c)?.Name).toBe('Unrelated');
+        expect(ResolveSchedulingItem('sync', c)?.Name).toBe('Unrelated');
     });
 });
 
@@ -158,7 +158,7 @@ describe('buildSchedulingNotFoundError', () => {
     ];
 
     it('lists available names on a miss', () => {
-        const msg = buildSchedulingNotFoundError('zzz', candidates);
+        const msg = BuildSchedulingNotFoundError('zzz', candidates);
         expect(msg).toContain('No job found matching "zzz"');
         expect(msg).toContain('Alpha');
         expect(msg).toContain('Beta');
@@ -166,17 +166,17 @@ describe('buildSchedulingNotFoundError', () => {
 
     it('adds a total-count hint when the list is truncated', () => {
         const many = Array.from({ length: SCHEDULING_CONTEXT_LIST_CAP + 5 }, (_, i) => ({ ID: `${i}`, Name: `Job ${i}` }));
-        const msg = buildSchedulingNotFoundError('zzz', many);
+        const msg = BuildSchedulingNotFoundError('zzz', many);
         expect(msg).toContain(`(${many.length} total)`);
     });
 
     it('omits the available-names clause when there are no candidates', () => {
-        const msg = buildSchedulingNotFoundError('zzz', []);
+        const msg = BuildSchedulingNotFoundError('zzz', []);
         expect(msg).toBe('No job found matching "zzz".');
     });
 
     it('honors a custom noun', () => {
-        const msg = buildSchedulingNotFoundError('zzz', candidates, 'execution');
+        const msg = BuildSchedulingNotFoundError('zzz', candidates, 'execution');
         expect(msg).toContain('No execution found');
         expect(msg).toContain('Available executions');
     });
@@ -184,7 +184,7 @@ describe('buildSchedulingNotFoundError', () => {
 
 describe('buildSchedulingAgentContext — KPI slice (always present)', () => {
     it('passes through the active tab + label and alert/locked/running counts', () => {
-        const ctx = buildSchedulingAgentContext(makeInput({
+        const ctx = BuildSchedulingAgentContext(makeInput({
             ActiveTab: 'activity',
             AlertCount: 3,
             LockedJobCount: 2,
@@ -198,13 +198,13 @@ describe('buildSchedulingAgentContext — KPI slice (always present)', () => {
     });
 
     it('coerces an invalid active tab to dashboard', () => {
-        const ctx = buildSchedulingAgentContext(makeInput({ ActiveTab: 'bogus' }));
+        const ctx = BuildSchedulingAgentContext(makeInput({ ActiveTab: 'bogus' }));
         expect(ctx['ActiveTab']).toBe('dashboard');
         expect(ctx['ActiveTabLabel']).toBe('Dashboard');
     });
 
     it('reports zero counts and zero success rate for an empty job list', () => {
-        const ctx = buildSchedulingAgentContext(makeInput());
+        const ctx = BuildSchedulingAgentContext(makeInput());
         expect(ctx['TotalJobs']).toBe(0);
         expect(ctx['ActiveJobCount']).toBe(0);
         expect(ctx['PausedJobCount']).toBe(0);
@@ -215,7 +215,7 @@ describe('buildSchedulingAgentContext — KPI slice (always present)', () => {
     });
 
     it('derives per-status counts from the job snapshots', () => {
-        const ctx = buildSchedulingAgentContext(makeInput({
+        const ctx = BuildSchedulingAgentContext(makeInput({
             Jobs: [
                 makeJob({ JobId: 'a', Status: 'Active' }),
                 makeJob({ JobId: 'b', Status: 'Active' }),
@@ -234,7 +234,7 @@ describe('buildSchedulingAgentContext — KPI slice (always present)', () => {
     });
 
     it('averages success rate only across jobs that have run, rounded to 3 dp', () => {
-        const ctx = buildSchedulingAgentContext(makeInput({
+        const ctx = BuildSchedulingAgentContext(makeInput({
             Jobs: [
                 makeJob({ JobId: 'a', SuccessRate: 1, TotalRuns: 10 }),
                 makeJob({ JobId: 'b', SuccessRate: 0.5, TotalRuns: 4 }),
@@ -245,7 +245,7 @@ describe('buildSchedulingAgentContext — KPI slice (always present)', () => {
     });
 
     it('rounds a repeating success-rate average to 3 decimal places', () => {
-        const ctx = buildSchedulingAgentContext(makeInput({
+        const ctx = BuildSchedulingAgentContext(makeInput({
             Jobs: [
                 makeJob({ JobId: 'a', SuccessRate: 1, TotalRuns: 1 }),
                 makeJob({ JobId: 'b', SuccessRate: 0, TotalRuns: 1 }),
@@ -261,7 +261,7 @@ describe('buildSchedulingAgentContext — KPI slice (always present)', () => {
             ActiveJobsCount: i,
             TotalRuns: i * 2,
         }));
-        const ctx = buildSchedulingAgentContext(makeInput({ JobTypeBreakdown: breakdown }));
+        const ctx = BuildSchedulingAgentContext(makeInput({ JobTypeBreakdown: breakdown }));
         expect(ctx['JobTypeCount']).toBe(breakdown.length);
         expect((ctx['JobTypeNames'] as string[]).length).toBe(SCHEDULING_CONTEXT_LIST_CAP);
     });
@@ -269,7 +269,7 @@ describe('buildSchedulingAgentContext — KPI slice (always present)', () => {
 
 describe('buildSchedulingAgentContext — mode-scoped detail slices', () => {
     it('on the dashboard tab, publishes only the KPI slice (no jobs/activity detail)', () => {
-        const ctx = buildSchedulingAgentContext(makeInput({
+        const ctx = BuildSchedulingAgentContext(makeInput({
             ActiveTab: 'dashboard',
             JobsSearchTerm: 'should-not-appear',
             ActivitySearchTerm: 'should-not-appear',
@@ -281,7 +281,7 @@ describe('buildSchedulingAgentContext — mode-scoped detail slices', () => {
     });
 
     it('on the jobs tab, publishes search/filters, visible names + selection', () => {
-        const ctx = buildSchedulingAgentContext(makeInput({
+        const ctx = BuildSchedulingAgentContext(makeInput({
             ActiveTab: 'jobs',
             JobsSearchTerm: 'sync',
             StatusFilter: 'Active',
@@ -302,21 +302,21 @@ describe('buildSchedulingAgentContext — mode-scoped detail slices', () => {
     });
 
     it('on the jobs tab with no selection, omits the selected-job fields', () => {
-        const ctx = buildSchedulingAgentContext(makeInput({ ActiveTab: 'jobs', SelectedJob: null }));
+        const ctx = BuildSchedulingAgentContext(makeInput({ ActiveTab: 'jobs', SelectedJob: null }));
         expect(ctx['SelectedJobId']).toBeUndefined();
         expect(ctx['SelectedJobName']).toBeUndefined();
     });
 
     it('flags a truncated visible-jobs list', () => {
         const many = Array.from({ length: SCHEDULING_CONTEXT_LIST_CAP + 4 }, (_, i) => makeJob({ JobId: `${i}`, JobName: `Job ${i}` }));
-        const ctx = buildSchedulingAgentContext(makeInput({ ActiveTab: 'jobs', VisibleJobs: many }));
+        const ctx = BuildSchedulingAgentContext(makeInput({ ActiveTab: 'jobs', VisibleJobs: many }));
         expect(ctx['VisibleJobCount']).toBe(many.length);
         expect((ctx['VisibleJobNames'] as string[]).length).toBe(SCHEDULING_CONTEXT_LIST_CAP);
         expect(ctx['VisibleJobNamesTruncated']).toBe(true);
     });
 
     it('on the activity tab, publishes search/filters, time range, executions + job names', () => {
-        const ctx = buildSchedulingAgentContext(makeInput({
+        const ctx = BuildSchedulingAgentContext(makeInput({
             ActiveTab: 'activity',
             ActivitySearchTerm: 'fail',
             ActivityStatusFilter: 'Failed',

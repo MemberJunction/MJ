@@ -8,10 +8,13 @@ import {
   MJCollectionEntity,
   MJCollectionArtifactEntity,
   MJTaskEntity,
-  MJArtifactEntity
+  MJArtifactEntity,
+  ConversationEngine
 } from '@memberjunction/core-entities';
 import { RunView, UserInfo, Metadata, IMetadataProvider } from '@memberjunction/core';
 import { EscapeSQLString } from '@memberjunction/global';
+import { ArtifactPermissionService } from './artifact-permission.service';
+import { BuildConversationTasksFilter } from './conversation-tasks-filter';
 
 /**
  * Types of searchable content
@@ -27,38 +30,53 @@ export type SearchFilter = 'all' | 'conversations' | 'messages' | 'artifacts' | 
  * Unified search result
  */
 export interface SearchResult {
-  id: string;
-  type: SearchResultType;
-  title: string;
-  preview: string;
-  matchedText?: string;
-  conversationId?: string;
-  conversationName?: string;
-  artifactType?: string;
-  collectionId?: string;
-  collectionName?: string;
-  createdAt: Date;
-  relevanceScore: number;
+  id: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  type: SearchResultType;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  title: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  preview: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  matchedText?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  conversationId?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  conversationName?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  artifactType?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  collectionId?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  collectionName?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  createdAt: Date;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  relevanceScore: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  /** A message hit's branch; null is the trunk. */
+  branchId?: string | null;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  /** A message hit's position in its conversation. */
+  sequence?: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
+
+/** The message columns a message hit reads. */
+type MessageSearchRow = Pick<
+  MJConversationDetailEntity,
+  'ID' | 'ConversationID' | 'Conversation' | 'Message' | 'BranchID' | 'Sequence' | '__mj_CreatedAt'
+>;
+
+/** Columns of {@link MessageSearchRow}, as the message query's `Fields`. */
+const MESSAGE_SEARCH_FIELDS: ReadonlyArray<keyof MessageSearchRow> = [
+  'ID', 'ConversationID', 'Conversation', 'Message', 'BranchID', 'Sequence', '__mj_CreatedAt'
+];
 
 /**
  * Search results grouped by type
  */
 export interface GroupedSearchResults {
-  conversations: SearchResult[];
-  messages: SearchResult[];
-  artifacts: SearchResult[];
-  collections: SearchResult[];
-  tasks: SearchResult[];
-  total: number;
+  conversations: SearchResult[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  messages: SearchResult[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  artifacts: SearchResult[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  collections: SearchResult[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  tasks: SearchResult[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  total: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
  * Date range filter
  */
 export interface DateRange {
-  start: Date | null;
-  end: Date | null;
+  start: Date | null;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  end: Date | null;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -97,24 +115,53 @@ export class SearchService {
   private readonly MAX_RECENT_SEARCHES = 10;
 
   // Public observables
-  public readonly searchQuery$ = this._searchQuery$.asObservable();
-  public readonly searchFilter$ = this._searchFilter$.asObservable();
-  public readonly dateRange$ = this._dateRange$.asObservable();
-  public readonly isSearching$ = this._isSearching$.asObservable();
-  public readonly searchResults$ = this._searchResults$.asObservable();
+  public readonly SearchQuery$ = this._searchQuery$.asObservable();
+
+  /** @deprecated Use {@link SearchQuery$}. */
+  public get searchQuery$() {
+    return this.SearchQuery$;
+  }
+  public readonly SearchFilter$ = this._searchFilter$.asObservable();
+
+  /** @deprecated Use {@link SearchFilter$}. */
+  public get searchFilter$() {
+    return this.SearchFilter$;
+  }
+  public readonly DateRange$ = this._dateRange$.asObservable();
+
+  /** @deprecated Use {@link DateRange$}. */
+  public get dateRange$() {
+    return this.DateRange$;
+  }
+  public readonly IsSearching$ = this._isSearching$.asObservable();
+
+  /** @deprecated Use {@link IsSearching$}. */
+  public get isSearching$() {
+    return this.IsSearching$;
+  }
+  public readonly SearchResults$ = this._searchResults$.asObservable();
+
+  /** @deprecated Use {@link SearchResults$}. */
+  public get searchResults$() {
+    return this.SearchResults$;
+  }
 
   private _provider: IMetadataProvider | null = null;
 
-  constructor() {
+  constructor(private artifactPermissions: ArtifactPermissionService) {
     this.initializeSearch();
     this.loadRecentSearches();
   }
 
   /**
    * Set the metadata provider this service should use. When unset, falls back to Metadata.Provider.
+   * Setting it also propagates to the artifact-permission service this depends on.
    */
   public set Provider(value: IMetadataProvider | null) {
       this._provider = value;
+      if (value !== null) {
+          this.artifactPermissions.Provider = value;
+      }
   }
 
   public get Provider(): IMetadataProvider {
@@ -138,7 +185,7 @@ export class SearchService {
   /**
    * Search across all content types
    */
-  public async search(
+  public async Search(
     query: string,
     environmentId: string,
     currentUser: UserInfo
@@ -198,8 +245,18 @@ export class SearchService {
     }
   }
 
+  /** @deprecated Use {@link Search}. */
+  public async search(
+    query: string,
+    environmentId: string,
+    currentUser: UserInfo
+  ): Promise<GroupedSearchResults> {
+    return this.Search(query, environmentId, currentUser);
+  }
+
   /**
-   * Search conversations by name and description
+   * Search conversations by name and description, limited to the conversations the
+   * conversation list shows the user
    */
   private async searchConversations(
     query: string,
@@ -210,7 +267,7 @@ export class SearchService {
     const rv = RunView.FromMetadataProvider(this.Provider);
     const lowerQuery = query.toLowerCase();
 
-    let filter = `EnvironmentID='${environmentId}' AND (IsArchived IS NULL OR IsArchived=0)`;
+    let filter = await ConversationEngine.Instance.GetVisibleConversationsFilter(environmentId, currentUser);
     filter += ` AND (LOWER(Name) LIKE '%${EscapeSQLString(lowerQuery)}%' OR LOWER(Description) LIKE '%${EscapeSQLString(lowerQuery)}%')`;
 
     if (dateRange.start) {
@@ -240,7 +297,8 @@ export class SearchService {
   }
 
   /**
-   * Search message content
+   * Search message content inside the conversations the conversation list shows the user,
+   * on every branch of each conversation
    */
   private async searchMessages(
     query: string,
@@ -248,11 +306,17 @@ export class SearchService {
     currentUser: UserInfo,
     dateRange: DateRange
   ): Promise<SearchResult[]> {
+    const conversationIds = await this.getVisibleConversationIds(environmentId, currentUser);
+    if (conversationIds.length === 0) {
+      return [];
+    }
+
     const rv = RunView.FromMetadataProvider(this.Provider);
     const lowerQuery = query.toLowerCase();
 
-    // First get conversations in this environment
-    let filter = `ConversationID IN (SELECT ID FROM vwConversations WHERE EnvironmentID='${environmentId}' AND (IsArchived IS NULL OR IsArchived=0))`;
+    // The IDs come from a separate query so this filter names only Conversation Details
+    // columns, which every provider can quote.
+    let filter = `ConversationID IN (${conversationIds.map(id => `'${id}'`).join(',')})`;
     filter += ` AND LOWER(Message) LIKE '%${EscapeSQLString(lowerQuery)}%'`;
     filter += ` AND (HiddenToUser IS NULL OR HiddenToUser=0)`;
 
@@ -263,13 +327,15 @@ export class SearchService {
       filter += ` AND __mj_CreatedAt <= '${dateRange.end.toISOString()}'`;
     }
 
-    const result = await rv.RunView<MJConversationDetailEntity>(
+    // conversation-scope: search spans every path on purpose; opening a hit switches to its branch
+    const result = await rv.RunView<MessageSearchRow>(
       {
         EntityName: 'MJ: Conversation Details',
         ExtraFilter: filter,
         OrderBy: '__mj_CreatedAt DESC',
         MaxRows: 100,
-        ResultType: 'entity_object'
+        Fields: [...MESSAGE_SEARCH_FIELDS],
+        ResultType: 'simple'
       },
       currentUser
     );
@@ -283,7 +349,30 @@ export class SearchService {
   }
 
   /**
-   * Search artifacts by name and description
+   * IDs of every conversation the conversation list shows the user. Not capped, so older
+   * conversations stay searchable.
+   */
+  private async getVisibleConversationIds(environmentId: string, currentUser: UserInfo): Promise<string[]> {
+    const rv = RunView.FromMetadataProvider(this.Provider);
+    const result = await rv.RunView<Pick<MJConversationEntity, 'ID'>>(
+      {
+        EntityName: 'MJ: Conversations',
+        ExtraFilter: await ConversationEngine.Instance.GetVisibleConversationsFilter(environmentId, currentUser),
+        Fields: ['ID'],
+        ResultType: 'simple'
+      },
+      currentUser
+    );
+
+    if (!result.Success || !result.Results) {
+      console.error('Failed to load conversations to search messages in:', result.ErrorMessage);
+      return [];
+    }
+    return result.Results.map(c => c.ID);
+  }
+
+  /**
+   * Search artifacts by name and description, limited to the artifacts the user can read
    * Includes artifacts from both conversations and collections
    */
   private async searchArtifacts(
@@ -295,8 +384,8 @@ export class SearchService {
     const rv = RunView.FromMetadataProvider(this.Provider);
     const lowerQuery = query.toLowerCase();
 
-    // Search artifacts directly by name and description
-    let filter = `EnvironmentID='${environmentId}'`;
+    const readableFilter = await this.artifactPermissions.GetReadableArtifactsFilter(currentUser.ID, currentUser);
+    let filter = `EnvironmentID='${environmentId}' AND ${readableFilter}`;
     filter += ` AND (LOWER(Name) LIKE '%${EscapeSQLString(lowerQuery)}%' OR LOWER(Description) LIKE '%${EscapeSQLString(lowerQuery)}%')`;
 
     if (dateRange.start) {
@@ -421,24 +510,8 @@ export class SearchService {
     const rv = RunView.FromMetadataProvider(this.Provider);
     const lowerQuery = query.toLowerCase();
 
-    // Build filter using same logic as TasksFullViewComponent
-    const md = this.Provider;
-    const cd = md.EntityByName('MJ: Conversation Details');
-    const c = md.EntityByName('MJ: Conversations');
-
-    if (!cd || !c) {
-      console.warn('⚠️ Missing metadata for Conversations or Conversation Details');
-      return [];
-    }
-
-    let filter = `ParentID IS NULL AND (UserID = '${currentUser.ID}' OR ConversationDetailID IN (
-      SELECT ID FROM [${cd.SchemaName}].[${cd.BaseView}]
-      WHERE
-      UserID ='${currentUser.ID}' OR
-      ConversationID IN (
-        SELECT ID FROM [${c.SchemaName}].[${c.BaseView}] WHERE UserID='${currentUser.ID}'
-      )
-    ))`;
+    // The same tasks the conversation workspace's tasks view shows.
+    let filter = await BuildConversationTasksFilter(this.Provider, currentUser);
 
     filter += ` AND (LOWER(Name) LIKE '%${EscapeSQLString(lowerQuery)}%' OR LOWER(Description) LIKE '%${EscapeSQLString(lowerQuery)}%')`;
 
@@ -501,9 +574,9 @@ export class SearchService {
   }
 
   /**
-   * Map message entity to search result
+   * Map a message row to a search result, with the branch and sequence that locate it
    */
-  private mapMessageToSearchResult(message: MJConversationDetailEntity, query: string): SearchResult {
+  private mapMessageToSearchResult(message: MessageSearchRow, query: string): SearchResult {
     const messageText = message.Message || '';
     const matchedText = this.extractMatchContext(messageText, query);
 
@@ -516,7 +589,9 @@ export class SearchService {
       conversationId: message.ConversationID,
       conversationName: message.Conversation || undefined,
       createdAt: message.__mj_CreatedAt,
-      relevanceScore: 5
+      relevanceScore: 5,
+      branchId: message.BranchID ?? null,
+      sequence: message.Sequence
     };
   }
 
@@ -645,29 +720,44 @@ export class SearchService {
   /**
    * Set search filter
    */
-  public setSearchFilter(filter: SearchFilter): void {
+  public SetSearchFilter(filter: SearchFilter): void {
     this._searchFilter$.next(filter);
+  }
+
+  /** @deprecated Use {@link SetSearchFilter}. */
+  public setSearchFilter(filter: SearchFilter): void {
+    return this.SetSearchFilter(filter);
   }
 
   /**
    * Set date range filter
    */
-  public setDateRange(range: DateRange): void {
+  public SetDateRange(range: DateRange): void {
     this._dateRange$.next(range);
+  }
+
+  /** @deprecated Use {@link SetDateRange}. */
+  public setDateRange(range: DateRange): void {
+    return this.SetDateRange(range);
   }
 
   /**
    * Clear all filters
    */
-  public clearFilters(): void {
+  public ClearFilters(): void {
     this._searchFilter$.next('all');
     this._dateRange$.next({ start: null, end: null });
+  }
+
+  /** @deprecated Use {@link ClearFilters}. */
+  public clearFilters(): void {
+    return this.ClearFilters();
   }
 
   /**
    * Clear search results
    */
-  public clearResults(): void {
+  public ClearResults(): void {
     this._searchResults$.next({
       conversations: [],
       messages: [],
@@ -678,11 +768,21 @@ export class SearchService {
     });
   }
 
+  /** @deprecated Use {@link ClearResults}. */
+  public clearResults(): void {
+    return this.ClearResults();
+  }
+
   /**
    * Get recent searches
    */
-  public getRecentSearches(): string[] {
+  public GetRecentSearches(): string[] {
     return [...this.recentSearches];
+  }
+
+  /** @deprecated Use {@link GetRecentSearches}. */
+  public getRecentSearches(): string[] {
+    return this.GetRecentSearches();
   }
 
   /**
@@ -709,9 +809,14 @@ export class SearchService {
   /**
    * Clear recent searches
    */
-  public clearRecentSearches(): void {
+  public ClearRecentSearches(): void {
     this.recentSearches = [];
     this.saveRecentSearches();
+  }
+
+  /** @deprecated Use {@link ClearRecentSearches}. */
+  public clearRecentSearches(): void {
+    return this.ClearRecentSearches();
   }
 
   /**

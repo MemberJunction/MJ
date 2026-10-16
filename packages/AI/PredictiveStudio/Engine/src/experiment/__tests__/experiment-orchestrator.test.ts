@@ -4,10 +4,10 @@ import type { ModelingPlanSpec, LeaderboardEntry } from '@memberjunction/predict
 import type { MJMLModelEntity, MJMLTrainingRunEntity } from '@memberjunction/core-entities';
 
 import { ExperimentOrchestrator } from '../experiment-orchestrator';
-import { extractNormalizedScore } from '../seams';
-import { rankLeaderboard, selectPrunedIterationIds } from '../leaderboard';
-import { runBounded } from '../concurrency';
-import { PlanOrderWaveStrategist, sortByPriority } from '../wave-strategist';
+import { ExtractNormalizedScore } from '../seams';
+import { RankLeaderboard, SelectPrunedIterationIds } from '../leaderboard';
+import { RunBounded } from '../concurrency';
+import { PlanOrderWaveStrategist, SortByPriority } from '../wave-strategist';
 import type {
   IExperimentEntityFactory,
   IExperimentTrainer,
@@ -597,29 +597,29 @@ describe('leaderboard helpers', () => {
   ];
 
   it('rankLeaderboard orders best-first deterministically', () => {
-    expect(rankLeaderboard(entries).map((e) => e.IterationID)).toEqual(['i2', 'i3', 'i1']);
+    expect(RankLeaderboard(entries).map((e) => e.IterationID)).toEqual(['i2', 'i3', 'i1']);
   });
 
   it('selectPrunedIterationIds applies top-K', () => {
-    const pruned = selectPrunedIterationIds(entries, { keepTopK: 1 });
+    const pruned = SelectPrunedIterationIds(entries, { keepTopK: 1 });
     expect([...pruned].sort()).toEqual(['i1', 'i3']);
   });
 
   it('selectPrunedIterationIds applies the relative threshold and never prunes the best', () => {
-    const pruned = selectPrunedIterationIds(entries, { relativePruneThreshold: 0.8 });
+    const pruned = SelectPrunedIterationIds(entries, { relativePruneThreshold: 0.8 });
     // best is 0.9 → cutoff 0.72 → i3(0.7) and i1(0.5) pruned, i2 kept.
     expect([...pruned].sort()).toEqual(['i1', 'i3']);
   });
 
   it('never prunes a single-entry leaderboard', () => {
-    expect(selectPrunedIterationIds([{ IterationID: 'x', Metric: 0.1 }], { keepTopK: 0 }).size).toBe(0);
+    expect(SelectPrunedIterationIds([{ IterationID: 'x', Metric: 0.1 }], { keepTopK: 0 }).size).toBe(0);
   });
 });
 
 describe('wave strategist (deterministic default)', () => {
   it('sortByPriority orders ascending priority, stable on ties', () => {
     const exps = [experiment('low', 5), experiment('hi', 1), experiment('mid', 1)];
-    expect(sortByPriority(exps).map((e) => e.Label)).toEqual(['hi', 'mid', 'low']);
+    expect(SortByPriority(exps).map((e) => e.Label)).toEqual(['hi', 'mid', 'low']);
   });
 
   it('PlanOrderWaveStrategist returns the next maxWaveSize by priority', () => {
@@ -641,7 +641,7 @@ describe('runBounded', () => {
       inFlight--;
       return i;
     });
-    const results = await runBounded(tasks, 2);
+    const results = await RunBounded(tasks, 2);
     expect(results).toEqual([0, 1, 2, 3]); // input order, not completion order
     expect(maxInFlight).toBeLessThanOrEqual(2);
   });
@@ -663,7 +663,7 @@ describe('runBounded', () => {
       return i;
     });
 
-    const results = await runBounded(tasks, 3, { shouldStop: () => stop });
+    const results = await RunBounded(tasks, 3, { shouldStop: () => stop });
 
     // Exactly the initial 3 in-flight tasks ran; no worker pulled a 4th once the
     // bound tripped. The un-dispatched slots stay `undefined`.
@@ -675,18 +675,18 @@ describe('runBounded', () => {
 
 describe('extractNormalizedScore', () => {
   it('prefers holdout metrics and passes ranking metrics through', () => {
-    expect(extractNormalizedScore(JSON.stringify({ auc: 0.81 }), JSON.stringify({ auc: 0.95 }), 'AUC', 'classification')).toBe(0.81);
+    expect(ExtractNormalizedScore(JSON.stringify({ auc: 0.81 }), JSON.stringify({ auc: 0.95 }), 'AUC', 'classification')).toBe(0.81);
   });
 
   it('falls back to training metrics when holdout is absent', () => {
-    expect(extractNormalizedScore(null, JSON.stringify({ f1: 0.7 }), 'F1', 'classification')).toBe(0.7);
+    expect(ExtractNormalizedScore(null, JSON.stringify({ f1: 0.7 }), 'F1', 'classification')).toBe(0.7);
   });
 
   it('negates error metrics so higher Score is always better', () => {
-    expect(extractNormalizedScore(JSON.stringify({ rmse: 2.5 }), null, 'RMSE', 'regression')).toBe(-2.5);
+    expect(ExtractNormalizedScore(JSON.stringify({ rmse: 2.5 }), null, 'RMSE', 'regression')).toBe(-2.5);
   });
 
   it('returns 0 when the metric is missing', () => {
-    expect(extractNormalizedScore(JSON.stringify({ auc: 0.8 }), null, 'F1', 'classification')).toBe(0);
+    expect(ExtractNormalizedScore(JSON.stringify({ auc: 0.8 }), null, 'F1', 'classification')).toBe(0);
   });
 });

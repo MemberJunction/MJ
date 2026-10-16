@@ -276,18 +276,17 @@ export class QueryParameterProcessor {
 
     /**
      * Validates parameters against their definitions.
-     * Boolean handling is platform-aware:
-     * - SQL Server: converts to 1/0 (BIT fields)
-     * - PostgreSQL: keeps as true/false (native boolean)
+     * Boolean values are bound the way the current platform's dialect expects
+     * (`BooleanParameterValue`): 1/0 on SQL Server, true/false on PostgreSQL.
      */
-    public static validateParameters(
+    public static ValidateParameters(
         parameters: Record<string, unknown> | undefined,
         parameterDefinitions: MJQueryParameterEntity[],
         skipUnknownParameterCheck?: boolean
     ): ParameterValidationResult {
         const errors: string[] = [];
         const validatedParams: Record<string, unknown> = {};
-        const platform = RunQuerySQLFilterManager.Instance.Platform;
+        const dialect = RunQuerySQLFilterManager.Instance.Dialect;
 
         // Process each defined parameter
         for (const paramDef of parameterDefinitions) {
@@ -338,13 +337,7 @@ export class QueryParameterProcessor {
                                 ? finalValue
                                 : String(finalValue).toLowerCase() === 'true';
 
-                            if (platform === 'postgresql') {
-                                // PostgreSQL natively supports boolean true/false
-                                validatedParams[paramDef.Name] = boolValue;
-                            } else {
-                                // SQL Server uses BIT (1/0)
-                                validatedParams[paramDef.Name] = boolValue ? 1 : 0;
-                            }
+                            validatedParams[paramDef.Name] = dialect.BooleanParameterValue(boolValue);
                             break;
                         }
                         case 'array':
@@ -408,6 +401,15 @@ export class QueryParameterProcessor {
         };
     }
 
+    /** @deprecated Use {@link ValidateParameters}. */
+    public static validateParameters(
+        parameters: Record<string, unknown> | undefined,
+        parameterDefinitions: MJQueryParameterEntity[],
+        skipUnknownParameterCheck?: boolean
+    ): ParameterValidationResult {
+        return this.ValidateParameters(parameters, parameterDefinitions, skipUnknownParameterCheck);
+    }
+
     /**
      * Processes a query template with the provided parameters.
      * Accepts either a full `QueryInfo` (saved queries) or a minimal `QueryTemplateInput`
@@ -419,7 +421,7 @@ export class QueryParameterProcessor {
      *        own UsesTemplate is false. Used for transitive template resolution when a composed
      *        dependency uses templates but the outer query does not.
      */
-    public static processQueryTemplate(
+    public static ProcessQueryTemplate(
         query: QueryTemplateInput,
         parameters: Record<string, unknown> | undefined,
         sqlOverride?: string,
@@ -440,7 +442,7 @@ export class QueryParameterProcessor {
             // Validate parameters against known definitions.
             // When force-processing for transitive templates, the outer query may not define
             // all parameters used by dependencies, so we skip the "unknown parameter" check.
-            const validation = this.validateParameters(parameters, query.Parameters, forceTemplateProcessing);
+            const validation = this.ValidateParameters(parameters, query.Parameters, forceTemplateProcessing);
             if (!validation.success) {
                 return {
                     success: false,
@@ -491,5 +493,15 @@ export class QueryParameterProcessor {
                 appliedParameters: {}
             };
         }
+    }
+
+    /** @deprecated Use {@link ProcessQueryTemplate}. */
+    public static processQueryTemplate(
+        query: QueryTemplateInput,
+        parameters: Record<string, unknown> | undefined,
+        sqlOverride?: string,
+        forceTemplateProcessing?: boolean
+    ): QueryProcessingResult {
+        return this.ProcessQueryTemplate(query, parameters, sqlOverride, forceTemplateProcessing);
     }
 }

@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
-import { MJConversationEntity, MJConversationDetailEntity } from '@memberjunction/core-entities';
+import { ConversationEngine, ConversationScope, MJConversationEntity, MJConversationDetailEntity } from '@memberjunction/core-entities';
 import { Metadata, UserInfo, BaseEntity, RunView, IMetadataProvider } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
+import { UUIDMap, UUIDsEqual } from '@memberjunction/global';
 
 /**
  * Global singleton cache for conversation-related entities.
@@ -46,7 +46,7 @@ export class DataCacheService {
    * @param currentUser User context for loading
    * @returns The cached or loaded MJConversationEntity, or null if not found
    */
-  async getConversation(id: string, currentUser: UserInfo): Promise<MJConversationEntity | null> {
+  async GetConversation(id: string, currentUser: UserInfo): Promise<MJConversationEntity | null> {
     // Check cache first
     const cached = this.conversations.find(c => UUIDsEqual(c.ID, id));
     if (cached) {
@@ -67,13 +67,18 @@ export class DataCacheService {
     return null;
   }
 
+  /** @deprecated Use {@link GetConversation}. */
+  async getConversation(id: string, currentUser: UserInfo): Promise<MJConversationEntity | null> {
+    return this.GetConversation(id, currentUser);
+  }
+
   /**
    * Create a new MJConversationEntity and automatically cache it
    * The cache is the ONLY place GetEntityObject() should be called
    * @param currentUser User context
    * @returns New MJConversationEntity instance (already cached)
    */
-  async createConversation(currentUser: UserInfo): Promise<MJConversationEntity> {
+  async CreateConversation(currentUser: UserInfo): Promise<MJConversationEntity> {
     const md = this.Provider;
     const conversation = await md.GetEntityObject<MJConversationEntity>('MJ: Conversations', currentUser);
 
@@ -85,20 +90,35 @@ export class DataCacheService {
     return conversation;
   }
 
+  /** @deprecated Use {@link CreateConversation}. */
+  async createConversation(currentUser: UserInfo): Promise<MJConversationEntity> {
+    return this.CreateConversation(currentUser);
+  }
+
   /**
    * Remove a MJConversationEntity from the cache
    * @param id The conversation ID to remove
    */
-  removeConversation(id: string): void {
+  RemoveConversation(id: string): void {
     this.conversations = this.conversations.filter(c => !UUIDsEqual(c.ID, id));
+  }
+
+  /** @deprecated Use {@link RemoveConversation}. */
+  removeConversation(id: string): void {
+    return this.RemoveConversation(id);
   }
 
   /**
    * Get all cached MJConversationEntity objects (no DB call)
    * @returns Array of cached conversations
    */
-  getCachedConversations(): MJConversationEntity[] {
+  GetCachedConversations(): MJConversationEntity[] {
     return this.conversations;
+  }
+
+  /** @deprecated Use {@link GetCachedConversations}. */
+  getCachedConversations(): MJConversationEntity[] {
+    return this.GetCachedConversations();
   }
 
   // =============================================================================
@@ -111,7 +131,7 @@ export class DataCacheService {
    * @param currentUser User context for loading
    * @returns The cached or loaded MJConversationDetailEntity, or null if not found
    */
-  async getConversationDetail(id: string, currentUser: UserInfo): Promise<MJConversationDetailEntity | null> {
+  async GetConversationDetail(id: string, currentUser: UserInfo): Promise<MJConversationDetailEntity | null> {
     // Check cache first
     const cached = this.conversationDetails.find(d => UUIDsEqual(d.ID, id));
     if (cached) {
@@ -132,13 +152,18 @@ export class DataCacheService {
     return null;
   }
 
+  /** @deprecated Use {@link GetConversationDetail}. */
+  async getConversationDetail(id: string, currentUser: UserInfo): Promise<MJConversationDetailEntity | null> {
+    return this.GetConversationDetail(id, currentUser);
+  }
+
   /**
    * Create a new MJConversationDetailEntity and automatically cache it
    * The cache is the ONLY place GetEntityObject() should be called
    * @param currentUser User context
    * @returns New MJConversationDetailEntity instance (already cached)
    */
-  async createConversationDetail(currentUser: UserInfo): Promise<MJConversationDetailEntity> {
+  async CreateConversationDetail(currentUser: UserInfo): Promise<MJConversationDetailEntity> {
     const md = this.Provider;
     const detail = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', currentUser);
 
@@ -151,14 +176,25 @@ export class DataCacheService {
     return detail;
   }
 
+  /** @deprecated Use {@link CreateConversationDetail}. */
+  async createConversationDetail(currentUser: UserInfo): Promise<MJConversationDetailEntity> {
+    return this.CreateConversationDetail(currentUser);
+  }
+
   /**
-   * Load all ConversationDetail entities for a conversation and cache them
-   * Used when loading a conversation's message history
+   * Load the ConversationDetail entities of one scope of a conversation (Main, or one fork's
+   * path) that no rerun replaced, and cache them
    * @param conversationId The conversation ID
    * @param currentUser User context
+   * @param scope The rows to read; Main when omitted
    * @returns Array of MJConversationDetailEntity objects
+   * @throws when the scope belongs to another conversation
    */
-  async loadConversationDetails(conversationId: string, currentUser: UserInfo): Promise<MJConversationDetailEntity[]> {
+  async LoadConversationDetails(conversationId: string, currentUser: UserInfo, scope?: ConversationScope): Promise<MJConversationDetailEntity[]> {
+    if (scope && !UUIDsEqual(scope.ConversationID, conversationId)) {
+      throw new Error(`Conversation ${conversationId} cannot be read with the scope of conversation ${scope.ConversationID}`);
+    }
+    const resolved = scope ?? ConversationEngine.TrunkScope(conversationId);
     const timestamp = new Date().toISOString();
     console.log(`[${timestamp}] 💾 DataCacheService.loadConversationDetails - Loading messages for conversation ${conversationId}`);
 
@@ -168,7 +204,7 @@ export class DataCacheService {
     const result = await rv.RunView<MJConversationDetailEntity>(
       {
         EntityName: 'MJ: Conversation Details',
-        ExtraFilter: `ConversationID='${conversationId}'`,
+        ExtraFilter: ConversationEngine.LiveRowsFilter(ConversationEngine.ScopeFilter(resolved)),
         OrderBy: '__mj_CreatedAt ASC',
         ResultType: 'entity_object'
       },
@@ -179,18 +215,7 @@ export class DataCacheService {
       const details = result.Results || [];
       console.log(`[${timestamp}] 💾 DataCacheService - Loaded ${details.length} message(s) for conversation ${conversationId}`);
 
-      // Add all to cache (avoid duplicates by checking ID)
-      for (const detail of details) {
-        const existingIndex = this.conversationDetails.findIndex(d => UUIDsEqual(d.ID, detail.ID));
-        if (existingIndex >= 0) {
-          // Replace existing (ensures we keep the same object reference)
-          this.conversationDetails[existingIndex] = detail;
-        } else {
-          // Add new
-          this.conversationDetails.push(detail);
-        }
-      }
-
+      this.upsertCachedDetails(details);
       return details;
     }
 
@@ -199,20 +224,58 @@ export class DataCacheService {
   }
 
   /**
+   * Adds loaded details to the cache, replacing any cached detail with the same ID in place.
+   * Positions are indexed once up front: the cache spans every loaded conversation, so searching
+   * it for each loaded detail grew with both.
+   */
+  private upsertCachedDetails(details: MJConversationDetailEntity[]): void {
+    const positionByID = new UUIDMap<number>();
+    this.conversationDetails.forEach((d, i) => {
+      if (!positionByID.Has(d.ID)) positionByID.Set(d.ID, i);
+    });
+    for (const detail of details) {
+      const existingIndex = positionByID.Get(detail.ID);
+      if (existingIndex !== undefined) {
+        // Replace existing (ensures we keep the same object reference)
+        this.conversationDetails[existingIndex] = detail;
+      } else {
+        // Add new
+        positionByID.Set(detail.ID, this.conversationDetails.length);
+        this.conversationDetails.push(detail);
+      }
+    }
+  }
+
+  /** @deprecated Use {@link LoadConversationDetails}. */
+  async loadConversationDetails(conversationId: string, currentUser: UserInfo, scope?: ConversationScope): Promise<MJConversationDetailEntity[]> {
+    return this.LoadConversationDetails(conversationId, currentUser, scope);
+  }
+
+  /**
    * Get all cached ConversationDetail entities for a conversation (no DB call)
    * @param conversationId The conversation ID
    * @returns Array of cached conversation details
    */
-  getCachedConversationDetails(conversationId: string): MJConversationDetailEntity[] {
+  GetCachedConversationDetails(conversationId: string): MJConversationDetailEntity[] {
     return this.conversationDetails.filter(d => UUIDsEqual(d.ConversationID, conversationId));
+  }
+
+  /** @deprecated Use {@link GetCachedConversationDetails}. */
+  getCachedConversationDetails(conversationId: string): MJConversationDetailEntity[] {
+    return this.GetCachedConversationDetails(conversationId);
   }
 
   /**
    * Remove a MJConversationDetailEntity from the cache
    * @param id The conversation detail ID to remove
    */
-  removeConversationDetail(id: string): void {
+  RemoveConversationDetail(id: string): void {
     this.conversationDetails = this.conversationDetails.filter(d => !UUIDsEqual(d.ID, id));
+  }
+
+  /** @deprecated Use {@link RemoveConversationDetail}. */
+  removeConversationDetail(id: string): void {
+    return this.RemoveConversationDetail(id);
   }
 
   // =============================================================================
@@ -224,7 +287,7 @@ export class DataCacheService {
    * This forces a reload from the database on next access
    * @param entityName The entity name to refresh (e.g., 'Conversations', 'MJ: Conversation Details')
    */
-  async refreshEntity(entityName: string): Promise<void> {
+  async RefreshEntity(entityName: string): Promise<void> {
     switch (entityName) {
       case 'Conversations':
         this.conversations = [];
@@ -237,16 +300,21 @@ export class DataCacheService {
     }
   }
 
+  /** @deprecated Use {@link RefreshEntity}. */
+  async refreshEntity(entityName: string): Promise<void> {
+    return this.RefreshEntity(entityName);
+  }
+
   /**
    * Refresh a specific cache by name
    * This method can be extended to handle different cache types
    * @param cacheName The cache name ('Core', 'AI', 'Actions')
    */
-  async refreshCache(cacheName: 'Core' | 'AI' | 'Actions'): Promise<void> {
+  async RefreshCache(cacheName: 'Core' | 'AI' | 'Actions'): Promise<void> {
     switch (cacheName) {
       case 'Core':
         // Clear core entity caches
-        this.clear();
+        this.Clear();
         break;
       case 'AI':
         // AI-specific cache refresh would go here
@@ -262,32 +330,52 @@ export class DataCacheService {
     }
   }
 
+  /** @deprecated Use {@link RefreshCache}. */
+  async refreshCache(cacheName: 'Core' | 'AI' | 'Actions'): Promise<void> {
+    return this.RefreshCache(cacheName);
+  }
+
   /**
    * Clear all cached entities
    * Call when switching environments, users, or when needed
    */
-  clear(): void {
+  Clear(): void {
     this.conversations = [];
     this.conversationDetails = [];
+  }
+
+  /** @deprecated Use {@link Clear}. */
+  clear(): void {
+    return this.Clear();
   }
 
   /**
    * Clear cached entities for a specific conversation
    * @param conversationId The conversation ID
    */
-  clearConversation(conversationId: string): void {
+  ClearConversation(conversationId: string): void {
     this.conversations = this.conversations.filter(c => !UUIDsEqual(c.ID, conversationId));
     this.conversationDetails = this.conversationDetails.filter(d => !UUIDsEqual(d.ConversationID, conversationId));
+  }
+
+  /** @deprecated Use {@link ClearConversation}. */
+  clearConversation(conversationId: string): void {
+    return this.ClearConversation(conversationId);
   }
 
   /**
    * Get cache statistics for debugging
    * @returns Object with cache sizes
    */
-  getStats(): { conversations: number; conversationDetails: number } {
+  GetStats(): { conversations: number; conversationDetails: number } {
     return {
       conversations: this.conversations.length,
       conversationDetails: this.conversationDetails.length
     };
+  }
+
+  /** @deprecated Use {@link GetStats}. */
+  getStats(): { conversations: number; conversationDetails: number } {
+    return this.GetStats();
   }
 }
