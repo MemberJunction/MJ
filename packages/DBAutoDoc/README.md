@@ -176,8 +176,9 @@ db-auto-doc analyze --resume ./output/run-3/state.json
 ```
 
 Sampling is what the enum/value-list verdicts and the organic-key cardinality gate are based on, so with
-`--skip-sampling` those verdicts fall back to the LLM's judgement and organic-key detection is skipped
-with a warning.
+`--skip-sampling` those verdicts fall back to the LLM's judgement. Organic-key detection is skipped with
+a warning when no table has column statistics; on a `--resume --skip-sampling` of a run that already
+sampled, the earlier statistics are kept and detection still runs.
 
 #### Seed context from files
 

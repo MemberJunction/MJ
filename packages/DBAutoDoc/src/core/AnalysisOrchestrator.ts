@@ -603,6 +603,7 @@ export class AnalysisOrchestrator {
       this.onProgress(`Sampling table data [${tableIndex}/${pending.length}]: ${schema.name}.${table.name}`);
       try {
         await sampler.analyzeTable(schema.name, table.name, table.columns);
+        phase.sampledTables++;
       } catch (error) {
         samplingErrors++;
         const errorMsg = `Warning: Failed to analyze data for ${schema.name}.${table.name}: ${(error as Error).message}`;
@@ -610,7 +611,6 @@ export class AnalysisOrchestrator {
         this.onProgress(errorMsg, { schema: schema.name, table: table.name, error: (error as Error).message });
         // Continue with next table - partial data better than no data
       }
-      phase.sampledTables++;
 
       // Checkpoint so an interrupted run resumes from here instead of from the start
       if (tableIndex % SAMPLING_CHECKPOINT_INTERVAL === 0) {
@@ -623,7 +623,9 @@ export class AnalysisOrchestrator {
       errors: samplingErrors
     });
 
-    phase.status = 'completed';
+    // A table whose sampling failed carries no statistics, so a later --resume picks it up again;
+    // the phase stays 'partial' so the state file says so instead of claiming a full pass.
+    phase.status = samplingErrors === 0 ? 'completed' : 'partial';
     phase.completedAt = new Date().toISOString();
     stateManager.updateSummary(state);
     await stateManager.save(state);

@@ -840,7 +840,7 @@ db-auto-doc analyze [OPTIONS]
 |------|-------|-------------|---------|
 | `--resume` | `-r` | Resume from state file | - |
 | `--config` | `-c` | Path to config file | `./config.json` |
-| `--skip-sampling` | - | Skip the table data sampling pass (same as `analysis.skipSampling`); organic-key detection is then skipped too | false |
+| `--skip-sampling` | - | Skip the table data sampling pass (same as `analysis.skipSampling`); organic-key detection is skipped when no table has statistics, so a fresh run loses it but a `--resume` of a sampled run keeps it | false |
 
 **Examples:**
 

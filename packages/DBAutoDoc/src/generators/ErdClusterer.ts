@@ -134,6 +134,7 @@ export class ErdClusterer {
       if (!members.has(hub)) members.set(hub, []);
       members.get(hub)!.push(table);
     }
+    this.warnAboutUndersizedClusters(graph, members, forcedHubs, settings);
     const clusters = [...members].map(([hub, list]) => this.buildCluster(graph, owner, hub, list, settings));
     clusters.sort((a, b) => b.Tables.length - a.Tables.length || a.HubName.localeCompare(b.HubName));
     this.assignPageFileNames(clusters);
@@ -332,6 +333,19 @@ export class ErdClusterer {
       }
     }
     return owner;
+  }
+
+  /**
+   * Folding only moves a small cluster into a larger neighbour, so two undersized clusters that
+   * link only to each other stay as they are. Say so rather than silently ignoring minClusterSize.
+   */
+  private warnAboutUndersizedClusters(graph: Graph, members: Map<string, string[]>, forcedHubs: Set<string>, settings: ErdClustererSettings): void {
+    const undersized = [...members]
+      .filter(([hub, list]) => list.length < settings.minClusterSize && !forcedHubs.has(hub))
+      .sort((a, b) => graph.nameOf(a[0]).localeCompare(graph.nameOf(b[0])));
+    for (const [hub, list] of undersized) {
+      graph.warnings.push(`minClusterSize: subject area '${graph.nameOf(hub)}' has ${list.length} table(s), below the minimum of ${settings.minClusterSize}, and no larger neighbouring area to fold into`);
+    }
   }
 
   private buildCluster(graph: Graph, owner: Map<string, string>, hub: string, list: string[], settings: ErdClustererSettings): ErdCluster {

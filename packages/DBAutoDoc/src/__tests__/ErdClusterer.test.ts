@@ -95,6 +95,25 @@ describe('ErdClusterer', () => {
     expect(plan.Clusters.every(c => c.Tables.length >= 3 || c.HubName === 'Invoice')).toBe(true);
   });
 
+  it('warns when two undersized areas link only to each other and cannot fold', () => {
+    // Two small hubs (3 exclusive members each) joined by one bridge and nothing else
+    const tables: TableDefinition[] = [
+      table('Alpha', 100000, []), table('Beta', 100000, []),
+      ...['A1', 'A2', 'A3'].map(n => table(n, 1000, ['Alpha'])),
+      ...['B1', 'B2', 'B3'].map(n => table(n, 1000, ['Beta'])),
+      table('AlphaBeta', 1000, ['Alpha', 'Beta']),
+    ];
+    const s = state();
+    s.schemas = [{ name: 'dbo', tables, descriptionIterations: [] }];
+    const plan = new ErdClusterer().Plan(s, { hubMinInbound: 3, minClusterSize: 6 });
+    expect(plan.Clusters.map(c => c.HubName).sort()).toEqual(['Alpha', 'Beta']);
+    expect(plan.Clusters.every(c => c.Tables.length < 6)).toBe(true);
+    expect(plan.Warnings).toEqual([
+      "minClusterSize: subject area 'Alpha' has 5 table(s), below the minimum of 6, and no larger neighbouring area to fold into",
+      "minClusterSize: subject area 'Beta' has 4 table(s), below the minimum of 6, and no larger neighbouring area to fold into",
+    ]);
+  });
+
   it('keeps same-named tables in different schemas apart and resolves dotted table names', () => {
     const s = state();
     s.schemas.push({ name: 'crm', descriptionIterations: [], tables: [

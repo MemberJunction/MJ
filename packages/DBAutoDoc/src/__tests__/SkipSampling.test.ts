@@ -149,6 +149,30 @@ describe('Resumed sampling in AnalysisOrchestrator', () => {
     expect(mockAnalyzeTable).toHaveBeenCalledWith('dbo', 'Orders', unsampled.columns);
   });
 
+  it('records a partial phase and counts only the tables that were actually sampled when a table fails', async () => {
+    const col = () => ({ name: 'Id', dataType: 'int', isNullable: false, isPrimaryKey: true, isForeignKey: false, descriptionIterations: [] });
+    const users = { name: 'Users', rowCount: 100, dependsOn: [], dependents: [], descriptionIterations: [], columns: [col()] };
+    const orders = { name: 'Orders', rowCount: 500, dependsOn: [], dependents: [], descriptionIterations: [], columns: [col()] };
+    const resumedState = { version: '1.0.0', database: { name: 'TestDB', server: 'localhost' }, summary: {}, phases: { descriptionGeneration: [] },
+      schemas: [{ name: 'dbo', tables: [users, orders], descriptionIterations: [] }] };
+    vi.spyOn(ResumableOrchestrator.prototype, 'loadAndMergeState').mockResolvedValue(resumedState as unknown as DatabaseDocumentation);
+    mockAnalyzeTable.mockImplementation(async (_schema: string, tableName: string) => {
+      if (tableName === 'Orders') throw new Error('timeout');
+    });
+
+    const orchestrator = new ResumableOrchestrator({
+      config: createTestConfig(),
+      resumeFromState: './output/run-1/state.json',
+      maxIterations: 0,
+      onProgress: () => undefined
+    });
+    const result = await orchestrator.Execute();
+    expect(result.success).toBe(true);
+    expect(mockAnalyzeTable).toHaveBeenCalledTimes(2);
+    expect(resumedState.phases).toMatchObject({ dataSampling: { status: 'partial', sampledTables: 1, totalTables: 2 } });
+    mockAnalyzeTable.mockReset().mockResolvedValue(undefined);
+  });
+
   it('does not start sampling on a resume when the resumed run skipped it', async () => {
     const progressMessages: string[] = [];
     const unsampled = { name: 'Orders', rowCount: 500, dependsOn: [], dependents: [], descriptionIterations: [],
