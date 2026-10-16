@@ -5,7 +5,7 @@ import { describe, it, expect } from 'vitest';
 import type { DatabaseProviderBase, IMetadataProvider, RunViewParams, RunViewResult, UserInfo } from '@memberjunction/core';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import type { UserPayload } from '../types.js';
-import type { RunDynamicViewInput } from '../generic/RunViewResolver.js';
+import type { RunDynamicViewInput, RunViewByNameInput } from '../generic/RunViewResolver.js';
 import type { PubSubEngine } from 'type-graphql';
 
 /**
@@ -13,8 +13,10 @@ import type { PubSubEngine } from 'type-graphql';
  * OverrideExcludeFilter): a subquery may only read an entity base view, and only one the
  * acting user can read. UserSearchString is free text and is not screened as a clause.
  *
- * lts/5 port of #4782: the findBy / RunViewByNameGeneric escaping tests and the RunViews
- * structured-error test on next cover fixes that are not on this line, so they are not here.
+ * Also pins #4037's escaping of `ResolverBase`'s own filter builders (`findBy` and the
+ * `RunViewByNameGeneric` name lookup), including the fail-closed rule on the unquoted
+ * (numeric/boolean) slot. The RunViews structured-error test on next covers a fix that is
+ * not on this line, so it is not here.
  */
 
 const ENTITY_NAME = 'MJ: Users';
@@ -80,8 +82,12 @@ function fakeProvider(captured: Captured, rows: Record<string, unknown>[] = [], 
 const fakeUser = () => ({ Email: 'tester@example.com' } as UserInfo);
 const fakePayload = () => ({ email: 'tester@example.com', userRecord: fakeUser() } as UserPayload);
 
-/** Reaches the protected client-subquery screen. */
+/** Reaches the protected `findBy` and the client-subquery screen. */
 class Probe extends ResolverBase {
+    public FindBy(provider: DatabaseProviderBase, entity: string, params: Record<string, unknown>) {
+        return this.findBy(provider, entity, params, fakeUser());
+    }
+
     public ScreenClause(clause: string | undefined | null, label: string, provider: DatabaseProviderBase) {
         return this.assertClientClauseUsesEntityBaseViews(clause, label, provider as unknown as IMetadataProvider);
     }
@@ -98,6 +104,66 @@ class Probe extends ResolverBase {
         return this.screenClientViewClauses(clauses, provider as unknown as IMetadataProvider);
     }
 }
+
+describe('ResolverBase.findBy — ExtraFilter escaping', () => {
+    it('doubles a single quote in a quoted value', async () => {
+        const captured: Captured = { params: null };
+        await new Probe().FindBy(fakeProvider(captured), ENTITY_NAME, { Email: "o'brien@example.com" });
+
+        expect(captured.params?.ExtraFilter).toBe("Email = 'o''brien@example.com'");
+    });
+
+    it('renders a tautology attempt inert instead of terminating the literal', async () => {
+        const captured: Captured = { params: null };
+        // The payload closes the literal and appends its own predicate. Escaped, every quote
+        // it carries stays *inside* the literal, so the clause matches a (non-existent)
+        // address rather than every row.
+        await new Probe().FindBy(fakeProvider(captured), ENTITY_NAME, { Email: "x' OR '1'='1" });
+
+        expect(captured.params?.ExtraFilter).toBe("Email = 'x'' OR ''1''=''1'");
+        // Nothing outside the literal: exactly two unescaped quotes, the delimiters.
+        expect(captured.params?.ExtraFilter?.replace(/''/g, '')).toBe("Email = 'x OR 1=1'");
+    });
+
+    it('joins multiple params with AND, escaping each', async () => {
+        const captured: Captured = { params: null };
+        await new Probe().FindBy(fakeProvider(captured), ENTITY_NAME, { Email: "a'b", Name: "c'd" });
+
+        expect(captured.params?.ExtraFilter).toBe("Email = 'a''b' AND Name = 'c''d'");
+    });
+
+    it('leaves a genuinely numeric value unquoted', async () => {
+        const captured: Captured = { params: null };
+        await new Probe().FindBy(fakeProvider(captured), ENTITY_NAME, { Sequence: 42 });
+
+        expect(captured.params?.ExtraFilter).toBe('Sequence = 42');
+    });
+
+    it('rejects a string aimed at an unquoted (numeric) field rather than emitting it as SQL', async () => {
+        const captured: Captured = { params: null };
+        // There is no quote to escape in an unquoted slot — the value lands in the clause as
+        // SQL. The only safe handling is to refuse it.
+        await expect(
+            new Probe().FindBy(fakeProvider(captured), ENTITY_NAME, { Sequence: '1 OR 1=1' })
+        ).rejects.toThrow(/Sequence/);
+
+        expect(captured.params).toBeNull(); // never reached RunView
+    });
+
+    it('rejects a non-finite number in an unquoted field', async () => {
+        const captured: Captured = { params: null };
+        await expect(
+            new Probe().FindBy(fakeProvider(captured), ENTITY_NAME, { Sequence: Number.NaN })
+        ).rejects.toThrow(/Sequence/);
+    });
+
+    it('still rejects an unknown field name', async () => {
+        // Pre-existing behavior, pinned so the escaping rework cannot quietly drop it.
+        await expect(
+            new Probe().FindBy(fakeProvider({ params: null }), ENTITY_NAME, { NotAField: 'x' })
+        ).rejects.toThrow(/NotAField/);
+    });
+});
 
 describe('ResolverBase — GraphQL-boundary ExtraFilter AST screen', () => {
     // Keyword SELECT/EXISTS ban (#4253) broke first-party IN (SELECT … FROM base view).
@@ -262,5 +328,24 @@ describe('ResolverBase.screenClientViewClauses — UserSearchString is free text
         await new Probe().RunDynamic(input, fakeProvider(captured));
 
         expect(captured.params?.UserSearchString).toBe("Marcus O'Leary");
+    });
+});
+
+describe('ResolverBase.RunViewByNameGeneric — view-name escaping', () => {
+    it('escapes the client-supplied view name', async () => {
+        const captured: Captured = { params: null };
+        const input = { ViewName: "My View' OR '1'='1" } as RunViewByNameInput;
+
+        // Empty Results short-circuits the method (returns null) once the lookup filter is built.
+        const result = await new Probe().RunViewByNameGeneric(
+            input,
+            fakeProvider(captured),
+            fakePayload(),
+            undefined as unknown as PubSubEngine // unused: the empty-result path returns before it is passed on
+        );
+
+        expect(result).toBeNull();
+        expect(captured.params?.EntityName).toBe('MJ: User Views');
+        expect(captured.params?.ExtraFilter).toBe("Name='My View'' OR ''1''=''1'");
     });
 });
