@@ -252,9 +252,20 @@ export class FLUXImageGenerator extends BaseImageGenerator {
     public async GetModels(): Promise<ImageModelInfo[]> {
         return [
             {
+                id: 'flux-3-image',
+                name: 'FLUX 3 Image',
+                description: 'Black Forest Labs FLUX 3 image generation and multi-reference image editing model (up to 10 reference images, 768sq to 4k resolution).',
+                supportedSizes: ['1024x1024', '1024x768', '768x1024', '1536x1024', '1024x1536', '2048x2048'],
+                maxImages: 1,
+                supportsEditing: true,
+                supportsVariations: true,
+                supportsNegativePrompt: false,
+                supportsSeed: false
+            },
+            {
                 id: 'flux-2-pro',
                 name: 'FLUX.2 Pro',
-                description: 'Black Forest Labs\' most capable model. 32B parameter transformer delivering photorealistic 4MP images with exceptional detail accuracy.',
+                description: 'Black Forest Labs\' most capable FLUX 2 model. 32B parameter transformer delivering photorealistic 4MP images with exceptional detail accuracy.',
                 supportedSizes: ['1024x1024', '1024x768', '768x1024', '1536x1024', '1024x1536', '2048x2048'],
                 maxImages: 1, // BFL API generates one image per request
                 supportsEditing: true,
@@ -299,6 +310,7 @@ export class FLUXImageGenerator extends BaseImageGenerator {
      */
     private getModelEndpoint(model: string): string {
         const modelEndpoints: Record<string, string> = {
+            'flux-3-image': '/flux-3-image',
             'flux-2-pro': '/flux-2-pro',
             'flux-1.1-pro': '/flux-pro-1.1',
             'flux-dev': '/flux-dev',
@@ -308,10 +320,41 @@ export class FLUXImageGenerator extends BaseImageGenerator {
         return modelEndpoints[model.toLowerCase()] || '/flux-pro-1.1';
     }
 
+    private static readonly FLUX3_IMAGE_ASPECT_RATIOS: ReadonlySet<string> = new Set([
+        'auto',
+        '21:9',
+        '2:1',
+        '16:9',
+        '3:2',
+        '7:5',
+        '4:3',
+        '5:4',
+        '1:1',
+        '4:5',
+        '3:4',
+        '5:7',
+        '2:3',
+        '9:16',
+        '1:2',
+        '9:21'
+    ]);
+
+    private static readonly FLUX3_IMAGE_RESOLUTIONS: ReadonlySet<string> = new Set([
+        '768sq',
+        '1k',
+        '1.5k',
+        '2k',
+        '4k'
+    ]);
+
     /**
      * Build the generation request body.
      */
     private buildGenerationRequest(params: ImageGenerationParams): Record<string, unknown> {
+        if ((params.model || '').toLowerCase() === 'flux-3-image') {
+            return this.buildFlux3ImageRequest(params);
+        }
+
         const request: Record<string, unknown> = {
             prompt: params.prompt,
             output_format: 'png'
@@ -350,6 +393,104 @@ export class FLUXImageGenerator extends BaseImageGenerator {
         }
 
         return request;
+    }
+
+    /**
+     * Build the request body for `POST /v1/flux-3-image` (`Flux3ImageInputs`, `additionalProperties: false`).
+     * Never sends `width`, `height`, `seed`, or `output_format`, and always sets `grounding: false`.
+     */
+    private buildFlux3ImageRequest(params: ImageGenerationParams): Record<string, unknown> {
+        const request: Record<string, unknown> = {
+            prompt: params.prompt,
+            grounding: false
+        };
+
+        if (params.ReferenceImages && params.ReferenceImages.length > 0) {
+            if (params.ReferenceImages.length > 10) {
+                const err = new Error(
+                    `FLUX 3 Image supports at most 10 ReferenceImages (got ${params.ReferenceImages.length})`
+                ) as Error & { errorInfo?: unknown };
+                err.errorInfo = {
+                    errorType: 'InvalidRequest',
+                    severity: 'Fatal',
+                    canFailover: false,
+                    error: err,
+                    context: { provider: 'Black Forest Labs' }
+                };
+                throw err;
+            }
+
+            request.images = params.ReferenceImages.map((ref) => {
+                if ('URL' in ref) {
+                    return ref.URL;
+                }
+                if (Buffer.isBuffer(ref.Data)) {
+                    return ref.Data.toString('base64');
+                }
+                return ref.Data;
+            });
+        }
+
+        const aspectRatio = this.resolveFlux3ImageAspectRatio(params);
+        if (aspectRatio) {
+            request.aspect_ratio = aspectRatio;
+        }
+
+        const requestedResolution = params.providerOptions?.resolution;
+        if (
+            typeof requestedResolution === 'string' &&
+            FLUXImageGenerator.FLUX3_IMAGE_RESOLUTIONS.has(requestedResolution)
+        ) {
+            request.resolution = requestedResolution;
+        } else if (params.quality === 'hd') {
+            request.resolution = '2k';
+        } else {
+            request.resolution = '1k';
+        }
+
+        const safetyTolerance = params.providerOptions?.safety_tolerance;
+        if (
+            typeof safetyTolerance === 'number' &&
+            Number.isInteger(safetyTolerance) &&
+            safetyTolerance >= 0 &&
+            safetyTolerance <= 7
+        ) {
+            request.safety_tolerance = safetyTolerance;
+        }
+
+        if (params.providerOptions?.version === 'latest') {
+            request.version = 'latest';
+        }
+
+        return request;
+    }
+
+    private resolveFlux3ImageAspectRatio(params: ImageGenerationParams): string | undefined {
+        if (params.aspectRatio && FLUXImageGenerator.FLUX3_IMAGE_ASPECT_RATIOS.has(params.aspectRatio)) {
+            return params.aspectRatio;
+        }
+        if (params.size) {
+            const parts = params.size.split('x').map(Number);
+            if (parts.length === 2 && Number.isInteger(parts[0]) && Number.isInteger(parts[1]) && parts[0] > 0 && parts[1] > 0) {
+                const divisor = this.gcd(parts[0], parts[1]);
+                const ratio = `${parts[0] / divisor}:${parts[1] / divisor}`;
+                if (FLUXImageGenerator.FLUX3_IMAGE_ASPECT_RATIOS.has(ratio)) {
+                    return ratio;
+                }
+            }
+        }
+        return undefined;
+    }
+
+    private gcd(a: number, b: number): number {
+        let x = Math.abs(a);
+        let y = Math.abs(b);
+        while (y !== 0) {
+            const t = y;
+            y = x % y;
+            x = t;
+        }
+        return x;
     }
 
     /**
@@ -545,3 +686,10 @@ export class FLUXImageGenerator extends BaseImageGenerator {
     }
 }
 
+export {
+    FLUX3VideoGenerator,
+    FLUX3_VIDEO_DIMENSIONS,
+    type FLUX3VideoAspectRatio,
+    type FLUX3VideoResolution,
+} from './flux3-video.js';
+export { HasC2PAManifest } from './c2pa.js';
