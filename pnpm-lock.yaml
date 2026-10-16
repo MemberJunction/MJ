@@ -492,6 +492,9 @@ importers:
 
   packages/AI/Agents:
     dependencies:
+      '@evan/opus':
+        specifier: 1.0.3
+        version: 1.0.3
       '@memberjunction/actions':
         specifier: 6.2.0-edge.4
         version: link:../../Actions/Engine
@@ -531,6 +534,9 @@ importers:
       '@memberjunction/core-entities':
         specifier: 6.2.0-edge.4
         version: link:../../MJCoreEntities
+      '@memberjunction/generic-database-provider':
+        specifier: 6.2.0-edge.4
+        version: link:../../GenericDatabaseProvider
       '@memberjunction/global':
         specifier: 6.2.0-edge.4
         version: link:../../MJGlobal
@@ -1474,6 +1480,9 @@ importers:
       '@memberjunction/templates-base-types':
         specifier: 6.2.0-edge.4
         version: link:../../Templates/base-types
+      cosmiconfig:
+        specifier: 9.0.0
+        version: 9.0.0(typescript@5.9.3)
       date-fns:
         specifier: ^2.30.0
         version: 2.30.0
@@ -4451,6 +4460,9 @@ importers:
 
   packages/Angular/Explorer/auth-services:
     dependencies:
+      '@angular/cdk':
+        specifier: ^21.2.14
+        version: 21.2.14(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(@angular/platform-browser@21.2.22(@angular/animations@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)))(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)))(rxjs@7.8.2)
       '@angular/common':
         specifier: ^21.2.22
         version: 21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2)
@@ -4484,6 +4496,12 @@ importers:
       '@memberjunction/ng-ui-components':
         specifier: 6.2.0-edge.4
         version: link:../../Generic/ui-components
+      '@memberjunction/realtime-runtime':
+        specifier: 6.2.0-edge.4
+        version: link:../../../RealtimeRuntime
+      '@memberjunction/theme-engine':
+        specifier: 6.2.0-edge.4
+        version: link:../../../ThemeEngine
       '@okta/okta-auth-js':
         specifier: ^7.14.1
         version: 7.14.1(encoding@0.1.13)
@@ -4506,6 +4524,9 @@ importers:
       '@angular/compiler-cli':
         specifier: 21.2.22
         version: 21.2.22(@angular/compiler@21.2.22)(typescript@5.9.3)
+      '@memberjunction/ng-test-utils':
+        specifier: 6.2.0-edge.4
+        version: link:../../Generic/test-utils
 
   packages/Angular/Explorer/base-application:
     dependencies:
@@ -4847,6 +4868,9 @@ importers:
       '@memberjunction/ng-artifacts':
         specifier: 6.2.0-edge.4
         version: link:../../Generic/artifacts
+      '@memberjunction/ng-auth-services':
+        specifier: 6.2.0-edge.4
+        version: link:../auth-services
       '@memberjunction/ng-base-application':
         specifier: 6.2.0-edge.4
         version: link:../base-application
@@ -5174,6 +5198,9 @@ importers:
       '@memberjunction/ng-workspace-initializer':
         specifier: 6.2.0-edge.4
         version: link:../workspace-initializer
+      '@memberjunction/theme-engine':
+        specifier: 6.2.0-edge.4
+        version: link:../../../ThemeEngine
       rxjs:
         specifier: ^7.8.2
         version: 7.8.2
@@ -12291,6 +12318,9 @@ importers:
       '@memberjunction/interactive-component-types':
         specifier: 6.2.0-edge.4
         version: link:../InteractiveComponents
+      '@memberjunction/theme-engine':
+        specifier: 6.2.0-edge.4
+        version: link:../ThemeEngine
       rxjs:
         specifier: ^7.8.2
         version: 7.8.2
@@ -13273,6 +13303,9 @@ importers:
       '@memberjunction/testing-engine-base':
         specifier: 6.2.0-edge.4
         version: link:../TestingFramework/EngineBase
+      '@memberjunction/theme-engine':
+        specifier: 6.2.0-edge.4
+        version: link:../ThemeEngine
       '@memberjunction/version-history':
         specifier: 6.2.0-edge.4
         version: link:../VersionHistory
@@ -14342,6 +14375,9 @@ importers:
       '@types/node':
         specifier: 24.10.11
         version: 24.10.11
+      fake-indexeddb:
+        specifier: ^6.2.5
+        version: 6.2.5
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -16061,6 +16097,9 @@ importers:
       '@memberjunction/ai-engine-base':
         specifier: 6.2.0-edge.4
         version: link:../../AI/BaseAIEngine
+      '@memberjunction/ai-inception':
+        specifier: 6.2.0-edge.4
+        version: link:../../AI/Providers/Inception
       '@memberjunction/ai-openrouter':
         specifier: 6.2.0-edge.4
         version: link:../../AI/Providers/OpenRouter
@@ -35871,8 +35910,7 @@ snapshots:
 
   '@eslint/js@8.56.0': {}
 
-  '@evan/opus@1.0.3':
-    optional: true
+  '@evan/opus@1.0.3': {}
 
   '@exodus/bytes@1.11.0': {}
 

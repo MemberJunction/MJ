@@ -137,8 +137,9 @@ import {
     DeepInfraLLM,
 } from '@memberjunction/ai-deepinfra';
 
-// @memberjunction/ai-inception (1 classes)
+// @memberjunction/ai-inception (2 classes)
 import {
+    InceptionDecision,
     InceptionLLM,
 } from '@memberjunction/ai-inception';
 
@@ -163,9 +164,10 @@ import {
     SiliconFlowLLM,
 } from '@memberjunction/ai-siliconflow';
 
-// @memberjunction/ai-systemone (2 classes)
+// @memberjunction/ai-systemone (3 classes)
 import {
     PerplexityDecision,
+    SubQDecision,
     SystemOneDecision,
 } from '@memberjunction/ai-systemone';
 
@@ -219,7 +221,7 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/core-entities (450 classes)
+// @memberjunction/core-entities (452 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -263,6 +265,7 @@ import {
     MJAIAgentSessionBridgeParticipantEntity,
     MJAIAgentSessionChannelEntity,
     MJAIAgentSessionEntity,
+    MJAIAgentSessionRecordingShardEntity,
     MJAIAgentSkillEntity,
     MJAIAgentStepEntity,
     MJAIAgentStepPathEntity,
@@ -635,6 +638,7 @@ import {
     MJTestSuiteTestEntity,
     MJTestTypeEntity,
     MJThemeEntity,
+    MJThemeEntityExtended,
     MJUserApplicationEntity,
     MJUserApplicationEntityEntity,
     MJUserEntity,
@@ -1137,7 +1141,7 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (60 classes)
+// @memberjunction/core-entities-server (62 classes)
 import {
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
@@ -1163,12 +1167,14 @@ import {
     MJComponentEntityServer,
     MJConversationDetailAttachmentEntityServer,
     MJConversationDetailEntityServer,
+    MJDataContextItemEntityServer,
     MJDuplicateRunEntityServer,
     MJEntityDocumentEntityServer,
     MJEntityEntityServer,
     MJEntityFieldPermissionEntityServer,
     MJEntityFormContributionEntityServer,
     MJEntityFormOverrideEntityServer,
+    MJFileEntityServer,
     MJInteractionEventEntityServer,
     MJListDetailEntityServer,
     MJListEntityServer,
@@ -1449,6 +1455,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     OpenAILiveRealtime,
     OpenAIRealtime,
     DeepInfraLLM,
+    InceptionDecision,
     InceptionLLM,
     LlamaCppLLM,
     MiniMaxLLM,
@@ -1456,6 +1463,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     OpenRouterLLM,
     SiliconFlowLLM,
     PerplexityDecision,
+    SubQDecision,
     SystemOneDecision,
     GeminiEnterpriseRealtime,
     VertexLLM,
@@ -1513,6 +1521,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJAIAgentSessionBridgeParticipantEntity,
     MJAIAgentSessionChannelEntity,
     MJAIAgentSessionEntity,
+    MJAIAgentSessionRecordingShardEntity,
     MJAIAgentSkillEntity,
     MJAIAgentStepEntity,
     MJAIAgentStepPathEntity,
@@ -1608,13 +1617,13 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJCompanyEntity,
     MJCompanyIntegrationEntity,
     MJCompanyIntegrationEntityMapEntity,
-    MJCompanyIntegrationFieldMapEntity,
-    MJCompanyIntegrationRecordMapEntity,
-    MJCompanyIntegrationRunAPILogEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJCompanyIntegrationFieldMapEntity,
+    MJCompanyIntegrationRecordMapEntity,
+    MJCompanyIntegrationRunAPILogEntity,
     MJCompanyIntegrationRunDetailEntity,
     MJCompanyIntegrationRunEntity,
     MJCompanyIntegrationSyncWatermarkEntity,
@@ -1812,13 +1821,13 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJRecordChangeReplayRunEntity,
     MJRecordCloneLogEntity,
     MJRecordCloneLogItemEntity,
-    MJRecordGeoCodeEntity,
-    MJRecordLinkEntity,
-    MJRecordMergeDeletionLogEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJRecordGeoCodeEntity,
+    MJRecordLinkEntity,
+    MJRecordMergeDeletionLogEntity,
     MJRecordMergeLogEntity,
     MJRecordProcessCategoryEntity,
     MJRecordProcessEntity,
@@ -1893,6 +1902,7 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJTestSuiteTestEntity,
     MJTestTypeEntity,
     MJThemeEntity,
+    MJThemeEntityExtended,
     MJUserApplicationEntity,
     MJUserApplicationEntityEntity,
     MJUserEntity,
@@ -2015,14 +2025,14 @@ const CLASS_REGISTRATIONS_2: any[] = [
     UpdateTypeformAction,
     WatchNewJotFormSubmissionsAction,
     WatchNewSurveyMonkeyResponsesAction,
-    WatchNewTypeformResponsesAction,
-    AttachTagsAction,
-    CreateUserAction_actions_bizapps_lms,
-    DetachTagsAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    WatchNewTypeformResponsesAction,
+    AttachTagsAction,
+    CreateUserAction_actions_bizapps_lms,
+    DetachTagsAction,
     EnrollUserAction,
     GetBundlesAction,
     GetCertificatesAction,
@@ -2219,14 +2229,14 @@ const CLASS_REGISTRATIONS_3: any[] = [
     PredictiveStudioRunFeaturePipelineServerOperation,
     PredictiveStudioScheduleModelScoringAction,
     PredictiveStudioScoreRecordSetAction,
-    PredictiveStudioScoreRecordSetServerOperation,
-    PredictiveStudioStartExperimentSessionServerOperation,
-    PredictiveStudioTrainModelAction,
-    PredictiveStudioTrainModelServerOperation,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    PredictiveStudioScoreRecordSetServerOperation,
+    PredictiveStudioStartExperimentSessionServerOperation,
+    PredictiveStudioTrainModelAction,
+    PredictiveStudioTrainModelServerOperation,
     DurableTaskGraphSubmitter,
     TaskGraphCancelServerOperation,
     TaskGraphForceCompleteTaskServerOperation,
@@ -2277,12 +2287,14 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJComponentEntityServer,
     MJConversationDetailAttachmentEntityServer,
     MJConversationDetailEntityServer,
+    MJDataContextItemEntityServer,
     MJDuplicateRunEntityServer,
     MJEntityDocumentEntityServer,
     MJEntityEntityServer,
     MJEntityFieldPermissionEntityServer,
     MJEntityFormContributionEntityServer,
     MJEntityFormOverrideEntityServer,
+    MJFileEntityServer,
     MJInteractionEventEntityServer,
     MJListDetailEntityServer,
     MJListEntityServer,
@@ -2421,16 +2433,16 @@ const CLASS_REGISTRATIONS_4: any[] = [
     ParallelExecuteAction,
     PasswordStrengthAction,
     PerplexitySearchAction,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_5: any[] = [
     PostalCodeLookupAction,
     PreviewDocumentAction,
     QRCodeAction,
     ReadRSSFeedAction,
     RefreshListFromSourceAction,
     RemoveRecordsFromListAction,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_5: any[] = [
     ResolveAudienceAction,
     RetryAction,
     ReverseGeocodeAction,
@@ -2514,7 +2526,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1067;
+export const CLASS_REGISTRATIONS_COUNT = 1073;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

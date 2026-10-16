@@ -8,7 +8,7 @@
 import { BaseEntity, BaseEntityEvent, IEntityDataProvider, IMetadataProvider, IRunViewProvider, ProviderConfigDataBase, RunViewResult,
          EntityInfo, EntityFieldInfo, EntityFieldTSType, TenantContext,
          RunViewParams, ProviderBase, ProviderType, UserInfo, UserRoleInfo, RecordChange,
-         ILocalStorageProvider, EntitySaveOptions, EntityMergeOptions, LogError, LogStatus,
+         ILocalStorageProvider, EntitySaveOptions, EntityMergeOptions, LogError, LogStatus, LogStatusEx,
          TransactionGroupBase, TransactionItem, DatasetItemFilterType, DatasetResultType, DatasetStatusResultType, EntityRecordNameInput, EntityRecordNameCache,
          EntityRecordNameResult, RecordDependency, RecordMergeRequest, RecordMergeResult,
          RunQueryResult, PotentialDuplicateRequest, PotentialDuplicateResponse, CompositeKey, EntityDeleteOptions,
@@ -59,6 +59,22 @@ export type SocketConnectionState = 'connected' | 'disconnected' | 'unknown';
  * The client application should use this to notify the user and force re-authentication.
  */
 export type AuthenticationErrorCallback = (error: Error) => void;
+
+/** The RunQueriesWithCacheCheck response as it arrives over GraphQL. */
+interface RunQueriesCacheCheckGQLResponse {
+    success: boolean;
+    errorMessage?: string;
+    results: Array<{
+        queryIndex: number;
+        queryId: string;
+        status: string;
+        Results?: string;
+        maxUpdatedAt?: string;
+        rowCount?: number;
+        errorMessage?: string;
+        definitionHash?: string | null;
+    }>;
+}
 
 /**
  * Options for {@link GraphQLDataProvider.ExecuteGQL}.
@@ -851,6 +867,11 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * using the Query's CacheValidationSQL. If current, returns status='current' with no data.
      * If stale, returns status='stale' with fresh data.
      *
+     * A server older than the query-definition check rejects the `definitionHash` field. The call
+     * is then retried once without it (the server falls back to data-only validation), and the field
+     * is left out of later calls for {@link DEFINITION_HASH_RETRY_MS} before it is tried again, so a
+     * client that outlives a rolling deploy picks the check up once the servers are upgraded.
+     *
      * @param params - Array of RunQuery requests with optional cache status
      * @param contextUser - Optional user context
      * @returns Response containing results for each query in the batch
@@ -860,100 +881,17 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         contextUser?: UserInfo
     ): Promise<RunQueriesWithCacheCheckResponse<T>> {
         try {
-            // Build the GraphQL input
-            const input = params.map(item => ({
-                params: {
-                    QueryID: item.params.QueryID || null,
-                    QueryName: item.params.QueryName || null,
-                    CategoryID: item.params.CategoryID || null,
-                    CategoryPath: item.params.CategoryPath || null,
-                    Parameters: item.params.Parameters || null,
-                    MaxRows: item.params.MaxRows ?? null,
-                    StartRow: item.params.StartRow ?? null,
-                    ForceAuditLog: item.params.ForceAuditLog || false,
-                    AuditLogDescription: item.params.AuditLogDescription || null,
-                    Enrichment: item.params.Enrichment || null,
-                    DataSource: item.params.DataSource || null,
-                },
-                cacheStatus: item.cacheStatus ? {
-                    maxUpdatedAt: item.cacheStatus.maxUpdatedAt,
-                    rowCount: item.cacheStatus.rowCount,
-                } : null,
-            }));
-
-            const query = gql`
-                query RunQueriesWithCacheCheckQuery($input: [RunQueryWithCacheCheckInput!]!) {
-                    RunQueriesWithCacheCheck(input: $input) {
-                        success
-                        errorMessage
-                        results {
-                            queryIndex
-                            queryId
-                            status
-                            Results
-                            maxUpdatedAt
-                            rowCount
-                            errorMessage
-                        }
-                    }
+            const sendDefinition = this._definitionHashUnsupportedUntil == null || Date.now() >= this._definitionHashUnsupportedUntil;
+            try {
+                return await this.executeRunQueriesWithCacheCheck<T>(params, sendDefinition);
+            } catch (e) {
+                if (!sendDefinition || !GraphQLDataProvider.isUnsupportedDefinitionHashError(e)) {
+                    throw e;
                 }
-            `;
-
-            const responseData = await this.ExecuteGQL(query, { input });
-            const response = responseData?.['RunQueriesWithCacheCheck'] as {
-                success: boolean;
-                errorMessage?: string;
-                results: Array<{
-                    queryIndex: number;
-                    queryId: string;
-                    status: string;
-                    Results?: string;
-                    maxUpdatedAt?: string;
-                    rowCount?: number;
-                    errorMessage?: string;
-                }>;
-            };
-
-            if (!response) {
-                return {
-                    success: false,
-                    results: [],
-                    errorMessage: 'No response from server',
-                };
+                this._definitionHashUnsupportedUntil = Date.now() + GraphQLDataProvider.DEFINITION_HASH_RETRY_MS;
+                LogStatusEx({ message: 'RunQueriesWithCacheCheck: the server does not support query definition hashes — validating cached query results by data only', verboseOnly: true });
+                return await this.executeRunQueriesWithCacheCheck<T>(params, false);
             }
-
-            // Transform results - deserialize Results for stale/no_validation results
-            const transformedResults: RunQueryWithCacheCheckResult<T>[] = response.results.map(result => {
-                if ((result.status === 'stale' || result.status === 'no_validation') && result.Results) {
-                    // Deserialize the Results JSON string
-                    const deserializedResults: T[] = JSON.parse(result.Results);
-
-                    return {
-                        queryIndex: result.queryIndex,
-                        queryId: result.queryId,
-                        status: result.status as 'current' | 'stale' | 'no_validation' | 'error',
-                        results: deserializedResults,
-                        maxUpdatedAt: result.maxUpdatedAt,
-                        rowCount: result.rowCount,
-                        errorMessage: result.errorMessage,
-                    };
-                }
-
-                return {
-                    queryIndex: result.queryIndex,
-                    queryId: result.queryId,
-                    status: result.status as 'current' | 'stale' | 'no_validation' | 'error',
-                    maxUpdatedAt: result.maxUpdatedAt,
-                    rowCount: result.rowCount,
-                    errorMessage: result.errorMessage,
-                };
-            });
-
-            return {
-                success: response.success,
-                results: transformedResults,
-                errorMessage: response.errorMessage,
-            };
         } catch (e) {
             LogError(`Error in RunQueriesWithCacheCheck: ${e}`);
             return {
@@ -963,6 +901,152 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             };
         }
     }
+
+    /** How long, in milliseconds, to leave `definitionHash` out after a server rejected it. */
+    private static readonly DEFINITION_HASH_RETRY_MS = 5 * 60_000;
+
+    /**
+     * When a server last rejected `definitionHash`, the time (ms) until which it is left out of
+     * RunQueriesWithCacheCheck calls. Null while the server is assumed to support it.
+     */
+    private _definitionHashUnsupportedUntil: number | null = null;
+
+    /**
+     * The errors a server whose schema predates `definitionHash` returns for this request, with the
+     * code Apollo gives each: the selected output field fails query validation, and the input field
+     * fails variable coercion. Only these mean "older server"; any other error that happens to name
+     * the field is an ordinary failure, and must not relax the check to data-only validation.
+     */
+    private static readonly UNSUPPORTED_DEFINITION_HASH_ERRORS: ReadonlyArray<{ Code: string; Message: string }> = [
+        { Code: 'GRAPHQL_VALIDATION_FAILED', Message: 'Cannot query field "definitionHash" on type "RunQueryWithCacheCheckResultOutput"' },
+        { Code: 'BAD_USER_INPUT', Message: 'Field "definitionHash" is not defined by type "RunQueryCacheStatusInput"' },
+    ];
+
+    /**
+     * True when the server's schema rejected the `definitionHash` field (a server that predates it):
+     * one of the GraphQL errors is one of {@link UNSUPPORTED_DEFINITION_HASH_ERRORS}, with that
+     * error's code when the server sends one. Reads the structured GraphQL errors when the thrown
+     * error carries them, and its message otherwise.
+     */
+    private static isUnsupportedDefinitionHashError(e: unknown): boolean {
+        const errors = (e as { response?: { errors?: Array<{ message?: string; extensions?: { code?: string } }> } } | null)?.response?.errors;
+        if (errors && errors.length > 0) {
+            return errors.some(error => GraphQLDataProvider.isDefinitionHashSchemaRejection(error.message, error.extensions?.code));
+        }
+        return e instanceof Error && GraphQLDataProvider.isDefinitionHashSchemaRejection(e.message, undefined);
+    }
+
+    /** True when `message` is one of the schema rejections and `code`, if given, is its code. */
+    private static isDefinitionHashSchemaRejection(message: string | undefined, code: string | undefined): boolean {
+        return GraphQLDataProvider.UNSUPPORTED_DEFINITION_HASH_ERRORS.some(rejection =>
+            !!message && message.includes(rejection.Message) && (code === undefined || code === rejection.Code));
+    }
+
+    /** One RunQueriesWithCacheCheck round trip; throws on a transport or GraphQL error. */
+    private async executeRunQueriesWithCacheCheck<T>(
+        params: RunQueryWithCacheCheckParams[],
+        includeDefinition: boolean
+    ): Promise<RunQueriesWithCacheCheckResponse<T>> {
+        const input = GraphQLDataProvider.buildRunQueriesCacheCheckInput(params, includeDefinition);
+        const query = includeDefinition
+            ? GraphQLDataProvider.RUN_QUERIES_CACHE_CHECK_GQL
+            : GraphQLDataProvider.RUN_QUERIES_CACHE_CHECK_GQL_WITHOUT_DEFINITION;
+        const responseData = await this.ExecuteGQL(query, { input });
+        const response = responseData?.['RunQueriesWithCacheCheck'] as RunQueriesCacheCheckGQLResponse | undefined;
+        if (!response) {
+            return {
+                success: false,
+                results: [],
+                errorMessage: 'No response from server',
+            };
+        }
+        return {
+            success: response.success,
+            results: response.results.map(result => GraphQLDataProvider.toRunQueryCacheCheckResult<T>(result)),
+            errorMessage: response.errorMessage,
+        };
+    }
+
+    /** The GraphQL input for a RunQueriesWithCacheCheck call. */
+    private static buildRunQueriesCacheCheckInput(params: RunQueryWithCacheCheckParams[], includeDefinition: boolean) {
+        return params.map(item => ({
+            params: {
+                QueryID: item.params.QueryID || null,
+                QueryName: item.params.QueryName || null,
+                CategoryID: item.params.CategoryID || null,
+                CategoryPath: item.params.CategoryPath || null,
+                Parameters: item.params.Parameters || null,
+                MaxRows: item.params.MaxRows ?? null,
+                StartRow: item.params.StartRow ?? null,
+                ForceAuditLog: item.params.ForceAuditLog || false,
+                AuditLogDescription: item.params.AuditLogDescription || null,
+                Enrichment: item.params.Enrichment || null,
+                DataSource: item.params.DataSource || null,
+            },
+            cacheStatus: item.cacheStatus ? {
+                maxUpdatedAt: item.cacheStatus.maxUpdatedAt,
+                rowCount: item.cacheStatus.rowCount,
+                // Only sent when the slot has one (or '' for a slot without): the server skips
+                // the definition check when the field is absent.
+                ...(includeDefinition && item.cacheStatus.definitionHash != null ? { definitionHash: item.cacheStatus.definitionHash } : {}),
+            } : null,
+        }));
+    }
+
+    /** Converts one result row, deserializing the rows of a stale or no_validation result. */
+    private static toRunQueryCacheCheckResult<T>(result: RunQueriesCacheCheckGQLResponse['results'][number]): RunQueryWithCacheCheckResult<T> {
+        const converted: RunQueryWithCacheCheckResult<T> = {
+            queryIndex: result.queryIndex,
+            queryId: result.queryId,
+            status: result.status as 'current' | 'stale' | 'no_validation' | 'error',
+            maxUpdatedAt: result.maxUpdatedAt,
+            rowCount: result.rowCount,
+            errorMessage: result.errorMessage,
+            definitionHash: result.definitionHash ?? undefined,
+        };
+        if ((result.status === 'stale' || result.status === 'no_validation') && result.Results) {
+            converted.results = JSON.parse(result.Results) as T[];
+        }
+        return converted;
+    }
+
+    private static readonly RUN_QUERIES_CACHE_CHECK_GQL = gql`
+        query RunQueriesWithCacheCheckQuery($input: [RunQueryWithCacheCheckInput!]!) {
+            RunQueriesWithCacheCheck(input: $input) {
+                success
+                errorMessage
+                results {
+                    queryIndex
+                    queryId
+                    status
+                    Results
+                    maxUpdatedAt
+                    rowCount
+                    errorMessage
+                    definitionHash
+                }
+            }
+        }
+    `;
+
+    /** The same request for a server that predates query definition hashes. */
+    private static readonly RUN_QUERIES_CACHE_CHECK_GQL_WITHOUT_DEFINITION = gql`
+        query RunQueriesWithCacheCheckQuery($input: [RunQueryWithCacheCheckInput!]!) {
+            RunQueriesWithCacheCheck(input: $input) {
+                success
+                errorMessage
+                results {
+                    queryIndex
+                    queryId
+                    status
+                    Results
+                    maxUpdatedAt
+                    rowCount
+                    errorMessage
+                }
+            }
+        }
+    `;
 
     /**************************************************************************/
     // END ---- IRunQueryProvider

@@ -4,7 +4,7 @@ dotenv.config({ quiet: true });
 
 import { expressMiddleware } from '@as-integrations/express5';
 import { mergeSchemas } from '@graphql-tools/schema';
-import { Metadata, DatabasePlatform, SetProvider, StartupManager as StartupManagerImport, BaseEntity, BaseEntityEvent, RunView, DatabaseProviderBase, ProviderBase, ResolveStartupMode } from '@memberjunction/core';
+import { Metadata, DatabasePlatform, SetProvider, StartupManager as StartupManagerImport, BaseEntity, BaseEntityEvent, RunView, DatabaseProviderBase, ProviderBase, ResolveStartupMode, UserInfo } from '@memberjunction/core';
 import { UserCache, resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provider';
 import { MJGlobal, MJEventType, UUIDsEqual, ShutdownRegistry } from '@memberjunction/global';
 import { setupSQLServerClient, SQLServerDataProvider, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
@@ -44,6 +44,10 @@ import { StartupLogger } from './logging/StartupLogger.js';
 import { AuthProviderFactory } from '@memberjunction/auth-providers';
 import createMSSQLConfig from './orm.js';
 import { setupRESTEndpoints } from './rest/setupRESTEndpoints.js';
+import { CreateRealtimeRecordingRouter, REALTIME_RECORDING_MOUNT_PATH } from './rest/RealtimeRecordingHandler.js';
+import { LoadOwnedRealtimeSession } from './realtimeSessions/ownedRealtimeSession.js';
+import { LoadSessionConversationExternalID } from './realtimeSessions/sessionAccess.js';
+import { RecordingAssemblyScheduler } from './realtimeSessions/RecordingAssemblyScheduler.js';
 import {
   RealtimeSessionEventService,
   ParseReplicatedRealtimeSessionEvent,
@@ -76,7 +80,7 @@ import type { RedisLocalStorageProvider } from '@memberjunction/redis-provider';
 import { IntegrationProgressEmitter } from '@memberjunction/integration-progress-artifacts';
 import { PublishIntegrationProgress } from './resolvers/IntegrationProgressResolver.js';
 import { RegisterRSUProgressBridge } from './integration/RSUProgressBridge.js';
-import { ClientToolRequestManager, AgentRunWatchdog } from '@memberjunction/ai-agents';
+import { ClientToolRequestManager, AgentRunWatchdog, SqlRealtimeRecordingLedger } from '@memberjunction/ai-agents';
 import { BindBridgeEngineHostInstance, SessionJanitor, SetHostInstancePort, StartBridgeOrphanReconciliation } from './agentSessions/index.js';
 import { StartTaskGraphDispatcher } from './services/StartTaskGraphDispatcher.js';
 import { MJServerWorkQueueProviderSource, StartWorkQueueHost } from './services/WorkQueueHostService.js';
@@ -95,7 +99,7 @@ import {
 import { ServerExtensionLoader, ServerExtensionConfig, mergeServerExtensionConfigs, prepareServerExtensionConfigs, describeServerExtensionMount, InstallMediaUpgradeDispatcher, IsGraphQLWsPath, GetCorsOwningServerExtensionRoots } from '@memberjunction/server-extensions-core';
 import { CreateExtensionOwnedPreflightFallback, CreateGlobalCorsMiddleware } from './globalCors.js';
 import { CoreReservedServerExtensionRoots } from './serverExtensionReservedRoots.js';
-import { ApiRootPath, ConfiguredPublicUrl } from './apiRoot.js';
+import { ApiRoute, ApiRootPath, ConfiguredPublicUrl } from './apiRoot.js';
 import { MountHealthcheckRoute, MountPublicCoreRoutes, MountExtensionHealthRoute, MountAuthCatalogRoute, MountAuthenticatedCoreRoutes } from './coreRoutes.js';
 import { MetadataCacheRefreshIntervalSeconds } from './providerConfigUnits.js';
 import { CreateMetadataRefreshSignalHandler, METADATA_REFRESH_SIGNAL } from './metadataRefreshSignal.js';
@@ -244,6 +248,7 @@ export * from './resolvers/FileCategoryResolver.js';
 export * from './resolvers/FileResolver.js';
 export * from './rest/MediaAccessKeys.js';
 export * from './rest/MediaStreamHandler.js';
+export * from './rest/RealtimeRecordingHandler.js';
 export * from './resolvers/InfoResolver.js';
 export * from './resolvers/PotentialDuplicateRecordResolver.js';
 export * from './resolvers/DuplicateEntryCheckResolver.js';
@@ -1443,6 +1448,15 @@ const setupComplete$ = new ReplaySubject(1);
   // ─── Authenticated core routes: OAuth status/initiate/exchange, magic-link create, widget resolve-identity ─────
   MountAuthenticatedCoreRoutes(app, coreAuthenticatedRouters, startupLog);
 
+  // ─── Realtime recording shards + terminal signal (authenticated, owner-gated) ─────
+  // The browser uploads a client-direct call's recording as Opus shards and a keepalive terminal request;
+  // assembly runs off the request path on the scheduler. Needs a SQL provider: the ledger calls procs.
+  if (configInfo.realtime?.enabled) {
+    if (mountRealtimeRecordingRoutes(app)) {
+      startupLog.LogIf('verbose', `[Realtime] Recording routes registered at ${ApiRoute(REALTIME_RECORDING_MOUNT_PATH)}/:agentSessionId/shard/:index and /end`);
+    }
+  }
+
   // ─── Post-auth server extensions ──────────────────────────────────────────
   // Extensions declaring Phase: 'post-auth' mount after the unified auth middleware
   // and are protected by JWT authentication by default.
@@ -2161,6 +2175,41 @@ function createMSSQLCompatPool(pgPool: import('pg').Pool): sql.ConnectionPool {
   return wrapper as unknown as sql.ConnectionPool;
 }
 
+// Defined below serve() on purpose: serverExtensionReservedRoots.test.ts treats every app.use() that appears
+// textually before the unified auth middleware as a pre-auth mount, and these routes are mounted post-auth.
+/**
+ * Mounts the realtime recording shard/terminal routes (post-auth) and starts the assembly scheduler they
+ * hand work to. Skipped, with a warning, when the server's provider is not a SQL provider (the ledger calls
+ * stored procedures). Without a system user the routes still store shards, and the janitor assembles them.
+ * Returns whether the routes were mounted.
+ */
+function mountRealtimeRecordingRoutes(app: Application): boolean {
+  const provider = Metadata.Provider; // global-provider-ok: REST endpoint — no per-request provider injection in REST middleware yet; the ledger's procs run as the server's SQL login either way
+  if (!(provider instanceof DatabaseProviderBase)) {
+    console.warn('[Realtime] Recording routes not mounted: the server provider is not a DatabaseProviderBase');
+    return false;
+  }
+  const graceMs = (): number => configInfo.realtime.recordingAssemblyGraceSeconds * 1000;
+  const systemUser = UserCache.Instance.GetSystemUser();
+  if (systemUser) {
+    RecordingAssemblyScheduler.Instance.Start({ Provider: provider, SystemUser: systemUser, GraceMs: graceMs });
+  } else {
+    LogError('[Realtime] Recording assembly scheduler not started: no system user; the session janitor assembles recordings instead');
+  }
+  app.use(ApiRoute(REALTIME_RECORDING_MOUNT_PATH), cors<cors.CorsRequest>(), CreateRealtimeRecordingRouter({
+    ResolveCaller: req => {
+      const user: UserInfo | undefined = req.userPayload?.userRecord;
+      return user ? { ContextUser: user, Provider: provider } : null;
+    },
+    LoadOwnedSession: LoadOwnedRealtimeSession,
+    LoadConversationExternalID: LoadSessionConversationExternalID,
+    CreateLedger: (ledgerProvider, contextUser) => new SqlRealtimeRecordingLedger(ledgerProvider, contextUser),
+    Scheduler: RecordingAssemblyScheduler.Instance,
+    GraceMs: graceMs,
+    SystemUser: () => UserCache.Instance.GetSystemUser() ?? null,
+  }));
+  return true;
+}
 
 // Public-edge building blocks for Open Apps that run their own pre-auth edge and mint
 // scope-limited guest sessions (e.g. a ballot edge: verify a credential, then mint a short-lived

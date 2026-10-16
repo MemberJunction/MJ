@@ -2,8 +2,12 @@ name: Unit Tests
 
 on:
   workflow_dispatch:
+  # Line branches run this gate too (process doc 5.2 rule 4): lts/* is what a publish
+  # ships from and what customers pin to, so a break discovered after merge is worse
+  # here than on next. The trigger lives on next so every candidate cut inherits it;
+  # lts/5 got it from a line-only commit (6937c7c050) and lts/6.1 was cut without it.
   pull_request:
-    branches: [next]
+    branches: [next, 'lts/**']
     paths:
       - 'package.json'
       - 'pnpm-lock.yaml'
@@ -104,7 +108,7 @@ on:
   # break (MJ's dynamic @RegisterClass / ClassFactory wiring can couple packages without a
   # package.json edge that turbo's graph sees) can never slip through PR affected-filtering.
   push:
-    branches: [next]
+    branches: [next, 'lts/**']
   # Nightly full run as a second safety net (catches flaky/resource failures + drift).
   schedule:
     - cron: '0 7 * * *'
@@ -605,7 +609,7 @@ jobs:
       # Cap it by deleting the oldest entries until the total is under CAP_MB. Entries are
       # (<hash>.tar.zst, <hash>-meta.json) pairs, so both are removed together.
       - name: Prune turbo cache to a bounded size
-        if: always() && (github.event_name == 'push' || github.event_name == 'schedule')
+        if: always() && (github.event_name == 'push' || github.event_name == 'schedule') && github.ref_name == 'next'
         env:
           CAP_MB: 3072
         run: |
@@ -645,7 +649,7 @@ jobs:
       # `always()` so a RED run still saves the build outputs it produced — the build succeeding
       # is independent of whether the suite passed, and re-running shouldn't pay for a cold build.
       - name: Save turbo build cache
-        if: always() && (github.event_name == 'push' || github.event_name == 'schedule')
+        if: always() && (github.event_name == 'push' || github.event_name == 'schedule') && github.ref_name == 'next'
         uses: actions/cache/save@v4
         with:
           path: .turbo/cache
@@ -906,8 +910,11 @@ jobs:
       # way to stand down: 140 were open by 2026-08-14 against four ever closed. The alarm is now a single
       # rolling issue — red comments on it, green (below) closes it — so a fresh issue means a fresh break.
       # Logic + tests live in .github/scripts/backstop-alarm.mjs.
+      #
+      # next only: the rolling issue is titled for `next`, so a line-branch push (lts/**) must neither
+      # comment on it nor close it. A red line push still shows as a red run, and line PRs gate first.
       - name: Checkout repo
-        if: always() && (github.event_name == 'push' || github.event_name == 'schedule')
+        if: always() && (github.event_name == 'push' || github.event_name == 'schedule') && github.ref_name == 'next'
         uses: actions/checkout@v4
         with:
           persist-credentials: false
@@ -915,7 +922,7 @@ jobs:
           filter: blob:none
 
       - name: Alert on backstop failure
-        if: failure() && (github.event_name == 'push' || github.event_name == 'schedule')
+        if: failure() && (github.event_name == 'push' || github.event_name == 'schedule') && github.ref_name == 'next'
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: node .github/scripts/backstop-alarm.mjs red
@@ -926,7 +933,7 @@ jobs:
       # turn a green backstop red, because that would file an alarm about the alarm. The script logs
       # `::error::` so the failure is still visible in the run summary.
       - name: Resolve backstop alarm on green
-        if: success() && (github.event_name == 'push' || github.event_name == 'schedule')
+        if: success() && (github.event_name == 'push' || github.event_name == 'schedule') && github.ref_name == 'next'
         continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ github.token }}

@@ -12,13 +12,13 @@ export function FindForbiddenFunctionCalls(sql: string, dialect: SQLParserDialec
     const patterns = dialect.CallerSQLForbiddenFunctions;
     if (patterns.length === 0) return [];
     const tokens = SignificantTokens(LexSQL(sql, dialect));
-    const found: string[] = [];
+    const found = new Set<string>();
     tokens.forEach((token, i) => {
         if (!isCallName(token, tokens[i + 1])) return;
         const name = unquote(token.Text).toLowerCase();
-        if (patterns.some(pattern => matches(name, pattern)) && !found.includes(name)) found.push(name);
+        if (!found.has(name) && patterns.some(pattern => matches(name, pattern))) found.add(name);
     });
-    return found;
+    return [...found];
 }
 
 function isCallName(token: SQLLexToken, next: SQLLexToken | undefined): boolean {

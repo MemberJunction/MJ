@@ -145,7 +145,7 @@ export function MountExtensionHealthRoute(app: Application, loader: ServerExtens
  */
 export function MountAuthCatalogRoute(app: Application, log: RouteLog): void {
     app.use(ApiRoute(AUTH_CATALOG_MOUNT_PATH), cors<cors.CorsRequest>(), CreateAuthProviderCatalogRouter());
-    log.LogIf('verbose', `[Auth] Public provider catalog registered at ${ApiRoute(AUTH_CATALOG_MOUNT_PATH)}/providers`);
+    log.LogIf('verbose', `[Auth] Public provider catalog and login screen registered at ${ApiRoute(AUTH_CATALOG_MOUNT_PATH)}/providers and ${ApiRoute(AUTH_CATALOG_MOUNT_PATH)}/login-screen`);
 }
 
 /** The routers {@link MountPublicCoreRoutes} returned, mounted AFTER the unified auth middleware. */

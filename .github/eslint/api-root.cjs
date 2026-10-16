@@ -16,6 +16,9 @@ for (const receiver of ["[callee.object.name='app']", "[callee.object.property.n
     const call = `CallExpression[callee.property.name=${METHODS}]${receiver}`;
     selectors.push({ selector: `${call}[arguments.0.type='Literal'][arguments.0.value=/^\\//]`, message });
     selectors.push({ selector: `${call}[arguments.0.type='TemplateLiteral'][arguments.0.quasis.0.value.raw=/^\\//]`, message });
+    // A *_PATH constant (`app.use(REALTIME_RECORDING_MOUNT_PATH, …)`) is a root-relative literal one hop away.
+    selectors.push({ selector: `${call}[arguments.0.type='Identifier'][arguments.0.name=/_PATH$/]`, message });
+    selectors.push({ selector: `${call}[arguments.0.type='MemberExpression'][arguments.0.property.name=/_PATH$/]`, message });
 }
 
 module.exports = {
