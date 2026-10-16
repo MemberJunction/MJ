@@ -120,6 +120,7 @@ Embedding products (white-labeled end-user apps, embedded widgets) can pare the 
 | `allowAttachments` | The file-attachment button |
 | `allowPlanMode` | The composer's Plan Mode toggle button |
 | `allowRealtime` | The composer's real-time voice (co-agent) launcher button |
+| `AllowStopRun` | Stopping and continuing agent runs: the composer's Stop and Stop all, the Stop pill on an in-progress reply, the Continue button on a stopped reply, and the "Continue, or tell {agent} what to do differently" placeholder. UI only: a run stopped from another client still shows as stopped, and the next message still continues it |
 | `showEmptyFill` | The message list's built-in "No messages yet" filler |
 | `showLoadingState` | The centered loading spinner (loading still short-circuits rendering, so hiding it does not flash the empty state) |
 | `showAgentPicker` | The agent picker |
