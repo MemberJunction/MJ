@@ -35,6 +35,18 @@ export async function ResolveRecordingStorageAccountID(
     if (!providerID) {
         return null;
     }
+    return ResolveStorageAccountIDForProvider(providerID, contextUser, provider);
+}
+
+/**
+ * The first storage account of a storage provider (the account a recording stored under that provider
+ * is read and written through), or `null` when the provider has none.
+ *
+ * @param providerID The `MJ: File Storage Providers` id (e.g. an `MJ: Files` row's `ProviderID`).
+ */
+export async function ResolveStorageAccountIDForProvider(
+    providerID: string, contextUser: UserInfo, provider?: IMetadataProvider
+): Promise<string | null> {
     // Ensure the storage engine has loaded its accounts before reading them. The engine may be
     // unconfigured in this process, or configured BEFORE this storage account was provisioned (a stale
     // cache). Try the loaded cache first; if the provider's account isn't found, force a one-time refresh
@@ -126,8 +138,12 @@ function parsePcmRate(mimeType: string): number | null {
     return null;
 }
 
-/** The per-session folder all of a session's recording artifacts live in (shards + final file). */
-function recordingFolder(sessionID: string): string {
+/**
+ * The per-session storage folder all of a session's recording artifacts live in (legacy `seg-*` shards,
+ * the final `recording.*` file and `peaks.json`). Every writer derives the folder from here so the path
+ * convention lives in one place.
+ */
+export function RecordingFolder(sessionID: string): string {
     return `realtime-recordings/${sessionID}`;
 }
 
@@ -213,7 +229,7 @@ export async function WriteRealtimeRecordingSegment(input: WriteRecordingSegment
     try {
         const driver = await FileStorageEngine.Instance.GetDriver(StorageAccountID, ContextUser);
         const name = segmentFileName(SegmentIndex, MimeType);
-        return await driver.PutObject(`${recordingFolder(SessionID)}/${name}`, Audio, MimeType);
+        return await driver.PutObject(`${RecordingFolder(SessionID)}/${name}`, Audio, MimeType);
     } catch (error) {
         LogError(`writeRealtimeRecordingSegment failed (session ${SessionID}, seg ${SegmentIndex}): ${error instanceof Error ? error.message : String(error)}`);
         return false;
@@ -242,7 +258,7 @@ export async function WriteRecordingPeaksSidecar(
     try {
         const driver = await FileStorageEngine.Instance.GetDriver(storageAccountID, contextUser);
         const payload = Buffer.from(JSON.stringify(peaks), 'utf8');
-        return await driver.PutObject(`${recordingFolder(sessionID)}/peaks.json`, payload, 'application/json');
+        return await driver.PutObject(`${RecordingFolder(sessionID)}/peaks.json`, payload, 'application/json');
     } catch (error) {
         LogError(`writeRecordingPeaksSidecar failed (session ${sessionID}): ${error instanceof Error ? error.message : String(error)}`);
         return false;
@@ -267,7 +283,7 @@ export async function writeRecordingPeaksSidecar(
 export async function DeleteRealtimeRecordingSegments(sessionID: string, storageAccountID: string, contextUser: UserInfo): Promise<number> {
     try {
         const driver = await FileStorageEngine.Instance.GetDriver(storageAccountID, contextUser);
-        const folder = recordingFolder(sessionID);
+        const folder = RecordingFolder(sessionID);
         // List the folder's CONTENTS: without the trailing slash, delimiter-based drivers (S3, GCS)
         // return the folder itself as a common prefix and no objects, so no shard was ever deleted.
         const listed = await driver.ListObjects(`${folder}/`);
@@ -330,7 +346,7 @@ export async function StoreRealtimeRecording(input: StoreRealtimeRecordingInput)
             contextUser: ContextUser,
             storageAccountId: StorageAccountID,
             provider: Provider,
-            pathPrefix: recordingFolder(SessionID)
+            pathPrefix: RecordingFolder(SessionID)
         });
 
         // Best-effort waveform-peaks sidecar (peaks.json) next to the recording, for fast waveform
@@ -356,7 +372,7 @@ async function linkAndStamp(input: StoreRealtimeRecordingInput, fileID: string):
     const { Media, StartedAt, SessionID, ContextUser, Provider } = input;
     const session = await Provider.GetEntityObject<MJAIAgentSessionEntity>('MJ: AI Agent Sessions', ContextUser);
     const sessionLoaded = await session.Load(SessionID);
-    await linkRecordingToSession(fileID, SessionID, ContextUser, Provider);
+    await LinkRecordingToSession(fileID, SessionID, ContextUser, Provider);
     if (sessionLoaded) {
         await stampRecordingOnSession(session, fileID, Media, StartedAt);
     }
@@ -384,15 +400,22 @@ async function stampPreservingExisting(input: StoreRealtimeRecordingInput, fileI
         const reason = session.LatestResult?.CompleteMessage ?? 'unknown error';
         return { FileID: fileID, ErrorMessage: `could not stamp file ${fileID} on session ${SessionID} (file orphaned, not linked): ${reason}`, Superseded: false };
     }
-    await linkRecordingToSession(fileID, SessionID, ContextUser, Provider);
+    await LinkRecordingToSession(fileID, SessionID, ContextUser, Provider);
     return { FileID: fileID, ErrorMessage: null, Superseded: false };
 }
 
-/** Links the file to the session record so it's discoverable via MJ: File Entity Record Links. */
-async function linkRecordingToSession(fileID: string, sessionID: string, contextUser: UserInfo, provider: IMetadataProvider): Promise<void> {
+/**
+ * Links a recording file to its session record so it's discoverable via `MJ: File Entity Record Links`.
+ * Failures are logged with the session and file ids; the link is discoverability only (the session's
+ * `RecordingFileID` is what playback uses), so callers do not fail the recording over it.
+ *
+ * @returns `true` when the link row was saved.
+ */
+export async function LinkRecordingToSession(fileID: string, sessionID: string, contextUser: UserInfo, provider: IMetadataProvider): Promise<boolean> {
     const sessionEntityID = provider.EntityByName('MJ: AI Agent Sessions')?.ID;
     if (!sessionEntityID) {
-        return;
+        LogError(`LinkRecordingToSession: entity 'MJ: AI Agent Sessions' is not in metadata; recording file ${fileID} not linked to session ${sessionID}`);
+        return false;
     }
     const link = await provider.GetEntityObject<MJFileEntityRecordLinkEntity>('MJ: File Entity Record Links', contextUser);
     link.NewRecord();
@@ -400,8 +423,10 @@ async function linkRecordingToSession(fileID: string, sessionID: string, context
     link.EntityID = sessionEntityID;
     link.RecordID = sessionID;
     if (!await link.Save()) {
-        LogError(`storeRealtimeRecording: failed to link recording to session ${sessionID}: ${link.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+        LogError(`LinkRecordingToSession: failed to link recording file ${fileID} to session ${sessionID}: ${link.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+        return false;
     }
+    return true;
 }
 
 /** Stamps the recording fields on an already-loaded session (file + media kind + t0). Logs and returns false on a failed save. */
@@ -423,7 +448,8 @@ export async function storeRealtimeRecording(input: StoreRealtimeRecordingInput)
     return StoreRealtimeRecording(input);
 }
 
-const RECORDING_WAV_HEADER_BYTES = 44;
+/** Size of the canonical mono PCM16 WAV header {@link WriteRecordingWavHeader} writes. */
+export const RECORDING_WAV_HEADER_BYTES = 44;
 const RECORDING_BYTES_PER_SAMPLE = 2; // mono, 16-bit PCM
 /** WAV stores sizes as uint32; the RIFF chunk size is `36 + dataSize`, so data tops out 36 bytes short of the max. */
 const RECORDING_MAX_DATA_BYTES = 0xFFFFFFFF - 36;
@@ -483,7 +509,7 @@ export function BuildRecordingFromSegments(
 
     // Buffer.alloc zero-fills, so gaps need no explicit write.
     const wav = Buffer.alloc(RECORDING_WAV_HEADER_BYTES + dataSize);
-    writeRecordingWavHeader(wav, sampleRate, dataSize);
+    WriteRecordingWavHeader(wav, sampleRate, dataSize);
     let offset = RECORDING_WAV_HEADER_BYTES;
     let expectedIndex = 0;
     for (const segment of ordered) {
@@ -542,8 +568,16 @@ function findMissingIndexes(ordered: RecordingSegmentBytes[]): number[] {
     return missing;
 }
 
-/** Same canonical header layout as `RealtimeRecordingCapture.encodeWavBuffer` (mono, 16-bit, PCM). */
-function writeRecordingWavHeader(buffer: Buffer, sampleRate: number, dataSize: number): void {
+/**
+ * Writes the canonical 44-byte ({@link RECORDING_WAV_HEADER_BYTES}) mono 16-bit PCM WAV header into the
+ * start of `buffer`. Same layout as `RealtimeRecordingCapture.encodeWavBuffer`; shared by every server
+ * path that produces a recording WAV so they cannot drift apart.
+ *
+ * @param buffer Destination; at least {@link RECORDING_WAV_HEADER_BYTES} long.
+ * @param sampleRate Sample rate of the PCM data, in Hz.
+ * @param dataSize Byte length of the PCM data that follows the header.
+ */
+export function WriteRecordingWavHeader(buffer: Buffer, sampleRate: number, dataSize: number): void {
     buffer.write('RIFF', 0, 'ascii');
     buffer.writeUInt32LE(36 + dataSize, 4);
     buffer.write('WAVE', 8, 'ascii');
@@ -771,7 +805,7 @@ async function deleteListedShards(storageAccountID: string, contextUser: UserInf
 
 /** Lists the session folder's `seg-*` objects. Other objects (recording.*, peaks.json) are ignored. */
 async function listRecordingShards(driver: FileStorageBase, sessionID: string): Promise<ListedShard[]> {
-    const folder = recordingFolder(sessionID);
+    const folder = RecordingFolder(sessionID);
     const listed = await driver.ListObjects(`${folder}/`);
     const shards: ListedShard[] = [];
     for (const obj of listed.objects ?? []) {

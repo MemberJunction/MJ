@@ -11,6 +11,7 @@ import { ClientCacheChecks } from '../checks/client-cache.checks';
 import { RunQueryCacheChecks } from '../checks/runquery-cache.checks';
 import { RlsIsolationChecks, RlsIsolationClientChecks } from '../checks/rls-isolation.checks';
 import { KeyRowFilterChecks } from '../checks/keyrowfilter.checks'; // must be imported AFTER rls-isolation.checks: registry order = RLS* then KF*
+import { RoleRowFilterChecks } from '../checks/rolerowfilter.checks'; // after keyrowfilter.checks: registry order = RLS*, KF*, then RF*
 import { RecordProcessChecks } from '../checks/record-process.checks';
 import { RecordProcessFacadeChecks } from '../checks/record-process-facade.checks';
 import { ScheduledJobsChecks } from '../checks/scheduled-jobs.checks';
@@ -131,8 +132,9 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['cache-immutability', CacheImmutabilityChecks, 15], // F1-F15 freeze-on-write runtime contract (IT81); F13/F14 cover review findings C1/C2, F15 covers M3 (dataset key collision)
         ['client-cache', ClientCacheChecks, 14],
         ['runquery-cache', RunQueryCacheChecks, 21], // Q11 (B46 category collision) + Q12 (B45 hit-vs-miss permission parity) added 2026-07-20; Q13–Q21 (query definition changes) added 2026-10-14
-        // RLS1–RLS10 (rls-isolation.checks.ts) + KF1–KF6 (keyrowfilter.checks.ts, API-key row filters) share one bundle
-        ['rls-isolation', [...RlsIsolationChecks, ...KeyRowFilterChecks], 16],
+        // RLS1–RLS10 (rls-isolation.checks.ts) + KF1–KF6 (keyrowfilter.checks.ts, API-key row filters)
+        // + RF1–RF3 (rolerowfilter.checks.ts, role filter edits) share one bundle
+        ['rls-isolation', [...RlsIsolationChecks, ...KeyRowFilterChecks, ...RoleRowFilterChecks], 19],
         ['rls-isolation-client', RlsIsolationClientChecks, 1],
         ['record-process', RecordProcessChecks, 12],
         ['record-process-facade', RecordProcessFacadeChecks, 2],
@@ -339,7 +341,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'remote-op-ai-authoring': 3,
         'remote-op-wire-progress': 1,
         'remote-operations': 7,
-        'rls-isolation': 16,
+        'rls-isolation': 19,
         'rls-isolation-client': 1,
         'runquery-cache': 21,
         'runquery-catalog': 6,
@@ -592,6 +594,9 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'record-cloning.RC7',
         'record-cloning.RC8',
         'record-cloning.RC9',
+        'rls-isolation.RF1',
+        'rls-isolation.RF2',
+        'rls-isolation.RF3',
         'role-elevation.RE6',
         'rubrics.R13',
         'rubrics.R14',

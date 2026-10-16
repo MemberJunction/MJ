@@ -120,6 +120,7 @@ Embedding products (white-labeled end-user apps, embedded widgets) can pare the 
 | `allowAttachments` | The file-attachment button |
 | `allowPlanMode` | The composer's Plan Mode toggle button |
 | `allowRealtime` | The composer's real-time voice (co-agent) launcher button |
+| `AllowForking` | Starting forks: Fork from here, and Edit or Regenerate as a fork. When `false`, Edit and Regenerate change the latest turn in place, as without the `Conversations: Fork` authorization. UI only; deny that authorization to a role to block forks on the server too |
 | `showEmptyFill` | The message list's built-in "No messages yet" filler |
 | `showLoadingState` | The centered loading spinner (loading still short-circuits rendering, so hiding it does not flash the empty state) |
 | `showAgentPicker` | The agent picker |
