@@ -390,7 +390,7 @@ When a sub-agent returns a `Chat` step, the parent resolves `ChatHandlingOption`
 | Value | Behavior when a sub-agent returns `Chat` |
 |---|---|
 | `NULL` (default) | Propagates the `Chat` step and any `responseForm` to the parent's caller, terminating the parent run (`AwaitingFeedback` at root). |
-| `Consult` | On Loop-like parents (`InjectLoopResultsAsMessage !== false`), keeps the parent loop running (`shouldTerminate: false`), records an open consult for that sub-agent, and injects a `"Sub-agent <Name> is asking you"` message into the parent conversation so the parent can answer via `resumeRunId`, escalate via its own `Chat` step, or instruct the sub-agent to proceed without the answer. Bounded per sub-agent by `AIAgent.MaxSubAgentConsultRounds` (default 3; `0` escalates immediately). On Flow parents, downgrades to `NULL` (propagate). |
+| `Consult` | On Loop-like parents (`InjectLoopResultsAsMessage !== false`), keeps the parent loop running (`shouldTerminate: false`), records an open consult for that sub-agent, and injects a `"Sub-agent <Name> is asking you"` message into the parent conversation so the parent can answer via `resumeRunId`, escalate via its own `Chat` step, or instruct the sub-agent to proceed without the answer. Bounded per sub-agent by `AIAgent.MaxSubAgentConsultRounds` (`> 0`; `NULL` uses the framework default `3`). On Flow parents, downgrades to `NULL` (propagate). |
 | `Retry` | Remaps the sub-agent's `Chat` step to a `Retry` step (`terminate: false`), merges any output payload, and injects the sub-agent's result message so the parent loop continues on the next turn. |
 | `Success` | Remaps the sub-agent's `Chat` step to `Success` and terminates the parent step accordingly. |
 | `Failed` | Remaps the sub-agent's `Chat` step to `Failed` and marks the parent step failed. |
@@ -399,8 +399,8 @@ When a sub-agent returns a `Chat` step, the parent resolves `ChatHandlingOption`
 
 A sub-agent can define named configuration presets in `MJ: AI Agent Configurations` (`Status = 'Active'`). When a parent invokes a sub-agent, the sub-agent's `configurationParams` are resolved in this precedence order:
 
-1. **Per-call `presetName`**: If the parent specifies `presetName` on `subAgent` or `subAgents[i]` (available when at least one active preset exists on an effective sub-agent), the matching active `AIConfiguration` name on that sub-agent is used.
-2. **Relationship `ConfigurationPresetID`**: For related sub-agents, if `AIAgentRelationship.ConfigurationPresetID` points to an active preset belonging to that sub-agent (`AIConfiguration.ID` or legacy `AIAgentConfiguration.ID`), its `AIConfiguration.Name` is used.
+1. **Per-call `presetName`**: If the parent specifies `presetName` on `subAgent` or `subAgents[i]` (available when at least one active preset exists on an effective sub-agent), the runtime matches an `Active` `AIAgentConfiguration` owned by that sub-agent by `Name` first, then `DisplayName` (trimmed, case-insensitive), passes its `AIConfigurationID`, and records the preset's own `Name`.
+2. **Relationship `ConfigurationPresetID`**: For related sub-agents, if `AIAgentRelationship.ConfigurationPresetID` matches an `Active` `AIAgentConfiguration.ID` (the FK target) owned by that sub-agent, the runtime passes its `AIConfigurationID` and records the preset's own `Name`.
 3. **Inherit parent**: Otherwise, the sub-agent inherits `params.configurationParams` from the parent run.
 
 ### Parent Continuation

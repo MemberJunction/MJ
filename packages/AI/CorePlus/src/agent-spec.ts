@@ -163,7 +163,7 @@ export interface AgentSpec {
     ChatHandlingOption?: 'Consult' | 'Failed' | 'Retry' | 'Success';
 
     /**
-    * Maximum number of times a single sub-agent may return a Chat step and be answered by this agent (when ChatHandlingOption resolves to Consult) within one run of this agent. After this many consult rounds for that sub-agent, the next Chat from it escalates to this agent's caller. 0 means escalate immediately without consulting. Defaults to 3 when unset.
+    * Maximum number of times a single sub-agent may return a Chat step and be answered by this agent (when ChatHandlingOption resolves to Consult) within one run of this agent (> 0; absent uses the framework default (3)). After this many consult rounds for that sub-agent, the next Chat from it escalates to this agent's caller.
     */
     MaxSubAgentConsultRounds?: number;
 

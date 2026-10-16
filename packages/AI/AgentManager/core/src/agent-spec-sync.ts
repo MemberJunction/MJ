@@ -951,7 +951,7 @@ export class AgentSpecSync {
         // Other config
         agentEntity.DefaultPromptEffortLevel = this.Spec.DefaultPromptEffortLevel || null;
         agentEntity.ChatHandlingOption = this.Spec.ChatHandlingOption || null;
-        agentEntity.MaxSubAgentConsultRounds = this.Spec.MaxSubAgentConsultRounds ?? 3;
+        agentEntity.MaxSubAgentConsultRounds = this.Spec.MaxSubAgentConsultRounds ?? null;
         agentEntity.DefaultArtifactTypeID = this.Spec.DefaultArtifactTypeID || null;
 
         // Set OwnerUserID - always use contextUser if available (user creating/modifying the agent)

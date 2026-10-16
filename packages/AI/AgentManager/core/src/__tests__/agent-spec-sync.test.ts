@@ -367,13 +367,13 @@ describe('AgentSpecSync', () => {
         {
           Name: 'Parent Agent',
           ChatHandlingOption: 'Consult',
-          MaxSubAgentConsultRounds: 0,
+          MaxSubAgentConsultRounds: 5,
         },
         mockUser,
         mockProvider
       );
       expect(sync.spec.ChatHandlingOption).toBe('Consult');
-      expect(sync.spec.MaxSubAgentConsultRounds).toBe(0);
+      expect(sync.spec.MaxSubAgentConsultRounds).toBe(5);
 
       const internals = sync as unknown as {
         mapEntitiesToRawSpec: (
@@ -393,7 +393,7 @@ describe('AgentSpecSync', () => {
 
       await internals.saveAgentEntity(false);
       expect(savedAgentEntity.ChatHandlingOption).toBe('Consult');
-      expect(savedAgentEntity.MaxSubAgentConsultRounds).toBe(0);
+      expect(savedAgentEntity.MaxSubAgentConsultRounds).toBe(5);
 
       const loadedSpec = internals.mapEntitiesToRawSpec(
         {
@@ -402,7 +402,7 @@ describe('AgentSpecSync', () => {
           Status: 'Active',
           InvocationMode: 'Any',
           ChatHandlingOption: 'Consult',
-          MaxSubAgentConsultRounds: 0,
+          MaxSubAgentConsultRounds: 5,
         },
         [],
         [],
@@ -413,7 +413,30 @@ describe('AgentSpecSync', () => {
         []
       );
       expect(loadedSpec.ChatHandlingOption).toBe('Consult');
-      expect(loadedSpec.MaxSubAgentConsultRounds).toBe(0);
+      expect(loadedSpec.MaxSubAgentConsultRounds).toBe(5);
+
+      // Entity with MaxSubAgentConsultRounds: null -> spec -> save keeps MaxSubAgentConsultRounds as null
+      const nullRoundsSpec = internals.mapEntitiesToRawSpec(
+        {
+          ID: 'agent-2',
+          Name: 'Null Rounds Agent',
+          Status: 'Active',
+          InvocationMode: 'Any',
+          ChatHandlingOption: 'Consult',
+          MaxSubAgentConsultRounds: null,
+        },
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        []
+      );
+      expect(nullRoundsSpec.MaxSubAgentConsultRounds).toBeUndefined();
+      const nullSync = new AgentSpecSync(nullRoundsSpec, mockUser, mockProvider);
+      await (nullSync as unknown as typeof internals).saveAgentEntity(false);
+      expect(savedAgentEntity.MaxSubAgentConsultRounds).toBeNull();
 
       const mappedRel = internals.mapRelatedAgentToSpec({
         ID: 'rel-1',
