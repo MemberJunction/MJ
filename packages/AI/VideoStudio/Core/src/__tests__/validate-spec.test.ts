@@ -486,13 +486,26 @@ describe('IsNumericLiteralToken and ExtractNumericLiteralTokens', () => {
                 'Q3 2026 Revenue grew 12% to $1.2M with 3,400 users (churn −4.5) #1 24/7',
             ),
         ).toEqual(['12%', '$1.2M', '3,400', '−4.5']);
-        expect(ExtractNumericLiteralTokens('28%YoY')).toEqual(['28%']);
-        expect(ExtractNumericLiteralTokens('$14.2M/qtr')).toEqual(['$14.2M']);
-        expect(ExtractNumericLiteralTokens('up28%')).toEqual(['28%']);
-        expect(ExtractNumericLiteralTokens('1.2M→3.4M')).toEqual(['1.2M', '3.4M']);
         expect(ExtractNumericLiteralTokens('Q3/2026 24/7 #1 1st v1.2 2026-10-15')).toEqual([]);
         expect(ExtractNumericLiteralTokens('')).toEqual([]);
         expect(ExtractNumericLiteralTokens('   ')).toEqual([]);
+    });
+
+    it.each<[string, string[]]>([
+        ['B2B growth', []],
+        ['COVID-19 recovery', []],
+        ['Web3 tools', []],
+        ['3D printing', []],
+        ['MP4 export', []],
+        ['H2O', []],
+        ['28%YoY', ['28%']],
+        ['up28%', ['28%']],
+        ['$14.2M/qtr', ['$14.2M']],
+        ['1.2M→3.4M', ['1.2M', '3.4M']],
+        ['4,000 new members', ['4,000']],
+        ['2B users', ['2B']],
+    ])('ExtractNumericLiteralTokens(%j) returns %j', (input, expected) => {
+        expect(ExtractNumericLiteralTokens(input)).toEqual(expected);
     });
 });
 
