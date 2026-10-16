@@ -7043,7 +7043,7 @@ export class BaseAgent {
             }
             
             // Remap the Chat step to the configured option.
-            // Retry clears terminate: false so the loop continues and sets errorMessage so the
+            // Retry sets terminate to false so the loop continues and sets errorMessage so the
             // unproductive-retry cap bounds a model that repeatedly emits Chat.
             const remappedStep: BaseAgentNextStep<P> = mappedStep === 'Retry'
                 ? {

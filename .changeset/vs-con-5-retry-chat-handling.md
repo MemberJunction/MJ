@@ -2,4 +2,5 @@
 "@memberjunction/ai-agents": patch
 ---
 
-fix(ai-agents): VS-CON-5 ChatHandlingOption='Retry' sets terminate:false, populates errorMessage, and injects sub-agent result
+`ChatHandlingOption = 'Retry'` no longer ends the run. The loop re-prompts, a sub-agent's question reaches the parent as a sub-agent result, and repeated Chat is capped by the unproductive-retry limit.
+

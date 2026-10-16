@@ -587,7 +587,29 @@ describe('BaseAgent.validateChatNextStep (unit)', () => {
         expect(result.step).toBe('Retry');
         expect(result.terminate).toBe(false);
         expect(result.message).toBe('Need clarification');
-        expect(result.errorMessage).toBeTruthy();
+        expect(result.errorMessage).toBe('Chat was remapped to Retry by ChatHandlingOption');
+    });
+
+    it('"Retry" - preserves existing errorMessage when remapping Chat to Retry', async () => {
+        harness.agent.ChatHandlingOption = 'Retry';
+        const agent = new HarnessAgent();
+        const params = makeParams();
+        const dummyRun = new FakeAgentRun() as unknown as MJAIAgentRunEntityExtended;
+        const dummyStep = new MockStepEntity(1) as unknown as MJAIAgentRunStepEntityExtended;
+        const chatStep: BaseAgentNextStep<Record<string, unknown>> = {
+            step: 'Chat',
+            terminate: true,
+            message: 'Need clarification',
+            errorMessage: 'orig',
+            newPayload: { someData: 'test' },
+        };
+
+        const result = await agent.CallValidateChatNextStep(params, chatStep, {}, dummyRun, dummyStep);
+
+        expect(result.step).toBe('Retry');
+        expect(result.terminate).toBe(false);
+        expect(result.message).toBe('Need clarification');
+        expect(result.errorMessage).toBe('orig');
     });
 
     it('Verbose logging logs remap status when verbose is true', async () => {
@@ -651,6 +673,7 @@ describe('ChatHandlingOption in real BaseAgent.Execute() loop', () => {
         expect(result.success).toBe(true);
         expect(result.agentRun.Status).toBe('Completed');
         expect(result.agentRun.FinalStep).toBe('Success');
+        expect(result.agentRun.Message).toBe('Need design approval');
         expect(result.payload).toEqual({ technicalDesign: 'Component architecture' });
     });
 
