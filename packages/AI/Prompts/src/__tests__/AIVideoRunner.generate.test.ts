@@ -348,22 +348,19 @@ describe('AIVideoRunner.RunGenerateVideo', () => {
     });
 
     it('does NOT fail over when a job returns Status: Failed after submission (FLUX 3 terminal status)', async () => {
+      const failureMessage = 'Video generation failed with status: Error';
       onSubmit = () => ({ JobID: 'https://api.bfl.ai/v1/get_result?id=job-mod', Status: 'Pending' });
       onPoll = () => ({
         JobID: 'https://api.bfl.ai/v1/get_result?id=job-mod',
         Status: 'Failed',
-        ErrorMessage: 'BFL video generation moderated: Request Moderated',
-        ErrorInfo: {
-          errorType: 'VendorValidationError',
-          severity: 'Fatal',
-          canFailover: false,
-        },
+        ErrorMessage: failureMessage,
+        ErrorInfo: ErrorAnalyzer.AnalyzeError(new Error(failureMessage), 'Black Forest Labs'),
       });
 
       const result = await runner.RunGenerateVideo(genParams());
 
       expect(result.Success).toBe(false);
-      expect(result.ErrorMessage).toContain('Request Moderated');
+      expect(result.ErrorMessage).toContain(failureMessage);
       expect(submitCalls).toHaveLength(1);
       expect(pollCalls).toHaveLength(1);
       expect(MediaHarness.LastRun?.Status).toBe('Failed');
@@ -446,7 +443,7 @@ describe('AIVideoRunner.RunGenerateVideo', () => {
     });
   });
 
-  describe('4. poll cap (MAX_POLL_ATTEMPTS)', () => {
+  describe('4. poll cap (MAX_POLL_ATTEMPTS) and TimeoutMS', () => {
     it('stops after exactly MAX_POLL_ATTEMPTS when the job stays Running, naming the job ID without failing over', async () => {
       onSubmit = () => ({ JobID: 'bfl-job-stuck-999', Status: 'Running' });
       onPoll = () => ({ JobID: 'bfl-job-stuck-999', Status: 'Running' });
@@ -461,39 +458,73 @@ describe('AIVideoRunner.RunGenerateVideo', () => {
       expect(MediaHarness.LastRun?.Status).toBe('Failed');
       expect(MediaHarness.LastRun?.FailoverAttempts ?? 0).toBe(0);
     });
+
+    it('when TimeoutMS fires after submit, stops polling as Fatal without failing over to the second candidate', async () => {
+      onSubmit = () => ({ JobID: 'bfl-job-timeout-777', Status: 'Pending' });
+      onPoll = async () => {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        return { JobID: 'bfl-job-timeout-777', Status: 'Running' };
+      };
+
+      const result = await runner.RunGenerateVideo(genParams({ TimeoutMS: 60 }));
+
+      expect(result.Success).toBe(false);
+      expect(result.ErrorMessage).toContain('bfl-job-timeout-777');
+      expect(result.ErrorMessage).toContain('60ms');
+      expect(result.ErrorMessage).toContain('billed');
+      expect(submitCalls).toHaveLength(1);
+      expect(MediaHarness.LastRun?.Status).toBe('Failed');
+      expect(MediaHarness.LastRun?.FailoverAttempts ?? 0).toBe(0);
+    });
   });
 
   describe('5. usage, cost, and prompt-run save flush', () => {
     it('records driver-reported seconds and cost on both the run row and the result, with the save flushed before returning', async () => {
-      const usage = ModelUsage.ForMedia('Seconds', 0, 8);
-      usage.cost = 1.92;
-      usage.costCurrency = 'USD';
-      onSubmit = () => ({ JobID: 'bfl-job-costed', Status: 'Pending', Usage: usage });
-      onPoll = () =>
-        succeededJob({
-          JobID: 'bfl-job-costed',
-          Video: {
-            Data: Buffer.from(SAMPLE_MP4),
-            MimeType: 'video/mp4',
-            DurationSeconds: 8,
-            Width: 1280,
-            Height: 720,
-          },
+      const realGetEntityObject = MediaHarness.Provider.GetEntityObject.bind(MediaHarness.Provider);
+      const getEntitySpy = vi
+        .spyOn(MediaHarness.Provider, 'GetEntityObject')
+        .mockImplementation(async (entityName: string) => {
+          const row = await realGetEntityObject(entityName);
+          const realSave = row.Save.bind(row);
+          row.Save = async () => {
+            await new Promise((resolve) => setTimeout(resolve, 20));
+            return realSave();
+          };
+          return row;
         });
 
-      const result = await runner.RunGenerateVideo(genParams({ DurationSeconds: 8 }));
-      const run = MediaHarness.LastRun;
+      try {
+        const usage = ModelUsage.ForMedia('Seconds', 0, 8);
+        usage.cost = 1.92;
+        usage.costCurrency = 'USD';
+        onSubmit = () => ({ JobID: 'bfl-job-costed', Status: 'Pending', Usage: usage });
+        onPoll = () =>
+          succeededJob({
+            JobID: 'bfl-job-costed',
+            Video: {
+              Data: Buffer.from(SAMPLE_MP4),
+              MimeType: 'video/mp4',
+              DurationSeconds: 8,
+              Width: 1280,
+              Height: 720,
+            },
+          });
 
-      expect(result.Success).toBe(true);
-      expect(result.Cost).toBe(1.92);
-      expect(result.CostCurrency).toBe('USD');
-      expect(run?.ID).toBe(result.PromptRunID);
-      // SaveCount >= 2 proves both initial creation and finalization saves completed before RunGenerateVideo returned
-      expect(run?.SaveCount).toBeGreaterThanOrEqual(2);
-      expect(run?.Status).toBe('Completed');
-      expect(run?.UsageTypeID).toBe(USAGE_TYPE.Seconds);
-      expect(run?.OutputUnitsUsed).toBe(8);
-      expect(run?.Cost).toBe(1.92);
+        const result = await runner.RunGenerateVideo(genParams({ DurationSeconds: 8 }));
+        const run = MediaHarness.LastRun;
+
+        expect(result.Success).toBe(true);
+        expect(result.Cost).toBe(1.92);
+        expect(result.CostCurrency).toBe('USD');
+        expect(run?.ID).toBe(result.PromptRunID);
+        expect(run?.SaveCount).toBe(2);
+        expect(run?.Status).toBe('Completed');
+        expect(run?.UsageTypeID).toBe(USAGE_TYPE.Seconds);
+        expect(run?.OutputUnitsUsed).toBe(8);
+        expect(run?.Cost).toBe(1.92);
+      } finally {
+        getEntitySpy.mockRestore();
+      }
     });
 
     it('counts seconds from Video.DurationSeconds when the driver reports no usage, leaving result.Cost undefined', async () => {

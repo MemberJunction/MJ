@@ -35,6 +35,9 @@ export interface AIVideoRunResult extends AIMediaRunResult {
  * Parameters for `AIVideoRunner.RunGenerateVideo`: the driver's own `VideoGenerationParams`
  * (prompt, mode, duration, aspect ratio, quality, optional seed/references/keyframes/source video),
  * plus the media runner options and optional polling interval override.
+ *
+ * `TimeoutMS` (inherited from {@link AIMediaRunOptions}) bounds the wait for the job and never
+ * fails over after submit, because a submitted job is already running and billable at the provider.
  */
 export interface AIVideoGenerationRunParams extends VideoGenerationParams, AIMediaRunOptions {
   /**

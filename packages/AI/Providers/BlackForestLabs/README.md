@@ -184,11 +184,11 @@ Automated test suites in CI and local builds never make live network calls to BF
 - **Prerequisites**:
   1. `metadata/prompts/.default-generative-video-prompt.json` (`VS-GEN-2`) and the active `FLUX 3 Video` model + `Per Second` price unit (`VS-GEN-4`) are synced to the target SQL Server database.
   2. Standard MJ database environment variables (`DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD`) and `BFL_API_KEY` are set.
-  3. Run from `packages/AI/Prompts` (after building `@memberjunction/ai-blackforestlabs` and `@memberjunction/ai-prompts`).
+  3. Run from `packages/MJServer` (after building `@memberjunction/ai-blackforestlabs` and `@memberjunction/ai-prompts`).
 - **Expected spend**: 1 draft 5-second 720p (`hd`) clip ≈ **30 credits (`$0.30 USD`)** at `bfl.ai/pricing`'s draft rate of 6 credits/s.
 
 ```bash
-cd packages/AI/Prompts
+cd packages/MJServer
 node --input-type=module -e '
 import { writeFileSync } from "node:fs";
 import sql from "mssql";
@@ -196,7 +196,7 @@ import { setupSQLServerClient, SQLServerProviderConfigData, UserCache } from "@m
 import { RunView } from "@memberjunction/core";
 import { AIEngine } from "@memberjunction/aiengine";
 import { AIVideoRunner } from "@memberjunction/ai-prompts";
-import "@memberjunction/ai-blackforestlabs";
+import "../AI/Providers/BlackForestLabs/dist/index.js";
 
 const pool = new sql.ConnectionPool({
     server: process.env.DB_HOST ?? "localhost",

@@ -78,7 +78,10 @@ export class VideoGenerationRunner extends BaseMediaRunner<
   public async Run(
     params: AIVideoGenerationRunParams,
   ): Promise<AIMediaRunOutcome<VideoGenerationCallOutput>> {
-    return this.RunMediaOperation(params, {
+    const { TimeoutMS: timeoutMS, ...unbounded } = params;
+    const hasTimeout =
+      typeof timeoutMS === 'number' && Number.isFinite(timeoutMS) && timeoutMS > 0;
+    return this.RunMediaOperation(unbounded, {
       Name: 'GenerateVideo',
       Validate: (p) => {
         if (!p.Prompt || p.Prompt.trim().length === 0) {
@@ -100,9 +103,10 @@ export class VideoGenerationRunner extends BaseMediaRunner<
         return undefined;
       },
       Invoke: async (driver, _apiName, signal) => {
+        const deadline = hasTimeout ? Date.now() + timeoutMS : undefined;
         const { PollIntervalMS: _pollIntervalMS, ...driverParams } =
           this.DriverParams<VideoGenerationParams & { PollIntervalMS?: number }>(
-            params,
+            unbounded,
             signal,
           );
 
@@ -139,7 +143,23 @@ export class VideoGenerationRunner extends BaseMediaRunner<
         let pollAttempts = 0;
         let consecutiveErrors = 0;
 
+        const buildTimeoutOutcome = (): VideoGenerationCallOutput => ({
+          success: false,
+          errorMessage: `Video generation job '${currentJob.JobID}' timed out after ${timeoutMS}ms; the job may still finish and be billed at the vendor.`,
+          errorInfo: {
+            errorType: 'ServiceUnavailable',
+            severity: 'Fatal',
+            canFailover: false,
+          },
+          usage: currentJob.Usage ?? submitted.Usage,
+          Job: currentJob,
+        });
+
         while (currentJob.Status === 'Pending' || currentJob.Status === 'Running') {
+          if (deadline !== undefined && Date.now() >= deadline) {
+            return buildTimeoutOutcome();
+          }
+
           if (pollAttempts >= AIVideoRunner.MAX_POLL_ATTEMPTS) {
             return {
               success: false,
@@ -154,7 +174,14 @@ export class VideoGenerationRunner extends BaseMediaRunner<
             };
           }
 
-          await AbortableDelay(pollIntervalMS, signal);
+          const delayMS =
+            deadline !== undefined
+              ? Math.max(0, Math.min(pollIntervalMS, deadline - Date.now()))
+              : pollIntervalMS;
+          await AbortableDelay(delayMS, signal);
+          if (deadline !== undefined && Date.now() >= deadline) {
+            return buildTimeoutOutcome();
+          }
           pollAttempts++;
 
           let polled: VideoGenerationJob;
