@@ -17,7 +17,6 @@
 import { BaseEntity, ProviderType, type IEntityDataProvider, type IMetadataProvider } from '@memberjunction/core';
 import { EscapeSQLString, RegisterClass, SafeJSONParse, ValidationErrorInfo, ValidationErrorType, type ValidationResult } from '@memberjunction/global';
 import { MJRecordProcessEntity, type MJAIPromptEntity } from '@memberjunction/core-entities';
-import { LinkedTemplateText } from '@memberjunction/ai-core-plus';
 import { ConstraintPromptTemplate, ValidateSpec, type DataFeatureSpec } from '../spec/data-feature-spec.js';
 import {
   BuildEntityFieldValueLookup,
@@ -25,6 +24,7 @@ import {
   ValidateOutputsAgainstCapabilities,
   type FeaturePipelineFieldValueLookup,
 } from '../spec/feature-pipeline-driver-capabilities.js';
+import { PromptTemplateContent } from '../templates/PromptTemplateContent.js';
 
 /** The fields of a Record Process row that decide whether its spec is checked, and what the spec is. */
 export type RecordProcessSpecFields = Pick<MJRecordProcessEntity, 'WorkType' | 'Status' | 'Configuration'>;
@@ -132,7 +132,7 @@ type CheckedPromptRow = Pick<MJAIPromptEntity, 'ID' | 'Name' | 'TemplateID'>;
 export class RecordProcessPromptTemplateCheck {
   /** Why the row's prompt template cannot run with its spec; null when it can or there is nothing to check. */
   public static async FindProblem(record: MJRecordProcessEntity): Promise<string | null> {
-    if (LinkedTemplateText.ProviderOf(record)?.ProviderType !== ProviderType.Database || !record.PromptID) {
+    if (RecordProcessPromptTemplateCheck.ProviderOf(record)?.ProviderType !== ProviderType.Database || !record.PromptID) {
       return null;
     }
     const spec = checkedSpecOf(record);
@@ -170,16 +170,26 @@ export class RecordProcessPromptTemplateCheck {
   }
 
   /**
-   * The text the prompt's template renders, through the record's provider ({@link LinkedTemplateText.ReadRenderedText});
+   * The text the prompt's template renders, through the record's provider ({@link PromptTemplateContent.ReadCurrent});
    * undefined when the template has no content, the read's error when its content cannot be read (the save is refused
    * with it rather than thrown out of validation).
    */
   protected static async ReadTemplateText(record: MJRecordProcessEntity, templateID: string): Promise<string | undefined | Error> {
+    const provider = RecordProcessPromptTemplateCheck.ProviderOf(record);
+    if (!provider) {
+      return new Error('the record has no provider');
+    }
     try {
-      return await LinkedTemplateText.ReadRenderedText(record, templateID);
+      const row = await PromptTemplateContent.ReadCurrent(provider, templateID, record.ContextCurrentUser);
+      return row ? row.TemplateText || '' : undefined;
     } catch (e) {
       return e instanceof Error ? e : new Error(String(e));
     }
+  }
+
+  /** The record's provider as a metadata provider (`BaseEntity.ProviderToUse` is typed as its entity-data side). */
+  protected static ProviderOf(record: MJRecordProcessEntity): IMetadataProvider | undefined {
+    return record.ProviderToUse as unknown as IMetadataProvider | undefined;
   }
 }
 

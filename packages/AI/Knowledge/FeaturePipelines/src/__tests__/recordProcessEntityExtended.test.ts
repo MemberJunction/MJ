@@ -373,6 +373,8 @@ describe('MJRecordProcessEntityExtended.ValidateAsync (the prompt template must 
     expect(await record.Save()).toBe(true);
     // read on the transaction's own provider, not from an engine cache that reloads only after commit
     expect(provider.Views.map((v) => v.EntityName)).toEqual(['MJ: AI Prompts', 'MJ: Template Contents']);
+    // the same read a Feature Pipeline run makes (PromptTemplateContent.ReadCurrent): past every cache
+    expect(provider.Views[1].BypassCache).toBe(true);
   });
 
   it('refuses, through Save(), a pipeline whose template lost the block earlier in the same transaction', async () => {

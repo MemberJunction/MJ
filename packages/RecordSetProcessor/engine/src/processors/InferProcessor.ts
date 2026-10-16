@@ -57,7 +57,10 @@ import {
     type TypedFeatureValue,
     ConfidenceFloor,
     type BelowConfidenceOutput,
+    PromptTemplateContent,
+    type PromptTemplateContentRow,
 } from '@memberjunction/feature-pipelines';
+import { TemplateEngineServer } from '@memberjunction/templates';
 import { EntityDocumentCache, EntityDocumentTemplateParser } from '@memberjunction/entity-documents';
 import type { HumanValueGuard, HumanValueGuardSource, OutputMappingConfig, WithheldTargetSource, WithheldWriteBackTargets } from '../writeBack';
 import { FeaturePipelineHumanValueGuard } from './FeaturePipelineHumanValueGuard';
@@ -178,6 +181,9 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
 
     /** The last pin resolved, and the inputs it was computed from (see {@link ResolvePin}). */
     private resolvedPin?: { Fingerprint: string; Pin: FeaturePipelinePinData };
+
+    /** The prompt's template text in the database at the last {@link SyncPromptTemplateText}; what the pin hashes. */
+    private promptTemplateText?: string;
 
     /** Resolved constraints per output name, with lookup rows loaded; started once (a processor serves one run). */
     private resolvedConstraints?: Promise<Map<string, ResolvedConstraint | null>>;
@@ -358,7 +364,7 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
         if ('ErrorMessage' in run) {
             throw new Error(run.ErrorMessage);
         }
-        const missingBlock = ConstraintPromptTemplate.DescribeMissingBlock(this.spec, run.Prompt.Name, run.Prompt.TemplateText);
+        const missingBlock = ConstraintPromptTemplate.DescribeMissingBlock(this.spec, run.Prompt.Name, this.promptTemplateText ?? run.Prompt.TemplateText);
         if (missingBlock) {
             throw new ConstraintBlockMissingError(run.Prompt.Name, missingBlock);
         }
@@ -808,6 +814,7 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
      * primary model, escalation target pin) changed, so an edited prompt takes effect on the next record.
      */
     public async ResolvePin(prompt: MJAIPromptEntityExtended, context: RecordProcessorContext): Promise<FeaturePipelinePinData> {
+        await this.SyncPromptTemplateText(prompt, context);
         const resolved = await this.ResolveConstraints(context);
         const models = (AIEngine.Instance.PromptModels ?? []).filter((pm) => UUIDsEqual(pm.PromptID, prompt.ID));
         const primary = FeaturePipelinePin.SelectPrimaryModel(models);
@@ -835,6 +842,37 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
         };
         this.resolvedPin = { Fingerprint: fingerprint, Pin: pin };
         return pin;
+    }
+
+    /**
+     * F-FP-6: the pin hashes the template text that is in the database now, not the text the prompt loaded when the
+     * process started, and the template engine is reloaded once when its cache holds other text — so an edited
+     * template changes the next run's pin and is what the next run renders, without a restart.
+     */
+    protected async SyncPromptTemplateText(prompt: MJAIPromptEntityExtended, context: RecordProcessorContext): Promise<void> {
+        if (!prompt.TemplateID) {
+            this.promptTemplateText = undefined;
+            return;
+        }
+        const current = await PromptTemplateContent.ReadCurrent(context.provider, prompt.TemplateID, context.contextUser);
+        this.promptTemplateText = current?.TemplateText ?? '';
+        const engine = TemplateEngineServer.Instance;
+        await engine.Config(false, context.contextUser);
+        if (!this.EngineHoldsCurrentText(engine, prompt.TemplateID, current)) {
+            await engine.Config(true, context.contextUser);
+            if (!this.EngineHoldsCurrentText(engine, prompt.TemplateID, current)) {
+                LogStatus(`InferProcessor: the template engine still holds other text for template ${prompt.TemplateID} after a reload (another load was in flight); the pin is computed from the database text and the engine is re-checked on the next record.`);
+            }
+        }
+    }
+
+    /** True when the engine's cached rendered content for `templateID` is the row `current` with the same text. */
+    private EngineHoldsCurrentText(engine: TemplateEngineServer, templateID: string, current: PromptTemplateContentRow | undefined): boolean {
+        const cached = engine.Templates.find((t) => UUIDsEqual(t.ID, templateID))?.GetHighestPriorityContent();
+        if (!current) {
+            return !cached;
+        }
+        return !!cached && UUIDsEqual(cached.ID, current.ID) && (cached.TemplateText || '') === (current.TemplateText || '');
     }
 
     /**
@@ -1177,7 +1215,7 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
 
     /** The text {@link computePromptVersionHash} hashes: prompt text, outputs, the rendered constraint block and suffixes. */
     private promptVersionHashBasis(prompt: MJAIPromptEntityExtended, spec?: DataFeatureSpec, resolved?: Map<string, ResolvedConstraint | null>): string {
-        const promptText = prompt.TemplateText ?? prompt.Description ?? prompt.Name ?? '';
+        const promptText = this.promptTemplateText ?? prompt.TemplateText ?? prompt.Description ?? prompt.Name ?? '';
         const outputsStr = spec?.Outputs ? JSON.stringify(spec.Outputs) : '';
         const constraintBlock = spec?.Outputs ? RenderConstraintBlock(spec.Outputs, resolved) : '';
         return `${prompt.ID}::${promptText}::${outputsStr}::${constraintBlock}${this.pipelineTypeHashSuffix(spec)}${this.escalationHashSuffix(spec)}${this.userMessageHashSuffix(spec)}`;

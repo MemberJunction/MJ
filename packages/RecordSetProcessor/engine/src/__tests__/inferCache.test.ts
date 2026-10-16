@@ -1,10 +1,11 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { InferProcessor } from '../processors/InferProcessor';
 import { WriteBackProcessor } from '../processors/WriteBackProcessor';
 import { RecordRef, RecordProcessorContext } from '@memberjunction/record-set-processor-base';
 import { EntityInfo, UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { KnowledgeHubMetadataEngine, MJFeatureValueCacheEntity } from '@memberjunction/core-entities';
-import { DataFeatureSpec, FeaturePipelineVersionService, FeatureValueCacheService, type RecordFeatureValuesOutcome } from '@memberjunction/feature-pipelines';
+import { DataFeatureSpec, FeaturePipelineVersionService, FeatureValueCacheService, PromptTemplateContent, type PromptTemplateContentRow, type RecordFeatureValuesOutcome } from '@memberjunction/feature-pipelines';
+import type { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import type { MJRecordProcessEntity } from '@memberjunction/core-entities';
 import { AIEngine } from '@memberjunction/aiengine';
 
@@ -23,6 +24,26 @@ vi.mock('@memberjunction/aiengine', () => ({
         },
     },
 }));
+
+/** The template engine's cache as the processor reads it: one template whose rendered content has `CachedText`. */
+const templateEngine = vi.hoisted(() => {
+    const state = { CachedText: 'old', TextAfterReload: 'old' };
+    return {
+        State: state,
+        Instance: {
+            Config: vi.fn(async (forceRefresh?: boolean, _contextUser?: UserInfo) => {
+                if (forceRefresh) {
+                    state.CachedText = state.TextAfterReload;
+                }
+            }),
+            get Templates() {
+                return [{ ID: '7e000000-0000-4000-8000-000000000001', GetHighestPriorityContent: () => ({ ID: '7e000000-0000-4000-8000-0000000000c1', TemplateText: state.CachedText }) }];
+            },
+        },
+    };
+});
+
+vi.mock('@memberjunction/templates', () => ({ TemplateEngineServer: { Instance: templateEngine.Instance } }));
 
 vi.mock('@memberjunction/ai-prompts', () => {
     return {
@@ -406,5 +427,60 @@ describe('InferProcessor dedup cache & two-phase execution', () => {
         const single = await new InferProcessor('prompt-1', undefined, spec, null).ProcessRecord(records[0], { ...context, DryRun: true, BypassCache: true });
         expect(single.Status).toBe('Succeeded');
         expect(lookup).not.toHaveBeenCalled();
+    });
+    describe('the prompt template a run pins and renders (F-FP-6)', () => {
+        const TEMPLATE_ID = '7e000000-0000-4000-8000-000000000001';
+        const CONTENT_ID = '7e000000-0000-4000-8000-0000000000c1';
+        /** The job-title prompt with `templateID` and the text it loaded at startup. */
+        const promptWith = (templateText: string, templateID: string | null): MJAIPromptEntityExtended =>
+            ({ ...AIEngine.Instance.Prompts[0], TemplateID: templateID, TemplateText: templateText }) as MJAIPromptEntityExtended;
+        /** The content row the database holds for the template now. */
+        const row = (text: string): PromptTemplateContentRow => ({ ID: CONTENT_ID, Priority: 1, __mj_CreatedAt: '2026-01-01', TemplateText: text });
+        const reloads = (): number => templateEngine.Instance.Config.mock.calls.filter(([force]) => force === true).length;
+
+        beforeEach(() => {
+            templateEngine.State.CachedText = 'new';
+            templateEngine.State.TextAfterReload = 'new';
+        });
+        afterEach(() => {
+            vi.restoreAllMocks();
+        });
+
+        it('hashes the template text in the database, not the text the prompt loaded', async () => {
+            const read = vi.spyOn(PromptTemplateContent, 'ReadCurrent').mockResolvedValue(row('new'));
+            const fromNew = await new InferProcessor('prompt-1', undefined, spec, null).ResolvePin(promptWith('old', TEMPLATE_ID), context);
+            read.mockResolvedValue(row('old'));
+            const fromOld = await new InferProcessor('prompt-1', undefined, spec, null).ResolvePin(promptWith('old', TEMPLATE_ID), context);
+            const loadedNew = await new InferProcessor('prompt-1', undefined, spec, null).ResolvePin(promptWith('new', null), context);
+            expect(read).toHaveBeenCalledWith(context.provider, TEMPLATE_ID, context.contextUser);
+            expect(fromNew.PromptVersionHash).not.toBe(fromOld.PromptVersionHash);
+            expect(fromNew.PromptVersionHash).toBe(loadedNew.PromptVersionHash);
+        });
+
+        it('reloads the template engine once when its cached text differs, and not when it matches', async () => {
+            vi.spyOn(PromptTemplateContent, 'ReadCurrent').mockResolvedValue(row('new'));
+            templateEngine.State.CachedText = 'old';
+            await new InferProcessor('prompt-1', undefined, spec, null).ResolvePin(promptWith('old', TEMPLATE_ID), context);
+            expect(reloads()).toBe(1);
+            expect(templateEngine.Instance.Config).toHaveBeenCalledWith(true, context.contextUser);
+
+            templateEngine.Instance.Config.mockClear();
+            await new InferProcessor('prompt-1', undefined, spec, null).ResolvePin(promptWith('old', TEMPLATE_ID), context);
+            expect(reloads()).toBe(0);
+        });
+
+        it('does not read or reload for a prompt without a template', async () => {
+            const read = vi.spyOn(PromptTemplateContent, 'ReadCurrent');
+            const pin = await new InferProcessor('prompt-1', undefined, spec, null).ResolvePin(promptWith('inline', null), context);
+            expect(read).not.toHaveBeenCalled();
+            expect(reloads()).toBe(0);
+            expect(pin.PromptVersionHash).toMatch(/^[0-9a-f]{64}$/);
+        });
+
+        it('fails the record with the read error when the template content cannot be read', async () => {
+            vi.spyOn(PromptTemplateContent, 'ReadCurrent').mockRejectedValue(new Error(`The content of template '${TEMPLATE_ID}' could not be read: timeout`));
+            await expect(new InferProcessor('prompt-1', undefined, spec, null).ResolvePin(promptWith('old', TEMPLATE_ID), context))
+                .rejects.toThrow(/could not be read: timeout/);
+        });
     });
 });

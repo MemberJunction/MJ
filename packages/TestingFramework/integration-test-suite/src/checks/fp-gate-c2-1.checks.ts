@@ -5,10 +5,11 @@
  * diffs the gates' copy of the golden titles against the golden set bizapps-common installs.
  */
 import { RunView } from '@memberjunction/core';
-import { MJTemplateEntityExtended, type MJAIModelEntity, type MJAIPromptModelEntity, type MJFeatureValueCacheEntity, type MJFeatureValueEntity, type MJTemplateContentEntity } from '@memberjunction/core-entities';
+import { type MJAIModelEntity, type MJAIPromptModelEntity, type MJFeatureValueCacheEntity, type MJFeatureValueEntity, type MJTemplateContentEntity } from '@memberjunction/core-entities';
 import type { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
 import { EscapeSQLString, UUIDSet, UUIDsEqual } from '@memberjunction/global';
+import { PromptTemplateContent } from '@memberjunction/feature-pipelines';
 import type { FeaturePipelineRunPin } from '@memberjunction/record-set-processor-base';
 import { Assert, AssertEqual, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration';
 import { FeaturePipelineGateFixtures as F } from './fp-gates/fp-gate-fixture';
@@ -70,13 +71,13 @@ class ChangeRecomputeSteps {
         console.log(`      → ${label}: recomputed ${r.People}/${N} (100%)`);
     }
 
-    /** The template content the prompt renders (the highest-priority content, as `TemplateText` reads it). */
+    /** The template content the prompt renders (the highest-priority content, as a Feature Pipeline run reads it: `PromptTemplateContent`). */
     public static async RenderedContent(ctx: IntegrationCheckContext, templateID: string): Promise<MJTemplateContentEntity> {
         const res = await RunView.FromMetadataProvider(ctx.Provider).RunView<MJTemplateContentEntity>({
             EntityName: 'MJ: Template Contents', ExtraFilter: `TemplateID = '${EscapeSQLString(templateID)}'`,
             ResultType: 'entity_object', BypassCache: true, // the row is edited and saved
         }, ctx.User);
-        const content = res.Success ? MJTemplateEntityExtended.SelectHighestPriorityContent(res.Results || []) : undefined;
+        const content = res.Success ? PromptTemplateContent.SelectHighestPriority(res.Results || []) : undefined;
         if (!content) {
             throw new Error(`template ${templateID} has no content${res.Success ? '' : `: ${res.ErrorMessage}`}`);
         }
@@ -130,7 +131,6 @@ export const FpGateC21Checks: NamedCheck[] = [
                 const tc = await ChangeRecomputeSteps.RenderedContent(ctx, prompt.TemplateID);
                 tc.TemplateText = `${tc.TemplateText}\n${marker}`;
                 Assert(await tc.Save(), `save template content: ${tc.LatestResult?.CompleteMessage}`);
-                await F.WaitFor(() => prompt.TemplateText.includes(marker), 10_000, 'the prompt to read the edited template');
             }, (pin, before) => pin.PromptVersionHash !== before.PromptVersionHash);
         },
     },

@@ -21,3 +21,4 @@ export * from './entities/MJRecordProcessEntityExtended.js';
 export * from './entities/MJFeaturePipelineVersionEntityExtended.js';
 export * from './providers/metadata-provider-capabilities.js';
 export * from './versions/FeaturePipelineVersionService.js';
+export * from './templates/PromptTemplateContent.js';
