@@ -629,6 +629,10 @@ export class SimpleVectorServiceProvider extends VectorDBBase {
                 // VectorBinary in Fields is what requests it — RunView omits binary columns otherwise.
                 Fields: ['ID', 'RecordID', 'VectorJSON', 'VectorBinary'],
                 ResultType: 'simple',
+                // The whole index, not the first page: without this the load stops at the
+                // entity's UserViewMaxRows (1,000 for Entity Record Documents) and every vector
+                // past it is invisible to search and duplicate detection.
+                IgnoreMaxRows: true,
             }, contextUser);
 
             if (!r.Success) {

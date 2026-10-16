@@ -1,9 +1,30 @@
 import { BaseEntity, DuplicateDetectionOptions, DuplicateDetectionProgress, EntitySaveOptions, IMetadataProvider, LogError, LogStatus, PotentialDuplicateRequest, RunView } from "@memberjunction/core";
-import { RegisterClass, GetGlobalObjectStore } from "@memberjunction/global";
+import { RegisterClass, GetGlobalObjectStore, EscapeSQLString } from "@memberjunction/global";
 import { MJDuplicateRunEntity, MJEntityDocumentEntity } from "@memberjunction/core-entities";
 import { DuplicateRecordDetector } from "@memberjunction/ai-vector-dupe";
 
 const PIPELINE_PROGRESS_TOPIC = 'PIPELINE_PROGRESS';
+
+/** Entity Document Type name of documents built for duplicate detection. */
+const RECORD_DUPLICATE_DOCUMENT_TYPE = 'Record Duplicate';
+
+/**
+ * Chooses the entity document a duplicate run uses, from the entity's active documents ordered
+ * newest-updated first. A 'Record Duplicate' document wins over any other type: an entity can
+ * also have a Search document (MJ ships one for several core entities), whose template and
+ * vectors are built for search, not for matching records. Without a 'Record Duplicate'
+ * document, the newest active document is used, as before.
+ *
+ * The run itself does not record which document it was started for, so when an entity has more
+ * than one 'Record Duplicate' document the newest-updated one is used.
+ *
+ * @param activeDocuments the entity's active documents, newest `__mj_UpdatedAt` first
+ * @returns the document to use, or null when there is none
+ */
+export function PickDuplicateDetectionDocument<T extends Pick<MJEntityDocumentEntity, 'Type'>>(activeDocuments: T[]): T | null {
+    const recordDuplicate = activeDocuments.find(d => d.Type === RECORD_DUPLICATE_DOCUMENT_TYPE);
+    return recordDuplicate ?? activeDocuments[0] ?? null;
+}
 
 /**
  * Key under which we stash the "detection in flight" set in the MJ global object
@@ -85,28 +106,28 @@ export class MJDuplicateRunEntityServer extends MJDuplicateRunEntity {
             request.EntityID = this.EntityID;
             request.ListID = this.SourceListID || undefined; // Optional — if not set, scans all entity records
 
-            // Find the most recently updated active entity document for this entity to get template/thresholds
+            // The entity document supplies the template, vectors and thresholds for this run.
             const rv = new RunView(this.RunViewProviderToUse);
             const edResult = await rv.RunView<MJEntityDocumentEntity>({
                 EntityName: 'MJ: Entity Documents',
-                ExtraFilter: `EntityID='${this.EntityID}' AND Status='Active'`,
+                ExtraFilter: `EntityID='${EscapeSQLString(this.EntityID)}' AND Status='Active'`,
                 OrderBy: '__mj_UpdatedAt DESC',
-                MaxRows: 1,
                 ResultType: 'entity_object'
             }, this.ContextCurrentUser);
-            if (edResult.Success && edResult.Results.length > 0) {
-                request.EntityDocumentID = edResult.Results[0].ID;
+            const entityDocument = edResult.Success ? PickDuplicateDetectionDocument(edResult.Results) : null;
+            if (entityDocument) {
+                request.EntityDocumentID = entityDocument.ID;
             }
 
             // Build detection options with threshold normalization.
-            // Entity document defaults are 1.0 (100%) which means nothing ever matches.
-            // Normalize to sensible fallbacks when the stored value is effectively unconfigured.
+            // A threshold left at 1.0 (100%) matches nothing, so treat it as unconfigured and use
+            // the fallback instead.
             const potentialThreshold = this.normalizeThreshold(
-                edResult.Success && edResult.Results.length > 0 ? edResult.Results[0].PotentialMatchThreshold : 1.0,
+                entityDocument ? entityDocument.PotentialMatchThreshold : 1.0,
                 0.70 // fallback: 70% for potential matches
             );
             const absoluteThreshold = this.normalizeThreshold(
-                edResult.Success && edResult.Results.length > 0 ? edResult.Results[0].AbsoluteMatchThreshold : 1.0,
+                entityDocument ? entityDocument.AbsoluteMatchThreshold : 1.0,
                 0.95 // fallback: 95% for absolute matches
             );
 

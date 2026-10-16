@@ -373,6 +373,7 @@ vi.mock('@memberjunction/templates', () => ({
 
 import { DuplicateRecordDetector } from '../duplicateRecordDetector';
 import { CompositeKey, PotentialDuplicateRequest, UserInfo } from '@memberjunction/core';
+import { NormalizeUUID } from '@memberjunction/global';
 
 describe('DuplicateRecordDetector', () => {
     let detector: DuplicateRecordDetector;
@@ -925,6 +926,61 @@ describe('DuplicateRecordDetector', () => {
             const meta = JSON.parse(result.get('old-1'));
             // Falls back to singular NameField
             expect(meta.Name).toBe('Legacy Record');
+        });
+    });
+
+    describe('FillMissingMatchMetadata', () => {
+        const peopleInfo = {
+            Name: 'People',
+            NameField: null,
+            Icon: 'fa-users',
+            Fields: [
+                { Name: 'FirstName', IsNameField: true, DefaultInView: true, Sequence: 1, IsPrimaryKey: false },
+                { Name: 'LastName', IsNameField: true, DefaultInView: true, Sequence: 2, IsPrimaryKey: false },
+                { Name: 'Email', IsNameField: false, DefaultInView: true, Sequence: 3, IsPrimaryKey: false },
+            ],
+            PrimaryKeys: [{ Name: 'ID' }],
+            FirstPrimaryKey: { Name: 'ID', NeedsQuotes: true },
+        };
+        const match = (id: string, meta?: Record<string, string>) => ({ VectorMetadata: meta, ToCompactURLSegment: () => id });
+
+        it('gives a match with only a RecordID the record\'s name and display fields', () => {
+            // The in-memory vector store returns { RecordID } and nothing else as match metadata.
+            const dupe = match('ABC-1', { RecordID: 'ABC-1' });
+            const rows = new Map([[NormalizeUUID('ABC-1'), { ID: 'ABC-1', FirstName: 'Oleg', LastName: 'Agarwal', Email: 'oleg@example.com' }]]);
+
+            (detector as never)['FillMissingMatchMetadata']([dupe], rows, peopleInfo);
+
+            expect(dupe.VectorMetadata).toMatchObject({
+                RecordID: 'ABC-1', Entity: 'People', EntityIcon: 'fa-users',
+                Name: 'Oleg Agarwal', FirstName: 'Oleg', LastName: 'Agarwal', Email: 'oleg@example.com',
+            });
+        });
+
+        it('leaves a match whose vector metadata already names the record alone', () => {
+            const dupe = match('ABC-2', { Name: 'From the vector store' });
+            const rows = new Map([[NormalizeUUID('ABC-2'), { ID: 'ABC-2', FirstName: 'Other', LastName: 'Name' }]]);
+
+            (detector as never)['FillMissingMatchMetadata']([dupe], rows, peopleInfo);
+
+            expect(dupe.VectorMetadata).toEqual({ Name: 'From the vector store' });
+        });
+
+        it('leaves a match it has no row for alone', () => {
+            const dupe = match('ABC-3', { RecordID: 'ABC-3' });
+
+            (detector as never)['FillMissingMatchMetadata']([dupe], new Map(), peopleInfo);
+
+            expect(dupe.VectorMetadata).toEqual({ RecordID: 'ABC-3' });
+        });
+
+        it('matches rows case-insensitively on the record key', () => {
+            const dupe = match('abc-4', undefined);
+            const rows = new Map([[NormalizeUUID('ABC-4'), { ID: 'ABC-4', FirstName: 'Ana', LastName: 'Lima' }]]);
+
+            (detector as never)['FillMissingMatchMetadata']([dupe], rows, peopleInfo);
+
+            expect(dupe.VectorMetadata?.['Name']).toBe('Ana Lima');
         });
     });
 

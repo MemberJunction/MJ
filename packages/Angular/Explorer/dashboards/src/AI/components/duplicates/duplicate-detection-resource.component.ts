@@ -889,18 +889,8 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
                 progress: 0,
             });
 
-            // Subscribe BEFORE Save() so fast runs or immediate errors that publish
-            // during the server Save() hook are not missed before the subscription connects.
-            this.subscribeToPipelineProgress(dupeRun.ID);
-
             const saved = await dupeRun.Save();
             if (!saved) {
-                if (this.idleTimer) {
-                    clearTimeout(this.idleTimer);
-                    this.idleTimer = null;
-                }
-                this.activeProgressSub?.unsubscribe();
-                this.activeProgressSub = null;
                 if (this.detectionActivityID) {
                     this.activityService.Complete(this.detectionActivityID, 'error');
                     this.detectionActivityID = null;
@@ -916,6 +906,14 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
                 this.cdr.detectChanges();
                 return;
             }
+
+            // Subscribe only now, with the saved ID. A new record's create request carries no
+            // primary key, so the server assigns the run's ID and the ID NewRecord() generated
+            // in the browser never matches it: a subscription opened before Save() listens for a
+            // run that never publishes, and its status check finds no such run. A run that
+            // finishes during Save() publishes before this subscription exists, so
+            // subscribeToPipelineProgress checks the run's status right away to catch it.
+            this.subscribeToPipelineProgress(dupeRun.ID);
         } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);
             console.error('[DuplicateDetection] Error starting detection:', msg);
@@ -1383,8 +1381,6 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
             }, 15000); // Check DB status after 15s of subscription silence
         };
 
-        resetIdleTimer();
-
         // Reset phase tracking for this new subscription
         this.detectionRawStage = '';
 
@@ -1430,6 +1426,11 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
             }
         });
         this.activeProgressSub = rxSub;
+
+        // Read the run's status now rather than after the first 15s of silence: a run that
+        // completed or failed before this subscription connected publishes nothing more, and
+        // this check is what finishes it. The check re-arms the idle timer itself.
+        void checkRunStatusOnIdle();
     }
 
     /** Format detection stage names for display */

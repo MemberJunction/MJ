@@ -68,7 +68,37 @@ vi.mock('@memberjunction/ai-vector-dupe', () => ({
     },
 }));
 
-import { MJDuplicateRunEntityServer } from '../custom/MJDuplicateRunEntityServer.server';
+import { MJDuplicateRunEntityServer, PickDuplicateDetectionDocument } from '../custom/MJDuplicateRunEntityServer.server';
+
+describe('PickDuplicateDetectionDocument', () => {
+    it('prefers a Record Duplicate document over a newer Search document', () => {
+        const picked = PickDuplicateDetectionDocument([
+            { ID: 'search-doc', Type: 'Search' },
+            { ID: 'dupe-doc', Type: 'Record Duplicate' },
+        ]);
+        expect(picked?.ID).toBe('dupe-doc');
+    });
+
+    it('takes the newest of several Record Duplicate documents (the list is newest first)', () => {
+        const picked = PickDuplicateDetectionDocument([
+            { ID: 'newer', Type: 'Record Duplicate' },
+            { ID: 'older', Type: 'Record Duplicate' },
+        ]);
+        expect(picked?.ID).toBe('newer');
+    });
+
+    it('falls back to the newest document of any type when none is Record Duplicate', () => {
+        const picked = PickDuplicateDetectionDocument([
+            { ID: 'search-newest', Type: 'Search' },
+            { ID: 'search-older', Type: 'Search' },
+        ]);
+        expect(picked?.ID).toBe('search-newest');
+    });
+
+    it('returns null when the entity has no active document', () => {
+        expect(PickDuplicateDetectionDocument([])).toBeNull();
+    });
+});
 
 describe('MJDuplicateRunEntityServer', () => {
     beforeEach(() => {
@@ -107,6 +137,26 @@ describe('MJDuplicateRunEntityServer', () => {
             Stage: 'error',
             CurrentItem: 'No active Entity Document found for ID doc-1',
         });
+    });
+
+    it('runs on the Record Duplicate document and its thresholds even when a Search document is newer', async () => {
+        runViewMock.mockResolvedValue({
+            Success: true,
+            Results: [
+                { ID: 'search-doc', Type: 'Search', PotentialMatchThreshold: 0.5, AbsoluteMatchThreshold: 0.6 },
+                { ID: 'dupe-doc', Type: 'Record Duplicate', PotentialMatchThreshold: 0.94, AbsoluteMatchThreshold: 0.97 },
+            ],
+        });
+        getDuplicateRecordsMock.mockResolvedValue({ Status: 'Success', PotentialDuplicateResult: [] });
+
+        const run = new MJDuplicateRunEntityServer();
+        await (run as unknown as { runDetectionAsync: () => Promise<void> }).runDetectionAsync();
+
+        const request = getDuplicateRecordsMock.mock.calls[0][0] as PotentialDuplicateRequest;
+        const options = request.Options as DuplicateDetectionOptions;
+        expect(request.EntityDocumentID).toBe('dupe-doc');
+        expect(options.PotentialMatchThreshold).toBe(0.94);
+        expect(options.AbsoluteMatchThreshold).toBe(0.97);
     });
 
     it('maps Embedding and Querying to extract and Matching/Merging to autotag without premature complete', async () => {
