@@ -211,7 +211,7 @@ recorded `not-run: budget` in §11 and in the PR description's test plan, and th
   every removed alias (an out-of-repo caller breaks at compile time). PR 6's last milestone removes whatever remains.
 - Commit and push only at a milestone checkpoint after its exit tests pass, only on `ps/pr-1-feature-pipelines`. Never
   `git checkout -- <file>`, `git restore <file>`, `git reset --hard`, force-push or rebase.
-- One migration, T-SQL only: `migrations/v6/V202610151119__v6.2.x__Feature_Value_Key_And_Versions.sql`. Its version
+- One migration, T-SQL only: `migrations/v6/V202610161457__v6.2.x__Feature_Value_Key_And_Versions.sql`. Its version
   must sort after the newest versioned migration on `origin/next` whenever `next` is merged in; if it no longer does,
   re-time the file name to now with byte-identical content (same folder rule: `v6.*` → `migrations/v6/`) and relabel the
   old version's `flyway_schema_history` row on this PR's dev databases (re-timed from `V202610122200` after the
@@ -456,7 +456,7 @@ model is exercised by `fp-live-jobtitle` (§7).
 
 ### 5.1 Data model — one migration
 
-File: `migrations/v6/V202610151119__v6.2.x__Feature_Value_Key_And_Versions.sql`. Hand-written part (complete text, as
+File: `migrations/v6/V202610161457__v6.2.x__Feature_Value_Key_And_Versions.sql`. Hand-written part (complete text, as
 shipped — synced to the file after the slimming pass: `AIModelID` throughout (D-036), the `ProcessRunDetail.Warnings`
 column (audit B40) and the replaced `FeatureValue` table description were added during execution; the one-time
 orphan-cache DELETE and the `macro-f1` metric were removed again):
@@ -996,7 +996,7 @@ added during execution; they are recorded below in the same format. Later milest
 
 #### Task M1.1: Migration, CodeGen and the generated tail
 
-**Files:** Create `migrations/v6/V202610151119__v6.2.x__Feature_Value_Key_And_Versions.sql` · Modify (generated)
+**Files:** Create `migrations/v6/V202610161457__v6.2.x__Feature_Value_Key_And_Versions.sql` · Modify (generated)
 `packages/MJCoreEntities/src/generated/entities/__mj.ts`, `packages/MJServer/src/generated/graphql-schemas/__mj.ts`,
 `packages/Angular/Explorer/core-entity-forms/src/lib/generated/**` (new `Entities/MJFeaturePipelineVersion/` form;
 regenerated forms of the changed entities; `generated-forms.module.ts`), `packages/Angular/Bootstrap/src/generated/mj-class-registrations.ts`,
@@ -9860,7 +9860,7 @@ Sequence 6, tier `live-model`).
     "Feature Pipeline Version Steward" scheduled job evaluates and backfills changed versions without a person; an
     Action scheduled job paused for a missing class resumes by itself once the class is loaded; Gemini, Vertex and
     Bedrock send temperature 0 as 0 and strict calls refuse a changed parameter. Migration
-    `V202610151119__v6.2.x__Feature_Value_Key_And_Versions.sql`.
+    `V202610161457__v6.2.x__Feature_Value_Key_And_Versions.sql`.
     ```
     Add any other package the branch touched that `npm run check:changeset` names (e.g. `@memberjunction/ai-vertex`
     if its tests changed); keep every entry `minor` (the `fixed` group makes one minor repo-wide either way).
@@ -10130,7 +10130,7 @@ Assumption checks (run from the MJ repo unless a path says otherwise):
 - [ ] A3 `grep -c "temperature: params.temperature || 0.7" packages/AI/Providers/Bedrock/src/models/bedrockLLM.ts` → `0` at HEAD (satisfied by M5.3; still `8` on `origin/next`).
 - [ ] A4 `grep -c "export class VertexLLM extends GeminiLLM" packages/AI/Providers/Vertex/src/models/vertexLLM.ts` → `1` (Vertex inherits the Gemini fix).
 - [ ] A5 `gh pr view 5185 --json state --jq .state` → `MERGED` (merged before 2026-10-15; M5.2's merged branch was taken and is satisfied at HEAD; A2 confirms). No further action.
-- [ ] A6 `ls migrations/v6 | grep '^V' | sort | tail -1` → at HEAD the newest file is this PR's `V202610151119__v6.2.x__Feature_Value_Key_And_Versions.sql`; on `origin/next` it is `V202610141513__v6.2.x__Theme_Login_Screen.sql`, which sorts before it (satisfied: Q-8 re-timed the migration at the 2026-10-15 `next` merge). Run with `git ls-tree --name-only origin/next migrations/v6/ | sed 's#.*/##' | grep '^V' | sort | tail -1`; a `next` file newer than this PR's migration → re-time this PR's migration to a later timestamp when `next` is merged.
+- [ ] A6 `ls migrations/v6 | grep '^V' | sort | tail -1` → at HEAD the newest file is this PR's `V202610161457__v6.2.x__Feature_Value_Key_And_Versions.sql`; on `origin/next` it is `V202610141513__v6.2.x__Theme_Login_Screen.sql`, which sorts before it (satisfied: Q-8 re-timed the migration at the 2026-10-15 `next` merge). Run with `git ls-tree --name-only origin/next migrations/v6/ | sed 's#.*/##' | grep '^V' | sort | tail -1`; a `next` file newer than this PR's migration → re-time this PR's migration to a later timestamp when `next` is merged.
 - [ ] A7 `git show origin/next:metadata/prompts/.job-function-seniority-prompt.json | grep -c '"deleteRecord"'` → `1` on `origin/next` (F-ENV-6 residue on `next`); at HEAD the file is deleted by M2.3 (`git show HEAD:metadata/prompts/.job-function-seniority-prompt.json` fails; satisfied by PR 1).
 - [ ] A8 `grep -c "Re-deleting" packages/MetadataSync/src/services/PushService.ts` → `1` (unchanged at HEAD and on `next`).
 - [ ] A9 `grep -c "SkipValidation?: boolean, SuppressWarnings?: boolean): Promise<TemplateRenderResult>" packages/Templates/engine/src/TemplateEngine.ts` → `1` on `origin/next`, `0` at HEAD (satisfied by M3.3: `RenderTemplate` now takes `options?: { autoescape?: boolean }`).
@@ -10323,7 +10323,7 @@ Assumption checks (run from the MJ repo unless a path says otherwise):
   re-time the companion migration after it. Default: each is done in the commit that merges `origin/next` (or the
   companion's `next`) into the branch, with the check that detects it re-run afterwards. Nothing was renamed by the
   refresh, which edits the plan only.
-  Resolution: (1) this PR's migration is now `V202610151119__v6.2.x__Feature_Value_Key_And_Versions.sql`; its CodeGen copy
+  Resolution: (1) this PR's migration is now `V202610161457__v6.2.x__Feature_Value_Key_And_Versions.sql`; its CodeGen copy
   of `spDeleteAIPrompt` was regenerated so it carries `next`'s `AIPrompt.TemplateDataCapture` (it now runs after
   `V202610140418`, which also emits that procedure); every other procedure and view in it is byte-identical to CodeGen's
   output on the merged schema. (2) IT123 → IT124 (`feature-pipeline-core`) and IT124 → IT125 (`fp-live-jobtitle`), with
@@ -10420,7 +10420,7 @@ PascalCase. `VendorCallParameters.VendorModelName` is the vendor's model name, `
 
 ### Migration
 
-`migrations/v6/V202610151119__v6.2.x__Feature_Value_Key_And_Versions.sql`: columns on `FeatureValue`
+`migrations/v6/V202610161457__v6.2.x__Feature_Value_Key_And_Versions.sql`: columns on `FeatureValue`
 (`PipelineVersion`, `AIModelID`, `ParametersHash`, `InputHash`, `ValueKeyHash`, `Source`), `FeatureValueCache`
 (`AIModelID`, `ParametersHash`, rebuilt unique indexes; cache rows that can never match the new key and that no
 Feature Value references are deleted), `ProcessRun.ResultSummary`, `ProcessRunDetail.Warnings`, new table
@@ -10675,7 +10675,7 @@ duplicate of a `next` mechanism, an unrequested feature, or a near-duplicate tes
   result); the merged method keeps the strict-parameter refusal first and stamps `parameterFidelity` on every exit,
   cancelled ones included. Its pattern is now `result = await this.nonStreamingChatCompletion(params);`. After:
   `# ok 63 · moved 0 · changed 0 · missing 0 · skipped 6`. `atCommit` values are unchanged.
-- **Assumptions:** A1 `d0c57a64f9`; A2 0 / 0; A3 `next` 8, HEAD 0; A4 1; A5 MERGED; A6 HEAD `V202610151119`, `next`
+- **Assumptions:** A1 `d0c57a64f9`; A2 0 / 0; A3 `next` 8, HEAD 0; A4 1; A5 MERGED; A6 HEAD `V202610161457`, `next`
   `V202610141513` (satisfied, Q-8); A7 `next` 1, HEAD deleted; A8 1; A9 `next` 1, HEAD 0; A10 `next` 1, companion 0;
   A11 `next` `V202610141644`, companion `V202610151021` (satisfied, Q-8); A12 `next` 0 / 1, HEAD 2 / 1; A13 0 / 1;
   A14 HEAD `IT124` (+ `IT125` in gates), `next` `IT123` (satisfied, Q-8); A15 `[]`; A16 `next` 1, HEAD 0; A17 `next`
