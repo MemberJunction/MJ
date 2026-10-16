@@ -18,6 +18,8 @@ import {
     IGeminiMicCapture,
 } from '../drivers/geminiRealtimeClient';
 
+import { FakeMediaStream } from './fake-media-stream';
+
 // ── Fakes (no network, no Web Audio) ───────────────────────────────────────────
 
 /** Fake Gemini Live session: records every outbound send for assertions. */
@@ -43,6 +45,8 @@ class FakeGeminiSession implements GeminiLiveClientSession {
 
 /** Fake playout engine standing in for the Web Audio playback clock. */
 class FakePlayback implements IGeminiAudioPlayback {
+    public OutputStream: MediaStream | null = null;
+    public GetOutputStream(): MediaStream | null { return this.OutputStream; }
     public Enqueued: ArrayBuffer[] = [];
     public FlushCount = 0;
     public Closed = false;
@@ -729,6 +733,20 @@ describe('GeminiRealtimeClient', () => {
     });
 
     describe('SetMuted / Disconnect / errors', () => {
+        it('publishes the PCM playback stream and clears it on Disconnect', async () => {
+            const stream = new FakeMediaStream([]);
+            client.Playback.OutputStream = stream;
+            const delivered: MediaStream[] = [];
+            client.OnRemoteMediaStream((s) => delivered.push(s));
+            await connect(client);
+            expect(client.GetRemoteMediaStream()).toBe(stream);
+            expect(delivered).toEqual([stream]);
+            const replayed: MediaStream[] = [];
+            client.OnRemoteMediaStream((s) => replayed.push(s));
+            expect(replayed).toEqual([stream]);
+            await client.Disconnect();
+            expect(client.GetRemoteMediaStream()).toBeNull();
+        });
         it('should toggle mic track enablement via SetMuted', async () => {
             const track = await connect(client);
             client.SetMuted(true);
