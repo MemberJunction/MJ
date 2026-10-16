@@ -150,7 +150,7 @@ describe('SQLServerDataProvider save path (real Save() → GenerateSaveSQL → m
     expect(executed.sql).not.toContain("Widget''s One");
     expect(inputWithValue(executed, "Widget's One").type).toEqual(mssql.NVarChar(100));
     expect(inputWithValue(executed, true).type).toEqual(mssql.Bit());
-    expect(inputWithValue(executed, new Date('2025-04-05T12:00:00.000Z')).type).toEqual(mssql.DateTimeOffset());
+    expect(inputWithValue(executed, '2025-04-05T12:00:00.000Z').type).toEqual(mssql.VarChar(34));
 
     // What is logged: the literal form, the text the batch has always had.
     const sql = provider.LiteralSQL[0];
