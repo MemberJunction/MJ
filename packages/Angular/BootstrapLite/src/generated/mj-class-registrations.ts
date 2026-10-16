@@ -35,7 +35,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (451 classes)
+// @memberjunction/core-entities (453 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -160,6 +160,8 @@ import {
     MJAuthenticationProviderEntity,
     MJAuthorizationEntity,
     MJAuthorizationRoleEntity,
+    MJCalendarEventLinkEntity,
+    MJCalendarSyncStateEntity,
     MJClusterAnalysisClusterEntity,
     MJClusterAnalysisEntity,
     MJCollectionArtifactEntity,
@@ -585,18 +587,21 @@ import {
     RecordProcessRunnerUXComponent,
 } from '@memberjunction/ng-entity-action-ux';
 
-// @memberjunction/ng-entity-viewer (4 classes)
+// @memberjunction/ng-entity-viewer (5 classes)
 import {
+    CalendarViewType,
     CardsViewType,
     GridViewType,
     MapViewType,
     TimelineViewType,
 } from '@memberjunction/ng-entity-viewer';
 
-// @memberjunction/ng-dashboard-viewer (8 classes)
+// @memberjunction/ng-dashboard-viewer (10 classes)
 import {
     ArtifactConfigPanelComponent,
     ArtifactPartComponent,
+    ComponentConfigPanelComponent,
+    ComponentPartComponent,
     QueryConfigPanelComponent,
     QueryPartComponent,
     ViewConfigPanelComponent,
@@ -853,6 +858,8 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJAuthenticationProviderEntity,
     MJAuthorizationEntity,
     MJAuthorizationRoleEntity,
+    MJCalendarEventLinkEntity,
+    MJCalendarSyncStateEntity,
     MJClusterAnalysisClusterEntity,
     MJClusterAnalysisEntity,
     MJCollectionArtifactEntity,
@@ -916,12 +923,12 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJDashboardCategoryLinkEntity,
     MJDashboardCategoryPermissionEntity,
     MJDashboardEntity,
-    MJDashboardEntityExtended,
-    MJDashboardPartTypeEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJDashboardEntityExtended,
+    MJDashboardPartTypeEntity,
     MJDashboardPermissionEntity,
     MJDashboardPermissionEntityExtended,
     MJDashboardUserPreferenceEntity,
@@ -1120,12 +1127,12 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJSignatureRequestLogEntity,
     MJSignatureRequestRecipientEntity,
     MJSkillEntity,
-    MJStateProvinceEntity,
-    MJTagAuditLogEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJStateProvinceEntity,
+    MJTagAuditLogEntity,
     MJTagCoOccurrenceEntity,
     MJTagEntity,
     MJTagScopeEntity,
@@ -1244,12 +1251,15 @@ const CLASS_REGISTRATIONS_2: any[] = [
     SkillCommandProvider,
     WhiteboardArtifactViewerComponent,
     RecordProcessRunnerUXComponent,
+    CalendarViewType,
     CardsViewType,
     GridViewType,
     MapViewType,
     TimelineViewType,
     ArtifactConfigPanelComponent,
     ArtifactPartComponent,
+    ComponentConfigPanelComponent,
+    ComponentPartComponent,
     QueryConfigPanelComponent,
     QueryPartComponent,
     ViewConfigPanelComponent,
@@ -1321,15 +1331,15 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MLModelFormComponentExtended,
     MLModelFormPolicy,
     ProjectHierarchyPanel,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_3: any[] = [
     QueryCategoryHierarchyPanel,
     RecordProcessCategoryHierarchyPanel,
     RecordProcessFormComponentExtended,
     RecordProcessFormPolicy,
     RubricAuthorPanel,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_3: any[] = [
     RubricDiffPanel,
     RubricEvaluationComparePanel,
     RubricEvaluationFormPolicy,
@@ -1362,7 +1372,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 618;
+export const CLASS_REGISTRATIONS_COUNT = 623;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

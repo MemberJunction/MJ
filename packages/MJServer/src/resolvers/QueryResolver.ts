@@ -226,7 +226,8 @@ export class RunQueryResolver extends ResolverBase {
         ForceAuditLog: ForceAuditLog,
         AuditLogDescription: AuditLogDescription,
         Enrichment: Enrichment,
-        DataSource: DataSource
+        DataSource: DataSource,
+        TimeZone: context.userPayload.TimeZone
       },
       context.userPayload.userRecord);
 
@@ -288,7 +289,8 @@ export class RunQueryResolver extends ResolverBase {
         ForceAuditLog: ForceAuditLog,
         AuditLogDescription: AuditLogDescription,
         Enrichment: Enrichment,
-        DataSource: DataSource
+        DataSource: DataSource,
+        TimeZone: context.userPayload.TimeZone
       },
       context.userPayload.userRecord);
       
@@ -337,7 +339,8 @@ export class RunQueryResolver extends ResolverBase {
         ForceAuditLog: ForceAuditLog,
         AuditLogDescription: AuditLogDescription,
         Enrichment: Enrichment,
-        DataSource: DataSource
+        DataSource: DataSource,
+        TimeZone: context.userPayload.TimeZone
       },
       context.userPayload.userRecord);
 
@@ -398,7 +401,8 @@ export class RunQueryResolver extends ResolverBase {
         ForceAuditLog: ForceAuditLog,
         AuditLogDescription: AuditLogDescription,
         Enrichment: Enrichment,
-        DataSource: DataSource
+        DataSource: DataSource,
+        TimeZone: context.userPayload.TimeZone
       },
       context.userPayload.userRecord);
     
@@ -447,7 +451,8 @@ export class RunQueryResolver extends ResolverBase {
       ForceAuditLog: i.ForceAuditLog,
       AuditLogDescription: i.AuditLogDescription,
       Enrichment: i.Enrichment,
-      DataSource: i.DataSource
+      DataSource: i.DataSource,
+      TimeZone: context.userPayload.TimeZone
     }));
 
     // Execute all queries in parallel using the batch method
@@ -498,7 +503,8 @@ export class RunQueryResolver extends ResolverBase {
       ForceAuditLog: i.ForceAuditLog,
       AuditLogDescription: i.AuditLogDescription,
       Enrichment: i.Enrichment,
-      DataSource: i.DataSource
+      DataSource: i.DataSource,
+      TimeZone: context.userPayload.TimeZone
     }));
 
     // Execute all queries in parallel using the batch method
@@ -563,6 +569,7 @@ export class RunQueryResolver extends ResolverBase {
           AuditLogDescription: item.params.AuditLogDescription,
           Enrichment: item.params.Enrichment,
           DataSource: item.params.DataSource,
+          TimeZone: context.userPayload.TimeZone,
         },
         cacheStatus: item.cacheStatus ? {
           maxUpdatedAt: item.cacheStatus.maxUpdatedAt,

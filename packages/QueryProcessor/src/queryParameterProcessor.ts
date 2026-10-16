@@ -1,4 +1,5 @@
-import { RunQuerySQLFilterManager, DatabasePlatform } from '@memberjunction/core';
+import { RunQuerySQLFilterManager, DatabasePlatform, LogError, QUERY_CONTEXT_NAME } from '@memberjunction/core';
+import type { QueryTemplateContext } from '@memberjunction/core';
 import { MJQueryParameterEntity } from '@memberjunction/core-entities';
 import nunjucks from 'nunjucks';
 
@@ -14,6 +15,22 @@ export interface QueryTemplateInput {
     UsesTemplate: boolean;
     /** Parameter definitions for validation and type conversion */
     Parameters: MJQueryParameterEntity[];
+}
+
+/**
+ * What the server sets on a run, beside the caller's parameter values. None of it can come from a
+ * caller: a caller value for a server-set name is refused.
+ */
+export interface QueryServerValues {
+    /** `RunQueryParams.ServerParameters`: values only server code sets. They win over caller values. */
+    ServerParameters?: Record<string, unknown>;
+    /**
+     * Names a caller value may not use beyond this query's own server-set parameters: the names that
+     * reach a server-set parameter of a query this one composes.
+     */
+    ProtectedNames?: ReadonlyArray<string>;
+    /** The reserved `Context` object, rendered as `Context` (`BuildQueryTemplateContext`). */
+    Context?: QueryTemplateContext;
 }
 
 /**
@@ -54,6 +71,11 @@ export interface QueryProcessingResult {
      * The final parameters that were applied, including defaults
      */
     appliedParameters: Record<string, unknown>;
+    /**
+     * The `Context` members the template read, with their values. Empty when it read none. A
+     * cached result depends on exactly these.
+     */
+    contextValues?: Record<string, string>;
 }
 
 /**
@@ -278,23 +300,33 @@ export class QueryParameterProcessor {
      * Validates parameters against their definitions.
      * Boolean values are bound the way the current platform's dialect expects
      * (`BooleanParameterValue`): 1/0 on SQL Server, true/false on PostgreSQL.
+     *
+     * Server-set values: a caller value (`parameters`) for a parameter marked `IsServerSet`, for a
+     * name in `serverValues.ProtectedNames`, or for the reserved name `Context` is refused and
+     * logged. Server-set parameters take their value from `serverValues.ServerParameters` only,
+     * and those values win over caller values for any name.
      */
     public static ValidateParameters(
         parameters: Record<string, unknown> | undefined,
         parameterDefinitions: MJQueryParameterEntity[],
-        skipUnknownParameterCheck?: boolean
+        skipUnknownParameterCheck?: boolean,
+        serverValues?: QueryServerValues
     ): ParameterValidationResult {
-        const errors: string[] = [];
+        const errors: string[] = QueryParameterProcessor.refuseCallerServerValues(parameters, parameterDefinitions, serverValues?.ProtectedNames);
         const validatedParams: Record<string, unknown> = {};
         const dialect = RunQuerySQLFilterManager.Instance.Dialect;
+        const values = QueryParameterProcessor.mergeServerValues(parameters, serverValues);
 
         // Process each defined parameter
         for (const paramDef of parameterDefinitions) {
-            const value = parameters?.[paramDef.Name];
+            // A server-set parameter takes its value from the server only, never from the caller.
+            const value = paramDef.IsServerSet ? serverValues?.ServerParameters?.[paramDef.Name] : values?.[paramDef.Name];
 
             // Check required parameters
             if (paramDef.IsRequired && (value === undefined || value === null || value === '')) {
-                errors.push(`Required parameter '${paramDef.Name}' is missing`);
+                errors.push(paramDef.IsServerSet
+                    ? `Required parameter '${paramDef.Name}' is set by the server, and no server value was given`
+                    : `Required parameter '${paramDef.Name}' is missing`);
                 continue;
             }
 
@@ -385,9 +417,9 @@ export class QueryParameterProcessor {
 
         // Check for unknown parameters (skipped for transitive template processing
         // where the outer query doesn't define the dependency's parameters)
-        if (parameters && !skipUnknownParameterCheck) {
+        if (values && !skipUnknownParameterCheck) {
             const definedParamNames = new Set(parameterDefinitions.map(p => p.Name));
-            for (const key of Object.keys(parameters)) {
+            for (const key of Object.keys(values)) {
                 if (!definedParamNames.has(key)) {
                     errors.push(`Unknown parameter: '${key}'`);
                 }
@@ -401,13 +433,51 @@ export class QueryParameterProcessor {
         };
     }
 
+    /**
+     * Refusals for caller values the server owns: the reserved `Context`, this query's server-set
+     * parameters, and the protected names of composed queries. Each refusal is logged.
+     */
+    private static refuseCallerServerValues(
+        parameters: Record<string, unknown> | undefined,
+        parameterDefinitions: MJQueryParameterEntity[],
+        protectedNames: ReadonlyArray<string> | undefined
+    ): string[] {
+        if (!parameters) {
+            return [];
+        }
+        const serverSet = new Set<string>(protectedNames ?? []);
+        parameterDefinitions.filter(p => p.IsServerSet).forEach(p => serverSet.add(p.Name));
+        const refusals: string[] = [];
+        for (const key of Object.keys(parameters)) {
+            if (key === QUERY_CONTEXT_NAME) {
+                refusals.push(`Parameter '${key}' is reserved: the server sets the ${QUERY_CONTEXT_NAME} object, and a caller value for it is refused`);
+            } else if (serverSet.has(key)) {
+                refusals.push(`Parameter '${key}' is set by the server; a caller value for it is refused`);
+            }
+        }
+        if (refusals.length > 0) {
+            LogError(`Query parameters refused: ${refusals.join('; ')}`);
+        }
+        return refusals;
+    }
+
+    /** The caller's values with the server's on top. The caller's own object when the server sets none. */
+    private static mergeServerValues(
+        parameters: Record<string, unknown> | undefined,
+        serverValues: QueryServerValues | undefined
+    ): Record<string, unknown> | undefined {
+        const server = serverValues?.ServerParameters;
+        return server && Object.keys(server).length > 0 ? { ...(parameters ?? {}), ...server } : parameters;
+    }
+
     /** @deprecated Use {@link ValidateParameters}. */
     public static validateParameters(
         parameters: Record<string, unknown> | undefined,
         parameterDefinitions: MJQueryParameterEntity[],
-        skipUnknownParameterCheck?: boolean
+        skipUnknownParameterCheck?: boolean,
+        serverValues?: QueryServerValues
     ): ParameterValidationResult {
-        return this.ValidateParameters(parameters, parameterDefinitions, skipUnknownParameterCheck);
+        return this.ValidateParameters(parameters, parameterDefinitions, skipUnknownParameterCheck, serverValues);
     }
 
     /**
@@ -420,12 +490,16 @@ export class QueryParameterProcessor {
      * @param forceTemplateProcessing When true, processes Nunjucks templates even if the query's
      *        own UsesTemplate is false. Used for transitive template resolution when a composed
      *        dependency uses templates but the outer query does not.
+     * @param serverValues What the server sets: `ServerParameters` for server-set parameters, the
+     *        names composed queries protect, and the reserved `Context` object. A template that
+     *        never reads `Context` renders exactly as without it.
      */
     public static ProcessQueryTemplate(
         query: QueryTemplateInput,
         parameters: Record<string, unknown> | undefined,
         sqlOverride?: string,
-        forceTemplateProcessing?: boolean
+        forceTemplateProcessing?: boolean,
+        serverValues?: QueryServerValues
     ): QueryProcessingResult {
         try {
             const sql = sqlOverride ?? query.SQL;
@@ -442,7 +516,7 @@ export class QueryParameterProcessor {
             // Validate parameters against known definitions.
             // When force-processing for transitive templates, the outer query may not define
             // all parameters used by dependencies, so we skip the "unknown parameter" check.
-            const validation = this.ValidateParameters(parameters, query.Parameters, forceTemplateProcessing);
+            const validation = this.ValidateParameters(parameters, query.Parameters, forceTemplateProcessing, serverValues);
             if (!validation.success) {
                 return {
                     success: false,
@@ -452,38 +526,8 @@ export class QueryParameterProcessor {
                 };
             }
 
-            // When force-processing, merge any provided parameters that weren't in query.Parameters
-            // so Nunjucks can resolve dependency template tokens
-            const renderParams = { ...validation.validatedParameters };
-            if (forceTemplateProcessing && parameters) {
-                for (const [key, value] of Object.entries(parameters)) {
-                    if (!(key in renderParams)) {
-                        renderParams[key] = value;
-                    }
-                }
-            }
-
-            // Process the template
-            try {
-                const processedSQL = this.nunjucksEnv.renderString(
-                    sql,
-                    renderParams
-                );
-
-                return {
-                    success: true,
-                    processedSQL,
-                    appliedParameters: renderParams
-                };
-            } catch (e: unknown) {
-                const msg = e instanceof Error ? e.message : String(e);
-                return {
-                    success: false,
-                    processedSQL: '',
-                    error: `Template processing failed: ${msg}`,
-                    appliedParameters: renderParams
-                };
-            }
+            const renderParams = this.buildRenderParams(validation.validatedParameters, parameters, forceTemplateProcessing, serverValues);
+            return this.renderTemplate(sql, renderParams, serverValues);
         } catch (e: unknown) {
             const msg = e instanceof Error ? e.message : String(e);
             return {
@@ -495,13 +539,67 @@ export class QueryParameterProcessor {
         }
     }
 
+    /**
+     * The values a template renders with: the validated parameters and, when force-processing,
+     * every other value given (caller and server) so Nunjucks can resolve composed queries' tokens.
+     */
+    private static buildRenderParams(
+        validated: Record<string, unknown>,
+        parameters: Record<string, unknown> | undefined,
+        forceTemplateProcessing: boolean | undefined,
+        serverValues: QueryServerValues | undefined
+    ): Record<string, unknown> {
+        const renderParams = { ...validated };
+        const given = this.mergeServerValues(parameters, serverValues);
+        if (forceTemplateProcessing && given) {
+            for (const [key, value] of Object.entries(given)) {
+                if (!(key in renderParams)) {
+                    renderParams[key] = value;
+                }
+            }
+        }
+        return renderParams;
+    }
+
+    /**
+     * Renders the template. `Context` joins the render context last, so nothing else can replace
+     * it. Values the server set are left out of `appliedParameters`, which callers see.
+     */
+    private static renderTemplate(
+        sql: string,
+        renderParams: Record<string, unknown>,
+        serverValues: QueryServerValues | undefined
+    ): QueryProcessingResult {
+        const applied = { ...renderParams };
+        Object.keys(serverValues?.ServerParameters ?? {}).forEach(name => delete applied[name]);
+        const context = serverValues?.Context;
+        try {
+            const renderContext = context ? { ...renderParams, [QUERY_CONTEXT_NAME]: context.Context } : renderParams;
+            const processedSQL = this.nunjucksEnv.renderString(sql, renderContext);
+            const result: QueryProcessingResult = { success: true, processedSQL, appliedParameters: applied };
+            if (context) {
+                result.contextValues = context.ReadValues();
+            }
+            return result;
+        } catch (e: unknown) {
+            const msg = e instanceof Error ? e.message : String(e);
+            return {
+                success: false,
+                processedSQL: '',
+                error: `Template processing failed: ${msg}`,
+                appliedParameters: applied
+            };
+        }
+    }
+
     /** @deprecated Use {@link ProcessQueryTemplate}. */
     public static processQueryTemplate(
         query: QueryTemplateInput,
         parameters: Record<string, unknown> | undefined,
         sqlOverride?: string,
-        forceTemplateProcessing?: boolean
+        forceTemplateProcessing?: boolean,
+        serverValues?: QueryServerValues
     ): QueryProcessingResult {
-        return this.ProcessQueryTemplate(query, parameters, sqlOverride, forceTemplateProcessing);
+        return this.ProcessQueryTemplate(query, parameters, sqlOverride, forceTemplateProcessing, serverValues);
     }
 }

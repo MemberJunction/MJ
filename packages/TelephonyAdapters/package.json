@@ -26,6 +26,7 @@
     "@memberjunction/ai-bridge-teams": "6.2.0-edge.4",
     "@memberjunction/ai-bridge-twilio": "6.2.0-edge.4",
     "@memberjunction/ai-bridge-vonage": "6.2.0-edge.4",
+    "@memberjunction/communication-ms-graph": "6.2.0-edge.4",
     "@memberjunction/core": "6.2.0-edge.4",
     "@memberjunction/core-entities": "6.2.0-edge.4",
     "@memberjunction/generic-database-provider": "6.2.0-edge.4",

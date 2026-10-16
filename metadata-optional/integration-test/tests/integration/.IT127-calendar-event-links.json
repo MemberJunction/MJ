@@ -1,0 +1,21 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT127 - Calendar Event Links and Sync",
+    "Description": "Server-transport bundle (#4789 A18). CL1 (needs MJAPI and MJ_API_KEY, skips loudly without them): a throwaway user holding only the UI role, created through MJAPI and connected with its own API key, reads MJ: Calendar Event Links and MJ: Calendar Sync States over GraphQL, and the generated create mutation of each is refused for permission. CL2: a test-only communication provider (registered through the ClassFactory, with a temporary MJ: Communication Providers row) keeps a calendar in memory; CalendarEventLinks.CreateLinkedEvent stores the link with the event's iCalendar UID and the record's compact RecordID; a sync after the calendar moves the event and an attendee accepts hands both to a test BaseCalendarEventLinkHandler and stores the new sync token; a refused token runs a full sync of the window and reports Resynced; a record of an entity with no handler gets only its link updated; CancelLinkedEvent marks the link Cancelled. The linked records are existing core rows, used read-only. Self-cleaning: Setup and Teardown delete by the provider's name and the reader's email pattern, so an interrupted run is cleaned up by the next.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "The UI role reads calendar links and sync states but cannot create them; a linked event keeps its iCalendar UID and record key, and sync brings calendar changes back to the record's handler, including after a refused token."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "calendar-event-links"
+        }
+      ]
+    },
+    "Status": "Active"
+  }
+}

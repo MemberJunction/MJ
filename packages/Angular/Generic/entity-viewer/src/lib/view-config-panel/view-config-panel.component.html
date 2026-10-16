@@ -77,6 +77,19 @@
     @if (ViewEntity || DefaultSaveAsNew) {
       <button
         class="tab-btn"
+        [class.active]="ActiveTab === 'properties'"
+        (click)="SetActiveTab('properties')"
+        [title]="IsIconOnlyMode ? 'Properties' + (Properties.length > 0 ? ' (' + Properties.length + ')' : '') : ''">
+        <i class="fa-solid fa-sliders"></i>
+        @if (!IsIconOnlyMode) {
+          <span>Properties</span>
+        }
+        @if (Properties.length > 0) {
+          <span class="tab-badge">{{ Properties.length }}</span>
+        }
+      </button>
+      <button
+        class="tab-btn"
         [class.active]="ActiveTab === 'settings'"
         (click)="SetActiveTab('settings')"
         [title]="IsIconOnlyMode ? 'Settings' : ''">
@@ -833,6 +846,19 @@
 
           <!-- Info Tip -->
           <mj-alert Variant="info" Size="sm" class="view-config-alert-pos">Aggregates are calculated server-side for accuracy with filtered/paginated data.</mj-alert>
+        </div>
+      </div>
+    }
+
+    <!-- Properties Tab -->
+    @if (ActiveTab === 'properties') {
+      <div class="tab-content">
+        <div class="config-section">
+          <div class="section-header">
+            <i class="fa-solid fa-sliders"></i>
+            <span>Properties</span>
+          </div>
+          <mj-view-properties-editor [Entity]="Entity" [(Properties)]="Properties" [Disabled]="!CanEdit"></mj-view-properties-editor>
         </div>
       </div>
     }

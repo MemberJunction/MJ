@@ -204,6 +204,56 @@
         }
     </mj-collapsible-panel>
 
+    <!-- Calendar Sync States Section -->
+    <mj-collapsible-panel
+        SectionKey="mJCalendarSyncStates"
+        SectionName="Calendar Sync States"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJCalendarSyncStates')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Calendar Sync States','CommunicationProviderID')"
+                [NewRecordValues]="NewRecordValues('MJ: Calendar Sync States','CommunicationProviderID')"
+                [AllowLoad]="IsSectionExpanded('mJCalendarSyncStates')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJCalendarSyncStates', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Calendar Event Links Section -->
+    <mj-collapsible-panel
+        SectionKey="mJCalendarEventLinks"
+        SectionName="Calendar Event Links"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJCalendarEventLinks')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Calendar Event Links','CommunicationProviderID')"
+                [NewRecordValues]="NewRecordValues('MJ: Calendar Event Links','CommunicationProviderID')"
+                [AllowLoad]="IsSectionExpanded('mJCalendarEventLinks')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJCalendarEventLinks', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-related" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
 </mj-record-form-container>
         

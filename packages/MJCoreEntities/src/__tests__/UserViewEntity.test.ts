@@ -4,7 +4,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 // Mocks must be defined before importing the module under test
 // ============================================================================
 
-vi.mock('@memberjunction/global', () => ({
+vi.mock('@memberjunction/global', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('@memberjunction/global')>()),
     RegisterClass: () => () => {},
     MJGlobal: { Instance: { GetGlobalObjectStore: () => ({}) } },
     // Case-insensitive UUID equality — enough for the permission/ownership checks under test.
@@ -12,7 +13,9 @@ vi.mock('@memberjunction/global', () => ({
         (a ?? '').toLowerCase() === (b ?? '').toLowerCase(),
 }));
 
-vi.mock('@memberjunction/core', () => {
+vi.mock('@memberjunction/core', async () => {
+    // The real validator, so the view's save-time Properties checks are exercised for real.
+    const { ValidateUserViewProperties } = await vi.importActual<typeof import('@memberjunction/core')>('@memberjunction/core');
     class MockBaseInfo {
         copyInitData(data: Record<string, unknown>) {
             if (data) Object.assign(this, data);
@@ -61,6 +64,11 @@ vi.mock('@memberjunction/core', () => {
             Success = true;
             Errors: unknown[] = [];
         },
+        ValidationErrorInfo: class {
+            constructor(public Source: string, public Message: string, public Value: unknown, public Type: string) {}
+        },
+        ValidationErrorType: { Failure: 'Failure', Warning: 'Warning' },
+        ValidateUserViewProperties,
         ParseFilterField: (field: string) => {
             const raw = (field ?? '').trim();
             const dot = raw.indexOf('.');
@@ -97,6 +105,8 @@ vi.mock('../generated/entity_subclasses', () => ({
         Set(_name: string, _value: unknown) { /* no-op */ }
         CheckPermissions() { return true; }
         Save(_options?: unknown) { return Promise.resolve(true); }
+        Properties: string | null = null;
+        Validate() { return { Success: true, Errors: [] as { Message: string }[] }; }
 
         // Mock *Object accessors matching the CodeGen-generated pattern
         get GridStateObject() { return this.GridState ? JSON.parse(this.GridState) : null; }
@@ -1619,5 +1629,45 @@ describe('MJUserViewEntityExtended WhereClause regeneration', () => {
         const view = makeSmartView({ isSaved: true, smartEnabled: true, prompt: 'Only active records', existingSmartWhere: '[IsActive] = 1' });
         await view.UpdateWhereClause(true);
         expect(view.GenerateCalls).toHaveLength(1);
+    });
+});
+
+describe('MJUserViewEntityExtended.Validate: Properties', () => {
+    const entityInfo = makeMockEntityInfo([
+        { Name: 'ID', NeedsQuotes: true, TSType: 'String' },
+        { Name: 'ChapterID', NeedsQuotes: true, TSType: 'String' },
+    ]);
+
+    function validate(properties: string | null) {
+        return createView({ _ViewEntityInfo: entityInfo, Properties: properties }).Validate();
+    }
+
+    it('a view with no properties validates exactly as before', () => {
+        expect(validate(null)).toEqual({ Success: true, Errors: [] });
+        expect(validate('')).toEqual({ Success: true, Errors: [] });
+    });
+
+    it('accepts well-formed properties', () => {
+        const ok = JSON.stringify([{ Name: 'Chapter', Type: 'uuid', AllowOverride: false, Target: { Field: 'ChapterID', Operator: '=' } }]);
+        expect(validate(ok).Success).toBe(true);
+    });
+
+    it('refuses a save with a bad property, naming it', () => {
+        const bad = JSON.stringify([
+            { Name: 'Chapter', Type: 'uuid', Target: { Field: 'Region', Operator: '>' }, Default: { Token: 'Context.Today' } },
+        ]);
+        const result = validate(bad);
+        expect(result.Success).toBe(false);
+        expect(result.Errors.map((e) => e.Message)).toEqual([
+            'Property "Chapter": Target.Field "Region" is not a field of the view\'s entity.',
+            'Property "Chapter": Target.Operator > does not apply to a uuid property. Allowed: =, <>, IN.',
+            'Property "Chapter": Context.Today cannot default a uuid property.',
+        ]);
+    });
+
+    it('refuses invalid JSON', () => {
+        const result = validate('[{');
+        expect(result.Success).toBe(false);
+        expect(result.Errors.map((e) => e.Message)).toEqual(['Properties must be valid JSON.']);
     });
 });

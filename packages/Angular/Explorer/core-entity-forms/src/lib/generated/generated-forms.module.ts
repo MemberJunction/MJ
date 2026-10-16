@@ -127,6 +127,8 @@ import { MJAuditLogTypeFormComponent } from "./Entities/MJAuditLogType/mjauditlo
 import { MJAuthenticationProviderFormComponent } from "./Entities/MJAuthenticationProvider/mjauthenticationprovider.form.component";
 import { MJAuthorizationFormComponent } from "./Entities/MJAuthorization/mjauthorization.form.component";
 import { MJAuthorizationRoleFormComponent } from "./Entities/MJAuthorizationRole/mjauthorizationrole.form.component";
+import { MJCalendarEventLinkFormComponent } from "./Entities/MJCalendarEventLink/mjcalendareventlink.form.component";
+import { MJCalendarSyncStateFormComponent } from "./Entities/MJCalendarSyncState/mjcalendarsyncstate.form.component";
 import { MJClusterAnalysisClusterFormComponent } from "./Entities/MJClusterAnalysisCluster/mjclusteranalysiscluster.form.component";
 import { MJClusterAnalysisFormComponent } from "./Entities/MJClusterAnalysis/mjclusteranalysis.form.component";
 import { MJCollectionArtifactFormComponent } from "./Entities/MJCollectionArtifact/mjcollectionartifact.form.component";
@@ -474,6 +476,7 @@ export class GeneratedForms_SubModule_0 { }
 declarations: [
     MJAIAgentCoAgentFormComponent,
     MJArtifactFormComponent,
+    MJCalendarSyncStateFormComponent,
     MJClusterAnalysisClusterFormComponent,
     MJCountryFormComponent,
     MJKnowledgeHubSavedSearchFormComponent,
@@ -591,6 +594,7 @@ declarations: [
     MJAIBridgeAgentIdentityFormComponent,
     MJAPIApplicationFormComponent,
     MJArchiveRunDetailFormComponent,
+    MJCalendarEventLinkFormComponent,
     MJComponentLibraryFormComponent,
     MJContentItemAttributeFormComponent,
     MJContentItemFormComponent,

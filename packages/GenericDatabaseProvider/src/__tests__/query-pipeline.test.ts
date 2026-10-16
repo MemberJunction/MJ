@@ -18,8 +18,10 @@ import {
     BaseEntity,
     EntitySaveOptions,
     EntityDeleteOptions,
+    ExternalDataSourceReadRouter,
+    LocalCacheManager,
 } from '@memberjunction/core';
-import { MJQueryEntityExtended, MJUserViewEntityExtended, QueryEngine } from '@memberjunction/core-entities';
+import { ComputeQueryFingerprintAsync, MJQueryEntityExtended, MJQueryParameterEntity, MJUserViewEntityExtended, QueryEngine } from '@memberjunction/core-entities';
 
 /**
  * Test subclass exposing protected pipeline methods for testing.
@@ -129,6 +131,17 @@ class TestPipelineProvider extends GenericDatabaseProviderTestBase {
         contextUser?: UserInfo,
     ): void {
         this.auditQueryExecution(query, params, finalSQL, rowCount, totalRowCount, executionTime, contextUser);
+    }
+
+    public testRunExternalQueryWithCache(
+        query: MJQueryEntityExtended,
+        finalSQL: string,
+        params: RunQueryParams,
+        router: ExternalDataSourceReadRouter,
+        contextUser?: UserInfo,
+        contextValues?: Record<string, string>,
+    ): Promise<RunQueryResult> {
+        return this.runExternalQueryWithCache(query, finalSQL, params, router, contextUser, contextValues);
     }
 
     public testWarnIfExternalQueryFieldsMissing(
@@ -1137,8 +1150,8 @@ class TestMatPlanProvider extends TestPipelineProvider {
         return { Success: false, Results: [] as T[], RowCount: 0, TotalRowCount: 0, ErrorMessage: 'unexpected entity' } as unknown as RunViewResult<T>;
     }
 
-    public plan(query: MJQueryEntityExtended, params: RunQueryParams, user?: UserInfo) {
-        return this.tryBuildMaterializedQueryPlan(query, params, user);
+    public plan(query: MJQueryEntityExtended, params: RunQueryParams, user?: UserInfo, contextValues?: Record<string, string>) {
+        return this.tryBuildMaterializedQueryPlan(query, params, user, contextValues);
     }
 }
 
@@ -1204,10 +1217,251 @@ describe('GenericDatabaseProvider.tryBuildMaterializedQueryPlan (plan-level)', (
         expect(r!.parameters).toEqual([42]);
     });
 
+    it('a run whose template read Context is served live: the shared snapshot was not built for this user or day', async () => {
+        const p = new TestMatPlanProvider();
+        p.setMatRow(activeSpec([{ column: 'X', operator: '=', paramName: 'x', kind: 'scalar' }]));
+        const q = matQuery({ QueryParameters: [{ Name: 'x', Type: 'string' }], QueryFields: [{ Name: 'ID' }, { Name: 'X' }] });
+        expect(await p.plan(q, matParams({ x: 'a' }), undefined, {})).not.toBeNull();
+        expect(await p.plan(q, matParams({ x: 'a' }), undefined, { UserID: 'u-1' })).toBeNull();
+    });
+
     it('status gate: a non-Active (DriftHold) materialization → null (serve live)', async () => {
         const p = new TestMatPlanProvider();
         p.setMatRow({ ...activeSpec([{ column: 'X', operator: '=', paramName: 'x', kind: 'scalar' }]), Status: 'DriftHold' });
         const q = matQuery({ QueryParameters: [{ Name: 'x', Type: 'string' }], QueryFields: [{ Name: 'ID' }, { Name: 'X' }] });
         expect(await p.plan(q, matParams({ x: 'a' }))).toBeNull();
+    });
+});
+
+// ════════════════════════════════════════════════════════════════════
+// #4789 A17 — server-set parameters, the Context object, and approvals
+// ════════════════════════════════════════════════════════════════════
+
+/** A parameter row as the QueryEngine holds it. */
+function paramRow(over: Record<string, unknown>): MJQueryParameterEntity {
+    return { Name: 'p', Type: 'string', IsRequired: false, ValidationFilters: null, IsServerSet: false, ...over } as unknown as MJQueryParameterEntity;
+}
+
+const CHAPTER_ID = paramRow({ Name: 'ChapterID', Type: 'number', IsRequired: true, IsServerSet: true });
+
+/** A templated saved query; its SQL is what GetPlatformSQL returns, so a test can edit it. */
+function templatedQuery(over: Parameters<typeof makeQueryInfo>[0], params: MJQueryParameterEntity[]): MJQueryEntityExtended {
+    const q = makeQueryInfo({ UsesTemplate: true, ...over }) as unknown as Record<string, unknown>;
+    q.QueryParameters = params;
+    q.ExternalDataSourceID = null;
+    q.GetPlatformSQL = vi.fn(() => q.SQL);
+    return q as unknown as MJQueryEntityExtended;
+}
+
+/** The QueryEngine as the approval and composition code read it. */
+function mockEngine(queries: MJQueryEntityExtended[]): void {
+    vi.spyOn(QueryEngine, 'Instance', 'get').mockReturnValue({
+        Queries: queries,
+        QuerySQLs: [],
+        Dependencies: [],
+        GetQueryParameters: (id: string) => queries.find(q => q.ID === id)?.QueryParameters ?? [],
+    } as unknown as QueryEngine);
+}
+
+describe('GenericDatabaseProvider — server-set parameters and Context (#4789 A17)', () => {
+    let provider: TestPipelineProvider;
+    const CHAPTER_SQL = 'SELECT * FROM Members WHERE ChapterID = {{ ChapterID | sqlNumber }}';
+
+    beforeEach(() => {
+        provider = new TestPipelineProvider();
+        const query = templatedQuery({ ID: 'q-chapter', Name: 'Chapter Members', SQL: CHAPTER_SQL }, [CHAPTER_ID]);
+        provider.setMockQueries([query]);
+        mockEngine([query]);
+    });
+
+    afterEach(() => {
+        vi.restoreAllMocks();
+        vi.useRealTimers();
+    });
+
+    it('refuses a caller value for a server-set parameter, naming it, and runs nothing', async () => {
+        const result = await provider.testInternalRunQuery({ QueryID: 'q-chapter', Parameters: { ChapterID: 7 }, ServerParameters: { ChapterID: 3 } }, mockUser);
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toContain("Parameter 'ChapterID' is set by the server; a caller value for it is refused");
+        expect(provider.executeSQLCalls).toHaveLength(0);
+    });
+
+    it('applies the value server code sets, and does not hand it back as an applied parameter', async () => {
+        const result = await provider.testInternalRunQuery({ QueryID: 'q-chapter', ServerParameters: { ChapterID: 3 } }, mockUser);
+        expect(result.Success).toBe(true);
+        expect(provider.executeSQLCalls[0].sql).toBe('SELECT * FROM Members WHERE ChapterID = 3');
+        expect(result.AppliedParameters).toEqual({});
+    });
+
+    it('refuses a run with no server value for a required server-set parameter', async () => {
+        const result = await provider.testInternalRunQuery({ QueryID: 'q-chapter' }, mockUser);
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toContain("Required parameter 'ChapterID' is set by the server, and no server value was given");
+    });
+
+    it("renders Context from the context user and the run's time zone, and refuses a caller's Context", async () => {
+        vi.useFakeTimers({ toFake: ['Date'] });
+        vi.setSystemTime(new Date('2026-10-14T23:30:00.000Z'));
+        const query = templatedQuery({ ID: 'q-mine', Name: 'Mine', SQL: "SELECT * FROM T WHERE OwnerID = {{ Context.UserID | sqlString }} AND Day = '{{ Context.Today }}'" }, []);
+        provider.setMockQueries([query]);
+
+        const tokyo = await provider.testInternalRunQuery({ QueryID: 'q-mine', TimeZone: 'Asia/Tokyo' }, mockUser);
+        expect(tokyo.RenderedSQL).toBe("SELECT * FROM T WHERE OwnerID = 'test-user-id' AND Day = '2026-10-15'");
+        const utc = await provider.testInternalRunQuery({ QueryID: 'q-mine' }, mockUser);
+        expect(utc.RenderedSQL).toContain("Day = '2026-10-14'");
+
+        const forged = await provider.testInternalRunQuery({ QueryID: 'q-mine', Parameters: { Context: { UserID: 'someone-else' } } }, mockUser);
+        expect(forged.Success).toBe(false);
+        expect(forged.ErrorMessage).toContain("Parameter 'Context' is reserved");
+    });
+
+    it('runs a query with neither exactly as before', async () => {
+        const plain = templatedQuery({ ID: 'q-plain', Name: 'Plain', SQL: "SELECT * FROM T WHERE Region = {{ Region | sqlString }}" }, [paramRow({ Name: 'Region', IsRequired: true })]);
+        provider.setMockQueries([plain]);
+        const result = await provider.testInternalRunQuery({ QueryID: 'q-plain', Parameters: { Region: 'West' } }, mockUser);
+        expect(result.Success).toBe(true);
+        expect(result.RenderedSQL).toBe("SELECT * FROM T WHERE Region = 'West'");
+        expect(result.AppliedParameters).toEqual({ Region: 'West' });
+    });
+
+    it("refuses a caller value that reaches a composed query's server-set parameter, and takes the server's", async () => {
+        const dep = templatedQuery({ ID: 'q-dep', Name: 'Chapter Members', CategoryPath: '/Reports/', SQL: CHAPTER_SQL, Reusable: true }, [CHAPTER_ID]);
+        const outer = templatedQuery({ ID: 'q-outer', Name: 'Outer', SQL: 'SELECT COUNT(*) AS N FROM {{query:"Reports/Chapter Members"}} m', UsesTemplate: false }, []);
+        provider.setMockQueries([outer]);
+        mockEngine([dep, outer]);
+
+        const forged = await provider.testInternalRunQuery({ QueryID: 'q-outer', Parameters: { ChapterID: 7 } }, mockUser);
+        expect(forged.Success).toBe(false);
+        expect(forged.ErrorMessage).toContain("Parameter 'ChapterID' is set by the server");
+
+        const server = await provider.testInternalRunQuery({ QueryID: 'q-outer', ServerParameters: { ChapterID: 3 } }, mockUser);
+        expect(server.Success).toBe(true);
+        expect(server.RenderedSQL).toContain('WHERE ChapterID = 3');
+    });
+
+    it('binds server-set values in a materialized read, so the row filter cannot be skipped', async () => {
+        const p = new TestMatPlanProvider();
+        p.setMatRow(activeSpec([{ column: 'ChapterID', operator: '=', paramName: 'ChapterID', kind: 'scalar' }]));
+        const q = matQuery({ QueryParameters: [{ Name: 'ChapterID', Type: 'number' }], QueryFields: [{ Name: 'ID' }, { Name: 'ChapterID' }] });
+        const plan = await p.plan(q, { DataSource: 'Materialized', Parameters: {}, ServerParameters: { ChapterID: 3 } } as RunQueryParams);
+        expect(plan!.parameters).toEqual([3]);
+    });
+});
+
+describe('GenericDatabaseProvider — RequireApproved (#4789 A17)', () => {
+    const D1 = 'SELECT * FROM Members WHERE ChapterID = {{ ChapterID | sqlNumber }}';
+    const D2 = 'SELECT * FROM Members WHERE ChapterID = {{ ChapterID | sqlNumber }} OR 1 = 1';
+    let provider: TestPipelineProvider;
+    let query: MJQueryEntityExtended & { SQL: string; ApprovedFingerprint: string | null };
+
+    beforeEach(async () => {
+        provider = new TestPipelineProvider();
+        query = templatedQuery({ ID: 'q-approved', Name: 'Chapter Members', SQL: D1 }, [CHAPTER_ID]) as typeof query;
+        query.ApprovedFingerprint = await ComputeQueryFingerprintAsync({ SQL: D1, UsesTemplate: true, ExternalDataSourceID: null }, { SQLs: [], Parameters: [CHAPTER_ID] });
+        provider.setMockQueries([query]);
+        mockEngine([query]);
+    });
+
+    afterEach(() => vi.restoreAllMocks());
+
+    const run = (requireApproved: boolean) =>
+        provider.testInternalRunQuery({ QueryID: 'q-approved', ServerParameters: { ChapterID: 3 }, RequireApproved: requireApproved }, mockUser);
+
+    it('approve D1 → runs; edit to D2 → refused; restore D1 exactly → runs again', async () => {
+        expect((await run(true)).Success).toBe(true);
+
+        query.SQL = D2;
+        const refused = await run(true);
+        expect(refused.Success).toBe(false);
+        expect(refused.ErrorMessage).toContain("Query 'Chapter Members' (ID: q-approved) is not approved in its current form");
+        expect((await run(false)).Success).toBe(true); // without the flag: today's warning only
+
+        query.SQL = D1;
+        expect((await run(true)).Success).toBe(true);
+    });
+
+    it('refuses an approval that predates fingerprints, and a status that is not Approved', async () => {
+        query.ApprovedFingerprint = null;
+        expect((await run(true)).ErrorMessage).toContain('approved before approvals were fingerprinted');
+        (query as unknown as { Status: string }).Status = 'Pending';
+        expect((await run(true)).ErrorMessage).toContain("its status is 'Pending'");
+    });
+
+    it('refuses when a query it composes is no longer approved in its current form', async () => {
+        const dep = templatedQuery({ ID: 'q-dep', Name: 'Chapter Members Dep', CategoryPath: '/Reports/', SQL: 'SELECT ID FROM Members', UsesTemplate: false, Reusable: true }, []);
+        (dep as unknown as { ApprovedFingerprint: string }).ApprovedFingerprint = 'fingerprint-of-an-older-definition';
+        const outer = templatedQuery({ ID: 'q-outer', Name: 'Outer', SQL: 'SELECT COUNT(*) AS N FROM {{query:"Reports/Chapter Members Dep"}} m', UsesTemplate: false }, []);
+        (outer as unknown as { ApprovedFingerprint: string }).ApprovedFingerprint = await ComputeQueryFingerprintAsync(
+            { SQL: (outer as unknown as { SQL: string }).SQL, UsesTemplate: false, ExternalDataSourceID: null }, { SQLs: [], Parameters: [] });
+        provider.setMockQueries([outer]);
+        mockEngine([dep, outer]);
+
+        const result = await provider.testInternalRunQuery({ QueryID: 'q-outer', RequireApproved: true }, mockUser);
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toContain("Query 'Chapter Members Dep' (ID: q-dep) is not approved in its current form");
+    });
+});
+
+describe('GenericDatabaseProvider — query cache keys cover server-set values (#4789 A17)', () => {
+    let provider: TestPipelineProvider;
+    let fingerprints: ReturnType<typeof vi.spyOn>;
+
+    beforeEach(() => {
+        provider = new TestPipelineProvider();
+        vi.spyOn(LocalCacheManager.Instance, 'IsInitialized', 'get').mockReturnValue(true);
+        vi.spyOn(LocalCacheManager.Instance, 'GetRunQueryResult').mockResolvedValue(null);
+        vi.spyOn(LocalCacheManager.Instance, 'SetRunQueryResult').mockResolvedValue(undefined);
+        fingerprints = vi.spyOn(LocalCacheManager.Instance, 'GenerateRunQueryFingerprint');
+    });
+
+    afterEach(() => vi.restoreAllMocks());
+
+    function useQuery(sql: string, params: MJQueryParameterEntity[] = []): void {
+        const q = templatedQuery({ ID: 'q-cache', Name: 'Cached', SQL: sql }, params);
+        provider.setMockQueries([q]);
+        mockEngine([q]);
+    }
+
+    const keyParams = () => fingerprints.mock.calls[0][2] as Record<string, unknown>;
+
+    it('a query with neither keeps exactly the fingerprint it had', async () => {
+        useQuery("SELECT * FROM T WHERE Region = {{ Region | sqlString }}", [paramRow({ Name: 'Region' })]);
+        await provider.RunQuery({ QueryID: 'q-cache', CacheLocal: true, Parameters: { Region: 'West' } }, mockUser);
+        expect(keyParams()).toEqual({ Region: 'West', __maxRows: -1, __startRow: 0 });
+    });
+
+    it('covers ServerParameters, and the Context values the query reads for this user', async () => {
+        useQuery('SELECT * FROM T WHERE ChapterID = {{ ChapterID | sqlNumber }} AND OwnerID = {{ Context.UserID | sqlString }}', [CHAPTER_ID]);
+        await provider.RunQuery({ QueryID: 'q-cache', CacheLocal: true, ServerParameters: { ChapterID: 3 } }, mockUser);
+        expect(keyParams()).toEqual({ __maxRows: -1, __startRow: 0, __serverParameters: { ChapterID: 3 }, __context: { UserID: 'test-user-id' } });
+    });
+
+    it('never caches a result that read Context.Now, nor a RequireApproved run', async () => {
+        useQuery("SELECT * FROM T WHERE At <= '{{ Context.Now }}'");
+        await provider.RunQuery({ QueryID: 'q-cache', CacheLocal: true }, mockUser);
+        await provider.RunQuery({ QueryID: 'q-cache', CacheLocal: true, RequireApproved: true }, mockUser);
+        expect(fingerprints).not.toHaveBeenCalled();
+        expect(LocalCacheManager.Instance.GetRunQueryResult).not.toHaveBeenCalled();
+        expect(LocalCacheManager.Instance.SetRunQueryResult).not.toHaveBeenCalled();
+    });
+
+    it("an external source's cache key covers them too", async () => {
+        const q = templatedQuery({ ID: 'q-ext', Name: 'External', SQL: 'SELECT 1' }, []);
+        (q as unknown as { ExternalDataSourceID: string }).ExternalDataSourceID = 'eds-1';
+        const router = {
+            GetCacheTTLSeconds: vi.fn(async () => 60),
+            RunQueryExternal: vi.fn(async () => ({ Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 0, ErrorMessage: '' })),
+        } as unknown as ExternalDataSourceReadRouter;
+
+        await provider.testRunExternalQueryWithCache(q, 'SELECT 1', { QueryID: 'q-ext' }, router, mockUser);
+        expect(keyParams()).toEqual({ __maxRows: -1, __startRow: 0, __eds: 'eds-1' });
+
+        fingerprints.mockClear();
+        await provider.testRunExternalQueryWithCache(q, 'SELECT 1', { QueryID: 'q-ext', ServerParameters: { ChapterID: 3 } }, router, mockUser, { UserID: 'test-user-id' });
+        expect(keyParams()).toMatchObject({ __serverParameters: { ChapterID: 3 }, __context: { UserID: 'test-user-id' } });
+
+        fingerprints.mockClear();
+        await provider.testRunExternalQueryWithCache(q, 'SELECT 1', { QueryID: 'q-ext' }, router, mockUser, { Now: '2026-10-14T00:00:00.000Z' });
+        expect(fingerprints).not.toHaveBeenCalled();
     });
 });

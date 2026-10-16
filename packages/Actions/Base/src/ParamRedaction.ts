@@ -55,6 +55,8 @@ export interface RedactedParam {
     Type: 'Input' | 'Output' | 'Both';
     /** The Entity Action binding's `ValueType`, when the run came from a binding. */
     ValueType?: string;
+    /** True when an agent run's caller bound the value (`ActionParam.Bound`); kept so the audit survives redaction. */
+    Bound?: true;
     /** Always `false` — the marker that distinguishes a redaction record from a logged param. */
     Logged: false;
     /** Which rule suppressed the value. */
@@ -220,6 +222,9 @@ function buildRedactionRecord(
     };
     if (binding?.ValueType) {
         record.ValueType = binding.ValueType;
+    }
+    if (param.Bound) {
+        record.Bound = true;
     }
     describeShape(param.Value, record);
     return record;

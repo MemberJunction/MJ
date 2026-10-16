@@ -1,0 +1,21 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT120 - Server-Set Query Parameters and Approvals",
+    "Description": "Server-transport bundle (#4789 A17). Creates a throwaway query whose ChapterID parameter is marked IsServerSet and approves it, then proves: a caller value for ChapterID (the only channel a GraphQL client has) is refused, naming it, and logged; server code sets it through RunQueryParams.ServerParameters; the approval is bound to a fingerprint of the definition, so editing the SQL to D2 without re-approval makes a RequireApproved run refuse while restoring D1 exactly makes it run again, and IsServerSet survives each SQL edit; and a template's Context.UserID renders the context user while a caller value for Context is refused and extraction keeps no Context parameter row. Self-cleaning.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "A server-set parameter can only be set by server code; an approval is current only for the exact definition approved; Context comes from the server."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "query-approvals"
+        }
+      ]
+    },
+    "Status": "Active"
+  }
+}

@@ -1500,6 +1500,30 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT126 - View Properties over GraphQL",
+            "Sequence": 75,
+            "Status": "Active"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT120 - Server-Set Query Parameters and Approvals",
+            "Sequence": 49,
+            "Status": "Active"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT127 - Calendar Event Links and Sync",
+            "Sequence": 49,
+            "Status": "Active"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT128 - Performance and Agent Overhead Benchmark",
             "Sequence": 49,
             "Status": "Active"

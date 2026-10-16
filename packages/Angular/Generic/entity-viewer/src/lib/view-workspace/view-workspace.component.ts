@@ -1247,6 +1247,7 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
     newView.SmartFilterEnabled = event.SmartFilterEnabled;
     newView.SmartFilterPrompt = event.SmartFilterPrompt;
     newView.FilterState = this.buildFilterStateJson(event);
+    this.applyProperties(newView, event);
 
     const before: WorkspaceCancelableEvent<ViewSaveOperation> = { Data: { View: newView, IsNew: true }, Cancel: false };
     this.BeforeViewSave.emit(before);
@@ -1270,6 +1271,13 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
     return true;
   }
 
+  /** Copies the designer's properties onto the view; an empty list stores null, as a view without properties has. */
+  private applyProperties(view: MJUserViewEntityExtended, event: ViewSaveEvent): void {
+    if (event.Properties !== undefined) {
+      view.PropertiesObject = event.Properties.length > 0 ? event.Properties : null;
+    }
+  }
+
   /**
    * Update and persist the currently-selected view from the save event. Fires the cancelable
    * {@link BeforeViewSave} before saving and {@link AfterViewSave} after success.
@@ -1291,6 +1299,7 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
     view.SmartFilterEnabled = event.SmartFilterEnabled;
     view.SmartFilterPrompt = event.SmartFilterPrompt;
     view.FilterState = this.buildFilterStateJson(event);
+    this.applyProperties(view, event);
 
     const before: WorkspaceCancelableEvent<ViewSaveOperation> = { Data: { View: view, IsNew: false }, Cancel: false };
     this.BeforeViewSave.emit(before);
@@ -1703,6 +1712,7 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
     newView.SortState = sourceView.SortState;
     newView.SmartFilterEnabled = sourceView.SmartFilterEnabled || false;
     newView.SmartFilterPrompt = sourceView.SmartFilterPrompt || '';
+    newView.Properties = sourceView.Properties;
 
     const saved = await newView.Save();
     if (!saved) {
