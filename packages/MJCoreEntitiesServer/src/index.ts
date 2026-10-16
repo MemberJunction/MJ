@@ -26,6 +26,7 @@ export * from './custom/RecordProcessOnChangeReconciler';
 export * from './custom/MJCompanyIntegrationEntityServer.server';
 export * from './custom/MJAIAgentEntityServer.server';
 export * from './custom/MJAIAgentCoAgentEntityServer.server';
+export * from './custom/MJAIAgentRelationshipEntityServer.server';
 export * from './custom/MJAIBridgeProviderEntityServer.server';
 export * from './custom/MJAIBridgeAgentIdentityEntityServer.server';
 export * from './custom/MJAIBridgeProviderChannelEntityServer.server';

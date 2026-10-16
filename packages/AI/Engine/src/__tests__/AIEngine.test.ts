@@ -557,10 +557,11 @@ describe('AIEngine', () => {
         }
 
         const invalidatingEntities = [
-            'AI Agents',
+            'MJ: AI Agents',
             'MJ: AI Agent Actions',
             'MJ: AI Agent Relationships',
             'MJ: AI Agent Types',
+            'MJ: AI Agent Configurations',
         ];
         const invalidatingEventTypes: Array<'save' | 'delete' | 'remote-invalidate'> = [
             'save', 'delete', 'remote-invalidate',
@@ -583,7 +584,7 @@ describe('AIEngine', () => {
 
         it('is case-insensitive on the entity name (lowercased comparison)', () => {
             const e = primeEngineWithCatalog();
-            emitGlobalEvent(makeBaseEntityEvent({ type: 'save', entityName: 'ai AGENTS' }));
+            emitGlobalEvent(makeBaseEntityEvent({ type: 'save', entityName: 'mj: ai AGENTS' }));
             expect(e.GetAgentBaseCatalog('agent-1')).toBeUndefined();
         });
 
@@ -610,21 +611,21 @@ describe('AIEngine', () => {
             // e.g. a 'new_record' / 'transaction_complete' event must be ignored — only
             // save/delete/remote-invalidate trigger a wipe.
             const e = primeEngineWithCatalog();
-            emitGlobalEvent(makeBaseEntityEvent({ type: 'new_record', entityName: 'AI Agents' }));
+            emitGlobalEvent(makeBaseEntityEvent({ type: 'new_record', entityName: 'MJ: AI Agents' }));
             expect(e.GetAgentBaseCatalog('agent-1')).toEqual({ v: 1 });
-            emitGlobalEvent(makeBaseEntityEvent({ type: 'transaction_complete', entityName: 'AI Agents' }));
+            emitGlobalEvent(makeBaseEntityEvent({ type: 'transaction_complete', entityName: 'MJ: AI Agents' }));
             expect(e.GetAgentBaseCatalog('agent-1')).toEqual({ v: 1 });
         });
 
         it('ignores non-BaseEntity ComponentEvents (wrong eventCode)', () => {
             const e = primeEngineWithCatalog();
-            emitGlobalEvent(makeBaseEntityEvent({ type: 'save', entityName: 'AI Agents', eventCode: 'SomeOtherCode' }));
+            emitGlobalEvent(makeBaseEntityEvent({ type: 'save', entityName: 'MJ: AI Agents', eventCode: 'SomeOtherCode' }));
             expect(e.GetAgentBaseCatalog('agent-1')).toEqual({ v: 1 });
         });
 
         it('ignores events whose event type is not ComponentEvent', () => {
             const e = primeEngineWithCatalog();
-            emitGlobalEvent(makeBaseEntityEvent({ type: 'save', entityName: 'AI Agents', event: 'LoggingEnabledChanged' }));
+            emitGlobalEvent(makeBaseEntityEvent({ type: 'save', entityName: 'MJ: AI Agents', event: 'LoggingEnabledChanged' }));
             expect(e.GetAgentBaseCatalog('agent-1')).toEqual({ v: 1 });
         });
 
@@ -638,7 +639,7 @@ describe('AIEngine', () => {
 
         it('a fresh catalog set after a wipe survives until the next invalidating event', () => {
             const e = primeEngineWithCatalog();
-            emitGlobalEvent(makeBaseEntityEvent({ type: 'delete', entityName: 'AI Agents' }));
+            emitGlobalEvent(makeBaseEntityEvent({ type: 'delete', entityName: 'MJ: AI Agents' }));
             expect(e.GetAgentBaseCatalog('agent-1')).toBeUndefined();
 
             e.SetAgentBaseCatalog('agent-3', { v: 3 });

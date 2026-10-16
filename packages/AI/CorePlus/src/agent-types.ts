@@ -454,6 +454,11 @@ export type AgentSubAgentRequest<TContext = any> = {
      * its question, then your message).
      */
     resumeRunId?: string;
+    /**
+     * Optional configuration preset of the target sub-agent, by name (or display name).
+     * Overrides the relationship's default `ConfigurationPresetID` and the parent's `configurationId`.
+     */
+    presetName?: string;
     /** The native tool call (ChatToolCall.id) this dispatch answers — set only on native turns. */
     toolCallId?: string;
     /** Optional template parameters for sub-agent invocation */
@@ -1529,8 +1534,9 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
     /**
      * Optional AI Configuration ID to use for this agent execution.
      * When provided, this configuration will be passed to all prompts executed
-     * by this agent and its sub-agents, enabling environment-specific model
-     * selection (e.g., Prod vs Dev configurations).
+     * by this agent, enabling environment-specific model selection (e.g., Prod vs Dev configurations).
+     * Sub-agents inherit this configuration ID by default unless overridden by a
+     * per-call `presetName` or the relationship's `ConfigurationPresetID`.
      * 
      * The configuration ID filters which AI models are available for prompt
      * execution and can provide configuration parameters for dynamic behavior.
@@ -1989,6 +1995,8 @@ export type AgentContextData = {
     planApproved?: boolean;
     /** Whether ChatHandlingOption='Consult' is active for at least one listed sub-agent */
     subAgentConsultEnabled?: boolean;
+    /** Whether at least one listed sub-agent has one or more active configuration presets */
+    subAgentPresetsAvailable?: boolean;
     /** Markdown formatted snapshot of the user's current application context */
     appContext?: string;
 }

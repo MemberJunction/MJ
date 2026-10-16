@@ -145,4 +145,13 @@ describe('Loop Agent Type system prompt — rendered snapshot', () => {
         expect(withConsult).toContain('{ name: string; message: string; terminateAfter: boolean; resumeRunId?: string }');
         expect(withConsult).toContain('Array<{ name: string; message: string; terminateAfter: boolean; resumeRunId?: string }>');
     });
+
+    it('renders presetName?: string in both subAgent and subAgents only when subAgentPresetsAvailable is true', () => {
+        const def = renderSystemPrompt({ ...DEFAULT_LOOP_AGENT_PROMPT_PARAMS });
+        expect(def).not.toContain('presetName?: string');
+
+        const withPresets = renderSystemPrompt({ ...DEFAULT_LOOP_AGENT_PROMPT_PARAMS }, { subAgentPresetsAvailable: true });
+        expect(withPresets).toContain('{ name: string; message: string; terminateAfter: boolean; presetName?: string }');
+        expect(withPresets).toContain('Array<{ name: string; message: string; terminateAfter: boolean; presetName?: string }>');
+    });
 });

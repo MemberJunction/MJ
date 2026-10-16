@@ -194,6 +194,12 @@ export interface LoopAgentResponse<P = any> {
              * its question, then your message).
              */
             resumeRunId?: string;
+
+            /**
+             * Optional configuration preset of the target sub-agent, by name (or display name).
+             * Overrides the relationship's default `ConfigurationPresetID` and the parent's `configurationId`.
+             */
+            presetName?: string;
         };
 
         /**
@@ -210,6 +216,11 @@ export interface LoopAgentResponse<P = any> {
              * its question, then your message).
              */
             resumeRunId?: string;
+            /**
+             * Optional configuration preset of the target sub-agent, by name (or display name).
+             * Overrides the relationship's default `ConfigurationPresetID` and the parent's `configurationId`.
+             */
+            presetName?: string;
         }>;
 
         /**

@@ -80,6 +80,19 @@ describe('sub-agent tools', () => {
         expect(props.resumeRunId.type).toBe('string');
         expect(props.resumeRunId.description).toMatch(/earlier run that ended with a question/i);
     });
+    it('includes presetName enum in inputSchema.properties only when presetNames is non-empty', () => {
+        const withoutPresets = BuildSubAgentTool(agent('Query Strategist', 'Plans SQL.'), { presetNames: [] });
+        expect(Object.keys(withoutPresets.inputSchema.properties ?? {}).sort()).toEqual(['message', 'terminateAfter']);
+
+        const withPresets = BuildSubAgentTool(agent('Query Strategist', 'Plans SQL.'), {
+            presetNames: ['Draft', 'Standard', 'High'],
+        });
+        expect(Object.keys(withPresets.inputSchema.properties ?? {}).sort()).toEqual(['message', 'presetName', 'terminateAfter']);
+        const props = withPresets.inputSchema.properties as Record<string, { type: string; enum?: string[]; description?: string }>;
+        expect(props.presetName.type).toBe('string');
+        expect(props.presetName.enum).toEqual(['Draft', 'Standard', 'High']);
+        expect(props.presetName.description).toMatch(/Preset for this sub-agent/i);
+    });
 });
 
 describe('buildNativeToolSet', () => {

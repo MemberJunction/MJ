@@ -391,6 +391,8 @@ export type TaskAgentRunParams = {
     Provider: IMetadataProvider;
     /** User the work runs as. */
     ContextUser: UserInfo;
+    /** Optional configuration preset name for the target agent, configured on the Agent step. */
+    ConfigurationPresetName?: string;
     /** Optional progress sink; the dispatcher turns calls into rate-limited `NodeProgress` frames. */
     OnProgress?: TaskRunProgressCallback;
 };

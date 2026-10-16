@@ -291,6 +291,46 @@ describe('AgentSpecSync', () => {
       expect(sync.spec.SubAgents).toHaveLength(1);
       expect(sync.spec.SubAgents![0].Type).toBe('child');
     });
+
+    it('should round-trip ConfigurationPresetID on a related sub-agent', async () => {
+      const savedRelEntity: Record<string, unknown> = {
+        Load: vi.fn().mockResolvedValue(true),
+        Save: vi.fn().mockResolvedValue(true),
+        NewRecord: vi.fn(),
+        ID: 'rel-1',
+        AgentID: null,
+        SubAgentID: null,
+        Status: null,
+        SubAgentOutputMapping: null,
+        SubAgentInputMapping: null,
+        SubAgentContextPaths: null,
+        ConfigurationPresetID: null,
+      };
+      const mockProvider = {
+        GetEntityObject: vi.fn().mockResolvedValue(savedRelEntity),
+      } as never;
+
+      const sync = new AgentSpecSync({ Name: 'Parent Agent' }, mockUser, mockProvider);
+      const internals = sync as unknown as {
+        mapRelatedAgentToSpec: (rel: Record<string, unknown>) => Record<string, unknown>;
+        saveRelatedSubAgent: (agentId: string, subSpec: Record<string, unknown>) => Promise<void>;
+      };
+
+      const mapped = internals.mapRelatedAgentToSpec({
+        ID: 'rel-1',
+        SubAgentID: 'sub-1',
+        Status: 'Active',
+        SubAgentOutputMapping: '{"*":"result"}',
+        SubAgentInputMapping: '{"*":"input"}',
+        SubAgentContextPaths: '["*"]',
+        ConfigurationPresetID: 'preset-uuid-123',
+      });
+      expect(mapped.ConfigurationPresetID).toBe('preset-uuid-123');
+
+      await internals.saveRelatedSubAgent('parent-uuid-1', mapped);
+      expect(savedRelEntity.ConfigurationPresetID).toBe('preset-uuid-123');
+      expect(savedRelEntity.Save).toHaveBeenCalled();
+    });
   });
 
   describe('spec with prompts', () => {

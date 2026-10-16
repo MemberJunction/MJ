@@ -78,6 +78,7 @@ import {
     ResolveGraphDecisions,
     StillHoldingDecisionOutput,
     type TaskDecisionStepConfiguration,
+    type TaskStepConfiguration,
 } from './decision-node';
 import { AIDecisionTaskRunner } from './AIDecisionTaskRunner';
 import { HumanTaskSQL, IsHumanTask } from './task-predicates';
@@ -3841,6 +3842,15 @@ export class TaskGraphDispatcher implements IShutdownable {
         onProgress?: TaskRunProgressCallback,
     ): Promise<TaskBodyOutcome> {
         const context = await this.graphContext(provider, task);
+        let parsedConfig: TaskStepConfiguration | null = (task.ConfigurationObject as TaskStepConfiguration | null) ?? null;
+        if (!parsedConfig && task.Configuration) {
+            try {
+                parsedConfig = JSON.parse(task.Configuration) as TaskStepConfiguration;
+            } catch {
+                parsedConfig = null;
+            }
+        }
+        const presetName = parsedConfig?.agent?.presetName?.trim() || undefined;
         return this.agentRunner.RunAgentForTask({
             TaskID: task.ID,
             AgentID: task.AgentID!,
@@ -3848,6 +3858,7 @@ export class TaskGraphDispatcher implements IShutdownable {
             DependencyOutputs: dependencyOutputs,
             ContinuationDepth: context.Depth,
             SubmittingAgentRunID: context.SubmittingAgentRunID,
+            ...(presetName ? { ConfigurationPresetName: presetName } : {}),
             Provider: provider,
             ContextUser: this.contextUser,
             OnProgress: onProgress,

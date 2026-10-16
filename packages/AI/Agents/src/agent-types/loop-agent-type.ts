@@ -218,11 +218,16 @@ export class LoopAgentType extends BaseAgentType {
             // describeFold() has already established this is an Agent node — folding is only offered
             // for one. The `?? ''` is unreachable and exists so this cannot become a silent `undefined`
             // if that precondition is ever loosened.
+            const agentCfg = ConfigOf(node, 'Agent');
+            const presetName = typeof agentCfg?.presetName === 'string' && agentCfg.presetName.trim().length > 0
+                ? agentCfg.presetName.trim()
+                : undefined;
             retVal.step = 'Sub-Agent';
             retVal.subAgent = {
-                name: ConfigOf(node, 'Agent')?.agentName ?? '',
+                name: agentCfg?.agentName ?? '',
                 message: node.description,
                 terminateAfter: false,
+                ...(presetName ? { presetName } : {}),
                 templateParameters: {},
             };
             // Recorded, never silent: the TaskGraph run step is written for folded graphs too, so
@@ -468,11 +473,16 @@ export class LoopAgentType extends BaseAgentType {
             const resumeRunId = typeof rawResumeRunId === 'string' && rawResumeRunId.trim().length > 0
                 ? rawResumeRunId.trim()
                 : undefined;
+            const rawPresetName = call.arguments?.presetName;
+            const presetName = typeof rawPresetName === 'string' && rawPresetName.trim().length > 0
+                ? rawPresetName.trim()
+                : undefined;
             return {
                 name: binding.agent.Name,
                 message: typeof call.arguments?.message === 'string' ? call.arguments.message : '',
                 terminateAfter: call.arguments?.terminateAfter === true,
                 ...(resumeRunId ? { resumeRunId } : {}),
+                ...(presetName ? { presetName } : {}),
                 toolCallId: call.id
             };
         });
@@ -726,11 +736,15 @@ export class LoopAgentType extends BaseAgentType {
                                 const resumeRunId = typeof sa.resumeRunId === 'string' && sa.resumeRunId.trim().length > 0
                                     ? sa.resumeRunId.trim()
                                     : undefined;
+                                const presetName = typeof sa.presetName === 'string' && sa.presetName.trim().length > 0
+                                    ? sa.presetName.trim()
+                                    : undefined;
                                 return {
                                     name: sa.name,
                                     message: sa.message,
                                     terminateAfter: sa.terminateAfter,
                                     ...(resumeRunId ? { resumeRunId } : {}),
+                                    ...(presetName ? { presetName } : {}),
                                     templateParameters: sa.templateParameters || {}
                                 };
                             });
@@ -739,11 +753,16 @@ export class LoopAgentType extends BaseAgentType {
                             const resumeRunId = typeof rawResumeRunId === 'string' && rawResumeRunId.trim().length > 0
                                 ? rawResumeRunId.trim()
                                 : undefined;
+                            const rawPresetName = response.nextStep.subAgent.presetName;
+                            const presetName = typeof rawPresetName === 'string' && rawPresetName.trim().length > 0
+                                ? rawPresetName.trim()
+                                : undefined;
                             retVal.subAgent = {
                                 name: response.nextStep.subAgent.name,
                                 message: response.nextStep.subAgent.message,
                                 terminateAfter: response.nextStep.subAgent.terminateAfter,
                                 ...(resumeRunId ? { resumeRunId } : {}),
+                                ...(presetName ? { presetName } : {}),
                                 templateParameters: response.nextStep.subAgent.templateParameters || {}
                             };
                         }

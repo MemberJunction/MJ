@@ -696,7 +696,8 @@ export class AgentSpecSync {
             AgentRelationshipID: relationship.ID,
             SubAgentInputMapping: this.parseJsonField<Record<string, string>>(relationship.SubAgentInputMapping),
             SubAgentOutputMapping: this.parseJsonField<Record<string, string>>(relationship.SubAgentOutputMapping),
-            SubAgentContextPaths: this.parseJsonField<Record<string, string>>(relationship.SubAgentContextPaths)
+            SubAgentContextPaths: this.parseJsonField<Record<string, string>>(relationship.SubAgentContextPaths),
+            ConfigurationPresetID: relationship.ConfigurationPresetID || undefined
         };
     }
 
@@ -1165,6 +1166,7 @@ export class AgentSpecSync {
         relationshipEntity.AgentID = agentId;
         relationshipEntity.SubAgentID = SubAgentSpec.SubAgent.ID;
         relationshipEntity.Status = 'Active';
+        relationshipEntity.ConfigurationPresetID = SubAgentSpec.ConfigurationPresetID ?? null;
 
         // Serialize mapping fields
         if (SubAgentSpec.SubAgentInputMapping) {

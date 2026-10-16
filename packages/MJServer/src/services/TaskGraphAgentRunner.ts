@@ -14,6 +14,7 @@
  */
 import { AgentRunner } from '@memberjunction/ai-agents';
 import { ChatMessageRole } from '@memberjunction/ai';
+import { AIEngine } from '@memberjunction/aiengine';
 import { LogError } from '@memberjunction/core';
 import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended } from '@memberjunction/ai-core-plus';
 import type { AgentExecutionProgressCallback } from '@memberjunction/ai-core-plus';
@@ -27,6 +28,26 @@ export class TaskGraphAgentRunner implements TaskAgentRunner {
                 return { Success: false, ErrorMessage: `Agent ${params.AgentID} could not be loaded.` };
             }
 
+            const parentRun = await this.loadSubmittingRun(params);
+            let configurationId: string | undefined;
+            const requestedPreset = params.ConfigurationPresetName?.trim();
+            if (requestedPreset) {
+                const target = requestedPreset.toLowerCase();
+                const presets = AIEngine.Instance.GetAgentConfigurationPresets(agent.ID, true);
+                const matched = presets.find((p) => p.Name?.trim().toLowerCase() === target)
+                    ?? presets.find((p) => p.DisplayName?.trim().toLowerCase() === target);
+                if (!matched) {
+                    const available = presets.map((p) => p.Name).join(', ') || 'none';
+                    return {
+                        Success: false,
+                        ErrorMessage: `Agent '${agent.Name || params.AgentID}' has no active preset '${requestedPreset}'. Available: ${available}.`,
+                    };
+                }
+                configurationId = matched.AIConfigurationID ?? undefined;
+            } else {
+                configurationId = parentRun?.ConfigurationID ?? undefined;
+            }
+
             const result = await new AgentRunner().RunAgent({
                 agent,
                 conversationMessages: [{ role: ChatMessageRole.user, content: this.buildPrompt(params) }],
@@ -34,7 +55,8 @@ export class TaskGraphAgentRunner implements TaskAgentRunner {
                 // Inherited from the graph, so a graph this run goes on to emit is one hop deeper
                 // rather than starting the chain over. Without it MAX_REINVOKE_DEPTH never fires.
                 continuationDepth: params.ContinuationDepth ?? 0,
-                parentRun: await this.loadSubmittingRun(params),
+                parentRun,
+                configurationId,
                 // The bridge from the agent's own progress stream up to graph-level observers: the
                 // dispatcher turns these into rate-limited `NodeProgress` frames, which is how a
                 // running Agent step shows "what it is doing right now" on the workflow canvas.

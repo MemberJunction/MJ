@@ -11,7 +11,7 @@
  * @since 2.49.0
  */
 
-import { MJAIAgentTypeEntity,  MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity, MJAISkillEntity, MJEnvironmentEntityExtended, MJConversationSkillEntity, MJAIVendorEntity, ConversationEngine, type ConversationBranchRow } from '@memberjunction/core-entities';
+import { MJAIAgentTypeEntity,  MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentConfigurationEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity, MJAISkillEntity, MJEnvironmentEntityExtended, MJConversationSkillEntity, MJAIVendorEntity, ConversationEngine, type ConversationBranchRow } from '@memberjunction/core-entities';
 import { BuildActionToolSet, FilterDeclarableActions, SanitizeToolName } from './native-tools/action-tool-builder';
 import { BuildNativeToolSet, COMPLETE_TASK_TOOL, SUB_AGENT_TOOL_PREFIX, type NativeToolBinding } from './native-tools/control-tools';
 import { BuildAssistantToolCallTurn, BuildToolResultTurn, CompactToolResultContent, type NativeToolResult } from './native-tools/tool-result-turns';
@@ -5346,9 +5346,13 @@ export class BaseAgent {
             // set — Actions plus the control-flow tools (one per sub-agent, payload_change_request,
             // ask_user) — and NAMES the control ones. The runner keeps them only when the selected
             // model's LLM.NativeControlFlow resolves to 'implicit'; a hybrid model never sees them.
-            const toolSet = BuildNativeToolSet(actionSet, subAgents, (sa) => ({
-                consultEnabled: this.isSubAgentConsultEnabledForSubAgent(params.agent, sa)
-            }));
+            const toolSet = BuildNativeToolSet(actionSet, subAgents, (sa) => {
+                const presetNames = (AIEngine.Instance.GetAgentConfigurationPresets?.(sa.ID, true) ?? []).map(p => p.Name);
+                return {
+                    consultEnabled: this.isSubAgentConsultEnabledForSubAgent(params.agent, sa),
+                    ...(presetNames.length > 0 ? { presetNames } : {})
+                };
+            });
             promptParams.tools = toolSet.tools;
             promptParams.controlFlowToolNames = toolSet.controlToolNames;
             promptParams.toolChoice = this.resolveToolChoiceForTurn(params);
@@ -6292,6 +6296,34 @@ export class BaseAgent {
                         this._generalValidationRetryCount++;
                     }
                     return {
+                        step: 'Retry',
+                        terminate: false,
+                        errorMessage
+                    };
+                }
+            }
+
+            if (req.presetName != null && req.presetName.trim() !== '') {
+                const matchedPreset = this.matchSubAgentPreset(subAgent.ID, req.presetName);
+                if (!matchedPreset) {
+                    const availablePresets = (AIEngine.Instance.GetAgentConfigurationPresets?.(subAgent.ID, true) ?? [])
+                        .map(p => p.Name);
+                    const availableList = availablePresets.length > 0 ? availablePresets.join(', ') : 'none';
+                    const errorMessage = `Sub-agent '${subAgent.Name}' has no preset '${req.presetName}'. Available: ${availableList}.`;
+                    this.logError(errorMessage, {
+                        agent: params.agent,
+                        category: 'SubAgentExecution',
+                        metadata: {
+                            subAgentName: name,
+                            presetName: req.presetName,
+                            availablePresets: availableList
+                        }
+                    });
+                    if (nextStep.step !== 'Retry') {
+                        this._generalValidationRetryCount++;
+                    }
+                    return {
+                        ...nextStep,
                         step: 'Retry',
                         terminate: false,
                         errorMessage
@@ -10601,6 +10633,9 @@ The context is now within limits. Please retry your request with the recovered c
             const subAgentConsultEnabled = uniqueActiveSubAgents.some(
                 sa => this.isSubAgentConsultEnabledForSubAgent(agent, sa)
             );
+            const subAgentPresetsAvailable = uniqueActiveSubAgents.some(
+                sa => (AIEngine.Instance.GetAgentConfigurationPresets?.(sa.ID, true) ?? []).length > 0
+            );
 
             const contextData: AgentContextData = {
                 agentName: agent.Name,
@@ -10616,6 +10651,7 @@ The context is now within limits. Please retry your request with the recovered c
                 planModeActive: this._planModeActive,
                 planApproved: this._planApproved,
                 ...(subAgentConsultEnabled ? { subAgentConsultEnabled: true } : {}),
+                ...(subAgentPresetsAvailable ? { subAgentPresetsAvailable: true } : {}),
                 appContext: appContext,
             };
 
@@ -12169,6 +12205,23 @@ The context is now within limits. Please retry your request with the recovered c
             // Use subAgentRequest.context if provided, otherwise fall back to params.context
             // This allows Flow agents and Loop agents to propagate context through sub-agent requests
             const subAgentContext = subAgentRequest.context !== undefined ? subAgentRequest.context : params.context;
+            const resolvedConfig = this.resolveSubAgentConfiguration(params, subAgentRequest, subAgent);
+            if (resolvedConfig.presetId && stepEntity) {
+                try {
+                    const parsedInput = stepEntity.InputData
+                        ? (JSON.parse(stepEntity.InputData) as Record<string, unknown>)
+                        : {};
+                    parsedInput.presetName = resolvedConfig.presetName;
+                    parsedInput.presetId = resolvedConfig.presetId;
+                    const updatedInputJson = JSON.stringify(parsedInput);
+                    stepEntity.InputData = updatedInputJson;
+                    if (typeof stepEntity.Save === 'function') {
+                        this.queueStepSave(stepEntity, (s) => { s.InputData = updatedInputJson; });
+                    }
+                } catch {
+                    // ignore malformed InputData in test mocks
+                }
+            }
 
             const result = await runner.RunAgent<SC, SR>({
                 agent: subAgent,
@@ -12184,7 +12237,7 @@ The context is now within limits. Please retry your request with the recovered c
                 parentActivatedSkillIDs: this.activeSkillIDsForRun(params), // the root's active skills reach the sub-agent's actions
                 payload: resumeRunId ? undefined : payload, // on resume, ignore computed/mapped payload so autoPopulateLastRunPayload loads the child's prior FinalPayload
                 ...(resumeRunId ? { lastRunId: resumeRunId, autoPopulateLastRunPayload: true } : {}),
-                configurationId: params.configurationId, // propagate configuration ID to sub-agent
+                configurationId: resolvedConfig.configurationId, // resolved preset configuration ID or inherited parent configurationId
                 effortLevel: params.effortLevel, // propagate effort level to sub-agent
                 apiKeys: params.apiKeys, // propagate API keys to sub-agent
                 CredentialScope: params.CredentialScope, // a sub-agent may not spend keys its parent could not
@@ -12235,6 +12288,85 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
+     * Matches an active configuration preset for a sub-agent by `Name` first, then `DisplayName`
+     * (both trimmed and case-insensitive).
+     */
+    private matchSubAgentPreset(subAgentId: string, presetName: string): MJAIAgentConfigurationEntity | undefined {
+        const target = presetName.trim().toLowerCase();
+        if (!target) {
+            return undefined;
+        }
+        const presets = AIEngine.Instance.GetAgentConfigurationPresets?.(subAgentId, true) ?? [];
+        const byName = presets.find(p => p.Name?.trim().toLowerCase() === target);
+        if (byName) {
+            return byName;
+        }
+        return presets.find(p => p.DisplayName?.trim().toLowerCase() === target);
+    }
+
+    /**
+     * Resolves the configuration to pass to a sub-agent run in precedence order:
+     * 1. Per-call `subAgentRequest.presetName` -> matching Active preset of `subAgent`.
+     * 2. Active `AIAgentRelationship.ConfigurationPresetID` -> that preset if Active and owned by `subAgent`;
+     *    otherwise logs a warning and falls through.
+     * 3. Inherit `params.configurationId`.
+     *
+     * When a preset is selected, `configurationId` is `preset.AIConfigurationID ?? undefined` (a NULL
+     * `AIConfigurationID` means default rows and intentionally does NOT inherit `params.configurationId`).
+     */
+    private resolveSubAgentConfiguration(
+        params: ExecuteAgentParams,
+        subAgentRequest: AgentSubAgentRequest,
+        subAgent: MJAIAgentEntityExtended
+    ): { configurationId: string | undefined; presetName?: string; presetId?: string } {
+        if (subAgentRequest.presetName != null && subAgentRequest.presetName.trim() !== '') {
+            const preset = this.matchSubAgentPreset(subAgent.ID, subAgentRequest.presetName);
+            if (preset) {
+                return {
+                    configurationId: preset.AIConfigurationID ?? undefined,
+                    presetName: preset.Name,
+                    presetId: preset.ID
+                };
+            }
+            this.logStatus(
+                `⚠️ Sub-agent '${subAgent.Name}' has no active preset matching '${subAgentRequest.presetName}'; falling through.`,
+                false,
+                params
+            );
+        }
+
+        const isDirectChild = subAgent.ParentID != null && UUIDsEqual(subAgent.ParentID, params.agent.ID);
+        if (!isDirectChild) {
+            const relationship = AIEngine.Instance.AgentRelationships.find(
+                r => UUIDsEqual(r.AgentID, params.agent.ID) &&
+                     UUIDsEqual(r.SubAgentID, subAgent.ID) &&
+                     r.Status === 'Active'
+            );
+            if (relationship?.ConfigurationPresetID) {
+                const allConfigs = AIEngine.Instance.AgentConfigurations ?? [];
+                const preset = allConfigs.find(p => UUIDsEqual(p.ID, relationship.ConfigurationPresetID))
+                    ?? (AIEngine.Instance.GetAgentConfigurationPresets?.(subAgent.ID, false) ?? []).find(
+                        p => UUIDsEqual(p.ID, relationship.ConfigurationPresetID)
+                    );
+                if (preset && preset.Status === 'Active' && UUIDsEqual(preset.AgentID, subAgent.ID)) {
+                    return {
+                        configurationId: preset.AIConfigurationID ?? undefined,
+                        presetName: preset.Name,
+                        presetId: preset.ID
+                    };
+                }
+                this.logStatus(
+                    `⚠️ Sub-agent relationship for '${subAgent.Name}' references preset '${relationship.ConfigurationPresetID}' which is missing, inactive, or belongs to another agent; inheriting parent configuration.`,
+                    false,
+                    params
+                );
+            }
+        }
+
+        return { configurationId: params.configurationId };
+    }
+
+    /**
      * A sub-agent request's template parameters without the host-only run-data keys
      * (`HOST_ONLY_AGENT_RUN_DATA_KEYS` in `@memberjunction/ai-core-plus`: the reserved scope family and
      * `__agentTypePromptParams`, and the browser, conversation and realtime controls — `clientTools`, `sessionID`,
@@ -12273,6 +12405,23 @@ The context is now within limits. Please retry your request with the recovered c
             let line = `- **${sa.Name}** — ${sa.Description}`;
             if (sa.ExecutionMode !== 'Sequential') {
                 line += ` _(${sa.ExecutionMode}, order: ${sa.ExecutionOrder})_`;
+            }
+            const presets = AIEngine.Instance.GetAgentConfigurationPresets?.(sa.ID, true) ?? [];
+            if (presets.length > 0) {
+                const presetSummary = presets.map(p => {
+                    const desc = p.Description?.trim();
+                    if (p.IsDefault && desc) {
+                        return `${p.Name} (default: ${desc})`;
+                    }
+                    if (p.IsDefault) {
+                        return `${p.Name} (default)`;
+                    }
+                    if (desc) {
+                        return `${p.Name} (${desc})`;
+                    }
+                    return p.Name;
+                }).join(', ');
+                line += `\n  Presets: ${presetSummary}`;
             }
             return line;
         }).join('\n');
@@ -14693,6 +14842,7 @@ The context is now within limits. Please retry your request with the recovered c
             message: subAgentRequest.message,
             terminateAfter: subAgentRequest.terminateAfter,
             ...(subAgentRequest.resumeRunId ? { resumeRunId: subAgentRequest.resumeRunId } : {}),
+            ...(subAgentRequest.presetName ? { presetName: subAgentRequest.presetName } : {}),
             conversationMessages: params.conversationMessages,
             parentAgentHierarchy: this._agentHierarchy
         };
@@ -15455,6 +15605,7 @@ The context is now within limits. Please retry your request with the recovered c
                 message: request.message,
                 terminateAfter: request.terminateAfter,
                 ...(request.resumeRunId ? { resumeRunId: request.resumeRunId } : {}),
+                ...(request.presetName ? { presetName: request.presetName } : {}),
                 conversationMessages: params.conversationMessages,
                 parentAgentHierarchy: this._agentHierarchy,
                 relationshipType: relationship ? 'related' : 'child'
@@ -15927,6 +16078,7 @@ The context is now within limits. Please retry your request with the recovered c
             message: subAgentRequest.message,
             terminateAfter: subAgentRequest.terminateAfter,
             ...(subAgentRequest.resumeRunId ? { resumeRunId: subAgentRequest.resumeRunId } : {}),
+            ...(subAgentRequest.presetName ? { presetName: subAgentRequest.presetName } : {}),
             conversationMessages: params.conversationMessages,
             parentAgentHierarchy: this._agentHierarchy,
             relationshipType: 'related'

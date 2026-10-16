@@ -44,6 +44,7 @@ import {
     ConfigOf,
 } from '@memberjunction/ai-core-plus';
 import { UUIDsEqual } from '@memberjunction/global';
+import { AIEngine } from '@memberjunction/aiengine';
 import { AgentDecisionService } from '@memberjunction/ai-agents';
 import { HeldDecisionAnswers, type DecisionTaskRow, type TaskStepConfiguration } from './decision-node';
 import { TaskClaimStore, type TaskGraphDebugFieldWrite } from './TaskClaimStore';
@@ -342,8 +343,12 @@ export function BuildStepConfiguration(node: TaskGraphSpecNode): TaskStepConfigu
     const config: TaskStepConfiguration = {};
 
     const agent = ConfigOf(node, 'Agent');
-    if (agent?.message || agent?.templateParameters) {
-        config.agent = { message: agent.message, templateParameters: agent.templateParameters };
+    if (agent?.message || agent?.templateParameters || agent?.presetName) {
+        config.agent = {
+            message: agent.message,
+            templateParameters: agent.templateParameters,
+            ...(agent.presetName ? { presetName: agent.presetName } : {}),
+        };
     }
 
     const prompt = ConfigOf(node, 'Prompt');
@@ -641,6 +646,10 @@ export class TaskGraphService {
             const agentIDsByName = await this.resolveAgents(spec, context);
             if (!agentIDsByName.Success) {
                 return { Success: false, ErrorMessage: agentIDsByName.ErrorMessage };
+            }
+            const presetCheck = this.validateAgentPresets(spec, agentIDsByName.Map!);
+            if (!presetCheck.Success) {
+                return { Success: false, ErrorMessage: presetCheck.ErrorMessage };
             }
             const actionIDsByName = await this.resolveActions(spec, context);
             if (!actionIDsByName.Success) {
@@ -1363,6 +1372,49 @@ export class TaskGraphService {
             };
         }
         return { Success: true, Map: found };
+    }
+
+    /**
+     * Validates that every Agent node specifying a `presetName` references an Active preset of its
+     * resolved agent (`Name` then `DisplayName`, trimmed and case-insensitive), reporting all invalid
+     * `(node, preset)` pairs in a single error message.
+     */
+    private validateAgentPresets(
+        spec: TaskGraphSpec,
+        agentIDsByName: Map<string, string>,
+    ): { Success: boolean; ErrorMessage?: string } {
+        const invalid: Array<{ nodeLabel: string; agentName: string; presetName: string }> = [];
+        for (const node of spec.tasks) {
+            const agent = ConfigOf(node, 'Agent');
+            const presetName = agent?.presetName?.trim();
+            if (!presetName) continue;
+            const agentID = agentIDsByName.get(agent!.agentName);
+            if (!agentID) continue;
+
+            const target = presetName.toLowerCase();
+            const presets = AIEngine.Instance.GetAgentConfigurationPresets(agentID, true);
+            const matched = presets.find((p) => p.Name?.trim().toLowerCase() === target)
+                ?? presets.find((p) => p.DisplayName?.trim().toLowerCase() === target);
+            if (!matched) {
+                invalid.push({
+                    nodeLabel: node.name || node.tempId,
+                    agentName: agent!.agentName,
+                    presetName,
+                });
+            }
+        }
+
+        if (invalid.length > 0) {
+            const pairs = invalid
+                .map((item) => `"${item.nodeLabel}" (agent "${item.agentName}", preset "${item.presetName}")`)
+                .join(', ');
+            return {
+                Success: false,
+                ErrorMessage:
+                    `Task graph "${spec.workflowName}" references ${invalid.length} unknown agent preset(s): ${pairs}.`,
+            };
+        }
+        return { Success: true };
     }
 
     /**

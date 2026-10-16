@@ -148,10 +148,11 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
     private _agentCatalogListenerSetUp: boolean = false;
     /** Entities whose change must coarse-invalidate the agent base-catalog cache (lowercased). */
     private static readonly agentCatalogInvalidatingEntities: ReadonlySet<string> = new Set([
-        'ai agents',
+        'mj: ai agents',
         'mj: ai agent actions',
         'mj: ai agent relationships',
         'mj: ai agent types',
+        'mj: ai agent configurations',
     ]);
 
     /**

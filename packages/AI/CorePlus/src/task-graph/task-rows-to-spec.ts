@@ -136,7 +136,11 @@ function nodeFor(
 ): TaskGraphSpecNode {
     switch (row.StepType as TaskGraphNodeKind | null | undefined) {
         case 'Agent':
-            return TaskNode.Agent(base, { agentName: row.Name, message: config?.agent?.message });
+            return TaskNode.Agent(base, {
+                agentName: row.Name,
+                message: config?.agent?.message,
+                ...(config?.agent?.presetName ? { presetName: config.agent.presetName } : {}),
+            });
         case 'Action':
             return TaskNode.Action(base, {
                 actionName: row.Name,
@@ -168,7 +172,7 @@ function nodeFor(
 
 /** The parts of `Task.Configuration` this projection reads. */
 type StoredConfiguration = {
-    agent?: { message?: string };
+    agent?: { message?: string; presetName?: string };
     human?: { instructions?: string };
     forEach?: { collectionPath: string };
     while?: { condition: string };

@@ -288,6 +288,11 @@ export interface SubAgentSpec {
      * doesn't fit the sub-agent's payload structure, this is where that info can go.
      */
     SubAgentContextPaths?: Record<string, string>;
+    /**
+     * Only used when Type === 'related'. Optional ID of an `MJ: AI Agent Configurations` preset on the sub-agent
+     * to use by default when the parent invokes this sub-agent without an explicit `presetName`.
+     */
+    ConfigurationPresetID?: string;
 }
 
 /**

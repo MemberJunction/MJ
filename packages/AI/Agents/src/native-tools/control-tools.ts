@@ -146,6 +146,8 @@ export function BuildCompleteTaskTool(): ChatTool {
 export interface SubAgentToolOptions {
     /** When true, exposes `resumeRunId` in the tool's inputSchema so the parent can resume an open consult. */
     consultEnabled?: boolean;
+    /** When non-empty, exposes `presetName` in the tool's inputSchema with these active preset names. */
+    presetNames?: string[];
 }
 
 /** One tool per sub-agent: `delegate_to_<sanitized name>`, described by the agent's own description. */
@@ -164,6 +166,15 @@ export function BuildSubAgentTool(agent: MJAIAgentEntityExtended, options?: SubA
                         resumeRunId: {
                             type: 'string',
                             description: "Optional. The ID of this sub-agent's earlier run that ended with a question to you; set it only to answer that question and resume that run."
+                        }
+                    }
+                    : {}),
+                ...(options?.presetNames && options.presetNames.length > 0
+                    ? {
+                        presetName: {
+                            type: 'string',
+                            enum: options.presetNames,
+                            description: 'Configuration preset for this sub-agent'
                         }
                     }
                     : {})

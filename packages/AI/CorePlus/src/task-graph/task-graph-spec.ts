@@ -196,7 +196,7 @@ export const DECISION_ANSWER_FIELDS: Readonly<Record<AgentDecisionQuestion['kind
  * 1000, `WhileOperation.maxIterations` to 100. A conditional loop is the one that runs away.
  */
 export type TaskGraphNodeConfigMap = {
-    Agent: { agentName: string; message?: string; templateParameters?: Record<string, string> };
+    Agent: { agentName: string; message?: string; templateParameters?: Record<string, string>; presetName?: string };
     Action: { actionName: string; inputMapping?: string; outputMapping?: string };
     Human: { assignToUserID?: string; instructions?: string; expiresInHours?: number };
     Prompt: { promptName: string; templateParameters?: Record<string, string> };
