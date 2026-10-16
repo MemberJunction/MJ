@@ -4,6 +4,7 @@ import * as path from 'node:path';
 import {
     VIDEO_FORMATS,
     type CapturedStill,
+    type CheckIssue,
     type CheckRequest,
     type CheckResult,
     type ContactSheetImage,
@@ -24,6 +25,7 @@ import {
 import {
     PINNED_HYPERFRAMES_VERSION,
     RenderWorkerError,
+    type BackendCheckJob,
     type RenderBackend,
 } from './backend.js';
 import {
@@ -31,7 +33,10 @@ import {
     StageRenderBundle,
     ValidateRenderGeometry,
 } from './bundle.js';
-import { RunLintGate } from './lint-gate.js';
+import { EvaluateDomRules } from './checks/dom-rules.js';
+import { BuildCheckCliFailedIssue } from './checks/hyperframes-check.js';
+import { RunStaticChecks } from './checks/static-checks.js';
+import { RunLintGate, SortCheckIssues } from './lint-gate.js';
 import { BuildPreambleOptionsFromBundle } from './preamble.js';
 
 /** Maximum number of still capture points allowed in a single `/stills` request. */
@@ -46,13 +51,26 @@ export const DEFAULT_TILES_PER_SHEET = 12;
 /** Output width in pixels for every contact sheet image. */
 export const CONTACT_SHEET_WIDTH = 1536;
 
+/** Issue code emitted when `backend.MeasureText` throws during `/check`. */
+export const MJ_MEASURE_TEXT_FAILED_CODE = 'MJ_MEASURE_TEXT_FAILED';
+
 /**
- * Executes a `/check` job: stages the bundle (without preamble injection so authored code is
- * linted cleanly) and runs the static + backend lint gate.
+ * Executes a `/check` job (VS-RND-5 Step 8):
+ * 1. Validate request & geometry
+ * 2. Stage bundle (without preamble so authored files are linted cleanly)
+ * 3. Run RND-1 lint gate (`RunLintGate`); if lint-blocked, return lint issues immediately
+ *    without invoking Chromium
+ * 4. Run static authored-file checks (`RunStaticChecks`)
+ * 5. Inject preamble (`ApplyPreambleToStagedBundle`)
+ * 6. Run `hyperframes check --json` via `backend.RunCheckCli`
+ * 7. Measure rendered text at `SampleTimestampsSeconds ?? [0]` via `backend.MeasureText` and
+ *    evaluate DOM rules (`EvaluateDomRules`)
+ * 8. Merge, dedupe on `Code + Selector + File + Line` keeping earliest `TimestampSeconds`, and sort.
  */
 export async function RunCheckJob(
     req: CheckRequest,
     backend: RenderBackend,
+    signal?: AbortSignal,
 ): Promise<CheckResult> {
     if (!req || typeof req !== 'object' || !req.Bundle) {
         throw new RenderWorkerError('InvalidRequest', 'CheckRequest.Bundle is required.');
@@ -65,9 +83,128 @@ export async function RunCheckJob(
 
     const staged = await StageRenderBundle(req.Bundle, { InjectPreamble: false });
     try {
-        return await RunLintGate(req.Bundle, staged.RootDir, backend);
+        const lintResult = await RunLintGate(req.Bundle, staged.RootDir, backend);
+        if (lintResult.BlockRender) {
+            return lintResult;
+        }
+
+        const staticIssues = RunStaticChecks(req.Bundle, {
+            AllowedDataLiterals: req.AllowedDataLiterals,
+        });
+
+        const preambleOptions = BuildPreambleOptionsFromBundle(req.Bundle, {
+            Width: req.Width,
+            Height: req.Height,
+            Fps: 30,
+        });
+        await ApplyPreambleToStagedBundle(staged.RootDir, req.Bundle, preambleOptions);
+
+        const checkJob: BackendCheckJob = {
+            RootDir: staged.RootDir,
+            EntryFile: req.Bundle.EntryFile,
+            Width: req.Width,
+            Height: req.Height,
+        };
+
+        const cliIssues = await runCheckCliSafely(backend, checkJob, signal);
+        const sampleTimestamps =
+            Array.isArray(req.SampleTimestampsSeconds) && req.SampleTimestampsSeconds.length > 0
+                ? req.SampleTimestampsSeconds
+                : [0];
+        const domIssues = await runDomChecksSafely(req, backend, checkJob, sampleTimestamps, signal);
+
+        const merged = SortCheckIssues(
+            DedupeCheckIssues([...lintResult.Issues, ...staticIssues, ...cliIssues, ...domIssues]),
+        );
+        const passed = !merged.some((issue) => issue.Severity === 'Error');
+        return {
+            Passed: passed,
+            BlockRender: !passed,
+            Issues: merged,
+        };
     } finally {
         await staged.Cleanup();
+    }
+}
+
+/**
+ * Deduplicates `CheckIssue` items on `Code + Selector + File + Line`, keeping the earliest
+ * `TimestampSeconds` when duplicates exist (VS-RND-5 Step 8).
+ */
+export function DedupeCheckIssues(issues: readonly CheckIssue[]): CheckIssue[] {
+    const byKey = new Map<string, CheckIssue>();
+    for (const issue of issues) {
+        const key = `${issue.Code}\u0000${issue.Selector ?? ''}\u0000${issue.File ?? ''}\u0000${issue.Line ?? ''}`;
+        const existing = byKey.get(key);
+        if (!existing) {
+            byKey.set(key, { ...issue });
+            continue;
+        }
+        const existingTime = existing.TimestampSeconds;
+        const candidateTime = issue.TimestampSeconds;
+        if (
+            candidateTime !== undefined &&
+            (existingTime === undefined || candidateTime < existingTime)
+        ) {
+            byKey.set(key, {
+                ...issue,
+                Severity:
+                    existing.Severity === 'Error' || issue.Severity === 'Error'
+                        ? 'Error'
+                        : issue.Severity,
+            });
+        } else if (existing.Severity !== 'Error' && issue.Severity === 'Error') {
+            existing.Severity = 'Error';
+        }
+    }
+    return [...byKey.values()];
+}
+
+async function runCheckCliSafely(
+    backend: RenderBackend,
+    job: BackendCheckJob,
+    signal?: AbortSignal,
+): Promise<CheckIssue[]> {
+    try {
+        return await backend.RunCheckCli(job, signal);
+    } catch (error) {
+        if (signal?.aborted) {
+            throw new RenderWorkerError('Cancelled', 'Check job was cancelled.');
+        }
+        const reason = error instanceof Error ? error.message : String(error);
+        return [BuildCheckCliFailedIssue(reason)];
+    }
+}
+
+async function runDomChecksSafely(
+    req: CheckRequest,
+    backend: RenderBackend,
+    job: BackendCheckJob,
+    sampleTimestamps: readonly number[],
+    signal?: AbortSignal,
+): Promise<CheckIssue[]> {
+    try {
+        const measuredByTimestamp = await backend.MeasureText(job, sampleTimestamps, signal);
+        const flatMeasured = measuredByTimestamp.flat();
+        return EvaluateDomRules(flatMeasured, {
+            Format: req.Bundle.Format,
+            Width: req.Width,
+            Height: req.Height,
+            AllowedDataLiterals: req.AllowedDataLiterals,
+        });
+    } catch (error) {
+        if (signal?.aborted) {
+            throw new RenderWorkerError('Cancelled', 'Check job was cancelled.');
+        }
+        const reason = error instanceof Error ? error.message : String(error);
+        return [
+            {
+                Code: MJ_MEASURE_TEXT_FAILED_CODE,
+                Category: 'Lint',
+                Severity: 'Warning',
+                Message: `DOM text measurement failed: ${reason}`,
+            },
+        ];
     }
 }
 

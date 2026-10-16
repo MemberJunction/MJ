@@ -3491,6 +3491,9 @@ importers:
       '@memberjunction/video-studio-core':
         specifier: 6.2.0-edge.4
         version: link:../Core
+      hyperframes:
+        specifier: 0.8.134
+        version: 0.8.134(@types/node@24.10.11)
     devDependencies:
       '@types/node':
         specifier: 24.10.11
@@ -23762,6 +23765,10 @@ packages:
     resolution: {integrity: sha512-TGw5yVi4saajsSEgz25grObGHEUaDrniwvA2qwSC060KfqGPdglhvPMA2lPIoxs3PQIItj2iag35fONcQqgUaQ==}
     engines: {node: '>=12.0'}
 
+  adm-zip@0.6.1:
+    resolution: {integrity: sha512-Xwrja8nx9e5o2N1my4DsKCeKpdrnACyr1wtbPxBDgGzKzKyE9kRtBFA8mWldI+RVlD7CBZNWY/wQ2+ydwOR6kQ==}
+    engines: {node: '>=14.0'}
+
   aes-js@3.1.2:
     resolution: {integrity: sha512-e5pEa2kBnBOgR4Y/p20pskXI74UEz7de8ZGVo58asOtvSVG5YAbJeELPZxOmt+Bnz3rX753YKhfIn4X4l1PPRQ==}
 
@@ -24615,6 +24622,9 @@ packages:
     resolution: {integrity: sha512-NIxF55hv4nSqQswkAeiOi1r83xy8JldOFDTWiug55KBu9Jnblncd2U6ViHmYgHf01TPZS77NJBhBMKdWj9HQMQ==}
     engines: {node: '>=8'}
 
+  citty@0.2.2:
+    resolution: {integrity: sha512-+6vJA3L98yv+IdfKGZHBNiGW5KHn22e/JwID0Strsz8h4S/csAu/OuICwxrg44k5MRiZHWIo8XXuJgQTriRP4w==}
+
   cjs-module-lexer@2.2.0:
     resolution: {integrity: sha512-4bHTS2YuzUvtoLjdy+98ykbNB5jS0+07EvFNXerqZQJ89F7DI6ET7OQo/HJuW6K0aVsKA9hj9/RVb2kQVOrPDQ==}
 
@@ -24808,6 +24818,9 @@ packages:
 
   commondir@1.0.1:
     resolution: {integrity: sha512-W9pAhw0ja1Edb5GVdIF1mjZw/ASI0AlShXM83UUGe2DVr5TdAPEA1OA8m/g8zWp9x6On7gqufY+FatDbC3MDQg==}
+
+  compare-versions@6.1.1:
+    resolution: {integrity: sha512-4hm4VPpIecmlg59CHXnRDnqGplJFrbLG4aFEl5vl6cK1u76ws3LLvX7ikFnTDl5vo39sjWD6AaDPYodJp/NNHg==}
 
   complex.js@2.4.3:
     resolution: {integrity: sha512-UrQVSUur14tNX6tiP4y8T4w4FeJAX3bi2cIv0pu/DTLFNxoq7z2Yh83Vfzztj6Px3X/lubqQ9IrPp7Bpn6p4MQ==}
@@ -25004,6 +25017,10 @@ packages:
 
   css-tree@3.1.0:
     resolution: {integrity: sha512-0eW44TGN5SQXU1mWSkKwFstI/22X2bG1nYzZTYMAWjylYURhse752YgbE4Cx46AC+bAvI+/dYTPRk1LqSUnu6w==}
+    engines: {node: ^10 || ^12.20.0 || ^14.13.0 || >=15.0.0}
+
+  css-tree@3.2.1:
+    resolution: {integrity: sha512-X7sjQzceUhu1u7Y/ylrRZFU2FS6LRiFVp6rKLPg23y3x3c3DOKAwuXGDp+PAGjh6CSnCjYeAul8pcT8bAl+lSA==}
     engines: {node: ^10 || ^12.20.0 || ^14.13.0 || >=15.0.0}
 
   css-what@6.2.2:
@@ -26601,6 +26618,10 @@ packages:
     resolution: {integrity: sha512-VilgtJj/ALgGY77fiLam5iD336eSWi96Q15JSAG1zi8NRBysm3LXKdGnHb4m5cuyxvOLQQKWpBZAT6ni4FI2iQ==}
     engines: {node: '>=6'}
 
+  giget@3.3.1:
+    resolution: {integrity: sha512-r+mvuDjrjMpsdw46Kmeydb8bdHm7wOKw8wNBtTndkjbPjgAp5oUJUxRE76wZFknxIPokfWvep2qSXK37aXE6zg==}
+    hasBin: true
+
   git-hooks-list@3.2.0:
     resolution: {integrity: sha512-ZHG9a1gEhUMX1TvGrLdyWb9kDopCBbTnI8z4JgRMYxsijWipgjSEYoPWqBuIB0DnRnvqlQSEeVmzpeuPm7NdFQ==}
 
@@ -26973,6 +26994,11 @@ packages:
   hyperdyperid@1.2.0:
     resolution: {integrity: sha512-Y93lCzHYgGWdrJ66yIktxiaGULYc6oGiABxhcO5AufBeOyoIdZF7bIfLaOrbM0iGIOXQQgxxRrFEnb+Y6w1n4A==}
     engines: {node: '>=10.18'}
+
+  hyperframes@0.8.134:
+    resolution: {integrity: sha512-gLS99Ci6lxWmacLAwt8LaF+oTUumfHyk7ZRQuhGu1fRZPWEILHornsTwl8GNEJorL/wdguXfKl3HufPmG3fZIA==}
+    engines: {node: '>=22'}
+    hasBin: true
 
   hyperlinker@1.0.0:
     resolution: {integrity: sha512-Ty8UblRWFEcfSuIaajM34LdPXIhbs1ajEX/BBPv24J+enSVaEVY63xQ6lTO9VRYS5LAoghIG0IDJ+p+IPzKUQQ==}
@@ -28175,6 +28201,9 @@ packages:
 
   mdn-data@2.12.2:
     resolution: {integrity: sha512-IEn+pegP1aManZuckezWCO+XZQDplx1366JoVhTpMpBB1sPey/SbveZQUosKiKiGYjg1wH4pMlNgXbCiYgihQA==}
+
+  mdn-data@2.27.1:
+    resolution: {integrity: sha512-9Yubnt3e8A0OKwxYSXyhLymGW4sCufcLG6VdiDdUGVkPhpqLxlvP5vl1983gQjJl3tqbrM731mjaZaP68AgosQ==}
 
   mdurl@2.0.0:
     resolution: {integrity: sha512-Lf+9+2r+Tdp5wXDXC4PcIBjTDtq4UKjCPMQhKIuzpJNW0b96kVqSwW0bT7FhRSfmAiFYgP+SCRvdrDozfh0U5w==}
@@ -37051,7 +37080,7 @@ snapshots:
       debug: 4.4.3(supports-color@5.5.0)
       expo: 54.0.37(@babel/core@7.29.7)(@expo/metro-runtime@6.1.2)(expo-router@6.0.24)(graphql@16.12.0)(react-native-webview@13.15.0(react-native@0.81.5(@babel/core@7.29.7)(@types/react@19.2.13)(react@19.1.0))(react@19.1.0))(react-native@0.81.5(@babel/core@7.29.7)(@types/react@19.2.13)(react@19.1.0))(react@19.1.0)(typescript@5.9.3)
       resolve-from: 5.0.0
-      semver: 7.7.4
+      semver: 7.8.5
       xml2js: 0.6.0
     transitivePeerDependencies:
       - supports-color
@@ -38668,7 +38697,7 @@ snapshots:
 
   '@npmcli/fs@5.0.0':
     dependencies:
-      semver: 7.7.4
+      semver: 7.8.5
 
   '@npmcli/git@7.0.1':
     dependencies:
@@ -41617,6 +41646,8 @@ snapshots:
 
   adm-zip@0.5.16: {}
 
+  adm-zip@0.6.1: {}
+
   aes-js@3.1.2:
     optional: true
 
@@ -42759,6 +42790,8 @@ snapshots:
 
   ci-info@3.9.0: {}
 
+  citty@0.2.2: {}
+
   cjs-module-lexer@2.2.0: {}
 
   class-validator@0.14.3:
@@ -42954,6 +42987,8 @@ snapshots:
   common-path-prefix@3.0.0: {}
 
   commondir@1.0.1: {}
+
+  compare-versions@6.1.1: {}
 
   complex.js@2.4.3: {}
 
@@ -43192,6 +43227,11 @@ snapshots:
   css-tree@3.1.0:
     dependencies:
       mdn-data: 2.12.2
+      source-map-js: 1.2.1
+
+  css-tree@3.2.1:
+    dependencies:
+      mdn-data: 2.27.1
       source-map-js: 1.2.1
 
   css-what@6.2.2: {}
@@ -43954,7 +43994,6 @@ snapshots:
       '@esbuild/win32-arm64': 0.25.12
       '@esbuild/win32-ia32': 0.25.12
       '@esbuild/win32-x64': 0.25.12
-    optional: true
 
   esbuild@0.26.0:
     optionalDependencies:
@@ -45269,6 +45308,8 @@ snapshots:
 
   getenv@2.0.0: {}
 
+  giget@3.3.1: {}
+
   git-hooks-list@3.2.0: {}
 
   github-from-package@0.0.0: {}
@@ -45727,6 +45768,33 @@ snapshots:
       ms: 2.1.3
 
   hyperdyperid@1.2.0: {}
+
+  hyperframes@0.8.134(@types/node@24.10.11):
+    dependencies:
+      '@hono/node-server': 2.1.5(hono@4.11.7)
+      '@puppeteer/browsers': 3.2.5
+      adm-zip: 0.6.1
+      citty: 0.2.2
+      compare-versions: 6.1.1
+      css-tree: 3.2.1
+      debug: 4.4.3(supports-color@5.5.0)
+      esbuild: 0.25.12
+      fontkit: 2.0.4
+      giget: 3.3.1
+      hono: 4.11.7
+      ignore: 5.3.2
+      open: 10.2.0
+      postcss: 8.5.25
+      prettier: 3.8.1
+      puppeteer-core: 25.14.0
+      sharp: 0.35.5(@types/node@24.10.11)
+    transitivePeerDependencies:
+      - '@types/node'
+      - bufferutil
+      - proxy-agent
+      - supports-color
+      - utf-8-validate
+      - yauzl
 
   hyperlinker@1.0.0: {}
 
@@ -46967,6 +47035,8 @@ snapshots:
 
   mdn-data@2.12.2: {}
 
+  mdn-data@2.27.1: {}
+
   mdurl@2.0.0: {}
 
   media-typer@0.3.0: {}
@@ -47605,7 +47675,7 @@ snapshots:
       make-fetch-happen: 15.0.3
       nopt: 9.0.0
       proc-log: 6.1.0
-      semver: 7.7.4
+      semver: 7.8.5
       tar: 7.5.7
       tinyglobby: 0.2.15
       which: 6.0.0
@@ -47654,7 +47724,7 @@ snapshots:
 
   npm-install-checks@8.0.0:
     dependencies:
-      semver: 7.7.4
+      semver: 7.8.5
 
   npm-normalize-package-bin@5.0.0: {}
 

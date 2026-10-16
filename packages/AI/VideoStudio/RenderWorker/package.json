@@ -6,7 +6,8 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
-    "/dist"
+    "/dist",
+    "/assets"
   ],
   "bin": {
     "mj-video-render-worker": "dist/main.js"
@@ -26,7 +27,8 @@
     "@hyperframes/engine": "0.8.134",
     "@hyperframes/lint": "0.8.134",
     "@hyperframes/producer": "0.8.134",
-    "@memberjunction/video-studio-core": "6.2.0-edge.4"
+    "@memberjunction/video-studio-core": "6.2.0-edge.4",
+    "hyperframes": "0.8.134"
   },
   "devDependencies": {
     "@types/node": "24.10.11",

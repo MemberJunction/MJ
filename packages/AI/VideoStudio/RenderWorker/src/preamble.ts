@@ -40,10 +40,30 @@ export interface PreambleRuntimeOptions {
 }
 
 /**
+ * Default SIL OFL font families bundled in the RenderWorker package (`assets/fonts/`)
+ * so compositions referencing the sample brand kit (`Inter`, `JetBrains Mono`) render
+ * deterministically offline with `FontIsBundled: true` (VS-RND-5 Decision 4).
+ */
+export const BUNDLED_DEFAULT_FONTS = ['Inter', 'JetBrains Mono'] as const;
+
+/**
  * Builds the `<meta http-equiv="Content-Security-Policy">` tag injected into every `.html` file.
  */
 export function BuildCspMetaTag(): string {
     return `<meta http-equiv="Content-Security-Policy" content="${COMPOSITION_CSP}">`;
+}
+
+/**
+ * Builds the `<style data-mj-default-fonts>` tag registering the worker's bundled `Inter`
+ * and `JetBrains Mono` `@font-face` rules served from `/__mj_fonts/`.
+ */
+export function BuildDefaultFontsStyleTag(): string {
+    return [
+        '<style data-mj-default-fonts>',
+        "@font-face{font-family:'Inter';src:url('/__mj_fonts/Inter-Regular.ttf') format('truetype');font-weight:100 900;font-style:normal;font-display:block;}",
+        "@font-face{font-family:'JetBrains Mono';src:url('/__mj_fonts/JetBrainsMono-Regular.ttf') format('truetype');font-weight:100 900;font-style:normal;font-display:block;}",
+        '</style>',
+    ].join('');
 }
 
 /**
@@ -206,13 +226,14 @@ export function BuildPreambleScript(options: PreambleRuntimeOptions): string {
 }
 
 /**
- * Injects the CSP `<meta>` tag and the `window.MJVideo` inline `<script>` right after `<!doctype ...>`
- * (or at byte 0 when no doctype is present).
+ * Injects the CSP `<meta>` tag, bundled default `@font-face` `<style>`, and the `window.MJVideo`
+ * inline `<script>` right after `<!doctype ...>` (or at byte 0 when no doctype is present).
  */
 export function InjectPreambleIntoHtml(html: string, options: PreambleRuntimeOptions): string {
     const metaTag = BuildCspMetaTag();
+    const fontsStyleTag = BuildDefaultFontsStyleTag();
     const scriptTag = `<script>${BuildPreambleScript(options)}</script>`;
-    const preamble = `${metaTag}${scriptTag}`;
+    const preamble = `${metaTag}${fontsStyleTag}${scriptTag}`;
 
     const doctypeMatch = /^\s*<!doctype[^>]*>/i.exec(html);
     if (doctypeMatch) {

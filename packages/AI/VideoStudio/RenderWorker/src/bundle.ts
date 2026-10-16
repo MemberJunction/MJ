@@ -1,6 +1,7 @@
 import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
     VIDEO_FORMATS,
     type RenderProjectBundle,
@@ -12,6 +13,14 @@ import {
     InjectPreambleIntoHtml,
     type PreambleRuntimeOptions,
 } from './preamble.js';
+
+const PACKAGE_FONTS_DIR = path.resolve(
+    path.dirname(fileURLToPath(import.meta.url)),
+    '..',
+    'assets',
+    'fonts',
+);
+const BUNDLED_FONT_FILES = ['Inter-Regular.ttf', 'JetBrainsMono-Regular.ttf'] as const;
 
 /** Maximum number of `Files` + `Assets` entries allowed in a single bundle. */
 export const MAX_BUNDLE_ENTRIES = 2000;
@@ -280,6 +289,10 @@ export async function StageRenderBundle(
             await fs.writeFile(targetPath, bytes);
         }
 
+        if (injectPreamble) {
+            await stageBundledDefaultFonts(rootDir);
+        }
+
         let cleaned = false;
         return {
             RootDir: rootDir,
@@ -299,14 +312,16 @@ export async function StageRenderBundle(
 }
 
 /**
- * Injects the CSP `<meta>` and `window.MJVideo` preamble into every `.html` file of a bundle
- * that was staged with `InjectPreamble: false`.
+ * Injects the CSP `<meta>`, bundled default `@font-face` `<style>`, and `window.MJVideo`
+ * preamble into every `.html` file of a bundle that was staged with `InjectPreamble: false`,
+ * and stages the worker's bundled SIL OFL default fonts (`Inter` and `JetBrains Mono`) into `__mj_fonts/`.
  */
 export async function ApplyPreambleToStagedBundle(
     rootDir: string,
     bundle: RenderProjectBundle,
     preambleOptions: PreambleRuntimeOptions,
 ): Promise<void> {
+    await stageBundledDefaultFonts(rootDir);
     for (const file of bundle.Files) {
         if (!/\.html$/i.test(file.Path)) {
             continue;
@@ -314,6 +329,16 @@ export async function ApplyPreambleToStagedBundle(
         const targetPath = resolveInsideRoot(rootDir, file.Path);
         const withPreamble = InjectPreambleIntoHtml(file.Content, preambleOptions);
         await fs.writeFile(targetPath, withPreamble, 'utf8');
+    }
+}
+
+async function stageBundledDefaultFonts(rootDir: string): Promise<void> {
+    const destDir = path.join(rootDir, '__mj_fonts');
+    await fs.mkdir(destDir, { recursive: true });
+    for (const fileName of BUNDLED_FONT_FILES) {
+        const srcPath = path.join(PACKAGE_FONTS_DIR, fileName);
+        const destPath = path.join(destDir, fileName);
+        await fs.copyFile(srcPath, destPath);
     }
 }
 

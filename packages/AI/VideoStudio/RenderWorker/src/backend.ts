@@ -114,12 +114,64 @@ export interface BackendProbeResult {
 }
 
 /**
+ * Parameters passed to `RenderBackend.RunCheckCli` and `RenderBackend.MeasureText` for an unpacked bundle on disk.
+ */
+export interface BackendCheckJob {
+    /** Absolute path to the unpacked bundle directory. */
+    RootDir: string;
+    /** Relative entry HTML path inside `RootDir`. */
+    EntryFile: string;
+    /** Viewport width in pixels. */
+    Width: number;
+    /** Viewport height in pixels. */
+    Height: number;
+    /** Frame rate in frames per second (defaults to 30). */
+    Fps?: number;
+}
+
+/**
+ * Visible text element measurement captured in the headless browser DOM at a specific timestamp (VS-RND-5).
+ */
+export interface MeasuredText {
+    /** Trimmed visible text owned by the element. */
+    Text: string;
+    /** Bounding box left coordinate in CSS pixels relative to the viewport. */
+    Left: number;
+    /** Bounding box top coordinate in CSS pixels relative to the viewport. */
+    Top: number;
+    /** Bounding box width in CSS pixels. */
+    Width: number;
+    /** Bounding box height in CSS pixels. */
+    Height: number;
+    /** Computed `font-size` in pixels. */
+    FontSizePx: number;
+    /** First computed `font-family` name (unquoted). */
+    FontFamily: string;
+    /** True when the first computed `font-family` is a loaded `FontFace` in `document.fonts`. */
+    FontIsBundled: boolean;
+    /** True when the element or an ancestor carries `data-mj-bound`. */
+    IsBound: boolean;
+    /** Short CSS selector path identifying the element. */
+    Selector: string;
+    /** Sample timestamp in seconds at which the measurement was taken. */
+    TimestampSeconds: number;
+}
+
+/**
  * Pluggable rendering backend interface separating job orchestration and HTTP transport
  * from HyperFrames, Chromium, and ffmpeg execution.
  */
 export interface RenderBackend {
     /** Runs static project and media URL lint checks on an unpacked bundle directory. */
     Lint(dir: string, entry: string): Promise<{ Issues: CheckIssue[]; Block: boolean }>;
+    /** Runs `hyperframes check --json` in a restricted subprocess and maps findings to `CheckIssue[]`. */
+    RunCheckCli(job: BackendCheckJob, signal?: AbortSignal): Promise<CheckIssue[]>;
+    /** Seeks the composition to each timestamp in `timestampsSeconds` and measures visible text elements. */
+    MeasureText(
+        job: BackendCheckJob,
+        timestampsSeconds: readonly number[],
+        signal?: AbortSignal,
+    ): Promise<MeasuredText[][]>;
     /** Renders an unpacked composition to an MP4 file on disk, emitting progress events. */
     Render(
         job: BackendRenderJob,
@@ -149,6 +201,14 @@ export interface FakeRenderBackendOptions {
     ExtraLintIssues?: CheckIssue[];
     /** Whether `Lint()` should report `Block: true`. */
     BlockLint?: boolean;
+    /** Scripted CLI check issues returned by `RunCheckCli()` (defaults to `[]`). */
+    CheckCliIssues?: CheckIssue[];
+    /** Optional error thrown by `RunCheckCli()` to test fault tolerance. */
+    ThrowOnCheckCli?: Error;
+    /** Scripted DOM text measurements returned by `MeasureText()` (defaults to `[]`). */
+    MeasuredTexts?: MeasuredText[][];
+    /** Optional error thrown by `MeasureText()` to test fault tolerance. */
+    ThrowOnMeasureText?: Error;
     /** Delay in milliseconds between each of the 5 progress steps (defaults to 20 ms). */
     StepDelayMs?: number;
     /** Simulated audio presence returned by `Probe()` (defaults to `true`). */
@@ -168,18 +228,49 @@ export class FakeRenderBackend implements RenderBackend {
         Width: 1280,
         Height: 720,
     };
+    public LintCallCount = 0;
+    public RunCheckCliCallCount = 0;
+    public MeasureTextCallCount = 0;
+    public LastMeasuredTimestamps: number[] = [];
 
     public constructor(options: FakeRenderBackendOptions = {}) {
         this.options = options;
     }
 
     public async Lint(_dir: string, _entry: string): Promise<{ Issues: CheckIssue[]; Block: boolean }> {
+        this.LintCallCount++;
         const extra = this.options.ExtraLintIssues ? [...this.options.ExtraLintIssues] : [];
         const hasError = extra.some((issue) => issue.Severity === 'Error');
         return {
             Issues: extra,
             Block: Boolean(this.options.BlockLint) || hasError,
         };
+    }
+
+    public async RunCheckCli(_job: BackendCheckJob, signal?: AbortSignal): Promise<CheckIssue[]> {
+        throwIfAborted(signal);
+        this.RunCheckCliCallCount++;
+        if (this.options.ThrowOnCheckCli) {
+            throw this.options.ThrowOnCheckCli;
+        }
+        return this.options.CheckCliIssues ? [...this.options.CheckCliIssues] : [];
+    }
+
+    public async MeasureText(
+        _job: BackendCheckJob,
+        timestampsSeconds: readonly number[],
+        signal?: AbortSignal,
+    ): Promise<MeasuredText[][]> {
+        throwIfAborted(signal);
+        this.MeasureTextCallCount++;
+        this.LastMeasuredTimestamps = [...timestampsSeconds];
+        if (this.options.ThrowOnMeasureText) {
+            throw this.options.ThrowOnMeasureText;
+        }
+        if (this.options.MeasuredTexts) {
+            return this.options.MeasuredTexts.map((group) => [...group]);
+        }
+        return [];
     }
 
     public async Render(

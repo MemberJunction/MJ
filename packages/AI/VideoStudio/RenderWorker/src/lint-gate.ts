@@ -104,7 +104,7 @@ export function ScanAuthoredFilesForLintIssues(bundle: RenderProjectBundle): Che
 }
 
 /**
- * Deterministically sorts `CheckIssue` items by `Category`, `File`, `Line`, then `Code`.
+ * Deterministically sorts `CheckIssue` items by `Category`, `File`, `Line`, `Code`, then `Selector` / `TimestampSeconds`.
  */
 export function SortCheckIssues(issues: readonly CheckIssue[]): CheckIssue[] {
     return [...issues].sort((a, b) => {
@@ -120,7 +120,15 @@ export function SortCheckIssues(issues: readonly CheckIssue[]): CheckIssue[] {
         if (lineCmp !== 0) {
             return lineCmp;
         }
-        return a.Code.localeCompare(b.Code);
+        const codeCmp = a.Code.localeCompare(b.Code);
+        if (codeCmp !== 0) {
+            return codeCmp;
+        }
+        const selectorCmp = (a.Selector ?? '').localeCompare(b.Selector ?? '');
+        if (selectorCmp !== 0) {
+            return selectorCmp;
+        }
+        return (a.TimestampSeconds ?? 0) - (b.TimestampSeconds ?? 0);
     });
 }
 
