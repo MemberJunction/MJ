@@ -10284,10 +10284,10 @@ export const MJArchiveRunDetailSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    ArchiveRun: z.date().describe(`
+    ArchiveRun: z.string().describe(`
         * * Field Name: ArchiveRun
         * * Display Name: Archive Run Timestamp
-        * * SQL Data Type: datetimeoffset`),
+        * * SQL Data Type: nvarchar(255)`),
     Entity: z.string().describe(`
         * * Field Name: Entity
         * * Display Name: Entity Name
@@ -69893,9 +69893,9 @@ export class MJArchiveRunDetailEntity extends BaseEntity<MJArchiveRunDetailEntit
     /**
     * * Field Name: ArchiveRun
     * * Display Name: Archive Run Timestamp
-    * * SQL Data Type: datetimeoffset
+    * * SQL Data Type: nvarchar(255)
     */
-    get ArchiveRun(): Date {
+    get ArchiveRun(): string {
         return this.Get('ArchiveRun');
     }
 

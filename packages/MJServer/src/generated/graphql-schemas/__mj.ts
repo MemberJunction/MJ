@@ -24918,7 +24918,7 @@ export class MJArchiveConfiguration_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
-    @Field({nullable: true, description: `Whether runs keep a copy of the data they remove. Store (default): each record's archive document is written to the storage account before the mode changes the source row. Purge: the mode is applied with no copy written, StorageAccountID is not needed, and cleared data cannot be restored. A Purge run refuses entities in ArchiveOnly mode and entities that track Record Changes.`}) 
+    @Field({nullable: true, description: "Whether runs keep a copy of the data they remove. Store (default): each record's archive document is written to the storage account before the mode changes the source row. Purge: the mode is applied with no copy written, StorageAccountID is not needed, and cleared data cannot be restored. A Purge run refuses entities in ArchiveOnly mode and entities that track Record Changes."}) 
     @MaxLength(20)
     StorageMode?: string;
         
@@ -25188,7 +25188,8 @@ export class MJArchiveRunDetail_ {
     _mj__UpdatedAt: Date;
         
     @Field({nullable: true}) 
-    ArchiveRun?: Date;
+    @MaxLength(255)
+    ArchiveRun?: string;
         
     @Field({nullable: true}) 
     @MaxLength(255)
@@ -25434,7 +25435,7 @@ export class MJArchiveRun_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
-    @Field({nullable: true, description: `The configuration's StorageMode when this run started: Store (copies written to storage) or Purge (no copies kept; only failed records get an ArchiveRunDetail row).`}) 
+    @Field({nullable: true, description: "The configuration's StorageMode when this run started: Store (copies written to storage) or Purge (no copies kept; only failed records get an ArchiveRunDetail row)."}) 
     @MaxLength(20)
     StorageMode?: string;
         
