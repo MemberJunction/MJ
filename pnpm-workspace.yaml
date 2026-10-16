@@ -88,3 +88,4 @@ packages:
   - 'packages/Rubrics/*'
   - 'packages/eSignature/*'
   - 'packages/eSignature/Providers/*'
+  - 'packages/WorkQueue/*'

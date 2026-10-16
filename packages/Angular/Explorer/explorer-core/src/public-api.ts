@@ -47,6 +47,7 @@ export * from './lib/services/startup-validation.service'
 // Server connectivity
 export * from './lib/services/server-connectivity.service'
 export * from './lib/server-connectivity/server-connectivity-banner.component'
+export * from './lib/template-user/template-user-banner.component';
 
 // Lazy loading infrastructure
 export * from './lib/services/lazy-module-registry'

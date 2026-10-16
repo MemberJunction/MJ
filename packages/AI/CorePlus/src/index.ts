@@ -1,6 +1,8 @@
 export * from './model-run.types';
 export * from './prompt.types';
+export * from './prompt-run-messages.types';
 export * from './agent-types';
+export * from './agent-run-data-keys';
 export * from './agent-failure-message';
 export * from './agent-payload-change-request';
 export * from './prompt.system-placeholders';
@@ -18,6 +20,14 @@ export * from './agent-decisions';
 export * from './agent-run-steps';
 export * from './app-context';
 export * from './client-tool-resolver';
+export * from './agent-settings';
+export * from './json-schema-subset';
+export * from './realtime-channel-descriptor';
+export * from './realtime-channel-exposure';
+export * from './realtime-channel-scope';
+export * from './realtime-session-policy';
+export * from './realtime-session-events';
+export * from './client-tool-media';
 export * from './artifact-tool-library';
 
 export * from './MJAIPromptEntityExtended';
@@ -52,3 +62,6 @@ export * from './task-graph/workflow-spec-validator';
 // because browser and React Native hosts implement it, and a package they can reach must not
 // declare a server-only dependency — not even for a type. See the file header for the incident.
 export * from './attachment-blob-store';
+
+// MJOPUS1 realtime-recording shard wire format, shared by the browser recorder and MJAPI.
+export * from './realtime-recording-shard-format';

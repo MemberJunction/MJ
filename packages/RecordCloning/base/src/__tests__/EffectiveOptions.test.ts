@@ -125,4 +125,10 @@ describe('NormalizeClonePresets', () => {
         expect(NormalizeClonePresets('nope')).toEqual([]);
         expect(NormalizeClonePresets([null, 3, {}])).toEqual([]);
     });
+
+    it('NormalizeClonePresets keeps a template preset\'s TemplateSourceField', () => {
+        const [preset] = NormalizeClonePresets([{ Key: 'template', Label: 'Template', TemplateSourceField: 'IsTemplate' }]);
+        expect(preset.TemplateSourceField).toBe('IsTemplate');
+        expect(NormalizeClonePresets([{ Key: 'plain', Label: 'Plain' }])[0].TemplateSourceField).toBeUndefined();
+    });
 });

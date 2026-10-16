@@ -1,5 +1,59 @@
 # @memberjunction/ng-explorer-modules
 
+## 6.2.0-edge.4
+
+### Patch Changes
+
+- Updated dependencies [de2dc2f]
+- Updated dependencies [7384dd6]
+- Updated dependencies [bb3028a]
+- Updated dependencies [6dc3aa9]
+- Updated dependencies [24fce37]
+- Updated dependencies [cc0814d]
+- Updated dependencies [9d73096]
+- Updated dependencies [1ce4217]
+- Updated dependencies [45ba6be]
+- Updated dependencies [1403d04]
+- Updated dependencies [20650af]
+- Updated dependencies [dbc3462]
+- Updated dependencies [6a19f78]
+- Updated dependencies [aac148b]
+- Updated dependencies [f2f6f4b]
+- Updated dependencies [382b9aa]
+- Updated dependencies [0e5a4cd]
+- Updated dependencies [57fea6a]
+- Updated dependencies [b8a9e5e]
+- Updated dependencies [e8258a1]
+  - @memberjunction/ng-core-entity-forms@6.2.0-edge.4
+  - @memberjunction/ng-explorer-core@6.2.0-edge.4
+  - @memberjunction/ng-shared@6.2.0-edge.4
+  - @memberjunction/ng-explorer-settings@6.2.0-edge.4
+  - @memberjunction/ng-workspace-initializer@6.2.0-edge.4
+  - @memberjunction/ng-link-directives@6.2.0-edge.4
+  - @memberjunction/ng-container-directives@6.2.0-edge.4
+
+## 6.2.0-edge.3
+
+### Patch Changes
+
+- Updated dependencies [dfe40a4]
+- Updated dependencies [fe39606]
+- Updated dependencies [279b93e]
+- Updated dependencies [093e0dd]
+- Updated dependencies [f41442f]
+- Updated dependencies [60bd774]
+- Updated dependencies [d0a8dbf]
+- Updated dependencies [fbad999]
+- Updated dependencies [b1b6d3d]
+- Updated dependencies [49e0bd8]
+  - @memberjunction/ng-core-entity-forms@6.2.0-edge.3
+  - @memberjunction/ng-explorer-core@6.2.0-edge.3
+  - @memberjunction/ng-shared@6.2.0-edge.3
+  - @memberjunction/ng-explorer-settings@6.2.0-edge.3
+  - @memberjunction/ng-workspace-initializer@6.2.0-edge.3
+  - @memberjunction/ng-container-directives@6.2.0-edge.3
+  - @memberjunction/ng-link-directives@6.2.0-edge.3
+
 ## 6.2.0-edge.2
 
 ### Patch Changes

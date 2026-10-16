@@ -89,7 +89,9 @@ export class GraphQLTransactionGroup extends TransactionGroupBase {
             }
         };        
 
-        const results = await this._provider.ExecuteGQL(mutation, vars)
+        // The group writes exactly its items' entities, so only their dedup-linger entries are dropped.
+        const affectedEntityNames = [...new Set(items.map(item => item.EntityName))];
+        const results = await this._provider.ExecuteGQL(mutation, vars, true, { AffectedEntityNames: affectedEntityNames })
         if (results && results.ExecuteTransactionGroup) {
             const data = results.ExecuteTransactionGroup;
             // The server's Success flag is authoritative. When the server-side transaction failed

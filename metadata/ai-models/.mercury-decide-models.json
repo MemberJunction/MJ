@@ -1,0 +1,115 @@
+[
+  {
+    "fields": {
+      "Name": "Mercury Decide",
+      "Description": "Inception Labs' diffusion-based decision model, mercury-decide, released on September 30, 2026. It answers Likelihood, Choice (up to 255 options) and Score (up to 10 levels) questions about one state, each with a probability for every option or level, and writes no text; it takes the same System One request as Jev. MJ reaches it directly through Inception's Decisions API (POST https://api.inceptionlabs.ai/v1/decisions, with the same Inception API key as Mercury 2) through the InceptionDecision driver, or through OpenRouter's Decisions API as inception/mercury-decide (pinned to the dated inception/mercury-decide-20260930, served by Inception with a 65,536-token context, text only) through the OpenRouterDecision driver. Inception charges $0.02 per million input tokens, a promotional price 50% off its regular $0.04; output is free. OpenRouter says it leads JevBench; MJ has not measured it. Its raw probabilities are not calibrated to MJ's data, so set thresholds on calibrated values.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Decision",
+      "PowerRank": 44,
+      "IsActive": true,
+      "SpeedRank": 0,
+      "CostRank": 0,
+      "InheritTypeModalities": true,
+      "ModelConfiguration": {
+        "Decision": {
+          "MaxChoiceOptions": 255,
+          "MaxScoreLevels": 10
+        }
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Inception Labs",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "3ED3E60D-2A1A-4012-9FA7-1EECC3417BFD"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Inception Labs",
+            "Priority": 2,
+            "Status": "Active",
+            "DriverClass": "InceptionDecision",
+            "APIName": "mercury-decide",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "0DB1DCDF-36A9-4126-A1B2-8EB64970BB1A"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "OpenRouterDecision",
+            "APIName": "inception/mercury-decide-20260930",
+            "MaxInputTokens": 65536,
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "AE8C1E0A-4E84-4A96-8687-6EF34D11AD88"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Inception Labs",
+            "StartedAt": "2026-10-12T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.02,
+            "OutputPricePerUnit": 0,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "mercury-decide on Inception's Decisions API, as checked on October 12, 2026: $0.02 per million input tokens, a promotional price 50% off the regular $0.04; output tokens are reported but not charged. Source: https://docs.inceptionlabs.ai/get-started/models"
+          },
+          "primaryKey": {
+            "ID": "52A6CDC0-B3CA-429F-A8E6-58195F9DAC0C"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "StartedAt": "2026-10-12T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.02,
+            "OutputPricePerUnit": 0,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "inception/mercury-decide-20260930 through OpenRouter's Decisions API, served by Inception, as listed by OpenRouter on October 12, 2026: $0.02 per million input tokens, Inception's promotional price 50% off the regular $0.04; output is free. Source: https://openrouter.ai/inception/mercury-decide"
+          },
+          "primaryKey": {
+            "ID": "D60BD566-8943-43FC-BF86-04CDA7382831"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "989FBE05-89AC-4F88-91AC-439E8DE4E28F"
+    }
+  }
+]

@@ -1,5 +1,57 @@
 # Change Log - @memberjunction/ng-chat
 
+## 6.2.0-edge.4
+
+### Patch Changes
+
+- ae0a662: Markdown now renders math: TeX the way language models write it (`$…$` and `\(…\)` inline, `$$…$$` and `\[…\]` for display) and MathML markup, including the prefixed `<mml:math>` that JATS article XML uses.
+  - **markdown-core:** a new `CreateMathExtension` recognizes the math and emits a `code.mj-math` placeholder holding the TeX (a `math` / `mathBlock` token on the AST path). It is tokenized first, so `_` and `*` inside a formula no longer become emphasis, and smartypants leaves its quotes and dashes alone. Single dollars follow Pandoc's rule, so prices stay prices ("$5 and $10", "$5-$10"), and `\[…\]`/`\(…\)` count only around something that reads as TeX, so escaped brackets like "\[1\]" stay brackets. MathML elements (`<math>` or `<mml:math>`) are matched whole, emitted with their prefixes removed, and kept away from markdown, so pretty-printed formulas don't turn into code blocks or emphasis. On by default; `enableMath: false` turns it off.
+  - **ng-markdown:** `MarkdownService.RenderMath(container)` typesets the placeholders with KaTeX as MathML, which browsers lay out natively, so hosts need no KaTeX stylesheet or fonts. KaTeX is loaded on first use, like Mermaid, so documents without math never download it. `<mj-markdown>` calls it after render (new `EnableMath` input). TeX that KaTeX can't parse, or that defines macros, stays visible as source; user sizes are capped. The sanitizer now allows MathML (DOMPurify's MathML profile, plus `columnalign`/`columnspacing`, which its list misspells or lacks). Chrome ignores MathML's `mathvariant` and `columnalign`, so styled letters are spelled with Unicode math characters (\mathbf{E} as 𝐄, \mathbb{R} as ℝ) and the stylesheet aligns `aligned`/`cases` columns.
+  - **ng-chat:** typesets math in its messages (`RenderMath` after `parse()`).
+  - **mobile-app:** shows math as its source, without delimiters, until mobile has a typesetter.
+
+- Updated dependencies [49f26d9]
+- Updated dependencies [88e6902]
+- Updated dependencies [6dc3aa9]
+- Updated dependencies [c87f87a]
+- Updated dependencies [490cd8d]
+- Updated dependencies [0a7c255]
+- Updated dependencies [d86bcbc]
+- Updated dependencies [ae0a662]
+- Updated dependencies [5e1e343]
+- Updated dependencies [90829e3]
+- Updated dependencies [d52f9ba]
+- Updated dependencies [0e5a4cd]
+- Updated dependencies [b968642]
+- Updated dependencies [68a7e3b]
+- Updated dependencies [e7b2ebc]
+- Updated dependencies [e0cf9ed]
+- Updated dependencies [57fea6a]
+- Updated dependencies [b8a9e5e]
+  - @memberjunction/core@6.2.0-edge.4
+  - @memberjunction/ng-shared-generic@6.2.0-edge.4
+  - @memberjunction/ng-ui-components@6.2.0-edge.4
+  - @memberjunction/ng-markdown@6.2.0-edge.4
+  - @memberjunction/ng-container-directives@6.2.0-edge.4
+
+## 6.2.0-edge.3
+
+### Patch Changes
+
+- Updated dependencies [dfe40a4]
+- Updated dependencies [0f04590]
+- Updated dependencies [41c2c08]
+- Updated dependencies [66fd011]
+- Updated dependencies [196160a]
+- Updated dependencies [60bd774]
+- Updated dependencies [35da130]
+- Updated dependencies [28c92e0]
+  - @memberjunction/core@6.2.0-edge.3
+  - @memberjunction/ng-ui-components@6.2.0-edge.3
+  - @memberjunction/ng-shared-generic@6.2.0-edge.3
+  - @memberjunction/ng-container-directives@6.2.0-edge.3
+  - @memberjunction/ng-markdown@6.2.0-edge.3
+
 ## 6.2.0-edge.2
 
 ### Patch Changes

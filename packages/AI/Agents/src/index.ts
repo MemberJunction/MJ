@@ -58,6 +58,7 @@ export * from './AgentDataPreloader';
 export * from './agent-context-injector';
 export * from './agent-memory-context-builder';
 export * from './agent-pre-execution-rag';
+export * from './agent-audience';
 export * from './memory-manager-agent';
 export * from './memory-note-gate';
 export * from './query-builder-agent';
@@ -78,13 +79,18 @@ export { RealtimeToolBroker, RealtimeToolBrokerDeps, ExecutedToolCall, Delegated
 export * from './realtime/realtime-client-session-service';
 export * from './realtime/realtime-coagent-config';
 export * from './realtime/realtime-vendor-resolution';
+export * from './realtime/realtime-video-output-gate';
 export * from './realtime/realtime-narration';
 export * from './realtime/realtime-delegation-narrator';
 export * from './realtime/realtime-coagent-resolution';
 export * from './realtime/bridge-host-params';
 export * from './realtime/realtime-channel-server-host';
+export * from './realtime/realtime-channel-policy';
 export * from './realtime/whiteboard-channel-server';
+export * from './realtime/client-only-channel-server';
 export * from './realtime/client-context-channel-server';
+export * from './realtime/identity-verification-channel-server';
+export * from './realtime/interactive-component-channel-server';
 export * from './realtime/meeting-controls-state';
 export * from './realtime/meeting-controls-channel-server';
 export * from './realtime/media-channel-server';
@@ -92,6 +98,8 @@ export * from './realtime/realtime-channel-server-data-context';
 export * from './realtime/agent-media-library';
 export * from './realtime/realtime-recording-capture';
 export * from './realtime/realtime-recording-store';
+export * from './realtime/realtime-recording-ledger';
+export * from './realtime/realtime-recording-opus-assembly';
 
 // Re-export from ai-reranker for backward compatibility
 export {

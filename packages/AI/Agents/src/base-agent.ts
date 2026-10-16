@@ -11,7 +11,7 @@
  * @since 2.49.0
  */
 
-import { MJAIAgentTypeEntity,  MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity, FileStorageEngineBase, MJAISkillEntity, MJEnvironmentEntityExtended, MJConversationSkillEntity, MJAIVendorEntity } from '@memberjunction/core-entities';
+import { MJAIAgentTypeEntity,  MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity, MJAISkillEntity, MJEnvironmentEntityExtended, MJConversationSkillEntity, MJAIVendorEntity, ConversationEngine, type ConversationBranchRow } from '@memberjunction/core-entities';
 import { BuildActionToolSet, FilterDeclarableActions, SanitizeToolName } from './native-tools/action-tool-builder';
 import { BuildNativeToolSet, COMPLETE_TASK_TOOL, SUB_AGENT_TOOL_PREFIX, type NativeToolBinding } from './native-tools/control-tools';
 import { BuildAssistantToolCallTurn, BuildToolResultTurn, CompactToolResultContent, type NativeToolResult } from './native-tools/tool-result-turns';
@@ -20,12 +20,12 @@ import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptE
 import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled, IMetadataProvider, DatabaseProviderBase, ToPlainJSON } from '@memberjunction/core';
 import { AgentRunWatchdog } from './agent-run-watchdog';
 import { AIPromptRunner, GetToolCallingDecision, AIDecisionRunResult } from '@memberjunction/ai-prompts';
-import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, AIErrorType, BaseRealtimeModel, GetAIAPIKey, MakeAIAPIKeyResolver, IRealtimeSession, IsPrefixPromptCache, JSONObject, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage, ChatToolChoice, DecisionQuestion, DecisionAnswer } from '@memberjunction/ai';
+import { ChatMessage, ChatMessageContent, AIErrorType, AIAPIKeyResolver, BaseRealtimeModel, GetAIAPIKey, CredentialScopeAllows, MakeAIAPIKeyResolver, IRealtimeSession, IsPrefixPromptCache, JSONObject, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage, ChatToolChoice, DecisionQuestion, DecisionAnswer } from '@memberjunction/ai';
 import { BaseAgentType } from './agent-types/base-agent-type';
 import { ProviderRubricEngine } from '@memberjunction/rubrics';
 import { ExecuteSelfCheck, PickSelfCheckLink, type SelfCheckLink, type SelfCheckLinkRow } from './self-check';
 import { LoopAgentTypePromptParams } from './agent-types/loop-agent-prompt-params';
-import { CopyScalarsAndArrays, JSONValidator, MJGlobal, NormalizeUUID, SafeExpressionEvaluator, UUIDsEqual, EscapeSQLString, IsPlainObject, CleanAndParseJSON } from '@memberjunction/global';
+import { CopyScalarsAndArrays, JSONValidator, MJGlobal, NormalizeUUID, SafeExpressionEvaluator, UUIDsEqual, EscapeSQLString, IsPlainObject, CleanAndParseJSON, IsValidUUID } from '@memberjunction/global';
 // token optimization via @memberjunction/context-crush (SmartCrusher/CacheAligner-inspired)
 import { CrushJSON, DescribeCrush, PartitionStablePrefix, type JsonValue } from '@memberjunction/context-crush';
 // AST-aware code reduction (CodeCompressor-inspired) — opt-in per agent type
@@ -50,7 +50,9 @@ import {
     RealtimeCoAgentConfig,
     ResolveEffectiveRealtimeConfig
 } from './realtime/realtime-coagent-config';
-import { SelectRealtimeVendorForModel } from './realtime/realtime-vendor-resolution';
+import { ListRealtimeVendorsForModel, RealtimeVendorSelection, SelectRealtimeVendorForModel } from './realtime/realtime-vendor-resolution';
+import { ChooseRealtimeVendorForAvatar, RealtimeModelShowsAvatar } from './realtime/realtime-video-output-gate';
+import { RealtimeSessionCanShowAvatar } from './realtime/realtime-avatar-resolution';
 import { RealtimeClientSessionService, PrepareClientSessionInput, WarnOnUnmatchedProviderVoice } from './realtime/realtime-client-session-service';
 import { BuildRealtimeAgentFraming } from './realtime/realtime-tool-broker';
 import { ReadHostTools, ReadTrimmedString } from './realtime/bridge-host-params';
@@ -62,9 +64,9 @@ import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
 import { AgentMemoryContextBuilder, AgentMemoryObservability } from './agent-memory-context-builder';
 import { ConversationCompactionManager, CompactionOutcome, EffectiveContextBudget } from './ConversationCompactionManager';
 import { ConversationToolManager, ConversationToolCall, ConversationToolExecutionResult, ConversationToolSummaryHost, ConversationToolNames, MAX_CONVERSATION_TOOL_CALLS_PER_TURN } from './ConversationToolManager';
-import { FormatToolResultSection, FormatToolErrorSection, RenderToolResultData, ToolResultSectionParts, CarryForwardToolFamily, CarryForwardToolStepOutput, CarryForwardStepRecord } from './tool-result-format';
+import { FormatToolResultSection, FormatToolErrorSection, RenderToolResultData, ToolResultSectionParts, CarryForwardToolFamily, CarryForwardToolStepOutput, CarryForwardStepRecord, StoppedRunStepRecord } from './tool-result-format';
 import { PriorTurnToolResultCache } from './prior-turn-tool-result-cache';
-import { PromptComponentResolver, InjectScopedPromptParts } from './prompt-component-resolver';
+import { PromptComponentResolver, InjectScopedPromptParts, type PromptComponentScope } from './prompt-component-resolver';
 import { ScopedPromptConfigResolver, ApplyScopedPromptConfig } from './scoped-prompt-config-resolver';
 import { AgentPreExecutionRAGResult } from './agent-pre-execution-rag';
 import {
@@ -119,9 +121,19 @@ import {
     AgentDecisionAnswerSummary,
     AgentFinishIf,
     SummarizeDecisionAnswers,
-    SystemPlaceholderManager
+    SystemPlaceholderManager,
+    WithoutHostOnlyAgentRunDataKeys,
+    WithAgentRunDataTrustApplied,
+    StopContinuationMode,
+    type AIPromptExecutionScope,
+    type AgentRunAudience
 } from '@memberjunction/ai-core-plus';
-import { MJActionEntityExtended, ActionResult, ActionParam, AIDirective, RuntimeAPIKeyResolver, RunActionParams } from '@memberjunction/actions-base';
+import {
+    MJActionEntityExtended, ActionResult, ActionParam, AIDirective, RuntimeAPIKeyResolver, RunActionParams, AUDIENCE_UNSUPPORTED_RESULT_CODE,
+    ActionRunScopeIsBounded, type ActionRunScope
+} from '@memberjunction/actions-base';
+import { UserCache } from '@memberjunction/generic-database-provider';
+import { AgentAudienceAddsReader, AgentAudienceProblem, AgentAudienceReaderIDs, MatchAudienceUsers } from './agent-audience';
 import { TemplateEngineServer } from '@memberjunction/templates';
 import { RuntimeStateFragmentBuilder, RuntimeStateDateTime, RuntimeStateScratchpad, EscapeRuntimeStateTagsInMessage } from './runtime-state-fragment';
 import { ResolveSpecializationPlacement } from './volatile-child-prompt';
@@ -211,6 +223,7 @@ import { AgentPayloadChangeRequest } from '@memberjunction/ai-core-plus';
 import { GetValueFromPath, SetMappedValue } from '@memberjunction/ai-core-plus';
 import { AgentDataPreloader } from './AgentDataPreloader';
 import { ClientToolRequestManager } from './ClientToolRequestManager';
+import { BuildClientToolResultMessage, ResolveClientToolResultMaxChars, ReplaceMediaBlocksWithStubs, IsMediaBlock, IMAGE_BLOCK_TOKEN_ESTIMATE } from './client-tool-results';
 import { ConversationMessageResolver } from './utils/ConversationMessageResolver';
 import { ForEachOperation, WhileOperation } from '@memberjunction/ai-core-plus';
 import _ from 'lodash';
@@ -233,10 +246,53 @@ interface AgentRunTokenStats {
     totalCost: number;
 }
 
+/** What one run's prompt leaves out (`BaseAgent.promptWithholding`). */
+interface PromptWithholding {
+    /** Task graphs are not offered (an audience, or a tenant-scoped run). */
+    TaskGraphs: boolean;
+    /** The caller's browser and view are not: no client tools, no app context (an audience). */
+    CallerContext: boolean;
+}
+
+/** The run's validated scope as memory, retrieval and scoped prompt configuration take it (`BaseAgent.runScopeForContext`). */
+interface RunContextScope {
+    /** The primary scope entity's ID, resolved from the run's entity name; undefined when it names none or it is unknown. */
+    EntityID: string | undefined;
+    /** The run's tenant, or undefined. */
+    RecordID: string | undefined;
+    /** The run's secondary dimensions (the agent's defaults applied), or undefined. */
+    Secondary: Record<string, SecondaryScopeValue> | undefined;
+}
+
+/** Why a turn's memory writes are not saved (`BaseAgent.memoryWriteSkip`). */
+interface MemoryWriteSkip {
+    /** For the log and the skip step's name. */
+    Reason: string;
+    /** What the model is told, before "the requested memories were NOT saved". */
+    Told: string;
+}
+
 /**
  * Compact representation of a single action's execution result, used for
  * building the markdown summary that goes into conversation messages.
  */
+/**
+ * A stopped run's step with its outcome. The full-stack resume reads every step of the run, not
+ * only completed results: it needs the prompt steps' recorded message stacks, and it needs to
+ * know which requested actions finished before the stop.
+ */
+export interface StoppedRunStackStepRecord extends StoppedRunStepRecord {
+    Status: MJAIAgentRunStepEntityExtended['Status'];
+    Success: MJAIAgentRunStepEntityExtended['Success'];
+}
+
+/** What the pre-execution phase loaded about a user-stopped predecessor, applied once the phase settles. */
+interface StoppedRunContinuation {
+    RunID: string;
+    Mode: StopContinuationMode;
+    Steps: StoppedRunStackStepRecord[];
+}
+
 interface ActionResultSummary {
     actionName: string;
     success: boolean;
@@ -433,12 +489,15 @@ export interface ExecuteSingleActionOptions {
  *
  * - `'fatal'` — the action failed earlier in the run with a configuration or credential error and is
  *   locked out for the rest of the run.
+ * - `'audience'` — the action engine refused the action for the run's audience (`AUDIENCE_UNSUPPORTED`): it cannot
+ *   limit what it returns to what everyone in a shared conversation may see, so it is locked out for the run. Not a
+ *   configuration or credential error, and the model is told so.
  * - `'identical-arguments'` — the action already failed {@link IDENTICAL_FAILURE_THRESHOLD} times
  *   with these exact arguments.
  * - `'attempts-exhausted'` — the action has failed {@link ACTION_FAILURE_BUDGET} consecutive times
  *   across any arguments.
  */
-export type ActionCircuitBreakerReason = 'fatal' | 'identical-arguments' | 'attempts-exhausted';
+export type ActionCircuitBreakerReason = 'fatal' | 'audience' | 'identical-arguments' | 'attempts-exhausted';
 
 /** Identical-arguments rule: this many failures with the same arguments block further identical calls. */
 export const IDENTICAL_FAILURE_THRESHOLD = 2;
@@ -651,6 +710,34 @@ export class BaseAgent {
     private _fatalActionFailures: Set<string> = new Set();
 
     /**
+     * Actions the action engine refused for the run's audience (`AUDIENCE_UNSUPPORTED`) during the current run —
+     * locked out like {@link _fatalActionFailures}, under their own breaker reason (`'audience'`) so the model is
+     * told the action is unavailable in a shared conversation rather than misconfigured.
+     * @private
+     */
+    private _audienceLockedActions: Set<string> = new Set();
+
+    /**
+     * The run's audience readers beyond the caller (`ExecuteAgentParams.Audience`), hydrated from the user cache:
+     * `[]` when the audience adds nobody, `undefined` until hydrated for this run. Set after the permission check
+     * in {@link Execute}; {@link ExecuteSingleAction}, which is also called directly, hydrates it lazily.
+     * @private
+     */
+    private _audienceReaders: UserInfo[] | undefined;
+
+    /** The `ExecuteAgentParams.Audience` that {@link _audienceReaders} was hydrated from, so a different one re-hydrates. */
+    private _audienceSource: AgentRunAudience | undefined;
+
+    /**
+     * The scope of the run in progress, exactly as {@link initializeAgentRun} validated and wrote it to the run row
+     * (nulls when the run is unscoped) — what every action dispatch is handed as `RunActionParams.RunScope`.
+     * `undefined` outside {@link Execute}: {@link ExecuteSingleAction}, which is also called directly, then
+     * resolves the scope from its params the same way.
+     * @private
+     */
+    private _runScope: ActionRunScope | undefined;
+
+    /**
      * Parameter-aware failure tracking per action name for the current agent run.
      * Differentiates identical retries (which trip quickly) from parameter modifications (which allow self-correction).
      * @private
@@ -798,10 +885,7 @@ export class BaseAgent {
      */
     protected recordActionFailure(action: AgentAction, actionEntity: MJActionEntityExtended | undefined, message: string | null | undefined, normalizedParams: string): void {
         if (this.isFatalActionError(message, action.params)) {
-            this._fatalActionFailures.add(action.name);
-            if (actionEntity?.Name) {
-                this._fatalActionFailures.add(actionEntity.Name);
-            }
+            this.lockOutAction(action, actionEntity);
             return;
         }
         const existing = this._actionFailureHistory.get(action.name) || (actionEntity?.Name ? this._actionFailureHistory.get(actionEntity.Name) : undefined);
@@ -818,6 +902,49 @@ export class BaseAgent {
     }
 
     /**
+     * Locks an action out for the rest of the run: later calls short-circuit on the breaker's `'fatal'` rule, or on
+     * its `'audience'` rule for an action the engine refused for the run's audience.
+     */
+    private lockOutAction(action: AgentAction, actionEntity: MJActionEntityExtended | undefined, reason: 'fatal' | 'audience' = 'fatal'): void {
+        const lockouts = reason === 'audience' ? this._audienceLockedActions : this._fatalActionFailures;
+        lockouts.add(action.name);
+        if (actionEntity?.Name) {
+            lockouts.add(actionEntity.Name);
+        }
+    }
+
+    /** Clears the run-scoped circuit-breaker state (both lockouts and the failure history) for a new run. */
+    private resetActionCircuitBreaker(): void {
+        this._fatalActionFailures.clear();
+        this._audienceLockedActions.clear();
+        this._actionFailureHistory.clear();
+    }
+
+    /**
+     * The blocked result for an action locked out for the run — refused for the audience (`'audience'`), or failed
+     * with an unrecoverable configuration or credential error (`'fatal'`) — or null when it is not locked out.
+     */
+    private lockedOutActionResult(params: ExecuteAgentParams, action: AgentAction, actionEntity: MJActionEntityExtended): CircuitBreakerActionResult | null {
+        const isLocked = (lockouts: Set<string>): boolean =>
+            lockouts.has(action.name) || (!!actionEntity?.Name && lockouts.has(actionEntity.Name));
+        if (isLocked(this._audienceLockedActions)) {
+            this.logStatus(`   ⚡ Circuit breaker: Action '${action.name}' short-circuited (0ms): not available under this run's audience`, false, params);
+            return this.buildBlockedActionResult(actionEntity, 'audience',
+                `Action '${action.name}' is not available in this shared conversation: what it returns could not be limited to what ` +
+                'everyone here may see. Do not call it again in this run; use another tool or answer from what you have.');
+        }
+        if (isLocked(this._fatalActionFailures)) {
+            this.logStatus(
+                `   ⚡ Circuit breaker: Action '${action.name}' short-circuited (0ms): fatal configuration or credential error earlier in this run`,
+                false, params);
+            return this.buildBlockedActionResult(actionEntity, 'fatal',
+                `Action '${action.name}' is disabled for this run because it previously failed with an unrecoverable configuration or ` +
+                'credential error. You must select an alternative action.');
+        }
+        return null;
+    }
+
+    /**
      * Clears the parameter-aware failure history for an action after it succeeds, so the
      * identical-arguments rule and the consecutive-attempt budget start over.
      */
@@ -831,7 +958,7 @@ export class BaseAgent {
     /**
      * Applies the three circuit-breaker rules to a call that is about to be dispatched. Returns a
      * blocked result, with the rule that fired, when the call must not go to the action engine;
-     * null when it may proceed. Rules are checked fatal → identical-arguments → budget.
+     * null when it may proceed. Rules are checked audience → fatal → identical-arguments → budget.
      */
     protected checkActionCircuitBreaker(
         params: ExecuteAgentParams,
@@ -839,12 +966,11 @@ export class BaseAgent {
         actionEntity: MJActionEntityExtended,
         normalizedParams: string
     ): CircuitBreakerActionResult | null {
-        const entityKey = actionEntity?.Name;
-        if (this._fatalActionFailures.has(action.name) || (entityKey && this._fatalActionFailures.has(entityKey))) {
-            this.logStatus(`   ⚡ Circuit breaker: Action '${action.name}' short-circuited (0ms): fatal configuration or credential error earlier in this run`, false, params);
-            return this.buildBlockedActionResult(actionEntity, 'fatal',
-                `Action '${action.name}' is disabled for this run because it previously failed with an unrecoverable configuration or credential error. You must select an alternative action.`);
+        const lockedOut = this.lockedOutActionResult(params, action, actionEntity);
+        if (lockedOut) {
+            return lockedOut;
         }
+        const entityKey = actionEntity?.Name;
 
         const record = this._actionFailureHistory.get(action.name) || (entityKey ? this._actionFailureHistory.get(entityKey) : undefined);
         if (!record) {
@@ -887,6 +1013,9 @@ export class BaseAgent {
         if (summary.breakerReason) {
             return summary.breakerReason;
         }
+        if (this._audienceLockedActions.has(summary.actionName)) {
+            return 'audience';
+        }
         if (this._fatalActionFailures.has(summary.actionName)) {
             return 'fatal';
         }
@@ -908,6 +1037,10 @@ export class BaseAgent {
         const name = summary.actionName;
         const record = this._actionFailureHistory.get(name);
         switch (this.classifyActionFailure(summary)) {
+            case 'audience':
+                return `[CRITICAL/NOT_AVAILABLE_IN_SHARED_CONVERSATION] Action '${name}' is not available in this shared conversation: what it ` +
+                    `returns could not be limited to what everyone in it may see ("${summary.message}"). It is not broken or misconfigured. ` +
+                    `DO NOT call '${name}' again during this run. Use another tool, or answer from what you already have.`;
             case 'fatal':
                 return `[CRITICAL/ACTION_UNAVAILABLE] Action '${name}' failed with an unrecoverable configuration or credential error: "${summary.message}". This action cannot execute in this environment. DO NOT call '${name}' again during this run. You MUST select an alternative tool or proceed with available data.`;
             case 'attempts-exhausted':
@@ -987,6 +1120,21 @@ export class BaseAgent {
     protected static readonly DEFAULT_ABSOLUTE_MAX_ITERATIONS = 5000;
 
     private _agentRun: MJAIAgentRunEntityExtended | null = null;
+
+    /**
+     * The prefix of the abort reason the wall-clock guard in {@link Execute} raises when a run
+     * outlives `maxExecutionTimeMs`. The guard appends the agent and the budget after it; a reader
+     * ({@link CancellationReasonForAbort}) checks the prefix, never the wording after it.
+     */
+    public static readonly AgentTimeoutAbortReason = 'Agent execution exceeded maxExecutionTimeMs';
+
+    /**
+     * The abort controller that governs the current `Execute` call (the merged timeout/upstream
+     * signal). Held so {@link initializeAgentRun} can register it with the watchdog's stop relay:
+     * when someone marks this run's row `Cancelled`, the watchdog aborts it and the loop's
+     * existing cancellation checks end the run. Null outside an execution.
+     */
+    private _runAbortController: AbortController | null = null;
 
     /**
      * The task graph this run submitted and is now waiting on, or null.
@@ -1497,6 +1645,12 @@ export class BaseAgent {
     private _conversationToolManager: ConversationToolManager = new ConversationToolManager();
 
     /**
+     * The conversation's branch rows for the current run, loaded once when the run is on a
+     * branch (`ExecuteAgentParams.ConversationBranchID`). Empty on the trunk.
+     */
+    private _conversationBranches: ConversationBranchRow[] = [];
+
+    /**
      * Manages in-flight durable memory writes for the current agent run.
      * Only consulted when the agent has AllowMemoryWrite enabled.
      */
@@ -1543,6 +1697,13 @@ export class BaseAgent {
      * @private
      */
     private _openingRequest: string = '';
+
+    /**
+     * The run's {@link AIPromptExecutionScope}, recorded when the run starts, for decision calls made
+     * from helpers that are not handed the run's params (discovery, catalog narrowing).
+     * @private
+     */
+    private _runExecutionScope: AIPromptExecutionScope | undefined;
 
     /**
      * Whether the run answers its conversation's opening request ({@link IsOpeningTurn}), read from
@@ -1834,6 +1995,13 @@ export class BaseAgent {
             this.logStatus(`⏭️  Data preloading disabled for agent '${params.agent.Name}'`, true, params);
             return;
         }
+        // Skipped under an audience: data sources load with the caller's rights alone, and what they load is
+        // put in front of the model (or the actions) for a room that may not be allowed to see it.
+        if (this.runAudienceAddsReader(params)) {
+            this.logStatus(`⏭️  Data preloading skipped for agent '${params.agent.Name}': the run has an audience, ` +
+                'and preloaded data is loaded with the caller\'s rights alone', false, params);
+            return;
+        }
 
         try {
             // Load preloaded data using the singleton service
@@ -1949,6 +2117,27 @@ export class BaseAgent {
     }
 
     /**
+     * The params a run executes with: `params` itself, or, when the caller did not set
+     * `ExecuteAgentParams.TrustReservedRunData` and `data` carries reserved keys, a copy whose `data` lacks them
+     * (`WithAgentRunDataTrustApplied` in `@memberjunction/ai-core-plus`). {@link Execute} applies it first, so it
+     * holds for every entry point: AgentRunner, the Execute Agent action, MCP, A2A, Runtime Actions, sub-agents.
+     * The removed keys are logged once with the agent and user, never their values.
+     */
+    private withRunDataTrustApplied<C>(params: ExecuteAgentParams<C>): ExecuteAgentParams<C> {
+        const { Params, StrippedKeys } = WithAgentRunDataTrustApplied(params);
+        if (StrippedKeys.length > 0) {
+            this.logStatus(
+                `🔒 Ignored reserved run-data key(s) ${StrippedKeys.join(', ')} for agent '${params.agent?.Name}' ` +
+                `(user ${params.contextUser?.Email ?? 'unknown'}): a run's scope and agent-type parameters come from the ` +
+                `ExecuteAgentParams fields, or from data only when the server sets TrustReservedRunData.`,
+                false,
+                params
+            );
+        }
+        return Params;
+    }
+
+    /**
      * Executes an AI agent using hierarchical prompt composition.
      * 
      * This method orchestrates the entire agent execution process, from loading
@@ -1987,6 +2176,10 @@ export class BaseAgent {
     }
 
     public async Execute<C = any, R = any>(params: ExecuteAgentParams<C>): Promise<ExecuteAgentResult<R>> {
+        // Every run, whatever started it: the reserved data keys (scope, agent-type params) count only when the
+        // caller set TrustReservedRunData. Everything below reads the cleaned params.
+        params = this.withRunDataTrustApplied(params);
+
         // Capture per-request provider for the duration of this execution so all entity
         // saves go through the isolated provider, never the global singleton's transaction.
         this._activeProvider = params.provider ?? Metadata.Provider;
@@ -2024,7 +2217,7 @@ export class BaseAgent {
         const timeoutId = setTimeout(() => {
             if (!timeoutController.signal.aborted) {
                 timeoutController.abort(
-                    `Agent '${params.agent.Name}' exceeded maxExecutionTimeMs (${agentTimeoutMS}ms)`
+                    `${BaseAgent.AgentTimeoutAbortReason}: agent '${params.agent.Name}' ran past ${agentTimeoutMS}ms`
                 );
             }
         }, agentTimeoutMS);
@@ -2032,6 +2225,8 @@ export class BaseAgent {
         // Execute (and downstream sub-agent invocations that propagate
         // `cancellationToken`) observe it.
         params.cancellationToken = timeoutController.signal;
+        // Hold it for the watchdog's stop relay (registered once the run row exists).
+        this._runAbortController = timeoutController;
 
         try {
             this.logStatus(`🤖 Starting execution of agent '${params.agent.Name}'`, true, params);
@@ -2082,8 +2277,8 @@ export class BaseAgent {
             this._lastVolatileStateMessage = undefined;
             this._resolvedTrailingStateMode = undefined;
             this._turn1InsertionIndex = -1;
-            this._fatalActionFailures.clear();
-            this._actionFailureHistory.clear();
+            this._runScope = undefined; // set again by initializeAgentRun, in Phase 1
+            this.resetActionCircuitBreaker();
 
             // Convert UI markup in conversation messages to plain text if requested (default: true)
             if (params.convertUIMarkupToPlainText !== false) {
@@ -2098,10 +2293,16 @@ export class BaseAgent {
             // Arm conversation-history retrieval tools — available only when the run has a
             // conversation to page against (the same gate as all cross-turn context features).
             // A history floor holds here too: the tools page only rows from it onward.
+            // On a branch, the tools page only rows on that branch's path.
+            this._conversationBranches = wrappedParams.conversationId && wrappedParams.ConversationBranchID
+                ? await ConversationEngine.LoadBranchesFresh(wrappedParams.conversationId, params.contextUser, this.ProviderToUse)
+                : [];
             this._conversationToolManager.Initialize(
                 wrappedParams.conversationId || null,
                 params.contextUser,
-                wrappedParams.ConversationHistoryFrom ?? null
+                wrappedParams.ConversationHistoryFrom ?? null,
+                wrappedParams.ConversationBranchID ?? null,
+                this._conversationBranches
             );
             this._conversationToolManager.SetSummaryHost(this.buildConversationSummaryHost(wrappedParams));
 
@@ -2164,16 +2365,12 @@ export class BaseAgent {
                 // Permission denied — mark the already-created AgentRun as failed so it doesn't
                 // appear as a phantom "running" record in the UI.
                 const errorMessage = `User ${params.contextUser.Email} does not have permission to run agent '${params.agent.Name}' (ID: ${params.agent.ID})`;
-                this.logStatus(`🚫 ${errorMessage}`, false, params);
-                if (this._agentRun) {
-                    this._agentRun.Status = 'Failed';
-                    this._agentRun.ErrorMessage = errorMessage;
-                    await this._agentRun.Save();
-                }
-                throw new Error(errorMessage);
+                await this.failRunAtStart(errorMessage, params);
             }
 
             // Reset per-run state (sync, instant — no parallelization needed)
+            this._audienceReaders = undefined;
+            this._audienceSource = undefined;
             this._validationRetryCount = 0;
             this._generalValidationRetryCount = 0;
             this._contextRecoveryAttempts = 0;
@@ -2183,7 +2380,16 @@ export class BaseAgent {
             this._messageLifecycleCallback = params.onMessageLifecycle;
             this._catalogNarrowing = undefined;
             this._openingRequest = OpeningRequestText(params.conversationMessages);
+            this._runExecutionScope = this.runPromptExecutionScope(params);
             this._isOpeningTurn = IsOpeningTurn(params.conversationMessages);
+
+            // The run's audience: validated and hydrated before any memory, retrieval or prompt (Phase 2). A
+            // malformed audience, or one naming a user who does not exist, fails the run here, as a refused
+            // permission does — running without it would show the room the caller's whole reach.
+            const audience = await this.audienceReadersFor(params);
+            if ('Error' in audience) {
+                await this.failRunAtStart(audience.Error, params);
+            }
 
             // Resolve storage account for file artifacts
             this._resolvedStorageAccountId = await this.getStorageAccountID(wrappedParams);
@@ -2225,25 +2431,16 @@ export class BaseAgent {
             const lastUserMessage = params.conversationMessages.filter(m => m.role === 'user').pop();
             const inputText = lastUserMessage?.content || '';
 
-            const scopeConfigJson = params.agent.ScopeConfig;
-            let scopeConfig: SecondaryScopeConfig | null = null;
-            if (scopeConfigJson) {
-                try { scopeConfig = JSON.parse(scopeConfigJson); } catch { /* ignore bad JSON */ }
-            }
+            // The run's scope exactly as initializeAgentRun validated it in Phase 1 — what the run row records and every
+            // action is handed — so notes, RAG and scoped prompt parts search the same tenant and dimensions.
+            const runScope = this.runScopeForContext(params);
 
-            const primaryScopeEntityName = params.PrimaryScopeEntityName ?? (params.data?.PrimaryScopeEntityName as string | undefined);
-            const primaryScopeRecordId = params.PrimaryScopeRecordID ?? (params.data?.PrimaryScopeRecordID as string | undefined);
-            const secondaryScopes = params.SecondaryScopes ?? (params.data?.SecondaryScopes as Record<string, SecondaryScopeValue> | undefined);
+            // The user's new message, captured by identity before anything below adds to the list, so a
+            // resumed stopped run can be spliced in ahead of it once the parallel phase settles.
+            const continuationMessage = wrappedParams.conversationMessages[wrappedParams.conversationMessages.length - 1];
 
-            let primaryScopeEntityId: string | undefined;
-            if (primaryScopeEntityName) {
-                const primaryEntity = this.ProviderToUse.EntityByName(primaryScopeEntityName);
-                if (primaryEntity) {
-                    primaryScopeEntityId = primaryEntity.ID;
-                }
-            }
-
-            const [config] = await Promise.all([
+            // Positions matter: [0] is the config and [5] the stopped-run continuation.
+            const [config, , , , , stoppedRunContinuation] = await Promise.all([
                 this.loadAgentConfiguration(params.agent),
                 this.preloadAgentData(wrappedParams),
                 this.InjectContextMemory(
@@ -2253,10 +2450,12 @@ export class BaseAgent {
                     companyId,
                     params.contextUser,
                     wrappedParams.conversationMessages,
-                    primaryScopeEntityId,
-                    primaryScopeRecordId,
-                    secondaryScopes,
-                    scopeConfig
+                    runScope.EntityID,
+                    runScope.RecordID,
+                    runScope.Secondary,
+                    this.parseSecondaryScopeConfig(params.agent),
+                    // Under an audience, one user's notes and examples are not shown to the room.
+                    this.runAudienceAddsReader(params)
                 ),
                 this.InjectPreExecutionRAG(
                     typeof inputText === 'string' ? inputText : '',
@@ -2264,29 +2463,33 @@ export class BaseAgent {
                     params.contextUser,
                     wrappedParams.conversationMessages,
                     params.conversationMessages,
-                    primaryScopeEntityId,
-                    primaryScopeRecordId,
-                    secondaryScopes,
-                    params.payload
+                    runScope.EntityID,
+                    runScope.RecordID,
+                    runScope.Secondary,
+                    params.payload,
+                    // Phase 1 has already activated requested + persisted conversation skills.
+                    this.activeSkillIDsForRun(params),
+                    // Each reader must pass the scope gate; the search keeps what every one of them may read.
+                    this._audienceReaders ?? []
                 ),
                 // Carry the previous turn's tool results forward (no-op without a
                 // conversationId). Runs here so the results are in the messages before
                 // the pre-turn compaction check and the first prompt.
                 this.injectPriorTurnToolResults(wrappedParams),
+                // If the previous turn was STOPPED by the user, load what it did so this turn continues
+                // the work instead of redoing it. Applied below, after this phase settles.
+                this.loadStoppedRunContinuation(wrappedParams),
                 // Decision discovery (plan Task 3.1), off unless the decisionsEnabled and decisionDiscovery prompt
                 // params are true: may add a <suggested_agent> system message, within DECISION_DISCOVERY_TIMEOUT_MS.
                 this.InjectDecisionDiscovery(params.agent, params.contextUser, wrappedParams.conversationMessages, params.data)
             ]);
 
+            // Resume (or summarize) a run the user stopped, now that nothing else is writing the list.
+            this.applyStoppedRunContinuation(wrappedParams, stoppedRunContinuation, continuationMessage);
+
             // Inject scope-resolved prompt parts (role-faithful) for this agent's prompt, alongside
             // memory/RAG. Synchronous — parts are cached on AIEngine. Uses the same run scope.
-            this.InjectScopedPromptParts(
-                params.agent,
-                wrappedParams.conversationMessages,
-                primaryScopeEntityId,
-                primaryScopeRecordId,
-                secondaryScopes
-            );
+            this.InjectScopedPromptParts(params.agent, wrappedParams.conversationMessages, runScope.EntityID, runScope.RecordID, runScope.Secondary);
 
             if (!config.success) {
                 this.logError(`Failed to load agent configuration: ${config.errorMessage}`, {
@@ -2314,6 +2517,11 @@ export class BaseAgent {
             // their execution falls through to `executeAgentInternal` below — byte-for-byte unchanged.
             // =====================================================================================
             if (this.isSessionDrivenAgentType(this.AgentTypeInstance)) {
+                const audienceRefusal = this.sessionAudienceRefusal(params);
+                if (audienceRefusal) {
+                    this.logError(audienceRefusal, { agent: params.agent, category: 'RealtimeSession' });
+                    return await this.createFailureResult(audienceRefusal, params.contextUser);
+                }
                 this.logStatus(`🎙️ Agent '${params.agent.Name}' is session-driven — routing to RealtimeSessionRunner`, true, params);
                 return await this.executeRealtimeSession<R>(wrappedParams, config);
             }
@@ -2380,12 +2588,222 @@ export class BaseAgent {
             // consumers that re-read `params` after the call see what they
             // passed in, not our chained signal.
             params.cancellationToken = upstreamToken;
+            this._runAbortController = null;
             // A cancellation, or an error thrown out of the step loop, leaves any held decision
             // requests unasked. The terminate path has already logged and cleared its own.
             this.skipHeldDecisions(params, this.runEndForHeldDecisions());
             this.releasePerRunDataCache();
             await this.finalizeRun(this.deriveRunOutcome());
+            // The run is over: a later direct ExecuteSingleAction resolves the scope and the audience from its own params.
+            this.clearRunBoundState();
         }
+    }
+
+    /**
+     * Fails the run at its start, before any prompt: marks the already-created AgentRun Failed with the message
+     * (so it never shows as a phantom "running" record) and throws, which {@link Execute} turns into a failure
+     * result. Used by the permission check and the audience check.
+     */
+    private async failRunAtStart(errorMessage: string, params: ExecuteAgentParams): Promise<never> {
+        this.logStatus(`🚫 ${errorMessage}`, false, params);
+        if (this._agentRun) {
+            this._agentRun.Status = 'Failed';
+            this._agentRun.ErrorMessage = errorMessage;
+            await this._agentRun.Save();
+        }
+        throw new Error(errorMessage);
+    }
+
+    /**
+     * The run's audience readers beyond the caller, hydrated once per run and audience: from the per-run state
+     * when it was hydrated from this same `params.Audience`, else validated and loaded now. `{ Error }` names
+     * what makes the audience unusable. `{ Readers: [] }` when the audience adds nobody.
+     */
+    private async audienceReadersFor(params: ExecuteAgentParams): Promise<{ Readers: UserInfo[] } | { Error: string }> {
+        if (this._audienceReaders && this._audienceSource === params.Audience) {
+            return { Readers: this._audienceReaders };
+        }
+        const resolved = await this.resolveRunAudience(params);
+        if ('Readers' in resolved) {
+            this._audienceReaders = resolved.Readers;
+            this._audienceSource = params.Audience;
+        }
+        return resolved;
+    }
+
+    /**
+     * Validates `params.Audience` ({@link AgentAudienceProblem}) and loads a hydrated user for each reader it adds
+     * beyond the caller ({@link ResolveAudienceUsers}). An ID no user has is refused, never skipped: a skipped
+     * reader would restrict nothing, and the room would see the caller's whole reach.
+     */
+    private async resolveRunAudience(params: ExecuteAgentParams): Promise<{ Readers: UserInfo[] } | { Error: string }> {
+        const problem = AgentAudienceProblem(params.Audience);
+        if (problem) {
+            return { Error: `Invalid Audience: ${problem}` };
+        }
+        const ids = AgentAudienceReaderIDs(params.Audience, params.contextUser?.ID);
+        if (ids.length === 0) {
+            return { Readers: [] };
+        }
+        const match = MatchAudienceUsers(ids, await this.ResolveAudienceUsers(ids, params));
+        if (match.MissingIDs.length > 0) {
+            return { Error: `Audience names user ID(s) that match no user: ${match.MissingIDs.join(', ')}. The run is refused rather than run without them.` };
+        }
+        this.logStatus(`👥 Run audience: ${match.Readers.length} reader(s) besides the caller — output limited to what every one of them may see`, true, params);
+        return { Readers: match.Readers };
+    }
+
+    /**
+     * Loads the hydrated user (with its `UserRoles`) for each audience ID, from the server's `UserCache`. When an
+     * ID is missing the cache is refreshed once — a user created since it loaded is then found, as MJServer's
+     * authentication does for a user it does not know — and looked up again. Returns the users found; an ID left
+     * out refuses the run. Override to resolve readers from another directory; never build `UserInfo` by hand.
+     *
+     * An inactive user is accepted as a reader, deliberately: a reader can only narrow what the run shows (each one is
+     * another permission check every result must pass), never widen it, so a deactivated participant still listed in
+     * the room restricts the run rather than failing it.
+     *
+     * @param ids The reader IDs the audience adds beyond the caller (normalized, distinct).
+     * @param params The run's parameters (for the request-scoped provider the refresh reads through).
+     */
+    protected async ResolveAudienceUsers(ids: string[], params: ExecuteAgentParams): Promise<UserInfo[]> {
+        const cached = MatchAudienceUsers(ids, UserCache.Instance.Users);
+        if (cached.MissingIDs.length === 0) {
+            return cached.Readers;
+        }
+        const provider = params.provider ?? this.ProviderToUse;
+        if (provider instanceof DatabaseProviderBase) {
+            this.logStatus(`👥 ${cached.MissingIDs.length} audience reader(s) not in the user cache — refreshing it once`, true, params);
+            await UserCache.Instance.Refresh(provider);
+        }
+        return MatchAudienceUsers(ids, UserCache.Instance.Users).Readers;
+    }
+
+    /**
+     * Whether this run's audience adds a reader beyond the caller — the condition every audience gate asks.
+     * A malformed audience counts as adding one (the run fails before the gates are reached anyway).
+     */
+    private runAudienceAddsReader(params: ExecuteAgentParams): boolean {
+        return AgentAudienceAddsReader(params.Audience, params.contextUser?.ID);
+    }
+
+    /**
+     * Why this run is not offered task graphs and refuses one the model writes, or null when it may use them — the one
+     * predicate, so every condition that withholds graphs is added in one place. A graph runs outside the run: its
+     * action nodes are dispatched by the task-graph runner (MJServer's `TaskGraphActionRunner`) with no `Audience`,
+     * no `RunScope` and no run `Context`, outside {@link ExecuteSingleAction}, and an agent node starts a run
+     * (`TaskGraphAgentRunner`) that carries neither the audience nor the scope. So graphs are withheld when the
+     * audience adds a reader, and when the run's validated scope carries a tenant or a secondary dimension
+     * (`ActionRunScopeIsBounded`): a model-written Scoped Search node would search outside the run's tenant, and an
+     * agent node would drop it.
+     */
+    private taskGraphWithholdingReason(params: ExecuteAgentParams): string | null {
+        if (this.runAudienceAddsReader(params)) {
+            return 'a run with an audience';
+        }
+        return ActionRunScopeIsBounded(this._runScope ?? this.validatedRunScope(params)) ? 'a tenant-scoped run' : null;
+    }
+
+    /** Whether this run withholds task graphs ({@link taskGraphWithholdingReason}). */
+    private runWithholdsTaskGraphs(params: ExecuteAgentParams): boolean {
+        return this.taskGraphWithholdingReason(params) !== null;
+    }
+
+    /**
+     * The `Failed` step for a task graph the model wrote although this run withholds them ({@link taskGraphWithholdingReason}),
+     * or null when graphs are allowed. The response type already hides `tasks`; this is the gate for a model that emits one
+     * anyway. Written before any step: nothing is submitted.
+     */
+    private taskGraphRefusal(params: ExecuteAgentParams, previousDecision: BaseAgentNextStep): BaseAgentNextStep | null {
+        const reason = this.taskGraphWithholdingReason(params);
+        if (!reason) {
+            return null;
+        }
+        return {
+            step: 'Failed',
+            terminate: true,
+            errorMessage: `Task graphs are not available in ${reason}: a graph dispatches its actions and agents outside the run, ` +
+                "where nothing limits them to the run's audience or scope.",
+            previousPayload: previousDecision.previousPayload,
+            newPayload: previousDecision.newPayload || previousDecision.previousPayload
+        };
+    }
+
+    /**
+     * What this run's prompt leaves out: task graphs ({@link taskGraphWithholdingReason}), and — when the audience adds a
+     * reader — the caller's own browser and view (`CallerContext`): client tools run in the caller's browser and what they
+     * return reaches the room, and the app context (`data.appContext`, with its `AdditionalContext`) is the caller's screen.
+     */
+    private promptWithholding(params: ExecuteAgentParams): PromptWithholding {
+        return { TaskGraphs: this.runWithholdsTaskGraphs(params), CallerContext: this.runAudienceAddsReader(params) };
+    }
+
+    /**
+     * The client-tools and app-context prompt sections ({@link buildClientToolPromptSection}, {@link buildAppContextSection}),
+     * both empty when the caller's context is withheld ({@link promptWithholding}): the prompt then offers no client tool
+     * and none of the caller's app context. {@link executeClientToolsStep} refuses a client-tools step emitted anyway.
+     */
+    private callerContextSections(
+        agent: MJAIAgentEntityExtended,
+        extraData: Record<string, unknown> | undefined,
+        withhold: boolean
+    ): { clientToolDetails: string; appContext: string } {
+        if (withhold) {
+            return { clientToolDetails: '', appContext: '' };
+        }
+        return {
+            clientToolDetails: this.buildClientToolPromptSection(agent, extraData),
+            appContext: this.buildAppContextSection(extraData),
+        };
+    }
+
+    /**
+     * The `Failed` step for a client-tools step under an audience, or null. Client tools run in the caller's browser and
+     * what they return comes back into a run whose output reaches the room; the prompt does not offer them then
+     * ({@link callerContextSections}), and this refuses a step the model emits anyway, as {@link taskGraphRefusal} does a graph.
+     */
+    private clientToolsRefusal(params: ExecuteAgentParams, previousDecision: BaseAgentNextStep): BaseAgentNextStep | null {
+        if (!this.runAudienceAddsReader(params)) {
+            return null;
+        }
+        return {
+            step: 'Failed',
+            terminate: true,
+            errorMessage: "Client tools are not available in a run with an audience: they run in the caller's browser, " +
+                'and what they return would reach everyone in the conversation.',
+            previousPayload: previousDecision.previousPayload,
+            newPayload: previousDecision.newPayload || previousDecision.previousPayload
+        };
+    }
+
+    /** Clears what bounds one run — its validated scope and its hydrated audience — once the run is over. */
+    private clearRunBoundState(): void {
+        this._runScope = undefined;
+        this._audienceReaders = undefined;
+        this._audienceSource = undefined;
+    }
+
+    /**
+     * A copy of the agent-type prompt params with task graphs withheld (`enableTaskGraphs` off and the `tasks`
+     * response section hidden). A copy, never a write: the input may be the process-wide cached base.
+     */
+    private withoutTaskGraphs(promptParams: Record<string, unknown>): Record<string, unknown> {
+        const responseType = IsPlainObject(promptParams.includeResponseTypeDefinition)
+            ? (promptParams.includeResponseTypeDefinition as Record<string, unknown>)
+            : {};
+        return { ...promptParams, enableTaskGraphs: false, includeResponseTypeDefinition: { ...responseType, tasks: false } };
+    }
+
+    /**
+     * Why a session-driven (realtime / voice / bridge) run is refused, or null. A live session speaks and calls
+     * tools outside the gates that hold a run to its audience, so a run whose audience adds a reader is refused.
+     */
+    private sessionAudienceRefusal(params: ExecuteAgentParams): string | null {
+        if (!this.runAudienceAddsReader(params)) {
+            return null;
+        }
+        return `Agent '${params.agent.Name}' is session-driven (realtime), and realtime sessions cannot yet be limited to an audience; ` +
+            'run it without an Audience, or use a non-realtime agent for a shared conversation.';
     }
 
     /**
@@ -2564,6 +2982,11 @@ export class BaseAgent {
      * @throws When the agent configuration fails to load or no usable Realtime model can be resolved.
      */
     public async StartBridgeRealtimeSession(params: ExecuteAgentParams): Promise<IRealtimeSession> {
+        // A bridged session is session-driven: refused under an audience that adds a reader, as Execute refuses one.
+        const audienceRefusal = this.sessionAudienceRefusal(params);
+        if (audienceRefusal) {
+            throw new Error(audienceRefusal);
+        }
         // Mirror Execute()'s provider wiring so the realtime helpers operate on the request-scoped provider.
         this._activeProvider = params.provider ?? Metadata.Provider;
         const provider = params.provider ?? Metadata.Provider;
@@ -2624,10 +3047,16 @@ export class BaseAgent {
             ? (params.data?.realtimeSelfNames as unknown[]).filter((n): n is string => typeof n === 'string')
             : undefined;
         const hostTools = ReadHostTools(params.data?.realtimeHostTools);
+        // Note: resolveHostTools is an in-process callback function passed directly in params.data.
+        // It will not survive process boundaries or cross-host job queue serialization.
+        const resolveHostTools = typeof params.data?.resolveHostTools === 'function'
+            ? (params.data.resolveHostTools as PrepareClientSessionInput['ResolveHostTools'])
+            : undefined;
         return {
             CoAgent: params.agent,
             TargetAgentID: targetID,
             HostTools: hostTools,
+            ResolveHostTools: resolveHostTools,
             HostFraming: ReadTrimmedString(params.data?.realtimeHostFraming, 'realtimeHostFraming'),
             PriorTranscript: ReadTrimmedString(params.data?.realtimePriorTranscript, 'realtimePriorTranscript'),
             ConversationID: ReadTrimmedString(params.data?.conversationId, 'conversationId'),
@@ -2636,6 +3065,7 @@ export class BaseAgent {
             // GetAIAPIKey; realtime does not consult MJ Credentials). Absent ⇒ platform keys, as before.
             // CreateBridgeRealtimeSession (the LiveKit / telephony factory) passes no apiKeys today.
             APIKeys: params.apiKeys,
+            CredentialScope: params.CredentialScope,
             AgentSessionID: (params.data?.agentSessionId as string | undefined) ?? '',
             PreferredModelID: modelID,
             ConfigOverridesJson: BuildRealtimeOverridesJson(modelID, voice) ?? undefined,
@@ -2643,6 +3073,12 @@ export class BaseAgent {
             UserID: params.contextUser?.ID,
             DisableAutoResponse: meetingMode || undefined,
             SelfNames: selfNames,
+            // The bridge's bot can publish the agent's avatar into the room (set by the room coordinator after it asked).
+            AvatarDelivery: params.data?.realtimeAvatarDelivery === 'room' ? 'room' : undefined,
+            // A server-side session: without room delivery it can't show an avatar, so the model choice prefers none.
+            ServerSide: true,
+            // A phone call (set by the telephony hosts): the caller sees no video, so the session asks for no avatar.
+            PhoneCall: params.data?.realtimePhoneCall === true || undefined,
             // App awareness (Move 1/3/4): the app the session runs in (sources the app cascade layer +
             // RelevantAgents → allowed-agent union) and the live app-context snapshot injected at mint.
             // Both ride params.data, the same conduit async agents use for appContext.
@@ -2659,7 +3095,8 @@ export class BaseAgent {
      * without provider SDKs or DB metadata.
      *
      * Production resolution: pick the highest-power active model of AIModelType `Realtime`; then
-     * pick its highest-priority active vendor whose `DriverClass` has a resolvable API key; then
+     * pick its highest-priority active vendor whose `DriverClass` has a resolvable API key, unless another keyed
+     * vendor matches whether the run will show an avatar better ({@link ChooseRealtimeVendorForAvatar}); then
      * instantiate the driver via the `ClassFactory`. Returns `null` (never throws) if any step
      * can't be satisfied — the caller turns that into a clean FAILED result. (Per-agent realtime
      * model preference can later be wired through the agent's prompt-model config, the same path
@@ -2685,35 +3122,69 @@ export class BaseAgent {
         // candidates by priority and takes the first whose key resolves, so an organization that
         // brings its own credential for a vendor we hold no platform key for now reaches that
         // vendor — which is the point of bringing your own key, not a side effect of it.
-        const resolveAPIKey = MakeAIAPIKeyResolver(params.apiKeys);
+        const resolveAPIKey = MakeAIAPIKeyResolver(params.apiKeys, undefined, params.CredentialScope);
+        // The vendor follows whether the run will show an avatar, by the co-agent session prep's rule: a vendor that
+        // renders avatars (Vertex AI for Gemini 3.8 Live) only when it will, or when it is the only keyed vendor.
+        const showsAvatar = this.realtimeRunShowsAvatar(params);
         const candidates = this.selectRealtimeModelCandidates(params.agent, overrideModelID);
         for (const model of candidates) {
             const vendor = SelectRealtimeVendorForModel(model.ID, resolveAPIKey);
-            if (!vendor) {
+            const first = vendor ? this.instantiateRealtimeRunVendor(model.ID, vendor, resolveAPIKey) : null;
+            if (!vendor || !first) {
                 continue;
             }
-            const apiKey = resolveAPIKey(vendor.DriverClass);
-            if (!apiKey) {
-                continue;
-            }
-            const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseRealtimeModel>(
-                BaseRealtimeModel,
-                vendor.DriverClass,
-                apiKey
-            );
-            if (!instance) {
-                continue;
-            }
-            return {
-                model: instance,
-                modelID: model.ID,
-                vendorID: vendor.VendorID,
-                modelVendorID: vendor.ModelVendorID,
-                apiName: vendor.APIName,
-                driverClass: vendor.DriverClass
-            };
+            return ChooseRealtimeVendorForAvatar(vendor, first, ListRealtimeVendorsForModel(model.ID), showsAvatar, {
+                Instantiate: (other) => this.instantiateRealtimeRunVendor(model.ID, other, resolveAPIKey),
+                RendersAvatar: (resolution) =>
+                    RealtimeModelShowsAvatar({ ModelID: resolution.modelID, APIName: resolution.apiName, Model: resolution.model }, AIEngine.Instance),
+            });
         }
         return null;
+    }
+
+    /**
+     * Whether a session-driven run will show an avatar: the agent's video setting is on and the run could show one
+     * ({@link RealtimeSessionCanShowAvatar}) — a server-side session, so only when its host publishes the avatar into a
+     * room (`params.data.realtimeAvatarDelivery` `'room'`) and it is not a phone call (`params.data.realtimePhoneCall`).
+     *
+     * @param params The execution parameters.
+     */
+    private realtimeRunShowsAvatar(params: ExecuteAgentParams): boolean {
+        if (this.resolveRealtimeEffectiveConfig(params.agent).realtime?.video?.enabled !== true) {
+            return false;
+        }
+        return RealtimeSessionCanShowAvatar({
+            ServerSide: true,
+            AvatarDelivery: params.data?.realtimeAvatarDelivery === 'room' ? 'room' : undefined,
+            PhoneCall: params.data?.realtimePhoneCall === true,
+        });
+    }
+
+    /**
+     * A vendor's realtime driver on its key, with the model and vendor identifiers a run resolves to; `null` when the
+     * key or the driver is missing.
+     */
+    private instantiateRealtimeRunVendor(
+        modelID: string,
+        vendor: RealtimeVendorSelection,
+        resolveAPIKey: AIAPIKeyResolver
+    ): { model: BaseRealtimeModel; modelID: string; vendorID: string; modelVendorID: string; apiName: string; driverClass: string } | null {
+        const apiKey = resolveAPIKey(vendor.DriverClass);
+        if (!apiKey) {
+            return null;
+        }
+        const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseRealtimeModel>(BaseRealtimeModel, vendor.DriverClass, apiKey);
+        if (!instance) {
+            return null;
+        }
+        return {
+            model: instance,
+            modelID,
+            vendorID: vendor.VendorID,
+            modelVendorID: vendor.ModelVendorID,
+            apiName: vendor.APIName,
+            driverClass: vendor.DriverClass
+        };
     }
 
     /**
@@ -2982,7 +3453,9 @@ export class BaseAgent {
             undefined,
             null,
             undefined,
-            (message, verboseOnly) => this.logStatus(message, verboseOnly ?? false, params)
+            (message, verboseOnly) => this.logStatus(message, verboseOnly ?? false, params),
+            // Unreachable under an audience today (session-driven runs are refused); kept so it never leaks one.
+            this.runAudienceAddsReader(params)
         );
 
         return scratch
@@ -3037,7 +3510,10 @@ export class BaseAgent {
                 parentDepth: this._depth,
                 configurationId: params.configurationId,
                 apiKeys: params.apiKeys,
+                CredentialScope: params.CredentialScope,
+                Audience: params.Audience, // the target answers the same people, so it is bounded the same way
                 data: params.data,
+                TrustReservedRunData: params.TrustReservedRunData, // the session's data, already vetted when it started
                 verbose: params.verbose,
                 // Progress streams BOTH to the runner's narration consumer (request.OnProgress —
                 // it paces SendContextNote/RequestSpokenUpdate over the live socket) AND to any
@@ -3601,6 +4077,14 @@ export class BaseAgent {
             const nextStep = await this.executeNextStep<P>(params, config, currentNextStep, stepCount);
             stepCount++;
 
+            // A failed step cut short by a cancellation is not a failure: end the run as cancelled
+            // before the step is counted toward the consecutive-failure limit, which would end it as
+            // Failed. A step that finished is kept: a final answer the user stopped too late to
+            // prevent still completes the run.
+            if (nextStep.step === 'Failed' && params.cancellationToken?.aborted) {
+                throw new Error('Cancelled during execution');
+            }
+
             // Promote any media outputs from this step to the agent's outputs
             if (nextStep.promoteMediaOutputs && nextStep.promoteMediaOutputs.length > 0) {
                 this.PromoteMediaOutputs(nextStep.promoteMediaOutputs);
@@ -3796,6 +4280,7 @@ export class BaseAgent {
      * @param primaryScopeRecordId - Optional primary scope record ID for multi-tenant filtering
      * @param secondaryScopes - Optional secondary scope dimensions for multi-tenant filtering
      * @param secondaryScopeConfig - Optional agent-level scope config for per-dimension inheritance
+     * @param sharedOnly - Inject only shared notes and examples (no `UserID`); set when the run's audience adds a reader
      * @returns Object containing injected notes and examples
      */
     protected async InjectContextMemory(
@@ -3808,7 +4293,8 @@ export class BaseAgent {
         primaryScopeEntityId?: string,
         primaryScopeRecordId?: string,
         secondaryScopes?: Record<string, SecondaryScopeValue>,
-        secondaryScopeConfig?: SecondaryScopeConfig | null
+        secondaryScopeConfig?: SecondaryScopeConfig | null,
+        sharedOnly?: boolean
     ): Promise<{ notes: MJAIAgentNoteEntity[]; examples: MJAIAgentExampleEntity[] }> {
         // Delegate the orchestration to the shared, reusable builder so both BaseAgent and the
         // Realtime agent type inject memory identically. The observability context and verbose
@@ -3827,7 +4313,8 @@ export class BaseAgent {
             secondaryScopes,
             secondaryScopeConfig,
             observability,
-            (message, verboseOnly) => this.logStatus(message, verboseOnly)
+            (message, verboseOnly) => this.logStatus(message, verboseOnly),
+            sharedOnly
         );
 
         // Store for inclusion in result (externally observable behavior preserved)
@@ -3898,6 +4385,9 @@ export class BaseAgent {
      * @param primaryScopeRecordId - Multi-tenant primary scope record ID.
      * @param secondaryScopes - Multi-tenant secondary scope dimensions.
      * @param payload - The agent's current payload (for template rendering).
+     * @param activeSkillIDs - The skills active for this run; a lone active skill is the search's skill principal.
+     * @param audienceReaders - The run's audience readers beyond the caller (`ExecuteAgentParams.Audience`,
+     *   hydrated): each must pass the scope gate, and only results every one of them may read are injected.
      * @returns The structured RAG result, or `null` if no scopes produced results.
      */
     protected async InjectPreExecutionRAG(
@@ -3909,7 +4399,9 @@ export class BaseAgent {
         primaryScopeEntityId?: string,
         primaryScopeRecordId?: string,
         secondaryScopes?: Record<string, SecondaryScopeValue>,
-        payload?: unknown
+        payload?: unknown,
+        activeSkillIDs?: string[],
+        audienceReaders?: UserInfo[]
     ): Promise<AgentPreExecutionRAGResult | null> {
         // Delegate to the shared builder so the Realtime agent type injects pre-execution RAG
         // identically. Verbose status + non-fatal error logging are threaded through from this instance.
@@ -3924,7 +4416,9 @@ export class BaseAgent {
             secondaryScopes,
             payload,
             (message, verboseOnly) => this.logStatus(message, verboseOnly),
-            (error, options) => this.logError(error, options)
+            (error, options) => this.logError(error, options),
+            activeSkillIDs,
+            audienceReaders
         );
 
         // Store for inclusion in result (externally observable behavior preserved)
@@ -4158,6 +4652,7 @@ export class BaseAgent {
                 AgentID: agent.ID,
                 PromptName: promptName,
                 CancellationToken: signal,
+                ExecutionScope: this._runExecutionScope,
             });
             return { ...DecisionDiscoveryFromResult(result, options, DECISION_DISCOVERY_MIN_CONFIDENCE), ...sizes };
         } catch (error) {
@@ -4899,7 +5394,8 @@ export class BaseAgent {
             params.contextUser,
             params.data,
             params.actionChanges,
-            params.subAgentChanges
+            params.subAgentChanges,
+            this.promptWithholding(params)
         );
 
         // Set up the hierarchical prompt execution
@@ -4999,10 +5495,10 @@ export class BaseAgent {
             }
 
             // Enable the memory-writes response field + docs only for agents that opted in
-            // via AllowMemoryWrite. Disabled agents never see the docs, so a well-behaved
-            // LLM never emits the field (the turn loop still guards against drift).
+            // via AllowMemoryWrite, and never under an audience (memoryWriteSkip). Disabled agents never
+            // see the docs, so a well-behaved LLM never emits the field (the turn loop still guards against drift).
             const memoryWritesDocsEnabled = agentTypePromptParams?.includeMemoryWritesDocs !== false;
-            if (memoryWritesDocsEnabled && params.agent.AllowMemoryWrite === true) {
+            if (memoryWritesDocsEnabled && this.memoryWriteSkip(params) === null) {
                 promptParams.data['_MEMORY_WRITES_ENABLED'] = true;
             }
 
@@ -5055,6 +5551,7 @@ export class BaseAgent {
             if (params.apiKeys && params.apiKeys.length > 0) {
                 childPromptParams.apiKeys = params.apiKeys;
             }
+            childPromptParams.CredentialScope = params.CredentialScope;
             
             // Pass through configurationId to both parent and child prompts if provided
             if (params.configurationId) {
@@ -5097,40 +5594,23 @@ export class BaseAgent {
             promptParams.apiKeys = params.apiKeys;
             this.logStatus(`🔑 Using ${params.apiKeys.length} API key(s) provided at runtime`, true, params);
         }
+        promptParams.CredentialScope = params.CredentialScope;
+        if (!CredentialScopeAllows(params.CredentialScope, 'Environment')) {
+            this.logStatus(`🔒 Credential scope is ${params.CredentialScope}: the platform's environment API keys will not be used`, true, params);
+        }
 
         // Thread the per-request provider so prompt run records are saved through the isolated provider
         promptParams.provider = params.provider || this._activeProvider;
 
         // Overlay scope-resolved run settings (model / vendor / configuration / effort / sampling
-        // knobs) for this run's scope — the config sibling of scoped prompt parts. Uses the same
-        // run scope BaseAgent already carries; runtime-explicit values set above still win.
+        // knobs) for this run's scope — the config sibling of scoped prompt parts. Uses the run's
+        // validated scope (runScopeForContext); runtime-explicit values set above still win.
         const scopedConfigPromptId = promptParams.prompt?.ID;
         if (scopedConfigPromptId) {
-            const primaryScopeEntityName =
-                params.PrimaryScopeEntityName ?? (params.data?.PrimaryScopeEntityName as string | undefined);
-            let primaryScopeEntityId: string | undefined;
-            if (primaryScopeEntityName) {
-                const primaryEntity = this.ProviderToUse.EntityByName(primaryScopeEntityName);
-                if (primaryEntity) {
-                    primaryScopeEntityId = primaryEntity.ID;
-                }
-            }
             const configResolver =
                 MJGlobal.Instance.ClassFactory.CreateInstance<ScopedPromptConfigResolver>(ScopedPromptConfigResolver) ??
                 new ScopedPromptConfigResolver();
-            ApplyScopedPromptConfig(
-                configResolver,
-                scopedConfigPromptId,
-                {
-                    primaryScopeEntityId,
-                    primaryScopeRecordId:
-                        params.PrimaryScopeRecordID ?? (params.data?.PrimaryScopeRecordID as string | undefined),
-                    secondaryScopes:
-                        params.SecondaryScopes ??
-                        (params.data?.SecondaryScopes as Record<string, SecondaryScopeValue> | undefined),
-                },
-                promptParams,
-            );
+            ApplyScopedPromptConfig(configResolver, scopedConfigPromptId, this.scopedPromptConfigScope(params), promptParams);
         }
 
         // Prompt-cache layout. The per-iteration state (and, when the child prompt is volatile, the
@@ -6435,7 +6915,7 @@ export class BaseAgent {
         };
         try {
             const outcome = await ExecuteSelfCheck({
-                engine: ProviderRubricEngine(provider, params.contextUser),
+                engine: ProviderRubricEngine(provider, params.contextUser, this.runPromptExecutionScope(params)),
                 link,
                 runId: agentRun.ID,
                 agentKind: this.AgentTypeInstance?.constructor?.name === 'LoopAgentType' ? 'loop' : 'flow',
@@ -6879,24 +7359,15 @@ export class BaseAgent {
 
     /**
      * Converts ChatMessageContent to a string representation.
-     * Handles both simple strings and content block arrays.
+     * Handles both simple strings and content block arrays. Text blocks keep their text;
+     * image, audio, video and file blocks become a short stub instead of their base64.
      *
      * @param content - The message content to convert
      * @returns String representation of the content
      * @protected
      */
     protected contentToString(content: ChatMessageContent): string {
-        if (typeof content === 'string') {
-            return content;
-        }
-
-        // Content is an array of blocks - convert to string
-        return content.map((block: ChatMessageContentBlock) => {
-            if (block.type === 'text') {
-                return block.content;
-            }
-            return `[${block.type}: ${block.content}]`;
-        }).join('\n');
+        return ReplaceMediaBlocksWithStubs(content);
     }
 
     /**
@@ -7210,9 +7681,7 @@ export class BaseAgent {
 
             const originalTokens = candidate.tokens;
             const originalMessage = candidate.message as AgentChatMessage;
-            const originalContent = typeof originalMessage.content === 'string'
-                ? originalMessage.content
-                : JSON.stringify(originalMessage.content);
+            const originalContent = ReplaceMediaBlocksWithStubs(originalMessage.content);
 
             if (originalMessage.role === 'tool') {
                 // compact each tool_result block's text; the block structure is what the provider needs.
@@ -7306,9 +7775,7 @@ export class BaseAgent {
 
             const originalTokens = candidate.tokens;
             const originalMessage = candidate.message as AgentChatMessage;
-            const originalContent = typeof originalMessage.content === 'string'
-                ? originalMessage.content
-                : JSON.stringify(originalMessage.content);
+            const originalContent = ReplaceMediaBlocksWithStubs(originalMessage.content);
 
             // Aggressive compaction - keep only first 200 chars
             const compactedContent = await this.compactMessage(
@@ -7675,11 +8142,13 @@ The context is now within limits. Please retry your request with the recovered c
      *
      * Gated on conversationId + root depth — programmatic runs and sub-agents skip it.
      * Skipped under a history floor (`ConversationHistoryFrom`): the previous run's tool
-     * results can quote messages from before the floor.
+     * results can quote messages from before the floor. Skipped under an audience
+     * (`ExecuteAgentParams.Audience`) too: the previous run's results were fetched for
+     * whoever ran it, not for this room.
      * @protected
      */
     protected async injectPriorTurnToolResults(params: ExecuteAgentParams): Promise<void> {
-        if (!params.conversationId || this._depth !== 0 || params.ConversationHistoryFrom) {
+        if (!params.conversationId || this._depth !== 0 || params.ConversationHistoryFrom || this.runAudienceAddsReader(params)) {
             return;
         }
         try {
@@ -7688,25 +8157,559 @@ The context is now within limits. Please retry your request with the recovered c
             if (!body) {
                 return;
             }
-            const message: AgentChatMessage = {
-                role: 'user',
-                content: body,
-                metadata: {
-                    turnAdded: 0,
-                    messageType: BaseAgent.toolResultMessageType,
-                    expirationTurns: 2,
-                    expirationMode: 'Compact',
-                    compactMode: 'First N Chars',
-                    compactLength: 500,
-                    compactPromptId: '',
-                },
-            };
-            params.conversationMessages.push(message);
+            params.conversationMessages.push(this.buildCarryForwardMessage(body));
             this.logStatus(`[PriorTurnToolResults] Carried ${steps.length} tool result(s) forward from the previous run`, true, params);
         } catch (error) {
             // Carry-forward is an optimization — never let it break the run.
             this.logStatus(`[PriorTurnToolResults] Skipped (contained error): ${error instanceof Error ? error.message : error}`, true, params);
         }
+    }
+
+    /**
+     * Carries a STOPPED previous turn's completed results forward into this run's context.
+     *
+     * {@link injectPriorTurnToolResults} covers the normal case: the previous run settled and
+     * its inline tool results ride along one turn. A run the user stopped never settles, so
+     * that path skips it, and the next turn would redo every action the stopped run had already
+     * finished (observed: a stopped Sage run had five weather lookups and fifteen searches done;
+     * "keep going" redid all of them). This path looks at the newest root run for this agent in
+     * the conversation and, when it is one the user stopped, carries it forward per
+     * {@link ExecuteAgentParams.stopContinuationMode}: by default its own message stack is resumed
+     * so the agent picks up where it stopped; in summary mode its completed Actions and Tool results
+     * go in as one transient message that says to continue, not restart. A settled newest run means
+     * the normal path already has the context, so nothing is added here. During execution the two
+     * halves run separately: {@link loadStoppedRunContinuation} in the parallel phase, then
+     * {@link applyStoppedRunContinuation} once it settles.
+     *
+     * Same gates as the sibling: root depth, a conversation, no history floor. Fail-soft.
+     * @protected
+     */
+    protected async injectStoppedRunResults(params: ExecuteAgentParams): Promise<void> {
+        const continuationMessage = params.conversationMessages[params.conversationMessages.length - 1];
+        const continuation = await this.loadStoppedRunContinuation(params);
+        this.applyStoppedRunContinuation(params, continuation, continuationMessage);
+    }
+
+    /**
+     * The I/O half of {@link injectStoppedRunResults}: finds a user-stopped predecessor and loads its
+     * steps (every step for the full-stack resume, only completed results for the summary). Runs inside
+     * the pre-execution parallel phase; nothing here touches the message list.
+     * @protected
+     */
+    protected async loadStoppedRunContinuation(params: ExecuteAgentParams): Promise<StoppedRunContinuation | null> {
+        if (!params.conversationId || this._depth !== 0 || params.ConversationHistoryFrom) {
+            return null;
+        }
+        try {
+            // A caller that chained this run (the run resolver, after its own stopped-predecessor
+            // lookup, or a client continuing a run) already named the predecessor: check that one
+            // row rather than searching the conversation again. Only an unchained run searches.
+            const runId = params.lastRunId
+                ? await this.userStoppedRunIdIfStopped(params.lastRunId, params)
+                : await this.findUserStoppedPredecessorRunId(params);
+            if (!runId) {
+                return null;
+            }
+            const mode = params.stopContinuationMode ?? BaseAgent.DefaultStopContinuationMode;
+            const steps = mode === 'full_stack'
+                ? await this.loadStoppedRunStack(runId, params)
+                : await this.loadStoppedRunResultSteps(runId, params);
+            return { RunID: runId, Mode: mode, Steps: steps };
+        } catch (error) {
+            this.logStatus(`[StoppedRunResults] Skipped (contained error): ${error instanceof Error ? error.message : error}`, true, params);
+            return null;
+        }
+    }
+
+    /**
+     * The message half of {@link injectStoppedRunResults}, applied once the pre-execution phase has
+     * settled so it never races the memory and RAG injections running beside the load.
+     *
+     * Full stack: the stopped run's own turns are spliced in ahead of the user's new message, in the
+     * shape the loop built while running, so the agent resumes where it stopped. When the stack cannot
+     * be resumed (no recorded prompt, or its anchor is missing) this falls back to the summary.
+     * Summary: the completed results go in as one carried-forward message. Fail-soft.
+     * @protected
+     */
+    protected applyStoppedRunContinuation(
+        params: ExecuteAgentParams,
+        continuation: StoppedRunContinuation | null,
+        continuationMessage: ChatMessage | undefined
+    ): void {
+        if (!continuation) {
+            return;
+        }
+        try {
+            if (continuation.Mode === 'full_stack' && this.tryResumeStoppedRunStack(params, continuation, continuationMessage)) {
+                return;
+            }
+            const steps = continuation.Steps.filter(BaseAgent.isCarriedForwardResultStep);
+            const body = BaseAgent.BuildStoppedRunResultsMessage(steps, BaseAgent.maxStoppedRunResultChars);
+            if (!body) {
+                return;
+            }
+            params.conversationMessages.push(this.buildCarryForwardMessage(body));
+            this.logStatus(`[StoppedRunResults] Carried ${steps.length} completed step result(s) forward from stopped run ${continuation.RunID}`, true, params);
+        } catch (error) {
+            this.logStatus(`[StoppedRunResults] Skipped (contained error): ${error instanceof Error ? error.message : error}`, true, params);
+        }
+    }
+
+    /**
+     * The full-stack half of {@link applyStoppedRunContinuation}: true when the stopped run's turns were
+     * spliced in. Any failure leaves the messages untouched and returns false, so the caller carries
+     * the results as a summary instead of losing them.
+     * @private
+     */
+    private tryResumeStoppedRunStack(
+        params: ExecuteAgentParams,
+        continuation: StoppedRunContinuation,
+        continuationMessage: ChatMessage | undefined
+    ): boolean {
+        try {
+            const resumed = this.buildResumedStoppedRunTurns(continuation.Steps, params);
+            if (resumed && BaseAgent.SpliceResumedTurns(params.conversationMessages, resumed, continuationMessage)) {
+                this.logStatus(`[StoppedRunResume] Resumed ${resumed.length} message(s) from stopped run ${continuation.RunID}`, true, params);
+                return true;
+            }
+            this.logStatus(`[StoppedRunResume] Stack of stopped run ${continuation.RunID} could not be resumed; carrying its results as a summary`, true, params);
+        } catch (error) {
+            this.logStatus(`[StoppedRunResume] Resume failed (${error instanceof Error ? error.message : error}); carrying its results as a summary`, true, params);
+        }
+        return false;
+    }
+
+    /** The mode a run uses when the caller does not set {@link ExecuteAgentParams.stopContinuationMode}. */
+    public static readonly DefaultStopContinuationMode: StopContinuationMode = 'full_stack';
+
+    /**
+     * Placed just before the user's new message when a stopped run's stack is resumed, so the model
+     * knows the turns above it were interrupted and what follows is how to continue.
+     */
+    public static readonly StoppedRunResumeNotice =
+        '[Note: The user stopped the previous execution at this point. The instruction that follows is the continuation request.]';
+
+    /** Result code and message for an action the stopped run requested but never ran. */
+    private static readonly stoppedBeforeRunResultCode = 'NOT_EXECUTED';
+    private static readonly stoppedBeforeRunMessage = 'Not executed: the user stopped the run before this action finished.';
+
+    /**
+     * The stopped run's turns in the shape the loop builds, or null when they cannot be recovered.
+     *
+     * The last prompt step recorded the run's whole message stack as it went into that prompt; the
+     * first prompt step recorded the stack the run started from (history plus this run's injections,
+     * which the new run adds for itself). The difference is the run's own turns. If the last prompt
+     * completed, its decision and the steps after it are rebuilt with the loop's own builders.
+     * @protected
+     */
+    protected buildResumedStoppedRunTurns(steps: StoppedRunStackStepRecord[], params: ExecuteAgentParams): AgentChatMessage[] | null {
+        const prompts = steps.filter(s => s.StepType === 'Prompt');
+        if (prompts.length === 0) {
+            return null;
+        }
+        const lastPrompt = prompts[prompts.length - 1];
+        const loopTurns = BaseAgent.ExtractStoppedRunLoopTurns(
+            BaseAgent.readPromptStepStack(prompts[0]),
+            BaseAgent.readPromptStepStack(lastPrompt)
+        );
+        if (!loopTurns) {
+            return null;
+        }
+        const decision = lastPrompt.Status === 'Completed' ? BaseAgent.readPromptStepDecision(lastPrompt) : null;
+        const tail = this.buildStoppedRunTail(decision, steps.filter(s => s.StepNumber > lastPrompt.StepNumber), params);
+        return [...loopTurns, ...tail].map(BaseAgent.restampResumedTurn);
+    }
+
+    /**
+     * The run's own turns: what follows the run's starting message in its last recorded stack, minus
+     * the per-request runtime-state fragments (the new run appends its own). The starting message is
+     * matched at its original position first, so a repeated message earlier in the history ("keep
+     * going" twice) cannot be mistaken for it. Null when it cannot be found.
+     */
+    public static ExtractStoppedRunLoopTurns(
+        firstStack: AgentChatMessage[] | null,
+        lastStack: AgentChatMessage[] | null
+    ): AgentChatMessage[] | null {
+        if (!firstStack?.length || !lastStack?.length) {
+            return null;
+        }
+        const key = (m: ChatMessage): string => `${m.role}\u0000${JSON.stringify(m.content)}`;
+        const startKey = key(firstStack[firstStack.length - 1]);
+        const expectedAt = firstStack.length - 1;
+        const at = lastStack[expectedAt] && key(lastStack[expectedAt]) === startKey
+            ? expectedAt
+            : lastStack.map(key).lastIndexOf(startKey);
+        if (at < 0) {
+            return null;
+        }
+        return lastStack.slice(at + 1).filter(m => m.metadata?.volatileState !== true);
+    }
+
+    /**
+     * Inserts resumed turns ahead of the user's new message (and ahead of the stopped run's own reply
+     * to the user, when that sits right before it), followed by {@link StoppedRunResumeNotice}. The new
+     * message is found by identity, captured before the pre-execution phase added anything. Returns
+     * false, changing nothing, when it is not a user message still in the list.
+     */
+    public static SpliceResumedTurns(
+        messages: ChatMessage[],
+        resumed: AgentChatMessage[],
+        continuationMessage: ChatMessage | undefined
+    ): boolean {
+        const at = continuationMessage ? messages.indexOf(continuationMessage) : -1;
+        if (at < 0 || continuationMessage?.role !== 'user') {
+            return false;
+        }
+        const notice: AgentChatMessage = { role: 'user', content: BaseAgent.StoppedRunResumeNotice };
+        const previous = messages[at - 1] as AgentChatMessage | undefined;
+        const stoppedReplyAt = previous?.role === 'assistant' && !previous.toolCalls?.length ? at - 1 : at;
+        messages.splice(at, 0, notice);
+        messages.splice(stoppedReplyAt, 0, ...resumed);
+        return true;
+    }
+
+    /**
+     * What the stopped run's last completed prompt decided, rebuilt as the loop would have written it:
+     * the model's native call turn when results go back natively, the invocation record and the results
+     * of the actions that finished (and a not-executed result for the ones that did not) for an Actions
+     * turn, otherwise the completed results as a carried-forward message. Any native call left without
+     * a result is then answered, so the history is valid for every provider.
+     * @protected
+     */
+    protected buildStoppedRunTail(
+        decision: BaseAgentNextStep | null,
+        tailSteps: StoppedRunStackStepRecord[],
+        params: ExecuteAgentParams
+    ): AgentChatMessage[] {
+        const tail: AgentChatMessage[] = [];
+        if (!decision) {
+            return tail;
+        }
+        const scratch: ExecuteAgentParams = { ...params, conversationMessages: tail };
+        const native = decision.nativeTurn?.sendResultsNatively === true;
+        if (native && decision.nativeTurn) {
+            tail.push(BuildAssistantToolCallTurn(decision.nativeTurn) as AgentChatMessage);
+        }
+        if (decision.step === 'Actions' && decision.actions?.length) {
+            if (!native) {
+                tail.push({ role: 'user', content: this.buildActionInvocationMessage(decision.actions) });
+            }
+            const summaries = this.summarizeStoppedRunActions(decision.actions, tailSteps);
+            this.appendActionResults(scratch, summaries, this.buildActionResultsMessage(summaries), undefined, decision);
+        } else {
+            const results = BaseAgent.BuildStoppedRunResultsMessage(tailSteps.filter(BaseAgent.isCarriedForwardResultStep), BaseAgent.maxStoppedRunResultChars);
+            if (results) {
+                tail.push(this.buildCarryForwardMessage(results));
+            }
+        }
+        this.reconcileUnansweredToolCalls(scratch);
+        return tail;
+    }
+
+    /** One result per requested action, in request order: its completed step's result, or not executed. @private */
+    private summarizeStoppedRunActions(requested: AgentAction[], tailSteps: StoppedRunStackStepRecord[]): ActionResultSummary[] {
+        const completed = tailSteps.filter(s => s.StepType === 'Actions' && s.Status === 'Completed');
+        const used = new Set<StoppedRunStackStepRecord>();
+        return requested.map(action => {
+            const step = completed.find(s => !used.has(s) && BaseAgent.readStoppedActionName(s) === action.name);
+            const summary = step ? this.summarizeStoppedActionStep(action.name, step) : null;
+            if (!step || !summary) {
+                return {
+                    actionName: action.name,
+                    success: false,
+                    params: [],
+                    resultCode: BaseAgent.stoppedBeforeRunResultCode,
+                    message: BaseAgent.stoppedBeforeRunMessage,
+                };
+            }
+            used.add(step);
+            return summary;
+        });
+    }
+
+    /**
+     * A completed action step as the loop summarizes a live action result: output parameters only,
+     * with large media swapped for placeholders. Null when the step's output cannot be read.
+     * @private
+     */
+    private summarizeStoppedActionStep(actionName: string, step: StoppedRunStackStepRecord): ActionResultSummary | null {
+        let output: { actionResult?: { success?: boolean; resultCode?: string; message?: string; parameters?: ActionParam[] } };
+        try {
+            output = step.OutputData ? JSON.parse(step.OutputData) : {};
+        } catch {
+            return null;
+        }
+        const result = output.actionResult;
+        if (!result) {
+            return null;
+        }
+        const success = result.success === true;
+        const outputParams = (result.parameters ?? []).filter(p => p.Type === 'Both' || p.Type === 'Output');
+        const actionEntity = ActionEngineServer.Instance.Actions?.find(a => a.Name === actionName);
+        return {
+            actionName,
+            success,
+            params: this.interceptLargeBinaryContent(outputParams, actionEntity),
+            resultCode: result.resultCode || (success ? 'SUCCESS' : 'ERROR'),
+            message: result.message || (success ? 'Action completed' : 'Unknown error'),
+        };
+    }
+
+    /** The message stack a prompt step recorded as its input, or null. @private */
+    private static readPromptStepStack(step: StoppedRunStackStepRecord): AgentChatMessage[] | null {
+        try {
+            const input: { conversationMessages?: AgentChatMessage[] } = step.InputData ? JSON.parse(step.InputData) : {};
+            return Array.isArray(input.conversationMessages) ? input.conversationMessages : null;
+        } catch {
+            return null;
+        }
+    }
+
+    /** The decision a completed prompt step recorded, or null. @private */
+    private static readPromptStepDecision(step: StoppedRunStackStepRecord): BaseAgentNextStep | null {
+        try {
+            const output: { nextStep?: BaseAgentNextStep } = step.OutputData ? JSON.parse(step.OutputData) : {};
+            return output.nextStep ?? null;
+        } catch {
+            return null;
+        }
+    }
+
+    /** The action an Actions step ran, from its recorded input, or null. @private */
+    private static readStoppedActionName(step: StoppedRunStackStepRecord): string | null {
+        try {
+            const input: { actionName?: string } = step.InputData ? JSON.parse(step.InputData) : {};
+            return input.actionName ?? null;
+        } catch {
+            return null;
+        }
+    }
+
+    /**
+     * A resumed turn re-dated to this run's first turn. The stopped run's turn numbers mean nothing
+     * to this run's counter, and expiry compares the two, so a resumed result ages from now.
+     * @private
+     */
+    private static restampResumedTurn(message: AgentChatMessage): AgentChatMessage {
+        return message.metadata?.turnAdded !== undefined
+            ? { ...message, metadata: { ...message.metadata, turnAdded: 0 } }
+            : message;
+    }
+
+    /** A step whose result the summary carries: a completed, successful Actions or Tool step. @private */
+    private static isCarriedForwardResultStep(step: StoppedRunStackStepRecord): boolean {
+        const types: ReadonlyArray<string> = BaseAgent.stoppedRunCarryForwardPredicate.stepTypes;
+        return types.includes(step.StepType) &&
+            step.Status === BaseAgent.stoppedRunCarryForwardPredicate.stepStatus &&
+            step.Success === true;
+    }
+
+    /**
+     * A carried-forward results message: a user-role message that expires after two turns and
+     * compacts to its head, so results reused once never compound across the conversation. Shared
+     * by the settled-run and stopped-run carry-forwards so the two cannot age differently.
+     * @private
+     */
+    private buildCarryForwardMessage(content: string): AgentChatMessage {
+        return {
+            role: 'user',
+            content,
+            metadata: {
+                turnAdded: 0,
+                messageType: BaseAgent.toolResultMessageType,
+                expirationTurns: 2,
+                expirationMode: 'Compact',
+                compactMode: 'First N Chars',
+                compactLength: 500,
+                compactPromptId: '',
+            },
+        };
+    }
+
+    /**
+     * The ID of this agent's newest root run on this turn's branch path IF the user stopped it,
+     * else null. One query over the runs that could be the predecessor (settled, or stopped by
+     * the user): the newest decides. A stopped run older than a settled one is history the
+     * settled run already built on, so it is not carried again. The path scopes it the same way
+     * as {@link loadPriorTurnToolResultSteps}: a run stopped on a sibling branch is never resumed.
+     * @private
+     */
+    private async findUserStoppedPredecessorRunId(params: ExecuteAgentParams): Promise<string | null> {
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+        const newest = await rv.RunView<{ ID: string; Status: string; CancellationReason: string | null }>({
+            EntityName: 'MJ: AI Agent Runs',
+            ExtraFilter: MJAIAgentRunEntityExtended.BuildStoppedPredecessorFilter(
+                params.conversationId!, params.agent.ID, params.ConversationBranchID ?? null, this._conversationBranches
+            ),
+            OrderBy: '__mj_CreatedAt DESC',
+            MaxRows: 1,
+            Fields: ['ID', 'Status', 'CancellationReason'],
+            ResultType: 'simple',
+            // The row this looks for was written by the Stop button moments ago; read the database, not a cache.
+            BypassCache: true,
+        }, params.contextUser);
+        const run = newest.Success ? newest.Results?.[0] : undefined;
+        return run && MJAIAgentRunEntityExtended.IsUserStopped(run.Status, run.CancellationReason) ? run.ID : null;
+    }
+
+    /**
+     * `runId` if that run is one the user stopped, else null. The chained-run counterpart of
+     * {@link findUserStoppedPredecessorRunId}: one primary-key read of the named run instead of a
+     * search of the conversation, so a run the resolver already resolved is not looked up twice,
+     * and a run chained to a settled predecessor (an ordinary continuation) resumes nothing.
+     * @private
+     */
+    private async userStoppedRunIdIfStopped(runId: string, params: ExecuteAgentParams): Promise<string | null> {
+        if (!IsValidUUID(runId)) {
+            return null;
+        }
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+        const result = await rv.RunView<{ ID: string; Status: string; CancellationReason: string | null }>({
+            EntityName: 'MJ: AI Agent Runs',
+            ExtraFilter: `ID='${runId}'`,
+            MaxRows: 1,
+            Fields: ['ID', 'Status', 'CancellationReason'],
+            ResultType: 'simple',
+            // The row this checks was written by the Stop button moments ago; read the database, not a cache.
+            BypassCache: true,
+        }, params.contextUser);
+        const run = result.Success ? result.Results?.[0] : undefined;
+        return run && MJAIAgentRunEntityExtended.IsUserStopped(run.Status, run.CancellationReason) ? run.ID : null;
+    }
+
+    /**
+     * Every step of a stopped run, in step order: the full-stack resume reads the prompt steps'
+     * recorded stacks and which requested actions completed. Read from the database, since the run
+     * was stopped moments ago.
+     * @private
+     */
+    private async loadStoppedRunStack(runId: string, params: ExecuteAgentParams): Promise<StoppedRunStackStepRecord[]> {
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+        const steps = await rv.RunView<StoppedRunStackStepRecord>({
+            EntityName: 'MJ: AI Agent Run Steps',
+            ExtraFilter: `AgentRunID='${runId}'`,
+            OrderBy: 'StepNumber ASC',
+            Fields: ['StepNumber', 'StepType', 'StepName', 'Status', 'Success', 'InputData', 'OutputData'],
+            ResultType: 'simple',
+            BypassCache: true,
+        }, params.contextUser);
+        return steps.Success ? (steps.Results || []) : [];
+    }
+
+    /** The completed, successful Actions and Tool steps of a stopped run, in step order. @private */
+    private async loadStoppedRunResultSteps(runId: string, params: ExecuteAgentParams): Promise<StoppedRunStackStepRecord[]> {
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+        const steps = await rv.RunView<StoppedRunStackStepRecord>({
+            EntityName: 'MJ: AI Agent Run Steps',
+            ExtraFilter: `AgentRunID='${runId}' AND StepType IN (${BaseAgent.stoppedRunCarryForwardPredicate.stepTypes.map(t => `'${t}'`).join(', ')}) ` +
+                `AND Status='${BaseAgent.stoppedRunCarryForwardPredicate.stepStatus}' AND Success=1`,
+            OrderBy: 'StepNumber ASC',
+            Fields: ['StepNumber', 'StepType', 'StepName', 'Status', 'Success', 'InputData', 'OutputData'],
+            ResultType: 'simple',
+            BypassCache: true,
+        }, params.contextUser);
+        return steps.Success ? (steps.Results || []) : [];
+    }
+
+    /**
+     * Budget for the stopped-run carry-forward message. Smaller than a standalone tool result on
+     * purpose: this rides at the front of a continuation turn's context, and a stopped run can
+     * hold dozens of search results. ~7k tokens keeps the useful values and drops the long tails.
+     */
+    protected static readonly maxStoppedRunResultChars = 28_000;
+
+    /**
+     * Renders a stopped run's completed step results into the carried-forward message body.
+     * Pure and static for testability. An Actions step renders as the action call (name and
+     * params) with its output parameters, or its message when it produced none; a Tool step
+     * renders under the same contract as {@link BuildPriorTurnToolResultsMessage}. Failed or
+     * unparseable steps are skipped. Each section is capped at an even share of `maxChars`
+     * (never below a readable floor) and the whole body at `maxChars`, with a note for anything
+     * dropped. Returns null when nothing usable remains.
+     */
+    public static BuildStoppedRunResultsMessage(steps: ReadonlyArray<StoppedRunStepRecord>, maxChars: number): string | null {
+        const sections: string[] = [];
+        const perSectionMax = Math.max(BaseAgent.minStoppedRunSectionChars, Math.floor(maxChars / Math.max(steps.length, 1)));
+        let usedChars = 0;
+        let dropped = 0;
+        for (const step of steps) {
+            const section = BaseAgent.renderStoppedRunStep(step);
+            if (!section) {
+                continue;
+            }
+            const capped = section.length > perSectionMax
+                ? `${section.slice(0, perSectionMax)}\n[truncated]`
+                : section;
+            if (usedChars + capped.length > maxChars && sections.length > 0) {
+                dropped++;
+                continue;
+            }
+            usedChars += capped.length;
+            sections.push(capped);
+        }
+        if (sections.length === 0) {
+            return null;
+        }
+        const header = 'Your previous turn was stopped by the user before it finished. The actions and tools listed below ' +
+            'were ALREADY EXECUTED in that turn and their results are still valid. Treat each entry as a result you already ' +
+            'have: do not run the action or call a tool again for it, and do not invoke the action names below as tools. ' +
+            'Continue from where the stopped turn left off rather than starting over.';
+        const droppedNote = dropped > 0 ? `\n\n[${dropped} additional result(s) omitted for size; re-call those if needed]` : '';
+        return `${header}\n${sections.join('\n\n')}${droppedNote}`;
+    }
+
+    /** One stopped-run step as a result section, or null when it carries nothing reusable. @private */
+    private static renderStoppedRunStep(step: StoppedRunStepRecord): string | null {
+        if (step.StepType === 'Tool') {
+            return BaseAgent.BuildPriorTurnToolResultsMessage([{ OutputData: step.OutputData }], Number.MAX_SAFE_INTEGER)
+                ?.split('\n').slice(1).join('\n') || null; // the sibling renderer's body without its header line
+        }
+        if (step.StepType !== 'Actions' || !step.InputData || !step.OutputData) {
+            return null;
+        }
+        let input: { actionName?: string; actionParams?: unknown };
+        let output: { actionResult?: { success?: boolean; message?: string; parameters?: Array<{ Name: string; Value: unknown; Type: string }> } };
+        try {
+            input = JSON.parse(step.InputData);
+            output = JSON.parse(step.OutputData);
+        } catch {
+            return null;
+        }
+        const result = output.actionResult;
+        if (!input.actionName || result?.success !== true) {
+            return null;
+        }
+        const outputs: Record<string, unknown> = {};
+        for (const param of result.parameters ?? []) {
+            if (param.Type === BaseAgent.actionOutputParamType && param.Value !== undefined && param.Value !== null) {
+                outputs[param.Name] = param.Value;
+            }
+        }
+        const body = Object.keys(outputs).length > 0 ? RenderToolResultData(outputs) : (result.message ?? '');
+        if (!body) {
+            return null;
+        }
+        // Deliberately NOT the inline-tool heading (`### tool({...})`): an agent shown that shape for an
+        // action tried to call the action as a conversation tool. Say what it is in words.
+        return `### Already executed: action "${input.actionName}" with params ${JSON.stringify(input.actionParams ?? {})}\n` +
+            `Result:\n\`\`\`json\n${body}\n\`\`\``;
+    }
+
+    /**
+     * The `MJ: AI Agent Runs` predicate for this agent's previous settled root run on one
+     * branch path: the run's reply row must be on that path, so a run made on a sibling
+     * branch is never carried forward, and not replaced by a rerun of its turn, so a replaced
+     * answer's tool results are never carried forward.
+     */
+    public static BuildPriorTurnRunFilter(
+        conversationId: string,
+        agentId: string,
+        branchId: string | null,
+        branches: ReadonlyArray<ConversationBranchRow>,
+        statusList: string
+    ): string {
+        return `ConversationID='${conversationId}' AND Status IN (${statusList}) AND ParentRunID IS NULL AND AgentID='${agentId}'`
+            + ` AND ${MJAIAgentRunEntityExtended.BuildReplyOnBranchPathFilter(conversationId, branchId, branches)}`;
     }
 
     /**
@@ -7724,7 +8727,8 @@ The context is now within limits. Please retry your request with the recovered c
      * @private
      */
     private async loadPriorTurnToolResultSteps(params: ExecuteAgentParams): Promise<CarryForwardStepRecord[]> {
-        const cached = PriorTurnToolResultCache.Instance.Get(params.conversationId!, params.agent.ID);
+        const branchId = params.ConversationBranchID ?? null;
+        const cached = PriorTurnToolResultCache.Instance.Get(params.conversationId!, params.agent.ID, branchId);
         if (cached) {
             this.logStatus(`[PriorTurnToolResults] Prior-run tool results served from cache (${cached.length} step(s), no DB lookup)`, true, params);
             return cached;
@@ -7734,10 +8738,11 @@ The context is now within limits. Please retry your request with the recovered c
         const statusList = predicate.runStatuses.map(s => `'${s}'`).join(', ');
         const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         // AgentID scopes provenance: in a multi-agent conversation, agent B must never
-        // inherit agent A's results labeled "your previous turn".
+        // inherit agent A's results labeled "your previous turn". The branch path scopes it
+        // the same way: a run on a sibling branch is never carried forward.
         const priorRun = await rv.RunView<{ ID: string }>({
             EntityName: 'MJ: AI Agent Runs',
-            ExtraFilter: `ConversationID='${params.conversationId}' AND Status IN (${statusList}) AND ParentRunID IS NULL AND AgentID='${params.agent.ID}'`,
+            ExtraFilter: BaseAgent.BuildPriorTurnRunFilter(params.conversationId!, params.agent.ID, branchId, this._conversationBranches, statusList),
             OrderBy: '__mj_CreatedAt DESC',
             MaxRows: 1,
             Fields: ['ID'],
@@ -7765,9 +8770,11 @@ The context is now within limits. Please retry your request with the recovered c
      * only when the run row settled as {@link settledRunStatuses} (Completed OR
      * AwaitingFeedback — the normal chat-turn ending) — a failed run leaves the previous
      * settled run's entry standing, just as the RunView filter would. Scoped to this
-     * run's agent (cache key = conversation + agent) so parallel agents in one
-     * conversation never cross-pollinate. An empty projection is cached too (the
-     * negative-cache case that spares tool-free conversations the queries every turn).
+     * run's agent and branch (cache key = conversation + agent + branch) so parallel
+     * agents in one conversation, and sibling branches, never cross-pollinate. An empty
+     * projection is cached too (the negative-cache case that spares tool-free
+     * conversations the queries every turn). The run's reply row is stored with the entry,
+     * so the entry is no longer served once a rerun of its turn replaces that row.
      * Same-node edge semantics (failed step INSERTs, concurrent completions) are
      * documented on the cache class. Called from {@link finalizeAgentRun}.
      * @private
@@ -7782,7 +8789,13 @@ The context is now within limits. Please retry your request with the recovered c
         const records: CarryForwardStepRecord[] = (this._agentRun.Steps || [])
             .filter(s => s.StepType === predicate.stepType && s.Status === predicate.stepStatus)
             .map(s => ({ OutputData: s.OutputData || null }));
-        PriorTurnToolResultCache.Instance.Set(conversationId, this._agentRun.AgentID, records);
+        PriorTurnToolResultCache.Instance.Set(
+            conversationId,
+            this._agentRun.AgentID,
+            this._executeParams?.ConversationBranchID ?? null,
+            records,
+            this._agentRun.ConversationDetailID ?? null
+        );
     }
 
     /**
@@ -7811,7 +8824,7 @@ The context is now within limits. Please retry your request with the recovered c
      * post-turn compaction gate ({@link startPostTurnCompaction}).
      */
     private static readonly settledRunStatuses: ReadonlyArray<MJAIAgentRunEntityExtended['Status']> =
-        ['Completed', 'AwaitingFeedback'];
+        MJAIAgentRunEntityExtended.SettledStatuses;
 
     /**
      * The carry-forward row predicate — the SINGLE source shared by the two places that
@@ -7834,6 +8847,25 @@ The context is now within limits. Please retry your request with the recovered c
         stepStatus: MJAIAgentRunStepEntityExtended['Status'];
         runStatuses: ReadonlyArray<MJAIAgentRunEntityExtended['Status']>;
     };
+
+    /**
+     * The row predicate for the stopped-run carry-forward's step query: the completed, successful
+     * Actions and Tool steps of the run the user stopped. Declared beside
+     * {@link carryForwardPredicate} for the same reason it is: one place to change what counts.
+     */
+    private static readonly stoppedRunCarryForwardPredicate = {
+        stepTypes: ['Actions', 'Tool'],
+        stepStatus: 'Completed',
+    } as const satisfies {
+        stepTypes: ReadonlyArray<MJAIAgentRunStepEntityExtended['StepType']>;
+        stepStatus: MJAIAgentRunStepEntityExtended['Status'];
+    };
+
+    /** An action parameter's direction, as the action executor stamps it. */
+    private static readonly actionOutputParamType: ActionParam['Type'] = 'Output';
+
+    /** A stopped-run result section is never cut below this many characters, whatever the budget. */
+    private static readonly minStoppedRunSectionChars = 1_500;
 
     /**
      * Display name of the seeded system prompt behind summarizeRange's recursive
@@ -7932,10 +8964,10 @@ The context is now within limits. Please retry your request with the recovered c
                     throw new Error(`The '${BaseAgent.SummarizeRangePromptName}' system prompt is not present in this environment`);
                 }
                 const promptParams = new AIPromptParams();
+                Object.assign(promptParams, this.runPromptExecutionScope(params));
                 promptParams.prompt = prompt;
                 // Keys are the summarize-range.template.md contract ({{ lens }}, {{ messages }})
                 promptParams.data = { lens, messages: rangeText };
-                promptParams.contextUser = params.contextUser;
                 promptParams.agentId = params.agent.ID;
                 promptParams.UserID = ResolvePromptRunUserID({
                     UserID: params.userId,
@@ -8215,10 +9247,10 @@ The context is now within limits. Please retry your request with the recovered c
 
     /**
      * Turn-loop entry point for in-flight memory writes, gated on the agent's
-     * AllowMemoryWrite flag. When disabled but the LLM emitted writes anyway
-     * (prompt drift / injection attempt), records ONE summary skip step —
-     * observable without per-write noise — and tells the agent the memories
-     * were NOT saved so it stops re-emitting. When enabled, executes the
+     * AllowMemoryWrite flag and on the run's audience ({@link memoryWriteSkip}).
+     * When refused but the LLM emitted writes anyway (prompt drift / injection
+     * attempt), records ONE summary skip step and tells the agent the memories
+     * were NOT saved ({@link skipMemoryWrites}). Otherwise executes the
      * writes as run steps and injects the results message.
      *
      * @protected
@@ -8227,34 +9259,59 @@ The context is now within limits. Please retry your request with the recovered c
         memoryWrites: MemoryWriteRequest[],
         params: ExecuteAgentParams,
     ): Promise<void> {
-        if (params.agent.AllowMemoryWrite !== true) {
-            this.logStatus(`[MemoryWrites] LLM emitted ${memoryWrites.length} memory write(s) but AllowMemoryWrite=false — skipping`, true, params);
-            const skipStep = await this.createStepEntity({
-                stepType: 'Tool',
-                stepName: 'Memory Writes: skipped (AllowMemoryWrite=false)',
-                contextUser: params.contextUser,
-                inputData: { requestedWriteCount: memoryWrites.length },
-            });
-            await this.finalizeStepEntity(skipStep, true, undefined, { skipped: true, reason: 'AllowMemoryWrite=false' });
-            params.conversationMessages.push({
-                role: 'user',
-                content: 'Memory write result: this agent does not have durable memory writes enabled — the requested memories were NOT saved. Do not emit memoryWrites again.',
-                metadata: {
-                    turnAdded: this._promptTurnCount,
-                    messageType: 'tool-result',
-                    expirationTurns: 3,
-                    expirationMode: 'Compact',
-                    compactMode: 'First N Chars',
-                    compactLength: 200,
-                    compactPromptId: '',
-                },
-            });
+        const skip = this.memoryWriteSkip(params);
+        if (skip) {
+            await this.skipMemoryWrites(memoryWrites.length, skip, params);
             return;
         }
 
         this.logStatus(`[MemoryWrites] LLM requested ${memoryWrites.length} memory write(s)`, true, params);
         const writeResults = await this.executeMemoryWritesAsSteps(memoryWrites, params);
         this.injectMemoryWriteResultsMessage(params, writeResults);
+    }
+
+    /**
+     * Why this run saves no memory writes, or null when it may: the agent has not opted in (`AllowMemoryWrite`), or the
+     * run's audience adds a reader. A write is the caller's note, and its reply — saved, superseded, "already exists
+     * verbatim" — is read against the caller's own notes, so in a shared conversation it would tell the room what the
+     * caller has noted. The memory-writes docs are left out of the prompt for the same reasons.
+     */
+    private memoryWriteSkip(params: ExecuteAgentParams): MemoryWriteSkip | null {
+        if (params.agent.AllowMemoryWrite !== true) {
+            return { Reason: 'AllowMemoryWrite=false', Told: 'this agent does not have durable memory writes enabled' };
+        }
+        if (this.runAudienceAddsReader(params)) {
+            return { Reason: 'shared conversation', Told: 'memory writes are not available in a shared conversation' };
+        }
+        return null;
+    }
+
+    /**
+     * Records ONE summary skip step for a turn's refused memory writes — observable without per-write noise — and tells
+     * the agent the memories were NOT saved, so it stops re-emitting them.
+     */
+    private async skipMemoryWrites(requestedWriteCount: number, skip: MemoryWriteSkip, params: ExecuteAgentParams): Promise<void> {
+        this.logStatus(`[MemoryWrites] LLM emitted ${requestedWriteCount} memory write(s) but ${skip.Reason} — skipping`, true, params);
+        const skipStep = await this.createStepEntity({
+            stepType: 'Tool',
+            stepName: `Memory Writes: skipped (${skip.Reason})`,
+            contextUser: params.contextUser,
+            inputData: { requestedWriteCount },
+        });
+        await this.finalizeStepEntity(skipStep, true, undefined, { skipped: true, reason: skip.Reason });
+        params.conversationMessages.push({
+            role: 'user',
+            content: `Memory write result: ${skip.Told} — the requested memories were NOT saved. Do not emit memoryWrites again.`,
+            metadata: {
+                turnAdded: this._promptTurnCount,
+                messageType: 'tool-result',
+                expirationTurns: 3,
+                expirationMode: 'Compact',
+                compactMode: 'First N Chars',
+                compactLength: 200,
+                compactPromptId: '',
+            },
+        });
     }
 
     /**
@@ -8701,6 +9758,7 @@ The context is now within limits. Please retry your request with the recovered c
             AgentID: params.agent?.ID ?? this._agentRun?.AgentID,
             PromptName: promptName,
             CancellationToken: params.cancellationToken,
+            ExecutionScope: this.runPromptExecutionScope(params),
         });
     }
 
@@ -9043,6 +10101,7 @@ The context is now within limits. Please retry your request with the recovered c
      * @param {UserInfo} [_contextUser] - Optional user context (reserved for future use)
      * @param {any} [extraData] - Optional extra data to include in the context, if provided and keys conflict within the agent context data, the extraData will override the agent context data.
      * @param {ActionChange[]} [actionChanges] - Optional runtime action modifications
+     * @param {PromptWithholding} [withholding] - What this run's prompt leaves out (see `promptWithholding`)
      *
      * @returns {Promise<AgentContextData>} Structured context data for prompts
      *
@@ -9055,7 +10114,8 @@ The context is now within limits. Please retry your request with the recovered c
         _contextUser?: UserInfo,
         extraData?: any,
         actionChanges?: ActionChange[],
-        subAgentChanges?: SubAgentChange[]
+        subAgentChanges?: SubAgentChange[],
+        withholding?: PromptWithholding
     ): Promise<AgentContextData> {
         try {
             const engine = AIEngine.Instance;
@@ -9124,6 +10184,11 @@ The context is now within limits. Please retry your request with the recovered c
                 // and removes any cache-poisoning foot-gun should a future consumer write to it.
                 agentTypePromptParams = { ...catalog.baseAgentTypePromptParams };
             }
+            // A run that withholds task graphs (an audience or a tenant: see taskGraphWithholdingReason) is not offered
+            // them; a copy, so the cached base is never written. executeTasksStep refuses a graph the model writes anyway.
+            if (withholding?.TaskGraphs) {
+                agentTypePromptParams = this.withoutTaskGraphs(agentTypePromptParams);
+            }
             // Store for the finishIf gate, which runs after this prompt in executeActionsStep / executeNextStep
             this._agentTypePromptParams = agentTypePromptParams;
 
@@ -9149,11 +10214,8 @@ The context is now within limits. Please retry your request with the recovered c
             subAgentDetails = this.narrowedCatalogSection('agent', uniqueActiveSubAgents, subAgentDetails, shown => this.formatSubAgentDetails(shown));
             const skillsCatalog = this.narrowedCatalogSection('skill', availableSkills, this.formatSkillsCatalog(availableSkills), shown => this.formatSkillsCatalog(shown));
 
-            // Build client tool details for the prompt (per-run; depends on extraData)
-            const clientToolDetails = this.buildClientToolPromptSection(agent, extraData);
-
-            // Build app context section if provided in extraData
-            const appContext = this.buildAppContextSection(extraData);
+            // The client tools and the app context (per-run, from extraData) — neither under an audience (callerContextSections).
+            const { clientToolDetails, appContext } = this.callerContextSections(agent, extraData, withholding?.CallerContext === true);
 
             const contextData: AgentContextData = {
                 agentName: agent.Name,
@@ -9353,6 +10415,7 @@ The context is now within limits. Please retry your request with the recovered c
                 AgentID: agent.ID,
                 PromptName: promptName,
                 CancellationToken: controller.signal,
+                ExecutionScope: this._runExecutionScope,
             });
             const result = await Promise.race([ask, stopped]);
             if (result === stoppedResult) {
@@ -9482,13 +10545,16 @@ The context is now within limits. Please retry your request with the recovered c
      */
     protected buildAgentBaseCatalog(agent: MJAIAgentEntityExtended, engine: AIEngine): AgentBaseCatalog {
         // Resolve sub-agents: direct ParentID children + active relationships, de-duped, ordered.
+        // Only Active agents are kept, so a Disabled relationship target never reaches the catalog.
         const activeSubAgents = engine.Agents.filter(a => UUIDsEqual(a.ParentID, agent.ID) && a.Status === 'Active')
             .sort((a, b) => a.ExecutionOrder - b.ExecutionOrder);
         const activeAgentRelationships = engine.AgentRelationships.filter(ar => UUIDsEqual(ar.AgentID, agent.ID) && ar.Status === 'Active');
         const uniqueActiveSubAgentIDs = new Set<string>();
         activeSubAgents.forEach(a => uniqueActiveSubAgentIDs.add(a.ID));
         activeAgentRelationships.forEach(ar => uniqueActiveSubAgentIDs.add(ar.SubAgentID));
-        const uniqueActiveSubAgents = Array.from(uniqueActiveSubAgentIDs).map(id => engine.Agents.find(a => UUIDsEqual(a.ID, id)));
+        const uniqueActiveSubAgents = Array.from(uniqueActiveSubAgentIDs)
+            .map(id => engine.Agents.find(a => UUIDsEqual(a.ID, id)))
+            .filter((a): a is MJAIAgentEntityExtended => !!a && a.Status === 'Active');
 
         // Resolve actions from the agent's active AIAgentAction junctions.
         const agentActions = engine.AgentActions.filter(aa => UUIDsEqual(aa.AgentID, agent.ID) && aa.Status === 'Active');
@@ -9985,7 +11051,8 @@ The context is now within limits. Please retry your request with the recovered c
             ContextUser: params.contextUser,
             AgentID: params.agent?.ID,
             PromptName: settings.PromptName,
-            CancellationToken: params.cancellationToken
+            CancellationToken: params.cancellationToken,
+            ExecutionScope: this.runPromptExecutionScope(params)
         });
         this.attachDecisionPromptRun(step, result);
         if (!result.success) {
@@ -10167,7 +11234,8 @@ The context is now within limits. Please retry your request with the recovered c
             ChangeReasoning: nextStep.payloadChangeRequest?.reasoning,
             Message: response.Message,
             AgentID: params.agent?.ID ?? this._agentRun?.AgentID,
-            CancellationToken: params.cancellationToken
+            CancellationToken: params.cancellationToken,
+            ExecutionScope: this.runPromptExecutionScope(params)
         };
     }
 
@@ -10214,11 +11282,30 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
+     * The {@link AIPromptExecutionScope} of model work this run starts outside the agent's own turn —
+     * summarizing a range, compacting a message or the conversation, decision calls (FinishIf,
+     * discovery, catalog narrowing, decision requests, the payload change check) and self-check
+     * rubrics. Each built its params with only `contextUser`, so it ran on the platform's keys and
+     * default configuration inside a run on a customer's keys, and under a `'RuntimeOnly'` scope
+     * would have bypassed it.
+     */
+    private runPromptExecutionScope(params: ExecuteAgentParams): AIPromptExecutionScope {
+        return {
+            contextUser: params.contextUser,
+            provider: params.provider || this._activeProvider,
+            configurationId: params.configurationId,
+            apiKeys: params.apiKeys,
+            CredentialScope: params.CredentialScope,
+        };
+    }
+
+    /**
      * Whether THIS action may use the run's runtime API key for THIS driver class. The default is
      * yes: the run was started on those keys, and an action that calls a vendor on the user's behalf
      * (Generate Image) is doing what the prompts do. Override to narrow it — an agent that knows
      * which of its actions talk to which vendor can refuse everything else, and a refusal costs the
      * action nothing but the customer's key: it falls back to the platform key as if the run had none.
+     * Under a `'RuntimeOnly'` credential scope a refusal leaves the action with no key for that class.
      */
     protected actionMayUseRuntimeAPIKey(action: MJActionEntityExtended, driverClass: string, params: ExecuteAgentParams): boolean {
         return true;
@@ -10232,14 +11319,135 @@ The context is now within limits. Please retry your request with the recovered c
     private buildRuntimeAPIKeyResolver(params: ExecuteAgentParams, actionEntity: MJActionEntityExtended): RuntimeAPIKeyResolver {
         const runKeys = params.apiKeys;
         return (driverClass: string): string | undefined => {
+            const platformAllowed = CredentialScopeAllows(params.CredentialScope, 'Environment');
             if (!this.actionMayUseRuntimeAPIKey(actionEntity, driverClass, params)) {
-                this.logStatus(`🔑 Runtime API key for '${driverClass}' refused to action '${actionEntity.Name}' by policy — platform key applies`, true, params);
+                this.logStatus(`🔑 Runtime API key for '${driverClass}' refused to action '${actionEntity.Name}' by policy — ${platformAllowed ? 'platform key applies' : `credential scope is ${params.CredentialScope}, so no key applies`}`, true, params);
                 return undefined;
             }
-            const key = GetAIAPIKey(driverClass, runKeys);
-            this.logStatus(`🔑 Action '${actionEntity.Name}' resolved an API key for '${driverClass}' (${runKeys?.some((k) => k.driverClass === driverClass) ? 'run' : 'platform'})`, true, params);
+            const key = GetAIAPIKey(driverClass, runKeys, false, params.CredentialScope);
+            const source = runKeys?.some((k) => k.driverClass === driverClass) ? 'run' : platformAllowed ? 'platform' : `none — credential scope is ${params.CredentialScope}`;
+            this.logStatus(`🔑 Action '${actionEntity.Name}' resolved an API key for '${driverClass}' (${source})`, true, params);
             return key || undefined;
         };
+    }
+
+    /** The model's arguments as the engine's input parameters. */
+    private toEngineActionParams(action: AgentAction): ActionParam[] {
+        return Object.entries(action.params || {}).map(([key, value]) => ({
+            Name: key,
+            Value: value,
+            Type: 'Input' as const
+        }));
+    }
+
+    /**
+     * The action context for one dispatch: the agent's own context object, by reference (do NOT spread —
+     * spreading destroys class instances, losing getters/methods on typed contexts like SkipAgentContext),
+     * stamped with the calling agent's identity, the run's active skills and its resolved storage account.
+     */
+    private stampActionContext(params: ExecuteAgentParams): Record<string, unknown> {
+        const actionContext = (typeof params.context === 'object' && params.context ? params.context : {}) as Record<string, unknown>;
+        actionContext.AgentID = params.agent.ID;
+        // The skills active in THIS run, as a fact the action can trust. An action that takes a
+        // skill principal (Scoped Search's AISkillID) must not have to believe a parameter the model
+        // authored: with this it can default the principal to the run's active skill and refuse a
+        // named skill the run never activated. Always stamped — an empty array means "inside an
+        // agent run, with no skill active", which is a different fact from "no agent at all".
+        actionContext.ActiveSkillIDs = this.activeSkillIDsForRun(params);
+        if (this._resolvedStorageAccountId) {
+            actionContext.__resolvedStorageAccountId = this._resolvedStorageAccountId;
+        }
+        return actionContext;
+    }
+
+    /**
+     * The run's bounds handed to ONE action dispatch, beside its parameters. Per dispatch on purpose: the action
+     * context IS params.context, shared by every action in the run (parallel ones included) and copied into
+     * sub-agent runs, so anything stamped there would name the wrong action under parallel dispatch and travel
+     * further than the action it was meant for. The model sets none of these.
+     */
+    private runBoundDispatchParams(
+        params: ExecuteAgentParams,
+        actionEntity: MJActionEntityExtended,
+        audienceReaders: UserInfo[],
+        runAs: UserInfo | undefined
+    ): Pick<RunActionParams, 'RuntimeAPIKeyResolver' | 'CredentialScope' | 'Audience' | 'RunScope'> {
+        const readers = this.dispatchReaders(params, audienceReaders, runAs);
+        return {
+            // The run's RUNTIME API KEYS, as a RESOLVER bound to this one action — see buildRuntimeAPIKeyResolver().
+            // Absent when the run has no keys, so the action uses GetAIAPIKey(driverClass) exactly as before —
+            // unless the scope below is RuntimeOnly, which tells the action the resolver's answer (or its absence) is final.
+            RuntimeAPIKeyResolver: params.apiKeys && params.apiKeys.length > 0 ? this.buildRuntimeAPIKeyResolver(params, actionEntity) : undefined,
+            // AICredentialScope → actions-base's RuntimeCredentialScope mirror: a value added to the
+            // former and not the latter fails to compile here, so the two cannot drift apart.
+            CredentialScope: params.CredentialScope,
+            // The run's audience (ExecuteAgentParams.Audience), when it adds a reader. The engine refuses an action
+            // that cannot honour it (AUDIENCE_UNSUPPORTED — see recordDispatchOutcome); one that can returns only
+            // what every reader may see.
+            Audience: readers.length > 0 ? { Readers: readers } : undefined,
+            // The run's scope (tenant + secondary dimensions), always present inside a run — nulls when it is
+            // unscoped — so an action that scopes by tenant defaults to the run's and refuses one the model names.
+            RunScope: this.runScopeFor(params),
+        };
+    }
+
+    /**
+     * The audience readers for one dispatch: everyone who will see the result besides the user the action RUNS AS
+     * ({@link ExecuteSingleAction}'s `contextUser`), which need not be the run's caller. The run's readers leave the
+     * caller out; when the action runs as someone else, the caller sees its result too and is added, and the user it
+     * runs as is left out (as the engine does). A run whose audience adds no reader stays without one.
+     */
+    private dispatchReaders(params: ExecuteAgentParams, readers: UserInfo[], runAs: UserInfo | undefined): UserInfo[] {
+        const caller = params.contextUser;
+        if (readers.length === 0 || !caller || UUIDsEqual(runAs?.ID, caller.ID)) {
+            return readers;
+        }
+        return [...readers.filter((reader) => !UUIDsEqual(reader.ID, runAs?.ID)), caller];
+    }
+
+    /**
+     * The scope an action dispatch is handed: the run's, as {@link initializeAgentRun} validated and recorded it,
+     * or — when {@link ExecuteSingleAction} is called outside {@link Execute} (the realtime tool path, tests,
+     * harnesses) — resolved from these params the same way ({@link validatedRunScope}). A copy each time, so an
+     * action cannot change what the next one sees.
+     */
+    private runScopeFor(params: ExecuteAgentParams): ActionRunScope {
+        const scope = this._runScope ?? this.validatedRunScope(params);
+        const secondary = scope.SecondaryScopes
+            ? Object.fromEntries(Object.entries(scope.SecondaryScopes).map(([key, value]) => [key, Array.isArray(value) ? [...value] : value]))
+            : null;
+        return { ...scope, SecondaryScopes: secondary };
+    }
+
+    /**
+     * Logs one dispatched call's outcome and feeds the run-scoped circuit breaker, unless the caller does its own
+     * failure accounting (`skipCircuitBreaker`). An `AUDIENCE_UNSUPPORTED` refusal locks the action out for the
+     * run: no argument changes it, and the model is told the action is unavailable rather than to retry.
+     */
+    private recordDispatchOutcome(
+        params: ExecuteAgentParams,
+        action: AgentAction,
+        actionEntity: MJActionEntityExtended,
+        result: ActionResult,
+        normalizedParams: string,
+        skipBreaker: boolean
+    ): void {
+        if (result.Success) {
+            this.logStatus(`   ✅ Action '${action.name}' completed successfully`, true, params);
+            if (!skipBreaker) {
+                this.clearActionFailureRecord(action, actionEntity);
+            }
+            return;
+        }
+        this.logStatus(`   ❌ Action '${action.name}' failed: ${result.Message || 'Unknown error'}`, false, params);
+        if (skipBreaker) {
+            return;
+        }
+        if (result.ResultCode === AUDIENCE_UNSUPPORTED_RESULT_CODE) {
+            this.lockOutAction(action, actionEntity, 'audience');
+            return;
+        }
+        this.recordActionFailure(action, actionEntity, result.Message, normalizedParams);
     }
 
     /**
@@ -10257,9 +11465,9 @@ The context is now within limits. Please retry your request with the recovered c
      * 
      * @throws {Error} If the action fails to execute
      */
-    public async ExecuteSingleAction(params: ExecuteAgentParams, action: AgentAction, actionEntity: MJActionEntityExtended, 
+    public async ExecuteSingleAction(params: ExecuteAgentParams, action: AgentAction, actionEntity: MJActionEntityExtended,
         contextUser?: UserInfo, options?: ExecuteSingleActionOptions): Promise<ActionResult> {
-        
+
         const skipBreaker = options?.skipCircuitBreaker === true;
         const normalizedParams = this.normalizeActionParams(action.params);
 
@@ -10272,63 +11480,27 @@ The context is now within limits. Please retry your request with the recovered c
             }
         }
 
+        // The run's audience, hydrated once per run — lazily here, since this method is also called outside
+        // Execute (the pipeline executor, tests). An unusable audience refuses the call: nothing is dispatched.
+        const audience = await this.audienceReadersFor(params);
+        if ('Error' in audience) {
+            throw new Error(audience.Error);
+        }
+
         try {
-            const actionEngine = ActionEngineServer.Instance;
-
-            // Convert params object to ActionParam array
-            const actionParams = Object.entries(action.params || {}).map(([key, value]) => ({
-                Name: key,
-                Value: value,
-                Type: 'Input' as const
-            }));
-
-            // Build action context: preserve the agent's context by reference
-            // (do NOT spread — spreading destroys class instances, losing
-            // getters/methods on typed contexts like SkipAgentContext).
-            // Stamp the calling agent's identity and resolved storage account ID
-            // directly onto the original context object.
-            const actionContext = typeof params.context === 'object' && params.context ? params.context : {};
-            (actionContext as Record<string, unknown>).AgentID = params.agent.ID;
-            // The skills active in THIS run, as a fact the action can trust. An action that takes a
-            // skill principal (Scoped Search's AISkillID) must not have to believe a parameter the model
-            // authored: with this it can default the principal to the run's active skill and refuse a
-            // named skill the run never activated. Always stamped — an empty array means "inside an
-            // agent run, with no skill active", which is a different fact from "no agent at all".
-            (actionContext as Record<string, unknown>).ActiveSkillIDs = this.activeSkillIDsForRun(params);
-            if (this._resolvedStorageAccountId) {
-                (actionContext as Record<string, unknown>).__resolvedStorageAccountId = this._resolvedStorageAccountId;
-            }
             // Execute the action and return the full ActionResult
-            const result = await actionEngine.RunAction({
+            const result = await ActionEngineServer.Instance.RunAction({
                 Action: actionEntity,
-                Params: actionParams,
+                Params: this.toEngineActionParams(action),
                 ContextUser: contextUser,
                 Filters: [],
                 SkipActionLog: false,
-                Context: actionContext,
-                // The run's RUNTIME API KEYS, as a RESOLVER bound to this one action — see
-                // buildRuntimeAPIKeyResolver(). Per dispatch on purpose: actionContext IS params.context,
-                // shared by every action in the run (parallel ones included) and copied into sub-agent
-                // runs, so anything stamped there would name the wrong action under parallel dispatch
-                // and travel further than the action it was meant for. Absent when the run has no keys,
-                // so the action uses GetAIAPIKey(driverClass) exactly as before.
-                RuntimeAPIKeyResolver: params.apiKeys && params.apiKeys.length > 0 ? this.buildRuntimeAPIKeyResolver(params, actionEntity) : undefined,
+                Context: this.stampActionContext(params),
+                ...this.runBoundDispatchParams(params, actionEntity, audience.Readers, contextUser),
             });
-            
-            if (result.Success) {
-                this.logStatus(`   ✅ Action '${action.name}' completed successfully`, true, params);
-                if (!skipBreaker) {
-                    this.clearActionFailureRecord(action, actionEntity);
-                }
-            } else {
-                this.logStatus(`   ❌ Action '${action.name}' failed: ${result.Message || 'Unknown error'}`, false, params);
-                if (!skipBreaker) {
-                    this.recordActionFailure(action, actionEntity, result.Message, normalizedParams);
-                }
-            }
-            
+            this.recordDispatchOutcome(params, action, actionEntity, result, normalizedParams, skipBreaker);
             return result;
-            
+
         } catch (error) {
             const errorMsg = error instanceof Error ? error.message : String(error);
             if (!skipBreaker) {
@@ -10568,8 +11740,9 @@ The context is now within limits. Please retry your request with the recovered c
             // For now, we execute normally and the sub-agent will track its parent relationship
             
             this.logStatus(`📨 Sub-agent message: "${subAgentRequest.message}"`, true, params);
-            if (subAgentRequest.templateParameters) {
-                this.logStatus(`📎 Template parameters: ${JSON.stringify(subAgentRequest.templateParameters)}`, true, params);
+            const templateParameters = this.subAgentTemplateParameters(params, subAgentRequest);
+            if (templateParameters) {
+                this.logStatus(`📎 Template parameters: ${JSON.stringify(templateParameters)}`, true, params);
             }
             if (params.effortLevel !== undefined && params.effortLevel !== null) {
                 this.logStatus(`🎯 Propagating effort level ${params.effortLevel} to sub-agent '${subAgentRequest.name}'`, true, params);
@@ -10602,11 +11775,14 @@ The context is now within limits. Please retry your request with the recovered c
                 configurationId: params.configurationId, // propagate configuration ID to sub-agent
                 effortLevel: params.effortLevel, // propagate effort level to sub-agent
                 apiKeys: params.apiKeys, // propagate API keys to sub-agent
+                CredentialScope: params.CredentialScope, // a sub-agent may not spend keys its parent could not
+                Audience: params.Audience, // a sub-agent's output reaches the same room; it re-hydrates the IDs itself
                 inputArtifacts: params.inputArtifacts, // propagate input artifacts so sub-agents inherit the parent's artifact manifest + tools (e.g. a Codesmith delegate can read a Data Snapshot the parent references)
                 data: {
                         ...params.data,
-                        ...subAgentRequest.templateParameters,
-                      }, // merge parent data first, then override with template parameters so loop agents can dynamically override parent data
+                        ...templateParameters,
+                      }, // parent data first, then the template parameters (never a host-only key) so loop agents can override parent data
+                TrustReservedRunData: params.TrustReservedRunData, // the reserved keys left in data are the parent's, already vetted
                 context: subAgentContext, // use subAgentRequest.context if provided, otherwise params.context
                 verbose: params.verbose, // pass verbose flag to sub-agent
                 actionChanges: subAgentActionChanges, // propagate filtered action changes to sub-agent
@@ -10644,6 +11820,33 @@ The context is now within limits. Please retry your request with the recovered c
             });
             throw new Error(`Error executing sub-agent: ${error.message}`);
         }
+    }
+
+    /**
+     * A sub-agent request's template parameters without the host-only run-data keys
+     * (`HOST_ONLY_AGENT_RUN_DATA_KEYS` in `@memberjunction/ai-core-plus`: the reserved scope family and
+     * `__agentTypePromptParams`, and the browser, conversation and realtime controls — `clientTools`, `sessionID`,
+     * `appContext`, `applicationId`, `conversationId`, `targetAgentID`, `agentSessionId`, `recording`, `realtime*`).
+     * They are merged into the child's `data`, which `BaseAgent` reads for all of these, and inside a Loop agent they
+     * are written by the model — so left in, a model could set a sub-agent's tenant (whenever the parent's run trusts
+     * its `data`), offer it client tools, inject an app context, or point it at another conversation. The child
+     * inherits the parent's values instead (its own params, and the parent's `data` as is). What was removed is
+     * logged once, by key only — never the values.
+     */
+    private subAgentTemplateParameters(params: ExecuteAgentParams, subAgentRequest: AgentSubAgentRequest): Record<string, unknown> | undefined {
+        if (!subAgentRequest.templateParameters) {
+            return undefined;
+        }
+        const { Data, StrippedKeys } = WithoutHostOnlyAgentRunDataKeys(subAgentRequest.templateParameters);
+        if (StrippedKeys.length > 0) {
+            this.logStatus(
+                `🔒 Ignored host-only key(s) ${StrippedKeys.join(', ')} in the template parameters for sub-agent '${subAgentRequest.name}': ` +
+                `a sub-agent inherits its parent run's scope, agent-type parameters, conversation and browser context; the model cannot set them.`,
+                false,
+                params
+            );
+        }
+        return Data;
     }
 
     /**
@@ -10809,7 +12012,7 @@ The context is now within limits. Please retry your request with the recovered c
         lines.push('records. When you choose client tools, set nextStep.type to "ClientTools".');
         lines.push('');
         lines.push('NOTE: Do NOT use client tools for asking the user questions or collecting input.');
-        lines.push('Use the "Chat" step for that. Client tools are for programmatic UI interaction only.');
+        lines.push('Use the "Chat" step for that. Client tools read and change the user\'s UI; some return an image.');
         lines.push('');
 
         for (const tool of tools) {
@@ -10916,6 +12119,46 @@ The context is now within limits. Please retry your request with the recovered c
 
         const desc = param.Description ? ` — ${param.Description}` : '';
         return `\`${param.Name}\`${requiredMarker}${suffix}${desc}${defaultStr}`;
+    }
+
+    /**
+     * The `user`-role record of what the model asked to run on an Actions turn ("[You invoked ...]").
+     * Shared by the live Actions step and the stopped-run resume, so a resumed turn reads exactly
+     * like one the loop wrote. See the Actions step for why it is a user-role annotation.
+     * @protected
+     */
+    protected buildActionInvocationMessage(actions: AgentAction[]): string {
+        if (actions.length === 1) {
+            const aa = actions[0];
+            if (!aa.params || Object.keys(aa.params).length === 0) {
+                return `[You invoked the **${aa.name}** action.]`;
+            }
+            const paramsList = Object.entries(aa.params)
+                .map(([key, value]) => `• **${key}**: ${this.formatParamValueForMessage(value)}`)
+                .join('\n');
+            return `[You invoked the **${aa.name}** action with parameters:\n${paramsList}\n]`;
+        }
+        return `[You invoked **${actions.length} actions** in parallel:\n\n` + actions.map((aa, index) => {
+            const actionText = `${index + 1}. **${aa.name}**`;
+            if (!aa.params || Object.keys(aa.params).length === 0) {
+                return actionText;
+            }
+            const paramsList = Object.entries(aa.params)
+                .map(([key, value]) => `   • **${key}**: ${this.formatParamValueForMessage(value)}`)
+                .join('\n');
+            return `${actionText}\n${paramsList}`;
+        }).join('\n\n') + '\n]';
+    }
+
+    /**
+     * The action-results message body: a header naming any failures, then each result in the
+     * compact markdown shape. Shared by the live Actions step and the stopped-run resume.
+     * @protected
+     */
+    protected buildActionResultsMessage(actionSummaries: ActionResultSummary[]): string {
+        const failed = actionSummaries.filter(a => !a.success).length;
+        const header = failed > 0 ? `${failed} of ${actionSummaries.length} action(s) failed:` : 'Action results:';
+        return `${header}\n${this.formatActionResultsAsMarkdown(actionSummaries)}`;
     }
 
     /**
@@ -11334,12 +12577,25 @@ The context is now within limits. Please retry your request with the recovered c
     }
  
     /**
+     * Throws unless `lastRunId` is absent or a UUID. The value can come from a client, and the run
+     * initialization places it in `ExtraFilter` clauses (the payload lookup, {@link validateRunChain}
+     * and {@link resolvePlanModeGate}).
+     */
+    private assertLastRunIdIsUUID(lastRunId: string | undefined): void {
+        if (lastRunId && !IsValidUUID(lastRunId)) {
+            throw new Error('Invalid lastRunId: expected the UUID of a prior AI Agent Run.');
+        }
+    }
+
+    /**
      * Initializes the agent run tracking by creating MJAIAgentRunEntityExtended and setting up context.
      * 
      * @private
      * @param {ExecuteAgentParams} params - The execution parameters
      */
     private async initializeAgentRun(params: ExecuteAgentParams): Promise<void> {
+        this.assertLastRunIdIsUUID(params.lastRunId);
+
         // Handle autoPopulateLastRunPayload if requested
         let modifiedParams = params;
         if (params.lastRunId && params.autoPopulateLastRunPayload) {
@@ -11348,7 +12604,9 @@ The context is now within limits. Please retry your request with the recovered c
             const lastRunResult = await rv.RunView({
                 EntityName: 'MJ: AI Agent Runs',
                 ExtraFilter: `ID='${params.lastRunId}'`,
-                ResultType: 'simple' // Avoid recursive loading
+                ResultType: 'simple', // Avoid recursive loading
+                // A stopped predecessor wrote its FinalPayload moments ago; read the database, not a cache.
+                BypassCache: true
             }, params.contextUser);
             
             if (lastRunResult.Success && lastRunResult.Results.length > 0) {
@@ -11471,53 +12729,12 @@ The context is now within limits. Please retry your request with the recovered c
             this._agentRun.TestRunID = params.testRunId;
         }
 
-        // Set scope for multi-tenant deployments
-        // Resolve from top-level params or data fallback (for GraphQL callers)
-        const primaryScopeEntityName = params.PrimaryScopeEntityName ?? (params.data?.PrimaryScopeEntityName as string | undefined);
-        const primaryScopeRecordID = params.PrimaryScopeRecordID ?? (params.data?.PrimaryScopeRecordID as string | undefined);
-        const secondaryScopes = params.SecondaryScopes ?? (params.data?.SecondaryScopes as Record<string, SecondaryScopeValue> | undefined);
-
-        if (primaryScopeEntityName || primaryScopeRecordID || secondaryScopes) {
-            // Parse agent's SecondaryScopeConfig from the ScopeConfig field
-            const scopeConfig = this.parseSecondaryScopeConfig(params.agent);
-
-            // Validate and apply secondary scopes with defaults
-            const validatedSecondary = this.validateAndApplySecondaryScopes(
-                secondaryScopes,
-                scopeConfig,
-                params.agent.Name
-            );
-
-            // Check if secondary-only is allowed
-            const hasSecondary = validatedSecondary && Object.keys(validatedSecondary).length > 0;
-            const hasPrimary = !!primaryScopeRecordID;
-            const allowSecondaryOnly = scopeConfig?.allowSecondaryOnly ?? false;
-
-            if (hasSecondary && !hasPrimary && !allowSecondaryOnly) {
-                LogError(
-                    `Scoping: Agent "${params.agent.Name}" requires primary scope when using secondary scopes. ` +
-                    `Set allowSecondaryOnly=true in ScopeConfig to allow secondary-only scoping.`
-                );
-            }
-
-            // Resolve primary entity ID from entity name
-            if (primaryScopeEntityName) {
-                const primaryEntity = this.ProviderToUse.EntityByName(primaryScopeEntityName);
-                if (primaryEntity) {
-                    this._agentRun.PrimaryScopeEntityID = primaryEntity.ID;
-                } else {
-                    LogError(`Scoping: Entity "${primaryScopeEntityName}" not found in metadata`);
-                }
-            }
-            // Set primary scope record ID
-            if (primaryScopeRecordID) {
-                this._agentRun.PrimaryScopeRecordID = primaryScopeRecordID;
-            }
-            // Set secondary scopes as JSON (with defaults applied)
-            if (validatedSecondary && Object.keys(validatedSecondary).length > 0) {
-                this._agentRun.SecondaryScopes = JSON.stringify(validatedSecondary);
-            }
-        }
+        // Set scope for multi-tenant deployments: resolved once (the explicit params, else the `data` fallbacks
+        // GraphQL callers use) and validated against the agent's SecondaryScopeConfig, written to the run row, and
+        // kept as the scope every action dispatch is handed (RunActionParams.RunScope). Inside the run, that scope
+        // — not a model-written action parameter — is the authority on the tenant.
+        this._runScope = this.validatedRunScope(params);
+        this.writeRunScope(params, this._runScope);
 
         // Save the agent run
         if (!await this._agentRun.Save()) {
@@ -11530,7 +12747,7 @@ The context is now within limits. Please retry your request with the recovered c
         // server-side DB provider can heartbeat via SQL; client/non-DB providers simply opt out.
         const runProvider = params.provider || this._activeProvider;
         if (runProvider instanceof DatabaseProviderBase && params.contextUser) {
-            AgentRunWatchdog.Instance.Track(this._agentRun.ID, runProvider, params.contextUser);
+            AgentRunWatchdog.Instance.Track(this._agentRun.ID, runProvider, params.contextUser, this._runAbortController ?? undefined);
         }
 
         // Invoke callback if provided
@@ -11758,6 +12975,9 @@ The context is now within limits. Please retry your request with the recovered c
         if (params.targetId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(params.targetId)) {
             console.warn(`Invalid target ID format: ${params.targetId}`);
         }
+        // A start payload that repeats an earlier step's end is stored as a pointer to that step.
+        const payloadAtStart = this.serializePayloadAtStart(params.payloadAtStart);
+        const payloadAtStartSource = this.findPayloadAtStartSource(payloadAtStart);
         // Populate the started fields via the shared single-source-of-truth helper. Instance-specific
         // concerns (hierarchy breadcrumb, InputData context, payload serialization) are computed here.
         initAgentRunStep(stepEntity, {
@@ -11768,7 +12988,8 @@ The context is now within limits. Please retry your request with the recovered c
             TargetID: params.targetId,
             TargetLogID: params.targetLogId,
             ParentID: params.parentId,  // Link to parent step (e.g., loop step)
-            PayloadAtStart: this.serializePayloadAtStart(params.payloadAtStart),
+            PayloadAtStart: payloadAtStartSource ? null : payloadAtStart,
+            PayloadAtStartSourceStepID: payloadAtStartSource?.ID ?? null,
             PayloadAtEnd: this.serializePayloadAtEnd(params.payloadAtEnd),
             InputData: params.inputData
                 ? JSON.stringify({
@@ -11809,6 +13030,8 @@ The context is now within limits. Please retry your request with the recovered c
         // When the step has a parent, chain the INSERT AFTER the parent's INSERT to satisfy the
         // self-referencing FK_AIAgentRunStep_ParentID constraint — without this, a child INSERT that
         // races the parent INSERT hits an FK violation (especially under large-payload parent INSERTs).
+        // FK_AIAgentRunStep_PayloadAtStartSourceStepID needs no chaining: the payload source is always a
+        // step whose INSERT has already landed (see findPayloadAtStartSource).
         const parentStepEntity = params.parentId && this._agentRun?.Steps
             ? this._agentRun.Steps.find(s => UUIDsEqual(s.ID, params.parentId))
             : undefined;
@@ -11820,6 +13043,44 @@ The context is now within limits. Please retry your request with the recovered c
         }
 
         return stepEntity;
+    }
+
+    /**
+     * Finds the step whose `PayloadAtEnd` a new step's start payload repeats, so the new step stores a
+     * pointer to it (`PayloadAtStartSourceStepID`) instead of a second copy. Call it before the new step
+     * is added to the run's `Steps`.
+     *
+     * The candidate is the latest step in the run that is not `Running` and has a `PayloadAtEnd`. Only that
+     * step is compared, with `===` on its in-memory `PayloadAtEnd`, and it is used only when its INSERT has
+     * landed (`IsSaved`). Otherwise the start payload is stored; no older step is compared.
+     * - Running steps are skipped because their end can still change: parallel sub-agent siblings write
+     *   their own result as `PayloadAtEnd` when they finish, and a ForEach step writes its end after all
+     *   of its child steps.
+     * - Finished steps with no end (tool, compaction and finish-check steps) are skipped because they never
+     *   get one, and would hide the step that produced the payload.
+     * - An unsaved candidate is not used because the new step's INSERT does not wait for it. If the
+     *   candidate's INSERT were still in flight, or failed, the pointer's foreign key would reject the new row.
+     *
+     * Rule: a step's `PayloadAtEnd` must not change after a later step points at it, because readers take
+     * the pointing step's start payload from it. The comparison uses the in-memory end, so the saved end
+     * must match it: `finalizeStepEntity` re-applies the end after the INSERT lands, and an end set after
+     * `finalizeStepEntity` is saved with `queueStepSave`.
+     *
+     * @param serializedStart The new step's start payload, already serialized.
+     * @returns The step to point at, or undefined when the start payload must be stored.
+     */
+    private findPayloadAtStartSource(serializedStart: string | null): MJAIAgentRunStepEntityExtended | undefined {
+        if (serializedStart == null) {
+            return undefined;
+        }
+        const steps = this._agentRun?.Steps ?? [];
+        for (let i = steps.length - 1; i >= 0; i--) {
+            const step = steps[i];
+            if (step.Status !== 'Running' && step.PayloadAtEnd != null) {
+                return step.IsSaved && step.PayloadAtEnd === serializedStart ? step : undefined;
+            }
+        }
+        return undefined;
     }
 
     /**
@@ -11882,6 +13143,9 @@ The context is now within limits. Please retry your request with the recovered c
      * populated consistently and the UPDATE is sequenced behind the INSERT via
      * `queueStepSave`.
      *
+     * Set `PayloadAtEnd` before calling it: the queued UPDATE re-applies the end the step has now.
+     * An end set later must be saved with `queueStepSave`.
+     *
      * @protected
      */
     protected async finalizeStepEntity(stepEntity: MJAIAgentRunStepEntityExtended, success: boolean, errorMessage?: string, outputData?: any): Promise<void> {
@@ -11898,6 +13162,9 @@ The context is now within limits. Please retry your request with the recovered c
                 // reload could leave it null on a fast step.
                 targetLogID: stepEntity.TargetLogID ?? undefined
             };
+            // Capture the end the step finished with for the same reason: a later step may point at this
+            // step after comparing this end, so the saved row must end with it.
+            const payloadAtEnd = stepEntity.PayloadAtEnd;
 
             // Apply to the in-memory entity NOW so the run's Steps array / UI see the terminal state
             // immediately. This in-memory copy can be reverted by the INSERT's post-save reload if the step
@@ -11905,10 +13172,13 @@ The context is now within limits. Please retry your request with the recovered c
             // post-INSERT continuation below (idempotent — same completedAt).
             finalizeAgentRunStep(stepEntity, finalizeOpts);
 
-            // Fire-and-forget the UPDATE, but re-assert the finalize state AFTER the INSERT (and its reload)
-            // lands so the force-persisted UPDATE never writes stale pre-finalize values. The agent flow
-            // never blocks on this UPDATE.
-            this.queueStepSave(stepEntity, (s) => finalizeAgentRunStep(s, finalizeOpts));
+            // Fire-and-forget the UPDATE, but re-assert the finalize state and the end AFTER the INSERT (and
+            // its reload) lands so the force-persisted UPDATE never writes stale pre-finalize values. The
+            // agent flow never blocks on this UPDATE.
+            this.queueStepSave(stepEntity, (s) => {
+                finalizeAgentRunStep(s, finalizeOpts);
+                s.PayloadAtEnd = payloadAtEnd;
+            });
         }
         catch (e) {
             LogError(`Failed to update agent run step record: ${(e as Error)?.message ?? e}`, undefined, e);
@@ -12488,6 +13758,25 @@ The context is now within limits. Please retry your request with the recovered c
                 this._lastModelSelectionInfo = promptResult.modelSelectionInfo;
             }
 
+            // Check for cancellation after prompt execution — before the failure check, because a prompt
+            // the caller cancelled comes back failed, and that is not a prompt failure. The step does not
+            // terminate the loop: a terminating step would finalize the run as Failed. The loop's own
+            // cancellation check, before the next step, ends the run as Cancelled.
+            if (params.cancellationToken?.aborted) {
+                if (stepEntity && payload) {
+                    stepEntity.PayloadAtEnd = this.serializePayloadAtEnd(payload);
+                }
+
+                await this.finalizeStepEntity(stepEntity, false, 'Cancelled during prompt execution');
+                return {
+                    errorMessage: 'Cancelled during prompt execution',
+                    step: 'Failed',
+                    terminate: false,
+                    previousPayload: payload,
+                    newPayload: payload
+                };
+            }
+
             // Check if prompt execution failed
             if (!promptResult.success) {
                 // CRITICAL FIX: Preserve payload before finalizing step
@@ -12531,24 +13820,6 @@ The context is now within limits. Please retry your request with the recovered c
                     previousPayload: payload,
                     newPayload: payload
                 };
-            }
-
-            // Check for cancellation after prompt execution
-            if (params.cancellationToken?.aborted) {
-                // CRITICAL FIX: Preserve payload before finalizing step
-                if (stepEntity && payload) {
-                    stepEntity.PayloadAtEnd = this.serializePayloadAtEnd(payload);
-                }
-
-                await this.finalizeStepEntity(stepEntity, false, 'Cancelled during prompt execution');
-                const cancelledResult = await this.createCancelledResult('Cancelled during prompt execution', params.contextUser);
-                return {
-                    ...cancelledResult,
-                    terminate: true,
-                    step: 'Failed', // Cancelled is treated as failed
-                    previousPayload: cancelledResult.payload,
-                    newPayload: cancelledResult.payload // No changes, just return the same payload
-                }
             }
 
             // Report decision processing progress
@@ -12753,12 +14024,10 @@ The context is now within limits. Please retry your request with the recovered c
                 }
 
                 // For root agents, create a persistent AIAgentRequest so the request is
-                // tracked in the dashboard and can be responded to outside a conversation.
-                // This is done here because Chat decisions from executePromptStep terminate
-                // immediately and never reach executeChatStep in the main loop.
-                if (this._depth === 0) {
-                    await this.createFeedbackRequest(params, stepEntity, updatedNextStep);
-                }
+                // tracked in the dashboard and can be responded to outside a conversation (none
+                // under an audience: raiseFeedbackRequest). This is done here because Chat decisions
+                // from executePromptStep terminate immediately and never reach executeChatStep in the main loop.
+                await this.raiseFeedbackRequest(params, stepEntity, updatedNextStep);
                 return { ...updatedNextStep, terminate: true };
             }
             else if (updatedNextStep.step === 'Success' || updatedNextStep.step === 'Failed') {
@@ -13040,8 +14309,6 @@ The context is now within limits. Please retry your request with the recovered c
                 scopedPayload = subAgentPayloadOverride; // we received a payload override, use it
             }
 
-            stepEntity.PayloadAtStart = this.serializePayloadAtStart(previousDecision.newPayload);
-
             // Execute sub-agent with scoped payload
             // Child sub-agents don't use context messages (they inherit payload directly)
             const subAgentResult = await this.ExecuteSubAgent<SC, SR>(
@@ -13213,6 +14480,11 @@ The context is now within limits. Please retry your request with the recovered c
                 })
             }; 
 
+            // Set PayloadAtEnd with the merged payload
+            if (stepEntity) {
+                stepEntity.PayloadAtEnd = this.serializePayloadAtEnd(mergedPayload);
+            }
+
             // Finalize step entity
             await this.finalizeStepEntity(stepEntity, subAgentResult.success,
                 subAgentResult.agentRun?.ErrorMessage, outputData);
@@ -13275,11 +14547,6 @@ The context is now within limits. Please retry your request with the recovered c
                 }], subAgentMetadata) as AgentChatMessage);
             } else {
                 params.conversationMessages.push({ role: 'user', content: resultMessage, metadata: subAgentMetadata } as AgentChatMessage);
-            }
-
-            // Set PayloadAtEnd with the merged payload
-            if (stepEntity) {
-                stepEntity.PayloadAtEnd = this.serializePayloadAtEnd(mergedPayload);
             }
 
             // Update the agent run's current payload with the merged result
@@ -14046,7 +15313,6 @@ The context is now within limits. Please retry your request with the recovered c
             // Related agents can receive parent data in two ways:
             // 1. SubAgentInputMapping: Maps parent payload → sub-agent payload (structural data)
             // 2. SubAgentContextPaths: Parent payload → sub-agent conversation context (LLM awareness)
-            stepEntity.PayloadAtStart = this.serializePayloadAtStart(previousDecision.newPayload);
 
             // Prepare initial payload via input mapping (if configured)
             let initialSubAgentPayload: SR | undefined = subAgentPayloadOverride;
@@ -14619,41 +15885,7 @@ The context is now within limits. Please retry your request with the recovered c
             // which (pre-guardrail) looped forever. Phrasing it in second person under the `user`
             // role keeps the memory while removing the false assistant-prose exemplar. The
             // human-facing narration is emitted separately via onProgress above.
-            let actionMessage: string;
-            if (actions.length === 1) {
-                const aa = actions[0];
-                actionMessage = `[You invoked the **${aa.name}** action`;
-
-                // Add parameters if they exist
-                if (aa.params && Object.keys(aa.params).length > 0) {
-                    const paramsList = Object.entries(aa.params)
-                        .map(([key, value]) => {
-                            const displayValue = this.formatParamValueForMessage(value);
-                            return `• **${key}**: ${displayValue}`;
-                        })
-                        .join('\n');
-                    actionMessage += ` with parameters:\n${paramsList}\n]`;
-                } else {
-                    actionMessage += '.]';
-                }
-            } else {
-                actionMessage = `[You invoked **${actions.length} actions** in parallel:\n\n` + actions.map((aa, index) => {
-                    let actionText = `${index + 1}. **${aa.name}**`;
-
-                    // Add parameters if they exist
-                    if (aa.params && Object.keys(aa.params).length > 0) {
-                        const paramsList = Object.entries(aa.params)
-                            .map(([key, value]) => {
-                                const displayValue = this.formatParamValueForMessage(value);
-                                return `   • **${key}**: ${displayValue}`;
-                            })
-                            .join('\n');
-                        actionText += `\n${paramsList}`;
-                    }
-
-                    return actionText;
-                }).join('\n\n') + '\n]';
-            }
+            const actionMessage = this.buildActionInvocationMessage(actions);
 
             if (addConversationMessage) {
                 // Record as a `user`-role environment annotation (no metadata - permanent record).
@@ -14805,10 +16037,7 @@ The context is now within limits. Please retry your request with the recovered c
             const failedActions = actionSummaries.filter(a => !a.success);
 
             // Add user message with the results — compact markdown instead of JSON
-            const header = failedActions.length > 0
-                ? `${failedActions.length} of ${actionSummaries.length} action(s) failed:`
-                : `Action results:`;
-            const resultsMessage = `${header}\n${this.formatActionResultsAsMarkdown(actionSummaries)}`;
+            const resultsMessage = this.buildActionResultsMessage(actionSummaries);
 
             // Build metadata from AI Agent Actions configuration
             // If multiple actions, use the most restrictive (shortest) expiration settings
@@ -14921,8 +16150,10 @@ The context is now within limits. Please retry your request with the recovered c
                     
                     finalPayload = changeResult.result;
                     if (lastStep) {
-                        lastStep.PayloadAtEnd = this.serializePayloadAtEnd(finalPayload);
-                        await lastStep.Save();
+                        const payloadAtEnd = this.serializePayloadAtEnd(finalPayload);
+                        lastStep.PayloadAtEnd = payloadAtEnd;
+                        // Queued behind the step's earlier saves, so the saved row ends with this end.
+                        this.queueStepSave(lastStep, (s) => { s.PayloadAtEnd = payloadAtEnd; });
                     }
                     
                     if (changeResult.warnings.length > 0 && (params.verbose === true || IsVerboseLoggingEnabled())) {
@@ -14980,10 +16211,19 @@ The context is now within limits. Please retry your request with the recovered c
     // Client Tools Step Execution
     // ================================================================
 
+    /** The assistant message describing a client-tools step's invocations. */
+    private describeClientToolInvocations(clientTools: AgentClientToolInvocation[]): string {
+        return clientTools.length === 1
+            ? `I'm invoking the **${clientTools[0].Name}** client tool${clientTools[0].Description ? ` — ${clientTools[0].Description}` : ''}.`
+            : `I'm invoking **${clientTools.length} client tools**:\n\n` +
+              clientTools.map((t, i) => `${i + 1}. **${t.Name}**${t.Description ? ` — ${t.Description}` : ''}`).join('\n');
+    }
+
     /**
      * Execute client-side tools requested by the agent.
      * Sends each tool invocation via PubSub, awaits the client's response
      * (or timeout), then adds results to the conversation and continues.
+     * Refused under an audience ({@link clientToolsRefusal}).
      */
     private async executeClientToolsStep(
         params: ExecuteAgentParams,
@@ -14991,6 +16231,10 @@ The context is now within limits. Please retry your request with the recovered c
         previousDecision: BaseAgentNextStep,
         stepCount: number = 0
     ): Promise<BaseAgentNextStep> {
+        const refused = this.clientToolsRefusal(params, previousDecision);
+        if (refused) {
+            return refused;
+        }
         const clientTools: AgentClientToolInvocation[] = previousDecision.clientTools ?? [];
         if (clientTools.length === 0) {
             // No tools to execute — continue with next prompt
@@ -15010,11 +16254,7 @@ The context is now within limits. Please retry your request with the recovered c
 
         const currentPayload = previousDecision?.newPayload || previousDecision?.previousPayload || params.payload;
 
-        // Build assistant message describing the tool invocations
-        const toolMessage = clientTools.length === 1
-            ? `I'm invoking the **${clientTools[0].Name}** client tool${clientTools[0].Description ? ` — ${clientTools[0].Description}` : ''}.`
-            : `I'm invoking **${clientTools.length} client tools**:\n\n` +
-              clientTools.map((t, i) => `${i + 1}. **${t.Name}**${t.Description ? ` — ${t.Description}` : ''}`).join('\n');
+        const toolMessage = this.describeClientToolInvocations(clientTools);
 
         params.conversationMessages.push({
             role: 'assistant',
@@ -15067,27 +16307,25 @@ The context is now within limits. Please retry your request with the recovered c
                 stepEntity,
                 response.Success,
                 response.ErrorMessage,
-                { result: response.Result }
+                {
+                    result: response.Result,
+                    media: response.Media?.map(m => ({ mimeType: m.MimeType, bytes: Math.floor((m.Base64.length * 3) / 4), width: m.Width, height: m.Height }))
+                }
             );
 
             results.push({
                 ToolName: tool.Name,
                 Success: response.Success,
                 Result: response.Result,
+                Media: response.Media,
                 ErrorMessage: response.ErrorMessage
             });
         }
 
         // Format results as conversation message
-        const resultsMarkdown = this.formatClientToolResultsAsMarkdown(results);
-        params.conversationMessages.push({
-            role: 'user',
-            content: resultsMarkdown,
-            metadata: {
-                turnAdded: this._promptTurnCount,
-                messageType: 'client-tool-result'
-            }
-        } as AgentChatMessage);
+        params.conversationMessages.push(
+            BuildClientToolResultMessage(results, this._promptTurnCount, ResolveClientToolResultMaxChars(this._agentTypePromptParams))
+        );
 
         // If the LLM already declared taskComplete=true alongside the client tools,
         // honor that intent now that tools have executed — no need for another LLM call.
@@ -15109,31 +16347,6 @@ The context is now within limits. Please retry your request with the recovered c
         }
 
         return await this.executePromptStep(params, config, previousDecision, stepCount);
-    }
-
-    /**
-     * Format client tool results as a compact markdown summary for the conversation.
-     */
-    private formatClientToolResultsAsMarkdown(results: ClientToolResultSummary[]): string {
-        const failedCount = results.filter(r => !r.Success).length;
-        const header = failedCount > 0
-            ? `${failedCount} of ${results.length} client tool(s) failed:`
-            : 'Client tool results:';
-
-        const lines = results.map(r => {
-            const icon = r.Success ? '✓' : '✗';
-            let line = `${icon} **${r.ToolName}**: ${r.Success ? 'succeeded' : 'failed'}`;
-            if (r.ErrorMessage) line += ` — ${r.ErrorMessage}`;
-            if (r.Success && r.Result != null) {
-                const resultStr = typeof r.Result === 'string' ? r.Result : JSON.stringify(r.Result);
-                if (resultStr.length <= 500) {
-                    line += `\n  Result: ${resultStr}`;
-                }
-            }
-            return line;
-        });
-
-        return `${header}\n${lines.join('\n')}`;
     }
 
     /**
@@ -15779,6 +16992,11 @@ The context is now within limits. Please retry your request with the recovered c
                 newPayload: previousDecision.newPayload || previousDecision.previousPayload
             };
         }
+        // Fail closed under an audience or a tenant-scoped run (taskGraphRefusal): a graph runs outside the run's gates.
+        const withheld = this.taskGraphRefusal(params, previousDecision);
+        if (withheld) {
+            return withheld;
+        }
 
         const stepEntity = await this.createStepEntity({
             stepType: 'TaskGraph',
@@ -15922,10 +17140,8 @@ The context is now within limits. Please retry your request with the recovered c
         };
 
         // For root agents, create a persistent AIAgentRequest so the request is tracked in the
-        // dashboard and can be responded to outside a conversation (mirrors executeChatStep).
-        if (this._depth === 0) {
-            await this.createFeedbackRequest(params, stepEntity, planPresentation);
-        }
+        // dashboard and can be responded to outside a conversation (mirrors executeChatStep; none under an audience).
+        await this.raiseFeedbackRequest(params, stepEntity, planPresentation);
 
         return {
             step: 'Chat',
@@ -16001,10 +17217,8 @@ The context is now within limits. Please retry your request with the recovered c
         await this.finalizeStepEntity(stepEntity, true);
 
         // For root agents, create a persistent AIAgentRequest so the request is
-        // tracked in the dashboard and can be responded to outside a conversation.
-        if (this._depth === 0) {
-            await this.createFeedbackRequest(params, stepEntity, previousDecision);
-        }
+        // tracked in the dashboard and can be responded to outside a conversation (none under an audience).
+        await this.raiseFeedbackRequest(params, stepEntity, previousDecision);
 
         return {
             step: 'Chat',
@@ -16023,6 +17237,29 @@ The context is now within limits. Please retry your request with the recovered c
             // the user has to reach the writer rather than being dropped on reconstruction.
             artifactDirective: previousDecision.artifactDirective
         };
+    }
+
+    /**
+     * Raises the persistent `MJ: AI Agent Requests` row for a root agent's Chat or Plan step ({@link createFeedbackRequest}),
+     * so it can be answered outside the conversation — except when the run's audience adds a reader. A request answered
+     * on the dashboard or through the API resumes the run (`MJAIAgentRequestEntityServer.resumeAgent`) as the responder,
+     * in the original conversation, with no audience: neither the request nor the run row has a field that can carry
+     * one without a new column. So a shared conversation's run raises none: its question or plan still reaches the room,
+     * which answers in the conversation, where the host starts the next run with the room's audience.
+     */
+    private async raiseFeedbackRequest(
+        params: ExecuteAgentParams,
+        stepEntity: MJAIAgentRunStepEntityExtended,
+        decision: BaseAgentNextStep
+    ): Promise<void> {
+        if (this._depth !== 0) {
+            return;
+        }
+        if (this.runAudienceAddsReader(params)) {
+            this.logStatus('📋 No feedback request raised: the run has an audience, so it is answered in the conversation, not resumed', true, params);
+            return;
+        }
+        await this.createFeedbackRequest(params, stepEntity, decision);
     }
 
     /**
@@ -16169,12 +17406,10 @@ The context is now within limits. Please retry your request with the recovered c
     /**
      * Resolves the file storage account ID for this agent's file artifacts.
      *
-     * Resolution chain (first non-null wins):
-     * 1. Runtime override (`params.override?.storageAccountId`)
-     * 2. Agent-level (`params.agent.DefaultStorageAccountID`)
-     * 3. Category hierarchy — walks up the agent's category tree via `ParentID`
-     * 4. Agent Type-level (`agentType.DefaultStorageAccountID`)
-     * 5. System fallback — single active storage account, if only one exists
+     * Delegates to {@link AIEngineBase.ResolveAgentStorageAccountID}, the shared golden path:
+     * runtime override (`params.override?.storageAccountId`) → agent → category tree → agent type →
+     * system fallback (the single active account, or the most recently updated one with a
+     * once-per-agent warning when several are active).
      *
      * This method is `protected` so subclasses can override the resolution logic
      * for custom storage routing (e.g., routing by file type or tenant).
@@ -16183,78 +17418,7 @@ The context is now within limits. Please retry your request with the recovered c
      * @returns The resolved FileStorageAccount ID, or null if none configured
      */
     protected async getStorageAccountID(params: ExecuteAgentParams): Promise<string | null> {
-        // 1. Runtime override — highest priority
-        if (params.override?.storageAccountId) {
-            return params.override.storageAccountId;
-        }
-
-        // 2. Agent-level override
-        if (params.agent.DefaultStorageAccountID) {
-            return params.agent.DefaultStorageAccountID;
-        }
-
-        // 3. Category tree walk
-        const categoryId = params.agent.CategoryID;
-        if (categoryId) {
-            try {
-                const categories = AIEngine.Instance.AgentCategories;
-
-                let currentId: string | null = categoryId;
-                const visited = new Set<string>();
-                while (currentId && !visited.has(currentId)) {
-                    visited.add(currentId);
-                    const cat = categories.find(c => UUIDsEqual(c.ID, currentId));
-                    if (!cat) break;
-                    if (cat.DefaultStorageAccountID) return cat.DefaultStorageAccountID;
-                    currentId = cat.ParentID;
-                }
-            } catch (error) {
-                LogError(`Error resolving category storage account: ${(error as Error).message}`);
-            }
-        }
-
-        // 4. Agent Type-level default
-        const agentTypeId = params.agent.TypeID;
-        if (agentTypeId) {
-            const agentType = AIEngine.Instance.AgentTypes.find(
-                at => UUIDsEqual(at.ID, agentTypeId)
-            );
-            if (agentType?.DefaultStorageAccountID) {
-                return agentType.DefaultStorageAccountID;
-            }
-        }
-
-        // 5. System fallback — use cached metadata (already loaded during engine Config)
-        const activeAccounts = FileStorageEngineBase.Instance.AccountsWithProviders
-            .filter(a => a.provider.IsActive);
-
-        if (activeAccounts.length === 0) {
-            // No storage configured — return null, inline base64 fallback handles it downstream
-            return null;
-        }
-
-        if (activeAccounts.length === 1) {
-            return activeAccounts[0].account.ID;
-        }
-
-        // 2+ active accounts but nothing configured at any level
-        const agentName = params.agent.Name || params.agent.ID;
-        const typeName = params.agent.TypeID
-            ? AIEngine.Instance.AgentTypes.find(at => UUIDsEqual(at.ID, params.agent.TypeID))?.Name || params.agent.TypeID
-            : 'unknown';
-        const categoryName = params.agent.CategoryID
-            ? AIEngine.Instance.AgentCategories.find(c => UUIDsEqual(c.ID, params.agent.CategoryID))?.Name || params.agent.CategoryID
-            : 'none';
-        const accountNames = activeAccounts.map(a => `'${a.account.Name}' (${a.provider.Name})`).join(', ');
-
-        throw new Error(
-            `Multiple active file storage accounts detected (${accountNames}) but no DefaultStorageAccountID is configured ` +
-            `for agent '${agentName}', category '${categoryName}', or agent type '${typeName}'.\n` +
-            `To fix: Set DefaultStorageAccountID on one of the following (in order of priority):\n` +
-            `  1. Agent '${agentName}' — for this specific agent\n` +
-            `  2. Agent Category '${categoryName}' — for all agents in this category\n` +
-            `  3. Agent Type '${typeName}' — for all agents of this type`
-        );
+        return AIEngine.Instance.ResolveAgentStorageAccountID(params.agent, params.override?.storageAccountId);
     }
 
     /**
@@ -17325,17 +18489,66 @@ The context is now within limits. Please retry your request with the recovered c
             this._agentRun.CompletedAt = new Date();
             this._agentRun.Success = false;
             this._agentRun.ErrorMessage = message;
-            
+            // Save() writes every column, so an in-memory null here would overwrite the reason the
+            // Stop button wrote on the row. Record the reason the abort signal carried instead. The
+            // signal is consulted first because most call sites pass a fixed message naming WHERE
+            // the run was cancelled ('during prompt execution'), not WHY.
+            const signalReason = this._runAbortController?.signal.reason;
+            this._agentRun.CancellationReason = BaseAgent.CancellationReasonForAbort(
+                typeof signalReason === 'string' ? signalReason : message
+            );
+
+            // A stop is not supposed to lose the work. The run row only learns its FinalPayload on a
+            // normal finish, but every completed step already recorded the payload as it stood, so
+            // the last of those is what the next turn (chained by LastRunID) starts from.
+            if (!this._agentRun.FinalPayload) {
+                const lastPayload = BaseAgent.LastStepPayload(this._agentRun.Steps);
+                if (lastPayload) {
+                    this._agentRun.FinalPayload = lastPayload;
+                }
+            }
+
             // Calculate total tokens even for cancelled runs
             this.applyTokenStatsToRun(this._agentRun, this.calculateTokenStats());
 
             await this._agentRun.Save();
+            AgentRunWatchdog.Instance.Untrack(this._agentRun.ID);
         }
         
         return {
             success: false,
             agentRun: this._agentRun!
         };
+    }
+
+    /**
+     * Maps the reason an abort signal carried to the run's `CancellationReason` value: the
+     * watchdog's stop relay raises {@link AgentRunWatchdog.UserCancelAbortReason} for a row marked
+     * `User Request`; the wall-clock guard's reason starts with {@link AgentTimeoutAbortReason};
+     * anything else (an upstream caller's token, a shutdown) is `System`.
+     */
+    public static CancellationReasonForAbort(reason: string | null | undefined): NonNullable<MJAIAgentRunEntityExtended['CancellationReason']> {
+        if (reason === AgentRunWatchdog.UserCancelAbortReason) {
+            return 'User Request';
+        }
+        if (reason && reason.startsWith(BaseAgent.AgentTimeoutAbortReason)) {
+            return 'Timeout';
+        }
+        return 'System';
+    }
+
+    /**
+     * The payload recorded at the end of the latest step that recorded one, as its serialized
+     * string, or null when no step has. Steps are examined from the highest `StepNumber` down
+     * (array order is spawn order, which a sub-step can interleave).
+     */
+    public static LastStepPayload(steps: ReadonlyArray<{ StepNumber: number; PayloadAtEnd: string | null }> | null | undefined): string | null {
+        if (!steps || steps.length === 0) {
+            return null;
+        }
+        const ordered = [...steps].sort((a, b) => (b.StepNumber ?? 0) - (a.StepNumber ?? 0));
+        const withPayload = ordered.find(s => typeof s.PayloadAtEnd === 'string' && s.PayloadAtEnd.length > 0);
+        return withPayload?.PayloadAtEnd ?? null;
     }
 
     /**
@@ -17411,10 +18624,8 @@ The context is now within limits. Please retry your request with the recovered c
                 this._agentRun.Status = 'Completed';
             }
 
-            // Serialize the (largest-it-ever-gets) final payload ONCE and reuse for both
-            // Result and FinalPayload instead of stringifying the same object three times.
+            // Serialize the (largest-it-ever-gets) final payload once for FinalPayload.
             const finalPayloadJson = resolvedPayload ? JSON.stringify(resolvedPayload) : null;
-            this._agentRun.Result = finalPayloadJson;
             this._agentRun.FinalStep = finalStep.step;
             this._agentRun.Message = finalStep.message;
 
@@ -17932,11 +19143,13 @@ The context is now within limits. Please retry your request with the recovered c
         }
         const outcome = await ConversationCompactionManager.CompactIfNeeded({
             ConversationId: params.conversationId,
+            BranchID: params.ConversationBranchID ?? null,
             Agent: params.agent,
             AgentType: config?.agentType || null,
             Budget: budget,
             ContextUser: params.contextUser,
             Provider: this.ProviderToUse,
+            ExecutionScope: this.runPromptExecutionScope(params),
             EstimateTokens: (messages) => this.estimateConversationTokens(messages),
             Verbose: params.verbose,
             // The in-flight agent-response placeholder row: a post-turn pass runs while
@@ -18167,9 +19380,7 @@ The context is now within limits. Please retry your request with the recovered c
         },
         params: ExecuteAgentParams
     ): Promise<string> {
-        const originalContent = typeof message.content === 'string'
-            ? message.content
-            : JSON.stringify(message.content);
+        const originalContent = ReplaceMediaBlocksWithStubs(message.content);
 
         switch (metadata.compactMode) {
             case 'First N Chars': {
@@ -18207,6 +19418,7 @@ The context is now within limits. Please retry your request with the recovered c
 
                     // Execute summarization prompt
                     const promptParams = new AIPromptParams();
+                    Object.assign(promptParams, this.runPromptExecutionScope(params));
                     promptParams.prompt = prompt;
                     promptParams.data = {
                         originalContent,
@@ -18215,7 +19427,6 @@ The context is now within limits. Please retry your request with the recovered c
                         messageType: message.metadata?.messageType || 'unknown',
                         turnAdded: message.metadata?.turnAdded || 0
                     };
-                    promptParams.contextUser = params.contextUser;
                     promptParams.agentId = params.agent.ID;
                     promptParams.UserID = ResolvePromptRunUserID({
                         UserID: params.userId,
@@ -18305,13 +19516,15 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     protected estimateTokens(content: ChatMessage['content'], modelName?: string): number {
-        const text = typeof content === 'string'
-            ? content
-            : JSON.stringify(content);
-
-        // Use heuristic token estimation (fast, good enough for context management)
-        // Avoids heavy tokenizer dependencies while providing ~10-20% accuracy
-        return this.heuristicTokenCount(text);
+        if (typeof content === 'string') {
+            return this.heuristicTokenCount(content);
+        }
+        // Each media block counts as IMAGE_BLOCK_TOKEN_ESTIMATE, not by its base64 length.
+        let tokens = 0;
+        for (const block of content) {
+            tokens += IsMediaBlock(block) ? IMAGE_BLOCK_TOKEN_ESTIMATE : this.heuristicTokenCount(block.content);
+        }
+        return tokens;
     }
 
     /**
@@ -18610,6 +19823,115 @@ The context is now within limits. Please retry your request with the recovered c
      */
     protected getValueFromPath(obj: unknown, path: string): unknown {
         return GetValueFromPath(obj, path);
+    }
+
+    /**
+     * The run's scope inputs: the explicit `ExecuteAgentParams` fields, else their `data` fallbacks, which count only
+     * when the caller set `TrustReservedRunData`. {@link Execute} has already cleaned `data`; the rule is applied here
+     * again for {@link ExecuteSingleAction} called outside a run (the realtime tool path, harnesses).
+     */
+    private runScopeInputs(params: ExecuteAgentParams): {
+        EntityName: string | undefined; RecordID: string | undefined; Secondary: Record<string, SecondaryScopeValue> | undefined
+    } {
+        const data = WithAgentRunDataTrustApplied(params).Params.data;
+        return {
+            EntityName: this.scopeText(params.PrimaryScopeEntityName ?? data?.PrimaryScopeEntityName),
+            RecordID: this.scopeText(params.PrimaryScopeRecordID ?? data?.PrimaryScopeRecordID),
+            Secondary: this.scopeDimensions(params.SecondaryScopes ?? data?.SecondaryScopes, params.agent?.Name),
+        };
+    }
+
+    /**
+     * Secondary scopes as the run takes them: a plain object of dimension values, else none. A host assembles them at
+     * runtime (often through `data`), so anything else — a JSON string, an array, a class instance — is not read as
+     * dimensions (its keys would be character indexes or properties); it is logged and the run carries no secondary scope.
+     */
+    private scopeDimensions(value: unknown, agentName: string | undefined): Record<string, SecondaryScopeValue> | undefined {
+        if (value === undefined || value === null) {
+            return undefined;
+        }
+        if (!IsPlainObject(value)) {
+            LogError(`Scoping: SecondaryScopes for agent "${agentName ?? 'unknown'}" must be a plain object of dimension values; ignored.`);
+            return undefined;
+        }
+        return value as Record<string, SecondaryScopeValue>;
+    }
+
+    /**
+     * The run's scope as memory, retrieval and scoped prompt configuration take it: the scope {@link initializeAgentRun}
+     * validated and wrote to the run row (`_runScope`; resolved the same way, {@link validatedRunScope}, outside a run),
+     * with the primary entity resolved to its ID. One source, so notes and examples, pre-execution RAG, scoped prompt
+     * parts and configs, the run row and every action dispatch see the same tenant and dimensions — trimmed, with the
+     * agent's `ScopeConfig` defaults applied, and never a `data` scope the caller was not trusted to set.
+     */
+    private runScopeForContext(params: ExecuteAgentParams): RunContextScope {
+        const scope = this._runScope ?? this.validatedRunScope(params);
+        const entityName = scope.PrimaryScopeEntityName ?? undefined;
+        return {
+            EntityID: entityName ? this.ProviderToUse.EntityByName(entityName)?.ID : undefined,
+            RecordID: scope.PrimaryScopeRecordID ?? undefined,
+            Secondary: scope.SecondaryScopes ?? undefined,
+        };
+    }
+
+    /** The run's scope ({@link runScopeForContext}) in the shape `ApplyScopedPromptConfig` takes. */
+    private scopedPromptConfigScope(params: ExecuteAgentParams): PromptComponentScope {
+        const scope = this.runScopeForContext(params);
+        return { primaryScopeEntityId: scope.EntityID, primaryScopeRecordId: scope.RecordID, secondaryScopes: scope.Secondary };
+    }
+
+    /** A scope identifier as text: a non-blank string (trimmed) or a number; anything else is no value. */
+    private scopeText(value: unknown): string | undefined {
+        if (typeof value === 'number') {
+            return String(value);
+        }
+        return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+    }
+
+    /**
+     * The run's scope as the run row records it and every action dispatch is handed it: the inputs from
+     * {@link runScopeInputs}, the secondary dimensions validated with the agent's configured defaults applied
+     * ({@link validateAndApplySecondaryScopes}), and `null` for whatever the run does not carry.
+     */
+    private validatedRunScope(params: ExecuteAgentParams): ActionRunScope {
+        const inputs = this.runScopeInputs(params);
+        if (!inputs.EntityName && !inputs.RecordID && !inputs.Secondary) {
+            return { PrimaryScopeEntityName: null, PrimaryScopeRecordID: null, SecondaryScopes: null };
+        }
+        const secondary = this.validateAndApplySecondaryScopes(inputs.Secondary, this.parseSecondaryScopeConfig(params.agent), params.agent.Name);
+        return {
+            PrimaryScopeEntityName: inputs.EntityName ?? null,
+            PrimaryScopeRecordID: inputs.RecordID ?? null,
+            SecondaryScopes: secondary && Object.keys(secondary).length > 0 ? secondary : null,
+        };
+    }
+
+    /**
+     * Writes the validated run scope onto the run row: the primary entity resolved to its ID (logged when it is
+     * not in metadata), the tenant record ID and the secondary dimensions as JSON. A secondary-only scope on an
+     * agent whose ScopeConfig does not allow one is logged, and still recorded.
+     */
+    private writeRunScope(params: ExecuteAgentParams, scope: ActionRunScope): void {
+        if (scope.PrimaryScopeEntityName) {
+            const primaryEntity = this.ProviderToUse.EntityByName(scope.PrimaryScopeEntityName);
+            if (primaryEntity) {
+                this._agentRun.PrimaryScopeEntityID = primaryEntity.ID;
+            } else {
+                LogError(`Scoping: Entity "${scope.PrimaryScopeEntityName}" not found in metadata`);
+            }
+        }
+        if (scope.PrimaryScopeRecordID) {
+            this._agentRun.PrimaryScopeRecordID = scope.PrimaryScopeRecordID;
+        }
+        if (scope.SecondaryScopes) {
+            this._agentRun.SecondaryScopes = JSON.stringify(scope.SecondaryScopes);
+            if (!scope.PrimaryScopeRecordID && !(this.parseSecondaryScopeConfig(params.agent)?.allowSecondaryOnly ?? false)) {
+                LogError(
+                    `Scoping: Agent "${params.agent.Name}" requires primary scope when using secondary scopes. ` +
+                    `Set allowSecondaryOnly=true in ScopeConfig to allow secondary-only scoping.`
+                );
+            }
+        }
     }
 
     /**

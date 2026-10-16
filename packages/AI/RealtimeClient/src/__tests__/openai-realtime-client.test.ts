@@ -15,6 +15,8 @@ import {
     IRealtimePeerConnection,
     OpenAIRealtimeClient,
 } from '../drivers/openAIRealtimeClient';
+import { FakeRtpSender } from './helpers/realtime-fakes';
+import { DescribeWebRtcMicrophoneReplacement } from './helpers/microphone-replacement';
 
 // ── Fakes (no network, no WebRTC) ──────────────────────────────────────────────
 
@@ -57,14 +59,19 @@ class FakeDataChannel implements IRealtimeDataChannel {
 class FakePeerConnection implements IRealtimePeerConnection {
     public ontrack: ((event: RTCTrackEvent) => void) | null = null;
     public AddedTracks: MediaStreamTrack[] = [];
+    /** The sender handed back for each added track. */
+    public Senders: FakeRtpSender[] = [];
     public Channel = new FakeDataChannel();
     public ChannelLabel = '';
     public LocalDescription: RTCSessionDescriptionInit | null = null;
     public RemoteDescription: RTCSessionDescriptionInit | null = null;
     public Closed = false;
 
-    public addTrack(track: MediaStreamTrack, _stream: MediaStream): void {
+    public addTrack(track: MediaStreamTrack, _stream: MediaStream): FakeRtpSender {
         this.AddedTracks.push(track);
+        const sender = new FakeRtpSender(track);
+        this.Senders.push(sender);
+        return sender;
     }
     public createDataChannel(label: string): IRealtimeDataChannel {
         this.ChannelLabel = label;
@@ -250,6 +257,14 @@ describe('OpenAIRealtimeClient', () => {
             expect(states).toEqual(['listening']);
         });
 
+        it('should keep the client-side requestedTracks hint out of session.update (OpenAI rejects unknown session params)', () => {
+            const tracks = [{ Direction: 'Inbound', Modality: 'Video' }];
+            client.InitChannel(channel, { instructions: 'voice co-agent', tools: [], requestedTracks: tracks });
+            channel.Open();
+
+            expect(channel.SentEvents()[0]).toEqual({ type: 'session.update', session: { instructions: 'voice co-agent', tools: [] } });
+        });
+
         it('should NOT send an empty session.update when no config was supplied', () => {
             client.InitChannel(channel, {});
             channel.Open();
@@ -338,6 +353,22 @@ describe('OpenAIRealtimeClient', () => {
                 },
             ]);
             expect(client.IsBusy).toBe(true);
+        });
+
+        it('should keep the session instructions on a spoken update — OpenAI treats response.instructions as a REPLACEMENT', () => {
+            // Seen live: the opener ("greet them, introduce yourself…") was spoken with no persona at all,
+            // as "Hi, I'm ChatGPT", because the per-response instructions displaced the session's.
+            const persona = new ChannelTestClient();
+            const personaChannel = new FakeDataChannel();
+            persona.InitChannel(personaChannel, { instructions: 'You are Nadia Whitfield, a talent partner.' });
+            personaChannel.Open();
+            personaChannel.Sent = [];
+
+            persona.RequestSpokenUpdate('Open the conversation now: greet them.');
+
+            expect(personaChannel.SentEvents()).toEqual([
+                { type: 'response.create', response: { instructions: 'You are Nadia Whitfield, a talent partner.\n\nOpen the conversation now: greet them.' } },
+            ]);
         });
 
         /**
@@ -886,3 +917,13 @@ describe('OpenAIRealtimeClient', () => {
         });
     });
 });
+
+DescribeWebRtcMicrophoneReplacement(
+    async () => {
+        const client = new ConnectTestClient();
+        const track = new FakeTrack();
+        await client.Connect(makeConfig(), new FakeMediaStream([track]));
+        return { Client: client, Track: track, Senders: client.Pc.Senders };
+    },
+    () => new ConnectTestClient()
+);
