@@ -197,6 +197,7 @@ import {
     IsOpeningTurn,
     MentionsAgent,
 } from './decision-discovery';
+import { ResolveHandoffTarget } from './handoff-target';
 import {
     BuildFinishIfQuestions,
     CapFinishIfState,
@@ -6728,14 +6729,47 @@ export class BaseAgent {
             };
         }
 
-        const requestedName = nextStep.handoff?.agentName?.trim() ?? '';
-        const target = (AIEngine.Instance.Agents ?? []).find(
-            a => a.Status === 'Active' && a.Name?.trim().toLowerCase() === requestedName.toLowerCase()
-        );
-        if (!requestedName || !target) {
-            this.logError(`Handoff target agent '${nextStep.handoff?.agentName}' not found or not active for agent '${params.agent.Name}'`, {
+        const requestedName = nextStep.handoff?.agentName ?? '';
+        const brief = nextStep.handoff?.brief ?? '';
+        const reason = nextStep.handoff?.reason ?? '';
+        const data = WithAgentRunDataTrustApplied(params).Params.data;
+        const resolution = await ResolveHandoffTarget({
+            AgentName: requestedName,
+            SourceAgentID: params.agent.ID,
+            HandoffChain: params.handoffChain ?? [],
+            HostAllowedIDs: HostAllowedAgentIDs(data),
+            ContextUser: params.contextUser,
+            Agents: AIEngine.Instance.Agents ?? [],
+        });
+
+        if (resolution.Refusal || !resolution.Target) {
+            const refusal = resolution.Refusal ?? {
+                Reason: 'NotFound' as const,
+                Message: `Agent '${requestedName}' not found or not active.`
+            };
+            this.logError(`Handoff target agent '${requestedName}' refused (${refusal.Reason}) for agent '${params.agent.Name}': ${refusal.Message}`, {
                 agent: params.agent,
                 category: 'NextStepValidation'
+            });
+            await this.createStepEntity({
+                stepType: 'Handoff',
+                stepName: `Handoff: ${requestedName.trim() || '(unknown)'}`,
+                contextUser: params.contextUser,
+                inputData: {
+                    agentName: requestedName,
+                    brief,
+                    reason
+                },
+                completed: {
+                    success: false,
+                    errorMessage: refusal.Message,
+                    outputData: {
+                        RefusalReason: refusal.Reason,
+                        AgentName: requestedName,
+                        Brief: brief,
+                        Reason: reason
+                    }
+                }
             });
             if (nextStep.step !== 'Retry') {
                 this._generalValidationRetryCount++;
@@ -6743,10 +6777,12 @@ export class BaseAgent {
             return {
                 step: 'Retry',
                 terminate: false,
-                errorMessage: `Handoff target agent '${nextStep.handoff?.agentName}' not found or not active`
+                message: refusal.Message,
+                errorMessage: refusal.Message
             };
         }
 
+        const target = resolution.Target;
         this._resolvedHandoffTarget = { id: target.ID, name: target.Name };
         if (nextStep.handoff) {
             nextStep.handoff = { ...nextStep.handoff, agentName: target.Name };
