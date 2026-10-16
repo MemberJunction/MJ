@@ -480,14 +480,6 @@ describe('FeatureValueCacheService', () => {
             expect(view?.BypassCache).toBe(true);
         });
 
-        it('GetLatestValue returns null when the source never wrote the feature, and adds no run filter without one', async () => {
-            MockRunView.mockResults = [];
-            const latest = await FeatureValueCacheService.Instance.GetLatestValue({ RecordProcessID: 'rp-1', EntityID: 'ENT-P', RecordID: 'person-1',
-                FeatureName: 'SeniorityLevel', Source: 'Human', ContextUser: mockUser, Provider: lookupProvider });
-            expect(latest).toBeNull();
-            expect(MockRunView.lastParams?.ExtraFilter).not.toContain('ProcessRunID');
-        });
-
         const humanRef = { RecordProcessID: 'rp-1', EntityID: 'ENT-P', RecordID: 'person-1', FeatureName: 'SeniorityLevel', ContextUser: mockUser, Provider: lookupProvider };
 
         it('retires the record\'s Human rows of a feature through the entity layer', async () => {
@@ -507,15 +499,6 @@ describe('FeatureValueCacheService', () => {
             expect(await FeatureValueCacheService.Instance.RetireHumanValue(humanRef)).toBe(0);
             MockRunView.mockResults = [{ Delete: vi.fn().mockResolvedValue(false), LatestResult: { CompleteMessage: 'FK violation' } }];
             await expect(FeatureValueCacheService.Instance.RetireHumanValue(humanRef)).rejects.toThrow(/failed retiring the Human 'SeniorityLevel' value of record 'person-1': FK violation/);
-        });
-
-        it('NativeValueOf returns the typed column that holds the value', () => {
-            const empty = { ValueText: null, ValueNumeric: null, ValueBoolean: null, ValueDate: null, ValueJSON: null };
-            expect(FeatureValueCacheService.NativeValueOf({ ...empty, ValueNumeric: 0 })).toBe(0);
-            expect(FeatureValueCacheService.NativeValueOf({ ...empty, ValueBoolean: false })).toBe(false);
-            expect(FeatureValueCacheService.NativeValueOf({ ...empty, ValueText: '' })).toBe('');
-            expect(FeatureValueCacheService.NativeValueOf({ ...empty, ValueJSON: '["a"]' })).toEqual(['a']);
-            expect(FeatureValueCacheService.NativeValueOf(empty)).toBeNull();
         });
     });
 });

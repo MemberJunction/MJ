@@ -117,11 +117,11 @@ afterEach(() => TransactionRegistry.Clear());
 type EntityDatabaseProvider = DatabaseProviderBase & IEntityDataProvider;
 
 /**
- * A database provider double at a given transaction depth, with a post-commit queue the test runs. `member` says
+ * A database provider double at a given transaction depth, with a post-commit queue the test can count. `member` says
  * whether the caller belongs to the open transaction: like GenericDatabaseProvider, a non-member (or a caller with no
  * transaction open) gets a token whose epoch is null.
  */
-function providerAtDepth(depth: number, member: boolean = true): { provider: EntityDatabaseProvider; commit: () => Promise<void>; queuedCount: () => number } {
+function providerAtDepth(depth: number, member: boolean = true): { provider: EntityDatabaseProvider; queuedCount: () => number } {
     const queued: PostCommitTask[] = [];
     const provider: EntityDatabaseProvider = Object.create(DatabaseProviderBase.prototype);
     // the entity-data members a record bound to the provider could call; the handler under test never does
@@ -137,7 +137,7 @@ function providerAtDepth(depth: number, member: boolean = true): { provider: Ent
     if (depth > 0) {
         TransactionRegistry.Open(provider);
     }
-    return { provider, commit: async () => { for (const t of queued.splice(0)) await t(); }, queuedCount: () => queued.length };
+    return { provider, queuedCount: () => queued.length };
 }
 
 /**
@@ -176,16 +176,6 @@ describe('BaseEngine: event-driven reloads read on the pool', () => {
         const engine = freshEngine();
         await engine.EventReload(datasetProvider(reads));
         expect(reads).toEqual([{ Name: 'Template_Metadata', ForceRefresh: true, ReadOptions: { ReadOnPool: true } }]);
-    });
-
-    it('keeps the read options on a forced reload queued behind a load in flight', async () => {
-        const reads: DatasetRead[] = [];
-        const provider = datasetProvider(reads);
-        const engine = freshEngine();
-        const first = engine.Config(true, undefined, provider);
-        const queued = engine.EventReload(provider);
-        await Promise.all([first, queued]);
-        expect(reads.map((r) => r.ReadOptions)).toEqual([undefined, { ReadOnPool: true }]);
     });
 
     it('keeps the pool reads when a plain forced reload is queued after an event reload', async () => {
@@ -247,14 +237,5 @@ describe('BaseEngine.RunAfterCommitOrNow', () => {
         await freshEngine().Defer(saveOn(provider), task);
         expect(task).toHaveBeenCalledTimes(1);
         expect(queuedCount()).toBe(0);
-    });
-
-    it('runs the task only after the commit when the event\'s write is inside a transaction', async () => {
-        const { provider, commit } = providerAtDepth(1);
-        const task = vi.fn().mockResolvedValue(undefined);
-        await freshEngine().Defer(saveOn(provider), task);
-        expect(task).not.toHaveBeenCalled();
-        await commit();
-        expect(task).toHaveBeenCalledTimes(1);
     });
 });

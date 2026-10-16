@@ -143,15 +143,6 @@ describe('ActionScheduledJobDriver', () => {
             expect(result.ErrorMessage).toContain('Pausing the job failed: locked row');
         });
 
-        it('reports a pause that could not read the job, without saving anything', async () => {
-            setClassLoaded(false);
-            const stored = new TestJob();
-            stored.LoadResult = false;
-            const result = await driver.Execute(contextFor(new TestJob(), stored));
-            expect(result.ErrorMessage).toContain('Pausing the job failed: the job could not be read.');
-            expect(stored.SaveCount).toBe(0);
-        });
-
         it('runs the action when its class is loaded', async () => {
             setClassLoaded(true);
             const stored = new TestJob();

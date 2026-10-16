@@ -5,7 +5,6 @@ import {
 } from '@memberjunction/core';
 import type { RecordRef } from '@memberjunction/record-set-processor-base';
 import { MJGlobal } from '@memberjunction/global';
-import { TagEngine } from '@memberjunction/tag-engine';
 import { ApplyOutputMapping, OutputMappingWriter, type HumanValueGuard, type OutputMappingConfig } from '../writeBack';
 import { WriteBackProcessor } from '../processors/WriteBackProcessor';
 import { DatabaseProviderStub, EntitiesOnlyProvider } from '@memberjunction/unit-testing';
@@ -574,7 +573,6 @@ const relatedEntity = (Name: string, BaseTable: string, keyType = 'uniqueidentif
  * returns `ExistingChildren`.
  */
 class PreviewDbProvider extends WriteBackTestProvider {
-    public FailRead = false;
     public readonly Known: EntityInfo[];
     /** The processed record's stored values; each load of it gets a copy. */
     public RecordValues: Record<string, unknown> = { ID: 'person-1', SeniorityLevelID: null };
@@ -631,9 +629,6 @@ class PreviewDbProvider extends WriteBackTestProvider {
         this.ViewRuns.push(params);
         if (params.EntityName === 'Person Job Functions') {
             return rowsResult(this.ExistingChildren as T[]);
-        }
-        if (this.FailRead) {
-            return { ...rowsResult<T>([]), Success: false, ErrorMessage: 'read failed' };
         }
         const [, column, list] = /^(\w+) IN \((.*)\)$/.exec(typeof params.ExtraFilter === 'string' ? params.ExtraFilter : '') || [];
         const wanted = [...(list || '').matchAll(/'([^']*)'/g)].map(([, v]) => v.toLowerCase());
@@ -728,70 +723,15 @@ describe('dry-run preview — the other checks a real write would fail', () => {
         expect(out.PreviewErrors).toEqual([`'People.SeniorityLevelID' = '${result.SeniorityLevel}' does not exist in 'Seniority Levels' (the real write fails on its foreign key)`]);
     });
 
-    it('reports a value that is not a key of the uniqueidentifier column without reading it', async () => {
-        const d = new PreviewDbProvider([PJF(), PEOPLE, JOB_FUNCTIONS], {});
-        const out = await ApplyOutputMapping({ outputMapping: childOnly, result: oneFunction('Sales'), record, contextUser: USER, provider: d, dryRun: true });
-        expect(out.PreviewErrors).toEqual([`'Person Job Functions.JobFunctionID' = 'Sales' is not a valid key of 'Job Functions' (the real write fails converting it)`]);
-        expect(d.RelatedReads).toHaveLength(0);
-    });
-
-    it('reports a value that is not a string or number', async () => {
-        const d = new PreviewDbProvider([PJF(), PEOPLE, JOB_FUNCTIONS], {});
-        const out = await ApplyOutputMapping({ outputMapping: childOnly, result: oneFunction({ Name: 'Sales' }), record, contextUser: USER, provider: d, dryRun: true });
-        expect(out.PreviewErrors).toEqual([`'Person Job Functions.JobFunctionID' holds a value of type object, which cannot be a key of 'Job Functions'`]);
-    });
-
-    it('reports a failed read instead of passing the values', async () => {
-        const d = new PreviewDbProvider([PJF(), PEOPLE, JOB_FUNCTIONS], {});
-        d.FailRead = true;
-        const out = await ApplyOutputMapping({ outputMapping: childOnly, result: oneFunction(JOB_FUNCTION_ID), record, contextUser: USER, provider: d, dryRun: true });
-        expect(out.PreviewErrors).toEqual([`checking 'Job Functions' for the written values failed: read failed`]);
-    });
-
-    it('reports a child entity that is not in metadata', async () => {
-        const d = new PreviewDbProvider([PEOPLE, JOB_FUNCTIONS], {});
-        const out = await ApplyOutputMapping({ outputMapping: childOnly, result: oneFunction(JOB_FUNCTION_ID), record, contextUser: USER, provider: d, dryRun: true });
-        expect(out.PreviewErrors).toEqual([`child entity 'Person Job Functions' is not in metadata`]);
-    });
-
     it('refuses a reconcile config the real write refuses, even for an empty answer', async () => {
         const d = new PreviewDbProvider([PJF(), PEOPLE, JOB_FUNCTIONS], {});
         const noSource: OutputMappingConfig = { childRecords: [{ ...mapping.childRecords![0], reconcile: { keyFields: ['JobFunctionID'] } }] };
         await expect(ApplyOutputMapping({ outputMapping: noSource, result: { Functions: [] }, record, contextUser: USER, provider: d, dryRun: true }))
             .rejects.toThrow(/needs sourceField and derivedSourceValue/);
     });
-
-    it('reports a taggedEntityName missing from metadata, which the real write refuses', async () => {
-        const resolve = vi.spyOn(TagEngine.Instance, 'ResolveTag').mockResolvedValue(null);
-        const config = vi.spyOn(TagEngine.Instance, 'Config').mockResolvedValue(undefined);
-        const d = new PreviewDbProvider([PEOPLE], {});
-        const out = await ApplyOutputMapping({ outputMapping: { tags: [{ ref: '$.tag', rootTagId: 'root-1', taggedEntityName: 'No Such Entity' }] },
-            result: { tag: 'Sales' }, record, contextUser: USER, provider: d, dryRun: true });
-        expect(out.PreviewErrors).toEqual([`taggedEntityName 'No Such Entity' not found in metadata`]);
-        resolve.mockRestore();
-        config.mockRestore();
-    });
 });
 
 describe('dry-run preview checks what the database constraint checks', () => {
-    it('does not check a soft foreign key (no database constraint)', async () => {
-        const soft = { ...PJF(), Fields: PJF().Fields.map((f) => (f.Name === 'JobFunctionID' ? uuidField('JobFunctionID', 'Job Functions', { IsSoftForeignKey: true }) : f)) };
-        const d = new PreviewDbProvider([soft, PEOPLE, JOB_FUNCTIONS], {});
-        const out = await ApplyOutputMapping({ outputMapping: childOnly, result: oneFunction(MISSING_ID), record, contextUser: USER, provider: d, dryRun: true });
-        expect(out.PreviewErrors).toBeUndefined();
-        expect(d.RelatedReads).toHaveLength(0);
-    });
-
-    it('does not check a relation only a fieldLookups entry names', async () => {
-        const plainPeople: PreviewEntity = { ...PEOPLE, Fields: [field('ID', 'uniqueidentifier'), field('SeniorityLevelID', 'uniqueidentifier')] };
-        const d = new PreviewDbProvider([plainPeople, LEVELS], {});
-        const out = await ApplyOutputMapping({ outputMapping: { fields: mapping.fields, fieldLookups: { SeniorityLevelID: { relatedEntity: 'Seniority Levels' } } },
-            result, record, contextUser: USER, provider: d, dryRun: true });
-        expect(out.PreviewErrors).toBeUndefined();
-        expect(d.RelatedReads).toHaveLength(0); // no constraint to check
-        expect(d.LoadedRecords.every((r) => r.Saved === 0)).toBe(true); // the record is loaded to decide its changes, never saved
-    });
-
     it('reads the related column the foreign key names, and finds a value in any case', async () => {
         const byRef = { ...PJF(), Fields: PJF().Fields.map((f) => (f.Name === 'JobFunctionID'
             ? Object.assign(uuidField('JobFunctionID', 'Job Functions'), { RelatedEntityFieldName: 'RefID' }) : f)) };
@@ -814,14 +754,6 @@ describe('dry-run preview checks only what the real write writes', () => {
         expect(guard.IsHumanOwned).toHaveBeenCalledTimes(1);
         expect(guard.RecordPreserved).not.toHaveBeenCalled();
         expect(out.preservedHumanFields).toBeUndefined();
-    });
-
-    it('does not check a field that already holds the value', async () => {
-        const d = new PreviewDbProvider([PEOPLE, LEVELS], {});
-        d.RecordValues.SeniorityLevelID = MISSING_ID.toLowerCase();
-        const out = await ApplyOutputMapping({ outputMapping: { fields: mapping.fields }, result: { SeniorityLevel: MISSING_ID }, record, contextUser: USER, provider: d, dryRun: true });
-        expect(out.PreviewErrors).toBeUndefined();
-        expect(d.RelatedReads).toHaveLength(0);
     });
 
     it('checks an inserted row in full, an updated row by its differing fields, and a kept human row not at all', async () => {

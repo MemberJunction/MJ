@@ -161,7 +161,7 @@ export class MockTransaction {
 
   /**
    * Server-side abort (trigger THROW, deadlock, XACT_ABORT). Next statement is ENOTBEGUN; commit/rollback are EABORT.
-   * Like real mssql (pinned by mssql-abort-contract.test.ts), the abort leaves `_activeRequest` set for good.
+   * Like real mssql, the abort leaves `_activeRequest` set for good.
    */
   public abortServerSide(): void {
     this.aborted = true;

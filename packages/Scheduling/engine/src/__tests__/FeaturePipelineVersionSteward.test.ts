@@ -163,32 +163,17 @@ describe('FeaturePipelineVersionSteward.RunOnce', () => {
         expect(await steward.RunOnce({ ContextUser: user, Provider: provider })).toMatchObject([{ RecordProcessID: 'RP-1', Action: 'none', Version: 1 }]);
     });
 
-    it('does not mark a backfill done when its run failed, so the next pass runs it again', async () => {
-        plan.mockResolvedValue({ Kind: 'backfill', Version: 2, RecordIDs: ['r1'] });
-        runByID.mockResolvedValue({ ...completedRun, Status: 'Failed', Processed: 0, ErrorMessage: 'version refused' });
-        const out = await steward.RunOnce({ ContextUser: user, Provider: provider });
-        expect(out).toMatchObject([{ Action: 'error', ProcessRunID: 'PR-1', Detail: expect.stringContaining('version refused') }]);
-        expect(markBackfilled).not.toHaveBeenCalled();
-    });
-
-    it('marks a backfill done when its run failed only after attempting every named record', async () => {
-        plan.mockResolvedValue({ Kind: 'backfill', Version: 2, RecordIDs: ['r1', 'r2'] });
-        // a run with a failed record ends Failed; it still handed both records (one skipped) to the processor
-        runByID.mockResolvedValue({ ...completedRun, Status: 'Failed', Processed: 2, Success: 0, Error: 1, Skipped: 1, ErrorMessage: '1 record failed' });
-        expect(await steward.RunOnce({ ContextUser: user, Provider: provider })).toMatchObject([{ Action: 'backfilled' }]);
-        expect(markBackfilled).toHaveBeenCalledWith('RP-1', 2, user, provider);
-        markBackfilled.mockClear();
-        // stopped after one of the two (its error-rate breaker): retried
-        runByID.mockResolvedValue({ ...completedRun, Status: 'Failed', Processed: 1, Success: 0, Error: 1, Skipped: 0 });
-        expect(await steward.RunOnce({ ContextUser: user, Provider: provider })).toMatchObject([{ Action: 'error' }]);
-        expect(markBackfilled).not.toHaveBeenCalled();
-    });
-
-    it('retries a failed backfill of no records, which only had to activate the version', async () => {
-        plan.mockResolvedValue({ Kind: 'backfill', Version: 2, RecordIDs: [] });
-        runByID.mockResolvedValue({ ...completedRun, Status: 'Failed', Total: 0, Processed: 0, Success: 0, ErrorMessage: 'version refused' });
-        expect(await steward.RunOnce({ ContextUser: user, Provider: provider })).toMatchObject([{ Action: 'error' }]);
-        expect(markBackfilled).not.toHaveBeenCalled();
+    // a failed backfill is marked done only when its run attempted every named record; otherwise the next pass reruns it
+    it.each([
+        ['failed before any record', 'error', ['r1'], { Processed: 0 }],
+        ['attempted every record (one failed, one skipped)', 'backfilled', ['r1', 'r2'], { Processed: 2, Success: 0, Error: 1, Skipped: 1 }],
+        ['stopped after one of two records', 'error', ['r1', 'r2'], { Processed: 1, Success: 0, Error: 1 }],
+        ['had no records, only the version to activate', 'error', [], { Total: 0, Processed: 0, Success: 0 }],
+    ])('a failed backfill run that %s ends as %s', async (_case, action: string, recordIDs: string[], counts: Partial<typeof completedRun>) => {
+        plan.mockResolvedValue({ Kind: 'backfill', Version: 2, RecordIDs: recordIDs });
+        runByID.mockResolvedValue({ ...completedRun, ...counts, Status: 'Failed', ErrorMessage: 'version refused' });
+        expect(await steward.RunOnce({ ContextUser: user, Provider: provider })).toMatchObject([{ Action: action, ProcessRunID: 'PR-1' }]);
+        expect(markBackfilled).toHaveBeenCalledTimes(action === 'backfilled' ? 1 : 0);
     });
 
     it('records an evaluation that returned no result as an error, naming the test', async () => {

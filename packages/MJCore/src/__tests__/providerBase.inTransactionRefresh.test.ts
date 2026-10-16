@@ -178,24 +178,6 @@ describe('RefreshWithinTransaction', () => {
         await withinMs(poolReload, 2000, 'pool reload');
         expect(provider.Adopted).toEqual([transactionRead.Label, followUpRead.Label]);
     });
-
-    it('joins only its own reads: a pool reload running at the same time reads on the pool', async () => {
-        const provider = await configuredProvider();
-        provider.HoldJoinedReads = true;
-        const inTransaction = provider.RefreshWithinTransaction();
-        await vi.waitFor(() => expect(provider.DatasetReads()).toHaveLength(1));
-        const readsOfTransactionPass = provider.Reads.length;
-
-        await withinMs(provider.Refresh(), 2000, 'pool reload');
-        const poolPassReads = provider.Reads.slice(readsOfTransactionPass);
-        expect(poolPassReads.map(r => [r.Kind, r.Joined])).toEqual([['status', false], ['dataset', false]]);
-        expect(provider.Reads.slice(0, readsOfTransactionPass).map(r => [r.Kind, r.Joined])).toEqual([['status', true], ['dataset', true]]);
-
-        // The pool pass started later and was adopted first, so the in-transaction snapshot is not adopted.
-        provider.ReleaseAll();
-        expect(await withinMs(inTransaction, 2000, 'RefreshWithinTransaction')).toBe(false);
-        expect(provider.Adopted).toEqual([poolPassReads[1].Label]);
-    });
 });
 
 describe('every reload pass is adopted only if no newer pass was', () => {

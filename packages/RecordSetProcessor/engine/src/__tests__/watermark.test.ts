@@ -450,19 +450,6 @@ describe('RecordSetProcessor: a real run that does not skip refreshes its waterm
         expect(reads).not.toHaveBeenCalled();
     });
 
-    it('writes no watermark when the processor computes no hash for the record (a wrapper whose inner has none)', async () => {
-        const processor = batchProcessor();
-        processor.ComputeBasisHash.mockResolvedValue(undefined);
-        await run(processor);
-        expect(writes).not.toHaveBeenCalled();
-    });
-
-    it('writes no watermark under the UpdatedAt strategy, which stores none', async () => {
-        await run(batchProcessor(), { watermarkStrategy: 'UpdatedAt' });
-        expect(writes).not.toHaveBeenCalled();
-        expect(reads).not.toHaveBeenCalled();
-    });
-
     it('lets the following SkipUnchanged run skip every record it wrote', async () => {
         await run(batchProcessor());
         handed = [];

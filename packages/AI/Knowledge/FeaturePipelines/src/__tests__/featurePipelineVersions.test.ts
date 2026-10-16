@@ -626,24 +626,18 @@ describe('FeaturePipelineVersionService activation and the backfill mark', () =>
         expect(stored(1)?.Status).toBe('Active');
         expect(stored(1)?.BackfilledAt).toBeNull();
     });
-    it('keeps the activation date and approver of a version that stays Active when a new golden-set result is recorded', async () => {
+    it('keeps the activation date, approver and backfill mark of a version that stays Active when a new golden-set result is recorded', async () => {
         const activatedAt = new Date('2026-10-01T14:45:00Z');
+        const backfilled = new Date('2026-10-01T00:00:00Z');
         await seedVersion(provider, pinA, { Version: 1, Status: 'Active', Gated: true, Threshold: 0.8, ResultValue: 0.85, GoldenSetTestRunID: 'TR-1',
-            ActivatedAt: activatedAt, ApprovedByUserID: 'approver-1' });
+            ActivatedAt: activatedAt, ApprovedByUserID: 'approver-1', BackfilledAt: backfilled });
         await svc.RecordGoldenSetResult({ RecordProcessID: 'RP', Pin: pinA, Activation: gate, TestRunID: 'TR-2',
             Result: { Value: 0.95, Lower: 0.9, Upper: 0.98, N: 52, Details: '{}' }, ApprovedByUserID: 'qa-runner', ContextUser: user, Provider: provider });
         expect(stored(1)?.Status).toBe('Active');
         expect(stored(1)?.ActivatedAt).toEqual(activatedAt);
         expect(stored(1)?.ApprovedByUserID).toBe('approver-1');
+        expect(stored(1)?.BackfilledAt).toEqual(backfilled);
         expect(stored(1)?.GoldenSetTestRunID).toBe('TR-2');
         expect(stored(1)?.ResultValue).toBe(0.95);
-    });
-    it('keeps the backfill mark of a version that stays Active when a new golden-set result is recorded', async () => {
-        const backfilled = new Date('2026-10-01T00:00:00Z');
-        await seedVersion(provider, pinA, { Version: 1, Status: 'Active', Gated: true, Threshold: 0.8, ResultValue: 0.85, GoldenSetTestRunID: 'TR-1', BackfilledAt: backfilled });
-        await svc.RecordGoldenSetResult({ RecordProcessID: 'RP', Pin: pinA, Activation: gate, TestRunID: 'TR-2',
-            Result: { Value: 0.95, Lower: 0.9, Upper: 0.98, N: 52, Details: '{}' }, ApprovedByUserID: 'user-1', ContextUser: user, Provider: provider });
-        expect(stored(1)?.Status).toBe('Active');
-        expect(stored(1)?.BackfilledAt).toEqual(backfilled);
     });
 });

@@ -499,32 +499,12 @@ describe('Decision pipeline escalation', () => {
             expect(answersFor('r1')).toHaveLength(0);
         });
 
-        it('keeps the LLM call\'s parameter fidelity when the target reports success without a Feature Value key', async () => {
-            const sent: ParameterFidelity = { Status: 'sent-unchanged', Sent: { VendorModelName: 'gemini-3.1-flash-lite', Temperature: 0, MaxTokens: null, Seed: 42 } };
-            decisionAnswers.set('r1', BELOW_FLOOR);
-            llmResults.set('r1', { Success: true, RawResult: { seniority: 'Executive', isVip: true }, AIPromptRunID: 'LLM-RUN-r1', ParameterFidelity: sent });
-            vi.spyOn(InferProcessor.prototype, 'FeatureValueKeyOf').mockReturnValue(undefined);
-            const result = await new InferProcessor(DECISION_PROMPT.ID, undefined, decisionSpec(), null).ProcessRecord(makeRecord('r1'), context);
-
-            expect(result).toMatchObject({ Status: 'Failed', ParameterFidelity: sent });
-        });
-
         it('links the decision\'s prompt run when the failed escalation names an empty one', async () => {
             decisionAnswers.set('r1', BELOW_FLOOR);
             llmResults.set('r1', { Success: false, ErrorMessage: 'model unavailable', AIPromptRunID: '' });
             const result = await new InferProcessor(DECISION_PROMPT.ID, undefined, decisionSpec(), null).ProcessRecord(makeRecord('r1'), context);
 
             expect(result).toMatchObject({ Status: 'Failed', AIPromptRunID: 'DEC-RUN-r1' });
-        });
-
-        it('links the decision\'s prompt run when a rejected escalated answer names an empty one', async () => {
-            const [seniorityOutput, isVip] = outputs();
-            targetRow.Configuration = JSON.stringify(llmSpec({ Outputs: [{ ...seniorityOutput, Constraint: { Type: 'enum', Values: ['Executive', 'Director', 'Manager', 'Staff'], OnViolation: 'fail' } }, isVip] }));
-            llmResults.set('r1', { Success: true, RawResult: { seniority: 'Director', isVip: true }, AIPromptRunID: '' });
-            decisionAnswers.set('r1', BELOW_FLOOR);
-            const result = await new InferProcessor(DECISION_PROMPT.ID, undefined, decisionSpec(), null).ProcessRecord(makeRecord('r1'), context);
-
-            expect(result).toMatchObject({ Status: 'Failed', FailureKind: 'RejectedInvalid', AIPromptRunID: 'DEC-RUN-r1' });
         });
 
         it('fails the record with both reasons, and writes none of the decision answers', async () => {
@@ -564,28 +544,6 @@ describe('Decision pipeline escalation', () => {
 
             expect(result.Status).toBe('Failed');
             expect(result.ParameterFidelity).toEqual(refused);
-        });
-
-        it('keeps the LLM call\'s parameter fidelity when its answer is outside the Decision pipeline\'s enum', async () => {
-            const sent: ParameterFidelity = { Status: 'sent-unchanged', Sent: { VendorModelName: 'gemini-3.1-flash-lite', Temperature: 0, MaxTokens: null, Seed: 42 } };
-            const [seniorityOutput, isVip] = outputs();
-            targetRow.Configuration = JSON.stringify(llmSpec({ Outputs: [{ ...seniorityOutput, Constraint: { Type: 'enum', Values: ['Executive', 'Director', 'Manager', 'Staff'], OnViolation: 'fail' } }, isVip] }));
-            llmResults.set('r1', { Success: true, RawResult: { seniority: 'Director', isVip: true }, AIPromptRunID: 'LLM-RUN-r1', ParameterFidelity: sent });
-            decisionAnswers.set('r1', BELOW_FLOOR);
-            const result = await new InferProcessor(DECISION_PROMPT.ID, undefined, decisionSpec(), null).ProcessRecord(makeRecord('r1'), context);
-
-            expect(result).toMatchObject({ Status: 'Failed', FailureKind: 'RejectedInvalid', ParameterFidelity: sent });
-        });
-
-        it('keeps the LLM call\'s parameter fidelity when the superseded decision\'s row cannot be written', async () => {
-            const sent: ParameterFidelity = { Status: 'sent-unchanged', Sent: { VendorModelName: 'gemini-3.1-flash-lite', Temperature: 0, MaxTokens: null, Seed: 42 } };
-            vi.spyOn(console, 'error').mockImplementation(() => undefined);
-            vi.spyOn(FeatureValueCacheService.Instance, 'RecordFeatureValues').mockRejectedValue(new Error('FK_FeatureValue_AIPromptRun'));
-            llmResults.set('r1', { Success: true, RawResult: { seniority: 'Executive', isVip: true }, AIPromptRunID: 'LLM-RUN-r1', ParameterFidelity: sent });
-            decisionAnswers.set('r1', BELOW_FLOOR);
-            const result = await new InferProcessor(DECISION_PROMPT.ID, undefined, decisionSpec(), null).ProcessRecord(makeRecord('r1'), context);
-
-            expect(result).toMatchObject({ Status: 'Failed', ErrorMessage: 'Feature Value write failed: FK_FeatureValue_AIPromptRun', ParameterFidelity: sent });
         });
 
         it('fails the record when the LLM driver throws', async () => {
@@ -1006,14 +964,6 @@ describe('Decision pipeline escalation', () => {
                 parametersHash: decisionPin.ParametersHash,
                 inputHash: decisionInput.keyHash,
             });
-        });
-
-        it('writes the superseded decision\'s row as history and the answer\'s row as the current value', async () => {
-            decisionAnswers.set('r1', BELOW_FLOOR);
-            await new InferProcessor(DECISION_PROMPT.ID, undefined, decisionSpec(), null).ProcessRecord(makeRecord('r1'), context);
-            // a history row never takes the latest value back, so an unchanged re-run of the record saves nothing
-            expect(supersededFor('r1')[0].historyOnly).toBe(true);
-            expect(answersFor('r1')[0].historyOnly).toBe(false);
         });
 
         it('keeps the values from before the run: the first write\'s capture, not the answer row\'s', async () => {

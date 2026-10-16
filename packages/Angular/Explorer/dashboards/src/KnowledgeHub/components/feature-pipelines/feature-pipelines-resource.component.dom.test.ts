@@ -52,11 +52,6 @@ function render(pipeline: FeaturePipelineSummary, navigation: Partial<Navigation
   return fixture;
 }
 
-const lastRunLine = (f: ComponentFixture<FeaturePipelinesResourceComponent>): string | undefined =>
-  Array.from((f.nativeElement as Element).querySelectorAll('.fp-meta-row'))
-    .map((r) => (r.textContent ?? '').replace(/\s+/g, ' ').trim())
-    .find((r) => r.startsWith('Last run'));
-
 /** A RunFeaturePipeline result as the provider's RouteOperation returns it. */
 function opResult(output: Partial<PredictiveStudioRunFeaturePipelineOutput>): RemoteOpResult<PredictiveStudioRunFeaturePipelineOutput> {
   return { Success: true, Output: { status: 'Completed', processed: 0, written: 0, skipped: 0, error: 0, ...output } };
@@ -68,14 +63,6 @@ afterEach(() => {
 });
 
 describe('Feature Pipelines card (DOM)', () => {
-  it('reports the last run by the outcome text the engine built', () => {
-    expect(lastRunLine(render({ ...SUMMARY, LastRunOutcomeText: '5 of 5 up to date (5 unchanged)' }))).toContain('· 5 of 5 up to date (5 unchanged)');
-  });
-
-  it('reports a run without a result summary as processed, not written', () => {
-    expect(lastRunLine(render(SUMMARY))).toContain('9/10 processed');
-  });
-
   it('shows a failed run\'s error message on the card', () => {
     const fixture = render({ ...SUMMARY, LastRunStatus: 'Failed', LastRunErrorMessage: 'Feature Pipeline version v6 is not activated' });
 

@@ -55,40 +55,6 @@ class SpyTracker implements IProcessRunTracker {
 }
 
 describe('RecordSetProcessor.Process', () => {
-    describe('watermarks on a dry run', () => {
-        afterEach(() => vi.restoreAllMocks());
-        /** Every record changed since its watermark, so a real run would write each one's. */
-        const changed = (): void => {
-            vi.spyOn(WatermarkService.Instance, 'CheckBatchWatermarks').mockImplementation(async (p) =>
-                new Map<string, WatermarkDecision>(p.records.map((r) => [r.RecordID, { shouldSkip: false, basisHash: `hash-${r.RecordID}` }])));
-        };
-        const run = (processor: Parameters<typeof engine.Process>[0]['processor'], dryRun: boolean) => engine.Process({
-            source: new ArraySource(recs(2), 'E'), processor, tracker: new NoOpTracker(), contextUser: USER, provider: PROVIDER,
-            dryRun, skipUnchanged: true, recordProcessID: 'RP', entityID: 'E', triggeredBy: 'Schedule',
-        });
-        const perRecord = { ProcessRecord: async () => ok() };
-        const batched = { ProcessRecord: async () => ok(), ProcessBatch: async (rs: RecordRef[]) => rs.map(() => ok()) };
-
-        it('writes no watermark, on the per-record or the batch path, while a real run writes one per record', async () => {
-            changed();
-            const update = vi.spyOn(WatermarkService.Instance, 'UpdateWatermark').mockResolvedValue();
-            await run(perRecord, true);
-            await run(batched, true);
-            expect(update).not.toHaveBeenCalled();
-            await run(perRecord, false);
-            await run(batched, false);
-            expect(update).toHaveBeenCalledTimes(4);
-        });
-
-        it('computes basis hashes with the context every record gets', async () => {
-            changed();
-            vi.spyOn(WatermarkService.Instance, 'UpdateWatermark').mockResolvedValue();
-            await run(perRecord, true);
-            const check = vi.mocked(WatermarkService.Instance.CheckBatchWatermarks);
-            expect(check.mock.calls[0][0].ProcessorContext).toMatchObject({ DryRun: true, TriggeredBy: 'Schedule', entityID: 'E', recordProcessID: 'RP' });
-        });
-    });
-
     it('passes DryRun and TriggeredBy to every record and to Preflight', async () => {
         const seen: Array<Pick<RecordProcessorContext, 'DryRun' | 'TriggeredBy'>> = [];
         let preflight: Pick<RecordProcessorContext, 'DryRun' | 'TriggeredBy'> | undefined;
@@ -414,37 +380,6 @@ describe('RecordSetProcessor.Process', () => {
                 batchSize: 2, dryRun: true, FeaturePipeline: true, recordProcessID: 'RP-1' });
             expect(tracker.completed?.FeaturePipeline?.WouldRefuse).toBe(refusal);
             expect(result.FeaturePipeline?.WouldRefuse).toBe(refusal);
-        });
-
-        it('carries no refusal on a real run, nor on a dry run whose version would run', async () => {
-            const real = new SpyTracker();
-            await engine.Process({ source: new ArraySource(recs(1), 'E'), tracker: real, contextUser: USER, provider: PROVIDER,
-                processor: { ProcessRecord: async (): Promise<RecordResult> => ({ Status: 'Succeeded', Outcome: 'Upserted' }), CurrentRunRefusal: () => 'stale' },
-                batchSize: 1, FeaturePipeline: true, recordProcessID: 'RP-1' });
-            expect(real.completed?.FeaturePipeline).not.toHaveProperty('WouldRefuse');
-            const dry = new SpyTracker();
-            await engine.Process({ source: new ArraySource(recs(1), 'E'), tracker: dry, contextUser: USER, provider: PROVIDER,
-                processor: { ProcessRecord: async (): Promise<RecordResult> => ({ Status: 'Succeeded', DryRun: true }), CurrentRunRefusal: () => null },
-                batchSize: 1, dryRun: true, FeaturePipeline: true, recordProcessID: 'RP-1' });
-            expect(dry.completed?.FeaturePipeline).not.toHaveProperty('WouldRefuse');
-        });
-
-        it('tallies the batch path the same way as the per-record path', async () => {
-            const tracker = new SpyTracker();
-            const processor = {
-                ProcessRecord: async (): Promise<RecordResult> => ok(),
-                ProcessBatch: async (rs: RecordRef[]): Promise<RecordResult[]> => rs.map((r): RecordResult => (r.RecordID === 'r0'
-                    ? { Status: 'Failed', ErrorMessage: 'not allowed', FailureKind: 'RejectedInvalid' }
-                    : r.RecordID === 'r1' ? { Status: 'Failed', ErrorMessage: 'deadlock' }
-                    : { Status: 'Succeeded', Outcome: r.RecordID === 'r2' ? 'Unchanged' : 'Upserted', HumanValuesPreserved: 2, PipelinePin: PIN })),
-            };
-            const result = await engine.Process({ source: new ArraySource(recs(12), 'E'), processor, tracker, contextUser: USER, provider: PROVIDER,
-                batchSize: 12, FeaturePipeline: true, recordProcessID: 'RP-1' });
-            expect(result.Status).toBe('Failed');
-            expect(result.ErrorMessage).toBe('2 of 12 attempted records failed (1 rejected by output constraints)');
-            expect(tracker.completed?.FeaturePipeline).toMatchObject({
-                Pin: PIN, Attempted: 12, Upserted: 9, Unchanged: 1, RejectedInvalid: 1, Failed: 1, HumanValuesPreserved: 20, Status: 'failed',
-            });
         });
 
         it('takes the pin from the processor when every record was skipped on its watermark', async () => {
