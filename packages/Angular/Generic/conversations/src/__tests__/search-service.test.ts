@@ -1,5 +1,8 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { BehaviorSubject, Subject } from 'rxjs';
+import type { EntityInfo, RunViewParams, UserInfo } from '@memberjunction/core';
+import { createFakeProvider } from '@memberjunction/ng-test-utils';
+import { SearchService } from '../lib/services/search.service';
 
 // Test search service logic without Angular DI
 interface SearchResult {
@@ -144,5 +147,72 @@ describe('SearchService logic', () => {
     it('should return text unchanged for empty text', () => {
       expect(service.highlightMatch('', 'test')).toBe('');
     });
+  });
+});
+
+/**
+ * The real SearchService task search: the conversation and message IDs it filters by are read
+ * with RunView, never through a subquery over the conversation or message views.
+ */
+describe('SearchService task search', () => {
+  const USER = { ID: 'user-1', Name: 'User One' } as unknown as UserInfo;
+  const ENTITIES = {
+    'MJ: Tasks': { Name: 'MJ: Tasks', SchemaName: '__mj', BaseView: 'vwTasks' },
+    'MJ: Conversations': { Name: 'MJ: Conversations', SchemaName: '__mj', BaseView: 'vwConversations' },
+    'MJ: Conversation Details': { Name: 'MJ: Conversation Details', SchemaName: '__mj', BaseView: 'vwConversationDetails' },
+  } as unknown as Record<string, EntityInfo>;
+
+  let service: SearchService;
+  let queries: RunViewParams[];
+  let rows: Record<string, object[]>;
+
+  beforeEach(() => {
+    vi.stubGlobal('localStorage', { getItem: () => null, setItem: () => undefined });
+    queries = [];
+    rows = {};
+    service = new SearchService();
+    service.Provider = createFakeProvider<object>({
+      runViewResults: (params) => {
+        queries.push(params);
+        return rows[params.EntityName ?? ''] ?? [];
+      },
+      entityByName: (name) => ENTITIES[name],
+    });
+    service.setSearchFilter('tasks');
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  /** The ExtraFilter of each query sent for an entity, narrowed to string (`ExtraFilter` is `string | PlatformSQL`). */
+  const filtersFor = (entityName: string): string[] =>
+    queries.filter((q) => q.EntityName === entityName).map((q) => (typeof q.ExtraFilter === 'string' ? q.ExtraFilter : ''));
+
+  it('searches tasks without a subquery over conversations or their messages', async () => {
+    rows['MJ: Conversations'] = [{ ID: 'c1' }];
+    rows['MJ: Conversation Details'] = [{ ID: 'd1' }];
+
+    await service.search('plan', 'env-1', USER);
+
+    const allFilters = queries.map((q) => (typeof q.ExtraFilter === 'string' ? q.ExtraFilter : '')).join(' ');
+    expect(allFilters).not.toMatch(/vwConversation/i);
+    const taskFilter = filtersFor('MJ: Tasks')[0] ?? '';
+    expect(taskFilter.startsWith("ParentID IS NULL AND (UserID = 'user-1' OR ConversationDetailID IN ('d1')) AND ")).toBe(true);
+    expect(taskFilter).toContain("LOWER(Name) LIKE '%plan%'");
+  });
+
+  it('reads the message IDs again on every task search', async () => {
+    rows['MJ: Conversations'] = [{ ID: 'c1' }];
+    rows['MJ: Conversation Details'] = [{ ID: 'd1' }];
+
+    await service.search('plan', 'env-1', USER);
+    rows['MJ: Conversation Details'] = [{ ID: 'd1' }, { ID: 'd2' }];
+    await service.search('plan', 'env-1', USER);
+
+    const taskFilters = filtersFor('MJ: Tasks');
+    expect(taskFilters).toHaveLength(2);
+    expect(taskFilters[1]).toContain("ConversationDetailID IN ('d1','d2')");
   });
 });
