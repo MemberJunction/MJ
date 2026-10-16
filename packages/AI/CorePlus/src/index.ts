@@ -62,3 +62,6 @@ export * from './task-graph/workflow-spec-validator';
 // because browser and React Native hosts implement it, and a package they can reach must not
 // declare a server-only dependency — not even for a type. See the file header for the incident.
 export * from './attachment-blob-store';
+
+// MJOPUS1 realtime-recording shard wire format, shared by the browser recorder and MJAPI.
+export * from './realtime-recording-shard-format';
