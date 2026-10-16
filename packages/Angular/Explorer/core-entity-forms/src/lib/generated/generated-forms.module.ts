@@ -48,6 +48,7 @@ import { MJAIAgentSessionBridgeFormComponent } from "./Entities/MJAIAgentSession
 import { MJAIAgentSessionBridgeParticipantFormComponent } from "./Entities/MJAIAgentSessionBridgeParticipant/mjaiagentsessionbridgeparticipant.form.component";
 import { MJAIAgentSessionChannelFormComponent } from "./Entities/MJAIAgentSessionChannel/mjaiagentsessionchannel.form.component";
 import { MJAIAgentSessionFormComponent } from "./Entities/MJAIAgentSession/mjaiagentsession.form.component";
+import { MJAIAgentSessionRecordingShardFormComponent } from "./Entities/MJAIAgentSessionRecordingShard/mjaiagentsessionrecordingshard.form.component";
 import { MJAIAgentSkillFormComponent } from "./Entities/MJAIAgentSkill/mjaiagentskill.form.component";
 import { MJAIAgentStepFormComponent } from "./Entities/MJAIAgentStep/mjaiagentstep.form.component";
 import { MJAIAgentStepPathFormComponent } from "./Entities/MJAIAgentStepPath/mjaiagentsteppath.form.component";
@@ -1139,6 +1140,7 @@ export class GeneratedForms_SubModule_22 { }
 @NgModule({
 declarations: [
     MJAIAgentSessionChannelFormComponent,
+    MJAIAgentSessionRecordingShardFormComponent,
     MJAIConfigurationFormComponent,
     MJAPIKeyUsageLogFormComponent,
     MJActionFilterFormComponent,

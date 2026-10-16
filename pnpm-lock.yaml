@@ -492,6 +492,9 @@ importers:
 
   packages/AI/Agents:
     dependencies:
+      '@evan/opus':
+        specifier: 1.0.3
+        version: 1.0.3
       '@memberjunction/actions':
         specifier: 6.2.0-edge.4
         version: link:../../Actions/Engine
@@ -4502,6 +4505,9 @@ importers:
       '@memberjunction/ng-ui-components':
         specifier: 6.2.0-edge.4
         version: link:../../Generic/ui-components
+      '@memberjunction/realtime-runtime':
+        specifier: 6.2.0-edge.4
+        version: link:../../../RealtimeRuntime
       '@memberjunction/theme-engine':
         specifier: 6.2.0-edge.4
         version: link:../../../ThemeEngine
@@ -14384,6 +14390,9 @@ importers:
       '@types/node':
         specifier: 24.10.11
         version: 24.10.11
+      fake-indexeddb:
+        specifier: ^6.2.5
+        version: 6.2.5
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -35970,8 +35979,7 @@ snapshots:
 
   '@eslint/js@8.56.0': {}
 
-  '@evan/opus@1.0.3':
-    optional: true
+  '@evan/opus@1.0.3': {}
 
   '@exodus/bytes@1.11.0': {}
 

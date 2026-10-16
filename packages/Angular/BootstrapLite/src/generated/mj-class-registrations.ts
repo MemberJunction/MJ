@@ -35,7 +35,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (452 classes)
+// @memberjunction/core-entities (453 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -79,6 +79,7 @@ import {
     MJAIAgentSessionBridgeParticipantEntity,
     MJAIAgentSessionChannelEntity,
     MJAIAgentSessionEntity,
+    MJAIAgentSessionRecordingShardEntity,
     MJAIAgentSkillEntity,
     MJAIAgentStepEntity,
     MJAIAgentStepPathEntity,
@@ -774,6 +775,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJAIAgentSessionBridgeParticipantEntity,
     MJAIAgentSessionChannelEntity,
     MJAIAgentSessionEntity,
+    MJAIAgentSessionRecordingShardEntity,
     MJAIAgentSkillEntity,
     MJAIAgentStepEntity,
     MJAIAgentStepPathEntity,
@@ -919,11 +921,11 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJDashboardCategoryPermissionEntity,
     MJDashboardEntity,
     MJDashboardEntityExtended,
-    MJDashboardPartTypeEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJDashboardPartTypeEntity,
     MJDashboardPermissionEntity,
     MJDashboardPermissionEntityExtended,
     MJDashboardUserPreferenceEntity,
@@ -1123,11 +1125,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJSignatureRequestLogEntity,
     MJSignatureRequestRecipientEntity,
     MJSkillEntity,
-    MJStateProvinceEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJStateProvinceEntity,
     MJTagAuditLogEntity,
     MJTagCoOccurrenceEntity,
     MJTagEntity,
@@ -1327,11 +1329,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     ProjectHierarchyPanel,
     QueryCategoryHierarchyPanel,
     RecordProcessCategoryHierarchyPanel,
-    RecordProcessFormComponentExtended,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    RecordProcessFormComponentExtended,
     RecordProcessFormPolicy,
     RubricAuthorPanel,
     RubricDiffPanel,
@@ -1366,7 +1368,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 620;
+export const CLASS_REGISTRATIONS_COUNT = 621;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
