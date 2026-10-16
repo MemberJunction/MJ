@@ -31,16 +31,16 @@ sequenceDiagram
     participant BFL as BFL API
 
     App->>FLUX: GenerateImage(params)
-    FLUX->>BFL: POST /flux-pro-2 (submit task)
-    BFL-->>FLUX: { id: "task-123" }
-    loop Poll until ready
-        FLUX->>BFL: GET /get_result?id=task-123
+    FLUX->>BFL: POST /flux-2-pro (submit task)
+    BFL-->>FLUX: { id: "task-123", polling_url: "https://api.bfl.ai/v1/get_result?id=task-123", cost: 4 }
+    loop Poll polling_url until ready
+        FLUX->>BFL: GET polling_url (or /get_result?id=task-123)
         BFL-->>FLUX: { status: "Pending" }
     end
-    BFL-->>FLUX: { status: "Ready", result: { sample: "url" } }
-    FLUX->>BFL: Download image from URL
+    BFL-->>FLUX: { status: "Ready", cost: 4, result: { sample: "url" } }
+    FLUX->>BFL: Download image from signed URL
     BFL-->>FLUX: Image data
-    FLUX-->>App: ImageGenerationResult
+    FLUX-->>App: ImageGenerationResult (with usage.cost in USD)
 ```
 
 ## Features
