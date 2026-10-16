@@ -430,10 +430,10 @@ const PERCENT_OR_CURRENCY_REGEX = /[%$€£¥]/;
 /**
  * Extracts all numeric, percentage, or currency runs from `text` using a global scan
  * (including numbers attached directly to text such as `28%YoY`, `$14.2M/qtr`, `up28%`,
- * `1.2M→3.4M`), skipping alphanumeric names (`B2B`, `COVID-19`, `Web3`, `3D`, `MP4`, `H2O`)
- * where a non-percentage/non-currency match is glued to a letter on its left or right,
- * and filters them with `IsNumericLiteralToken` to exclude quarters, years, ISO dates,
- * ratios, and ordinals/versions.
+ * `1.2M→3.4M`, `5k users`, `100GB storage`), skipping alphanumeric names (`B2B`, `COVID-19`,
+ * `Web3`, `MP4`, `H2O`) where a non-percentage/non-currency match is glued to a letter
+ * (or a letter followed by `-`) on its left, and filters them with `IsNumericLiteralToken`
+ * to exclude quarters, years, ISO dates, ratios, and ordinals/versions.
  */
 export function ExtractNumericLiteralTokens(text: string): string[] {
     if (typeof text !== 'string' || !text.trim()) {
@@ -443,14 +443,12 @@ export function ExtractNumericLiteralTokens(text: string): string[] {
     for (const match of text.matchAll(GLOBAL_NUMERIC_RUN_REGEX)) {
         const candidate = match[0];
         const startIndex = match.index ?? 0;
-        const endIndex = startIndex + candidate.length;
 
         const isGluedLeft =
             (startIndex > 0 && ASCII_LETTER_REGEX.test(text[startIndex - 1])) ||
             (startIndex > 1 && text[startIndex - 1] === '-' && ASCII_LETTER_REGEX.test(text[startIndex - 2]));
-        const isGluedRight = endIndex < text.length && ASCII_LETTER_REGEX.test(text[endIndex]);
 
-        if ((isGluedLeft || isGluedRight) && !PERCENT_OR_CURRENCY_REGEX.test(candidate)) {
+        if (isGluedLeft && !PERCENT_OR_CURRENCY_REGEX.test(candidate)) {
             continue;
         }
         if (IsNumericLiteralToken(candidate)) {

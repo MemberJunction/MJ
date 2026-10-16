@@ -495,7 +495,7 @@ describe('IsNumericLiteralToken and ExtractNumericLiteralTokens', () => {
         ['B2B growth', []],
         ['COVID-19 recovery', []],
         ['Web3 tools', []],
-        ['3D printing', []],
+        ['3D printing', ['3']],
         ['MP4 export', []],
         ['H2O', []],
         ['28%YoY', ['28%']],
@@ -504,6 +504,11 @@ describe('IsNumericLiteralToken and ExtractNumericLiteralTokens', () => {
         ['1.2M→3.4M', ['1.2M', '3.4M']],
         ['4,000 new members', ['4,000']],
         ['2B users', ['2B']],
+        ['5k users', ['5']],
+        ['100GB storage', ['100']],
+        ['24h support', ['24']],
+        ['2.5kg', ['2.5']],
+        ['4,000mAh', ['4,000']],
     ])('ExtractNumericLiteralTokens(%j) returns %j', (input, expected) => {
         expect(ExtractNumericLiteralTokens(input)).toEqual(expected);
     });
