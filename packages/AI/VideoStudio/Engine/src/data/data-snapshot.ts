@@ -21,7 +21,7 @@ import {
     RunViewResult,
     UserInfo,
 } from '@memberjunction/core';
-import { EscapeSQLString, IsValidUUID, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, IndexByUUID, IsValidUUID, UUIDSet } from '@memberjunction/global';
 import {
     DataBindingValue,
     DataDeltaValue,
@@ -295,9 +295,7 @@ function validateAndQueueViewBinding(
     }
 
     const provider = options.Provider ?? Metadata.Provider; // global-provider-ok: caller-supplied provider preferred; global is the documented last-resort fallback
-    const entity = provider?.EntityByName
-        ? provider.EntityByName(entityName)
-        : provider?.Entities?.find((e) => e.Name.trim().toLowerCase() === entityName.toLowerCase());
+    const entity = provider.EntityByName(entityName);
     if (!entity || entity.Status?.trim().toLowerCase() === 'disabled') {
         issues.push({
             Severity: 'Error',
@@ -309,7 +307,7 @@ function validateAndQueueViewBinding(
     }
 
     const canonicalFieldByLower = new Map<string, string>();
-    for (const ef of entity.Fields ?? []) {
+    for (const ef of entity.Fields) {
         canonicalFieldByLower.set(ef.Name.trim().toLowerCase(), ef.Name);
     }
     const unknownFields = fields.filter((f) => !canonicalFieldByLower.has(f.trim().toLowerCase()));
@@ -329,7 +327,7 @@ function validateAndQueueViewBinding(
 
     pendingViews.push({
         Binding: binding,
-        EntityName: entity.Name ?? entityName,
+        EntityName: entity.Name,
         Fields: canonicalFields,
         ExtraFilter: binding.Source.ExtraFilter,
         ParamIndex: pendingViews.length,
@@ -429,9 +427,11 @@ async function executeBatchedViewsAndArtifacts(
 
     let artifactParamIndex = -1;
     if (pendingArtifacts.length > 0) {
+        const seen = new UUIDSet();
         const uniqueIds: string[] = [];
         for (const pa of pendingArtifacts) {
-            if (!uniqueIds.some((id) => UUIDsEqual(id, pa.ArtifactVersionID))) {
+            if (!seen.Has(pa.ArtifactVersionID)) {
+                seen.Add(pa.ArtifactVersionID);
                 uniqueIds.push(pa.ArtifactVersionID);
             }
         }
@@ -528,9 +528,10 @@ async function processArtifactBindings(
     }
 
     const versionRows = (artifactRes.Results ?? []) as ArtifactVersionSimpleRow[];
+    const versionById = IndexByUUID(versionRows, (r) => String(r.ID ?? ''));
 
     for (const pa of pendingArtifacts) {
-        const row = versionRows.find((r) => UUIDsEqual(String(r.ID ?? ''), pa.ArtifactVersionID));
+        const row = versionById.Get(pa.ArtifactVersionID);
         if (!row) {
             issues.push({
                 Severity: 'Error',

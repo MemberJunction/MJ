@@ -1136,4 +1136,72 @@ describe('VS-DAT-1: CaptureDataSnapshot & LoadDataSnapshotValues', () => {
             }),
         ]);
     });
+
+    it('deduplicates case-differing ArtifactVersionIDs in the IN list via UUIDSet and matches both bindings via IndexByUUID', async () => {
+        const lowerId = ARTIFACT_VERSION_ID_1.toLowerCase();
+        const upperId = ARTIFACT_VERSION_ID_1.toUpperCase();
+
+        mockRunViews.mockResolvedValueOnce([
+            {
+                Success: true,
+                Results: [
+                    {
+                        ID: lowerId,
+                        ContentMode: 'Text',
+                        Content: JSON.stringify({
+                            tables: [
+                                {
+                                    name: 'summary',
+                                    rows: [
+                                        { Region: 'NA', Revenue: 450 },
+                                        { Region: 'EU', Revenue: 320 },
+                                    ],
+                                },
+                            ],
+                        }),
+                    },
+                ],
+            },
+        ]);
+
+        const bindings: VideoDataBinding[] = [
+            {
+                Key: 'artifact.lower.table',
+                Source: { Kind: 'Artifact', ArtifactVersionID: lowerId },
+                Shape: 'Table',
+            },
+            {
+                Key: 'artifact.upper.series',
+                Source: {
+                    Kind: 'Artifact',
+                    ArtifactVersionID: upperId,
+                    Fields: ['Region', 'Revenue'],
+                },
+                Shape: 'Series',
+            },
+        ];
+
+        const res = await CaptureDataSnapshot(bindings, undefined, { ContextUser: contextUser });
+
+        expect(res.Issues).toEqual([]);
+        expect(mockRunViews).toHaveBeenCalledTimes(1);
+        const [viewParamsArg] = mockRunViews.mock.calls[0];
+        expect(viewParamsArg).toHaveLength(1);
+        expect(viewParamsArg[0]).toEqual({
+            EntityName: 'MJ: Artifact Versions',
+            ExtraFilter: `ID IN ('${lowerId}')`,
+            Fields: ['ID', 'Content', 'ContentMode', 'FileID', 'MimeType'],
+            ResultType: 'simple',
+            MaxRows: MAX_ROWS_PER_BINDING,
+        });
+
+        expect(res.Values['artifact.lower.table']).toEqual([
+            { Region: 'NA', Revenue: 450 },
+            { Region: 'EU', Revenue: 320 },
+        ]);
+        expect(res.Values['artifact.upper.series']).toEqual([
+            { Label: 'NA', Value: 450 },
+            { Label: 'EU', Value: 320 },
+        ]);
+    });
 });
