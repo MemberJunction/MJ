@@ -1,16 +1,14 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
-    BaseEntity, BaseEntityResult, CompositeKey, DatabaseProviderBase, EntityFieldInfo, EntityInfo, IMetadataProvider, RunViewResult, UserInfo,
-    type DatasetResultType, type DatasetStatusResultType, type DeleteSQLResult, type EntityRecordNameResult, type EntityTransactionScope,
-    type IEntityDataProvider, type ILocalStorageProvider, type PotentialDuplicateResponse, type ProviderType, type RecordDependency, type RecordMergeResult,
-    type RunQueryResult, type RunViewParams, type SaveSQLResult, type ScoredCandidate, type TransactionGroupBase,
+    BaseEntity, BaseEntityResult, CompositeKey, DatabaseProviderBase, EntityFieldInfo, EntityInfo, RunViewResult, UserInfo,
+    type EntityTransactionScope, type IEntityDataProvider, type RunViewParams,
 } from '@memberjunction/core';
 import type { RecordRef } from '@memberjunction/record-set-processor-base';
 import { MJGlobal } from '@memberjunction/global';
 import { TagEngine } from '@memberjunction/tag-engine';
 import { ApplyOutputMapping, OutputMappingWriter, type HumanValueGuard, type OutputMappingConfig } from '../writeBack';
 import { WriteBackProcessor } from '../processors/WriteBackProcessor';
-import { EntitiesOnlyProvider } from '@memberjunction/unit-testing';
+import { DatabaseProviderStub, EntitiesOnlyProvider } from '@memberjunction/unit-testing';
 
 const USER = new UserInfo();
 const record: RecordRef = { EntityID: 'ENT-P', RecordID: 'person-1', Record: {} };
@@ -346,59 +344,12 @@ describe('OutputMappingWriter.ValuesEqual — equality by field type', () => {
     });
 });
 
-/** A member of the provider base that write-back never calls. */
-function notUsed(): Error {
-    return new Error('not used by write-back');
-}
-
 /**
- * A real `DatabaseProviderBase` whose abstract members — none of which write-back calls — throw. Each double below
- * extends it and overrides only what write-back does call, so it passes write-back's `instanceof DatabaseProviderBase`
- * checks as the real server provider does, with no cast.
+ * The database provider double write-back runs on: a real `DatabaseProviderBase` (see `DatabaseProviderStub`), so it
+ * passes write-back's `instanceof DatabaseProviderBase` checks as the real server provider does. Each double below
+ * overrides only what write-back calls.
  */
-class WriteBackTestProvider extends DatabaseProviderBase {
-    public get ProviderType(): ProviderType { return 'Database'; }
-    public get DatabaseConnection(): null { return null; }
-    public get InstanceConnectionString(): string { return ''; }
-    public get LocalStorageProvider(): ILocalStorageProvider { throw notUsed(); }
-    protected get AllowRefresh(): boolean { return false; }
-    protected get Metadata(): IMetadataProvider { return this; }
-    protected async InternalGetEntityRecordName(): Promise<string> { throw notUsed(); }
-    protected async InternalGetEntityRecordNames(): Promise<EntityRecordNameResult[]> { throw notUsed(); }
-    public async GetRecordFavoriteStatus(): Promise<boolean> { throw notUsed(); }
-    public async SetRecordFavoriteStatus(): Promise<void> { throw notUsed(); }
-    protected async InternalRunView<T>(): Promise<RunViewResult<T>> { throw notUsed(); }
-    protected async InternalRunViews<T>(): Promise<RunViewResult<T>[]> { throw notUsed(); }
-    protected async InternalRunQuery(): Promise<RunQueryResult> { throw notUsed(); }
-    protected async InternalRunQueries(): Promise<RunQueryResult[]> { throw notUsed(); }
-    protected async searchEntitiesSemanticPass(): Promise<ScoredCandidate[]> { throw notUsed(); }
-    protected async GetCurrentUser(): Promise<UserInfo> { throw notUsed(); }
-    public async GetRecordDependencies(): Promise<RecordDependency[]> { throw notUsed(); }
-    public async GetRecordDuplicates(): Promise<PotentialDuplicateResponse> { throw notUsed(); }
-    public async MergeRecords(): Promise<RecordMergeResult> { throw notUsed(); }
-    public async GetDatasetByName(): Promise<DatasetResultType> { throw notUsed(); }
-    public async GetDatasetStatusByName(): Promise<DatasetStatusResultType> { throw notUsed(); }
-    public async CreateTransactionGroup(): Promise<TransactionGroupBase> { throw notUsed(); }
-    public async ExecuteSQL<T>(_query: string): Promise<Array<T>> { throw notUsed(); }
-    public async BeginTransaction(): Promise<void> { throw notUsed(); }
-    public async CommitTransaction(): Promise<void> { throw notUsed(); }
-    public async RollbackTransaction(): Promise<void> { throw notUsed(); }
-    public QuoteIdentifier(name: string): string { return `[${name}]`; }
-    public QuoteSchemaAndView(schema: string, name: string): string { return `[${schema}].[${name}]`; }
-    protected async InternalExecuteQueryFromSpec(): Promise<RunQueryResult> { throw notUsed(); }
-    protected BuildChildDiscoverySQL(): string { throw notUsed(); }
-    protected BuildHardLinkDependencySQL(): string { throw notUsed(); }
-    protected BuildSoftLinkDependencySQL(): string { throw notUsed(); }
-    protected async GenerateSaveSQL(): Promise<SaveSQLResult> { throw notUsed(); }
-    protected GenerateDeleteSQL(): DeleteSQLResult { throw notUsed(); }
-    protected get UUIDFunctionPattern(): RegExp { return /^newid\(\)$/i; }
-    protected get DBDefaultFunctionPattern(): RegExp { return /^getdate\(\)$/i; }
-    protected async CheckRecordRLS(): Promise<boolean> { throw notUsed(); }
-    protected async CheckCreateRLS(): Promise<boolean> { throw notUsed(); }
-    protected async CheckUpdateRLSPostImage(): Promise<boolean> { throw notUsed(); }
-    protected BuildRecordChangeSQL(): { sql: string; parameters?: unknown[] } | null { throw notUsed(); }
-    protected BuildSiblingRecordChangeSQL(): string { throw notUsed(); }
-
+class WriteBackTestProvider extends DatabaseProviderStub {
     /** A row this provider's `GetEntityObject` made (the base class's real factory path, see {@link TestRow}). */
     public RowCreated(_row: TestRow): void {}
     /** Loads a row's values by its key, as the database would. */
@@ -478,7 +429,6 @@ function rowsResult<R>(rows: R[]): RunViewResult<R> {
  */
 class AmbientTransactionProvider extends WriteBackTestProvider {
     private log: string[] = [];
-    private depth = 0;
     /** Called when record B's failing save runs (B's transaction is open at that moment). */
     public OnFailingSave: () => void = () => undefined;
     /** Statements and transaction begins run through this instance. */
@@ -522,23 +472,18 @@ class AmbientTransactionProvider extends WriteBackTestProvider {
         return rowsResult<T>([]);
     }
 
-    /** As `DatabaseProviderBase.TransactionDepth`: 0 = no open transaction on this instance. */
-    protected override get CurrentTransactionDepth(): number {
-        return this.depth;
-    }
-
     public override async BeginEntityTransaction(): Promise<EntityTransactionScope> {
         this.Calls++;
         const savepoint = this.log.length;
-        this.depth++;
+        this.Depth++;
         let settled = false;
         return {
-            IsNested: this.depth > 1,
+            IsNested: this.Depth > 1,
             Commit: async () => {
                 if (settled) return;
                 settled = true;
-                this.depth--;
-                if (this.depth === 0) {
+                this.Depth--;
+                if (this.Depth === 0) {
                     this.Durable.push(...this.log);
                     this.log = [];
                 }
@@ -546,15 +491,15 @@ class AmbientTransactionProvider extends WriteBackTestProvider {
             Rollback: async () => {
                 if (settled) return;
                 settled = true;
-                this.depth--;
-                this.log.length = this.depth === 0 ? 0 : savepoint;
+                this.Depth--;
+                this.log.length = this.Depth === 0 ? 0 : savepoint;
             },
         };
     }
 
     /** Runs one statement through this instance: inside its open transaction, or durably when none is open. */
     public Write(label: string): void {
-        (this.depth > 0 ? this.log : this.Durable).push(label);
+        (this.Depth > 0 ? this.log : this.Durable).push(label);
     }
 
     public override async CreateIndependentInstance(): Promise<DatabaseProviderBase> {
@@ -608,6 +553,14 @@ describe('ApplyOutputMapping transaction isolation', () => {
         expect(shared.Durable).toEqual(['caller:own-write', ...A_WRITES]);
     });
 
+    it('runs on its own instance when the open transaction belongs to another scope', async () => {
+        const shared = new AmbientTransactionProvider();
+        await shared.BeginEntityTransaction();
+        shared.CallerIsMember = false; // a transaction another unit of work opened on the shared provider
+        await ApplyOutputMapping({ outputMapping: mapping, result, record: recordA, contextUser: USER, provider: shared });
+        expect(shared.Minted).toHaveLength(1);
+        expect(shared.Durable).toEqual(A_WRITES);
+    });
 });
 
 const uuidField = (Name: string, RelatedEntity?: string, extra: Partial<EntityFieldInfo> = {}): EntityFieldInfo =>

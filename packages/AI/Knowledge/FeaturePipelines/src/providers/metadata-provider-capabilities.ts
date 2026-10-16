@@ -18,14 +18,15 @@ export class MetadataProviderCapabilities {
     /**
      * Runs one unit of work (a record's write-back, a version-registry lock) on its own provider instance
      * (`CreateIndependentInstance`, released afterwards), so no other statement on the shared provider lands in its
-     * transaction. When the caller already holds a transaction on `provider`, the unit joins it as a savepoint and the
-     * caller owns atomicity; a provider that is not a `DatabaseProviderBase` (a client provider) runs the unit on itself.
+     * transaction. When the caller is in a transaction on `provider` (another scope's transaction does not count), the
+     * unit joins it as a savepoint and the caller owns atomicity; a provider that is not a `DatabaseProviderBase` (a
+     * client provider) runs the unit on itself.
      * @param provider - the caller's provider
      * @param work - the unit, given the provider every read, save and the transaction must use
      */
     public static async RunIsolated<T>(provider: IMetadataProvider, work: (unitProvider: IMetadataProvider) => Promise<T>): Promise<T> {
         // The transaction members live on DatabaseProviderBase; any other provider (a client provider) runs the unit on itself.
-        if (!(provider instanceof DatabaseProviderBase) || provider.TransactionDepth > 0) {
+        if (!(provider instanceof DatabaseProviderBase) || (provider.CapturePostCommitToken()?.Epoch ?? null) !== null) {
             return work(provider);
         }
         const unit = await provider.CreateIndependentInstance();

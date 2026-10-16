@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { CompositeKey, DatabaseProviderBase, EntityInfo, type EntityTransactionScope, IMetadataProvider, type IRunViewProvider, UserInfo } from '@memberjunction/core';
+import { CompositeKey, EntityInfo, type EntityTransactionScope, IMetadataProvider, type IRunViewProvider, UserInfo } from '@memberjunction/core';
+import { DatabaseProviderStub } from '@memberjunction/unit-testing';
 import type { MJRecordProcessEntity } from '@memberjunction/core-entities';
 import { ArraySource, type IRecordProcessor, type ProcessRunResult, type RecordProcessorContext, type RecordRef, type RecordResult } from '@memberjunction/record-set-processor-base';
 import {
@@ -389,34 +390,36 @@ describe('the guard resolves "what the pipeline last wrote" read-only with the m
 });
 
 describe('the run-wide lookup cache inside a caller\'s transaction', () => {
-    /** A caller provider that holds an open transaction: write-back joins it (it is a DatabaseProviderBase with depth 1). */
-    class JoinedProvider implements Pick<IMetadataProvider, 'EntityByID' | 'EntityByName' | 'GetEntityObject'>, Pick<IRunViewProvider, 'RunView'> {
-        public get TransactionDepth(): number { return 1; }
-        public get SupportsEntityTransactions(): boolean { return true; }
+    /** A caller provider whose open transaction the caller is in: write-back joins it. */
+    class JoinedProvider extends DatabaseProviderStub {
+        public Lookups = 0;
+        constructor() {
+            super();
+            this.Depth = 1;
+            this.GetEntityObject = vi.fn().mockImplementation(async () => parentRow({ ID: 'new-level' }, []));
+            this.RunView = vi.fn().mockImplementation(async () => { this.Lookups++; return { Success: true, Results: [] }; });
+        }
         /** Joins the caller's open transaction as a savepoint (nested scope). */
-        public async BeginEntityTransaction(): Promise<EntityTransactionScope> {
+        public override async BeginEntityTransaction(): Promise<EntityTransactionScope> {
             return { IsNested: true, Commit: async () => undefined, Rollback: async () => undefined };
         }
-        public Lookups = 0;
-        public EntityByID = (): EntityInfo => new EntityInfo({
-            ID: 'ENT-P', Name: 'People',
-            Fields: [{ Name: 'ID', Type: 'uniqueidentifier', IsPrimaryKey: true }, { Name: 'SeniorityLevelID', Type: 'uniqueidentifier', RelatedEntity: 'Seniority Levels' }],
-        });
-        public EntityByName = (): EntityInfo => new EntityInfo({ ID: 'ENT-S', Name: 'Seniority Levels', Fields: [{ Name: 'ID', Type: 'uniqueidentifier', IsPrimaryKey: true }] });
-        public GetEntityObject: IMetadataProvider['GetEntityObject'] = vi.fn().mockImplementation(async () => parentRow({ ID: 'new-level' }, []));
-        public RunView: IRunViewProvider['RunView'] = vi.fn().mockImplementation(async () => { this.Lookups++; return { Success: true, Results: [] }; });
+        public override EntityByID(): EntityInfo {
+            return new EntityInfo({
+                ID: 'ENT-P', Name: 'People',
+                Fields: [{ Name: 'ID', Type: 'uniqueidentifier', IsPrimaryKey: true }, { Name: 'SeniorityLevelID', Type: 'uniqueidentifier', RelatedEntity: 'Seniority Levels' }],
+            });
+        }
+        public override EntityByName(): EntityInfo {
+            return new EntityInfo({ ID: 'ENT-S', Name: 'Seniority Levels', Fields: [{ Name: 'ID', Type: 'uniqueidentifier', IsPrimaryKey: true }] });
+        }
     }
-    // Write-back joins a caller's transaction only on a DatabaseProviderBase (an `instanceof` check); the double puts the
-    // abstract base's prototype under it rather than implementing the base's many abstract members, which write-back never calls.
-    Object.setPrototypeOf(JoinedProvider.prototype, DatabaseProviderBase.prototype);
 
     it('neither caches a created lookup row nor serves one from the cache while the caller holds a transaction', async () => {
-        const joined = new JoinedProvider();
-        const provider = joined as Pick<IMetadataProvider, 'EntityByID' | 'EntityByName' | 'GetEntityObject'> as IMetadataProvider;
+        const provider = new JoinedProvider();
         const cache = new Map<string, string | number>([['Seniority Levels|Name|Director', 'stale-cached-id']]);
         const mapping = { fields: { SeniorityLevelID: '$.SeniorityLevel' }, fieldLookups: { SeniorityLevelID: { onLookupMiss: 'create' as const } } };
         await ApplyOutputMapping({ outputMapping: mapping, result: { SeniorityLevel: 'Director' }, record, contextUser: USER, provider, lookupCache: cache });
-        expect(joined.Lookups).toBe(1); // the cached key was not served
+        expect(provider.Lookups).toBe(1); // the cached key was not served
         await ApplyOutputMapping({ outputMapping: mapping, result: { SeniorityLevel: 'Principal' }, record, contextUser: USER, provider, lookupCache: cache });
         expect(cache.has('Seniority Levels|Name|Principal')).toBe(false);
     });
@@ -455,33 +458,13 @@ class MemoryStore {
 }
 
 /** A provider instance with its own transaction over a {@link MemoryStore}. */
-class MemoryProvider implements Pick<IMetadataProvider, 'EntityByID' | 'GetEntityObject'> {
-    private depth = 0;
+class MemoryProvider extends DatabaseProviderStub {
     private staged: Array<() => void> = [];
     private onEnd: Array<() => void> = [];
-    constructor(public readonly Store: MemoryStore, public readonly FailNextPersonSave: { Value: boolean }) {}
-
-    public get TransactionDepth(): number { return this.depth; }
-    public get SupportsEntityTransactions(): boolean { return true; }
-    public async BeginEntityTransaction(): Promise<EntityTransactionScope> {
-        this.depth++;
-        return {
-            IsNested: false,
-            Commit: async () => { this.depth--; this.staged.forEach((w) => w()); this.end(); },
-            Rollback: async () => { this.depth--; this.end(); },
-        };
-    }
-    public async CreateIndependentInstance(): Promise<MemoryProvider> { return new MemoryProvider(this.Store, this.FailNextPersonSave); }
-    public async ReleaseIndependentInstance(): Promise<void> { /* nothing pooled */ }
-    public OnEnd(f: () => void): void { this.onEnd.push(f); }
-    /** Runs a write now, or on commit when this instance holds a transaction. */
-    public Write(w: () => void): void {
-        if (this.depth > 0) this.staged.push(w); else w();
-    }
-    public EntityByID = (): EntityInfo => PEOPLE;
-    public GetEntityObject: IMetadataProvider['GetEntityObject'] = vi.fn().mockImplementation(async () => {
+    constructor(public readonly Store: MemoryStore, public readonly FailNextPersonSave: { Value: boolean }) {
+        super();
         const self = this;
-        return {
+        this.GetEntityObject = vi.fn().mockImplementation(async () => ({
             Values: {} as Record<string, unknown>, LatestResult: { CompleteMessage: 'person save failed' }, PrimaryKey: CompositeKey.FromKeyValuePair('ID', 'person-1'),
             Get(f: string) { return f === 'SeniorityLevelID' ? self.Store.People.get('person-1') : this.Values[f]; },
             Set(f: string, v: unknown) { this.Values[f] = v; },
@@ -493,8 +476,25 @@ class MemoryProvider implements Pick<IMetadataProvider, 'EntityByID' | 'GetEntit
                 self.Write(() => self.Store.People.set('person-1', v));
                 return true;
             },
+        }));
+    }
+
+    public override async BeginEntityTransaction(): Promise<EntityTransactionScope> {
+        this.Depth++;
+        return {
+            IsNested: false,
+            Commit: async () => { this.Depth--; this.staged.forEach((w) => w()); this.end(); },
+            Rollback: async () => { this.Depth--; this.end(); },
         };
-    });
+    }
+    public override async CreateIndependentInstance(): Promise<MemoryProvider> { return new MemoryProvider(this.Store, this.FailNextPersonSave); }
+    public override async ReleaseIndependentInstance(): Promise<void> { /* nothing pooled */ }
+    public OnEnd(f: () => void): void { this.onEnd.push(f); }
+    /** Runs a write now, or on commit when this instance holds a transaction. */
+    public Write(w: () => void): void {
+        if (this.Depth > 0) this.staged.push(w); else w();
+    }
+    public override EntityByID(): EntityInfo { return PEOPLE; }
 
     private end(): void {
         this.staged = [];
@@ -503,7 +503,6 @@ class MemoryProvider implements Pick<IMetadataProvider, 'EntityByID' | 'GetEntit
         ends.forEach((f) => f());
     }
 }
-Object.setPrototypeOf(MemoryProvider.prototype, DatabaseProviderBase.prototype);
 
 /** Backs the Feature Value service with the store, through the provider each call is given (as the real service does). */
 function backServiceWith(store: MemoryStore): void {

@@ -515,7 +515,7 @@ export class OutputMappingWriter {
     /** Whether the run-wide lookup cache may be used: not inside a caller's transaction, whose rollback would undo a cached row. */
     protected get CanCacheLookups(): boolean {
         const provider = this.Options.LookupProvider;
-        return !(provider instanceof DatabaseProviderBase && provider.TransactionDepth > 0);
+        return !(provider instanceof DatabaseProviderBase && (provider.CapturePostCommitToken()?.Epoch ?? null) !== null);
     }
 
     /** The match value inside a mapped value (an array's first element, an object's `Name`); null when not a string or number. */

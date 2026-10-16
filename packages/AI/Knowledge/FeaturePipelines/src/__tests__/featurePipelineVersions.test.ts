@@ -4,32 +4,18 @@ import {
     DatabaseProviderBase,
     EntityInfo,
     UserInfo,
-    type DatasetResultType,
-    type DatasetStatusResultType,
-    type DeleteSQLResult,
-    type EntityRecordNameResult,
     type EntityTransactionScope,
     type IEntityDataProvider,
-    type ILocalStorageProvider,
-    type IMetadataProvider,
-    type PotentialDuplicateResponse,
-    type ProviderType,
     type RecordChange,
-    type RecordDependency,
-    type RecordMergeResult,
-    type RunQueryResult,
     type RunViewParams,
     type RunViewResult,
-    type SaveSQLResult,
-    type ScoredCandidate,
-    type TransactionGroupBase,
 } from '@memberjunction/core';
 import { FeaturePipelineVersionService, FeaturePipelineVersionRefusedError, type PlanUnattendedParams } from '../versions/FeaturePipelineVersionService.js';
 import type { MJFeatureValueEntity } from '@memberjunction/core-entities';
 import { MJFeaturePipelineVersionEntityExtended, type VersionActivationFields } from '../entities/MJFeaturePipelineVersionEntityExtended.js';
 import { UUIDsEqual } from '@memberjunction/global';
 import { FeaturePipelinePin, type FeaturePipelinePinData } from '../spec/feature-value-key.js';
-import { EntitiesOnlyProvider } from '@memberjunction/unit-testing';
+import { DatabaseProviderStub, EntitiesOnlyProvider } from '@memberjunction/unit-testing';
 
 /**
  * The version registry over in-memory `MJ: Feature Pipeline Versions` rows. The rows are REAL entity objects of the
@@ -463,27 +449,24 @@ class SharedVersionDatabase {
 /**
  * A database provider instance over the shared database: its own transaction stack (a nested begin is a savepoint on
  * the same session), the lock statement, independent instances on the same database, and version rows saved through
- * it only while it holds the lock. It extends `DatabaseProviderBase`, so the registry treats it as the server provider
- * does; everything it does not use throws.
+ * it only while it holds the lock. It is a real `DatabaseProviderBase` (see `DatabaseProviderStub`), so the registry
+ * treats it as the server provider does.
  */
-class VersionDatabaseProvider extends DatabaseProviderBase {
-    private depth = 0;
+class VersionDatabaseProvider extends DatabaseProviderStub {
     public readonly Store = new VersionRowStore(() => this.db.Holds(this), () => this.db.UniqueKeyViolations++);
     constructor(private readonly db: SharedVersionDatabase) {
         super();
     }
     public override get Entities(): EntityInfo[] { return [VERSION_ENTITY]; }
-    protected override get CurrentTransactionDepth(): number { return this.depth; }
-    public async BeginTransaction(): Promise<void> { this.depth++; }
-    public async CommitTransaction(): Promise<void> { this.EndOne(); }
-    public async RollbackTransaction(): Promise<void> { this.EndOne(); }
+    public override async CommitTransaction(): Promise<void> { this.EndOne(); }
+    public override async RollbackTransaction(): Promise<void> { this.EndOne(); }
     private EndOne(): void {
-        this.depth--;
-        if (this.depth === 0) {
+        this.Depth--;
+        if (this.Depth === 0) {
             this.db.Unlock(this);
         }
     }
-    public async ExecuteSQL<T>(query: string): Promise<Array<T>> {
+    public override async ExecuteSQL<T>(query: string): Promise<Array<T>> {
         if (!query.includes('UPDLOCK')) {
             throw notUsed();
         }
@@ -494,43 +477,6 @@ class VersionDatabaseProvider extends DatabaseProviderBase {
         this.db.IndependentInstances++;
         return databaseProvider(this.db);
     }
-    public get ProviderType(): ProviderType { return 'Database'; }
-    public get DatabaseConnection(): null { return null; }
-    public get InstanceConnectionString(): string { return ''; }
-    public get LocalStorageProvider(): ILocalStorageProvider { throw notUsed(); }
-    protected get AllowRefresh(): boolean { return false; }
-    protected get Metadata(): IMetadataProvider { return this; }
-    protected async InternalGetEntityRecordName(): Promise<string> { throw notUsed(); }
-    protected async InternalGetEntityRecordNames(): Promise<EntityRecordNameResult[]> { throw notUsed(); }
-    public async GetRecordFavoriteStatus(): Promise<boolean> { throw notUsed(); }
-    public async SetRecordFavoriteStatus(): Promise<void> { throw notUsed(); }
-    protected async InternalRunView<T>(): Promise<RunViewResult<T>> { throw notUsed(); }
-    protected async InternalRunViews<T>(): Promise<RunViewResult<T>[]> { throw notUsed(); }
-    protected async InternalRunQuery(): Promise<RunQueryResult> { throw notUsed(); }
-    protected async InternalRunQueries(): Promise<RunQueryResult[]> { throw notUsed(); }
-    protected async searchEntitiesSemanticPass(): Promise<ScoredCandidate[]> { throw notUsed(); }
-    protected async GetCurrentUser(): Promise<UserInfo> { throw notUsed(); }
-    public async GetRecordDependencies(): Promise<RecordDependency[]> { throw notUsed(); }
-    public async GetRecordDuplicates(): Promise<PotentialDuplicateResponse> { throw notUsed(); }
-    public async MergeRecords(): Promise<RecordMergeResult> { throw notUsed(); }
-    public async GetDatasetByName(): Promise<DatasetResultType> { throw notUsed(); }
-    public async GetDatasetStatusByName(): Promise<DatasetStatusResultType> { throw notUsed(); }
-    public async CreateTransactionGroup(): Promise<TransactionGroupBase> { throw notUsed(); }
-    public QuoteIdentifier(name: string): string { return `[${name}]`; }
-    public QuoteSchemaAndView(schema: string, name: string): string { return `[${schema}].[${name}]`; }
-    protected async InternalExecuteQueryFromSpec(): Promise<RunQueryResult> { throw notUsed(); }
-    protected BuildChildDiscoverySQL(): string { throw notUsed(); }
-    protected BuildHardLinkDependencySQL(): string { throw notUsed(); }
-    protected BuildSoftLinkDependencySQL(): string { throw notUsed(); }
-    protected async GenerateSaveSQL(): Promise<SaveSQLResult> { throw notUsed(); }
-    protected GenerateDeleteSQL(): DeleteSQLResult { throw notUsed(); }
-    protected get UUIDFunctionPattern(): RegExp { return /^newid\(\)$/i; }
-    protected get DBDefaultFunctionPattern(): RegExp { return /^getdate\(\)$/i; }
-    protected async CheckRecordRLS(): Promise<boolean> { throw notUsed(); }
-    protected async CheckCreateRLS(): Promise<boolean> { throw notUsed(); }
-    protected async CheckUpdateRLSPostImage(): Promise<boolean> { throw notUsed(); }
-    protected BuildRecordChangeSQL(): { sql: string; parameters?: unknown[] } | null { throw notUsed(); }
-    protected BuildSiblingRecordChangeSQL(): string { throw notUsed(); }
 }
 
 /** A database provider instance whose views read the shared rows and whose new entity objects are version rows on it. */

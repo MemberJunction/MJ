@@ -3,6 +3,7 @@ export { CreateMockEntity, createMockEntity, type MockEntityOptions } from './mo
 export { MockRunView, mockRunView, MockRunViews, mockRunViews, ResetRunViewMocks, resetRunViewMocks } from './mock-run-view';
 export { InstallCustomMatchers, installCustomMatchers } from './custom-matchers';
 export { EntitiesOnlyProvider } from './entities-only-provider';
+export { DatabaseProviderStub } from './database-provider-stub';
 export type {} from './vitest.d';
 
 // ---- Shared AI test harness (real @memberjunction/ai contracts, no structural fakes) ----
