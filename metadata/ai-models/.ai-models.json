@@ -28381,5 +28381,174 @@
     "primaryKey": {
       "ID": "A207B3C3-0CF0-41D8-9CB4-04FE747DDDD6"
     }
+  },
+  {
+    "fields": {
+      "Name": "FLUX 3 Video",
+      "Description": "Black Forest Labs' FLUX 3 unified audiovisual generation model for video. Supports text-to-video, image-to-video, keyframes, continuation and synchronized audio in 5-20 s clips (vendor-reported, October 2026; VS-GEN-3 re-verifies against docs.bfl.ai).",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Video",
+      "PowerRank": 10,
+      "SpeedRank": 2,
+      "CostRank": 9,
+      "IsActive": false,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Black Forest Labs",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "F86417BD-3F9E-4A34-BD5F-A21A0773923E"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Black Forest Labs",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "FLUX3VideoGenerator",
+            "APIName": "flux-3-video",
+            "MaxInputTokens": 10000,
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "6FFB611C-E418-4EE0-BCE4-28B573FC74AD"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Black Forest Labs",
+            "StartedAt": "2026-10-01T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "InputPricePerUnit": 0,
+            "OutputPricePerUnit": 0.80,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per Second",
+            "ProcessingType": "Realtime",
+            "Comments": "Per second of output at the UHD tier, the highest published (Draft HD is about $0.06/s). MJ: AI Model Costs holds one price per model, so this errs high. Source: Black Forest Labs FLUX 3 announcement as reported in October 2026 (plan §1.2); vendor-reported, not yet verified; VS-GEN-3 re-verifies against docs.bfl.ai.",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "7290F8F0-6BB6-4053-A912-5BEDCE835B7C"
+          }
+        }
+      ],
+      "MJ: AI Model Modalities": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Image",
+            "Direction": "Input",
+            "IsSupported": true,
+            "SupportedFormats": "image/jpeg,image/png,image/webp",
+            "MaxCountPerMessage": 10,
+            "Comments": "reference images and keyframes, up to 10, vendor-reported"
+          },
+          "primaryKey": {
+            "ID": "EB46428D-AE90-4745-8264-F7710D11CE0A"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+            "Direction": "Output",
+            "IsSupported": true,
+            "Comments": "synchronized audio"
+          },
+          "primaryKey": {
+            "ID": "0CF82BC5-E82C-4235-9D3B-608605E5CEA4"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "CC202FFC-2015-4C8C-8A6D-8BB30ADBFE2D"
+    }
+  },
+  {
+    "fields": {
+      "Name": "FLUX 3 Image",
+      "Description": "Black Forest Labs' FLUX 3 image generation and editing model. Supports text-to-image and multi-reference image input (up to 10 reference images, vendor-reported, October 2026; VS-GEN-3 re-verifies against docs.bfl.ai).",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Image Generator",
+      "PowerRank": 11,
+      "SpeedRank": 7,
+      "CostRank": 6,
+      "IsActive": false,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Black Forest Labs",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "A16EB867-6ED6-460C-AAB7-EEAB71665918"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Black Forest Labs",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "FLUXImageGenerator",
+            "APIName": "flux-3-image",
+            "MaxInputTokens": 10000,
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "A55AAC36-729E-46C8-8912-830FF7FA991F"
+          }
+        }
+      ],
+      "MJ: AI Model Modalities": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Image",
+            "Direction": "Input",
+            "IsSupported": true,
+            "SupportedFormats": "image/jpeg,image/png,image/webp",
+            "MaxCountPerMessage": 10,
+            "Comments": "reference images, up to 10, vendor-reported"
+          },
+          "primaryKey": {
+            "ID": "33E8D1E4-2B4F-4960-A3A5-EC470C607FD7"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "DADFD72E-77AB-4699-AE68-578AB4EF0534"
+    }
   }
 ]
