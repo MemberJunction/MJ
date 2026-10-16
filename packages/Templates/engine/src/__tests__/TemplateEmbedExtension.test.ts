@@ -180,14 +180,14 @@ describe('TemplateEmbedExtension', () => {
             const content = { Type: 'Text', Priority: 1, TemplateText: '{{ title }}' };
             const targetTemplate = { Name: 'TitleTemplate', Content: [content], GetContentByType: vi.fn().mockReturnValue([content]), GetHighestPriorityContent: vi.fn().mockReturnValue(content) };
             mockFindTemplate.mockReturnValue(targetTemplate);
-            mockRenderTemplateSimple.mockResolvedValue({ Success: true, Output: 'Affineur & Owner' });
+            mockRenderTemplate.mockResolvedValue({ Success: true, Output: 'Affineur & Owner' });
             const callback = vi.fn();
 
             extension.run({ ctx: { title: 'Affineur & Owner' }, env: { opts: { autoescape: false } } }, 'TitleTemplate', callback);
             await new Promise(resolve => setTimeout(resolve, 50));
 
-            expect(mockRenderTemplateSimple).toHaveBeenCalledWith('{{ title }}', expect.objectContaining({ title: 'Affineur & Owner' }), { autoescape: false });
-            expect(mockRenderTemplate).not.toHaveBeenCalled();
+            expect(mockRenderTemplate).toHaveBeenCalledWith(targetTemplate, content, expect.objectContaining({ title: 'Affineur & Owner' }), true, true, { autoescape: false });
+            expect(mockRenderTemplateSimple).not.toHaveBeenCalled();
             expect(callback).toHaveBeenCalledWith(null, 'Affineur & Owner');
         });
 

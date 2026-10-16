@@ -202,7 +202,7 @@ export class TemplateEmbedExtension extends TemplateExtensionBase {
             renderContext.currentContentType = templateContent.Type;
 
             // Render the embedded template asynchronously, in the outer render's escape mode
-            this.renderEmbeddedTemplate(templateEngine, templateContent, embeddedData, TemplateEmbedExtension.RendersEscaped(context))
+            this.renderEmbeddedTemplate(templateEngine, targetTemplate, templateContent, embeddedData, TemplateEmbedExtension.RendersEscaped(context))
                 .then((result) => {
                     // Remove template from stack after successful rendering
                     renderContext.templateStack.pop();
@@ -288,18 +288,20 @@ export class TemplateEmbedExtension extends TemplateExtensionBase {
     }
 
     /**
-     * Renders the embedded template content with the provided data context through
-     * {@link TemplateEngineServer.RenderTemplateSimple}; the escaped and raw renders differ only by escaping.
+     * Renders the embedded template content with the provided data context. A raw render goes through
+     * {@link TemplateEngineServer.RenderTemplate}, whose raw environment carries the extensions.
+     * The raw path renders through RenderTemplate so the registered extensions (nested embeds) stay available; unlike the escaped RenderTemplateSimple path it also merges the template's parameter defaults.
      */
     private async renderEmbeddedTemplate(
         templateEngine: TemplateEngineServer,
+        template: MJTemplateEntityExtended,
         templateContent: MJTemplateContentEntity,
         data: Record<string, unknown>,
         autoescape: boolean
     ): Promise<string> {
         const result = autoescape
             ? await templateEngine.RenderTemplateSimple(templateContent.TemplateText, data)
-            : await templateEngine.RenderTemplateSimple(templateContent.TemplateText, data, { autoescape: false });
+            : await templateEngine.RenderTemplate(template, templateContent, data, true, true, { autoescape: false });
         
         if (!result.Success) {
             throw new Error(`Failed to render embedded template: ${result.Message}`);
