@@ -5,11 +5,11 @@
  * does, loads them into `AIEngineBase`, and verifies:
  * 1. The `Per Second` price unit row (`DriverClass: 'Linear'`, `UnitsPerBillingUnit: 1`, `UsageTypeID` -> `Seconds`)
  *    and the `metadata/.mj-sync.json` push order (`ai-usage-types` < `ai-model-price-unit-types` < `ai-models`).
- * 2. Linear per-second pricing (`LinearPriceUnitType`) against the FLUX 3 Video cost row ($0.80/s -> $9.60 for 12 s)
+ * 2. Linear per-second pricing (`LinearPriceUnitType`) against the FLUX 3 Video cost row ($0.45/s -> $5.40 for 12 s)
  *    and measure-filtered `GetActiveModelCost` (`'Seconds'` matches, `'Tokens'` returns null).
- * 3. Model types, `IsActive: false` rollout guard, and BFL Model Developer / Inference Provider vendor bindings.
+ * 3. Model types, `IsActive: true` status, and BFL Model Developer / Inference Provider vendor bindings.
  * 4. Effective model modalities via `GetModelModalities` combining baseline model-type defaults with junction rows.
- * 5. Absence of deprecated `PriceTypeID` on the FLUX 3 Video cost row and absence of any cost row on FLUX 3 Image.
+ * 5. Absence of deprecated `PriceTypeID` on both cost rows, and `PerImagePriceUnitType` pricing for FLUX 3 Image ($0.607/image).
  */
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -87,7 +87,7 @@ vi.mock('../AIAgentPermissionHelper', () => ({ AIAgentPermissionHelper: {}, Effe
 
 import type { MJAIModelCostEntity, MJAIModelPriceUnitTypeEntity } from '@memberjunction/core-entities';
 import { AIEngineBase } from '../BaseAIEngine';
-import { LinearPriceUnitType } from '../PriceUnitTypes';
+import { LinearPriceUnitType, PerImagePriceUnitType } from '../PriceUnitTypes';
 
 /** A field value in a seed file. */
 type SeedValue = string | number | boolean | null | SeedObject;
@@ -215,6 +215,7 @@ const VIDEO_TYPE = keyOf('MJ: AI Model Types', 'Video');
 const IMAGE_GENERATOR_TYPE = keyOf('MJ: AI Model Types', 'Image Generator');
 const SECONDS_USAGE_TYPE = keyOf('MJ: AI Usage Types', 'Seconds');
 const PER_SECOND_UNIT_TYPE = keyOf('MJ: AI Model Price Unit Types', 'Per Second');
+const PER_IMAGE_UNIT_TYPE = keyOf('MJ: AI Model Price Unit Types', 'Per Image');
 
 const usageTypeNameByID = new Map<string, string>(
     seeds.UsageTypes.map((u) => [u.primaryKey?.ID ?? '', String(u.fields['Name'])]),
@@ -272,7 +273,7 @@ describe('Per Second price unit type and metadata push order', () => {
 });
 
 describe('FLUX 3 Video cost calculation from output seconds', () => {
-    it('prices 12 output seconds at $9.60 via LinearPriceUnitType and filters GetActiveModelCost by measure', () => {
+    it('prices 12 output seconds at $5.40 via LinearPriceUnitType and filters GetActiveModelCost by measure', () => {
         const perSecondRow = priceUnitTypes.find(
             (put) => put['ID'] === PER_SECOND_UNIT_TYPE,
         ) as unknown as MJAIModelPriceUnitTypeEntity;
@@ -282,11 +283,11 @@ describe('FLUX 3 Video cost calculation from output seconds', () => {
 
         const activeSecondsCost = AIEngineBase.Instance.GetActiveModelCost(VIDEO_MODEL, BFL, 'Realtime', 'Seconds');
         expect(activeSecondsCost).not.toBeNull();
-        expect(activeSecondsCost?.OutputPricePerUnit).toBe(0.8);
+        expect(activeSecondsCost?.OutputPricePerUnit).toBe(0.45);
         expect(activeSecondsCost?.InputPricePerUnit).toBe(0);
 
         const cost = calculator.CalculateCost(activeSecondsCost as MJAIModelCostEntity, { input: 0, output: 12 });
-        expect(Number(cost.toFixed(8))).toBe(9.6);
+        expect(Number(cost.toFixed(8))).toBe(5.4);
 
         const activeTokensCost = AIEngineBase.Instance.GetActiveModelCost(VIDEO_MODEL, BFL, 'Realtime', 'Tokens');
         expect(activeTokensCost).toBeNull();
@@ -294,7 +295,7 @@ describe('FLUX 3 Video cost calculation from output seconds', () => {
 });
 
 describe('FLUX 3 Video and FLUX 3 Image models and vendor bindings', () => {
-    it('seeds both models with the right model type and IsActive: false', () => {
+    it('seeds both models with the right model type and IsActive: true', () => {
         const models = seeds.Models.map((m) => toEngineRow(m));
         const videoModel = models.find((m) => m['ID'] === VIDEO_MODEL);
         const imageModel = models.find((m) => m['ID'] === IMAGE_MODEL);
@@ -302,7 +303,7 @@ describe('FLUX 3 Video and FLUX 3 Image models and vendor bindings', () => {
         expect(videoModel).toMatchObject({
             Name: FLUX_3_VIDEO,
             AIModelTypeID: VIDEO_TYPE,
-            IsActive: false,
+            IsActive: true,
             PowerRank: 10,
             SpeedRank: 2,
             CostRank: 9,
@@ -312,7 +313,7 @@ describe('FLUX 3 Video and FLUX 3 Image models and vendor bindings', () => {
         expect(imageModel).toMatchObject({
             Name: FLUX_3_IMAGE,
             AIModelTypeID: IMAGE_GENERATOR_TYPE,
-            IsActive: false,
+            IsActive: true,
             PowerRank: 11,
             SpeedRank: 7,
             CostRank: 6,
@@ -367,8 +368,8 @@ describe('FLUX 3 effective model modalities', () => {
             .map((m) => m.Name)
             .sort();
 
-    it('resolves FLUX 3 Video Input to [Image, Text] and Output to [Audio, Video]', () => {
-        expect(modalityNames(VIDEO_MODEL, 'Input')).toEqual(['Image', 'Text']);
+    it('resolves FLUX 3 Video Input to [Image, Text, Video] and Output to [Audio, Video]', () => {
+        expect(modalityNames(VIDEO_MODEL, 'Input')).toEqual(['Image', 'Text', 'Video']);
         expect(modalityNames(VIDEO_MODEL, 'Output')).toEqual(['Audio', 'Video']);
     });
 
@@ -379,12 +380,30 @@ describe('FLUX 3 effective model modalities', () => {
 });
 
 describe('FLUX 3 cost row invariants', () => {
-    it('omits deprecated PriceTypeID on the FLUX 3 Video cost row and seeds no cost row on FLUX 3 Image', () => {
+    it('seeds one cost row per model with no PriceTypeID and prices FLUX 3 Image at $0.607 via PerImagePriceUnitType', () => {
         const videoCosts = modelCosts.filter((c) => c['ModelID'] === VIDEO_MODEL);
         expect(videoCosts).toHaveLength(1);
         expect(videoCosts[0]).not.toHaveProperty('PriceTypeID');
 
         const imageCosts = modelCosts.filter((c) => c['ModelID'] === IMAGE_MODEL);
-        expect(imageCosts).toHaveLength(0);
+        expect(imageCosts).toHaveLength(1);
+        expect(imageCosts[0]).not.toHaveProperty('PriceTypeID');
+
+        const activeImageCost = AIEngineBase.Instance.GetActiveModelCost(IMAGE_MODEL, BFL, 'Realtime', 'Images');
+        expect(activeImageCost).not.toBeNull();
+        expect(activeImageCost?.OutputPricePerUnit).toBe(0.607);
+        expect(activeImageCost?.InputPricePerUnit).toBe(0);
+
+        const activeSecondsCost = AIEngineBase.Instance.GetActiveModelCost(IMAGE_MODEL, BFL, 'Realtime', 'Seconds');
+        expect(activeSecondsCost).toBeNull();
+
+        const perImageRow = priceUnitTypes.find(
+            (put) => put['ID'] === PER_IMAGE_UNIT_TYPE,
+        ) as unknown as MJAIModelPriceUnitTypeEntity;
+        const imageCalculator = new PerImagePriceUnitType(perImageRow);
+        expect(imageCalculator.UnitKind).toBe('Images');
+
+        const cost = imageCalculator.CalculateCost(activeImageCost as MJAIModelCostEntity, { input: 0, output: 1 });
+        expect(Number(cost.toFixed(8))).toBe(0.607);
     });
 });

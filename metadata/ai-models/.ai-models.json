@@ -28385,12 +28385,12 @@
   {
     "fields": {
       "Name": "FLUX 3 Video",
-      "Description": "Black Forest Labs' FLUX 3 unified audiovisual generation model for video. Supports text-to-video, image-to-video, keyframes, continuation and synchronized audio in 5-20 s clips (vendor-reported, October 2026; VS-GEN-3 re-verifies against docs.bfl.ai).",
+      "Description": "Black Forest Labs' FLUX 3 unified audiovisual generation model for video. Supports text-to-video, image-to-video, keyframes, continuation and synchronized audio in 5-20 s clips (vendor-reported, October 2026; checked against docs.bfl.ai on 2026-10-16 (VS-GEN-3)).",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Video",
       "PowerRank": 10,
       "SpeedRank": 2,
       "CostRank": 9,
-      "IsActive": false,
+      "IsActive": true,
       "InheritTypeModalities": true
     },
     "relatedEntities": {
@@ -28438,10 +28438,10 @@
             "Status": "Active",
             "Currency": "USD",
             "InputPricePerUnit": 0,
-            "OutputPricePerUnit": 0.80,
+            "OutputPricePerUnit": 0.45,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per Second",
             "ProcessingType": "Realtime",
-            "Comments": "Per second of output at the UHD tier, the highest published (Draft HD is about $0.06/s). MJ: AI Model Costs holds one price per model, so this errs high. Source: Black Forest Labs FLUX 3 announcement as reported in October 2026 (plan §1.2); vendor-reported, not yet verified; VS-GEN-3 re-verifies against docs.bfl.ai.",
+            "Comments": "Fallback estimate only: the driver records BFL's own cost per call. Per second of output at the highest published rate, video-to-video (continuation) UHD, $0.45/s (45 credits; 1 credit = $0.01). Published range: Draft HD $0.06/s; text/image to video HD $0.15, FHD $0.24, QHD $0.28, UHD $0.41; video to video HD $0.21, FHD $0.27, QHD $0.31, UHD $0.45. MJ: AI Model Costs holds one price per model, so this errs high. Source: https://bfl.ai/pricing, read 2026-10-16.",
             "CacheReadPricePerUnit": null,
             "CacheWritePricePerUnit": null
           },
@@ -28468,6 +28468,19 @@
         {
           "fields": {
             "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Video",
+            "Direction": "Input",
+            "IsSupported": true,
+            "MaxCountPerMessage": 1,
+            "Comments": "source clip for continuation (v2v)"
+          },
+          "primaryKey": {
+            "ID": "2FEB1262-7E67-46AA-844B-6608EEFEE7F3"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
             "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
             "Direction": "Output",
             "IsSupported": true,
@@ -28486,12 +28499,12 @@
   {
     "fields": {
       "Name": "FLUX 3 Image",
-      "Description": "Black Forest Labs' FLUX 3 image generation and editing model. Supports text-to-image and multi-reference image input (up to 10 reference images, vendor-reported, October 2026; VS-GEN-3 re-verifies against docs.bfl.ai).",
+      "Description": "Black Forest Labs' FLUX 3 image generation and editing model. Supports text-to-image and multi-reference image input (up to 10 reference images, vendor-reported, October 2026; checked against docs.bfl.ai on 2026-10-16 (VS-GEN-3)).",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Image Generator",
       "PowerRank": 11,
       "SpeedRank": 7,
       "CostRank": 6,
-      "IsActive": false,
+      "IsActive": true,
       "InheritTypeModalities": true
     },
     "relatedEntities": {
@@ -28527,6 +28540,27 @@
           },
           "primaryKey": {
             "ID": "A55AAC36-729E-46C8-8912-830FF7FA991F"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Black Forest Labs",
+            "StartedAt": "2026-10-01T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "InputPricePerUnit": 0,
+            "OutputPricePerUnit": 0.607,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per Image",
+            "ProcessingType": "Realtime",
+            "Comments": "Fallback estimate only: the driver records BFL's own cost per call. Per image at the highest published tier, 4K, $0.607. Published tiers: 768x768 $0.041, 1K $0.048, 1.5K $0.07, 2K $0.10, 4K $0.607. Reference images and prompts are not charged. MJ: AI Model Costs holds one price per model, so this errs high. Source: https://bfl.ai/pricing, read 2026-10-16.",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "B024CB0E-7FAA-4455-94A1-764F3C1F11FD"
           }
         }
       ],
