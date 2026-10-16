@@ -139,6 +139,12 @@ export class TasksFullViewComponent extends BaseAngularComponent implements OnIn
   @Input() environmentId!: string;
   @Input() currentUser!: UserInfo;
   @Input() baseFilter: string = '1=1'; // SQL filter for tasks (default: show all)
+
+  /**
+   * Builds the task filter each time the view loads or refreshes, so the list includes tasks
+   * created since the last load. Replaces {@link baseFilter} when set.
+   */
+  @Input() BaseFilterResolver: (() => Promise<string>) | null = null;
   @Input() activeTaskId?: string; // Task ID to auto-select and drill into
   @Output() openEntityRecord = new EventEmitter<{ entityName: string; recordId: string }>();
   @Output() taskSelected = new EventEmitter<string | null>(); // Emits task ID when drill-down occurs, null when returning to list
@@ -159,8 +165,9 @@ export class TasksFullViewComponent extends BaseAngularComponent implements OnIn
   }
 
   ngOnChanges(changes: SimpleChanges) {
-    // Reload tasks if baseFilter changes
-    if (changes['baseFilter'] && !changes['baseFilter'].firstChange) {
+    // Reload tasks if the filter or the filter builder changes
+    const filterChanged = (key: string) => !!changes[key] && !changes[key].firstChange;
+    if (filterChanged('baseFilter') || filterChanged('BaseFilterResolver')) {
       this.loadTasks();
     }
 
@@ -184,14 +191,15 @@ export class TasksFullViewComponent extends BaseAngularComponent implements OnIn
       }
 
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+      const filter = this.BaseFilterResolver ? await this.BaseFilterResolver() : this.baseFilter;
 
-      console.log('📝 Tasks filter SQL:', this.baseFilter);
+      console.log('📝 Tasks filter SQL:', filter);
 
-      // Load all tasks with the provided filter
+      // Load all tasks with the filter
       const tasksResult = await rv.RunView<MJTaskEntity>(
         {
           EntityName: 'MJ: Tasks',
-          ExtraFilter: this.baseFilter,
+          ExtraFilter: filter,
           OrderBy: '__mj_CreatedAt DESC',
           MaxRows: 1000,
           ResultType: 'entity_object'

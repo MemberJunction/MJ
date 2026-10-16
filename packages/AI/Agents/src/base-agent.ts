@@ -22,7 +22,7 @@ import { AgentRunWatchdog } from './agent-run-watchdog';
 import { AIPromptRunner, GetToolCallingDecision } from '@memberjunction/ai-prompts';
 import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, AIErrorType, BaseRealtimeModel, GetAIAPIKey, CredentialScopeAllows, IRealtimeSession, JSONObject, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage, ChatToolChoice } from '@memberjunction/ai';
 import { BaseAgentType } from './agent-types/base-agent-type';
-import { CopyScalarsAndArrays, JSONValidator, MJGlobal, SafeExpressionEvaluator, UUIDsEqual, EscapeSQLString } from '@memberjunction/global';
+import { CopyScalarsAndArrays, JSONValidator, MJGlobal, SafeExpressionEvaluator, UUIDsEqual, EscapeSQLString, IsValidUUID } from '@memberjunction/global';
 // token optimization via @memberjunction/context-crush (SmartCrusher/CacheAligner-inspired)
 import { CrushJSON, DescribeCrush, PartitionStablePrefix, type JsonValue } from '@memberjunction/context-crush';
 // AST-aware code reduction (CodeCompressor-inspired) — opt-in per agent type
@@ -8465,12 +8465,25 @@ The context is now within limits. Please retry your request with the recovered c
     }
  
     /**
+     * Throws unless `lastRunId` is absent or a UUID. The value can come from a client, and the run
+     * initialization places it in `ExtraFilter` clauses (the payload lookup, {@link validateRunChain}
+     * and {@link resolvePlanModeGate}).
+     */
+    private assertLastRunIdIsUUID(lastRunId: string | undefined): void {
+        if (lastRunId && !IsValidUUID(lastRunId)) {
+            throw new Error('Invalid lastRunId: expected the UUID of a prior AI Agent Run.');
+        }
+    }
+
+    /**
      * Initializes the agent run tracking by creating MJAIAgentRunEntityExtended and setting up context.
      * 
      * @private
      * @param {ExecuteAgentParams} params - The execution parameters
      */
     private async initializeAgentRun(params: ExecuteAgentParams): Promise<void> {
+        this.assertLastRunIdIsUUID(params.lastRunId);
+
         // Handle autoPopulateLastRunPayload if requested
         let modifiedParams = params;
         if (params.lastRunId && params.autoPopulateLastRunPayload) {
