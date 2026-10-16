@@ -107,8 +107,14 @@ generator.setPollingConfig({
 
 - **Verification date**: `2026-10-16`
 - **Documentation URLs read**:
+  - `https://docs.bfl.ai/flux_3/flux3_overview` (`flux_3/flux3_overview.md`)
   - `https://docs.bfl.ai/flux_3/flux3_video` (`flux_3/flux3_video.md`)
   - `https://docs.bfl.ai/flux_3/flux3_image` (`flux_3/flux3_image.md`)
+  - `https://docs.bfl.ai/flux_3/flux3_image_generate` (`flux_3/flux3_image_generate.md`)
+  - `https://docs.bfl.ai/flux_tools/flux_video_edit` (`flux_tools/flux_video_edit.md`)
+  - `https://docs.bfl.ai/cookbook/video_quickstart` (`cookbook/video_quickstart.md`)
+  - `https://docs.bfl.ai/cookbook/video_edit_recast_continue` (`cookbook/video_edit_recast_continue.md`)
+  - `https://docs.bfl.ai/api_integration/integration_guidelines` (`api_integration/integration_guidelines.md`)
   - `https://docs.bfl.ai/api-reference/utility/generate-a-video-with-flux-3` (`api-reference/utility/generate-a-video-with-flux-3.md`)
   - `https://docs.bfl.ai/api-reference/utility/generate-an-image-with-flux-3` (`api-reference/utility/generate-an-image-with-flux-3.md`)
   - `https://docs.bfl.ai/api-reference/utility/get-result` (`api-reference/utility/get-result.md`)
@@ -129,8 +135,8 @@ generator.setPollingConfig({
   - `duration`: `'auto'` or integer `5..20` seconds for `'t2v'` and `'i2v'`; `5..15` seconds for `'v2v'` (API schema default `'auto'`; driver requires an integer in `5..20` for `'t2v'`/`'i2v'` or `5..15` for `'v2v'`)
   - `generate_audio`: boolean (BFL API defaults to `true`; `FLUX3VideoGenerator` always sends `generate_audio: params.WantAudio === true` so omitted `WantAudio` never bills for audio)
   - `draft`: boolean (optional; set to `true` for `'draft'` quality tier)
-  - `keyframes`: `Array<[number, string]> | string[]` (`1..10` items; required in `'i2v'` mode; timestamped `[seconds, image]` pairs with `0 <= seconds <= duration` or plain base64/HTTPS URL strings; each image ≤20 MB)
-  - `start_video`: string (`'v2v'` continuation mode only; base64 or HTTPS URL; MP4/MOV/WebM; ≤20 MB; ≤15s)
+  - `keyframes`: `Array<[number, string]> | string[]` (`1..10` items; required in `'i2v'` mode; timestamped `[seconds, image]` pairs with `0 <= seconds <= duration` or plain base64/HTTPS URL strings)
+  - `start_video`: string (`'v2v'` continuation mode only; base64 or HTTPS URL; `mp4`; ≤50 MB; ≤15s per `cookbook/video_edit_recast_continue.md`)
   - `safety_tolerance`: integer `0..7` (default `2`)
   - `user`, `version`: optional strings in the `t2v`/`i2v`/`v2v` input schemas (`webhook_url` and `webhook_secret` are not in the `t2v`/`i2v`/`v2v` input schemas)
   - Does not accept `seed`, `fps`, `width`, or `height`.
@@ -150,7 +156,7 @@ generator.setPollingConfig({
 - **FLUX 3 Image (`Flux3ImageInputs`, `additionalProperties: false`) parameters & limits**:
   - `prompt`: string (required)
   - `images`: string[] | null (optional; up to `10` reference images)
-  - `aspect_ratio`: `'auto' | '21:9' | '2:1' | '16:9' | '3:2' | '7:5' | '4:3' | '5:4' | '1:1' | '4:5' | '3:4' | '5:7' | '2:3' | '9:16' | '1:2' | '9:21'` (API schema default `'auto'`; driver defaults to `'1:1'` when no dimensions or aspect ratio are specified)
+  - `aspect_ratio`: `'auto' | '21:9' | '2:1' | '16:9' | '3:2' | '7:5' | '4:3' | '5:4' | '1:1' | '4:5' | '3:4' | '5:7' | '2:3' | '9:16' | '1:2' | '9:21'` (API schema default `'auto'`; driver omits `aspect_ratio` when no dimensions or aspect ratio are specified so BFL uses `'auto'`)
   - `resolution`: `'768sq' | '1k' | '1.5k' | '2k' | '4k'` (default `'1k'`)
   - `grounding`: boolean (BFL API defaults to `true`; `FLUXImageGenerator` always sets `grounding: false` so image generation never makes unsolicited web searches)
   - `safety_tolerance`: integer `0..7` (default `2`)
@@ -173,18 +179,37 @@ generator.setPollingConfig({
 
 ## Opt-in Live Smoke Test (Run Only With Explicit Approval)
 
-Automated test suites in CI and local builds never make live network calls to BFL. To run a live end-to-end smoke check (after `VS-GEN-2` lands and only with explicit approval from Colin):
+Automated test suites in CI and local builds never make live network calls to BFL. To run a live end-to-end smoke check (only with explicit approval from Colin):
 
+- **Prerequisites**:
+  1. `metadata/prompts/.default-generative-video-prompt.json` (`VS-GEN-2`) and the active `FLUX 3 Video` model + `Per Second` price unit (`VS-GEN-4`) are synced to the target SQL Server database.
+  2. Standard MJ database environment variables (`DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD`) and `BFL_API_KEY` are set.
+  3. Run from `packages/AI/Prompts` (after building `@memberjunction/ai-blackforestlabs` and `@memberjunction/ai-prompts`).
 - **Expected spend**: 1 draft 5-second 720p (`hd`) clip ≈ **30 credits (`$0.30 USD`)** at `bfl.ai/pricing`'s draft rate of 6 credits/s.
 
 ```bash
-node -e '
+cd packages/AI/Prompts
+node --input-type=module -e '
 import { writeFileSync } from "node:fs";
+import sql from "mssql";
+import { setupSQLServerClient, SQLServerProviderConfigData, UserCache } from "@memberjunction/sqlserver-dataprovider";
+import { RunView } from "@memberjunction/core";
 import { AIEngine } from "@memberjunction/aiengine";
 import { AIVideoRunner } from "@memberjunction/ai-prompts";
-import { Metadata, RunView } from "@memberjunction/core";
+import "@memberjunction/ai-blackforestlabs";
 
-const user = Metadata.Provider.CurrentUser;
+const pool = new sql.ConnectionPool({
+    server: process.env.DB_HOST ?? "localhost",
+    port: Number(process.env.DB_PORT ?? 1433),
+    database: process.env.DB_DATABASE,
+    user: process.env.DB_USERNAME,
+    password: process.env.DB_PASSWORD,
+    options: { encrypt: true, trustServerCertificate: true },
+});
+await pool.connect();
+await setupSQLServerClient(new SQLServerProviderConfigData(pool, process.env.MJ_CORE_SCHEMA ?? "__mj"));
+
+const user = UserCache.Instance.Users[0];
 await AIEngine.Instance.Config(false, user);
 
 const runner = new AIVideoRunner();
@@ -196,6 +221,8 @@ const result = await runner.RunGenerateVideo({
     Quality: "draft",
     WantAudio: false,
     ContextUser: user,
+    CredentialScope: "RuntimeOnly",
+    APIKeys: [{ driverClass: "FLUX3VideoGenerator", apiKey: process.env.BFL_API_KEY }],
 });
 
 if (!result.Success || !result.Video?.Data?.length) {
@@ -209,7 +236,7 @@ console.log("Saved /tmp/flux3-smoke.mp4", {
     width: result.Video.Width,
     height: result.Video.Height,
     durationSeconds: result.Video.DurationSeconds,
-    c2pa: result.Provenance?.C2PA,
+    c2pa: result.C2PA,
     promptRunId: result.PromptRunID,
 });
 
@@ -221,6 +248,7 @@ const runRes = await rv.RunView({
     ResultType: "simple",
 }, user);
 console.log("PromptRun row:", runRes.Results[0]);
+await pool.close();
 process.exit(0);
 '
 ```

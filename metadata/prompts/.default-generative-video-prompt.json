@@ -1,0 +1,42 @@
+[
+  {
+    "fields": {
+      "Name": "Default Generative Video",
+      "Description": "The carrier prompt AIVideoRunner.RunGenerateVideo uses when no other is named. Its bindings choose the generative video model and its failover settings apply; every call is recorded as an AI Prompt Run. Reference images, keyframes, and source clips travel as inline bytes rather than provider-account asset IDs, so pre-submission failures can fail over across bound models (NextBestModel). The request goes straight to the model and nothing in the template is rendered or sent.",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Text To Video (TTV)",
+      "TemplateText": "@file:templates/system/default-generative-video.template.md",
+      "Status": "Active",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Video",
+      "SelectionStrategy": "Specific",
+      "RequireSpecificModels": true,
+      "PowerPreference": "Highest",
+      "ParallelizationMode": "None",
+      "ResponseFormat": "Any",
+      "OutputType": "string",
+      "ValidationBehavior": "None",
+      "MaxRetries": 0,
+      "FailoverStrategy": "NextBestModel",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=FLUX 3 Video",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Black Forest Labs",
+            "Priority": 10
+          },
+          "primaryKey": {
+            "ID": "3CF363AB-CD74-4D8F-AFFE-2A7D331F2088"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "61CE426E-FC8B-4894-B52B-D96B0C0D69CB"
+    }
+  }
+]

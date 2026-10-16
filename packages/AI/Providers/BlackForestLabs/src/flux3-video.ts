@@ -247,6 +247,11 @@ export class FLUX3VideoGenerator extends BaseVideoGenerator {
     /**
      * Polls a submitted FLUX 3 video job via its `polling_url` (`jobId`).
      * Refuses any `jobId` that is not an `https://` URL on a `.bfl.ai` host before making any network request.
+     *
+     * Status contract:
+     * - A returned `'Failed'` status is final (BFL's terminal failure statuses, the host guard, or `'Ready'` without an `https:` sample URL).
+     * - Poll and download errors throw so the caller's runner retries within its error budget.
+     * - An unknown BFL status maps to `'Running'`.
      */
     public override async GetVideoGenerationStatus(
         jobId: string,
