@@ -11,6 +11,7 @@ import {
   MJArtifactEntity
 } from '@memberjunction/core-entities';
 import { RunView, UserInfo, Metadata, IMetadataProvider } from '@memberjunction/core';
+import { BuildConversationTasksFilter } from './conversation-tasks-filter';
 
 /**
  * Types of searchable content
@@ -410,24 +411,8 @@ export class SearchService {
     const rv = RunView.FromMetadataProvider(this.Provider);
     const lowerQuery = query.toLowerCase();
 
-    // Build filter using same logic as TasksFullViewComponent
-    const md = this.Provider;
-    const cd = md.EntityByName('MJ: Conversation Details');
-    const c = md.EntityByName('MJ: Conversations');
-
-    if (!cd || !c) {
-      console.warn('⚠️ Missing metadata for Conversations or Conversation Details');
-      return [];
-    }
-
-    let filter = `ParentID IS NULL AND (UserID = '${currentUser.ID}' OR ConversationDetailID IN (
-      SELECT ID FROM [${cd.SchemaName}].[${cd.BaseView}]
-      WHERE
-      UserID ='${currentUser.ID}' OR
-      ConversationID IN (
-        SELECT ID FROM [${c.SchemaName}].[${c.BaseView}] WHERE UserID='${currentUser.ID}'
-      )
-    ))`;
+    // The same tasks the conversation workspace's tasks view shows.
+    let filter = await BuildConversationTasksFilter(this.Provider, currentUser);
 
     filter += ` AND (LOWER(Name) LIKE '%${this.escapeSQL(lowerQuery)}%' OR LOWER(Description) LIKE '%${this.escapeSQL(lowerQuery)}%')`;
 

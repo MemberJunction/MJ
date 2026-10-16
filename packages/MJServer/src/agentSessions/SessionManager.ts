@@ -8,24 +8,13 @@ import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
 import { RealtimeClientSessionService, RealtimeChannelServerHost } from '@memberjunction/ai-agents';
 import { GetHostInstanceID } from './HostInstance.js';
 import { writeReturningVisitorRecap } from './ReturningVisitorRecap.js';
+import { SessionRunIDVerifier, SessionRunIDs } from './SessionRunIDVerifier.js';
 import { ResolveScopedAnonymousRunUser } from '../realtimeWidget/widgetGuestElevation.js';
 
 /** Entity names — centralised so the `MJ:`-prefix convention is applied in exactly one place. */
 const SESSION_ENTITY = 'MJ: AI Agent Sessions';
 const SESSION_CHANNEL_ENTITY = 'MJ: AI Agent Session Channels';
 const CONVERSATION_ENTITY = 'MJ: Conversations';
-
-/**
- * Shape of the observability run ids a realtime voice session persists in `AIAgentSession.Config_`.
- * Read on {@link SessionManager.CloseSession} to finalize the co-agent runs. All fields optional —
- * a non-voice session (or one whose run creation was skipped) carries none of them.
- */
-interface SessionRunConfig {
-    coAgentRunID?: string;
-    promptRunID?: string;
-    /** The co-agent run's single system-prompt `MJ: AI Agent Run Steps` row id (its Timeline entry). */
-    coAgentRunStepID?: string;
-}
 
 /**
  * Inputs for {@link SessionManager.CreateSession}. `conversationID`/`lastSessionID`/`config`
@@ -95,6 +84,9 @@ const HEARTBEAT_MIN_WRITE_INTERVAL_MS = 3_000;
 export class SessionManager {
     /** session ID (lowercased) → epoch ms of its last persisted `LastActiveAt` write. */
     private heartbeatLastWrite = new Map<string, number>();
+
+    /** Checks the run ids read from a session's owner-editable `Config_` before they are used. */
+    private readonly runIDVerifier = new SessionRunIDVerifier();
 
     /**
      * Authorize and create a new session. Flow:
@@ -218,7 +210,8 @@ export class SessionManager {
 
     /**
      * Finalizes the co-agent observability runs a realtime voice session stored in its `Config_`
-     * (see `RealtimeClientSessionResolver`). No-op when the config carries no run ids. Tolerant: a
+     * (see `RealtimeClientSessionResolver`). Only run ids that are records of the session are
+     * finalized, because the owner can edit `Config_`. No-op when none remain. Tolerant: a
      * malformed config or a finalize failure is swallowed so it can never break session close.
      */
     private async finalizeObservabilityRuns(
@@ -226,8 +219,8 @@ export class SessionManager {
         contextUser: UserInfo,
         provider: IMetadataProvider,
     ): Promise<void> {
-        const config = this.parseSessionRunConfig(session.Config_);
-        if (!config.coAgentRunID && !config.promptRunID && !config.coAgentRunStepID) {
+        const claimed = this.parseSessionRunConfig(session.Config_);
+        if (!claimed.CoAgentRunID && !claimed.PromptRunID && !claimed.CoAgentRunStepID) {
             return;
         }
         try {
@@ -235,35 +228,41 @@ export class SessionManager {
             // for a scoped anonymous session, so an owner-initiated (or error) close must finalize
             // under it too — the caller's role holds no grants on the AI run entities. Janitor and
             // shutdown sweeps already close as the system user and pass through unchanged.
+            const runUser = ResolveScopedAnonymousRunUser(contextUser);
+            const runIDs = await this.runIDVerifier.Verify(session.ID, claimed, runUser, provider);
+            if (!runIDs.CoAgentRunID && !runIDs.PromptRunID && !runIDs.CoAgentRunStepID) {
+                return;
+            }
             await new RealtimeClientSessionService().FinalizeCoAgentRun(
-                config.coAgentRunID ?? null,
-                config.promptRunID ?? null,
-                ResolveScopedAnonymousRunUser(contextUser),
+                runIDs.CoAgentRunID ?? null,
+                runIDs.PromptRunID ?? null,
+                runUser,
                 provider,
                 true,
-                config.coAgentRunStepID ?? null,
+                runIDs.CoAgentRunStepID ?? null,
             );
         } catch (e) {
             LogError(`SessionManager.finalizeObservabilityRuns failed: ${e instanceof Error ? e.message : String(e)}`);
         }
     }
 
-    /** Parses the session's `Config_` for observability run ids; returns an empty config on any error. */
-    private parseSessionRunConfig(raw: string | null): SessionRunConfig {
+    /** Parses the session's `Config_` for observability run ids; returns none on any error. */
+    private parseSessionRunConfig(raw: string | null): SessionRunIDs {
         if (!raw) {
             return {};
         }
         try {
-            const parsed = JSON.parse(raw) as Partial<SessionRunConfig>;
+            const parsed = JSON.parse(raw) as { coAgentRunID?: unknown; promptRunID?: unknown; coAgentRunStepID?: unknown };
             return {
-                coAgentRunID: typeof parsed.coAgentRunID === 'string' ? parsed.coAgentRunID : undefined,
-                promptRunID: typeof parsed.promptRunID === 'string' ? parsed.promptRunID : undefined,
-                coAgentRunStepID: typeof parsed.coAgentRunStepID === 'string' ? parsed.coAgentRunStepID : undefined,
+                CoAgentRunID: typeof parsed.coAgentRunID === 'string' ? parsed.coAgentRunID : undefined,
+                PromptRunID: typeof parsed.promptRunID === 'string' ? parsed.promptRunID : undefined,
+                CoAgentRunStepID: typeof parsed.coAgentRunStepID === 'string' ? parsed.coAgentRunStepID : undefined,
             };
         } catch {
             return {};
         }
     }
+
 
     /**
      * Record activity on a session. Coalesces persisted writes so at most one `LastActiveAt` update

@@ -44,6 +44,7 @@ import { UICommandHandlerService } from '../../services/ui-command-handler.servi
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { NavigationTab, WorkspaceLayout } from '../../models/conversation-state.model';
 import { SearchResult } from '../../services/search.service';
+import { BuildConversationTasksFilter, OwnTasksFilter } from '../../services/conversation-tasks-filter';
 import { Subject, takeUntil } from 'rxjs';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { ActionableCommand, AutomaticCommand } from '@memberjunction/ai-core-plus';
@@ -192,7 +193,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   private saveSettingsTimeout: ReturnType<typeof setTimeout> | null = null;
   private isLoadingSettings: boolean = false;
 
-  // Task filter for conversation-specific filtering
+  /** The user's own top-level tasks; the Tasks tab's fallback filter (see {@link TasksFilterResolver}). */
   public tasksFilter: string = '1=1';
 
   // LOCAL CONVERSATION STATE - enables multiple workspace instances
@@ -505,30 +506,24 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   }
 
   /**
-   * Builds the SQL filter for tasks in conversations the user has access to
+   * Sets {@link tasksFilter} to the user's own tasks. The Tasks tab builds its full filter with
+   * {@link TasksFilterResolver} each time it loads.
    */
   private buildTasksFilter(): void {
-    // Filter tasks by conversations the user owns or is a participant in, or tasks owned
-    // by the user
-    const md = this.ProviderToUse;
-    const cd = md.EntityByName('MJ: Conversation Details');
-    const c = md.EntityByName('MJ: Conversations');
-    if (!cd || !c) {
-      console.warn('⚠️ Missing metadata for Conversations or Conversation Details');
-      this.tasksFilter = `ParentID IS NULL AND UserID = '${this.currentUser.ID}'`; // Fallback to user-owned tasks only
-      return;
-    }
-
-    this.tasksFilter = `ParentID IS NULL AND (UserID = '${this.currentUser.ID}' OR ConversationDetailID IN (
-      SELECT ID FROM [${cd.SchemaName}].[${cd.BaseView}] 
-      WHERE 
-      UserID ='${this.currentUser.ID}' OR 
-      ConversationID IN (
-        SELECT ID FROM [${c.SchemaName}].[${c.BaseView}] WHERE UserID='${this.currentUser.ID}'
-      )
-    ))`;
-    console.log('📝 Conversations domain tasks filter built:', this.tasksFilter);
+    this.tasksFilter = OwnTasksFilter(this.currentUser);
   }
+
+  /**
+   * Builds the Tasks tab filter (see {@link BuildConversationTasksFilter}). The tasks view calls it
+   * on every load and refresh, so a task linked to a message created after the workspace opened
+   * appears on the next refresh. The same function is returned every time, so the input binding
+   * does not change.
+   */
+  public get TasksFilterResolver(): () => Promise<string> {
+    this.tasksFilterResolver ??= () => BuildConversationTasksFilter(this.ProviderToUse, this.currentUser);
+    return this.tasksFilterResolver;
+  }
+  private tasksFilterResolver: (() => Promise<string>) | null = null;
 
   ngDoCheck() {
     // Detect new unsaved conversation state changes
