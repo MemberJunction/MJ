@@ -1,9 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { UserInfo } from '@memberjunction/core';
+import { LogError, UserInfo } from '@memberjunction/core';
 import { MAX_HANDOFF_HOPS } from '@memberjunction/ai-core-plus';
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
 import { DecisionDiscoveryAgent } from '../decision-discovery';
 import { MAX_HANDOFF_CANDIDATES, ResolveHandoffTarget } from '../handoff-target';
+
+vi.mock('@memberjunction/core', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/core')>();
+    return {
+        ...actual,
+        LogError: vi.fn(),
+    };
+});
 
 vi.mock('@memberjunction/ai-engine-base', () => ({
     AIAgentPermissionHelper: {
@@ -107,10 +115,68 @@ describe('ResolveHandoffTarget', () => {
             expect(maxHop.Refusal).toBeUndefined();
             expect(maxHop.Target?.ID).toBe(TARGET_ID);
         });
+
+        it('same-named agents: ParentID child and root agent with same name (different case) resolve to the root in both catalog orders, and an unrunnable match does not shadow a runnable one', async () => {
+            const childFormBuilder = makeAgent({
+                ID: '00000000-0000-4000-8000-000000000001',
+                Name: 'Form Builder',
+                ParentID: SOURCE_ID,
+            });
+            const rootFormBuilder = makeAgent({
+                ID: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
+                Name: 'form builder',
+                ParentID: null,
+            });
+
+            const childFirst = await ResolveHandoffTarget({
+                AgentName: 'Form Builder',
+                SourceAgentID: SOURCE_ID,
+                HandoffChain: [],
+                ContextUser: mockUser,
+                Agents: [makeAgent({ ID: SOURCE_ID, Name: 'Sage' }), childFormBuilder, rootFormBuilder],
+            });
+            expect(childFirst.Refusal).toBeUndefined();
+            expect(childFirst.Target?.ID).toBe(rootFormBuilder.ID);
+
+            const rootFirst = await ResolveHandoffTarget({
+                AgentName: 'Form Builder',
+                SourceAgentID: SOURCE_ID,
+                HandoffChain: [],
+                ContextUser: mockUser,
+                Agents: [makeAgent({ ID: SOURCE_ID, Name: 'Sage' }), rootFormBuilder, childFormBuilder],
+            });
+            expect(rootFirst.Refusal).toBeUndefined();
+            expect(rootFirst.Target?.ID).toBe(rootFormBuilder.ID);
+
+            const unrunnableDup = makeAgent({
+                ID: '00000000-0000-4000-8000-000000000002',
+                Name: 'Analyst',
+            });
+            const runnableDup = makeAgent({
+                ID: 'ffffffff-ffff-4fff-8fff-fffffffffff2',
+                Name: 'analyst',
+            });
+            vi.mocked(AIAgentPermissionHelper.HasPermission).mockImplementation(
+                async (agentId: string, _user: UserInfo, permission: string) => {
+                    if (permission === 'run' && agentId === unrunnableDup.ID) return false;
+                    return true;
+                },
+            );
+
+            const unrunnableFirst = await ResolveHandoffTarget({
+                AgentName: 'Analyst',
+                SourceAgentID: SOURCE_ID,
+                HandoffChain: [],
+                ContextUser: mockUser,
+                Agents: [makeAgent({ ID: SOURCE_ID, Name: 'Sage' }), unrunnableDup, runnableDup],
+            });
+            expect(unrunnableFirst.Refusal).toBeUndefined();
+            expect(unrunnableFirst.Target?.ID).toBe(runnableDup.ID);
+        });
     });
 
     describe('Refusal reasons in deterministic check order', () => {
-        it('1. NotFound when agent does not exist or is Inactive', async () => {
+        it('1. NotFound when agent does not exist, is Inactive, or user lacks view permission (does not confirm invisible agents)', async () => {
             const missing = await ResolveHandoffTarget({
                 AgentName: 'Nonexistent Agent',
                 SourceAgentID: SOURCE_ID,
@@ -132,6 +198,32 @@ describe('ResolveHandoffTarget', () => {
             });
             expect(inactive.Target).toBeUndefined();
             expect(inactive.Refusal?.Reason).toBe('NotFound');
+
+            // A target the user can't view gives the exact same NotFound result an unknown name gives
+            vi.mocked(AIAgentPermissionHelper.HasPermission).mockImplementation(
+                async (agentId: string, _user: UserInfo, permission: string) => {
+                    if (permission === 'view' && agentId === TARGET_ID) return false;
+                    return true;
+                },
+            );
+            vi.mocked(AIAgentPermissionHelper.FilterRunnableAgents).mockImplementation(async (agents) => {
+                return agents.filter((a) => a.Status === 'Active' && a.ID !== TARGET_ID);
+            });
+            const unviewable = await ResolveHandoffTarget({
+                AgentName: 'Skip',
+                SourceAgentID: SOURCE_ID,
+                HandoffChain: [],
+                ContextUser: mockUser,
+                Agents: baseAgents,
+            });
+            const unknownWithSameLabel = await ResolveHandoffTarget({
+                AgentName: 'Skip',
+                SourceAgentID: SOURCE_ID,
+                HandoffChain: [],
+                ContextUser: mockUser,
+                Agents: baseAgents.filter((a) => a.ID !== TARGET_ID),
+            });
+            expect(unviewable).toEqual(unknownWithSameLabel);
         });
 
         it('2. Self when target ID matches SourceAgentID (case-insensitive UUID)', async () => {
@@ -199,8 +291,10 @@ describe('ResolveHandoffTarget', () => {
             expect(excludedAllowed.Candidates.map((c) => c.Name)).toEqual(['Research Agent']);
         });
 
-        it('5. NoRunPermission when HasPermission returns false or throws (fail closed)', async () => {
-            vi.mocked(AIAgentPermissionHelper.HasPermission).mockResolvedValueOnce(false);
+        it('5. NoRunPermission when target is viewable but HasPermission(run) returns false or throws (fail closed + LogError)', async () => {
+            vi.mocked(AIAgentPermissionHelper.HasPermission).mockImplementation(
+                async (_agentId: string, _user: UserInfo, permission: string) => permission !== 'run',
+            );
             const denied = await ResolveHandoffTarget({
                 AgentName: 'Skip',
                 SourceAgentID: SOURCE_ID,
@@ -211,7 +305,15 @@ describe('ResolveHandoffTarget', () => {
             expect(denied.Refusal?.Reason).toBe('NoRunPermission');
             expect(denied.Refusal?.Message).toMatch(/does not have permission to run Skip/i);
 
-            vi.mocked(AIAgentPermissionHelper.HasPermission).mockRejectedValueOnce(new Error('DB connection error'));
+            vi.mocked(LogError).mockClear();
+            vi.mocked(AIAgentPermissionHelper.HasPermission).mockImplementation(
+                async (_agentId: string, _user: UserInfo, permission: string) => {
+                    if (permission === 'run') {
+                        throw new Error('DB connection error');
+                    }
+                    return true;
+                },
+            );
             const thrown = await ResolveHandoffTarget({
                 AgentName: 'Skip',
                 SourceAgentID: SOURCE_ID,
@@ -220,6 +322,9 @@ describe('ResolveHandoffTarget', () => {
                 Agents: baseAgents,
             });
             expect(thrown.Refusal?.Reason).toBe('NoRunPermission');
+            expect(LogError).toHaveBeenCalledTimes(1);
+            expect(vi.mocked(LogError).mock.calls[0][0]).toContain(TARGET_ID);
+            expect(vi.mocked(LogError).mock.calls[0][0]).toContain('DB connection error');
         });
 
         it('6. AlreadyInThisTurn for direct ping-pong (A -> B -> A) and 3-agent cycle (A -> B -> C -> A)', async () => {

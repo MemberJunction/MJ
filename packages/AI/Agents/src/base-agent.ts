@@ -6721,9 +6721,11 @@ export class BaseAgent {
 
     /**
      * Validates a `'Handoff'` next step: re-checks the runtime withholding conditions (sub-agent run,
-     * missing `conversationDetailId`, or missing `handoffChain`) and resolves the target agent by name
-     * over active agents in {@link AIEngine}. Stores the resolved target ID and name for
-     * {@link executeHandoffStep}.
+     * missing `conversationDetailId`, or missing `handoffChain`) and validates the requested target
+     * via {@link ResolveHandoffTarget} (Active status, `'view'` and `'run'` permissions, direct
+     * discoverability, host allow-list, cycle check, and hop limit). On refusal, writes a Failed
+     * `'Handoff'` step and returns a `'Retry'` step naming up to 20 candidate agents; on approval,
+     * stores the resolved target ID and name for {@link executeHandoffStep}.
      *
      * @protected
      */
@@ -6758,14 +6760,11 @@ export class BaseAgent {
             HandoffChain: params.handoffChain ?? [],
             HostAllowedIDs: HostAllowedAgentIDs(data),
             ContextUser: params.contextUser,
-            Agents: AIEngine.Instance.Agents ?? [],
+            Agents: AIEngine.Instance.Agents,
         });
 
-        if (resolution.Refusal || !resolution.Target) {
-            const refusal = resolution.Refusal ?? {
-                Reason: 'NotFound' as const,
-                Message: `Agent '${requestedName}' not found or not active.`
-            };
+        if (resolution.Refusal) {
+            const refusal = resolution.Refusal;
             this.logError(`Handoff target agent '${requestedName}' refused (${refusal.Reason}) for agent '${params.agent.Name}': ${refusal.Message}`, {
                 agent: params.agent,
                 category: 'NextStepValidation'

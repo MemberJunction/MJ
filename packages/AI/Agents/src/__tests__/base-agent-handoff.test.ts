@@ -502,10 +502,54 @@ describe('BaseAgent validateHandoffNextStep -> executeHandoffStep (VS-SAGE-2)', 
         ).toBe(true);
     });
 
+    it('refused handoff (NotAllowedHere) when host ALL_AVAILABLE_AGENTS excludes target writes a Failed Handoff step, lists only allowed candidates on retry, and leaves result.handoff unset', async () => {
+        const { agent, runner } = makeAgent([
+            () => llmEnvelope(handoffEnvelope('Video Studio')),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+
+        const result = await agent.Execute(
+            makeParams({
+                data: {
+                    ALL_AVAILABLE_AGENTS: [{ ID: PEER_AGENT_ID, Name: 'Research Agent' }],
+                },
+            }),
+        );
+
+        expect(result.success).toBe(true);
+        expect(result.handoff).toBeUndefined();
+        expect(agent.ValidationRetryCount).toBe(1);
+
+        const handoffSteps = harness.steps.filter((s) => s.StepType === 'Handoff');
+        expect(handoffSteps).toHaveLength(1);
+        expect(handoffSteps[0].Status).toBe('Failed');
+        expect(handoffSteps[0].ErrorMessage).toContain('Video Studio is not available in this host environment.');
+        expect(handoffSteps[0].ErrorMessage).toContain('Hand off to one of: Research Agent');
+        expect(handoffSteps[0].ErrorMessage).not.toContain('Hand off to one of: Research Agent, Video Studio');
+        const output = JSON.parse(handoffSteps[0].OutputData ?? '{}') as Record<string, unknown>;
+        expect(output.RefusalReason).toBe('NotAllowedHere');
+
+        expect(runner.Calls).toHaveLength(2);
+        const turn2Messages = (runner.Calls[1].conversationMessages ?? []).map((m) =>
+            typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
+        );
+        expect(
+            turn2Messages.some(
+                (c) =>
+                    c.includes('Video Studio is not available in this host environment.') &&
+                    c.includes('Hand off to one of: Research Agent') &&
+                    !c.includes('Hand off to one of: Research Agent, Video Studio'),
+            ),
+        ).toBe(true);
+    });
+
     it('refused handoff (NoRunPermission) writes a Failed Handoff step, increments retry count, and injects refusal message with candidates', async () => {
-        vi.mocked(AIAgentPermissionHelper.HasPermission).mockImplementation(async (agentId: string) => {
-            return agentId !== TARGET_AGENT_ID;
-        });
+        vi.mocked(AIAgentPermissionHelper.HasPermission).mockImplementation(
+            async (agentId: string, _user: UserInfo, permission: string) => {
+                if (permission === 'run') return agentId !== TARGET_AGENT_ID;
+                return true;
+            },
+        );
         vi.mocked(AIAgentPermissionHelper.FilterRunnableAgents).mockImplementation(
             async <T extends { ID?: string; Status?: string }>(agents: T[]) =>
                 agents.filter((a) => a.Status === 'Active' && a.ID !== TARGET_AGENT_ID),

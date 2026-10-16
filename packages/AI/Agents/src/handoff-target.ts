@@ -1,4 +1,4 @@
-import { UserInfo } from '@memberjunction/core';
+import { LogError, UserInfo } from '@memberjunction/core';
 import { MAX_HANDOFF_HOPS, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
 import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
@@ -49,7 +49,7 @@ export interface ResolveHandoffTargetInput<T extends DecisionDiscoveryAgent = MJ
     HandoffChain: ReadonlyArray<string>;
     /** Optional host allow-list of agent IDs (`HostAllowedAgentIDs(data)`). */
     HostAllowedIDs?: ReadonlyArray<string>;
-    /** Calling user whose run permission gates target resolution and candidate discovery. */
+    /** Calling user whose view/run permissions gate target resolution and candidate discovery. */
     ContextUser: UserInfo | undefined;
     /** Agent catalog (`AIEngine.Instance.Agents`). */
     Agents: ReadonlyArray<T>;
@@ -58,21 +58,28 @@ export interface ResolveHandoffTargetInput<T extends DecisionDiscoveryAgent = MJ
 /**
  * Outcome of {@link ResolveHandoffTarget}.
  */
-export interface ResolveHandoffTargetResult<T extends DecisionDiscoveryAgent = MJAIAgentEntityExtended> {
-    /** Resolved target agent when all checks pass. */
-    Target?: T;
-    /** Refusal reason and model-facing guidance when the target is rejected. */
-    Refusal?: HandoffRefusal;
-    /** Sorted list of up to 20 candidate agents the source may hand off to, populated on refusal. */
-    Candidates: HandoffCandidate[];
-}
+export type ResolveHandoffTargetResult<T extends DecisionDiscoveryAgent = MJAIAgentEntityExtended> =
+    | {
+          /** Resolved target agent when all checks pass. */
+          Target: T;
+          Refusal?: undefined;
+          /** Empty when target resolution succeeds. */
+          Candidates: HandoffCandidate[];
+      }
+    | {
+          Target?: undefined;
+          /** Refusal reason and model-facing guidance when the target is rejected. */
+          Refusal: HandoffRefusal;
+          /** Sorted list of up to 20 candidate agents the source may hand off to, populated on refusal. */
+          Candidates: HandoffCandidate[];
+      };
 
 /** Maximum number of candidate agent names returned on refusal. */
 export const MAX_HANDOFF_CANDIDATES = 20;
 
 /**
  * Resolves and validates a handoff target agent in deterministic order:
- * 1. `NotFound` — no Active agent with that name (trimmed, case-insensitive).
+ * 1. `NotFound` — no Active agent with that name (trimmed, case-insensitive), or `ContextUser` lacks `'view'` permission on it.
  * 2. `Self` — the target is the source agent (`SourceAgentID`).
  * 3. `NotDiscoverable` — `!AIAgentPermissionHelper.IsDirectlyDiscoverable(target)`.
  * 4. `NotAllowedHere` — `HostAllowedIDs` is present and the target is not in it.
@@ -80,65 +87,96 @@ export const MAX_HANDOFF_CANDIDATES = 20;
  * 6. `AlreadyInThisTurn` — the target is already in `HandoffChain` (prevents ping-pong and longer cycles).
  * 7. `HopLimit` — `HandoffChain.length + 1 > MAX_HANDOFF_HOPS`.
  *
- * At most one handoff per user turn per source is enforced naturally because a successful Handoff
- * ends the source agent's run (`FinalStep: 'Success'`) and `SourceAgentID` is appended to `HandoffChain`.
+ * When multiple Active agents share the requested name, matches are ordered by `NormalizeUUID(ID)`
+ * and checked in order, resolving to the first match that passes all checks and refusing with the
+ * first match's failure reason only when none passes.
  */
 export async function ResolveHandoffTarget<T extends DecisionDiscoveryAgent = MJAIAgentEntityExtended>(
     input: ResolveHandoffTargetInput<T>
 ): Promise<ResolveHandoffTargetResult<T>> {
     const requestedName = (input.AgentName ?? '').trim();
     const normalizedName = requestedName.toLowerCase();
+    const fallbackLabel = requestedName || '(empty)';
 
-    const target = normalizedName.length > 0
-        ? input.Agents.find(a => a.Status === 'Active' && (a.Name ?? '').trim().toLowerCase() === normalizedName)
-        : undefined;
+    const matches = normalizedName.length > 0
+        ? input.Agents
+              .filter(a => a.Status === 'Active' && (a.Name ?? '').trim().toLowerCase() === normalizedName)
+              .sort((a, b) => NormalizeUUID(a.ID).localeCompare(NormalizeUUID(b.ID)))
+        : [];
 
-    if (!target) {
-        return buildRefusal('NotFound', requestedName || '(empty)', input);
+    if (matches.length === 0) {
+        return buildRefusal('NotFound', fallbackLabel, input);
     }
 
-    if (UUIDsEqual(target.ID, input.SourceAgentID)) {
-        return buildRefusal('Self', target.Name, input);
-    }
+    let firstViewableFailure: { reason: HandoffRefusalReason; label: string } | undefined;
 
-    if (!AIAgentPermissionHelper.IsDirectlyDiscoverable(target)) {
-        return buildRefusal('NotDiscoverable', target.Name, input);
-    }
-
-    if (input.HostAllowedIDs !== undefined) {
-        const allowed = KeepHostAllowedAgents([target], input.HostAllowedIDs);
-        if (allowed.length === 0) {
-            return buildRefusal('NotAllowedHere', target.Name, input);
+    for (const target of matches) {
+        const canView = await checkPermissionFailClosed(target.ID, input.ContextUser, 'view');
+        if (!canView) {
+            continue;
         }
+
+        const targetLabel = target.Name ?? fallbackLabel;
+
+        if (UUIDsEqual(target.ID, input.SourceAgentID)) {
+            firstViewableFailure ??= { reason: 'Self', label: targetLabel };
+            continue;
+        }
+
+        if (!AIAgentPermissionHelper.IsDirectlyDiscoverable(target)) {
+            firstViewableFailure ??= { reason: 'NotDiscoverable', label: targetLabel };
+            continue;
+        }
+
+        if (input.HostAllowedIDs !== undefined) {
+            const allowed = KeepHostAllowedAgents([target], input.HostAllowedIDs);
+            if (allowed.length === 0) {
+                firstViewableFailure ??= { reason: 'NotAllowedHere', label: targetLabel };
+                continue;
+            }
+        }
+
+        const canRun = await checkPermissionFailClosed(target.ID, input.ContextUser, 'run');
+        if (!canRun) {
+            firstViewableFailure ??= { reason: 'NoRunPermission', label: targetLabel };
+            continue;
+        }
+
+        const inChain = input.HandoffChain.some(chainId => UUIDsEqual(chainId, target.ID));
+        if (inChain) {
+            firstViewableFailure ??= { reason: 'AlreadyInThisTurn', label: targetLabel };
+            continue;
+        }
+
+        if (input.HandoffChain.length + 1 > MAX_HANDOFF_HOPS) {
+            firstViewableFailure ??= { reason: 'HopLimit', label: targetLabel };
+            continue;
+        }
+
+        return {
+            Target: target,
+            Candidates: [],
+        };
     }
 
-    const canRun = await checkRunPermissionFailClosed(target.ID, input.ContextUser);
-    if (!canRun) {
-        return buildRefusal('NoRunPermission', target.Name, input);
-    }
-
-    const inChain = input.HandoffChain.some(chainId => UUIDsEqual(chainId, target.ID));
-    if (inChain) {
-        return buildRefusal('AlreadyInThisTurn', target.Name, input);
-    }
-
-    if (input.HandoffChain.length + 1 > MAX_HANDOFF_HOPS) {
-        return buildRefusal('HopLimit', target.Name, input);
-    }
-
-    return {
-        Target: target,
-        Candidates: [],
-    };
+    const refusal = firstViewableFailure ?? { reason: 'NotFound' as const, label: fallbackLabel };
+    return buildRefusal(refusal.reason, refusal.label, input);
 }
 
-async function checkRunPermissionFailClosed(agentId: string, user: UserInfo | undefined): Promise<boolean> {
+async function checkPermissionFailClosed(
+    agentId: string,
+    user: UserInfo | undefined,
+    permission: 'view' | 'run'
+): Promise<boolean> {
     if (!user) {
         return false;
     }
     try {
-        return await AIAgentPermissionHelper.HasPermission(agentId, user, 'run');
-    } catch {
+        return await AIAgentPermissionHelper.HasPermission(agentId, user, permission);
+    } catch (error) {
+        LogError(
+            `ResolveHandoffTarget: Failed to check '${permission}' permission for agent ${agentId}: ${error instanceof Error ? error.message : String(error)}`
+        );
         return false;
     }
 }
@@ -159,7 +197,10 @@ async function computeHandoffCandidates<T extends DecisionDiscoveryAgent>(
             .map(a => ({ ID: a.ID, Name: a.Name ?? '' }))
             .sort((a, b) => a.Name.localeCompare(b.Name))
             .slice(0, MAX_HANDOFF_CANDIDATES);
-    } catch {
+    } catch (error) {
+        LogError(
+            `ResolveHandoffTarget: Failed to compute handoff candidates for agent ${input.SourceAgentID}: ${error instanceof Error ? error.message : String(error)}`
+        );
         return [];
     }
 }
