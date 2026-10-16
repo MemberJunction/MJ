@@ -103,6 +103,8 @@ vi.mock('@memberjunction/core', async () => {
 });
 
 vi.mock('@memberjunction/core-entities', () => ({}));
+// ResolverBase imports the client clause screen from generic-database-provider; these tests do not reach it.
+vi.mock('@memberjunction/generic-database-provider', () => ({}));
 
 // ─── Import after mocks ──────────────────────────────────────────────────
 import { ResolverBase } from '../generic/ResolverBase';
