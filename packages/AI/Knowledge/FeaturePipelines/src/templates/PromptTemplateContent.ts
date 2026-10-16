@@ -1,7 +1,7 @@
 /**
- * @fileoverview The Template Content a prompt renders *now*, read through a provider rather than an engine cache, so a
- * Feature Pipeline run hashes and renders the text that is in the database at run start (F-FP-6: a template edit takes
- * effect without a server restart).
+ * @fileoverview The Template Content a prompt renders, read at run start through a provider rather than an engine
+ * cache, so a Feature Pipeline run hashes and renders the text that is in the database at run start (F-FP-6: a template
+ * edit takes effect on the next run without a server restart).
  * @module @memberjunction/feature-pipelines
  */
 import { RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
@@ -17,8 +17,9 @@ export interface PromptTemplateContentRow {
 
 export class PromptTemplateContent {
     /**
-     * The row a template renders: lowest `Priority`, ties to the oldest row, then the lowest normalised ID — the rule
-     * `MJTemplateEntityExtended.GetHighestPriorityContent` applies, so every reader picks the same row.
+     * The row a template renders: lowest `Priority`; ties are broken by the oldest row, then the lowest normalised ID, so
+     * every reader of this helper picks the same row — the template engine itself breaks ties by load order, so two
+     * content rows with equal Priority are not supported.
      */
     public static SelectHighestPriority<T extends Pick<PromptTemplateContentRow, 'ID' | 'Priority' | '__mj_CreatedAt'>>(rows: readonly T[]): T | undefined {
         const time = (d: Date | string | null | undefined): number => (d ? new Date(d).getTime() : 0);

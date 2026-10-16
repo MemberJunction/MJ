@@ -1023,9 +1023,6 @@ importers:
 
   packages/AI/Knowledge/FeaturePipelines:
     dependencies:
-      '@memberjunction/ai-core-plus':
-        specifier: 6.2.0-edge.4
-        version: link:../../CorePlus
       '@memberjunction/core':
         specifier: 6.2.0-edge.4
         version: link:../../../MJCore

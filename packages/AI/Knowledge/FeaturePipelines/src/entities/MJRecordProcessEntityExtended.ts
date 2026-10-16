@@ -189,7 +189,8 @@ export class RecordProcessPromptTemplateCheck {
 
   /** The record's provider as a metadata provider (`BaseEntity.ProviderToUse` is typed as its entity-data side). */
   protected static ProviderOf(record: MJRecordProcessEntity): IMetadataProvider | undefined {
-    return record.ProviderToUse as unknown as IMetadataProvider | undefined;
+    const provider = record.ProviderToUse;
+    return isMetadataProvider(provider) ? provider : undefined;
   }
 }
 
@@ -207,6 +208,13 @@ function pipelineEntityFieldValues(record: MJRecordProcessEntity): FeaturePipeli
 }
 
 /** Whether the record's data provider also resolves entity metadata by ID, as every MJ provider does. */
+/** Whether the record's data provider is also a metadata provider (every MJ provider is both; a bare double may not be). */
+function isMetadataProvider(
+  provider: IEntityDataProvider | null | undefined
+): provider is IEntityDataProvider & IMetadataProvider {
+  return !!provider && 'ProviderType' in provider;
+}
+
 function resolvesEntities(
   provider: IEntityDataProvider | null | undefined
 ): provider is IEntityDataProvider & Pick<IMetadataProvider, 'EntityByID'> {

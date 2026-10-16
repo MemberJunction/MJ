@@ -2,7 +2,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { InferProcessor } from '../processors/InferProcessor';
 import { WriteBackProcessor } from '../processors/WriteBackProcessor';
 import { RecordRef, RecordProcessorContext } from '@memberjunction/record-set-processor-base';
-import { EntityInfo, UserInfo, IMetadataProvider } from '@memberjunction/core';
+import { EntityInfo, UserInfo, IMetadataProvider, LogStatus } from '@memberjunction/core';
+import type * as CoreModule from '@memberjunction/core';
 import { KnowledgeHubMetadataEngine, MJFeatureValueCacheEntity } from '@memberjunction/core-entities';
 import { DataFeatureSpec, FeaturePipelineVersionService, FeatureValueCacheService, PromptTemplateContent, type PromptTemplateContentRow, type RecordFeatureValuesOutcome } from '@memberjunction/feature-pipelines';
 import type { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
@@ -25,9 +26,15 @@ vi.mock('@memberjunction/aiengine', () => ({
     },
 }));
 
-/** The template engine's cache as the processor reads it: one template whose rendered content has `CachedText`. */
+/** `LogStatus` observed (and still logging), so a test can count the processor's status lines. */
+vi.mock('@memberjunction/core', async (importOriginal) => {
+    const actual = await importOriginal<typeof CoreModule>();
+    return { ...actual, LogStatus: vi.fn(actual.LogStatus) };
+});
+
+/** The template engine's cache as the processor reads it: one template whose rendered content has `CachedText` (none when null). */
 const templateEngine = vi.hoisted(() => {
-    const state = { CachedText: 'old', TextAfterReload: 'old' };
+    const state: { CachedText: string | null; TextAfterReload: string | null } = { CachedText: 'old', TextAfterReload: 'old' };
     return {
         State: state,
         Instance: {
@@ -37,7 +44,7 @@ const templateEngine = vi.hoisted(() => {
                 }
             }),
             get Templates() {
-                return [{ ID: '7e000000-0000-4000-8000-000000000001', GetHighestPriorityContent: () => ({ ID: '7e000000-0000-4000-8000-0000000000c1', TemplateText: state.CachedText }) }];
+                return [{ ID: '7e000000-0000-4000-8000-000000000001', GetHighestPriorityContent: () => (state.CachedText === null ? undefined : { ID: '7e000000-0000-4000-8000-0000000000c1', TemplateText: state.CachedText }) }];
             },
         },
     };
@@ -467,6 +474,62 @@ describe('InferProcessor dedup cache & two-phase execution', () => {
             templateEngine.Instance.Config.mockClear();
             await new InferProcessor('prompt-1', undefined, spec, null).ResolvePin(promptWith('old', TEMPLATE_ID), context);
             expect(reloads()).toBe(0);
+            expect(vi.mocked(LogStatus)).not.toHaveBeenCalled();
+
+            // the cache still differs after the reload: the pin is still the database text's, and it is logged once
+            templateEngine.State.CachedText = 'old';
+            templateEngine.State.TextAfterReload = 'old';
+            const databasePin = await new InferProcessor('prompt-1', undefined, spec, null).ResolvePin(promptWith('new', null), context);
+            const pin = await new InferProcessor('prompt-1', undefined, spec, null).ResolvePin(promptWith('old', TEMPLATE_ID), context);
+            expect(reloads()).toBe(1);
+            expect(pin.PromptVersionHash).toBe(databasePin.PromptVersionHash);
+            expect(vi.mocked(LogStatus).mock.calls.filter(([m]) => String(m).includes('still holds other text'))).toHaveLength(1);
+        });
+
+        it('reloads at most once per run and template when the cache still differs after the reload', async () => {
+            vi.spyOn(PromptTemplateContent, 'ReadCurrent').mockResolvedValue(row('new'));
+            templateEngine.State.CachedText = 'old';
+            templateEngine.State.TextAfterReload = 'old';
+            const stillDiffers = () => vi.mocked(LogStatus).mock.calls.filter(([m]) => String(m).includes('still holds other text')).length;
+
+            const processor = new InferProcessor('prompt-1', undefined, spec, null);
+            await processor.ResolvePin(promptWith('old', TEMPLATE_ID), context);
+            await processor.ResolvePin(promptWith('old', TEMPLATE_ID), context);
+            expect(reloads()).toBe(1);
+            expect(stillDiffers()).toBe(1);
+
+            // without a processRunID every call reads and checks the engine; the reload and the log still happen once
+            templateEngine.Instance.Config.mockClear();
+            vi.mocked(LogStatus).mockClear();
+            const unscoped = new InferProcessor('prompt-1', undefined, spec, null);
+            const noRun: RecordProcessorContext = { ...context, processRunID: undefined };
+            await unscoped.ResolvePin(promptWith('old', TEMPLATE_ID), noRun);
+            await unscoped.ResolvePin(promptWith('old', TEMPLATE_ID), noRun);
+            expect(PromptTemplateContent.ReadCurrent).toHaveBeenCalledTimes(3);
+            expect(reloads()).toBe(1);
+            expect(stillDiffers()).toBe(1);
+        });
+
+        it('reads the template once per run: the same processRunID reuses the read, another run reads again', async () => {
+            const read = vi.spyOn(PromptTemplateContent, 'ReadCurrent').mockResolvedValue(row('new'));
+            const processor = new InferProcessor('prompt-1', undefined, spec, null);
+            await processor.ResolvePin(promptWith('old', TEMPLATE_ID), context);
+            const second = await processor.ResolvePin(promptWith('old', TEMPLATE_ID), context);
+            expect(read).toHaveBeenCalledTimes(1);
+
+            read.mockResolvedValue(row('edited'));
+            const nextRun = await processor.ResolvePin(promptWith('old', TEMPLATE_ID), { ...context, processRunID: 'pr-2' });
+            expect(read).toHaveBeenCalledTimes(2);
+            expect(nextRun.PromptVersionHash).not.toBe(second.PromptVersionHash);
+        });
+
+        it('pins a template without a content row as empty text, without reloading an engine that holds none', async () => {
+            vi.spyOn(PromptTemplateContent, 'ReadCurrent').mockResolvedValue(undefined);
+            templateEngine.State.CachedText = null;
+            const pin = await new InferProcessor('prompt-1', undefined, spec, null).ResolvePin(promptWith('old', TEMPLATE_ID), context);
+            const empty = await new InferProcessor('prompt-1', undefined, spec, null).ResolvePin(promptWith('', null), context);
+            expect(reloads()).toBe(0);
+            expect(pin.PromptVersionHash).toBe(empty.PromptVersionHash);
         });
 
         it('does not read or reload for a prompt without a template', async () => {
