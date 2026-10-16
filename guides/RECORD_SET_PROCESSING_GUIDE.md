@@ -89,7 +89,7 @@ covered in [§4](#4-the-four-work-types); `FunctionRecordProcessor` wraps an arb
 
 ### What the engine owns (so no consumer re-invents it)
 Batching · bounded concurrency within a batch (`maxConcurrency`) · optional token-bucket **rate limiting** ·
-an **error-rate circuit breaker** · a **budget gate** (`onAfterBatch`) · **progress events** per batch · a
+an **error-rate circuit breaker** (over *attempted* records: a record skipped on its watermark does not count) · a **budget gate** (`onAfterBatch`) · **progress events** per batch · a
 **pause/cancel handshake** (the tracker re-reads its cancellation flag at each checkpoint) · **resume** from an
 offset or keyset cursor · and **per-record error isolation** — one bad record never aborts its batch.
 
@@ -129,7 +129,7 @@ A **Record Process** (`MJ: Record Processes`) is a saved operation. Its columns 
 | `ScheduleEnabled` + `CronExpression` + `Timezone` | trigger on a schedule |
 | `OnDemandEnabled` | runnable from the UI / API |
 | `BatchSize` / `MaxConcurrency` | substrate knobs |
-| `SkipUnchanged` | don't write (or count) records the work left unchanged |
+| `SkipUnchanged` + `WatermarkStrategy` | skip a record whose input is unchanged since it was last processed (`Checksum`, the default, or `UpdatedAt`), unless the run overwrites human values. A real `Checksum` run without `SkipUnchanged` (such as a Feature Pipeline version backfill) skips nothing but writes the watermark of each record whose processor computes a basis hash (`Infer`) |
 
 The **`RecordProcessExecutor`** facade turns a row into a substrate run:
 
@@ -232,6 +232,20 @@ await new RecordProcessExecutor().RunByID(id, { contextUser, dryRun: true,  scop
 await new RecordProcessExecutor().RunByID(id, { contextUser, dryRun: false, scope });
 ```
 
+### Infer (Feature Pipeline) dry runs
+
+An `Infer` dry run writes nothing (no Dedup Cache entry, Feature Value, watermark, target or child row) but still calls
+the model, so its `MJ: AI Prompt Runs` are recorded and cost what a real run of those records would.
+
+- Without a scope or a single record it previews at most **25** records (`DryRunSampleSize` overrides it).
+- A record whose real write would fail is reported `Failed` with the write-back's reason (`PreviewErrors`).
+- It reports, in `WouldRefuse`, why a real run would be refused (a version that has not passed its golden set), and
+  never registers or activates a version. `RecordProcess.RunNow` / `PredictiveStudio.RunFeaturePipeline` return it as
+  `wouldRefuse`; the Bulk Operations dialog then offers no Apply.
+- Each record's `previewFields` / `previewChildren` / `previewTags` hold only what the real write would change, so the
+  dialog's change count is what the following real run writes. Outputs withheld below their confidence floor are listed
+  in `withheldFields` (and `withheldKeptFields` when the column does not allow null) and `withheldChildEntities`.
+
 ---
 
 ## 7. Triggers — three ways a Record Process runs
@@ -300,6 +314,10 @@ graph LR
 - The **run header** tracks status (`Running → Completed / Failed / Paused / Cancelled`), the counts
   (`Processed / Success / Error / Skipped`), the `DryRun` flag, the resume cursor (`LastProcessedOffset` /
   `LastProcessedKey`), and `CancellationRequested`.
+- For a Feature Pipeline (every `Infer` Record Process), `ResultSummary` holds the `FeaturePipelineRunResult` JSON:
+  the pin the run used and the tallies `Attempted`, `Upserted`, `Unchanged`, `Previewed`,
+  `RejectedInvalid`, `BelowConfidence`, `Failed`, `Skipped`, `HumanValuesPreserved`. **A Feature Pipeline run with any
+  failed or rejected record ends `Failed`**; other work types keep their status rules.
 - Each **detail** is one terminal record outcome plus its `ResultPayload` (for FieldRules, the field diff that
   was — or would be — applied). Details are written **fire-and-forget** by the tracker's `BaseEntitySaveQueue`
   and flushed before the run finalizes.

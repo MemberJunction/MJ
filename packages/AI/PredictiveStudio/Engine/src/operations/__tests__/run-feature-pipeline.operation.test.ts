@@ -109,6 +109,17 @@ describe('PredictiveStudioRunFeaturePipelineServerOperation — happy path', () 
   });
 });
 
+describe('PredictiveStudioRunFeaturePipelineServerOperation — human values', () => {
+  it('keeps human values by default, and overwrites them only when the input asks', async () => {
+    const facade = new MockFacade(fakeRunResult());
+    const op = new TestableRunFeatureOp(facade);
+    await op.ExecuteServer({ featurePipelineID: 'fp-1' }, new CapturingContext());
+    expect(facade.LastOptions?.overwriteHumanValues).toBe(false);
+    await op.ExecuteServer({ featurePipelineID: 'fp-1', overwriteHumanValues: true }, new CapturingContext());
+    expect(facade.LastOptions?.overwriteHumanValues).toBe(true);
+  });
+});
+
 describe('PredictiveStudioRunFeaturePipelineServerOperation — validation/errors', () => {
   it('fails when featurePipelineID is missing', async () => {
     const facade = new MockFacade(fakeRunResult());
@@ -131,5 +142,18 @@ describe('PredictiveStudioRunFeaturePipelineServerOperation — validation/error
     const out = result.Output as { status: string; errorMessage?: string };
     expect(out.status).toBe('Failed');
     expect(out.errorMessage).toBe('boom');
+  });
+
+  it('returns why a real run would be refused for a dry run whose version is not activated, and nothing otherwise', async () => {
+    const refusal = 'Feature Pipeline version v6 is not activated';
+    const facade = new MockFacade(fakeRunResult({
+      FeaturePipeline: { RecordProcessID: 'fp-1', Pin: null, Attempted: 1, Upserted: 0, Unchanged: 0, Previewed: 1,
+        RejectedInvalid: 0, BelowConfidence: 0, Failed: 0, Skipped: 0, HumanValuesPreserved: 0, Status: 'completed', WouldRefuse: refusal },
+    }));
+    const result = await new TestableRunFeatureOp(facade).ExecuteServer({ featurePipelineID: 'fp-1', dryRun: true }, new CapturingContext());
+    expect(result.Output?.wouldRefuse).toBe(refusal);
+
+    const plain = await new TestableRunFeatureOp(new MockFacade(fakeRunResult())).ExecuteServer({ featurePipelineID: 'fp-1' }, new CapturingContext());
+    expect(plain.Output).not.toHaveProperty('wouldRefuse');
   });
 });

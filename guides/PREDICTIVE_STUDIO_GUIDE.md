@@ -632,6 +632,52 @@ flowchart LR
 - **Run path** — `RunFeaturePipeline` (the only op with no PS-specific logic) delegates straight to `RecordProcessExecutor.RunByID(featurePipelineID, …)`. Running a feature pipeline is *exactly* running the underlying Record Process — full batching/resume/audit + true forwarded per-batch progress.
 - **Knowledge Hub UI** — `FeaturePipelinesResourceComponent` (`@RegisterClass(BaseResourceComponent, 'FeaturePipelinesResource')`, `packages/Angular/Explorer/dashboards/src/KnowledgeHub/components/feature-pipelines/`) lists pipelines from the engine, shows target/written-attribute/freshness, offers **Run** (via the provider's `RouteOperation` seam → `RunFeaturePipeline`), and an **authoring** entry that opens the reusable `mj-record-process-editor` rather than rebuilding authoring.
 
+### Feature Value key and versions
+
+**The key.** A `MJ: Feature Values` row is upserted on its key: the record, the feature name, the pipeline version, the
+prompt version hash (template text, outputs, constraint block, pipeline type, escalation settings), the primary AI
+model, the parameters hash and the input hash. `ValueKeyHash` (SHA-256 of the key) is unique per pipeline. A re-run
+with the same key leaves the row `Unchanged`; a changed value updates it; a changed key is a new row. The latest value
+of a feature for a record is the row with the newest `ComputedAt`.
+
+**Human values.** `Source` is `Pipeline` or `Human` (a value a person entered on the target record). Write-back never
+overwrites a `Human` value unless the run sets `overwriteHumanValues`; `HumanValuesPreserved` counts the ones it kept.
+
+**Versions.** Each distinct pin (prompt version hash, primary model, parameters hash, spec hash) is the next numbered
+`MJ: Feature Pipeline Versions` row: Candidate, Active, Retired or Refused.
+
+- Without an `Activation` block, an on-demand or manual run activates a changed pin; a scheduled or on-change run of a
+  changed pipeline is refused until then, so a prompt edit never silently changes what an unattended job writes.
+- With `Activation` (`GoldenSetTestID`, `Metric: 'accuracy'`, `Threshold`), a version runs only when its golden-set
+  result meets the threshold; a failing result marks it Refused. Dry runs report this (`WouldRefuse`) and never
+  register or activate.
+- The **Feature Pipeline Version Steward** scheduled job (shipped Active, every 15 minutes) evaluates a gated
+  pipeline's unevaluated version and runs the one backfill of a changed version (the records whose latest value is
+  under another version or none), recording each decision in the job run's `Details.Outcomes`. A pipeline opts out
+  per step with `Unattended: { AutoEvaluate: false }` / `{ AutoBackfill: false }`.
+
+**Golden sets.** A `Feature Pipeline Golden Set` test scores a pipeline's answers against labelled cases. Model-made
+labels carry a stored **label-quality record**: two labelers from two vendors label every case under the same guide,
+each must agree with the existing labels at a Wilson 95% lower bound of at least 0.70, one adjudicates the other's
+disagreements, and at most 5 of 52 cases may be excluded. The record is tied to the cases by hash, and the driver
+refuses a set that fails it before any model call. A case marked `Required: true` that is answered wrong fails the set
+whatever its accuracy (gate value 0, the cases listed in `RequiredFailures`). A case can expect an abstention for some
+outputs (`ExpectAbstain`). `LabelSource: "specification"` cases (prompt-injection attempts, non-titles) are fixed by
+the guide's rule rather than labelled, must be `Required`, and stay outside the label-quality record.
+
+**Output constraints.** A `lookup` constraint reads its entity's rows (`DisplayFields`, `Filter`) and renders them into
+the prompt as the taxonomy; `ItemRef` checks an array output item by item. A violating answer is `RejectedInvalid`,
+nothing is written for it, and the run ends `Failed`.
+
+**Confidence floors.** An output can declare `MinConfidence` with `OnLowConfidence: 'null'` (an LLM pipeline also
+needs `ConfidenceRef`). Below the floor the output is withheld: its Feature Value records the abstention with no value,
+write-back clears a value the pipeline wrote and keeps a person's, and the result lists it in `BelowConfidenceOutputs`.
+The floor is part of the spec hash, so changing it is a new version.
+
+**The record as the user turn.** An LLM pipeline that sets `Context.RecordAsUserMessage: true` sends the template as
+the system turn and the record's context fields, as one JSON object, as the user turn, so a field value cannot pose as
+an instruction.
+
 ---
 
 ## 12. The Model Development Agent + artifact + viewer

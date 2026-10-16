@@ -1,0 +1,22 @@
+[
+  {
+    "fields": {
+      "AuthorizationID": "@lookup:MJ: Authorizations.Name=Run Record Processes",
+      "RoleID": "@lookup:MJ: Roles.Name=Developer",
+      "Type": "Allow"
+    },
+    "primaryKey": {
+      "ID": "77CD392A-0F89-49FC-AC03-3C0CD14FF10E"
+    }
+  },
+  {
+    "fields": {
+      "AuthorizationID": "@lookup:MJ: Authorizations.Name=Run Record Processes",
+      "RoleID": "@lookup:MJ: Roles.Name=Integration",
+      "Type": "Allow"
+    },
+    "primaryKey": {
+      "ID": "0733B05F-3EEC-40FF-8C76-375EEE85D416"
+    }
+  }
+]

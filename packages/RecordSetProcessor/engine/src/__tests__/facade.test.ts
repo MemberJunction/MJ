@@ -15,6 +15,7 @@ import {
     RecordProcessorRegistry,
     RecordRef,
     ViewSource,
+    type WriteBackRunPayload,
 } from '@memberjunction/record-set-processor-base';
 import {
     ActionRecordProcessor,
@@ -23,7 +24,8 @@ import {
     InferProcessor,
     RecordProcessExecutor,
     WriteBackProcessor,
-    applyOutputMapping,
+    ApplyOutputMapping,
+    RecordSetProcessor,
 } from '../index';
 
 const USER = {} as UserInfo;
@@ -70,6 +72,50 @@ describe('RecordProcessExecutor.buildSource', () => {
             // stored scope is View (would need ScopeViewID), but the override wins so no throw
             expect(exec.buildSource(rp({ ScopeType: 'View' }), provider, undefined, { Kind: 'view', ViewID: 'V9' })).toBeInstanceOf(ViewSource);
         });
+    });
+});
+
+describe('RecordProcessExecutor dry-run sample', () => {
+    afterEach(() => vi.restoreAllMocks());
+    it('caps an Infer dry run at 25 records unless a scope is given', async () => {
+        const process = vi.spyOn(RecordSetProcessor.Instance, 'Process').mockResolvedValue({ Status: 'Completed', Total: 0, Processed: 0, Success: 0, Error: 0, Skipped: 0 });
+        const exec = new RecordProcessExecutor();
+        vi.spyOn(exec, 'BuildProcessor').mockReturnValue({ ProcessRecord: async () => ({ Status: 'Succeeded' as const }) });
+        vi.spyOn(exec, 'BuildSource').mockReturnValue(new ArraySource([], 'ENT-1'));
+        const infer = rp({ WorkType: 'Infer', ScopeType: 'Filter' });
+        await exec.Run(infer, { contextUser: USER, provider: providerWithEntity(), dryRun: true });
+        expect(process.mock.calls[0][0].maxRecords).toBe(25);
+        await exec.Run(infer, { contextUser: USER, provider: providerWithEntity(), dryRun: true, scope: { Kind: 'records', RecordIDs: ['a'] } });
+        expect(process.mock.calls[1][0].maxRecords).toBeUndefined();
+        await exec.Run(infer, { contextUser: USER, provider: providerWithEntity(), dryRun: false });
+        expect(process.mock.calls[2][0].maxRecords).toBeUndefined();
+    });
+
+    it('fails an Infer run on any failed record, and leaves other work types to the breaker', async () => {
+        const process = vi.spyOn(RecordSetProcessor.Instance, 'Process').mockResolvedValue({ Status: 'Completed', Total: 0, Processed: 0, Success: 0, Error: 0, Skipped: 0 });
+        const exec = new RecordProcessExecutor();
+        vi.spyOn(exec, 'BuildProcessor').mockReturnValue({ ProcessRecord: async () => ({ Status: 'Succeeded' as const }) });
+        vi.spyOn(exec, 'BuildSource').mockReturnValue(new ArraySource([], 'ENT-1'));
+        await exec.Run(rp({ WorkType: 'Infer', ScopeType: 'Filter' }), { contextUser: USER, provider: providerWithEntity() });
+        await exec.Run(rp({ WorkType: 'Action', ScopeType: 'Filter' }), { contextUser: USER, provider: providerWithEntity() });
+        expect(process.mock.calls[0][0]).toMatchObject({ FeaturePipeline: true, recordProcessID: 'RP-1' });
+        expect(process.mock.calls[1][0].FeaturePipeline).toBe(false);
+    });
+});
+
+describe('RecordProcessExecutor watermark skip', () => {
+    afterEach(() => vi.restoreAllMocks());
+    it('skips unchanged records as the Record Process says, unless the caller turns the skip off', async () => {
+        const process = vi.spyOn(RecordSetProcessor.Instance, 'Process').mockResolvedValue({ Status: 'Completed', Total: 0, Processed: 0, Success: 0, Error: 0, Skipped: 0 });
+        const exec = new RecordProcessExecutor();
+        vi.spyOn(exec, 'BuildProcessor').mockReturnValue({ ProcessRecord: async () => ({ Status: 'Succeeded' as const }) });
+        vi.spyOn(exec, 'BuildSource').mockReturnValue(new ArraySource([], 'ENT-1'));
+        const watermarked = rp({ WorkType: 'Infer', ScopeType: 'Filter', SkipUnchanged: true, WatermarkStrategy: 'UpdatedAt' });
+        const lastRunAt = new Date('2026-10-01T00:00:00Z');
+        await exec.Run(watermarked, { contextUser: USER, provider: providerWithEntity(), lastRunAt });
+        expect(process.mock.calls[0][0]).toMatchObject({ skipUnchanged: true, lastRunAt });
+        await exec.Run(watermarked, { contextUser: USER, provider: providerWithEntity(), SkipUnchanged: false });
+        expect(process.mock.calls[1][0]).toMatchObject({ skipUnchanged: false, lastRunAt: undefined });
     });
 });
 
@@ -271,19 +317,21 @@ class FakeEntity {
 function fakeProvider(childKey?: CompositeKey, primaryKeys: Array<{ Name: string }> = [{ Name: 'ID' }]): { provider: IMetadataProvider; created: FakeEntity[] } {
     const created: FakeEntity[] = [];
     const provider = {
-        EntityByID: () => ({ Name: 'Customer', PrimaryKeys: primaryKeys, FirstPrimaryKey: primaryKeys[0] }),
-        EntityByName: (name: string) => ({ ID: 'ENT-' + name, Name: name, PrimaryKeys: [{ Name: 'ID' }] }),
+        // Fields: a dry run names its preview from the entity's name fields (these entities declare none)
+        EntityByID: () => ({ Name: 'Customer', PrimaryKeys: primaryKeys, FirstPrimaryKey: primaryKeys[0], Fields: [] }),
+        EntityByName: (name: string) => ({ ID: 'ENT-' + name, Name: name, PrimaryKeys: [{ Name: 'ID' }], Fields: [] }),
         GetEntityObject: async () => { const e = new FakeEntity(childKey); created.push(e); return e; },
+        RunView: async () => ({ Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 0, ErrorMessage: '' }),
     } as unknown as IMetadataProvider;
     return { provider, created };
 }
 
 const record: RecordRef = { EntityID: 'ENT-1', RecordID: 'c1', Record: {} };
 
-describe('applyOutputMapping', () => {
+describe('ApplyOutputMapping', () => {
     it('updates fields on the processed record from the result', async () => {
         const { provider, created } = fakeProvider();
-        const out = await applyOutputMapping({
+        const out = await ApplyOutputMapping({
             outputMapping: { fields: { Satisfaction: '$.satisfaction', Sentiment: '$.sentiment' } },
             result: { satisfaction: 'High', sentiment: 0.8 },
             record,
@@ -297,7 +345,7 @@ describe('applyOutputMapping', () => {
 
     it('creates a child record with the parent FK and mapped fields', async () => {
         const { provider, created } = fakeProvider();
-        const out = await applyOutputMapping({
+        const out = await ApplyOutputMapping({
             outputMapping: { childRecord: { entity: 'Customer Insights', parentField: 'CustomerID', map: { Summary: '$.summary' } } },
             result: { summary: 'great' },
             record,
@@ -314,7 +362,7 @@ describe('applyOutputMapping', () => {
             { FieldName: 'LineNo', Value: 3 },
         ]);
         const { provider } = fakeProvider(compositeKey);
-        const out = await applyOutputMapping({
+        const out = await ApplyOutputMapping({
             outputMapping: { childRecord: { entity: 'Order Line Notes', parentField: 'OrderID', map: { Note: '$.note' } } },
             result: { note: 'n' },
             record,
@@ -326,7 +374,7 @@ describe('applyOutputMapping', () => {
 
     it('dry-run resolves field values into previewFields but saves NOTHING', async () => {
         const { provider, created } = fakeProvider();
-        const out = await applyOutputMapping({
+        const out = await ApplyOutputMapping({
             outputMapping: { fields: { Satisfaction: '$.satisfaction', Sentiment: '$.sentiment' } },
             result: { satisfaction: 'High', sentiment: 0.8 },
             record,
@@ -337,13 +385,13 @@ describe('applyOutputMapping', () => {
         expect(out.dryRun).toBe(true);
         expect(out.updatedRecord).toBe(false);
         expect(out.previewFields).toEqual({ Satisfaction: 'High', Sentiment: 0.8 });
-        // No entity object is even created on a dry-run (nothing loaded, nothing saved).
-        expect(created.length).toBe(0);
+        // A dry-run loads the record to compare its fields, and saves nothing.
+        expect(created.every((e) => !e.saved)).toBe(true);
     });
 
     it('dry-run previews the child record values but creates NOTHING', async () => {
         const { provider, created } = fakeProvider();
-        const out = await applyOutputMapping({
+        const out = await ApplyOutputMapping({
             outputMapping: { childRecord: { entity: 'Customer Insights', parentField: 'CustomerID', map: { Summary: '$.summary' } } },
             result: { summary: 'great' },
             record,
@@ -363,13 +411,29 @@ describe('applyOutputMapping', () => {
             ProcessRecord: async () => ({ Status: 'Succeeded', ResultPayload: { satisfaction: 'High' } }),
         };
         const proc = new WriteBackProcessor(inner, { fields: { Satisfaction: '$.satisfaction' } }, true);
-        const result = await proc.ProcessRecord(record, { contextUser: USER, provider } as unknown as RecordProcessorContext);
+        const result = await proc.ProcessRecord(record, { contextUser: USER, provider });
         expect(result.Status).toBe('Succeeded');
-        // The write-back payload carries the dry-run preview; the entity was never created/saved.
-        const writeBack = (result.ResultPayload as { writeBack: { dryRun?: boolean; previewFields?: Record<string, unknown> } }).writeBack;
-        expect(writeBack.dryRun).toBe(true);
-        expect(writeBack.previewFields).toEqual({ Satisfaction: 'High' });
-        expect(created.length).toBe(0);
+        // The write-back payload carries the dry-run preview; the record was loaded to compare its fields, never saved.
+        const writeBack = (result.ResultPayload as WriteBackRunPayload).writeBack;
+        expect(writeBack?.dryRun).toBe(true);
+        expect(writeBack?.previewFields).toEqual({ Satisfaction: 'High' });
+        expect(created.every((e) => !e.saved)).toBe(true);
+    });
+
+    it('WriteBackProcessor previews when the run is a dry run, whatever it was built with', async () => {
+        const { provider, created } = fakeProvider();
+        const inner: IRecordProcessor = {
+            ProcessRecord: async () => ({ Status: 'Succeeded', ResultPayload: { satisfaction: 'High' } }),
+        };
+        const proc = new WriteBackProcessor(inner, { fields: { Satisfaction: '$.satisfaction' } });
+        const result = await proc.ProcessRecord(record, { contextUser: USER, provider, DryRun: true });
+        const writeBack = (result.ResultPayload as WriteBackRunPayload).writeBack;
+        expect(writeBack?.dryRun).toBe(true);
+        expect(writeBack?.previewFields).toEqual({ Satisfaction: 'High' });
+        expect(created.every((e) => !e.saved)).toBe(true);
+        // A previewed write-back claims no write
+        expect(result).toMatchObject({ DryRun: true });
+        expect(result.Outcome).toBeUndefined();
     });
 
     it('updates fields on a composite-keyed record without throwing', async () => {
@@ -386,7 +450,7 @@ describe('applyOutputMapping', () => {
             RecordID: 'OrderID|100||LineNo|2',
             Record: {},
         };
-        const out = await applyOutputMapping({
+        const out = await ApplyOutputMapping({
             outputMapping: { fields: { Discount: '$.discount' } },
             result: { discount: 0.15 },
             record: compositeRecord,
@@ -400,7 +464,7 @@ describe('applyOutputMapping', () => {
 
     it('maps $run provenance to fields and child records', async () => {
         const { provider, created } = fakeProvider();
-        const out = await applyOutputMapping({
+        const out = await ApplyOutputMapping({
             outputMapping: {
                 fields: {
                     ProcessRunID: '$run.ProcessRunID',
@@ -426,20 +490,21 @@ describe('applyOutputMapping', () => {
             },
         });
         expect(out.updatedRecord).toBe(true);
+        // Children are written before the record's own fields (one transaction, parent field last).
         expect(created[0].sets).toEqual({
-            ProcessRunID: 'RUN-123',
-            PromptVersion: 'HASH-XYZ',
-        });
-        expect(created[1].sets).toEqual({
             ParentID: 'c1',
             RunID: 'RUN-123',
             ExecutedAt: '2026-09-21T00:00:00.000Z',
+        });
+        expect(created[1].sets).toEqual({
+            ProcessRunID: 'RUN-123',
+            PromptVersion: 'HASH-XYZ',
         });
     });
 
     it('supports childRecords with array fan-out', async () => {
         const { provider, created } = fakeProvider();
-        const out = await applyOutputMapping({
+        const out = await ApplyOutputMapping({
             outputMapping: {
                 childRecords: [
                     {
@@ -487,7 +552,7 @@ describe('applyOutputMapping', () => {
 
     it('dry-run previews fan-out child records in previewChildren without saving', async () => {
         const { provider, created } = fakeProvider();
-        const out = await applyOutputMapping({
+        const out = await ApplyOutputMapping({
             outputMapping: {
                 childRecords: [
                     {
@@ -537,7 +602,7 @@ describe('applyOutputMapping', () => {
         const mockConfig = vi.spyOn(TagEngine.Instance, 'Config').mockResolvedValue(undefined);
 
         const { provider, created } = fakeProvider();
-        const out = await applyOutputMapping({
+        const out = await ApplyOutputMapping({
             outputMapping: {
                 tags: [
                     {
@@ -581,6 +646,8 @@ describe('applyOutputMapping', () => {
             depth: 1,
             error: undefined,
         });
+        // Only the depth overrun is what the real write would fail on.
+        expect(out.PreviewErrors).toEqual([`tag 'Deep Tag': Match exceeds maxDepth (2 > 1)`]);
         expect(created.length).toBe(0);
         expect(mockResolveTag).toHaveBeenCalledWith(
             'Existing Tag',
@@ -615,7 +682,7 @@ describe('applyOutputMapping', () => {
         const mockConfig = vi.spyOn(TagEngine.Instance, 'Config').mockResolvedValue(undefined);
 
         const { provider } = fakeProvider();
-        const out = await applyOutputMapping({
+        const out = await ApplyOutputMapping({
             outputMapping: {
                 tags: [
                     {
@@ -646,6 +713,23 @@ describe('applyOutputMapping', () => {
         mockConfig.mockRestore();
     });
 
+    it('reports an auto-grown tag that would exceed maxDepth as what the real write would fail on', async () => {
+        const mockResolveTag = vi.spyOn(TagEngine.Instance, 'ResolveTag').mockResolvedValue(null);
+        const mockConfig = vi.spyOn(TagEngine.Instance, 'Config').mockResolvedValue(undefined);
+        const { provider } = fakeProvider();
+        const out = await ApplyOutputMapping({
+            outputMapping: { tags: [{ ref: '$.tag', rootTagId: 'root-1', growth: 'auto-grow', maxDepth: 0 }] },
+            result: { tag: 'Brand New Tag' },
+            record,
+            contextUser: USER,
+            provider,
+            dryRun: true,
+        });
+        expect(out.PreviewErrors).toEqual([`tag 'Brand New Tag': Created tag exceeds maxDepth (1 > 0)`]);
+        mockResolveTag.mockRestore();
+        mockConfig.mockRestore();
+    });
+
     it('marks non-descendant tags as error in previewTags during dry-run', async () => {
         const mockResolveTag = vi.spyOn(TagEngine.Instance, 'ResolveTag').mockResolvedValue({
             ID: 'tag-unrelated',
@@ -660,7 +744,7 @@ describe('applyOutputMapping', () => {
         const mockConfig = vi.spyOn(TagEngine.Instance, 'Config').mockResolvedValue(undefined);
 
         const { provider } = fakeProvider();
-        const out = await applyOutputMapping({
+        const out = await ApplyOutputMapping({
             outputMapping: {
                 tags: [
                     {
@@ -680,6 +764,8 @@ describe('applyOutputMapping', () => {
         expect(out.previewTags?.length).toBe(1);
         expect(out.previewTags?.[0].depth).toBe(-1);
         expect(out.previewTags?.[0].error).toContain('is not a descendant of root tag');
+        // The real write throws on it, so the dry run reports it as what the real write would fail on.
+        expect(out.PreviewErrors).toEqual([`tag 'Unrelated Tag': Matched tag 'Unrelated Tag' is not a descendant of root tag 'root-1'`]);
 
         mockResolveTag.mockRestore();
         mockGetTagByID.mockRestore();
@@ -700,7 +786,7 @@ describe('applyOutputMapping', () => {
         const mockConfig = vi.spyOn(TagEngine.Instance, 'Config').mockResolvedValue(undefined);
 
         const { provider } = fakeProvider();
-        await expect(applyOutputMapping({
+        await expect(ApplyOutputMapping({
             outputMapping: {
                 tags: [
                     {
@@ -726,6 +812,8 @@ describe('applyOutputMapping', () => {
             fields?: Array<{ Name: string; RelatedEntity?: string; RelatedEntityID?: string }>;
             runViewHandler?: (params: { EntityName: string; ExtraFilter?: string }) => Array<Record<string, unknown>>;
             childKey?: CompositeKey;
+            /** Values every loaded record already holds — a mapped null is only written over a non-null value. */
+            current?: Record<string, unknown>;
         }) {
             const created: FakeEntity[] = [];
             const provider = {
@@ -746,6 +834,7 @@ describe('applyOutputMapping', () => {
                 }),
                 GetEntityObject: async () => {
                     const e = new FakeEntity(opts?.childKey ?? CompositeKey.FromKeyValuePair('ID', 'new-created-id'));
+                    e.sets = { ...opts?.current };
                     created.push(e);
                     return e;
                 },
@@ -766,7 +855,7 @@ describe('applyOutputMapping', () => {
                 },
             });
 
-            const out = await applyOutputMapping({
+            const out = await ApplyOutputMapping({
                 outputMapping: {
                     fields: { SeniorityLevelID: '$.seniority' },
                     fieldLookups: {
@@ -797,7 +886,7 @@ describe('applyOutputMapping', () => {
                 },
             });
 
-            const out = await applyOutputMapping({
+            const out = await ApplyOutputMapping({
                 outputMapping: {
                     fields: { SeniorityLevelID: '$.seniority' },
                 },
@@ -815,9 +904,10 @@ describe('applyOutputMapping', () => {
         it('handles lookup miss with onLookupMiss=null by setting null', async () => {
             const { provider, created } = fakeFKProvider({
                 runViewHandler: () => [], // 0 rows matched
+                current: { SeniorityLevelID: 'old-level-id' },
             });
 
-            const out = await applyOutputMapping({
+            const out = await ApplyOutputMapping({
                 outputMapping: {
                     fields: { SeniorityLevelID: '$.seniority' },
                     fieldLookups: {
@@ -841,7 +931,7 @@ describe('applyOutputMapping', () => {
                 runViewHandler: () => [], // 0 rows matched
             });
 
-            await expect(applyOutputMapping({
+            await expect(ApplyOutputMapping({
                 outputMapping: {
                     fields: { SeniorityLevelID: '$.seniority' },
                     fieldLookups: {
@@ -863,7 +953,7 @@ describe('applyOutputMapping', () => {
                 childKey: CompositeKey.FromKeyValuePair('ID', 'new-created-level-id'),
             });
 
-            const out = await applyOutputMapping({
+            const out = await ApplyOutputMapping({
                 outputMapping: {
                     fields: { SeniorityLevelID: '$.seniority' },
                     fieldLookups: {
@@ -891,7 +981,7 @@ describe('applyOutputMapping', () => {
                 runViewHandler: () => [],
             });
 
-            const out = await applyOutputMapping({
+            const out = await ApplyOutputMapping({
                 outputMapping: {
                     fields: { SeniorityLevelID: '$.seniority' },
                     fieldLookups: {
@@ -909,7 +999,7 @@ describe('applyOutputMapping', () => {
 
             expect(out.dryRun).toBe(true);
             expect(out.updatedRecord).toBe(false);
-            expect(created.length).toBe(0);
+            expect(created.every((e) => !e.saved)).toBe(true);
             expect(out.previewFields?.SeniorityLevelID).toBe('preview-new-Seniority Levels-Staff');
         });
 
@@ -922,7 +1012,7 @@ describe('applyOutputMapping', () => {
                 },
             });
 
-            const out = await applyOutputMapping({
+            const out = await ApplyOutputMapping({
                 outputMapping: {
                     fields: { SeniorityLevelID: '$.seniority' },
                 },
@@ -945,7 +1035,7 @@ describe('applyOutputMapping', () => {
                 },
             });
 
-            const out = await applyOutputMapping({
+            const out = await ApplyOutputMapping({
                 outputMapping: {
                     fields: { SeniorityLevelID: '$.seniority' },
                     fieldLookups: {
@@ -969,7 +1059,7 @@ describe('applyOutputMapping', () => {
         it('rejects unsafe matchField identifiers with special characters or SQL injection', async () => {
             const { provider } = fakeFKProvider();
 
-            await expect(applyOutputMapping({
+            await expect(ApplyOutputMapping({
                 outputMapping: {
                     fields: { SeniorityLevelID: '$.seniority' },
                     fieldLookups: {
@@ -993,10 +1083,11 @@ describe('applyOutputMapping', () => {
                     runViewCalled = true;
                     return [];
                 },
+                current: { SeniorityLevelID: 'old-level-id' },
             });
 
             // Default onLookupMiss = null
-            const out = await applyOutputMapping({
+            const out = await ApplyOutputMapping({
                 outputMapping: {
                     fields: { SeniorityLevelID: '$.seniority' },
                     fieldLookups: { SeniorityLevelID: { onLookupMiss: 'null' } },
@@ -1012,7 +1103,7 @@ describe('applyOutputMapping', () => {
             expect(created[0].sets.SeniorityLevelID).toBeNull();
 
             // onLookupMiss = fail throws
-            await expect(applyOutputMapping({
+            await expect(ApplyOutputMapping({
                 outputMapping: {
                     fields: { SeniorityLevelID: '$.seniority' },
                     fieldLookups: { SeniorityLevelID: { onLookupMiss: 'fail' } },
@@ -1031,10 +1122,11 @@ describe('applyOutputMapping', () => {
                     runViewCalled = true;
                     return [];
                 },
+                current: { SeniorityLevelID: 'old-level-id' },
             });
 
             // Default onLookupMiss = null
-            const out = await applyOutputMapping({
+            const out = await ApplyOutputMapping({
                 outputMapping: {
                     fields: { SeniorityLevelID: '$.seniority' },
                     fieldLookups: { SeniorityLevelID: { onLookupMiss: 'null' } },
@@ -1050,7 +1142,7 @@ describe('applyOutputMapping', () => {
             expect(created[0].sets.SeniorityLevelID).toBeNull();
 
             // onLookupMiss = fail throws
-            await expect(applyOutputMapping({
+            await expect(ApplyOutputMapping({
                 outputMapping: {
                     fields: { SeniorityLevelID: '$.seniority' },
                     fieldLookups: { SeniorityLevelID: { onLookupMiss: 'fail' } },
@@ -1065,9 +1157,9 @@ describe('applyOutputMapping', () => {
         it('throws descriptive error when RunView provider is unavailable', async () => {
             const { provider } = fakeFKProvider();
             // Remove RunView capability from provider
-            (provider as Record<string, unknown>).RunView = undefined;
+            Object.assign(provider, { RunView: undefined });
 
-            await expect(applyOutputMapping({
+            await expect(ApplyOutputMapping({
                 outputMapping: {
                     fields: { SeniorityLevelID: '$.seniority' },
                 },
@@ -1091,12 +1183,13 @@ describe('applyOutputMapping', () => {
                     }
                     return []; // miss for others
                 },
+                current: { SeniorityLevelID: 'old-level-id' },
             });
 
             const sharedCache = new Map<string, string | number>();
 
             // First call for 'Director' -> hits RunView
-            const out1 = await applyOutputMapping({
+            const out1 = await ApplyOutputMapping({
                 outputMapping: { fields: { SeniorityLevelID: '$.seniority' } },
                 result: { seniority: 'Director' },
                 record: { EntityID: 'ENT-Person', RecordID: 'p1', Record: {} },
@@ -1108,7 +1201,7 @@ describe('applyOutputMapping', () => {
             expect(created[0].sets.SeniorityLevelID).toBe('dir-uuid');
 
             // Second call for 'Director' -> hits cache, RunView count unchanged
-            const out2 = await applyOutputMapping({
+            const out2 = await ApplyOutputMapping({
                 outputMapping: { fields: { SeniorityLevelID: '$.seniority' } },
                 result: { seniority: 'Director' },
                 record: { EntityID: 'ENT-Person', RecordID: 'p2', Record: {} },
@@ -1120,7 +1213,7 @@ describe('applyOutputMapping', () => {
             expect(created[1].sets.SeniorityLevelID).toBe('dir-uuid');
 
             // Numeric ID lookup retains number type (not stringified)
-            await applyOutputMapping({
+            await ApplyOutputMapping({
                 outputMapping: { fields: { SeniorityLevelID: '$.seniority' } },
                 result: { seniority: 'NumericLevel' },
                 record: { EntityID: 'ENT-Person', RecordID: 'p3', Record: {} },
@@ -1132,7 +1225,7 @@ describe('applyOutputMapping', () => {
             expect(created[2].sets.SeniorityLevelID).toBe(42);
 
             // Second call for NumericLevel -> hits cache and still receives number 42
-            await applyOutputMapping({
+            await ApplyOutputMapping({
                 outputMapping: { fields: { SeniorityLevelID: '$.seniority' } },
                 result: { seniority: 'NumericLevel' },
                 record: { EntityID: 'ENT-Person', RecordID: 'p4', Record: {} },
@@ -1144,7 +1237,7 @@ describe('applyOutputMapping', () => {
             expect(created[3].sets.SeniorityLevelID).toBe(42);
 
             // Third call for a miss 'Unknown' with onLookupMiss='null' -> does NOT cache null
-            await applyOutputMapping({
+            await ApplyOutputMapping({
                 outputMapping: {
                     fields: { SeniorityLevelID: '$.seniority' },
                     fieldLookups: { SeniorityLevelID: { onLookupMiss: 'null' } },
@@ -1159,7 +1252,7 @@ describe('applyOutputMapping', () => {
             expect(created[4].sets.SeniorityLevelID).toBeNull();
 
             // Subsequent call for 'Unknown' with onLookupMiss='fail' must NOT be downgraded to null; it must fail!
-            await expect(applyOutputMapping({
+            await expect(ApplyOutputMapping({
                 outputMapping: {
                     fields: { SeniorityLevelID: '$.seniority' },
                     fieldLookups: { SeniorityLevelID: { onLookupMiss: 'fail' } },

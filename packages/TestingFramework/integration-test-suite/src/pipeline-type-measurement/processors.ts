@@ -37,8 +37,8 @@ export class ValueDescribingInferProcessor extends InferProcessor {
  */
 export function CreateMeasurementProcessor(type: MeasuredPipelineType, spec: MeasurementSpec): InferProcessor {
     const processor = type === 'LLM'
-        ? new ValueDescribingInferProcessor(spec.PromptID, undefined, spec)
-        : new InferProcessor(spec.PromptID, undefined, spec);
+        ? new ValueDescribingInferProcessor(spec.PromptID, undefined, spec, null)
+        : new InferProcessor(spec.PromptID, undefined, spec, null);
     processor.WritesHistory = false;
     return processor;
 }

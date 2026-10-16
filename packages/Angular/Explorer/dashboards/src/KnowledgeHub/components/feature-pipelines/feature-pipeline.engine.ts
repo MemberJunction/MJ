@@ -7,6 +7,7 @@ import {
 } from '@memberjunction/core';
 import { SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import { MJRecordProcessEntity, MJProcessRunEntity } from '@memberjunction/core-entities';
+import { FeaturePipelineRunResults, type FeaturePipelineRunResult } from '@memberjunction/record-set-processor-base';
 import type { Observable } from 'rxjs';
 
 /**
@@ -65,6 +66,10 @@ export interface FeaturePipelineSummary {
   LastRunSuccess: number | null;
   /** Records that errored in the most recent run, or null. */
   LastRunErrors: number | null;
+  /** What the most recent run did with its records ({@link FeaturePipelineEngine.DescribeRunOutcome}), or null for a run without a result. */
+  LastRunOutcomeText: string | null;
+  /** The most recent run's error message when it did not complete (a refused or failed run), else null. */
+  LastRunErrorMessage: string | null;
   /**
    * The pipeline type ('LLM' or 'Decision' or custom). Defaults to 'LLM' when unset. The two built-in
    * names are given in their canonical case whatever case the spec uses, as the processor matches them.
@@ -177,6 +182,7 @@ export class FeaturePipelineEngine extends BaseEngine<FeaturePipelineEngine> {
     runs: ReadonlyArray<MJProcessRunEntity>,
   ): FeaturePipelineSummary {
     const latest = FeaturePipelineEngine.newestRun(runs, p.ID);
+    const result = FeaturePipelineRunResults.Parse(latest?.ResultSummary);
     return {
       ID: p.ID,
       Name: p.Name,
@@ -194,11 +200,32 @@ export class FeaturePipelineEngine extends BaseEngine<FeaturePipelineEngine> {
       LastRunProcessed: latest?.ProcessedItems ?? null,
       LastRunSuccess: latest?.SuccessCount ?? null,
       LastRunErrors: latest?.ErrorCount ?? null,
+      LastRunOutcomeText: latest && result ? FeaturePipelineEngine.DescribeRunOutcome(result, latest) : null,
+      LastRunErrorMessage: latest && latest.Status !== 'Completed' ? latest.ErrorMessage || null : null,
       PipelineType: FeaturePipelineEngine.derivePipelineType(p.Configuration),
     };
   }
 
-  /** Newest run for a pipeline id, scanning by StartTime/EndTime/createdAt regardless of input order. */
+  /**
+   * The card's last-run line from a run's result. Records skipped on their watermark count as unchanged: they still
+   * hold what the pipeline wrote. A completed run with nothing to write is "up to date".
+   */
+  public static DescribeRunOutcome(result: FeaturePipelineRunResult, run: MJProcessRunEntity): string {
+    const total = run.ProcessedItems || 0;
+    const failed = run.ErrorCount || 0;
+    const unchanged = result.Unchanged + result.Skipped;
+    if (total === 0) {
+      return 'no records processed';
+    }
+    if (run.Status === 'Completed' && result.Upserted === 0 && failed === 0) {
+      return `${unchanged} of ${total} up to date (${unchanged} unchanged)`;
+    }
+    const parts: Array<[number, string]> = [[result.Upserted, 'written'], [unchanged, 'unchanged'], [failed, 'failed']];
+    const shown = parts.filter(([count]) => count > 0).map(([count, label]) => `${count} ${label}`);
+    return `${shown.length > 0 ? shown.join(', ') : '0 written'} of ${total}`;
+  }
+
+  /** Newest real (not dry) run for a pipeline id, scanning by StartTime/EndTime/createdAt regardless of input order. */
   private static newestRun(
     runs: ReadonlyArray<MJProcessRunEntity>,
     recordProcessID: string,
@@ -206,7 +233,7 @@ export class FeaturePipelineEngine extends BaseEngine<FeaturePipelineEngine> {
     let best: MJProcessRunEntity | undefined;
     let bestTime = -Infinity;
     for (const r of runs) {
-      if (r.RecordProcessID == null || !UUIDsEqual(r.RecordProcessID, recordProcessID)) continue;
+      if (r.RecordProcessID == null || !UUIDsEqual(r.RecordProcessID, recordProcessID) || r.DryRun) continue;
       const candidate = r.StartTime ?? r.EndTime ?? r.__mj_CreatedAt;
       const t = candidate ? new Date(candidate).getTime() : -Infinity;
       if (t > bestTime) {

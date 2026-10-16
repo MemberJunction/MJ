@@ -35,7 +35,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (452 classes)
+// @memberjunction/core-entities (453 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -281,6 +281,7 @@ import {
     MJExternalDataSourceEntity,
     MJExternalDataSourceTypeEntity,
     MJFeaturePipelineTypeEntity,
+    MJFeaturePipelineVersionEntity,
     MJFeatureValueCacheEntity,
     MJFeatureValueEntity,
     MJFileCategoryEntity,
@@ -531,8 +532,9 @@ import {
     MJEntityCommunicationMessageTypeEntityExtended,
 } from '@memberjunction/entity-communications-base';
 
-// @memberjunction/feature-pipelines (1 classes)
+// @memberjunction/feature-pipelines (2 classes)
 import {
+    MJFeaturePipelineVersionEntityExtended,
     MJRecordProcessEntityExtended,
 } from '@memberjunction/feature-pipelines';
 
@@ -979,6 +981,7 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJExternalDataSourceEntity,
     MJExternalDataSourceTypeEntity,
     MJFeaturePipelineTypeEntity,
+    MJFeaturePipelineVersionEntity,
     MJFeatureValueCacheEntity,
     MJFeatureValueEntity,
     MJFileCategoryEntity,
@@ -1122,11 +1125,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJSignatureRequestLogEntity,
     MJSignatureRequestRecipientEntity,
     MJSkillEntity,
-    MJStateProvinceEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJStateProvinceEntity,
     MJTagAuditLogEntity,
     MJTagCoOccurrenceEntity,
     MJTagEntity,
@@ -1211,6 +1214,7 @@ const CLASS_REGISTRATIONS_2: any[] = [
     TimePerMinutePriceUnitType,
     MJCommunicationProviderEntityExtended,
     MJEntityCommunicationMessageTypeEntityExtended,
+    MJFeaturePipelineVersionEntityExtended,
     MJRecordProcessEntityExtended,
     AudioArtifactViewerComponent,
     CodeArtifactViewerComponent,
@@ -1325,12 +1329,12 @@ const CLASS_REGISTRATIONS_2: any[] = [
     ProjectHierarchyPanel,
     QueryCategoryHierarchyPanel,
     RecordProcessCategoryHierarchyPanel,
-    RecordProcessFormComponentExtended,
-    RecordProcessFormPolicy,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    RecordProcessFormComponentExtended,
+    RecordProcessFormPolicy,
     RubricAuthorPanel,
     RubricDiffPanel,
     RubricEvaluationComparePanel,
@@ -1364,7 +1368,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 619;
+export const CLASS_REGISTRATIONS_COUNT = 621;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

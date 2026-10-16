@@ -14,6 +14,8 @@ export * from './processors/ActionRecordProcessor';
 export * from './processors/AgentRecordProcessor';
 export * from './processors/WriteBackProcessor';
 export * from './processors/InferProcessor';
+export * from './processors/FeaturePipelineErrors';
+export * from './processors/FeaturePipelineHumanValueGuard';
 export * from './processors/FieldRulesProcessor';
 export * from './feature-pipeline-drivers/BaseFeaturePipelineDriver';
 export * from './feature-pipeline-drivers/LLMFeaturePipelineDriver';

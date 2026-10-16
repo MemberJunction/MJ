@@ -1,24 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import {
-    BaseEntity,
-    EntityInfo,
-    ProviderBase,
-    UserInfo,
-    type DatasetResultType,
-    type DatasetStatusResultType,
-    type EntityRecordNameResult,
-    type ILocalStorageProvider,
-    type IMetadataProvider,
-    type PotentialDuplicateResponse,
-    type ProviderType,
-    type RecordDependency,
-    type RecordMergeResult,
-    type RunQueryResult,
-    type RunViewResult,
-    type ScoredCandidate,
-    type TransactionGroupBase,
-} from '@memberjunction/core';
-import { MJGlobal, NormalizeUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { BaseEntity, EntityInfo, UserInfo } from '@memberjunction/core';
+import { MJGlobal, NormalizeUUID, RegisterClass } from '@memberjunction/global';
 import {
     KnowledgeHubMetadataEngine,
     MJAIModelTypeEntity,
@@ -37,6 +19,7 @@ import {
     FeatureValueCacheService,
     type DataFeatureOutput,
     type DataFeatureSpec,
+    type RecordFeatureValuesOutcome,
 } from '@memberjunction/feature-pipelines';
 import { InferProcessor } from '../processors/InferProcessor';
 import {
@@ -45,6 +28,7 @@ import {
     type FeaturePipelineComputeRequest,
 } from '../feature-pipeline-drivers/BaseFeaturePipelineDriver';
 import { DecisionFeaturePipelineDriver } from '../feature-pipeline-drivers/DecisionFeaturePipelineDriver';
+import { EntitiesOnlyProvider } from '@memberjunction/unit-testing';
 
 // ---------------------------------------------------------------------------
 // Metadata: real EntityInfo and entity objects, holding only the fields a test sets
@@ -64,92 +48,6 @@ function entityInfo(id: string, name: string, fields: EntityFieldSeed[] = []): E
 /** A new entity object whose metadata names only the fields a test sets. */
 function newEntity<T extends BaseEntity>(ctor: new (entity: EntityInfo) => T, entityName: string, fields: string[]): T {
     return new ctor(entityInfo(`${entityName} entity`, entityName, fields.map((field) => ({ Name: field }))));
-}
-
-function notUsed(): Error {
-    return new Error('not used by these tests');
-}
-
-/** A metadata provider that knows only the entities it is given. */
-class EntitiesOnlyProvider extends ProviderBase {
-    constructor(private readonly entityList: EntityInfo[]) {
-        super();
-    }
-    public override get Entities(): EntityInfo[] {
-        return this.entityList;
-    }
-    public override EntityByID(entityID: string): EntityInfo | undefined {
-        return this.entityList.find((entity) => UUIDsEqual(entity.ID, entityID));
-    }
-    public get ProviderType(): ProviderType {
-        return 'Database';
-    }
-    public get DatabaseConnection(): null {
-        return null;
-    }
-    public get InstanceConnectionString(): string {
-        return '';
-    }
-    public get LocalStorageProvider(): ILocalStorageProvider {
-        throw notUsed();
-    }
-    protected get AllowRefresh(): boolean {
-        return false;
-    }
-    protected get Metadata(): IMetadataProvider {
-        return this;
-    }
-    protected InternalGetEntityRecordName(): Promise<string> {
-        throw notUsed();
-    }
-    protected InternalGetEntityRecordNames(): Promise<EntityRecordNameResult[]> {
-        throw notUsed();
-    }
-    public GetRecordFavoriteStatus(): Promise<boolean> {
-        throw notUsed();
-    }
-    public SetRecordFavoriteStatus(): Promise<void> {
-        throw notUsed();
-    }
-    protected InternalRunView<T>(): Promise<RunViewResult<T>> {
-        throw notUsed();
-    }
-    protected InternalRunViews<T>(): Promise<RunViewResult<T>[]> {
-        throw notUsed();
-    }
-    protected InternalRunQuery(): Promise<RunQueryResult> {
-        throw notUsed();
-    }
-    protected InternalRunQueries(): Promise<RunQueryResult[]> {
-        throw notUsed();
-    }
-    protected searchEntitiesSemanticPass(): Promise<ScoredCandidate[]> {
-        throw notUsed();
-    }
-    protected InternalExecuteQueryFromSpec(): Promise<RunQueryResult> {
-        throw notUsed();
-    }
-    protected GetCurrentUser(): Promise<UserInfo> {
-        throw notUsed();
-    }
-    public GetRecordDependencies(): Promise<RecordDependency[]> {
-        throw notUsed();
-    }
-    public GetRecordDuplicates(): Promise<PotentialDuplicateResponse> {
-        throw notUsed();
-    }
-    public MergeRecords(): Promise<RecordMergeResult> {
-        throw notUsed();
-    }
-    public GetDatasetByName(): Promise<DatasetResultType> {
-        throw notUsed();
-    }
-    public GetDatasetStatusByName(): Promise<DatasetStatusResultType> {
-        throw notUsed();
-    }
-    public CreateTransactionGroup(): Promise<TransactionGroupBase> {
-        throw notUsed();
-    }
 }
 
 const TICKETS_ENTITY_ID = '6E0C4F1A-1B2C-4D3E-8F90-A1B2C3D4E5F6';
@@ -338,12 +236,16 @@ function computeHooks(state: Record<string, string>): FeaturePipelineComputeHook
         BuildPromptData: vi.fn<FeaturePipelineComputeHooks['BuildPromptData']>(async () => state),
         BeforePromptExecute: vi.fn<FeaturePipelineComputeHooks['BeforePromptExecute']>(async () => undefined),
         AfterPromptExecute: vi.fn<FeaturePipelineComputeHooks['AfterPromptExecute']>(async (result) => result.result),
+        BuildUserMessage: vi.fn<FeaturePipelineComputeHooks['BuildUserMessage']>(async () => null),
     };
 }
 
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
+
+/** What a history write that inserted every output returns. */
+const UPSERTED: RecordFeatureValuesOutcome = { Upserted: 1, Unchanged: 0, Previous: {} };
 
 describe('DecisionFeaturePipelineDriver', () => {
     const provider = new EntitiesOnlyProvider([TICKETS]);
@@ -602,6 +504,14 @@ describe('DecisionFeaturePipelineDriver', () => {
             expect(req.Hooks.AfterPromptExecute).not.toHaveBeenCalled();
         });
 
+        it('renders the decision prompt template raw, since the state is plain text for the model', async () => {
+            const runner = answerWith(decided({ Status: choice('Open', 0.9, { Open: 0.9, Closed: 0.1 }) }));
+
+            await driver.ComputeOutputs(request(decisionSpec([statusOutput()])));
+
+            expect(runner.Calls[0].templateAutoescape).toBe(false);
+        });
+
         it("asks a field-backed enum's options, with their descriptions, from the record entity's field", async () => {
             const runner = answerWith(decided({ Status: choice('Open', 0.9, { Open: 0.9, Closed: 0.1 }) }));
 
@@ -655,9 +565,9 @@ describe('DecisionFeaturePipelineDriver', () => {
     describe('the output check, end to end through InferProcessor.ProcessRecord', () => {
         /** Runs one ticket through the processor, answering with `answers`; returns the result and the Feature Values rows. */
         async function processTicket(outputs: DataFeatureOutput[], answers: Record<string, DecisionAnswer>) {
-            const recordFeatureValues = vi.spyOn(FeatureValueCacheService.Instance, 'RecordFeatureValues').mockResolvedValue();
+            const recordFeatureValues = vi.spyOn(FeatureValueCacheService.Instance, 'RecordFeatureValues').mockResolvedValue(UPSERTED);
             answerWith(decided(answers));
-            const result = await new InferProcessor(PROMPT_ID, undefined, decisionSpec(outputs)).ProcessRecord(ticket('T-1'), context);
+            const result = await new InferProcessor(PROMPT_ID, undefined, decisionSpec(outputs), null).ProcessRecord(ticket('T-1'), context);
             return { result, featureValues: recordFeatureValues.mock.calls.map(([params]) => params.outputs) };
         }
 
@@ -667,7 +577,8 @@ describe('DecisionFeaturePipelineDriver', () => {
             const { result, featureValues } = await processTicket([statusOutput()], { Status: choice('Open', 0.9, { Open: 0.9, Closed: 0.1 }) });
 
             expect(result.Status).toBe('Succeeded');
-            expect(result.ResultPayload).toEqual({ Status: 'Open' });
+            // The driver's confidences ride in the payload under the reserved key, so a cache hit replays them
+            expect(result.ResultPayload).toEqual({ Status: 'Open', [InferProcessor.DRIVER_CONFIDENCE_KEY]: { Status: 0.9 } });
             expect(result.Confidence).toEqual({ Status: 0.9 });
             expect(featureValues).toEqual([[expect.objectContaining({ featureName: 'Status', value: 'Open', confidence: 0.9 })]]);
         });
@@ -702,7 +613,7 @@ describe('DecisionFeaturePipelineDriver', () => {
             const { result, featureValues } = await processTicket([nested], { IsUrgent: likelihood(0.93) });
 
             expect(result.Status).toBe('Succeeded');
-            expect(result.ResultPayload).toEqual({ IsUrgent: true, flags: { urgent: true } });
+            expect(result.ResultPayload).toEqual({ IsUrgent: true, flags: { urgent: true }, [InferProcessor.DRIVER_CONFIDENCE_KEY]: { IsUrgent: 0.93 } });
             expect(result.ResultPayload).not.toHaveProperty(['flags.urgent']);
             expect(featureValues).toEqual([[expect.objectContaining({ featureName: 'IsUrgent', value: true, confidence: 0.93 })]]);
         });
@@ -728,7 +639,7 @@ describe('DecisionFeaturePipelineDriver', () => {
 
         it("resolves the pipeline type's registered Decision driver", async () => {
             vi.spyOn(KnowledgeHubMetadataEngine.Instance, 'FeaturePipelineTypes', 'get').mockReturnValue([pipelineType('DecisionFeaturePipelineDriver')]);
-            const processor = new DecisionProbeProcessor(PROMPT_ID, undefined, decisionSpec([booleanOutput('IsUrgent')]));
+            const processor = new DecisionProbeProcessor(PROMPT_ID, undefined, decisionSpec([booleanOutput('IsUrgent')]), null);
 
             const driver = await processor.Resolve(context);
 
@@ -743,10 +654,10 @@ describe('DecisionFeaturePipelineDriver', () => {
             const archivedTickets = entityInfo('6E0C4F1A-1B2C-4D3E-8F90-A1B2C3D4E5F7', 'Archived Tickets', [{ Name: 'Status', TSType: 'string' }]);
             const bothEntities = new EntitiesOnlyProvider([TICKETS, archivedTickets]);
 
-            const onTickets = await new DecisionProbeProcessor(PROMPT_ID, undefined, spec).Resolve({ ...context, provider: bothEntities });
+            const onTickets = await new DecisionProbeProcessor(PROMPT_ID, undefined, spec, null).Resolve({ ...context, provider: bothEntities });
             expect(onTickets).toBeInstanceOf(DecisionFeaturePipelineDriver);
 
-            const onArchived = new DecisionProbeProcessor(PROMPT_ID, undefined, spec).Resolve({
+            const onArchived = new DecisionProbeProcessor(PROMPT_ID, undefined, spec, null).Resolve({
                 ...context,
                 provider: bothEntities,
                 entityID: archivedTickets.ID,
@@ -759,13 +670,13 @@ describe('DecisionFeaturePipelineDriver', () => {
         it('fans out confidence, to the result and to Feature Values, across records sharing a cache key', async () => {
             vi.spyOn(FeatureValueCacheService.Instance, 'BatchLookup').mockResolvedValue(new Map());
             vi.spyOn(FeatureValueCacheService.Instance, 'Store').mockResolvedValue(cacheEntry('CACHE-1'));
-            const recordFeatureValues = vi.spyOn(FeatureValueCacheService.Instance, 'RecordFeatureValues').mockResolvedValue();
+            const recordFeatureValues = vi.spyOn(FeatureValueCacheService.Instance, 'RecordFeatureValues').mockResolvedValue(UPSERTED);
             const runner = answerWith(decided({ IsUrgent: likelihood(0.95) }, 'PR-BATCH-1'));
             const spec = decisionSpec([booleanOutput('IsUrgent')], {
                 Caching: { Cacheable: true, KeyFields: ['EmailDomain'], Scope: 'pipeline' },
             });
 
-            const results = await new InferProcessor(PROMPT_ID, undefined, spec).ProcessBatch([ticket('T-1'), ticket('T-2')], context);
+            const results = await new InferProcessor(PROMPT_ID, undefined, spec, null).ProcessBatch([ticket('T-1'), ticket('T-2')], context);
 
             expect(runner.Calls).toHaveLength(1);
             expect(results.get('T-1')?.Confidence).toEqual({ IsUrgent: 0.95 });

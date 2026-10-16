@@ -111,20 +111,28 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
         this._templateLoader = new TemplateEntityLoader();
         this._nunjucksEnv = this.createConfiguredNunjucksEnv(true);
         this._nunjucksEnvNoAutoescape = undefined; // rebound lazily against the fresh loader on next no-autoescape render
+        this._nunjucksEnvRawTemplates = undefined;
+        this._registeredExtensions = this.registerExtensions(this._nunjucksEnv, contextUser);
+    }
 
-        // get all of the extensions that are registered and register them with nunjucks
-        this._registeredExtensions = [];
+    /**
+     * Registers every {@link TemplateExtensionBase} subclass with the given environment.
+     * @returns the extension instances registered on `env`
+     */
+    private registerExtensions(env: nunjucks.Environment, contextUser?: UserInfo): nunjucks.Extension[] {
+        const registered: nunjucks.Extension[] = [];
         const extensions = MJGlobal.Instance.ClassFactory.GetAllRegistrations(TemplateExtensionBase);
         if (extensions && extensions.length > 0) {
             for (const ext of extensions) {
                 const SubClassConstructor = ext.SubClass as new (contextUser: UserInfo) => TemplateExtensionBase;
                 const instance = new SubClassConstructor(contextUser!);
                 if (ext.Key) {
-                    this._nunjucksEnv.addExtension(ext.Key, instance);
-                    this._registeredExtensions.push(instance);
+                    env.addExtension(ext.Key, instance);
+                    registered.push(instance);
                 }
             }
         }
+        return registered;
     }
 
     /** True once the underlying TemplateEngineBase cache has loaded. */
@@ -144,6 +152,7 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
         this._templateLoader = new TemplateEntityLoader();
         this._nunjucksEnv = this.createConfiguredNunjucksEnv(true);
         this._nunjucksEnvNoAutoescape = undefined; // rebound lazily against the fresh loader on next no-autoescape render
+        this._nunjucksEnvRawTemplates = undefined;
     }
 
     private _nunjucksEnv: nunjucks.Environment;
@@ -155,6 +164,8 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
      * renders, not the stored-Template extension surface. Reset to `undefined` whenever the loader is rebuilt.
      */
     private _nunjucksEnvNoAutoescape?: nunjucks.Environment;
+    /** Environment with autoescape off and the registered extensions, for {@link RenderTemplate} with `autoescape: false`. Created lazily. */
+    private _nunjucksEnvRawTemplates?: nunjucks.Environment;
     private _templateLoader: TemplateEntityLoader;
     /** The extension instances registered on {@link _nunjucksEnv}. The variable analysis parses their custom tags. */
     private _registeredExtensions: nunjucks.Extension[] = [];
@@ -207,9 +218,10 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
     }
 
     /**
-     * Cache for templates that have been created by nunjucks so we don't have to create them over and over
+     * Compiled templates per environment, then per template content ID, so a raw compile is never served to an
+     * escaping render.
      */
-    private _templateCache: Map<string, any> = new Map<string, any>();
+    private _templateCache = new WeakMap<nunjucks.Environment, Map<string, nunjucks.Template>>();
 
     /** {@link GetReferencedVariables} results by template text. */
     private _referencedVariablesCache = new Map<string, ReferencedVariablesResult>();
@@ -226,8 +238,10 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
      * @param data
      * @param SkipValidation if true, validation is skipped entirely (or reduced to warnings depending on SuppressWarnings)
      * @param SuppressWarnings if true AND SkipValidation is true, no validation warnings are logged. When SkipValidation is true but SuppressWarnings is false, validation issues are logged as non-fatal warnings. Defaults to false.
+     * @param options `autoescape` (default `true`) toggles HTML escaping; pass `false` when the output is plain text for
+     *   a model, where `Affineur & Owner` must not become `Affineur &amp; Owner`
      */
-    public async RenderTemplate(templateEntity: MJTemplateEntityExtended, templateContent: MJTemplateContentEntity, data: any, SkipValidation?: boolean, SuppressWarnings?: boolean): Promise<TemplateRenderResult> {
+    public async RenderTemplate(templateEntity: MJTemplateEntityExtended, templateContent: MJTemplateContentEntity, data: any, SkipValidation?: boolean, SuppressWarnings?: boolean, options?: { autoescape?: boolean }): Promise<TemplateRenderResult> {
         try {
             if (!templateContent) {
                 return {
@@ -275,7 +289,8 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
             // Merge default values from parameters applicable to this content
             const mergedData = this.mergeDefaultValues(templateEntity, templateContent.ID, data);
      
-            const template = this.getNunjucksTemplate(templateContent.ID, templateContent.TemplateText, true);
+            const env = options?.autoescape === false ? this.getRawTemplateEnv() : this._nunjucksEnv;
+            const template = this.getNunjucksTemplate(templateContent.ID, templateContent.TemplateText, true, env);
             const result = await this.renderTemplateAsync(template, mergedData); 
             return {
                 Success: true,
@@ -355,20 +370,26 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
      * @param templateId - must be provided if you want to cache the template, if not provided the template will not be cached
      * @param templateText 
      * @param cacheTemplate - if true, the template will be cached, otherwise it will not be cached
+     * @param env the environment to compile against; defaults to the shared autoescape environment
      */
-    protected getNunjucksTemplate(templateContentId: string, templateText: string, cacheTemplate: boolean): any {
+    protected getNunjucksTemplate(templateContentId: string, templateText: string, cacheTemplate: boolean, env: nunjucks.Environment = this._nunjucksEnv): nunjucks.Template {
         if (templateContentId && cacheTemplate) {
-            let template = this._templateCache.get(templateContentId);
-            if (!template) {
-                template = this.createNunjucksTemplate(templateText);
-                this._templateCache.set(templateContentId, template);
+            let envCache = this._templateCache.get(env);
+            if (!envCache) {
+                envCache = new Map<string, nunjucks.Template>();
+                this._templateCache.set(env, envCache);
             }
-            return template;    
+            let template = envCache.get(templateContentId);
+            if (!template) {
+                template = this.createNunjucksTemplate(templateText, env);
+                envCache.set(templateContentId, template);
+            }
+            return template;
         }
         else {
             // we don't have a template ID which means this is a dyanmic template, and so we don't want to do
             // anything with the cache, we just create a new nunjucks template and return it
-            return this.createNunjucksTemplate(templateText);
+            return this.createNunjucksTemplate(templateText, env);
         }
     }
 
@@ -378,7 +399,7 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
      * @param env the environment to bind to; defaults to the shared autoescape environment
      * @returns
      */
-    protected createNunjucksTemplate(templateText: string, env: nunjucks.Environment = this._nunjucksEnv): any {
+    protected createNunjucksTemplate(templateText: string, env: nunjucks.Environment = this._nunjucksEnv): nunjucks.Template {
         return new nunjucks.Template(templateText, env);
     }
 
@@ -397,9 +418,18 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
         return this._nunjucksEnvNoAutoescape;
     }
 
+    /** The environment for {@link RenderTemplate} with `autoescape: false`, built on first use with the registered extensions. */
+    private getRawTemplateEnv(): nunjucks.Environment {
+        if (!this._nunjucksEnvRawTemplates) {
+            this._nunjucksEnvRawTemplates = this.createConfiguredNunjucksEnv(false);
+            this.registerExtensions(this._nunjucksEnvRawTemplates, this._contextUser);
+        }
+        return this._nunjucksEnvRawTemplates;
+    }
+
     /** Clears the compiled-template cache and the cached {@link GetReferencedVariables} results. */
     public ClearTemplateCache() {
-        this._templateCache.clear();
+        this._templateCache = new WeakMap<nunjucks.Environment, Map<string, nunjucks.Template>>();
         this._referencedVariablesCache.clear();
     }
 

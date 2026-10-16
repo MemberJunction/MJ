@@ -7,7 +7,7 @@ import { SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import { MJRecordProcessEntity } from '@memberjunction/core-entities';
 import { renderComponentFixture, query, queryAll, createFakeProvider } from '@memberjunction/ng-test-utils';
 import { FeaturePipelineBuilderComponent, ParseConfidenceFloor, type EscalationTargetCandidate } from './feature-pipeline-builder.component';
-import type { DataFeatureSpec } from '@memberjunction/feature-pipelines';
+import { LookupConstraintValues, OutputConstraintResolver, RenderConstraintBlock, type DataFeatureOutput, type DataFeatureSpec, type ValueConstraint } from '@memberjunction/feature-pipelines';
 
 try {
   getTestBed().initTestEnvironment(BrowserTestingModule, platformBrowserTesting());
@@ -1175,5 +1175,130 @@ describe('FeaturePipelineBuilderComponent (DOM & Type Switching)', () => {
 
       expect(selectFor(f, 'Constraint Type').value).toBe('boolean');
     });
+  });
+});
+
+describe('the constraint block preview', () => {
+  const SENIORITY_LEVELS = new EntityInfo({ ID: 'e2', Name: 'Seniority Levels', Fields: [{ Name: 'Name', Type: 'nvarchar' }] });
+  const ROWS = [{ Name: 'Manager' }, { Name: 'Director' }];
+  const OUTPUTS: DataFeatureOutput[] = [
+    { Name: 'Tier', Ref: '$.Tier', Target: { Mode: 'field', EntityFieldName: 'Rating' }, Constraint: { Type: 'enum', FromFieldMetadata: true, OnViolation: 'fail' } },
+    {
+      Name: 'Level', Ref: '$.Level', Target: { Mode: 'child', EntityName: 'Levels', ParentField: 'AccountID', Map: { Name: '$.Name' } },
+      Constraint: { Type: 'lookup', Entity: 'Seniority Levels', MatchField: 'Name', OnViolation: 'fail' },
+    },
+  ];
+
+  /** A provider that knows the lookup entity and answers its view with ROWS, recording every view it runs. */
+  function previewProvider(views: RunViewParams[]) {
+    const entities = [...ENTITIES, SENIORITY_LEVELS];
+    return Object.assign(
+      createFakeProvider({
+        entities,
+        entityByName: (name: string) => entities.find((e) => e.Name === name),
+        runViewResults: (params: RunViewParams) => {
+          views.push(params);
+          return params.EntityName === 'Seniority Levels' ? ROWS : [];
+        },
+      }),
+      { EntityByID: (id: string) => ENTITIES.find((e) => UUIDsEqual(e.ID, id)) }
+    );
+  }
+
+  it('shows field values at once, then the lookup rows, exactly as the runner renders them, reading each lookup once', async () => {
+    const views: RunViewParams[] = [];
+    const rec = makeRecord({ PipelineType: 'LLM', Outputs: OUTPUTS });
+    const f = renderComponentFixture(FeaturePipelineBuilderComponent, { inputs: { Record: rec, Provider: previewProvider(views), EntityID: rec.EntityID } });
+    const builder = f.componentInstance;
+    expect(builder.RenderedConstraintPreview).toContain('"Hot"');
+
+    await vi.waitFor(() => expect(builder.RenderedConstraintPreview).toContain('"Director"'));
+    const rows = LookupConstraintValues.InStableOrder(ROWS.map((r) => ({ Match: r.Name, Display: null })));
+    const runnerBlock = RenderConstraintBlock(OUTPUTS, await OutputConstraintResolver.Resolve(OUTPUTS, ENTITIES[0], async () => rows));
+    expect(builder.RenderedConstraintPreview).toBe(runnerBlock);
+
+    builder.OnFieldsCsvChange(eventWithValue('Name', 'input'));
+    builder.OnFieldsCsvChange(eventWithValue('Name, Rating', 'input'));
+    await vi.waitFor(() => expect(builder.RenderedConstraintPreview).toBe(runnerBlock));
+    expect(views.filter((v) => v.EntityName === 'Seniority Levels')).toHaveLength(1);
+  });
+
+  it('keeps a later edit\'s preview when an earlier lookup load finishes after it', async () => {
+    const rec = makeRecord({ PipelineType: 'LLM', Outputs: OUTPUTS });
+    const f = renderComponentFixture(FeaturePipelineBuilderComponent, { inputs: { Record: rec, Provider: previewProvider([]), EntityID: rec.EntityID } });
+    const builder = f.componentInstance;
+    await vi.waitFor(() => expect(builder.RenderedConstraintPreview).toContain('"Director"'));
+    await f.whenStable();
+    // One edit renders and starts its lookup step; before that step settles, a second edit drops the lookup
+    builder.OnFieldsCsvChange(eventWithValue('Name', 'input'));
+    builder.UpdateConstraintType(1, eventWithValue('freetext'));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(builder.RenderedConstraintPreview).not.toContain('"Director"');
+    expect(builder.RenderedConstraintPreview).toContain('Free-form text');
+  });
+
+});
+
+describe('the constraint type picker and the lookup editor', () => {
+  const lookupOutput = (constraint: ValueConstraint): DataFeatureOutput => ({
+    Name: 'Level', Ref: '$.Level', Target: { Mode: 'field', EntityFieldName: 'Rating' }, Constraint: constraint,
+  });
+  const SAVED_LOOKUP: ValueConstraint = {
+    Type: 'lookup', Entity: 'Accounts', MatchField: 'Summary', DisplayFields: ['Rating', 'Summary'], Filter: "Rating='Hot'", ItemRef: '$.Level', OnViolation: 'null',
+  };
+
+  /** The control of the given kind in the field whose label starts with `label`. */
+  const controlIn = (f: ComponentFixture<FeaturePipelineBuilderComponent>, label: string, tag: 'select' | 'input'): Element => {
+    const field = Array.from((f.nativeElement as Element).querySelectorAll('.field')).find((el) => el.querySelector('label')?.textContent?.trim().startsWith(label));
+    const control = field?.querySelector(tag);
+    if (!control) {
+      throw new Error(`no ${tag} labelled '${label}'`);
+    }
+    return control;
+  };
+  const selectLabelled = (f: ComponentFixture<FeaturePipelineBuilderComponent>, label: string) => controlIn(f, label, 'select') as HTMLSelectElement;
+  const inputLabelled = (f: ComponentFixture<FeaturePipelineBuilderComponent>, label: string) => controlIn(f, label, 'input') as HTMLInputElement;
+  const constraintSelect = (f: ComponentFixture<FeaturePipelineBuilderComponent>) => selectLabelled(f, 'Constraint Type');
+  const shownText = (select: HTMLSelectElement): string => select.options[select.selectedIndex]?.textContent?.trim() ?? '';
+  const renderOutput = (constraint: ValueConstraint) => render(makeRecord({ PipelineType: 'LLM', Outputs: [lookupOutput(constraint)] }));
+  const savedConstraint = (f: ComponentFixture<FeaturePipelineBuilderComponent>) => savedSpec(f.componentInstance.Record as MJRecordProcessEntity)?.Outputs[0].Constraint;
+
+  it('offers every constraint type the LLM pipeline type declares, each with a label', () => {
+    const f = render(makeRecord());
+
+    const offered = f.componentInstance.AvailableConstraintTypes;
+    expect(offered.map((t) => t.Value)).toEqual(['none', 'boolean', 'enum', 'numeric', 'lookup', 'money', 'date', 'freetext']);
+    expect(offered.every((t) => t.Label.trim().length > 0)).toBe(true);
+  });
+
+  it('shows a saved lookup as Lookup and populates its fields', () => {
+    const f = renderOutput(SAVED_LOOKUP);
+
+    expect(shownText(constraintSelect(f))).toBe('Lookup (Existing Records)');
+    expect(f.componentInstance.IsConstraintTypeOffered(f.componentInstance.spec.Outputs[0])).toBe(true);
+    expect(selectLabelled(f, 'Lookup Entity').value).toBe('Accounts');
+    expect(inputLabelled(f, 'Match Field').value).toBe('Summary');
+    expect(inputLabelled(f, 'Display Fields').value).toBe('Rating, Summary');
+    expect(inputLabelled(f, 'Filter').value).toBe("Rating='Hot'");
+  });
+
+  it('keeps the other lookup fields when the filter is edited', () => {
+    const f = renderOutput(SAVED_LOOKUP);
+    const emitted: DataFeatureSpec[] = [];
+    f.componentInstance.SpecChange.subscribe((s: DataFeatureSpec) => emitted.push(s));
+
+    f.componentInstance.UpdateLookupFilter(0, eventWithValue("Rating='Cold'", 'input'));
+
+    expect(emitted).toHaveLength(1);
+    expect(emitted[0].Outputs[0].Constraint).toEqual({ ...SAVED_LOOKUP, Filter: "Rating='Cold'" });
+    expect(savedConstraint(f)).toEqual({ ...SAVED_LOOKUP, Filter: "Rating='Cold'" });
+  });
+
+  it('keeps the lookup when Lookup is selected again', () => {
+    const f = renderOutput(SAVED_LOOKUP);
+
+    f.componentInstance.UpdateConstraintType(0, eventWithValue('lookup'));
+
+    expect(savedConstraint(f)).toEqual(SAVED_LOOKUP);
   });
 });

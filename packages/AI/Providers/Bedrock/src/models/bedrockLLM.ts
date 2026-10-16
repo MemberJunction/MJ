@@ -94,7 +94,7 @@ export class BedrockLLM extends BaseLLM {
           anthropic_version: "bedrock-2023-05-31",
           max_tokens: params.maxOutputTokens || 1024,
           messages: claudeMessages,
-          temperature: params.temperature || 0.7,
+          temperature: params.temperature ?? 0.7,
           top_p: 0.9
         };
         if (params.stopSequences != null && params.stopSequences.length > 0) {
@@ -105,7 +105,7 @@ export class BedrockLLM extends BaseLLM {
         requestBody = {
           prompt: this.convertMessagesToPrompt(bedrockParams.messages),
           maxTokens: params.maxOutputTokens || 1024,
-          temperature: params.temperature || 0.7,
+          temperature: params.temperature ?? 0.7,
           topP: 0.9
         };
         if (params.stopSequences != null && params.stopSequences.length > 0) {
@@ -117,7 +117,7 @@ export class BedrockLLM extends BaseLLM {
           inputText: this.convertMessagesToPrompt(bedrockParams.messages),
           textGenerationConfig: {
             maxTokenCount: params.maxOutputTokens || 1024,
-            temperature: params.temperature || 0.7,
+            temperature: params.temperature ?? 0.7,
             topP: 0.9
           }
         };
@@ -129,7 +129,7 @@ export class BedrockLLM extends BaseLLM {
         requestBody = {
           prompt: this.convertMessagesToPrompt(bedrockParams.messages),
           max_gen_len: params.maxOutputTokens || 1024,
-          temperature: params.temperature || 0.7,
+          temperature: params.temperature ?? 0.7,
           top_p: 0.9
         };
         // Note: Meta Llama models on Bedrock don't support stop sequences in the request body
@@ -276,7 +276,7 @@ export class BedrockLLM extends BaseLLM {
         anthropic_version: "bedrock-2023-05-31",
         max_tokens: params.maxOutputTokens || 1024,
         messages: claudeMessages,
-        temperature: params.temperature || 0.7,
+        temperature: params.temperature ?? 0.7,
         top_p: 0.9
       };
       if (params.stopSequences != null && params.stopSequences.length > 0) {
@@ -287,7 +287,7 @@ export class BedrockLLM extends BaseLLM {
       requestBody = {
         prompt: this.convertMessagesToPrompt(bedrockParams.messages),
         maxTokens: params.maxOutputTokens || 1024,
-        temperature: params.temperature || 0.7,
+        temperature: params.temperature ?? 0.7,
         topP: 0.9
       };
       if (params.stopSequences != null && params.stopSequences.length > 0) {
@@ -299,7 +299,7 @@ export class BedrockLLM extends BaseLLM {
         inputText: this.convertMessagesToPrompt(bedrockParams.messages),
         textGenerationConfig: {
           maxTokenCount: params.maxOutputTokens || 1024,
-          temperature: params.temperature || 0.7,
+          temperature: params.temperature ?? 0.7,
           topP: 0.9
         }
       };
@@ -311,7 +311,7 @@ export class BedrockLLM extends BaseLLM {
       requestBody = {
         prompt: this.convertMessagesToPrompt(bedrockParams.messages),
         max_gen_len: params.maxOutputTokens || 1024,
-        temperature: params.temperature || 0.7,
+        temperature: params.temperature ?? 0.7,
         top_p: 0.9
       };
       // Note: Meta Llama models on Bedrock don't support stop sequences in the request body

@@ -7,6 +7,7 @@
  */
 
 import { RegisterClass } from '@memberjunction/global';
+import { ChatMessageRole } from '@memberjunction/ai';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { AIPromptParams, type AIPromptRunResult } from '@memberjunction/ai-core-plus';
 import { LLM_FEATURE_PIPELINE_CAPABILITIES, type FeaturePipelineDriverCapabilities } from '@memberjunction/feature-pipelines';
@@ -64,7 +65,10 @@ export class LLMFeaturePipelineDriver extends BaseFeaturePipelineDriver {
         return { Success: true, RawResult: rawResult, AIPromptRunID: aiPromptRunID };
     }
 
-    /** Builds the prompt's parameters, with the prompt data from the processor's `BuildPromptData` hook. */
+    /**
+     * Builds the prompt's parameters: the prompt data from the processor's `BuildPromptData` hook, and the record's data
+     * as the user turn from its `BuildUserMessage` hook.
+     */
     private async buildPromptParams(request: FeaturePipelineComputeRequest): Promise<AIPromptParams> {
         const { Record: record, Context: context, Prompt: prompt, Spec: spec, Hooks: hooks } = request;
 
@@ -86,7 +90,16 @@ export class LLMFeaturePipelineDriver extends BaseFeaturePipelineDriver {
         params.prompt = executionPrompt;
         params.validationBehavior = targetValidationBehavior;
         params.data = await hooks.BuildPromptData(record, context);
+        // The template is the system turn; the record's data, when the processor gives it, is the one user turn (in
+        // place of the runner's generic "proceed" turn), so the model reads it as the data to classify, not as rules.
+        const userMessage = await hooks.BuildUserMessage(record, context);
+        if (userMessage !== null) {
+            params.templateMessageRole = 'system';
+            params.conversationMessages = [{ role: ChatMessageRole.user, content: userMessage }];
+        }
         params.contextUser = context.contextUser;
+        // The template is a prompt for a model, not HTML: a title such as "Affineur & Owner" must reach it unescaped
+        params.templateAutoescape = false;
         return params;
     }
 }

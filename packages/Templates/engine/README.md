@@ -85,6 +85,10 @@ if (result.Success) {
 }
 ```
 
+Stored templates are HTML-escaped by default. For plain text a model reads (AI prompt templates), pass
+`{ autoescape: false }` as the sixth argument: `Affineur & Owner` then stays `Affineur & Owner`. The raw render keeps
+the registered extensions, and a `{% template %}` embed inside it renders raw too.
+
 ### Simple Template Rendering
 
 For ad-hoc templates not stored in the database:

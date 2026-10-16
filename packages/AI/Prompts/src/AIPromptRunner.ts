@@ -164,6 +164,11 @@ interface ResolvedScalarInferenceParams {
 }
 
 export class AIPromptRunner extends BaseModelRunner {
+  /** The render options a prompt asks for: a raw render when `templateAutoescape` is false, else the engine's default. */
+  public static RenderOptions(params: AIPromptParams): { autoescape?: boolean } | undefined {
+    return params.templateAutoescape === false ? { autoescape: false } : undefined;
+  }
+
   /**
    * The model type this runner requires. Returns 'LLM' for AIPromptRunner.
    */
@@ -1308,11 +1313,14 @@ export class AIPromptRunner extends BaseModelRunner {
       }
 
       // Render the template with the full params context
-      // We already have system placeholders resolved, so we'll render directly
+      // We already have system placeholders resolved, so we'll render directly.
       const renderedPrompt = await this._templateEngine.RenderTemplate(
-        template, 
-        template.GetHighestPriorityContent()!, 
-        mergedData
+        template,
+        template.GetHighestPriorityContent()!,
+        mergedData,
+        undefined,
+        undefined,
+        AIPromptRunner.RenderOptions(params)
       );
       
       if (!renderedPrompt.Success) {
@@ -1766,7 +1774,7 @@ export class AIPromptRunner extends BaseModelRunner {
       // almost always what the author meant. If real param validation is
       // needed (e.g., catching typos at template-author time), it should
       // live in the authoring tools, not in the runtime render path.
-      return await this._templateEngine.RenderTemplate(template, templateContent, mergedData, true, false);
+      return await this._templateEngine.RenderTemplate(template, templateContent, mergedData, true, false, AIPromptRunner.RenderOptions(params));
     } catch (error) {
       this.logError(error, {
         category: 'TemplateRendering',

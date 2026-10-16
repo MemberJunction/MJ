@@ -88,6 +88,7 @@ vi.mock('@memberjunction/ai', () => {
   };
 });
 
+import { ChatParams, type ChatResult } from '@memberjunction/ai';
 import { BedrockLLM } from '../models/bedrockLLM';
 
 /* ------------------------------------------------------------------ */
@@ -528,5 +529,34 @@ describe('BedrockLLM', () => {
 
       expect(mockSend.mock.calls[0][1]).toEqual({ abortSignal: controller.signal });
     });
+  });
+});
+
+/** Reaches the protected request paths through a subclass, so a test sees the exact InvokeModel body. */
+class RequestCapturingBedrockLLM extends BedrockLLM {
+  public SendNonStreaming(params: ChatParams): Promise<ChatResult> { return this.nonStreamingChatCompletion(params); }
+  public SendStreaming(params: ChatParams): Promise<unknown> { return this.createStreamingRequest(params); }
+}
+/** Chat params from a partial literal; `ChatParams` is mocked, so the instance carries only what is given. */
+const chatParams = (o: Partial<ChatParams>): ChatParams => Object.assign(new ChatParams(), o);
+/** The JSON body of the most recent command sent to the mocked Bedrock client. */
+const lastSentBody = (): Record<string, unknown> => JSON.parse(mockSend.mock.calls[mockSend.mock.calls.length - 1][0].body as string);
+
+describe('BedrockLLM parameter fidelity', () => {
+  const families: Array<[string, (body: Record<string, unknown>) => unknown]> = [
+    ['anthropic.claude-3-haiku-20240307-v1:0', (b) => b.temperature],
+    ['ai21.j2-ultra-v1', (b) => b.temperature],
+    ['amazon.titan-text-express-v1', (b) => (b.textGenerationConfig as Record<string, unknown>).temperature],
+    ['meta.llama3-8b-instruct-v1:0', (b) => b.temperature],
+  ];
+  it.each(families)('%s sends a configured temperature of 0 as 0', async (model, read) => {
+    mockSend.mockResolvedValueOnce({ body: new TextEncoder().encode(JSON.stringify({})) });
+    await new RequestCapturingBedrockLLM('a:b').SendNonStreaming(chatParams({ model, messages: [{ role: 'user', content: 'x' }], temperature: 0 }));
+    expect(read(lastSentBody())).toBe(0);
+  });
+  it('a streaming request sends a configured temperature of 0 as 0', async () => {
+    mockSend.mockResolvedValueOnce({ body: [] });
+    await new RequestCapturingBedrockLLM('a:b').SendStreaming(chatParams({ model: 'anthropic.claude-3-haiku-20240307-v1:0', messages: [{ role: 'user', content: 'x' }], temperature: 0 }));
+    expect(lastSentBody().temperature).toBe(0);
   });
 });

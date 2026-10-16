@@ -4,9 +4,11 @@
  * ProcessRecord paths are covered by integration tests; here we verify the deterministic logic.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { BaseEntity, EntityFieldRules, EntityInfo, UserInfo, type EntityFieldRulesResult } from '@memberjunction/core';
+import { EntitiesOnlyProvider } from '@memberjunction/unit-testing';
 import { RecordRef } from '@memberjunction/record-set-processor-base';
-import { ActionRecordProcessor, AgentRecordProcessor, WriteBackProcessor } from '../index';
+import { ActionRecordProcessor, AgentRecordProcessor, FieldRulesProcessor, WriteBackProcessor } from '../index';
 
 const record: RecordRef = { EntityID: 'ENT-1', RecordID: 'c1', Record: { ID: 'c1', Name: 'Ada', Tier: 3 } };
 
@@ -110,5 +112,28 @@ describe('WriteBackProcessor.ProcessBatch — inner result shapes', () => {
         const out = await wrapped.ProcessBatch(recordsIn, ctx);
         expect(out.get('a')?.ErrorMessage).toBe('No result returned from batch processor');
         expect(out.get('b')?.ErrorMessage).toBe('only-b');
+    });
+});
+
+/** A Widgets record that loads any key (the processor only loads it before applying the rules). */
+class LoadedWidget extends BaseEntity {
+    public override async InnerLoad(): Promise<boolean> {
+        return true;
+    }
+}
+
+describe('FieldRulesProcessor on a dry run', () => {
+    afterEach(() => vi.restoreAllMocks());
+
+    it('previews when the run is a dry run, whatever it was built with', async () => {
+        const preview: Pick<EntityFieldRulesResult, 'DryRun' | 'Changes' | 'AppliedFields' | 'Errors'> = { DryRun: true, Changes: [], AppliedFields: [], Errors: [] };
+        const apply = vi.spyOn(EntityFieldRules.prototype, 'ApplyToEntity').mockResolvedValue(preview as EntityFieldRulesResult);
+        const widgets = new EntityInfo({ ID: 'E', Name: 'Widgets', Fields: [{ Name: 'ID', IsPrimaryKey: true, TSType: 'string' }] });
+        const provider = new EntitiesOnlyProvider([widgets]);
+        vi.spyOn(provider, 'GetEntityObject').mockResolvedValue(new LoadedWidget(widgets));
+        const processor = new FieldRulesProcessor({ RuleSet: { Rules: [] } });
+        const result = await processor.ProcessRecord({ EntityID: 'E', RecordID: 'w1' }, { contextUser: new UserInfo(), provider, DryRun: true });
+        expect(result.Status).toBe('Succeeded');
+        expect(apply.mock.calls[0][2]).toEqual({ DryRun: true });
     });
 });

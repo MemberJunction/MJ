@@ -4,18 +4,20 @@
  * No database — uses the real ArraySource + FunctionRecordProcessor and a spy tracker.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import {
     ArraySource,
     IProcessRunTracker,
     ProcessCursor,
     ProcessRunSummary,
+    RecordProcessorContext,
     RecordRef,
     RecordResult,
     RunHandle,
 } from '@memberjunction/record-set-processor-base';
 import { FunctionRecordProcessor, NoOpTracker, RecordSetProcessor } from '../index';
+import { WatermarkService, type WatermarkDecision } from '../watermark/WatermarkService';
 
 const USER = {} as UserInfo;
 const PROVIDER = {} as IMetadataProvider;
@@ -53,6 +55,18 @@ class SpyTracker implements IProcessRunTracker {
 }
 
 describe('RecordSetProcessor.Process', () => {
+    it('passes DryRun and TriggeredBy to every record and to Preflight', async () => {
+        const seen: Array<Pick<RecordProcessorContext, 'DryRun' | 'TriggeredBy'>> = [];
+        let preflight: Pick<RecordProcessorContext, 'DryRun' | 'TriggeredBy'> | undefined;
+        const processor = {
+            ProcessRecord: async (_r: RecordRef, ctx: RecordProcessorContext) => { seen.push({ DryRun: ctx.DryRun, TriggeredBy: ctx.TriggeredBy }); return ok(); },
+            Preflight: async (ctx: RecordProcessorContext) => { preflight = { DryRun: ctx.DryRun, TriggeredBy: ctx.TriggeredBy }; },
+        };
+        await engine.Process({ source: new ArraySource(recs(2), 'E'), processor, tracker: new NoOpTracker(), contextUser: USER, provider: PROVIDER, dryRun: true, triggeredBy: 'Schedule' });
+        expect(seen).toEqual([{ DryRun: true, TriggeredBy: 'Schedule' }, { DryRun: true, TriggeredBy: 'Schedule' }]);
+        expect(preflight).toEqual({ DryRun: true, TriggeredBy: 'Schedule' });
+    });
+
     it('processes every record across batches and reports Completed with correct counts', async () => {
         const result = await engine.Process({
             source: new ArraySource(recs(5), 'E'),
@@ -125,6 +139,7 @@ describe('RecordSetProcessor.Process', () => {
             ProcessRecord: (r: RecordRef, c: Parameters<typeof inner.ProcessRecord>[1]) => inner.ProcessRecord(r, c),
             Preflight: async () => { throw new Error('ML Model needs training'); },
         };
+        const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
         const result = await engine.Process({
             source: new ArraySource(recs(5), 'E'),
             processor,
@@ -139,6 +154,7 @@ describe('RecordSetProcessor.Process', () => {
         expect(processed).toBe(0);
         expect(tracker.details).toHaveLength(0);
         expect(tracker.completed?.Status).toBe('Failed'); // the run is still recorded honestly
+        expect(consoleError).toHaveBeenCalledWith('RecordSetProcessor: run failed: ML Model needs training');
     });
 
     it('runs normally when the processor Preflight passes, calling it exactly once', async () => {
@@ -249,5 +265,131 @@ describe('RecordSetProcessor.Process', () => {
         });
         expect(result.Processed).toBe(2); // only r3, r4 remain after offset 3
         expect(tracker.details.map((d) => d.record.RecordID)).toEqual(['r3', 'r4']);
+    });
+
+    describe('the breaker over attempted records', () => {
+        afterEach(() => vi.restoreAllMocks());
+        /** The engine skips records r0..r(n-1) on their watermark, without handing them to the processor. */
+        const watermarkSkips = (n: number): void => {
+            vi.spyOn(WatermarkService.Instance, 'CheckBatchWatermarks').mockImplementation(async (p) =>
+                new Map<string, WatermarkDecision>(p.records.map((r) => [r.RecordID, { shouldSkip: Number(r.RecordID.slice(1)) < n }])));
+        };
+
+        it('27 records, 25 skipped on their watermark, 2 failed ends Failed', async () => {
+            watermarkSkips(25);
+            const processor = new FunctionRecordProcessor(() => ({ Status: 'Failed', ErrorMessage: 'UNIQUE KEY' }));
+            const result = await engine.Process({ source: new ArraySource(recs(27), 'E'), processor, tracker: new NoOpTracker(),
+                contextUser: USER, provider: PROVIDER, batchSize: 27, skipUnchanged: true, recordProcessID: 'RP', entityID: 'E' });
+            expect(result.Skipped).toBe(25);
+            expect(result.Error).toBe(2);
+            expect(result.Status).toBe('Failed');
+            expect(result.ErrorMessage).toContain('100.0% of 2 attempted records');
+        });
+
+        it('counts records the processor returned as Skipped as attempted: 1000 records, 97% no-op, 1% failed completes', async () => {
+            // Field-rules shape: every record is evaluated; most change nothing (Skipped), a few fail
+            const processor = new FunctionRecordProcessor((r) => {
+                const i = Number(r.RecordID.slice(1)) % 100;
+                if (i === 0) return { Status: 'Failed', ErrorMessage: 'validation failed' };
+                return i < 3 ? ok() : { Status: 'Skipped' };
+            });
+            const result = await engine.Process({ source: new ArraySource(recs(1000), 'E'), processor, tracker: new NoOpTracker(),
+                contextUser: USER, provider: PROVIDER, batchSize: 100 });
+            expect(result.Status).toBe('Completed');
+            expect(result.Processed).toBe(1000);
+            expect(result.Skipped).toBe(970);
+            expect(result.Error).toBe(10);
+        });
+    });
+
+    describe('Feature Pipeline runs', () => {
+        const PIN = { PipelineVersion: 4, PromptVersionHash: 'pv', AIModelID: 'm', ParametersHash: 'ph' };
+
+        it('ends a Feature Pipeline run Failed when any record failed, and summarises it', async () => {
+            const tracker = new SpyTracker();
+            const processor = new FunctionRecordProcessor((r) => {
+                if (r.RecordID === 'r0') return { Status: 'Failed', ErrorMessage: 'Constraint violation', FailureKind: 'RejectedInvalid' };
+                if (r.RecordID === 'r1') return { Status: 'Succeeded', Outcome: 'Unchanged', HumanValuesPreserved: 1 };
+                return { Status: 'Succeeded', Outcome: 'Upserted', PipelinePin: PIN };
+            });
+            const result = await engine.Process({ source: new ArraySource(recs(10), 'E'), processor, tracker, contextUser: USER,
+                provider: PROVIDER, batchSize: 10, FeaturePipeline: true, recordProcessID: 'RP-1' });
+            expect(result.Status).toBe('Failed');
+            expect(result.ErrorMessage).toBe('1 of 10 attempted records failed (1 rejected by output constraints)');
+            expect(tracker.completed?.FeaturePipeline).toEqual({
+                RecordProcessID: 'RP-1', Pin: PIN, Attempted: 10, Upserted: 8, Unchanged: 1, Previewed: 0,
+                RejectedInvalid: 1, BelowConfidence: 0, Failed: 0, Skipped: 0, HumanValuesPreserved: 1, Status: 'failed',
+            });
+        });
+
+        it('tallies the records whose outputs a confidence floor withheld', async () => {
+            const tracker = new SpyTracker();
+            const processor = new FunctionRecordProcessor((r): RecordResult => {
+                if (r.RecordID === 'r0' || r.RecordID === 'r1') return { Status: 'Succeeded', Outcome: 'Upserted', BelowConfidenceOutputs: ['S'] };
+                if (r.RecordID === 'r2') return { Status: 'Failed', ErrorMessage: 'deadlock' };
+                return { Status: 'Succeeded', Outcome: 'Upserted', PipelinePin: PIN };
+            });
+            const result = await engine.Process({ source: new ArraySource(recs(10), 'E'), processor, tracker, contextUser: USER,
+                provider: PROVIDER, batchSize: 10, FeaturePipeline: true, recordProcessID: 'RP-1' });
+            expect(result.Status).toBe('Failed');
+            expect(result.ErrorMessage).toBe('1 of 10 attempted records failed (0 rejected by output constraints)');
+            expect(tracker.completed?.FeaturePipeline).toMatchObject({
+                Attempted: 10, Upserted: 9, RejectedInvalid: 0, BelowConfidence: 2, Failed: 1, Status: 'failed',
+            });
+        });
+
+        it('keeps today\'s status for other work types', async () => {
+            const processor = new FunctionRecordProcessor((r) => (r.RecordID === 'r0' ? { Status: 'Failed', ErrorMessage: 'x' } : ok()));
+            const tracker = new SpyTracker();
+            const result = await engine.Process({ source: new ArraySource(recs(10), 'E'), processor, tracker, contextUser: USER, provider: PROVIDER, batchSize: 10 });
+            expect(result.Status).toBe('Completed');
+            expect(tracker.completed?.FeaturePipeline).toBeUndefined();
+        });
+
+        it('refuses a Feature Pipeline run without a recordProcessID', async () => {
+            await expect(engine.Process({ source: new ArraySource(recs(1), 'E'), processor: new FunctionRecordProcessor(() => ok()), tracker: new NoOpTracker(),
+                contextUser: USER, provider: PROVIDER, FeaturePipeline: true })).rejects.toThrow(/needs recordProcessID/);
+            await expect(engine.Process({ source: new ArraySource(recs(1), 'E'), processor: new FunctionRecordProcessor(() => ok()), tracker: new NoOpTracker(),
+                contextUser: USER, provider: PROVIDER, FeaturePipeline: true })).rejects.toThrow('A Feature Pipeline run (FeaturePipeline: true) needs recordProcessID.');
+        });
+
+        it('tallies a dry run as previewed, never as a write', async () => {
+            const tracker = new SpyTracker();
+            const result = await engine.Process({ source: new ArraySource(recs(3), 'E'), tracker, contextUser: USER, provider: PROVIDER,
+                processor: new FunctionRecordProcessor(() => ({ Status: 'Succeeded', DryRun: true, PipelinePin: PIN })),
+                batchSize: 3, dryRun: true, FeaturePipeline: true, recordProcessID: 'RP-1' });
+            expect(result.Status).toBe('Completed');
+            expect(tracker.completed?.FeaturePipeline).toMatchObject({ Attempted: 3, Previewed: 3, Upserted: 0, Unchanged: 0, Status: 'completed' });
+        });
+
+        it('carries why the real run would be refused on a dry run\'s result', async () => {
+            const tracker = new SpyTracker();
+            const refusal = 'Feature Pipeline version v6 is not activated';
+            const processor = { ProcessRecord: async (): Promise<RecordResult> => ({ Status: 'Succeeded', DryRun: true, PipelinePin: PIN }), CurrentRunRefusal: () => refusal };
+            const result = await engine.Process({ source: new ArraySource(recs(2), 'E'), processor, tracker, contextUser: USER, provider: PROVIDER,
+                batchSize: 2, dryRun: true, FeaturePipeline: true, recordProcessID: 'RP-1' });
+            expect(tracker.completed?.FeaturePipeline?.WouldRefuse).toBe(refusal);
+            expect(result.FeaturePipeline?.WouldRefuse).toBe(refusal);
+        });
+
+        it('takes the pin from the processor when every record was skipped on its watermark', async () => {
+            vi.spyOn(WatermarkService.Instance, 'CheckBatchWatermarks').mockImplementation(async (p) =>
+                new Map<string, WatermarkDecision>(p.records.map((r) => [r.RecordID, { shouldSkip: true }])));
+            const tracker = new SpyTracker();
+            const processor = { ProcessRecord: async (): Promise<RecordResult> => ok(), CurrentRunPin: () => PIN };
+            const result = await engine.Process({ source: new ArraySource(recs(2), 'E'), processor, tracker, contextUser: USER, provider: PROVIDER,
+                batchSize: 2, FeaturePipeline: true, recordProcessID: 'RP-1', skipUnchanged: true, entityID: 'E' });
+            vi.restoreAllMocks();
+            expect(result.Status).toBe('Completed');
+            expect(tracker.completed?.FeaturePipeline).toMatchObject({ Pin: PIN, Attempted: 0, Skipped: 2, Status: 'completed' });
+        });
+
+        it('keeps a run that already ended Failed with its own message', async () => {
+            const result = await engine.Process({ source: new ArraySource(recs(2), 'E'), tracker: new NoOpTracker(), contextUser: USER, provider: PROVIDER,
+                processor: new FunctionRecordProcessor(() => ({ Status: 'Failed', ErrorMessage: 'x' })),
+                batchSize: 2, FeaturePipeline: true, recordProcessID: 'RP-1' });
+            expect(result.Status).toBe('Failed');
+            expect(result.ErrorMessage).toContain('Circuit breaker');
+        });
     });
 });

@@ -629,6 +629,24 @@ export interface AgentLiveFixture {
     FabricatedStepIds: string[];
 }
 
+/** Fixture of the Feature Pipeline gate bundles (`fp-gate-*`) and the Feature Pipeline core bundle. */
+export interface FeaturePipelineGateFixture {
+    /** The fixture Record Process (a clone of the job-title pipeline on the stub driver, or the core bundle's own pipeline). */
+    RecordProcessID: string;
+    /** The fixture's own prompt (a clone, so the gates can edit it without touching the installed one). */
+    PromptID: string;
+    /** The fixture prompt's one `MJ: AI Prompt Models` binding. */
+    PromptModelID: string;
+    /** The stub's `MJ: Feature Pipeline Types` row. */
+    PipelineTypeID: string;
+    /** Entity the pipeline runs on. */
+    EntityID: string;
+    /** Fixture record ID → its title/name input. */
+    Inputs: Map<string, string>;
+    /** `MJ: Tests` rows a check created (a golden-set test), deleted at teardown. */
+    CreatedTestIDs: string[];
+}
+
 export interface IntegrationCheckContext {
     /** Resolved context user threaded from the engine (server) or bootstrap. */
     User: UserInfo;
@@ -704,6 +722,8 @@ export interface IntegrationCheckContext {
     ShippedAgentsLiveFixture?: AgentLiveFixture;
     /** Accumulator fixture for the `agent-carry-forward` bundle (live-model, client transport, fabricate-then-observe). */
     AgentCarryForwardFixture?: AgentLiveFixture;
+    /** Feature Pipeline gate fixture (the `fp-gate-*` bundles and the Feature Pipeline core bundle). */
+    FeaturePipelineGateFixture?: FeaturePipelineGateFixture;
     /**
      * The opaque per-selector `config` bag from `Test.Configuration.checks[].config`,
      * set by the driver/script before each bundle runs. Bundles read their own keys

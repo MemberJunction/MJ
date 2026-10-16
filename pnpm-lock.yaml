@@ -1032,7 +1032,13 @@ importers:
       '@memberjunction/global':
         specifier: 6.2.0-edge.4
         version: link:../../../MJGlobal
+      '@memberjunction/record-set-processor-base':
+        specifier: 6.2.0-edge.4
+        version: link:../../../RecordSetProcessor/base
     devDependencies:
+      '@memberjunction/unit-testing':
+        specifier: 6.2.0-edge.4
+        version: link:../../../UnitTesting
       '@types/node':
         specifier: 24.10.11
         version: 24.10.11
@@ -4988,6 +4994,9 @@ importers:
       '@memberjunction/predictive-studio-core':
         specifier: 6.2.0-edge.4
         version: link:../../../AI/PredictiveStudio/Core
+      '@memberjunction/record-set-processor-base':
+        specifier: 6.2.0-edge.4
+        version: link:../../../RecordSetProcessor/base
       '@memberjunction/rubrics-base':
         specifier: 6.2.0-edge.4
         version: link:../../../Rubrics/Base
@@ -14540,6 +14549,9 @@ importers:
         specifier: 6.2.0-edge.4
         version: link:../../Templates/engine
     devDependencies:
+      '@memberjunction/unit-testing':
+        specifier: 6.2.0-edge.4
+        version: link:../../UnitTesting
       '@types/node':
         specifier: 24.10.11
         version: 24.10.11
@@ -14858,6 +14870,9 @@ importers:
       '@memberjunction/core-entities':
         specifier: 6.2.0-edge.4
         version: link:../../MJCoreEntities
+      '@memberjunction/feature-pipelines':
+        specifier: 6.2.0-edge.4
+        version: link:../../AI/Knowledge/FeaturePipelines
       '@memberjunction/global':
         specifier: 6.2.0-edge.4
         version: link:../../MJGlobal
@@ -14873,6 +14888,9 @@ importers:
       '@memberjunction/record-set-processor':
         specifier: 6.2.0-edge.4
         version: link:../../RecordSetProcessor/engine
+      '@memberjunction/record-set-processor-base':
+        specifier: 6.2.0-edge.4
+        version: link:../../RecordSetProcessor/base
       '@memberjunction/rubrics':
         specifier: 6.2.0-edge.4
         version: link:../../Rubrics/Engine
@@ -14891,6 +14909,9 @@ importers:
       '@memberjunction/templates':
         specifier: 6.2.0-edge.4
         version: link:../../Templates/engine
+      '@memberjunction/testing-engine':
+        specifier: 6.2.0-edge.4
+        version: link:../../TestingFramework/Engine
       cron-parser:
         specifier: ^4.9.0
         version: 4.9.0
@@ -14901,6 +14922,9 @@ importers:
         specifier: ^13.0.0
         version: 13.0.0
     devDependencies:
+      '@memberjunction/unit-testing':
+        specifier: 6.2.0-edge.4
+        version: link:../../UnitTesting
       '@types/node':
         specifier: 24.10.11
         version: 24.10.11
@@ -15996,12 +16020,21 @@ importers:
       '@memberjunction/credentials':
         specifier: 6.2.0-edge.4
         version: link:../../Credentials/Engine
+      '@memberjunction/feature-pipelines':
+        specifier: 6.2.0-edge.4
+        version: link:../../AI/Knowledge/FeaturePipelines
       '@memberjunction/global':
         specifier: 6.2.0-edge.4
         version: link:../../MJGlobal
       '@memberjunction/interactive-component-types':
         specifier: 6.2.0-edge.4
         version: link:../../InteractiveComponents
+      '@memberjunction/record-set-processor':
+        specifier: 6.2.0-edge.4
+        version: link:../../RecordSetProcessor/engine
+      '@memberjunction/record-set-processor-base':
+        specifier: 6.2.0-edge.4
+        version: link:../../RecordSetProcessor/base
       '@memberjunction/rubrics':
         specifier: 6.2.0-edge.4
         version: link:../../Rubrics/Engine
@@ -16021,6 +16054,9 @@ importers:
         specifier: ^3.25.0
         version: 3.25.76
     devDependencies:
+      '@memberjunction/unit-testing':
+        specifier: 6.2.0-edge.4
+        version: link:../../UnitTesting
       '@types/debug':
         specifier: ^4.1.12
         version: 4.1.12
@@ -16097,9 +16133,15 @@ importers:
       '@memberjunction/ai-engine-base':
         specifier: 6.2.0-edge.4
         version: link:../../AI/BaseAIEngine
+      '@memberjunction/ai-gemini':
+        specifier: 6.2.0-edge.4
+        version: link:../../AI/Providers/Gemini
       '@memberjunction/ai-inception':
         specifier: 6.2.0-edge.4
         version: link:../../AI/Providers/Inception
+      '@memberjunction/ai-openai':
+        specifier: 6.2.0-edge.4
+        version: link:../../AI/Providers/OpenAI
       '@memberjunction/ai-openrouter':
         specifier: 6.2.0-edge.4
         version: link:../../AI/Providers/OpenRouter
@@ -16166,6 +16208,9 @@ importers:
       '@memberjunction/encryption':
         specifier: 6.2.0-edge.4
         version: link:../../Encryption
+      '@memberjunction/feature-pipelines':
+        specifier: 6.2.0-edge.4
+        version: link:../../AI/Knowledge/FeaturePipelines
       '@memberjunction/generic-database-provider':
         specifier: 6.2.0-edge.4
         version: link:../../GenericDatabaseProvider
@@ -16358,6 +16403,9 @@ importers:
       '@memberjunction/ai':
         specifier: 6.2.0-edge.4
         version: link:../AI/Core
+      '@memberjunction/core':
+        specifier: 6.2.0-edge.4
+        version: link:../MJCore
       '@memberjunction/global':
         specifier: 6.2.0-edge.4
         version: link:../MJGlobal

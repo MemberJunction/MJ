@@ -7,6 +7,7 @@
 
 import { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import {
+    FeaturePipelineRunPin,
     ProcessCursor,
     ProcessRunSummary,
     ProgressInfo,
@@ -62,6 +63,14 @@ export interface RecordProcessorContext {
     recordProcessID?: string;
     /** Target entity ID, when applicable. */
     entityID?: string;
+    /** When true, write-back overwrites values a person entered and retires their Human values (default false). */
+    overwriteHumanValues?: boolean;
+    /** Compute-only run: Infer, FieldRules and write-back persist nothing; Action and Agent work runs for real. */
+    DryRun?: boolean;
+    /** What triggered the run (the version gate treats scheduled and on-demand runs differently). */
+    TriggeredBy?: TriggeredByValue;
+    /** Skip Dedup Cache lookups (golden-set and consistency evaluations measure the model, not the cache). */
+    BypassCache?: boolean;
 }
 
 /**
@@ -102,6 +111,12 @@ export interface IRecordProcessor {
      * @param context - The run-level execution context (user, provider, run/process IDs).
      */
     Preflight?(context: RecordProcessorContext): Promise<void>;
+
+    /** Optional: the pin a Feature Pipeline processor runs under once resolved, else null (a run of skipped records reports it). */
+    CurrentRunPin?(): FeaturePipelineRunPin | null;
+
+    /** Optional, Feature Pipelines: on a dry run, why a real run would be refused (e.g. its version is not activated), else null. */
+    CurrentRunRefusal?(): string | null;
 }
 
 /** Opaque handle returned by a tracker's `BeginRun`, threaded back through the other tracker calls. */
@@ -217,6 +232,13 @@ export interface RecordSetProcessOptions {
     watermarkStrategy?: WatermarkStrategyValue;
     /** Timestamp of the last run, used for 'UpdatedAt' strategy. */
     lastRunAt?: Date | null;
+    /** Overwrite values a person entered (default false); such a run skips no record on its watermark. */
+    overwriteHumanValues?: boolean;
+    /**
+     * A Feature Pipeline (Infer) run: it ends `Failed` when any record failed, and the summary carries a
+     * `FeaturePipelineRunResult`. Requires `recordProcessID`.
+     */
+    FeaturePipeline?: boolean;
 }
 
 /** Strategy used to detect unchanged records when skipUnchanged is enabled. */

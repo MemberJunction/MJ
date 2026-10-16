@@ -1,0 +1,36 @@
+---
+"@memberjunction/ai-bedrock": minor
+"@memberjunction/ai-core-plus": minor
+"@memberjunction/ai-prompts": minor
+"@memberjunction/core-actions": minor
+"@memberjunction/core-entities": minor
+"@memberjunction/feature-pipelines": minor
+"@memberjunction/integration-test-suite": minor
+"@memberjunction/ng-bootstrap": minor
+"@memberjunction/ng-bootstrap-lite": minor
+"@memberjunction/ng-core-entity-forms": minor
+"@memberjunction/ng-dashboards": minor
+"@memberjunction/ng-entity-action-ux": minor
+"@memberjunction/ng-record-process-studio": minor
+"@memberjunction/predictive-studio": minor
+"@memberjunction/record-set-processor": minor
+"@memberjunction/record-set-processor-base": minor
+"@memberjunction/scheduling-engine": minor
+"@memberjunction/server": minor
+"@memberjunction/server-bootstrap": minor
+"@memberjunction/server-bootstrap-lite": minor
+"@memberjunction/templates": minor
+"@memberjunction/testing-engine": minor
+"@memberjunction/testing-integration": minor
+"@memberjunction/unit-testing": minor
+---
+
+Feature Pipelines: keyed, versioned Feature Values and honest runs (migration `V202610161457__v6.2.x__Feature_Value_Key_And_Versions.sql`).
+
+- Feature Values upsert on a key (record, feature, pipeline version, prompt version, primary model, parameters, input); a value a person entered (`Source='Human'`) is never overwritten unless the run sets `overwriteHumanValues`. Child write-back can `reconcile` rows on a key.
+- `MJ: Feature Pipeline Versions` registers each pipeline pin; a gated pipeline runs only under a version whose golden-set result meets its threshold. The new Feature Pipeline Version Steward scheduled job evaluates and backfills changed versions; golden sets carry a label-quality record, `Required` and `ExpectAbstain` cases.
+- Outputs are checked against `lookup` constraints (per item with `ItemRef`); an output below its `MinConfidence` is withheld (`OnLowConfidence: 'null'`); `Context.RecordAsUserMessage` sends the record as a JSON user turn.
+- Dry runs write nothing, preview only what the real write would change, cap at 25 records and report `WouldRefuse`; a Feature Pipeline run with a failed record ends `Failed` with a `FeaturePipelineRunResult` summary; the breaker counts attempted records.
+- Bedrock sends a configured temperature of 0 as 0 (F-FP-13).
+- `AIPromptParams.templateAutoescape` (set by the Feature Pipeline drivers) renders a prompt template without HTML escaping; a Feature Pipeline run reads its prompt's template from the database at run start, so a template edit takes effect on the next run.
+- API move: `WriteBackResult`, `TagWriteBackPreview` and `FieldRulesResultPayload` now live in `@memberjunction/record-set-processor-base` (no longer exported by `@memberjunction/record-set-processor`).

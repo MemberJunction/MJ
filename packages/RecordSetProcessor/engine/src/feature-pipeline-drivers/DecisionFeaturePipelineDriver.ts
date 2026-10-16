@@ -11,9 +11,8 @@
  * NOTE ON CONFIDENCE & CACHING:
  * Direct computations by this driver produce per-output confidence scores returned in
  * {@link FeaturePipelineComputeSuccess.Confidence} and persisted to `MJ: Feature Values` history.
- * However, cache hits served from `MJ: Feature Value Cache` carry no confidence because the cache
- * table schema stores only input key hashes, prompt version hashes, and serialized output JSON;
- * it has no confidence column. Consumers should note that cached evaluations do not retain confidence.
+ * `InferProcessor` stores them in the Dedup Cache's payload under `InferProcessor.DRIVER_CONFIDENCE_KEY`, since the
+ * cache table has no confidence column, so a cache hit replays them.
  *
  * @module @memberjunction/record-set-processor
  */
@@ -105,6 +104,7 @@ export class DecisionFeaturePipelineDriver extends BaseFeaturePipelineDriver {
         params.contextUser = context.contextUser;
         params.State = serializedState;
         params.Questions = questions;
+        params.templateAutoescape = false; // the state is plain text for the decision model, not HTML
 
         const runner = this.CreateDecisionRunner();
         const result = await runner.ExecuteDecision(params);

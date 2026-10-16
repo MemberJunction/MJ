@@ -35,12 +35,17 @@ import {
     ValueConstraint,
     OutputTarget,
     ViolationPolicy,
-    renderConstraintBlock,
+    RenderConstraintBlock,
+    OutputConstraintResolver,
+    LookupConstraintValues,
+    type LookupValueRow,
+    type ResolvedConstraint,
     validateSpec,
     GetFeaturePipelineCapabilities,
     ValidateOutputsAgainstCapabilities,
     FindEscalationTargetRowProblem,
     FindEscalationTargetSpecProblem,
+    type FeaturePipelineConstraintType,
     type FeaturePipelineDriverCapabilities,
     type FeaturePipelineFieldValueLookup,
     type SpecValidationIssue,
@@ -180,10 +185,10 @@ export function ParseConfidenceFloor(raw: string): number {
                     }
                 </div>
 
-                @if (renderedConstraintPreview) {
+                @if (RenderedConstraintPreview) {
                     <div class="field rpe-mt">
                         <label>Injected Constraint Block <span class="muted">— automatically appended to prompt instructions</span></label>
-                        <pre class="fpb-code-preview">{{ renderedConstraintPreview }}</pre>
+                        <pre class="fpb-code-preview">{{ RenderedConstraintPreview }}</pre>
                     </div>
                 }
             </section>
@@ -384,6 +389,36 @@ export function ParseConfidenceFloor(raw: string): number {
                                             </div>
                                         </div>
                                     }
+                                }
+                                @if (output.Constraint?.Type === 'lookup') {
+                                    <div class="rpe-grid2 rpe-mt">
+                                        <div class="field">
+                                            <label>Lookup Entity <span class="muted">— the entity whose rows are the allowed values</span></label>
+                                            <select class="mj-input" (change)="UpdateLookupEntity(outputIndex, $event)">
+                                                <option value="" [selected]="!LookupOf(output.Constraint)?.Entity">— From the target field —</option>
+                                                @if (LookupOf(output.Constraint)?.Entity && !IsEntityListed(LookupOf(output.Constraint)?.Entity)) {
+                                                    <option [value]="LookupOf(output.Constraint)?.Entity" [selected]="true">{{ LookupOf(output.Constraint)?.Entity }}</option>
+                                                }
+                                                @for (e of availableEntities; track e.ID) {
+                                                    <option [value]="e.Name" [selected]="e.Name === LookupOf(output.Constraint)?.Entity">{{ e.DisplayName || e.Name }}</option>
+                                                }
+                                            </select>
+                                        </div>
+                                        <div class="field">
+                                            <label>Match Field <span class="muted">— the column the model's answer is matched on (default Name)</span></label>
+                                            <input class="mj-input" [value]="LookupOf(output.Constraint)?.MatchField || ''" (input)="UpdateLookupMatchField(outputIndex, $event)" placeholder="e.g. Name">
+                                        </div>
+                                    </div>
+                                    <div class="rpe-grid2 rpe-mt">
+                                        <div class="field">
+                                            <label>Display Fields <span class="muted">— comma separated, shown to the model next to each value</span></label>
+                                            <input class="mj-input" [value]="GetLookupDisplayFieldsCsv(output.Constraint)" (input)="UpdateLookupDisplayFields(outputIndex, $event)" placeholder="e.g. Name, Description">
+                                        </div>
+                                        <div class="field">
+                                            <label>Filter <span class="muted">— limits which rows are allowed</span></label>
+                                            <input class="mj-input" [value]="LookupOf(output.Constraint)?.Filter || ''" (input)="UpdateLookupFilter(outputIndex, $event)" placeholder="e.g. Status='Active'">
+                                        </div>
+                                    </div>
                                 }
                                 @if (output.Constraint?.Type === 'boolean' && IsDecisionPipeline) {
                                     <div class="field rpe-mt">
@@ -672,24 +707,37 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
         return all.filter((m) => supported.includes(m.Value));
     }
 
+    /** Every constraint type the pipeline type's driver declares, plus `none` when an unconstrained output is allowed. */
     public get AvailableConstraintTypes(): Array<{ Value: string; Label: string }> {
         const options: Array<{ Value: string; Label: string }> = [];
         if (!this.IsDecisionPipeline) {
             options.push({ Value: 'none', Label: 'None / Unconstrained' });
         }
-        if (this.CurrentCapabilities.ConstraintTypes.includes('boolean')) {
-            options.push({ Value: 'boolean', Label: 'Boolean' });
-        }
-        if (this.CurrentCapabilities.ConstraintTypes.includes('enum')) {
-            options.push({ Value: 'enum', Label: 'Enum (Allowed Values)' });
-        }
-        if (this.CurrentCapabilities.ConstraintTypes.includes('numeric')) {
-            options.push({ Value: 'numeric', Label: this.IsDecisionPipeline ? 'Numeric (Levels)' : 'Numeric (Min/Max)' });
-        }
-        if (this.CurrentCapabilities.ConstraintTypes.includes('freetext')) {
-            options.push({ Value: 'freetext', Label: 'Free Text' });
+        const declared = this.CurrentCapabilities.ConstraintTypes;
+        for (const type of FeaturePipelineBuilderComponent.constraintTypeOrder) {
+            if (declared.includes(type)) {
+                options.push({ Value: type, Label: this.constraintTypeLabel(type) });
+            }
         }
         return options;
+    }
+
+    /** The picker's label for every constraint type, keyed so the compiler fails when the spec gains a type this does not name. */
+    private static readonly constraintTypeLabels: Record<FeaturePipelineConstraintType, string> = {
+        boolean: 'Boolean',
+        enum: 'Enum (Allowed Values)',
+        numeric: 'Numeric (Min/Max)',
+        lookup: 'Lookup (Existing Records)',
+        money: 'Money',
+        date: 'Date',
+        freetext: 'Free Text',
+    };
+
+    /** The picker's order of the constraint types. */
+    private static readonly constraintTypeOrder = Object.keys(FeaturePipelineBuilderComponent.constraintTypeLabels) as FeaturePipelineConstraintType[];
+
+    private constraintTypeLabel(type: FeaturePipelineConstraintType): string {
+        return type === 'numeric' && this.IsDecisionPipeline ? 'Numeric (Levels)' : FeaturePipelineBuilderComponent.constraintTypeLabels[type];
     }
 
     // The pickers mark the saved option with [selected] on each <option>, not [value] on the <select>. A [value]
@@ -840,7 +888,14 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
     public set validationErrors(value: SpecValidationIssue[]) {
         this.ValidationErrors = value;
     }
+    /** The constraint block the model is sent, as the runner renders it (see {@link RenderConstraintPreview}). */
     public RenderedConstraintPreview = '';
+
+    /** Each lookup's allowed rows for the preview, read once per lookup; a failed read is not kept. */
+    private previewLookupRows = new Map<string, Promise<LookupValueRow[]>>();
+
+    /** Counts preview renders, so a lookup load that finishes after a later edit does not overwrite that edit's preview. */
+    private previewRenderVersion = 0;
 
     /** @deprecated Use {@link RenderedConstraintPreview}. */
     public get renderedConstraintPreview() {
@@ -1322,9 +1377,13 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
         return this.UpdateChildTargetEntity(index, event);
     }
 
+    /** Switches the output's constraint type; re-choosing its current type keeps the saved constraint's settings. */
     public UpdateConstraintType(index: number, event: Event): void {
         const type = (event.target as HTMLSelectElement).value;
         const output = this.spec.Outputs[index];
+        if ((output.Constraint?.Type || 'none') === type) {
+            return;
+        }
         if (type === 'none') {
             output.Constraint = undefined;
         } else if (type === 'enum') {
@@ -1338,6 +1397,12 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
             }
         } else if (type === 'boolean') {
             output.Constraint = { Type: 'boolean', OnViolation: 'fail' };
+        } else if (type === 'lookup') {
+            output.Constraint = { Type: 'lookup', OnViolation: 'fail' };
+        } else if (type === 'money') {
+            output.Constraint = { Type: 'money', OnViolation: 'fail' };
+        } else if (type === 'date') {
+            output.Constraint = { Type: 'date', OnViolation: 'fail' };
         } else if (type === 'freetext') {
             output.Constraint = { Type: 'freetext', MaxLength: 500, OnViolation: 'fail' };
         }
@@ -1436,6 +1501,55 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
     /** @deprecated Use {@link UpdateNumericMax}. */
     public updateNumericMax(index: number, event: Event): void {
         return this.UpdateNumericMax(index, event);
+    }
+
+    /** The constraint as a lookup, or undefined when it is another type. */
+    public LookupOf(constraint?: ValueConstraint): Extract<ValueConstraint, { Type: 'lookup' }> | undefined {
+        return constraint?.Type === 'lookup' ? constraint : undefined;
+    }
+
+    /** A lookup's display fields as the comma separated text the editor shows. */
+    public GetLookupDisplayFieldsCsv(constraint?: ValueConstraint): string {
+        return this.LookupOf(constraint)?.DisplayFields?.join(', ') || '';
+    }
+
+    public UpdateLookupEntity(index: number, event: Event): void {
+        const lookup = this.LookupOf(this.spec.Outputs[index].Constraint);
+        if (lookup) {
+            lookup.Entity = FeaturePipelineBuilderComponent.textOrUndefined(event);
+        }
+        this.emitChanges();
+    }
+
+    public UpdateLookupMatchField(index: number, event: Event): void {
+        const lookup = this.LookupOf(this.spec.Outputs[index].Constraint);
+        if (lookup) {
+            lookup.MatchField = FeaturePipelineBuilderComponent.textOrUndefined(event);
+        }
+        this.emitChanges();
+    }
+
+    public UpdateLookupDisplayFields(index: number, event: Event): void {
+        const lookup = this.LookupOf(this.spec.Outputs[index].Constraint);
+        if (lookup) {
+            const fields = (event.target as HTMLInputElement).value.split(',').map((f) => f.trim()).filter((f) => f.length > 0);
+            lookup.DisplayFields = fields.length > 0 ? fields : undefined;
+        }
+        this.emitChanges();
+    }
+
+    public UpdateLookupFilter(index: number, event: Event): void {
+        const lookup = this.LookupOf(this.spec.Outputs[index].Constraint);
+        if (lookup) {
+            lookup.Filter = FeaturePipelineBuilderComponent.textOrUndefined(event);
+        }
+        this.emitChanges();
+    }
+
+    /** The event target's trimmed text, or undefined when it is empty (so an emptied editor field leaves the spec). */
+    private static textOrUndefined(event: Event): string | undefined {
+        const text = (event.target as HTMLInputElement | HTMLSelectElement).value.trim();
+        return text.length > 0 ? text : undefined;
     }
 
     public UpdateWatermarkStrategy(event: Event): void {
@@ -1769,8 +1883,64 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
         };
     }
 
+    /**
+     * Renders the constraint block preview as the runner renders the block it sends ({@link OutputConstraintResolver}):
+     * at once from the entity's fields, then again once the lookup outputs' allowed rows have loaded.
+     */
+    protected RenderConstraintPreview(): void {
+        const outputs = this.spec.Outputs;
+        const entity = this.PreviewEntity();
+        this.RenderedConstraintPreview = RenderConstraintBlock(outputs, OutputConstraintResolver.ResolveFromFields(outputs, entity));
+        const version = ++this.previewRenderVersion;
+        if (outputs.some((o) => o.Constraint?.Type === 'lookup')) {
+            void this.RenderPreviewWithLookupRows(outputs, entity, version);
+        }
+    }
+
+    /** The pipeline's entity, whose fields the constraints resolve against; undefined before one is chosen. */
+    protected PreviewEntity(): EntityInfo | undefined {
+        const entityID = this.Record?.EntityID || this.EntityID;
+        return entityID ? this.ProviderToUse.EntityByID(entityID) : undefined;
+    }
+
+    /** Re-renders the preview with the lookup rows loaded, unless a later edit has rendered it since. */
+    protected async RenderPreviewWithLookupRows(outputs: DataFeatureOutput[], entity: EntityInfo | undefined, version: number): Promise<void> {
+        const resolved = await OutputConstraintResolver.Resolve(outputs, entity, (lookup) => this.PreviewLookupRows(lookup));
+        if (version !== this.previewRenderVersion) {
+            return;
+        }
+        this.RenderedConstraintPreview = RenderConstraintBlock(outputs, resolved);
+        this.cdr.markForCheck();
+    }
+
+    /** A lookup's allowed rows for the preview; none for an entity that is not known (one still being typed). */
+    protected PreviewLookupRows(lookup: ResolvedConstraint): Promise<LookupValueRow[]> {
+        const entityName = lookup.RelatedEntityName;
+        if (!entityName || !this.ProviderToUse.EntityByName(entityName)) {
+            return Promise.resolve([]);
+        }
+        const key = JSON.stringify([entityName.toLowerCase(), lookup.LookupMatchField || 'Name', lookup.DisplayFields || [], lookup.Filter || '']);
+        let rows = this.previewLookupRows.get(key);
+        if (!rows) {
+            rows = this.LoadPreviewLookupRows(lookup, key);
+            this.previewLookupRows.set(key, rows);
+        }
+        return rows;
+    }
+
+    /** Reads a lookup's allowed rows for the preview. A failed read is logged and dropped, so the next edit reads again. */
+    protected async LoadPreviewLookupRows(lookup: ResolvedConstraint, key: string): Promise<LookupValueRow[]> {
+        try {
+            return await LookupConstraintValues.Load(lookup, this.ProviderToUse, this.ProviderToUse.CurrentUser);
+        } catch (e) {
+            LogError(`FeaturePipelineBuilder: the preview could not load the allowed values of '${lookup.RelatedEntityName}': ${e instanceof Error ? e.message : String(e)}`);
+            this.previewLookupRows.delete(key);
+            return [];
+        }
+    }
+
     private recomputeValidation(): void {
-        this.RenderedConstraintPreview = renderConstraintBlock(this.spec.Outputs);
+        this.RenderConstraintPreview();
         const entity = this.Record?.EntityID ? this.ProviderToUse.EntityByID(this.Record.EntityID) : null;
         if (entity) {
             const stub: EntityMetadataStub = {

@@ -243,7 +243,7 @@ import {
     WorkOSProvider,
 } from '@memberjunction/auth-providers';
 
-// @memberjunction/core-entities (452 classes)
+// @memberjunction/core-entities (453 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -489,6 +489,7 @@ import {
     MJExternalDataSourceEntity,
     MJExternalDataSourceTypeEntity,
     MJFeaturePipelineTypeEntity,
+    MJFeaturePipelineVersionEntity,
     MJFeatureValueCacheEntity,
     MJFeatureValueEntity,
     MJFileCategoryEntity,
@@ -1043,8 +1044,9 @@ import {
     SQLServerExternalDataSourceDriver,
 } from '@memberjunction/external-data-source-sqlserver';
 
-// @memberjunction/feature-pipelines (1 classes)
+// @memberjunction/feature-pipelines (2 classes)
 import {
+    MJFeaturePipelineVersionEntityExtended,
     MJRecordProcessEntityExtended,
 } from '@memberjunction/feature-pipelines';
 
@@ -1356,13 +1358,29 @@ import {
     TeamsMessagingExtension,
 } from '@memberjunction/messaging-adapters';
 
-// @memberjunction/scheduling-engine (10 classes)
+// @memberjunction/testing-engine (5 classes)
+import {
+    AgentEvalDriver,
+    DecisionEvalDriver,
+    FeaturePipelineGoldenSetDriver,
+    PromptEvalDriver,
+    RubricCalibrationTestDriver,
+} from '@memberjunction/testing-engine';
+
+// @memberjunction/computer-use-engine (2 classes)
+import {
+    ComputerUseAction,
+    ComputerUseTestDriver,
+} from '@memberjunction/computer-use-engine';
+
+// @memberjunction/scheduling-engine (11 classes)
 import {
     ActionLogRetentionScheduledJobDriver,
     ActionScheduledJobDriver,
     AgentRunSweepScheduledJobDriver,
     AgentScheduledJobDriver,
     EvaluateSampledAgentRunsDriver,
+    FeaturePipelineVersionStewardDriver,
     IntegrationDiscoveryScheduledJobDriver,
     IntegrationSyncScheduledJobDriver,
     MaterializationRefreshScheduledJobDriver,
@@ -1454,20 +1472,6 @@ import {
     QueryScheduledJobsAction,
     UpdateScheduledJobAction,
 } from '@memberjunction/scheduling-actions';
-
-// @memberjunction/testing-engine (4 classes)
-import {
-    AgentEvalDriver,
-    DecisionEvalDriver,
-    PromptEvalDriver,
-    RubricCalibrationTestDriver,
-} from '@memberjunction/testing-engine';
-
-// @memberjunction/computer-use-engine (2 classes)
-import {
-    ComputerUseAction,
-    ComputerUseTestDriver,
-} from '@memberjunction/computer-use-engine';
 
 // @memberjunction/testing-integration (1 classes)
 import {
@@ -2013,6 +2017,7 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJExternalDataSourceEntity,
     MJExternalDataSourceTypeEntity,
     MJFeaturePipelineTypeEntity,
+    MJFeaturePipelineVersionEntity,
     MJFeatureValueCacheEntity,
     MJFeatureValueEntity,
     MJFileCategoryEntity,
@@ -2096,11 +2101,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJQueryPermissionEntity,
     MJQuerySQLEntity,
     MJQueueEntity,
-    MJQueueTaskEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJQueueTaskEntity,
     MJQueueTypeEntity,
     MJRSUPendingWorkEntity,
     MJRecommendationEntity,
@@ -2300,11 +2305,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     ExportSurveyMonkeyCSVAction,
     ExportTypeformCSVAction,
     GetGoogleFormAction,
-    GetGoogleFormsStatisticsAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    GetGoogleFormsStatisticsAction,
     GetJotFormAction,
     GetJotFormStatisticsAction,
     GetJotFormSubmissionsAction,
@@ -2429,6 +2434,7 @@ const CLASS_REGISTRATIONS_3: any[] = [
     PostgresExternalDataSourceDriver,
     SnowflakeExternalDataSourceDriver,
     SQLServerExternalDataSourceDriver,
+    MJFeaturePipelineVersionEntityExtended,
     MJRecordProcessEntityExtended,
     GeocodioGeocodingProvider,
     GoogleGeocodingProvider,
@@ -2503,12 +2509,12 @@ const CLASS_REGISTRATIONS_3: any[] = [
     EntitySearchProvider,
     FullTextSearchProvider,
     NoopReRanker,
-    OpenAIReRanker,
-    OpenSearchSearchProvider,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    OpenAIReRanker,
+    OpenSearchSearchProvider,
     SearchScopePermissionResolver,
     StorageSearchProvider,
     TagSearchProvider,
@@ -2606,11 +2612,19 @@ const CLASS_REGISTRATIONS_4: any[] = [
     WorkflowValidateServerOperation,
     SlackMessagingExtension,
     TeamsMessagingExtension,
+    AgentEvalDriver,
+    DecisionEvalDriver,
+    FeaturePipelineGoldenSetDriver,
+    PromptEvalDriver,
+    RubricCalibrationTestDriver,
+    ComputerUseAction,
+    ComputerUseTestDriver,
     ActionLogRetentionScheduledJobDriver,
     ActionScheduledJobDriver,
     AgentRunSweepScheduledJobDriver,
     AgentScheduledJobDriver,
     EvaluateSampledAgentRunsDriver,
+    FeaturePipelineVersionStewardDriver,
     IntegrationDiscoveryScheduledJobDriver,
     IntegrationSyncScheduledJobDriver,
     MaterializationRefreshScheduledJobDriver,
@@ -2689,12 +2703,6 @@ const CLASS_REGISTRATIONS_4: any[] = [
     GetScheduledJobStatisticsAction,
     QueryScheduledJobsAction,
     UpdateScheduledJobAction,
-    AgentEvalDriver,
-    DecisionEvalDriver,
-    PromptEvalDriver,
-    RubricCalibrationTestDriver,
-    ComputerUseAction,
-    ComputerUseTestDriver,
     IntegrationTestDriver,
     BraveWebSearchProvider,
     DuckDuckGoWebSearchProvider,
@@ -2705,14 +2713,14 @@ const CLASS_REGISTRATIONS_4: any[] = [
     APIRateLimiterAction,
     ActionSmithAgent,
     ActivateFormContributionVersionAction,
-    ActivateInteractiveFormVersionAction,
-    AddDocumentContentAction,
-    AddRecordsToListAction,
-    AddViewResultsToListAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    ActivateInteractiveFormVersionAction,
+    AddDocumentContentAction,
+    AddRecordsToListAction,
+    AddViewResultsToListAction,
     AggregateDataAction,
     AssignUserRolesAction,
     BraveSearchAction,
@@ -2898,7 +2906,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1169;
+export const CLASS_REGISTRATIONS_COUNT = 1173;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
@@ -3014,12 +3022,12 @@ export const CLASS_REGISTRATIONS_PACKAGES = [
     '@memberjunction/predictive-studio',
     '@memberjunction/task-graph',
     '@memberjunction/messaging-adapters',
+    '@memberjunction/testing-engine',
+    '@memberjunction/computer-use-engine',
     '@memberjunction/scheduling-engine',
     '@memberjunction/core-entities-server',
     '@memberjunction/codegen-lib',
     '@memberjunction/scheduling-actions',
-    '@memberjunction/testing-engine',
-    '@memberjunction/computer-use-engine',
     '@memberjunction/testing-integration',
     '@memberjunction/web-search-engine',
     '@memberjunction/core-actions',

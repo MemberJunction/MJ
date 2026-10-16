@@ -221,7 +221,7 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/core-entities (452 classes)
+// @memberjunction/core-entities (453 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -467,6 +467,7 @@ import {
     MJExternalDataSourceEntity,
     MJExternalDataSourceTypeEntity,
     MJFeaturePipelineTypeEntity,
+    MJFeaturePipelineVersionEntity,
     MJFeatureValueCacheEntity,
     MJFeatureValueEntity,
     MJFileCategoryEntity,
@@ -915,8 +916,9 @@ import {
     RotateEncryptionKeyAction,
 } from '@memberjunction/encryption';
 
-// @memberjunction/feature-pipelines (1 classes)
+// @memberjunction/feature-pipelines (2 classes)
 import {
+    MJFeaturePipelineVersionEntityExtended,
     MJRecordProcessEntityExtended,
 } from '@memberjunction/feature-pipelines';
 
@@ -1134,13 +1136,23 @@ import {
     WorkflowValidateServerOperation,
 } from '@memberjunction/task-graph';
 
-// @memberjunction/scheduling-engine (10 classes)
+// @memberjunction/testing-engine (5 classes)
+import {
+    AgentEvalDriver,
+    DecisionEvalDriver,
+    FeaturePipelineGoldenSetDriver,
+    PromptEvalDriver,
+    RubricCalibrationTestDriver,
+} from '@memberjunction/testing-engine';
+
+// @memberjunction/scheduling-engine (11 classes)
 import {
     ActionLogRetentionScheduledJobDriver,
     ActionScheduledJobDriver,
     AgentRunSweepScheduledJobDriver,
     AgentScheduledJobDriver,
     EvaluateSampledAgentRunsDriver,
+    FeaturePipelineVersionStewardDriver,
     IntegrationDiscoveryScheduledJobDriver,
     IntegrationSyncScheduledJobDriver,
     MaterializationRefreshScheduledJobDriver,
@@ -1383,14 +1395,6 @@ import {
     QueryScheduledJobsAction,
     UpdateScheduledJobAction,
 } from '@memberjunction/scheduling-actions';
-
-// @memberjunction/testing-engine (4 classes)
-import {
-    AgentEvalDriver,
-    DecisionEvalDriver,
-    PromptEvalDriver,
-    RubricCalibrationTestDriver,
-} from '@memberjunction/testing-engine';
 
 // @memberjunction/work-queue-engine (14 classes)
 import {
@@ -1734,6 +1738,7 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJExternalDataSourceEntity,
     MJExternalDataSourceTypeEntity,
     MJFeaturePipelineTypeEntity,
+    MJFeaturePipelineVersionEntity,
     MJFeatureValueCacheEntity,
     MJFeatureValueEntity,
     MJFileCategoryEntity,
@@ -1827,11 +1832,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJRecordChangeEntity,
     MJRecordChangeReplayRunEntity,
     MJRecordCloneLogEntity,
-    MJRecordCloneLogItemEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJRecordCloneLogItemEntity,
     MJRecordGeoCodeEntity,
     MJRecordLinkEntity,
     MJRecordMergeDeletionLogEntity,
@@ -2031,11 +2036,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     UpdateSurveyMonkeyAction,
     UpdateTypeformAction,
     WatchNewJotFormSubmissionsAction,
-    WatchNewSurveyMonkeyResponsesAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    WatchNewSurveyMonkeyResponsesAction,
     WatchNewTypeformResponsesAction,
     AttachTagsAction,
     CreateUserAction_actions_bizapps_lms,
@@ -2128,6 +2133,7 @@ const CLASS_REGISTRATIONS_3: any[] = [
     EnableFieldEncryptionAction,
     EnvVarKeySource,
     RotateEncryptionKeyAction,
+    MJFeaturePipelineVersionEntityExtended,
     MJRecordProcessEntityExtended,
     GeocodioGeocodingProvider,
     GoogleGeocodingProvider,
@@ -2234,12 +2240,12 @@ const CLASS_REGISTRATIONS_3: any[] = [
     PredictiveStudioModelDevAgent,
     PredictiveStudioPipelineBuilderAgent,
     PredictiveStudioPromoteModelAction,
-    PredictiveStudioPromoteModelServerOperation,
-    PredictiveStudioRunExperimentAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    PredictiveStudioPromoteModelServerOperation,
+    PredictiveStudioRunExperimentAction,
     PredictiveStudioRunFeaturePipelineServerOperation,
     PredictiveStudioScheduleModelScoringAction,
     PredictiveStudioScoreRecordSetAction,
@@ -2263,11 +2269,17 @@ const CLASS_REGISTRATIONS_4: any[] = [
     WorkflowDraftServerOperation,
     WorkflowSaveServerOperation,
     WorkflowValidateServerOperation,
+    AgentEvalDriver,
+    DecisionEvalDriver,
+    FeaturePipelineGoldenSetDriver,
+    PromptEvalDriver,
+    RubricCalibrationTestDriver,
     ActionLogRetentionScheduledJobDriver,
     ActionScheduledJobDriver,
     AgentRunSweepScheduledJobDriver,
     AgentScheduledJobDriver,
     EvaluateSampledAgentRunsDriver,
+    FeaturePipelineVersionStewardDriver,
     IntegrationDiscoveryScheduledJobDriver,
     IntegrationSyncScheduledJobDriver,
     MaterializationRefreshScheduledJobDriver,
@@ -2432,6 +2444,10 @@ const CLASS_REGISTRATIONS_4: any[] = [
     LoopAction,
     MCPToolAction,
     MaterializeListFromViewAction,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_5: any[] = [
     ModifyDocumentSectionAction,
     ModifyFormContributionAction,
     ModifyInteractiveFormAction,
@@ -2440,10 +2456,6 @@ const CLASS_REGISTRATIONS_4: any[] = [
     OAuthFlowAction,
     ObjectExistsAction,
     PDFExtractorAction,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_5: any[] = [
     ParallelExecuteAction,
     PasswordStrengthAction,
     PerplexitySearchAction,
@@ -2501,10 +2513,6 @@ const CLASS_REGISTRATIONS_5: any[] = [
     GetScheduledJobStatisticsAction,
     QueryScheduledJobsAction,
     UpdateScheduledJobAction,
-    AgentEvalDriver,
-    DecisionEvalDriver,
-    PromptEvalDriver,
-    RubricCalibrationTestDriver,
     DatabaseTransportDriverFactory,
     MJWorkQueueDeduplicationEntityServer,
     MJWorkQueueDeliveryEntityServer,
@@ -2536,7 +2544,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1076;
+export const CLASS_REGISTRATIONS_COUNT = 1080;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
@@ -2615,11 +2623,11 @@ export const CLASS_REGISTRATIONS_PACKAGES = [
     '@memberjunction/record-set-processor',
     '@memberjunction/predictive-studio',
     '@memberjunction/task-graph',
+    '@memberjunction/testing-engine',
     '@memberjunction/scheduling-engine',
     '@memberjunction/core-entities-server',
     '@memberjunction/core-actions',
     '@memberjunction/scheduling-actions',
-    '@memberjunction/testing-engine',
     '@memberjunction/work-queue-engine',
     '@memberjunction/work-queue-samples',
 ] as const;
