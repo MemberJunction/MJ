@@ -10572,6 +10572,7 @@ duplicate of a `next` mechanism, an unrequested feature, or a near-duplicate tes
 - `7994cca5c0`, `18bcb44bfe` steward, golden set, migration: macro-F1, the orphan-cache DELETE, the PostgreSQL comment and essay descriptions cut (§5.1 synced).
 - `855c611206`, `7e3b785aa2` Explorer: QA fixes at minimal size; the Testing dashboard aggregates and notices cut.
 - `3edfc52d7b` rigs, tooling and docs: one-shot rigs, the host sleep guard, the suspension monitor and the cost ledger cut; tests of test helpers shrunk; query-parameter pins and the demo-query rewrite back to `next`; guides, READMEs and one changeset sized to the kept behaviour.
+- Final review fixes: `0c07ba445f` a plain engine load skips a blocked pool reload when the caller is in a transaction on any provider instance (MJAPI saves through per-request providers); `fba199c1d8` a Feature Pipeline unit runs on its own instance unless the caller is in the open transaction; `05d0e01bf1` a user view with no provider fails validation; `65f775cdd8` IT22 holds the User Routine Dispatcher job lock; `3b9f525e3a` near-duplicate and tooling tests cut; `ba2f083a8c` minors.
 
 ## 12. Refresh log (append-only)
 
