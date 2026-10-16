@@ -432,6 +432,10 @@ export class SQLServerDataProvider
   private static _needsDatetimeOffsetAdjustment: boolean = false;
   private static _datetimeOffsetTestComplete: boolean = false;
   private static _datetimeOffsetTestPromise: Promise<void> | null = null;
+  /** When the last datetimeoffset probe failed (ms since epoch), or null if it hasn't failed since the last success. */
+  private static _datetimeOffsetTestFailedAt: number | null = null;
+  /** After a failed probe, callers use the safe default for this long before probing again. */
+  private static readonly DATETIMEOFFSET_PROBE_RETRY_MS = 30_000;
   private get _needsDatetimeOffsetAdjustment(): boolean {
     return SQLServerDataProvider._needsDatetimeOffsetAdjustment;
   }
@@ -445,6 +449,7 @@ export class SQLServerDataProvider
     SQLServerDataProvider._datetimeOffsetTestComplete = value;
     if (!value) {
       SQLServerDataProvider._datetimeOffsetTestPromise = null;
+      SQLServerDataProvider._datetimeOffsetTestFailedAt = null;
     }
   }
   /**
@@ -2730,6 +2735,13 @@ export class SQLServerDataProvider
       return this._needsDatetimeOffsetAdjustment;
     }
 
+    // A recent probe failed: keep its safe default until the backoff passes, rather than re-probing
+    // (and logging the failure again) on every call while the database is unreachable.
+    const failedAt = SQLServerDataProvider._datetimeOffsetTestFailedAt;
+    if (failedAt !== null && Date.now() - failedAt < SQLServerDataProvider.DATETIMEOFFSET_PROBE_RETRY_MS) {
+      return this._needsDatetimeOffsetAdjustment;
+    }
+
     // Deduplicate concurrent tests across per-request provider instances
     if (!SQLServerDataProvider._datetimeOffsetTestPromise) {
       SQLServerDataProvider._datetimeOffsetTestPromise = this.testDatetimeOffsetHandling().finally(() => {
@@ -2787,12 +2799,14 @@ export class SQLServerDataProvider
 
       // Mark the test as complete
       this._datetimeOffsetTestComplete = true;
+      SQLServerDataProvider._datetimeOffsetTestFailedAt = null;
     } catch (e) {
       // If the test fails, log the error but don't prevent initialization
       console.error('SQLServerDataProvider: Failed to test datetimeoffset handling:', e);
       // Default to assuming adjustment is needed for safety on this provider,
-      // but leave _datetimeOffsetTestComplete false so the next call retries.
+      // but leave _datetimeOffsetTestComplete false so a call after the backoff retries.
       this._needsDatetimeOffsetAdjustment = true;
+      SQLServerDataProvider._datetimeOffsetTestFailedAt = Date.now();
     }
   }
 

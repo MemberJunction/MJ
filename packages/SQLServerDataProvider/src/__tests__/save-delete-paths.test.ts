@@ -887,6 +887,43 @@ describe('SQLServerDataProvider Record Change text is sent as Unicode (N\'…\')
     }
   });
 
+  it('backs off after a failed datetimeoffset probe instead of re-probing on every call, then retries', async () => {
+    const provider = makeProvider();
+    const surface = provider as unknown as ProviderPrivateSurface;
+    surface._datetimeOffsetTestComplete = false; // also clears any earlier backoff
+    surface._needsDatetimeOffsetAdjustment = false;
+
+    const probeSpy = vi.spyOn(provider, 'ExecuteSQL');
+    const probeCount = () => probeSpy.mock.calls.filter((c) => (c[2] as { description?: string } | undefined)?.description === 'DatetimeOffset handling test').length;
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    let now = 1_000_000;
+    const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => now);
+    try {
+      mssqlState.QueueResult({ error: new Error('Transient pool timeout') });
+      expect(await provider.NeedsDatetimeOffsetAdjustment()).toBe(true);
+      expect(probeCount()).toBe(1);
+
+      // Within the backoff: the safe default, with no new probe and no new error log.
+      now += 29_000;
+      expect(await provider.NeedsDatetimeOffsetAdjustment()).toBe(true);
+      expect(await provider.NeedsDatetimeOffsetAdjustment()).toBe(true);
+      expect(probeCount()).toBe(1);
+      expect(errSpy).toHaveBeenCalledTimes(1);
+
+      // After the backoff: probes again, and a success completes the test.
+      now += 2_000;
+      mssqlState.QueueResult({ rows: [{ TestDateTime: new Date('1900-01-01T11:00:00.000Z') }] });
+      expect(await provider.NeedsDatetimeOffsetAdjustment()).toBe(false);
+      expect(probeCount()).toBe(2);
+      expect(surface._datetimeOffsetTestComplete).toBe(true);
+    } finally {
+      nowSpy.mockRestore();
+      errSpy.mockRestore();
+      probeSpy.mockRestore();
+      surface._datetimeOffsetTestComplete = false;
+    }
+  });
+
   it('HandleEntityActions fast path: runs Active actions when Loaded is true and short-circuits when only Disabled actions exist', async () => {
     const provider = makeProvider();
     const entity = makeNewWidgetEntity(makeWidgetEntityInfo(), TEST_USER);
@@ -940,5 +977,3 @@ describe('SQLServerDataProvider Record Change text is sent as Unicode (N\'…\')
     }
   });
 });
-
-

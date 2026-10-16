@@ -72,6 +72,9 @@ export class SaveParameterCollector {
    * writes for it), and returns the reference to write into the statement in its place.
    */
   public AddField(field: EntityFieldInfo, literal: string): string {
+    if (IsKeptAsInlineLiteral(field)) {
+      return literal;
+    }
     const { Type, Value } = SaveParameterFromLiteral(field, literal);
     const name = `p$${this.parameters.length}`;
     this.parameters.push(new SQLServerSaveParameter(name, Type, Value, literal));
@@ -86,12 +89,10 @@ export class SaveParameterCollector {
  * value and the logged literal cannot disagree.
  */
 export function SaveParameterFromLiteral(field: EntityFieldInfo, literal: string): { Type: sql.ISqlType; Value: SQLServerSaveValue } {
+  refuseInlineLiteralType(field);
   const name = field.Type.trim().toLowerCase();
   if (field.IsBinaryFieldType) {
     return { Type: SaveParameterType(field), Value: Buffer.from(literal.slice(2), 'hex') };
-  }
-  if (name === 'sql_variant') {
-    return sqlVariantParameterFromLiteral(literal);
   }
   if (TEXT_DATE_TYPES.has(name)) {
     return { Type: SaveParameterType(field), Value: QuotedLiteralText(literal) };
@@ -114,27 +115,6 @@ export function SaveParameterFromLiteral(field: EntityFieldInfo, literal: string
     default:
       return { Type: SaveParameterType(field), Value: QuotedLiteralText(literal) };
   }
-}
-
-/**
- * A `sql_variant` column records the runtime base type of the parameter bound to `@p$n`.
- * SQL Server rejects `nvarchar(max)` inside `sql_variant` (Msg 206), so string literals bind as
- * `nvarchar(4000)` (the maximum `nvarchar` length `sql_variant` permits), while unquoted numeric
- * literals bind with their numeric type (`int`, `bigint`, or `float`) so `SQL_VARIANT_PROPERTY(..., 'BaseType')`
- * preserves numeric base types.
- */
-function sqlVariantParameterFromLiteral(literal: string): { Type: sql.ISqlType; Value: SQLServerSaveValue } {
-  if (literal.startsWith("'") || literal.startsWith("N'")) {
-    return { Type: sql.NVarChar(4000), Value: QuotedLiteralText(literal) };
-  }
-  if (/^-?\d+$/.test(literal)) {
-    const asBigInt = BigInt(literal);
-    if (asBigInt >= -2147483648n && asBigInt <= 2147483647n) {
-      return { Type: sql.Int(), Value: Number(literal) };
-    }
-    return { Type: sql.BigInt(), Value: asBigInt };
-  }
-  return { Type: sql.Float(), Value: Number(literal) };
 }
 
 /** A bigint literal as a BigInt; a fraction is truncated toward zero, as SQL Server converts it. */
@@ -182,6 +162,28 @@ const EXACT_NUMERIC_TYPES = new Set(['decimal', 'numeric', 'money', 'smallmoney'
 const TEXT_DATE_TYPES = new Set(['datetimeoffset', 'smalldatetime']);
 
 /**
+ * Types a save keeps as their inline literal instead of binding a parameter.
+ * - `sql_variant`: the stored base type comes from whatever is assigned to it. MJ writes these values
+ *   unquoted (`NeedsQuotes` is false), and the literal is what gives SQL Server the right base type
+ *   (`0x1F` is varbinary, `1.10` is numeric(3,2), `3000000000` is numeric(10,0)). No parameter type
+ *   reproduces that: `nvarchar(max)` is rejected (Msg 206), `float` loses precision past 15 digits,
+ *   and `sql.Decimal` goes through a JS number. These saves don't share a plan, as before.
+ */
+const KEPT_AS_INLINE_LITERAL = new Set(['sql_variant']);
+
+/** Whether a save writes `field`'s value as its inline literal rather than as a typed parameter. */
+export function IsKeptAsInlineLiteral(field: EntityFieldInfo): boolean {
+  return KEPT_AS_INLINE_LITERAL.has(field.Type.trim().toLowerCase());
+}
+
+/** A type kept as its inline literal has no parameter form; binding one would store the wrong base type. */
+function refuseInlineLiteralType(field: EntityFieldInfo): void {
+  if (IsKeptAsInlineLiteral(field)) {
+    throw new Error(`Field "${field.Name}" has SQL type "${field.Type}", which a save writes as its inline literal, not as a parameter`);
+  }
+}
+
+/**
  * Types the driver cannot send as a parameter (`xml` and the CLR types are "not implemented" in
  * tedious), or that it does not know. Their value is sent as `nvarchar(max)` text so Unicode is
  * preserved while the typed SET converts it as before.
@@ -198,6 +200,7 @@ const NEVER_WRITTEN = new Set(['timestamp', 'rowversion']);
  *   wrongly.
  */
 export function SaveParameterType(field: EntityFieldInfo): sql.ISqlType {
+  refuseInlineLiteralType(field);
   const name = field.Type.trim().toLowerCase();
   const length = field.Length > 0 ? field.Length : sql.MAX;
   switch (name) {
@@ -219,9 +222,6 @@ export function SaveParameterType(field: EntityFieldInfo): sql.ISqlType {
       return sql.VarBinary(sql.MAX);
     case 'sysname':
       return sql.NVarChar(128);
-    case 'sql_variant':
-      // SQL Server rejects nvarchar(max) inside sql_variant (Msg 206); 4000 is the max permitted.
-      return sql.NVarChar(4000);
   }
   if (TEXT_DATE_TYPES.has(name)) {
     return sql.VarChar(34);
@@ -238,5 +238,3 @@ export function SaveParameterType(field: EntityFieldInfo): sql.ISqlType {
   }
   return factory();
 }
-
-

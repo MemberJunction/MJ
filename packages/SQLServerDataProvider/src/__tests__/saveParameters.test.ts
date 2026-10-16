@@ -12,6 +12,7 @@ import {
   IsSaveParameterList,
   QuotedLiteralText,
   RenderSaveSQL,
+  IsKeptAsInlineLiteral,
   SaveParameterCollector,
   SaveParameterFromLiteral,
   SaveParameterType,
@@ -35,9 +36,11 @@ const SQL_SERVER_TYPE_NAMES = [
 
 /** Server-generated, never written by a save; asking for their parameter type is a bug. */
 const NEVER_WRITTEN = ['timestamp'];
+/** Written as their inline literal, so they have no parameter type (see IsKeptAsInlineLiteral). */
+const KEPT_INLINE = ['sql_variant'];
 
 describe('SaveParameterType', () => {
-  it.each(SQL_SERVER_TYPE_NAMES.filter((t) => !NEVER_WRITTEN.includes(t)))('resolves a driver type for %s', (typeName) => {
+  it.each(SQL_SERVER_TYPE_NAMES.filter((t) => !NEVER_WRITTEN.includes(t) && !KEPT_INLINE.includes(t)))('resolves a driver type for %s', (typeName) => {
     const type = SaveParameterType(field(typeName, 20));
     expect(Object.values(sql.TYPES)).toContain(type.type);
   });
@@ -82,8 +85,9 @@ describe('SaveParameterType', () => {
     expect(SaveParameterType(field('smalldatetime'))).toEqual(sql.VarChar(34));
   });
 
-  it('caps sql_variant text parameters at nvarchar(4000), the maximum length sql_variant permits', () => {
-    expect(SaveParameterType(field('sql_variant'))).toEqual(sql.NVarChar(4000));
+  it('refuses to give sql_variant a parameter type, since a save writes it as its inline literal', () => {
+    expect(() => SaveParameterType(field('sql_variant', 0, 'Payload'))).toThrow(/"Payload".*sql_variant.*inline literal/);
+    expect(() => SaveParameterFromLiteral(field('sql_variant', 0, 'Payload'), '0x1F')).toThrow(/inline literal/);
   });
 
   it('sends types the driver cannot bind directly as nvarchar(max) text so Unicode is preserved', () => {
@@ -131,27 +135,23 @@ describe('SaveParameterFromLiteral', () => {
     expect(SaveParameterFromLiteral(field('bigint'), '-7.9').Value).toBe(-7n);
   });
 
-  it('binds sql_variant literals with compatible base types (nvarchar(4000), int, bigint, float)', () => {
-    expect(SaveParameterFromLiteral(field('sql_variant'), "N'hello'")).toEqual({
-      Type: sql.NVarChar(4000),
-      Value: 'hello',
-    });
-    expect(SaveParameterFromLiteral(field('sql_variant'), "'plain'")).toEqual({
-      Type: sql.NVarChar(4000),
-      Value: 'plain',
-    });
-    expect(SaveParameterFromLiteral(field('sql_variant'), '42')).toEqual({
-      Type: sql.Int(),
-      Value: 42,
-    });
-    expect(SaveParameterFromLiteral(field('sql_variant'), '9007199254740993')).toEqual({
-      Type: sql.BigInt(),
-      Value: 9007199254740993n,
-    });
-    expect(SaveParameterFromLiteral(field('sql_variant'), '3.14')).toEqual({
-      Type: sql.Float(),
-      Value: 3.14,
-    });
+  it('keeps sql_variant values as their inline literal so SQL Server picks the base type', () => {
+    expect(IsKeptAsInlineLiteral(field('sql_variant'))).toBe(true);
+    expect(IsKeptAsInlineLiteral(field(' SQL_VARIANT '))).toBe(true);
+    expect(IsKeptAsInlineLiteral(field('nvarchar', 200))).toBe(false);
+    // MJ classifies sql_variant as Number, so these are the unquoted literals it actually writes.
+    for (const literal of ['0x1F', '12345678901234567.891', '3000000000', '1.10', '42', "N'hello'"]) {
+      const params = new SaveParameterCollector();
+      expect(params.AddField(field('sql_variant'), literal)).toBe(literal);
+      expect(params.Parameters).toHaveLength(0);
+    }
+  });
+
+  it('still parameterizes the other fields of a save that contains a sql_variant', () => {
+    const params = new SaveParameterCollector();
+    expect(params.AddField(field('sql_variant'), '0x1F')).toBe('0x1F');
+    expect(params.AddField(field('int'), '7')).toBe('@p$0');
+    expect(params.Parameters).toHaveLength(1);
   });
 
   it('reads booleans from the 1/0 the literal batch writes', () => {
