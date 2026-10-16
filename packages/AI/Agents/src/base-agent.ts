@@ -6905,8 +6905,13 @@ export class BaseAgent {
 
     /**
      * Validates that the Chat next step is valid and can be executed by the current agent. 
-     * Implements ChatHandlingOption remapping logic - if the agent has ChatHandlingOption set,
-     * the Chat step is remapped to the specified value (Success, Fail, or Retry).
+     * Implements ChatHandlingOption remapping logic - if the agent (or sub-agent relationship)
+     * has ChatHandlingOption set:
+     * - `'Consult'`: leaves the Chat step unchanged (an agent's own Chat propagates to its caller;
+     *   sub-agent Consult is intercepted before this validator).
+     * - `'Success'` / `'Failed'`: remaps `step` while preserving `terminate: true` to end the run.
+     * - `'Retry'`: remaps `step` to `'Retry'`, sets `terminate: false` so the loop continues, and
+     *   populates `errorMessage` so the unproductive-retry safety net bounds repeated Chat attempts.
      * Subclasses can override this method to implement custom validation logic if needed.
      * @param params 
      * @param nextStep 
@@ -6947,11 +6952,20 @@ export class BaseAgent {
                     return nextStep;
             }
             
-            // Remap the Chat step to the configured option
-            const remappedStep: BaseAgentNextStep<P> = {
-                ...nextStep,
-                step: mappedStep
-            };
+            // Remap the Chat step to the configured option.
+            // Retry clears terminate: false so the loop continues and sets errorMessage so the
+            // unproductive-retry cap bounds a model that repeatedly emits Chat.
+            const remappedStep: BaseAgentNextStep<P> = mappedStep === 'Retry'
+                ? {
+                    ...nextStep,
+                    step: 'Retry',
+                    terminate: false,
+                    errorMessage: nextStep.errorMessage || 'Chat was remapped to Retry by ChatHandlingOption'
+                }
+                : {
+                    ...nextStep,
+                    step: mappedStep
+                };
             
             // Log the remapping for debugging
             if (params.verbose === true || IsVerboseLoggingEnabled()) {
@@ -15537,7 +15551,7 @@ The context is now within limits. Please retry your request with the recovered c
         };
 
         const effectiveOption = this.effectiveSubAgentChatHandlingOption(params.agent, relationship, params);
-        return await this.validateChatNextStep(
+        const validatedStep = await this.validateChatNextStep(
             params,
             chatStep,
             mergedPayload,
@@ -15545,6 +15559,24 @@ The context is now within limits. Please retry your request with the recovered c
             stepEntity!,
             effectiveOption
         );
+
+        if (validatedStep.step === 'Retry') {
+            const resultMessage = this.formatSubAgentResultAsMarkdown(subAgentRequest.name, subAgentResult);
+            this.pushSubAgentConversationMessage(
+                params,
+                previousDecision,
+                subAgentRequest,
+                subAgentEntity,
+                resultMessage,
+                'sub-agent-result',
+                !subAgentResult.success
+            );
+            if (this._agentRun) {
+                this._agentRun.FinalPayloadObject = mergedPayload;
+            }
+        }
+
+        return validatedStep;
     }
 
     /**
