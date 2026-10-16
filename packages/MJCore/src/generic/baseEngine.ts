@@ -701,11 +701,11 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      * This method should be called by sub-classes to load up their specific metadata requirements. For more complex metadata
      * loading or for post-processing of metadata loading done here, overide the AdditionalLoading method to add your logic.
      *
-     * While another load is in flight, a plain load joins it, except a loaded engine's plain load during a pool reload,
-     * which returns at once: its caller may hold the transaction the reload's reads wait on. A forced load does not join
-     * (the load in flight may have read before the change that asked for the reload): it queues one follow-up load,
-     * shared by every forced request made meanwhile, which runs with the latest request's arguments once the load in
-     * flight finishes.
+     * While another load is in flight, a plain load joins it, except a loaded engine's plain load inside a transaction
+     * during a pool reload, which returns at once: the reload's reads may wait on that transaction. A forced load does
+     * not join (the load in flight may have read before the change that asked for the reload): it queues one follow-up
+     * load, shared by every forced request made meanwhile, which runs with the latest request's arguments once the load
+     * in flight finishes.
      * @param configs
      * @param contextUser
      * @param readOptions where dataset configs read (see {@link DatasetReadOptions})
@@ -718,7 +718,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             if (forceRefresh) {
                 return this.queueForcedReload([configs, provider, forceRefresh, contextUser, readOptions]);
             }
-            if (this._loaded && this._inFlightReadsOnPool) {
+            if (this._loaded && this._inFlightReadsOnPool && this.callerInTransaction()) {
                 return;
             }
             return this.waitForInFlightLoad();
@@ -789,6 +789,12 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 TelemetryManager.Instance.EndEvent(eventId);
             }
         }
+    }
+
+    /** Whether the calling async scope is in a transaction open on this engine's provider. */
+    private callerInTransaction(): boolean {
+        const provider = this.ProviderToUse;
+        return provider instanceof DatabaseProviderBase && (provider.CapturePostCommitToken()?.Epoch ?? null) !== null;
     }
 
     private waitForInFlightLoad(): Promise<void> {

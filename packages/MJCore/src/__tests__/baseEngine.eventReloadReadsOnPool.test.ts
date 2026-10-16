@@ -125,6 +125,25 @@ function providerAtDepth(depth: number, member: boolean = true): { provider: Ent
     return { provider, commit: async () => { for (const t of queued.splice(0)) await t(); }, queuedCount: () => queued.length };
 }
 
+/**
+ * A database provider at transaction depth 1 whose first dataset read is held (see {@link heldProvider}); `member` says
+ * whether the caller belongs to the open transaction.
+ */
+function heldDatabaseProvider(member: boolean): { Provider: IMetadataProvider; FirstReadStarted: Promise<void>; Release: () => void } {
+    const gate = heldProvider([]);
+    const { provider } = providerAtDepth(1, member);
+    const metadata: Pick<IMetadataProvider, 'InstanceConnectionString' | 'GetDatasetByName' | 'CacheDataset' | 'GetAndCacheDatasetByName'> = {
+        InstanceConnectionString: gate.Provider.InstanceConnectionString,
+        GetDatasetByName: gate.Provider.GetDatasetByName.bind(gate.Provider),
+        CacheDataset: gate.Provider.CacheDataset.bind(gate.Provider),
+        GetAndCacheDatasetByName: gate.Provider.GetAndCacheDatasetByName.bind(gate.Provider),
+    };
+    Object.assign(provider, metadata);
+    // a client-side provider type, so the loads need no context user
+    Object.defineProperty(provider, 'ProviderType', { get: () => ProviderType.Network });
+    return { Provider: provider, FirstReadStarted: gate.FirstReadStarted, Release: gate.Release };
+}
+
 /** The entity of the saves below; the handler reads only the saving record's provider. */
 const RECORDS = new EntityInfo({ ID: 'ent-records', Name: 'Records', Fields: [] });
 
@@ -166,9 +185,9 @@ describe('BaseEngine: event-driven reloads read on the pool', () => {
         expect(reads.map((r) => r.ReadOptions)).toEqual([undefined, { ReadOnPool: true }]);
     });
 
-    it('does not make a plain load of a loaded engine wait for an event reload in flight', async () => {
-        // the caller may hold the transaction whose row locks the reload's pool read is waiting on
-        const gate = heldProvider([]);
+    /** Starts an event reload held at its read on a loaded engine, then a plain load; returns whether that settled first. */
+    async function plainLoadSettlesDuringReload(member: boolean): Promise<boolean> {
+        const gate = heldDatabaseProvider(member);
         const engine = freshEngine();
         await engine.Config(false, undefined, gate.Provider);
         const reload = engine.EventReload(gate.Provider); // holds its read until released
@@ -176,9 +195,19 @@ describe('BaseEngine: event-driven reloads read on the pool', () => {
         let settled = false;
         const plain = engine.Config(false, undefined, gate.Provider).then(() => { settled = true; });
         await new Promise<void>((resolve) => setTimeout(resolve, 0));
-        expect(settled).toBe(true);
+        const settledFirst = settled;
         gate.Release();
         await Promise.all([reload, plain]);
+        return settledFirst;
+    }
+
+    it('does not make a plain load inside a transaction wait for an event reload in flight', async () => {
+        // the reload's pool read may be waiting on the row locks of the caller's transaction
+        expect(await plainLoadSettlesDuringReload(true)).toBe(true);
+    });
+
+    it('makes a plain load outside a transaction wait for an event reload in flight', async () => {
+        expect(await plainLoadSettlesDuringReload(false)).toBe(false);
     });
 
     it('reads the dataset\'s entity names from the dataset itself, lower-cased and trimmed', async () => {

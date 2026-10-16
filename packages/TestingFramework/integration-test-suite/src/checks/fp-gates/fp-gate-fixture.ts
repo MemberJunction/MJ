@@ -20,6 +20,7 @@ import type { FeaturePipelineGoldenSetInput, GoldenCase } from '@memberjunction/
 import { Settle, type FeaturePipelineGateFixture, type IntegrationCheckContext } from '@memberjunction/testing-integration';
 import { FeaturePipelineGateStubTable, type StubAnswer } from './feature-pipeline-gate-stub-driver';
 import { FORCED_INVALID, GOLDEN_TITLES, NON_EXISTENT_FUNCTION_ID } from './golden-titles';
+import { FixtureQuerySaveOptions } from '../query-fixture-save-options';
 
 type Pool = NonNullable<IntegrationCheckContext['Pool']>;
 
@@ -312,7 +313,7 @@ export class FeaturePipelineGateFixtures {
         content.TemplateText = templateText;
         content.Priority = 1;
         content.IsActive = true;
-        if (!(await content.Save(FeaturePipelineGateFixtures.ScratchRowSaveOptions()))) {
+        if (!(await content.Save(FixtureQuerySaveOptions()))) {
             throw new Error(`Feature Pipeline gate fixture: saving the template content failed: ${content.LatestResult?.CompleteMessage || 'unknown error'}`);
         }
         return template.ID;
@@ -569,7 +570,7 @@ export class FeaturePipelineGateFixtures {
         table.Answers.set(keyOf(FORCED_INVALID.Both), answer('Grand Poobah', NON_EXISTENT_FUNCTION_ID));
     }
 
-    /** Save options of the fixture's bizapps-common rows and template content: no Entity Actions or AI Actions. */
+    /** Save options of the fixture's bizapps-common rows: no Entity Actions or AI Actions. */
     protected static ScratchRowSaveOptions(): EntitySaveOptions {
         const options = new EntitySaveOptions();
         options.SkipEntityActions = true;
