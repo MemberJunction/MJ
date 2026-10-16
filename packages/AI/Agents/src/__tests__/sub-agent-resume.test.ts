@@ -35,7 +35,7 @@ import {
 } from '@memberjunction/ai-core-plus';
 import { RecordToolCallingDecision, type ToolCallingMode } from '@memberjunction/ai-prompts';
 import type { ChatResult } from '@memberjunction/ai';
-import type { ChatMessage, IMetadataProvider, UserInfo } from '@memberjunction/core';
+import { LogErrorEx, type ChatMessage, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import type { NativeToolBinding } from '../native-tools/control-tools';
 
 // ============================================================================
@@ -410,7 +410,9 @@ class HarnessAgent extends BaseAgent {
             payload,
         });
         if (subAgentRequest.resumeRunId) {
-            this._openSubAgentConsults.delete(subAgentRequest.resumeRunId);
+            (this as unknown as { _openSubAgentConsults: Map<string, SubAgentConsultRecord> })._openSubAgentConsults.delete(
+                subAgentRequest.resumeRunId
+            );
         }
         const res = await harness.executeSubAgentHandler(subAgentRequest, subAgent, payload);
         if (stepEntity && res.agentRun?.ID) {
@@ -425,12 +427,16 @@ class RealExecuteSubAgentCaller extends BaseAgent {
         return null;
     }
 
+    private get openConsultsMap(): Map<string, SubAgentConsultRecord> {
+        return (this as unknown as { _openSubAgentConsults: Map<string, SubAgentConsultRecord> })._openSubAgentConsults;
+    }
+
     public setOpenConsult(record: SubAgentConsultRecord): void {
-        this._openSubAgentConsults.set(record.childRunId, record);
+        this.openConsultsMap.set(record.childRunId, record);
     }
 
     public getOpenConsult(runId: string): SubAgentConsultRecord | undefined {
-        return this._openSubAgentConsults.get(runId);
+        return this.openConsultsMap.get(runId);
     }
 
     public async invokeExecuteSubAgent<SC = unknown, SR = unknown>(
@@ -601,6 +607,80 @@ describe('VS-CON-3: Resume a sub-agent that asked a question (resumeRunId)', () 
                 content: 'Use a British RP accent.',
             });
             expect(caller.getOpenConsult(CONSULT_RUN_ID_2)).toBeUndefined();
+        });
+
+        it('ignores unknown resumeRunId or another sub-agent open resumeRunId when ExecuteSubAgent is called directly (runs fresh with normal payload, no lastRunId, and no injected assistant turn)', async () => {
+            const caller = new RealExecuteSubAgentCaller();
+            const childAgent = registerChildSubAgent();
+            const { subAgent: otherSubAgent } = registerRelatedSubAgent();
+
+            // Register an open consult belonging to otherSubAgent
+            caller.setOpenConsult({
+                childRunId: CONSULT_RUN_ID_2,
+                subAgentId: otherSubAgent.ID,
+                subAgentName: otherSubAgent.Name,
+                round: 1,
+                question: 'Question from otherSubAgent?',
+            });
+
+            const params = makeParams();
+            const stepEntity = new MockStepEntity(3) as unknown as MJAIAgentRunStepEntityExtended;
+            const normalPayload = { normal: 'fresh-payload' };
+
+            // Case A: unknown resumeRunId
+            await caller.invokeExecuteSubAgent(
+                params,
+                {
+                    name: childAgent.Name,
+                    message: 'Task with unknown resumeRunId',
+                    terminateAfter: false,
+                    resumeRunId: UNKNOWN_RUN_ID,
+                },
+                childAgent,
+                stepEntity,
+                normalPayload
+            );
+
+            expect(mockRunAgent).toHaveBeenCalledTimes(1);
+            const unknownCallParams: ExecuteAgentParams = mockRunAgent.mock.calls[0][0];
+            expect(unknownCallParams.lastRunId).toBeUndefined();
+            expect(unknownCallParams.autoPopulateLastRunPayload).toBeUndefined();
+            expect(unknownCallParams.payload).toEqual(normalPayload);
+            expect(unknownCallParams.conversationMessages.some(m => m.role === 'assistant')).toBe(false);
+            expect(LogErrorEx).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    message: expect.stringContaining(UNKNOWN_RUN_ID),
+                })
+            );
+
+            // Case B: another sub-agent's open resumeRunId
+            vi.mocked(LogErrorEx).mockClear();
+            await caller.invokeExecuteSubAgent(
+                params,
+                {
+                    name: childAgent.Name,
+                    message: 'Task with mismatched sub-agent resumeRunId',
+                    terminateAfter: false,
+                    resumeRunId: CONSULT_RUN_ID_2,
+                },
+                childAgent,
+                stepEntity,
+                normalPayload
+            );
+
+            expect(mockRunAgent).toHaveBeenCalledTimes(2);
+            const mismatchedCallParams: ExecuteAgentParams = mockRunAgent.mock.calls[1][0];
+            expect(mismatchedCallParams.lastRunId).toBeUndefined();
+            expect(mismatchedCallParams.autoPopulateLastRunPayload).toBeUndefined();
+            expect(mismatchedCallParams.payload).toEqual(normalPayload);
+            expect(mismatchedCallParams.conversationMessages.some(m => m.role === 'assistant')).toBe(false);
+            expect(LogErrorEx).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    message: expect.stringContaining(CONSULT_RUN_ID_2),
+                })
+            );
+            // The other sub-agent's open consult remains untouched
+            expect(caller.getOpenConsult(CONSULT_RUN_ID_2)).toBeDefined();
         });
     });
 
@@ -919,6 +999,57 @@ describe('VS-CON-3: Resume a sub-agent that asked a question (resumeRunId)', () 
 
             expect(retry.step).toBe('Retry');
             expect(retry.errorMessage).toContain(`Open consult run IDs for '${child.Name}': none`);
+        });
+
+        it('returns Retry when a parallel step carries the same open resumeRunId more than once', async () => {
+            const child = registerChildSubAgent();
+            const caller = new RealExecuteSubAgentCaller();
+            caller.setOpenConsult({
+                childRunId: CONSULT_RUN_ID_1,
+                subAgentId: child.ID,
+                subAgentName: child.Name,
+                round: 1,
+                question: 'Should we use 16:9 or 9:16?',
+            });
+
+            const internals = caller as unknown as {
+                validateSubAgentNextStep: (
+                    params: ExecuteAgentParams,
+                    nextStep: { step: string; subAgents?: AgentSubAgentRequest[] },
+                    currentPayload: unknown,
+                    agentRun: unknown,
+                    currentStep: unknown
+                ) => Promise<{ step: string; errorMessage?: string }>;
+                _generalValidationRetryCount: number;
+            };
+
+            const retry = await internals.validateSubAgentNextStep(
+                makeParams(),
+                {
+                    step: 'Sub-Agent',
+                    subAgents: [
+                        {
+                            name: child.Name,
+                            message: 'Answer 1',
+                            terminateAfter: false,
+                            resumeRunId: CONSULT_RUN_ID_1,
+                        },
+                        {
+                            name: child.Name,
+                            message: 'Answer 2',
+                            terminateAfter: false,
+                            resumeRunId: CONSULT_RUN_ID_1,
+                        },
+                    ],
+                },
+                {},
+                fakeRun,
+                fakeStep
+            );
+
+            expect(retry.step).toBe('Retry');
+            expect(retry.errorMessage).toContain(`resumeRunId '${CONSULT_RUN_ID_1}' is used more than once`);
+            expect(internals._generalValidationRetryCount).toBe(1);
         });
     });
 

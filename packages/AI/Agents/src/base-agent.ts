@@ -6231,6 +6231,7 @@ export class BaseAgent {
         }
 
         // Validate each requested sub-agent: existence + MaxExecutionsPerRun
+        const seenResumeRunIds = new Set<string>();
         for (const req of requested) {
             const name = req?.name;
             const subAgent = curAgentSubAgents.find(a => a.Name.trim().toLowerCase() === name?.trim().toLowerCase());
@@ -6302,6 +6303,28 @@ export class BaseAgent {
                         errorMessage
                     };
                 }
+
+                const normalizedResumeId = matchingConsult.childRunId.trim().toLowerCase();
+                if (seenResumeRunIds.has(normalizedResumeId)) {
+                    const errorMessage = `resumeRunId '${req.resumeRunId}' is used more than once`;
+                    this.logError(errorMessage, {
+                        agent: params.agent,
+                        category: 'SubAgentExecution',
+                        metadata: {
+                            subAgentName: name,
+                            resumeRunId: req.resumeRunId
+                        }
+                    });
+                    if (nextStep.step !== 'Retry') {
+                        this._generalValidationRetryCount++;
+                    }
+                    return {
+                        step: 'Retry',
+                        terminate: false,
+                        errorMessage
+                    };
+                }
+                seenResumeRunIds.add(normalizedResumeId);
             }
 
             if (req.presetName != null && req.presetName.trim() !== '') {
@@ -12036,6 +12059,7 @@ The context is now within limits. Please retry your request with the recovered c
      * @param {AgentSubAgentRequest} subAgentRequest - Sub-agent request details
      * @param {MJAIAgentEntityExtended} subAgent - The sub-agent entity
      * @param {ChatMessage | undefined} contextMessage - Optional context from SubAgentContextPaths
+     * @param {string | null | undefined} consultQuestion - Optional open-consult question when resuming a child run
      * @returns {ChatMessage[]} Prepared message array for sub-agent execution
      *
      * @protected
@@ -12044,7 +12068,8 @@ The context is now within limits. Please retry your request with the recovered c
         params: ExecuteAgentParams,
         subAgentRequest: AgentSubAgentRequest,
         subAgent: MJAIAgentEntityExtended,
-        contextMessage?: ChatMessage
+        contextMessage?: ChatMessage,
+        consultQuestion?: string | null
     ): ChatMessage[] {
         const engine = AIEngine.Instance;
         let messages: ChatMessage[] = [];
@@ -12114,16 +12139,11 @@ The context is now within limits. Please retry your request with the recovered c
         }
 
         // On resume, insert the consult's question as an assistant turn right before the request message
-        if (subAgentRequest.resumeRunId) {
-            const resumeId = subAgentRequest.resumeRunId.trim();
-            const consult = this._openSubAgentConsults.get(resumeId)
-                ?? Array.from(this._openSubAgentConsults.values()).find(c => UUIDsEqual(c.childRunId, resumeId));
-            if (consult?.question) {
-                messages.push({
-                    role: 'assistant',
-                    content: consult.question
-                });
-            }
+        if (consultQuestion) {
+            messages.push({
+                role: 'assistant',
+                content: consultQuestion
+            });
         }
 
         if (subAgentRequest.message) {
@@ -12177,25 +12197,40 @@ The context is now within limits. Please retry your request with the recovered c
             // Create a new AgentRunner instance with the same isolated provider
             const runner = new AgentRunner(params.provider || this._activeProvider);
 
+            // Look up an open consult matching both childRunId and subAgent.ID once.
+            // Only resume when the consult is open for this sub-agent; otherwise log an error and run fresh.
+            const requestedResumeRunId = subAgentRequest.resumeRunId?.trim() || undefined;
+            let matchedConsult: SubAgentConsultRecord | undefined;
+            if (requestedResumeRunId) {
+                matchedConsult = Array.from(this._openSubAgentConsults.values()).find(
+                    c => UUIDsEqual(c.childRunId, requestedResumeRunId) && UUIDsEqual(c.subAgentId, subAgent.ID)
+                );
+                if (matchedConsult) {
+                    this._openSubAgentConsults.delete(matchedConsult.childRunId);
+                } else {
+                    this.logError(
+                        `ExecuteSubAgent: ignoring unknown or mismatched resumeRunId '${requestedResumeRunId}' for sub-agent '${subAgent.Name}'`,
+                        {
+                            agent: params.agent,
+                            category: 'SubAgentExecution',
+                            metadata: {
+                                subAgentName: subAgent.Name,
+                                resumeRunId: requestedResumeRunId
+                            }
+                        }
+                    );
+                }
+            }
+            const verifiedResumeRunId = matchedConsult?.childRunId;
+
             // Prepare messages for sub-agent using database-configured message mode
             const subAgentMessages = this.prepareSubAgentMessages(
                 params,
                 subAgentRequest,
                 subAgent,
-                contextMessage
+                contextMessage,
+                matchedConsult?.question
             );
-
-            // Remove the open consult now that it is being answered
-            const resumeRunId = subAgentRequest.resumeRunId?.trim() || undefined;
-            if (resumeRunId) {
-                const consult = this._openSubAgentConsults.get(resumeRunId)
-                    ?? Array.from(this._openSubAgentConsults.values()).find(c => UUIDsEqual(c.childRunId, resumeRunId));
-                if (consult) {
-                    this._openSubAgentConsults.delete(consult.childRunId);
-                } else {
-                    this._openSubAgentConsults.delete(resumeRunId);
-                }
-            }
             
             // Set parent run ID in the sub-agent's execution
             // This would need to be passed through the AgentRunner in a real implementation
@@ -12250,8 +12285,8 @@ The context is now within limits. Please retry your request with the recovered c
                 parentStepCounts: parentStepCountsToPass,
                 parentRun: this._agentRun,
                 parentActivatedSkillIDs: this.activeSkillIDsForRun(params), // the root's active skills reach the sub-agent's actions
-                payload: resumeRunId ? undefined : payload, // on resume, ignore computed/mapped payload so autoPopulateLastRunPayload loads the child's prior FinalPayload
-                ...(resumeRunId ? { lastRunId: resumeRunId, autoPopulateLastRunPayload: true } : {}),
+                payload: verifiedResumeRunId ? undefined : payload, // on resume, ignore computed/mapped payload so autoPopulateLastRunPayload loads the child's prior FinalPayload
+                ...(verifiedResumeRunId ? { lastRunId: verifiedResumeRunId, autoPopulateLastRunPayload: true } : {}),
                 configurationId: resolvedConfig.configurationId, // resolved preset configuration ID or inherited parent configurationId
                 effortLevel: params.effortLevel, // propagate effort level to sub-agent
                 apiKeys: params.apiKeys, // propagate API keys to sub-agent
@@ -13205,7 +13240,6 @@ The context is now within limits. Please retry your request with the recovered c
                         const lastPayload = JSON.parse(lastRun.FinalPayload);
                         // Only set payload if not explicitly provided
                         if (!params.payload) {
-                            params.payload = lastPayload;
                             modifiedParams = {
                                 ...params,
                                 payload: lastPayload
