@@ -12,13 +12,13 @@ const LAYOUT_ESCAPED_AFTER_SQL =
 
 describe('DecodeJSONArgument', () => {
     it('parses valid JSON without repairing it', () => {
-        expect(DecodeJSONArgument('{"a": 1}')).toEqual({ success: true, value: { a: 1 }, repaired: false });
+        expect(DecodeJSONArgument('{"a": 1}')).toEqual({ Success: true, Value: { a: 1 }, Repaired: false });
     });
 
     it('repairs layout written as escapes after a long string value', () => {
         const result = DecodeJSONArgument(LAYOUT_ESCAPED_AFTER_SQL);
-        expect(result).toMatchObject({ success: true, repaired: true });
-        const value = (result as { value: { updateElements: { query: { name: string; sql: string } } } }).value;
+        expect(result).toMatchObject({ Success: true, Repaired: true });
+        const value = (result as { Value: { updateElements: { query: { name: string; sql: string } } } }).Value;
         expect(value.updateElements.query.name).toBe('Chapter Quarterly Engagement Matrix');
         // Escapes inside the string decode as JSON escapes, exactly as they would have unrepaired.
         expect(value.updateElements.query.sql).toBe(
@@ -26,17 +26,17 @@ describe('DecodeJSONArgument', () => {
     });
 
     it('repairs a document written entirely with escaped layout', () => {
-        expect(DecodeJSONArgument('{\\n\\t"a": [1,\\r\\n 2]\\n}')).toEqual({ success: true, value: { a: [1, 2] }, repaired: true });
+        expect(DecodeJSONArgument('{\\n\\t"a": [1,\\r\\n 2]\\n}')).toEqual({ Success: true, Value: { a: [1, 2] }, Repaired: true });
     });
 
     it("reports the parser's error for the model's own text when the repair does not help", () => {
         const result = DecodeJSONArgument('{"a": 1,\\n "b": }');
-        expect(result.success).toBe(false);
-        expect((result as { error: string }).error).toMatch(/JSON/);
+        expect(result.Success).toBe(false);
+        expect((result as { Error: string }).Error).toMatch(/JSON/);
     });
 
     it('reports an error for text that is not JSON at all', () => {
-        expect(DecodeJSONArgument('not json').success).toBe(false);
+        expect(DecodeJSONArgument('not json').Success).toBe(false);
     });
 });
 

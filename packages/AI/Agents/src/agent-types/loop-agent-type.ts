@@ -449,13 +449,13 @@ export class LoopAgentType extends BaseAgentType {
         let candidate: unknown = value;
         if (typeof value === 'string') {
             const decoded = DecodeJSONArgument(value);
-            if ('error' in decoded) {
-                return { error: decoded.error };
+            if ('Error' in decoded) {
+                return { error: decoded.Error };
             }
-            if (decoded.repaired) {
+            if (decoded.Repaired) {
                 LogStatusEx({ message: '🩹 Loop Agent: complete_task.payloadChangeRequest had layout escapes outside its strings — repaired' });
             }
-            candidate = decoded.value;
+            candidate = decoded.Value;
         }
         return candidate !== null && typeof candidate === 'object' && !Array.isArray(candidate)
             ? { payloadChangeRequest: candidate as AgentPayloadChangeRequest }

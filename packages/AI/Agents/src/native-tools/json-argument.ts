@@ -16,8 +16,8 @@
 
 /** The result of decoding a JSON argument: the parsed value, or why it could not be parsed. */
 export type JSONArgumentDecodeResult =
-    | { success: true; value: unknown; repaired: boolean }
-    | { success: false; error: string };
+    | { Success: true; Value: unknown; Repaired: boolean }
+    | { Success: false; Error: string };
 
 /** Escapes a model writes for layout, mapped to the whitespace they stand for. */
 const LAYOUT_ESCAPES: Readonly<Record<string, string>> = { n: '\n', r: '\r', t: '\t' };
@@ -27,12 +27,12 @@ const LAYOUT_ESCAPES: Readonly<Record<string, string>> = { n: '\n', r: '\r', t: 
  * fails.
  *
  * @param text the argument as the model sent it
- * @returns the parsed value, with `repaired` true when the repair was needed; or the original parse error
+ * @returns the parsed value, with `Repaired` true when the repair was needed; or the original parse error
  */
 export function DecodeJSONArgument(text: string): JSONArgumentDecodeResult {
     let originalError: string;
     try {
-        return { success: true, value: JSON.parse(text), repaired: false };
+        return { Success: true, Value: JSON.parse(text), Repaired: false };
     } catch (error: unknown) {
         originalError = error instanceof Error ? error.message : String(error);
     }
@@ -40,12 +40,12 @@ export function DecodeJSONArgument(text: string): JSONArgumentDecodeResult {
     const repaired = RepairLayoutEscapesOutsideStrings(text);
     if (repaired !== text) {
         try {
-            return { success: true, value: JSON.parse(repaired), repaired: true };
+            return { Success: true, Value: JSON.parse(repaired), Repaired: true };
         } catch {
             // Fall through: report the error the model's own text produced, not the repair's.
         }
     }
-    return { success: false, error: originalError };
+    return { Success: false, Error: originalError };
 }
 
 /**
