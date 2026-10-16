@@ -90,6 +90,12 @@ export function SaveParameterFromLiteral(field: EntityFieldInfo, literal: string
   if (field.IsBinaryFieldType) {
     return { Type: SaveParameterType(field), Value: Buffer.from(literal.slice(2), 'hex') };
   }
+  if (name === 'sql_variant') {
+    return sqlVariantParameterFromLiteral(literal);
+  }
+  if (TEXT_DATE_TYPES.has(name)) {
+    return { Type: SaveParameterType(field), Value: QuotedLiteralText(literal) };
+  }
   if (EXACT_NUMERIC_TYPES.has(name)) {
     // An exponent makes the literal a float (`1e-07`), so that one is sent as a float.
     return /e/i.test(literal) ? { Type: sql.Float(), Value: Number(literal) } : { Type: SaveParameterType(field), Value: literal };
@@ -108,6 +114,27 @@ export function SaveParameterFromLiteral(field: EntityFieldInfo, literal: string
     default:
       return { Type: SaveParameterType(field), Value: QuotedLiteralText(literal) };
   }
+}
+
+/**
+ * A `sql_variant` column records the runtime base type of the parameter bound to `@p$n`.
+ * SQL Server rejects `nvarchar(max)` inside `sql_variant` (Msg 206), so string literals bind as
+ * `nvarchar(4000)` (the maximum `nvarchar` length `sql_variant` permits), while unquoted numeric
+ * literals bind with their numeric type (`int`, `bigint`, or `float`) so `SQL_VARIANT_PROPERTY(..., 'BaseType')`
+ * preserves numeric base types.
+ */
+function sqlVariantParameterFromLiteral(literal: string): { Type: sql.ISqlType; Value: SQLServerSaveValue } {
+  if (literal.startsWith("'") || literal.startsWith("N'")) {
+    return { Type: sql.NVarChar(4000), Value: QuotedLiteralText(literal) };
+  }
+  if (/^-?\d+$/.test(literal)) {
+    const asBigInt = BigInt(literal);
+    if (asBigInt >= -2147483648n && asBigInt <= 2147483647n) {
+      return { Type: sql.Int(), Value: Number(literal) };
+    }
+    return { Type: sql.BigInt(), Value: asBigInt };
+  }
+  return { Type: sql.Float(), Value: Number(literal) };
 }
 
 /** A bigint literal as a BigInt; a fraction is truncated toward zero, as SQL Server converts it. */
@@ -145,11 +172,21 @@ function driverTypesByName(): Map<string, DriverTypeFactory> {
 const EXACT_NUMERIC_TYPES = new Set(['decimal', 'numeric', 'money', 'smallmoney']);
 
 /**
- * Types the driver cannot send as a parameter (`xml` and the CLR types are "not implemented" in
- * tedious; `sql_variant` is named `Variant` there), or that it does not know. Their value is sent
- * as `nvarchar(max)` text so Unicode is preserved while the typed SET converts it as before.
+ * Date types sent as their ISO-8601 literal text (`varchar(34)`) so the typed `SET @x = @p$n`
+ * performs the conversion on SQL Server:
+ * - `datetimeoffset`: tedious encodes `sql.DateTimeOffset()` with `-date.getTimezoneOffset()`,
+ *   which stamps the Node host's local offset instead of the `+00:00` written by `.toISOString()`.
+ * - `smalldatetime`: tedious truncates seconds (`date.getUTCMinutes()`) instead of rounding >=30s
+ *   to the next minute as SQL Server does, and throws a Node `RangeError` for pre-1900 dates.
  */
-const SENT_AS_LITERAL_TEXT = new Set(['xml', 'sql_variant', 'hierarchyid', 'geography', 'geometry', 'json', 'vector']);
+const TEXT_DATE_TYPES = new Set(['datetimeoffset', 'smalldatetime']);
+
+/**
+ * Types the driver cannot send as a parameter (`xml` and the CLR types are "not implemented" in
+ * tedious), or that it does not know. Their value is sent as `nvarchar(max)` text so Unicode is
+ * preserved while the typed SET converts it as before.
+ */
+const SENT_AS_LITERAL_TEXT = new Set(['xml', 'hierarchyid', 'geography', 'geometry', 'json', 'vector']);
 
 /** Server-generated types that a save never writes. */
 const NEVER_WRITTEN = new Set(['timestamp', 'rowversion']);
@@ -174,8 +211,20 @@ export function SaveParameterType(field: EntityFieldInfo): sql.ISqlType {
     case 'varbinary':
       // The literal is a `0x…` varbinary; a binary(n) variable pads it the same way.
       return sql.VarBinary(length);
+    case 'ntext':
+      return sql.NVarChar(sql.MAX);
+    case 'text':
+      return sql.VarChar(sql.MAX);
+    case 'image':
+      return sql.VarBinary(sql.MAX);
     case 'sysname':
       return sql.NVarChar(128);
+    case 'sql_variant':
+      // SQL Server rejects nvarchar(max) inside sql_variant (Msg 206); 4000 is the max permitted.
+      return sql.NVarChar(4000);
+  }
+  if (TEXT_DATE_TYPES.has(name)) {
+    return sql.VarChar(34);
   }
   if (EXACT_NUMERIC_TYPES.has(name)) {
     return sql.VarChar(sql.MAX);
@@ -189,4 +238,5 @@ export function SaveParameterType(field: EntityFieldInfo): sql.ISqlType {
   }
   return factory();
 }
+
 

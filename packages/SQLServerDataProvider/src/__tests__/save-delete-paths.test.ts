@@ -22,6 +22,7 @@ import type { BaseEntity, EntityInfo, UserInfo } from '@memberjunction/core';
 import { EntitySaveOptions, EntityDeleteOptions, Metadata } from '@memberjunction/core';
 import type { IMetadataProvider } from '@memberjunction/core';
 import { GenericDatabaseProvider } from '@memberjunction/generic-database-provider';
+import { EntityActionEngineServer } from '@memberjunction/actions';
 import { SQLServerDataProvider } from '../SQLServerDataProvider';
 import { SQLServerTransactionGroup } from '../SQLServerTransactionGroup';
 import { mssqlState, MockConnectionPool, RecordedInput, RecordedQuery } from './helpers/mock-mssql';
@@ -150,7 +151,7 @@ describe('SQLServerDataProvider save path (real Save() → GenerateSaveSQL → m
     expect(executed.sql).not.toContain("Widget''s One");
     expect(inputWithValue(executed, "Widget's One").type).toEqual(mssql.NVarChar(100));
     expect(inputWithValue(executed, true).type).toEqual(mssql.Bit());
-    expect(inputWithValue(executed, new Date('2025-04-05T12:00:00.000Z')).type).toEqual(mssql.DateTimeOffset());
+    expect(inputWithValue(executed, '2025-04-05T12:00:00.000Z').type).toEqual(mssql.VarChar(34));
 
     // What is logged: the literal form, the text the batch has always had.
     const sql = provider.LiteralSQL[0];
@@ -331,16 +332,35 @@ describe('SQLServerDataProvider save path (real Save() → GenerateSaveSQL → m
     expect(message).toContain('Parameters: None');
   });
 
-  it('CREATE: throws when the proc returns no rows (create must produce a record)', async () => {
+  it('CREATE: throws when the proc returns no rows, including literal SQL instead of @p$ placeholders', async () => {
     const provider = makeProvider();
     const entity = makeNewWidgetEntity(makeWidgetEntityInfo(), TEST_USER);
     entity.Set('Name', 'Ghost');
     entity.Set('IsActive', true);
     mssqlState.QueueResult({ rows: [] });
 
-    await expect(provider.Save(entity, TEST_USER, new EntitySaveOptions())).rejects.toThrow(
-      /Error creating new record, no rows returned/,
+    const error = await provider.Save(entity, TEST_USER, new EntitySaveOptions()).then(
+      () => null,
+      (e: Error) => e,
     );
+    expect(error?.message).toMatch(/Error creating new record, no rows returned/);
+    expect(error?.message).toContain("N'Ghost'");
+    expect(error?.message).not.toContain('@p$');
+  });
+
+  it('UPDATE: throws when the proc returns no rows, including literal SQL instead of @p$ placeholders', async () => {
+    const provider = makeProvider();
+    const entity = makeSavedWidgetEntity(makeWidgetEntityInfo(), TEST_USER);
+    entity.Set('Name', 'Vanished');
+    mssqlState.QueueResult({ rows: [] });
+
+    const error = await provider.Save(entity, TEST_USER, new EntitySaveOptions()).then(
+      () => null,
+      (e: Error) => e,
+    );
+    expect(error?.message).toMatch(/Error updating record, no MATCHING rows/);
+    expect(error?.message).toContain("N'Vanished'");
+    expect(error?.message).not.toContain('@p$');
   });
 });
 
@@ -818,5 +838,107 @@ describe('SQLServerDataProvider Record Change text is sent as Unicode (N\'…\')
     expect(saveSQL.literalSQL).toContain("N'Lazy Check'");
     expect(saveSQL.simpleSQL).toContain("N'Lazy Check'");
   });
+
+  it('populates extraData.overlappingChangeData.changesJSON with the diff JSON (not fullRecordJSON) on tracked updates', async () => {
+    const provider = makeProvider();
+    provider.SetTestEntities([makeRecordChangesEntityInfo()]);
+    const entity = makeSavedWidgetEntity(makeWidgetEntityInfo({ trackRecordChanges: true }), TEST_USER);
+    entity.Set('Name', 'Updated Only Name');
+
+    const saveSQL = await provider.SaveSQLForTest(entity, false, TEST_USER);
+    const extraData = (saveSQL as unknown as {
+      extraData?: { overlappingChangeData?: { changesJSON: string; changesDescription: string } };
+    }).extraData;
+
+    expect(extraData?.overlappingChangeData).toBeDefined();
+    const parsedChanges = JSON.parse(extraData!.overlappingChangeData!.changesJSON) as Record<string, unknown>;
+    expect(Object.keys(parsedChanges)).toEqual(['Name']);
+    expect(parsedChanges['Name']).toMatchObject({
+      field: 'Name',
+      oldValue: 'Widget One',
+      newValue: 'Updated Only Name',
+    });
+    expect(parsedChanges['IsActive']).toBeUndefined();
+  });
+
+  it('does not lock _datetimeOffsetTestComplete on a transient probe error, allowing the next probe to succeed', async () => {
+    const provider = makeProvider();
+    const surface = provider as unknown as ProviderPrivateSurface & {
+      testDatetimeOffsetHandling: () => Promise<void>;
+    };
+    surface._datetimeOffsetTestComplete = false;
+    surface._needsDatetimeOffsetAdjustment = false;
+
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      mssqlState.QueueResult({ error: new Error('Transient pool timeout') });
+      await surface.testDatetimeOffsetHandling();
+
+      expect(surface._datetimeOffsetTestComplete).toBe(false);
+      expect(surface._needsDatetimeOffsetAdjustment).toBe(true);
+
+      mssqlState.QueueResult({ rows: [{ TestDateTime: new Date('1900-01-01T11:00:00.000Z') }] });
+      await surface.testDatetimeOffsetHandling();
+
+      expect(surface._datetimeOffsetTestComplete).toBe(true);
+      expect(surface._needsDatetimeOffsetAdjustment).toBe(false);
+    } finally {
+      errSpy.mockRestore();
+    }
+  });
+
+  it('HandleEntityActions fast path: runs Active actions when Loaded is true and short-circuits when only Disabled actions exist', async () => {
+    const provider = makeProvider();
+    const entity = makeNewWidgetEntity(makeWidgetEntityInfo(), TEST_USER);
+    const engine = EntityActionEngineServer.Instance;
+    const realHandle = (GenericDatabaseProvider.prototype as unknown as {
+      HandleEntityActions: (
+        e: BaseEntity,
+        baseType: 'save' | 'delete' | 'validate',
+        before: boolean,
+        u: UserInfo,
+      ) => Promise<unknown[]>;
+    }).HandleEntityActions;
+
+    const configSpy = vi.spyOn(engine, 'Config').mockResolvedValue(undefined as never);
+    const loadedSpy = vi.spyOn(engine, 'Loaded', 'get').mockReturnValue(true);
+    const invTypesSpy = vi
+      .spyOn(engine, 'InvocationTypes', 'get')
+      .mockReturnValue([{ ID: 'inv-val', Name: 'Validate' }] as never);
+    const byNameSpy = vi
+      .spyOn(engine, 'GetActionsByEntityName')
+      .mockImplementation((_entityName: string, status?: string) =>
+        status === 'Active' ? ([{ ID: 'ea-active', Status: 'Active' }] as never) : ([] as never),
+      );
+    const byInvSpy = vi
+      .spyOn(engine, 'GetActionsByEntityNameAndInvocationType')
+      .mockReturnValue([{ ID: 'ea-active', Status: 'Active' }] as never);
+    const runSpy = vi.spyOn(engine, 'RunEntityAction').mockResolvedValue({ Success: true } as never);
+
+    try {
+      const activeResult = await realHandle.call(provider, entity, 'validate', true, TEST_USER);
+      expect(configSpy).not.toHaveBeenCalled();
+      expect(byNameSpy).toHaveBeenCalledWith('Widgets', 'Active');
+      expect(runSpy).toHaveBeenCalledTimes(1);
+      expect(activeResult).toHaveLength(1);
+
+      runSpy.mockClear();
+      byNameSpy.mockImplementation((_entityName: string, status?: string) =>
+        status === 'Disabled' ? ([{ ID: 'ea-disabled', Status: 'Disabled' }] as never) : ([] as never),
+      );
+
+      const disabledOnlyResult = await realHandle.call(provider, entity, 'validate', true, TEST_USER);
+      expect(disabledOnlyResult).toEqual([]);
+      expect(runSpy).not.toHaveBeenCalled();
+    } finally {
+      configSpy.mockRestore();
+      loadedSpy.mockRestore();
+      invTypesSpy.mockRestore();
+      byNameSpy.mockRestore();
+      byInvSpy.mockRestore();
+      runSpy.mockRestore();
+    }
+  });
 });
+
 

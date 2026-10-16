@@ -53,10 +53,13 @@ describe('SaveParameterType', () => {
     expect(SaveParameterType(field('char', 3))).toEqual(sql.Char(3));
   });
 
-  it('gives unbounded columns MAX', () => {
+  it('gives unbounded columns and legacy LOB types MAX', () => {
     expect(SaveParameterType(field('nvarchar', -1))).toEqual(sql.NVarChar(sql.MAX));
     expect(SaveParameterType(field('varchar', -1))).toEqual(sql.VarChar(sql.MAX));
     expect(SaveParameterType(field('varbinary', -1))).toEqual(sql.VarBinary(sql.MAX));
+    expect(SaveParameterType(field('ntext', 16))).toEqual(sql.NVarChar(sql.MAX));
+    expect(SaveParameterType(field('text', 16))).toEqual(sql.VarChar(sql.MAX));
+    expect(SaveParameterType(field('image', 16))).toEqual(sql.VarBinary(sql.MAX));
   });
 
   it('binds binary(n) as varbinary(n), the type of the 0x literal it replaces', () => {
@@ -74,8 +77,17 @@ describe('SaveParameterType', () => {
     }
   });
 
+  it('sends datetimeoffset and smalldatetime as varchar(34) ISO text so SQL Server handles offset and rounding', () => {
+    expect(SaveParameterType(field('datetimeoffset'))).toEqual(sql.VarChar(34));
+    expect(SaveParameterType(field('smalldatetime'))).toEqual(sql.VarChar(34));
+  });
+
+  it('caps sql_variant text parameters at nvarchar(4000), the maximum length sql_variant permits', () => {
+    expect(SaveParameterType(field('sql_variant'))).toEqual(sql.NVarChar(4000));
+  });
+
   it('sends types the driver cannot bind directly as nvarchar(max) text so Unicode is preserved', () => {
-    for (const typeName of ['xml', 'sql_variant', 'hierarchyid', 'geography', 'geometry', 'json', 'vector']) {
+    for (const typeName of ['xml', 'hierarchyid', 'geography', 'geometry', 'json', 'vector']) {
       expect(SaveParameterType(field(typeName))).toEqual(sql.NVarChar(sql.MAX));
     }
   });
@@ -119,15 +131,44 @@ describe('SaveParameterFromLiteral', () => {
     expect(SaveParameterFromLiteral(field('bigint'), '-7.9').Value).toBe(-7n);
   });
 
+  it('binds sql_variant literals with compatible base types (nvarchar(4000), int, bigint, float)', () => {
+    expect(SaveParameterFromLiteral(field('sql_variant'), "N'hello'")).toEqual({
+      Type: sql.NVarChar(4000),
+      Value: 'hello',
+    });
+    expect(SaveParameterFromLiteral(field('sql_variant'), "'plain'")).toEqual({
+      Type: sql.NVarChar(4000),
+      Value: 'plain',
+    });
+    expect(SaveParameterFromLiteral(field('sql_variant'), '42')).toEqual({
+      Type: sql.Int(),
+      Value: 42,
+    });
+    expect(SaveParameterFromLiteral(field('sql_variant'), '9007199254740993')).toEqual({
+      Type: sql.BigInt(),
+      Value: 9007199254740993n,
+    });
+    expect(SaveParameterFromLiteral(field('sql_variant'), '3.14')).toEqual({
+      Type: sql.Float(),
+      Value: 3.14,
+    });
+  });
+
   it('reads booleans from the 1/0 the literal batch writes', () => {
     expect(SaveParameterFromLiteral(field('bit'), '1')).toEqual({ Type: sql.Bit(), Value: true });
     expect(SaveParameterFromLiteral(field('bit'), '0')).toEqual({ Type: sql.Bit(), Value: false });
   });
 
-  it('reads dates as the same instant', () => {
-    const p = SaveParameterFromLiteral(field('datetimeoffset'), "'2025-04-05T12:00:00.000Z'");
-    expect(p.Type).toEqual(sql.DateTimeOffset());
-    expect(p.Value).toEqual(new Date('2025-04-05T12:00:00.000Z'));
+  it('binds datetime2 as a Date and sends datetimeoffset/smalldatetime as ISO text', () => {
+    const dt2 = SaveParameterFromLiteral(field('datetime2'), "'2025-04-05T12:00:00.000Z'");
+    expect(dt2.Type).toEqual(sql.DateTime2());
+    expect(dt2.Value).toEqual(new Date('2025-04-05T12:00:00.000Z'));
+
+    const dto = SaveParameterFromLiteral(field('datetimeoffset'), "'2025-04-05T12:00:00.000Z'");
+    expect(dto).toEqual({ Type: sql.VarChar(34), Value: '2025-04-05T12:00:00.000Z' });
+
+    const sdt = SaveParameterFromLiteral(field('smalldatetime'), "'2025-06-15T14:29:45.000Z'");
+    expect(sdt).toEqual({ Type: sql.VarChar(34), Value: '2025-06-15T14:29:45.000Z' });
   });
 
   it('reads binary from the hex literal, including zero bytes', () => {

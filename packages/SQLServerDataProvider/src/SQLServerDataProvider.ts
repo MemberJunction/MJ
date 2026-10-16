@@ -2790,9 +2790,9 @@ export class SQLServerDataProvider
     } catch (e) {
       // If the test fails, log the error but don't prevent initialization
       console.error('SQLServerDataProvider: Failed to test datetimeoffset handling:', e);
-      // Default to assuming adjustment is needed for safety
+      // Default to assuming adjustment is needed for safety on this provider,
+      // but leave _datetimeOffsetTestComplete false so the next call retries.
       this._needsDatetimeOffsetAdjustment = true;
-      this._datetimeOffsetTestComplete = true;
     }
   }
 
