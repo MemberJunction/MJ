@@ -243,7 +243,7 @@ import {
     WorkOSProvider,
 } from '@memberjunction/auth-providers';
 
-// @memberjunction/core-entities (451 classes)
+// @memberjunction/core-entities (452 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -287,6 +287,7 @@ import {
     MJAIAgentSessionBridgeParticipantEntity,
     MJAIAgentSessionChannelEntity,
     MJAIAgentSessionEntity,
+    MJAIAgentSessionRecordingShardEntity,
     MJAIAgentSkillEntity,
     MJAIAgentStepEntity,
     MJAIAgentStepPathEntity,
@@ -1799,6 +1800,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJAIAgentSessionBridgeParticipantEntity,
     MJAIAgentSessionChannelEntity,
     MJAIAgentSessionEntity,
+    MJAIAgentSessionRecordingShardEntity,
     MJAIAgentSkillEntity,
     MJAIAgentStepEntity,
     MJAIAgentStepPathEntity,
@@ -1884,11 +1886,11 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJClusterAnalysisEntity,
     MJCollectionArtifactEntity,
     MJCollectionEntity,
-    MJCollectionPermissionEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJCollectionPermissionEntity,
     MJCollectionPermissionEntityExtended,
     MJCommunicationBaseMessageTypeEntity,
     MJCommunicationLogEntity,
@@ -2088,11 +2090,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJQuerySQLEntity,
     MJQueueEntity,
     MJQueueTaskEntity,
-    MJQueueTypeEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJQueueTypeEntity,
     MJRSUPendingWorkEntity,
     MJRecommendationEntity,
     MJRecommendationItemEntity,
@@ -2292,11 +2294,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     ExportTypeformCSVAction,
     GetGoogleFormAction,
     GetGoogleFormsStatisticsAction,
-    GetJotFormAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    GetJotFormAction,
     GetJotFormStatisticsAction,
     GetJotFormSubmissionsAction,
     GetSingleGoogleFormsResponseAction,
@@ -2496,11 +2498,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     SearchScopePermissionResolver,
     StorageSearchProvider,
     TagSearchProvider,
-    TypesenseSearchProvider,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    TypesenseSearchProvider,
     VectorSearchProvider,
     VoyageReRanker,
     AISkillExportMarkdownServerOperation,
@@ -2700,11 +2702,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     AggregateDataAction,
     AssignUserRolesAction,
     BraveSearchAction,
-    BulkUpdateListItemStatusAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    BulkUpdateListItemStatusAction,
     BusinessDaysCalculatorAction,
     CSVParserAction,
     CalculateExpressionAction,
@@ -2886,7 +2888,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1165;
+export const CLASS_REGISTRATIONS_COUNT = 1166;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
