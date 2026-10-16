@@ -12,3 +12,5 @@ export const VIDEO_STUDIO_SPEC_VERSION = '1.0' as const;
 export * from './archetype-types.js';
 export * from './video-generation-spec.js';
 export * from './render-contract.js';
+export * from './validate-spec.js';
+
