@@ -710,8 +710,8 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
 
     // Explorer is a host where users routinely open interactive component artifacts, so warm the
     // React runtime in the background now that the user is signed in. ArtifactsModule no longer
-    // does this on construction (#4802). Non-blocking; Preload() logs and retries on demand.
-    this.reactAdapter.Preload();
+    // does this on construction (#4802). Non-blocking; preload() logs and retries on demand.
+    this.reactAdapter.preload();
   }
 
   /**
