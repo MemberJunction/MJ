@@ -7,6 +7,7 @@ import { RelationshipDiscoveryPhase, CachedColumnStats } from './discovery.js';
 import { SampleQuery, SampleQueryGenerationSummary } from './sample-queries.js';
 import { OrganicKeyCluster, OrganicKeyDetectionPhase } from './organic-keys.js';
 import type { AutoDocPluginStateSection } from '../plugins/types.js';
+import type { AutoDocIndex } from './driver.js';
 
 export interface DatabaseDocumentation {
   version: string;
@@ -124,6 +125,12 @@ export interface TableDefinition {
   dependsOn: ForeignKeyReference[];
   dependents: ForeignKeyReference[];
   columns: ColumnDefinition[];
+  /**
+   * Indexes that exist on the table in the database, read during introspection and shown to the
+   * LLM as key evidence. Absent when they were not read (`analysis.useExistingIndexes: false`, an
+   * older state file, or a catalog read that failed); an empty array means the table has none.
+   */
+  indexes?: AutoDocIndex[];
   description?: string;
   descriptionIterations: DescriptionIteration[];
   userNotes?: string;
