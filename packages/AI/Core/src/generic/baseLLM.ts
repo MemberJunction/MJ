@@ -3,7 +3,6 @@ import { BaseModel, ModelUsage } from "./baseModel";
 import { ChatMessage, ChatMessageRole, ChatParams, ChatResult, StreamingChatCallbacks, ParallelChatCompletionsCallbacks, ChatCompletionMessage, ValidateToolConversation } from "./chat.types";
 import { ClassifyParams, ClassifyResult } from "./classify.types";
 import { ErrorAnalyzer } from "./errorAnalyzer";
-import { ParameterFidelityError, VendorParameterFidelity, type VendorCallParameters } from "./parameterFidelity";
 import { BuildCancellationErrorInfo, DescribeCancellation, IsAbortError } from "./cancellation";
 
 /**
@@ -89,32 +88,8 @@ export abstract class BaseLLM extends BaseModel {
     }
 
     /**
-     * The temperature, max output tokens and seed this driver would send for these params. The default is the
-     * configured values; a driver that substitutes a default or drops a parameter overrides this.
-     */
-    public DescribeSentParameters(params: ChatParams): VendorCallParameters {
-        return VendorParameterFidelity.ConfiguredParameters(params);
-    }
-
-    /** Whether {@link ChatCompletion} takes the streaming path for these params. */
-    protected WillStream(params: ChatParams): boolean {
-        return params.streaming === true && params.streamingCallbacks != null && this.SupportsStreaming && !this.isStreamingSuppressedForTools(params);
-    }
-
-    /**
-     * Native tool calling is non-streaming only: streaming tool-call delta assembly differs substantially per
-     * provider and is deferred. When a caller asks for both, tools win and we quietly take the non-streaming
-     * path, recording it on the result so the downgrade is visible rather than mysterious.
-     */
-    private isStreamingSuppressedForTools(params: ChatParams): boolean {
-        const toolsRequested = this.SupportsTools && params.tools != null && params.tools.length > 0;
-        return toolsRequested && params.streaming === true;
-    }
-
-    /**
      * Process a chat completion request. If streaming is enabled and supported,
-     * this will route to the streaming implementation. A `strictParameters` call the driver would not send as
-     * configured throws {@link ParameterFidelityError} before any request.
+     * this will route to the streaming implementation.
      */
     public async ChatCompletion(params: ChatParams): Promise<ChatResult> {
         if (params.enableCaching === undefined) {
@@ -128,13 +103,13 @@ export abstract class BaseLLM extends BaseModel {
             ValidateToolConversation(params.messages);
         }
 
-        // Refuse before any request when a strict caller's temperature, max tokens or seed would not reach the vendor as configured
-        const fidelity = VendorParameterFidelity.CompareParameters(VendorParameterFidelity.ConfiguredParameters(params), this.DescribeSentParameters(params));
-        if (params.strictParameters === true && fidelity.Status === 'refused') {
-            throw new ParameterFidelityError(fidelity, this.constructor.name);
-        }
-
-        const streamingSuppressedForTools = this.isStreamingSuppressedForTools(params);
+        // Native tool calling is non-streaming only: streaming tool-call delta assembly
+        // differs substantially per provider and is deferred. When a caller asks for both, tools
+        // win and we quietly take the non-streaming path — the same shape as the existing
+        // "streaming unsupported -> non-streaming" fallback — recording it on the result so the
+        // downgrade is visible rather than mysterious.
+        const toolsRequested = this.SupportsTools && params.tools != null && params.tools.length > 0;
+        const streamingSuppressedForTools = toolsRequested && params.streaming === true;
 
         // A request cancelled before it starts opens no socket, on every driver alike.
         const signal = params.cancellationToken;
@@ -142,10 +117,9 @@ export abstract class BaseLLM extends BaseModel {
             return this.BuildCancelledChatResult(new Date(), { signal });
         }
 
-        if (this.WillStream(params)) {
-            const streamed = await this.handleStreamingChatCompletion(params);
-            streamed.parameterFidelity = fidelity;
-            return streamed;
+        // Check if streaming is requested and if we support it
+        if (params.streaming && params.streamingCallbacks && this.SupportsStreaming && !streamingSuppressedForTools) {
+            return this.handleStreamingChatCompletion(params);
         }
 
         // Continue with normal non-streaming implementation
@@ -164,7 +138,6 @@ export abstract class BaseLLM extends BaseModel {
         if (!result.success && signal?.aborted) {
             return this.BuildCancelledChatResult(result.startTime ?? startTime, { error: result.exception, signal, message: result.errorMessage });
         }
-        result.parameterFidelity = fidelity;
         if (streamingSuppressedForTools) {
             result.modelSpecificResponseDetails = {
                 ...result.modelSpecificResponseDetails,

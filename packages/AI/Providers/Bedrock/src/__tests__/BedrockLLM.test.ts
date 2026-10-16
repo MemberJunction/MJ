@@ -559,9 +559,4 @@ describe('BedrockLLM parameter fidelity', () => {
     await new RequestCapturingBedrockLLM('a:b').SendStreaming(chatParams({ model: 'anthropic.claude-3-haiku-20240307-v1:0', messages: [{ role: 'user', content: 'x' }], temperature: 0 }));
     expect(lastSentBody().temperature).toBe(0);
   });
-  it('describes the 0.7 and 1024 defaults it sends when none is configured, and no seed', () => {
-    const llm = new BedrockLLM('a:b');
-    expect(llm.DescribeSentParameters(chatParams({ model: 'anthropic.claude-3-haiku-20240307-v1:0', messages: [], seed: 42 })))
-      .toEqual({ VendorModelName: 'anthropic.claude-3-haiku-20240307-v1:0', Temperature: 0.7, MaxTokens: 1024, Seed: null });
-  });
 });

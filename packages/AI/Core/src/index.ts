@@ -40,4 +40,3 @@ export * from './generic/realtimeAgentAvatar';
 export * from './generic/realtimeVideoFrames';
 export * from './generic/realtimeVideoOutput';
 export * from './generic/fmp4Reader';
-export * from './generic/parameterFidelity';

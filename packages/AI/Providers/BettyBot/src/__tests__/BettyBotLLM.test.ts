@@ -79,7 +79,7 @@ vi.mock('env-var', () => ({
 }));
 
 import { BettyBotLLM } from '../models/BettyBotLLM';
-import { ChatMessageRole, type ChatParams, type ChatResult } from '@memberjunction/ai';
+import { ChatMessageRole } from '@memberjunction/ai';
 
 /* ------------------------------------------------------------------ */
 /*  Tests                                                              */
@@ -313,24 +313,5 @@ describe('BettyBotLLM', () => {
     it('ClassifyText should throw', async () => {
       await expect(llm.ClassifyText({} as never)).rejects.toThrow('Method not implemented.');
     });
-  });
-});
-
-/** Reaches the protected request path through a subclass, so a test sees the exact request body. */
-class RequestCapturingBettyBotLLM extends BettyBotLLM {
-  public SendNonStreaming(params: ChatParams): Promise<ChatResult> { return this.nonStreamingChatCompletion(params); }
-}
-
-describe('BettyBotLLM parameter fidelity', () => {
-  it('describes temperature, max tokens and seed as not sent, matching a request body that carries none of them', async () => {
-    mockHttpPost.mockResolvedValueOnce({ Data: { status: 'SUCCESS', errorMessage: '', enabledFeatures: [], token: 'jwt' } });
-    mockHttpPost.mockResolvedValueOnce({ Data: { status: 'ok', errorMessage: '', response: 'hi', references: [] } });
-    const llm = new RequestCapturingBettyBotLLM('k');
-    // `ChatParams` is mocked here, so the params are a plain object of the real type.
-    const params: ChatParams = { model: 'betty', messages: [{ role: ChatMessageRole.user, content: 'hello' }], temperature: 0.2, maxOutputTokens: 100, seed: 7 };
-    await llm.SendNonStreaming(params);
-    const body = mockHttpPost.mock.calls[1][1] as Record<string, unknown>;
-    expect(Object.keys(body)).toEqual(['input']);
-    expect(llm.DescribeSentParameters(params)).toEqual({ VendorModelName: 'betty', Temperature: null, MaxTokens: null, Seed: null });
   });
 });

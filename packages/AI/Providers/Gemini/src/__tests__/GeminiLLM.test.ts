@@ -120,7 +120,6 @@ vi.mock('@memberjunction/ai', () => {
   };
 });
 
-import { ChatParams } from '@memberjunction/ai';
 import { GeminiLLM } from '../index';
 
 /* ------------------------------------------------------------------ */
@@ -784,43 +783,6 @@ describe('GeminiLLM — native tool calling', () => {
 
       expect(result.data.choices[0].message.toolCalls).toBeUndefined();
       expect(result.data.choices[0].finish_reason).toBe('STOP');
-    });
-  });
-
-  describe('parameter fidelity', () => {
-    /** A typed chat request; `ChatParams` is mocked, so the instance carries only what is given. */
-    const chatParams = (fields: Partial<ChatParams>): ChatParams => Object.assign(new ChatParams(), fields);
-
-    it('sends maxOutputTokens and seed when configured, and describes exactly that', async () => {
-      await run({ messages: [{ role: 'user', content: 'x' }], temperature: 0, maxOutputTokens: 256, seed: 42 });
-      expect(sentConfig()).toMatchObject({ temperature: 0, maxOutputTokens: 256, seed: 42 });
-      expect(llm.DescribeSentParameters(chatParams({ model: 'gemini-2.5-flash', messages: [], temperature: 0, maxOutputTokens: 256, seed: 42 })))
-        .toEqual({ VendorModelName: 'gemini-2.5-flash', Temperature: 0, MaxTokens: 256, Seed: 42 });
-    });
-
-    it('sends and describes no max tokens or seed when none is configured', async () => {
-      await run({ messages: [{ role: 'user', content: 'x' }] });
-      expect(sentConfig()).not.toHaveProperty('maxOutputTokens');
-      expect(sentConfig()).not.toHaveProperty('seed');
-      expect(llm.DescribeSentParameters(chatParams({ model: 'gemini-2.5-flash', messages: [] })))
-        .toEqual({ VendorModelName: 'gemini-2.5-flash', Temperature: 0.5, MaxTokens: null, Seed: null });
-    });
-
-    it('describes no temperature for a model that takes none, so a strict call refuses a configured 0', async () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      await run({ model: 'gemini-3.8-flash', messages: [{ role: 'user', content: 'x' }], temperature: 0 });
-      expect(sentConfig()).not.toHaveProperty('temperature');
-      expect(llm.DescribeSentParameters(chatParams({ model: 'gemini-3.8-flash', messages: [], temperature: 0 })))
-        .toEqual({ VendorModelName: 'gemini-3.8-flash', Temperature: null, MaxTokens: null, Seed: null });
-      warn.mockRestore();
-    });
-
-    it('describes a model-specific response format that overrides the sampling, as the request sends it', async () => {
-      const overriding: Partial<ChatParams> = { model: 'gemini-2.5-flash', temperature: 0.2, responseFormat: 'ModelSpecific', modelSpecificResponseFormat: { temperature: 0.9, maxOutputTokens: 64 } };
-      await run({ messages: [{ role: 'user', content: 'x' }], ...overriding });
-      expect(sentConfig()).toMatchObject({ temperature: 0.9, maxOutputTokens: 64 });
-      expect(llm.DescribeSentParameters(chatParams({ messages: [], ...overriding })))
-        .toEqual({ VendorModelName: 'gemini-2.5-flash', Temperature: 0.9, MaxTokens: 64, Seed: null });
     });
   });
 });

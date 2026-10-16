@@ -1,4 +1,4 @@
-import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, ChatMessageContentBlock, ErrorAnalyzer, AIErrorInfo, ParameterFidelityError, ResolveFileInputStrategy, AIPromptConfiguration, EncodeToolTurnsAsText, AIModelConfiguration, CredentialScopeAllows, type AICredentialScope } from '@memberjunction/ai';
+import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, ChatMessageContentBlock, ErrorAnalyzer, AIErrorInfo, ResolveFileInputStrategy, AIPromptConfiguration, EncodeToolTurnsAsText, AIModelConfiguration, CredentialScopeAllows, type AICredentialScope } from '@memberjunction/ai';
 import {
   BaseModelRunner,
   type ExecutionBound,
@@ -2237,8 +2237,6 @@ export class AIPromptRunner extends BaseModelRunner {
       if (resolvedParams.seed !== undefined) chatParams.seed = resolvedParams.seed;
       if (resolvedParams.includeLogProbs !== undefined) chatParams.includeLogProbs = resolvedParams.includeLogProbs;
       if (resolvedParams.topLogProbs !== undefined) chatParams.topLogProbs = resolvedParams.topLogProbs;
-      // A strict caller (a Feature Pipeline) needs the configured values sent unchanged; the driver refuses otherwise
-      chatParams.strictParameters = params.strictParameters === true;
 
       // Stop sequences are handled separately: the prompt value is comma-delimited and gated by
       // driver support; additionalParameters supplies a ready-made array that overrides it.
@@ -3071,11 +3069,9 @@ export class AIPromptRunner extends BaseModelRunner {
           throw error;
         }
         lastError = error;
-        // A strict-parameter refusal cannot be resolved by another attempt
-        const refused = error instanceof ParameterFidelityError;
         this.logError(error, {
           category: 'ExecutionRetry',
-          severity: attempt < maxRetries && !refused ? 'warning' : 'error',
+          severity: attempt < maxRetries ? 'warning' : 'error',
           metadata: {
             attempt: attempt + 1,
             maxRetries: maxRetries + 1,
@@ -3094,8 +3090,8 @@ export class AIPromptRunner extends BaseModelRunner {
         };
         validationAttempts.push(validationAttempt);
 
-        if (refused || attempt === maxRetries) {
-          throw error; // Refused, or the last attempt: propagate the error
+        if (attempt === maxRetries) {
+          throw error; // Last attempt, propagate error
         }
       }
     }

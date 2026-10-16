@@ -1,6 +1,6 @@
 import {
     BaseLLM, ChatParams, ChatResult, ChatMessageRole, ClassifyParams, ClassifyResult,
-    SummarizeParams, SummarizeResult, ModelUsage, ErrorAnalyzer, getTextFromContent, type VendorCallParameters,
+    SummarizeParams, SummarizeResult, ModelUsage, ErrorAnalyzer, getTextFromContent,
 } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
 import { HttpPost, HttpRequestConfig, IsHttpError, IsCancellationError as IsHttpCancellation } from '@memberjunction/network-utils';
@@ -81,11 +81,6 @@ export class BettyLLM extends BaseLLM {
     constructor(apiKey: string, endUserId?: string) {
         super(apiKey);
         this.endUserId = endUserId;
-    }
-
-    /** The request carries no temperature, output cap or seed. */
-    public override DescribeSentParameters(params: ChatParams): VendorCallParameters {
-        return { VendorModelName: params.model, Temperature: null, MaxTokens: null, Seed: null };
     }
 
     /**

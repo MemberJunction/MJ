@@ -486,20 +486,3 @@ describe('BettyEndpoint', () => {
         expect(BettyEndpoint('https://h/betty/v1', 'messages')).not.toContain('/betty/messages');
     });
 });
-
-describe('BettyLLM parameter fidelity', () => {
-    beforeEach(() => {
-        vi.resetAllMocks();
-        process.env.BETTY_API_BASE_URL = BASE;
-    });
-
-    it('describes temperature, max tokens and seed as not sent, matching a request body that carries none of them', async () => {
-        vi.mocked(HttpPost).mockResolvedValue(reply());
-        const llm = new BettyLLM('key');
-        const params = Object.assign(paramsWith([{ role: ChatMessageRole.user, content: 'Hi' }]), { temperature: 0.2, maxOutputTokens: 100, seed: 7 });
-        await llm.ChatCompletion(params);
-        const body = vi.mocked(HttpPost).mock.calls[0][1] as Record<string, unknown>;
-        expect(['temperature', 'maxOutputTokens', 'max_tokens', 'seed'].filter((k) => k in body)).toEqual([]);
-        expect(llm.DescribeSentParameters(params)).toEqual({ VendorModelName: 'betty', Temperature: null, MaxTokens: null, Seed: null });
-    });
-});

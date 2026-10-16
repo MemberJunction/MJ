@@ -819,7 +819,7 @@ coverage loss):
 | `conversation-compaction` | CC1–CC12 (12) | server | — | IT30 | Compaction assembly layer (graduated from PR #2732) |
 | `self-test` | cache-warm (1) | server | — | smoke script | Proves the instrumented cache observes RunView traffic (lives in the framework package) |
 
-**Predictive Studio gate suite.** `Predictive Studio Gates — Feature Pipelines` holds the five Feature Pipeline gate
+**Predictive Studio gate suite.** `Predictive Studio Gates — Feature Pipelines` holds the four Feature Pipeline gate
 bundles (`fp-gate-*`) and IT125. It needs bizapps-common installed and `RUN_MUTATION_TESTS=1`, and must run where the
 bizapps-common entity classes load: from `packages/MJAPI`, with its own `.env`, and the repo-root `mj.config.cjs`
 naming the host's generated entities package as a local edit (see the [Dynamic Package Loading guide](DYNAMIC_PACKAGE_LOADING_GUIDE.md)):

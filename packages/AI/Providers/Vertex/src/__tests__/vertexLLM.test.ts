@@ -1,8 +1,7 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { VertexLLM, VertexAICredentials } from '../models/vertexLLM';
 import { VertexKeySourceOf } from '../vertexCredentials';
 import { ChatParams, ChatMessageRole, ModelUsage } from '@memberjunction/ai';
-import { type Chat, FinishReason, GenerateContentResponse, GoogleGenAI } from '@google/genai';
 
 /**
  * Test suite for VertexLLM
@@ -422,36 +421,5 @@ describe('VertexLLM', () => {
       expect(result).toBeDefined();
       expect(result.success).toBeDefined();
     }, 30000);
-  });
-});
-
-/** A VertexLLM that uses the SDK client a test hands it, so the test reads what the driver sends without a network call. */
-class ClientInjectedVertexLLM extends VertexLLM {
-  constructor(credentialsJson: string, private readonly injectedClient: GoogleGenAI) {
-    super(credentialsJson);
-  }
-  protected override async createClient(): Promise<GoogleGenAI> {
-    return this.injectedClient;
-  }
-}
-
-describe('parameter fidelity (inherited from GeminiLLM)', () => {
-  it('records on the result exactly the temperature, max tokens and seed the request sent', async () => {
-    const client = new GoogleGenAI({ apiKey: 'test-key' });
-    const chat = client.chats.create({ model: 'gemini-3.1-flash-lite' });
-    vi.spyOn(client.chats, 'create').mockReturnValue(chat);
-    const sendMessage: MockInstance<Chat['sendMessage']> = vi.spyOn(chat, 'sendMessage').mockResolvedValue(Object.assign(new GenerateContentResponse(), {
-      candidates: [{ content: { parts: [{ text: '{}' }] }, finishReason: FinishReason.STOP }],
-      usageMetadata: { promptTokenCount: 1, candidatesTokenCount: 1 },
-    }));
-    const llm = new ClientInjectedVertexLLM(JSON.stringify({ project: 'test-project', location: 'global' }), client);
-
-    const result = await llm.ChatCompletion({ model: 'gemini-3.1-flash-lite', messages: [{ role: ChatMessageRole.user, content: 'x' }], temperature: 0, maxOutputTokens: 256, seed: 42 });
-
-    expect(sendMessage.mock.calls[0][0].config).toMatchObject({ temperature: 0, maxOutputTokens: 256, seed: 42 });
-    expect(result.parameterFidelity).toEqual({
-      Status: 'sent-unchanged',
-      Sent: { VendorModelName: 'gemini-3.1-flash-lite', Temperature: 0, MaxTokens: 256, Seed: 42 },
-    });
   });
 });

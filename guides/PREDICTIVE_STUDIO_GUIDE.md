@@ -678,10 +678,6 @@ The floor is part of the spec hash, so changing it is a new version.
 the system turn and the record's context fields, as one JSON object, as the user turn, so a field value cannot pose as
 an instruction.
 
-**Strict vendor parameters.** Every Feature Pipeline call sets `strictParameters`: a driver that would change or drop
-the configured temperature, max tokens or seed refuses before the request, and the refusal stops the prompt without
-failover. The run's `ResultSummary.ParameterFidelity` carries it.
-
 ---
 
 ## 12. The Model Development Agent + artifact + viewer

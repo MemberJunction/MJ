@@ -12,8 +12,7 @@ import {
   ChatMessage,
   ChatMessageContentBlock,
   ErrorAnalyzer,
-  parseBase64DataUrl,
-  type VendorCallParameters
+  parseBase64DataUrl
 } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
 import { 
@@ -439,11 +438,6 @@ export class BedrockLLM extends BaseLLM {
    */
   public async ClassifyText(params: ClassifyParams): Promise<ClassifyResult> {
     throw new Error("Method not implemented.");
-  }
-
-  /** Every family's request body sends the temperature or 0.7, the max tokens or 1024, and no seed. */
-  public override DescribeSentParameters(params: ChatParams): VendorCallParameters {
-    return { VendorModelName: params.model, Temperature: params.temperature ?? 0.7, MaxTokens: params.maxOutputTokens || 1024, Seed: null };
   }
 
   /**

@@ -38,7 +38,7 @@ graph TD
 - **Multimodal Input**: Native support for text, images, audio, video, and file inputs
 - **Message Alternation**: Automatic handling of Gemini's role alternation requirements
 - **Safety Handling**: Detection and reporting of content blocking with detailed safety ratings
-- **Effort Level Mapping**: Maps MJ effort levels (1-100 or a level name) to Gemini thinking levels (Gemini 3+) or budgets (Gemini 2.5)
+- **Effort Level Mapping**: Maps MJ effort levels (1-100) to Gemini thinking budgets (0-24576)
 
 ### Image Generation (GeminiImageGenerator)
 - **Text-to-Image**: Generate images using Gemini image models
@@ -139,25 +139,22 @@ console.log(multimodal.vector.length); // 3072
 
 ## Thinking Budget / Effort Level
 
-The provider maps MJ effort levels to Gemini's thinking system (`ResolveGeminiThinkingConfig`), and asks for thought summaries whenever it sends a setting:
+The provider maps MJ effort levels to Gemini's thinking system:
 
-| Effort Level | Gemini 2.5 (`thinkingBudget`) | Gemini 3+ and unversioned ids (`thinkingLevel`) |
+| Effort Level | Gemini 2.5 (Budget) | Gemini 3+ (Level) |
 |-------------|---------------------|-------------------|
-| `minimal` / `none` (by name only) | 512 | MINIMAL (LOW on models that reject it) |
-| 1-33 or `low` | 1024 | LOW |
-| 34-66 or `medium` | 8192 | MEDIUM |
-| 67-100, `high`, `xhigh` or `max` | 24576 | HIGH |
-
-No effort level sends no thinking setting, so the model thinks at its own default. Earlier models and non-Gemini ids get none.
+| 1-5 (Flash only) | 0 (disabled) | MINIMAL |
+| 1-33 | 1024-4096 | LOW |
+| 34-66 | 4097-12288 | MEDIUM |
+| 67-100 | 12289-24576 | HIGH |
 
 ## Supported Parameters
 
 | Parameter | Supported | Notes |
 |-----------|-----------|-------|
-| temperature | Yes | The configured value, 0 included; default 0.5. Not sent to Gemini 3.6+ (Google ignores it there) |
+| temperature | Yes | Default 0.5 |
 | topP | Yes | Nucleus sampling |
 | topK | Yes | Top-K sampling |
-| maxOutputTokens | Yes | Sent when configured; otherwise the model's own limit applies |
 | seed | Yes | Deterministic outputs |
 | stopSequences | Yes | Custom stop sequences |
 | effortLevel | Yes | Maps to thinking budget/level |
@@ -166,8 +163,6 @@ No effort level sends no thinking setting, so the model thinks at its own defaul
 | frequencyPenalty | No | Not supported by Gemini |
 | presencePenalty | No | Not supported by Gemini |
 | minP | No | Not supported by Gemini |
-
-`DescribeSentParameters` reports the temperature, max output tokens and seed a call sends, read from the same generation options the request uses, so a `strictParameters` call whose value would not be sent as configured (for example a temperature on Gemini 3.6+) is refused before any request.
 
 ## Gemini Live (realtime)
 

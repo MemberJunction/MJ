@@ -14,14 +14,12 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@google/genai": "^2.16.0",
     "@memberjunction/actions": "6.2.0-edge.4",
     "@memberjunction/actions-base": "6.2.0-edge.4",
     "@memberjunction/ai": "6.2.0-edge.4",
     "@memberjunction/ai-agent-harness": "6.2.0-edge.4",
     "@memberjunction/ai-agents": "6.2.0-edge.4",
     "@memberjunction/ai-anthropic": "6.2.0-edge.4",
-    "@memberjunction/ai-bedrock": "6.2.0-edge.4",
     "@memberjunction/ai-bridge-base": "6.2.0-edge.4",
     "@memberjunction/ai-bridge-server": "6.2.0-edge.4",
     "@memberjunction/ai-cloudflare": "6.2.0-edge.4",
@@ -34,7 +32,6 @@
     "@memberjunction/ai-prompts": "6.2.0-edge.4",
     "@memberjunction/ai-systemone": "6.2.0-edge.4",
     "@memberjunction/ai-vector-dupe": "6.2.0-edge.4",
-    "@memberjunction/ai-vertex": "6.2.0-edge.4",
     "@memberjunction/aiengine": "6.2.0-edge.4",
     "@memberjunction/api-keys": "6.2.0-edge.4",
     "@memberjunction/auth-providers": "6.2.0-edge.4",

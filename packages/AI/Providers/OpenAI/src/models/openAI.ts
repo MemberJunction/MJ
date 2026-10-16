@@ -1,5 +1,5 @@
 import { BaseLLM, ChatMessage, ChatMessageRole, ChatParams, ChatResult, ClassifyParams, ClassifyResult, GetUserMessageFromChatParams, ModelUsage, SummarizeParams, SummarizeResult, StreamingChatCallbacks, ErrorAnalyzer, FileCapabilities, ChatToolCall, getToolResultBlocks, CHAT_FINISH_REASON_TOOL_CALLS,
-    buildOpenAICompatibleTools, buildOpenAICompatibleToolChoice, buildOpenAICompatibleToolCalls, buildOpenAICompatibleToolResults, extractOpenAICompatibleToolCalls, type VendorCallParameters } from "@memberjunction/ai";
+    buildOpenAICompatibleTools, buildOpenAICompatibleToolChoice, buildOpenAICompatibleToolCalls, buildOpenAICompatibleToolResults, extractOpenAICompatibleToolCalls } from "@memberjunction/ai";
 import { OpenAI } from "openai";
 import { RegisterClass, ToJSONSafe } from '@memberjunction/global';
 import { ChatCompletionAssistantMessageParam, ChatCompletionContentPart, ChatCompletionMessageFunctionToolCall, ChatCompletionMessageParam, ChatCompletionMessageToolCall, ChatCompletionSystemMessageParam, ChatCompletionTool, ChatCompletionUserMessageParam } from "openai/resources";
@@ -139,15 +139,6 @@ export class OpenAILLM extends BaseLLM {
         if (numValue <= 33) return 'low';
         if (numValue <= 66) return 'medium';
         return 'high';
-    }
-
-    /** The non-streaming request sends `gpt-5` a temperature of 1 in place of any other non-zero one. */
-    public override DescribeSentParameters(params: ChatParams): VendorCallParameters {
-        const sent = super.DescribeSentParameters(params);
-        if (!this.WillStream(params) && params.model.toLowerCase() === 'gpt-5' && params.temperature && params.temperature !== 1) {
-            return { ...sent, Temperature: 1 };
-        }
-        return sent;
     }
 
     /**

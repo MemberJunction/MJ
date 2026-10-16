@@ -100,8 +100,7 @@ Pure (no DOM, no Node APIs), so the browser and the meeting bot read avatar piec
 | Type | Description |
 |------|-------------|
 | `ChatParams` | Full parameter set for chat requests: messages, model, temperature, topP, topK, streaming, effort level, response format, and more |
-| `ChatResult` | Completion result with choices, token usage, cost tracking, timing, and `parameterFidelity` (configured versus sent parameters) |
-| `VendorCallParameters` / `ParameterFidelity` / `VendorParameterFidelity` / `ParameterFidelityError` | The temperature, max tokens and seed a caller configured versus what the driver would send (`BaseLLM.DescribeSentParameters`). With `ChatParams.strictParameters`, `ChatCompletion` throws the Fatal `ParameterFidelityError` before any request when a driver would change or drop a configured value |
+| `ChatResult` | Completion result with choices, token usage, cost tracking, and timing |
 | `ChatMessage` | Single message with role, content (text or multimodal blocks), and optional metadata |
 | `ChatMessageContentBlock` | Multimodal content: text, image (base64/URL), video, audio, or file |
 | `StreamingChatCallbacks` | Callbacks for real-time streaming: `OnContent`, `OnComplete`, `OnError` |
@@ -245,7 +244,7 @@ const key3 = GetAIAPIKey("OpenAILLM", runKeys, false, 'RuntimeOnly'); // undefin
 Extend the base class for the capability you want to support:
 
 ```typescript
-import { BaseLLM, ChatParams, ChatResult, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, VendorCallParameters } from "@memberjunction/ai";
+import { BaseLLM, ChatParams, ChatResult, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult } from "@memberjunction/ai";
 import { RegisterClass } from "@memberjunction/global";
 
 @RegisterClass(BaseLLM, "MyProviderLLM")
@@ -260,9 +259,6 @@ export class MyProviderLLM extends BaseLLM {
 
     // Required by BaseLLM but deprecated: new drivers should throw a "not supported" error
     public async SummarizeText(params: SummarizeParams): Promise<SummarizeResult> { /* ... */ }
-
-    // Override when the driver substitutes a default or never sends a parameter (e.g. no seed)
-    public DescribeSentParameters(params: ChatParams): VendorCallParameters { /* ... */ }
 
     // Optional: enable streaming by overriding these
     public get SupportsStreaming(): boolean { return true; }

@@ -1,5 +1,4 @@
 import { BaseParams, BaseResult, ModelUsage } from "./baseModel"
-import type { ParameterFidelity } from "./parameterFidelity";
 
 
 
@@ -434,12 +433,6 @@ export class ChatParams extends BaseParams  {
      * Anthropic `tool_choice.disable_parallel_tool_use`.
      */
     parallelToolCalls?: boolean;
-
-    /**
-     * When true, the driver must send temperature, maxOutputTokens and seed exactly as configured; if it would change or
-     * drop one, ChatCompletion throws ParameterFidelityError before any request. Feature Pipelines set it.
-     */
-    strictParameters?: boolean;  // case-violation-ok-legacy-back-compat: new member of shipped camelCase ChatParams keeps its casing
 }
 /**
  * Returns the first user message from the chat params
@@ -573,9 +566,6 @@ export class ChatResult extends BaseResult {
      * Structure varies by AI provider.
      */
     modelSpecificResponseDetails?: Record<string, any>;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
-
-    /** Configured versus sent parameters for this call. */
-    parameterFidelity?: ParameterFidelity;  // case-violation-ok-legacy-back-compat: new member of shipped camelCase ChatResult keeps its casing
 }
 
 // =============================================================================

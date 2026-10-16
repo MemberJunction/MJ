@@ -261,10 +261,6 @@ repair, the result-selector judge, decisions' chat prompts) run under the caller
 
 When a model fails due to rate limiting, authentication errors, or other transient issues, the runner can automatically retry with alternate models from the selection candidates.
 
-### Strict Parameters
-
-Set `AIPromptParams.strictParameters = true` when the call must reach the model with exactly the configured temperature, max output tokens and seed (Feature Pipelines set it). A driver that would change or drop one refuses with `ParameterFidelityError` before any request; the refusal is Fatal, so neither failover nor the retry loop tries again, and the failed result keeps the error on `chatResult.exception`.
-
 ### Media Runners
 
 Non-chat models run through runners built on the same `BaseModelRunner`, so they get the same model selection, credential resolution, failover and `MJ: AI Prompt Runs` row as a chat prompt. Each requires one model type, and uses a default carrier prompt, found by name, unless the caller passes a `PromptID`. A `ModelID` pins the model, and failover then stays within its vendors. The run row never holds media bytes.

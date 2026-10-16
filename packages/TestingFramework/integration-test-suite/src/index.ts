@@ -83,7 +83,6 @@ export * from './checks/fp-gate-c2-1.checks';
 export * from './checks/fp-gate-c2-2.checks';
 export * from './checks/fp-gate-c2-3.checks';
 export * from './checks/fp-gate-c2-5.checks';
-export * from './checks/fp-gate-c3-3.checks';
 export * from './checks/feature-pipeline-core.checks';
 export * from './checks/fp-live-jobtitle.checks';
 export * from './checks/fp-gates/feature-pipeline-gate-stub-driver'; // registers FeaturePipelineGateStubDriver (@RegisterClass)

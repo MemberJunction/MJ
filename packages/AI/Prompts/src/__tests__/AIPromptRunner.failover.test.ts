@@ -85,7 +85,6 @@ const h = vi.hoisted(() => {
     },
     HasCredentialBindings() { return false; },
     GetCredentialBindingsForTarget() { return []; },
-    GetEffectiveModelConfiguration() { return null; },
   };
   return { state, engine, getApiKey: (d: string) => (state.configuredDrivers.has(d) ? 'sk-test' : '') };
 });
@@ -109,11 +108,8 @@ vi.mock('@memberjunction/credentials', async (importOriginal) => {
 import { AIPromptRunner } from '../AIPromptRunner';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { MJGlobal } from '@memberjunction/global';
-import type { ChatResult, AIPromptConfiguration, ChatParams } from '@memberjunction/ai'; // real types — the mock only replaces GetAIAPIKey
-import { ParameterFidelityError, VendorParameterFidelity } from '@memberjunction/ai';
-import type { AIPromptParams } from '@memberjunction/ai-core-plus';
+import type { ChatResult, AIPromptConfiguration } from '@memberjunction/ai'; // real types — the mock only replaces GetAIAPIKey
 import { TestLLM, makeFailedChatResult } from '@memberjunction/unit-testing';
-import { BuildPromptRunRecord, BuildPrompt, BuildPromptParams, InMemoryRunRecordRunner } from './__fixtures__/prompt-run.fixtures';
 import { buildRealisticCatalog, DEFAULT_CONFIGURED_DRIVERS, MODEL_TYPE, VENDOR, makeModel, makeModelVendor, type AICatalog } from './__fixtures__/ai-metadata.fixtures';
 
 // ---------------------------------------------------------------------------
@@ -190,7 +186,6 @@ async function runFailover(
   candidates: TestCandidate[],
   promptOverrides: Record<string, unknown> = {},
   promptRun?: FailoverPromptRunRecord,
-  paramOverrides: Partial<AIPromptParams> = {},
 ): Promise<ChatResult> {
   const prompt = makeFailoverPrompt(promptOverrides);
   const first = candidates[0];
@@ -198,7 +193,7 @@ async function runFailover(
   // templateMessageRole, cancellationToken, allCandidates, promptRun, vendorDriverClass,
   // vendorApiName, vendorSupportsEffortLevel, modelEffortLevel, credentialAvailability
   return (runner as unknown as FailoverRunner).executeModelWithFailover(
-    first.model, 'rendered prompt', prompt, { verbose: false, ...paramOverrides }, first.vendorId,
+    first.model, 'rendered prompt', prompt, { verbose: false }, first.vendorId,
     undefined, 'system', undefined, candidates, promptRun,
     first.driverClass, first.apiName, false, undefined,
   );
@@ -834,65 +829,5 @@ describe('ExecutePrompt — caller cancellation stops failover', () => {
     expect(result.success).toBe(true);
     expect(result.result).toBe('answered after the timeout');
     expect(testLLM.CalledModels).toHaveLength(2);
-  });
-});
-
-// ===========================================================================
-// Strict parameters
-// ===========================================================================
-describe('ExecutePrompt — strict parameters', () => {
-  // Built while collecting, before beforeEach replaces ClassFactory.CreateInstance (which builds each entity's fields)
-  const prompts = {
-    strictWithRetries: BuildPrompt(MODEL_TYPE.LLM, { Temperature: 0, Seed: 42, ValidationBehavior: 'Strict', MaxRetries: 2 }),
-  };
-  const runs = {
-    refusal: BuildPromptRunRecord('run-refusal'),
-    fatalRetried: BuildPromptRunRecord('run-fatal-retried'),
-  };
-
-  /** Makes the scripted driver refuse a strict call: it would drop the configured seed. */
-  function refuseStrictCalls(): void {
-    vi.spyOn(testLLM, 'DescribeSentParameters').mockImplementation((p: ChatParams) => ({ ...VendorParameterFidelity.ConfiguredParameters(p), Seed: null }));
-  }
-
-  beforeEach(() => {
-    vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    vi.spyOn(console, 'log').mockImplementation(() => undefined);
-  });
-
-  it('forwards strictParameters to the driver call', async () => {
-    const c1 = candidate('m-claude', 'AnthropicLLM', 'v-anthropic', 'Anthropic', 'api-claude', 100);
-    testLLM.Script({ kind: 'succeed', content: 'ok' });
-
-    await runFailover(runner, [c1], { Temperature: 0 }, undefined, { strictParameters: true });
-
-    expect(testLLM.Calls[0].strictParameters).toBe(true);
-  });
-
-  it('a strict refusal makes no retry and fails with the refusal on chatResult.exception', async () => {
-    refuseStrictCalls();
-    testLLM.Script({ kind: 'succeed', content: 'never sent' });
-    const strictRunner = new InMemoryRunRecordRunner(runs.refusal);
-    const params = BuildPromptParams(prompts.strictWithRetries);
-    params.strictParameters = true;
-
-    const result = await strictRunner.ExecutePrompt(params);
-
-    expect(result.success).toBe(false);
-    expect(testLLM.CallCount).toBe(1);
-    expect(strictRunner.RetryDelays).toBe(0);
-    expect(result.chatResult.exception).toBeInstanceOf(ParameterFidelityError);
-  });
-
-  it('retries any other thrown Fatal error up to MaxRetries, as before', async () => {
-    const fatal = (): Error => Object.assign(new Error('invalid request'), { errorInfo: { errorType: 'InvalidRequest', severity: 'Fatal', canFailover: false } });
-    testLLM.Script({ kind: 'throw', error: fatal() }, { kind: 'throw', error: fatal() }, { kind: 'throw', error: fatal() });
-    const retryingRunner = new InMemoryRunRecordRunner(runs.fatalRetried);
-
-    const result = await retryingRunner.ExecutePrompt(BuildPromptParams(prompts.strictWithRetries));
-
-    expect(result.success).toBe(false);
-    expect(testLLM.CallCount).toBe(3);
-    expect(retryingRunner.RetryDelays).toBe(2);
   });
 });

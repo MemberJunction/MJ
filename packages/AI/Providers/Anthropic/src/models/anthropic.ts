@@ -1,9 +1,9 @@
 import { Anthropic } from "@anthropic-ai/sdk";
-import { ContentBlock, MessageCreateParamsNonStreaming, MessageCreateParamsStreaming, MessageParam, RawMessageStreamEvent, Tool, ToolChoice } from "@anthropic-ai/sdk/resources/messages";
+import { ContentBlock, MessageCreateParams, MessageParam, Tool, ToolChoice } from "@anthropic-ai/sdk/resources/messages";
 import { BaseLLM, ChatMessage, ChatMessageRole, ChatMessageContent, ChatMessageContentBlock, ChatParams, ChatResult, ClassifyParams, ClassifyResult,
     GetSystemPromptFromChatParams, GetUserMessageFromChatParams, SummarizeParams,
     SummarizeResult, ModelUsage, ErrorAnalyzer, parseBase64DataUrl, FileCapabilities,
-    ChatToolCall, CHAT_FINISH_REASON_TOOL_CALLS, VendorCallParameters } from "@memberjunction/ai";
+    ChatToolCall, CHAT_FINISH_REASON_TOOL_CALLS } from "@memberjunction/ai";
 import { RegisterClass, ToJSONSafe } from "@memberjunction/global";
 import { BuildAnthropicThinking, UsesAdaptiveThinking } from "./thinking-config";
 
@@ -26,9 +26,6 @@ export const ANTHROPIC_CACHE_BREAKPOINT = '<<<MJ_CACHE_BREAKPOINT>>>';
 
 /** Anthropic allows at most 4 cache_control breakpoints per request. */
 const MAX_CACHE_BREAKPOINTS = 4;
-
-/** The output cap, thinking budget and temperature one request path sends (`undefined` = not sent). */
-type AnthropicSentSampling = { MaxTokens: number; ThinkingBudget: number | undefined; Temperature: number | undefined };
 
 /** A minimal Anthropic text content block, optionally carrying an ephemeral cache breakpoint. */
 type AnthropicTextBlock = { type: 'text'; text: string; cache_control?: { type: 'ephemeral' } };
@@ -623,48 +620,6 @@ export class AnthropicLLM extends BaseLLM {
     }
 
     /**
-     * What a non-streaming request sends. When BUDGET-form thinking is enabled, max_tokens must be greater than
-     * budget_tokens. Adaptive-thinking models (Claude 4.6+, all of Claude 5) have no budget: they take
-     * `thinking.type = 'adaptive'` + `output_config.effort` and reject the budget form with
-     * HTTP 400 (observed on claude-sonnet-5) — see `UsesAdaptiveThinking`.
-     */
-    private resolveNonStreamingSampling(params: ChatParams): AnthropicSentSampling {
-        let maxTokens = this.resolveMaxTokens(params);
-        let thinkingBudget: number | undefined = undefined;
-        const configuredBudget = params.reasoningBudgetTokens;
-        // An unset budget takes the 31000 default; a set one must be at least 1.
-        if (!UsesAdaptiveThinking(params.model) && params.effortLevel && (typeof configuredBudget !== 'number' || configuredBudget >= 1)) {
-            thinkingBudget = configuredBudget || 31000;
-            if (maxTokens <= thinkingBudget) {
-                maxTokens = thinkingBudget + 1000; // buffer so max_tokens > budget_tokens
-            }
-        }
-        //2025-11-25: With thinking enabled on Claude 4.5 Opus, temperature must be 1, so it is not sent.
-        const temperatureRejected = params.model.toLowerCase().startsWith('claude-opus-4-5') && thinkingBudget !== undefined;
-        return { MaxTokens: maxTokens, ThinkingBudget: thinkingBudget, Temperature: temperatureRejected ? undefined : params.temperature ?? undefined };
-    }
-
-    /** The `max_tokens` both paths start from: the API requires it, so an unset or non-positive cap sends 32000. */
-    private resolveMaxTokens(params: ChatParams): number {
-        return params.maxOutputTokens != null && params.maxOutputTokens > 0 ? params.maxOutputTokens : 32000;
-    }
-
-    /** What a streaming request sends: a budget-form thinking budget only when the caller supplied at least 1024 tokens. */
-    private resolveStreamingSampling(params: ChatParams): AnthropicSentSampling {
-        return {
-            MaxTokens: this.resolveMaxTokens(params),
-            ThinkingBudget: typeof params.reasoningBudgetTokens === 'number' && params.reasoningBudgetTokens >= 1024 ? params.reasoningBudgetTokens : undefined,
-            Temperature: params.temperature ?? undefined
-        };
-    }
-
-    /** The two request paths send different values, so this follows the path taken. The Messages API has no seed. */
-    public override DescribeSentParameters(params: ChatParams): VendorCallParameters {
-        const sampling = this.WillStream(params) ? this.resolveStreamingSampling(params) : this.resolveNonStreamingSampling(params);
-        return { VendorModelName: params.model, Temperature: sampling.Temperature ?? null, MaxTokens: sampling.MaxTokens, Seed: null };
-    }
-
-    /**
      * Non-streaming implementation for Anthropic
      */
     protected async nonStreamingChatCompletion(params: ChatParams): Promise<ChatResult> {
@@ -675,22 +630,40 @@ export class AnthropicLLM extends BaseLLM {
             const systemMsgs = params.messages.filter(m => m.role === "system");
             const nonSystemMsgs = params.messages.filter(m => m.role !== "system");
             
-            // max_tokens, thinking budget and temperature
-            const sampling = this.resolveNonStreamingSampling(params);
+            // Determine max_tokens and thinking budget
+            // When BUDGET-form thinking is enabled, max_tokens must be greater than budget_tokens.
+            // Adaptive-thinking models (Claude 4.6+, all of Claude 5) have no budget: they take
+            // `thinking.type = 'adaptive'` + `output_config.effort` and reject the budget form with
+            // HTTP 400 (observed on claude-sonnet-5) — see `UsesAdaptiveThinking`.
+            let maxTokens = params.maxOutputTokens || 32000;
+            let thinkingBudget: number | undefined = undefined;
+
+            if (!UsesAdaptiveThinking(params.model) && params.effortLevel && (params.reasoningBudgetTokens >= 1 || params.reasoningBudgetTokens === undefined || params.reasoningBudgetTokens === null)) {
+                thinkingBudget = params.reasoningBudgetTokens || 31000;
+                // Ensure max_tokens is greater than budget_tokens
+                if (maxTokens <= thinkingBudget) {
+                    maxTokens = thinkingBudget + 1000; // Add buffer to ensure max_tokens > budget_tokens
+                }
+            }
 
             // Append assistant prefill message if specified
             const messagesForApi = this.appendPrefillMessage(nonSystemMsgs, params.assistantPrefill);
 
             // Create the request parameters
-            // Sent through `messages.stream()` (Anthropic prefers it for any decent sized response), which adds `stream: true`
-            const createParams: MessageCreateParamsNonStreaming = {
+            const createParams: MessageCreateParams = {
                 model: params.model,
-                max_tokens: sampling.MaxTokens,
+                max_tokens: maxTokens,
+                stream: true, // even for non-streaming, we set stream to true as Anthropic prefers it for any decent sized response
                 messages: this.formatMessagesWithCaching(messagesForApi, params.enableCaching || true)
             };
 
-            if (sampling.Temperature !== undefined) {
-                createParams.temperature = sampling.Temperature;
+            // Add temperature if specified. Note that Claude 4.5 Opus doesn't support temperature changes when extended thinking is enabled.
+            // Skip the temperature set in that case.
+            if (params.temperature != null) {
+                //2025-11-25: With thinking enabled on Claude 4.5 Opus, temperature must be 1.
+                if (!(params.model.toLowerCase().startsWith('claude-opus-4-5') && thinkingBudget !== undefined)) {
+                    createParams.temperature = params.temperature;
+                }
             }
 
             // Add supported parameters.
@@ -728,7 +701,7 @@ export class AnthropicLLM extends BaseLLM {
             }
 
             // Add thinking, in whichever form the model accepts, if an effort level is set
-            const thinking = BuildAnthropicThinking({ model: params.model, effortLevel: params.effortLevel, budgetTokens: sampling.ThinkingBudget });
+            const thinking = BuildAnthropicThinking({ model: params.model, effortLevel: params.effortLevel, budgetTokens: thinkingBudget });
             if (thinking.thinking) {
                 createParams.thinking = thinking.thinking;
             }
@@ -913,28 +886,23 @@ export class AnthropicLLM extends BaseLLM {
     /**
      * Create a streaming request for Anthropic
      */
-    protected async createStreamingRequest(params: ChatParams): Promise<AsyncIterable<RawMessageStreamEvent>> {
+    protected async createStreamingRequest(params: ChatParams): Promise<any> {
         // Reset streaming state for new request
         this.resetStreamingState();
         // Find system message and non-system messages
         const systemMsg = params.messages.find(m => m.role === "system");
         const nonSystemMsgs = params.messages.filter(m => m.role !== "system");
         
-        const sampling = this.resolveStreamingSampling(params);
-
-        // Append assistant prefill message if specified; messages carry caching as configured
-        const messagesForApi = this.appendPrefillMessage(nonSystemMsgs, params.assistantPrefill);
-
         // Create the request parameters
-        const createParams: MessageCreateParamsStreaming = {
+        const createParams: any = {
             model: params.model,
-            max_tokens: sampling.MaxTokens,
-            messages: this.formatMessagesWithCaching(messagesForApi, params.enableCaching),
-            stream: true
+            max_tokens: params.maxOutputTokens,
+            stream: true as const
         };
 
-        if (sampling.Temperature !== undefined) {
-            createParams.temperature = sampling.Temperature;
+        // Add temperature if specified
+        if (params.temperature != null) {
+            createParams.temperature = params.temperature;
         }
 
         // Add supported parameters
@@ -970,13 +938,20 @@ export class AnthropicLLM extends BaseLLM {
             );
         }
         
+        // Append assistant prefill message if specified, then add messages with caching applied
+        const messagesForApi = this.appendPrefillMessage(nonSystemMsgs, params.assistantPrefill);
+        createParams.messages = this.formatMessagesWithCaching(
+            messagesForApi,
+            params.enableCaching
+        );
+        
         // Add thinking, in whichever form the model accepts, if an effort level is set. The budget
         // form needs a caller-supplied budget of at least 1024 tokens (and below max_tokens); the
         // adaptive form (Claude 4.6+, all of Claude 5) has no budget at all.
         const streamingThinking = BuildAnthropicThinking({
             model: params.model,
             effortLevel: params.effortLevel,
-            budgetTokens: sampling.ThinkingBudget
+            budgetTokens: params.reasoningBudgetTokens >= 1024 ? params.reasoningBudgetTokens : undefined
         });
         if (streamingThinking.thinking) {
             createParams.thinking = streamingThinking.thinking;

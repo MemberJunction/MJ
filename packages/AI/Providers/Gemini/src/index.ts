@@ -1,10 +1,10 @@
 
 
 // Google Gemini Import
-import { GoogleGenAI, ApiError, Content, Part, Blob, FileData, FunctionDeclaration, FunctionCallingConfigMode, ToolConfig, ToolListUnion, GenerateContentResponseUsageMetadata, ThinkingConfig, type GenerateContentConfig } from "@google/genai";
+import { GoogleGenAI, ApiError, Content, Part, Blob, FileData, FunctionDeclaration, FunctionCallingConfigMode, ToolConfig, ToolListUnion, GenerateContentResponseUsageMetadata, ThinkingConfig } from "@google/genai";
 
 // MJ stuff
-import { BaseLLM, ChatMessage, ChatParams, ChatResult, SummarizeParams, SummarizeResult, StreamingChatCallbacks, ChatMessageContent, ChatMessageContentBlock, ModelUsage, ErrorAnalyzer, FileCapabilities, ChatToolCall, CHAT_FINISH_REASON_TOOL_CALLS, CHAT_FINISH_REASON_MALFORMED_TOOL_CALL, type VendorCallParameters } from "@memberjunction/ai";
+import { BaseLLM, ChatMessage, ChatParams, ChatResult, SummarizeParams, SummarizeResult, StreamingChatCallbacks, ChatMessageContent, ChatMessageContentBlock, ModelUsage, ErrorAnalyzer, FileCapabilities, ChatToolCall, CHAT_FINISH_REASON_TOOL_CALLS, CHAT_FINISH_REASON_MALFORMED_TOOL_CALL } from "@memberjunction/ai";
 import { RegisterClass, ToJSONSafe } from "@memberjunction/global";
 import { AcceptsCustomSampling } from "./geminiSampling";
 import { GeminiThinkingFallback, ResolveGeminiThinkingConfig } from "./geminiThinking";
@@ -233,7 +233,6 @@ export class GeminiLLM extends BaseLLM {
 
             // Sampling + response-format options, shaped for the model's version (see buildGenerationOptions)
             const modelOptions = this.buildGenerationOptions(params, modelName);
-            this.warnUnsupportedParameters(params, modelName);
 
             // Ensure Gemini client is initialized
             const client = await this.ensureGeminiClient();
@@ -513,27 +512,19 @@ export class GeminiLLM extends BaseLLM {
      */
     private static readonly _warnedUnsupportedSampling = new Set<string>();
 
-    /** What both request paths send for temperature, max output tokens and seed, read off the same generation options. */
-    public override DescribeSentParameters(params: ChatParams): VendorCallParameters {
-        const modelName = params.model || "gemini-pro";
-        const sent = this.buildGenerationOptions(params, modelName);
-        return { VendorModelName: modelName, Temperature: sent.temperature ?? null, MaxTokens: sent.maxOutputTokens ?? null, Seed: sent.seed ?? null };
-    }
-
     /**
-     * Builds the per-request generation options: sampling, stop sequences, seed, max output tokens, response format.
-     * Free of side effects, since {@link DescribeSentParameters} reads it too.
+     * Builds the per-request generation options: sampling, stop sequences, seed, response format.
      *
      * Sampling fields depend on the model's version. Models before Gemini 3.6 keep the original
      * shape (`temperature` defaulting to 0.5, `topP`, `topK`) because they still honor it. Every
      * other model gets none of the three: Google ignores them since Gemini 3.6 Flash and upcoming
-     * models reject them with a 400, so a caller-supplied value is dropped (warnUnsupportedParameters warns once).
+     * models reject them with a 400, so a caller-supplied value is dropped with a one-time warning.
      *
      * A `ModelSpecific` response format is merged in after this gate, so it can still set these
      * fields explicitly; that is the caller's deliberate override.
      */
-    private buildGenerationOptions(params: ChatParams, modelName: string): GenerateContentConfig {
-        const modelOptions: GenerateContentConfig = {};
+    private buildGenerationOptions(params: ChatParams, modelName: string): Record<string, unknown> {
+        const modelOptions: Record<string, unknown> = {};
 
         if (AcceptsCustomSampling(modelName)) {
             modelOptions.temperature = params.temperature ?? 0.5;
@@ -543,6 +534,10 @@ export class GeminiLLM extends BaseLLM {
             if (params.topK != null) {
                 modelOptions.topK = params.topK;
             }
+        } else {
+            this.warnUnsupportedSampling(modelName, 'temperature', params.temperature);
+            this.warnUnsupportedSampling(modelName, 'topP', params.topP);
+            this.warnUnsupportedSampling(modelName, 'topK', params.topK);
         }
 
         switch (params.responseFormat) {
@@ -562,20 +557,7 @@ export class GeminiLLM extends BaseLLM {
         if (params.seed != null) {
             modelOptions.seed = params.seed;
         }
-        if (params.maxOutputTokens != null) {
-            modelOptions.maxOutputTokens = params.maxOutputTokens;
-        }
 
-        return modelOptions;
-    }
-
-    /** Warns about configured parameters a request drops. Called by the request paths only. */
-    private warnUnsupportedParameters(params: ChatParams, modelName: string): void {
-        if (!AcceptsCustomSampling(modelName)) {
-            this.warnUnsupportedSampling(modelName, 'temperature', params.temperature);
-            this.warnUnsupportedSampling(modelName, 'topP', params.topP);
-            this.warnUnsupportedSampling(modelName, 'topK', params.topK);
-        }
         // Gemini doesn't support these parameters - warn if provided
         if (params.frequencyPenalty != null) {
             console.warn('Gemini provider does not support frequencyPenalty parameter, ignoring');
@@ -586,6 +568,8 @@ export class GeminiLLM extends BaseLLM {
         if (params.minP != null) {
             console.warn('Gemini provider does not support minP parameter, ignoring');
         }
+
+        return modelOptions;
     }
 
     private warnUnsupportedSampling(modelName: string, field: 'temperature' | 'topP' | 'topK', value: number | undefined): void {
@@ -752,7 +736,6 @@ export class GeminiLLM extends BaseLLM {
 
         // Sampling + response-format options, shaped for the model's version (see buildGenerationOptions)
         const modelOptions = this.buildGenerationOptions(params, modelName);
-        this.warnUnsupportedParameters(params, modelName);
 
         // Ensure Gemini client is initialized
         const client = await this.ensureGeminiClient();

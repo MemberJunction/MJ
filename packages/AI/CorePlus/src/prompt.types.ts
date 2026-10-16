@@ -503,12 +503,6 @@ export class AIPromptParams extends AIModelRunParams {
   additionalParameters?: Record<string, any>;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
   /**
-   * When true, the driver refuses with `ParameterFidelityError` rather than send a temperature, max output tokens or
-   * seed different from the configured ones.
-   */
-  strictParameters?: boolean;  // case-violation-ok-legacy-back-compat: new member of shipped camelCase AIPromptParams keeps its casing
-
-  /**
    * When false, the prompt's template renders without HTML escaping: its output is plain text for a model, not HTML.
    * Unset keeps the template engine's default (escaped), as every caller got before this member existed. Feature
    * Pipeline drivers set it to false.

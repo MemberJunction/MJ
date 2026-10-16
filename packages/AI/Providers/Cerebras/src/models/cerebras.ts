@@ -1,6 +1,6 @@
 import { BaseLLM, ChatParams, ChatResult, ChatResultChoice, ChatMessage, ChatMessageRole, toClassicChatMessageRole, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, ModelUsage,
     buildOpenAICompatibleTools, buildOpenAICompatibleToolChoice, buildOpenAICompatibleToolCalls, buildOpenAICompatibleToolResults, extractOpenAICompatibleToolCalls,
-    type OpenAICompatibleMessage, type RawOpenAICompatibleToolCall, type VendorCallParameters } from '@memberjunction/ai';
+    type OpenAICompatibleMessage, type RawOpenAICompatibleToolCall } from '@memberjunction/ai';
 import { RegisterClass, ToJSONSafe } from '@memberjunction/global';
 import { Cerebras } from '@cerebras/cerebras_cloud_sdk';
 import { Chat, ChatCompletion } from '@cerebras/cerebras_cloud_sdk/resources/chat';
@@ -20,11 +20,6 @@ export class CerebrasLLM extends BaseLLM {
     constructor(apiKey: string) {
         super(apiKey);
         this._client = new Cerebras({ apiKey });
-    }
-
-    /** Both request paths send temperature and `max_tokens` as configured and never a seed. */
-    public override DescribeSentParameters(params: ChatParams): VendorCallParameters {
-        return { VendorModelName: params.model, Temperature: params.temperature ?? null, MaxTokens: params.maxOutputTokens ?? null, Seed: null };
     }
 
     /**

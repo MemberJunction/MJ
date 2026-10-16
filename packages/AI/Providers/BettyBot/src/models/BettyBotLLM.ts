@@ -1,4 +1,4 @@
-import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, ModelUsage, ErrorAnalyzer, type VendorCallParameters } from '@memberjunction/ai';
+import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, ModelUsage, ErrorAnalyzer } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
 import { HttpPost, HttpRequestConfig, IsHttpError, IsCancellationError as IsHttpCancellation } from '@memberjunction/network-utils';
 import * as Config from '../config';
@@ -16,11 +16,6 @@ export class BettyBotLLM extends BaseLLM {
         this.aPIKey = apiKey;
         this.JWTToken = '';
         this.TokenExpiration = new Date();
-    }
-
-    /** The request carries no temperature, output cap or seed. */
-    public override DescribeSentParameters(params: ChatParams): VendorCallParameters {
-        return { VendorModelName: params.model, Temperature: null, MaxTokens: null, Seed: null };
     }
 
     /**

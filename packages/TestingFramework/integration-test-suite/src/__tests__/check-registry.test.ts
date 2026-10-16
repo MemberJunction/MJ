@@ -320,7 +320,6 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'fp-gate-c2-2': 3,
         'fp-gate-c2-3': 3,
         'fp-gate-c2-5': 3,
-        'fp-gate-c3-3': 5,
         'fp-live-jobtitle': 1,
         'layered-base-views': 6,
         'lists': 3,
@@ -410,7 +409,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(130);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(129);
     });
 });
 
