@@ -72,7 +72,7 @@
     "5.51": {
       "status": "maintenance",
       "certifiedBuild": "5.51.0",
-      "newest": "5.51.3",
+      "newest": "5.51.4",
       "candidateDate": "2026-07-31",
       "certifiedDate": "2026-08-14",
       "supportEnds": "2027-02-14",
@@ -85,6 +85,9 @@
           "dbImpact": "none"
         },
         "5.51.3": {
+          "dbImpact": "none"
+        },
+        "5.51.4": {
           "dbImpact": "none"
         }
       },
