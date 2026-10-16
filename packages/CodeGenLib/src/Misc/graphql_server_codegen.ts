@@ -326,15 +326,14 @@ import { ${`${entity.ClassName}Entity`} } from '${importLibrary}';
   }
 
   protected generateServerEntityHeader(entity: EntityInfo, serverGraphQLTypeName: string): string {
-    let sDescription: string = entity.Description?.trim().length > 0 ? entity.Description : '';
-    if (sDescription.includes("'")) sDescription = sDescription.replace(/'/g, "\\'");
+    const sDescription: string = entity.Description?.trim().length > 0 ? entity.Description : '';
 
     return `
 
 //****************************************************************************
 // ENTITY CLASS for ${entity.Name}
 //****************************************************************************
-@ObjectType(${sDescription.length > 0 ? `{ description: \`${sDescription.replace(/`/g, "\\`")}\` }` : ''})
+@ObjectType(${sDescription.length > 0 ? `{ description: ${JSON.stringify(sDescription)} }` : ''})
 export class ${serverGraphQLTypeName} {`;
   }
 
@@ -351,7 +350,7 @@ export class ${serverGraphQLTypeName} {`;
     let fieldOptions: string = '';
     if (fieldInfo.AllowsNull) fieldOptions += 'nullable: true';
     if (fieldInfo.Description !== null && fieldInfo.Description.trim().length > 0)
-      fieldOptions += (fieldOptions.length > 0 ? ', ' : '') + `description: \`${fieldInfo.Description.replace(/`/g, "\\`")}\``;
+      fieldOptions += (fieldOptions.length > 0 ? ', ' : '') + `description: ${JSON.stringify(fieldInfo.Description)}`;
 
     return `
     @Field(${fieldString}${fieldOptions.length > 0 ? (fieldString == '' ? '' : ', ') + `{${fieldOptions}}` : ''}) ${fieldInfo.MaxLength > 0 && fieldString == '' /*string*/ ? '\n    @MaxLength(' + fieldInfo.MaxLength + ')' : ''}
