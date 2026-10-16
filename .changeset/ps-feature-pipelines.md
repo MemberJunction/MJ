@@ -27,6 +27,7 @@
 "@memberjunction/ng-actions": minor
 "@memberjunction/ng-bootstrap": minor
 "@memberjunction/ng-bootstrap-lite": minor
+"@memberjunction/ng-code-editor": minor
 "@memberjunction/ng-core-entity-forms": minor
 "@memberjunction/ng-dashboards": minor
 "@memberjunction/ng-entity-action-ux": minor
@@ -55,5 +56,5 @@ Feature Pipelines: keyed, versioned Feature Values and honest runs (migration `V
 - Dry runs write nothing, preview only what the real write would change, cap at 25 records and report `WouldRefuse`; a Feature Pipeline run with a failed record ends `Failed` with a `FeaturePipelineRunResult` summary; the breaker counts attempted records.
 - Vendor parameter fidelity: `ChatParams.strictParameters` / `ParameterFidelityError`, `DescribeSentParameters` on the drivers that change a value, Gemini `maxOutputTokens`; a strict refusal stops the prompt.
 - AI prompt templates render without HTML escaping; templates reload after an edit without a restart.
-- Fixes: cascade-delete deadlock (error 213); a transaction group rolls back on an item that did no work; `mj sync push` in-transaction metadata refresh; CodeGen fields of dropped columns; a failed prompt run records its own error; an Action scheduled job whose class is not loaded is paused, not failed every run; `RunAction` `ResultData` is an array of the output params; Testing Overview time ranges, suite health and suite filter; record tabs compare IDs case-insensitively.
+- Fixes: cascade-delete deadlock (error 213); a transaction group rolls back on an item that did no work; `mj sync push` in-transaction metadata refresh; CodeGen fields of dropped columns; a failed prompt run records its own error; an Action scheduled job whose class is not loaded is paused, not failed every run; `RunAction` `ResultData` is an array of the output params; Testing Overview time ranges, suite health and suite filter; record tabs compare IDs case-insensitively; a code editor becomes editable again when `readonly` is cleared.
 - API move: `WriteBackResult`, `TagWriteBackPreview` and `FieldRulesResultPayload` now live in `@memberjunction/record-set-processor-base` (no longer exported by `@memberjunction/record-set-processor`).
