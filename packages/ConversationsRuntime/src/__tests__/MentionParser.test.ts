@@ -241,7 +241,7 @@ describe('MentionParser', () => {
             const text = '@{'.repeat(60_000) + 'x';
             let mentionCount = -1;
             const elapsed = timeMs(() => {
-                mentionCount = parser.ParseMentions(text, []).mentions.length;
+                mentionCount = parser.parseMentions(text, []).mentions.length;
             });
 
             expect(mentionCount).toBe(0);
@@ -252,7 +252,7 @@ describe('MentionParser', () => {
             const agents = [createMockAgent('agent-1', 'Sage')];
             const text = '@a' + '!'.repeat(80_000) + 'a';
             const elapsed = timeMs(() => {
-                parser.ParseMentions(text, agents as never);
+                parser.parseMentions(text, agents as never);
             });
 
             expect(elapsed).toBeLessThan(BUDGET_MS);
@@ -261,7 +261,7 @@ describe('MentionParser', () => {
         it('still strips trailing punctuation from a mention name', () => {
             const agents = [createMockAgent('agent-1', 'Sage')];
 
-            const result = parser.ParseMentions('Thanks @Sage?!.', agents as never);
+            const result = parser.parseMentions('Thanks @Sage?!.', agents as never);
 
             expect(result.agentMention?.id).toBe('agent-1');
         });
@@ -269,7 +269,7 @@ describe('MentionParser', () => {
         it('still parses JSON mentions next to unclosed ones', () => {
             const text = '@{ broken @{"type":"agent","id":"agent-1","name":"Sage"} done';
 
-            const result = parser.ParseMentions(text, []);
+            const result = parser.parseMentions(text, []);
 
             expect(result.mentions.map((m) => m.id)).toEqual(['agent-1']);
         });
