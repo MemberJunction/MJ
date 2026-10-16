@@ -34,6 +34,7 @@ export * from './custom/MJAIRemoteBrowserProviderEntityServer.server';
 export * from './custom/MJAISkillPermissionEntityServer.server';
 export * from './custom/MJAISkillEntityServer.server';
 export * from './custom/MJMLTrainingPipelineEntityServer.server';
+export * from './custom/MJUserEntityServer.server';
 export * from './custom/MJUserRoutineEntityServer.server';
 export * from './custom/MJUserRoutineRecipientEntityServer.server';
 export * from './custom/json-schema-lite';
