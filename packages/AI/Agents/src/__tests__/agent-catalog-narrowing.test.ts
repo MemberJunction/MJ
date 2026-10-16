@@ -382,6 +382,7 @@ class CatalogHarness {
             GetAutoActivatableSkillsForAgent: (): unknown[] => SKILLS,
             GetSkillsForAgent: (): unknown[] => SKILLS,
             GetClientToolsForAgent: (): unknown[] => [],
+            GetAgentConfigurationPresets: (): unknown[] => [],
             GetAgentBaseCatalog: (agentId: string): unknown => this.catalog.get(agentId),
             SetAgentBaseCatalog: (agentId: string, cat: unknown): void => {
                 this.catalog.set(agentId, cat);

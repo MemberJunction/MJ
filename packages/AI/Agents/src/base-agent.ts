@@ -5347,7 +5347,7 @@ export class BaseAgent {
             // ask_user) — and NAMES the control ones. The runner keeps them only when the selected
             // model's LLM.NativeControlFlow resolves to 'implicit'; a hybrid model never sees them.
             const toolSet = BuildNativeToolSet(actionSet, subAgents, (sa) => {
-                const presetNames = (AIEngine.Instance.GetAgentConfigurationPresets?.(sa.ID, true) ?? []).map(p => p.Name);
+                const presetNames = (AIEngine.Instance.GetAgentConfigurationPresets(sa.ID, true) ?? []).map(p => p.Name);
                 return {
                     consultEnabled: this.isSubAgentConsultEnabledForSubAgent(params.agent, sa),
                     ...(presetNames.length > 0 ? { presetNames } : {})
@@ -6328,9 +6328,9 @@ export class BaseAgent {
             }
 
             if (req.presetName != null && req.presetName.trim() !== '') {
-                const matchedPreset = this.matchSubAgentPreset(subAgent.ID, req.presetName);
+                const matchedPreset = AIEngine.Instance.FindActiveAgentConfigurationPreset(subAgent.ID, req.presetName);
                 if (!matchedPreset) {
-                    const availablePresets = (AIEngine.Instance.GetAgentConfigurationPresets?.(subAgent.ID, true) ?? [])
+                    const availablePresets = (AIEngine.Instance.GetAgentConfigurationPresets(subAgent.ID, true) ?? [])
                         .map(p => p.Name);
                     const availableList = availablePresets.length > 0 ? availablePresets.join(', ') : 'none';
                     const errorMessage = `Sub-agent '${subAgent.Name}' has no preset '${req.presetName}'. Available: ${availableList}.`;
@@ -10670,7 +10670,7 @@ The context is now within limits. Please retry your request with the recovered c
                 sa => this.isSubAgentConsultEnabledForSubAgent(agent, sa)
             );
             const subAgentPresetsAvailable = uniqueActiveSubAgents.some(
-                sa => (AIEngine.Instance.GetAgentConfigurationPresets?.(sa.ID, true) ?? []).length > 0
+                sa => (AIEngine.Instance.GetAgentConfigurationPresets(sa.ID, true) ?? []).length > 0
             );
 
             let parentConsults = false;
@@ -12273,20 +12273,14 @@ The context is now within limits. Please retry your request with the recovered c
             const subAgentContext = subAgentRequest.context !== undefined ? subAgentRequest.context : params.context;
             const resolvedConfig = this.resolveSubAgentConfiguration(params, subAgentRequest, subAgent);
             if (resolvedConfig.presetId && stepEntity) {
-                try {
-                    const parsedInput = stepEntity.InputData
-                        ? (JSON.parse(stepEntity.InputData) as Record<string, unknown>)
-                        : {};
-                    parsedInput.presetName = resolvedConfig.presetName;
-                    parsedInput.presetId = resolvedConfig.presetId;
-                    const updatedInputJson = JSON.stringify(parsedInput);
-                    stepEntity.InputData = updatedInputJson;
-                    if (typeof stepEntity.Save === 'function') {
-                        this.queueStepSave(stepEntity, (s) => { s.InputData = updatedInputJson; });
-                    }
-                } catch {
-                    // ignore malformed InputData in test mocks
-                }
+                const parsedInput = stepEntity.InputData
+                    ? (JSON.parse(stepEntity.InputData) as Record<string, unknown>)
+                    : {};
+                parsedInput.presetName = resolvedConfig.presetName;
+                parsedInput.presetId = resolvedConfig.presetId;
+                const updatedInputJson = JSON.stringify(parsedInput);
+                stepEntity.InputData = updatedInputJson;
+                this.queueStepSave(stepEntity, (s) => { s.InputData = updatedInputJson; });
             }
 
             const result = await runner.RunAgent<SC, SR>({
@@ -12354,23 +12348,6 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
-     * Matches an active configuration preset for a sub-agent by `Name` first, then `DisplayName`
-     * (both trimmed and case-insensitive).
-     */
-    private matchSubAgentPreset(subAgentId: string, presetName: string): MJAIAgentConfigurationEntity | undefined {
-        const target = presetName.trim().toLowerCase();
-        if (!target) {
-            return undefined;
-        }
-        const presets = AIEngine.Instance.GetAgentConfigurationPresets?.(subAgentId, true) ?? [];
-        const byName = presets.find(p => p.Name?.trim().toLowerCase() === target);
-        if (byName) {
-            return byName;
-        }
-        return presets.find(p => p.DisplayName?.trim().toLowerCase() === target);
-    }
-
-    /**
      * Resolves the configuration to pass to a sub-agent run in precedence order:
      * 1. Per-call `subAgentRequest.presetName` -> matching Active preset of `subAgent`.
      * 2. Active `AIAgentRelationship.ConfigurationPresetID` -> that preset if Active and owned by `subAgent`;
@@ -12386,7 +12363,7 @@ The context is now within limits. Please retry your request with the recovered c
         subAgent: MJAIAgentEntityExtended
     ): { configurationId: string | undefined; presetName?: string; presetId?: string } {
         if (subAgentRequest.presetName != null && subAgentRequest.presetName.trim() !== '') {
-            const preset = this.matchSubAgentPreset(subAgent.ID, subAgentRequest.presetName);
+            const preset = AIEngine.Instance.FindActiveAgentConfigurationPreset(subAgent.ID, subAgentRequest.presetName);
             if (preset) {
                 return {
                     configurationId: preset.AIConfigurationID ?? undefined,
@@ -12409,11 +12386,9 @@ The context is now within limits. Please retry your request with the recovered c
                      r.Status === 'Active'
             );
             if (relationship?.ConfigurationPresetID) {
-                const allConfigs = AIEngine.Instance.AgentConfigurations ?? [];
-                const preset = allConfigs.find(p => UUIDsEqual(p.ID, relationship.ConfigurationPresetID))
-                    ?? (AIEngine.Instance.GetAgentConfigurationPresets?.(subAgent.ID, false) ?? []).find(
-                        p => UUIDsEqual(p.ID, relationship.ConfigurationPresetID)
-                    );
+                const preset = (AIEngine.Instance.AgentConfigurations ?? []).find(
+                    p => UUIDsEqual(p.ID, relationship.ConfigurationPresetID)
+                );
                 if (preset && preset.Status === 'Active' && UUIDsEqual(preset.AgentID, subAgent.ID)) {
                     return {
                         configurationId: preset.AIConfigurationID ?? undefined,
@@ -12472,7 +12447,7 @@ The context is now within limits. Please retry your request with the recovered c
             if (sa.ExecutionMode !== 'Sequential') {
                 line += ` _(${sa.ExecutionMode}, order: ${sa.ExecutionOrder})_`;
             }
-            const presets = AIEngine.Instance.GetAgentConfigurationPresets?.(sa.ID, true) ?? [];
+            const presets = AIEngine.Instance.GetAgentConfigurationPresets(sa.ID, true) ?? [];
             if (presets.length > 0) {
                 const presetSummary = presets.map(p => {
                     const desc = p.Description?.trim();

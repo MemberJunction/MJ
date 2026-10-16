@@ -37,6 +37,16 @@ vi.mock('@memberjunction/aiengine', () => ({
         get Instance() {
             return {
                 GetAgentConfigurationPresets: mockGetAgentConfigurationPresets,
+                FindActiveAgentConfigurationPreset: (agentId: string, presetName: string) => {
+                    const target = presetName.trim().toLowerCase();
+                    if (!target) return undefined;
+                    const presets = (mockGetAgentConfigurationPresets(agentId, true) ?? []) as Array<{
+                        Name?: string;
+                        DisplayName?: string;
+                    }>;
+                    return presets.find((p) => p.Name?.trim().toLowerCase() === target)
+                        ?? presets.find((p) => p.DisplayName?.trim().toLowerCase() === target);
+                },
             };
         },
     },
@@ -171,7 +181,7 @@ describe('VS-CON-7: TaskGraph Agent node presets', () => {
     });
 
     describe('3. TaskGraphDispatcher.runAgentNode passes ConfigurationPresetName', () => {
-        it('extracts presetName from task.Configuration and passes ConfigurationPresetName to agentRunner', async () => {
+        it('extracts presetName from task.ConfigurationObject and passes ConfigurationPresetName to agentRunner', async () => {
             const runAgentForTask = vi.fn().mockResolvedValue({
                 Success: true,
                 Output: { ok: true },
@@ -205,13 +215,12 @@ describe('VS-CON-7: TaskGraph Agent node presets', () => {
             const task = {
                 ID: 'task-1',
                 AgentID: 'agent-sb-1',
-                ConfigurationObject: null,
-                Configuration: JSON.stringify({
+                ConfigurationObject: {
                     agent: {
                         message: 'Draw frame',
                         presetName: 'High',
                     },
-                }),
+                },
             } as unknown as MJTaskEntity;
 
             await internals.runAgentNode(

@@ -80,6 +80,13 @@ const engineState = {
             (c) => c.AgentID === agentId && (!activeOnly || c.Status === 'Active')
         )
     ),
+    FindActiveAgentConfigurationPreset: vi.fn((agentId: string, presetName: string) => {
+        const target = presetName.trim().toLowerCase();
+        if (!target) return undefined;
+        const presets = engineState.GetAgentConfigurationPresets(agentId, true);
+        return presets.find((p) => p.Name?.trim().toLowerCase() === target)
+            ?? presets.find((p) => p.DisplayName?.trim().toLowerCase() === target);
+    }),
     GetAgentBaseCatalog: vi.fn(() => undefined),
     SetAgentBaseCatalog: vi.fn(),
     GetAutoActivatableSkillsForAgent: vi.fn(() => []),
