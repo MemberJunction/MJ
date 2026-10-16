@@ -11,24 +11,30 @@ export type CombinationUniquenessCheck = (columns: string[]) => Promise<boolean>
 export interface PKProposalVerdict {
   Eligible: boolean;
   Reason?: string;
+  /** When eligible: the proposed columns in the schema's own spelling. */
+  Columns?: string[];
 }
 
 /**
  * Every column must exist, have statistics and contain no nulls. A single column must be 100% unique
  * on its own. A composite key only needs to be unique as a combination — its columns are usually not
- * unique individually (ProductID, StartDate) — so it is checked with `checkCombination`. Without one,
- * a composite proposal is rejected because its uniqueness cannot be verified.
+ * unique individually (ProductID, StartDate) — so it is checked with `checkCombination`, which receives
+ * the schema's column names rather than the LLM's spelling of them. Without one, a composite proposal is
+ * rejected because its uniqueness cannot be verified.
  */
 export async function CheckPKProposal(
   table: Pick<TableDefinition, 'columns'>,
   columns: string[],
   checkCombination?: CombinationUniquenessCheck
 ): Promise<PKProposalVerdict> {
+  // The schema's own spelling of each column. Only these reach the database check, never the LLM's strings.
+  const canonical: string[] = [];
   for (const colName of columns) {
     const column = table.columns.find((c) => c.name.toLowerCase() === colName.toLowerCase());
     if (!column) {
       return { Eligible: false, Reason: `column "${colName}" not found` };
     }
+    canonical.push(column.name);
     const stats = column.statistics;
     if (!stats) {
       return { Eligible: false, Reason: `${colName} — no statistics available` };
@@ -47,14 +53,14 @@ export async function CheckPKProposal(
     }
   }
   if (columns.length === 1) {
-    return { Eligible: true };
+    return { Eligible: true, Columns: canonical };
   }
   if (!checkCombination) {
     return { Eligible: false, Reason: `(${columns.join(', ')}) — composite uniqueness can't be checked without a database connection` };
   }
   try {
-    return (await checkCombination(columns))
-      ? { Eligible: true }
+    return (await checkCombination(canonical))
+      ? { Eligible: true, Columns: canonical }
       : { Eligible: false, Reason: `(${columns.join(', ')}) — combination is not unique` };
   } catch (err) {
     return { Eligible: false, Reason: `(${columns.join(', ')}) — uniqueness check failed: ${err instanceof Error ? err.message : String(err)}` };

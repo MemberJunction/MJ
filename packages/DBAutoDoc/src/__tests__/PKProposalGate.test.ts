@@ -19,7 +19,7 @@ describe('CheckPKProposal', () => {
   it('accepts a composite key whose columns are not unique alone when the combination is unique', async () => {
     const checked: string[][] = [];
     const verdict = await CheckPKProposal(PRODUCT_COST_HISTORY, ['ProductID', 'StartDate'], async (cols) => { checked.push(cols); return true; });
-    expect(verdict).toEqual({ Eligible: true });
+    expect(verdict).toEqual({ Eligible: true, Columns: ['ProductID', 'StartDate'] });
     expect(checked).toEqual([['ProductID', 'StartDate']]);
   });
 
@@ -44,11 +44,17 @@ describe('CheckPKProposal', () => {
 
   it('still requires a single-column key to be 100% unique on its own', async () => {
     expect((await CheckPKProposal(PRODUCT_COST_HISTORY, ['ProductID'])).Reason).toContain('uniqueness 74.2%');
-    expect(await CheckPKProposal({ columns: [col('ID', 10, 10)] }, ['ID'])).toEqual({ Eligible: true });
+    expect(await CheckPKProposal({ columns: [col('ID', 10, 10)] }, ['id'])).toEqual({ Eligible: true, Columns: ['ID'] });
   });
 
   it('rejects unknown columns, case-insensitively matching known ones', async () => {
     expect((await CheckPKProposal(PRODUCT_COST_HISTORY, ['Nope'])).Reason).toContain('not found');
     expect((await CheckPKProposal(PRODUCT_COST_HISTORY, ['productid', 'startdate'], async () => true)).Eligible).toBe(true);
+  });
+
+  it('passes the schema\'s column names to the database check, never the LLM\'s spelling', async () => {
+    const checked: string[][] = [];
+    await CheckPKProposal(PRODUCT_COST_HISTORY, ['PRODUCTID', 'startdate'], async (cols) => { checked.push(cols); return true; });
+    expect(checked).toEqual([['ProductID', 'StartDate']]);
   });
 });

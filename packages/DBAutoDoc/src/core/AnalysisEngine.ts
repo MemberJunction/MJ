@@ -1420,18 +1420,19 @@ export class AnalysisEngine {
       console.log(`[AnalysisEngine] LLM PK rejected: ${schemaName}.${tableName} ${verdict.Reason}`);
       return;
     }
+    const pkColumns = verdict.Columns ?? columns;
 
     // All columns pass — create new PK candidate
     const newPK: import('../types/discovery.js').PKCandidate = {
       schemaName,
       tableName,
-      columnNames: columns,
+      columnNames: pkColumns,
       confidence,
       evidence: {
         uniqueness: 1.0,
         nullCount: 0,
         totalRows: table.rowCount || 0,
-        dataPattern: columns.length > 1 ? 'composite' : 'unknown',
+        dataPattern: pkColumns.length > 1 ? 'composite' : 'unknown',
         namingScore: 0.5,
         dataTypeScore: 0.8,
         warnings: ['Created from LLM proposal — passed deterministic eligibility']
@@ -1444,12 +1445,12 @@ export class AnalysisEngine {
     discoveryPhase.discovered.primaryKeys.push(newPK);
 
     // Update column flags
-    for (const colName of columns) {
+    for (const colName of pkColumns) {
       const column = this.findColumnInState(state, schemaName, tableName, colName);
       if (column) column.isPrimaryKey = true;
     }
 
-    console.log(`[AnalysisEngine] Created PK from LLM: ${schemaName}.${tableName} (${columns.join(', ')}) confidence: ${confidence}`);
+    console.log(`[AnalysisEngine] Created PK from LLM: ${schemaName}.${tableName} (${pkColumns.join(', ')}) confidence: ${confidence}`);
   }
 
   /**
