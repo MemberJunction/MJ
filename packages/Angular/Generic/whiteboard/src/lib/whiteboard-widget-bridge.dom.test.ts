@@ -160,4 +160,52 @@ describe('widget bridge helper (executed): collectFields', () => {
     `);
     expect(submitForm(root.querySelector('form')!)).toEqual({ planet: 'Venus' });
   });
+
+  it('a ticked box with NO value attribute reports its label text, not the native "on"', () => {
+    root = mount(`
+      <form>
+        <label><input type="checkbox" name="toppings" checked> Olives</label>
+        <label><input type="checkbox" name="toppings"> Basil</label>
+        <label><input type="checkbox" name="toppings" checked> Chili</label>
+      </form>
+    `);
+    expect(submitForm(root.querySelector('form')!)).toEqual({ toppings: ['Olives', 'Chili'] });
+  });
+
+  it('a valueless box labelled through `for` reports that label text too', () => {
+    root = mount(`
+      <form>
+        <input type="checkbox" id="opt-a" name="opts" checked> <label for="opt-a">Extra cheese</label>
+      </form>
+    `);
+    expect(submitForm(root.querySelector('form')!)).toEqual({ opts: ['Extra cheese'] });
+  });
+
+  it('a valueless box with no label at all keeps the native "on"', () => {
+    root = mount(`
+      <form>
+        <input type="checkbox" name="bare" checked>
+      </form>
+    `);
+    expect(submitForm(root.querySelector('form')!)).toEqual({ bare: ['on'] });
+  });
+
+  it('an explicit value attribute always wins over the label text', () => {
+    root = mount(`
+      <form>
+        <label><input type="checkbox" name="size" value="xl" checked> Extra large</label>
+      </form>
+    `);
+    expect(submitForm(root.querySelector('form')!)).toEqual({ size: ['xl'] });
+  });
+
+  it('a checked radio with NO value attribute reports its label text as well', () => {
+    root = mount(`
+      <form>
+        <label><input type="radio" name="planet"> Mercury</label>
+        <label><input type="radio" name="planet" checked> Venus</label>
+      </form>
+    `);
+    expect(submitForm(root.querySelector('form')!)).toEqual({ planet: 'Venus' });
+  });
 });
