@@ -98,6 +98,8 @@ export * from './realtime/realtime-channel-server-data-context';
 export * from './realtime/agent-media-library';
 export * from './realtime/realtime-recording-capture';
 export * from './realtime/realtime-recording-store';
+export * from './realtime/realtime-recording-ledger';
+export * from './realtime/realtime-recording-opus-assembly';
 
 // Re-export from ai-reranker for backward compatibility
 export {
