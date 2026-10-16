@@ -1,0 +1,77 @@
+[
+  {
+    "fields": {
+      "Name": "IT: Consult Parent",
+      "Description": "Deterministic fixture agent for IT124 (agent-consult). Uses DriverClass=ITConsultParentAgent and ChatHandlingOption=Consult (MaxSubAgentConsultRounds=1) so a child Chat question is consulted once, escalated to the root caller on round 2, and resumed when the MJ: AI Agent Requests row is answered.",
+      "CategoryID": "@lookup:MJ: AI Agent Categories.Name=IT: Integration Test",
+      "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+      "DriverClass": "ITConsultParentAgent",
+      "Status": "Active",
+      "ExecutionOrder": 0,
+      "ExposeAsAction": false,
+      "ModelSelectionMode": "Agent",
+      "ArtifactCreationMode": "Never",
+      "IconClass": "fa-solid fa-comments",
+      "InjectNotes": false,
+      "InjectExamples": false,
+      "MaxIterationsPerRun": 6,
+      "ChatHandlingOption": "Consult",
+      "MaxSubAgentConsultRounds": 1
+    },
+    "relatedEntities": {
+      "MJ: AI Agent Prompts": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "PromptID": "@lookup:MJ: AI Prompts.Name=IT: Decisions Switch Agent - System Prompt",
+            "ExecutionOrder": 0,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "D95B774B-DFAD-453F-A96A-0A4C8AFDBF84"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "F309CBCF-A64E-45A9-B5E5-5652F9A6DAAD"
+    }
+  },
+  {
+    "fields": {
+      "Name": "IT: Consult Child",
+      "Description": "Deterministic child fixture agent for IT124 (agent-consult). Uses DriverClass=ITConsultChildAgent under ParentID=IT: Consult Parent.",
+      "ParentID": "@lookup:MJ: AI Agents.Name=IT: Consult Parent",
+      "CategoryID": "@lookup:MJ: AI Agent Categories.Name=IT: Integration Test",
+      "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+      "DriverClass": "ITConsultChildAgent",
+      "Status": "Active",
+      "ExecutionOrder": 0,
+      "ExposeAsAction": false,
+      "ModelSelectionMode": "Agent",
+      "ArtifactCreationMode": "Never",
+      "IconClass": "fa-solid fa-comment-dots",
+      "InjectNotes": false,
+      "InjectExamples": false,
+      "MaxIterationsPerRun": 6
+    },
+    "relatedEntities": {
+      "MJ: AI Agent Prompts": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "PromptID": "@lookup:MJ: AI Prompts.Name=IT: Decisions Switch Agent - System Prompt",
+            "ExecutionOrder": 0,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "4C440F55-4740-4315-960F-107AE60B02A0"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "DFFBB907-E4F4-4ECC-8BFA-C08A61E7D85C"
+    }
+  }
+]

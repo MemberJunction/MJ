@@ -114,3 +114,23 @@ export function FormatSubAgentConsultMessage(params: FormatSubAgentConsultMessag
 
     return lines.join('\n');
 }
+
+/**
+ * Formats the reminder message injected before the caller's answer when an agent run
+ * resumes (`lastRunId` pointing to a prior run that paused with `FinalStep === 'Chat'`)
+ * with one or more unanswered sub-agent consultations from that prior run.
+ *
+ * Returns `''` when `consults` is empty.
+ */
+export function FormatReloadedConsultsMessage(consults: ReadonlyArray<SubAgentConsultRecord>): string {
+    if (!consults || consults.length === 0) {
+        return '';
+    }
+    return consults
+        .map(
+            c =>
+                `You asked your caller about a question from sub-agent ${c.subAgentName} (run ${c.childRunId}, round ${c.round}): ${c.question ?? ''}. Their answer follows. To pass it on, call ${c.subAgentName} with resumeRunId: "${c.childRunId}".`
+        )
+        .join('\n');
+}
+

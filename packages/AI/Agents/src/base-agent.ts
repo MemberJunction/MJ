@@ -227,6 +227,7 @@ import { ClientToolRequestManager } from './ClientToolRequestManager';
 import { BuildClientToolResultMessage, ResolveClientToolResultMaxChars, ReplaceMediaBlocksWithStubs, IsMediaBlock, IMAGE_BLOCK_TOKEN_ESTIMATE } from './client-tool-results';
 import {
     DEFAULT_MAX_SUB_AGENT_CONSULT_ROUNDS,
+    FormatReloadedConsultsMessage,
     FormatResponseFormSummary,
     FormatSubAgentConsultMessage,
     SubAgentConsultRecord
@@ -2477,8 +2478,8 @@ export class BaseAgent {
             // resumed stopped run can be spliced in ahead of it once the parallel phase settles.
             const continuationMessage = wrappedParams.conversationMessages[wrappedParams.conversationMessages.length - 1];
 
-            // Positions matter: [0] is the config and [5] the stopped-run continuation.
-            const [config, , , , , stoppedRunContinuation] = await Promise.all([
+            // Positions matter: [0] is the config, [5] the stopped-run continuation, and [7] open sub-agent consults.
+            const [config, , , , , stoppedRunContinuation, , openConsults] = await Promise.all([
                 this.loadAgentConfiguration(params.agent),
                 this.preloadAgentData(wrappedParams),
                 this.InjectContextMemory(
@@ -2519,7 +2520,10 @@ export class BaseAgent {
                 this.loadStoppedRunContinuation(wrappedParams),
                 // Decision discovery (plan Task 3.1), off unless the decisionsEnabled and decisionDiscovery prompt
                 // params are true: may add a <suggested_agent> system message, within DECISION_DISCOVERY_TIMEOUT_MS.
-                this.InjectDecisionDiscovery(params.agent, params.contextUser, wrappedParams.conversationMessages, params.data)
+                this.InjectDecisionDiscovery(params.agent, params.contextUser, wrappedParams.conversationMessages, params.data),
+                // If this run resumes a prior run that paused with FinalStep === 'Chat', reload any unanswered
+                // sub-agent consults so the caller's answer can be relayed back to the waiting sub-agent.
+                this.loadOpenConsults(wrappedParams)
             ]);
 
             // Resume (or summarize) a run the user stopped, now that nothing else is writing the list.
@@ -2528,6 +2532,10 @@ export class BaseAgent {
             // Inject scope-resolved prompt parts (role-faithful) for this agent's prompt, alongside
             // memory/RAG. Synchronous — parts are cached on AIEngine. Uses the same run scope.
             this.InjectScopedPromptParts(params.agent, wrappedParams.conversationMessages, runScope.EntityID, runScope.RecordID, runScope.Secondary);
+
+            // Restore open sub-agent consults from a resumed Chat run and splice the reminder immediately
+            // before the caller's answer (continuationMessage).
+            this.applyOpenConsults(wrappedParams, openConsults, continuationMessage);
 
             if (!config.success) {
                 this.logError(`Failed to load agent configuration: ${config.errorMessage}`, {
@@ -8438,6 +8446,193 @@ The context is now within limits. Please retry your request with the recovered c
             this.logStatus(`[StoppedRunResults] Carried ${steps.length} completed step result(s) forward from stopped run ${continuation.RunID}`, true, params);
         } catch (error) {
             this.logStatus(`[StoppedRunResults] Skipped (contained error): ${error instanceof Error ? error.message : error}`, true, params);
+        }
+    }
+
+    /**
+     * Loads unanswered sub-agent consultations (`OutputData.consult`) from `params.lastRunId` when that
+     * prior run paused with `FinalStep === 'Chat'` (and was not stopped by the user). Runs at any depth
+     * so a middle agent resumed via `resumeRunId` also reloads its own open child consults. Fail-soft.
+     * @private
+     */
+    private async loadOpenConsults(params: ExecuteAgentParams): Promise<SubAgentConsultRecord[]> {
+        if (!params.lastRunId || !IsValidUUID(params.lastRunId)) {
+            return [];
+        }
+        try {
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+            const runResult = await rv.RunView<{
+                ID: string;
+                FinalStep: string | null;
+                Status: string;
+                CancellationReason: string | null;
+            }>({
+                EntityName: 'MJ: AI Agent Runs',
+                ExtraFilter: `ID='${params.lastRunId}'`,
+                MaxRows: 1,
+                Fields: ['ID', 'FinalStep', 'Status', 'CancellationReason'],
+                ResultType: 'simple',
+                BypassCache: true,
+            }, params.contextUser);
+
+            const priorRun = runResult.Success ? runResult.Results?.[0] : undefined;
+            if (
+                !priorRun ||
+                priorRun.FinalStep !== 'Chat' ||
+                MJAIAgentRunEntityExtended.IsUserStopped(priorRun.Status, priorRun.CancellationReason)
+            ) {
+                return [];
+            }
+
+            const stepsResult = await rv.RunView<{
+                StepNumber: number;
+                InputData: string | null;
+                OutputData: string | null;
+            }>({
+                EntityName: 'MJ: AI Agent Run Steps',
+                ExtraFilter: `AgentRunID='${params.lastRunId}' AND StepType='Sub-Agent'`,
+                OrderBy: 'StepNumber ASC',
+                Fields: ['StepNumber', 'InputData', 'OutputData'],
+                ResultType: 'simple',
+                BypassCache: true,
+            }, params.contextUser);
+
+            const steps = stepsResult.Success ? (stepsResult.Results || []) : [];
+            if (steps.length === 0) {
+                return [];
+            }
+
+            const openConsults: SubAgentConsultRecord[] = [];
+            for (let i = 0; i < steps.length; i++) {
+                const consult = BaseAgent.readStepConsultRecord(steps[i].OutputData);
+                if (!consult) {
+                    continue;
+                }
+                const answeredLater = steps.slice(i + 1).some(laterStep => {
+                    const resumedId = BaseAgent.readStepResumeRunId(laterStep.InputData);
+                    return resumedId != null && (resumedId === consult.childRunId || UUIDsEqual(resumedId, consult.childRunId));
+                });
+                if (!answeredLater) {
+                    openConsults.push(consult);
+                }
+            }
+            return openConsults;
+        } catch (error) {
+            this.logStatus(
+                `[SubAgentConsult] Skipped loading open consults (contained error): ${error instanceof Error ? error.message : error}`,
+                true,
+                params
+            );
+            return [];
+        }
+    }
+
+    /**
+     * Restores reloaded open sub-agent consults into `this._openSubAgentConsults` (so `resumeRunId`
+     * validation accepts them) and splices a `sub-agent-consult` reminder message immediately before
+     * `continuationMessage` (the caller's answer). Fail-soft.
+     * @private
+     */
+    private applyOpenConsults(
+        params: ExecuteAgentParams,
+        openConsults: SubAgentConsultRecord[],
+        continuationMessage: ChatMessage | undefined
+    ): void {
+        if (!openConsults || openConsults.length === 0) {
+            return;
+        }
+        try {
+            for (const consult of openConsults) {
+                if (consult.childRunId) {
+                    this._openSubAgentConsults.set(consult.childRunId, consult);
+                }
+            }
+            const content = FormatReloadedConsultsMessage(openConsults);
+            if (!content) {
+                return;
+            }
+            const metadata: AgentChatMessageMetadata = {
+                turnAdded: 0,
+                messageType: 'sub-agent-consult',
+                ...(openConsults.length === 1
+                    ? {
+                          subAgentName: openConsults[0].subAgentName,
+                          subAgentId: openConsults[0].subAgentId,
+                      }
+                    : {}),
+                expirationTurns: 3,
+                expirationMode: 'Remove',
+            };
+            const consultReminder: AgentChatMessage = {
+                role: 'user',
+                content,
+                metadata,
+            };
+
+            const at = continuationMessage ? params.conversationMessages.indexOf(continuationMessage) : -1;
+            if (at >= 0) {
+                params.conversationMessages.splice(at, 0, consultReminder);
+            } else {
+                let lastUserIdx = -1;
+                for (let i = params.conversationMessages.length - 1; i >= 0; i--) {
+                    if (params.conversationMessages[i].role === 'user') {
+                        lastUserIdx = i;
+                        break;
+                    }
+                }
+                if (lastUserIdx >= 0) {
+                    params.conversationMessages.splice(lastUserIdx, 0, consultReminder);
+                } else {
+                    params.conversationMessages.push(consultReminder);
+                }
+            }
+            this.logStatus(
+                `[SubAgentConsult] Reloaded ${openConsults.length} open consult(s) from prior run ${params.lastRunId}`,
+                true,
+                params
+            );
+        } catch (error) {
+            this.logStatus(
+                `[SubAgentConsult] Skipped applying open consults (contained error): ${error instanceof Error ? error.message : error}`,
+                true,
+                params
+            );
+        }
+    }
+
+    /** Parses `OutputData.consult` from a persisted Sub-Agent step row, or returns `null`. @private */
+    private static readStepConsultRecord(outputDataJson: string | null): SubAgentConsultRecord | null {
+        if (!outputDataJson) {
+            return null;
+        }
+        try {
+            const parsed: { consult?: Partial<SubAgentConsultRecord> } = JSON.parse(outputDataJson);
+            const c = parsed?.consult;
+            if (!c || typeof c.childRunId !== 'string' || !c.childRunId || typeof c.subAgentName !== 'string') {
+                return null;
+            }
+            return {
+                childRunId: c.childRunId,
+                subAgentId: typeof c.subAgentId === 'string' ? c.subAgentId : '',
+                subAgentName: c.subAgentName,
+                round: typeof c.round === 'number' ? c.round : 1,
+                question: typeof c.question === 'string' ? c.question : '',
+            };
+        } catch {
+            return null;
+        }
+    }
+
+    /** Parses `InputData.resumeRunId` from a persisted Sub-Agent step row, or returns `null`. @private */
+    private static readStepResumeRunId(inputDataJson: string | null): string | null {
+        if (!inputDataJson) {
+            return null;
+        }
+        try {
+            const parsed: { resumeRunId?: unknown } = JSON.parse(inputDataJson);
+            return typeof parsed?.resumeRunId === 'string' && parsed.resumeRunId ? parsed.resumeRunId : null;
+        } catch {
+            return null;
         }
     }
 
@@ -15559,21 +15754,21 @@ The context is now within limits. Please retry your request with the recovered c
             this._subAgentConsultRounds.set(subAgentEntity.ID, round);
             const maxRounds = params.agent.MaxSubAgentConsultRounds ?? DEFAULT_MAX_SUB_AGENT_CONSULT_ROUNDS;
 
-            if (round <= maxRounds) {
-                const childRunId = subAgentResult.agentRun?.ID || '';
-                const question = subAgentResult.agentRun?.Message || null;
-                const consultRecord: SubAgentConsultRecord = {
-                    childRunId,
-                    subAgentId: subAgentEntity.ID,
-                    subAgentName: subAgentRequest.name,
-                    round,
-                    question
-                };
-                if (childRunId) {
-                    this._openSubAgentConsults.set(childRunId, consultRecord);
-                }
+            const childRunId = subAgentResult.agentRun?.ID || '';
+            const question = subAgentResult.agentRun?.Message || null;
+            const consultRecord: SubAgentConsultRecord = {
+                childRunId,
+                subAgentId: subAgentEntity.ID,
+                subAgentName: subAgentRequest.name,
+                round,
+                question
+            };
+            if (childRunId) {
+                this._openSubAgentConsults.set(childRunId, consultRecord);
+            }
+            outputData.consult = consultRecord;
 
-                outputData.consult = consultRecord;
+            if (round <= maxRounds) {
                 outputData.shouldTerminate = false;
                 outputData.nextStep = 'retry';
 
@@ -15651,7 +15846,9 @@ The context is now within limits. Please retry your request with the recovered c
             effectiveOption
         );
 
-        if (validatedStep.step === 'Retry') {
+        if (validatedStep.step === 'Chat' && effectiveOption === 'Consult' && this._depth === 0) {
+            await this.raiseFeedbackRequest(params, stepEntity, chatStep);
+        } else if (validatedStep.step === 'Retry') {
             const resultMessage = this.formatSubAgentResultAsMarkdown(subAgentRequest.name, subAgentResult);
             this.pushSubAgentConversationMessage(
                 params,

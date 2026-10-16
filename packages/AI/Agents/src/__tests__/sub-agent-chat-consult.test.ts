@@ -261,6 +261,15 @@ class ConsultLoopHarness {
                 this.steps.push(step);
                 return step;
             }
+            if (entityName === 'MJ: AI Agent Requests') {
+                return {
+                    ID: '',
+                    NewRecord() {
+                        this.ID = 'aaaaaaaa-4444-4000-8000-000000000001';
+                    },
+                    Save: async () => true,
+                };
+            }
             throw new Error(`ConsultLoopHarness: unexpected GetEntityObject('${entityName}')`);
         },
     };
