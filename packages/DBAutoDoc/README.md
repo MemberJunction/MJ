@@ -164,6 +164,38 @@ This will:
 - Perform sanity checks
 - Save state to `db-doc-state.json`
 
+#### Large databases
+
+```bash
+# Skip the table data sampling pass (row counts, distinct counts, sample values)
+db-auto-doc analyze --skip-sampling          # or "analysis": { "skipSampling": true }
+
+# An interrupted sampling pass resumes where it stopped: state is saved every 25 tables and a
+# resume samples only the tables that have no statistics yet
+db-auto-doc analyze --resume ./output/run-3/state.json
+```
+
+Sampling is what the enum/value-list verdicts and the organic-key cardinality gate are based on, so with
+`--skip-sampling` those verdicts fall back to the LLM's judgement. Organic-key detection is skipped with
+a warning when no table has column statistics; on a `--resume --skip-sampling` of a run that already
+sampled, the earlier statistics are kept and detection still runs.
+
+#### Seed context from files
+
+Long-form context (a data dictionary, an engineering assessment) can live in files instead of inline
+`customInstructions`; their contents are appended to it:
+
+```json
+"seedContext": {
+  "overallPurpose": "Association management system",
+  "file": "./context/data-dictionary.md",
+  "files": ["./context/assessment.md", "./context/glossary.md"]
+}
+```
+
+Paths are relative to `config.json`. The text is sent with every table prompt, so keep it to what the
+model needs for descriptions rather than a full specification.
+
 ### 3. Generate Sample Queries (Optional)
 
 Generate reference SQL queries for AI agent training:
@@ -329,6 +361,59 @@ db-auto-doc export --state-file ./output/run-1/state.json --format index-migrati
 ```
 
 Dialect-specific formats take the database platform from the state file; override it with `--provider sqlserver|postgresql|mysql`. `--file-prefix` replaces a format's default file-name prefix (for example a migration version such as `V202610081500__`).
+
+#### Subject-area diagrams for large schemas
+
+Mermaid refuses a diagram whose source exceeds ~50,000 characters, and a schema of a few hundred tables
+passes that long before it becomes readable. `--erd-mode clusters` splits the foreign-key graph into
+hub-centred subject areas and writes one diagram per area to `erd/`, with an index and a "Subject Areas"
+section in `documentation.html`:
+
+```bash
+db-auto-doc export --html --mermaid --erd-mode clusters
+db-auto-doc export --mermaid --erd-mode both --erd-columns keys     # keep the full diagram too
+```
+
+How the areas are chosen:
+
+1. **Reference tables** — tables that reference nothing and hold fewer than `lookupMaxRows` rows
+   (status codes, types, flags) — are listed beside each diagram rather than drawn. Left in, a flag table
+   referenced by sixty others links every area to every other.
+2. **Hubs** are tables referenced by at least `hubMinInbound` other tables.
+3. Every other connected table joins its nearest hub; an area smaller than `minClusterSize` folds into
+   the neighbour it links to most.
+4. An area larger than `pageSize` is paginated, with the hub on every page.
+
+Defaults live in `config.json` and any of them can be overridden per run:
+
+```json
+"output": {
+  "erd": {
+    "mode": "clusters",
+    "columns": "keys",
+    "hubMinInbound": 8,
+    "lookupMaxRows": 5000,
+    "pageSize": 50,
+    "minClusterSize": 4,
+    "hubs": ["Invoice"],
+    "lookupTables": ["AuditFlag"],
+    "excludeTables": ["Customer.bak"]
+  }
+}
+```
+
+| Flag | Overrides |
+|------|-----------|
+| `--erd-mode full\|clusters\|both` | `erd.mode` |
+| `--erd-columns all\|keys\|none` | `erd.columns` (clusters default to `keys`) |
+| `--erd-hub-min-inbound N` | `erd.hubMinInbound` |
+| `--erd-lookup-max-rows N` | `erd.lookupMaxRows` |
+| `--erd-page-size N` | `erd.pageSize` |
+| `--erd-min-cluster-size N` | `erd.minClusterSize` |
+
+`erd/index.md` names every area's members, the reference tables, the tables with no foreign keys and any
+connected tables that reached no hub, so a wrong-looking split can be traced to a threshold or pinned with
+`hubs` / `lookupTables` / `excludeTables`.
 
 ### 5. Export Sample Queries to Metadata (Optional)
 
