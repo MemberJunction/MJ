@@ -1634,7 +1634,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
 
             // 3. User search string
             if (userSearchString.length > 0) {
-                if (!this.ValidateUserProvidedSQLClause(userSearchString))
+                if (!this.IsUserSearchTermAllowed(userSearchString))
                     throw new Error(`Invalid User Search SQL clause: ${userSearchString}, contains one more for forbidden keywords`);
                 const sUserSearchSQL = this.createViewUserSearchSQL(entityInfo, userSearchString);
                 if (sUserSearchSQL.length > 0) {
@@ -1988,6 +1988,15 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
      *   - skips fields that are not sensible text-search targets (non-text types,
      *     unbounded text columns when FTX is off).
      */
+    /**
+     * Screens a user search term with {@link ValidateUserProvidedSQLClause}. The screen reads the
+     * quote-doubled term, because that is the text {@link createViewUserSearchSQL} splices, so a
+     * term such as `O'Leary` is read as complete SQL tokens.
+     */
+    protected IsUserSearchTermAllowed(userSearchString: string): boolean {
+        return this.ValidateUserProvidedSQLClause(userSearchString.replace(/'/g, "''"));
+    }
+
     protected createViewUserSearchSQL(entityInfo: EntityInfo, userSearchString: string): string {
         let sUserSearchSQL = '';
         const safeUserSearchString = userSearchString.replace(/'/g, "''");
@@ -2534,7 +2543,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         }
 
         if (params.UserSearchString && params.UserSearchString.length > 0) {
-            if (!this.ValidateUserProvidedSQLClause(params.UserSearchString))
+            if (!this.IsUserSearchTermAllowed(params.UserSearchString))
                 throw new Error(`Invalid User Search SQL clause: ${params.UserSearchString}`);
             const sUserSearchSQL = this.createViewUserSearchSQL(entityInfo, params.UserSearchString);
             if (sUserSearchSQL.length > 0) {
@@ -3455,7 +3464,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     protected async ExecuteAdhocQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult> {
         try {
             const validator = SQLExpressionValidator.Instance;
-            const validation = validator.validateFullQuery(params.SQL!);
+            const validation = validator.ValidateFullQuery(params.SQL!, this.PlatformKey);
             const statementCheck = IsReadOnlyQuery(params.SQL!, this.Dialect);
             if (!validation.valid || !statementCheck.IsReadOnly) {
                 return {
