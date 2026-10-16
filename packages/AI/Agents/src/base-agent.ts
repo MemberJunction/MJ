@@ -22,6 +22,7 @@ import { AgentRunWatchdog } from './agent-run-watchdog';
 import { AIPromptRunner, GetToolCallingDecision, AIDecisionRunResult } from '@memberjunction/ai-prompts';
 import { ChatMessage, ChatMessageContent, AIErrorType, AIAPIKeyResolver, BaseRealtimeModel, GetAIAPIKey, CredentialScopeAllows, MakeAIAPIKeyResolver, IRealtimeSession, IsPrefixPromptCache, JSONObject, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage, ChatToolChoice, DecisionQuestion, DecisionAnswer } from '@memberjunction/ai';
 import { BaseAgentType } from './agent-types/base-agent-type';
+import { LoopAgentType } from './agent-types/loop-agent-type';
 import { ProviderRubricEngine } from '@memberjunction/rubrics';
 import { ExecuteSelfCheck, PickSelfCheckLink, type SelfCheckLink, type SelfCheckLinkRow } from './self-check';
 import { LoopAgentTypePromptParams } from './agent-types/loop-agent-prompt-params';
@@ -6021,7 +6022,17 @@ export class BaseAgent {
     ): Promise<BaseAgentNextStep<P>> {
         // Let the agent type determine the next step
         this.logStatus(`🎯 Agent type '${agentType.Name}' determining next step`, true, params);
-        const nextStep = await this.AgentTypeInstance.DetermineNextStep<P>(promptResult, params, currentPayload, this.AgentTypeState, this._nativeToolBindings);
+        const stepParams =
+            this._agentTypePromptParams && this.AgentTypeInstance instanceof LoopAgentType
+                ? {
+                      ...params,
+                      data: {
+                          ...params.data,
+                          __agentTypePromptParams: this._agentTypePromptParams,
+                      },
+                  }
+                : params;
+        const nextStep = await this.AgentTypeInstance.DetermineNextStep<P>(promptResult, stepParams, currentPayload, this.AgentTypeState, this._nativeToolBindings);
         return nextStep;
     }
 

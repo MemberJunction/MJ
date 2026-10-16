@@ -45,9 +45,11 @@ import { BaseAgentType } from '../agent-types/base-agent-type';
 // (its @RegisterClass decorator) so BaseAgentType.GetAgentTypeInstance resolves DriverClass
 // 'LoopAgentType'. A named-but-unreferenced import would be dropped by the TS transform.
 import '../agent-types/loop-agent-type';
+import { FlowAgentType } from '../agent-types/flow-agent-type';
+import { AgentRunner } from '../AgentRunner';
 import type { LoopAgentResponse } from '../agent-types/loop-agent-response-type';
 import type { AgentPreExecutionRAGResult } from '../agent-pre-execution-rag';
-import type { AIPromptParams, AIPromptRunResult, ExecuteAgentParams, MJAIAgentEntityExtended, MJAIAgentRunStepEntityExtended, AgentDecisionRequest, AgentFinishIf, BaseAgentNextStep, AgentChatMessage } from '@memberjunction/ai-core-plus';
+import { GetTaskGraphSubmitter, type TaskGraphSubmitter, type TaskGraphSpec, type AIPromptParams, type AIPromptRunResult, type ExecuteAgentParams, type MJAIAgentEntityExtended, type MJAIAgentRunStepEntityExtended, type AgentDecisionRequest, type AgentFinishIf, type BaseAgentNextStep, type AgentChatMessage } from '@memberjunction/ai-core-plus';
 import type { MJAIPromptRunEntity } from '@memberjunction/core-entities';
 import { RecordToolCallingDecision } from '@memberjunction/ai-prompts';
 import { SanitizeToolName } from '../native-tools/action-tool-builder';
@@ -66,6 +68,14 @@ import { UserCache } from '@memberjunction/generic-database-provider';
 // ============================================================================
 // Module mocks (boundaries only)
 // ============================================================================
+
+vi.mock('@memberjunction/ai-core-plus', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/ai-core-plus')>();
+    return {
+        ...actual,
+        GetTaskGraphSubmitter: vi.fn(() => actual.GetTaskGraphSubmitter()),
+    };
+});
 
 vi.mock('@memberjunction/core', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/core')>();
@@ -2614,3 +2624,241 @@ describe('BaseAgent.buildAgentBaseCatalog — relationship targets', () => {
         expect(catalog.subAgentDetails).not.toContain('Skip');
     });
 });
+
+describe('BaseAgent.Execute — Loop agent-type gates read the merged params (VS-SAGE-0)', () => {
+    const TENANT = 'aaaaaaaa-0000-4000-8000-0000000000d7';
+    const CHILD_AGENT_ID = 'aaaaaaaa-5555-4000-8000-000000000001';
+    const FLOW_TYPE_ID = 'aaaaaaaa-5555-4000-8000-000000000002';
+    const FLOW_STEP_ID = 'aaaaaaaa-5555-4000-8000-000000000003';
+    const PARENT_TASK_ID = 'aaaaaaaa-5555-4000-8000-000000000004';
+
+    const twoNodeGraph = (): TaskGraphSpec => ({
+        workflowName: 'Quarterly review',
+        tasks: [
+            {
+                tempId: 'a',
+                name: 'Gather',
+                description: 'gather the data',
+                kind: 'Agent',
+                configuration: { agentName: 'Query Builder' },
+                dependsOn: [],
+            },
+            {
+                tempId: 'b',
+                name: 'Summarize',
+                description: 'summarize it',
+                kind: 'Agent',
+                configuration: { agentName: 'Sage' },
+                dependsOn: ['a'],
+            },
+        ],
+    });
+
+    const tasksEnvelope = (): LoopAgentResponse => ({
+        taskComplete: false,
+        reasoning: 'Schedule durable two-node task graph',
+        nextStep: {
+            type: 'Tasks',
+            tasks: twoNodeGraph(),
+        },
+    });
+
+    let submitSpy: ReturnType<typeof vi.fn>;
+
+    beforeEach(() => {
+        submitSpy = vi.fn().mockResolvedValue({
+            Success: true,
+            ParentTaskID: PARENT_TASK_ID,
+        });
+        vi.mocked(GetTaskGraphSubmitter).mockReturnValue({
+            Submit: submitSpy,
+        } as unknown as TaskGraphSubmitter);
+    });
+
+    afterEach(() => {
+        vi.mocked(GetTaskGraphSubmitter).mockReset();
+        vi.restoreAllMocks();
+    });
+
+    it('1. metadata-only gate: an agent with AgentTypePromptParams.enableTaskGraphs=true and nothing in data reaches executeTasksStep', async () => {
+        harness.agent = makeAgentRow({
+            AgentTypePromptParams: JSON.stringify({ enableTaskGraphs: true }),
+        });
+        const { agent, runner } = makeAgent([
+            () => llmEnvelope(tasksEnvelope()),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+
+        const result = await agent.Execute(makeParams());
+
+        expect(result.success).toBe(true);
+        expect(submitSpy).toHaveBeenCalledTimes(1);
+        expect(submitSpy.mock.calls[0][0].Spec.workflowName).toBe('Quarterly review');
+        expect(harness.steps.map((s) => s.StepType)).toContain('TaskGraph');
+        expect(runner.Calls).toHaveLength(1);
+    });
+
+    it('2. withheld: the same metadata-enabled agent on a run that withholds task graphs is refused', async () => {
+        harness.agent = makeAgentRow({
+            AgentTypePromptParams: JSON.stringify({ enableTaskGraphs: true }),
+        });
+        const { agent, runner } = makeAgent([
+            () => llmEnvelope(tasksEnvelope()),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+
+        const result = await agent.Execute(makeParams({ PrimaryScopeRecordID: TENANT }));
+
+        expect(result.success).toBe(true);
+        expect(submitSpy).not.toHaveBeenCalled();
+        expect(harness.steps.map((s) => s.StepType)).not.toContain('TaskGraph');
+        expect(runner.Calls).toHaveLength(2);
+        const turn2Messages = (runner.Calls[1].conversationMessages ?? []).map((m) =>
+            typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
+        );
+        expect(turn2Messages.some((c) => /not enabled to emit task graphs/i.test(c))).toBe(true);
+    });
+
+    it('3. off: an agent without the flag in metadata is refused', async () => {
+        harness.agent = makeAgentRow();
+        const { agent, runner } = makeAgent([
+            () => llmEnvelope(tasksEnvelope()),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+
+        const result = await agent.Execute(makeParams());
+
+        expect(result.success).toBe(true);
+        expect(submitSpy).not.toHaveBeenCalled();
+        expect(harness.steps.map((s) => s.StepType)).not.toContain('TaskGraph');
+        expect(runner.Calls).toHaveLength(2);
+        const turn2Messages = (runner.Calls[1].conversationMessages ?? []).map((m) =>
+            typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
+        );
+        expect(turn2Messages.some((c) => /not enabled to emit task graphs/i.test(c))).toBe(true);
+    });
+
+    it("4. a sub-agent's data never carries the parent's merged params", async () => {
+        harness.agent = makeAgentRow({
+            AgentTypePromptParams: JSON.stringify({ enableTaskGraphs: true }),
+        });
+        const childRow = {
+            ...makeAgentRow({ ID: CHILD_AGENT_ID, Name: 'Child Worker' }),
+            ParentID: AGENT_ID,
+            Status: 'Active',
+            ExposeAsAction: false,
+            PayloadDownstreamPaths: '["*"]',
+            PayloadUpstreamPaths: '["*"]',
+        };
+        const baseEngine = harness.engineInstance;
+        vi.spyOn(harness, 'engineInstance', 'get').mockReturnValue({
+            ...baseEngine,
+            Agents: [childRow],
+            GetSubAgents: () => [childRow],
+        });
+
+        const runAgentSpy = vi.spyOn(AgentRunner.prototype, 'RunAgent').mockResolvedValue({
+            success: true,
+            payload: {},
+            agentRun: { ID: 'aaaaaaaa-6666-4000-8000-000000000001', Status: 'Completed' } as unknown as MJAIAgentRunStepEntityExtended['AgentRun'],
+        } as unknown as Awaited<ReturnType<AgentRunner['RunAgent']>>);
+
+        const { agent } = makeAgent([
+            () =>
+                llmEnvelope({
+                    taskComplete: false,
+                    reasoning: 'Delegate to Child Worker',
+                    nextStep: {
+                        type: 'Sub-Agent',
+                        subAgent: {
+                            name: 'Child Worker',
+                            message: 'Do sub-work',
+                            terminateAfter: true,
+                        },
+                    },
+                }),
+        ]);
+
+        const callerData = { callerKey: 'keep-me' };
+        const runParams = makeParams({ data: callerData });
+        const result = await agent.Execute(runParams);
+
+        expect(result.success).toBe(true);
+        expect(callerData).toEqual({ callerKey: 'keep-me' });
+        expect(runParams.data).toBe(callerData);
+        expect(runAgentSpy).toHaveBeenCalledTimes(1);
+        const childParams = runAgentSpy.mock.calls[0][0];
+        expect(childParams.data).toEqual({ callerKey: 'keep-me' });
+        expect(childParams.data).not.toHaveProperty('__agentTypePromptParams');
+    });
+
+    it("5. a Flow agent's DetermineNextStep gets the run's params object unchanged", async () => {
+        const flowAgent = makeAgentRow({
+            TypeID: FLOW_TYPE_ID,
+            AgentTypePromptParams: JSON.stringify({ enableTaskGraphs: true }),
+        });
+        harness.agent = flowAgent;
+        const flowStep = {
+            ID: FLOW_STEP_ID,
+            AgentID: AGENT_ID,
+            Name: 'Flow Prompt Step',
+            Description: 'Run prompt',
+            StepType: 'Prompt',
+            StartingStep: true,
+            Status: 'Active',
+            SubAgentID: null,
+            PromptID: CHILD_PROMPT_ID,
+            ActionID: null,
+            ActionInputMapping: null,
+            ActionOutputMapping: null,
+            Configuration: null,
+            LoopBodyType: null,
+            PositionX: 0,
+            PositionY: 0,
+        };
+        const baseEngine = harness.engineInstance;
+        vi.spyOn(harness, 'engineInstance', 'get').mockReturnValue({
+            ...baseEngine,
+            AgentTypes: [
+                ...(baseEngine.AgentTypes as unknown[]),
+                {
+                    ID: FLOW_TYPE_ID,
+                    Name: 'Flow',
+                    DriverClass: 'FlowAgentType',
+                    SystemPromptID: SYS_PROMPT_ID,
+                    AgentPromptPlaceholder: '_AGENT_PROMPT_',
+                    PromptParamsSchema: null,
+                    DefaultStorageAccountID: null,
+                },
+            ],
+            GetAgentSteps: () => [flowStep],
+            GetAgentStepByID: (id: string) => (id === FLOW_STEP_ID ? flowStep : null),
+            GetPathsFromStep: () => [],
+        });
+
+        const determineSpy = vi.spyOn(FlowAgentType.prototype, 'DetermineNextStep');
+        const { agent } = makeAgent([() => llmEnvelope(successEnvelope())]);
+        const callerData = { flowConditionKey: 'present' };
+        const runParams = makeParams({
+            agent: flowAgent as unknown as MJAIAgentEntityExtended,
+            data: callerData,
+            agentTypeParams: { executionMode: 'inRun' },
+        });
+
+        const determineStepSpy = vi.spyOn(
+            agent as unknown as { determineNextStep: (...args: unknown[]) => unknown },
+            'determineNextStep',
+        );
+        const result = await agent.Execute(runParams);
+
+        expect(result.success).toBe(true);
+        expect(determineStepSpy).toHaveBeenCalledTimes(1);
+        expect(determineSpy).toHaveBeenCalledTimes(1);
+        const runLevelParams = determineStepSpy.mock.calls[0][0] as ExecuteAgentParams;
+        const passedParams = determineSpy.mock.calls[0][1];
+        expect(passedParams).toBe(runLevelParams);
+        expect(passedParams.data).toBe(callerData);
+        expect(passedParams.data).toEqual({ flowConditionKey: 'present' });
+    });
+});
+

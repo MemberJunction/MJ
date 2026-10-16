@@ -146,10 +146,13 @@ export class LoopAgentType extends BaseAgentType {
     /**
      * Resolves whether this agent may emit durable task graphs.
      *
-     * Read from the merged three-level params bag (schema defaults → agent config → runtime
-     * override), so a per-run override behaves like every other Loop parameter. Absent means NO:
-     * this is the one Loop flag whose default is off, because the capability creates durable rows
-     * that outlive the run rather than merely adding prompt text (D3).
+     * Read from `params.data.__agentTypePromptParams`, which `BaseAgent.determineNextStep`
+     * populates on a shallow copy of `params` from `this._agentTypePromptParams` (the merged
+     * three-level params bag: schema defaults → agent config → runtime override, with
+     * `withoutTaskGraphs` applied when the run withholds them), or which a direct unit caller
+     * supplies in `params.data`. Absent means NO: this is the one Loop flag whose default is
+     * off, because the capability creates durable rows that outlive the run rather than merely
+     * adding prompt text (D3).
      */
     private taskGraphsEnabled(params: ExecuteAgentParams<any, any>): boolean {
         const promptParams = params?.data?.__agentTypePromptParams as Record<string, unknown> | undefined;
