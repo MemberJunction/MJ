@@ -151,23 +151,11 @@ export class MockTransaction {
     this.savepoints.clear();
   }
 
-  /** mssql's in-flight request marker (set while a request holds the connection). */
-  public _activeRequest: object | null = null;
-
-  /** mssql's own name for the aborted flag. */
-  public get _aborted(): boolean {
-    return this.aborted;
-  }
-
-  /**
-   * Server-side abort (trigger THROW, deadlock, XACT_ABORT). Next statement is ENOTBEGUN; commit/rollback are EABORT.
-   * Like real mssql, the abort leaves `_activeRequest` set for good.
-   */
+  /** Server-side abort (trigger THROW, deadlock, XACT_ABORT). Next statement is ENOTBEGUN; commit/rollback are EABORT. */
   public abortServerSide(): void {
     this.aborted = true;
     this.begun = false;
     this.savepoints.clear();
-    this._activeRequest = {};
   }
 }
 

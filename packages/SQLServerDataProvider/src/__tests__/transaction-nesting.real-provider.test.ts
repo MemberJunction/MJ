@@ -86,8 +86,7 @@ describe('SQLServerDataProvider nested transactions (real class, mocked mssql)',
         await provider.BeginTransaction();
         const first = provider.Handle();
         first!.abortServerSide();
-        // the server already rolled the transaction back, so mssql's EABORT means the rollback is done
-        await expect(provider.RollbackTransaction()).resolves.toBeUndefined();
+        await expect(provider.RollbackTransaction()).rejects.toMatchObject({ code: 'EABORT' });
         expect(provider.TransactionDepth).toBe(0);
         expect(provider.Handle()).toBeNull();
         expect(provider.isTransactionActive).toBe(false);
@@ -96,17 +95,6 @@ describe('SQLServerDataProvider nested transactions (real class, mocked mssql)',
         expect(provider.Handle()?.begun).toBe(true);
         expect(mssqlState.EventKinds().filter((k) => k === 'begin')).toHaveLength(2);
         await provider.RollbackTransaction();
-    });
-
-    it('rollback of a server-aborted transaction does not wait on mssql\'s stale in-flight marker', async () => {
-        const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-        await provider.BeginTransaction();
-        provider.Handle()!.abortServerSide();
-        const started = Date.now();
-        await expect(provider.RollbackTransaction()).resolves.toBeUndefined();
-        expect(Date.now() - started).toBeLessThan(1000); // not the full in-flight request wait
-        expect(errorSpy.mock.calls.flat().map(String).join(' ')).not.toMatch(/did not go through the instance SQL queue/);
-        errorSpy.mockRestore();
     });
 
     it('outer commit of an aborted handle unpublishes (B2 commit path)', async () => {

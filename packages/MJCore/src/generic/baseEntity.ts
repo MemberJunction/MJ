@@ -15,7 +15,7 @@ import { RelatedRecordCollection, RelatedRecordCollectionOptions } from './relat
 import { COMPANION_PAYLOAD_KEY, EntityCompanion, EntityCompanionDeserializeMode, EntityCompanionPayload } from './entityCompanion';
 import { EmbeddedRecord, type EmbeddedRecordOptions } from './embeddedRecord';
 import { EntitySavePlan, ExecuteEntitySavePlan } from './entitySavePlan';
-import { EntityTransactionScope, RunInEntityTransaction } from './entityTransactionScope';
+import { EntityTransactionScope } from './entityTransactionScope';
 import { JSONFieldBinding, JSONFieldRuleSet, JSONFieldSeverity, ValidateJSONFieldValue } from './jsonFieldBinding';
 import { BaseRemotableOperation } from './baseRemotableOperation';
 import {
@@ -6319,34 +6319,6 @@ export abstract class BaseEntity<T = unknown> {
         const result = new ValidationResult();
         result.Success = true;
         return result;
-    }
-
-    /**
-     * Runs `deleteRecord` as one unit of work on this record's own provider: commits when it returns true, rolls back
-     * when it returns false or throws. The generated `Delete()` override of a `CascadeDeletes` entity calls this. Inside
-     * a {@link TransactionGroup}, or on a provider without entity transactions, the delete runs as-is.
-     * @param deleteRecord the delete itself — the generated override passes `() => super.Delete(options)`
-     */
-    protected async DeleteWithinEntityTransaction(deleteRecord: () => Promise<boolean>): Promise<boolean> {
-        if (this.TransactionGroup) {
-            return deleteRecord();
-        }
-        return RunInEntityTransaction(this.ProviderToUse, deleteRecord, (deleted) => deleted);
-    }
-
-    /**
-     * Whether a delete's result row reports `entity` as deleted: every primary key is present and equal (UUIDs in any
-     * letter case). A generated delete answers "nothing deleted" with NULL keys, which never match.
-     */
-    public static DeleteResultMatchesEntity(entity: BaseEntity, row: Record<string, unknown> | null | undefined): boolean {
-        if (!row) return false;
-        return entity.PrimaryKeys.every((key) => {
-            const returned = row[key.Name];
-            if (key.EntityFieldInfo.IsUniqueIdentifier && typeof key.Value === 'string' && typeof returned === 'string') {
-                return UUIDsEqual(key.Value, returned);
-            }
-            return returned !== null && returned !== undefined && key.Value === returned;
-        });
     }
 
     /**

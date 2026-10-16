@@ -888,8 +888,6 @@ const results = await txGroup.Submit();
 ```
 
 Each `TransactionResult` in the returned array contains a `Success` flag. If any operation fails, all are rolled back.
-An item that runs without doing its work — a save that returns no row, or a delete whose row does not report the
-record's keys (`BaseEntity.DeleteResultMatchesEntity`) — fails the group the same way.
 
 > **A TransactionGroup is an *arbitrary batch* facility, not a composite-save engine.** Under a
 > transaction group `Save()` **defers**: the provider only registers an instruction, so the entity
@@ -1426,10 +1424,6 @@ await RunInEntityTransaction(this.ProviderToUse, async () => {
 See [Transactions, Batching & Entity Graphs](../../guides/TRANSACTIONS_AND_BATCHING_GUIDE.md) for
 the difference between provider transactions, Transaction Groups, and entity graphs — and for why
 the `BeginISATransaction` trio was retired in 6.2.
-
-`RunInEntityTransaction(provider, work, commitWhen?)` takes an optional predicate for work that reports failure
-through its result: a result it rejects rolls back and is returned unchanged. The generated `Delete()` override of a
-`CascadeDeletes` entity uses it through `BaseEntity.DeleteWithinEntityTransaction`.
 
 ---
 

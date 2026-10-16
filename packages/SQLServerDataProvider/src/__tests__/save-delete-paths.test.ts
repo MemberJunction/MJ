@@ -18,7 +18,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 vi.mock('mssql', async () => (await import('./helpers/mock-mssql')).createMockMssqlModule());
 
 import type { BaseEntity, EntityInfo, UserInfo } from '@memberjunction/core';
-import { EntitySaveOptions, EntityDeleteOptions, Metadata, TransactionGroupBase, TransactionResult } from '@memberjunction/core';
+import { EntitySaveOptions, EntityDeleteOptions, Metadata } from '@memberjunction/core';
 import type { IMetadataProvider } from '@memberjunction/core';
 import { GenericDatabaseProvider } from '@memberjunction/generic-database-provider';
 import { SQLServerDataProvider } from '../SQLServerDataProvider';
@@ -78,11 +78,6 @@ class SaveDeleteTestProvider extends SQLServerDataProvider {
 
   protected override async HandleEntityAIActions(): Promise<void> {
     // no-op — AI engine not under test
-  }
-
-  /** Exposes the delete SQL the provider would run. */
-  public DeleteSQLForTest(entity: BaseEntity, user: UserInfo): string {
-    return this.GenerateDeleteSQL(entity, user).fullSQL;
   }
 
   /** Exposes the save SQL pair (executed fullSQL, logged simpleSQL) for the replay-guard tests. */
@@ -503,97 +498,6 @@ describe('SQLServerDataProvider delete path (real Delete() → GenerateDeleteSQL
     const deleted = await provider.Delete(entity, new EntityDeleteOptions(), TEST_USER);
 
     expect(deleted).toBe(true);
-  });
-});
-
-/**
- * A CascadeDeletes spDelete returns one result set per cascaded child call before its own, so the
- * positional `INSERT INTO @ResultTable EXEC spDelete…` capture fails with SQL error 213.
- */
-describe('SQLServerDataProvider delete path — CascadeDeletes entity with TrackRecordChanges', () => {
-  beforeEach(() => {
-    mssqlState.Reset();
-  });
-
-  function cascadingWidget() {
-    const provider = makeProvider();
-    provider.SetTestEntities([makeRecordChangesEntityInfo()]);
-    const entity = makeSavedWidgetEntity(makeWidgetEntityInfo({ trackRecordChanges: true, cascadeDeletes: true }), TEST_USER);
-    return { provider, entity };
-  }
-
-  it('judges the delete from the table instead of capturing the proc output, inside one transaction', async () => {
-    const { provider, entity } = cascadingWidget();
-    mssqlState.QueueResult({ recordsets: [[{ ID: 'w-0001' }], [{ ID: 'w-0001' }]] });
-
-    await provider.Delete(entity, new EntityDeleteOptions(), TEST_USER);
-
-    const sql = mssqlState.Queries[0].sql;
-    expect(sql).not.toContain('@ResultTable');
-    const order = [
-      'IF @OwnsDeleteTransaction = 1 BEGIN TRANSACTION;',
-      `CASE WHEN EXISTS (SELECT 1 FROM [dbo].[Widget] WITH (UPDLOCK, HOLDLOCK) WHERE [ID] = 'w-0001') THEN 1 ELSE 0 END;`,
-      `EXEC [dbo].[spDeleteWidget] @ID='w-0001';`,
-      `IF @DeleteTargetExisted = 1 AND NOT EXISTS (SELECT 1 FROM [dbo].[Widget] WHERE [ID] = 'w-0001')`,
-      'spCreateRecordChange_Internal',
-      `SELECT CAST('w-0001' AS`,
-      'SELECT CAST(NULL AS',
-      'IF @OwnsDeleteTransaction = 1 COMMIT TRANSACTION;',
-      'IF @OwnsDeleteTransaction = 1 AND @@TRANCOUNT > 0 ROLLBACK TRANSACTION;',
-    ].map((fragment) => sql.indexOf(fragment));
-    expect(order.every((i) => i >= 0)).toBe(true);
-    expect(order).toEqual([...order].sort((x, y) => x - y));
-  });
-
-  it('succeeds when child result sets precede the record (validation reads the LAST set)', async () => {
-    const { provider, entity } = cascadingWidget();
-    mssqlState.QueueResult({
-      recordsets: [
-        [{ ID: 'child-2', Name: 'Child', ParentID: null, Status: 'Active' }], // a cascaded child update's base-view row
-        [{ ID: 'w-0001' }], // spDeleteWidget's own SELECT @ID
-        [{ ID: 'w-0001' }], // the wrapper's final SELECT of the deleted keys
-      ],
-    });
-
-    expect(await provider.Delete(entity, new EntityDeleteOptions(), TEST_USER)).toBe(true);
-  });
-
-  it('fails when the wrapper reports NULL keys (nothing was deleted)', async () => {
-    const { provider, entity } = cascadingWidget();
-    mssqlState.QueueResult({ recordsets: [[{ ID: null }], [{ ID: null }]] });
-
-    expect(await provider.Delete(entity, new EntityDeleteOptions(), TEST_USER)).toBe(false);
-  });
-
-  it('survives batched variable scoping: every local reference is renamed', () => {
-    const { provider, entity } = cascadingWidget();
-    const sql = SQLServerTransactionGroup.ScopeItemVariables(provider.DeleteSQLForTest(entity, TEST_USER), 3);
-    const unscoped = [...sql.matchAll(/@(OwnsDeleteTransaction|DeleteTargetExisted|ResultChangesTable)\b(?!_mjb3)/g)];
-    expect(unscoped).toEqual([]);
-  });
-});
-
-describe('the delete of a record queued in a TransactionGroup', () => {
-  /** A group that reports every item as run, leaving the judgement of a delete's row to the delete's callback. */
-  class ReportingGroup extends TransactionGroupBase {
-    public Row: Record<string, unknown> = {};
-    protected async HandleSubmit(): Promise<TransactionResult[]> {
-      return this.PendingTransactions.map((item) => new TransactionResult(item, this.Row, true));
-    }
-  }
-
-  it('fails when the row it returned does not report the record\'s keys (NULL keys: nothing deleted)', async () => {
-    mssqlState.Reset();
-    const provider = makeProvider();
-    const entity = makeSavedWidgetEntity(makeWidgetEntityInfo(), TEST_USER);
-    const group = new ReportingGroup();
-    group.Row = { ID: null };
-    entity.TransactionGroup = group;
-    await provider.Delete(entity, new EntityDeleteOptions(), TEST_USER);
-    await group.Submit();
-
-    expect(entity.LatestResult?.Success).toBe(false);
-    expect(provider.EntityActionInvocations.filter((i) => i.BaseType === 'delete' && !i.Before)).toEqual([]);
   });
 });
 

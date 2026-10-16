@@ -7040,14 +7040,6 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         if (this._transactionDepth === 1) {
             try {
                 await this.RollbackPhysicalTransaction();
-            } catch (rollbackError) {
-                // The server already rolled the transaction back (a statement inside it failed), so the
-                // rollback asked for has happened. Throwing here made callers' failure paths roll back
-                // again and report "No active transaction to rollback" instead of the statement's error.
-                if (!this.isDoomedPhysicalTransactionError(rollbackError)) {
-                    throw rollbackError;
-                }
-                LogStatusEx({ message: 'RollbackTransaction: the server had already rolled the transaction back', verboseOnly: true });
             } finally {
                 this.clearTransactionState();
             }

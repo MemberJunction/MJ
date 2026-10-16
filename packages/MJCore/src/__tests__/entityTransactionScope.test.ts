@@ -190,14 +190,4 @@ describe('RunInEntityTransaction', () => {
         await expect(RunInEntityTransaction(null, async () => 'ok')).resolves.toBe('ok');
         await expect(RunInEntityTransaction(undefined, async () => 'ok')).resolves.toBe('ok');
     });
-
-    it('commitWhen: a result it rejects rolls back and is returned unchanged, not thrown', async () => {
-        const provider = new RecordingProvider();
-
-        const result = await RunInEntityTransaction(provider, async () => false, (ok) => ok);
-
-        expect(result).toBe(false);
-        expect(provider.Calls).toEqual(['begin:1', 'rollback:1']);
-    });
-
 });

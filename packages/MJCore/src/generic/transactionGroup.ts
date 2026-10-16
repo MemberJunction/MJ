@@ -300,16 +300,6 @@ export abstract class TransactionGroupBase {
     protected abstract HandleSubmit(): Promise<TransactionResult[]>;
 
     /**
-     * Whether an item's statement did its work, judged from the first row it returned: a save must return its row, and
-     * a delete's row must report the record's keys ({@link BaseEntity.DeleteResultMatchesEntity}). A provider fails the
-     * whole group on an item that did not.
-     */
-    protected static ItemSucceeded(item: TransactionItem, row: Record<string, unknown> | null | undefined): boolean {
-        if (!row) return false;
-        return item.OperationType !== 'Delete' || BaseEntity.DeleteResultMatchesEntity(item.BaseEntity, row);
-    }
-
-    /**
      * Helper method for sub-classes to map a variable to a position in the pending transactions array
      * @param variable 
      * @returns 

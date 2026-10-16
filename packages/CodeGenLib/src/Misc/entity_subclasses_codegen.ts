@@ -356,7 +356,7 @@ export const loadModule = () => {
 }
 `
       : '';
-    return `import { BaseEntity, EntitySaveOptions, EntityDeleteOptions, CompositeKey, ValidationResult, ValidationErrorInfo, ValidationErrorType, RunView } from "@memberjunction/core";
+    return `import { BaseEntity, EntitySaveOptions, EntityDeleteOptions, CompositeKey, ValidationResult, ValidationErrorInfo, ValidationErrorType, Metadata, ProviderType, DatabaseProviderBase, RunView } from "@memberjunction/core";
 import { RegisterClass } from "@memberjunction/global";
 import { z } from "zod";
 ${loadModule}
@@ -636,7 +636,7 @@ ${loadModule}
         throw new Error('Delete is not allowed for ${entity.Name}, to enable it set AllowDeleteAPI to 1 in the database.');
     }`;
       } else if (entity.CascadeDeletes) {
-        // Entity has cascading deletes, wrap in transaction (BaseEntity.DeleteWithinEntityTransaction)
+        // Entity has cascading deletes, wrap in transaction
         deleteFunction = `    /**
     * ${entity.Name} - Delete method override to wrap in transaction since CascadeDeletes is true.
     * Wrapping in a transaction ensures that all cascade delete operations are handled atomically.
@@ -647,7 +647,29 @@ ${loadModule}
     * @returns {Promise<boolean>} - true if successful, false otherwise
     */
     public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
-        return this.DeleteWithinEntityTransaction(() => super.Delete(options));
+        if (Metadata.Provider.ProviderType === ProviderType.Database) { // global-provider-ok: codegen runs offline against a single provider
+            // For database providers, use the transaction methods directly
+            const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: codegen runs offline against a single provider
+            
+            try {
+                await provider.BeginTransaction();
+                const result = await super.Delete(options);
+                
+                if (result) {
+                    await provider.CommitTransaction();
+                    return true;
+                } else {
+                    await provider.RollbackTransaction();
+                    return false;
+                }
+            } catch (error) {
+                await provider.RollbackTransaction();
+                throw error;
+            }
+        } else {
+            // For network providers, cascading deletes are handled server-side
+            return super.Delete(options);
+        }
     }`;
       }
 

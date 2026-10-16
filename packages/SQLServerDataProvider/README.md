@@ -253,15 +253,6 @@ await item.Save();
 const results = await transaction.Submit();
 ```
 
-An item that runs without doing its work — a save that returns no row, or a delete that does not report the record's
-key — rolls the whole group back, like a statement that throws. Each item's result is the last result set its
-statement returned.
-
-**Cascading, record-change-tracked deletes.** The delete procedure of a `CascadeDeletes` entity returns one result
-set per cascaded child call before its own, so its output is not captured with `INSERT … EXEC`. The provider checks
-that the row exists before the `EXEC` (`WITH (UPDLOCK, HOLDLOCK)`, inside one transaction) and is gone after it, then
-writes the Delete record change and selects the record's key last (NULL keys when nothing was deleted).
-
 ### Instance-Level Transactions
 
 For multi-user server environments, each provider instance supports isolated transaction state with nested savepoints.

@@ -19,7 +19,6 @@
 
 import {
   BaseEntity,
-  EntityField,
   IEntityDataProvider,
   IMetadataProvider,
   IRunViewProvider,
@@ -343,8 +342,6 @@ type SQLQueueItem = SQLQueueQuery | SQLQueueAction;
 
 interface InternalMSSQLTransaction extends sql.Transaction {
   _activeRequest?: sql.Request | null;
-  /** Set by mssql when the server rolled the transaction back. */
-  _aborted?: boolean;
 }
 
 export class SQLServerDataProvider
@@ -1866,9 +1863,7 @@ export class SQLServerDataProvider
     const sSimpleSQL: string = `EXEC [${entity.EntityInfo.SchemaName}].[${spName}] ${sParams}`;
     const recordChangesEntityInfo = this.Entities.find((e) => e.Name === 'MJ: Record Changes');
 
-    if (entity.EntityInfo.TrackRecordChanges && !skipRecordChanges && entity.EntityInfo.Name.trim().toLowerCase() !== 'record changes' && entity.EntityInfo.CascadeDeletes) {
-      sSQL = this.getCascadingTrackedDeleteSQL(entity, user, sSimpleSQL, recordChangesEntityInfo);
-    } else if (entity.EntityInfo.TrackRecordChanges && !skipRecordChanges && entity.EntityInfo.Name.trim().toLowerCase() !== 'record changes') {
+    if (entity.EntityInfo.TrackRecordChanges && !skipRecordChanges && entity.EntityInfo.Name.trim().toLowerCase() !== 'record changes') {
       // don't track changes for the record changes entity
       const oldData = entity.GetAll(true); // get all the OLD values
       const sTableDeclare: string = entity.PrimaryKeys.map((pk) => {
@@ -1917,52 +1912,6 @@ export class SQLServerDataProvider
       sSQL = sSimpleSQL;
     }
     return { fullSQL: sSQL, simpleSQL: sSimpleSQL };
-  }
-
-  /**
-   * Record-change-tracked delete for a `CascadeDeletes` entity. Its spDelete returns one result set per cascaded
-   * child call before its own, so capturing the output with `INSERT INTO @ResultTable EXEC` fails (error 213). The
-   * proc's result sets go to the client instead (validation reads the last one), and whether the row was deleted is
-   * read from the table: present before the EXEC, gone after. The before-check takes an update/range lock and the
-   * batch runs in one transaction (its own when none is open), so no other session can delete the row in between.
-   */
-  private getCascadingTrackedDeleteSQL(entity: BaseEntity, user: UserInfo, simpleSQL: string, recordChangesEntityInfo: EntityInfo): string {
-    const info = entity.EntityInfo;
-    const literal = (pk: EntityField) => SQLServerDataProvider.RenderKeyValueLiteral(pk.Value, pk.NeedsQuotes, pk.Name, info.Name);
-    const keyMatch = entity.PrimaryKeys.map((pk) => `[${pk.Name}] = ${literal(pk)}`).join(' AND ');
-    const softDelete = info.DeleteType === 'Soft' ? ` AND [${EntityInfo.DeletedAtFieldName}] IS NULL` : '';
-    const rowExists = (hints: string) => `EXISTS (SELECT 1 FROM [${info.SchemaName}].[${info.BaseTable}]${hints} WHERE ${keyMatch}${softDelete})`;
-    const deletedKeys = entity.PrimaryKeys.map((pk) => `CAST(${literal(pk)} AS ${pk.EntityFieldInfo.SQLFullType}) AS [${pk.Name}]`).join(', ');
-    const nullKeys = entity.PrimaryKeys.map((pk) => `CAST(NULL AS ${pk.EntityFieldInfo.SQLFullType}) AS [${pk.Name}]`).join(', ');
-    return `
-                    DECLARE @OwnsDeleteTransaction BIT = CASE WHEN @@TRANCOUNT = 0 THEN 1 ELSE 0 END;
-                    IF @OwnsDeleteTransaction = 1 BEGIN TRANSACTION;
-
-                    BEGIN TRY
-                        DECLARE @DeleteTargetExisted BIT = CASE WHEN ${rowExists(' WITH (UPDLOCK, HOLDLOCK)')} THEN 1 ELSE 0 END;
-
-                        ${simpleSQL};
-
-                        IF @DeleteTargetExisted = 1 AND NOT ${rowExists('')}
-                        BEGIN
-                            DECLARE @ResultChangesTable TABLE (
-                                ${this.getAllEntityColumnsSQL(recordChangesEntityInfo)}
-                            );
-
-                            INSERT INTO @ResultChangesTable
-                            ${this.GetLogRecordChangeSQL(null /*no new data for a deleted record*/, entity.GetAll(true), info.Name, entity.PrimaryKey.ToConcatenatedString(), info, 'Delete', user, true, entity.RestoreContext, entity.CloneContext)};
-
-                            SELECT ${deletedKeys};
-                        END
-                        ELSE
-                            SELECT ${nullKeys};
-
-                        IF @OwnsDeleteTransaction = 1 COMMIT TRANSACTION;
-                    END TRY
-                    BEGIN CATCH
-                        IF @OwnsDeleteTransaction = 1 AND @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
-                        THROW;
-                    END CATCH;`;
   }
 
   /**************************************************************************/
@@ -2786,11 +2735,6 @@ IF ${varName} IS NOT NULL
     }
     const tx = this._transaction as InternalMSSQLTransaction;
     if (!tx._activeRequest) {
-      return;
-    }
-    if (tx._aborted) {
-      // The server rolled this transaction back. mssql then never clears `_activeRequest` (its `_abort` drops the
-      // connection before the failing request releases it), so nothing is in flight and waiting would only time out.
       return;
     }
     const start = Date.now();

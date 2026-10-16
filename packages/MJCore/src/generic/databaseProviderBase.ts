@@ -1946,8 +1946,14 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                         extraData,
                         (transactionResult: Record<string, unknown>, success: boolean) => {
                             entityResult.EndedAt = new Date();
-                            if (success && BaseEntity.DeleteResultMatchesEntity(entity, transactionResult)) {
+                            if (success && transactionResult) {
                                 this.OnAfterDeleteExecute(entity, user, options);
+                                for (const key of entity.PrimaryKeys) {
+                                    if (key.Value !== transactionResult[key.Name]) {
+                                        entityResult.Success = false;
+                                        entityResult.Message = 'Transaction failed to commit';
+                                    }
+                                }
                                 entityResult.NewValues = this.MapTransactionResultToNewValues(transactionResult);
                                 entityResult.Success = true;
                             } else {

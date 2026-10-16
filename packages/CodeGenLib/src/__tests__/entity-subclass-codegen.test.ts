@@ -476,36 +476,6 @@ describe('EntitySubClassGeneratorBase', () => {
         });
     });
 
-    describe('CascadeDeletes Delete() override', () => {
-        it('delegates the transaction to BaseEntity.DeleteWithinEntityTransaction', async () => {
-            const entity = {
-                Name: 'MJ: Cascade Parents',
-                ClassName: 'MJCascadeParent',
-                PrimaryKeys: [{ Name: 'ID', CodeName: 'ID', TSType: 'string', IsPrimaryKey: true, AutoIncrement: false }],
-                Fields: [
-                    { Name: 'ID', CodeName: 'ID', Type: 'uniqueidentifier', SQLFullType: 'uniqueidentifier', AllowsNull: false, ReadOnly: false, IsPrimaryKey: true, AutoIncrement: false, IsVirtual: false, AllowUpdateAPI: true, ValueListType: '', ValueListTypeEnum: 0, EntityFieldValues: [], Status: 'Active', NeedsQuotes: true },
-                ],
-                EntityObjectSubclassName: '',
-                EntityObjectSubclassImport: '',
-                AllowDeleteAPI: true,
-                CascadeDeletes: true,
-                Status: 'Active',
-                SchemaName: '__mj',
-                BaseTable: 'CascadeParent',
-                BaseView: 'vwCascadeParents',
-                Description: '',
-            };
-            const code = await generator.generateEntitySubClass(
-                {} as Parameters<typeof generator.generateEntitySubClass>[0],
-                entity as Parameters<typeof generator.generateEntitySubClass>[1],
-                false,
-                true
-            );
-            expect(code).toMatch(/public override async Delete\(options\?: EntityDeleteOptions\): Promise<boolean> \{\s*return this\.DeleteWithinEntityTransaction\(\(\) => super\.Delete\(options\)\);\s*\}/);
-            expect(code).not.toContain('Metadata.Provider');
-        });
-    });
-
     describe('GenerateSchemaAndType', () => {
         it('should rename Zod schema key when field name conflicts with BaseEntity member', () => {
             const entity = {

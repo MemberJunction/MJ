@@ -2060,33 +2060,6 @@ describe('GenericDatabaseProvider nested transactions', () => {
         expect(p.physicalOpen).toBe(false);
     });
 
-    describe('outermost rollback of a transaction the server already rolled back', () => {
-        /** Rolls back like mssql's driver on a handle the server aborted: the handle is released, then the driver rejects. */
-        class ServerAbortedRollback extends RecordingProvider {
-            public rollbackError: Error = Object.assign(new Error('Transaction has been aborted.'), { code: 'EABORT' });
-            protected override async RollbackPhysicalTransaction(): Promise<void> {
-                this.physicalOpen = false;
-                throw this.rollbackError;
-            }
-        }
-
-        it('EABORT: resolves as already rolled back and ends at depth 0', async () => {
-            const p = new ServerAbortedRollback();
-            await p.BeginTransaction();
-            await expect(p.RollbackTransaction()).resolves.toBeUndefined();
-            expect(p.TransactionDepth).toBe(0);
-            expect(p.physicalOpen).toBe(false);
-        });
-
-        it('a rollback failure that is NOT a server abort still rejects with that error', async () => {
-            const p = new ServerAbortedRollback();
-            p.rollbackError = Object.assign(new Error('Connection lost - socket hang up'), { code: 'ESOCKET' });
-            await p.BeginTransaction();
-            await expect(p.RollbackTransaction()).rejects.toThrow(/socket hang up/);
-            expect(p.TransactionDepth).toBe(0);
-        });
-    });
-
     it('three concurrent BeginTransactions serialize to one physical begin and two savepoints (A12)', async () => {
         const p = new RecordingProvider();
         await Promise.all([p.BeginTransaction(), p.BeginTransaction(), p.BeginTransaction()]);

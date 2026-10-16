@@ -7,12 +7,6 @@ import { GenericDatabaseProvider } from "@memberjunction/generic-database-provid
  * SQL Server implementation of the TransactionGroupBase
  */
 export class SQLServerTransactionGroup extends TransactionGroupBase {
-    /** An item's result is its LAST result set: a cascading delete returns its children's sets before its own. */
-    private static lastRecordset(queryResult: sql.IResult<Record<string, unknown>>): Record<string, unknown>[] | undefined {
-        const sets = queryResult.recordsets;
-        return Array.isArray(sets) && sets.length > 0 ? sets[sets.length - 1] : queryResult.recordset;
-    }
-
     protected async HandleSubmit(): Promise<TransactionResult[]> {
         const returnResults: TransactionResult[] = [];
         const items = this.PendingTransactions;
@@ -65,17 +59,14 @@ export class SQLServerTransactionGroup extends TransactionGroupBase {
                             );
                             
                             const queryResult = await request.query(item.Instruction);
-                            const rawResult = SQLServerTransactionGroup.lastRecordset(queryResult);
+                            const rawResult = queryResult.recordset;
                             
                             if (rawResult && rawResult.length > 0) {
                                 // Process the result to handle timezone conversions and decryption
                                 result = await sqlProvider.ProcessEntityRows(rawResult, item.BaseEntity.EntityInfo, item.BaseEntity.ContextCurrentUser);
                                 this.SetVariableValuesFromEntity(item.BaseEntity, result[0]); // set the variables that this item defines after the save is done
                             }
-                            bSuccess = SQLServerTransactionGroup.ItemSucceeded(item, result?.[0]);
-                            if (!bSuccess) {
-                                throw new Error(`${item.OperationType} of ${item.BaseEntity.EntityInfo.Name} did not return its record`);
-                            }
+                            bSuccess = (result && result.length > 0); // success if we have a result and it has rows 
                         }
                         catch (e) {
                             result = e; // push the exception to the result
@@ -131,7 +122,7 @@ export class SQLServerTransactionGroup extends TransactionGroupBase {
                                 );
                                 
                                 const queryResult = await request.query(modifiedInstruction);
-                                const rawResult = SQLServerTransactionGroup.lastRecordset(queryResult);
+                                const rawResult = queryResult.recordset;
 
                                 if (rawResult && rawResult.length > 0) {
                                     // Process the result to handle timezone conversions and decryption
@@ -149,17 +140,14 @@ export class SQLServerTransactionGroup extends TransactionGroupBase {
                                 );
 
                                 const queryResult = await request.query(item.Instruction);
-                                const rawResult = SQLServerTransactionGroup.lastRecordset(queryResult);
+                                const rawResult = queryResult.recordset;
 
                                 if (rawResult && rawResult.length > 0) {
                                     // Process the result to handle timezone conversions and decryption
                                     result = await sqlProvider.ProcessEntityRows(rawResult, item.BaseEntity.EntityInfo, item.BaseEntity.ContextCurrentUser);
                                 }
                             }
-                            bSuccess = SQLServerTransactionGroup.ItemSucceeded(item, result?.[0]);
-                            if (!bSuccess) {
-                                throw new Error(`${item.OperationType} of ${item.BaseEntity.EntityInfo.Name} did not return its record`);
-                            }
+                            bSuccess = (result && result.length > 0); // success if we have a result and it has rows 
                         }
                         catch (e) {
                             result = e; // push the exception to the result
@@ -336,6 +324,7 @@ export class SQLServerTransactionGroup extends TransactionGroupBase {
     private static collectDeclaredNames(masked: string): Set<string> {
         const declared = new Set<string>();
         const nameAt = /@([A-Za-z_][A-Za-z0-9_$#@]*)/y;
+        const nextTokenAt = /[ \t\r]*(\S)/y;
         for (const d of masked.matchAll(/\bDECLARE\b/gi)) {
             let i = d.index! + d[0].length;
             let depth = 0;
@@ -347,9 +336,9 @@ export class SQLServerTransactionGroup extends TransactionGroupBase {
                 if (depth === 0 && ch === ';') break;
                 if (depth === 0 && ch === ',') { expectName = true; i++; continue; }
                 if (depth === 0 && ch === '\n') {
-                    let j = i + 1;
-                    while (masked[j] === ' ' || masked[j] === '\t' || masked[j] === '\r') j++;
-                    if (masked[j] !== '@' && masked[j] !== ',') break;
+                    nextTokenAt.lastIndex = i + 1;
+                    const next = nextTokenAt.exec(masked);
+                    if (!next || (next[1] !== '@' && next[1] !== ',')) break;
                     i++;
                     continue;
                 }
@@ -463,17 +452,17 @@ export class SQLServerTransactionGroup extends TransactionGroupBase {
                     if (Number.isFinite(idx)) current = idx;
                     continue;
                 }
-                // OWNERSHIP RULE: an item owns the LAST recordset before the next sentinel, empty
-                // or not. A generated save emits exactly one recordset; a cascading delete emits
-                // its children's first and its own last. Bounding by the next sentinel means a
-                // procedure that returned zero rows is reported as "no result" (Success false)
-                // rather than silently adopting the NEXT item's rows.
-                if (current >= 0 && current < items.length) {
+                // OWNERSHIP RULE: an item owns the FIRST recordset after its sentinel, empty or
+                // not. A generated CRUD procedure emits exactly one recordset, so the first is
+                // the only one; taking it unconditionally means a procedure that returned zero
+                // rows is reported as "no result" (Success false) rather than silently adopting
+                // the NEXT item's rows. The PostgreSQL sibling skips empty results instead —
+                // documented there for the same reason. Neither is reachable with generated
+                // procedures; both are stated so the two cannot drift apart unnoticed.
+                if (current >= 0 && current < items.length && perItem[current] === undefined) {
                     perItem[current] = rs;
                 }
             }
-            // Judge every item before reporting any: one that did not do its work fails the whole batch.
-            const itemResults: TransactionResult[] = [];
             for (let i = 0; i < items.length; i++) {
                 const item = items[i];
                 const raw = perItem[i];
@@ -482,12 +471,8 @@ export class SQLServerTransactionGroup extends TransactionGroupBase {
                     const processed = await sqlProvider.ProcessEntityRows(raw, item.BaseEntity.EntityInfo, item.BaseEntity.ContextCurrentUser);
                     result = processed && processed.length > 0 ? processed[0] : null;
                 }
-                if (!SQLServerTransactionGroup.ItemSucceeded(item, result)) {
-                    throw new Error(`${item.OperationType} of ${item.BaseEntity.EntityInfo.Name} did not return its record`);
-                }
-                itemResults.push(new TransactionResult(item, result, true));
+                returnResults.push(new TransactionResult(item, result, result != null));
             }
-            returnResults.push(...itemResults);
         }
         catch (e) {
             // One statement to the server, so a failure fails all of it — the same outcome the

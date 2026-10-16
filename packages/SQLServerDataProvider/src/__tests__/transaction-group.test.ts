@@ -7,7 +7,7 @@
  * (? → @pN), transaction variables (a Define result feeding a later Use item,
  * including instruction regeneration through the provider), the failure path
  * (immediate rollback, remaining statements skipped, NOTHING commits), the
- * an item that ran but did not return its record failing the group, preprocessing
+ * empty-recordset "failed item but committed group" semantics, preprocessing
  * waits, and the Submit state machine guards.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -163,8 +163,7 @@ describe('SQLServerTransactionGroup.Submit', () => {
     }
   });
 
-  it('a save that returns no row fails the whole group: rollback, no commit, no item reported as a success', async () => {
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined); // Submit() logs the failure
+  it('treats an empty recordset as a failed item but still commits (no-exception path) and Submit returns false', async () => {
     const entityInfo = makeWidgetEntityInfo();
     const group = new SQLServerTransactionGroup();
     const a = makeItem(makeSavedWidgetEntity(entityInfo, TEST_USER), 'Update', 'STATEMENT 1', pool);
@@ -172,45 +171,18 @@ describe('SQLServerTransactionGroup.Submit', () => {
     group.AddTransaction(a.item);
     group.AddTransaction(b.item);
     mssqlState.QueueResult({ rows: [{ ID: 'w-1' }] });
-    mssqlState.QueueResult({ rows: [] }); // succeeded SQL, but no row returned: the record was not persisted
+    mssqlState.QueueResult({ rows: [] }); // succeeded SQL, but no row returned
 
     const success = await group.Submit();
 
     expect(success).toBe(false);
     expect(group.Status).toBe('Failed');
-    expect(mssqlState.EventKinds()).toEqual(['begin', 'query', 'query', 'rollback']);
-    for (const { callback } of [a, b]) {
-      expect(callback.mock.calls[0][1]).toBe(false);
-    }
-    consoleError.mockRestore();
-  });
-
-  it('fails a delete item whose row carries NULL keys (nothing deleted): rollback, no commit', async () => {
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    const group = new SQLServerTransactionGroup();
-    const d = makeItem(makeSavedWidgetEntity(makeWidgetEntityInfo(), TEST_USER), 'Delete', "EXEC [dbo].[spDeleteWidget] @ID='w-0001'", pool);
-    group.AddTransaction(d.item);
-    mssqlState.QueueResult({ rows: [{ ID: null }] });
-
-    expect(await group.Submit()).toBe(false);
-    expect(mssqlState.EventKinds()).toEqual(['begin', 'query', 'rollback']);
-    expect(d.callback.mock.calls[0][1]).toBe(false);
-    consoleError.mockRestore();
-  });
-
-  it('hands a cascading delete item the LAST result set (the record), not a cascaded child row', async () => {
-    const group = new SQLServerTransactionGroup();
-    const d = makeItem(makeSavedWidgetEntity(makeWidgetEntityInfo(), TEST_USER), 'Delete', "EXEC [dbo].[spDeleteWidget] @ID='w-0001'", pool);
-    group.AddTransaction(d.item);
-    mssqlState.QueueResult({
-      recordsets: [
-        [{ ID: 'child-1', Name: 'Child', ParentID: null }], // a cascaded child update's base-view row
-        [{ ID: 'w-0001' }], // the delete's own keys
-      ],
-    });
-
-    expect(await group.Submit()).toBe(true);
-    expect(d.callback).toHaveBeenCalledWith({ ID: 'w-0001' }, true);
+    // No exception was thrown, so the transaction still commits — only the group
+    // RESULT reflects the failed item. This is load-bearing current behavior.
+    expect(mssqlState.EventKinds()).toEqual(['begin', 'query', 'query', 'commit']);
+    expect(a.callback).toHaveBeenCalledWith({ ID: 'w-1' }, true);
+    // The empty-recordset item reports a falsy success flag to its callback
+    expect(b.callback.mock.calls[0][1]).toBeFalsy();
   });
 
   it('variables: a Define result flows into a later Use item and its instruction is regenerated through the provider', async () => {

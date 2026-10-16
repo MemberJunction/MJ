@@ -105,7 +105,7 @@ export interface EntityTransactionScope {
 
 /**
  * Runs `work` inside a provider-arbitrated transaction scope, committing on success and rolling
- * back on any thrown error — or, when `commitWhen` is given, on a result it rejects.
+ * back on any thrown error.
  *
  * This is the preferred entry point — it makes the settle-once contract impossible to get wrong and
  * keeps the `try`/`catch` boilerplate in one place.
@@ -124,8 +124,6 @@ export interface EntityTransactionScope {
  *                   callers needing atomicity must check `SupportsEntityTransactions` first and
  *                   route the unit of work to the server instead.
  * @param work - The work to perform inside the scope.
- * @param commitWhen - Optional. When it rejects the work's result (e.g. `Delete()` returned false),
- *                     the scope is rolled back and the result returned as-is.
  * @returns Whatever `work` returns.
  * @throws Re-throws whatever `work` throws, after rolling the scope back.
  */
@@ -135,7 +133,6 @@ export async function RunInEntityTransaction<T>(
         BeginEntityTransaction?(): Promise<EntityTransactionScope>;
     } | null | undefined,
     work: () => Promise<T>,
-    commitWhen?: (result: T) => boolean,
 ): Promise<T> {
     const canTransact = provider?.SupportsEntityTransactions === true && !!provider.BeginEntityTransaction;
     if (!canTransact) {
@@ -146,34 +143,23 @@ export async function RunInEntityTransaction<T>(
     }
 
     const scope = await provider.BeginEntityTransaction!();
-    let result: T;
     try {
-        result = await work();
-        if (!commitWhen || commitWhen(result)) {
-            await scope.Commit();
-            return result;
-        }
+        const result = await work();
+        await scope.Commit();
+        return result;
     } catch (e) {
-        await rollbackKeepingCallerError(scope, 'the work threw');
+        // Rollback failures are logged and swallowed so the CALLER'S error survives: this is the
+        // failure path, and a doomed transaction (savepoint rollback refused, connection gone)
+        // throwing here would replace the error that explains what actually went wrong with a
+        // secondary one that explains less. Mirrors BaseEntity's own scope helper.
+        try {
+            await scope.Rollback();
+        } catch (rollbackError) {
+            LogError(
+                `RunInEntityTransaction: rollback failed after the work threw — reporting the original error. ` +
+                `Rollback failure: ${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`,
+            );
+        }
         throw e;
-    }
-    await rollbackKeepingCallerError(scope, 'the work reported failure');
-    return result;
-}
-
-/**
- * Rolls a scope back on a failure path. Rollback failures are logged and swallowed so the CALLER'S
- * error survives: a doomed transaction (savepoint rollback refused, connection gone) throwing here
- * would replace the error that explains what actually went wrong with a secondary one that explains
- * less. Mirrors BaseEntity's own scope helper.
- */
-async function rollbackKeepingCallerError(scope: EntityTransactionScope, why: string): Promise<void> {
-    try {
-        await scope.Rollback();
-    } catch (rollbackError) {
-        LogError(
-            `RunInEntityTransaction: rollback failed after ${why} — reporting the original outcome. ` +
-            `Rollback failure: ${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`,
-        );
     }
 }
