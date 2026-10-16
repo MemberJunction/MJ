@@ -137,3 +137,4 @@ export * from './checks/materialized-read.checks';
 export * from './checks/materialized-entity-read.checks';
 export * from './checks/form-contributions.checks';
 export * from './checks/cache-architecture.checks';
+export * from './checks/performance-benchmark.checks';
