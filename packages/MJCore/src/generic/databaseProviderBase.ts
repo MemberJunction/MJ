@@ -38,6 +38,11 @@ export interface SaveSQLResult {
     simpleSQL?: string;
     /** Parameterized query values (e.g. [$1,$2] for PG). Null/undefined for inline SQL. */
     parameters?: unknown[] | null;
+    /**
+     * `fullSQL` with its parameter values written in as literals, when the provider runs it with
+     * parameters and can render it. Logged instead of `fullSQL`, and shown in error messages.
+     */
+    literalSQL?: string;
     /** Provider-specific extra data (e.g. overlapping-change data for ISA propagation) */
     extraData?: Record<string, unknown>;
 }
@@ -49,6 +54,8 @@ export interface DeleteSQLResult {
     fullSQL: string;
     simpleSQL?: string;
     parameters?: unknown[] | null;
+    /** See {@link SaveSQLResult.literalSQL}. */
+    literalSQL?: string;
 }
 
 /**
@@ -1235,8 +1242,23 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         // Always offer the record-change-free form to the SQL logger, not only when the
         // entity tracks record changes: it is also the replay-safe form of a create for
         // migration recordings (MemberJunction/MJ#4503). Execution still uses fullSQL.
-        if (sqlDetails.simpleSQL) {
-            opts.simpleSQLFallback = sqlDetails.simpleSQL;
+        if ('simpleSQL' in sqlDetails) {
+            Object.defineProperty(opts, 'simpleSQLFallback', {
+                enumerable: true,
+                configurable: true,
+                get(): string | undefined {
+                    return sqlDetails.simpleSQL || undefined;
+                },
+            });
+        }
+        if ('literalSQL' in sqlDetails) {
+            Object.defineProperty(opts, 'literalSQL', {
+                enumerable: true,
+                configurable: true,
+                get(): string | undefined {
+                    return sqlDetails.literalSQL || undefined;
+                },
+            });
         }
         return opts;
     }
@@ -1249,8 +1271,23 @@ export abstract class DatabaseProviderBase extends ProviderBase {
             isMutation: true,
             description: `Delete ${entity.EntityInfo.Name}`,
         };
-        if (entity.EntityInfo.TrackRecordChanges && sqlDetails.simpleSQL) {
-            opts.simpleSQLFallback = sqlDetails.simpleSQL;
+        if (entity.EntityInfo.TrackRecordChanges && 'simpleSQL' in sqlDetails) {
+            Object.defineProperty(opts, 'simpleSQLFallback', {
+                enumerable: true,
+                configurable: true,
+                get(): string | undefined {
+                    return sqlDetails.simpleSQL || undefined;
+                },
+            });
+        }
+        if ('literalSQL' in sqlDetails) {
+            Object.defineProperty(opts, 'literalSQL', {
+                enumerable: true,
+                configurable: true,
+                get(): string | undefined {
+                    return sqlDetails.literalSQL || undefined;
+                },
+            });
         }
         return opts;
     }
@@ -1790,17 +1827,19 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                     suspendRefresh();
 
                     const extraData = this.GetTransactionExtraData(entity);
-                    if (sqlDetails.simpleSQL) {
-                        extraData.simpleSQLFallback = sqlDetails.simpleSQL;
-                    }
+                    Object.defineProperty(extraData, 'simpleSQLFallback', {
+                        get: () => sqlDetails.simpleSQL,
+                        enumerable: true,
+                        configurable: true,
+                    });
                     extraData.entityName = entity.EntityInfo.Name;
 
                     entity.TransactionGroup.AddTransaction(
                         new TransactionItem(
                             entity,
                             entityResult.Type === 'create' ? 'Create' : 'Update',
-                            sqlDetails.fullSQL,
-                            sqlDetails.parameters ?? null,
+                            sqlDetails.literalSQL ?? sqlDetails.fullSQL,
+                            sqlDetails.literalSQL ? null : (sqlDetails.parameters ?? null),
                             extraData,
                             (transactionResult: Record<string, unknown>, success: boolean) => {
                                 resumeRefresh();
@@ -1853,9 +1892,9 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                         return result[0];
                     } else {
                         if (bNewRecord)
-                            throw new Error(`SQL Error: Error creating new record, no rows returned from SQL: ${sqlDetails.fullSQL}`);
+                            throw new Error(`SQL Error: Error creating new record, no rows returned from SQL: ${sqlDetails.literalSQL ?? sqlDetails.fullSQL}`);
                         else
-                            throw new Error(`SQL Error: Error updating record, no MATCHING rows found within the database: ${sqlDetails.fullSQL}`);
+                            throw new Error(`SQL Error: Error updating record, no MATCHING rows found within the database: ${sqlDetails.literalSQL ?? sqlDetails.fullSQL}`);
                     }
                 }
             } else {
@@ -1932,8 +1971,12 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                 entity.RaiseReadyForTransaction();
 
                 const extraData = this.GetTransactionExtraData(entity);
-                if (entity.EntityInfo.TrackRecordChanges && sqlDetails.simpleSQL) {
-                    extraData.simpleSQLFallback = sqlDetails.simpleSQL;
+                if (entity.EntityInfo.TrackRecordChanges) {
+                    Object.defineProperty(extraData, 'simpleSQLFallback', {
+                        get: () => sqlDetails.simpleSQL,
+                        enumerable: true,
+                        configurable: true,
+                    });
                 }
                 extraData.entityName = entity.EntityInfo.Name;
 
@@ -1941,8 +1984,8 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                     new TransactionItem(
                         entity,
                         'Delete',
-                        sqlDetails.fullSQL,
-                        sqlDetails.parameters ?? null,
+                        sqlDetails.literalSQL ?? sqlDetails.fullSQL,
+                        sqlDetails.literalSQL ? null : (sqlDetails.parameters ?? null),
                         extraData,
                         (transactionResult: Record<string, unknown>, success: boolean) => {
                             entityResult.EndedAt = new Date();
@@ -2673,6 +2716,11 @@ export interface ExecuteSQLOptions {
   isMutation?: boolean;
   /** Simple SQL fallback for loggers to emit logging of a simpler SQL statement that doesn't have extra functionality that isn't important for migrations or other logging purposes. */
   simpleSQLFallback?: string;
+  /**
+   * The statement with its parameter values written in as literals. A provider that supports it
+   * logs this in place of the parameterized statement and shows it in error messages.
+   */
+  literalSQL?: string;
   /**
    * Explicit driver handle (pool, client, or transaction). When set, the statement
    * bypasses the ambient transaction — required for teardown/probes after a doomed TX.

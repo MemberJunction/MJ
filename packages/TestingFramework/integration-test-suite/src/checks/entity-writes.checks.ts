@@ -26,8 +26,11 @@
  *                instantiated the higher-priority server subclass.
  *   - EW10       Record Change text keeps characters outside the database code page: emoji, CJK and
  *                Greek survive in ChangesJSON, FullRecordJSON and ChangesDescription.
+ *   - EW11       Typed save parameters: decimal, bigint, datetime, int, bit and Unicode text round-trip
+ *                with the conversions the literal batch always applied (a decimal is rounded by
+ *                SQL Server from its exact text, never through a double).
  *
- * MUTATION TIER: EW1/EW2/EW3/EW5/EW6/EW7/EW10 write to the database and therefore carry
+ * MUTATION TIER: EW1/EW2/EW3/EW5/EW6/EW7/EW9/EW10/EW11 write to the database and therefore carry
  * `RequiresMutation: true` (they run only under RUN_MUTATION_TESTS=1). EW4 and EW8 are read-only —
  * EW8's saves are rejected during validation, before any INSERT is attempted.
  *
@@ -37,7 +40,15 @@
 import { RunView, CompositeKey, ProviderBase, EntitySaveOptions } from '@memberjunction/core';
 import type { UserInfo, IMetadataProvider, RunViewParams } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
-import { MJActionCategoryEntity, MJConversationEntity, MJConversationDetailEntity, MJListEntity, MJTagScopeEntity } from '@memberjunction/core-entities';
+import {
+    MJActionCategoryEntity,
+    MJConversationEntity,
+    MJConversationDetailEntity,
+    MJKnowledgeHubSavedSearchEntity,
+    MJListEntity,
+    MJListInvitationEntity,
+    MJTagScopeEntity,
+} from '@memberjunction/core-entities';
 import { Assert, AssertEqual } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext, EntityWritesFixture } from '@memberjunction/testing-integration';
@@ -576,6 +587,102 @@ export const EntityWritesChecks: NamedCheck[] = [
                 `ChangesDescription lost the text: ${update!.ChangesDescription}`);
 
             console.log('      → emoji, CJK and Greek survive in ChangesJSON, FullRecordJSON and ChangesDescription');
+        }
+    },
+    {
+        Id: 'entity-writes.EW11',
+        Name: 'EW11: typed save parameters keep the literal batch\'s conversions (decimal, bigint, datetime, int, bit, Unicode)',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            // Saves bind each value as a typed parameter (SQLServerDataProvider saveParameters.ts).
+            // The driver encodes a decimal parameter through a double: 1.005 * 100 = 100.4999…, so
+            // decimal(3,2) would store 1.00. MJ sends decimals as their exact text instead, and
+            // SQL Server rounds that to 1.01, the value the literal batch always stored.
+            const f = fx(ctx);
+            const text = "Zoë's 😀 日本 Ωμέγα (mj-integration-test — safe to delete)";
+            const search = await ctx.Provider.GetEntityObject<MJKnowledgeHubSavedSearchEntity>('MJ: Knowledge Hub Saved Searches', ctx.User);
+            search.NewRecord();
+            search.UserID = ctx.User.ID;
+            search.Name = `${f.Prefix}-typed ${FIXTURE_TAG}`;
+            search.Query = text;
+            search.MinScore = 1.005;
+            search.MaxResults = 7;
+            search.NotifyOnNewResults = true;
+            Assert(await search.Save(), `EW11 saved-search save failed: ${search.LatestResult?.CompleteMessage}`);
+            try {
+                const reloaded = await ctx.Provider.GetEntityObject<MJKnowledgeHubSavedSearchEntity>('MJ: Knowledge Hub Saved Searches', ctx.User);
+                Assert(await reloaded.Load(search.ID), `EW11 reloading saved search ${search.ID} failed`);
+                AssertEqual(reloaded.MinScore, 1.01, 'decimal(3,2) 1.005 stored as SQL Server rounds its exact text (a double would give 1.00)');
+                AssertEqual(reloaded.MaxResults, 7, 'int round trip');
+                AssertEqual(reloaded.NotifyOnNewResults, true, 'bit round trip');
+                AssertEqual(reloaded.Query, text, 'Unicode text with a quote round-trips exactly');
+            } finally {
+                await search.Delete();
+            }
+
+            // datetime keeps SQL Server's 1/300 s rounding: .999 becomes the next second.
+            const entityRows = await runRows<{ ID: string }>({
+                EntityName: 'MJ: Entities', Fields: ['ID'], MaxRows: 1, ResultType: 'simple'
+            }, ctx.User, 'entity lookup for the List FK');
+            Assert(entityRows.length === 1, 'no entities available to satisfy MJ: Lists.EntityID');
+            const list = await ctx.Provider.GetEntityObject<MJListEntity>(LIST_ENTITY, ctx.User);
+            list.NewRecord();
+            list.Name = `${f.Prefix}-typed ${FIXTURE_TAG}`;
+            list.EntityID = entityRows[0].ID;
+            list.UserID = ctx.User.ID;
+            const listSaved = await list.Save();
+            if (list.ID) {
+                f.ListIds.push(list.ID);
+            }
+            Assert(listSaved, `EW11 list save failed: ${list.LatestResult?.CompleteMessage}`);
+            const invitation = await ctx.Provider.GetEntityObject<MJListInvitationEntity>('MJ: List Invitations', ctx.User);
+            invitation.NewRecord();
+            invitation.ListID = list.ID;
+            invitation.Email = 'ew11@mj-integration-test.invalid';
+            invitation.Role = 'Viewer';
+            invitation.Token = `${f.Prefix}-ew11-token`;
+            invitation.ExpiresAt = new Date('2030-06-15T12:00:00.999Z');
+            invitation.CreatedByUserID = ctx.User.ID;
+            invitation.Status = 'Pending';
+            Assert(await invitation.Save(), `EW11 invitation save failed: ${invitation.LatestResult?.CompleteMessage}`);
+            try {
+                const reloaded = await ctx.Provider.GetEntityObject<MJListInvitationEntity>('MJ: List Invitations', ctx.User);
+                Assert(await reloaded.Load(invitation.ID), `EW11 reloading invitation ${invitation.ID} failed`);
+                AssertEqual(reloaded.ExpiresAt?.toISOString(), '2030-06-15T12:00:01.000Z', 'datetime rounds .999 to the next second, as SQL Server does');
+            } finally {
+                await invitation.Delete();
+            }
+
+            // bigint (GraphQL carries it as a 32-bit Int, so the value stays below 2^31).
+            const conversation = await ctx.Provider.GetEntityObject<MJConversationEntity>('MJ: Conversations', ctx.User);
+            conversation.NewRecord();
+            conversation.Name = 'EW11 typed probe (mj-integration-test — safe to delete)';
+            conversation.UserID = ctx.User.ID;
+            Assert(await conversation.Save(), `EW11 conversation save failed: ${conversation.LatestResult?.CompleteMessage}`);
+            (f.ConversationIds ??= []).push(conversation.ID);
+            try {
+                const detail = await ctx.Provider.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', ctx.User);
+                detail.NewRecord();
+                detail.ConversationID = conversation.ID;
+                detail.Role = 'User';
+                detail.Message = text;
+                detail.Status = 'Complete';
+                detail.CompletionTime = 2_000_000_123;
+                Assert(await detail.Save(), `EW11 detail save failed: ${detail.LatestResult?.CompleteMessage}`);
+                (f.ConversationDetailIds ??= []).push(detail.ID);
+                try {
+                    const reloaded = await ctx.Provider.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', ctx.User);
+                    Assert(await reloaded.Load(detail.ID), `EW11 reloading detail ${detail.ID} failed`);
+                    AssertEqual(reloaded.CompletionTime, 2_000_000_123, 'bigint round trip');
+                    AssertEqual(reloaded.Message, text, 'nvarchar(MAX) Unicode round trip');
+                } finally {
+                    await detail.Delete();
+                }
+            } finally {
+                await conversation.Delete();
+            }
+
+            console.log('      → decimal 1.005→1.01, datetime .999→next second, bigint, int, bit and Unicode text all round-tripped');
         }
     }
 ];
