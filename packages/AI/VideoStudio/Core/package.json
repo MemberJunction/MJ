@@ -10,6 +10,7 @@
   ],
   "scripts": {
     "build": "tsc && tsc-alias -f",
+    "postbuild": "node ../../CorePlus/scripts/generate-prompt-types.mjs --package . --config ./prompt-types.config.json",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
