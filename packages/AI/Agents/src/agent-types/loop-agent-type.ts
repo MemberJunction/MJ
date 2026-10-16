@@ -15,6 +15,7 @@ import { RegisterClass, SafeExpressionEvaluator } from '@memberjunction/global';
 import { BaseAgentType } from './base-agent-type';
 import type { NativeToolBinding } from '../native-tools/control-tools';
 import { CoerceActionArguments } from '../native-tools/action-tool-builder';
+import { DecodeJSONArgument } from '../native-tools/json-argument';
 import type { ChatToolCall } from '@memberjunction/ai';
 import { GetToolCallingDecision } from '@memberjunction/ai-prompts';
 
@@ -409,10 +410,12 @@ export class LoopAgentType extends BaseAgentType {
             return this.createRetryStep('complete_task must be the only call on its turn. Finish any other tool calls first, then call complete_task on its own.');
         }
         const message = typeof complete.call.arguments?.message === 'string' ? complete.call.arguments.message.trim() : '';
-        const payloadChangeRequest = this.decodePayloadChangeArgument(complete.call.arguments?.payloadChangeRequest);
-        if (payloadChangeRequest === null) {
-            return this.createRetryStep('complete_task.payloadChangeRequest must be an object (newElements / updateElements / replaceElements / removeElements), or be omitted.');
+        const decoded = this.decodePayloadChangeArgument(complete.call.arguments?.payloadChangeRequest);
+        if ('error' in decoded) {
+            return this.createRetryStep('complete_task.payloadChangeRequest must be an object (newElements / updateElements / replaceElements / removeElements), or be omitted.'
+                + ` Problem: ${decoded.error}`);
         }
+        const payloadChangeRequest = decoded.payloadChangeRequest;
         return this.createSuccessStep({
             ...(message ? { message } : {}),
             payloadChangeRequest,
@@ -430,28 +433,33 @@ export class LoopAgentType extends BaseAgentType {
     }
 
     /**
-     * Reads `complete_task.payloadChangeRequest`: undefined when absent, null when unusable. Models
-     * occasionally JSON-encode a nested object argument, so a string that parses to one is accepted.
+     * Reads `complete_task.payloadChangeRequest`: no change when absent, an error when unusable. The
+     * argument is declared as a JSON string (see `BuildCompleteTaskTool`); an object is accepted too,
+     * since some providers send one anyway. A string whose layout the model wrote as escape sequences
+     * is repaired rather than rejected — see `DecodeJSONArgument`.
      */
-    private decodePayloadChangeArgument(value: unknown): AgentPayloadChangeRequest | undefined | null {
+    private decodePayloadChangeArgument(value: unknown): { payloadChangeRequest?: AgentPayloadChangeRequest } | { error: string } {
         if (value === undefined || value === null) {
-            return undefined;
+            return {};
         }
         // An empty or "null" string is the argument left out, not a malformed one.
         if (typeof value === 'string' && (value.trim() === '' || value.trim() === 'null')) {
-            return undefined;
+            return {};
         }
         let candidate: unknown = value;
         if (typeof value === 'string') {
-            try {
-                candidate = JSON.parse(value);
-            } catch {
-                return null;
+            const decoded = DecodeJSONArgument(value);
+            if ('Error' in decoded) {
+                return { error: decoded.Error };
             }
+            if (decoded.Repaired) {
+                LogStatusEx({ message: '🩹 Loop Agent: complete_task.payloadChangeRequest had layout escapes outside its strings — repaired' });
+            }
+            candidate = decoded.Value;
         }
         return candidate !== null && typeof candidate === 'object' && !Array.isArray(candidate)
-            ? candidate as AgentPayloadChangeRequest
-            : null;
+            ? { payloadChangeRequest: candidate as AgentPayloadChangeRequest }
+            : { error: 'the value is not a JSON object' };
     }
 
     /** One sub-agent tool → `subAgent`; several → the parallel `subAgents[]` form. */
