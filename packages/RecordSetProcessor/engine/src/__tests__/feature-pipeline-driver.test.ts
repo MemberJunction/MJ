@@ -446,6 +446,15 @@ describe('Feature Pipeline driver seam', () => {
     // Hashes
     // ================================================================
 
+    describe('record result from the LLM driver', () => {
+        it('marks a record whose answer is rejected as RejectedInvalid', async () => {
+            executePrompt.mockResolvedValue({ success: true, result: { seniority: 'Intern' }, promptRun: { ID: 'PROMPT-RUN-1' } });
+            const result = await new InferProcessor(PROMPT_ID, undefined, buildSpec(), null).ProcessRecord(makeRecord(), context);
+
+            expect(result.FailureKind).toBe('RejectedInvalid');
+        });
+    });
+
     describe('computePromptVersionHash', () => {
         const probe = new ProbeProcessor(PROMPT_ID, undefined, undefined, null);
 
