@@ -336,7 +336,6 @@ export class SQLServerTransactionGroup extends TransactionGroupBase {
     private static collectDeclaredNames(masked: string): Set<string> {
         const declared = new Set<string>();
         const nameAt = /@([A-Za-z_][A-Za-z0-9_$#@]*)/y;
-        const nextTokenAt = /[ \t\r]*(\S)/y;
         for (const d of masked.matchAll(/\bDECLARE\b/gi)) {
             let i = d.index! + d[0].length;
             let depth = 0;
@@ -348,9 +347,9 @@ export class SQLServerTransactionGroup extends TransactionGroupBase {
                 if (depth === 0 && ch === ';') break;
                 if (depth === 0 && ch === ',') { expectName = true; i++; continue; }
                 if (depth === 0 && ch === '\n') {
-                    nextTokenAt.lastIndex = i + 1;
-                    const next = nextTokenAt.exec(masked);
-                    if (!next || (next[1] !== '@' && next[1] !== ',')) break;
+                    let j = i + 1;
+                    while (masked[j] === ' ' || masked[j] === '\t' || masked[j] === '\r') j++;
+                    if (masked[j] !== '@' && masked[j] !== ',') break;
                     i++;
                     continue;
                 }

@@ -286,6 +286,13 @@ describe('SQLServerTransactionGroup.scopeItemVariables', () => {
         expect(out).toContain('@B=@ID_mjb2');
     });
 
+    it('follows a declaration list across lines and stops at the next statement', () => {
+        const src = 'DECLARE @A INT,\r\n\t\t@B INT\r\n  , @C INT\r\nSET @Z = @A;';
+        const out = SQLServerTransactionGroup.scopeItemVariables(src, 0);
+        for (const v of ['@A', '@B', '@C']) expect(out).toContain(`${v}_mjb0 INT`);
+        expect(out).toContain('SET @Z = @A_mjb0;');
+    });
+
     it('is a no-op when the item declares nothing', () => {
         const src = "EXEC [__mj].[spDeleteTask] @ID='00000000-0000-0000-0000-000000000000';";
         expect(SQLServerTransactionGroup.scopeItemVariables(src, 0)).toBe(src);
