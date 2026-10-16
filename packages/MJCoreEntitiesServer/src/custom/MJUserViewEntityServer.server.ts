@@ -101,8 +101,8 @@ export class MJUserViewEntityServer extends MJUserViewEntityExtended  {
     }
 
     /** True for a provider that reaches the database through MJAPI rather than holding a connection itself. */
-    private static isNetworkProvider(provider: object): boolean {
-        return 'ProviderType' in provider && provider.ProviderType === ProviderType.Network;
+    private static isNetworkProvider(provider: object | null | undefined): boolean {
+        return provider != null && 'ProviderType' in provider && provider.ProviderType === ProviderType.Network;
     }
 
     /**
