@@ -1,8 +1,9 @@
-import { BaseEntity, EntitySaveOptions, LogError, LogStatus, Metadata, RunView } from "@memberjunction/core";
+import { BaseEntity, EntitySaveOptions, IMetadataProvider, LogError, LogStatus, Metadata, RunView } from "@memberjunction/core";
 import { RegisterClass, MJGlobal } from "@memberjunction/global";
 import { MJVectorIndexEntity, MJVectorDatabaseEntity } from "@memberjunction/core-entities";
 import { VectorDBBase, CreateIndexParams, IndexModelMetricEnum } from "@memberjunction/ai-vectordb";
 import { GetAIAPIKey } from "@memberjunction/ai";
+import { AIEmbeddingRunner } from "@memberjunction/ai-prompts";
 import { AIEngineBase } from "@memberjunction/ai-engine-base";
 
 /**
@@ -22,6 +23,12 @@ import { AIEngineBase } from "@memberjunction/ai-engine-base";
 export class MJVectorIndexEntityServer extends MJVectorIndexEntity {
     /** Upper bound on one provider CreateIndex call. */
     public static readonly CREATE_INDEX_TIMEOUT_MS = 60_000;
+    /** Upper bound on the one embedding call that learns a model's width (see resolveDimensions). */
+    public static readonly DIMENSION_PROBE_TIMEOUT_MS = 30_000;
+    /** Width used only when the record has none and the probe cannot answer (OpenAI text-embedding-3-small). */
+    public static readonly DEFAULT_DIMENSIONS = 1536;
+    /** The one string embedded to learn a model's width; its content is irrelevant, only the vector's length is read. */
+    private static readonly DIMENSION_PROBE_TEXT = 'dimension probe';
 
     /**
      * After saving, if this is a new record, create the index in the provider.
@@ -97,7 +104,7 @@ export class MJVectorIndexEntityServer extends MJVectorIndexEntity {
 
         const params: CreateIndexParams = {
             id: sanitizedName,
-            dimension: this.resolveDimensions(),
+            dimension: await this.resolveDimensions(),
             metric: 'cosine' as IndexModelMetricEnum,
             additionalParams: {
                 serverless: {
@@ -203,15 +210,68 @@ export class MJVectorIndexEntityServer extends MJVectorIndexEntity {
      * Resolve the embedding dimensions to create the provider index at.
      *
      * Prefers this index's own `Dimensions` column, which is where the operator states it and what the
-     * embedding call already honors. Falling straight through to 1536 ignored that column entirely, so
-     * an index for any other model was created at the wrong width — harmless with providers that don't
-     * enforce it, and fatal with ones that do: a colocated SQL Server index is a `VECTOR(n)` column, and
-     * inserting 384-dimension vectors into a `VECTOR(1536)` is rejected outright.
+     * embedding call already honors. When the record carries none (every index created from the UI:
+     * the Config page's Create Index and the "Vector Index: Auto" path both leave it null, and
+     * `MJ: AI Models` has no width column to copy from), the width is learned by embedding one short
+     * string with the index's own model and reading the vector's length. Every provider fixes the width
+     * at create time, so guessing it wrong gives an index the sync can never write to: a 384-dimension
+     * model's vectors are rejected by a `VECTOR(1536)` column or a 1536-wide Pinecone index outright.
      *
-     * 1536 (OpenAI text-embedding-3-small) remains the fallback for records that never set it.
+     * 1536 (OpenAI text-embedding-3-small) remains the fallback only when the probe cannot run or
+     * fails, and the failure is logged so the width can be set by hand.
      */
-    private resolveDimensions(): number {
-        return this.Dimensions ?? 1536;
+    private async resolveDimensions(): Promise<number> {
+        if (this.Dimensions) {
+            return this.Dimensions;
+        }
+        const probed = await this.probeModelDimensions();
+        if (probed === null) {
+            LogError(`Vector index "${this.Name}": could not learn the embedding width; creating the provider index at the ${MJVectorIndexEntityServer.DEFAULT_DIMENSIONS} fallback. Set Dimensions on the record if the model's width differs.`);
+            return MJVectorIndexEntityServer.DEFAULT_DIMENSIONS;
+        }
+        return probed;
+    }
+
+    /**
+     * Embed one short string with this index's embedding model and return the vector's length, or null
+     * when there is no model, no user context, or the call fails. `ModelID` is pinned so the answer
+     * comes from the model the index is for; the run row is skipped since this is not a real workload.
+     */
+    private async probeModelDimensions(): Promise<number | null> {
+        if (!this.EmbeddingModelID) {
+            LogError(`Vector index "${this.Name}" has no EmbeddingModelID; cannot probe its embedding width`);
+            return null;
+        }
+        if (!this.ContextCurrentUser) {
+            LogError(`Vector index "${this.Name}" has no context user; cannot probe its embedding width`);
+            return null;
+        }
+        try {
+            const result = await MJVectorIndexEntityServer.withTimeout(
+                new AIEmbeddingRunner().RunEmbedding({
+                    Texts: [MJVectorIndexEntityServer.DIMENSION_PROBE_TEXT],
+                    ModelID: this.EmbeddingModelID,
+                    ContextUser: this.ContextCurrentUser,
+                    // The entity's data provider is the same object as its metadata provider; this is
+                    // the cast BaseEntity itself uses wherever it needs the metadata view of it.
+                    Provider: this.ProviderToUse as unknown as IMetadataProvider,
+                    SkipRunRecord: true,
+                    Description: `Vector index "${this.Name}" dimension probe`,
+                }),
+                MJVectorIndexEntityServer.DIMENSION_PROBE_TIMEOUT_MS,
+                `Dimension probe for vector index "${this.Name}"`
+            );
+            const width = result.Success ? result.Vectors?.[0]?.length ?? 0 : 0;
+            if (width <= 0) {
+                LogError(`Dimension probe for vector index "${this.Name}" returned no vector: ${result.ErrorMessage ?? 'empty result'}`);
+                return null;
+            }
+            LogStatus(`Vector index "${this.Name}": embedding width ${width} learned from model ${result.ModelName ?? this.EmbeddingModelID}`);
+            return width;
+        } catch (error) {
+            LogError(`Dimension probe for vector index "${this.Name}" failed`, undefined, error);
+            return null;
+        }
     }
 
     /**

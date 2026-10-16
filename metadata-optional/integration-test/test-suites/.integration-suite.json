@@ -1346,6 +1346,17 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT121 - SubQ Snap and Mercury Decide Decision Models",
+            "Sequence": 48,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "92D27276-9AD6-4D1F-BA85-7895757F5349"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT96 - Record Cloning",
             "Sequence": 71,
             "Status": "Active"
@@ -1484,6 +1495,17 @@
           },
           "primaryKey": {
             "ID": "3F27D8A1-8E70-49A6-86FF-858A80446494"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT128 - Performance and Agent Overhead Benchmark",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "B4E9102C-58D3-4A7E-91F2-3C85A71D6E04"
           }
         }
       ]

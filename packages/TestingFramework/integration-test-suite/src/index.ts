@@ -49,6 +49,7 @@ export * from './checks/fls-client.checks';
 export * from './checks/self-avatar-client.checks';
 export * from './checks/conversation-authorship-client.checks';
 export * from './checks/keyrowfilter.checks'; // KF1–KF6: registers into the 'rls-isolation' bundle AFTER RLS1–RLS10 (order matters for GetBundle parity)
+export * from './checks/rolerowfilter.checks'; // RF1–RF3: registers into the 'rls-isolation' bundle AFTER KF1–KF6
 export * from './checks/runquery-cache.checks';
 export * from './checks/scheduled-jobs.checks';
 export * from './checks/server-cache.checks';
@@ -122,9 +123,11 @@ export * from './checks/ai-providers.checks';
 export * from './checks/cloudflare-clef.checks';
 export * from './checks/systemone-kev.checks';
 export * from './checks/perplexity-decider.checks';
+export * from './checks/subq-mercury-decisions.checks';
 export * from './checks/app-behavioral.checks';
 export * from './checks/content-vectorization.checks';
 export * from './checks/materialized-read.checks';
 export * from './checks/materialized-entity-read.checks';
 export * from './checks/form-contributions.checks';
 export * from './checks/cache-architecture.checks';
+export * from './checks/performance-benchmark.checks';

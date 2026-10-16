@@ -11,6 +11,7 @@ import { ClientCacheChecks } from '../checks/client-cache.checks';
 import { RunQueryCacheChecks } from '../checks/runquery-cache.checks';
 import { RlsIsolationChecks, RlsIsolationClientChecks } from '../checks/rls-isolation.checks';
 import { KeyRowFilterChecks } from '../checks/keyrowfilter.checks'; // must be imported AFTER rls-isolation.checks: registry order = RLS* then KF*
+import { RoleRowFilterChecks } from '../checks/rolerowfilter.checks'; // after keyrowfilter.checks: registry order = RLS*, KF*, then RF*
 import { RecordProcessChecks } from '../checks/record-process.checks';
 import { RecordProcessFacadeChecks } from '../checks/record-process-facade.checks';
 import { ScheduledJobsChecks } from '../checks/scheduled-jobs.checks';
@@ -52,6 +53,7 @@ import { AiProvidersChecks } from '../checks/ai-providers.checks';
 import { CloudflareClefChecks } from '../checks/cloudflare-clef.checks';
 import { SystemOneKevChecks } from '../checks/systemone-kev.checks';
 import { PerplexityDeciderChecks } from '../checks/perplexity-decider.checks';
+import { SubQMercuryDecisionsChecks } from '../checks/subq-mercury-decisions.checks';
 import { AppBehavioralChecks } from '../checks/app-behavioral.checks';
 import { ContentVectorizationChecks } from '../checks/content-vectorization.checks';
 import { MaterializedReadChecks } from '../checks/materialized-read.checks';
@@ -73,6 +75,7 @@ import { FlsLifecycleChecks } from '../checks/fls-lifecycle.checks';
 import { FlsClientChecks } from '../checks/fls-client.checks';
 import { MetadataSyncPushChecks } from '../checks/metadata-sync-push.checks';
 import { TaskGraphExecutionChecks } from '../checks/task-graph-execution.checks';
+import { PerformanceBenchmarkChecks } from '../checks/performance-benchmark.checks';
 import { SearchOriginGateChecks } from '../checks/search-origin-gate.checks';
 import { SearchProviderTrustChecks } from '../checks/search-provider-trust.checks';
 import { SearchScopeBoundChecks } from '../checks/search-scope-bound.checks';
@@ -129,8 +132,9 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['cache-immutability', CacheImmutabilityChecks, 15], // F1-F15 freeze-on-write runtime contract (IT81); F13/F14 cover review findings C1/C2, F15 covers M3 (dataset key collision)
         ['client-cache', ClientCacheChecks, 14],
         ['runquery-cache', RunQueryCacheChecks, 21], // Q11 (B46 category collision) + Q12 (B45 hit-vs-miss permission parity) added 2026-07-20; Q13–Q21 (query definition changes) added 2026-10-14
-        // RLS1–RLS10 (rls-isolation.checks.ts) + KF1–KF6 (keyrowfilter.checks.ts, API-key row filters) share one bundle
-        ['rls-isolation', [...RlsIsolationChecks, ...KeyRowFilterChecks], 16],
+        // RLS1–RLS10 (rls-isolation.checks.ts) + KF1–KF6 (keyrowfilter.checks.ts, API-key row filters)
+        // + RF1–RF3 (rolerowfilter.checks.ts, role filter edits) share one bundle
+        ['rls-isolation', [...RlsIsolationChecks, ...KeyRowFilterChecks, ...RoleRowFilterChecks], 19],
         ['rls-isolation-client', RlsIsolationClientChecks, 1],
         ['record-process', RecordProcessChecks, 12],
         ['record-process-facade', RecordProcessFacadeChecks, 2],
@@ -174,6 +178,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['cloudflare-clef', CloudflareClefChecks, 6], // CF1-CF6 Clef/Clef-flash metadata, driver registration, runner calls through an HTTP stand-in: envelope failures and failover, a bare response, a JSON credential's account (IT108)
         ['systemone-kev', SystemOneKevChecks, 10], // KV1-KV10 Kev metadata, SystemOneDecision registration, runner calls against loopback System One servers: Default Decision selection, bound credentials, per-row routing, failover and error classification, Kev-4B on OpenRouter, a binding on the serving row of a two-row model (IT109)
         ['perplexity-decider', PerplexityDeciderChecks, 5], // PX1-PX5 Perplexity Decider metadata, PerplexityDecision registration, runner calls through an HTTP stand-in: the quickstart request and response, a bound credential's token, Default Decision selection and failover (IT110)
+        ['subq-mercury-decisions', SubQMercuryDecisionsChecks, 8], // SM1-SM8 SubQ Snap and Mercury Decide metadata, SubQDecision and InceptionDecision registration, runner calls through guarded SubQ, Inception and OpenRouter stand-ins: request and answer mapping per route, bound credentials, 422 and 402 failing over, Default Decision's order with the new models last (IT121, provisional)
         ['app-behavioral', AppBehavioralChecks, 3], // S4/S6/S8 Application behaviors (IT66)
         ['content-vectorization', ContentVectorizationChecks, 10], // CV1-CV10 content vectorization pipeline (IT67)
         ['materialized-read', MaterializedReadChecks, 3], // MR1-MR2 served-from-snapshot proof + MR3 delete-path FK cleanup (IT79)
@@ -201,6 +206,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['metadata-sync-push', MetadataSyncPushChecks, 10], // MSP1-MSP10 sync push atomicity, in-transaction metadata reload, and one row-level security filter, mutation tier (IT94)
         ['record-cloning', RecordCloningChecks, 13], // RC1-RC9 plan §13.2 + RC10-RC13 real-database dry runs, client transport (IT96)
         ['binary-fields', BinaryFieldsChecks, 6], // BF1-BF6 binary fields end to end + binary vector columns, client transport (IT101)
+        ['performance-benchmark', PerformanceBenchmarkChecks, 12], // PB1-PB12 MJ primitives microbenchmarks + Sage/Query Builder/Research Agent deterministic and live runs (IT128)
         ['search-origin-gate', SearchOriginGateChecks, 4], // SOG1-SOG4 the search origin-record gate against the live views (IT116)
         ['search-provider-trust', SearchProviderTrustChecks, 2], // SPT1 external-index hits verified, SPT2 unresolvable scope refused (IT118)
         ['search-scope-bound', SearchScopeBoundChecks, 3], // SSB1-SSB3 a scoped search is bounded by its scope's rows (IT123)
@@ -319,6 +325,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'metadata-sync-push': 10,
         'nested-transactions': 11,
         'open-app-teardown': 2,
+        'performance-benchmark': 12,
         'permission-engine': 15,
         'perplexity-decider': 5,
         'predictive-studio': 5,
@@ -334,7 +341,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'remote-op-ai-authoring': 3,
         'remote-op-wire-progress': 1,
         'remote-operations': 7,
-        'rls-isolation': 16,
+        'rls-isolation': 19,
         'rls-isolation-client': 1,
         'runquery-cache': 21,
         'runquery-catalog': 6,
@@ -359,6 +366,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'shipped-agents-live': 4,
         'startup-mode': 3,
         'storage': 9,
+        'subq-mercury-decisions': 8,
         'subscription-isolation': 2,
         'systemone-kev': 10,
         'task-graph-execution': 27,
@@ -395,7 +403,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(121);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(123);
     });
 });
 
@@ -586,6 +594,9 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'record-cloning.RC7',
         'record-cloning.RC8',
         'record-cloning.RC9',
+        'rls-isolation.RF1',
+        'rls-isolation.RF2',
+        'rls-isolation.RF3',
         'role-elevation.RE6',
         'rubrics.R13',
         'rubrics.R14',
@@ -710,6 +721,9 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'agent-skills-live.SL5',
         'agent-wire-callback.WC1',
         'agent-wire-callback.WC2',
+        'performance-benchmark.PB10',
+        'performance-benchmark.PB11',
+        'performance-benchmark.PB12',
         'shipped-agents-live.SA1',
         'shipped-agents-live.SA2',
         'shipped-agents-live.SA3',

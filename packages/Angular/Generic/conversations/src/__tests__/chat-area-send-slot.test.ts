@@ -140,6 +140,20 @@ describe('ConversationChatArea — the send slot as the stop control', () => {
     expect(h.component.ComposerPlaceholderFor('other-conv')).toBe('Type a message... (Ctrl+Enter to send)');
   });
 
+  it('keeps the plain placeholder after a stopped reply when the host turns stopping off', () => {
+    const off = createHarness({ inFlight: [], allow: false, runs: [['a1', { ID: 'run-1', Agent: 'Sage', WasStoppedByUser: true }]] });
+    expect(off.component.ComposerPlaceholderFor('conv-1')).toBe('Type a message... (Ctrl+Enter to send)');
+  });
+
+  it('with stopping off, a reply in flight leaves the slot as Send, with no status line and nothing to stop', async () => {
+    const off = createHarness({ allow: false });
+    expect(off.component.SendSlotMode).toBe('send');
+    expect(off.component.StatusText).toBeNull();
+    expect(off.component.StopCount).toBe(0);
+    await off.component.OnComposerStopClicked();
+    expect(off.cancelAgent).not.toHaveBeenCalled();
+  });
+
   it('formats elapsed time like the reply\'s time pill', () => {
     expect(ConversationChatAreaComponent.FormatElapsed(41_000)).toBe('0:41');
     expect(ConversationChatAreaComponent.FormatElapsed(5 * 60_000 + 3_000)).toBe('5:03');

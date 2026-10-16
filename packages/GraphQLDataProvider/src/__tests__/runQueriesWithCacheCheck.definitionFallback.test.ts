@@ -19,11 +19,19 @@ const OK_RESPONSE = {
     },
 };
 
-/** The error an older server's schema validation produces, shaped as ExecuteGQL rethrows it. */
-function schemaRejection(): Error {
-    const message = 'Field "definitionHash" is not defined by type "RunQueryCacheStatusInput".';
-    return Object.assign(new Error(message), { response: { errors: [{ message }] } });
+/** A thrown GraphQL error shaped as ExecuteGQL rethrows it: the first error's message, plus the errors. */
+function graphQLError(message: string, code: string | undefined): Error {
+    const extensions = code ? { code } : undefined;
+    return Object.assign(new Error(message), { response: { errors: [{ message, extensions }] } });
 }
+
+/** What an older server returns: graphql-js / Apollo messages and codes for the unknown output and input fields. */
+const OLD_SERVER_OUTPUT_FIELD = () => graphQLError('Cannot query field "definitionHash" on type "RunQueryWithCacheCheckResultOutput".', 'GRAPHQL_VALIDATION_FAILED');
+const OLD_SERVER_INPUT_FIELD = () => graphQLError('Variable "$input" got invalid value { maxUpdatedAt: "x", rowCount: 1, definitionHash: "h" } at "input[0].cacheStatus"; Field "definitionHash" is not defined by type "RunQueryCacheStatusInput".', 'BAD_USER_INPUT');
+/** Errors a current server could raise that name the field without meaning the schema lacks it. */
+const NEW_SERVER_ERROR = () => graphQLError('definitionHash validation failed for this request', 'INTERNAL_SERVER_ERROR');
+const SIGNATURE_WITH_OTHER_CODE = () => graphQLError('Cannot query field "definitionHash" on type "RunQueryWithCacheCheckResultOutput".', 'INTERNAL_SERVER_ERROR');
+const PLAIN_ERROR_NAMING_FIELD = () => new Error('could not read definitionHash');
 
 interface ExecuteCall {
     Query: string;
@@ -31,14 +39,16 @@ interface ExecuteCall {
 }
 
 /** A provider whose ExecuteGQL is scripted; records each call's query text and input. */
-function makeProvider(script: Array<'reject-definition' | 'ok' | 'other-error'>) {
+type Step = 'ok' | 'other-error' | (() => Error);
+
+function makeProvider(script: Step[]) {
     const provider = Object.create(GraphQLDataProvider.prototype) as GraphQLDataProvider;
     const calls: ExecuteCall[] = [];
     let i = 0;
     const execute = vi.fn(async (query: string, variables: { input: ExecuteCall['Input'] }) => {
         calls.push({ Query: query, Input: variables.input });
         const step = script[Math.min(i++, script.length - 1)];
-        if (step === 'reject-definition') throw schemaRejection();
+        if (typeof step === 'function') throw step();
         if (step === 'other-error') throw new Error('network down');
         return OK_RESPONSE;
     });
@@ -65,8 +75,8 @@ describe('GraphQLDataProvider.RunQueriesWithCacheCheck against a server without 
         expect(selectsHash(calls[0])).toBe(true);
     });
 
-    it('retries once without the hash when the server rejects it', async () => {
-        const { provider, calls } = makeProvider(['reject-definition', 'ok']);
+    it('retries once without the hash when the server rejects the output field', async () => {
+        const { provider, calls } = makeProvider([OLD_SERVER_OUTPUT_FIELD, 'ok']);
 
         const response = await provider.RunQueriesWithCacheCheck(PARAMS);
 
@@ -80,7 +90,7 @@ describe('GraphQLDataProvider.RunQueriesWithCacheCheck against a server without 
     it('leaves the hash out of later calls for a while, then tries it again', async () => {
         let now = 1_800_000_000_000;
         vi.spyOn(Date, 'now').mockImplementation(() => now);
-        const { provider, calls } = makeProvider(['reject-definition', 'ok', 'ok', 'ok']);
+        const { provider, calls } = makeProvider([OLD_SERVER_OUTPUT_FIELD, 'ok', 'ok', 'ok']);
 
         await provider.RunQueriesWithCacheCheck(PARAMS);
         now += 60_000;
@@ -92,6 +102,32 @@ describe('GraphQLDataProvider.RunQueriesWithCacheCheck against a server without 
         await provider.RunQueriesWithCacheCheck(PARAMS);
         expect(calls).toHaveLength(4);
         expect(sentHash(calls[3])).toBe('hash-1');
+    });
+
+    it('retries once without the hash when the server rejects the input field', async () => {
+        const { provider, calls } = makeProvider([OLD_SERVER_INPUT_FIELD, 'ok']);
+
+        const response = await provider.RunQueriesWithCacheCheck(PARAMS);
+
+        expect(response.success).toBe(true);
+        expect(calls).toHaveLength(2);
+        expect(sentHash(calls[1])).toBeUndefined();
+    });
+
+    it.each([
+        ['an error from a current server that names the field', NEW_SERVER_ERROR],
+        ['a schema-rejection message with a non-validation code', SIGNATURE_WITH_OTHER_CODE],
+        ['a plain error that names the field', PLAIN_ERROR_NAMING_FIELD],
+    ])('fails without downgrading on %s', async (_label, error) => {
+        const { provider, calls } = makeProvider([error, 'ok']);
+
+        const response = await provider.RunQueriesWithCacheCheck(PARAMS);
+        expect(response.success).toBe(false);
+        expect(calls).toHaveLength(1);
+
+        await provider.RunQueriesWithCacheCheck(PARAMS);
+        expect(calls).toHaveLength(2);
+        expect(sentHash(calls[1])).toBe('hash-1');
     });
 
     it('does not retry other errors', async () => {

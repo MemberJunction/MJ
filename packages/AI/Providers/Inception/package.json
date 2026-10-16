@@ -2,7 +2,7 @@
   "name": "@memberjunction/ai-inception",
   "type": "module",
   "version": "6.2.0-edge.4",
-  "description": "MemberJunction Wrapper for Inception Labs (Mercury diffusion LLM family)",
+  "description": "MemberJunction Wrapper for Inception Labs: the Mercury diffusion LLM family, and the Mercury Decide decision model",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [

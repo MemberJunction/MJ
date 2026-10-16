@@ -138,8 +138,20 @@ export interface ServerExtensionInitContext {
     /** Extension configuration from mj.config.cjs or Open App metadata. */
     config: ServerExtensionConfig;
 
-    /** Canonical public base URL of the MJ server (e.g. 'https://api.example.com'). */
+    /**
+     * Where the world reaches MJAPI (`MJAPI_PUBLIC_URL`), prefix included (e.g. 'https://example.com/api').
+     * Build outward URLs as `publicUrl` + a path relative to `apiRootPath` — never by appending the
+     * already-composed `config.RootPath` to it.
+     */
     publicUrl?: string;
+
+    /**
+     * MJAPI's base path (`MJAPI_BASE_PATH`, no trailing slash; `''` at `/`): the prefix every MJAPI route is
+     * mounted under. `config.RootPath` is already composed under it, so mount on `config.RootPath` as-is.
+     * Not related to `GRAPHQL_ROOT_PATH`, which is only Apollo's path. Browser bundles are given the MJAPI
+     * URL explicitly; they never derive it from `window.location` or by stripping `/graphql`.
+     */
+    apiRootPath?: string; // case-violation-ok-legacy-back-compat: matches this context's existing camelCase members
 
     /** Shared service registry for cross-extension service lookup and registration. */
     services: ServerExtensionServiceRegistry;
