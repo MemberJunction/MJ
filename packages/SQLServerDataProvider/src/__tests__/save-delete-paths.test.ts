@@ -465,6 +465,46 @@ describe('SQLServerDataProvider delete path (real Delete() → GenerateDeleteSQL
     expect(sql).toContain('SELECT @ID AS [ID]'); // PK echoed back for delete validation
   });
 
+  it('with TrackRecordChanges + CascadeDeletes: runs the proc uncaptured, so cascaded spUpdate rows cannot break an @ResultTable capture', async () => {
+    const provider = makeProvider();
+    provider.SetTestEntities([makeRecordChangesEntityInfo()]);
+    const entity = makeSavedWidgetEntity(makeWidgetEntityInfo({ trackRecordChanges: true, cascadeDeletes: true }), TEST_USER);
+    // Real shape: our key first, a cascaded spUpdate full row, the proc's own echo, our key last
+    mssqlState.QueueResult({
+      recordsets: [[{ ID: 'w-0001' }], [{ ID: 'child-1', Name: 'Child', ParentID: null }], [{ ID: 'w-0001' }], [{ ID: 'w-0001' }]],
+    });
+
+    const deleted = await provider.Delete(entity, new EntityDeleteOptions(), TEST_USER);
+
+    expect(deleted).toBe(true);
+    const sql = mssqlState.Queries[0].sql;
+    expect(sql).not.toContain('INSERT INTO @ResultTable');
+    const rowGone = `NOT EXISTS (SELECT 1 FROM [dbo].[Widget] WHERE [ID]='w-0001')`;
+    const exec = `EXEC [dbo].[spDeleteWidget] @ID='w-0001'`;
+    const firstKey = `SELECT CASE WHEN @MJDeleteRowExisted = 1 THEN 'w-0001' END AS [ID]`;
+    const lastKey = `SELECT CASE WHEN @MJDeleteRowDeleted = 1 THEN 'w-0001' END AS [ID]`;
+    expect(sql).toContain(rowGone);
+    expect(sql).toContain(`@Type='Delete'`);
+    // Order: key for transaction groups (first result set) → proc → record change only if the row is gone → key last
+    expect(sql.indexOf(firstKey)).toBeGreaterThan(-1);
+    expect(sql.indexOf(firstKey)).toBeLessThan(sql.indexOf(exec));
+    expect(sql.indexOf(exec)).toBeLessThan(sql.indexOf(rowGone));
+    expect(sql.indexOf(rowGone)).toBeLessThan(sql.indexOf('spCreateRecordChange_Internal'));
+    expect(sql.trim().endsWith(lastKey)).toBe(true);
+  });
+
+  it('with TrackRecordChanges + CascadeDeletes: returns false when the row was not deleted (NULL key)', async () => {
+    const provider = makeProvider();
+    provider.SetTestEntities([makeRecordChangesEntityInfo()]);
+    const entity = makeSavedWidgetEntity(makeWidgetEntityInfo({ trackRecordChanges: true, cascadeDeletes: true }), TEST_USER);
+    mssqlState.QueueResult({ recordsets: [[{ ID: null }], [{ ID: null }]] });
+
+    const deleted = await provider.Delete(entity, new EntityDeleteOptions(), TEST_USER);
+
+    expect(deleted).toBe(false);
+    expect(entity.LatestResult?.Message).toContain('ID=w-0001 not found');
+  });
+
   it('returns false when the proc echoes a different PK (delete validation)', async () => {
     const provider = makeProvider();
     const entity = makeSavedWidgetEntity(makeWidgetEntityInfo(), TEST_USER);

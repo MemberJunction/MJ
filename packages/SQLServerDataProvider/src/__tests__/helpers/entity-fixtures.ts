@@ -71,7 +71,7 @@ function widgetFieldInitData(): Record<string, unknown>[] {
  * (spCreateWidget / spUpdateWidget / spDeleteWidget) from BaseTableCodeName —
  * exercising the real GetCreateUpdateSPName fallback.
  */
-export function makeWidgetEntityInfo(options?: { trackRecordChanges?: boolean; updateProc?: boolean }): EntityInfo {
+export function makeWidgetEntityInfo(options?: { trackRecordChanges?: boolean; updateProc?: boolean; cascadeDeletes?: boolean }): EntityInfo {
   return new EntityInfo({
     ID: WIDGET_ENTITY_ID,
     Name: 'Widgets',
@@ -86,6 +86,7 @@ export function makeWidgetEntityInfo(options?: { trackRecordChanges?: boolean; u
     spCreateGenerated: true,
     spUpdateGenerated: options?.updateProc ?? true,
     TrackRecordChanges: options?.trackRecordChanges ?? false,
+    CascadeDeletes: options?.cascadeDeletes ?? false,
     spCreate: null,
     spUpdate: null,
     spDelete: null,
