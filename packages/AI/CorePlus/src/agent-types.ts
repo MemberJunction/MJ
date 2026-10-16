@@ -181,6 +181,12 @@ export interface MediaOutput {
     /** Base64 encoded data (only if NOT from prompt run) */
     data?: string;
 
+    /**
+     * `MJ: Files` ID set once the media bytes are in MJStorage; downstream consumers
+     * reuse it instead of uploading the same bytes again.
+     */
+    fileId?: string;
+
     /** URL if available (some providers return URLs) */
     url?: string;
 

@@ -658,7 +658,8 @@ export class AgentRunner {
                         agentResult.agentRun.ID,
                         mediaToSave,
                         contextUser,
-                        md
+                        md,
+                        agentResult.resolvedStorageAccountId
                     );
 
                     // Create Artifact + ArtifactVersion + ConversationDetailArtifact for each
@@ -1578,6 +1579,8 @@ export class AgentRunner {
      * @param agentRunId - The ID of the agent run
      * @param mediaOutputs - Array of media outputs to save
      * @param contextUser - User context for the operation
+     * @param provider - Optional metadata provider for multi-provider support
+     * @param resolvedStorageAccountId - Optional pre-resolved storage account ID from the agent's resolution chain
      * @returns Array of saved AIAgentRunMedia IDs
      * @since 3.1.0
      *
@@ -1596,7 +1599,8 @@ export class AgentRunner {
         agentRunId: string,
         mediaOutputs: MediaOutput[] | undefined,
         contextUser: UserInfo,
-        provider?: IMetadataProvider
+        provider?: IMetadataProvider,
+        resolvedStorageAccountId?: string
     ): Promise<string[]> {
         if (!mediaOutputs || mediaOutputs.length === 0) {
             return [];
@@ -1608,6 +1612,8 @@ export class AgentRunner {
         const md = provider || this._provider;
 
         try {
+            await FileStorageEngine.Instance.Config(false, contextUser);
+
             // Use AIEngine's cached modalities instead of a fresh DB call
             const aiEngine = AIEngine.Instance;
 
@@ -1638,9 +1644,28 @@ export class AgentRunner {
 
                     mediaEntity.MimeType = mediaOutput.mimeType;
 
-                    // Only store inline data if NOT from prompt run media
+                    // Upload to MJStorage when configured (or fall back to InlineData) if NOT from prompt run media
                     if (!mediaOutput.promptRunMediaId && mediaOutput.data) {
-                        mediaEntity.InlineData = mediaOutput.data;
+                        const extension = this.getMimeTypeExtension(mediaOutput.mimeType);
+                        const fileName = mediaOutput.label || `${mediaOutput.modality.toLowerCase()}_${i + 1}.${extension}`;
+                        const estimatedSizeBytes = Math.ceil(mediaOutput.data.length * 0.75);
+                        const fileId = mediaOutput.fileId ?? await this.uploadToStorageIfConfigured(
+                            mediaOutput.data,
+                            fileName,
+                            mediaOutput.mimeType,
+                            contextUser,
+                            resolvedStorageAccountId,
+                            md,
+                            'SaveAgentRunMedia'
+                        );
+                        if (fileId) {
+                            mediaEntity.FileID = fileId;
+                            mediaEntity.FileName = fileName;
+                            mediaEntity.FileSizeBytes = estimatedSizeBytes;
+                            mediaOutput.fileId = fileId;
+                        } else {
+                            mediaEntity.InlineData = mediaOutput.data;
+                        }
                     }
 
                     // Set dimensions if available
@@ -1790,12 +1815,13 @@ export class AgentRunner {
                     ? Math.ceil(media.data.length * 0.75)
                     : undefined;
 
-                // Storage-backed when an account is configured, exactly as ProcessFileArtifacts
+                // Reuse fileId when SaveAgentRunMedia already uploaded the bytes to MJStorage;
+                // otherwise upload when a storage account is configured, exactly as ProcessFileArtifacts
                 // does for file outputs.
-                const fileId = media.data
+                const fileId = media.fileId ?? (media.data
                     ? await this.uploadToStorageIfConfigured(
                           media.data, fileName, media.mimeType, contextUser, resolvedStorageAccountId, md, 'CreateMediaArtifacts')
-                    : undefined;
+                    : undefined);
 
                 if (fileId) {
                     await this.createFileArtifact(
