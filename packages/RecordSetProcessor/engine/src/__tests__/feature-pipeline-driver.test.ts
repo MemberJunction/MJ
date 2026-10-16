@@ -5,7 +5,6 @@ import { KnowledgeHubMetadataEngine, type MJFeaturePipelineTypeEntity } from '@m
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import type { AIPromptParams, AIPromptRunResult, MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
-import { ParameterFidelityError, type ParameterFidelity } from '@memberjunction/ai';
 import type { RecordProcessorContext, RecordRef } from '@memberjunction/record-set-processor-base';
 import {
     FeatureValueCacheService,
@@ -429,80 +428,23 @@ describe('Feature Pipeline driver seam', () => {
             expect(await driver.ComputeOutputs(request)).toEqual({ Success: false, ErrorMessage: 'AI prompt execution failed', AIPromptRunID: undefined });
         });
 
-        it('runs the prompt strict and returns the call\'s parameter fidelity', async () => {
-            const fidelity: ParameterFidelity = { Status: 'sent-unchanged', Sent: { VendorModelName: 'gemini-3.1-flash-lite', Temperature: 0, MaxTokens: null, Seed: 42 } };
-            executePrompt.mockResolvedValue({ success: true, result: { a: 1 }, promptRun: { ID: 'r1' }, chatResult: { parameterFidelity: fidelity } });
+        it('runs the prompt with template escaping off', async () => {
+            executePrompt.mockResolvedValue({ success: true, result: { a: 1 }, promptRun: { ID: 'r1' } });
             const request: FeaturePipelineComputeRequest = {
                 Record: makeRecord(), Context: context, Prompt: mockPrompt,
                 Hooks: { BuildPromptData: async () => ({}), BeforeBuildContext: async () => undefined, BeforePromptExecute: async () => undefined, AfterPromptExecute: async (r) => r.result || {}, BuildUserMessage: async () => null },
             };
             const out = await new LLMFeaturePipelineDriver().ComputeOutputs(request);
             const sent: AIPromptParams = executePrompt.mock.calls[0][0];
-            expect(sent.strictParameters).toBe(true);
             expect(sent.templateAutoescape).toBe(false);
-            expect('ErrorMessage' in out ? null : out.ParameterFidelity).toEqual(fidelity);
+            expect(out.Success).toBe(true);
         });
 
-        it('returns a refused call\'s parameter fidelity with the failure', async () => {
-            const sentShape = { VendorModelName: 'gemini-3.1-flash-lite', Temperature: 0, MaxTokens: null, Seed: 42 };
-            const refused: Extract<ParameterFidelity, { Status: 'refused' }> = { Status: 'refused', Configured: sentShape, WouldSend: { ...sentShape, Seed: null } };
-            const error = new ParameterFidelityError(refused, 'GeminiLLM');
-            executePrompt.mockResolvedValue({ success: false, errorMessage: error.message, promptRun: { ID: 'r2' }, chatResult: { success: false, exception: error } });
-            const request: FeaturePipelineComputeRequest = {
-                Record: makeRecord(), Context: context, Prompt: mockPrompt,
-                Hooks: { BuildPromptData: async () => ({}), BeforeBuildContext: async () => undefined, BeforePromptExecute: async () => undefined, AfterPromptExecute: async () => ({}), BuildUserMessage: async () => null },
-            };
-            expect(await new LLMFeaturePipelineDriver().ComputeOutputs(request)).toEqual({
-                Success: false, ErrorMessage: error.message, AIPromptRunID: 'r2', ParameterFidelity: refused,
-            });
-        });
-
-        it('returns no parameter fidelity with a failure that is not a refusal, whatever the error carries', async () => {
-            const configured = { VendorModelName: 'gemini-3.1-flash-lite', Temperature: 0, MaxTokens: null, Seed: 42 };
-            const lookalike = Object.assign(new Error('model unavailable'), { Fidelity: { Status: 'refused', Configured: configured, WouldSend: configured } });
-            executePrompt.mockResolvedValue({ success: false, errorMessage: 'model unavailable', chatResult: { success: false, exception: lookalike } });
-            const request: FeaturePipelineComputeRequest = {
-                Record: makeRecord(), Context: context, Prompt: mockPrompt,
-                Hooks: { BuildPromptData: async () => ({}), BeforeBuildContext: async () => undefined, BeforePromptExecute: async () => undefined, AfterPromptExecute: async () => ({}), BuildUserMessage: async () => null },
-            };
-            const out = await new LLMFeaturePipelineDriver().ComputeOutputs(request);
-            expect('ErrorMessage' in out ? out.ParameterFidelity : 'succeeded').toBeUndefined();
-        });
     });
 
     // ================================================================
     // Hashes
     // ================================================================
-
-    describe('parameter fidelity on the record result', () => {
-        const sentShape = { VendorModelName: 'gemini-3.1-flash-lite', Temperature: 0, MaxTokens: null, Seed: 42 };
-        const sent: ParameterFidelity = { Status: 'sent-unchanged', Sent: sentShape };
-
-        it('records the call\'s parameter fidelity on a succeeded record', async () => {
-            executePrompt.mockResolvedValue({ success: true, result: { seniority: 'Director' }, promptRun: { ID: 'PROMPT-RUN-1' }, chatResult: { parameterFidelity: sent } });
-            const result = await new InferProcessor(PROMPT_ID, undefined, buildSpec(), null).ProcessRecord(makeRecord(), context);
-
-            expect(result.Status).toBe('Succeeded');
-            expect(result.ParameterFidelity).toEqual(sent);
-        });
-
-        it('records the call\'s parameter fidelity on a record whose answer is rejected', async () => {
-            executePrompt.mockResolvedValue({ success: true, result: { seniority: 'Intern' }, promptRun: { ID: 'PROMPT-RUN-1' }, chatResult: { parameterFidelity: sent } });
-            const result = await new InferProcessor(PROMPT_ID, undefined, buildSpec(), null).ProcessRecord(makeRecord(), context);
-
-            expect(result.FailureKind).toBe('RejectedInvalid');
-            expect(result.ParameterFidelity).toEqual(sent);
-        });
-
-        it('records a refused call\'s parameter fidelity on the failed record', async () => {
-            const refused: Extract<ParameterFidelity, { Status: 'refused' }> = { Status: 'refused', Configured: sentShape, WouldSend: { ...sentShape, Seed: null } };
-            const error = new ParameterFidelityError(refused, 'GeminiLLM');
-            executePrompt.mockResolvedValue({ success: false, errorMessage: error.message, chatResult: { success: false, exception: error } });
-            const result = await new InferProcessor(PROMPT_ID, undefined, buildSpec(), null).ProcessRecord(makeRecord(), context);
-
-            expect(result).toMatchObject({ Status: 'Failed', ErrorMessage: error.message, ParameterFidelity: refused });
-        });
-    });
 
     describe('computePromptVersionHash', () => {
         const probe = new ProbeProcessor(PROMPT_ID, undefined, undefined, null);

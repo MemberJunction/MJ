@@ -7,7 +7,6 @@
  * @module @memberjunction/record-set-processor
  */
 
-import type { ParameterFidelity } from '@memberjunction/ai';
 import { BaseSingleton } from '@memberjunction/global';
 import { IMetadataProvider, LogError, Metadata, UserInfo } from '@memberjunction/core';
 import {
@@ -88,7 +87,7 @@ export class RecordSetProcessor extends BaseSingleton<RecordSetProcessor> {
         const handle = await tracker.BeginRun(meta, contextUser, provider);
         const counts: RunCounts = { Processed: 0, Success: 0, Error: 0, Skipped: 0 };
         const tally: RunTally = {
-            WatermarkSkipped: 0, Upserted: 0, Unchanged: 0, Previewed: 0, RejectedInvalid: 0, BelowConfidence: 0, HumanValuesPreserved: 0, Pin: null, ParameterFidelity: null,
+            WatermarkSkipped: 0, Upserted: 0, Unchanged: 0, Previewed: 0, RejectedInvalid: 0, BelowConfidence: 0, HumanValuesPreserved: 0, Pin: null,
         };
         let cursor = shouldResume ? await tracker.LoadResumeCursor(handle, contextUser, provider) : undefined;
         let total: number | null = null;
@@ -426,9 +425,6 @@ export class RecordSetProcessor extends BaseSingleton<RecordSetProcessor> {
         }
         tally.HumanValuesPreserved += result.HumanValuesPreserved || 0;
         tally.Pin ||= result.PipelinePin || null;
-        if (result.ParameterFidelity && (tally.ParameterFidelity === null || result.ParameterFidelity.Status === 'refused')) {
-            tally.ParameterFidelity = result.ParameterFidelity;
-        }
     }
 
     /**
@@ -441,7 +437,7 @@ export class RecordSetProcessor extends BaseSingleton<RecordSetProcessor> {
         const wouldRefuse = dryRun ? processor.CurrentRunRefusal?.() || null : null;
         return {
             ...(wouldRefuse ? { WouldRefuse: wouldRefuse } : {}),
-            RecordProcessID: recordProcessID, Pin: tally.Pin || processor.CurrentRunPin?.() || null, ParameterFidelity: tally.ParameterFidelity,
+            RecordProcessID: recordProcessID, Pin: tally.Pin || processor.CurrentRunPin?.() || null,
             Attempted: this.attemptedOf(counts, tally), Upserted: tally.Upserted, Unchanged: tally.Unchanged, Previewed: tally.Previewed,
             RejectedInvalid: tally.RejectedInvalid, BelowConfidence: tally.BelowConfidence,
             Failed: counts.Error - tally.RejectedInvalid, Skipped: counts.Skipped,
@@ -523,5 +519,4 @@ interface RunTally {
     BelowConfidence: number;
     HumanValuesPreserved: number;
     Pin: FeaturePipelineRunPin | null;
-    ParameterFidelity: ParameterFidelity | null;
 }

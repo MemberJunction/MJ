@@ -45,7 +45,7 @@ describe('GenericProcessRunTracker.CompleteRun', () => {
     type RunDouble = Partial<Pick<MJProcessRunEntity, 'ID' | 'Status' | 'ResultSummary' | 'ErrorMessage'>> & { Save: () => Promise<boolean> };
     const counts = { Processed: 1, Success: 1, Error: 0, Skipped: 0, Total: 1 };
     const result = {
-        RecordProcessID: 'RP-1', Pin: null, ParameterFidelity: null, Attempted: 1, Upserted: 1, Unchanged: 0, Previewed: 0,
+        RecordProcessID: 'RP-1', Pin: null, Attempted: 1, Upserted: 1, Unchanged: 0, Previewed: 0,
         RejectedInvalid: 0, BelowConfidence: 0, Failed: 0, Skipped: 0, HumanValuesPreserved: 0, Status: 'completed' as const,
     };
     const complete = async (run: RunDouble, summary: Parameters<GenericProcessRunTracker['CompleteRun']>[1]): Promise<void> => {

@@ -32,7 +32,7 @@ describe('RecordProcess.RunNow: a dry run that a real run would be refused', () 
         const refusal = 'Feature Pipeline version v6 is not activated';
         const dry: ProcessRunResult = {
             ProcessRunID: 'run-2', Status: 'Completed', Total: 1, Processed: 1, Success: 1, Error: 0, Skipped: 0,
-            FeaturePipeline: { RecordProcessID: 'rp-1', Pin: null, ParameterFidelity: null, Attempted: 1, Upserted: 0, Unchanged: 0, Previewed: 1,
+            FeaturePipeline: { RecordProcessID: 'rp-1', Pin: null, Attempted: 1, Upserted: 0, Unchanged: 0, Previewed: 1,
                 RejectedInvalid: 0, BelowConfidence: 0, Failed: 0, Skipped: 0, HumanValuesPreserved: 0, Status: 'completed', WouldRefuse: refusal },
         };
         vi.spyOn(RecordProcessExecutor.prototype, 'RunByID').mockResolvedValue(dry);

@@ -13,9 +13,8 @@ pluggable seams defined in [`@memberjunction/record-set-processor-base`](../base
 - **Error-rate circuit breaker** — auto-fails a run when the error rate of the records it attempted exceeds a
   threshold (records skipped on their watermark are left out)
 - **Feature Pipeline runs** (`FeaturePipeline`, set by `RecordProcessExecutor` for Infer work) — the run ends `Failed`
-  when any record failed, and its `FeaturePipelineRunResult` (counts, pin, parameter fidelity) is persisted as the
-  run's `ResultSummary`. The LLM driver calls with `strictParameters`, so a call that would not send the configured
-  temperature, max tokens and seed fails the record
+  when any record failed, and its `FeaturePipelineRunResult` (counts, pin) is persisted as the
+  run's `ResultSummary`
 - **Skipping unchanged records** (`skipUnchanged`, by `Checksum` or `UpdatedAt`) — unless the run overwrites human
   values. A real `Checksum` run that does not skip (e.g. a version backfill) still writes the watermark of each
   succeeded record whose processor computes a basis hash (Infer), so the next skipping run skips it

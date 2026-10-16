@@ -144,7 +144,6 @@ function resultSummary(counts: Partial<FeaturePipelineRunResult> = {}): string {
   const result: FeaturePipelineRunResult = {
     RecordProcessID: 'RP-1',
     Pin: null,
-    ParameterFidelity: null,
     Attempted: 5,
     Upserted: 0,
     Unchanged: 0,

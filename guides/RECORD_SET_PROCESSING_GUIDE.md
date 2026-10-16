@@ -315,7 +315,7 @@ graph LR
   (`Processed / Success / Error / Skipped`), the `DryRun` flag, the resume cursor (`LastProcessedOffset` /
   `LastProcessedKey`), and `CancellationRequested`.
 - For a Feature Pipeline (every `Infer` Record Process), `ResultSummary` holds the `FeaturePipelineRunResult` JSON:
-  the pin and `ParameterFidelity` the run used and the tallies `Attempted`, `Upserted`, `Unchanged`, `Previewed`,
+  the pin the run used and the tallies `Attempted`, `Upserted`, `Unchanged`, `Previewed`,
   `RejectedInvalid`, `BelowConfidence`, `Failed`, `Skipped`, `HumanValuesPreserved`. **A Feature Pipeline run with any
   failed or rejected record ends `Failed`**; other work types keep their status rules.
 - Each **detail** is one terminal record outcome plus its `ResultPayload` (for FieldRules, the field diff that

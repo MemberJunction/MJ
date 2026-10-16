@@ -103,8 +103,6 @@ export interface EscalatedAnswer {
     PipelineName: string;
     /** The reasoning of the history row that links the superseded decision's prompt run to the process run. */
     SupersededNote: string;
-    /** The target's model call: its configured versus sent parameters (none when its answer was cached). */
-    ParameterFidelity?: RecordResult['ParameterFidelity'];
 }
 
 /** Why an escalation failed. The message carries both reasons: why the record escalated, and why that failed. */
@@ -113,8 +111,6 @@ export interface EscalationFailure {
     ErrorMessage: string;
     /** The target's failed `MJ: AI Prompt Runs` row, when there is one. */
     AIPromptRunID?: string;
-    /** The target's model call parameters, when it made one (a refusal among them). */
-    ParameterFidelity?: RecordResult['ParameterFidelity'];
 }
 
 /** The outcome of escalating one record. Narrow it with `'ErrorMessage' in outcome`. */
@@ -332,7 +328,6 @@ export class FeaturePipelineEscalator {
                     result?.ErrorMessage ?? 'it returned no result'
                 ),
                 AIPromptRunID: result?.AIPromptRunID,
-                ParameterFidelity: result?.ParameterFidelity,
             };
         }
         const key = target.Processor.FeatureValueKeyOf(request.Record.RecordID);
@@ -345,7 +340,6 @@ export class FeaturePipelineEscalator {
                     'it returned no Feature Value key (pin and input hash) for the record'
                 ),
                 AIPromptRunID: result.AIPromptRunID,
-                ParameterFidelity: result.ParameterFidelity,
             };
         }
         return {
@@ -362,7 +356,6 @@ export class FeaturePipelineEscalator {
             EscalationReason: this.escalationReason(request.BelowFloor),
             PipelineName: target.Name,
             SupersededNote: BuildSupersededDecisionNote(target.Name, this.settings.BelowConfidence, request.BelowFloor),
-            ParameterFidelity: result.ParameterFidelity,
         };
     }
 }

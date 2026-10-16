@@ -10,7 +10,6 @@ import {
 } from '@memberjunction/core-entities';
 import { AIEngine } from '@memberjunction/aiengine';
 import type { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
-import type { ParameterFidelity } from '@memberjunction/ai';
 import type { AIDecisionRunner, AIDecisionRunResult } from '@memberjunction/ai-prompts';
 import type { RecordProcessorContext, RecordRef, RecordResult } from '@memberjunction/record-set-processor-base';
 import {
@@ -462,16 +461,6 @@ describe('Decision pipeline escalation', () => {
             expect(answersFor('r1')[0].outputs[0].reasoning).toContain('IsVIP none');
         });
 
-        it('records the LLM call\'s parameter fidelity on the escalated record', async () => {
-            const sent: ParameterFidelity = { Status: 'sent-unchanged', Sent: { VendorModelName: 'gemini-3.1-flash-lite', Temperature: 0, MaxTokens: null, Seed: 42 } };
-            decisionAnswers.set('r1', BELOW_FLOOR);
-            llmResults.set('r1', { Success: true, RawResult: { seniority: 'Executive', isVip: true }, AIPromptRunID: 'LLM-RUN-r1', ParameterFidelity: sent });
-            const result = await new InferProcessor(DECISION_PROMPT.ID, undefined, decisionSpec(), null).ProcessRecord(makeRecord('r1'), context);
-
-            expect(result.Status).toBe('Succeeded');
-            expect(result.ParameterFidelity).toEqual(sent);
-        });
-
         it('lists every output below the floor or without a finite confidence', () => {
             const escalator = new FeaturePipelineEscalator({ PipelineID: LLM_PIPELINE_ID, BelowConfidence: 0.7 }, outputs(), () => {
                 throw new Error('not built in this test');
@@ -533,17 +522,6 @@ describe('Decision pipeline escalation', () => {
             expect(result.ErrorMessage).toContain('Decision confidence below 0.7 (IsVIP 0.4)');
             expect(result.ErrorMessage).toContain("Constraint violation for 'Seniority'");
             expect(historyCalls).toEqual([]);
-        });
-
-        it('keeps the LLM call\'s refused parameter fidelity on the failed record', async () => {
-            const configured = { VendorModelName: 'gemini-3.1-flash-lite', Temperature: 0, MaxTokens: null, Seed: 42 };
-            const refused: Extract<ParameterFidelity, { Status: 'refused' }> = { Status: 'refused', Configured: configured, WouldSend: { ...configured, Seed: null } };
-            decisionAnswers.set('r1', BELOW_FLOOR);
-            llmResults.set('r1', { Success: false, ErrorMessage: 'refused', AIPromptRunID: 'LLM-RUN-FAILED', ParameterFidelity: refused });
-            const result = await new InferProcessor(DECISION_PROMPT.ID, undefined, decisionSpec(), null).ProcessRecord(makeRecord('r1'), context);
-
-            expect(result.Status).toBe('Failed');
-            expect(result.ParameterFidelity).toEqual(refused);
         });
 
         it('fails the record when the LLM driver throws', async () => {

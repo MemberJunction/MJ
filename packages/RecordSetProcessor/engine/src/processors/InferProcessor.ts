@@ -526,7 +526,6 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
                     Status: 'Failed',
                     ErrorMessage: computed.ErrorMessage,
                     AIPromptRunID: computed.AIPromptRunID,
-                    ParameterFidelity: computed.ParameterFidelity,
                 },
             };
         }
@@ -568,7 +567,6 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
                 FailureKind: 'RejectedInvalid',
                 ErrorMessage: validationOutcome.errorMessage ?? 'Constraint violation',
                 AIPromptRunID: aiPromptRunID,
-                ParameterFidelity: computed.ParameterFidelity,
             };
         }
 
@@ -618,7 +616,6 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
             AIPromptRunID: aiPromptRunID,
             PromptVersionHash: promptVersionHash,
             FeatureValueCacheID: featureValueCacheID,
-            ParameterFidelity: computed.ParameterFidelity,
             ...(annotations.OutputConfidence ? { Confidence: annotations.OutputConfidence } : {}),
             ...(warnings.length > 0 ? { Warnings: warnings } : {}),
         }, {
@@ -1071,13 +1068,13 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
             return { Result: { Status: 'Failed', ErrorMessage: message, AIPromptRunID: decisionRunID } };
         }
         if ('ErrorMessage' in outcome) {
-            return { Result: { Status: 'Failed', ErrorMessage: outcome.ErrorMessage, AIPromptRunID: outcome.AIPromptRunID || decisionRunID, ParameterFidelity: outcome.ParameterFidelity } };
+            return { Result: { Status: 'Failed', ErrorMessage: outcome.ErrorMessage, AIPromptRunID: outcome.AIPromptRunID || decisionRunID } };
         }
         const checked = await this.validateOutputs(this.spec?.Outputs ?? [], this.projectEscalatedPayload(outcome), record, context);
         if (!checked.valid) {
             const reason = `its answer is outside this Decision pipeline's own constraints: ${checked.errorMessage ?? 'Constraint violation'}`;
             const message = DescribeEscalationFailure(outcome.EscalationReason, outcome.PipelineName, reason);
-            return { Result: { Status: 'Failed', FailureKind: 'RejectedInvalid', ErrorMessage: message, AIPromptRunID: outcome.AIPromptRunID || decisionRunID, ParameterFidelity: outcome.ParameterFidelity } };
+            return { Result: { Status: 'Failed', FailureKind: 'RejectedInvalid', ErrorMessage: message, AIPromptRunID: outcome.AIPromptRunID || decisionRunID } };
         }
         // The escalated answer is recorded under this pipeline's outputs, so it is held to their confidence floors too
         const payload = this.ApplyConfidenceFloors(checked.payload);
@@ -1085,7 +1082,7 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
             await this.recordSupersededDecision(sample, decision, outcome, context, run);
         } catch (e) {
             const message = this.FeatureValueWriteFailure(e, record);
-            return { Result: { Status: 'Failed', ErrorMessage: message, AIPromptRunID: outcome.AIPromptRunID || decisionRunID, ParameterFidelity: outcome.ParameterFidelity } };
+            return { Result: { Status: 'Failed', ErrorMessage: message, AIPromptRunID: outcome.AIPromptRunID || decisionRunID } };
         }
         // The answer is keyed under the target's pin and its input hash: the target computed it
         const featureValues: GroupFeatureValues = {
@@ -1106,7 +1103,6 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
             AIPromptRunID: outcome.AIPromptRunID,
             PromptVersionHash: outcome.PromptVersionHash,
             FeatureValueCacheID: outcome.FeatureValueCacheID,
-            ParameterFidelity: outcome.ParameterFidelity,
         }, { ...featureValues, Record: record });
         return { Result: result, FeatureValues: result.Status === 'Succeeded' ? featureValues : undefined };
     }

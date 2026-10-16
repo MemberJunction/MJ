@@ -5,7 +5,6 @@
  * @module @memberjunction/record-set-processor-base
  */
 
-import type { ParameterFidelity } from '@memberjunction/ai';
 import type { FieldChange } from '@memberjunction/global';
 
 /** A reference to a single record to be processed. */
@@ -103,8 +102,6 @@ export interface RecordResult {
     HumanValuesPreserved?: number;
     /** Feature Pipelines: the pin the record was computed under; the run result reports it. */
     PipelinePin?: FeaturePipelineRunPin;
-    /** Feature Pipelines: whether the record's model call sent the configured parameters (a refusal on any record is the run's). */
-    ParameterFidelity?: ParameterFidelity;
 }
 
 /** The pin a Feature Pipeline run computed under: its pipeline version and the Feature Value key hashes. */
@@ -120,8 +117,6 @@ export interface FeaturePipelineRunResult {
     RecordProcessID: string;
     /** The run's pin: the first record's, else the processor's run-level pin (a run whose records were all skipped). */
     Pin: FeaturePipelineRunPin | null;
-    /** A refused fidelity when any record had one, else the first record's; null when no record reported one. */
-    ParameterFidelity: ParameterFidelity | null;
     /** Records the run handed to the processor: every processed record except those skipped on their watermark. */
     Attempted: number;
     Upserted: number;

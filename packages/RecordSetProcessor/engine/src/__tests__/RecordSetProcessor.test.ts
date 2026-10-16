@@ -317,7 +317,7 @@ describe('RecordSetProcessor.Process', () => {
             expect(result.Status).toBe('Failed');
             expect(result.ErrorMessage).toBe('1 of 10 attempted records failed (1 rejected by output constraints)');
             expect(tracker.completed?.FeaturePipeline).toEqual({
-                RecordProcessID: 'RP-1', Pin: PIN, ParameterFidelity: null, Attempted: 10, Upserted: 8, Unchanged: 1, Previewed: 0,
+                RecordProcessID: 'RP-1', Pin: PIN, Attempted: 10, Upserted: 8, Unchanged: 1, Previewed: 0,
                 RejectedInvalid: 1, BelowConfidence: 0, Failed: 0, Skipped: 0, HumanValuesPreserved: 1, Status: 'failed',
             });
         });
@@ -344,16 +344,6 @@ describe('RecordSetProcessor.Process', () => {
             const result = await engine.Process({ source: new ArraySource(recs(10), 'E'), processor, tracker, contextUser: USER, provider: PROVIDER, batchSize: 10 });
             expect(result.Status).toBe('Completed');
             expect(tracker.completed?.FeaturePipeline).toBeUndefined();
-        });
-
-        it('reports a refused parameter fidelity when any record had one', async () => {
-            const sent = { Status: 'sent-unchanged' as const, Sent: { VendorModelName: 'm', Temperature: 0, MaxTokens: null, Seed: 42 } };
-            const refused = { Status: 'refused' as const, Configured: sent.Sent, WouldSend: { ...sent.Sent, Seed: null } };
-            const tracker = new SpyTracker();
-            const processor = new FunctionRecordProcessor((r) => ({ Status: 'Succeeded', Outcome: 'Upserted', ParameterFidelity: r.RecordID === 'r1' ? refused : sent }));
-            await engine.Process({ source: new ArraySource(recs(3), 'E'), processor, tracker, contextUser: USER, provider: PROVIDER,
-                batchSize: 3, FeaturePipeline: true, recordProcessID: 'RP-1' });
-            expect(tracker.completed?.FeaturePipeline?.ParameterFidelity).toEqual(refused);
         });
 
         it('refuses a Feature Pipeline run without a recordProcessID', async () => {

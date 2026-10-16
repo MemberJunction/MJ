@@ -7,7 +7,7 @@
  */
 
 import { RegisterClass } from '@memberjunction/global';
-import { ChatMessageRole, ParameterFidelityError, type ParameterFidelity } from '@memberjunction/ai';
+import { ChatMessageRole } from '@memberjunction/ai';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { AIPromptParams, type AIPromptRunResult } from '@memberjunction/ai-core-plus';
 import { LLM_FEATURE_PIPELINE_CAPABILITIES, type FeaturePipelineDriverCapabilities } from '@memberjunction/feature-pipelines';
@@ -45,12 +45,10 @@ export class LLMFeaturePipelineDriver extends BaseFeaturePipelineDriver {
 
         const aiPromptRunID = result.promptRun?.ID;
         if (!result.success) {
-            const refused = LLMFeaturePipelineDriver.RefusedFidelity(result);
             return {
                 Success: false,
                 ErrorMessage: result.errorMessage ?? 'AI prompt execution failed',
                 AIPromptRunID: aiPromptRunID,
-                ...(refused ? { ParameterFidelity: refused } : {}),
             };
         }
 
@@ -64,16 +62,7 @@ export class LLMFeaturePipelineDriver extends BaseFeaturePipelineDriver {
             }
         }
 
-        return { Success: true, RawResult: rawResult, AIPromptRunID: aiPromptRunID, ParameterFidelity: result.chatResult?.parameterFidelity };
-    }
-
-    /**
-     * The refused parameters of a prompt that failed because its driver would not send the configured ones: the
-     * runner keeps the driver's `ParameterFidelityError` on `chatResult.exception`. Undefined for any other failure.
-     */
-    protected static RefusedFidelity(result: AIPromptRunResult): Extract<ParameterFidelity, { Status: 'refused' }> | undefined {
-        const exception = result.chatResult?.exception;
-        return exception instanceof ParameterFidelityError ? exception.Fidelity : undefined;
+        return { Success: true, RawResult: rawResult, AIPromptRunID: aiPromptRunID };
     }
 
     /**
@@ -109,8 +98,6 @@ export class LLMFeaturePipelineDriver extends BaseFeaturePipelineDriver {
             params.conversationMessages = [{ role: ChatMessageRole.user, content: userMessage }];
         }
         params.contextUser = context.contextUser;
-        // A Feature Value is keyed on the pipeline's pinned parameters, so a call that would send others is refused
-        params.strictParameters = true;
         // The template is a prompt for a model, not HTML: a title such as "Affineur & Owner" must reach it unescaped
         params.templateAutoescape = false;
         return params;
