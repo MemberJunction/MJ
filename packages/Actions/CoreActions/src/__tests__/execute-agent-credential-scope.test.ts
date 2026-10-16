@@ -42,7 +42,7 @@ describe('Execute Agent credential scope', () => {
     });
 
     it("forwards the calling run's CredentialScope to the nested RunAgent", async () => {
-        h.runAgentMock.mockResolvedValue({ success: true, payload: { done: true }, agentRun: { ID: 'RUN-1', Message: 'done' } });
+        h.runAgentMock.mockResolvedValue({ success: true, payload: { done: true }, agentRun: { GetAll: () => ({ ID: 'RUN-1', Message: 'done' }) } });
         const action = new ExecuteAgentAction() as unknown as Runnable;
 
         const r = await action.InternalRunAction({

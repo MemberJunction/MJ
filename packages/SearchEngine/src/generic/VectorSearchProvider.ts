@@ -657,9 +657,13 @@ export class VectorSearchProvider extends BaseSearchProvider {
 
             const rawScore = match.score ?? 0;
 
+            const entityInfo = this.Provider.EntityByName(entityName);
+            const entityDisplayName = entityInfo?.DisplayName || entityName;
+
             return {
                 ID: recordID,
                 EntityName: entityName,
+                EntityDisplayName: entityDisplayName,
                 RecordID: recordID,
                 SourceType: 'vector',
                 ResultType: 'entity-record' as SearchResultType,

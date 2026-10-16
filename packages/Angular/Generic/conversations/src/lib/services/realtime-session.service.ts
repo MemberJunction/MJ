@@ -1161,9 +1161,9 @@ export class RealtimeSessionService {
       this.currentTurnStartMs = recorder.IsRecording ? 0 : null;
       this.turnAudioStartCaptured = false;
       if (this.recorder) {
-        // The agent's WebRTC audio track usually lands AFTER Connect() resolves, so `remoteStream`
-        // above is typically null and we'd capture mic-only. Attach the agent stream whenever it
-        // arrives (fires immediately if already present) so the recording includes the agent voice.
+        // WebRTC drivers publish their track after Connect; PCM drivers publish their playout
+        // stream during Connect. The immediate callback may repeat the stream passed to Start;
+        // AttachRemoteStream is idempotent so the agent is mixed only once.
         client.OnRemoteMediaStream?.((stream) => this.recorder?.AttachRemoteStream(stream));
         this.startSegmentFlushing();
       }
