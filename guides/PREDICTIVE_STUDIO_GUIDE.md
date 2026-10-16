@@ -17,7 +17,7 @@ It is **core MJ, not an OpenApp**. It composes on substrates MJ already has — 
 | **What it is *not*** | SageMaker / Databricks. No GPU. No training embeddings from scratch (it *uses* pre-trained embeddings as features). Deliberately rigid about algorithms (a fixed 6-catalog), flexible about data. |
 | **Compute** | **CPU-bound, no GPU.** Gradient boosting / logistic / random forest / small MLP on tabular data train in seconds-to-minutes — matches MJ's API-runtime infra. |
 | **Invocation** | **6 typed Remote Operations** (`predictive:execute` scope) + **4 Actions**, both delegating to one shared engine layer. The browser, Skip, and the agent all call the same code. |
-| **Status** | **End-to-end shipped** — sidecar, FeatureAssembly, training, scoring, the experiment orchestrator, the 6 Remote Ops + 4 Actions, Feature Pipelines, the Model Development Agent + artifact + viewer, maintenance/retrain, multimodal vision-as-feature, the Studio UI, and a live integration test. Planned: prediction serving through Feature Values and a materialized entity, so a new model needs no schema change (see [Roadmap](#17-roadmap--future-phases)). |
+| **Status** | **End-to-end shipped** — sidecar, FeatureAssembly, training, scoring, the experiment orchestrator, the 6 Remote Ops + 4 Actions, Feature Pipelines, the Model Development Agent + artifact + viewer, maintenance/retrain, multimodal vision-as-feature, the Studio UI, and a live integration test. The one explicitly-deferred item is **SP5 materialized prediction columns**, gated on PR #2770 (see [Roadmap](#17-roadmap--future-phases)). |
 
 **Proof it works — real numbers from the live integration test** (`live-train-score.integration.test.ts`, real managed sidecar, 420-row synthetic dataset with a genuinely learnable signal, no DB):
 
@@ -97,7 +97,7 @@ flowchart TB
     end
     subgraph INFER["4 · Inference layer"]
         RSP["Record Set Processing<br/>MLModelInferenceProcessor ('ML Model' work type)"]
-        MAT["Materialized Results · #2770 (shipped in MJ)<br/>not yet used by Predictive Studio"]
+        MAT["Materialization · #2770 (deferred)<br/>physical prediction columns"]
     end
     DATA --> FEAT
     FP -->|persist features| E
@@ -105,7 +105,7 @@ flowchart TB
     TRAIN <-->|"/train · /predict"| SIDE
     TRAIN --> MM
     MM --> RSP
-    MM -.planned.-> MAT
+    MM -.deferred.-> MAT
     RSP -->|optional write-back| E
     AGENT["Model Development Agent<br/>Remote Ops + Actions"] -.drives.-> FEAT & MODEL & INFER
     style FEAT fill:#ecfeff,stroke:#0891b2
@@ -119,7 +119,7 @@ The differentiation is **data assembly + agentic search over MJ's entire data su
 | **1 · Data** (existing) | Entities, `MJ: Queries`, external entities (#2449), vectors, DBAutoDoc — all become feed-ins via `RunView`/`RunQuery` | — |
 | **2 · Feature** | `FeatureAssemblyExecutor` (the single correctness backbone) + Feature Pipelines (persisted derived features) | §4, §11 |
 | **3 · Model** | `MLSidecar` + `TrainingEngine` → immutable versioned `MJ: ML Models` | §2, §5 |
-| **4 · Inference** | `MLModelInferenceProcessor` (RSP work type); population-wide querying of predictions is planned through Feature Values and a materialized entity (§6.5, §17) | §6, §17 |
+| **4 · Inference** | `MLModelInferenceProcessor` (RSP work type); population-wide indexed columns are deferred to #2770 | §6, §17 |
 
 ---
 
@@ -414,20 +414,20 @@ The processor **warm-loads the model once** and shares it across the batch (an i
 
 ### 6.4 Single, batch, on-demand, scheduled
 
-The sidecar doesn't care about cardinality — single-record serves interactive/agent needs, batch serves bulk. **On-demand** = `RecordProcess.RunNow` + a runtime scope override (records/view/list/filter/single). **Scheduled** = the `Schedule` trigger, with an `MJ: ML Model Scoring Binding` (`upsertScoringBinding`) recording lineage (`LastScoredAt` / `LastRowCount`) for staleness detection and retraining (§14). Population-wide querying of predictions through a materialized entity is planned (§17); scoring + write-back ship with **zero dependency** on it.
+The sidecar doesn't care about cardinality — single-record serves interactive/agent needs, batch serves bulk. **On-demand** = `RecordProcess.RunNow` + a runtime scope override (records/view/list/filter/single). **Scheduled** = the `Schedule` trigger, with an `MJ: ML Model Scoring Binding` (`upsertScoringBinding`) recording lineage (`LastScoredAt` / `LastRowCount`) for staleness detection and retraining (§14). **Materialized** prediction columns (population-wide, indexed) are the *deferred* later optimization gated on #2770 (§17); scoring + write-back ship with **zero dependency** on it.
 
 ### 6.5 Where predictions go — the four storage paths
 
-These are **four distinct, orthogonal** things. Today predictions are stored through paths A–C. Paths A and C need a column or an entity in your schema for each model, so adding a model means a schema change. MJ's Materialized Results (#2770, path D) has shipped, but Predictive Studio does not use it yet. **Planned:** predictions become effective-dated Feature Values with model and run lineage, shown by one generic record panel and queryable through one materialized entity, with no schema change per model (§17).
+These are **four distinct, orthogonal** things. The common confusion is to assume column write-back needs materialization (#2770), or that "Materialized Results" is an ML run-history store — **neither is true.** All "store a prediction" needs are met by paths A–C **today**; #2770 (D) is an optional future *auto-refresh* optimization, nothing more.
 
 | | Path | What it is | Status | When to use |
 |---|---|---|---|---|
 | **A** | **Column write-back** — `OutputMapping.fields` | Writes the prediction into a real column on the **target entity**, **overwritten each run** (the *current* value). `fields` is a map, so one run can write several columns. | ✅ shipped | "Put each member's latest renewal probability on the member record." e.g. `{ "RenewalProbability": "$.score", "LastScoredAt": "$.scoredAt" }` |
 | **B** | **`MJ: Process Run Details`** | Automatic per-record **transactional history** — every scoring run writes one detail row per record carrying the full prediction `ResultPayload` (score/class/scoredAt/lineage), `RecordID`, `Status`, `CompletedAt`. No config. | ✅ shipped (automatic) | Audit / replay / "what did the model say for this member on each run" — for free, even with no `OutputMapping`. |
 | **C** | **`OutputMapping.childRecord`** — typed time-series | Creates a **child record per scored record per run** in an entity *you* define (e.g. `Member Renewal Scores` with `MemberID` + `Probability` + `ScoredAt`). A clean, queryable, append-only history of your own shape. | ✅ shipped | "Keep a typed history table / time-series of scores" (cleaner than the generic JSON in path B). |
-| **D** | **#2770 Materialized Results** | A **generic** MJ capability: a stored query (or an entity's base view) is materialized by CodeGen into a read-only virtual entity backed by a snapshot table, refreshed by the "Materialization Refresh" scheduled job and read with `DataSource: 'Materialized'`. **Not ML-specific, not run history.** | ✅ shipped in MJ · not yet used by Predictive Studio (the `'Materialized'` binding mode and `MaterializedResultID` are unused) | Planned: one population-wide entity holding the latest prediction per record and feature (§17). |
+| **D** | **#2770 Materialized Results** | A **generic**, not-yet-built primitive for materializing *any query/entity result set* as a cached, auto-refreshed physical table. **Not ML-specific, not run history.** ML can later ride it for population-wide *indexed* prediction columns. | ⏳ deferred (design-doc; gated on PR #2770) | A *future* optimization for indexed, population-wide querying — **never required** to store predictions. |
 
-> **#2770 is NOT "ML Model Run Results."** It's generic view/entity-materialization infrastructure. Per-run prediction history already lives in path B (`MJ: Process Run Details`) and, if you want a typed table, path C (`childRecord`). Writing a prediction into an entity column (path A) is a plain MJ column write — it needs nothing from #2770.
+> **#2770 is NOT "ML Model Run Results."** It's view/entity-materialization infrastructure that ML could *optionally* use later. Per-run prediction history already lives in path B (`MJ: Process Run Details`) and, if you want a typed table, path C (`childRecord`). Writing a prediction into an entity column (path A) is a plain MJ column write — it needs nothing from #2770.
 
 ### 6.x "Needs training" and opt-in auto-train
 
@@ -634,127 +634,53 @@ flowchart LR
 
 ### Feature Value key and versions
 
-A Feature Pipeline's output is only worth reading if a value can be traced to exactly what produced it and re-running
-the same inputs gives the same row. Feature Values are therefore **upserted on a key**, and every run is bound to a
-registered **pipeline version**.
+**The key.** A `MJ: Feature Values` row is upserted on its key: the record, the feature name, the pipeline version, the
+prompt version hash (template text, outputs, constraint block, pipeline type, escalation settings), the primary AI
+model, the parameters hash and the input hash. `ValueKeyHash` (SHA-256 of the key) is unique per pipeline. A re-run
+with the same key leaves the row `Unchanged`; a changed value updates it; a changed key is a new row. The latest value
+of a feature for a record is the row with the newest `ComputedAt`.
 
-**The key.** One `MJ: Feature Values` row is identified by the record, the feature (output) name, the pipeline version,
-the prompt version hash, the primary AI model, the parameters hash and the input hash. `ValueKeyHash` is the SHA-256 of
-that key (UUIDs normalised by case, feature name case-insensitive) and is **unique per pipeline**. The prompt version
-hash covers the template text, outputs, constraint block, pipeline type and escalation settings; the parameters hash
-covers the prompt's inference parameters and the primary prompt model's `ModelParameters`; the input hash is the
-record's normalised inputs (the Dedup Cache key). Change any of them and the value is a new row under a new key; leave
-them unchanged and a re-run finds the existing row.
+**Human values.** `Source` is `Pipeline` or `Human` (a value a person entered on the target record). Write-back never
+overwrites a `Human` value unless the run sets `overwriteHumanValues`; `HumanValuesPreserved` counts the ones it kept.
 
-**Upsert semantics.** A run looks the key up before it writes: an existing value that is unchanged is counted
-`Unchanged` and not re-saved; a changed value updates the row; the Dedup Cache refreshes an expired entry in place
-and normalises keys, and edits to the prompt template apply on the next run without restarting the server. The
-latest value of a feature for a record is the row with the newest `ComputedAt`.
+**Versions.** Each distinct pin (prompt version hash, primary model, parameters hash, spec hash) is the next numbered
+`MJ: Feature Pipeline Versions` row: Candidate, Active, Retired or Refused.
 
-**`Source` and human values.** `Source` is `Pipeline` (computed) or `Human` (a value a person entered on the target
-record, recorded when write-back found it and left it in place). Write-back never overwrites a `Human` value unless
-the run sets `overwriteHumanValues` (an input of the Record Process run-now operation); such a run skips no record on
-its watermark, since an unchanged record still holds the human values it must overwrite. The run's
-`HumanValuesPreserved` tally counts the ones it left alone.
+- Without an `Activation` block, an on-demand or manual run activates a changed pin; a scheduled or on-change run of a
+  changed pipeline is refused until then, so a prompt edit never silently changes what an unattended job writes.
+- With `Activation` (`GoldenSetTestID`, `Metric: 'accuracy'`, `Threshold`), a version runs only when its golden-set
+  result meets the threshold; a failing result marks it Refused. Dry runs report this (`WouldRefuse`) and never
+  register or activate.
+- The **Feature Pipeline Version Steward** scheduled job (shipped Active, every 15 minutes) evaluates a gated
+  pipeline's unevaluated version and runs the one backfill of a changed version (the records whose latest value is
+  under another version or none), recording each decision in the job run's `Details.Outcomes`. A pipeline opts out
+  per step with `Unattended: { AutoEvaluate: false }` / `{ AutoBackfill: false }`.
 
-**`MJ: Feature Pipeline Versions`.** Each distinct pin (prompt version hash, primary model, parameters hash, spec
-hash) is registered as the next numbered version of its pipeline, with a `Status` of Candidate, Active, Retired or
-Refused. Rules:
+**Golden sets.** A `Feature Pipeline Golden Set` test scores a pipeline's answers against labelled cases. Model-made
+labels carry a stored **label-quality record**: two labelers from two vendors label every case under the same guide,
+each must agree with the existing labels at a Wilson 95% lower bound of at least 0.70, one adjudicates the other's
+disagreements, and at most 5 of 52 cases may be excluded. The record is tied to the cases by hash, and the driver
+refuses a set that fails it before any model call. A case marked `Required: true` that is answered wrong fails the set
+whatever its accuracy (gate value 0, the cases listed in `RequiredFailures`). A case can expect an abstention for some
+outputs (`ExpectAbstain`). `LabelSource: "specification"` cases (prompt-injection attempts, non-titles) are fixed by
+the guide's rule rather than labelled, must be `Required`, and stay outside the label-quality record.
 
-- A pipeline **without** an `Activation` block (ungated): a changed pin becomes a Candidate; an **on-demand or manual
-  run activates it** (and retires the previous Active version); a **scheduled or on-change run of a changed pipeline
-  is refused** until that happens, so a prompt edit never silently changes what an unattended job writes.
-- A pipeline **with** `Activation` (`GoldenSetTestID`, `Metric`, `Threshold`): a version runs only when its
-  golden-set result meets the threshold. Passing the golden-set test activates the version; failing it marks the
-  version Refused, and the refusal stands until the pin or the Activation settings change. Dry runs only report
-  this (`WouldRefuse`); they never register or activate.
-- **On-demand backfill.** When a version changes, values already written under the old version are stale. The
-  records whose latest value is under another version (or has no version: rows written before versions existed) are
-  re-derived once, and the version is stamped `BackfilledAt`. Re-activating an older version re-derives from the cache
-  at no model cost; the latest value by `ComputedAt` decides which records need work.
+**Output constraints.** A `lookup` constraint reads its entity's rows (`DisplayFields`, `Filter`) and renders them into
+the prompt as the taxonomy; `ItemRef` checks an array output item by item. A violating answer is `RejectedInvalid`,
+nothing is written for it, and the run ends `Failed`.
 
-**The Feature Pipeline Version Steward.** The scheduled job **"Feature Pipeline Version Steward"** (shipped Active,
-every 15 minutes) does that evaluation and backfill **without a person**: for every Active `Infer` Record Process it
-runs the golden-set evaluation of a gated pipeline's unevaluated version, then the one backfill of a changed version,
-under the pipeline's version lock. Each decision (`evaluated`, `backfilled`, `held`, `refused`, `error`, `none`) is
-stored in the job run's `Details.Outcomes`. A threshold change re-evaluates; a failed backfill is marked when every
-named record was attempted, so it is not retried every 15 minutes with spend. A pipeline opts out per step with
-`Unattended: { AutoEvaluate: false }` and/or `{ AutoBackfill: false }`, in which case the steward reports `held` and
-the step waits for a person (`mj test run` of the golden set; an on-demand run).
+**Confidence floors.** An output can declare `MinConfidence` with `OnLowConfidence: 'null'` (an LLM pipeline also
+needs `ConfidenceRef`). Below the floor the output is withheld: its Feature Value records the abstention with no value,
+write-back clears a value the pipeline wrote and keeps a person's, and the result lists it in `BelowConfidenceOutputs`.
+The floor is part of the spec hash, so changing it is a new version.
 
-**The golden set's label quality.** A golden-set test (`Feature Pipeline Golden Set` test type) scores a pipeline's
-answers against labelled cases. When the labels were made by models rather than a person, the set carries a stored
-**label-quality record** and the driver refuses a set that fails it, before any model call. The procedure: the existing
-labels (A) and two new labelers from two different vendors (B, C) label every case under the same written guide;
-per output, the A-B and A-C agreement must reach a Wilson 95% lower bound (default 0.70); C **adjudicates** an A-B
-disagreement; a case all three disagree on is **excluded** and listed (at most 5 of 52 by default). The record is tied
-to the cases by hash and re-checked before every evaluation, so an edited case invalidates it.
+**The record as the user turn.** An LLM pipeline that sets `Context.RecordAsUserMessage: true` sends the template as
+the system turn and the record's context fields, as one JSON object, as the user turn, so a field value cannot pose as
+an instruction.
 
-**Required and abstention cases.** A golden case can be marked `Required: true`: when any output it scores is wrong,
-the golden set fails whatever its accuracy. The stored gate value is then 0 (`ResultDetails.Score` keeps the measured
-value as `MeasuredValue` and lists the wrong cases in `RequiredFailures`), so the existing activation path refuses the
-version, and the test result carries a failed `golden-set.required` oracle naming each case and output. A case can
-also expect an **abstention** for some outputs (`ExpectAbstain: ["SeniorityLevel", "JobFunctions"]`): such an output is
-right when the pipeline withheld it below its confidence floor, answered nothing (null, an empty list), or answered one
-of the case's `Expected` labels (an explicit abstain value such as `Unknown`); a record that failed for another reason
-is not an abstention. Cases fixed by the pipeline's written rule rather than judged (prompt-injection attempts,
-non-titles) carry `LabelSource: "specification"`: no labeler labels them, and the label-quality record covers only the
-labelled cases, so adding one leaves the record valid. A specification case must be `Required` (the label-quality check
-refuses one that is not), so it can only make the gate stricter. The job-title golden set has 52 labelled cases and 6 required
-specification cases (an instruction posing as a title, a fence breakout, a fake system line, gibberish, a blank title,
-and a genuine title with an embedded instruction to ignore).
-
-**Output constraints.** Each output can declare a `Constraint`: `enum`, `lookup`, `numeric`, `money`, `date`,
-`boolean` or `freetext`, with an `OnViolation` policy. A `lookup` constraint reads its allowed rows from the named
-entity and **renders them in the prompt as the taxonomy** (a stable order, so the hash does not churn); an
-array output uses `ItemRef` to name the field of each item the constraint applies to, so it is checked item by item. A
-violating answer is reported `RejectedInvalid` (counted apart from `Failed`) and nothing is written for it; the run
-still ends `Failed` (see the Record Set Processing guide).
-
-**Confidence floors.** An output can declare `MinConfidence` (0 < floor <= 1) with `OnLowConfidence` (`null` or
-`fail`; both or neither; not on a whole-answer `$` output beside other outputs, since withholding it would drop
-theirs). Its confidence is the driver's, else the answer's at the output's `ConfidenceRef` (an LLM
-pipeline output with a floor must have one); a missing or unusable confidence is below the floor. With `null`, a
-below-floor output is **withheld**: its Feature Value records the abstention (a `Pipeline` row with no value, so the
-record counts as answered and the watermark skip does not re-run it); write-back maps its target field to null through
-the human-value guard, so a value the pipeline wrote earlier is **cleared** and a value a person entered is kept (and
-counted in `HumanValuesPreserved`) even on a run that sets `overwriteHumanValues`, which lets an answer replace a
-person's value but never lets an abstention erase it or retire its Human value; a column that does not allow null is
-left as it is (listed in `withheldKeptFields`, and still in `withheldFields`); a withheld child-target output's child
-mapping is skipped (its rows stay as they are, and a reconcile mapping deletes no stale row); the record's other
-outputs are written as usual. The
-result lists it in `BelowConfidenceOutputs`, the payload names it under `_belowConfidence` (a reserved key the model's
-answer cannot set; the Dedup Cache replays it), and a dry run's write-back preview reports the real write's decision
-for it: `withheldFields` lists every withheld field, `withheldChildEntities` every skipped child mapping, and
-`previewFieldChanges` holds a change to null only where the real write clears the value (one the pipeline wrote; not a
-person's value, a column that does not allow null, or an empty field). The Bulk Operations run dialog shows each
-withheld output as "withheld (below confidence)" beside the record's changes. With `fail`, the record fails with `FailureKind: 'BelowConfidence'` and
-nothing is cached or written. The run's `ResultSummary.BelowConfidence` counts every record a floor acted on (its
-rejections are left out of `Failed`). The floor is part of the outputs, so it is part of the spec hash and the prompt
-version hash: changing it is a new pipeline version, gated again by the golden set. A value an earlier version wrote
-from an answer that now abstains is cleared by the next run of that record, unless a person has since changed it.
-
-**The record's data as the user turn (opt-in).** An LLM pipeline that sets `Context.RecordAsUserMessage: true` (it
-needs `Context.Fields`; `ValidateSpec` refuses it on another pipeline type) sends the prompt template as the system
-turn and the record's context fields, as one JSON object (`{"CurrentJobTitle": "..."}`), as the user turn
-(`InferProcessor.BuildUserMessage`, overridable). JSON encoding fences each value: a value cannot close its string or
-add a key, whatever instruction, quote or closing tag it holds. The flag is part of the spec hash and of the prompt
-version hash (so the Dedup Cache never serves an answer read the other way). A pipeline that does
-not opt in sends exactly the messages it sent before (the template, and the runner's default user turn).
-
-**Strict vendor parameters.** A call sends the prompt's parameters as configured: Gemini, Vertex and Bedrock send
-`temperature: 0` as `0` (not as "unset"), and the OpenAI/Azure reasoning-model rule is by model family, dropping the
-parameters those models reject. The driver reports what it actually sent (`ParameterFidelity` on the result). With
-`strictParameters` (set by every Feature Pipeline call), a changed or dropped parameter is **refused**, and a refusal
-**stops the prompt**: it does not fail over to another model, because a Feature Pipeline pins its model. The run's
-`ResultSummary.ParameterFidelity` carries the refusal.
-
-**Embedding templates render raw.** Entity-document and duplicate-detection templates that feed embeddings render
-their values as written (no HTML escaping, so `&` stays `&`). Existing vectors escaped under the old rule are
-re-vectorized automatically, and Content Autotagging heals its entity documents once per document.
-
-**Planned.** PR 3 adds `EffectiveAsOf` to Feature Values and Predictive Studio reads values as of decision dates; PR 5
-makes Feature Pipelines write effective-dated values.
+**Strict vendor parameters.** Every Feature Pipeline call sets `strictParameters`: a driver that would change or drop
+the configured temperature, max tokens or seed refuses before the request, and the refusal stops the prompt without
+failover. The run's `ResultSummary.ParameterFidelity` carries it.
 
 ---
 
@@ -970,7 +896,7 @@ flowchart TB
 - `PredictiveStudioScoringStartup` (`Engine/src/scoring/startup-register.ts`) — a `@RegisterForStartup`-decorated `IStartupSink` (a `BaseSingleton`) whose `HandleStartup()` calls `registerMLScoringProcessor(buildProductionMLInferenceDeps())` **once at MJAPI boot**. It warms no `BaseEngine` cache and touches no DB — the injected seams take their `provider` + `user` per call — so the registration is a cheap synchronous map write (not `deferred`). Mirrors `RemoteBrowserEngine`'s startup pattern.
 - The **migration** `migrations/v5/V202606280215__v5.44.x__RecordProcess_WorkType_AddMLModel.sql` adds `'ML Model'` to the `CK_RecordProcess_WorkType` CHECK constraint — **drop the old constraint + add the new one** (`'Action' | 'Agent' | 'Infer' | 'FieldRules' | 'ML Model'`) **in a single migration**. The CHECK is the **source of truth**: CodeGen derives the field's value list, its `ValueListType`, and the generated TypeScript union from it, and the value validates at SAVE time (a typo'd work type is rejected up front). Work-type **resolution** still happens at execution time via `RecordProcessExecutor.buildProcessor() → RecordProcessorRegistry.Resolve()` (the registry is the pluggable seam) — the CHECK just guarantees the stored value is a known work type. To add further work types, extend the CHECK the same way + re-run `mj codegen`. *(Never hand-edit `EntityFieldValue` / `ValueListType` to do this — that metadata is CodeGen-derived from the CHECK; see [`migrations/CLAUDE.md`](../migrations/CLAUDE.md).)*
 
-**Dry-run write-back fix.** PS2-1 also hardened the substrate's write-back so a **dry-run** of any wrapped work type (Action / Agent / Infer / **ML Model**) computes its effect without mutating data. `applyOutputMapping(... dryRun: true)` (`packages/RecordSetProcessor/engine/src/writeBack.ts`) now still resolves the mapped values and validates the target entity/field metadata, but saves nothing — returning the would-be values in `previewFields` / `previewChild` (`WriteBackResult.dryRun`), and the real write's own decision in `previewFieldChanges` / `previewChildChanges` / `previewTags` (see the Record Set Processing guide's Infer dry runs). This mirrors the first-class `ProcessRun.DryRun` flag threaded through `WriteBackProcessor.ts` and `RecordProcessExecutor.ts`, and through the action's `ScoreRecordSetRequest.dryRun`.
+**Dry-run write-back fix.** PS2-1 also hardened the substrate's write-back so a **dry-run** of any wrapped work type (Action / Agent / Infer / **ML Model**) computes its effect without mutating data. `applyOutputMapping(... dryRun: true)` (`packages/RecordSetProcessor/engine/src/writeBack.ts`) now still resolves the mapped values and validates the target entity/field metadata, but saves nothing — returning the would-be values in `previewFields` / `previewChild` (`WriteBackResult.dryRun`). This mirrors the first-class `ProcessRun.DryRun` flag threaded through `WriteBackProcessor.ts` and `RecordProcessExecutor.ts`, and through the action's `ScoreRecordSetRequest.dryRun`.
 
 **Usage** — score a view and write a probability column on demand:
 
@@ -1219,11 +1145,11 @@ Both §16.3 and §16.4 read `MJ: ML Model Scoring Bindings` — so operationaliz
 
 ## 17. Roadmap / future phases
 
-Predictive Studio ships end-to-end. The planned change to how predictions are stored and served:
+Predictive Studio ships end-to-end. The one explicitly-deferred capability is honest here:
 
 | Item | Status | Detail |
 |---|---|---|
-| **Prediction serving through Feature Values** | **Planned** | Every prediction becomes an effective-dated Feature Value (`Source = 'Model'`) carrying model, scoring-run and binding lineage. A scoring binding defines the prediction feature, who may see it, how long history is kept and an optional copy into an existing column. One generic record panel shows a record's predictions and their history, and one materialized entity of the latest values (built on Materialized Results, #2770, which has shipped) makes them queryable across the population, with no schema change or CodeGen run per model. The `'Materialized'` binding mode and `MaterializedResultID` are unused placeholders that this change removes. Until it ships, use paths A–C (§6.5). |
+| **SP5 — Materialized prediction columns** | **Deferred, gated on PR #2770** | The "population-wide, indexed prediction column" optimization runs ML batch-scoring inside the offline **materialization** refresh and writes predictions as **physical columns** on a materialized `VirtualEntity` (Skip/reports/views query them like any table). It depends on PR #2770 landing the `MJ: Materialized Results` table. **The forward-compat seam is already in place**: `MJ: ML Model Scoring Bindings.MaterializedResultID` is a **soft reference** (not a FK) to that table, and the `ScoringBindingMode = 'OnDemand' \| 'Scheduled' \| 'Materialized'` already names the `Materialized` mode. On-demand + scheduled scoring (§6) ship with **zero dependency** on #2770 — when the table lands, materialization is additive. |
 
 Other open questions carried forward (none block the shipped feature): model serialization native-vs-ONNX for cross-platform portability; reserving algorithm slots (k-NN / Naive Bayes); the precise drift-detection method behind the `IDriftDetector` seam; sidecar multi-tenancy / per-session resource limits for long agentic searches; and detached fire-and-forget Remote-Op progress (poll-via-status today, full background execution later).
 
@@ -1330,7 +1256,7 @@ It exercises the real `FeatureAssemblyExecutor`, `TrainingEngine`, `MLSidecar` (
 | Studio dashboard UI (6 panels, engine, embedded copilot, lazy-load) | ✅ built |
 | **Business-user experience** (§16) — agent offers + schedules monthly · generic `'*'` risk-card panel · Models-in-Production section · de-mocked Studio + ops wired · scoring-binding lineage · WorkType value-list + Enrichment-over-GraphQL | ✅ built |
 | Live integration test (`PS_INTEGRATION=1`) | ✅ built |
-| Prediction serving through Feature Values + a materialized entity (#2770 itself has shipped) | ⏳ **planned** (§17) |
+| Materialized prediction columns (#2770) | ⏳ **deferred — gated on PR #2770** (§17) |
 
 **Related guides**: [Record Set Processing](RECORD_SET_PROCESSING_GUIDE.md) (the scoring + wave + feature-pipeline substrate) · [Remote Operations](REMOTE_OPERATIONS_GUIDE.md) & [Transport-Layer Architecture](TRANSPORT_LAYER_ARCHITECTURE_GUIDE.md) (the invocation surface) · [Dashboard Best Practices](DASHBOARD_BEST_PRACTICES.md) & [Lazy Loading](LAZY_LOADING_GUIDE.md) (the Studio UI) · [Conversations UX Stack](CONVERSATIONS_UX_STACK_GUIDE.md) (the embedded copilot) · [Agent Memory](AGENT_MEMORY_GUIDE.md) (the Model Dev Agent's notes).
 

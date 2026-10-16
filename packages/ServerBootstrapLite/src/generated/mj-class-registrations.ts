@@ -21,6 +21,12 @@ import {
     AssemblyAIRealtime,
 } from '@memberjunction/ai-assemblyai';
 
+// @memberjunction/ai-azure (2 classes)
+import {
+    AzureEmbedding,
+    AzureLLM,
+} from '@memberjunction/ai-azure';
+
 // @memberjunction/ai-bedrock (2 classes)
 import {
     BedrockEmbedding,
@@ -125,12 +131,6 @@ import {
     OpenAILiveRealtime,
     OpenAIRealtime,
 } from '@memberjunction/ai-openai';
-
-// @memberjunction/ai-azure (2 classes)
-import {
-    AzureEmbedding,
-    AzureLLM,
-} from '@memberjunction/ai-azure';
 
 // @memberjunction/ai-deepinfra (1 classes)
 import {
@@ -1422,6 +1422,8 @@ import {
 const CLASS_REGISTRATIONS_0: any[] = [
     AnthropicLLM,
     AssemblyAIRealtime,
+    AzureEmbedding,
+    AzureLLM,
     BedrockEmbedding,
     BedrockLLM,
     BettyLLM,
@@ -1455,8 +1457,6 @@ const CLASS_REGISTRATIONS_0: any[] = [
     OpenAILLM,
     OpenAILiveRealtime,
     OpenAIRealtime,
-    AzureEmbedding,
-    AzureLLM,
     DeepInfraLLM,
     InceptionDecision,
     InceptionLLM,
@@ -2538,6 +2538,7 @@ export const CLASS_REGISTRATIONS_COUNT = 1076;
 export const CLASS_REGISTRATIONS_PACKAGES = [
     '@memberjunction/ai-anthropic',
     '@memberjunction/ai-assemblyai',
+    '@memberjunction/ai-azure',
     '@memberjunction/ai-bedrock',
     '@memberjunction/ai-betty',
     '@memberjunction/ai-betty-bot',
@@ -2556,7 +2557,6 @@ export const CLASS_REGISTRATIONS_PACKAGES = [
     '@memberjunction/ai-mistral',
     '@memberjunction/ai-ollama',
     '@memberjunction/ai-openai',
-    '@memberjunction/ai-azure',
     '@memberjunction/ai-deepinfra',
     '@memberjunction/ai-inception',
     '@memberjunction/ai-llamacpp',

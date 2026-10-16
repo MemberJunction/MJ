@@ -13,7 +13,7 @@ import { KnowledgeHubMetadataEngine } from '@memberjunction/core-entities';
 import type { MJAIModelEntity, MJFeaturePipelineVersionEntity, MJFeatureValueCacheEntity, MJRecordProcessEntity } from '@memberjunction/core-entities';
 import type { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
-import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, ExcludeByUUIDs, UUIDsEqual } from '@memberjunction/global';
 import type { DataFeatureSpec } from '@memberjunction/feature-pipelines';
 import { InferProcessor, RecordSetProcessor } from '@memberjunction/record-set-processor';
 import { ArraySource, type ProcessRunResult, type RecordRef, type TriggeredByValue } from '@memberjunction/record-set-processor-base';
@@ -210,7 +210,7 @@ export const FeaturePipelineCoreChecks: NamedCheck[] = [
             const r = await B.Run(ctx, [B.Ref(ctx, 3, 'Director of Sales'), B.Ref(ctx, 4, ' director  of sales ')]);
             AssertEqual(r.Status, 'Completed', `status (${r.ErrorMessage || 'no error'})`);
             AssertEqual(stub().Calls.length, 1, 'one computation for both spellings');
-            const added = (await B.CacheRows(ctx)).filter((row) => !before.some((b) => UUIDsEqual(b.ID, row.ID)));
+            const added = ExcludeByUUIDs(await B.CacheRows(ctx), before.map((b) => b.ID));
             AssertEqual(added.length, 1, 'one new cache row for both spellings');
             AssertEqual(await B.Count(ctx, 'MJ: Feature Values'), 4, 'both records hold a Feature Value');
             B.DirectorCacheRowID = added[0].ID;

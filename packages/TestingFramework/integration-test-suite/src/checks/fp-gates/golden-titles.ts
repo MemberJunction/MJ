@@ -138,7 +138,7 @@ export class GoldenTitleCopy {
                 return;
             }
             const title = c.Input.CurrentJobTitle;
-            if (c.ID !== g.ID || title !== g.Title) {
+            if (!GoldenTitleCopy.SameCaseID(g.ID, c.ID) || title !== g.Title) {
                 problems.push(`#${i + 1}: copy ${g.ID} '${g.Title}', installed ${c.ID} '${typeof title === 'string' ? title : JSON.stringify(title)}'`);
             } else if (!GoldenTitleCopy.SameLabels(g.Functions, c.Expected.JobFunctions) || !GoldenTitleCopy.SameLabels(g.Seniority, c.Expected.SeniorityLevel)) {
                 problems.push(`${g.ID} '${g.Title}': labels differ (copy ${g.Functions.join('/')} | ${g.Seniority.join('/')}; `
@@ -150,6 +150,11 @@ export class GoldenTitleCopy {
             }
         });
         return problems;
+    }
+
+    /** The same golden-set case ID: authored labels ("g01"), not UUIDs, so compared exactly. */
+    protected static SameCaseID(copy: string, installed: string): boolean {
+        return copy === installed;
     }
 
     /** The same labels in the same order (the first is the primary, so order matters). */

@@ -13,36 +13,7 @@
       "UsesTemplate": true,
       "IsMaterialized": false
     },
-    "relatedEntities": {
-      "MJ: Query Parameters": [
-        {
-          "fields": {
-            "QueryID": "@parent:ID",
-            "Name": "scopeEntityId",
-            "Type": "string",
-            "IsRequired": false,
-            "SampleValue": "00000000-0000-0000-0000-000000000000",
-            "DetectionMethod": "Manual"
-          },
-          "primaryKey": {
-            "ID": "FF860027-CD2F-4EA7-A1DB-3E325C9FE770"
-          }
-        },
-        {
-          "fields": {
-            "QueryID": "@parent:ID",
-            "Name": "scopeRecordId",
-            "Type": "string",
-            "IsRequired": false,
-            "SampleValue": "00000000-0000-0000-0000-000000000000",
-            "DetectionMethod": "Manual"
-          },
-          "primaryKey": {
-            "ID": "670459E6-65F9-42B5-8F75-E43A19363877"
-          }
-        }
-      ]
-    },
+    "relatedEntities": {},
     "primaryKey": {
       "ID": "EBF9166E-DEA4-4CEE-8D1F-56A903D0D1E6"
     },

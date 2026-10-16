@@ -411,8 +411,6 @@ MJ_INTEGRATION_TEST=1 pnpm mj test suite --name "Integration Tests — Determini
 RUN_AGENT_TESTS=1 MJ_INTEGRATION_TEST=1 pnpm mj test suite --name "Integration Tests — Live Model"
 
 # Client-transport tests — start MJAPI first: (cd packages/MJAPI && npm run start)
-# For the DETERMINISTIC tier (zero live model calls), start that MJAPI with
-#   MJ_DISABLE_TASK_GRAPH_DISPATCHER=1   (otherwise it executes the task graphs IT71/TG6 submits, running real agents)
 MJ_INTEGRATION_TEST=1 pnpm mj test run --name "IT03 - Client GraphQL Cache Integrity"
 
 # Validate definitions without executing (driver resolvable, Configuration parses)
@@ -461,16 +459,6 @@ MJAPI_A_URL=http://localhost:14000/ MJAPI_B_URL=http://localhost:14001/ \
 MJ_API_KEY=<system-api-key> \
 npx tsx packages/TestingFramework/integration-test-suite/rigs/cross-server-invalidation-tests.ts
 ```
-
-**Feature-pipeline and transaction rigs** (`rigs/feature-pipelines/`) — run a Record Process,
-edit a template and re-run it in one process, delete a cascading AI Prompt (direct, group, batched,
-forced failure), race two cascading deletes for the same row, inject a non-dooming fault into a
-cascading delete that joined the caller's transaction, and race the in-transaction metadata refresh
-against a pool reload. Each one's needs (SQL Server, live model credentials), what it mutates, and
-the shared exit-code contract (0 pass, 1 an expectation failed, 2 bootstrap or usage error) are in
-the [suite README](../packages/TestingFramework/integration-test-suite/README.md#feature-pipeline-and-transaction-rigs-rigsfeature-pipelines).
-Run them on a private database. `pnpm run check:rigs` in the suite package type-checks them (the
-package build does not).
 
 **Other rigs**: `agent-memory-tests.ts` (live-model, `RUN_AGENT_TESTS=1`),
 `runview-matrix-tests.ts` (client-first RunView sweep across every entity — needs MJAPI +
@@ -812,8 +800,8 @@ coverage loss):
 | `ai-skills` | AS1–AS21 (21) | server | 4 skills + grants/junctions | IT12 | Skills gates, resolution, SKILL.md round-trip, activation governance — no LLM |
 | `api-keys` | AK1–AK3 (3) | server | key fixtures | IT13 | API Keys engine `Config` + end-to-end `Authorize` allow/deny |
 | `predictive-studio` | PS1–PS5 (5) | server | Pipeline → Model → Binding chain | IT14 | PS stack seams (entities, work-type registration, Actions) — no sidecar |
-| `feature-pipeline-core` | Feature Value key, Dedup Cache, version gate, dry run and breaker (mutation-gated) | server | stub driver, pipeline, prompt | IT124 | Feature Pipelines against MJ core tables only, no model calls, self-cleaning; member of the deterministic suite |
-| `fp-live-jobtitle` | job-title consistency (live-model) | server | bizapps-common people + pipeline | IT125 | Live consistency of a Feature Pipeline over repeated runs; needs bizapps-common and a model key; member of `Predictive Studio Gates — Feature Pipelines` |
+| `feature-pipeline-core` | FP1–FP7 (7) | server | stub driver, pipeline, prompt | IT124 | Feature Value key, Dedup Cache, version gate, dry run and breaker on MJ core tables, no model calls |
+| `fp-live-jobtitle` | L1 (1, live-model) | server | bizapps-common people + pipeline | IT125 | Job-title Feature Pipeline answers identically over three runs; gate suite only |
 | `remote-op-wire-progress` | WIRE1 (1) | client | over-the-wire fixtures | IT15 | Remote Operation progress streamed over GraphQL |
 | `prompt-runner` | PR1 (1) | server | lifecycle | IT16 (live-model) | Real prompt run + persisted `MJ: AI Prompt Runs` verification |
 | `agent-runner` | AR1 (1) | server | lifecycle | IT17 (live-model) | Real agent run, deep-verified (steps → prompt runs → action logs → sub-agents) |
@@ -831,16 +819,15 @@ coverage loss):
 | `conversation-compaction` | CC1–CC12 (12) | server | — | IT30 | Compaction assembly layer (graduated from PR #2732) |
 | `self-test` | cache-warm (1) | server | — | smoke script | Proves the instrumented cache observes RunView traffic (lives in the framework package) |
 
-
-**Predictive Studio gate suite.** `Predictive Studio Gates — Feature Pipelines` holds the Phase 7 gates (`C1 → C2.1` first) and `IT125`. It needs bizapps-common installed and `RUN_MUTATION_TESTS=1` (the C2 gates are mutation-tier and report Skipped without it). `IT123` also runs in the deterministic suite (`RUN_MUTATION_TESTS=1` enables its mutation checks). The gates write bizapps-common rows, so the CLI process must load the same entity classes MJAPI loads; a run that does not logs `ClassFactory: no registration found … 'MJ_BizApps_Common: …'` for every fixture write. Run the gates from the MJAPI directory, which declares the host-generated entities package, and give that directory its own `.env` (the CLI reads `.env` from the working directory; copy the repo-root one):
+**Predictive Studio gate suite.** `Predictive Studio Gates — Feature Pipelines` holds the five Feature Pipeline gate
+bundles (`fp-gate-*`) and IT125. It needs bizapps-common installed and `RUN_MUTATION_TESTS=1`, and must run where the
+bizapps-common entity classes load: from `packages/MJAPI`, with its own `.env`, and the repo-root `mj.config.cjs`
+naming the host's generated entities package as a local edit (see the [Dynamic Package Loading guide](DYNAMIC_PACKAGE_LOADING_GUIDE.md)):
 
 ```bash
 cd packages/MJAPI
 MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm exec mj test suite "Predictive Studio Gates — Feature Pipelines"
-MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm exec mj test run "C1 → C2.3"     # one gate
 ```
-
-Name the generated package (`codeGeneration: { packages: { entities: { name: 'mj_generatedentities' } } }`) in the repo-root `mj.config.cjs` as a **local, uncommitted** edit (`packages/MJAPI/mj.config.cjs` only re-exports it); the tracked config does not carry it, because the generated packages exist only on a host that ran CodeGen. From the repo root the same commands still log the errors: pnpm gives the root no access to a package only MJAPI declares, and the loader reports it not found. See the [Dynamic Package Loading guide](DYNAMIC_PACKAGE_LOADING_GUIDE.md).
 
 There are no script-only suites anymore — the former `lists` / `user-routines` /
 `open-app-teardown` scripts graduated to bundles (IT20–IT22), and the multi-process /

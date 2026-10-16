@@ -50,19 +50,11 @@ export class JobTitleConsistency {
             const recordID = (g: GoldenTitle): string => `live-${g.ID}-${rep}`;
             const records: RecordRef[] = ALL_GOLDEN_TITLES.map((g) => ({ EntityID: rp.EntityID, RecordID: recordID(g), Record: { CurrentJobTitle: g.Title } }));
             const results = await processor.ProcessBatch(records, context);
-            await JobTitleConsistency.RecordCost(ctx, results); // before any answer is read: a failed record must not lose the spend
+            const cost = await FeaturePipelineGoldenSetDriver.PromptRunCost(results.values(), ctx.Provider, ctx.User);
+            console.log(`      → run ${rep + 1}: model spend $${cost.toFixed(4)}`);
             runs.push(ALL_GOLDEN_TITLES.map((g) => JobTitleConsistency.AnswerOf(results.get(recordID(g)), g.Title)));
         }
         return runs;
-    }
-
-    /**
-     * Adds to `ctx.CostUSD` what the batch's model calls cost, read by prompt-run ID
-     * ({@link FeaturePipelineGoldenSetDriver.PromptRunCost}), so nothing else running at the same time is counted.
-     * @throws Error when the prompt runs cannot be read: an unknown cost is never reported as 0
-     */
-    public static async RecordCost(ctx: IntegrationCheckContext, results: Map<string, RecordResult>): Promise<void> {
-        ctx.CostUSD = (ctx.CostUSD || 0) + await FeaturePipelineGoldenSetDriver.PromptRunCost(results.values(), ctx.Provider, ctx.User);
     }
 
     /**

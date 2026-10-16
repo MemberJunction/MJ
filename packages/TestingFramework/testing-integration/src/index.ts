@@ -24,7 +24,6 @@ export * from './fls-fixture';
 // every bundle on this registry. This framework package deliberately ships content-free.
 export * from './types';
 export * from './IntegrationTestDriver';
-export * from './suspension-monitor';
 
 // The @RegisterClass decorator on IntegrationTestDriver fires via the export above.
 //

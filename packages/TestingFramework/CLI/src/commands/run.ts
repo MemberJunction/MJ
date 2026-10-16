@@ -10,7 +10,6 @@ import { OutputFormatter } from '../utils/output-formatter';
 import { SpinnerManager } from '../utils/spinner-manager';
 import { LoadMJConfig, LoadCLIConfig } from '../utils/config-loader';
 import { InitializeMJProvider, CloseMJProvider, GetContextUser } from '../lib/mj-provider';
-import { HostSleepGuard } from '../lib/host-sleep-guard';
 import { ParseVariableFlags, GetTestVariablesSchema } from '../utils/variable-parser';
 import { LoadOraclesModule } from '../utils/oracle-module-loader';
 import { LoadCheckModules } from '../utils/check-module-loader';
@@ -31,13 +30,7 @@ export class RunCommand {
      * @param contextUser - Optional user context (will be fetched if not provided)
      */
     async Execute(testId: string | undefined, flags: RunFlags, contextUser?: UserInfo): Promise<void> {
-        // Keep the host from idle-sleeping for the whole run: a sleep freezes the run mid-check and
-        // every check in flight then fails on wake as a hung check (see host-sleep-guard.ts). Released
-        // in `finally` when Execute returns or throws; a path that calls process.exit ends the
-        // assertion with the process (caffeinate -w <pid>).
-        const sleepGuard = HostSleepGuard.AcquireForRun();
         try {
-
             // Integration tests must install the instrumented cache as the FIRST caller
             // (before any provider setup) or its counters are a silent no-op. Opt-in via
             // MJ_INTEGRATION_TEST=1 so every other test run is byte-for-byte unchanged.
@@ -242,7 +235,7 @@ export class RunCommand {
 
         } catch (error) {
             this.spinner.fail();
-            console.error(OutputFormatter.formatError('Failed to run test', error instanceof Error ? error : new Error(String(error))));
+            console.error(OutputFormatter.formatError('Failed to run test', error as Error));
 
             // Clean up resources before exit
             try {
@@ -252,8 +245,6 @@ export class RunCommand {
             }
 
             process.exit(1);
-        } finally {
-            sleepGuard.Release();
         }
     }
 

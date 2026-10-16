@@ -457,26 +457,18 @@ model is exercised by `fp-live-jobtitle` (§7).
 ### 5.1 Data model — one migration
 
 File: `migrations/v6/V202610151119__v6.2.x__Feature_Value_Key_And_Versions.sql`. Hand-written part (complete text, as
-shipped — CQ-5 synced it to the file after the coding-standards waves: `AIModelID` throughout (D-036), the
-`ProcessRunDetail.Warnings` column (audit B40), the one-time orphan-cache DELETE (audit B21/B22) and the replaced
-`FeatureValue` table description were added during execution):
+shipped — synced to the file after the slimming pass: `AIModelID` throughout (D-036), the `ProcessRunDetail.Warnings`
+column (audit B40) and the replaced `FeatureValue` table description were added during execution; the one-time
+orphan-cache DELETE and the `macro-f1` metric were removed again):
 
 ```sql
 -- =====================================================================================
--- Feature Pipelines: Feature Value key, value source, run summary and version registry (PR 1)
+-- Feature Pipelines: Feature Value key, value source, run summary and version registry
 --
--- 1. FeatureValue: the non-temporal FeatureValueKey columns (PipelineVersion, AIModelID, ParametersHash,
---    InputHash) and its hash (ValueKeyHash, unique per pipeline) so writes upsert on the key (D-008, C2.1, C2.3);
---    Source distinguishes pipeline-derived from human-entered values (D-017, C2.3). The table's description
---    changes with it: values are keyed and updated in place, no longer an append-only history.
--- 2. FeatureValueCache: AIModelID and ParametersHash join the cache key; the two unique indexes are rebuilt
---    to include them (F-FP-4, C2.1). Cache rows written before this migration can never match the new key and
---    are deleted unless a Feature Value references them.
--- 3. ProcessRun.ResultSummary: the FeaturePipelineRunResult JSON of a Feature Pipeline run (C2.2, F-FP-10);
---    ProcessRunDetail.Warnings: a record's non-fatal problems, kept out of ErrorMessage.
--- 4. FeaturePipelineVersion: one row per distinct pipeline pin; golden-set activation (C2.5, F-FP-12, F-FP-6) and the
---    unattended steward's backfill marker (BackfilledAt, D-PR1-18).
--- PR 3 adds FeatureValue.EffectiveAsOf (D-018).
+-- 1. FeatureValue: the FeatureValueKey columns and their hash (ValueKeyHash, unique per pipeline), and Source.
+-- 2. FeatureValueCache: AIModelID and ParametersHash join the cache key; its two unique indexes are rebuilt.
+-- 3. ProcessRun.ResultSummary and ProcessRunDetail.Warnings.
+-- 4. FeaturePipelineVersion: one row per distinct pipeline pin, with its golden-set activation.
 -- =====================================================================================
 
 -- -------------------------------------------------------------------------------------
@@ -521,9 +513,6 @@ GO
 DROP INDEX [UQ_FeatureValueCache_PromptScoped] ON [${flyway:defaultSchema}].[FeatureValueCache];
 GO
 
--- AIModelID is NULL for a prompt with no Active model. SQL Server treats NULLs as equal in a unique index, so
--- those rows still dedupe; PostgreSQL treats them as distinct, so the PostgreSQL conversion of these two
--- indexes needs NULLS NOT DISTINCT (release engineer: see the PR description).
 CREATE UNIQUE NONCLUSTERED INDEX [UQ_FeatureValueCache_Scoped]
     ON [${flyway:defaultSchema}].[FeatureValueCache]
        ([RecordProcessID], [PromptID], [PromptVersionHash], [ConstraintHash], [AIModelID], [ParametersHash], [KeyHash])
@@ -534,14 +523,6 @@ CREATE UNIQUE NONCLUSTERED INDEX [UQ_FeatureValueCache_PromptScoped]
     ON [${flyway:defaultSchema}].[FeatureValueCache]
        ([PromptID], [PromptVersionHash], [ConstraintHash], [AIModelID], [ParametersHash], [KeyHash])
     WHERE [RecordProcessID] IS NULL;
-GO
-
--- Cache rows written before this migration have no ParametersHash, so the new key can never match them.
--- Delete them; a row a Feature Value references stays, as the provenance of the value computed from it.
-DELETE c
-FROM [${flyway:defaultSchema}].[FeatureValueCache] c
-WHERE c.[ParametersHash] IS NULL
-  AND NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[FeatureValue] fv WHERE fv.[FeatureValueCacheID] = c.[ID]);
 GO
 
 -- -------------------------------------------------------------------------------------
@@ -599,7 +580,7 @@ CREATE TABLE [${flyway:defaultSchema}].[FeaturePipelineVersion] (
     CONSTRAINT [UQ_FeaturePipelineVersion_Version] UNIQUE ([RecordProcessID], [Version]),
     CONSTRAINT [UQ_FeaturePipelineVersion_Pin] UNIQUE ([RecordProcessID], [PinHash]),
     CONSTRAINT [CK_FeaturePipelineVersion_Status] CHECK ([Status] IN (N'Candidate', N'Active', N'Refused', N'Retired')),
-    CONSTRAINT [CK_FeaturePipelineVersion_Metric] CHECK ([Metric] IN (N'accuracy', N'macro-f1'))
+    CONSTRAINT [CK_FeaturePipelineVersion_Metric] CHECK ([Metric] IN (N'accuracy'))
 );
 GO
 
@@ -607,7 +588,7 @@ GO
 -- 5. Extended properties
 -- -------------------------------------------------------------------------------------
 EXEC sp_addextendedproperty @name = N'MS_Description',
-    @value = N'Version of the Feature Pipeline (MJ: Feature Pipeline Versions.Version for this RecordProcessID) that computed this value. Part of the FeatureValueKey. NULL on rows written before versioning or by a processor run without a run-level Preflight.',
+    @value = N'Version of the Feature Pipeline (MJ: Feature Pipeline Versions.Version) that computed this value; part of the FeatureValueKey.',
     @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'FeatureValue',
     @level2type = N'COLUMN', @level2name = N'PipelineVersion';
 EXEC sp_addextendedproperty @name = N'MS_Description',
@@ -627,7 +608,7 @@ EXEC sp_addextendedproperty @name = N'MS_Description',
     @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'FeatureValue',
     @level2type = N'COLUMN', @level2name = N'ValueKeyHash';
 EXEC sp_addextendedproperty @name = N'MS_Description',
-    @value = N'Who produced the value: Pipeline (computed by the Feature Pipeline) or Human (a value a person entered on the target record, recorded when write-back found it and left it in place). Write-back never overwrites a Human value unless the run sets overwriteHumanValues.',
+    @value = N'Who produced the value: Pipeline (computed by the Feature Pipeline) or Human (entered by a person, which write-back leaves in place).',
     @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'FeatureValue',
     @level2type = N'COLUMN', @level2name = N'Source';
 EXEC sp_addextendedproperty @name = N'MS_Description',
@@ -639,7 +620,7 @@ EXEC sp_addextendedproperty @name = N'MS_Description',
     @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'FeatureValueCache',
     @level2type = N'COLUMN', @level2name = N'ParametersHash';
 EXEC sp_addextendedproperty @name = N'MS_Description',
-    @value = N'JSON summary of a Feature Pipeline run (FeaturePipelineRunResult): attempted, upserted, unchanged, previewed, rejectedInvalid, failed, skipped and humanValuesPreserved counts, the pipeline pin and parameter fidelity, and the status. NULL for other work types.',
+    @value = N'JSON summary of a Feature Pipeline run (FeaturePipelineRunResult); NULL for other work types.',
     @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'ProcessRun',
     @level2type = N'COLUMN', @level2name = N'ResultSummary';
 EXEC sp_addextendedproperty @name = N'MS_Description',
@@ -650,7 +631,7 @@ EXEC sp_addextendedproperty @name = N'MS_Description',
 EXEC sp_dropextendedproperty @name = N'MS_Description',
     @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'FeatureValue';
 EXEC sp_addextendedproperty @name = N'MS_Description',
-    @value = N'Feature values computed by Feature Pipelines (or entered by people, Source = Human): one row per Feature Value key (record, feature, pipeline version, prompt version, primary AI model, parameters, input, source), updated in place when the same key is recomputed, with provenance, model reasoning and run back-links. Earlier values of a row are in Record Changes. Rows written before the key existed (ValueKeyHash NULL) are kept as history.',
+    @value = N'Feature values computed by Feature Pipelines (or entered by people), one row per Feature Value key, updated in place when the same key is recomputed.',
     @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'FeatureValue';
 EXEC sp_addextendedproperty @name = N'MS_Description',
     @value = N'One version of a Feature Pipeline: a distinct pin (spec hash, prompt version hash, primary AI model, parameters hash). A gated pipeline runs only under an Active version, and a version becomes Active only with a stored golden-set result at or above its declared threshold.',
@@ -677,7 +658,7 @@ EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'The MJ: Tests 
     @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'FeaturePipelineVersion', @level2type = N'COLUMN', @level2name = N'GoldenSetTestID';
 EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'The MJ: Test Runs row of the evaluation whose result is stored here.',
     @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'FeaturePipelineVersion', @level2type = N'COLUMN', @level2name = N'GoldenSetTestRunID';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'Metric of the stored result: accuracy or macro-f1.',
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'Metric of the stored result: accuracy.',
     @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'FeaturePipelineVersion', @level2type = N'COLUMN', @level2name = N'Metric';
 EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'Declared activation threshold copied from DataFeatureSpec.Activation at evaluation time.',
     @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'FeaturePipelineVersion', @level2type = N'COLUMN', @level2name = N'Threshold';
@@ -693,11 +674,11 @@ EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'JSON per-outpu
     @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'FeaturePipelineVersion', @level2type = N'COLUMN', @level2name = N'ResultDetails';
 EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'When the version became Active.',
     @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'FeaturePipelineVersion', @level2type = N'COLUMN', @level2name = N'ActivatedAt';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'The user whose run activated the version: the context user of the activating golden-set evaluation or on-demand run; for an unattended activation, the user the Feature Pipeline Version Steward scheduled job runs as.',
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'The user whose run activated the version (for an unattended activation, the Feature Pipeline Version Steward job''s user).',
     @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'FeaturePipelineVersion', @level2type = N'COLUMN', @level2name = N'ApprovedByUserID';
 EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'When a later Active version superseded this one.',
     @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'FeaturePipelineVersion', @level2type = N'COLUMN', @level2name = N'RetiredAt';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'When the Feature Pipeline Version Steward finished the one backfill run of this activation of the version (the records whose latest Pipeline value was written under another version, or under none). NULL until then; cleared when the version is retired or becomes Active again, so each activation is backfilled once.',
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'When the Feature Pipeline Version Steward finished the one backfill run of this activation of the version.',
     @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'FeaturePipelineVersion', @level2type = N'COLUMN', @level2name = N'BackfilledAt';
 GO
 ```
@@ -720,9 +701,8 @@ Then ≥ 50 blank lines, then this block, then the CodeGen output (M1.1 Step 3 s
 
 Backward compatibility of data: existing `FeatureValue` rows keep NULL key columns (the filtered unique index excludes
 them; they stay readable history; the M6.5 steward's backfill re-derives the records that only have such rows, ruling
-W2-F1-2). Existing cache rows have NULL `AIModelID`/`ParametersHash` and can never match the new key: the migration
-deletes them unless a Feature Value references them (that row stays as the value's provenance), and every pipeline
-recomputes each distinct key once after upgrade (one-time cost = distinct cache keys × mean prompt-run cost; the
+W2-F1-2). Existing cache rows have NULL `AIModelID`/`ParametersHash` and can never match the new key: they stay as unused
+rows, and every pipeline recomputes each distinct key once after upgrade (one-time cost = distinct cache keys × mean prompt-run cost; the
 job-title pipeline on 1,679 people: 34 calls, ≈ $0.02; the dev database: ≈ $0.001). No existing `ProcessRun` or
 `ProcessRunDetail` row changes.
 
@@ -10577,6 +10557,21 @@ _(The agent opening the PR adds its own tool attribution line here, per its harn
   `as never` outside generated code except the ruled `RenderTemplate` `data: any`, the `ProviderToUse` bridge (S3) and
   four PostgreSQL test-double casts (S5). AI spend $0.093 (IT124 $0.091).
 - **Verification disclosure (ruling S1):** all of the above was run by AI agents.
+
+### 2026-10-15 — slimming pass (cut what the PR did not need) — Claude Opus 5.5
+
+Every change kept is required by Feature Pipelines or fixes a bug hit on the way, at `next`'s comment density; a
+duplicate of a `next` mechanism, an unrequested feature, or a near-duplicate test was cut. By area:
+
+- `0805e80ead` deterministic tier: the save-time-AI layer (`SaveTimeAISettings`, deterministic host, `EmbeddingBackfill`) → `next`'s `FixtureQuerySaveOptions` / `SkipEntityAIActions`.
+- `603baa55c2` data layer: four targeted fixes (cascade-delete 213, transaction-group failed item, in-transaction refresh, forced-reload slot); RCSI handling and the transaction-group rewrite cut.
+- `8a24ab9ac9` server, CodeGen, Actions: targeted edits only; renames and the hourly paused-job resume timer cut.
+- `cb375e14dd` templates: raw rendering for AI prompt templates only; raw embedding renders and the autotag heal cut.
+- `e551bfc493`, `fd7e9a22a0` vendors: fidelity on the drivers that change a value; Bedrock profiles, `us.` model rows, Azure/OpenAI reasoning rules cut; retry stop scoped to `ParameterFidelityError`.
+- `f57ea45313`, `664ca5aec6` engine: the `fail` floor policy and record names in dry-run previews cut; previews show only real changes.
+- `7994cca5c0`, `18bcb44bfe` steward, golden set, migration: macro-F1, the orphan-cache DELETE, the PostgreSQL comment and essay descriptions cut (§5.1 synced).
+- `855c611206`, `7e3b785aa2` Explorer: QA fixes at minimal size; the Testing dashboard aggregates and notices cut.
+- Task 9 commit: one-shot rigs, the host sleep guard, the suspension monitor and the cost ledger cut; tests of test helpers shrunk; query-parameter pins and the demo-query rewrite back to `next`; guides, READMEs and one changeset sized to the kept behaviour.
 
 ## 12. Refresh log (append-only)
 

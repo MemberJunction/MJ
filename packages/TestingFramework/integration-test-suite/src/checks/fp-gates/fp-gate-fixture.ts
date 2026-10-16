@@ -3,15 +3,9 @@
  * onto the stub driver and a cloned prompt, and seeds fixture people carrying the golden titles. Everything it
  * creates is prefixed and deleted at teardown (and before setup, to clear an interrupted run).
  *
- * Direct SQL is used for one thing only: reads that verify physical state under the provider being tested
- * (checksums, counts). Every row the fixtures create, change or delete — MJ core rows and bizapps-common's fixture
- * organization, people, relationships and job functions alike — goes through the entity layer (no direct DML against
- * an entity), so validation and Record Changes run as they do for a real edit. The fixture's own bizapps-common rows
- * skip their Entity Actions: those react to real business events (activity logging, agent triggers), which scratch
- * rows are not, and their action classes live in bizapps-common's server package, not in this test process.
- *
- * SQL Server only: the `ExtraFilter` texts below select through MJ core views with subqueries, and the gate hosts
- * (bizapps-common installations) are SQL Server.
+ * Direct SQL only reads physical state (checksums, counts); every write goes through the entity layer. The fixture's
+ * bizapps-common rows skip their Entity Actions (scratch rows are no business event, and those action classes live in
+ * bizapps-common's server package). SQL Server only: the filters select through MJ core views with subqueries.
  */
 import { BaseEntity, EntityDeleteOptions, EntitySaveOptions, RunView } from '@memberjunction/core';
 import type { MJAIPromptModelEntity, MJFeaturePipelineTypeEntity, MJRecordProcessEntity, MJTestEntity } from '@memberjunction/core-entities';
@@ -125,11 +119,9 @@ export class FeaturePipelineGateFixtures {
     }
 
     /**
-     * Creates or updates one bizapps-common row through the entity layer. MJ core has no generated classes for
-     * bizapps-common's entities, so the field names are checked against the entity's `EntityInfo` first and then
-     * written with `Set()` — the `.Set()` ban targets substitution for generated properties, and none exist here; raw
-     * SQL would bypass validation and Record Changes. The save skips the row's Entity Actions (see the file header).
-     * Throws with the save's message when it fails.
+     * Creates or updates one bizapps-common row through the entity layer. MJ core has no generated classes for these
+     * entities, so the field names are checked against `EntityInfo` and written with `Set()`.
+     * @throws Error with the save's message when it fails
      */
     public static async SaveBizAppsRow(ctx: IntegrationCheckContext, entityName: string, fields: Record<string, string | number | null>,
         existing?: BaseEntity): Promise<BaseEntity> {
@@ -159,10 +151,8 @@ export class FeaturePipelineGateFixtures {
     ]);
 
     /**
-     * Updates the fixture's own bizapps-common rows of `entityName` that match `filter`, through the entity layer;
-     * returns how many. The filter is always narrowed to the fixture's ID prefix, because these saves skip Entity
-     * Actions (see the file header): a caller can never reach a real row with them.
-     * @throws Error for an entity the fixture does not write
+     * Updates the fixture's own bizapps-common rows of `entityName` matching `filter` (always narrowed to the fixture's
+     * ID prefix, since these saves skip Entity Actions); returns how many. @throws Error for an entity the fixture does not write
      */
     public static async UpdateBizAppsRows(ctx: IntegrationCheckContext, entityName: string, filter: string,
         fields: Record<string, string | number | null>): Promise<number> {
@@ -247,10 +237,8 @@ export class FeaturePipelineGateFixtures {
     }
 
     /**
-     * Creates a stub pipeline: its Feature Pipeline Type (driver {@link STUB_DRIVER_CLASS}), a prompt with one model
-     * binding, and an on-demand Infer Record Process; puts them on the context's fixture slot and refreshes the engines
-     * that cache them. Unattended is off: the version steward (running in any MJAPI on this database) must not
-     * evaluate or backfill a fixture between a check's steps; the checks drive versions themselves.
+     * Creates a stub pipeline: its Feature Pipeline Type, a prompt with one model binding, and an on-demand Infer Record
+     * Process. Unattended is off, so the version steward of any MJAPI on this database leaves the fixture alone.
      */
     public static async CreateStubPipeline(ctx: IntegrationCheckContext, opts: StubPipelineOptions): Promise<FeaturePipelineGateFixture> {
         const type = await FeaturePipelineGateFixtures.CreateStubType(ctx, opts.TypeName);
@@ -306,9 +294,8 @@ export class FeaturePipelineGateFixtures {
     }
 
     /**
-     * Deletes every stub pipeline whose Record Process, prompt or template name starts with `name` (so a check's own
-     * clones, named from it, go too), with everything that hangs off them, then the `typeName` stub type — children
-     * first, through BaseEntity. Returns the failures instead of throwing, for best-effort teardown.
+     * Deletes every stub pipeline whose name starts with `name`, with everything that hangs off it, then the stub type,
+     * children first. Returns the failures instead of throwing (best-effort teardown).
      */
     public static async DeleteStubPipeline(ctx: IntegrationCheckContext, name: string, typeName: string): Promise<string[]> {
         const like = `N'${EscapeSQLString(name)}%'`;
@@ -369,11 +356,7 @@ export class FeaturePipelineGateFixtures {
         return rows[0];
     }
 
-    /**
-     * The cases of the golden-set test the installed job-title pipeline is gated by (its `Activation.GoldenSetTestID`),
-     * so a check can diff them against {@link GOLDEN_TITLES}. Throws the prerequisite message when the pipeline, its
-     * activation or the test is missing.
-     */
+    /** The cases of the installed job-title pipeline's golden-set test. @throws Error when the pipeline, its activation or the test is missing */
     public static async InstalledGoldenCases(ctx: IntegrationCheckContext): Promise<GoldenCase[]> {
         const source = await FeaturePipelineGateFixtures.LoadSourcePipeline(ctx);
         const testID = FeaturePipelineGateFixtures.ParseSpec(source).Activation?.GoldenSetTestID;
@@ -410,10 +393,7 @@ export class FeaturePipelineGateFixtures {
         }
     }
 
-    /**
-     * Deletes every row of an MJ core entity matching `filter`, through BaseEntity (in parallel: each delete is its
-     * own unit; no transaction is open here). Returns the failures instead of throwing, for best-effort teardown.
-     */
+    /** Deletes every row of `entityName` matching `filter`, through BaseEntity, in parallel; returns the failures. */
     public static async DeleteWhere(ctx: IntegrationCheckContext, entityName: string, filter: string, options?: EntityDeleteOptions): Promise<string[]> {
         const res = await RunView.FromMetadataProvider(ctx.Provider).RunView<BaseEntity>({
             EntityName: entityName, ExtraFilter: filter, ResultType: 'entity_object', BypassCache: true, IgnoreMaxRows: true,
@@ -448,10 +428,7 @@ export class FeaturePipelineGateFixtures {
         ]);
     }
 
-    /**
-     * The fixture people, their rows and the fixture organization in bizapps-common, children first, through
-     * BaseEntity. Skipped when bizapps-common is not installed (nothing of it can exist); returns the failures.
-     */
+    /** The fixture people, their rows and organization, children first (none without bizapps-common); returns the failures. */
     protected static async DeleteFixturePeople(ctx: IntegrationCheckContext): Promise<string[]> {
         if (!ctx.Provider.EntityByName('MJ_BizApps_Common: People')) {
             return [];
@@ -478,11 +455,10 @@ export class FeaturePipelineGateFixtures {
     }
 
     /**
-     * The stub pipeline's spec from the installed pipeline's: without the activation gate (the checks drive activation
-     * themselves) and without `Context.RecordAsUserMessage`, which only an LLM pipeline honours (its driver builds the
-     * prompt's messages; the stub driver builds none), so `ValidateSpec` would refuse it on the stub type.
+     * The stub pipeline's spec: the installed one without the activation gate (the checks drive activation) and without
+     * `Context.RecordAsUserMessage`, which `ValidateSpec` refuses on a non-LLM pipeline type.
      */
-    public static StubSpec(spec: DataFeatureSpec): StubPipelineOptions['Spec'] {
+    protected static StubSpec(spec: DataFeatureSpec): StubPipelineOptions['Spec'] {
         return { ...spec, Context: { ...spec.Context, RecordAsUserMessage: false }, Activation: undefined };
     }
 
@@ -495,10 +471,7 @@ export class FeaturePipelineGateFixtures {
         return spec;
     }
 
-    /**
-     * The gate fixture as a clone of the installed job-title pipeline: its prompt's text and primary model, its spec
-     * without the activation gate (the checks drive activation themselves), and its scope narrowed to the fixture people.
-     */
+    /** The gate fixture as a clone of the installed job-title pipeline, scoped to the fixture people. */
     protected static async CloneOptions(ctx: IntegrationCheckContext, source: MJRecordProcessEntity): Promise<StubPipelineOptions> {
         await AIEngine.Instance.Config(true, ctx.User, ctx.Provider);
         const sourcePrompt = AIEngine.Instance.Prompts.find((p) => UUIDsEqual(p.ID, source.PromptID));
@@ -571,7 +544,7 @@ export class FeaturePipelineGateFixtures {
         table.Answers.set(keyOf(FORCED_INVALID.Both), answer('Grand Poobah', NON_EXISTENT_FUNCTION_ID));
     }
 
-    /** Save options of the fixture's bizapps-common rows: no Entity Actions or AI Actions (see the file header). */
+    /** Save options of the fixture's bizapps-common rows: no Entity Actions or AI Actions. */
     protected static ScratchRowSaveOptions(): EntitySaveOptions {
         const options = new EntitySaveOptions();
         options.SkipEntityActions = true;
@@ -579,7 +552,7 @@ export class FeaturePipelineGateFixtures {
         return options;
     }
 
-    /** Delete options of the fixture's bizapps-common rows: no Entity Actions or AI Actions (see the file header). */
+    /** Delete options of the fixture's bizapps-common rows: no Entity Actions or AI Actions. */
     protected static ScratchRowDeleteOptions(): EntityDeleteOptions {
         const options = new EntityDeleteOptions();
         options.SkipEntityActions = true;

@@ -71,13 +71,8 @@ describe('assertion helpers', () => {
 
     it('AssertDeepEqual compares objects and arrays by structure, not identity', () => {
         expect(() => AssertDeepEqual({ A: 1, B: [1, 2] }, { B: [1, 2], A: 1 }, 'm')).not.toThrow();
-        expect(() => AssertDeepEqual({ A: 1, B: { C: null } }, { A: 1, B: { C: null } }, 'm')).not.toThrow();
         expect(() => AssertDeepEqual({ FV: 0, Cache: 1 }, { FV: 0, Cache: 0 }, 'nothing stored')).toThrow(/nothing stored.*expected \{"Cache":0,"FV":0\}.*got \{"Cache":1,"FV":0\}/);
         expect(() => AssertDeepEqual([1, 2], [2, 1], 'order')).toThrow(/order/);
-        expect(() => AssertDeepEqual({ A: 1 }, { A: 1, B: 2 }, 'missing key')).toThrow(/missing key/);
-        expect(() => AssertDeepEqual<{ A: number | string }>({ A: 1 }, { A: '1' }, 'type')).toThrow(/type/);
-        // Documented limit: like JSON, a whole-value undefined reads as null.
-        expect(() => AssertDeepEqual<number | null | undefined>(undefined, null, 'm')).not.toThrow();
     });
 
     it('RowKeys lowercases and sorts keys', () => {

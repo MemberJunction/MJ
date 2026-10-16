@@ -28,21 +28,6 @@
             "checksum": "1face3241f4423dd58a8a22b72fa2232a1d7b9ff1693e5502014733b68e3c6f4"
           }
         }
-      ],
-      "MJ: Query Parameters": [
-        {
-          "fields": {
-            "QueryID": "@parent:ID",
-            "Name": "AIAgentRunID",
-            "Type": "string",
-            "IsRequired": true,
-            "SampleValue": "00000000-0000-0000-0000-000000000000",
-            "DetectionMethod": "Manual"
-          },
-          "primaryKey": {
-            "ID": "9DE9C1D2-B13E-47EC-8D8D-BE4C5F1FBE24"
-          }
-        }
       ]
     },
     "primaryKey": {

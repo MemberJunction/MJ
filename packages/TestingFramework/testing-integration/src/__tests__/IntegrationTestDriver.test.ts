@@ -10,31 +10,23 @@ interface FakeServerBootstrap {
     Pool: undefined;
     Db: { Schema: string };
 }
-const { mockServerClaimed, mockActiveBootstrap, mockClientBootstrap } = vi.hoisted(() => ({
+const { mockServerClaimed, mockActiveBootstrap } = vi.hoisted(() => ({
     mockServerClaimed: vi.fn(() => false),
-    /** The client bootstrap the driver calls for a client-transport test; each test decides how it fails. */
-    mockClientBootstrap: vi.fn(async (): Promise<never> => { throw new Error('unit test must not self-bootstrap'); }),
     // Default null keeps the server branch resolving Metadata.Provider (unset in unit env), exactly
     // as before; tests that need a typed provider override this to inject one (#3251 guard).
     mockActiveBootstrap: vi.fn<() => FakeServerBootstrap | null>(() => null),
 }));
-vi.mock('../bootstrap', () => {
-    const refuseBootstrap = async (): Promise<never> => { throw new Error('unit test must not self-bootstrap'); };
-    return {
-        getActiveIntegrationStorage: () => ({ SetCount: (_category: string) => 0, ResetCounts: () => { /* no-op */ } }),
-        getActiveIntegrationBootstrap: () => mockActiveBootstrap(),
-        getActiveIntegrationClientBootstrap: () => null,
-        BootstrapIntegrationServer: refuseBootstrap,
-        bootstrapIntegrationServer: refuseBootstrap,
-        bootstrapIntegrationClient: refuseBootstrap,
-        serverProcessAlreadyClaimed: () => mockServerClaimed()
-    };
-});
-
-vi.mock('../bootstrap-client', () => ({ BootstrapIntegrationClient: () => mockClientBootstrap() }));
+vi.mock('../bootstrap', () => ({
+    getActiveIntegrationStorage: () => ({ SetCount: (_category: string) => 0, ResetCounts: () => { /* no-op */ } }),
+    getActiveIntegrationBootstrap: () => mockActiveBootstrap(),
+    getActiveIntegrationClientBootstrap: () => null,
+    BootstrapIntegrationServer: async () => { throw new Error('unit test must not self-bootstrap'); },
+    get bootstrapIntegrationServer() { return this.BootstrapIntegrationServer; },
+    bootstrapIntegrationClient: async () => { throw new Error('unit test must not self-bootstrap'); },
+    serverProcessAlreadyClaimed: () => mockServerClaimed()
+}));
 
 import { IntegrationTestDriver } from '../IntegrationTestDriver';
-import { MJAPIUnreachableError } from '../bootstrap-shared';
 import { IntegrationCheckRegistry } from '../check-registry';
 import type { DriverExecutionContext, IOracle } from '@memberjunction/testing-engine';
 import type { MJTestEntity, MJTestRunEntity } from '@memberjunction/core-entities';
@@ -67,37 +59,6 @@ describe('IntegrationTestDriver bundle dispatch', () => {
         reg.Register({ Id: 'unitmix.B', Name: 'mixB', Fn: async () => { throw new Error('boom'); } });
         reg.Register({ Id: 'unitmut.A', Name: 'mutA', Fn: async () => { /* pass */ } });
         reg.Register({ Id: 'unitmut.M', Name: 'mutM', RequiresMutation: true, Fn: async () => { /* pass */ } });
-        reg.Register({ Id: 'unitcost.A', Name: 'costA', Fn: async (ctx) => { ctx.CostUSD = (ctx.CostUSD || 0) + 0.25; } });
-        reg.Register({ Id: 'unitcost.B', Name: 'costB', Fn: async (ctx) => { ctx.CostUSD = (ctx.CostUSD || 0) + 0.5; throw new Error('failed after spending'); } });
-        reg.Register({ Id: 'unitcost.C', Name: 'costC', Fn: async () => { /* no model call */ } });
-    });
-
-    it('sums the cost the checks reported into the result totalCost, a failed check included', async () => {
-        const result = await new IntegrationTestDriver().Execute(makeContext({ checks: [{ type: 'unitcost' }] }));
-        expect(result.totalCost).toBe(0.75);
-        const costOf = (id: string): number | undefined => {
-            const cost = (result.oracleResults.find(o => o.oracleType === id)?.details as Record<string, unknown> | undefined)?.CostUSD; // details is typed unknown by the engine
-            return typeof cost === 'number' ? cost : undefined;
-        };
-        expect(costOf('unitcost.A')).toBe(0.25);   // each check carries only its own cost, not the running total
-        expect(costOf('unitcost.B')).toBe(0.5);
-        expect(costOf('unitcost.C')).toBeUndefined();
-    });
-
-    it('counts the spend of a bundle fixture setup and teardown in the total, but on no check', async () => {
-        IntegrationCheckRegistry.Instance.Register({ Id: 'unitlife.A', Name: 'lifeA', Fn: async () => { /* no model call */ } });
-        IntegrationCheckRegistry.Instance.RegisterLifecycle('unitlife', {
-            Setup: async (ctx) => { ctx.CostUSD = (ctx.CostUSD || 0) + 0.125; },
-            Teardown: async (ctx) => { ctx.CostUSD = (ctx.CostUSD || 0) + 0.25; },
-        });
-        const result = await new IntegrationTestDriver().Execute(makeContext({ checks: [{ type: 'unitlife' }] }));
-        expect(result.totalCost).toBe(0.375);
-        expect((result.oracleResults[0].details as Record<string, unknown>).CostUSD).toBeUndefined();
-    });
-
-    it('a check that reports no cost contributes 0', async () => {
-        const result = await new IntegrationTestDriver().Execute(makeContext({ checks: [{ type: 'unitpass' }] }));
-        expect(result.totalCost).toBe(0);
     });
 
     it('expands a bundle and runs its checks in registration order → Passed, score 1', async () => {
@@ -293,21 +254,5 @@ describe('IntegrationTestDriver bundle dispatch', () => {
         const result = await driver.Execute(makeContext({ checks: [{ type: 'unitlifecycle' }] }));
         expect(result.status).toBe('Passed');
         expect(order).toEqual(['setup', 'check', 'teardown']);
-    });
-
-    describe('error labelling', () => {
-        it('a client-transport test whose MJAPI is unreachable is Skipped as an environment gap', async () => {
-            mockClientBootstrap.mockImplementationOnce(async () => { throw new MJAPIUnreachableError('http://localhost:1/graphql', 'ECONNREFUSED'); });
-            const result = await new IntegrationTestDriver().Execute(makeContext({ transport: 'client', checks: [{ type: 'unitpass' }] }));
-            expect(result.status).toBe('Skipped');
-            expect(result.oracleResults[0].message).toMatch(/environment gap/);
-        });
-
-        it('any other client bootstrap failure is an Error, even when its text mentions reachability', async () => {
-            mockClientBootstrap.mockImplementationOnce(async () => { throw new Error('MJAPI is not reachable — but this is a plain Error'); });
-            const result = await new IntegrationTestDriver().Execute(makeContext({ transport: 'client', checks: [{ type: 'unitpass' }] }));
-            expect(result.status).toBe('Error');
-            expect(result.errorMessage).toMatch(/^Bootstrap failed: /);
-        });
     });
 });

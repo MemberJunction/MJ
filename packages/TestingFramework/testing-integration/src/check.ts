@@ -725,17 +725,6 @@ export interface IntegrationCheckContext {
     /** Feature Pipeline gate fixture (the `fp-gate-*` bundles and the Feature Pipeline core bundle). */
     FeaturePipelineGateFixture?: FeaturePipelineGateFixture;
     /**
-     * Model spend (USD) the running check has incurred. A check that calls a model adds what the call cost
-     * (`ctx.CostUSD = (ctx.CostUSD || 0) + cost`) as soon as it is known, before it asserts, so a check that then
-     * fails still reports what it spent. The driver resets it before each check and records the check's cost on its
-     * result; the sum becomes the test run's `CostUSD` (and rolls into the suite's total).
-     *
-     * Attribution: spend added during a bundle's `Setup` or `Teardown` counts toward the run total but is not shown
-     * on any check. A check abandoned by the run's deadline keeps running on this shared context; whatever it adds
-     * after the next check began is charged to that check, and whatever it adds after the last check is not counted.
-     */
-    CostUSD?: number;
-    /**
      * The opaque per-selector `config` bag from `Test.Configuration.checks[].config`,
      * set by the driver/script before each bundle runs. Bundles read their own keys
      * from it (e.g. `dataset-cache` reads `datasetName`, `aggregates-cache` reads

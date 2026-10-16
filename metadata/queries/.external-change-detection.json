@@ -24,21 +24,6 @@
             "checksum": "bced5e54f6e29c6d29909b5821887b459d25cbc91317e2e1c4bd7efdaba03e0f"
           }
         }
-      ],
-      "MJ: Query Parameters": [
-        {
-          "fields": {
-            "QueryID": "@parent:ID",
-            "Name": "EntityID",
-            "Type": "string",
-            "IsRequired": true,
-            "SampleValue": "00000000-0000-0000-0000-000000000000",
-            "DetectionMethod": "Manual"
-          },
-          "primaryKey": {
-            "ID": "C1AED0A0-0CC8-4A1A-8B72-187FCF5B8A44"
-          }
-        }
       ]
     },
     "primaryKey": {
@@ -107,21 +92,6 @@
           "sync": {
             "lastModified": "2026-03-07T22:42:24.675Z",
             "checksum": "c482cc5c58b9f4dd11646e2dbea7a2f59a34d106caa1ccd83ed7c200fb3db49a"
-          }
-        }
-      ],
-      "MJ: Query Parameters": [
-        {
-          "fields": {
-            "QueryID": "@parent:ID",
-            "Name": "EntityID",
-            "Type": "string",
-            "IsRequired": true,
-            "SampleValue": "00000000-0000-0000-0000-000000000000",
-            "DetectionMethod": "Manual"
-          },
-          "primaryKey": {
-            "ID": "1B65B85B-B149-4818-9721-D744F302B8AA"
           }
         }
       ]

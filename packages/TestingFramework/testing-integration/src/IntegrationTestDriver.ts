@@ -42,7 +42,6 @@ import {
     BootstrapIntegrationServer,
     serverProcessAlreadyClaimed
 } from './bootstrap';
-import { MJAPIUnreachableError } from './bootstrap-shared';
 import { BootstrapIntegrationClient } from './bootstrap-client';
 import type { InstrumentedLocalStorageProvider } from './instrumented-cache';
 import type { IntegrationCheckContext, RlsFixture } from './check';
@@ -51,18 +50,12 @@ import { IntegrationTestConfig, IntegrationCheckSelectionConfig } from './types'
 import { IntegrationTier, TIER_ENV_GATE, IsTierEnabled } from './tiers';
 import { TestOutcome, WriteOutcomesFile } from './test-runner';
 import { DiscoverRlsFixture } from './rls-fixture';
-import { SuspensionMonitor } from './suspension-monitor';
 
 const TARGET_TYPE = 'Integration Check Bundle';
 /** Bundles that run against the GraphQL client transport (everything else: SQL server). */
 const CLIENT_BUNDLES = new Set(['client-cache', 'rls-isolation-client', 'remote-op-wire-progress', 'fls-enforcement-client']);
 /** Bundles that need the discovered two-user RLS fixture threaded into the context. */
 const RLS_BUNDLES = new Set(['rls-isolation', 'rls-isolation-client']);
-/** The run's model spend so far (USD): what the checks, fixture setups and teardowns reported, summed by Execute. */
-interface CostLedger {
-    TotalUSD: number;
-}
-
 /** Key under SuiteFixtureContext.Data where the discovered RLS fixture is stashed. */
 const RLS_FIXTURE_KEY = 'rlsFixture';
 
@@ -88,7 +81,7 @@ export class IntegrationTestDriver extends BaseTestDriver {
                 context.Data[RLS_FIXTURE_KEY] = DiscoverRlsFixture(this.Provider, users);
             }
         } catch (e) {
-            this.log(`SetupSuite RLS discovery skipped: ${e instanceof Error ? e.message : String(e)}`);
+            this.log(`SetupSuite RLS discovery skipped: ${(e as Error).message}`);
         }
     }
 
@@ -128,7 +121,7 @@ export class IntegrationTestDriver extends BaseTestDriver {
         try {
             config = this.parseConfig<IntegrationTestConfig>(context.test);
         } catch (err) {
-            return this.buildErrorResult(context, startTime, err instanceof Error ? err.message : String(err));
+            return this.buildErrorResult(context, startTime, (err as Error).message);
         }
 
         // 2) Whole-test tier gate (gated-tier / local-dev safety net). The tier decides the
@@ -174,7 +167,6 @@ export class IntegrationTestDriver extends BaseTestDriver {
 
         const oracleResults: OracleResult[] = [];
         const outcomes: TestOutcome[] = []; // parallel array for the EMIT_OUTCOMES sidecar
-        const cost: CostLedger = { TotalUSD: 0 };
         try {
             const checkCtx = await this.buildCheckContext(context, transport);
 
@@ -183,17 +175,17 @@ export class IntegrationTestDriver extends BaseTestDriver {
                 if (timedOut) {
                     break;
                 }
-                await this.runBundle(context, checkCtx, sel.type, sel.config, oracleResults, outcomes, cost, () => timedOut, deadline);
+                await this.runBundle(context, checkCtx, sel.type, sel.config, oracleResults, outcomes, () => timedOut, deadline);
             }
         } catch (bootErr) {
             clearTimeout(timer);
-            const msg = bootErr instanceof Error ? bootErr.message : String(bootErr);
+            const msg = (bootErr as Error).message ?? String(bootErr);
             // ENVIRONMENT GAP, not a product defect: client-transport bundles need a live MJAPI.
             // When the preflight says the server is simply absent (no MJAPI reachable), report a
             // REAL 'Skipped' result loudly — visible in every summary, never masquerading as
             // executed coverage. Any OTHER bootstrap failure (bad credentials, cache ownership,
             // config) stays a hard error.
-            if (transport === 'client' && bootErr instanceof MJAPIUnreachableError) {
+            if (transport === 'client' && /MJAPI is not reachable/i.test(msg)) {
                 return this.buildSkipResult(context, startTime,
                     `SKIPPED (environment gap): ${msg} Client-transport checks need a live MJAPI; start it and re-run for full coverage.`);
             }
@@ -207,12 +199,12 @@ export class IntegrationTestDriver extends BaseTestDriver {
             try {
                 await WriteOutcomesFile(emitPath, outcomes);
             } catch (e) {
-                this.logToTestRun(context, 'warn', `EMIT_OUTCOMES write failed: ${e instanceof Error ? e.message : String(e)}`);
+                this.logToTestRun(context, 'warn', `EMIT_OUTCOMES write failed: ${(e as Error).message}`);
             }
         }
 
         // 5b) Assemble the DriverExecutionResult (counts mirror AgentEvalDriver).
-        return this.buildResult(context, startTime, oracleResults, timedOut, cost.TotalUSD);
+        return this.buildResult(context, startTime, oracleResults, timedOut);
     }
 
     /**
@@ -228,7 +220,6 @@ export class IntegrationTestDriver extends BaseTestDriver {
         selConfig: IntegrationCheckSelectionConfig | undefined,
         oracleResults: OracleResult[],
         outcomes: TestOutcome[],
-        cost: CostLedger,
         isTimedOut: () => boolean,
         deadline: number
     ): Promise<void> {
@@ -271,7 +262,6 @@ export class IntegrationTestDriver extends BaseTestDriver {
         // IDs as they go). A Setup failure short-circuits the bundle with one failing 'fixtures'
         // oracle and skips the checks — but never re-throws and never leaves the fixture orphaned.
         const lifecycle = IntegrationCheckRegistry.Instance.GetLifecycle(bundleType);
-        IntegrationTestDriver.drainCost(checkCtx, cost); // spend from here on belongs to this bundle, Setup included
         try {
             if (lifecycle) {
                 await lifecycle.Setup(checkCtx);
@@ -290,7 +280,7 @@ export class IntegrationTestDriver extends BaseTestDriver {
                         `SKIPPED: live-model-gated (RUN_AGENT_TESTS disabled)`);
                     continue;
                 }
-                await this.runCheck(context, checkCtx, check.Id, check.Name, check.Fn, oracleResults, outcomes, cost, deadline);
+                await this.runCheck(context, checkCtx, check.Id, check.Name, check.Fn, oracleResults, outcomes, deadline);
             }
 
             // A bundle whose every check was gated out ran NOTHING, and used to report PASS for it.
@@ -326,7 +316,6 @@ export class IntegrationTestDriver extends BaseTestDriver {
                 } catch (tdErr) {
                     this.logToTestRun(context, 'warn', `${bundleType} teardown warning: ${(tdErr as Error).message}`);
                 }
-                IntegrationTestDriver.drainCost(checkCtx, cost);
             }
         }
     }
@@ -349,18 +338,12 @@ export class IntegrationTestDriver extends BaseTestDriver {
         if (remaining <= 0) {
             throw new Error(`integration run budget exhausted before check '${id}' started`);
         }
-        // The budget timer's clock keeps running while the host sleeps (macOS) or the process is
-        // stopped, so a check in flight across a sleep "exceeds the budget" the moment the host
-        // wakes. Measure event-loop stalls so that case is reported as what it is, not as a hang.
-        const monitor = new SuspensionMonitor();
-        const startedAt = Date.now();
-        monitor.Start();
         let timer: ReturnType<typeof setTimeout> | undefined;
         const timeout = new Promise<never>((_, reject) => {
-            timer = setTimeout(() => {
-                monitor.Sample();
-                reject(new Error(IntegrationTestDriver.BudgetExceededMessage(id, remaining, monitor.StalledMs, Date.now() - startedAt)));
-            }, remaining);
+            timer = setTimeout(
+                () => reject(new Error(`check '${id}' exceeded the ${remaining}ms remaining run budget (hung check)`)),
+                remaining
+            );
         });
         try {
             await Promise.race([fn(checkCtx), timeout]);
@@ -368,28 +351,7 @@ export class IntegrationTestDriver extends BaseTestDriver {
             if (timer) {
                 clearTimeout(timer);
             }
-            monitor.Stop();
         }
-    }
-
-    /**
-     * Failure message for a check that outlived the remaining run budget. A suspension is reported
-     * only when the stall explains the overrun: `elapsedMs - stalledMs < remainingMs`, i.e. the check
-     * would have finished inside its budget had the process been running. Otherwise the check is a
-     * hung check, and any stall that was measured is appended as a note.
-     */
-    public static BudgetExceededMessage(id: string, remainingMs: number, stalledMs: number, elapsedMs: number): string {
-        const hung = `check '${id}' exceeded the ${remainingMs}ms remaining run budget (hung check)`;
-        if (stalledMs <= 0) {
-            return hung;
-        }
-        if (elapsedMs - stalledMs >= remainingMs) {
-            return `${hung} (also stalled ${Math.round(stalledMs / 1000)}s)`;
-        }
-        return `check '${id}' exceeded the ${remainingMs}ms remaining run budget, but the process did not run for ` +
-            `${Math.round(stalledMs / 1000)}s of that time (host sleep, SIGSTOP, or a synchronous block of the event ` +
-            `loop) — not a hung check. Keep the host awake for the whole run (on macOS the mj test CLI holds a ` +
-            `caffeinate assertion; a closed lid or a forced sleep still suspends it).`;
     }
 
     /**
@@ -411,19 +373,6 @@ export class IntegrationTestDriver extends BaseTestDriver {
         this.logToTestRun(context, 'warn', `− ${id}: ${reason}`);
     }
 
-    /** Moves the spend the context holds into the run's ledger and clears it; returns what was moved. */
-    private static drainCost(checkCtx: IntegrationCheckContext, cost: CostLedger): number {
-        const spent = checkCtx.CostUSD || 0;
-        checkCtx.CostUSD = 0;
-        cost.TotalUSD += spent;
-        return spent;
-    }
-
-    /** The `CostUSD` detail of a check that spent `spent`: present only when it spent something. */
-    private static costDetail(spent: number): { CostUSD?: number } {
-        return spent > 0 ? { CostUSD: spent } : {};
-    }
-
     /** Run one check in try/catch and append one OracleResult + one TestOutcome. */
     private async runCheck(
         context: DriverExecutionContext,
@@ -433,11 +382,9 @@ export class IntegrationTestDriver extends BaseTestDriver {
         fn: (ctx: IntegrationCheckContext) => Promise<void>,
         oracleResults: OracleResult[],
         outcomes: TestOutcome[],
-        cost: CostLedger,
         deadline: number
     ): Promise<void> {
         const checkStart = Date.now();
-        IntegrationTestDriver.drainCost(checkCtx, cost); // the context is shared by every check; each check reports only its own spend
         try {
             await this.runWithDeadline(id, fn, checkCtx, deadline);
             const durationMs = Date.now() - checkStart;
@@ -446,14 +393,14 @@ export class IntegrationTestDriver extends BaseTestDriver {
                 passed: true,
                 score: 1,
                 message: name,
-                details: { DurationMs: durationMs, runViewCacheSets: checkCtx.Storage.SetCount('RunViewCache'), ...IntegrationTestDriver.costDetail(IntegrationTestDriver.drainCost(checkCtx, cost)) }
+                details: { DurationMs: durationMs, runViewCacheSets: checkCtx.Storage.SetCount('RunViewCache') }
             });
             outcomes.push({ Name: name, Passed: true, DurationMs: durationMs });
             this.logToTestRun(context, 'info', `✓ ${id}`);
         } catch (checkErr) {
             const durationMs = Date.now() - checkStart;
             const message = (checkErr as Error).message;
-            oracleResults.push({ oracleType: id, passed: false, score: 0, message, details: { DurationMs: durationMs, ...IntegrationTestDriver.costDetail(IntegrationTestDriver.drainCost(checkCtx, cost)) } });
+            oracleResults.push({ oracleType: id, passed: false, score: 0, message, details: { DurationMs: durationMs } });
             outcomes.push({ Name: name, Passed: false, DurationMs: durationMs, Error: message });
             this.logToTestRun(context, 'error', `✗ ${id}: ${message}`);
         }
@@ -544,8 +491,7 @@ export class IntegrationTestDriver extends BaseTestDriver {
         context: DriverExecutionContext,
         startTime: number,
         oracleResults: OracleResult[],
-        timedOut: boolean,
-        totalCostUSD: number
+        timedOut: boolean
     ): DriverExecutionResult {
         const skipped = oracleResults.filter(r => (r.details as Record<string, unknown> | undefined)?.Skipped === true);
         const executed = oracleResults.filter(r => !skipped.includes(r));
@@ -569,8 +515,7 @@ export class IntegrationTestDriver extends BaseTestDriver {
             failedChecks,
             totalChecks,
             skippedChecks: skipped.length,
-            durationMs: Date.now() - startTime,
-            totalCost: totalCostUSD
+            durationMs: Date.now() - startTime
         };
         if (timedOut) {
             result.errorMessage = `Integration run timed out after ${this.getEffectiveTimeout(context.test)}ms`;

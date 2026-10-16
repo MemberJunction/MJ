@@ -135,13 +135,7 @@ export function AssertEqual<T>(actual: T, expected: T, message: string): void {
     }
 }
 
-/**
- * Structural equality for objects and arrays, where {@link AssertEqual}'s `!==` compares identity: the two values'
- * canonical JSON must match (object keys in any order, arrays in order, `undefined` properties ignored, numbers and
- * strings kept distinct). Like JSON, it does not tell `undefined` from `null` for a whole value or an array entry
- * (`AssertDeepEqual(undefined, null)` passes); compare those with {@link AssertEqual}. The message shows both canonical
- * forms.
- */
+/** Structural equality for objects and arrays: the two values' canonical JSON must match (object keys in any order). */
 export function AssertDeepEqual<T>(actual: T, expected: T, message: string): void {
     const a = Canonicalize(actual);
     const e = Canonicalize(expected);

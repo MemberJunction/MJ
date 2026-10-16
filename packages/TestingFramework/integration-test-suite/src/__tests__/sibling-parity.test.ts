@@ -54,16 +54,13 @@ const TESTS_ROOT = path.join(ROOT, 'metadata-optional/integration-test/tests');
 const SUITES_DIR = path.join(ROOT, 'metadata-optional/integration-test/test-suites');
 
 /**
- * A directory of test records and the suite files its records belong to — and only those. The integration tiers'
- * records must run in the integration suites (the CI tier); the gate records need bizapps-common, so they must stay in
- * the gate suites and never reach the deterministic tier.
+ * A directory of test records and the suite files its records belong to — and only those: the gate records need
+ * bizapps-common, so they must never reach the integration (CI) suite.
  */
 interface DirSuitePair {
-    /** Directory under tests/. */
     Dir: string;
-    /** Whether a suite file (its name under test-suites/) is one of this directory's own. */
     IsOwnSuiteFile: (file: string) => boolean;
-    /** A missing directory is a failure (the integration tier always exists). */
+    /** A missing directory is a failure. */
     Required: boolean;
 }
 
@@ -88,16 +85,13 @@ interface SuiteRecord {
     relatedEntities?: { 'MJ: Test Suite Tests'?: Array<{ fields?: { TestID?: string } }> };
 }
 
-/**
- * The records of one metadata file (one record or an array of them). `unknown` because the file is untyped JSON; each
- * caller narrows the records with {@link isMetadataRecord}.
- */
+/** The records of one metadata file (one record or an array of them), narrowed by {@link isMetadataRecord}. */
 function fileRecords(file: string): unknown[] {
     const parsed: unknown = JSON.parse(fs.readFileSync(file, 'utf-8'));
     return Array.isArray(parsed) ? parsed : [parsed];
 }
 
-/** A metadata record: an object (its `fields`/`relatedEntities` are read optionally, so their absence is fine). `unknown` in: a parsed JSON value. */
+/** A metadata record: an object (its `fields`/`relatedEntities` are read optionally). */
 function isMetadataRecord(value: unknown): value is ItRecord & SuiteRecord {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -129,10 +123,7 @@ function membersBySuiteFile(): Map<string, Set<string>> {
         .map(f => [f, suiteMembers(fileRecords(path.join(SUITES_DIR, f)).filter(isMetadataRecord))]));
 }
 
-/**
- * Where test records sit in the wrong suites: a required directory that is missing, a record joined to none of its own
- * directory's suite files, or a record joined to another directory's suite file.
- */
+/** A missing required directory, a record joined to none of its own suites, or one joined to another directory's suite. */
 function PairingProblems(pairs: DirSuitePair[], namesByDir: Map<string, string[] | undefined>, members: Map<string, Set<string>>): string[] {
     const problems: string[] = [];
     for (const pair of pairs) {
@@ -213,14 +204,6 @@ describe('bundle↔metadata sibling parity (drift-check)', () => {
         expect(PairingProblems(DIR_SUITE_PAIRS, new Map([['integration', ['IT01', 'IT02']], ['gates', []]]), members)).toEqual([
             'IT02 (tests/integration) is joined to none of its own suites',
             'IT02 (tests/integration) is joined to .ps-gates-x.json, another directory\'s suite',
-        ]);
-    });
-
-    it('the pairing fails a gate record joined to the integration suite, and a missing integration directory', () => {
-        const members = new Map([['.integration-suite.json', new Set(['G1'])], ['.ps-gates-x.json', new Set(['G1'])]]);
-        expect(PairingProblems(DIR_SUITE_PAIRS, new Map([['integration', undefined], ['gates', ['G1']]]), members)).toEqual([
-            'tests/integration is missing',
-            'G1 (tests/gates) is joined to .integration-suite.json, another directory\'s suite',
         ]);
     });
 

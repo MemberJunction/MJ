@@ -4,6 +4,6 @@
     "noEmit": true,
     "rootDir": "."
   },
-  "include": ["rigs/feature-pipelines/**/*.ts", "rigs/lib/rig-cli.ts"],
+  "include": ["rigs/feature-pipelines/**/*.ts"],
   "exclude": ["node_modules"]
 }
