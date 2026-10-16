@@ -127,7 +127,8 @@ import {
     WithAgentRunDataTrustApplied,
     StopContinuationMode,
     type AIPromptExecutionScope,
-    type AgentRunAudience
+    type AgentRunAudience,
+    type AgentHandoffResult
 } from '@memberjunction/ai-core-plus';
 import {
     MJActionEntityExtended, ActionResult, ActionParam, AIDirective, RuntimeAPIKeyResolver, RunActionParams, AUDIENCE_UNSUPPORTED_RESULT_CODE,
@@ -258,6 +259,8 @@ interface AgentRunTokenStats {
 interface PromptWithholding {
     /** Task graphs are not offered (an audience, or a tenant-scoped run). */
     TaskGraphs: boolean;
+    /** Handoff is not offered (a sub-agent run, no conversation detail row, or a host that does not carry handoffs). */
+    Handoff: boolean;
     /** The caller's browser and view are not: no client tools, no app context (an audience). */
     CallerContext: boolean;
 }
@@ -1177,6 +1180,17 @@ export class BaseAgent {
      * @private
      */
     private _feedbackRequestId: string | null = null;
+
+    /**
+     * Stores the handoff outcome when a Handoff step fires.
+     * Populated by executeHandoffStep(), returned in ExecuteAgentResult.handoff.
+     */
+    private _handoffResult: AgentHandoffResult | null = null;
+
+    /**
+     * Stores the target agent resolved during validateHandoffNextStep() for executeHandoffStep().
+     */
+    private _resolvedHandoffTarget: { id: string; name: string } | null = null;
 
     private _resolvedStorageAccountId: string | null = null;
 
@@ -2416,6 +2430,8 @@ export class BaseAgent {
             this._effectiveActions = [];
             this._dynamicActionLimits = {};
             this._mediaOutputs = [];
+            this._handoffResult = null;
+            this._resolvedHandoffTarget = null;
             this._messageLifecycleCallback = params.onMessageLifecycle;
             this._catalogNarrowing = undefined;
             this._openingRequest = OpeningRequestText(params.conversationMessages);
@@ -2776,12 +2792,27 @@ export class BaseAgent {
     }
 
     /**
-     * What this run's prompt leaves out: task graphs ({@link taskGraphWithholdingReason}), and — when the audience adds a
-     * reader — the caller's own browser and view (`CallerContext`): client tools run in the caller's browser and what they
-     * return reaches the room, and the app context (`data.appContext`, with its `AdditionalContext`) is the caller's screen.
+     * Whether this run withholds Handoff (`enableHandoff` off and the `handoff` response section hidden).
+     * True when the run has a `parentRun` (sub-agents cannot transfer the conversation), has no
+     * `conversationDetailId` (there is no conversation reply row to hand over), or has no `handoffChain`
+     * (the host does not carry out handoffs).
+     */
+    private runWithholdsHandoff(params: ExecuteAgentParams): boolean {
+        return Boolean(params.parentRun) || !params.conversationDetailId || !Array.isArray(params.handoffChain);
+    }
+
+    /**
+     * What this run's prompt leaves out: task graphs ({@link taskGraphWithholdingReason}), handoff
+     * ({@link runWithholdsHandoff}), and — when the audience adds a reader — the caller's own browser
+     * and view (`CallerContext`): client tools run in the caller's browser and what they return reaches
+     * the room, and the app context (`data.appContext`, with its `AdditionalContext`) is the caller's screen.
      */
     private promptWithholding(params: ExecuteAgentParams): PromptWithholding {
-        return { TaskGraphs: this.runWithholdsTaskGraphs(params), CallerContext: this.runAudienceAddsReader(params) };
+        return {
+            TaskGraphs: this.runWithholdsTaskGraphs(params),
+            Handoff: this.runWithholdsHandoff(params),
+            CallerContext: this.runAudienceAddsReader(params)
+        };
     }
 
     /**
@@ -2838,6 +2869,17 @@ export class BaseAgent {
             ? (promptParams.includeResponseTypeDefinition as Record<string, unknown>)
             : {};
         return { ...promptParams, enableTaskGraphs: false, includeResponseTypeDefinition: { ...responseType, tasks: false } };
+    }
+
+    /**
+     * A copy of the agent-type prompt params with handoff withheld (`enableHandoff` off and the `handoff`
+     * response section hidden). A copy, never a write: the input may be the process-wide cached base.
+     */
+    private withoutHandoff(promptParams: Record<string, unknown>): Record<string, unknown> {
+        const responseType = IsPlainObject(promptParams.includeResponseTypeDefinition)
+            ? (promptParams.includeResponseTypeDefinition as Record<string, unknown>)
+            : {};
+        return { ...promptParams, enableHandoff: false, includeResponseTypeDefinition: { ...responseType, handoff: false } };
     }
 
     /**
@@ -6161,6 +6203,10 @@ export class BaseAgent {
             // to check here; submission is handled by executeTasksStep.
             case 'Tasks' as typeof nextStep.step:
                 return nextStep;
+            // Type assertion required because 'Handoff' is not part of the BaseAgentNextStep step
+            // union (transfer-and-detach — the terminal step it produces is 'Success').
+            case 'Handoff' as typeof nextStep.step:
+                return this.validateHandoffNextStep<P>(params, nextStep, currentPayload, agentRun, currentStep);
             default:
                 // if we get here, the next step is not recognized, we can return a retry step
                 this.logError(`Invalid next step '${nextStep.step}' for agent '${params.agent.Name}'`, {
@@ -6650,6 +6696,61 @@ export class BaseAgent {
             };
         }
 
+        return nextStep;
+    }
+
+    /**
+     * Validates a `'Handoff'` next step: re-checks the runtime withholding conditions (sub-agent run,
+     * missing `conversationDetailId`, or missing `handoffChain`) and resolves the target agent by name
+     * over active agents in {@link AIEngine}. Stores the resolved target ID and name for
+     * {@link executeHandoffStep}.
+     *
+     * @protected
+     */
+    protected async validateHandoffNextStep<P>(
+        params: ExecuteAgentParams,
+        nextStep: BaseAgentNextStep<P>,
+        _currentPayload: P,
+        _agentRun: MJAIAgentRunEntityExtended,
+        _currentStep: MJAIAgentRunStepEntityExtended
+    ): Promise<BaseAgentNextStep<P>> {
+        if (this.runWithholdsHandoff(params)) {
+            if (nextStep.step !== 'Retry') {
+                this._generalValidationRetryCount++;
+            }
+            return {
+                step: 'Retry',
+                terminate: false,
+                message:
+                    'Handoff is not available here, so nextStep.type must never be "Handoff". ' +
+                    'Answer directly, or use nextStep.type "Sub-Agent" or "Actions" instead.',
+                errorMessage: 'Handoff is not available on this run'
+            };
+        }
+
+        const requestedName = nextStep.handoff?.agentName?.trim() ?? '';
+        const target = (AIEngine.Instance.Agents ?? []).find(
+            a => a.Status === 'Active' && a.Name?.trim().toLowerCase() === requestedName.toLowerCase()
+        );
+        if (!requestedName || !target) {
+            this.logError(`Handoff target agent '${nextStep.handoff?.agentName}' not found or not active for agent '${params.agent.Name}'`, {
+                agent: params.agent,
+                category: 'NextStepValidation'
+            });
+            if (nextStep.step !== 'Retry') {
+                this._generalValidationRetryCount++;
+            }
+            return {
+                step: 'Retry',
+                terminate: false,
+                errorMessage: `Handoff target agent '${nextStep.handoff?.agentName}' not found or not active`
+            };
+        }
+
+        this._resolvedHandoffTarget = { id: target.ID, name: target.Name };
+        if (nextStep.handoff) {
+            nextStep.handoff = { ...nextStep.handoff, agentName: target.Name };
+        }
         return nextStep;
     }
 
@@ -10638,6 +10739,9 @@ The context is now within limits. Please retry your request with the recovered c
             if (withholding?.TaskGraphs) {
                 agentTypePromptParams = this.withoutTaskGraphs(agentTypePromptParams);
             }
+            if (withholding?.Handoff) {
+                agentTypePromptParams = this.withoutHandoff(agentTypePromptParams);
+            }
             // Store for the finishIf gate, which runs after this prompt in executeActionsStep / executeNextStep
             this._agentTypePromptParams = agentTypePromptParams;
 
@@ -11331,7 +11435,8 @@ The context is now within limits. Please retry your request with the recovered c
         // that loop's `else` branch defaults an unset key to true, which is exactly what a gated
         // capability must never do.
         const gateMappings: Array<{ gateFlag: string; responseTypeKey: string }> = [
-            { gateFlag: 'enableTaskGraphs', responseTypeKey: 'tasks' }
+            { gateFlag: 'enableTaskGraphs', responseTypeKey: 'tasks' },
+            { gateFlag: 'enableHandoff', responseTypeKey: 'handoff' }
         ];
 
         for (const { gateFlag, responseTypeKey } of gateMappings) {
@@ -14069,6 +14174,11 @@ The context is now within limits. Please retry your request with the recovered c
             // durable task graph. executeTasksStep detaches (see its doc comment).
             case 'Tasks' as typeof previousDecision.step:
                 return await this.executeTasksStep(params, previousDecision);
+            // Type assertion required because 'Handoff' is not part of the BaseAgentNextStep step
+            // union — LoopAgentType.DetermineNextStep() emits it when an opted-in agent transfers
+            // the conversation to another agent. executeHandoffStep records the step and ends Success.
+            case 'Handoff' as typeof previousDecision.step:
+                return await this.executeHandoffStep(params, previousDecision);
             // Type assertion required because 'ClientTools' is not part of the BaseAgentNextStep
             // step union — LoopAgentType.DetermineNextStep() emits it when the LLM chooses client tools.
             case 'ClientTools' as typeof previousDecision.step:
@@ -15154,7 +15264,8 @@ The context is now within limits. Please retry your request with the recovered c
                 // persist the PARENT's payload onto an artifact the CHILD named, silently and with no
                 // way for the parent to opt out. Dropped explicitly, which also matches the Chat
                 // mapping in this method and `executeChatStep`: neither ever carried it.
-                artifactDirective: undefined
+                artifactDirective: undefined,
+                handoff: undefined
             };            
         } catch (error) {
             // Preserve payload on error
@@ -16001,7 +16112,8 @@ The context is now within limits. Please retry your request with the recovered c
                     terminate: false,
                     previousPayload: previousDecision?.newPayload,
                     newPayload: mergedPayload,
-                    artifactDirective: undefined
+                    artifactDirective: undefined,
+                    handoff: undefined
                 };
             }
         }
@@ -16323,7 +16435,8 @@ The context is now within limits. Please retry your request with the recovered c
                 // persist the PARENT's payload onto an artifact the CHILD named, silently and with no
                 // way for the parent to opt out. Dropped explicitly, which also matches the Chat
                 // mapping in this method and `executeChatStep`: neither ever carried it.
-                artifactDirective: undefined
+                artifactDirective: undefined,
+                handoff: undefined
             };
         } catch (error) {
             // Preserve payload on error
@@ -17870,6 +17983,88 @@ The context is now within limits. Please retry your request with the recovered c
                 previousDecision.message ||
                 `Started **${spec.workflowName}** — ${spec.tasks.length} task(s) running. ` +
                 `I'll follow up when it finishes.`,
+            reasoning: previousDecision.reasoning,
+            confidence: previousDecision.confidence,
+            previousPayload: previousDecision.previousPayload,
+            newPayload: previousDecision.newPayload || previousDecision.previousPayload
+        };
+    }
+
+    /**
+     * Executes a `'Handoff'` next step: records the `'Handoff'` step entity with the resolved
+     * target agent ID, stores {@link _handoffResult} for {@link ExecuteAgentResult.handoff},
+     * and ends this run `'Success'` with the handoff message so the host can invoke the target agent.
+     *
+     * @protected
+     */
+    protected async executeHandoffStep(
+        params: ExecuteAgentParams,
+        previousDecision: BaseAgentNextStep
+    ): Promise<BaseAgentNextStep> {
+        const handoff = previousDecision.handoff;
+        const resolved = this._resolvedHandoffTarget;
+        if (!handoff || !resolved) {
+            return {
+                step: 'Failed',
+                terminate: true,
+                errorMessage: 'A Handoff step reached execution without a validated handoff target.',
+                previousPayload: previousDecision.previousPayload,
+                newPayload: previousDecision.newPayload || previousDecision.previousPayload
+            };
+        }
+
+        if (this.runWithholdsHandoff(params)) {
+            return {
+                step: 'Failed',
+                terminate: true,
+                errorMessage: 'Handoff is not available on this run.',
+                previousPayload: previousDecision.previousPayload,
+                newPayload: previousDecision.newPayload || previousDecision.previousPayload
+            };
+        }
+
+        const stepEntity = await this.createStepEntity({
+            stepType: 'Handoff',
+            stepName: `Handoff: ${resolved.name}`,
+            targetId: resolved.id,
+            contextUser: params.contextUser,
+            inputData: {
+                agentName: handoff.agentName,
+                brief: handoff.brief,
+                reason: handoff.reason
+            }
+        });
+
+        const chain = [...(params.handoffChain ?? []), params.agent.ID];
+        const hop = chain.length;
+
+        await this.finalizeStepEntity(
+            stepEntity,
+            true,
+            undefined,
+            {
+                HandoffToAgentID: resolved.id,
+                TargetAgentName: resolved.name,
+                Brief: handoff.brief,
+                Reason: handoff.reason,
+                Hop: hop,
+                Chain: chain
+            }
+        );
+
+        this._handoffResult = {
+            targetAgentId: resolved.id,
+            targetAgentName: resolved.name,
+            sourceAgentId: params.agent.ID,
+            brief: handoff.brief,
+            reason: handoff.reason,
+            runStepId: stepEntity?.ID ?? ''
+        };
+
+        return {
+            step: 'Success',
+            terminate: true,
+            message: previousDecision.message || `Transferring you to **${resolved.name}**…`,
             reasoning: previousDecision.reasoning,
             confidence: previousDecision.confidence,
             previousPayload: previousDecision.previousPayload,
@@ -19471,6 +19666,7 @@ The context is now within limits. Please retry your request with the recovered c
             mediaOutputs: this._mediaOutputs.length > 0 ? this._mediaOutputs : undefined,
             fileOutputs: this._fileOutputs.length > 0 ? this._fileOutputs : undefined,
             feedbackRequestId: this._feedbackRequestId || undefined,
+            handoff: this._handoffResult || undefined,
             resolvedStorageAccountId: this._resolvedStorageAccountId || undefined
         };
     }

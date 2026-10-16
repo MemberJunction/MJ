@@ -5974,7 +5974,7 @@ export class MJAIAgentRunStep_ {
     @Field(() => Int, {nullable: true, description: "Sequential number of this step within the agent run, starting from 1"}) 
     StepNumber?: number;
         
-    @Field({nullable: true, description: "Type of execution step: Prompt, Actions, Sub-Agent, Decision, Chat, Validation, ForEach, While, Tool"}) 
+    @Field({nullable: true, description: "Type of execution step: Actions, Chat, Compaction, Decision, ForEach, Handoff, Plan, Prompt, Skill, Sub-Agent, TaskGraph, Tool, Validation, While."}) 
     @MaxLength(50)
     StepType?: string;
         

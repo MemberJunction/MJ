@@ -55,6 +55,11 @@
                 "type": "boolean",
                 "default": false,
                 "description": "Include Tasks in nextStep.type union and the tasks property. Auto-aligns with enableTaskGraphs. Defaults to FALSE, unlike its siblings — an agent that has not opted into task graphs must not see the type at all, or the model will reach for it."
+              },
+              "handoff": {
+                "type": "boolean",
+                "default": false,
+                "description": "Include Handoff in nextStep.type union and the handoff property. Auto-aligns with enableHandoff. Defaults to FALSE — an agent that has not opted into handoff (or is running where handoff is withheld) must not see the type at all, or the model will reach for it."
               }
             }
           },
@@ -153,6 +158,11 @@
             "type": "boolean",
             "default": false,
             "description": "Allow this agent to emit durable task graphs (nextStep.type == 'Tasks'). DEFAULTS TO FALSE, unlike every other flag here, and is ENFORCED rather than advisory. The other flags only shape the prompt: turning one off saves tokens, and an agent that emits the feature anyway still works. This one is a capability gate — a task graph creates durable Task rows that outlive the run, execute on a server-side dispatcher under the submitting user, and can spawn further agent runs, so acquiring that reach through prompt drift rather than deliberate configuration is a real problem, not a token-budget one. LoopAgentType rejects a 'Tasks' step from a disabled agent with a corrective, on top of omitting the type from the prompt."
+          },
+          "enableHandoff": {
+            "type": "boolean",
+            "default": false,
+            "description": "Allow this agent to transfer the conversation turn to another agent (nextStep.type == 'Handoff'). DEFAULTS TO FALSE, like enableTaskGraphs, and is ENFORCED rather than advisory. A handoff detaches the current run and causes the host to start a peer agent run in the same conversation as that agent itself. LoopAgentType rejects a 'Handoff' step from a disabled agent with a corrective Retry, on top of omitting the type from the prompt. Even when enabled on the agent, BaseAgent withholds Handoff on sub-agent runs, runs without a conversationDetailId, and runs where the host has not supplied handoffChain."
           },
           "maxSubAgentsInPrompt": {
             "type": "integer",

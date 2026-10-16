@@ -594,6 +594,43 @@ export type ArtifactDirective = {
 };
 
 /**
+ * Maximum number of agent-to-agent handoffs allowed within a single user turn.
+ * Shared across `BaseAgent` handoff validation/execution and messaging adapters.
+ */
+export const MAX_HANDOFF_HOPS = 3;
+
+/**
+ * Request emitted by an agent to transfer the conversation turn to another agent (`step === 'Handoff'`).
+ * The target agent runs as itself in the same conversation rather than as a nested sub-agent.
+ */
+export type AgentHandoffRequest = {
+    /** Name of the target agent to transfer the conversation to. */
+    agentName: string;
+    /** Self-contained brief carrying the context and requirements the target agent needs to handle the turn. */
+    brief: string;
+    /** Explanation of why the source agent is transferring the turn to the target agent. */
+    reason: string;
+};
+
+/**
+ * Outcome recorded when a run ends with a `'Handoff'` step, read by the host to execute the transfer.
+ */
+export type AgentHandoffResult = {
+    /** Resolved ID of the target agent receiving the handoff. */
+    targetAgentId: string;
+    /** Canonical Name of the target agent receiving the handoff. */
+    targetAgentName: string;
+    /** ID of the source agent that initiated the handoff. */
+    sourceAgentId: string;
+    /** Self-contained brief passed from the source agent to the target agent. */
+    brief: string;
+    /** Explanation of why the turn was transferred. */
+    reason: string;
+    /** ID of the recorded `AIAgentRunStep` row (`StepType = 'Handoff'`). */
+    runStepId: string;
+};
+
+/**
  * Represents the next step determination from an agent type.
  * 
  * Agent types analyze the output of prompt execution and determine what should
@@ -627,6 +664,9 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
      * - 'Decision': non-terminal in the same way. Runs {@link decisions} as `Decision` run steps with
      *   no LLM turn, and returns a 'Retry' carrying {@link decisionResults}. A Flow agent's Decision
      *   step emits it.
+     * - 'Handoff': detaches by recording a `Handoff` run step, storing {@link AgentHandoffResult} on
+     *   `ExecuteAgentResult.handoff`, and concluding the source agent's run with `'Success'`. Use
+     *   `'Handoff' as typeof nextStep.step` at assignment and switch sites.
      *
      * Note: To expand a compacted message, set step to 'Retry', set messageIndex to the message to expand,
      * and optionally set expandReason to explain why expansion is needed. The framework will expand the message
@@ -819,6 +859,12 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
         foldReason?: string;
     };
     /**
+     * Request to transfer the conversation turn to another agent when `step` is `'Handoff'`.
+     * Records a `Handoff` run step and terminates the current agent run with `Success` so the
+     * host can invoke the target agent in the same conversation.
+     */
+    handoff?: AgentHandoffRequest;
+    /**
      * When true, the agent should terminate after executing the current step.
      * Used by ClientTools: the main loop needs `terminate: false` so it continues
      * to dispatch the tool execution, but `executeClientToolsStep` checks this
@@ -948,6 +994,12 @@ export type ExecuteAgentResult<P = any> = {
      * @since 5.12.0
      */
     feedbackRequestId?: string;
+
+    /**
+     * Populated when the run concluded with a `'Handoff'` step. Carries the resolved target agent
+     * and brief so the conversation host can execute the transfer in the same conversation.
+     */
+    handoff?: AgentHandoffResult;
 
     /**
      * The resolved FileStorageAccount ID for file artifact storage, determined during
@@ -1474,6 +1526,15 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      * turn's tool results. Omitted, the run reads the trunk (rows with no branch).
      */
     ConversationBranchID?: string;
+
+    /**
+     * Ordered list of agent IDs that have already handed this user turn on, oldest first.
+     *
+     * A host that carries out handoffs sets this property, even to `[]` on the initial run.
+     * When absent (`undefined`), this host does not carry out handoffs (e.g., MCP, scheduled jobs,
+     * evals, or API-key callers), so the run is not offered the `Handoff` step type.
+     */
+    handoffChain?: string[];
 
     /**
      * Optional flag to automatically populate the payload from the last run.

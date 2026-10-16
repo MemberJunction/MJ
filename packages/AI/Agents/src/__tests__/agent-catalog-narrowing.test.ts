@@ -513,6 +513,7 @@ const GOLDEN: Record<string, unknown> = {
         includeFinishIfDocs: false,
         // Decisions are opt-in too (includeDecisionsDocs defaults to false), so their docs and type are out.
         includeDecisionsDocs: false,
+        enableHandoff: false,
         includeResponseTypeDefinition: {
             payload: true,
             responseForms: true,
@@ -527,6 +528,7 @@ const GOLDEN: Record<string, unknown> = {
             pipeline: true,
             memoryWrites: true,
             tasks: false,
+            handoff: false,
         },
     },
 };

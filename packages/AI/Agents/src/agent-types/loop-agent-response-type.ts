@@ -1,4 +1,4 @@
-import { AgentPayloadChangeRequest, ForEachOperation, WhileOperation, AgentResponseForm, ActionableCommand, AutomaticCommand, AgentScratchpad, AgentPipelineRequest, TaskGraphSpec, AgentDecisionRequest, AgentFinishIf } from "@memberjunction/ai-core-plus";
+import { AgentPayloadChangeRequest, ForEachOperation, WhileOperation, AgentResponseForm, ActionableCommand, AutomaticCommand, AgentScratchpad, AgentPipelineRequest, TaskGraphSpec, AgentDecisionRequest, AgentFinishIf, AgentHandoffRequest } from "@memberjunction/ai-core-plus";
 import { ArtifactToolCall } from "../ArtifactToolManager";
 import { ConversationToolCall } from "../ConversationToolManager";
 import { MemoryWriteRequest } from "../MemoryWriteManager";
@@ -21,7 +21,7 @@ export type { ForEachOperation, WhileOperation, ArtifactToolCall, ConversationTo
  */
 export const LOOP_NEXT_STEP_TYPES = [
     'Actions', 'ClientTools', 'Sub-Agent', 'Chat', 'Retry',
-    'ForEach', 'While', 'Pipeline', 'Skill', 'Plan', 'Tasks'
+    'ForEach', 'While', 'Pipeline', 'Skill', 'Plan', 'Tasks', 'Handoff'
 ] as const;
 
 /** The `nextStep.type` union, derived from the interface rather than restated. */
@@ -132,9 +132,9 @@ export interface LoopAgentResponse<P = any> {
      */
     nextStep?: {
         /**
-         * Operation type: 'Actions' | 'ClientTools' | 'Sub-Agent' | 'Chat' | 'Retry' | 'ForEach' | 'While' | 'Pipeline' | 'Skill' | 'Plan' | 'Tasks'
+         * Operation type: 'Actions' | 'ClientTools' | 'Sub-Agent' | 'Chat' | 'Retry' | 'ForEach' | 'While' | 'Pipeline' | 'Skill' | 'Plan' | 'Tasks' | 'Handoff'
          */
-        type: 'Actions' | 'ClientTools' | 'Sub-Agent' | 'Chat' | 'Retry' | 'ForEach' | 'While' | 'Pipeline' | 'Skill' | 'Plan' | 'Tasks';
+        type: 'Actions' | 'ClientTools' | 'Sub-Agent' | 'Chat' | 'Retry' | 'ForEach' | 'While' | 'Pipeline' | 'Skill' | 'Plan' | 'Tasks' | 'Handoff';
 
         /**
          * Actions to execute (when type='Actions')
@@ -282,6 +282,16 @@ export interface LoopAgentResponse<P = any> {
          * results into the conversation or starts you a fresh turn with the outcome.
          */
         tasks?: TaskGraphSpec;
+
+        /**
+         * Conversation handoff details (when type='Handoff'). Required for that type.
+         *
+         * Transfers the conversation turn to another agent so that agent answers in this
+         * conversation as itself, with its own settings. Emitting one ends your turn; put
+         * everything the target agent needs in `brief`. Use `Handoff` when another agent
+         * should own the request, and `Sub-Agent` when you need a result back.
+         */
+        handoff?: AgentHandoffRequest;
 
         /**
          * Conditional completion gate for Actions or Sub-Agent steps.
