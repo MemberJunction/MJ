@@ -10,7 +10,7 @@ import { LogError } from "./logging";
 import { AggregateResult, EntityRecordNameInput, EntityRecordNameResult, RunReportResult, RunQueryResult } from "./interfaces";
 import { QueryExecutionSpec } from "./queryExecutionSpec";
 import { RunReportParams } from "./runReport";
-import { SQLExpressionValidator, StripSQLStringLiterals, uuidv4 } from "@memberjunction/global";
+import { ScanSQLForScreening, SQLExpressionValidator, uuidv4 } from "@memberjunction/global";
 import { GetDialect, SQLDialect } from "@memberjunction/sql-dialect";
 
 // Re-export PlatformSQL types from their canonical location for backward compatibility
@@ -973,27 +973,27 @@ export abstract class DatabaseProviderBase extends ProviderBase {
 
     /**
      * Validates a user-provided SQL clause (WHERE, ORDER BY, etc.) to prevent SQL injection.
-     * Checks for forbidden keywords (INSERT, UPDATE, DELETE, EXEC, DROP, UNION, etc.)
-     * and dangerous patterns (comments, semicolons, xp_ prefix).
-     * String literals are stripped before validation to avoid false positives.
+     * The clause is read with this provider's SQL dialect. It is rejected when it contains a
+     * comment, text that cannot be read the way the database reads it, a forbidden keyword
+     * (INSERT, UPDATE, DELETE, EXEC, DROP, UNION, etc.), a semicolon, or an `xp_` name.
+     * String literals and quoted identifiers are not checked for keywords.
      *
      * @param clause The SQL clause to validate
      * @returns true if the clause is safe, false if it contains forbidden patterns
      */
     protected ValidateUserProvidedSQLClause(clause: string): boolean {
-        // Remove string literals to avoid false positives.
-        //
-        // 🚨 SECURITY: this uses the SHARED stripper in @memberjunction/global. It must match how
-        // SQL Server / PostgreSQL actually parse literals — see StripSQLStringLiterals for the full
-        // rationale and the backslash-escape bypass it exists to prevent. Do NOT inline a regex here;
-        // an inline copy is exactly how this screen and SQLExpressionValidator drifted apart before.
-        const clauseWithoutStrings = StripSQLStringLiterals(clause);
-        const lowerClause = clauseWithoutStrings.toLowerCase();
+        // 🚨 SECURITY: this uses the SHARED scanner in @memberjunction/global, which reads quotes,
+        // [bracket] and "double-quoted" identifiers, comments, and PostgreSQL E'…' and $$…$$ strings
+        // the way this provider's database does, and refuses text it cannot classify. Do NOT inline
+        // a regex here: this screen and SQLExpressionValidator must read SQL the same way.
+        const scan = ScanSQLForScreening(clause, this.PlatformKey);
+        if (!scan.Classified || scan.CommentCount > 0) return false;
+        const lowerClause = scan.Code.toLowerCase();
 
         const forbiddenPatterns: RegExp[] = [
             /\binsert\b/, /\bupdate\b/, /\bdelete\b/,
             /\bexec\b/, /\bexecute\b/, /\bdrop\b/,
-            /--/, /\/\*/, /\*\//, /\bunion\b/, /\bxp_/, /;/,
+            /--/, /\/\*/, /\*\//, /\bunion\b/, /;/,
             // Time-based blind injection vector — no legitimate filter/order-by clause uses WAITFOR.
             /\bwaitfor\b/,
         ];
@@ -1001,7 +1001,8 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         for (const pattern of forbiddenPatterns) {
             if (pattern.test(lowerClause)) return false;
         }
-        return true;
+        // Extended stored procedures are names, so a quoted name such as [xp_cmdshell] is checked too.
+        return !/\bxp_/.test(scan.CodeWithIdentifiers.toLowerCase());
     }
 
     /**
@@ -1060,6 +1061,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
             const result = validator.validate(agg.expression, {
                 context: 'aggregate',
                 entityFields: fieldNames,
+                Dialect: this.PlatformKey,
             });
 
             if (!result.valid) {
@@ -1158,14 +1160,20 @@ export abstract class DatabaseProviderBase extends ProviderBase {
     }
 
     /**
-     * Builds the SQL to retrieve the "name" field value for a specific entity record.
-     * Uses QuoteIdentifier/QuoteSchemaAndView for dialect-neutral SQL generation.
+     * Builds the query that reads a record's name fields by its primary key.
+     *
+     * Key columns are written from the entity's metadata and key values are bound as parameters,
+     * so nothing the caller supplies reaches the SQL text. When a user is given, their effective
+     * read row filter (role RLS) is ANDed in. A caller that gives no user
+     * is trusted server code, as for a single-record Load.
      *
      * @param entityName The entity name
      * @param compositeKey The record's primary key
-     * @returns The SQL query string, or null if the entity has no name field
+     * @param contextUser The acting user, whose read row filter applies
+     * @returns The SQL and its parameter values, or null if the entity has no name field or the
+     * key does not name the entity's primary key fields
      */
-    protected BuildEntityRecordNameSQL(entityName: string, compositeKey: CompositeKey): string | null {
+    protected BuildEntityRecordNameSQL(entityName: string, compositeKey: CompositeKey, contextUser?: UserInfo): { SQL: string; Parameters: unknown[] } | null {
         const e = this.EntityByName(entityName);
         if (!e) throw new Error('Entity ' + entityName + ' not found');
 
@@ -1185,22 +1193,53 @@ export abstract class DatabaseProviderBase extends ProviderBase {
             nameFields.push(f);
         }
 
-        let where = '';
-        for (const pkv of compositeKey.KeyValuePairs) {
-            const pk = e.PrimaryKeys.find((pk) => pk.Name === pkv.FieldName);
-            const quotes = pk && pk.NeedsQuotes ? "'" : '';
-            if (where.length > 0) where += ' AND ';
-            where += this.QuoteIdentifier(pkv.FieldName) + '=' + quotes + pkv.Value + quotes;
+        const keyFields = this.RecordNameKeyFieldsOf(e, compositeKey);
+        if (!keyFields) {
+            return null;
+        }
+
+        const conditions = keyFields.map((f, i) => this.QuoteIdentifier(f.Name) + '=' + this.BuildParameterPlaceholder(i));
+        const rowFilter = contextUser ? e.GetUserRowLevelSecurityWhereClause(contextUser, EntityPermissionType.Read, '') : '';
+        if (rowFilter) {
+            conditions.push('(' + rowFilter + ')');
         }
 
         // SELECT all name fields so InternalGetEntityRecordName can concatenate them
         const selectFields = nameFields.map(f => this.QuoteIdentifier(f.Name)).join(', ');
-        return 'SELECT ' + selectFields + ' FROM ' + this.QuoteSchemaAndView(e.SchemaName, e.BaseView) + ' WHERE ' + where;
+        return {
+            SQL: 'SELECT ' + selectFields + ' FROM ' + this.QuoteSchemaAndView(e.SchemaName, e.BaseView) + ' WHERE ' + conditions.join(' AND '),
+            Parameters: compositeKey.KeyValuePairs.map(kv => kv.Value),
+        };
+    }
+
+    /**
+     * The primary key field each pair of a record-name key names, in key order. Names match
+     * case-insensitively. Null, after logging, when the key is empty or names a field that is not
+     * one of the entity's primary keys.
+     */
+    protected RecordNameKeyFieldsOf(entity: EntityInfo, compositeKey: CompositeKey): EntityFieldInfo[] | null {
+        const pairs = compositeKey?.KeyValuePairs ?? [];
+        if (pairs.length === 0) {
+            LogError(`Record name lookup on ${entity.Name}: the key names no fields`);
+            return null;
+        }
+        const keyFields: EntityFieldInfo[] = [];
+        for (const pair of pairs) {
+            const name = String(pair.FieldName ?? '').trim().toLowerCase();
+            const field = entity.PrimaryKeys.find(pk => pk.Name.trim().toLowerCase() === name);
+            if (!field) {
+                LogError(`Record name lookup on ${entity.Name}: ${JSON.stringify(pair.FieldName)} is not a primary key field`);
+                return null;
+            }
+            keyFields.push(field);
+        }
+        return keyFields;
     }
 
     /**
      * Retrieves the display name for a single entity record.
-     * Uses BuildEntityRecordNameSQL for dialect-neutral SQL generation.
+     * Uses BuildEntityRecordNameSQL for dialect-neutral SQL generation, which limits the lookup to
+     * rows the acting user's read row filter allows.
      */
     protected async InternalGetEntityRecordName(
         entityName: string,
@@ -1208,9 +1247,9 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         contextUser?: UserInfo,
     ): Promise<string> {
         try {
-            const sql = this.BuildEntityRecordNameSQL(entityName, compositeKey);
-            if (sql) {
-                const data = await this.ExecuteSQL<Record<string, unknown>>(sql, undefined, undefined, contextUser);
+            const query = this.BuildEntityRecordNameSQL(entityName, compositeKey, contextUser);
+            if (query) {
+                const data = await this.ExecuteSQL<Record<string, unknown>>(query.SQL, query.Parameters, undefined, contextUser);
                 if (data && data.length === 1) {
                     // Concatenate all returned fields with spaces (supports multi-name entities)
                     const values = Object.values(data[0])

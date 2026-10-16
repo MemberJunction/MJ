@@ -1883,3 +1883,26 @@ export function ToEpochMs(value: Date | string | number | null | undefined): num
     const ms = value instanceof Date ? value.getTime() : new Date(value).getTime();
     return Number.isNaN(ms) ? 0 : ms;
 }
+
+/**
+ * Safely escapes a string literal for use inside single-quoted SQL statements, clauses, or `ExtraFilter` predicates.
+ *
+ * Replaces each single quote with doubled single quotes (`''`) per ANSI SQL standard — the escaping
+ * mechanism supported by both SQL Server and PostgreSQL — and removes null bytes (`\0`), which cannot
+ * appear in any legitimate value and invite parser-level surprises when left in a predicate.
+ *
+ * **This escapes string literals and nothing else.** It does not escape `LIKE` wildcards
+ * (`%`, `_`, `[`) or identifier names, and `null`/`undefined` map to `''`.
+ *
+ * @param value - The raw string value to escape. If null or undefined, returns empty string.
+ * @returns Safely escaped string value (without surrounding quotes).
+ *
+ * @example
+ * ```typescript
+ * const filter = `Email = '${EscapeSQLString(userEmail)}'`;
+ * ```
+ */
+export function EscapeSQLString(value: string | null | undefined): string {
+  if (value == null) return '';
+  return String(value).replace(/\0/g, '').replace(/'/g, "''");
+}

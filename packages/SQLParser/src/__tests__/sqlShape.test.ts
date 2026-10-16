@@ -19,6 +19,11 @@ describe('LexSQL', () => {
         expect(LexSQL(sql, pg).some(t => t.Kind === 'comment')).toBe(false);
     });
 
+    it('reads a PostgreSQL dollar quote whose tag has a non-ASCII letter as one string token', () => {
+        const strings = LexSQL("SELECT $\u00e9$'x$\u00e9$ AS s", pg).filter(t => t.Kind === 'string').map(t => t.Text);
+        expect(strings).toEqual(["$\u00e9$'x$\u00e9$"]);
+    });
+
     it('treats brackets as identifiers on SQL Server only', () => {
         expect(LexSQL('SELECT [x]', ss).some(t => t.Kind === 'identifier' && t.Text === '[x]')).toBe(true);
         expect(LexSQL('SELECT ARRAY[1]', pg).some(t => t.Kind === 'identifier')).toBe(false);
