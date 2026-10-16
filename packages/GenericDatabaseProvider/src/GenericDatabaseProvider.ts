@@ -71,14 +71,14 @@ import {
     QueryInfo,
 } from '@memberjunction/core';
 
-import { MJGlobal, SQLExpressionValidator, UUIDsEqual } from '@memberjunction/global';
+import { IsValidUUID, MJGlobal, SQLExpressionValidator, UUIDsEqual } from '@memberjunction/global';
 import { QueryPagingEngine } from './queryPagingEngine.js';
 // QueryParameterProcessor is now called internally by RenderPipeline
 import { v4 as uuidv4 } from 'uuid';
 import { SqlLoggingSessionImpl } from './SqlLogger.js';
 import { SqlLoggingOptions, SqlLoggingSession } from './types.js';
 import { SQLDialect } from '@memberjunction/sql-dialect';
-import { IsReadOnlyQuery } from '@memberjunction/sql-parser';
+import { IsReadOnlyQuery, CheckAggregateExpression, IsBalancedSQLFragment, SplitTopLevelAndTerms, type BalancedFragmentOptions } from '@memberjunction/sql-parser';
 // QueryCompositionEngine is now owned by RenderPipeline
 import { RenderPipeline, type RenderResult } from './renderPipeline.js';
 import { CRUDSprocType, useJsonArgShape } from './crudSprocFieldRules.js';
@@ -101,6 +101,7 @@ import { QueueManager } from '@memberjunction/queue';
 import { EntityActionEngineServer } from '@memberjunction/actions';
 import { ActionResult } from '@memberjunction/actions-base';
 import { EncryptionEngine } from '@memberjunction/encryption';
+import { ClientClauseScreen, type ClientClauseScreeningProvider } from './clientClauseScreen.js';
 import { GeoCodeSyncService, GeocodeResult } from '@memberjunction/geo-core';
 
 /**
@@ -122,6 +123,16 @@ export interface ExecuteSQLBatchOptions {
  */
 const CALLER_SQL_OPTIONS: ExecuteSQLOptions = { readOnlyTransaction: true, description: 'caller-supplied query' };
 
+/** How one dataset item reads for the caller, or why it is refused. */
+interface DatasetItemScope {
+    /** The item's stored WhereClause AND'd with the caller's ItemFilter; '' when neither applies. */
+    Filter: string;
+    /** The context user's effective read row filter for the item's entity; '' when none applies. */
+    RowFilter: string;
+    /** Why the item is refused, or null when it may run. */
+    Refusal: string | null;
+}
+
 /**
  * GenericDatabaseProvider is an intermediate abstract class that implements shared
  * entity action, AI action, encryption, and view WHERE clause rendering logic.
@@ -135,7 +146,7 @@ const GEO_EXTENDED_TYPES = new Set([
     'GeoCountry', 'GeoPostalCode', 'GeoLatitude', 'GeoLongitude'
 ]);
 
-export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
+export abstract class GenericDatabaseProvider extends DatabaseProviderBase implements ClientClauseScreeningProvider {
     // Composition engine is now owned by RenderPipeline
 
     /**************************************************************************/
@@ -1409,6 +1420,45 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     }
 
     /**
+     * Throws unless a caller-supplied WHERE piece (ExtraFilter, OverrideExcludeFilter, a stored view
+     * WhereClause) stays inside the parentheses this provider puts around it, read with this
+     * provider's SQL dialect (see `IsBalancedSQLFragment`). The pieces are ANDed with row-level
+     * security, which also carries guest scope; a piece that closes its parentheses early, such as
+     * `1=1) OR (1=1`, would leave those filters on one side of an OR the caller controls.
+     */
+    protected AssertClauseBalanced(clause: string, label: string, options?: BalancedFragmentOptions): void {
+        const check = IsBalancedSQLFragment(clause, this.Dialect, options);
+        if (!check.IsBalanced) {
+            throw new Error(`Invalid ${label}: ${check.Reason}`);
+        }
+    }
+
+    /**
+     * Applies {@link TransformExternalSQLClause} to a caller's ExtraFilter and checks the result with
+     * {@link AssertClauseBalanced}. When the transform changes the text and the filter is a chain of
+     * top-level AND terms, each term is transformed, checked and parenthesized on its own. A
+     * PreRunView hook that ANDs a server predicate (such as tenant scope) onto the caller's filter
+     * runs before this transform, so a rewrite that changes the caller's term cannot reach the
+     * hook's term.
+     */
+    protected PrepareExtraFilterSQL(extraFilter: string, entityInfo: EntityInfo): string {
+        if (!extraFilter) return '';
+        const transformed = this.TransformExternalSQLClause(extraFilter, entityInfo);
+        const terms = transformed === extraFilter ? null : SplitTopLevelAndTerms(extraFilter, this.Dialect);
+        if (!terms || terms.length < 2) {
+            this.AssertClauseBalanced(transformed, 'ExtraFilter');
+            return transformed;
+        }
+        return terms
+            .map((term) => {
+                const termSQL = this.TransformExternalSQLClause(term.trim(), entityInfo);
+                this.AssertClauseBalanced(termSQL, 'ExtraFilter');
+                return `(${termSQL})`;
+            })
+            .join(' AND ');
+    }
+
+    /**
      * Optionally wraps a view query with user view run logging.
      * SQL Server overrides to use spCreateUserViewRunWithDetail.
      * Default: returns null (no view run logging).
@@ -1489,11 +1539,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             }
 
             // ── Parameters (transform user-provided SQL clauses for platform compatibility) ──
-            const extraFilter: string = this.TransformExternalSQLClause((params.ExtraFilter as string) || '', entityInfo);
+            const extraFilter: string = this.PrepareExtraFilterSQL((params.ExtraFilter as string) || '', entityInfo);
             const userSearchString: string = params.UserSearchString ?? '';
             const excludeUserViewRunID: string = params.ExcludeUserViewRunID ?? '';
             const overrideExcludeFilter: string = params.OverrideExcludeFilter ?? '';
             const saveViewResults: boolean = params.SaveViewResults ?? false;
+            this.AssertClauseFragmentIsSingleStatement(extraFilter, 'ExtraFilter');
+            this.AssertClauseFragmentIsSingleStatement(overrideExcludeFilter, 'OverrideExcludeFilter');
 
             // ── TOP / pagination mode ──
             // Keyset (AfterKey) takes precedence: validate now so failures are early, predictable,
@@ -1553,18 +1605,21 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             // 1. View where clause
             if (viewEntity?.WhereClause && viewEntity.WhereClause.length > 0) {
                 const renderedWhere = await this.RenderViewWhereClause(viewEntity, user);
-                // SECURITY: a stored view WhereClause originates from a client save, so pass the
-                // rendered clause through the same screen ExtraFilter gets. The one exemption is
-                // CustomWhereClause views: those are admin-authored (MJUserViewEntityServer's save
-                // gate restricts setting/changing them to Owner-type users) and may legitimately
-                // contain constructs the screen blocks. Auto-generated clauses (FilterState /
-                // SmartFilter / nested {%UserView%} templates) always pass — the screen permits
-                // plain SELECT subqueries and blocks only stacked statements, DML, comments,
-                // UNION and WAITFOR.
+                // SECURITY: a stored view WhereClause originates from a client save, so the rendered
+                // clause passes the full client-clause screen (ScreenStoredViewWhereClause). The one
+                // exemption is CustomWhereClause views: those are admin-authored (MJUserViewEntityServer's
+                // save gate restricts setting/changing them to Owner-type users) and may legitimately
+                // contain constructs the screen blocks. Auto-generated clauses (FilterState / SmartFilter /
+                // nested {%UserView%} templates) are written against entity base views, which the screen
+                // permits when the running user reads each of those entities unscoped.
+                this.ScreenStoredViewWhereClause(viewEntity, renderedWhere, user);
                 const isCustomWhereClause = !!viewEntity.CustomWhereClause; // truthy — the DB may hand back true or 1
-                if (!isCustomWhereClause && !this.ValidateUserProvidedSQLClause(renderedWhere)) {
-                    throw new Error(`Invalid view WhereClause for view '${viewEntity.Name ?? viewEntity.ID}': contains one or more forbidden keywords`);
-                }
+                // CustomWhereClause views too: an unbalanced clause would take row-level security
+                // out of force for everyone who runs the view. Only their admin-written text may
+                // carry comments.
+                this.AssertClauseBalanced(renderedWhere, `view WhereClause for view '${viewEntity.Name ?? viewEntity.ID}'`, {
+                    AllowComments: isCustomWhereClause,
+                });
                 whereSQL = `(${renderedWhere})`;
                 bHasWhere = true;
             }
@@ -1579,7 +1634,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
             // 3. User search string
             if (userSearchString.length > 0) {
-                if (!this.ValidateUserProvidedSQLClause(userSearchString))
+                if (!this.IsUserSearchTermAllowed(userSearchString))
                     throw new Error(`Invalid User Search SQL clause: ${userSearchString}, contains one more for forbidden keywords`);
                 const sUserSearchSQL = this.createViewUserSearchSQL(entityInfo, userSearchString);
                 if (sUserSearchSQL.length > 0) {
@@ -1591,8 +1646,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             // 4. Exclude UserViewRunID
             if ((excludeUserViewRunID.length > 0) || params.ExcludeDataFromAllPriorViewRuns === true) {
                 let sExcludeSQL = `${this.QuoteIdentifier(entityInfo.FirstPrimaryKey?.Name ?? 'ID')} NOT IN (SELECT RecordID FROM ${this.QuoteSchemaAndView(this.MJCoreSchemaName, 'vwUserViewRunDetails')} WHERE EntityID='${viewEntity?.EntityID}' AND`;
-                if (params.ExcludeDataFromAllPriorViewRuns === true)
+                if (params.ExcludeDataFromAllPriorViewRuns === true) {
+                    // SECURITY: the view ID is interpolated; a loaded view's ID is always a GUID.
+                    if (!IsValidUUID(String(viewEntity?.ID ?? '')))
+                        throw new Error(`ExcludeDataFromAllPriorViewRuns requires a saved view with a GUID ID`);
                     sExcludeSQL += ` UserViewID=${viewEntity?.ID})`;
+                }
                 else {
                     // SECURITY: excludeUserViewRunID is user-supplied (GraphQL input) and is
                     // interpolated directly into SQL here. Unlike ExtraFilter/UserSearchString/
@@ -1608,6 +1667,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 if (overrideExcludeFilter.length > 0) {
                     if (!this.ValidateUserProvidedSQLClause(overrideExcludeFilter))
                         throw new Error(`Invalid OverrideExcludeFilter: ${overrideExcludeFilter}, contains one more for forbidden keywords`);
+                    this.AssertClauseBalanced(overrideExcludeFilter, 'OverrideExcludeFilter');
                     sExcludeSQL += ' OR (' + overrideExcludeFilter + ')';
                 }
                 whereSQL = bHasWhere ? `${whereSQL} AND (${sExcludeSQL})` : `(${sExcludeSQL})`;
@@ -1647,6 +1707,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             const orderBy: string = rawOrderBy.length > 0
                 ? (usingKeyset ? rawOrderBy : this.TransformExternalSQLClause(rawOrderBy, entityInfo))
                 : '';
+            if (orderBy.length > 0 && !usingKeyset) {
+                this.AssertClauseFragmentIsSingleStatement(orderBy, 'OrderBy');
+                // No caller OrderBy means the sort came from the saved view's stored sort state.
+                if (!params.OrderBy && viewEntity) this.ScreenStoredViewOrderBy(orderBy, user);
+            }
 
             // View run logging (SQL Server-specific, others return null)
             let userViewRunID = '';
@@ -1815,6 +1880,45 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     /**************************************************************************/
 
     /**
+     * Builds the aggregate query without running the caller's text. Each expression must be a single
+     * aggregate function call over this entity's columns: the query runs the SQL that
+     * {@link CheckAggregateExpression} rebuilds from the checked parse tree (with this provider's
+     * dialect), once the keyword validator has also accepted that SQL. A refused expression becomes a
+     * per-aggregate error in request order. The accepted ones are aliased `Agg_0`, `Agg_1`, … in
+     * request order, which is how `RunViewCore` reads their values back.
+     */
+    protected override BuildAggregateSQL(
+        aggregates: { expression: string; alias?: string }[],
+        entityInfo: EntityInfo,
+        schemaName: string,
+        baseView: string,
+        whereSQL: string,
+    ): { aggregateSQL: string | null; validationErrors: AggregateResult[] } {
+        const columns = entityInfo.Fields.map((f) => f.Name);
+        const items: string[] = [];
+        const validationErrors: AggregateResult[] = [];
+        for (const agg of aggregates ?? []) {
+            const screened = this.screenAggregateExpression(agg.expression, columns);
+            if ('SQL' in screened) {
+                items.push(`${screened.SQL} AS ${this.QuoteIdentifier(`Agg_${items.length}`)}`);
+            } else {
+                validationErrors.push({ expression: agg.expression, alias: agg.alias || agg.expression, value: null, error: screened.Error });
+            }
+        }
+        if (items.length === 0) return { aggregateSQL: null, validationErrors };
+        const where = whereSQL ? ` WHERE ${whereSQL}` : '';
+        return { aggregateSQL: `SELECT ${items.join(', ')} FROM ${this.QuoteSchemaAndView(schemaName, baseView)}${where}`, validationErrors };
+    }
+
+    /** The SQL to run for one caller aggregate expression, or why it is refused. */
+    private screenAggregateExpression(expression: string, columns: string[]): { SQL: string } | { Error: string } {
+        const check = CheckAggregateExpression(expression, this.Dialect, columns);
+        if (!check.IsAllowed || check.SQL === null) return { Error: `Invalid aggregate expression: ${check.Reason}` };
+        const keywordCheck = SQLExpressionValidator.Instance.validate(check.SQL, { context: 'aggregate', entityFields: columns });
+        return keywordCheck.valid ? { SQL: check.SQL } : { Error: keywordCheck.error || 'Validation failed' };
+    }
+
+    /**
      * Builds the SQL field list string for a view query, using dialect-neutral quoting.
      * Returns '*' if no specific fields are resolved.
      */
@@ -1884,6 +1988,15 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      *   - skips fields that are not sensible text-search targets (non-text types,
      *     unbounded text columns when FTX is off).
      */
+    /**
+     * Screens a user search term with {@link ValidateUserProvidedSQLClause}. The screen reads the
+     * quote-doubled term, because that is the text {@link createViewUserSearchSQL} splices, so a
+     * term such as `O'Leary` is read as complete SQL tokens.
+     */
+    protected IsUserSearchTermAllowed(userSearchString: string): boolean {
+        return this.ValidateUserProvidedSQLClause(userSearchString.replace(/'/g, "''"));
+    }
+
     protected createViewUserSearchSQL(entityInfo: EntityInfo, userSearchString: string): string {
         let sUserSearchSQL = '';
         const safeUserSearchString = userSearchString.replace(/'/g, "''");
@@ -1913,6 +2026,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             }
             if (sUserSearchSQL.length > 0) sUserSearchSQL = '(' + sUserSearchSQL + ')';
         }
+        // A UserSearchParamFormatAPI format may splice the term outside quotes; the term must not end the statement there.
+        this.AssertClauseFragmentIsSingleStatement(sUserSearchSQL, 'UserSearchString');
         return sUserSearchSQL;
     }
 
@@ -1974,6 +2089,54 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         if (t !== 'nvarchar' && t !== 'varchar' && t !== 'char' && t !== 'nchar') return false;
         if (field.Length === -1) return false;
         return true;
+    }
+
+    /**************************************************************************/
+    // Client clause screening
+    /**************************************************************************/
+
+    /**
+     * SECURITY — refuses a statement separator or comment in a filter, sort or search fragment.
+     * Runs for every RunView caller, server-internal ones included, and cannot refuse a legitimate
+     * fragment. The full base-view screen runs at the client entry points; see {@link ClientClauseScreen}.
+     */
+    protected AssertClauseFragmentIsSingleStatement(clause: string, label: string): void {
+        ClientClauseScreen.AssertSingleStatementFragment(clause, label, this.Dialect);
+    }
+
+    /**
+     * SECURITY — the full client-clause screen ({@link ClientClauseScreen.AssertClauseUsesEntityBaseViews})
+     * against this provider's entities and dialect, with `contextUser` as the acting user. With
+     * `entityInfo`, the clause is screened in the form this provider runs a client clause for that
+     * entity ({@link TransformExternalSQLClause}). Server code that hands client SQL text to RunView
+     * outside the API entry points calls this: ad-hoc list sources (`ListOperations`) and the
+     * saved-view save gate (`MJUserViewEntityServer`).
+     */
+    public ScreenClientClause(clause: string | null | undefined, label: string, contextUser?: UserInfo, entityInfo?: EntityInfo): void {
+        const text = clause && entityInfo ? this.TransformExternalSQLClause(clause, entityInfo) : clause;
+        ClientClauseScreen.AssertClauseUsesEntityBaseViews(text, label, this.Entities, this.Dialect, contextUser);
+    }
+
+    /**
+     * SECURITY — screens a saved view's rendered WhereClause with the full client-clause screen.
+     * Any user who can save a view can write its WhereClause, directly or through FilterState or a
+     * Smart Filter. Exempt: a CustomWhereClause view loaded as an entity, whose clause only an Owner
+     * can set (MJUserViewEntityServer). The flag on any other object, such as one built from a
+     * request body, is not trusted. The exemption tests `instanceof BaseEntity`, so a second copy of
+     * `@memberjunction/core` in the process makes loaded custom views fail closed, not open.
+     */
+    protected ScreenStoredViewWhereClause(viewEntity: MJUserViewEntityExtended, renderedWhere: string, user: UserInfo): void {
+        if (viewEntity instanceof BaseEntity && !!viewEntity.CustomWhereClause) return; // truthy — the DB may hand back true or 1
+        this.AssertClauseFragmentIsSingleStatement(renderedWhere, 'view WhereClause');
+        this.ScreenClientClause(renderedWhere, 'view WhereClause', user);
+    }
+
+    /**
+     * SECURITY — screens the ORDER BY a saved view builds from its stored SortState / GridState with
+     * the full client-clause screen. Any user who can save a view can write those.
+     */
+    protected ScreenStoredViewOrderBy(orderBy: string, user: UserInfo): void {
+        this.ScreenClientClause(orderBy, 'OrderBy', user);
     }
 
     /**************************************************************************/
@@ -2368,7 +2531,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         let whereSQL = '';
         let bHasWhere = false;
 
-        const extraFilter = this.TransformExternalSQLClause((params.ExtraFilter as string) || '', entityInfo);
+        // PrepareExtraFilterSQL transforms and balance-checks the filter; the single-statement
+        // check then runs on the result, as on the main view path.
+        const extraFilter = this.PrepareExtraFilterSQL((params.ExtraFilter as string) || '', entityInfo);
+        this.AssertClauseFragmentIsSingleStatement(extraFilter, 'ExtraFilter');
         if (extraFilter.length > 0) {
             if (!this.ValidateUserProvidedSQLClause(extraFilter))
                 throw new Error(`Invalid Extra Filter: ${extraFilter}`);
@@ -2377,7 +2543,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         }
 
         if (params.UserSearchString && params.UserSearchString.length > 0) {
-            if (!this.ValidateUserProvidedSQLClause(params.UserSearchString))
+            if (!this.IsUserSearchTermAllowed(params.UserSearchString))
                 throw new Error(`Invalid User Search SQL clause: ${params.UserSearchString}`);
             const sUserSearchSQL = this.createViewUserSearchSQL(entityInfo, params.UserSearchString);
             if (sUserSearchSQL.length > 0) {
@@ -2820,6 +2986,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             if (orderBy.length > 0) {
                 if (!this.ValidateUserProvidedSQLClause(orderBy))
                     throw new Error(`Invalid OrderBy clause: ${orderBy}`);
+                this.AssertClauseFragmentIsSingleStatement(orderBy, 'OrderBy');
                 sql += ` ORDER BY ${orderBy}`;
             }
 
@@ -3297,7 +3464,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     protected async ExecuteAdhocQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult> {
         try {
             const validator = SQLExpressionValidator.Instance;
-            const validation = validator.validateFullQuery(params.SQL!);
+            const validation = validator.ValidateFullQuery(params.SQL!, this.PlatformKey);
             const statementCheck = IsReadOnlyQuery(params.SQL!, this.Dialect);
             if (!validation.valid || !statementCheck.IsReadOnly) {
                 return {
@@ -4054,11 +4221,61 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     }
 
     /**
+     * Resolves how one dataset item reads for the caller. A caller's ItemFilter must pass the same
+     * denylist as a RunView ExtraFilter. With a context user, the item's entity must be readable by
+     * that user and the user's effective read row filter applies. MJ_Metadata is exempt from the
+     * user checks: every authenticated client loads it to learn the schema, including principals
+     * (widget guests, magic-link sessions) whose roles hold no read grant on the metadata entities.
+     */
+    private resolveDatasetItemScope(
+        datasetName: string,
+        item: Record<string, unknown>,
+        itemFilters: DatasetItemFilterType[] | undefined,
+        contextUser: UserInfo | undefined,
+    ): DatasetItemScope {
+        const code = String(item['Code']);
+        const whereClause = item['WhereClause'] ? String(item['WhereClause']) : '';
+        const clientFilter = itemFilters?.find(f => f?.ItemCode === code)?.Filter ?? '';
+        if (clientFilter && !this.ValidateUserProvidedSQLClause(clientFilter)) {
+            return { Filter: '', RowFilter: '', Refusal: `Invalid ItemFilter for dataset item '${code}': contains one or more forbidden keywords` };
+        }
+        const filter = whereClause && clientFilter ? `${whereClause} AND (${clientFilter})` : (whereClause || clientFilter);
+        if (!contextUser || datasetName === GenericDatabaseProvider._mjMetadataDatasetName) {
+            return { Filter: filter, RowFilter: '', Refusal: null };
+        }
+
+        const entityName = String(item['Entity']);
+        const entity = this.EntityByName(entityName);
+        if (!entity) {
+            return { Filter: filter, RowFilter: '', Refusal: `Entity '${entityName}' of dataset item '${code}' not found in metadata` };
+        }
+        if (!entity.GetUserPermisions(contextUser)?.CanRead) {
+            return { Filter: filter, RowFilter: '', Refusal: `User ${contextUser.Email} does not have read permissions on ${entity.Name}` };
+        }
+        return { Filter: filter, RowFilter: entity.GetUserRowLevelSecurityWhereClause(contextUser, EntityPermissionType.Read, ''), Refusal: null };
+    }
+
+    /**
+     * The WHERE text for a dataset item: the caller's row filter AND'd with the item's filter. The
+     * item's filter sits two parentheses deep because a client ItemFilter is screened inside one
+     * level, so an OR it reaches by closing a parenthesis still cannot widen the row filter.
+     */
+    private datasetItemWhereClause(scope: DatasetItemScope): string {
+        if (!scope.RowFilter) return scope.Filter;
+        if (!scope.Filter) return scope.RowFilter;
+        return `(${scope.RowFilter}) AND ((${scope.Filter}))`;
+    }
+
+    /**
      * Retrieves a dataset by name, executing all item queries via ExecuteSQLBatch
      * and aggregating results. Uses dialect-neutral quoting for all SQL construction.
      *
      * ExecuteSQLBatch gives SQL Server true multi-result-set batching automatically,
      * while PG (and the default) use parallel individual queries.
+     *
+     * An ItemFilter that fails the denylist refuses its item. With a context user, each item needs
+     * CanRead on its entity and gets the user's read row filter (MJ_Metadata excepted). A refused
+     * item runs no SQL and fails the dataset.
      */
     public async GetDatasetByName(
         datasetName: string,
@@ -4117,7 +4334,6 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             const code = String(item['Code']);
             const entityName = String(item['Entity']);
             const entityID = String(item['EntityID']);
-            const whereClause = item['WhereClause'] ? String(item['WhereClause']) : '';
 
             // External-data-source entities have no MJ base view — their data is proxied live and
             // can't be served through the dataset's batched MJ-DB SQL path. Fail loud for that item
@@ -4136,23 +4352,30 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 continue;
             }
 
-            // Build effective filter (WhereClause + optional runtime ItemFilter)
-            let effectiveFilter = whereClause;
-            if (itemFilters && itemFilters.length > 0) {
-                const filter = itemFilters.find(f => f.ItemCode === code);
-                if (filter) {
-                    effectiveFilter = whereClause
-                        ? `${whereClause} AND (${filter.Filter})`
-                        : filter.Filter;
-                }
+            // The item's filter and the caller's row filter, or why it is refused. A refused item
+            // never reaches the cache or the database.
+            const scope = provider.resolveDatasetItemScope(datasetName, item, itemFilters, contextUser);
+            if (scope.Refusal) {
+                errorResults.push({
+                    EntityID: entityID,
+                    EntityName: entityName,
+                    Code: code,
+                    Results: [],
+                    LatestUpdateDate: undefined,
+                    Status: scope.Refusal,
+                    Success: false,
+                });
+                continue;
             }
+            // The row filter keys the slot, so one user's filtered rows are never served to another.
+            const rowFilterKey = scope.RowFilter || undefined;
 
             // Try cache first
             if (cacheAvailable) {
                 const fingerprint = cache.GenerateRunViewFingerprint(
-                    { EntityName: entityName, ExtraFilter: effectiveFilter } as RunViewParams,
+                    { EntityName: entityName, ExtraFilter: scope.Filter } as RunViewParams,
                     this.InstanceConnectionString,
-                    undefined,
+                    rowFilterKey,
                     this.datasetCacheSegment(datasetName, code)
                 );
                 const cached = await cache.GetRunViewResult(fingerprint);
@@ -4188,15 +4411,16 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 continue;
             }
 
-            const filterSQL = effectiveFilter ? 'WHERE ' + effectiveFilter : '';
+            const whereSQL = this.datasetItemWhereClause(scope);
+            const filterSQL = whereSQL ? 'WHERE ' + whereSQL : '';
             uncachedQueries.push(`SELECT ${columns} FROM ${provider.QuoteSchemaAndView(entitySchemaName, entityBaseView)} ${filterSQL}`);
             uncachedItems.push(item);
             // Store fingerprint for write-through caching after SQL
             const fp = cacheAvailable
                 ? cache.GenerateRunViewFingerprint(
-                    { EntityName: entityName, ExtraFilter: effectiveFilter } as RunViewParams,
+                    { EntityName: entityName, ExtraFilter: scope.Filter } as RunViewParams,
                     this.InstanceConnectionString,
-                    undefined,
+                    rowFilterKey,
                     this.datasetCacheSegment(datasetName, code)
                 )
                 : '';
@@ -4301,6 +4525,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     /**
      * Retrieves status information for a dataset by name: per-entity row count and
      * latest update date. Uses ExecuteSQLBatch for per-item status queries.
+     *
+     * Items read with the same scope as {@link GetDatasetByName}. When any item is refused, the
+     * status fails with the refusal and no status SQL runs.
      */
     public async GetDatasetStatusByName(
         datasetName: string,
@@ -4348,13 +4575,28 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         const updateDates: DatasetStatusEntityUpdateDateType[] = [];
         let overallLatestDate = new Date(1900, 1, 1);
 
+        // Same scope as GetDatasetByName's data read — the stored item WhereClause, the caller's
+        // ItemFilter and the caller's row filter — so status and data describe the same row set.
+        // (Every shipped MJ_Metadata item has a NULL WhereClause and no row filter, so for
+        // metadata this is an unfiltered aggregate.)
+        const scopes = items.map(item => provider.resolveDatasetItemScope(datasetName, item, itemFilters, contextUser));
+        const refusal = scopes.find(scope => scope.Refusal)?.Refusal;
+        if (refusal) {
+            return {
+                DatasetID: String(items[0]['DatasetID']),
+                DatasetName: datasetName,
+                Success: false,
+                Status: refusal,
+                LatestUpdateDate: new Date(0),
+                EntityUpdateDates: [],
+            };
+        }
+
         const itemMeta: Array<{ entityID: string; entityName: string }> = [];
-        const queries = items.map((item) => {
+        const queries = items.map((item, index) => {
             const entitySchemaName = String(item['EntitySchemaName'] ?? schema);
             const entityBaseView = String(item['EntityBaseView']);
-            const code = String(item['Code']);
             const dateFieldToCheck = String(item['DateFieldToCheck'] ?? '__mj_UpdatedAt');
-            const whereClause = item['WhereClause'] ? String(item['WhereClause']) : '';
 
             itemMeta.push({ entityID: String(item['EntityID']), entityName: String(item['Entity']) });
 
@@ -4364,20 +4606,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             const datasetUpdatedAt = new Date(String(item['DatasetUpdatedAt']));
             const datasetMaxUpdatedAt = new Date(Math.max(itemUpdatedAt.getTime(), datasetUpdatedAt.getTime())).toISOString();
 
-            // Same filter composition as GetDatasetByName's data read — the stored item
-            // WhereClause AND'd with any runtime filter — so status and data describe the same
-            // row set. (Every shipped MJ_Metadata item has a NULL WhereClause, so for metadata
-            // this is identical to an unfiltered aggregate.)
-            let effectiveFilter = whereClause;
-            if (itemFilters && itemFilters.length > 0) {
-                const filter = itemFilters.find(f => f.ItemCode === code);
-                if (filter) {
-                    effectiveFilter = whereClause
-                        ? `${whereClause} AND (${filter.Filter})`
-                        : filter.Filter;
-                }
-            }
-            const filterSQL = effectiveFilter ? ' WHERE ' + effectiveFilter : '';
+            const whereSQL = this.datasetItemWhereClause(scopes[index]);
+            const filterSQL = whereSQL ? ' WHERE ' + whereSQL : '';
 
             return `SELECT ` +
                 `CASE ` +

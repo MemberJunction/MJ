@@ -260,9 +260,15 @@ export interface CoAgentSystemPromptResolution {
 export interface ExecuteRelayedToolInput {
     /** The shared session id grouping this voice session's runs. */
     AgentSessionID: string;
-    /** The id of the (co-agent) run that owns this session, used as the delegated run's parent. Optional. */
+    /**
+     * The id of the (co-agent) run that owns this session, used as the delegated run's parent. Optional.
+     * The caller passes it only when it is a run of this session.
+     */
     ParentRunID?: string;
-    /** The top-level (lead) target agent id for `invoke-target-agent` delegation. */
+    /**
+     * The top-level (lead) target agent id for `invoke-target-agent` delegation. The caller must have
+     * checked that the acting user may run this agent.
+     */
     TargetAgentID: string;
     /**
      * The session's effective allowed delegation targets (the union-accumulated set from the config
@@ -289,7 +295,8 @@ export interface ExecuteRelayedToolInput {
      * Optional id of a previously-paused delegated run (Status `AwaitingFeedback`) to RESUME instead
      * of starting a fresh run. When set, {@link delegateToTarget} passes it as `lastRunId` (with
      * `autoPopulateLastRunPayload`) to {@link AgentRunner.RunAgent}, so the user's answer continues
-     * the SAME interactive run (e.g. confirming a Query Builder task graph).
+     * the SAME interactive run (e.g. confirming a Query Builder task graph). The caller passes it only
+     * when it is a run of this session.
      */
     ResumeRunID?: string;
     /**
