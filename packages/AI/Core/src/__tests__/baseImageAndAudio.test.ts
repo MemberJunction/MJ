@@ -16,6 +16,9 @@ import {
     BaseAudioGenerator,
     TranscriptionPiece,
     SpeechResult,
+    SpeechAlignment,
+    WordTiming,
+    DeriveWordTimings,
     VoiceInfo,
     VoiceSample,
     AudioModel,
@@ -303,6 +306,112 @@ describe('SpeechResult', () => {
 
         expect(result.success).toBe(false);
         expect(result.errorMessage).toBe('Voice not found');
+    });
+
+    it('should hold optional Alignment when timestamps are returned', () => {
+        const result = new SpeechResult();
+        result.success = true;
+        result.content = 'audio-base64';
+        result.Alignment = {
+            Characters: ['H', 'i'],
+            StartSeconds: [0, 0.1],
+            EndSeconds: [0.1, 0.25],
+        };
+
+        expect(result.Alignment.Characters).toEqual(['H', 'i']);
+        expect(result.Alignment.StartSeconds).toEqual([0, 0.1]);
+        expect(result.Alignment.EndSeconds).toEqual([0.1, 0.25]);
+    });
+});
+
+describe('DeriveWordTimings', () => {
+    function buildAlignment(text: string, stepSeconds = 0.1): SpeechAlignment {
+        const chars = Array.from(text);
+        return {
+            Characters: chars,
+            StartSeconds: chars.map((_, idx) => Number((idx * stepSeconds).toFixed(4))),
+            EndSeconds: chars.map((_, idx) => Number(((idx + 1) * stepSeconds).toFixed(4))),
+        };
+    }
+
+    const cases: Array<{
+        name: string;
+        alignment: SpeechAlignment | null | undefined;
+        expected: WordTiming[];
+    }> = [
+        {
+            name: 'undefined alignment returns []',
+            alignment: undefined,
+            expected: [],
+        },
+        {
+            name: 'null alignment returns []',
+            alignment: null,
+            expected: [],
+        },
+        {
+            name: 'empty alignment arrays return []',
+            alignment: { Characters: [], StartSeconds: [], EndSeconds: [] },
+            expected: [],
+        },
+        {
+            name: 'sentence with punctuation keeps punctuation attached to its word',
+            alignment: buildAlignment('Hello, world!'),
+            expected: [
+                { Word: 'Hello,', StartSeconds: 0, EndSeconds: 0.6 },
+                { Word: 'world!', StartSeconds: 0.7, EndSeconds: 1.3 },
+            ],
+        },
+        {
+            name: 'leading and trailing spaces are ignored',
+            alignment: buildAlignment('  Hi  '),
+            expected: [{ Word: 'Hi', StartSeconds: 0.2, EndSeconds: 0.4 }],
+        },
+        {
+            name: 'multiple consecutive spaces split words cleanly',
+            alignment: buildAlignment('A   B'),
+            expected: [
+                { Word: 'A', StartSeconds: 0, EndSeconds: 0.1 },
+                { Word: 'B', StartSeconds: 0.4, EndSeconds: 0.5 },
+            ],
+        },
+        {
+            name: 'newlines and tabs split words cleanly',
+            alignment: buildAlignment('One\nTwo\tThree\r\nFour'),
+            expected: [
+                { Word: 'One', StartSeconds: 0, EndSeconds: 0.3 },
+                { Word: 'Two', StartSeconds: 0.4, EndSeconds: 0.7 },
+                { Word: 'Three', StartSeconds: 0.8, EndSeconds: 1.3 },
+                { Word: 'Four', StartSeconds: 1.5, EndSeconds: 1.9 },
+            ],
+        },
+        {
+            name: 'whitespace-only alignment returns []',
+            alignment: buildAlignment('   \n\t '),
+            expected: [],
+        },
+        {
+            name: 'mismatched StartSeconds length returns []',
+            alignment: {
+                Characters: ['H', 'i'],
+                StartSeconds: [0],
+                EndSeconds: [0.1, 0.2],
+            },
+            expected: [],
+        },
+        {
+            name: 'mismatched EndSeconds length returns []',
+            alignment: {
+                Characters: ['H', 'i'],
+                StartSeconds: [0, 0.1],
+                EndSeconds: [0.1],
+            },
+            expected: [],
+        },
+    ];
+
+    it.each(cases)('$name', ({ alignment, expected }) => {
+        expect(DeriveWordTimings(alignment)).toEqual(expected);
     });
 });
 
