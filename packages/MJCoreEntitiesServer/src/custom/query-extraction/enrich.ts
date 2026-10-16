@@ -257,15 +257,6 @@ export function BuildPassthroughDescription(
 }
 
 /**
- * True when a parameter name reads as a key (`ID`, `ActivityID`, `userId`, `user_id`, or a GUID/UUID name),
- * so its sample must be a GUID: `'Example'` fails a uniqueidentifier comparison.
- */
-export function IsIdentifierParameterName(name: string): boolean {
-    return /^id$/i.test(name) || /[a-z0-9]I[Dd]$/.test(name) || /_id$/i.test(name)
-        || /^(guid|uuid)$/i.test(name) || /(GUID|Guid|UUID|Uuid)$/.test(name) || /_(guid|uuid)$/i.test(name);
-}
-
-/**
  * Generates a deterministic sample value based on the parameter type.
  * Uses the default value if available, otherwise generates a type-appropriate example.
  *
@@ -277,7 +268,7 @@ export function GenerateSampleValue(param: MJParameterInfo): string | null {
     }
 
     switch (param.type) {
-        case 'string': return IsIdentifierParameterName(param.name) ? '00000000-0000-0000-0000-000000000000' : 'Example';
+        case 'string': return 'Example';
         case 'number': return '10';
         case 'date': return '2024-01-01';
         case 'boolean': return 'true';

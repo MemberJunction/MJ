@@ -105,9 +105,6 @@ Extends the Query entity with automatic Template management similar to AIPromptE
 - **Automatic Template Management**: Creates and updates Template records when saving
 - **Dynamic SQL Support**: Supports parameterized queries with Nunjucks templates
 
-A string parameter whose name reads as a key (`ID`, `ActivityID`, `userId`, `user_id`, a GUID/UUID name) gets the
-empty GUID as its heuristic sample, so a test run of the query is valid SQL (`IsIdentifierParameterName`).
-
 ### MJAIAgentNoteEntityServer (v5.30.x+)
 
 Extends the agent note entity to keep the in-process vector store in sync with persisted state:

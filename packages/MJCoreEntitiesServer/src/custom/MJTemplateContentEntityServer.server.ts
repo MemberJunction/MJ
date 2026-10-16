@@ -28,7 +28,7 @@ export class MJTemplateContentEntityServer extends MJTemplateContentEntity {
 
             // Extract and sync parameters if needed
             if (shouldExtractParams && this.TemplateText && this.TemplateText.trim().length > 0) {
-                await this.extractAndSyncParameters(options?.SkipEntityAIActions === true);
+                await this.extractAndSyncParameters();
             }
 
             // Commit the transaction
@@ -42,11 +42,7 @@ export class MJTemplateContentEntityServer extends MJTemplateContentEntity {
         }
     }
 
-    /**
-     * Extracts the template's parameters and syncs them, inside a nested transaction.
-     * @param skipAIEnrichment Skip the AI enrichment stage (the save asked to skip AI actions).
-     */
-    private async extractAndSyncParameters(skipAIEnrichment: boolean): Promise<void> {
+    private async extractAndSyncParameters(): Promise<void> {
         // Nest the AI-driven extraction in its own transaction (a SAVEPOINT
         // on PG, a SAVE TRANSACTION on SS) so any failure inside this step
         // can't poison the parent `super.Save()`'s outer tx.
@@ -76,7 +72,6 @@ export class MJTemplateContentEntityServer extends MJTemplateContentEntity {
                 this.TemplateText,
                 this.Template,
                 this.ContextCurrentUser,
-                skipAIEnrichment,
             );
 
             if (result.Warnings.length > 0) {

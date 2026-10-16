@@ -33,7 +33,7 @@ import {
 } from "./search-guardrails";
 import { MapExternalNativeTypeToMJ } from "../Misc/externalTypeMapping";
 import { SQLParser } from "@memberjunction/sql-parser";
-import { createDisplayName, EscapeSQLString, generatePluralName, IndexByUUID, IsValidUUID, MJGlobal, NormalizeUUID, RegisterClass, ResolveSingleEntityResourceTarget, SafeJSONParse, stripTrailingChars, UUIDsEqual } from "@memberjunction/global";
+import { createDisplayName, EscapeSQLString, generatePluralName, IndexByUUID, MJGlobal, NormalizeUUID, RegisterClass, ResolveSingleEntityResourceTarget, SafeJSONParse, stripTrailingChars, UUIDsEqual } from "@memberjunction/global";
 import { v4 as uuidv4, v5 as uuidv5 } from 'uuid';
 
 import * as fs from 'fs';
@@ -306,15 +306,6 @@ export type ViewRegenReason = 'Geocoding';
 export interface ViewRegenEntry {
    EntityName: string;
    Reason: ViewRegenReason;
-}
-
-/** An entity field whose column is gone from its entity's base table (a dropped or renamed column). */
-export interface DroppedColumnField {
-   ID: string;
-   EntityID: string;
-   Name: string;
-   /** The owning entity's name. */
-   Entity: string;
 }
 
 export class ManageMetadataBase {
@@ -4573,12 +4564,6 @@ export class ManageMetadataBase {
       const step1StartTime: Date = new Date();
       if (skipDeleteUnneededFields) {
          logStatus(`      Skipping deletion of unneeded entity fields (deferred to post-SQL pass)`);
-         // A field whose column is gone from the base table is stale whatever the views say: a renamed column's old
-         // field would keep its Sequence while the new field takes the same one (UQ_EntityField_EntityID_Sequence).
-         if (! await this.DeleteFieldsOfDroppedColumns(pool, excludeSchemas, scopedEntityIDs)) {
-            logError('Error deleting entity fields whose column was dropped');
-            bSuccess = false;
-         }
       } else {
          if (! await this.deleteUnneededEntityFields(pool, excludeSchemas, scopedEntityIDs)) {
             logError ('Error deleting unneeded entity fields');
@@ -5845,74 +5830,6 @@ export class ManageMetadataBase {
          logError(e as string);
          return false;
       }
-   }
-
-   /**
-    * Deletes the non-virtual fields whose column is gone from the entity's base table, with their value lists, in
-    * CodeGen's first pass (where `spDeleteUnneededEntityFields` is deferred until the views are regenerated).
-    * Same scope as that procedure; compares against the base table, not the not-yet-regenerated base view.
-    */
-   protected async DeleteFieldsOfDroppedColumns(pool: CodeGenConnection, excludeSchemas: string[], entityIDs?: string[]): Promise<boolean> {
-      try {
-         const findSQL = this.BuildDroppedColumnFieldsQuerySQL(excludeSchemas, entityIDs, await this.entityHasExternalDataSourceColumn(pool));
-         if (findSQL === null) {
-            return true;
-         }
-         const stale = (await this.runQuery(pool, findSQL)).recordset as DroppedColumnField[];
-         if (stale.length === 0) {
-            return true;
-         }
-         await this.logSQLAndExecute(pool, this.BuildDroppedColumnFieldsDeleteSQL(stale), 'SQL text to delete entity fields whose column was dropped');
-         ManageMetadataBase.addNewEntitiesToModifiedList([...new Set(stale.map((f) => f.Entity))]);
-         return true;
-      }
-      catch (e) {
-         logError(e instanceof Error ? e.message : String(e));
-         return false;
-      }
-   }
-
-   /** The query that finds the fields {@link DeleteFieldsOfDroppedColumns} deletes; null when no scoped ID is valid. */
-   protected BuildDroppedColumnFieldsQuerySQL(excludeSchemas: string[], entityIDs: string[] | undefined, hasExternalDataSourceColumn: boolean): string | null {
-      let scoped = '';
-      if (entityIDs && entityIDs.length > 0) {
-         const validIDs = entityIDs.filter((id) => IsValidUUID(id));
-         if (validIDs.length === 0) {
-            return null;
-         }
-         scoped = `
-              AND e.${this.qi('ID')} IN (${validIDs.map((id) => `'${id}'`).join(', ')})`;
-      }
-      const excluded = excludeSchemas.length > 0
-         ? `
-              AND e.${this.qi('SchemaName')} NOT IN (${excludeSchemas.map((schema) => `'${EscapeSQLString(schema)}'`).join(', ')})`
-         : '';
-      const external = hasExternalDataSourceColumn
-         ? `
-              AND e.${this.qi('ExternalDataSourceID')} IS NULL`
-         : '';
-      return `SELECT ef.${this.qi('ID')} AS ${this.qi('ID')}, ef.${this.qi('EntityID')} AS ${this.qi('EntityID')}, ef.${this.qi('Name')} AS ${this.qi('Name')}, e.${this.qi('Name')} AS ${this.qi('Entity')}
-            FROM ${this.qs(MjCoreSchema(), 'EntityField')} ef
-            INNER JOIN ${this.qs(MjCoreSchema(), 'vwEntities')} e ON e.${this.qi('ID')} = ef.${this.qi('EntityID')}
-            WHERE ef.${this.qi('IsVirtual')} = ${this.boolLit(false)}
-              AND e.${this.qi('VirtualEntity')} = ${this.boolLit(false)}${external}${excluded}${scoped}
-              AND EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES t
-                          WHERE t.TABLE_SCHEMA = e.${this.qi('SchemaName')} AND t.TABLE_NAME = e.${this.qi('BaseTable')})
-              AND NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS c
-                              WHERE c.TABLE_SCHEMA = e.${this.qi('SchemaName')} AND c.TABLE_NAME = e.${this.qi('BaseTable')}
-                                AND c.COLUMN_NAME = ef.${this.qi('Name')})`;
-   }
-
-   /** Touches the entities, then deletes the fields' value lists and the fields, as `spDeleteUnneededEntityFields` does. */
-   protected BuildDroppedColumnFieldsDeleteSQL(fields: DroppedColumnField[]): string {
-      const fieldIDs = fields.map((f) => `'${f.ID}'`).join(', ');
-      const entityIDs = [...new Set(fields.map((f) => f.EntityID))].map((id) => `'${id}'`).join(', ');
-      return `
-/* Delete the entity fields whose column was dropped from the base table */
-   UPDATE ${this.qs(MjCoreSchema(), 'Entity')} SET ${this.qi(EntityInfo.UpdatedAtFieldName)} = ${this.utcNow()} WHERE ${this.qi('ID')} IN (${entityIDs});
-   DELETE FROM ${this.qs(MjCoreSchema(), 'EntityFieldValue')} WHERE ${this.qi('EntityFieldID')} IN (${fieldIDs});
-   DELETE FROM ${this.qs(MjCoreSchema(), 'EntityField')} WHERE ${this.qi('ID')} IN (${fieldIDs});
-`;
    }
 
    protected async manageEntityFieldValuesAndValidatorFunctions(pool: CodeGenConnection, excludeSchemas: string[], currentUser: UserInfo, skipDBUpdate: boolean): Promise<boolean> {

@@ -7767,23 +7767,6 @@ END;
 GO
 
 -- Save MJ: AI Prompts (core SP call only)
--- bizapps-common ships an AI Prompt with this same ID. When bizapps-common owns it (its template B8221E1A is attached, or
--- its migration 202609282100 that creates the prompt has been applied), skip this batch: MJ core must not overwrite it.
-DECLARE @PR1Env6_BizAppsOwnsPrompt BIT = 0;
-IF SCHEMA_ID(N'__mj_BizAppsCommon') IS NOT NULL
-BEGIN
-  IF EXISTS (
-    SELECT 1 FROM [${flyway:defaultSchema}].[AIPrompt]
-    WHERE [ID] = '7C46041F-0412-4C2E-9B9E-3ED61D32210C' AND [TemplateID] = 'B8221E1A-F5DB-4C71-8196-944EA959E82A'
-  )
-    SET @PR1Env6_BizAppsOwnsPrompt = 1;
-  ELSE IF OBJECT_ID(N'[__mj_BizAppsCommon].[flyway_schema_history]', N'U') IS NOT NULL
-    EXEC sp_executesql
-      N'IF EXISTS (SELECT 1 FROM [__mj_BizAppsCommon].[flyway_schema_history] WHERE [success] = 1 AND TRY_CAST([version] AS BIGINT) >= 202609282100) SET @Owns = 1;',
-      N'@Owns BIT OUTPUT',
-      @Owns = @PR1Env6_BizAppsOwnsPrompt OUTPUT;
-END
-IF @PR1Env6_BizAppsOwnsPrompt = 1 RETURN;
 DECLARE @ID_abc44ee165ae UNIQUEIDENTIFIER,
 @Name_abc44ee165ae NVARCHAR(255),
 @Description_abc44ee165ae NVARCHAR(MAX),
@@ -8064,29 +8047,6 @@ END;
 GO
 
 -- Save MJ: AI Prompt Models (core SP call only)
--- Binding for prompt 7C46041F, which bizapps-common also ships. Skip it when bizapps-common owns the prompt, or when a
--- binding for the same prompt, model, vendor and configuration already exists under another ID (it would violate
--- UQ_AIPromptModel_Prompt_Model_Vendor_ConfigID).
-DECLARE @PR1Env6_BizAppsOwnsPrompt BIT = 0;
-IF SCHEMA_ID(N'__mj_BizAppsCommon') IS NOT NULL
-BEGIN
-  IF EXISTS (
-    SELECT 1 FROM [${flyway:defaultSchema}].[AIPrompt]
-    WHERE [ID] = '7C46041F-0412-4C2E-9B9E-3ED61D32210C' AND [TemplateID] = 'B8221E1A-F5DB-4C71-8196-944EA959E82A'
-  )
-    SET @PR1Env6_BizAppsOwnsPrompt = 1;
-  ELSE IF OBJECT_ID(N'[__mj_BizAppsCommon].[flyway_schema_history]', N'U') IS NOT NULL
-    EXEC sp_executesql
-      N'IF EXISTS (SELECT 1 FROM [__mj_BizAppsCommon].[flyway_schema_history] WHERE [success] = 1 AND TRY_CAST([version] AS BIGINT) >= 202609282100) SET @Owns = 1;',
-      N'@Owns BIT OUTPUT',
-      @Owns = @PR1Env6_BizAppsOwnsPrompt OUTPUT;
-END
-IF @PR1Env6_BizAppsOwnsPrompt = 1 RETURN;
-IF EXISTS (
-  SELECT 1 FROM [${flyway:defaultSchema}].[AIPromptModel]
-  WHERE [PromptID] = '7C46041F-0412-4C2E-9B9E-3ED61D32210C' AND [ModelID] = 'E8C833BC-1723-4B4B-9B12-0629EB5190A3'
-    AND [VendorID] = 'E4A5CCEC-6A37-EF11-86D4-000D3A4E707E' AND [ConfigurationID] IS NULL AND [ID] <> '29E25958-922D-4148-A9DB-01770ED9F3B0'
-) RETURN;
 DECLARE @ID_6ee4db6e5250 UNIQUEIDENTIFIER,
 @PromptID_6ee4db6e5250 UNIQUEIDENTIFIER,
 @ModelID_6ee4db6e5250 UNIQUEIDENTIFIER,
@@ -8172,29 +8132,6 @@ END;
 GO
 
 -- Save MJ: AI Prompt Models (core SP call only)
--- Binding for prompt 7C46041F, which bizapps-common also ships. Skip it when bizapps-common owns the prompt, or when a
--- binding for the same prompt, model, vendor and configuration already exists under another ID (it would violate
--- UQ_AIPromptModel_Prompt_Model_Vendor_ConfigID).
-DECLARE @PR1Env6_BizAppsOwnsPrompt BIT = 0;
-IF SCHEMA_ID(N'__mj_BizAppsCommon') IS NOT NULL
-BEGIN
-  IF EXISTS (
-    SELECT 1 FROM [${flyway:defaultSchema}].[AIPrompt]
-    WHERE [ID] = '7C46041F-0412-4C2E-9B9E-3ED61D32210C' AND [TemplateID] = 'B8221E1A-F5DB-4C71-8196-944EA959E82A'
-  )
-    SET @PR1Env6_BizAppsOwnsPrompt = 1;
-  ELSE IF OBJECT_ID(N'[__mj_BizAppsCommon].[flyway_schema_history]', N'U') IS NOT NULL
-    EXEC sp_executesql
-      N'IF EXISTS (SELECT 1 FROM [__mj_BizAppsCommon].[flyway_schema_history] WHERE [success] = 1 AND TRY_CAST([version] AS BIGINT) >= 202609282100) SET @Owns = 1;',
-      N'@Owns BIT OUTPUT',
-      @Owns = @PR1Env6_BizAppsOwnsPrompt OUTPUT;
-END
-IF @PR1Env6_BizAppsOwnsPrompt = 1 RETURN;
-IF EXISTS (
-  SELECT 1 FROM [${flyway:defaultSchema}].[AIPromptModel]
-  WHERE [PromptID] = '7C46041F-0412-4C2E-9B9E-3ED61D32210C' AND [ModelID] = 'E8C833BC-1723-4B4B-9B12-0629EB5190A3'
-    AND [VendorID] = 'E41E970D-7D38-45D9-BBFC-4013FF7C5860' AND [ConfigurationID] IS NULL AND [ID] <> 'EBCD12BB-B5D0-45A5-84E0-C6EAEA8ADF0A'
-) RETURN;
 DECLARE @ID_0b3fcfb39772 UNIQUEIDENTIFIER,
 @PromptID_0b3fcfb39772 UNIQUEIDENTIFIER,
 @ModelID_0b3fcfb39772 UNIQUEIDENTIFIER,

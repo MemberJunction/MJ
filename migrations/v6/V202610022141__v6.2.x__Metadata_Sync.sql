@@ -68270,104 +68270,22 @@ END;
 GO
 
 -- Delete MJ: AI Prompts (core SP call only)
--- MJ core used to ship this prompt ('Job Function and Seniority Derivation'). bizapps-common ships its own row
--- with the same ID, so this removes MJ core's former copy only when bizapps-common does not own the row and no
--- other row references it. bizapps-common owns it when its template (B8221E1A) is attached, or when its own
--- migration that creates the prompt (202609282100) has been applied. spDeleteAIPrompt removes the prompt's own
--- AIPromptModel rows, so rows that reference those bindings (for example AICredentialBinding) count as references too.
-DECLARE @PR1Env6_PromptID UNIQUEIDENTIFIER = '7C46041F-0412-4C2E-9B9E-3ED61D32210C',
-  @PR1Env6_BizAppsOwnsPrompt BIT = 0,
-  @PR1Env6_ReferenceCount INT = 0,
-  @PR1Env6_CountSQL NVARCHAR(MAX),
-  @PR1Env6_TemplateID UNIQUEIDENTIFIER = 'FE0A363B-4EF6-4CCA-A7E3-93E3C015F3AF',
-  @PR1Env6_TemplateContentID UNIQUEIDENTIFIER = '00AAECBA-0772-49C0-9E6A-B9E6205E1A4B',
-  @PR1Env6_TemplateParamID UNIQUEIDENTIFIER = 'A6FE72EC-AA38-444A-A38D-DC33FA7F0030',
-  @PR1Env6_BizAppsTemplateID UNIQUEIDENTIFIER = 'B8221E1A-F5DB-4C71-8196-944EA959E82A',
-  @PR1Env6_TemplateReferenceCount INT = 0,
-  @PR1Env6_TemplateCountSQL NVARCHAR(MAX);
-IF SCHEMA_ID(N'__mj_BizAppsCommon') IS NOT NULL
-BEGIN
-  IF EXISTS (
-    SELECT 1 FROM [${flyway:defaultSchema}].[AIPrompt]
-    WHERE [ID] = @PR1Env6_PromptID AND [TemplateID] = @PR1Env6_BizAppsTemplateID
-  )
-    SET @PR1Env6_BizAppsOwnsPrompt = 1;
-  ELSE IF OBJECT_ID(N'[__mj_BizAppsCommon].[flyway_schema_history]', N'U') IS NOT NULL
-    EXEC sp_executesql
-      N'IF EXISTS (SELECT 1 FROM [__mj_BizAppsCommon].[flyway_schema_history] WHERE [success] = 1 AND TRY_CAST([version] AS BIGINT) >= 202609282100) SET @Owns = 1;',
-      N'@Owns BIT OUTPUT',
-      @Owns = @PR1Env6_BizAppsOwnsPrompt OUTPUT;
-END
-IF @PR1Env6_BizAppsOwnsPrompt = 0
-  AND EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIPrompt] WHERE [ID] = @PR1Env6_PromptID)
-BEGIN
-  -- One COUNT per foreign key into AIPrompt (other than its own AIPromptModel rows) and per foreign key into
-  -- AIPromptModel (restricted to this prompt's bindings).
-  SELECT @PR1Env6_CountSQL = STRING_AGG(CONVERT(NVARCHAR(MAX),
-      N'SELECT @Count = @Count + COUNT(*) FROM ' + QUOTENAME(OBJECT_SCHEMA_NAME(fkc.parent_object_id)) + N'.'
-      + QUOTENAME(OBJECT_NAME(fkc.parent_object_id)) + N' WHERE '
-      + QUOTENAME(COL_NAME(fkc.parent_object_id, fkc.parent_column_id))
-      + CASE WHEN fkc.referenced_object_id = OBJECT_ID(N'[${flyway:defaultSchema}].[AIPrompt]') THEN N' = @ID;'
-        ELSE N' IN (SELECT [ID] FROM [${flyway:defaultSchema}].[AIPromptModel] WHERE [PromptID] = @ID);' END), NCHAR(10))
-  FROM sys.foreign_key_columns fkc
-  WHERE (fkc.referenced_object_id = OBJECT_ID(N'[${flyway:defaultSchema}].[AIPrompt]')
-      AND fkc.parent_object_id <> OBJECT_ID(N'[${flyway:defaultSchema}].[AIPromptModel]'))
-    OR fkc.referenced_object_id = OBJECT_ID(N'[${flyway:defaultSchema}].[AIPromptModel]');
-  IF @PR1Env6_CountSQL IS NOT NULL
-    EXEC sp_executesql @PR1Env6_CountSQL, N'@ID UNIQUEIDENTIFIER, @Count INT OUTPUT',
-      @ID = @PR1Env6_PromptID, @Count = @PR1Env6_ReferenceCount OUTPUT;
-  IF @PR1Env6_ReferenceCount = 0
-    EXEC [${flyway:defaultSchema}].[spDeleteAIPrompt] @ID = '7C46041F-0412-4C2E-9B9E-3ED61D32210C';
-END
+EXEC [${flyway:defaultSchema}].[spDeleteAIPrompt] @ID = '7C46041F-0412-4C2E-9B9E-3ED61D32210C';
 
--- Delete MJ: Template Contents, Template Params, Templates (core SP call only)
--- Template FE0A363B and its content 00AAECBA and param A6FE72EC are MJ core's own former copy (bizapps-common's
--- prompt uses its own template B8221E1A). The original V202609221852 could leave bizapps-common's prompt pointing at
--- FE0A363B, because it wrote MJ core's TemplateID over bizapps-common's row. When bizapps-common owns the prompt and its
--- own template B8221E1A is present with content, the prompt is pointed back at B8221E1A (bizapps-common's own value) so
--- that MJ core's template is not left behind. All three are then removed only when nothing references them: no foreign
--- key into the template (other than its own contents and params), into content 00AAECBA or into param A6FE72EC, and
--- the template has no contents or params besides those two (the delete procedures do not cascade).
-IF @PR1Env6_BizAppsOwnsPrompt = 1
-  AND EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[Template] WHERE [ID] = @PR1Env6_BizAppsTemplateID)
-  AND EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[TemplateContent] WHERE [TemplateID] = @PR1Env6_BizAppsTemplateID)
-  UPDATE [${flyway:defaultSchema}].[AIPrompt]
-  SET [TemplateID] = @PR1Env6_BizAppsTemplateID
-  WHERE [ID] = @PR1Env6_PromptID AND [TemplateID] = @PR1Env6_TemplateID;
-SELECT @PR1Env6_TemplateCountSQL = STRING_AGG(CONVERT(NVARCHAR(MAX),
-    N'SELECT @Count = @Count + COUNT(*) FROM ' + QUOTENAME(OBJECT_SCHEMA_NAME(fkc.parent_object_id)) + N'.'
-    + QUOTENAME(OBJECT_NAME(fkc.parent_object_id)) + N' WHERE '
-    + QUOTENAME(COL_NAME(fkc.parent_object_id, fkc.parent_column_id))
-    + CASE fkc.referenced_object_id
-        WHEN OBJECT_ID(N'[${flyway:defaultSchema}].[Template]') THEN N' = @ID;'
-        WHEN OBJECT_ID(N'[${flyway:defaultSchema}].[TemplateContent]') THEN N' = @ContentID;'
-        ELSE N' = @ParamID;' END), NCHAR(10))
-FROM sys.foreign_key_columns fkc
-WHERE (fkc.referenced_object_id = OBJECT_ID(N'[${flyway:defaultSchema}].[Template]')
-    AND fkc.parent_object_id NOT IN (
-      OBJECT_ID(N'[${flyway:defaultSchema}].[TemplateContent]'),
-      OBJECT_ID(N'[${flyway:defaultSchema}].[TemplateParam]')
-    ))
-  OR fkc.referenced_object_id IN (
-    OBJECT_ID(N'[${flyway:defaultSchema}].[TemplateContent]'),
-    OBJECT_ID(N'[${flyway:defaultSchema}].[TemplateParam]')
-  );
-IF @PR1Env6_TemplateCountSQL IS NOT NULL
-  EXEC sp_executesql @PR1Env6_TemplateCountSQL,
-    N'@ID UNIQUEIDENTIFIER, @ContentID UNIQUEIDENTIFIER, @ParamID UNIQUEIDENTIFIER, @Count INT OUTPUT',
-    @ID = @PR1Env6_TemplateID, @ContentID = @PR1Env6_TemplateContentID, @ParamID = @PR1Env6_TemplateParamID,
-    @Count = @PR1Env6_TemplateReferenceCount OUTPUT;
-SELECT @PR1Env6_TemplateReferenceCount = @PR1Env6_TemplateReferenceCount
-  + (SELECT COUNT(*) FROM [${flyway:defaultSchema}].[TemplateContent]
-     WHERE [TemplateID] = @PR1Env6_TemplateID AND [ID] <> @PR1Env6_TemplateContentID)
-  + (SELECT COUNT(*) FROM [${flyway:defaultSchema}].[TemplateParam]
-     WHERE [TemplateID] = @PR1Env6_TemplateID AND [ID] <> @PR1Env6_TemplateParamID);
-IF @PR1Env6_TemplateReferenceCount = 0
-BEGIN
-  EXEC [${flyway:defaultSchema}].[spDeleteTemplateContent] @ID = '00AAECBA-0772-49C0-9E6A-B9E6205E1A4B';
-  EXEC [${flyway:defaultSchema}].[spDeleteTemplateParam] @ID = 'A6FE72EC-AA38-444A-A38D-DC33FA7F0030';
-  EXEC [${flyway:defaultSchema}].[spDeleteTemplate] @ID = 'FE0A363B-4EF6-4CCA-A7E3-93E3C015F3AF';
-END
+GO
+
+-- Delete MJ: Template Contents (core SP call only)
+EXEC [${flyway:defaultSchema}].[spDeleteTemplateContent] @ID = '00AAECBA-0772-49C0-9E6A-B9E6205E1A4B';
+
+GO
+
+-- Delete MJ: Template Params (core SP call only)
+EXEC [${flyway:defaultSchema}].[spDeleteTemplateParam] @ID = 'A6FE72EC-AA38-444A-A38D-DC33FA7F0030';
+
+GO
+
+-- Delete MJ: Templates (core SP call only)
+EXEC [${flyway:defaultSchema}].[spDeleteTemplate] @ID = 'FE0A363B-4EF6-4CCA-A7E3-93E3C015F3AF';
 
 GO
 

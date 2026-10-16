@@ -4161,21 +4161,29 @@ export class AIPromptRunner extends BaseModelRunner {
     // Determine what to save as the result
     let resultToSave: string;
     const rawResult = modelResult.data?.choices?.[0]?.message?.content || '';
-    const parsedToNothing = parsedResult.result === undefined ||
-        parsedResult.result === null ||
-        (typeof parsedResult.result === 'string' && parsedResult.result.trim().length === 0);
-
-    if (parsedToNothing) {
+    
+    if (parsedResult.result === undefined || 
+        parsedResult.result === null || 
+        (typeof parsedResult.result === 'string' && parsedResult.result.trim().length === 0)) {
       // Use raw result as fallback when parsed result is undefined, null, or empty string
       resultToSave = rawResult;
+      
+      // Also set error message when we have to fall back to raw result
+      if (!promptRun.ErrorMessage) {
+        const validationErrors = parsedResult.validationResult?.Errors;
+        if (validationErrors && validationErrors.length > 0) {
+          promptRun.ErrorMessage = `JSON parsing/validation failed: ${validationErrors.map(e => e.Message).join('; ')}`;
+        } else {
+          promptRun.ErrorMessage = 'Failed to parse result into expected format; raw output saved instead';
+        }
+      }
     } else if (typeof parsedResult.result === 'string') {
       resultToSave = parsedResult.result;
     } else {
       resultToSave = JSON.stringify(parsedResult.result);
     }
-
+    
     promptRun.Result = resultToSave;
-    this.ApplyChatRunErrorMessage(promptRun, modelResult, parsedResult, parsedToNothing);
 
     // Extract token usage and cost - use cumulative if retries occurred
     if (cumulativeTokens && validationAttempts && validationAttempts.length > 1) {
@@ -4335,44 +4343,12 @@ export class AIPromptRunner extends BaseModelRunner {
 
     // Set ErrorDetails if failed
     if (!promptRun.Success) {
-      if (!modelResult.success) {
-        promptRun.ErrorDetails = AIPromptRunner.FailedCallErrorMessage(modelResult);
+      if (!modelResult.success && modelResult.errorMessage) {
+        promptRun.ErrorDetails = modelResult.errorMessage;
       } else if (parsedResult.validationResult?.Success === false) {
         promptRun.ErrorDetails = `Validation failed: ${parsedResult.validationResult.Errors?.map(e => e.Message).join(', ')}`;
       }
     }
-  }
-
-  /**
-   * Sets a chat run's `ErrorMessage`: a failed model call records the call's own error; a call whose text output
-   * parsed to nothing gets the parse message. A native tool-call turn has no text by design, so it gets none.
-   */
-  protected ApplyChatRunErrorMessage(
-    promptRun: MJAIPromptRunEntityExtended,
-    modelResult: ChatResult,
-    parsedResult: { result: unknown; validationResult?: ValidationResult },
-    parsedToNothing: boolean,
-  ): void {
-    if (!modelResult.success) {
-      promptRun.ErrorMessage = AIPromptRunner.FailedCallErrorMessage(modelResult);
-      return;
-    }
-    const toolCallTurn = (modelResult.data?.choices?.[0]?.message?.toolCalls?.length ?? 0) > 0;
-    if (!parsedToNothing || toolCallTurn || promptRun.ErrorMessage) {
-      return;
-    }
-    const validationErrors = parsedResult.validationResult?.Errors;
-    if (validationErrors && validationErrors.length > 0) {
-      promptRun.ErrorMessage = `JSON parsing/validation failed: ${validationErrors.map(e => e.Message).join('; ')}`;
-    } else {
-      promptRun.ErrorMessage = 'Failed to parse result into expected format; raw output saved instead';
-    }
-  }
-
-  /** A failed model call's error: its `errorMessage`, else its exception's message, never empty. */
-  protected static FailedCallErrorMessage(modelResult: ChatResult): string {
-    const exception: Error | undefined = modelResult.exception instanceof Error ? modelResult.exception : undefined;
-    return modelResult.errorMessage || exception?.message || 'The model call failed without reporting an error';
   }
 
   /**

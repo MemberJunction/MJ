@@ -1,7 +1,7 @@
 {
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
-    "Name": "C1 → C3.3",
+    "Name": "C1 -> C3.3",
     "Description": "Gate G7.8 (owner PR 1, phase 7, dataset C1, criterion C3.3): a prompt configured at temperature 0 reaches the Gemini, Vertex and Bedrock clients as 0, 3 of 3 (0.5, 0.5 and 0.7 today), and a rejected parameter raises instead of being replaced. Captures the real request bodies without network (Gemini and Vertex at fetch, Bedrock at an SDK middleware); a strict call whose seed Bedrock drops, and a strict temperature-0 call to a Gemini model that no longer takes temperature (3.6 and later), each raise ParameterFidelityError before any request; no model calls, no database writes.",
     "Status": "Active",
     "Tags": "[\"gate\",\"G7.8\",\"owner:PR1\",\"phase:7\",\"dataset:C1\",\"criterion:C3.3\"]",

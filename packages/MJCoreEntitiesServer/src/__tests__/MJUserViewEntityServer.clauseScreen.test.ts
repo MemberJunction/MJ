@@ -179,20 +179,6 @@ describe('MJUserViewEntityServer — stored clauses pass the clause screen at sa
         expect(messages(result)).toMatch(/cannot screen client SQL/);
     });
 
-    it('fails closed when there is no provider', () => {
-        const result = view({ where: `Status = 'Active'`, provider: undefined }).Validate();
-
-        expect(result.Success).toBe(false);
-        expect(messages(result)).toMatch(/cannot screen client SQL/);
-    });
-
-    it('leaves a network provider\'s save to the server, which screens it before writing', () => {
-        const result = view({ where: `Status = 'Active'`, provider: { Entities: [CONTACTS], ProviderType: 'Network' } }).Validate();
-
-        expect(messages(result)).toBe('');
-        expect(result.Success).toBe(true);
-    });
-
     it('does not re-screen clauses an edit did not touch', () => {
         const result = view({ saved: true, where: `ID IN (SELECT ContactID FROM crm.ContactAudit)`, dirty: ['Name'] }).Validate();
 

@@ -61,7 +61,6 @@ import {
 import { Assert, AssertEqual } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
-import { FixtureQuerySaveOptions } from './query-fixture-save-options';
 
 const TAG_ENTITY = 'MJ: Tags';
 const SCOPE_ENTITY = 'MJ: Tag Scopes';
@@ -474,7 +473,7 @@ export const EntityServerInvariantsChecks: NamedCheck[] = [
                 content.TypeID = typeRow.Results[0].ID;
                 content.TemplateText = `Hello {{ itAlphaParam }} and {{ itBetaParam }} ${FIXTURE_TAG}`;
                 content.Priority = 1;
-                Assert(await content.Save(FixtureQuerySaveOptions()), `ESI9 content save: ${content.LatestResult?.CompleteMessage}`);
+                Assert(await content.Save(), `ESI9 content save: ${content.LatestResult?.CompleteMessage}`);
                 contentID = content.ID;
 
                 const params1 = await new RunView().RunView<{ ID: string; Name: string }>({
@@ -488,7 +487,7 @@ export const EntityServerInvariantsChecks: NamedCheck[] = [
 
                 // Case-flip re-save: the diff is case-insensitive → still exactly 2 rows, no dup.
                 content.TemplateText = `Hello {{ ITALPHAPARAM }} and {{ itBetaParam }} ${FIXTURE_TAG}`;
-                Assert(await content.Save(FixtureQuerySaveOptions()), `ESI9 case-flip re-save: ${content.LatestResult?.CompleteMessage}`);
+                Assert(await content.Save(), `ESI9 case-flip re-save: ${content.LatestResult?.CompleteMessage}`);
                 const params2 = await new RunView().RunView<{ ID: string; Name: string }>({
                     EntityName: TEMPLATE_PARAM_ENTITY, ExtraFilter: `TemplateID='${tpl.ID}'`,
                     Fields: ['ID', 'Name'], ResultType: 'simple', BypassCache: true,

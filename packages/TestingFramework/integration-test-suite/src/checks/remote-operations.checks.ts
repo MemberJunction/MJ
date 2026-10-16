@@ -34,7 +34,6 @@ import { Assert, AssertEqual, settle } from '@memberjunction/testing-integration
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 import type { RemoteOpsFixture } from '@memberjunction/testing-integration';
-import { FixtureQuerySaveOptions } from './query-fixture-save-options';
 
 const ACT_ENTITY = 'MJ: Action Categories';
 const PREFIX = 'mj-remote-op-test';
@@ -227,7 +226,7 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('remote-operations', {
         content.TemplateText = 'Hello {{ name }}';
         content.Priority = 1;
         content.IsActive = true;
-        Assert(await content.Save(FixtureQuerySaveOptions()), `creating test template content failed: ${content.LatestResult?.CompleteMessage}`);
+        Assert(await content.Save(), `creating test template content failed: ${content.LatestResult?.CompleteMessage}`);
         fx.Content = content;
 
         // ── RecordProcess.RunNow fixtures: 2 throwaway Action Categories (Description null) + a FieldRules process ──

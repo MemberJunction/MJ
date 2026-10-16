@@ -258,13 +258,6 @@ describe('SyncEngine reference resolution (processFieldValue / resolveLookup)', 
       expect(runViewInvocations[0].ExtraFilter).toBe("LOWER(Name) = LOWER('O''Brien')");
     });
 
-    it('writes a value outside ASCII as a Unicode literal on SQL Server', async () => {
-      runViewHandler = () => ({ Success: true, Results: [{ ID: 'cat-arrow' }] });
-
-      expect(await engine.processFieldValue('@lookup:MJ: AI Prompt Categories.Name=C1 → C2.1', tmpDir)).toBe('cat-arrow');
-      expect(runViewInvocations[0].ExtraFilter).toBe("LOWER(Name) = LOWER(N'C1 → C2.1')");
-    });
-
     it('throws the not-found error when no record matches', async () => {
       await expect(
         engine.processFieldValue('@lookup:MJ: AI Prompt Categories.Name=Missing', tmpDir),

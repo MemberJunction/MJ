@@ -276,10 +276,11 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
     }
 
     /**
-     * Claim a due routine by advancing NextRunAt to the next cron occurrence BEFORE running,
-     * so a crash mid-run does not re-run this occurrence on the next pass. The claim is a plain
-     * save: two passes that loaded the same due routine would both run it. Exclusion between
-     * passes comes from the Scheduled Job lock (the dispatcher job runs with ConcurrencyMode='Skip').
+     * Claim a due routine by advancing NextRunAt to the next cron occurrence BEFORE running.
+     * Persisting the claim first means an overlapping dispatcher pass (or a crash mid-run)
+     * can never double-run this occurrence — the routine simply isn't due anymore. Cross-
+     * process exclusion of whole sweeps is additionally provided by the Scheduled Job lock
+     * (the dispatcher job runs with ConcurrencyMode='Skip').
      *
      * @returns true when the claim persisted and the routine should run on this pass.
      */

@@ -1,7 +1,7 @@
 {
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
-    "Name": "C1 → C2.1",
+    "Name": "C1 -> C2.1",
     "Description": "Gate G7.1 (owner PR 1, phase 7, dataset C1, criterion C2.1): on the MoreCheese people behind scenario C1, changing the job-title prompt, its AI model or a parameter forces recomputation of 100% of the affected values, and an expired entry is recomputed. Runs the installed job-title pipeline cloned onto a deterministic stub driver over 52 fixture people carrying the 52 golden titles; no model calls.",
     "Status": "Active",
     "Tags": "[\"gate\",\"G7.1\",\"owner:PR1\",\"phase:7\",\"dataset:C1\",\"criterion:C2.1\"]",

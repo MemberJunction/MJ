@@ -1,7 +1,7 @@
 {
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
-    "Name": "C1 → C2.2",
+    "Name": "C1 -> C2.2",
     "Description": "Gate G7.2 (owner PR 1, phase 7, dataset C1, criterion C2.2): on the MoreCheese people behind scenario C1, forced out-of-taxonomy job-title outputs are rejected and counted on the run, with 0 stored as feature values. Runs the installed job-title pipeline cloned onto a deterministic stub driver over the 52 golden-title fixture people plus 3 whose titles the stub answers outside the taxonomy (an unknown seniority, a non-existent job function ID, both); a supplementary check dry-runs an unconstrained clone and expects the foreign-key failure its real write would hit to be reported, with nothing written; no model calls.",
     "Status": "Active",
     "Tags": "[\"gate\",\"G7.2\",\"owner:PR1\",\"phase:7\",\"dataset:C1\",\"criterion:C2.2\"]",

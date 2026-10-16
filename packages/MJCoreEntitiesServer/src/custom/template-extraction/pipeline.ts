@@ -31,14 +31,12 @@ import type {
  * @param templateText  The raw Nunjucks template content
  * @param templateName  The template name (used for self-extraction skip)
  * @param contextUser   Server-side user context
- * @param skipAIEnrichment  Skip stage 2. Set from the save's `SkipEntityAIActions`.
  * @returns Array of merged parameters ready for sync, plus any parse warnings
  */
 export async function RunTemplateExtractionPipeline(
     templateText: string,
     templateName: string,
     contextUser: UserInfo,
-    skipAIEnrichment: boolean,
 ): Promise<TemplateExtractionResult> {
     // ── STAGE 1: PARSE ──
     const parseResult = ParseTemplateParameters(templateText);
@@ -57,7 +55,7 @@ export async function RunTemplateExtractionPipeline(
     // ── STAGE 2: ENRICH (best-effort, non-fatal) ──
     let enrichedDescriptions: Map<string, string> = new Map();
 
-    if (userParams.length > 0 && !skipAIEnrichment) {
+    if (userParams.length > 0) {
         enrichedDescriptions = await runAIEnrichment(
             templateText,
             userParams,

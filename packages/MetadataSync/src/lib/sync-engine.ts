@@ -770,8 +770,8 @@ export class SyncEngine {
           && !IsDateSQLType(field.Type);
         if (isStringType) {
           const dialect = GetDialect(resolveDbPlatformFromEnv() ?? 'sqlserver');
-          const literal = `${dialect.StringLiteralPrefix(fieldValue)}${dialect.QuoteStringLiteral(fieldValue)}`;
-          filterParts.push(`${dialect.LowerCase(fieldName)} = ${dialect.LowerCase(literal)}`);
+          const escaped = fieldValue.replace(/'/g, "''");
+          filterParts.push(`${dialect.LowerCase(fieldName)} = ${dialect.LowerCase(`'${escaped}'`)}`);
         } else {
           filterParts.push(`${fieldName} = ${quotes}${fieldValue.replace(/'/g, "''")}${quotes}`);
         }

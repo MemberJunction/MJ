@@ -866,15 +866,6 @@ describe('Parameter Merge Logic', () => {
                 defaultValue: null, filters: [], usageLocations: [],
             })).toBeNull();
         });
-
-        it('should sample a string parameter named like a key with the empty GUID', () => {
-            const sample = (name: string, type: MJParameterInfo['type']) => GenerateSampleValue({
-                name, type, isRequired: true, defaultValue: null, filters: [], usageLocations: [],
-            });
-            expect(sample('ActivityID', 'string')).toBe('00000000-0000-0000-0000-000000000000');
-            expect(sample('Category', 'string')).toBe('Example');
-            expect(sample('userId', 'number')).toBe('10');
-        });
     });
 });
 

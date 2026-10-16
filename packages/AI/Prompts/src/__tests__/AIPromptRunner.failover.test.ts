@@ -112,7 +112,7 @@ import { MJGlobal } from '@memberjunction/global';
 import type { ChatResult, AIPromptConfiguration, ChatParams } from '@memberjunction/ai'; // real types — the mock only replaces GetAIAPIKey
 import { ParameterFidelityError, VendorParameterFidelity } from '@memberjunction/ai';
 import type { AIPromptParams } from '@memberjunction/ai-core-plus';
-import { TestLLM, makeFailedChatResult, makeSuccessChatResult } from '@memberjunction/unit-testing';
+import { TestLLM, makeFailedChatResult } from '@memberjunction/unit-testing';
 import { BuildPromptRunRecord, BuildPrompt, BuildPromptParams, InMemoryRunRecordRunner } from './__fixtures__/prompt-run.fixtures';
 import { buildRealisticCatalog, DEFAULT_CONFIGURED_DRIVERS, MODEL_TYPE, VENDOR, makeModel, makeModelVendor, type AICatalog } from './__fixtures__/ai-metadata.fixtures';
 
@@ -838,21 +838,16 @@ describe('ExecutePrompt — caller cancellation stops failover', () => {
 });
 
 // ===========================================================================
-// Strict parameters, and the prompt run of a failed call records the call's own error
+// Strict parameters
 // ===========================================================================
-describe('ExecutePrompt — strict parameters and failed-call errors', () => {
+describe('ExecutePrompt — strict parameters', () => {
   // Built while collecting, before beforeEach replaces ClassFactory.CreateInstance (which builds each entity's fields)
   const prompts = {
-    plain: BuildPrompt(MODEL_TYPE.LLM),
     strictWithRetries: BuildPrompt(MODEL_TYPE.LLM, { Temperature: 0, Seed: 42, ValidationBehavior: 'Strict', MaxRetries: 2 }),
-    strictWithFailover: BuildPrompt(MODEL_TYPE.LLM, { Temperature: 0, Seed: 42, FailoverStrategy: 'SameModelDifferentVendor' }),
   };
   const runs = {
     refusal: BuildPromptRunRecord('run-refusal'),
     fatalRetried: BuildPromptRunRecord('run-fatal-retried'),
-    driverFailure: BuildPromptRunRecord('run-driver-failure'),
-    refusalWithFailover: BuildPromptRunRecord('run-refusal-failover'),
-    toolCallTurn: BuildPromptRunRecord('run-tool-call'),
   };
 
   /** Makes the scripted driver refuse a strict call: it would drop the configured seed. */
@@ -899,45 +894,5 @@ describe('ExecutePrompt — strict parameters and failed-call errors', () => {
     expect(result.success).toBe(false);
     expect(testLLM.CallCount).toBe(3);
     expect(retryingRunner.RetryDelays).toBe(2);
-  });
-
-  it('records a driver failure on ErrorMessage and ErrorDetails', async () => {
-    testLLM.Script({ kind: 'fail', error: new Error('fetch failed: network socket disconnected') });
-    const failingRunner = new InMemoryRunRecordRunner(runs.driverFailure);
-
-    const result = await failingRunner.ExecutePrompt(BuildPromptParams(prompts.plain));
-    await failingRunner.WaitForPendingPromptRunSaves();
-
-    expect(result.success).toBe(false);
-    expect(runs.driverFailure.ErrorMessage).toContain('network socket disconnected');
-    expect(runs.driverFailure.ErrorDetails).toBe(runs.driverFailure.ErrorMessage);
-  });
-
-  it('records a strict refusal returned through failover on ErrorMessage, not the parse fallback', async () => {
-    refuseStrictCalls();
-    testLLM.Script({ kind: 'succeed', content: 'never sent' });
-    const failoverRunner = new InMemoryRunRecordRunner(runs.refusalWithFailover);
-    const params = BuildPromptParams(prompts.strictWithFailover);
-    params.strictParameters = true;
-
-    await failoverRunner.ExecutePrompt(params);
-    await failoverRunner.WaitForPendingPromptRunSaves();
-
-    expect(testLLM.CallCount).toBe(1); // the refusal is not failed over to another vendor
-    expect(runs.refusalWithFailover.Status).toBe('Failed');
-    expect(runs.refusalWithFailover.ErrorMessage).toContain('would not send the configured parameters');
-  });
-
-  it('records no error for a native tool-call turn, which has no text to parse', async () => {
-    const toolCallTurn = makeSuccessChatResult('');
-    toolCallTurn.data.choices[0].message.toolCalls = [{ id: 'call-1', name: 'get_weather', arguments: { city: 'NYC' } }];
-    testLLM.Script({ kind: 'failResult', result: toolCallTurn }); // 'failResult' hands the given result back as-is
-    const toolRunner = new InMemoryRunRecordRunner(runs.toolCallTurn);
-
-    await toolRunner.ExecutePrompt(BuildPromptParams(prompts.plain));
-    await toolRunner.WaitForPendingPromptRunSaves();
-
-    expect(runs.toolCallTurn.Status).toBe('Completed');
-    expect(runs.toolCallTurn.ErrorMessage).toBeNull();
   });
 });

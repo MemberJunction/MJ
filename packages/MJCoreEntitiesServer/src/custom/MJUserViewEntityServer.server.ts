@@ -1,5 +1,5 @@
 import { RegisterClass, CleanAndParseJSON } from "@memberjunction/global";
-import { BaseEntity, EntityInfo, LogError, IMetadataProvider, Metadata, ProviderType, ValidationErrorInfo, ValidationErrorType, ValidationResult } from "@memberjunction/core";
+import { BaseEntity, EntityInfo, LogError, IMetadataProvider, Metadata, ValidationErrorInfo, ValidationErrorType, ValidationResult } from "@memberjunction/core";
 import { MJUserViewEntityExtended } from '@memberjunction/core-entities'
 import { AIPromptParams } from "@memberjunction/ai-core-plus";
 import { AIEngine } from "@memberjunction/aiengine";
@@ -83,12 +83,11 @@ export class MJUserViewEntityServer extends MJUserViewEntityExtended  {
 
     /**
      * Adds a validation failure on `field` when the provider's client-clause screen refuses `clause`,
-     * or when the provider cannot screen (fails closed). A network provider is skipped: MJAPI screens its save.
+     * or when the provider cannot screen (fails closed).
      */
     private screenStoredClause(result: ValidationResult, field: string, clause: string, label: string, entityInfo?: EntityInfo): void {
         if (!clause.trim()) return;
         const provider = this.ProviderToUse;
-        if (MJUserViewEntityServer.isNetworkProvider(provider)) return;
         try {
             if (!IsClientClauseScreeningProvider(provider)) {
                 throw new Error(`Invalid ${label}: the data provider cannot screen client SQL`);
@@ -98,11 +97,6 @@ export class MJUserViewEntityServer extends MJUserViewEntityExtended  {
             const message = e instanceof Error ? e.message : String(e);
             result.Errors.push(new ValidationErrorInfo(field, message, clause, ValidationErrorType.Failure));
         }
-    }
-
-    /** True for a provider that reaches the database through MJAPI rather than holding a connection itself. */
-    private static isNetworkProvider(provider: object | null | undefined): boolean {
-        return provider != null && 'ProviderType' in provider && provider.ProviderType === ProviderType.Network;
     }
 
     /**
