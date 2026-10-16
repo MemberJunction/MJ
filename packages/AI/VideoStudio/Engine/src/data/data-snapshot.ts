@@ -12,6 +12,7 @@ import {
     IMetadataProvider,
     IRunQueryProvider,
     IRunViewProvider,
+    Metadata,
     NormalizeToTables,
     RunQuery,
     RunQueryParams,
@@ -58,8 +59,9 @@ export interface DataSnapshotIssue {
     Severity: DataSnapshotIssueSeverity;
     /**
      * Machine-readable issue code (e.g., `'RowsTruncated'`, `'SnapshotStoredInline'`,
-     * `'MissingViewFields'`, `'InvalidQueryID'`, `'InvalidArtifactVersionID'`,
-     * `'ArtifactEmptyRows'`, `'MissingInlineValue'`, `'BindingReadFailed'`).
+     * `'MissingViewFields'`, `'UnknownEntity'`, `'UnknownField'`, `'InvalidQueryID'`,
+     * `'InvalidArtifactVersionID'`, `'ArtifactEmptyRows'`, `'MissingInlineValue'`,
+     * `'DeltaNotNumeric'`, `'SeriesValueNotNumeric'`, `'BindingReadFailed'`).
      */
     Code: string;
     /** Key of the `VideoDataBinding` that triggered the issue, when scoped to one binding. */
@@ -183,7 +185,7 @@ export async function CaptureDataSnapshot(
     for (const binding of bindings) {
         const kind = binding.Source?.Kind;
         if (kind === 'View') {
-            validateAndQueueViewBinding(binding, pendingViews, issues);
+            validateAndQueueViewBinding(binding, options, pendingViews, issues);
         } else if (kind === 'Artifact') {
             validateAndQueueArtifactBinding(binding, pendingArtifacts, issues);
         } else if (kind === 'Query') {
@@ -266,6 +268,7 @@ export async function LoadDataSnapshotValues(
 
 function validateAndQueueViewBinding(
     binding: VideoDataBinding,
+    options: CaptureDataSnapshotOptions,
     pendingViews: PendingViewBinding[],
     issues: DataSnapshotIssue[],
 ): void {
@@ -291,10 +294,43 @@ function validateAndQueueViewBinding(
         return;
     }
 
+    const provider = options.Provider ?? Metadata.Provider; // global-provider-ok: caller-supplied provider preferred; global is the documented last-resort fallback
+    const entity = provider?.EntityByName
+        ? provider.EntityByName(entityName)
+        : provider?.Entities?.find((e) => e.Name.trim().toLowerCase() === entityName.toLowerCase());
+    if (!entity || entity.Status?.trim().toLowerCase() === 'disabled') {
+        issues.push({
+            Severity: 'Error',
+            Code: 'UnknownEntity',
+            BindingKey: binding.Key,
+            Message: `View binding "${binding.Key}" references unknown or disabled entity "${entityName}".`,
+        });
+        return;
+    }
+
+    const canonicalFieldByLower = new Map<string, string>();
+    for (const ef of entity.Fields ?? []) {
+        canonicalFieldByLower.set(ef.Name.trim().toLowerCase(), ef.Name);
+    }
+    const unknownFields = fields.filter((f) => !canonicalFieldByLower.has(f.trim().toLowerCase()));
+    if (unknownFields.length > 0) {
+        issues.push({
+            Severity: 'Error',
+            Code: 'UnknownField',
+            BindingKey: binding.Key,
+            Message: `View binding "${binding.Key}" on "${entityName}" references unknown field(s): ${unknownFields.map((f) => `"${f}"`).join(', ')}.`,
+        });
+        return;
+    }
+
+    const canonicalFields = fields.map(
+        (f) => canonicalFieldByLower.get(f.trim().toLowerCase()) ?? f.trim(),
+    );
+
     pendingViews.push({
         Binding: binding,
-        EntityName: entityName,
-        Fields: fields,
+        EntityName: entity.Name ?? entityName,
+        Fields: canonicalFields,
         ExtraFilter: binding.Source.ExtraFilter,
         ParamIndex: pendingViews.length,
     });
@@ -450,8 +486,11 @@ async function executeBatchedViewsAndArtifacts(
 
         const rawRows = (res.Results ?? []) as Record<string, unknown>[];
         const rows = applyRowCap(rawRows, pv.Binding.Key, issues);
-        values[pv.Binding.Key] = shapeRows(rows, pv.Binding, pv.Fields);
-        sourceSet.add(`View:${pv.EntityName}`);
+        const shaped = shapeRows(rows, pv.Binding, pv.Fields, issues);
+        if (shaped !== undefined) {
+            values[pv.Binding.Key] = shaped;
+            sourceSet.add(`View:${pv.EntityName}`);
+        }
     }
 
     // Process each Artifact binding result.
@@ -520,8 +559,11 @@ async function processArtifactBindings(
             const explicitFields = pa.Binding.Source.Fields?.filter(
                 (f) => typeof f === 'string' && f.trim().length > 0,
             );
-            values[pa.Binding.Key] = shapeRows(rows, pa.Binding, explicitFields);
-            sourceSet.add(`Artifact:${pa.ArtifactVersionID}`);
+            const shaped = shapeRows(rows, pa.Binding, explicitFields, issues);
+            if (shaped !== undefined) {
+                values[pa.Binding.Key] = shaped;
+                sourceSet.add(`Artifact:${pa.ArtifactVersionID}`);
+            }
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             issues.push({
@@ -612,8 +654,11 @@ async function executeBatchedQueries(
         const explicitFields = pq.Binding.Source.Fields?.filter(
             (f) => typeof f === 'string' && f.trim().length > 0,
         );
-        values[pq.Binding.Key] = shapeRows(rows, pq.Binding, explicitFields);
-        sourceSet.add(`Query:${pq.QueryID}`);
+        const shaped = shapeRows(rows, pq.Binding, explicitFields, issues);
+        if (shaped !== undefined) {
+            values[pq.Binding.Key] = shaped;
+            sourceSet.add(`Query:${pq.QueryID}`);
+        }
     }
 }
 
@@ -637,8 +682,9 @@ function applyRowCap(
 function shapeRows(
     rows: Record<string, unknown>[],
     binding: VideoDataBinding,
-    explicitFields?: string[],
-): DataBindingValue {
+    explicitFields: string[] | undefined,
+    issues: DataSnapshotIssue[],
+): DataBindingValue | undefined {
     const orderedFields =
         explicitFields && explicitFields.length > 0
             ? explicitFields
@@ -650,11 +696,11 @@ function shapeRows(
         case 'Scalar':
             return shapeScalar(rows, orderedFields);
         case 'Series':
-            return shapeSeries(rows, orderedFields);
+            return shapeSeries(rows, orderedFields, binding.Key, issues);
         case 'Table':
             return shapeTable(rows, explicitFields);
         case 'Delta':
-            return shapeDelta(rows, orderedFields);
+            return shapeDelta(rows, orderedFields, binding.Key, issues);
         default:
             return shapeScalar(rows, orderedFields);
     }
@@ -683,26 +729,55 @@ function shapeScalar(
     return String(raw);
 }
 
+function parseFiniteNumber(raw: unknown): number | undefined {
+    if (typeof raw === 'number') {
+        return Number.isFinite(raw) ? raw : undefined;
+    }
+    if (typeof raw === 'string') {
+        const trimmed = raw.trim();
+        if (trimmed.length === 0) {
+            return undefined;
+        }
+        const n = Number(trimmed);
+        return Number.isFinite(n) ? n : undefined;
+    }
+    return undefined;
+}
+
 function shapeSeries(
     rows: Record<string, unknown>[],
     orderedFields: string[],
-): DataSeriesPoint[] {
-    return rows.map((row) => {
+    bindingKey: string,
+    issues: DataSnapshotIssue[],
+): DataSeriesPoint[] | undefined {
+    const points: DataSeriesPoint[] = [];
+    for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
         const fields = orderedFields.length > 0 ? orderedFields : Object.keys(row);
         const rawLabel = fields[0] !== undefined ? row[fields[0]] : undefined;
         const rawValue = fields[1] !== undefined ? row[fields[1]] : undefined;
+        const numericValue = parseFiniteNumber(rawValue);
+        if (numericValue === undefined) {
+            issues.push({
+                Severity: 'Error',
+                Code: 'SeriesValueNotNumeric',
+                BindingKey: bindingKey,
+                Message: `Series binding "${bindingKey}" has a non-numeric value at row ${i} (field "${fields[1] ?? ''}").`,
+            });
+            return undefined;
+        }
         const label =
             rawLabel === null || rawLabel === undefined
                 ? ''
                 : rawLabel instanceof Date
                   ? rawLabel.toISOString()
                   : String(rawLabel);
-        const numericValue = Number(rawValue ?? 0);
-        return {
+        points.push({
             Label: label,
-            Value: Number.isFinite(numericValue) ? numericValue : 0,
-        };
-    });
+            Value: numericValue,
+        });
+    }
+    return points;
 }
 
 function shapeTable(
@@ -741,9 +816,17 @@ function coerceTableCell(raw: unknown): DataTableCellValue {
 function shapeDelta(
     rows: Record<string, unknown>[],
     orderedFields: string[],
-): DataDeltaValue {
+    bindingKey: string,
+    issues: DataSnapshotIssue[],
+): DataDeltaValue | undefined {
     if (rows.length === 0) {
-        return { Current: 0, Previous: 0, Change: 0, ChangePercent: null };
+        issues.push({
+            Severity: 'Error',
+            Code: 'DeltaNotNumeric',
+            BindingKey: bindingKey,
+            Message: `Delta binding "${bindingKey}" returned no rows; requires a first row with two numeric fields.`,
+        });
+        return undefined;
     }
     const firstRow = rows[0];
     const candidateFields =
@@ -764,21 +847,28 @@ function shapeDelta(
     if (numericValues.length < 2) {
         numericValues.length = 0;
         for (const field of candidateFields) {
-            const val = firstRow[field];
-            if (val !== null && val !== undefined && val !== '' && typeof val !== 'boolean') {
-                const n = Number(val);
-                if (Number.isFinite(n)) {
-                    numericValues.push(n);
-                    if (numericValues.length === 2) {
-                        break;
-                    }
+            const parsed = parseFiniteNumber(firstRow[field]);
+            if (parsed !== undefined) {
+                numericValues.push(parsed);
+                if (numericValues.length === 2) {
+                    break;
                 }
             }
         }
     }
 
-    const current = numericValues[0] ?? 0;
-    const previous = numericValues[1] ?? 0;
+    if (numericValues.length < 2) {
+        issues.push({
+            Severity: 'Error',
+            Code: 'DeltaNotNumeric',
+            BindingKey: bindingKey,
+            Message: `Delta binding "${bindingKey}" requires a first row with at least two numeric fields (found ${numericValues.length}).`,
+        });
+        return undefined;
+    }
+
+    const current = numericValues[0];
+    const previous = numericValues[1];
     const change = current - previous;
     const changePercent = previous === 0 ? null : change / previous;
 

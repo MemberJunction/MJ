@@ -14,6 +14,7 @@ const {
     mockStorageState,
     mockDriverGetObject,
     mockLogError,
+    defaultStubEntities,
 } = vi.hoisted(() => ({
     mockRunView: vi.fn(),
     mockRunViews: vi.fn(),
@@ -26,6 +27,43 @@ const {
         ResolveFileObject: vi.fn(),
     },
     mockLogError: vi.fn(),
+    defaultStubEntities: [
+        {
+            Name: 'MJ: Invoices',
+            Status: 'Active',
+            Fields: [
+                { Name: 'TotalRevenue' },
+                { Name: 'Region' },
+                { Name: 'Revenue' },
+                { Name: 'Total' },
+            ],
+        },
+        {
+            Name: 'MJ: Reports',
+            Status: 'Active',
+            Fields: [{ Name: 'HeadlineLabel' }, { Name: 'MonthName' }, { Name: 'Amount' }],
+        },
+        {
+            Name: 'MJ: Accounts',
+            Status: 'Active',
+            Fields: [{ Name: 'Name' }, { Name: 'Active' }, { Name: 'ARR' }],
+        },
+        {
+            Name: 'MJ: Users',
+            Status: 'Active',
+            Fields: [{ Name: 'ID' }, { Name: 'V' }],
+        },
+        {
+            Name: 'MJ: Secret',
+            Status: 'Active',
+            Fields: [{ Name: 'ID' }],
+        },
+        {
+            Name: 'MJ: Metrics',
+            Status: 'Active',
+            Fields: [{ Name: 'Label' }, { Name: 'Val' }],
+        },
+    ],
 }));
 
 vi.mock('@memberjunction/core', async (importOriginal) => {
@@ -45,8 +83,17 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
         }
         public RunQueries = mockRunQueries;
     }
+    const stubGlobalProvider = {
+        Entities: defaultStubEntities,
+        EntityByName: (name: string) =>
+            defaultStubEntities.find((e) => e.Name.toLowerCase() === name.trim().toLowerCase()),
+    };
     return {
         ...actual,
+        Metadata: {
+            ...actual.Metadata,
+            Provider: stubGlobalProvider,
+        },
         RunView: MockRunView,
         RunQuery: MockRunQuery,
         LogError: mockLogError,
@@ -808,6 +855,15 @@ describe('VS-DAT-1: CaptureDataSnapshot & LoadDataSnapshotValues', () => {
             { ContextUser: contextUser },
         );
         expect(loadedFromFile).toEqual(captureInline.Values);
+        expect(mockRunView).toHaveBeenCalledWith(
+            {
+                EntityName: 'MJ: Files',
+                ExtraFilter: `ID = '${FILE_ID_1}'`,
+                Fields: ['ProviderID', 'ProviderKey', 'Name'],
+                ResultType: 'simple',
+            },
+            contextUser,
+        );
         expect(mockStorageState.ResolveFileObject).toHaveBeenLastCalledWith(
             expect.objectContaining({ ProviderID: 'prov-1' }),
             contextUser,
@@ -851,5 +907,233 @@ describe('VS-DAT-1: CaptureDataSnapshot & LoadDataSnapshotValues', () => {
         const afterValidation = ValidateVideoGenerationSpec(spec, 'PreProduced');
         expect(afterValidation.Errors.some((i) => i.Code === 'MissingDataSnapshot')).toBe(false);
         expect(afterValidation.Valid).toBe(true);
+    });
+
+    it('pre-validates View EntityName and Fields against options.Provider so unknown/disabled entities and mistyped fields do not queue or abort valid View and Artifact bindings', async () => {
+        const stubEntities = [
+            {
+                Name: 'MJ: Invoices',
+                Status: 'Active',
+                Fields: [{ Name: 'TotalRevenue' }, { Name: 'Region' }],
+            },
+            {
+                Name: 'MJ: LegacyEntity',
+                Status: 'Disabled',
+                Fields: [{ Name: 'ID' }],
+            },
+        ];
+        const stubProvider = {
+            Entities: stubEntities,
+            EntityByName: (name: string) =>
+                stubEntities.find((e) => e.Name.toLowerCase() === name.trim().toLowerCase()),
+        } as unknown as NonNullable<Parameters<typeof CaptureDataSnapshot>[2]['Provider']>;
+
+        mockRunViews.mockResolvedValueOnce([
+            { Success: true, Results: [{ TotalRevenue: 88000 }] },
+            {
+                Success: true,
+                Results: [
+                    {
+                        ID: ARTIFACT_VERSION_ID_1,
+                        ContentMode: 'Text',
+                        Content: JSON.stringify({
+                            tables: [{ name: 't', rows: [{ Segment: 'Core', Count: 12 }] }],
+                        }),
+                    },
+                ],
+            },
+        ]);
+
+        const bindings: VideoDataBinding[] = [
+            {
+                Key: 'view.unknownEntity',
+                Source: {
+                    Kind: 'View',
+                    EntityName: 'MJ: DoesNotExist',
+                    Fields: ['ID'],
+                },
+                Shape: 'Scalar',
+            },
+            {
+                Key: 'view.disabledEntity',
+                Source: {
+                    Kind: 'View',
+                    EntityName: 'MJ: LegacyEntity',
+                    Fields: ['ID'],
+                },
+                Shape: 'Scalar',
+            },
+            {
+                Key: 'view.unknownField',
+                Source: {
+                    Kind: 'View',
+                    EntityName: 'MJ: Invoices',
+                    Fields: ['TotalRevenue', 'MistypedColumn'],
+                },
+                Shape: 'Series',
+            },
+            {
+                Key: 'view.valid',
+                Source: {
+                    Kind: 'View',
+                    EntityName: 'MJ: Invoices',
+                    Fields: ['totalrevenue'], // case-insensitive field match
+                },
+                Shape: 'Scalar',
+            },
+            {
+                Key: 'artifact.valid',
+                Source: {
+                    Kind: 'Artifact',
+                    ArtifactVersionID: ARTIFACT_VERSION_ID_1,
+                },
+                Shape: 'Table',
+            },
+        ];
+
+        const res = await CaptureDataSnapshot(bindings, undefined, {
+            ContextUser: contextUser,
+            Provider: stubProvider,
+        });
+
+        // Only the 1 valid View and 1 Artifact binding are sent to RunViews
+        expect(mockRunViews).toHaveBeenCalledTimes(1);
+        const [viewParamsArg] = mockRunViews.mock.calls[0];
+        expect(viewParamsArg).toHaveLength(2);
+        expect(viewParamsArg[0]).toEqual({
+            EntityName: 'MJ: Invoices',
+            ExtraFilter: undefined,
+            Fields: ['TotalRevenue'],
+            ResultType: 'simple',
+            MaxRows: MAX_ROWS_PER_BINDING,
+        });
+        expect(viewParamsArg[1]).toEqual({
+            EntityName: 'MJ: Artifact Versions',
+            ExtraFilter: `ID IN ('${ARTIFACT_VERSION_ID_1}')`,
+            Fields: ['ID', 'Content', 'ContentMode', 'FileID', 'MimeType'],
+            ResultType: 'simple',
+            MaxRows: MAX_ROWS_PER_BINDING,
+        });
+
+        // Valid View and Artifact bindings still capture
+        expect(res.Values).toEqual({
+            'view.valid': 88000,
+            'artifact.valid': [{ Segment: 'Core', Count: 12 }],
+        });
+
+        // UnknownEntity and UnknownField errors recorded
+        expect(res.Issues).toEqual([
+            expect.objectContaining({
+                Severity: 'Error',
+                Code: 'UnknownEntity',
+                BindingKey: 'view.unknownEntity',
+            }),
+            expect.objectContaining({
+                Severity: 'Error',
+                Code: 'UnknownEntity',
+                BindingKey: 'view.disabledEntity',
+            }),
+            expect.objectContaining({
+                Severity: 'Error',
+                Code: 'UnknownField',
+                BindingKey: 'view.unknownField',
+                Message: expect.stringContaining('MistypedColumn'),
+            }),
+        ]);
+    });
+
+    it('records DeltaNotNumeric and SeriesValueNotNumeric errors instead of inventing zeros while accepting numeric strings', async () => {
+        mockRunQueries.mockResolvedValueOnce([
+            // 1. Delta with zero rows -> DeltaNotNumeric
+            { Success: true, Results: [] },
+            // 2. Delta with only one numeric field -> DeltaNotNumeric
+            { Success: true, Results: [{ Label: 'Q3', OnlyOneNumber: 100, MissingPrev: null }] },
+            // 3. Series with a null value -> SeriesValueNotNumeric
+            {
+                Success: true,
+                Results: [
+                    { Month: 'Jan', Amount: 120 },
+                    { Month: 'Feb', Amount: null },
+                ],
+            },
+            // 4. Series with numeric strings -> accepted
+            {
+                Success: true,
+                Results: [
+                    { Month: 'Jan', Amount: '123.45' },
+                    { Month: 'Feb', Amount: '200' },
+                ],
+            },
+            // 5. Delta with numeric strings -> accepted
+            {
+                Success: true,
+                Results: [{ Current: '112', Previous: '100' }],
+            },
+        ]);
+
+        const bindings: VideoDataBinding[] = [
+            {
+                Key: 'delta.empty',
+                Source: { Kind: 'Query', QueryID: QUERY_ID_1 },
+                Shape: 'Delta',
+            },
+            {
+                Key: 'delta.oneNumber',
+                Source: { Kind: 'Query', QueryID: QUERY_ID_1 },
+                Shape: 'Delta',
+            },
+            {
+                Key: 'series.nullVal',
+                Source: { Kind: 'Query', QueryID: QUERY_ID_2, Fields: ['Month', 'Amount'] },
+                Shape: 'Series',
+            },
+            {
+                Key: 'series.numericStrings',
+                Source: { Kind: 'Query', QueryID: QUERY_ID_2, Fields: ['Month', 'Amount'] },
+                Shape: 'Series',
+            },
+            {
+                Key: 'delta.numericStrings',
+                Source: { Kind: 'Query', QueryID: QUERY_ID_1 },
+                Shape: 'Delta',
+            },
+        ];
+
+        const res = await CaptureDataSnapshot(bindings, undefined, { ContextUser: contextUser });
+
+        // Broken Delta and Series keys are absent from Values
+        expect(res.Values['delta.empty']).toBeUndefined();
+        expect(res.Values['delta.oneNumber']).toBeUndefined();
+        expect(res.Values['series.nullVal']).toBeUndefined();
+
+        // Numeric strings are accepted
+        expect(res.Values['series.numericStrings']).toEqual([
+            { Label: 'Jan', Value: 123.45 },
+            { Label: 'Feb', Value: 200 },
+        ]);
+        expect(res.Values['delta.numericStrings']).toEqual({
+            Current: 112,
+            Previous: 100,
+            Change: 12,
+            ChangePercent: 0.12,
+        });
+
+        expect(res.Issues).toEqual([
+            expect.objectContaining({
+                Severity: 'Error',
+                Code: 'DeltaNotNumeric',
+                BindingKey: 'delta.empty',
+            }),
+            expect.objectContaining({
+                Severity: 'Error',
+                Code: 'DeltaNotNumeric',
+                BindingKey: 'delta.oneNumber',
+            }),
+            expect.objectContaining({
+                Severity: 'Error',
+                Code: 'SeriesValueNotNumeric',
+                BindingKey: 'series.nullVal',
+            }),
+        ]);
     });
 });

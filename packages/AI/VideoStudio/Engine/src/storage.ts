@@ -82,7 +82,8 @@ export async function ReadStoredFile(
         {
             EntityName: 'MJ: Files',
             ExtraFilter: `ID = '${EscapeSQLString(fileId)}'`,
-            ResultType: 'entity_object',
+            Fields: ['ProviderID', 'ProviderKey', 'Name'],
+            ResultType: 'simple',
         },
         contextUser,
     );
