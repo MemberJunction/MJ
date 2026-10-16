@@ -1088,21 +1088,27 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
     }
 
     /**
-     * Resolves cached fingerprints for an entity, checking the local in-memory
-     * index first and falling back to the shared storage provider (e.g., Redis)
-     * when the local index is empty. This handles cross-server scenarios where
-     * Server A cached RunView results and Server B saves a record — Server B's
-     * local index is empty but Redis still has the stale cached entries.
+     * Resolves cached fingerprints for an entity: this process's own index, plus the slots the
+     * storage provider lists for the entity.
+     *
+     * On a provider shared between processes (e.g. Redis) the provider is listed on every call
+     * and merged into the local index. The local index only knows slots this process wrote, so
+     * answering from it alone would miss slots other processes wrote — including a slot this
+     * process only read warm at boot — and a save here would never reach the engines that load
+     * from those slots on its peers.
+     *
+     * On a process-local provider (e.g. IndexedDB) the category is listed only when the local
+     * index knows nothing for the entity, which picks up slots persisted by an earlier session.
      */
     private async resolveFingerprintsForEntity(entityName: string): Promise<Set<string> | undefined> {
+        if (this._storageProvider?.SharedAcrossProcesses === true && this._storageProvider.GetCategoryKeys) {
+            return this.resolveFingerprintsFromSharedStore(entityName);
+        }
+
         const local = this._entityFingerprintIndex.get(entityName);
         if (local && local.size > 0) return local;
 
-        if (!this._storageProvider?.GetCategoryKeys) return undefined;
-
-        const allKeys = await this._storageProvider.GetCategoryKeys(CacheCategory.RunViewCache);
-        const entityPrefix = entityName + '|';
-        const remoteFingerprints = allKeys.filter(k => k.startsWith(entityPrefix));
+        const remoteFingerprints = await this.listStoredFingerprintsForEntity(entityName);
         if (remoteFingerprints.length > 0) {
             LogStatusVerbose(`LocalCacheManager: found ${remoteFingerprints.length} remote cached fingerprint(s) for "${entityName}" via storage provider`);
             const result = new Set(remoteFingerprints);
@@ -1114,6 +1120,27 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         }
 
         return undefined;
+    }
+
+    /**
+     * Merges the slots a shared store lists for the entity into the local index and returns the
+     * union. Local entries the store does not list are left in place; invalidation removes them
+     * from the index the same way it does for any other slot.
+     */
+    private async resolveFingerprintsFromSharedStore(entityName: string): Promise<Set<string> | undefined> {
+        for (const fp of await this.listStoredFingerprintsForEntity(entityName)) {
+            this.addToEntityIndex(fp);
+        }
+        const merged = this._entityFingerprintIndex.get(entityName);
+        return merged && merged.size > 0 ? merged : undefined;
+    }
+
+    /** Lists the RunView slots the storage provider holds for an entity; empty when it cannot list keys. */
+    private async listStoredFingerprintsForEntity(entityName: string): Promise<string[]> {
+        if (!this._storageProvider?.GetCategoryKeys) return [];
+        const allKeys = await this._storageProvider.GetCategoryKeys(CacheCategory.RunViewCache);
+        const entityPrefix = entityName + '|';
+        return allKeys.filter(k => k.startsWith(entityPrefix));
     }
 
     // ========================================================================
