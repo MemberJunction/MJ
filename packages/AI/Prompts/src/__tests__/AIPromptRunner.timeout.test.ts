@@ -89,7 +89,10 @@ import { MJGlobal } from '@memberjunction/global';
 import { buildRealisticCatalog, DEFAULT_CONFIGURED_DRIVERS, MODEL_TYPE, type AICatalog } from './__fixtures__/ai-metadata.fixtures';
 
 // ---- controllable LLM: one call, resolution controlled per test ----
-type ChatResultLike = { success: boolean; data?: unknown; errorMessage?: string };
+type ChatResultLike = { success: boolean; data?: unknown; errorMessage?: string; errorInfo?: { errorType: string; severity: string; canFailover: boolean } };
+
+/** Scripted per-call outcomes, used before the default delay behaviour: a failover-eligible failure, or a hung call. */
+let llmScript: Array<'networkFailure' | 'hang'> = [];
 
 /** How long the fake provider takes to answer. `'never'` models a hung socket. */
 let llmDelayMS: number | 'never' = 0;
@@ -107,6 +110,13 @@ const testLLM = {
   async ChatCompletion(params: { cancellationToken?: AbortSignal }): Promise<ChatResultLike> {
     llmCallCount++;
     llmCalls.push(params);
+    const scripted = llmScript.shift();
+    if (scripted === 'networkFailure') {
+      return { success: false, errorMessage: 'fetch failed: network socket disconnected', errorInfo: { errorType: 'NetworkError', severity: 'Retriable', canFailover: true } };
+    }
+    if (scripted === 'hang') {
+      return await new Promise<ChatResultLike>(() => { /* never settles — a hung provider */ });
+    }
     if (llmDelayMS === 'never') {
       return await new Promise<ChatResultLike>(() => { /* never settles — a hung provider */ });
     }
@@ -119,14 +129,35 @@ const testLLM = {
 // ---- fake AIPromptRun entity + provider ----
 let prSeq = 0;
 class FakePromptRun {
+  /**
+   * How long the first Save (the 'Running' INSERT) takes. When it lands, the run reloads from the
+   * fields it sent, as BaseEntity's finalizeSave does — undoing anything set while it was in flight.
+   */
+  public static InsertDelayMS = 0;
   public ID = '';
   public LatestResult: { CompleteMessage: string } | null = null;
   public saveCount = 0;
+  /** The fields as of the last Save: what the database holds. */
+  public Persisted: Record<string, unknown> = {};
   [k: string]: unknown;
   NewRecord(): boolean { this.ID = `pr-${++prSeq}`; return true; }
-  async Save(): Promise<boolean> { this.saveCount++; return true; }
+  async Save(): Promise<boolean> {
+    this.saveCount++;
+    const sent = this.fields();
+    if (this.saveCount === 1 && FakePromptRun.InsertDelayMS > 0) {
+      await new Promise(resolve => setTimeout(resolve, FakePromptRun.InsertDelayMS));
+      Object.assign(this, sent);
+    }
+    this.Persisted = sent;
+    return true;
+  }
+  private fields(): Record<string, unknown> {
+    const { Persisted: _persisted, saveCount: _saves, LatestResult: _latest, ...fields } = this as Record<string, unknown>;
+    return { ...fields };
+  }
 }
-const fakeProvider = { GetEntityObject: vi.fn(async () => new FakePromptRun()) };
+let lastPromptRun: FakePromptRun | null = null;
+const fakeProvider = { GetEntityObject: vi.fn(async () => { lastPromptRun = new FakePromptRun(); return lastPromptRun; }) };
 
 function loadCatalog(catalog: AICatalog, drivers = DEFAULT_CONFIGURED_DRIVERS): void {
   h.state.vendorTypeDefinitions = catalog.vendorTypeDefinitions;
@@ -165,7 +196,7 @@ function priv(r: AIPromptRunner): BoundInternals { return r as unknown as BoundI
 let runner: AIPromptRunner;
 beforeEach(() => {
   vi.restoreAllMocks();
-  llmDelayMS = 0; llmCallCount = 0; llmCalls.length = 0;
+  llmDelayMS = 0; llmCallCount = 0; llmCalls.length = 0; llmScript = []; lastPromptRun = null; FakePromptRun.InsertDelayMS = 0;
   loadCatalog(buildRealisticCatalog());
   vi.spyOn(AIEngineBase.Instance, 'EnsureLoaded').mockResolvedValue(undefined as never);
   vi.spyOn(MJGlobal.Instance.ClassFactory, 'CreateInstance').mockImplementation(() => testLLM as never);
@@ -330,5 +361,97 @@ describe('ExecutePrompt — both bounds present: whichever fires first wins', ()
     expect(result.success).toBe(false);
     expect(result.errorMessage?.toLowerCase()).toContain('cancel');
     expect(result.errorMessage?.toLowerCase()).not.toContain('timeout');
+  });
+});
+
+describe('ExecutePrompt — caller cancellation stops failover', () => {
+  const failoverPrompt = (): Record<string, unknown> => makePrompt({ FailoverStrategy: 'NextBestModel' });
+  /** The console.error lines a run wrote — every logError / LogErrorEx ends there. */
+  function errorLines(spy: ReturnType<typeof vi.spyOn>): string[] {
+    return spy.mock.calls.map(call => String(call[0]));
+  }
+
+  it('calls one candidate when the caller aborts mid-call, and records the run as cancelled with no error logged', async () => {
+    llmDelayMS = 'never';
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const controller = new AbortController();
+    setTimeout(() => controller.abort(), 20);
+
+    const result = await runner.ExecutePrompt(makeParams(failoverPrompt(), { cancellationToken: controller.signal }) as never);
+    await runner.WaitForPendingPromptRunSaves();
+
+    expect(llmCallCount).toBe(1);
+    expect(result.success).toBe(false);
+    expect(result.cancelled).toBe(true);
+    expect(result.status).toBe('Cancelled');
+    expect(errorLines(errorSpy)).toEqual([]);
+    expect(lastPromptRun!.Status).toBe('Cancelled');
+    expect(lastPromptRun!.Cancelled).toBe(true);
+    expect(lastPromptRun!.CancellationReason).toBe('user_requested');
+  });
+
+  it('keeps the real failure that came before the cancellation, and still stops at the cancelled candidate', async () => {
+    llmScript = ['networkFailure', 'hang'];
+    const controller = new AbortController();
+    setTimeout(() => controller.abort(), 20);
+
+    const result = await runner.ExecutePrompt(makeParams(failoverPrompt(), { cancellationToken: controller.signal }) as never);
+    await runner.WaitForPendingPromptRunSaves();
+
+    expect(llmCallCount).toBe(2);
+    expect(result.cancelled).toBe(true);
+    expect(lastPromptRun!.Persisted.FailoverAttempts).toBe(1);
+    expect(lastPromptRun!.Persisted.Status).toBe('Cancelled');
+  });
+
+  it('keeps the failover attempt on the saved run when the INSERT lands after the cancellation', async () => {
+    FakePromptRun.InsertDelayMS = 100;
+    llmScript = ['networkFailure', 'hang'];
+    const controller = new AbortController();
+    setTimeout(() => controller.abort(), 20);
+
+    await runner.ExecutePrompt(makeParams(failoverPrompt(), { cancellationToken: controller.signal }) as never);
+    await runner.WaitForPendingPromptRunSaves();
+
+    expect(lastPromptRun!.Persisted.FailoverAttempts).toBe(1);
+    expect(lastPromptRun!.Persisted.Status).toBe('Cancelled');
+  });
+
+  it('keeps the failover attempt of a run that recovered by failing over, when the INSERT is slow', async () => {
+    FakePromptRun.InsertDelayMS = 100;
+    llmScript = ['networkFailure'];
+
+    const result = await runner.ExecutePrompt(makeParams(failoverPrompt()) as never);
+    await runner.WaitForPendingPromptRunSaves();
+
+    expect(result.success).toBe(true);
+    expect(lastPromptRun!.Persisted.FailoverAttempts).toBe(1);
+  });
+
+  it('still fails over from a prompt timeout, which is not a cancellation', async () => {
+    llmScript = ['hang'];
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const controller = new AbortController();
+
+    const result = await runner.ExecutePrompt(makeParams(failoverPrompt(), { timeoutMS: 20, cancellationToken: controller.signal }) as never);
+
+    expect(result.success).toBe(true);
+    expect(llmCallCount).toBe(2);
+  });
+
+  it('leaves no abort listener on a caller token reused across prompts', async () => {
+    const controller = new AbortController();
+    const added = vi.spyOn(controller.signal, 'addEventListener');
+    const removed = vi.spyOn(controller.signal, 'removeEventListener');
+
+    for (let i = 0; i < 3; i++) {
+      const result = await runner.ExecutePrompt(makeParams(makePrompt(), { cancellationToken: controller.signal }) as never);
+      expect(result.success).toBe(true);
+    }
+
+    const abortAdds = added.mock.calls.filter(([type]) => type === 'abort').length;
+    const abortRemoves = removed.mock.calls.filter(([type]) => type === 'abort').length;
+    expect(abortAdds).toBeGreaterThan(0);
+    expect(abortRemoves).toBe(abortAdds);
   });
 });

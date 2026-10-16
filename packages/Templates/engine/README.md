@@ -124,6 +124,68 @@ The engine provides built-in filters for JSON operations:
 {% set parsed = jsonString | jsonparse %}
 ```
 
+### Template Sandbox
+
+Users can edit stored templates, so the engine guards nunjucks when this package loads
+(`HardenNunjucksRuntime()`). The guard is process-wide: it also covers nunjucks environments that
+other packages create, and templates loaded through `include` and `import`. It checks templates at
+two points.
+
+**Before a template compiles.** The nunjucks compiler copies names from the template into the code it
+generates, so `AssertTemplateTreeIsSafe()` checks every parsed template first:
+
+- Variable, filter, loop, `set`, macro, import and block names must be plain names: letters,
+  combining marks, digits, connector characters such as `_`, and `$`. A filter name can also contain
+  dots.
+- A test name (`is defined`, `is none`) and an extension's registered name and method must not
+  contain a quote, a backslash or a line break.
+- A name that every object inherits (a member of `Object.prototype`, such as `toString`,
+  `hasOwnProperty` or `constructor`), or `prototype`, must not be used as a dictionary key, a keyword
+  argument, a macro or call-block argument, a `set`, loop, import, macro or block name, or a filter or
+  test name. The code generator also refuses such a name as a dictionary key or keyword argument. Bare
+  names and member reads are not in this rule: `{{ constructor }}` reads only an own key of the render
+  data, and a member read such as `obj.constructor` or `value.toLocaleString()` goes through the
+  render-time member check (see below).
+- The name of a called member, such as `obj["key"]()`, must not contain a backslash or a line break.
+- A loop variable must not reuse an identifier that the generated loop code uses, such as `context`,
+  `frame`, `runtime`, `env`, `cb`, `next`, `tasks` or `undefined`. A unit test compiles every kind of
+  loop body with nunjucks 3.2.4, including loops inside macros and blocks, and checks this list against
+  the generated code, so a nunjucks upgrade that adds an identifier fails the test.
+- The parse tree may hold only nunjucks nodes, plain values and regular expression literals. This
+  matters only for extensions, which build their own nodes.
+
+**While a template renders.**
+
+- A filter, test or global resolves only to a name that the environment registered itself, never to a
+  member that every object inherits. This also covers the test names that the `select` and `reject`
+  filters receive while the template renders. Such a name must be text, a number or another simple
+  value such as `none`; an object, a function or a symbol is refused.
+- The member names `constructor`, `prototype` and the `__define/lookup Getter/Setter__` accessors read
+  as empty unless they hold an object's own data that is not a function. `__proto__` always reads as
+  empty. This applies to a literal member name (`obj.name`, `obj["name"]`) and to one computed while
+  the template renders (`obj[key]`) alike.
+- A bare name such as `{{ user }}` resolves only to a template variable, an own key of the render data,
+  or an own environment global. It never resolves to a property that the data or the globals inherit,
+  such as `valueOf`.
+- A macro or call-block argument that a call leaves out is filled only from a keyword argument of the
+  same name that the call itself passes, never from a member that the keyword arguments inherit, so
+  otherwise it reads as empty. Keyword arguments written at a call site must be a plain object literal
+  with ordinary names; keyword arguments passed as a value (from render data, for example) are read
+  through a copy of their own keys.
+- A template must not read a member of the render context, an environment, a loader, a frame, a
+  template or a nunjucks module. A lookup or call that would return one of them fails.
+- A template must not reach `Function` (or its async and generator variants), `eval`, `Object`,
+  `Reflect`, `globalThis` or `process`.
+
+A template that breaks one of these rules fails with a `TemplateSandboxError`.
+
+The guard blocks reflection and code injection, not ordinary methods. Pass templates plain data, not
+objects whose methods reach the database or the file system (for example `BaseEntity` instances).
+
+The `RunTemplate` mutation and the `Template.Run` remote operation also apply
+`GetTemplateRunRefusal()` before they load anything: they refuse scope-limited sessions and callers
+without read permission on `MJ: Templates` and `MJ: Template Contents`.
+
 ### Template Extensions
 
 Extensions are registered via the MJ class factory:

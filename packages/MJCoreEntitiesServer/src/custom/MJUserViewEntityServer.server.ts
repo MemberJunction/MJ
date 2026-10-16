@@ -1,9 +1,10 @@
 import { RegisterClass, CleanAndParseJSON } from "@memberjunction/global";
-import { BaseEntity, EntityInfo, LogError, IMetadataProvider, Metadata } from "@memberjunction/core";
+import { BaseEntity, EntityInfo, LogError, IMetadataProvider, Metadata, ValidationErrorInfo, ValidationErrorType, ValidationResult } from "@memberjunction/core";
 import { MJUserViewEntityExtended } from '@memberjunction/core-entities'
 import { AIPromptParams } from "@memberjunction/ai-core-plus";
 import { AIEngine } from "@memberjunction/aiengine";
 import { AIPromptRunner } from "@memberjunction/ai-prompts";
+import { IsClientClauseScreeningProvider } from "@memberjunction/generic-database-provider";
 
 /**
  * Expected response format from the Smart Filter AI prompt
@@ -35,6 +36,110 @@ export class MJUserViewEntityServer extends MJUserViewEntityExtended  {
      */
     protected override get SmartFilterImplemented(): boolean {
         return true;
+    }
+
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.validateCustomWhereClauseAuthorization(result);
+        this.validateStoredClauses(result);
+        result.Success = result.Success && result.Errors.length === 0;
+        return result;
+    }
+
+    /**
+     * SECURITY: screens the SQL this view stores with the clause screen the RunView API applies to
+     * client filters — its WhereClause (set directly, compiled from FilterState, or made by a Smart
+     * Filter) and the ORDER BY built from SortState / GridState. Any user who can save a view can
+     * write these, and the provider splices them into view SQL. A CustomWhereClause is left to the
+     * Owner gate above. Only a new view or a changed clause is screened here; the provider screens
+     * every stored clause again when the view runs. Both use the provider's own screen, so a clause
+     * is judged the same way at save and at run.
+     */
+    private validateStoredClauses(result: ValidationResult): void {
+        const changed = (...fields: string[]) => !this.IsSaved || fields.some(f => this.GetFieldByName(f)?.Dirty === true);
+
+        if (!this.CustomWhereClause && changed('WhereClause', 'CustomWhereClause')) {
+            const where = MJUserViewEntityServer.neutralizeViewTemplates(this.WhereClause ?? '');
+            this.screenStoredClause(result, 'WhereClause', where, 'view WhereClause');
+        }
+        const orderBy = changed('SortState', 'GridState') ? this.storedOrderBy() : null;
+        if (orderBy) {
+            // The provider transforms a stored sort for its platform before running it; screen that form.
+            this.screenStoredClause(result, 'SortState', orderBy, 'OrderBy', this.ViewEntityInfo);
+        }
+    }
+
+    /**
+     * The ORDER BY built from SortState / GridState, or null when SortState is not valid JSON. Such
+     * a view cannot build an ORDER BY when it runs either, so there is nothing to screen.
+     */
+    private storedOrderBy(): string | null {
+        try {
+            return this.OrderByClause;
+        } catch {
+            return null;
+        }
+    }
+
+    /**
+     * Adds a validation failure on `field` when the provider's client-clause screen refuses `clause`,
+     * or when the provider cannot screen (fails closed).
+     */
+    private screenStoredClause(result: ValidationResult, field: string, clause: string, label: string, entityInfo?: EntityInfo): void {
+        if (!clause.trim()) return;
+        const provider = this.ProviderToUse;
+        try {
+            if (!IsClientClauseScreeningProvider(provider)) {
+                throw new Error(`Invalid ${label}: the data provider cannot screen client SQL`);
+            }
+            provider.ScreenClientClause(clause, label, this.ActiveUser, entityInfo);
+        } catch (e) {
+            const message = e instanceof Error ? e.message : String(e);
+            result.Errors.push(new ValidationErrorInfo(field, message, clause, ValidationErrorType.Failure));
+        }
+    }
+
+    /**
+     * A `{%UserView "id"%}` template becomes a subquery only when the view runs, and the provider
+     * screens that rendered clause. Here each template stands in as `SELECT NULL` so the rest of
+     * the clause can be parsed.
+     */
+    private static neutralizeViewTemplates(whereClause: string): string {
+        return whereClause.replace(/{%[^%]+%}/g, 'SELECT NULL');
+    }
+
+    /**
+     * SECURITY gate: `CustomWhereClause = 1` tells the platform to fold the stored
+     * `WhereClause` into view SQL verbatim — it bypasses both the auto-generation in
+     * `UpdateWhereClause()` and the render-time `ValidateUserProvidedSQLClause` screen in
+     * the database provider (custom clauses may legitimately contain constructs that screen
+     * blocks). That makes the CustomWhereClause/WhereClause pair an arbitrary-SQL channel,
+     * so creating or modifying a view with `CustomWhereClause` enabled is restricted to
+     * admin (Owner-type) users. Ordinary views (CustomWhereClause off) are unaffected.
+     */
+    private validateCustomWhereClauseAuthorization(result: ValidationResult): void {
+        const isCustom = !!this.CustomWhereClause; // truthy — the DB may hand back true or 1
+        if (!isCustom) {
+            return;
+        }
+        const customDirty = this.GetFieldByName('CustomWhereClause')?.Dirty === true;
+        const whereDirty = this.GetFieldByName('WhereClause')?.Dirty === true;
+        // A new record is always authorized: a field first written without NewRecord() seeding it
+        // does not read as dirty. On an existing record, only a change needs authorizing.
+        if (this.IsSaved && !customDirty && !whereDirty) {
+            return;
+        }
+
+        const user = this.ContextCurrentUser
+            ?? (this.ProviderToUse as unknown as IMetadataProvider).CurrentUser;
+        if (!user || user.Type?.trim().toLowerCase() !== 'owner') {
+            result.Errors.push(new ValidationErrorInfo(
+                'CustomWhereClause',
+                'Only an administrator (Owner-type user) may create or modify a view with CustomWhereClause enabled — the custom WhereClause is executed as raw SQL.',
+                this.CustomWhereClause,
+                ValidationErrorType.Failure
+            ));
+        }
     }
 
     /**
