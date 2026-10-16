@@ -828,6 +828,11 @@ const realtimeSchema = z.object({
   enabled: zodBooleanWithTransforms().default(true),
   /** Mid-session identity verification (off by default). */
   identityVerification: identityVerificationSchema.optional().default({}),
+  /**
+   * Seconds a client-direct call's recording waits for missing shards after its terminal signal before it
+   * is assembled anyway as `Partial` (gaps become silence). Defaults to 90.
+   */
+  recordingAssemblyGraceSeconds: z.coerce.number().positive().optional().default(90),
 }).passthrough();
 
 const configInfoSchema = z.object({

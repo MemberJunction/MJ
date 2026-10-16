@@ -21,8 +21,8 @@ seam, or the `RealtimeRecordingController`.
   `RecordingStartedAt` (the `t0`). Capture happens on **both** topologies: server-side (server-bridged)
   and **in the browser** (client-direct).
 - A **capture-time waveform** (normalized `0..1` max-abs peaks) is computed cheaply *during* recording
-  and written as a **`peaks.json` sidecar** in the same storage folder as the WAV, so a player renders
-  the waveform instantly without re-decoding the audio.
+  (server-bridged) or during server-side assembly (client-direct) and written as a **`peaks.json` sidecar**
+  in the same storage folder as the WAV, so a player renders the waveform instantly without re-decoding the audio.
 - Playback **streams** the recording over HTTP Range via `mj-storage-media-player` → the
   `CreateMediaAccessToken` mutation → the `GET /media/:fileId?token=` route (not a base64 download).
 - Recording is **OFF by default**, resolved **runtime param > agent (`RecordingDefault`) > off**,
@@ -37,10 +37,11 @@ seam, or the `RealtimeRecordingController`.
 | Server-side audio accumulation + WAV encode | `RealtimeRecordingController` (`packages/AI/Agents/src/realtime/realtime-recording-capture.ts`) |
 | Recording store + `peaks.json` sidecar write | `realtime-recording-store.ts` (`storeRealtimeRecording` / `writeRecordingPeaksSidecar`) |
 | Session attach + finalize seam | `RealtimeSessionRunner` (`Recording` / `FinalizeRecording` deps) |
-| Client-direct browser capture | `RealtimeAudioRecorder` + `encodePcm16Wav` / `PeakAccumulator` (`packages/Angular/Generic/conversations/src/lib/services/realtime-audio-recorder.ts`, `realtime-pcm-wav.ts`) |
+| Client-direct browser capture | `RealtimeAudioRecorder` + the Opus encoders in `services/recording/` (`packages/Angular/Generic/conversations/src/lib/services/`) |
+| Client-direct delivery + server assembly | `RealtimeSessionRuntime` shard window/queue/IndexedDB store/transport (`packages/RealtimeRuntime/src/session/`), `RealtimeRecordingHandler` (`packages/MJServer/src/rest/`), `AssembleRealtimeRecordingFromLedger` (`packages/AI/Agents/src/realtime/realtime-recording-opus-assembly.ts`) |
 | Streaming playback (server) | `CreateMediaAccessToken` mutation + `GET /media/:fileId` route (`packages/MJServer/src/rest/MediaStreamHandler.ts`, `peaksSidecar.ts`) |
 | Streaming playback (client) | `mj-storage-media-player` (`@memberjunction/ng-media-player`) |
-| Schema | `ConversationDetail.{TurnEndedAt,UtteranceStartMs,UtteranceEndMs,MediaType}`; `AIAgentSession.{RecordingMedia,RecordingStartedAt,RecordingFileID}`; `AIAgent.{RecordingDefault,RecordingStorageProviderID}` |
+| Schema | `ConversationDetail.{TurnEndedAt,UtteranceStartMs,UtteranceEndMs,MediaType}`; `AIAgentSession.{RecordingMedia,RecordingStartedAt,RecordingFileID,RecordingStatus,RecordingExpectedShards,RecordingCapturedSamples,RecordingGaps,RecordingAssemblyVersion}`; `MJ: AI Agent Session Recording Shards`; `AIAgent.{RecordingDefault,RecordingStorageProviderID}` |
 
 ## Turn lifecycle (always on, recording or not)
 
@@ -85,11 +86,16 @@ computes capture-time peaks, and finalizes on `Stop()`.
 so capture happens **in the browser** via `RealtimeAudioRecorder` (`@memberjunction/ng-conversations`):
 
 - It mixes the user's microphone with the agent's remote-audio stream through the Web Audio API and
-  captures Float32 PCM frames off an `AudioWorkletNode` (preferred) or `ScriptProcessorNode` (fallback) —
-  **not** a `MediaRecorder` (whose webm/opus output is header-less, so range seeking is unreliable). At
-  `Stop()` the accumulated PCM is encoded to a seekable 16-bit PCM WAV via `encodePcm16Wav`.
-- A bounded `PeakAccumulator` computes the waveform peaks **during** capture (cost stays O(buckets)
-  regardless of call length); these become the `peaks.json` sidecar on upload.
+  captures Float32 frames off an `AudioWorkletNode` (preferred) or `ScriptProcessorNode` (fallback) at
+  48 kHz (resampling when the browser will not give it a 48 kHz context), and feeds them to **one Opus
+  encoder for the whole call** — WebCodecs `AudioEncoder` where it supports mono 48 kHz Opus, otherwise
+  libopus WebAssembly in a Worker. Nothing is accumulated until the end.
+- The runtime uploads the packets as 5 s `MJOPUS1` shards during the call (IndexedDB-backed, so they
+  survive reloads and network drops) and sends a `keepalive` terminal request with the final partial
+  window on End, `pagehide` and when the tab is hidden. The **server** assembles `recording.wav` and
+  computes `peaks.json` from the decoded PCM — the stored artifacts are the same WAV + sidecar as
+  before. The delivery, ledger and assembly rules are in
+  [REALTIME_CO_AGENTS_GUIDE.md §3, step 6](REALTIME_CO_AGENTS_GUIDE.md#client-direct-flow-the-shipped-path).
 - **Agent-audio mixing:** the agent's WebRTC track usually lands *after* recording has already begun
   (mic-only). The recorder exposes `AttachRemoteStream(stream)`, and the session service subscribes to
   the client driver's `OnRemoteMediaStream(cb)` hook (`BaseRealtimeClient` / `OpenAIRealtimeClient`) so
