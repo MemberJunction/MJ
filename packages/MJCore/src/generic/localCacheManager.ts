@@ -148,6 +148,14 @@ export interface CachedRunViewData {
      */
     schemaHash?: string;
     /**
+     * The newest `__mj_UpdatedAt` (ISO string) across the entity's metadata row and its field rows,
+     * written alongside {@link schemaHash}. When two processes sharing a cache disagree on the hash,
+     * this says which of them holds the newer metadata, so the older one stops treating the newer
+     * one's slots as stale. Absent on entries from writers that predate it or whose metadata
+     * carries no timestamps.
+     */
+    schemaStamp?: string;
+    /**
      * Set when the slot was written with {@link CacheWriteOptions.ProviderInternalScaffolding}.
      * Persisted so that in-place slot maintenance (`storeCachedResults`, driven by BaseEntity
      * save/delete events) can carry the exemption FORWARD. Without it, the first save event
@@ -182,12 +190,48 @@ export interface CachedRunViewResult {
      * permanently disabling post-migration drift detection for that slot.
      */
     schemaHash?: string;
+    /** Surfaced for the same carry-forward reason as {@link schemaHash}. See {@link CachedRunViewData.schemaStamp}. */
+    schemaStamp?: string;
     /**
      * Surfaced from the stored payload so in-place maintenance can carry the freeze exemption
      * forward. See {@link CachedRunViewData.providerInternalScaffolding}.
      */
     providerInternalScaffolding?: boolean;
 }
+
+/** An entity's schema hash and schema stamp. See {@link CachedRunViewData.schemaStamp}. */
+interface SchemaSignature {
+    Hash: string;
+    Stamp?: string;
+}
+
+/** A cached RunView slot whose schema hash differs from this process's for the entity. */
+interface SchemaMismatch {
+    EntityName: string;
+    CachedHash: string;
+    Current: SchemaSignature;
+    /** The slot's schema stamp is known to be newer than this process's. */
+    EntryIsNewer: boolean;
+}
+
+/**
+ * A hold on writing one entity's shared slots after a schema mismatch. See
+ * `LocalCacheManager.handleSchemaMismatch`.
+ */
+interface SchemaWriteHold {
+    /** This process's schema hash when the hold was taken; a different hash ends the hold. */
+    OwnHash: string;
+    /** Earliest time (ms) of the next permitted write; infinite while this process is behind. */
+    NextWriteAt: number;
+    /** When a mismatch was last seen for the entity (ms). */
+    LastMismatchAt: number;
+}
+
+/**
+ * Why a RunView slot is being read: to serve it to a caller, or to rewrite it in place after a
+ * row changed.
+ */
+type SlotReadPurpose = 'serve' | 'maintain';
 
 /**
  * Per-write options for the cache write methods.
@@ -431,6 +475,20 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      * (e.g., TransactionGroup batch deletes).
      */
     private _fingerprintLocks = new Map<string, Promise<void>>();
+
+    /**
+     * Write holds on entities whose shared slots were found under a different schema, keyed by
+     * lowercased entity name. While a hold applies, {@link SetRunViewResult} skips or rate-limits
+     * writes of that entity's slots. See {@link handleSchemaMismatch} and {@link mayWriteUnderSchemaHold}.
+     */
+    private _schemaWriteHolds = new Map<string, SchemaWriteHold>();
+    /**
+     * How often, at most, a process writes an entity's shared slots while it keeps finding that
+     * entity's slots under a schema different from its own. See {@link handleSchemaMismatch}.
+     */
+    public static readonly SCHEMA_MISMATCH_WRITE_INTERVAL_MS = 60_000;
+    /** Schema mismatches already reported, so each entity/hash pair is logged once per process. */
+    private _reportedSchemaMismatches = new Set<string>();
 
     private readonly REGISTRY_KEY = '__MJ_CACHE_REGISTRY__';
 
@@ -858,31 +916,138 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
     }
 
     /**
-     * Checks whether a cached RunView entry is structurally stale due to a schema change
-     * (e.g., new columns added via migration + CodeGen). Compares the stored schema hash
-     * against the current entity field list. If they differ, the entry is invalidated.
+     * Compares a cached RunView entry's schema hash against this process's current field list for
+     * the entity (a mismatch follows a migration + CodeGen that added, removed or reordered
+     * columns). Entries without a hash, and entities this process cannot resolve, never mismatch.
      * @param fingerprint - The cache fingerprint
      * @param data - The cached data to validate
-     * @returns true if the entry is stale and should not be served
+     * @returns The mismatch, or null when the entry may be served
      */
-    private isSchemaStaleCacheEntry(fingerprint: string, data: CachedRunViewData): boolean {
-        if (!data.schemaHash) return false;
+    private findSchemaMismatch(fingerprint: string, data: CachedRunViewData): SchemaMismatch | null {
+        if (!data.schemaHash) return null;
 
         const entityName = this.extractEntityFromFingerprint(fingerprint);
-        if (!entityName) return false;
+        if (!entityName) return null;
 
-        const currentHash = this.ComputeSchemaHash(undefined, entityName);
-        if (!currentHash) return false;
+        const current = this.computeSchemaSignature(undefined, entityName);
+        if (!current || current.Hash === data.schemaHash) return null;
 
-        if (currentHash !== data.schemaHash) {
-            LogStatusEx({
-                message: `[CACHE-SCHEMA-STALE] Entity "${entityName}" schema changed (cached=${data.schemaHash}, current=${currentHash})`,
-                verboseOnly: false
+        return {
+            EntityName: entityName,
+            CachedHash: data.schemaHash,
+            Current: current,
+            EntryIsNewer: LocalCacheManager.isNewerSchemaStamp(data.schemaStamp, current.Stamp),
+        };
+    }
+
+    /**
+     * True only when both stamps are present and the cached entry's is strictly newer than this
+     * process's. Equal or missing stamps leave the order unknown, which counts as not newer.
+     */
+    private static isNewerSchemaStamp(entryStamp: string | undefined, currentStamp: string | undefined): boolean {
+        if (!entryStamp || !currentStamp) {
+            return false;
+        }
+        return LocalCacheManager.timestampMs(entryStamp) > LocalCacheManager.timestampMs(currentStamp);
+    }
+
+    /**
+     * Decides what a schema mismatch does to the slot. The entry is never served; the question is
+     * whether the slot is deleted, which on a shared store also tells every peer to reload.
+     *
+     * - Process-local store, or a slot-maintenance read: delete it. No other process reads a local
+     *   store. A maintenance read happens because a row changed, and a slot that cannot take the
+     *   change in place must go, whichever process wrote it.
+     * - Shared store, serving read: leave it, and hold back this process's writes of the entity.
+     *   Deleting publishes `removed`, every peer engine holding the slot reloads and rewrites it
+     *   under its own hash, and processes on either side of a migration keep doing that to each
+     *   other. The caller reads the database instead.
+     *   - When the slot is known to come from newer metadata, this process is the one out of date.
+     *     It stops writing the entity's slots until its own metadata changes.
+     *   - Otherwise it writes the entity's slots at most once per
+     *     {@link SCHEMA_MISMATCH_WRITE_INTERVAL_MS} while mismatches keep appearing. That still
+     *     replaces a slot left by older metadata, but a peer running code that deletes mismatched
+     *     slots (any release before this check stopped deleting them) gets one slot to delete per
+     *     interval instead of one per read. The hold lapses after an interval with no mismatch.
+     */
+    private handleSchemaMismatch(fingerprint: string, mismatch: SchemaMismatch, purpose: SlotReadPurpose): void {
+        const shared = this._storageProvider?.SharedAcrossProcesses === true;
+        if (!shared || purpose === 'maintain') {
+            this.reportSchemaMismatch(mismatch, 'dropping the slot');
+            this.InvalidateRunViewResult(fingerprint).catch(() => {});
+            return;
+        }
+        this.holdSchemaWrites(mismatch);
+        if (mismatch.EntryIsNewer) {
+            this.reportSchemaMismatch(mismatch,
+                'another process wrote the slot under newer metadata. This process reads the entity from the database ' +
+                'and stops writing its cache slots until its metadata changes. If it started before a migration, restart it.');
+        } else {
+            this.reportSchemaMismatch(mismatch,
+                `reading from the database. While slots under other metadata keep appearing, this process writes the entity's ` +
+                `slots at most once every ${LocalCacheManager.SCHEMA_MISMATCH_WRITE_INTERVAL_MS / 1000}s.`);
+        }
+    }
+
+    /** Records or extends the write hold for a mismatch seen on a shared store. */
+    private holdSchemaWrites(mismatch: SchemaMismatch): void {
+        const key = mismatch.EntityName.trim().toLowerCase();
+        const now = Date.now();
+        const existing = this._schemaWriteHolds.get(key);
+        if (mismatch.EntryIsNewer) {
+            this._schemaWriteHolds.set(key, { OwnHash: mismatch.Current.Hash, NextWriteAt: Number.POSITIVE_INFINITY, LastMismatchAt: now });
+        } else if (existing && existing.OwnHash === mismatch.Current.Hash) {
+            existing.LastMismatchAt = now;
+        } else {
+            this._schemaWriteHolds.set(key, {
+                OwnHash: mismatch.Current.Hash,
+                NextWriteAt: now + LocalCacheManager.SCHEMA_MISMATCH_WRITE_INTERVAL_MS,
+                LastMismatchAt: now,
             });
+        }
+    }
+
+    /** Logs a schema mismatch once per entity and hash pair per process. */
+    private reportSchemaMismatch(mismatch: SchemaMismatch, outcome: string): void {
+        const key = `${mismatch.EntityName.trim().toLowerCase()}|${mismatch.CachedHash}|${mismatch.Current.Hash}`;
+        if (this._reportedSchemaMismatches.has(key)) {
+            return;
+        }
+        this._reportedSchemaMismatches.add(key);
+        LogStatusEx({
+            message: `[CACHE-SCHEMA-STALE] Entity "${mismatch.EntityName}" schema differs from a cached slot ` +
+                `(cached=${mismatch.CachedHash}, current=${mismatch.Current.Hash}) — ${outcome}`,
+            verboseOnly: false
+        });
+    }
+
+    /**
+     * Whether a slot of `entityName` may be written now, given the entity's write hold (see
+     * {@link handleSchemaMismatch}). A permitted write under a rate-limiting hold uses up the
+     * interval. The hold is dropped once this process's schema hash changes (a metadata refresh)
+     * or, for a rate-limiting hold, once an interval passes with no mismatch.
+     */
+    private mayWriteUnderSchemaHold(entityName: string, currentHash: string): boolean {
+        if (this._storageProvider?.SharedAcrossProcesses !== true) {
             return true;
         }
-
-        return false;
+        const key = entityName.trim().toLowerCase();
+        const hold = this._schemaWriteHolds.get(key);
+        if (!hold) {
+            return true;
+        }
+        const now = Date.now();
+        const interval = LocalCacheManager.SCHEMA_MISMATCH_WRITE_INTERVAL_MS;
+        const lapsed = hold.NextWriteAt !== Number.POSITIVE_INFINITY && now - hold.LastMismatchAt > interval;
+        if (hold.OwnHash !== currentHash || lapsed) {
+            this._schemaWriteHolds.delete(key);
+            return true;
+        }
+        if (now < hold.NextWriteAt) {
+            return false;
+        }
+        hold.NextWriteAt = now + interval;
+        return true;
     }
 
     /**
@@ -923,21 +1088,27 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
     }
 
     /**
-     * Resolves cached fingerprints for an entity, checking the local in-memory
-     * index first and falling back to the shared storage provider (e.g., Redis)
-     * when the local index is empty. This handles cross-server scenarios where
-     * Server A cached RunView results and Server B saves a record — Server B's
-     * local index is empty but Redis still has the stale cached entries.
+     * Resolves cached fingerprints for an entity: this process's own index, plus the slots the
+     * storage provider lists for the entity.
+     *
+     * On a provider shared between processes (e.g. Redis) the provider is listed on every call
+     * and merged into the local index. The local index only knows slots this process wrote, so
+     * answering from it alone would miss slots other processes wrote — including a slot this
+     * process only read warm at boot — and a save here would never reach the engines that load
+     * from those slots on its peers.
+     *
+     * On a process-local provider (e.g. IndexedDB) the category is listed only when the local
+     * index knows nothing for the entity, which picks up slots persisted by an earlier session.
      */
     private async resolveFingerprintsForEntity(entityName: string): Promise<Set<string> | undefined> {
+        if (this._storageProvider?.SharedAcrossProcesses === true && this._storageProvider.GetCategoryKeys) {
+            return this.resolveFingerprintsFromSharedStore(entityName);
+        }
+
         const local = this._entityFingerprintIndex.get(entityName);
         if (local && local.size > 0) return local;
 
-        if (!this._storageProvider?.GetCategoryKeys) return undefined;
-
-        const allKeys = await this._storageProvider.GetCategoryKeys(CacheCategory.RunViewCache);
-        const entityPrefix = entityName + '|';
-        const remoteFingerprints = allKeys.filter(k => k.startsWith(entityPrefix));
+        const remoteFingerprints = await this.listStoredFingerprintsForEntity(entityName);
         if (remoteFingerprints.length > 0) {
             LogStatusVerbose(`LocalCacheManager: found ${remoteFingerprints.length} remote cached fingerprint(s) for "${entityName}" via storage provider`);
             const result = new Set(remoteFingerprints);
@@ -949,6 +1120,27 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         }
 
         return undefined;
+    }
+
+    /**
+     * Merges the slots a shared store lists for the entity into the local index and returns the
+     * union. Local entries the store does not list are left in place; invalidation removes them
+     * from the index the same way it does for any other slot.
+     */
+    private async resolveFingerprintsFromSharedStore(entityName: string): Promise<Set<string> | undefined> {
+        for (const fp of await this.listStoredFingerprintsForEntity(entityName)) {
+            this.addToEntityIndex(fp);
+        }
+        const merged = this._entityFingerprintIndex.get(entityName);
+        return merged && merged.size > 0 ? merged : undefined;
+    }
+
+    /** Lists the RunView slots the storage provider holds for an entity; empty when it cannot list keys. */
+    private async listStoredFingerprintsForEntity(entityName: string): Promise<string[]> {
+        if (!this._storageProvider?.GetCategoryKeys) return [];
+        const allKeys = await this._storageProvider.GetCategoryKeys(CacheCategory.RunViewCache);
+        const entityPrefix = entityName + '|';
+        return allKeys.filter(k => k.startsWith(entityPrefix));
     }
 
     // ========================================================================
@@ -1857,6 +2049,15 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      * @returns The schema hash string, or undefined if the entity can't be resolved
      */
     public ComputeSchemaHash(provider: IMetadataProvider | undefined, entityName: string): string | undefined {
+        return this.computeSchemaSignature(provider, entityName)?.Hash;
+    }
+
+    /**
+     * The entity's schema hash (see {@link ComputeSchemaHash}) together with its schema stamp: the
+     * newest `__mj_UpdatedAt` across the entity row and its field rows, as an ISO string, or
+     * undefined when the metadata carries no timestamps.
+     */
+    private computeSchemaSignature(provider: IMetadataProvider | undefined, entityName: string): SchemaSignature | undefined {
         try {
             const md = provider ?? new Metadata();
             const entity = md.EntityByName(entityName);
@@ -1864,10 +2065,26 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             // Use natural sequence order (EntityInfo.Fields is sorted by Sequence).
             // This detects field additions, removals, AND reorderings.
             const fieldNames = entity.Fields.map(f => f.Name).join('|');
-            return this.simpleHash(fieldNames);
+            let newest = LocalCacheManager.timestampMs(entity.__mj_UpdatedAt);
+            for (const field of entity.Fields) {
+                newest = Math.max(newest, LocalCacheManager.timestampMs(field.__mj_UpdatedAt));
+            }
+            return {
+                Hash: this.simpleHash(fieldNames),
+                Stamp: newest > 0 ? new Date(newest).toISOString() : undefined,
+            };
         } catch {
             return undefined;
         }
+    }
+
+    /** Milliseconds since the epoch for a metadata timestamp (a Date or a string), or 0 when unreadable. */
+    private static timestampMs(value: Date | string | null | undefined): number {
+        if (value == null) {
+            return 0;
+        }
+        const ms = value instanceof Date ? value.getTime() : Date.parse(value);
+        return Number.isNaN(ms) ? 0 : ms;
     }
 
     /**
@@ -2034,9 +2251,16 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         }
         // Compute and store schema hash for upgrade detection
         if (params.EntityName) {
-            const schemaHash = this.ComputeSchemaHash(provider, params.EntityName);
-            if (schemaHash) {
-                data.schemaHash = schemaHash;
+            const signature = this.computeSchemaSignature(provider, params.EntityName);
+            if (signature) {
+                if (!this.mayWriteUnderSchemaHold(params.EntityName, signature.Hash)) {
+                    LogStatusEx({ message: `[CACHE-WRITE-GATE] Skipping cache write for "${params.EntityName}" — its shared slots were found under different metadata`, verboseOnly: true });
+                    return;
+                }
+                data.schemaHash = signature.Hash;
+                if (signature.Stamp) {
+                    data.schemaStamp = signature.Stamp;
+                }
             }
         }
         // Estimate size by sampling rows (eviction accounting only); the actual stored
@@ -2053,9 +2277,9 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             return;
         }
 
-        // The oversized gate above is the ONLY step that can decline this write, and it is
-        // synchronous — so by here the row set is definitely becoming shared state, and it is
-        // frozen with no intervening yield point. That ordering is load-bearing: the eviction
+        // The schema gate and the oversized gate above are the ONLY steps that can decline this
+        // write, and they are synchronous — so by here the row set is definitely becoming shared
+        // state, and it is frozen with no intervening yield point. That ordering is load-bearing: the eviction
         // steps below are awaited, and callers hold this very array while they run (the
         // smart-cache stale leg does not await this method at all). Freezing after them leaves
         // a window in which shared rows are handed out still mutable — and `BaseEntity`
@@ -2117,12 +2341,17 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      * @returns The cached results, maxUpdatedAt, rowCount (derived), and aggregateResults, or null if not found
      */
     public async GetRunViewResult(fingerprint: string): Promise<CachedRunViewResult | null> {
+        return this.readRunViewSlot(fingerprint, 'serve');
+    }
+
+    /** {@link GetRunViewResult} for a given purpose; in-place slot maintenance reads with `'maintain'`. */
+    private async readRunViewSlot(fingerprint: string, purpose: SlotReadPurpose): Promise<CachedRunViewResult | null> {
         if (!this._storageProvider || !this._config.enabled) return null;
 
         try {
             // Native object read — IDB structured-clones the result back, no JSON.parse needed.
             const parsed = await this._storageProvider.GetItem<CachedRunViewData>(fingerprint, CacheCategory.RunViewCache);
-            return this.materializeCachedRunViewResult(fingerprint, parsed);
+            return this.materializeCachedRunViewResult(fingerprint, parsed, purpose);
         } catch (e) {
             LogError(`LocalCacheManager.GetRunViewResult failed: ${e}`);
             this._stats.misses++;
@@ -2162,7 +2391,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         try {
             const raw = await this._storageProvider.GetItems<CachedRunViewData>(fingerprints, CacheCategory.RunViewCache);
             for (const [fp, parsed] of raw) {
-                out.set(fp, this.materializeCachedRunViewResult(fp, parsed));
+                out.set(fp, this.materializeCachedRunViewResult(fp, parsed, 'serve'));
             }
             return out;
         } catch (e) {
@@ -2187,7 +2416,8 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      */
     private materializeCachedRunViewResult(
         fingerprint: string,
-        parsed: CachedRunViewData | null | undefined
+        parsed: CachedRunViewData | null | undefined,
+        purpose: SlotReadPurpose
     ): CachedRunViewResult | null {
         if (!parsed) {
             this._stats.misses++;
@@ -2204,8 +2434,9 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             return null;
         }
 
-        if (this.isSchemaStaleCacheEntry(fingerprint, parsed)) {
-            this.InvalidateRunViewResult(fingerprint).catch(() => {});
+        const schemaMismatch = this.findSchemaMismatch(fingerprint, parsed);
+        if (schemaMismatch) {
+            this.handleSchemaMismatch(fingerprint, schemaMismatch, purpose);
             this._stats.misses++;
             return null;
         }
@@ -2220,6 +2451,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             totalRowCount: parsed.totalRowCount,
             // Surfaced so in-place maintenance can carry it forward on rewrite (B38).
             schemaHash: parsed.schemaHash,
+            schemaStamp: parsed.schemaStamp,
             // Same carry-forward rationale: a maintained scaffolding slot must stay exempt.
             providerInternalScaffolding: parsed.providerInternalScaffolding,
         };
@@ -2452,7 +2684,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
 
         return this.withFingerprintLock(fingerprint, async () => {
             try {
-                const cached = await this.GetRunViewResult(fingerprint);
+                const cached = await this.readRunViewSlot(fingerprint, 'maintain');
                 if (!cached) {
                     LogStatusVerbose(`LocalCacheManager.UpsertSingleEntity: No cached data found for fingerprint "${fingerprint.substring(0, 60)}" — skipping (cache will be populated on next RunView)`);
                     return false;
@@ -2478,7 +2710,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
                 const updatedResults = Array.from(resultMap.values());
 
                 return await this.storeCachedResults(fingerprint, updatedResults, newMaxUpdatedAt,
-                    { totalRowCount: cached.totalRowCount, rowCount: cached.results.length, schemaHash: cached.schemaHash,
+                    { totalRowCount: cached.totalRowCount, rowCount: cached.results.length, schemaHash: cached.schemaHash, schemaStamp: cached.schemaStamp,
                       providerInternalScaffolding: cached.providerInternalScaffolding });
             } catch (e) {
                 LogError(`LocalCacheManager.UpsertSingleEntity failed: ${e}`);
@@ -2505,7 +2737,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
 
         return this.withFingerprintLock(fingerprint, async () => {
             try {
-                const cached = await this.GetRunViewResult(fingerprint);
+                const cached = await this.readRunViewSlot(fingerprint, 'maintain');
                 if (!cached) {
                     return false;
                 }
@@ -2531,7 +2763,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
                 const updatedResults = Array.from(resultMap.values());
 
                 return await this.storeCachedResults(fingerprint, updatedResults, newMaxUpdatedAt,
-                    { totalRowCount: cached.totalRowCount, rowCount: cached.results.length, schemaHash: cached.schemaHash,
+                    { totalRowCount: cached.totalRowCount, rowCount: cached.results.length, schemaHash: cached.schemaHash, schemaStamp: cached.schemaStamp,
                       providerInternalScaffolding: cached.providerInternalScaffolding });
             } catch (e) {
                 LogError(`LocalCacheManager.RemoveSingleEntity failed: ${e}`);
@@ -2558,7 +2790,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         fingerprint: string,
         updatedResults: unknown[],
         newMaxUpdatedAt: string,
-        prior?: { totalRowCount?: number; rowCount: number; schemaHash?: string; providerInternalScaffolding?: boolean }
+        prior?: { totalRowCount?: number; rowCount: number; schemaHash?: string; schemaStamp?: string; providerInternalScaffolding?: boolean }
     ): Promise<boolean> {
         const data: CachedRunViewData = {
             results: updatedResults,
@@ -2577,6 +2809,9 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         // the very drift the guard exists to catch.
         if (prior?.schemaHash) {
             data.schemaHash = prior.schemaHash;
+        }
+        if (prior?.schemaStamp) {
+            data.schemaStamp = prior.schemaStamp;
         }
         // Carry the freeze exemption forward too — a scaffolding slot that gets maintained in
         // place must not silently become frozen, or the owner that mutates those rows breaks on

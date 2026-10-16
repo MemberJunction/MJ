@@ -10,6 +10,7 @@ import {
   EntitySaveOptions,
   IMetadataProvider,
   IRunViewProvider,
+  KeyValuePair,
   LogDebug,
   LogError,
   LogStatus,
@@ -24,7 +25,7 @@ import {
 } from '@memberjunction/core';
 import { MJAuditLogEntity, MJErrorLogEntity, MJUserViewEntityExtended } from '@memberjunction/core-entities';
 import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
-import { UserCache } from '@memberjunction/generic-database-provider';
+import { ClientClauseScreen, UserCache, type EntityBaseViewAllowList } from '@memberjunction/generic-database-provider';
 import { PubSubEngine, AuthorizationError } from 'type-graphql';
 import { GraphQLError } from 'graphql';
 import { RefusalExtensions } from './refusalExtensions.js';
@@ -36,14 +37,23 @@ import { RunViewGenericParams, UserPayload } from '../types.js';
 import { RunDynamicViewInput, RunViewByIDInput, RunViewByNameInput } from './RunViewResolver.js';
 import { DeleteOptionsInput } from './DeleteOptionsInput.js';
 import { MJEvent, MJEventType, MJGlobal, ENCRYPTED_SENTINEL, EscapeSQLString, IsValueEncrypted, IsOnlyTimezoneShift } from '@memberjunction/global';
-import { SQLParser } from '@memberjunction/sql-parser';
-import { PostgreSQLDialect, SQLServerDialect, type SQLParserDialect } from '@memberjunction/sql-dialect';
+import { SQLParser, IsBalancedSQLFragment, LexSQL } from '@memberjunction/sql-parser';
+import type { SQLParserDialect } from '@memberjunction/sql-dialect';
 import { EncryptionEngine } from '@memberjunction/encryption';
 import { PUSH_STATUS_UPDATES_TOPIC, publishStatusUpdate } from './PushStatusResolver.js';
 import { CACHE_INVALIDATION_TOPIC, MayBroadcastRecordData } from './CacheInvalidationResolver.js';
 import { PubSubManager } from './PubSubManager.js';
 import { FieldMapper } from '@memberjunction/graphql-dataprovider';
 import { Subscription } from 'rxjs';
+
+/**
+ * Entities whose update is always hydrated from the stored row, never from the client's `OldValues___`, though they
+ * do not track record changes: their server-side write rules compare against the prior state, which a client could
+ * otherwise supply itself (lower-case names). See `ResolverBase.MustLoadTruthFromDatabase`.
+ */
+const ENTITIES_THAT_ALWAYS_LOAD_STORED_ROW: ReadonlySet<string> = new Set([
+  'mj: data context items',
+]);
 
 export class ResolverBase {
   private static _emit = process.env.CLOUDEVENTS_HTTP_TRANSPORT ? emitterFor(httpTransport(process.env.CLOUDEVENTS_HTTP_TRANSPORT)) : null;
@@ -357,13 +367,16 @@ export class ResolverBase {
    * @param dataObject - The data object containing field values
    * @param encryptionEngine - Optional encryption engine for re-encryption (lazy loaded if needed)
    * @param contextUser - User context for encryption operations
+   * @param fieldKey - What the object's keys are: field CodeNames (GraphQL transport rows, the
+   *   default) or field Names (raw provider rows, such as dataset item results)
    * @returns The filtered data object
    */
   protected async FilterEncryptedFieldsForAPI(
     entityName: string,
     dataObject: Record<string, unknown>,
     contextUser: UserInfo,
-    provider?: IMetadataProvider
+    provider?: IMetadataProvider,
+    fieldKey: 'CodeName' | 'Name' = 'CodeName'
   ): Promise<Record<string, unknown>> {
     if (!dataObject) return dataObject;
 
@@ -377,7 +390,7 @@ export class ResolverBase {
 
     // Process each encrypted field
     for (const field of encryptedFields) {
-      const fieldName = field.CodeName;
+      const fieldName = fieldKey === 'Name' ? field.Name : field.CodeName;
       const value = dataObject[fieldName];
 
       // Skip null/undefined values
@@ -418,13 +431,15 @@ export class ResolverBase {
   }
 
   /**
-   * Filters encrypted fields for an array of data objects
+   * Filters encrypted fields for an array of data objects. `fieldKey` is as for
+   * {@link FilterEncryptedFieldsForAPI}.
    */
   protected async ArrayFilterEncryptedFieldsForAPI(
     entityName: string,
     dataObjectArray: Record<string, unknown>[],
     contextUser: UserInfo,
-    provider?: IMetadataProvider
+    provider?: IMetadataProvider,
+    fieldKey: 'CodeName' | 'Name' = 'CodeName'
   ): Promise<Record<string, unknown>[]> {
     if (!dataObjectArray || dataObjectArray.length === 0) return dataObjectArray;
 
@@ -438,7 +453,7 @@ export class ResolverBase {
 
     // Process each element
     for (const element of dataObjectArray) {
-      await this.FilterEncryptedFieldsForAPI(entityName, element, contextUser, provider);
+      await this.FilterEncryptedFieldsForAPI(entityName, element, contextUser, provider, fieldKey);
     }
 
     return dataObjectArray;
@@ -912,51 +927,105 @@ export class ResolverBase {
    * This screen uses `@memberjunction/sql-parser` (same wrap as EDS `assertReadOnlyClause`):
    * wrap the fragment as a single SELECT, fail closed if it does not parse as a read, then
    * allow a FROM only when it is an entity **BaseView**. Base tables (`Meeting`, `__mj.User`)
-   * and catalogs are rejected. Server-internal RunView callers never hit this.
+   * and catalogs are rejected. Server-internal RunView callers get only the provider's
+   * statement-separator check, which cannot refuse a legitimate filter.
+   *
+   * The screen is `ClientClauseScreen` in `@memberjunction/generic-database-provider`, shared
+   * with the REST view routes, ad-hoc list sources, and the provider's saved-view checks.
+   *
+   * Before that parse, the fragment must be balanced on its own (`IsBalancedSQLFragment`). The
+   * provider and the tenant hook splice it inside parentheses and AND their own filters after
+   * it, so a fragment that closes those parentheses (`1=1) OR (1=1`) would leave row-level
+   * security, API-key row filters and tenant scope on one side of an OR the caller controls.
+   * The parse wraps the fragment in parentheses too, which is why it cannot catch this alone.
+   * A backslash inside a quoted string or identifier is refused as well: the parser reads `\'`
+   * inside a plain literal as an escaped quote, but SQL Server and PostgreSQL end the literal
+   * there, so the text after it could be code that the parse-based checks never saw.
    *
    * RLS is applied by RunView as an outer WHERE around the entity being queried, not compiled
-   * into the view. Subqueries against another entity's BaseView therefore do not inherit that
-   * entity's RLS; they are still restricted to the view (not the table).
+   * into the view, and RunView removes denied fields from its own result only. A subquery reads a
+   * base view directly with neither, so the screen refuses one over any entity the user reads under
+   * a row filter or with denied fields (`ClientClauseScreen.AssertUnscopedRead`), the queried
+   * entity included.
    */
   protected assertClientClauseUsesEntityBaseViews(
     clause: string | undefined | null,
     label: string,
     provider?: IMetadataProvider,
+    user?: UserInfo,
+    options?: { LeaveUnparseableToProvider?: boolean },
   ): void {
     if (!clause?.trim()) return;
 
+    // The balance and backslash checks run before the shared screen: it parses the fragment
+    // inside its own parentheses, so it cannot see a fragment that closes the parentheses the
+    // provider and the tenant hook splice it into.
     const dialect = this.dialectForProvider(provider);
     if (SQLParser.HasStackedStatements(clause, dialect)) {
       throw new Error(`Invalid ${label}: multiple statements are not permitted in client-supplied filters`);
     }
+    const balance = IsBalancedSQLFragment(clause, dialect);
+    if (!balance.IsBalanced) {
+      throw new Error(`Invalid ${label}: ${balance.Reason}`);
+    }
+    if (this.hasBackslashInQuotes(clause, dialect)) {
+      throw new Error(`Invalid ${label}: a backslash inside a quoted string or identifier is not permitted in client-supplied filters`);
+    }
 
-    const wrapped =
-      label === 'OrderBy'
-        ? `SELECT 1 FROM __mj_clause_screen ORDER BY ${clause}`
-        : `SELECT 1 FROM __mj_clause_screen WHERE (${clause})`;
-    const parser = new SQLParser(wrapped, dialect);
+    ClientClauseScreen.AssertClauseUsesEntityBaseViews(clause, label, provider?.Entities ?? [], dialect, user, options);
+  }
+
+  /**
+   * SECURITY — screen for a FULL client-supplied SQL statement (ad-hoc query path). In addition
+   * to the SELECT-only validation the caller performs, every table reference must resolve to an
+   * entity BaseView the acting user can read UNSCOPED. A reference is excluded only when it reads a
+   * CTE that is in scope there (`StatementRelation.IsCTEReference`): unqualified, declared by its
+   * own SELECT or an enclosing one, and matched by the dialect's identifier rules. A name reserved
+   * for the SQL parser is refused before parsing (`ClientClauseScreen.AssertNoIdentifierAliasNames`).
+   * Fails closed: no user, or an unresolvable reference, refuses.
+   *
+   * The references come from a walk of the whole parse tree
+   * (`ClientClauseScreen.CollectStatementReads`). The statement is refused when that walk does not
+   * account for every SELECT in the text, or when a FROM item names no table (a table function or
+   * a row list).
+   *
+   * Entity CanRead is not unscoped base-view read authority: RunView narrows a granted read with
+   * row-level security and denied-field projection, and raw SQL applies neither. Rather than try
+   * to rewrite arbitrary SQL (joins, CTEs) to compose that policy, this refuses any entity that
+   * carries a row filter or a denied field for the caller — those reads belong on RunView. For
+   * the remaining entities CanRead genuinely means "every row and field of the view".
+   */
+  protected assertFullQueryUsesReadableEntityViews(
+    sqlText: string,
+    provider: IMetadataProvider | undefined,
+    user: UserInfo | undefined,
+    label = 'SQL',
+  ): void {
+    if (!user) {
+      throw new Error(`Invalid ${label}: no acting user resolved for ad-hoc SQL — refusing`);
+    }
+    const dialect = this.dialectForProvider(provider);
+    ClientClauseScreen.AssertNoIdentifierAliasNames(sqlText, dialect, label);
+    const parser = new SQLParser(sqlText, dialect);
     if (!parser.IsValid || parser.HasWriteStatement || parser.StatementKind !== 'select') {
-      throw new Error(
-        `Invalid ${label}: not a safe read-only filter fragment — refusing under uncertainty`,
-      );
+      throw new Error(`Invalid ${label}: not a safe read-only statement — refusing under uncertainty`);
     }
     if (this.astContainsWriteNode(parser.AST)) {
       throw new Error(`Invalid ${label}: write/DDL nested in a subquery is not permitted`);
     }
-
+    const reads = ClientClauseScreen.CollectStatementReads(parser);
+    ClientClauseScreen.AssertEverySelectAccountedFor(sqlText, dialect, reads, label);
     const allowed = this.entityBaseViewAllowList(provider);
-    const tables = SQLParser.ExtractTableRefs(wrapped, dialect);
-    for (const t of tables) {
-      const table = this.stripSqlIdent(t.TableName);
-      const schema = this.stripSqlIdent(t.SchemaName);
-      if (table.toLowerCase() === '__mj_clause_screen') continue;
-      const qualified = `${schema}.${table}`.toLowerCase();
-      const bare = table.toLowerCase();
-      if (allowed.qualified.has(qualified) || allowed.bare.has(bare)) continue;
-      throw new Error(
-        `Invalid ${label}: subquery must use an entity base view, not '${schema}.${table}'`,
-      );
+    for (const relation of reads.Relations) {
+      if (relation.IsCTEReference) continue;
+      const entity = ClientClauseScreen.AssertRelationReadable(allowed, relation, label, user);
+      if (entity) this.assertUnscopedRead(entity, user, label);
     }
+  }
+
+  /** Refuses an entity whose read is narrowed for this user; see `ClientClauseScreen.AssertUnscopedRead`. */
+  private assertUnscopedRead(entity: EntityInfo, user: UserInfo, label: string): void {
+    ClientClauseScreen.AssertUnscopedRead(entity, user, label);
   }
 
   /**
@@ -980,6 +1049,11 @@ export class ResolverBase {
    * The single place that is not true is a field carrying `UserSearchParamFormatAPI`, whose
    * admin-authored format may splice the term in unquoted; `createViewUserSearchSQL` re-applies
    * `ValidateUserProvidedSQLClause` for exactly those entities.
+   *
+   * Each `Aggregates[].expression` gets the same screen, except that text the parser cannot read
+   * goes on to the provider, which refuses it per aggregate. The provider never runs the caller's
+   * aggregate text: it runs the SQL that `CheckAggregateExpression` rebuilds from a single
+   * aggregate call over the entity's columns, and refuses everything else per aggregate.
    */
   protected screenClientViewClauses(
     clauses: {
@@ -987,57 +1061,39 @@ export class ResolverBase {
       orderBy?: string | null;
       userSearchString?: string | null;
       overrideExcludeFilter?: string | null;
+      aggregates?: AggregateExpression[] | null;
     },
     provider?: IMetadataProvider,
+    user?: UserInfo,
   ): void {
-    this.assertClientClauseUsesEntityBaseViews(clauses.extraFilter, 'ExtraFilter', provider);
-    this.assertClientClauseUsesEntityBaseViews(clauses.orderBy, 'OrderBy', provider);
-    this.assertClientClauseUsesEntityBaseViews(clauses.overrideExcludeFilter, 'OverrideExcludeFilter', provider);
-  }
-
-  /** Same write-node walk as EDS `sqlReadOnlyScreen.astContainsWriteNode`. */
-  private astContainsWriteNode(node: unknown): boolean {
-    if (!node || typeof node !== 'object') return false;
-    if (Array.isArray(node)) return node.some((n) => this.astContainsWriteNode(n));
-    const obj = node as Record<string, unknown>;
-    const type = obj.type;
-    if (typeof type === 'string' && ResolverBase.WRITE_NODE_TYPES.has(type.toLowerCase())) {
-      return true;
+    this.assertClientClauseUsesEntityBaseViews(clauses.extraFilter, 'ExtraFilter', provider, user);
+    this.assertClientClauseUsesEntityBaseViews(clauses.orderBy, 'OrderBy', provider, user);
+    this.assertClientClauseUsesEntityBaseViews(clauses.overrideExcludeFilter, 'OverrideExcludeFilter', provider, user);
+    for (const aggregate of clauses.aggregates ?? []) {
+      this.assertClientClauseUsesEntityBaseViews(aggregate?.expression, 'Aggregate', provider, user, { LeaveUnparseableToProvider: true });
     }
-    return Object.values(obj).some((v) => this.astContainsWriteNode(v));
   }
 
-  private static readonly WRITE_NODE_TYPES = new Set<string>([
-    'insert', 'update', 'delete', 'merge', 'replace', 'drop', 'create', 'alter', 'truncate',
-    'rename', 'call', 'exec', 'execute', 'grant', 'revoke', 'use', 'load', 'copy', 'do',
-  ]);
+  /**
+   * True when a string literal or quoted identifier in `clause`, read the way the database reads
+   * it, contains a backslash (see {@link assertClientClauseUsesEntityBaseViews}).
+   */
+  private hasBackslashInQuotes(clause: string, dialect: SQLParserDialect): boolean {
+    return LexSQL(clause, dialect).some((t) => (t.Kind === 'string' || t.Kind === 'identifier') && t.Text.includes('\\'));
+  }
+
+  /** Write/DDL node walk shared with the clause screen; see `ClientClauseScreen.AstContainsWriteNode`. */
+  private astContainsWriteNode(node: unknown): boolean {
+    return ClientClauseScreen.AstContainsWriteNode(node);
+  }
 
   private dialectForProvider(provider?: IMetadataProvider): SQLParserDialect {
-    const name = provider?.constructor?.name ?? '';
-    if (/postgres/i.test(name)) return new PostgreSQLDialect();
-    return new SQLServerDialect();
+    return ClientClauseScreen.DialectFor(provider);
   }
 
-  private stripSqlIdent(name: string | null | undefined): string {
-    if (!name) return '';
-    return name.replace(/^\[|\]$/g, '').replace(/^"|"$/g, '').replace(/^`|`$/g, '');
-  }
-
-  private entityBaseViewAllowList(provider?: IMetadataProvider): {
-    qualified: Set<string>;
-    bare: Set<string>;
-  } {
-    const qualified = new Set<string>();
-    const bare = new Set<string>();
-    const entities = provider?.Entities ?? [];
-    for (const e of entities) {
-      const view = this.stripSqlIdent(e.BaseView);
-      if (!view) continue;
-      const schema = this.stripSqlIdent(e.SchemaName);
-      bare.add(view.toLowerCase());
-      if (schema) qualified.add(`${schema}.${view}`.toLowerCase());
-    }
-    return { qualified, bare };
+  /** The entity base-view allow-list for a provider's entities. */
+  private entityBaseViewAllowList(provider?: IMetadataProvider): EntityBaseViewAllowList {
+    return ClientClauseScreen.BuildEntityBaseViewAllowList(provider?.Entities ?? []);
   }
 
   /**
@@ -1071,17 +1127,6 @@ export class ResolverBase {
     try {
       if (!viewInfo || !userPayload) return null;
 
-      // SECURITY: GraphQL ExtraFilter may contain IN (SELECT … FROM <base view>).
-      // Screen at this boundary: parse, reject writes, allow only entity BaseViews.
-      this.screenClientViewClauses(
-        { extraFilter, orderBy, userSearchString, overrideExcludeFilter },
-        provider as unknown as IMetadataProvider,
-      );
-
-      // Check API key scope authorization for view operations
-      await this.CheckAPIKeyScopeAuthorization('view:run', viewInfo.Entity, userPayload);
-
-      const md = provider
       // Prefer the authenticated session's payload user — it is the authoritative per-request
       // identity and (for magic-link sessions) carries the per-session resource scope / synthesized
       // roles that drive RLS. The cached lookup is a fallback for paths where the payload user
@@ -1089,6 +1134,20 @@ export class ResolverBase {
       const user = this.GetUserFromPayload(userPayload)
         ?? UserCache.Users.find((u) => u.Email.toLowerCase().trim() === userPayload?.email.toLowerCase().trim());
       if (!user) throw new Error(`User ${userPayload?.email} not found in metadata`);
+
+      // SECURITY: GraphQL ExtraFilter may contain IN (SELECT … FROM <base view>).
+      // Screen at this boundary: parse, reject writes, allow only entity BaseViews the
+      // acting user can read (subqueries do not inherit the top entity's permission check).
+      this.screenClientViewClauses(
+        { extraFilter, orderBy, userSearchString, overrideExcludeFilter, aggregates },
+        provider as unknown as IMetadataProvider,
+        user,
+      );
+
+      // Check API key scope authorization for view operations
+      await this.CheckAPIKeyScopeAuthorization('view:run', viewInfo.Entity, userPayload);
+
+      const md = provider
 
       const entityInfo = md.Entities.find((e) => e.Name === viewInfo.Entity);
       if (!entityInfo) throw new Error(`Entity ${viewInfo.Entity} not found in metadata`);
@@ -1246,8 +1305,10 @@ export class ResolverBase {
             orderBy: param.orderBy,
             userSearchString: param.userSearchString,
             overrideExcludeFilter: param.overrideExcludeFilter,
+            aggregates: param.aggregates,
           },
           md,
+          contextUser ?? undefined,
         );
 
         if (param.viewInfo) {
@@ -1529,6 +1590,62 @@ export class ResolverBase {
     }
   }
 
+  /**
+   * IS-A PROMOTION over the wire: an EXISTING parent record gaining a subtype — an Animal that is
+   * now also a Dog. It arrives as the CHILD's create mutation carrying the existing parent's
+   * primary key, because in IS-A the shared key is the relationship and the child has no key of
+   * its own to mint. `NewRecord()` has just reset the whole chain to "new", so left alone the
+   * parent would save as a CREATE: a second copy of a row that already exists (a unique-constraint
+   * violation at best, a silently duplicated parent at worst).
+   *
+   * When a child create carries a complete primary key, bind the new child to the existing parent
+   * row with `AttachToParent` (#3825): it loads the parent chain, so the parent saves as an UPDATE
+   * and only the child is INSERTed. A key that matches no row leaves the fresh chain exactly as
+   * `NewRecord()` built it — the ordinary whole-chain create. A non-IS-A entity, or a create with
+   * no key, never gets past the guards.
+   *
+   * @returns true when the child was attached to an existing parent row.
+   */
+  protected async attachToExistingParentIfPromotion(entityObject: BaseEntity, input: Record<string, unknown>): Promise<boolean> {
+    if (!entityObject.EntityInfo.IsChildType) {
+      return false;
+    }
+    const key = this.primaryKeyFromInput(entityObject.EntityInfo, input);
+    if (!key) {
+      return false;
+    }
+    const attached = await entityObject.AttachToParent(key);
+    if (!attached) {
+      // No parent row under that key: this is a whole-chain create on the CALLER's key (the
+      // client mints the shared key at the root and sends it, so honoring it keeps the client's
+      // in-memory chain and the stored rows on one key). AttachToParent restored the fresh chain,
+      // but the root's ReadOnly key slot is no longer writable — a later SetMany would silently
+      // keep the server-minted value — so re-seed the chain with the supplied key explicitly.
+      entityObject.NewRecord(key);
+    }
+    return attached;
+  }
+
+  /**
+   * The entity's primary key as supplied on a mutation input, or null when any part of it is
+   * missing. Composite keys are all-or-nothing: a half-specified key identifies nothing. An empty
+   * string counts as missing, the same as null — it is never a valid key value, and a GUID or
+   * string key that is "" identifies no row, so the create proceeds as a whole-chain create rather
+   * than failing the lookup. A malformed non-empty key (e.g. a non-GUID for a uniqueidentifier)
+   * is NOT swallowed: the load throws and the mutation fails loudly.
+   */
+  protected primaryKeyFromInput(entityInfo: EntityInfo, input: Record<string, unknown>): CompositeKey | null {
+    const pairs: KeyValuePair[] = [];
+    for (const pk of entityInfo.PrimaryKeys) {
+      const value = input[pk.Name] ?? input[pk.CodeName];
+      if (value === null || value === undefined || value === '') {
+        return null;
+      }
+      pairs.push(new KeyValuePair(pk.Name, value));
+    }
+    return pairs.length > 0 ? CompositeKey.FromKeyValuePairs(pairs) : null;
+  }
+
   protected async CreateRecord(entityName: string, input: any, provider: DatabaseProviderBase, userPayload: UserPayload, pubSub: PubSubEngine) {
     // Check API key scope authorization for entity create operations
     await this.CheckAPIKeyScopeAuthorization('entity:create', entityName, userPayload);
@@ -1546,6 +1663,10 @@ export class ResolverBase {
       for (const key of Object.keys(input)) {
         if (key !== 'RestoreContext___') fieldsForSet[key] = input[key];
       }
+      // IS-A promotion: bind the new child to its EXISTING parent row BEFORE the field
+      // assignments, so values the client sent for parent fields land on the loaded parent
+      // (as an update) instead of being wiped by the load.
+      await this.attachToExistingParentIfPromotion(entityObject, fieldsForSet);
       entityObject.SetMany(fieldsForSet);
 
       // Reconstruct the client-side restore context, if any, on this server
@@ -1711,6 +1832,11 @@ export class ResolverBase {
    *
    * Ordered so the boolean flag is evaluated last: the extra load lands only on entities that have
    * the feature switched on, which is almost none of them.
+   *
+   * `MJ: Data Context Items` always loads from the database: its server class lets only an
+   * administrator save an item that holds SQL, and decides that from the item's `Type` and `SQL`.
+   * Hydrated from OldValues, a client could leave both out, and the stored procedure would keep the
+   * stored SQL item while the rule saw none. See {@link ENTITIES_THAT_ALWAYS_LOAD_STORED_ROW}.
    */
   protected MustLoadTruthFromDatabase(
     entityInfo: EntityInfo,
@@ -1720,6 +1846,7 @@ export class ResolverBase {
   ): boolean {
     return (
       entityInfo.TrackRecordChanges ||
+      ENTITIES_THAT_ALWAYS_LOAD_STORED_ROW.has(entityInfo.Name.trim().toLowerCase()) ||
       !input.OldValues___ ||
       hasDeniedReadFields ||
       hasNarrowedAuditPayload ||

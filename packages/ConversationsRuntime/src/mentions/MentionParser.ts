@@ -42,6 +42,9 @@ export interface MentionParseResult {
     skillMentions: Mention[];
 }
 
+/** Characters `findAgent` strips from the end of a mention name. */
+const TRAILING_PUNCTUATION = '.,;!?';
+
 /**
  * Parses `@`-mentions out of conversation message text.
  *
@@ -52,7 +55,9 @@ export interface MentionParseResult {
  */
 export class MentionParser {
     /** Matches JSON-encoded mentions like `@{"type":"agent","id":"…","name":"…"}`. */
-    private readonly JSON_MENTION_REGEX = /@\{[^}]+\}/g;
+    // `[^{}]` rather than `[^}]`: a match can't start at one `@{` and run on through later ones, so a
+    // message with many unclosed `@{` is scanned in linear time instead of quadratic (CodeQL #228).
+    private readonly JSON_MENTION_REGEX = /@\{[^{}]+\}/g;
 
     /** Matches legacy text mentions — quoted names with spaces or unquoted names. */
     private readonly LEGACY_MENTION_REGEX = /@"([^"]+)"|@(\S+)/g;
@@ -311,8 +316,13 @@ export class MentionParser {
         name: string,
         agents: MJAIAgentEntityExtended[]
     ): MJAIAgentEntityExtended | null {
-        // Remove trailing punctuation and trim
-        const cleanName = name.replace(/[.,;!?]+$/, '').trim();
+        // Remove trailing punctuation and trim. A loop from the end, not /[.,;!?]+$/: that regex is
+        // quadratic on a long punctuation run that isn't at the end (CodeQL #231).
+        let end = name.length;
+        while (end > 0 && TRAILING_PUNCTUATION.includes(name[end - 1])) {
+            end--;
+        }
+        const cleanName = name.slice(0, end).trim();
         const lowerName = cleanName.toLowerCase();
 
         // Try exact match first

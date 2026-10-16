@@ -588,6 +588,17 @@ export interface ILocalStorageProvider {
     readonly SupportsCrossProcessPersistence?: boolean;
 
     /**
+     * Whether other processes read and write the same storage — `true` for Redis, where every
+     * server in a fleet shares one keyspace; `false`/omitted for per-process or per-browser
+     * stores (in-memory, IndexedDB, localStorage, MMKV).
+     *
+     * `LocalCacheManager` treats a cached slot whose schema differs from this process's as a
+     * local miss on a shared store instead of deleting it, since a delete there reaches every
+     * process sharing the store.
+     */
+    readonly SharedAcrossProcesses?: boolean;
+
+    /**
      * Retrieves a value from storage. The implementation is responsible for any
      * deserialization required by the underlying medium:
      *  - **IndexedDB**: returns the value directly via structured clone (Date/Map/Set/typed arrays preserved, no parse needed)
@@ -858,10 +869,12 @@ export interface IMetadataProvider {
     /**
      * Returns the Name of the specific recordId for a given entityName. This is done by
      * looking for the IsNameField within the EntityFields collection for a given entity.
-     * If no IsNameField is found, but a field called "Name" exists, that value is returned. Otherwise null returned
+     * If no IsNameField is found, but a field called "Name" exists, that value is returned. Otherwise null returned.
+     * When field-level security withholds a name field from the user, the answer is the same as for a
+     * record that does not exist.
      * @param entityName
      * @param CompositeKey
-     * @param contextUser - optional user context for permissions
+     * @param contextUser - the acting user; field- and row-level security are applied for them
      * @param forceRefresh - if true, bypasses cache and fetches fresh from database
      * @returns the name of the record
      */
@@ -879,6 +892,10 @@ export interface IMetadataProvider {
     /**
      * Asynchronous lookup of a cached entity record name. Returns the cached name if available, or undefined if not cached.
      * Use this for synchronous contexts (like template rendering) where you can't await GetEntityRecordName().
+     *
+     * Only a provider that serves a single user keeps record names (the browser's `GraphQLDataProvider`).
+     * A provider shared by several users, such as a server's database provider, keeps none, so its
+     * synchronous record-name methods always answer "not cached".
      * @param entityName - The name of the entity
      * @param compositeKey - The primary key value(s) for the record
      * @param loadIfNeeded - If set to true, will load from database if not already cached
@@ -887,8 +904,9 @@ export interface IMetadataProvider {
     GetCachedRecordName(entityName: string, compositeKey: CompositeKey, loadIfNeeded?: boolean): Promise<string | undefined>;
 
     /**
-     * Stores a record name in the cache for later synchronous retrieval via GetCachedRecordName().
-     * Called automatically by BaseEntity after Load(), LoadFromData(), and Save() operations.
+     * Stores a record name in the cache for later synchronous retrieval via GetCachedRecordName(), on a
+     * provider that caches; ignored otherwise. Called automatically by BaseEntity after Load(),
+     * LoadFromData(), and Save() operations.
      * @param entityName - The name of the entity
      * @param compositeKey - The primary key value(s) for the record
      * @param recordName - The display name to cache

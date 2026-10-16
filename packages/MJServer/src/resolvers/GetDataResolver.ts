@@ -1,4 +1,5 @@
 import { Arg, Ctx, Field, InputType, ObjectType, Query } from 'type-graphql';
+import { SQLExpressionValidator } from '@memberjunction/global';
 import { AppContext } from '../types.js';
 import { LogError, LogStatus, LogStatusEx, Metadata } from '@memberjunction/core';
 import { QueryCompositionEngine } from '@memberjunction/generic-database-provider';
@@ -154,8 +155,20 @@ export class GetDataResolver {
                             resolvedSQL = compositionResult.ResolvedSQL;
                         }
 
+                        // Defense-in-depth: even system-token holders get SELECT-only SQL here.
+                        // The read-only pool is the primary control, but if it is ever
+                        // misconfigured to a read-write login this validator still refuses DML/DDL
+                        // (mirrors AdhocQueryResolver). The validator reads exactly the text that
+                        // runs: it is trimmed here as validate() trims it, and literal \n sequences
+                        // are not rewritten as validateFullQuery would.
+                        const sqlToRun = resolvedSQL.trim();
+                        const validation = SQLExpressionValidator.Instance.validate(sqlToRun, { context: 'full_query', Dialect: platform });
+                        if (!validation.valid) {
+                            return { result: null, error: validation.error || 'SQL validation failed' };
+                        }
+
                         const request = new sql.Request(readOnlyDataSource);
-                        const result = await request.query(resolvedSQL);
+                        const result = await request.query(sqlToRun);
                         return { result: result.recordset, error: null };
                     } catch (err) {
                         // Extract clean SQL error message

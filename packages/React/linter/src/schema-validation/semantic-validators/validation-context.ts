@@ -91,6 +91,16 @@ export interface ValidationContext {
   propertyValue: ExtractedValue;
 
   /**
+   * Whether the parent passed the property on the element.
+   *
+   * The linter sets this on every context it builds. It is `false` only for a validator that
+   * opted in with {@link SemanticValidator.EvaluatesAbsentProp}; then {@link propertyValue} is
+   * `undefined` and {@link node} is the element's opening tag. Optional so contexts built outside
+   * the linter (tests, other tools) stay valid.
+   */
+  PropertyPresent?: boolean;
+
+  /**
    * Map of sibling props on the same JSX element
    *
    * Key is prop name, value is extracted value.
