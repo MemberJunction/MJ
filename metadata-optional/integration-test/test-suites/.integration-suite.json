@@ -1500,7 +1500,7 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
-            "TestID": "@lookup:MJ: Tests.Name=IT125 - Performance and Agent Overhead Benchmark",
+            "TestID": "@lookup:MJ: Tests.Name=IT128 - Performance and Agent Overhead Benchmark",
             "Sequence": 49,
             "Status": "Active"
           },
