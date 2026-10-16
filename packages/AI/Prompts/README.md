@@ -187,8 +187,6 @@ Every prompt execution creates an `AIPromptRun` record with:
 
 **Persistence is fire-and-forget.** The initial `Running` INSERT and the final `Completed`/`Failed` UPDATE are queued, not awaited, so the model call is never blocked on a DB round-trip. Saves for the same run are chained (the INSERT always completes before the UPDATE, so a slow INSERT can't clobber the finalized row), and the record's ID is available immediately because `NewRecord()` client-generates the UUID. Save failures are logged but never fail the prompt (the record is observability, not part of the success contract). Callers that need the rows durably written before continuing can `await runner.WaitForPendingPromptRunSaves()`.
 
-**A failed run records its own error.** When the model call fails, the run's `ErrorMessage` and `ErrorDetails` are the call's error; the "Failed to parse result…" note is only for a call that succeeded but whose text output parsed to nothing.
-
 ### Template data capture
 
 `AIPromptRun.Messages` stores the messages the model received. The template inputs (`data` and `templateData`) can be large, so a capture mode sets how much of them the run stores:

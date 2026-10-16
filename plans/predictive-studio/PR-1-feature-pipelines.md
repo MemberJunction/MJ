@@ -10689,3 +10689,22 @@ duplicate of a `next` mechanism, an unrequested feature, or a near-duplicate tes
 - **Plan edits:** §2 migration rule, §5 migration file name, M1.8/M2 companion migration names, M7.4 and every IT number
   (IT123 → IT124, IT124 → IT125), §8 A6/A11/A14, §9 Q-8 (resolved), §5.5 anchors.
 - **Decisions recorded:** none.
+
+## 13. Scope reduction (2026-10-16)
+
+The owner's rule: a change outside the pipeline packages stays only if the Feature Pipeline literally fails without
+it. Spec: `.superpowers/sdd/PR-1-feature-pipelines/slim/scope-reduction-spec.md`; audits: `slim/audit-*.md`.
+
+Moved out of this PR, as patches under `slim/patches/` (one follow-up PR each):
+01 cascade delete / error 213 (M1.7, M1.10) · 02 sync-push metadata reload (M1.11) · 03 engine reload-on-save
+(M1.6's mechanism; see below) · 04 strict-parameters contract and gate C3.3 (M5.1–M5.4 except Bedrock's `?? 0.7`)
+· 05 product-wide raw rendering (M3.3's mechanism; agent harness) · 06 Explorer fixes to unrelated screens (QA
+F2, F13, F15, F17, F18) · 07 RunAction `ResultData` array (QA F13) · 08 scheduler pause-on-missing-class
+(M6.3, F-ENV-11) · 09 read-failure guards (M3.3b step 3), AIPrompt extension · 10 misc server/tooling incl. the
+two shipped-migration edits (F-ENV-6's migration half).
+
+Re-designed inside the pipeline: F-FP-6 — `InferProcessor.ResolvePin` reads the prompt's Template Content from the
+database at run start (`PromptTemplateContent.ReadCurrent`), hashes that text, and reloads the template engine once
+when its cache differs; F-FP-14 — `AIPromptParams.templateAutoescape`, set only by the Feature Pipeline drivers.
+Gate C3.3 leaves this PR with patch 04. Sections 1–12 above describe the pre-reduction design and are kept as history.
+The plan's earlier sections still describe `DeleteWithinEntityTransaction`, the engine reload-on-save and the strict-parameters contract as delivered (e.g. tasks M1.6, M1.7, M1.10, M1.11, M5.x); those descriptions are history, not the shipped code — see the patches.
