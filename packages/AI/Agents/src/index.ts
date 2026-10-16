@@ -30,6 +30,7 @@ export * from './PayloadManager';
 export * from './ScratchpadManager';
 export * from './constants';
 export * from './runtime-state-fragment';
+export * from './sub-agent-consult';
 export * from './volatile-child-prompt';
 export * from './ArtifactToolManager';
 export * from './ConversationCompactionManager';

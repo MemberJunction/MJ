@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { AgentChatMessage, AgentChatMessageMetadata, BaseAgentNextStep, ExecuteAgentParams, MessageExpirationOverride } from '@memberjunction/ai-core-plus';
+import { AgentChatMessage, AgentChatMessageMetadata, AgentResponseForm, BaseAgentNextStep, ExecuteAgentParams, MessageExpirationOverride } from '@memberjunction/ai-core-plus';
+import { FormatResponseFormSummary } from '../sub-agent-consult';
 
 /**
  * Tests for loop and sub-agent result lifecycle management.
@@ -222,6 +223,8 @@ function buildLoopResultContent(
 /** Minimal type for sub-agent run info used in tests */
 interface SubAgentRunInfo {
     Status?: string;
+    FinalStep?: string;
+    Message?: string;
     ErrorMessage?: string;
 }
 
@@ -230,6 +233,7 @@ interface SubAgentResult {
     success: boolean;
     agentRun: SubAgentRunInfo | null;
     payload: unknown;
+    responseForm?: AgentResponseForm;
 }
 
 /**
@@ -243,6 +247,19 @@ function formatSubAgentResultAsMarkdown(subAgentName: string, result: SubAgentRe
 
     const status = result.agentRun?.Status || (result.success ? 'Completed' : 'Failed');
     lines.push(`**Status:** ${status}`);
+
+    if (result.agentRun?.FinalStep) {
+        lines.push(`**Final step:** ${result.agentRun.FinalStep}`);
+    }
+
+    if (result.agentRun?.Message && result.agentRun.Message.trim().length > 0) {
+        lines.push(`**Message:** ${result.agentRun.Message}`);
+    }
+
+    const formSummary = FormatResponseFormSummary(result.responseForm);
+    if (formSummary) {
+        lines.push(`**Form:**\n${formSummary}`);
+    }
 
     if (!result.success && result.agentRun?.ErrorMessage) {
         lines.push(`**Error:** ${result.agentRun.ErrorMessage}`);
@@ -1320,6 +1337,40 @@ describe('Loop and Sub-Agent Result Lifecycle', () => {
             });
 
             expect(md).not.toContain('**Error:**');
+        });
+
+        it('should include Final step, Message, and Form summary when present', () => {
+            const md = formatSubAgentResultAsMarkdown('Agent', {
+                success: true,
+                agentRun: {
+                    Status: 'Completed',
+                    FinalStep: 'Success',
+                    Message: 'Summary of findings'
+                } as SubAgentRunInfo,
+                payload: null,
+                responseForm: {
+                    title: 'Confirm Output',
+                    questions: [
+                        {
+                            id: 'q1',
+                            label: 'Approve?',
+                            type: {
+                                type: 'buttongroup',
+                                options: [
+                                    { value: 'yes', label: 'Yes' },
+                                    { value: 'no', label: 'No' }
+                                ]
+                            },
+                            required: true
+                        }
+                    ]
+                }
+            });
+
+            expect(md).toContain('**Final step:** Success');
+            expect(md).toContain('**Message:** Summary of findings');
+            expect(md).toContain('**Form:**');
+            expect(md).toContain('- Approve? (buttongroup, required) [Yes, No]');
         });
     });
 

@@ -225,6 +225,12 @@ import { GetValueFromPath, SetMappedValue } from '@memberjunction/ai-core-plus';
 import { AgentDataPreloader } from './AgentDataPreloader';
 import { ClientToolRequestManager } from './ClientToolRequestManager';
 import { BuildClientToolResultMessage, ResolveClientToolResultMaxChars, ReplaceMediaBlocksWithStubs, IsMediaBlock, IMAGE_BLOCK_TOKEN_ESTIMATE } from './client-tool-results';
+import {
+    DEFAULT_MAX_SUB_AGENT_CONSULT_ROUNDS,
+    FormatResponseFormSummary,
+    FormatSubAgentConsultMessage,
+    SubAgentConsultRecord
+} from './sub-agent-consult';
 import { ConversationMessageResolver } from './utils/ConversationMessageResolver';
 import { ForEachOperation, WhileOperation } from '@memberjunction/ai-core-plus';
 import _ from 'lodash';
@@ -453,6 +459,8 @@ interface ParallelSubAgentExecution<SR> {
     /** Undefined only for synthetic entries representing an unresolved sub-agent. */
     stepEntity?: MJAIAgentRunStepEntityExtended;
     upstreamPaths: string[];
+    consult?: SubAgentConsultRecord;
+    maxConsultRounds?: number;
 }
 
 /**
@@ -1831,6 +1839,32 @@ export class BaseAgent {
     private _validationRetryCount: number = 0;
 
     /**
+     * Per-parent-run consultation round counter keyed by `subAgentEntity.ID`.
+     * Tracks how many times each sub-agent has returned `FinalStep === 'Chat'`
+     * under `ChatHandlingOption = 'Consult'` during this run.
+     * Reset at the start of each agent run.
+     * @private
+     */
+    private _subAgentConsultRounds: Map<string, number> = new Map();
+
+    /**
+     * Open sub-agent consultations keyed by `childRunId`.
+     * Populated when a child sub-agent pauses with `FinalStep === 'Chat'` under `'Consult'`,
+     * and removed when the parent resumes that child run.
+     * Reset at the start of each agent run.
+     * @protected
+     */
+    protected _openSubAgentConsults: Map<string, SubAgentConsultRecord> = new Map();
+
+    /**
+     * Tracks whether we have already logged the warning that `'Consult'` is not
+     * supported on agent types where `InjectLoopResultsAsMessage` is `false`.
+     * Reset at the start of each agent run.
+     * @private
+     */
+    private _loggedConsultUnsupportedAgentType: boolean = false;
+
+    /**
      * Counter tracking the number of context recovery attempts made in this run.
      * Context recovery removes/compacts old messages when context length is exceeded.
      * Reset at the start of each agent run.
@@ -2375,6 +2409,9 @@ export class BaseAgent {
             this._validationRetryCount = 0;
             this._generalValidationRetryCount = 0;
             this._contextRecoveryAttempts = 0;
+            this._subAgentConsultRounds.clear();
+            this._openSubAgentConsults.clear();
+            this._loggedConsultUnsupportedAgentType = false;
             this._effectiveActions = [];
             this._dynamicActionLimits = {};
             this._mediaOutputs = [];
@@ -6802,6 +6839,71 @@ export class BaseAgent {
     }
 
     /**
+     * Resolves the effective `ChatHandlingOption` for a sub-agent execution:
+     * `relationship?.ChatHandlingOption ?? parentAgent.ChatHandlingOption ?? null`.
+     * @private
+     */
+    private resolveSubAgentChatHandlingOption(
+        parentAgent: MJAIAgentEntityExtended,
+        relationship?: MJAIAgentRelationshipEntity
+    ): 'Consult' | 'Failed' | 'Retry' | 'Success' | null {
+        return (relationship?.ChatHandlingOption ?? parentAgent.ChatHandlingOption ?? null) as
+            | 'Consult'
+            | 'Failed'
+            | 'Retry'
+            | 'Success'
+            | null;
+    }
+
+    /**
+     * Returns `true` only when `resolvedOption === 'Consult'` AND the parent agent's
+     * type supports injecting loop/consult messages into conversation history
+     * (`this.AgentTypeInstance?.InjectLoopResultsAsMessage !== false`).
+     *
+     * When `resolvedOption === 'Consult'` and `this.AgentTypeInstance?.InjectLoopResultsAsMessage === false`
+     * (e.g., a Flow parent), logs a warning once per run and returns `false` so `'Consult'`
+     * is treated as `null` (propagate).
+     * @private
+     */
+    private isSubAgentConsultActive(
+        resolvedOption: 'Consult' | 'Failed' | 'Retry' | 'Success' | null,
+        params?: ExecuteAgentParams
+    ): boolean {
+        if (resolvedOption !== 'Consult') {
+            return false;
+        }
+        if (this.AgentTypeInstance?.InjectLoopResultsAsMessage === false) {
+            if (!this._loggedConsultUnsupportedAgentType) {
+                this._loggedConsultUnsupportedAgentType = true;
+                this.logStatus(
+                    "⚠️ ChatHandlingOption 'Consult' is not supported for agent types where InjectLoopResultsAsMessage is false; treating as null (propagate).",
+                    false,
+                    params
+                );
+            }
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Resolves the sub-agent `ChatHandlingOption` and downgrades `'Consult'` to `null`
+     * when `isSubAgentConsultActive` returns `false` (e.g., on Flow parents).
+     * @private
+     */
+    private effectiveSubAgentChatHandlingOption(
+        parentAgent: MJAIAgentEntityExtended,
+        relationship?: MJAIAgentRelationshipEntity,
+        params?: ExecuteAgentParams
+    ): 'Consult' | 'Failed' | 'Retry' | 'Success' | null {
+        const resolved = this.resolveSubAgentChatHandlingOption(parentAgent, relationship);
+        if (resolved === 'Consult' && !this.isSubAgentConsultActive(resolved, params)) {
+            return null;
+        }
+        return resolved;
+    }
+
+    /**
      * Validates that the Chat next step is valid and can be executed by the current agent. 
      * Implements ChatHandlingOption remapping logic - if the agent has ChatHandlingOption set,
      * the Chat step is remapped to the specified value (Success, Fail, or Retry).
@@ -6815,16 +6917,21 @@ export class BaseAgent {
         nextStep: BaseAgentNextStep<P>,
         currentPayload: P,
         agentRun: MJAIAgentRunEntityExtended,
-        currentStep: MJAIAgentRunStepEntityExtended
+        currentStep: MJAIAgentRunStepEntityExtended,
+        chatHandlingOption?: 'Consult' | 'Failed' | 'Retry' | 'Success' | null
     ): Promise<BaseAgentNextStep<P>> {
-        // Check if the agent has ChatHandlingOption configured
-        const chatHandlingOption = params.agent.ChatHandlingOption;
+        // Use caller-resolved option when provided; otherwise fall back to params.agent.ChatHandlingOption
+        const effectiveOption = chatHandlingOption !== undefined
+            ? chatHandlingOption
+            : params.agent.ChatHandlingOption;
         
-        if (chatHandlingOption) {
+        if (effectiveOption) {
             // Use a switch to validate and map the ChatHandlingOption value
             let mappedStep: 'Success' | 'Failed' | 'Retry';
             
-            switch (chatHandlingOption) {
+            switch (effectiveOption) {
+                case 'Consult':
+                    return nextStep;
                 case 'Success':
                     mappedStep = 'Success';
                     break;
@@ -6836,7 +6943,7 @@ export class BaseAgent {
                     break;
                 default:
                     // Log error and treat as null (default behavior)
-                    LogError(`Invalid ChatHandlingOption value: ${chatHandlingOption}. Expected 'Success', 'Failed', or 'Retry'. Treating as null and allowing Chat to propagate.`);
+                    LogError(`Invalid ChatHandlingOption value: ${effectiveOption}. Expected 'Consult', 'Success', 'Failed', or 'Retry'. Treating as null and allowing Chat to propagate.`);
                     return nextStep;
             }
             
@@ -6848,7 +6955,7 @@ export class BaseAgent {
             
             // Log the remapping for debugging
             if (params.verbose === true || IsVerboseLoggingEnabled()) {
-                LogStatus(`Remapping Chat step to ${chatHandlingOption} based on agent's ChatHandlingOption`);
+                LogStatus(`Remapping Chat step to ${effectiveOption} based on agent's ChatHandlingOption`);
             }
             
             // Re-validate the remapped step using the appropriate validator
@@ -12234,6 +12341,19 @@ The context is now within limits. Please retry your request with the recovered c
         const status = result.agentRun?.Status || (result.success ? 'Completed' : 'Failed');
         lines.push(`**Status:** ${status}`);
 
+        if (result.agentRun?.FinalStep) {
+            lines.push(`**Final step:** ${result.agentRun.FinalStep}`);
+        }
+
+        if (result.agentRun?.Message) {
+            lines.push(`**Message:** ${result.agentRun.Message}`);
+        }
+
+        const formSummary = FormatResponseFormSummary(result.responseForm);
+        if (formSummary) {
+            lines.push(`**Form:**\n${formSummary}`);
+        }
+
         if (!result.success && result.agentRun?.ErrorMessage) {
             lines.push(`**Error:** ${result.agentRun.ErrorMessage}`);
         }
@@ -14496,69 +14616,37 @@ The context is now within limits. Please retry your request with the recovered c
                 stepEntity.PayloadAtEnd = this.serializePayloadAtEnd(mergedPayload);
             }
 
+            // Check if sub-agent returned a Chat step (handled before finalizeStepEntity so Consult can update outputData)
+            if (subAgentResult.agentRun?.FinalStep === 'Chat') {
+                return await this.handleSingleSubAgentChatStep(
+                    params,
+                    previousDecision,
+                    subAgentRequest,
+                    subAgentEntity,
+                    undefined,
+                    subAgentResult,
+                    mergedPayload,
+                    stepEntity,
+                    outputData
+                );
+            }
+
             // Finalize step entity
             await this.finalizeStepEntity(stepEntity, subAgentResult.success,
                 subAgentResult.agentRun?.ErrorMessage, outputData);
-
-            // Check if sub-agent returned a Chat step
-            if (subAgentResult.agentRun?.FinalStep === 'Chat') {
-                // Create Chat nextStep but validate it through parent's ChatHandlingOption
-                // This allows parent agents to remap Chat -> Success/Failed/Retry if configured
-                const chatStep: BaseAgentNextStep<SR, SC> = {
-                    step: 'Chat',
-                    terminate: true,
-                    message: subAgentResult.agentRun?.Message || null,
-                    previousPayload: previousDecision?.newPayload,
-                    newPayload: mergedPayload, // Preserve sub-agent payload changes
-                    responseForm: subAgentResult.responseForm,
-                    actionableCommands: subAgentResult.actionableCommands,
-                    automaticCommands: subAgentResult.automaticCommands
-                    // artifactDirective is deliberately NOT carried across the parent/child
-                    // boundary — see warnIfDiscardingSubAgentArtifactDirective.
-                };
-
-                // Validate through parent's ChatHandlingOption (if configured)
-                // This ensures parent agents can override child Chat steps
-                return await this.validateChatNextStep(params, chatStep, mergedPayload, this._agentRun!, stepEntity!);
-            }
             
             // Add user message with the sub-agent results using markdown format
             // and expiration metadata so it persists across multiple prompt turns
             const resultMessage = this.formatSubAgentResultAsMarkdown(subAgentRequest.name, subAgentResult);
-
-            const subAgentMetadata: AgentChatMessageMetadata = {
-                turnAdded: this._promptTurnCount,
-                messageType: 'sub-agent-result',
-                subAgentName: subAgentRequest.name,
-                subAgentId: subAgentEntity.ID,
-                // Default: keep sub-agent results for 3 turns then remove
-                expirationTurns: 3,
-                expirationMode: 'Remove'
-            };
-
-            // Apply global override if configured
-            if (params.messageExpirationOverride) {
-                const override = params.messageExpirationOverride;
-                if (override.expirationTurns != null) {
-                    subAgentMetadata.expirationTurns = override.expirationTurns;
-                    subAgentMetadata.expirationMode = override.expirationMode || 'Remove';
-                    subAgentMetadata.compactMode = override.compactMode;
-                    subAgentMetadata.compactLength = override.compactLength;
-                    subAgentMetadata.compactPromptId = override.compactPromptId;
-                }
-            }
-
-            if (previousDecision?.nativeTurn?.sendResultsNatively && subAgentRequest.toolCallId) {
-                // the delegate_to_* call is answered as a tool result.
-                params.conversationMessages.push(BuildToolResultTurn([...this.payloadToolResult(previousDecision), {
-                    toolCallId: subAgentRequest.toolCallId,
-                    toolName: `${SUB_AGENT_TOOL_PREFIX}${SanitizeToolName(subAgentRequest.name)}`,
-                    content: resultMessage,
-                    isError: !subAgentResult.success
-                }], subAgentMetadata) as AgentChatMessage);
-            } else {
-                params.conversationMessages.push({ role: 'user', content: resultMessage, metadata: subAgentMetadata } as AgentChatMessage);
-            }
+            this.pushSubAgentConversationMessage(
+                params,
+                previousDecision,
+                subAgentRequest,
+                subAgentEntity,
+                resultMessage,
+                'sub-agent-result',
+                !subAgentResult.success
+            );
 
             // Update the agent run's current payload with the merged result
             if (this._agentRun) {
@@ -14989,14 +15077,30 @@ The context is now within limits. Please retry your request with the recovered c
         return executions
             .map(execution => {
                 const statusEmoji = execution.result.success ? '✅' : '❌';
-                const baseInfo =
-                    `${statusEmoji} **Sub-Agent: ${execution.request.name}**\n` +
-                    `* Message: "${execution.request.message}"\n` +
-                    `* Status: ${execution.result.agentRun?.FinalStep || 'Failed'}`;
-                if (execution.result.agentRun?.ErrorMessage) {
-                    return `${baseInfo}\n* Error: ${execution.result.agentRun.ErrorMessage}`;
+                const lines: string[] = [
+                    `${statusEmoji} **Sub-Agent: ${execution.request.name}**`,
+                    `* Message: "${execution.request.message}"`,
+                    `* Status: ${execution.result.agentRun?.FinalStep || 'Failed'}`
+                ];
+                const isChat = execution.result.agentRun?.FinalStep === 'Chat';
+                const question = execution.result.agentRun?.Message;
+                if (execution.consult) {
+                    const maxRounds = execution.maxConsultRounds ?? DEFAULT_MAX_SUB_AGENT_CONSULT_ROUNDS;
+                    lines.push(
+                        `* Question (round ${execution.consult.round} of ${maxRounds}): ${question?.trim() ? question : '(no message provided)'}`
+                    );
+                    const formSummary = FormatResponseFormSummary(execution.result.responseForm);
+                    if (formSummary) {
+                        lines.push(`* Form:\n${formSummary}`);
+                    }
+                    lines.push(`* Child run ID: ${execution.consult.childRunId || '(unknown)'}`);
+                } else if (isChat && question?.trim()) {
+                    lines.push(`* Question: ${question}`);
                 }
-                return baseInfo;
+                if (execution.result.agentRun?.ErrorMessage) {
+                    lines.push(`* Error: ${execution.result.agentRun.ErrorMessage}`);
+                }
+                return lines.join('\n');
             })
             .join('\n\n---\n\n');
     }
@@ -15130,6 +15234,31 @@ The context is now within limits. Please retry your request with the recovered c
             if (execution.result.mediaOutputs?.length) this._mediaOutputs.push(...execution.result.mediaOutputs);
             if (execution.result.fileOutputs?.length) this._fileOutputs.push(...execution.result.fileOutputs);
 
+            if (execution.result.agentRun?.FinalStep === 'Chat') {
+                const resolvedOption = this.resolveSubAgentChatHandlingOption(params.agent, execution.relationship);
+                if (this.isSubAgentConsultActive(resolvedOption, params)) {
+                    const round = (this._subAgentConsultRounds.get(execution.subAgentEntity.ID) ?? 0) + 1;
+                    this._subAgentConsultRounds.set(execution.subAgentEntity.ID, round);
+                    const maxRounds = params.agent.MaxSubAgentConsultRounds ?? DEFAULT_MAX_SUB_AGENT_CONSULT_ROUNDS;
+                    if (round <= maxRounds) {
+                        const childRunId = execution.result.agentRun?.ID || '';
+                        const question = execution.result.agentRun?.Message || null;
+                        const consultRecord: SubAgentConsultRecord = {
+                            childRunId,
+                            subAgentId: execution.subAgentEntity.ID,
+                            subAgentName: execution.request.name,
+                            round,
+                            question
+                        };
+                        if (childRunId) {
+                            this._openSubAgentConsults.set(childRunId, consultRecord);
+                        }
+                        execution.consult = consultRecord;
+                        execution.maxConsultRounds = maxRounds;
+                    }
+                }
+            }
+
             const { mergedPayload: newMerged, stepPayloadAtEnd } = this.mergeParallelSubAgentResult(
                 params, execution, mergedPayload
             );
@@ -15153,6 +15282,7 @@ The context is now within limits. Please retry your request with the recovered c
     ): Promise<void> {
         if (!execution.stepEntity) return;
         execution.stepEntity.PayloadAtEnd = this.serializePayloadAtEnd(stepPayloadAtEnd);
+        const shouldTerminate = execution.request.terminateAfter === true && !execution.consult;
         await this.finalizeStepEntity(
             execution.stepEntity,
             execution.result.success,
@@ -15164,8 +15294,9 @@ The context is now within limits. Please retry your request with the recovered c
                     errorMessage: execution.result.agentRun?.ErrorMessage,
                     stepCount: execution.result.agentRun?.Steps?.length || 0,
                 },
-                shouldTerminate: execution.request.terminateAfter === true,
-                nextStep: execution.request.terminateAfter === true ? 'success' : 'retry'
+                shouldTerminate,
+                nextStep: shouldTerminate ? 'success' : 'retry',
+                ...(execution.consult && { consult: execution.consult })
             }
         );
     }
@@ -15229,10 +15360,10 @@ The context is now within limits. Please retry your request with the recovered c
 
         // Termination semantics: matches the single sub-agent path —
         // `terminateAfter` triggers parent termination regardless of the child's
-        // success/failure. The parent's step reflects whether any child failed:
-        // Failed if any did, Success if terminating cleanly, otherwise Retry.
+        // success/failure, EXCEPT when a Chat child is handled under Consult
+        // (the parent must get its turn to answer).
         const shouldTerminateParent = allExecutions.some(e =>
-            e.request.terminateAfter === true
+            e.request.terminateAfter === true && !e.consult
         );
         return {
             step: anyFailure ? 'Failed' : (shouldTerminateParent ? 'Success' : 'Retry'),
@@ -15240,6 +15371,180 @@ The context is now within limits. Please retry your request with the recovered c
             newPayload: mergedPayload,
             previousPayload: previousDecision.newPayload
         };
+    }
+
+    /**
+     * Pushes a sub-agent result or consult message to the parent's conversation history,
+     * answering natively-invoked `delegate_to_*` calls as a tool-result turn when applicable
+     * and applying expiration defaults / overrides.
+     *
+     * @private
+     */
+    private pushSubAgentConversationMessage<SC, SR>(
+        params: ExecuteAgentParams<SC>,
+        previousDecision: BaseAgentNextStep<SR, SC>,
+        subAgentRequest: AgentSubAgentRequest<SC>,
+        subAgentEntity: MJAIAgentEntityExtended,
+        messageContent: string,
+        messageType: 'sub-agent-result' | 'sub-agent-consult',
+        isError: boolean
+    ): void {
+        const metadata: AgentChatMessageMetadata = {
+            turnAdded: this._promptTurnCount,
+            messageType,
+            subAgentName: subAgentRequest.name,
+            subAgentId: subAgentEntity.ID,
+            expirationTurns: 3,
+            expirationMode: 'Remove'
+        };
+
+        if (params.messageExpirationOverride) {
+            const override = params.messageExpirationOverride;
+            if (override.expirationTurns != null) {
+                metadata.expirationTurns = override.expirationTurns;
+                metadata.expirationMode = override.expirationMode || 'Remove';
+                metadata.compactMode = override.compactMode;
+                metadata.compactLength = override.compactLength;
+                metadata.compactPromptId = override.compactPromptId;
+            }
+        }
+
+        if (previousDecision?.nativeTurn?.sendResultsNatively && subAgentRequest.toolCallId) {
+            params.conversationMessages.push(BuildToolResultTurn([
+                ...this.payloadToolResult(previousDecision),
+                {
+                    toolCallId: subAgentRequest.toolCallId,
+                    toolName: `${SUB_AGENT_TOOL_PREFIX}${SanitizeToolName(subAgentRequest.name)}`,
+                    content: messageContent,
+                    isError
+                }
+            ], metadata) as AgentChatMessage);
+        } else {
+            params.conversationMessages.push({
+                role: 'user',
+                content: messageContent,
+                metadata
+            } as AgentChatMessage);
+        }
+    }
+
+    /**
+     * Unified handler for a single sub-agent (child, related, or runtime-granted) that
+     * finished with `FinalStep === 'Chat'`. Resolves `ChatHandlingOption` for the pairing,
+     * runs the consult flow when `'Consult'` is active and within the per-sub-agent round
+     * bound, and otherwise finalizes the step and delegates to `validateChatNextStep`.
+     *
+     * @private
+     */
+    private async handleSingleSubAgentChatStep<SC, SR>(
+        params: ExecuteAgentParams<SC>,
+        previousDecision: BaseAgentNextStep<SR, SC>,
+        subAgentRequest: AgentSubAgentRequest<SC>,
+        subAgentEntity: MJAIAgentEntityExtended,
+        relationship: MJAIAgentRelationshipEntity | undefined,
+        subAgentResult: ExecuteAgentResult<SR>,
+        mergedPayload: SR,
+        stepEntity: MJAIAgentRunStepEntityExtended,
+        outputData: Record<string, unknown>
+    ): Promise<BaseAgentNextStep<SR, SC>> {
+        const resolvedOption = this.resolveSubAgentChatHandlingOption(params.agent, relationship);
+
+        if (this.isSubAgentConsultActive(resolvedOption, params)) {
+            const round = (this._subAgentConsultRounds.get(subAgentEntity.ID) ?? 0) + 1;
+            this._subAgentConsultRounds.set(subAgentEntity.ID, round);
+            const maxRounds = params.agent.MaxSubAgentConsultRounds ?? DEFAULT_MAX_SUB_AGENT_CONSULT_ROUNDS;
+
+            if (round <= maxRounds) {
+                const childRunId = subAgentResult.agentRun?.ID || '';
+                const question = subAgentResult.agentRun?.Message || null;
+                const consultRecord: SubAgentConsultRecord = {
+                    childRunId,
+                    subAgentId: subAgentEntity.ID,
+                    subAgentName: subAgentRequest.name,
+                    round,
+                    question
+                };
+                if (childRunId) {
+                    this._openSubAgentConsults.set(childRunId, consultRecord);
+                }
+
+                outputData.consult = consultRecord;
+                outputData.shouldTerminate = false;
+                outputData.nextStep = 'retry';
+
+                await this.finalizeStepEntity(
+                    stepEntity,
+                    subAgentResult.success,
+                    subAgentResult.agentRun?.ErrorMessage,
+                    outputData
+                );
+
+                const consultMessage = FormatSubAgentConsultMessage({
+                    subAgentName: subAgentRequest.name,
+                    round,
+                    maxRounds,
+                    question,
+                    responseForm: subAgentResult.responseForm,
+                    childRunId
+                });
+
+                this.pushSubAgentConversationMessage(
+                    params,
+                    previousDecision,
+                    subAgentRequest,
+                    subAgentEntity,
+                    consultMessage,
+                    'sub-agent-consult',
+                    false
+                );
+
+                if (this._agentRun) {
+                    this._agentRun.FinalPayloadObject = mergedPayload;
+                }
+
+                this.warnIfDiscardingSubAgentArtifactDirective(subAgentResult, subAgentRequest.name);
+                return {
+                    ...subAgentResult,
+                    step: 'Success',
+                    errorMessage: undefined,
+                    terminate: false,
+                    previousPayload: previousDecision?.newPayload,
+                    newPayload: mergedPayload,
+                    artifactDirective: undefined
+                };
+            }
+        }
+
+        // Not under active Consult (or round exceeded bound): finalize step and validate/propagate Chat
+        await this.finalizeStepEntity(
+            stepEntity,
+            subAgentResult.success,
+            subAgentResult.agentRun?.ErrorMessage,
+            outputData
+        );
+
+        const chatStep: BaseAgentNextStep<SR, SC> = {
+            step: 'Chat',
+            terminate: true,
+            message: subAgentResult.agentRun?.Message || null,
+            previousPayload: previousDecision?.newPayload,
+            newPayload: mergedPayload,
+            responseForm: subAgentResult.responseForm,
+            actionableCommands: subAgentResult.actionableCommands,
+            automaticCommands: subAgentResult.automaticCommands
+            // artifactDirective is deliberately NOT carried across the parent/child
+            // boundary — see warnIfDiscardingSubAgentArtifactDirective.
+        };
+
+        const effectiveOption = this.effectiveSubAgentChatHandlingOption(params.agent, relationship, params);
+        return await this.validateChatNextStep(
+            params,
+            chatStep,
+            mergedPayload,
+            this._agentRun!,
+            stepEntity!,
+            effectiveOption
+        );
     }
 
     /**
@@ -15372,6 +15677,11 @@ The context is now within limits. Please retry your request with the recovered c
                 stepCount
             );
 
+            if (stepEntity && subAgentResult.agentRun?.ID) {
+                stepEntity.TargetLogID = subAgentResult.agentRun.ID;
+                stepEntity.SubAgentRun = subAgentResult.agentRun;
+            }
+
             // Merge sub-agent's media outputs into parent's array.
             // This includes both promoted media and intercepted binary (with refIds) for placeholder resolution.
             if (subAgentResult.mediaOutputs?.length) {
@@ -15429,7 +15739,7 @@ The context is now within limits. Please retry your request with the recovered c
             const shouldTerminate = subAgentRequest.terminateAfter === true;
 
             // Prepare output data
-            const outputData = {
+            const outputData: Record<string, unknown> = {
                 subAgentResult: {
                     success: subAgentResult.success,
                     finalStep: subAgentResult.agentRun?.FinalStep,
@@ -15449,6 +15759,21 @@ The context is now within limits. Please retry your request with the recovered c
                 stepEntity.PayloadAtEnd = this.serializePayloadAtEnd(mergedPayload);
             }
 
+            // Check if sub-agent returned a Chat step (handled before finalizeStepEntity so Consult can update outputData)
+            if (subAgentResult.agentRun?.FinalStep === 'Chat') {
+                return await this.handleSingleSubAgentChatStep(
+                    params,
+                    previousDecision,
+                    subAgentRequest,
+                    subAgentEntity,
+                    relationship,
+                    subAgentResult,
+                    mergedPayload,
+                    stepEntity,
+                    outputData
+                );
+            }
+
             // Finalize step entity
             await this.finalizeStepEntity(
                 stepEntity,
@@ -15457,67 +15782,18 @@ The context is now within limits. Please retry your request with the recovered c
                 outputData
             );
 
-            // Check if sub-agent returned a Chat step
-            if (subAgentResult.agentRun?.FinalStep === 'Chat') {
-                // Create Chat nextStep but validate it through parent's ChatHandlingOption
-                // This allows parent agents to remap Chat -> Success/Failed/Retry if configured
-                const chatStep: BaseAgentNextStep<SR, SC> = {
-                    step: 'Chat',
-                    terminate: true,
-                    message: subAgentResult.agentRun?.Message || null,
-                    previousPayload: previousDecision?.newPayload,
-                    newPayload: mergedPayload, // Preserve sub-agent payload changes
-                    responseForm: subAgentResult.responseForm,
-                    actionableCommands: subAgentResult.actionableCommands,
-                    automaticCommands: subAgentResult.automaticCommands
-                    // artifactDirective is deliberately NOT carried across the parent/child
-                    // boundary — see warnIfDiscardingSubAgentArtifactDirective.
-                };
-
-                // Validate through parent's ChatHandlingOption (if configured)
-                // This ensures parent agents can override child Chat steps
-                return await this.validateChatNextStep(params, chatStep, mergedPayload, this._agentRun!, stepEntity!);
-            }
-
             // Add sub-agent result to conversation as user message using markdown format
             // and expiration metadata so it persists across multiple prompt turns
             const relatedResultMessage = this.formatSubAgentResultAsMarkdown(subAgentRequest.name, subAgentResult);
-
-            const relatedMetadata: AgentChatMessageMetadata = {
-                turnAdded: this._promptTurnCount,
-                messageType: 'sub-agent-result',
-                subAgentName: subAgentRequest.name,
-                subAgentId: subAgentEntity.ID,
-                expirationTurns: 3,
-                expirationMode: 'Remove'
-            };
-
-            if (params.messageExpirationOverride) {
-                const override = params.messageExpirationOverride;
-                if (override.expirationTurns != null) {
-                    relatedMetadata.expirationTurns = override.expirationTurns;
-                    relatedMetadata.expirationMode = override.expirationMode || 'Remove';
-                    relatedMetadata.compactMode = override.compactMode;
-                    relatedMetadata.compactLength = override.compactLength;
-                    relatedMetadata.compactPromptId = override.compactPromptId;
-                }
-            }
-
-            if (previousDecision.nativeTurn?.sendResultsNatively && subAgentRequest.toolCallId) {
-                // the delegate_to_* call is answered as a tool result (same as the child path).
-                params.conversationMessages.push(BuildToolResultTurn([...this.payloadToolResult(previousDecision), {
-                    toolCallId: subAgentRequest.toolCallId,
-                    toolName: `${SUB_AGENT_TOOL_PREFIX}${SanitizeToolName(subAgentRequest.name)}`,
-                    content: relatedResultMessage,
-                    isError: !subAgentResult.success
-                }], relatedMetadata) as AgentChatMessage);
-            } else {
-                params.conversationMessages.push({
-                    role: 'user',
-                    content: relatedResultMessage,
-                    metadata: relatedMetadata
-                } as AgentChatMessage);
-            }
+            this.pushSubAgentConversationMessage(
+                params,
+                previousDecision,
+                subAgentRequest,
+                subAgentEntity,
+                relatedResultMessage,
+                'sub-agent-result',
+                !subAgentResult.success
+            );
 
             // Update the agent run's current payload
             if (this._agentRun) {
@@ -19523,6 +19799,7 @@ The context is now within limits. Please retry your request with the recovered c
             || messageType === 'client-tool-result'
             || messageType === BaseAgent.toolResultMessageType
             || messageType === 'sub-agent-result'
+            || messageType === 'sub-agent-consult'
             || messageType === 'loop-result';
     }
 

@@ -2031,10 +2031,10 @@ export type AgentChatMessageMetadata = {
     /** Whether this message has expired */
     isExpired?: boolean;
     /** Type of message (for lifecycle management and logging) */
-    messageType?: 'action-result' | 'client-tool-result' | 'tool-result' | 'loop-result' | 'sub-agent-result' | 'skill-activation' | 'skill-activation-refused' | 'chat' | 'system' | 'user';
-    /** Name of the sub-agent (only for sub-agent-result messages) */
+    messageType?: 'action-result' | 'client-tool-result' | 'tool-result' | 'loop-result' | 'sub-agent-result' | 'sub-agent-consult' | 'skill-activation' | 'skill-activation-refused' | 'chat' | 'system' | 'user';
+    /** Name of the sub-agent (only for sub-agent-result and sub-agent-consult messages) */
     subAgentName?: string;
-    /** ID of the sub-agent (only for sub-agent-result messages) */
+    /** ID of the sub-agent (only for sub-agent-result and sub-agent-consult messages) */
     subAgentId?: string;
     /**
      * `ConversationDetail.Sequence` of the row this message came from. Stamped by
