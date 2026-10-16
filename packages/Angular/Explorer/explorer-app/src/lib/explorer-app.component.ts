@@ -13,7 +13,7 @@ import { DOCUMENT } from '@angular/common';
 import { Router, NavigationEnd } from '@angular/router';
 import { Subject } from 'rxjs';
 import { filter, take, takeUntil } from 'rxjs/operators';
-import { CompositeKey, EntityInfo, LogError, Metadata, SetProductionStatus, type PublicAuthProviderInfo } from '@memberjunction/core';
+import { CompositeKey, EntityInfo, LogError, Metadata, ResolveMJAPIURL, SetProductionStatus, type PublicAuthProviderInfo } from '@memberjunction/core';
 import {
   MJAuthBase,
   StandardUserInfo,
@@ -503,6 +503,7 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
       const result = await this.workspaceInit.initializeWorkspace(token, userInfo, {
         GRAPHQL_URI: this.environment.GRAPHQL_URI,
         GRAPHQL_WS_URI: this.environment.GRAPHQL_WS_URI,
+        MJAPI_URI: this.environment.MJAPI_URI,
         MJ_CORE_SCHEMA_NAME: this.environment.MJ_CORE_SCHEMA_NAME
       });
 
@@ -1293,10 +1294,12 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
   }
 
   /**
-   * Derive the health check URL from GRAPHQL_URI and start the connectivity polling service.
+   * Build the health check URL off the MJAPI URL and start the connectivity polling service.
    */
   private startConnectivityMonitoring(): void {
-    const healthUrl = new URL('/healthcheck', this.environment.GRAPHQL_URI).toString();
+    // MJAPI_URI when configured (MJ #5674); otherwise the pre-#5674 origin-relative URL.
+    const mjapiUrl = ResolveMJAPIURL(this.environment.MJAPI_URI);
+    const healthUrl = mjapiUrl ? `${mjapiUrl}/healthcheck` : new URL('/healthcheck', this.environment.GRAPHQL_URI).toString();
     this.connectivityService.Start(healthUrl);
   }
 
@@ -1410,7 +1413,7 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
   /** Loads the published sign-in page (usually already fetched by the app's bootstrap preload). */
   private async loadPublishedLoginScreen(): Promise<void> {
     if (!this.UsePublishedLoginScreen) return;
-    const screen = await LoginScreenLoader.Load(this.environment.GRAPHQL_URI);
+    const screen = await LoginScreenLoader.Load(this.environment.GRAPHQL_URI, undefined, this.environment.MJAPI_URI);
     if (!screen) return;
     this.PublishedLoginScreen = screen;
     this.refreshLoginStyle();
