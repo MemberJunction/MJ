@@ -7,6 +7,7 @@ import { DatabaseDocumentation, AnalysisRun, SchemaDefinition, TableDefinition, 
 import { EnsureArray } from "../utils/ensureArray.js";
 import type { BaseAutoDocDriver } from "../drivers/BaseAutoDocDriver.js";
 import { CheckPKProposal } from "./PKProposalGate.js";
+import { BuildIndexHints, FormatIndexHint, IsUniquelyIndexed } from "../utils/index-hints.js";
 import { TableNode, BackpropagationTrigger, TableAnalysisContext, TableGroundTruthContext, EnumCandidateContext } from '../types/analysis.js';
 import { EnumCandidateGate } from '../discovery/EnumCandidateGate.js';
 import {
@@ -202,7 +203,7 @@ export class AnalysisEngine {
       const [schemaName, tableName] = tableKey.split('.');
       const table = this.stateManager.findTable(state, schemaName, tableName);
       const candidates = tablePKs.map(pk => ({ columns: pk.columnNames, confidence: pk.confidence, locked: pk.status === 'confirmed' }));
-      const context = { sourceSchema: schemaName, sourceTable: tableName, tableDescription: table?.description || '', allTables, candidates, seedContext: state.seedContext ?? this.config.seedContext };
+      const context = { sourceSchema: schemaName, sourceTable: tableName, tableDescription: table?.description || '', allTables, candidates, existingIndexes: this.indexHintLines(table), seedContext: state.seedContext ?? this.config.seedContext };
 
       const result = await this.promptEngine.executePrompt<import('../types/prompts.js').PKPruningProposal[]>(
         'pk-pruning-table', context,
@@ -339,7 +340,8 @@ export class AnalysisEngine {
         targetTable: fk.targetTable,
         targetColumn: fk.targetColumn,
         confidence: fk.confidence,
-        locked: fk.status === 'confirmed'
+        locked: fk.status === 'confirmed',
+        targetUniquelyIndexed: IsUniquelyIndexed(this.stateManager.findTable(state, fk.targetSchema, fk.targetTable), fk.targetColumn)
       }));
 
       const context = {
@@ -348,6 +350,7 @@ export class AnalysisEngine {
         tableDescription: table?.description || '',
         allTables,
         candidates,
+        existingIndexes: this.indexHintLines(table),
         seedContext: state.seedContext ?? this.config.seedContext
       };
 
@@ -767,8 +770,15 @@ export class AnalysisEngine {
       allTables,
       groundTruth: groundTruthContext,
       fkCandidateStats,
-      enumCandidates: enumCandidates.length > 0 ? enumCandidates : undefined
+      enumCandidates: enumCandidates.length > 0 ? enumCandidates : undefined,
+      existingIndexes: this.indexHintLines(table)
     };
+  }
+
+  /** The table's existing indexes as prompt lines, or undefined when there are none to show. */
+  private indexHintLines(table: TableDefinition | undefined): string[] | undefined {
+    const lines = BuildIndexHints(table).map(FormatIndexHint);
+    return lines.length > 0 ? lines : undefined;
   }
 
   /**
