@@ -78,6 +78,7 @@ import { SearchOriginGateChecks } from '../checks/search-origin-gate.checks';
 import { SearchProviderTrustChecks } from '../checks/search-provider-trust.checks';
 import { SearchScopeBoundChecks } from '../checks/search-scope-bound.checks';
 import { AgentConsultChecks } from '../checks/agent-consult.checks';
+import { VideoDataSnapshotChecks } from '../checks/video-data-snapshot.checks';
 
 const makeCheck = (id: string): NamedCheck => ({ Id: id, Name: id, Fn: async () => { /* pass */ } });
 
@@ -208,6 +209,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['search-provider-trust', SearchProviderTrustChecks, 2], // SPT1 external-index hits verified, SPT2 unresolvable scope refused (IT118)
         ['search-scope-bound', SearchScopeBoundChecks, 3], // SSB1-SSB3 a scoped search is bounded by its scope's rows (IT123)
         ['agent-consult', AgentConsultChecks, 1], // AC1 deterministic sub-agent consult, escalation, request resume, open-consult reload, and resumeRunId chain (IT124)
+        ['video-data-snapshot', VideoDataSnapshotChecks, 3], // VDS1-VDS3 CaptureDataSnapshot + LoadDataSnapshotValues RLS and permission enforcement per contextUser (IT135)
     ];
 
     for (const [prefix, checks, expectedCount] of bundles) {
@@ -374,6 +376,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'transaction-groups-batched': 5,
         'user-elevation': 4,
         'user-routines': 16,
+        'video-data-snapshot': 3,
         'view-execution': 12,
         'view-security': 4,
         'work-queue-runtime': 19,
@@ -401,7 +404,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(123);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(124);
     });
 });
 

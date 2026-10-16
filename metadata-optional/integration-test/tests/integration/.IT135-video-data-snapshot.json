@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT135 - Video Data Snapshot",
+    "Description": "Deterministic server-transport integration checks (VDS1–VDS3) for Video Studio CaptureDataSnapshot and LoadDataSnapshotValues against live Row-Level Security and entity permissions on MJ: AI Agent Runs: user A sees only A's row, user B sees only B's row, it-nogrant records an Error issue with no rows and no throw, and LoadDataSnapshotValues round-trips the captured Values with a valid AsOf timestamp and Sources list.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "User A and User B each capture only their own RLS-scoped row; no-grant user records an Error issue with no rows; LoadDataSnapshotValues round-trips Values with valid AsOf and Sources."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "video-data-snapshot"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "EA064415-289D-4A15-8EBD-A6E2E4104FCA"
+  }
+}

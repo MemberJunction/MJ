@@ -4,8 +4,9 @@
  * @module @memberjunction/video-studio
  */
 
-import { IMetadataProvider, LogError, UserInfo } from '@memberjunction/core';
-import { FileStorageEngine } from '@memberjunction/storage';
+import { IMetadataProvider, IRunViewProvider, LogError, RunView, UserInfo } from '@memberjunction/core';
+import { EscapeSQLString, IsValidUUID } from '@memberjunction/global';
+import { FileStorageEngine, StorageFileLocation } from '@memberjunction/storage';
 
 /**
  * Input parameters for {@link StoreFile}.
@@ -55,3 +56,57 @@ export async function StoreFile(input: StoreFileInput): Promise<string | undefin
         return undefined;
     }
 }
+
+/**
+ * Loads an `MJ: Files` row as `contextUser` and reads its bytes through
+ * `FileStorageEngine.ResolveFileObject(..., 'Read')` and `Driver.GetObject`.
+ *
+ * Throws when `fileId` is not a valid UUID, when the `MJ: Files` row is missing or denied,
+ * when no storage account resolves for the provider, or when storage access is refused.
+ *
+ * @param fileId - The `MJ: Files` record ID to read.
+ * @param contextUser - The caller whose entity and storage permissions govern the read.
+ * @param provider - Optional metadata provider override.
+ * @returns The file content as a `Buffer`.
+ */
+export async function ReadStoredFile(
+    fileId: string,
+    contextUser: UserInfo,
+    provider?: IMetadataProvider,
+): Promise<Buffer> {
+    if (!IsValidUUID(fileId)) {
+        throw new Error(`Invalid file ID: ${fileId}`);
+    }
+    const rv = new RunView(provider as unknown as IRunViewProvider);
+    const fileResult = await rv.RunView<StorageFileLocation>(
+        {
+            EntityName: 'MJ: Files',
+            ExtraFilter: `ID = '${EscapeSQLString(fileId)}'`,
+            ResultType: 'entity_object',
+        },
+        contextUser,
+    );
+
+    if (!fileResult.Success || fileResult.Results.length === 0) {
+        throw new Error(
+            fileResult.ErrorMessage
+                ? `File not found or denied in MJ: Files (${fileId}): ${fileResult.ErrorMessage}`
+                : `File not found in MJ: Files: ${fileId}`,
+        );
+    }
+
+    const file = fileResult.Results[0];
+    const resolved = await FileStorageEngine.Instance.ResolveFileObject(
+        file,
+        contextUser,
+        'Read',
+        provider,
+    );
+    if (!resolved) {
+        throw new Error(`No FileStorageAccount found for ProviderID ${file.ProviderID}`);
+    }
+
+    const content = await resolved.Driver.GetObject({ fullPath: resolved.ObjectKey });
+    return Buffer.isBuffer(content) ? content : Buffer.from(content);
+}
+

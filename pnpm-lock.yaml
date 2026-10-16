@@ -3472,6 +3472,9 @@ importers:
       '@memberjunction/core':
         specifier: 6.2.0-edge.4
         version: link:../../../MJCore
+      '@memberjunction/global':
+        specifier: 6.2.0-edge.4
+        version: link:../../../MJGlobal
       '@memberjunction/storage':
         specifier: 6.2.0-edge.4
         version: link:../../../MJStorage
@@ -16308,6 +16311,12 @@ importers:
       '@memberjunction/unit-testing':
         specifier: 6.2.0-edge.4
         version: link:../../UnitTesting
+      '@memberjunction/video-studio':
+        specifier: 6.2.0-edge.4
+        version: link:../../AI/VideoStudio/Engine
+      '@memberjunction/video-studio-core':
+        specifier: 6.2.0-edge.4
+        version: link:../../AI/VideoStudio/Core
       '@memberjunction/work-queue-core':
         specifier: 6.2.0-edge.4
         version: link:../../WorkQueue/core
