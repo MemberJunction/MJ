@@ -1855,11 +1855,12 @@ export class SQLServerDataProvider
   private getDeleteSQLWithDetails(entity: BaseEntity, user: UserInfo, skipRecordChanges = false): { fullSQL: string; simpleSQL: string } {
     let sSQL: string = '';
     const spName: string = entity.EntityInfo.spDelete ? entity.EntityInfo.spDelete : `spDelete${entity.EntityInfo.BaseTableCodeName}`;
-    const sParams = entity.PrimaryKey.KeyValuePairs.map((kv) => {
+    const pkLiterals = entity.PrimaryKey.KeyValuePairs.map((kv) => {
       const f = entity.EntityInfo.Fields.find((f) => f.Name.trim().toLowerCase() === kv.FieldName.trim().toLowerCase());
       const quotes = f.NeedsQuotes ? "'" : '';
-      return `@${f.CodeName}=${quotes}${kv.Value}${quotes}`;
-    }).join(', ');
+      return { Field: f, Literal: `${quotes}${kv.Value}${quotes}` };
+    });
+    const sParams = pkLiterals.map((pk) => `@${pk.Field.CodeName}=${pk.Literal}`).join(', ');
     const sSimpleSQL: string = `EXEC [${entity.EntityInfo.SchemaName}].[${spName}] ${sParams}`;
     const recordChangesEntityInfo = this.Entities.find((e) => e.Name === 'MJ: Record Changes');
 
@@ -1882,6 +1883,38 @@ export class SQLServerDataProvider
       const sReturnList: string = entity.PrimaryKeys.map((pk) => {
         return `@${pk.CodeName} AS [${pk.Name}]`;
       }).join(', ');
+      const sLogRecordChange = this.GetLogRecordChangeSQL(null /*pass in null for new data for deleted records*/, oldData, entity.EntityInfo.Name, sCombinedPrimaryKey, entity.EntityInfo, 'Delete', user, true, entity.RestoreContext, entity.CloneContext);
+      if (entity.EntityInfo.CascadeDeletes) {
+        // A cascading spDelete EXECs other procs (spUpdate* to null references, spDelete* for
+        // children) and each emits its own result set, spUpdate*'s being the full row. Capturing the
+        // call with INSERT INTO @ResultTable EXEC takes every one of them, so the first full row fails
+        // with error 213. Run the proc uncaptured instead and judge success by whether the row is
+        // gone. The key is selected first (transaction groups read the first result set) and last
+        // (direct execution reads the last, see ValidateDeleteResult); NULL when nothing was deleted.
+        const sTable = `[${entity.EntityInfo.SchemaName}].[${entity.EntityInfo.BaseTable}]`;
+        const sWhere = pkLiterals.map((pk) => `[${pk.Field.Name}]=${pk.Literal}`).join(' AND ');
+        const sKeyWhen = (flag: string) => pkLiterals.map((pk) => `CASE WHEN ${flag} = 1 THEN ${pk.Literal} END AS [${pk.Field.Name}]`).join(', ');
+        sSQL = `
+                    DECLARE @MJDeleteRowExisted BIT = CASE WHEN EXISTS (SELECT 1 FROM ${sTable} WHERE ${sWhere}) THEN 1 ELSE 0 END
+                    SELECT ${sKeyWhen('@MJDeleteRowExisted')}
+
+                    IF @MJDeleteRowExisted = 1
+                        ${sSimpleSQL}
+
+                    DECLARE @MJDeleteRowDeleted BIT = CASE WHEN @MJDeleteRowExisted = 1 AND NOT EXISTS (SELECT 1 FROM ${sTable} WHERE ${sWhere}) THEN 1 ELSE 0 END
+                    IF @MJDeleteRowDeleted = 1
+                    BEGIN
+                        DECLARE @ResultChangesTable TABLE (
+                            ${this.getAllEntityColumnsSQL(recordChangesEntityInfo)}
+                        )
+
+                        INSERT INTO @ResultChangesTable
+                        ${sLogRecordChange}
+                    END
+
+                    SELECT ${sKeyWhen('@MJDeleteRowDeleted')}`;
+        return { fullSQL: sSQL, simpleSQL: sSimpleSQL };
+      }
       sSQL = `
                     IF OBJECT_ID('tempdb..#ResultTable') IS NOT NULL
                         DROP TABLE #ResultTable
@@ -1902,7 +1935,7 @@ export class SQLServerDataProvider
                         )
 
                         INSERT INTO @ResultChangesTable
-                        ${this.GetLogRecordChangeSQL(null /*pass in null for new data for deleted records*/, oldData, entity.EntityInfo.Name, sCombinedPrimaryKey, entity.EntityInfo, 'Delete', user, true, entity.RestoreContext, entity.CloneContext)}
+                        ${sLogRecordChange}
                     END
 
                     SELECT ${sReturnList}`;
