@@ -1612,7 +1612,11 @@ export class AgentRunner {
         const md = provider || this._provider;
 
         try {
-            await FileStorageEngine.Instance.Config(false, contextUser);
+            try {
+                await FileStorageEngine.Instance.Config(false, contextUser);
+            } catch (configError) {
+                LogError(`SaveAgentRunMedia: failed to configure FileStorageEngine, falling back to inline: ${(configError as Error).message}`);
+            }
 
             // Use AIEngine's cached modalities instead of a fresh DB call
             const aiEngine = AIEngine.Instance;

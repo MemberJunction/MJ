@@ -15,6 +15,7 @@ import type { MediaOutput } from '@memberjunction/ai-core-plus';
 
 let hasStorageAccounts = false;
 let storageEngineConfigured = false;
+let storageConfigShouldReject = false;
 
 vi.mock('@memberjunction/storage', () => ({
     FileStorageEngine: {
@@ -23,6 +24,9 @@ vi.mock('@memberjunction/storage', () => ({
                 return hasStorageAccounts;
             },
             Config: async () => {
+                if (storageConfigShouldReject) {
+                    throw new Error('RunViews connection timeout');
+                }
                 storageEngineConfigured = true;
             },
         },
@@ -91,6 +95,7 @@ describe('AgentRunner — media artifact storage routing', () => {
         uploadCalls = [];
         hasStorageAccounts = false;
         storageEngineConfigured = false;
+        storageConfigShouldReject = false;
         runner = Object.create(AgentRunner.prototype) as StorageProbe;
         runner.uploadBase64ToStorage = async (...args: unknown[]) => {
             uploadCalls.push(args);
@@ -303,6 +308,26 @@ describe('AgentRunner — media artifact storage routing', () => {
             expect(savedEntities[0].InlineData).toBe('QUJD');
             expect(savedEntities[0].FileID).toBeUndefined();
             expect(mediaOutputs[0].fileId).toBeUndefined();
+        });
+
+        it('when FileStorageEngine.Instance.Config rejects: saves every media row inline without throwing', async () => {
+            storageConfigShouldReject = true;
+            hasStorageAccounts = false;
+            const mediaOutputs: MediaOutput[] = [
+                { modality: 'Image', mimeType: 'image/png', data: 'QUJD', label: 'first.png' },
+                { modality: 'Image', mimeType: 'image/png', data: 'REVG', label: 'second.png' },
+            ];
+
+            await expect(
+                probe.SaveAgentRunMedia('run-1', mediaOutputs, {} as UserInfo, mockProvider, 'storage-acct-1')
+            ).resolves.toEqual(['run-media-1', 'run-media-2']);
+
+            expect(uploadCalls).toHaveLength(0);
+            expect(savedEntities).toHaveLength(2);
+            expect(savedEntities[0].InlineData).toBe('QUJD');
+            expect(savedEntities[0].FileID).toBeUndefined();
+            expect(savedEntities[1].InlineData).toBe('REVG');
+            expect(savedEntities[1].FileID).toBeUndefined();
         });
 
         it('for promptRunMediaId media: links SourcePromptRunMediaID and performs no upload or inline write', async () => {
