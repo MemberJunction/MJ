@@ -570,8 +570,21 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
   public async toggleUserStatus(user: MJUserEntity): Promise<void> {
     try {
       user.IsActive = !user.IsActive;
-      await user.Save();
+      // BaseEntity.Save() returns false on a validation failure — it does NOT throw. Discarding
+      // the result meant the catch below never ran for a refused save: no revert, no message, and
+      // calculateStats() re-rendered the row as toggled, so the UI asserted success while nothing
+      // had been written. Reachable for every non-Owner admin since the #4260 privilege-elevation
+      // guard on MJ: Users, because deactivating a user is a write to another user's row.
+      // Mirrors deleteUser() above, which already checks its result this way.
+      if (!(await user.Save())) {
+        throw new Error(user.LatestResult?.Message || 'Failed to update user status');
+      }
       this.ngZone.run(() => {
+        // Clear any banner left by a PREVIOUS refused toggle. Without this a non-Owner who is
+        // refused on one row, then succeeds on a row they may edit (their own), keeps reading the
+        // stale refusal. `loadInitialData()` is the only other place `error` is reset and this path
+        // does not call it.
+        this.error = null;
         this.calculateStats();
         this.cdr.markForCheck();
       });
@@ -579,6 +592,7 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
       console.error('Error updating user status:', error);
       this.ngZone.run(() => {
         user.IsActive = !user.IsActive; // Revert on error
+        this.error = error instanceof Error ? error.message : 'Failed to update user status';
         this.cdr.markForCheck();
       });
     }
