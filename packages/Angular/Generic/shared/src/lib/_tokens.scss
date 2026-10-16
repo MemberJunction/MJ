@@ -537,9 +537,14 @@
   /* Status Colors (adjusted for dark backgrounds)
      -text uses the 300 step: the 100 step is a near-white tint that is
      indistinguishable from --mj-text-primary (1.00-1.12:1), so it carries no
-     status signal. 300 reads as its hue and clears WCAG AA on every dark
-     surface and on the matching -bg tint; 400 fails AA for error/info on
-     --mj-bg-surface-elevated. See MJ#4564. */
+     status signal. 300 reads as its hue and clears WCAG AA on every RESTING
+     dark surface (page, surface, card, elevated, sunken) and on the matching
+     -bg tint; 400 fails AA for error/info on --mj-bg-surface-elevated.
+     Known limitation: on --mj-bg-surface-hover and --mj-bg-surface-active the
+     300 step drops below AA for error/info (and warning on its tint). Those
+     two surfaces sit 2-3 ramp steps off the base and no saturated text color
+     survives them; that is a surface-token problem, not a status-text one.
+     See MJ#4564. Keep ThemeEngine derive.ts STATUS.*Text300 in lockstep. */
   --mj-status-success-bg: rgba(34, 197, 94, 0.15);
   --mj-status-success-text: var(--mj-color-success-300);
   --mj-status-success-border: var(--mj-color-success-600);
