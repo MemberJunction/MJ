@@ -870,7 +870,7 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
         const row = await PromptTemplateContent.ReadCurrent(context.provider, templateID, context.contextUser);
         this.templateRead = { ProcessRunID: context.processRunID, TemplateID: templateID, Row: row };
         this.promptTemplateText = row?.TemplateText ?? '';
-        await this.SyncTemplateEngine(templateID, row, context);
+        await this.syncTemplateEngine(templateID, row, context);
     }
 
     /**
@@ -878,10 +878,10 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
      * a cache that still differs after the reload (another load in flight, or equal-Priority rows the engine orders by
      * load order) is logged once instead of reloading on every record.
      */
-    private async SyncTemplateEngine(templateID: string, row: PromptTemplateContentRow | undefined, context: RecordProcessorContext): Promise<void> {
+    private async syncTemplateEngine(templateID: string, row: PromptTemplateContentRow | undefined, context: RecordProcessorContext): Promise<void> {
         const engine = TemplateEngineServer.Instance;
         await engine.Config(false, context.contextUser);
-        if (this.EngineHoldsCurrentText(engine, templateID, row)) {
+        if (this.engineHoldsCurrentText(engine, templateID, row)) {
             return;
         }
         let reload = this.templateReload;
@@ -889,7 +889,7 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
             reload = { ProcessRunID: context.processRunID, TemplateID: templateID, Logged: false };
             this.templateReload = reload;
             await engine.Config(true, context.contextUser);
-            if (this.EngineHoldsCurrentText(engine, templateID, row)) {
+            if (this.engineHoldsCurrentText(engine, templateID, row)) {
                 return;
             }
         }
@@ -903,7 +903,7 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
      * True when the engine's cached rendered content for `templateID` has the text of `current` (no content in the
      * database ↔ no cached content). Text only, not the row ID: the engine breaks equal-Priority ties by load order.
      */
-    private EngineHoldsCurrentText(engine: TemplateEngineServer, templateID: string, current: PromptTemplateContentRow | undefined): boolean {
+    private engineHoldsCurrentText(engine: TemplateEngineServer, templateID: string, current: PromptTemplateContentRow | undefined): boolean {
         const cached = engine.Templates.find((t) => UUIDsEqual(t.ID, templateID))?.GetHighestPriorityContent();
         if (!current || !cached) {
             return !current && !cached;
