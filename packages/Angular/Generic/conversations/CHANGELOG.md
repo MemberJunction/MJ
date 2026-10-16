@@ -1,5 +1,59 @@
 # @memberjunction/ng-conversations
 
+## 5.51.4
+
+### Patch Changes
+
+- 7443245: The conversations Tasks tab and task search now read the conversation and message IDs they filter by with their own RunView instead of a subquery over the Conversations and Conversation Details views. The server's clause screen refuses such a subquery for a user whose read of those entities is row-filtered (for example the Widget Guest role, or a row filter a customer adds), so the Tasks tab and task search failed for those users. The Tasks tab rebuilds the filter on every load and refresh, so a task linked to a message created after the workspace opened appears on the next refresh.
+- 5326958: Backport #5155: include PCM provider agent audio in realtime recordings, release recorder setup resources when stopped, and retain microphone capture when agent audio cannot be mixed.
+- Updated dependencies [80ea6b8]
+- Updated dependencies [4349a70]
+- Updated dependencies [4fe6b23]
+- Updated dependencies [ecb32fd]
+- Updated dependencies [5326958]
+- Updated dependencies [aaf1fba]
+- Updated dependencies [45c4c05]
+- Updated dependencies [2ed739c]
+- Updated dependencies [3e25fab]
+- Updated dependencies [6901aaa]
+- Updated dependencies [c3ab75e]
+- Updated dependencies [75e94d7]
+- Updated dependencies [612f08e]
+- Updated dependencies [e26ad53]
+- Updated dependencies [05a3b17]
+- Updated dependencies [bd01671]
+- Updated dependencies [e9a5530]
+- Updated dependencies [3fa4b09]
+- Updated dependencies [f324af2]
+  - @memberjunction/ng-artifacts@5.51.4
+  - @memberjunction/core@5.51.4
+  - @memberjunction/core-entities@5.51.4
+  - @memberjunction/ai-realtime-client@5.51.4
+  - @memberjunction/conversations-runtime@5.51.4
+  - @memberjunction/ng-markdown@5.51.4
+  - @memberjunction/graphql-dataprovider@5.51.4
+  - @memberjunction/global@5.51.4
+  - @memberjunction/ai-agent-client@5.51.4
+  - @memberjunction/ai-engine-base@5.51.4
+  - @memberjunction/ai-core-plus@5.51.4
+  - @memberjunction/ng-testing@5.51.4
+  - @memberjunction/ng-base-types@5.51.4
+  - @memberjunction/ng-code-editor@5.51.4
+  - @memberjunction/ng-composer@5.51.4
+  - @memberjunction/ng-container-directives@5.51.4
+  - @memberjunction/ng-media-player@5.51.4
+  - @memberjunction/ng-notifications@5.51.4
+  - @memberjunction/ng-resource-permissions@5.51.4
+  - @memberjunction/ng-shared-generic@5.51.4
+  - @memberjunction/ng-tasks@5.51.4
+  - @memberjunction/ng-user-routines@5.51.4
+  - @memberjunction/interactive-component-types@5.51.4
+  - @memberjunction/ng-forms@5.51.4
+  - @memberjunction/ng-whiteboard@5.51.4
+  - @memberjunction/ai@5.51.4
+  - @memberjunction/ng-agent-client@5.51.4
+  - @memberjunction/ng-ui-components@5.51.4
+
 ## 5.51.3
 
 ### Patch Changes

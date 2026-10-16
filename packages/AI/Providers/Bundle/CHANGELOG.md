@@ -1,5 +1,41 @@
 # @memberjunction/ai-provider-bundle
 
+## 5.51.4
+
+### Patch Changes
+
+- Updated dependencies [2e2bef5]
+- Updated dependencies [9a284cd]
+- Updated dependencies [a907eae]
+  - @memberjunction/ai-gemini@5.51.4
+  - @memberjunction/ai-vertex@5.51.4
+  - @memberjunction/ai-bedrock@5.51.4
+  - @memberjunction/ai-recommendations-rex@5.51.4
+  - @memberjunction/ai-vectors-pinecone@5.51.4
+  - @memberjunction/ai-anthropic@5.51.4
+  - @memberjunction/ai-assemblyai@5.51.4
+  - @memberjunction/ai-azure@5.51.4
+  - @memberjunction/ai-betty-bot@5.51.4
+  - @memberjunction/ai-blackforestlabs@5.51.4
+  - @memberjunction/ai-cerebras@5.51.4
+  - @memberjunction/ai-cohere@5.51.4
+  - @memberjunction/ai-elevenlabs@5.51.4
+  - @memberjunction/ai-fireworks@5.51.4
+  - @memberjunction/ai-groq@5.51.4
+  - @memberjunction/ai-heygen@5.51.4
+  - @memberjunction/ai-inception@5.51.4
+  - @memberjunction/ai-inworld@5.51.4
+  - @memberjunction/ai-lmstudio@5.51.4
+  - @memberjunction/ai-llamacpp@5.51.4
+  - @memberjunction/ai-local-embeddings@5.51.4
+  - @memberjunction/ai-minimax@5.51.4
+  - @memberjunction/ai-mistral@5.51.4
+  - @memberjunction/ai-ollama@5.51.4
+  - @memberjunction/ai-openai@5.51.4
+  - @memberjunction/ai-openrouter@5.51.4
+  - @memberjunction/ai-zhipu@5.51.4
+  - @memberjunction/ai-xai@5.51.4
+
 ## 5.51.3
 
 ### Patch Changes

@@ -1,5 +1,93 @@
 # Change Log - @memberjunction/ng-explorer-core
 
+## 5.51.4
+
+### Patch Changes
+
+- 80ea6b8: ArtifactsModule no longer preloads React, ReactDOM and Babel from unpkg when it is constructed, so apps that only import a realtime overlay (e.g. a public voice widget) make no third-party CDN requests at bootstrap. MJ Explorer keeps the warm cache by calling AngularAdapterService.Preload() after login. Other hosts that render interactive component artifacts and want a warm cache can call `inject(AngularAdapterService).Preload()` (from `@memberjunction/ng-react`) after authentication; otherwise the runtime loads on first use.
+- aaf1fba: Use lts/5 method names (`preload`, `initialize`, `parseMentions`) in code and tests that the #4943 and #5549 backports carried over from next, which renamed them to PascalCase. Fixes the lts/5 build of ng-explorer-core.
+- 7ea6fe6: Fix two ways interactive components fail to open entity records.
+  - **sql-dialect** — PostgreSQL `tsvector` and `tsquery` are now string types. They were missing
+    from the list, so CodeGen typed the `__mj_fts_vector` column that full-text search adds as a
+    GraphQL `Int`. Once the trigger fills it, the value is text, and every load of that entity's
+    records fails with `Int cannot represent non-integer value`. Re-run CodeGen to regenerate the
+    affected entities.
+  - **ng-explorer-core** — the standalone artifact tab (`ArtifactResource`) now handles the viewer
+    panel's `openEntityRecord` and `navigationRequest` events, as the conversation view already does.
+    Before, a component's `OpenEntityRecord` call in a shared artifact tab did nothing, with no
+    console output.
+
+- Updated dependencies [80ea6b8]
+- Updated dependencies [4349a70]
+- Updated dependencies [4fe6b23]
+- Updated dependencies [7443245]
+- Updated dependencies [ecb32fd]
+- Updated dependencies [5326958]
+- Updated dependencies [aaf1fba]
+- Updated dependencies [45c4c05]
+- Updated dependencies [3e25fab]
+- Updated dependencies [6901aaa]
+- Updated dependencies [c3ab75e]
+- Updated dependencies [75e94d7]
+- Updated dependencies [7ed8f3d]
+- Updated dependencies [612f08e]
+- Updated dependencies [e26ad53]
+- Updated dependencies [05a3b17]
+- Updated dependencies [bd01671]
+- Updated dependencies [e9a5530]
+- Updated dependencies [3fa4b09]
+- Updated dependencies [f324af2]
+- Updated dependencies [5f9df91]
+  - @memberjunction/ng-artifacts@5.51.4
+  - @memberjunction/core@5.51.4
+  - @memberjunction/core-entities@5.51.4
+  - @memberjunction/ng-dashboards@5.51.4
+  - @memberjunction/ng-conversations@5.51.4
+  - @memberjunction/ng-markdown@5.51.4
+  - @memberjunction/graphql-dataprovider@5.51.4
+  - @memberjunction/ng-explorer-settings@5.51.4
+  - @memberjunction/global@5.51.4
+  - @memberjunction/ng-dashboard-viewer@5.51.4
+  - @memberjunction/ai-engine-base@5.51.4
+  - @memberjunction/ai-core-plus@5.51.4
+  - @memberjunction/ng-auth-services@5.51.4
+  - @memberjunction/ng-base-application@5.51.4
+  - @memberjunction/ng-entity-form-dialog@5.51.4
+  - @memberjunction/ng-entity-permissions@5.51.4
+  - @memberjunction/ng-list-detail-grid@5.51.4
+  - @memberjunction/ng-shared@5.51.4
+  - @memberjunction/ng-ai-test-harness@5.51.4
+  - @memberjunction/ng-base-forms@5.51.4
+  - @memberjunction/ng-base-types@5.51.4
+  - @memberjunction/ng-composer@5.51.4
+  - @memberjunction/ng-container-directives@5.51.4
+  - @memberjunction/ng-entity-viewer@5.51.4
+  - @memberjunction/ng-feedback@5.51.4
+  - @memberjunction/ng-file-storage@5.51.4
+  - @memberjunction/ng-list-management@5.51.4
+  - @memberjunction/ng-mj-livekit-room@5.51.4
+  - @memberjunction/ng-notifications@5.51.4
+  - @memberjunction/ng-query-viewer@5.51.4
+  - @memberjunction/ng-record-changes@5.51.4
+  - @memberjunction/ng-record-selector@5.51.4
+  - @memberjunction/ng-record-tags@5.51.4
+  - @memberjunction/ng-resource-permissions@5.51.4
+  - @memberjunction/ng-search@5.51.4
+  - @memberjunction/ng-shared-generic@5.51.4
+  - @memberjunction/ng-user-avatar@5.51.4
+  - @memberjunction/communication-types@5.51.4
+  - @memberjunction/entity-communications-client@5.51.4
+  - @memberjunction/interactive-component-types@5.51.4
+  - @memberjunction/templates-base-types@5.51.4
+  - @memberjunction/ng-export-service@5.51.4
+  - @memberjunction/ng-generic-dialog@5.51.4
+  - @memberjunction/ng-pagination@5.51.4
+  - @memberjunction/ng-ui-components@5.51.4
+  - @memberjunction/ng-word-cloud@5.51.4
+  - @memberjunction/lists-base@5.51.4
+  - @memberjunction/export-engine@5.51.4
+  - @memberjunction/theme-engine@5.51.4
+
 ## 5.51.3
 
 ### Patch Changes

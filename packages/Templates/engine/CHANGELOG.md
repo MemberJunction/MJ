@@ -1,5 +1,38 @@
 # Change Log - @memberjunction/templates
 
+## 5.51.4
+
+### Patch Changes
+
+- e26ad53: Security (#4253, remaining pieces): the JSON artifact viewer's HTML iframe no longer gets `allow-same-origin`. The Gmail provider strips CR/LF from header values. Nunjucks runs with `dev: false`, so render errors no longer carry stack traces. The rest of #4253 (the `CustomWhereClause` Owner gate, stored WhereClause screening, Conditional action hardening) already reached lts/5 through the C1, C8 and C9 ports.
+- d4b1edf: Security (C2): sandbox template rendering, and authorize on-demand template runs.
+  - **Sandboxed templates.** `HardenNunjucksRuntime()` (new export of `@memberjunction/templates`) guards the nunjucks parser, code generator, runtime and environment lookups that every nunjucks environment in the process shares, including templates loaded through `include` and `import`. The template engine applies it when it loads and checks it before each render. A template that breaks one of the rules below fails with `TemplateSandboxError`.
+    - **Before a template compiles**, `AssertTemplateTreeIsSafe()` (new export) checks its parse tree, because the nunjucks compiler copies template-controlled names into the code it generates. Variable, filter, loop, `set`, macro, import and block names must be plain names (letters, combining marks, digits, connector characters such as `_`, and `$`; filter names can contain dots). A test name, and an extension's registered name and method, must not contain a quote, a backslash or a line break, so `is none` and `is not none` still work. A name that every object inherits (such as `toString` or `constructor`), or `prototype`, must not be used as a dictionary key, a keyword argument, a macro or call-block argument, a `set`, loop, import, macro or block name, or a filter or test name; the code generator also refuses it as a dictionary key or keyword argument. Member reads such as `value.toLocaleString()` are not in this rule; they go through the render-time member check. A called member's name must not contain a backslash or a line break. A loop variable must not reuse an identifier that the generated loop code uses (`context`, `frame`, `runtime`, `env`, `cb`, `next`, `tasks`, `undefined`, ...); a unit test checks this list against the code nunjucks 3.2.4 generates for every kind of loop body, including loops inside macros and blocks. A parse tree may hold only nunjucks nodes, plain values and regular expression literals.
+    - **While a template renders**, it can no longer reach `Function` (for example `{{ range.constructor("...")() }}`), `eval`, `Object`, `Reflect`, `globalThis` or `process`, and it can no longer read a member of the render context, an environment, a loader, a frame, a template or a nunjucks module, or get one of them from a lookup or a call. It could use those to run code on the server, or to change the shared environment for later renders. A filter, test or global resolves only to a name the environment registered itself, never to a member that every object inherits; this also covers test names that `select` and `reject` receive while the template renders, which must be text, a number or another simple value, not an object, a function or a symbol. The member names `constructor`, `prototype` and the `__define/lookup Getter/Setter__` accessors read as empty unless they hold an object's own data that is not a function, and `__proto__` always reads as empty, whether the member name is literal or computed while rendering. A bare name resolves only to a template variable, an own key of the render data, or an own environment global, never to an inherited property. A macro or call-block argument that a call leaves out is filled only from a keyword argument of that name that the call itself passes, never from an inherited member, so otherwise it reads as empty; keyword arguments written at a call site must be a plain object literal with ordinary names, and keyword arguments passed as a value are read through a copy of their own keys.
+  - **Authorized template runs.** The `RunTemplate` mutation and the `Template.Run` remote operation now refuse scope-limited sessions (anonymous magic-link and widget guests, resource-scoped magic-link sessions) and callers without read permission on `MJ: Templates` and `MJ: Template Contents`, before they load anything. The rule is the new `GetTemplateRunRefusal()` export.
+
+- Updated dependencies [4349a70]
+- Updated dependencies [4fe6b23]
+- Updated dependencies [ecb32fd]
+- Updated dependencies [3e25fab]
+- Updated dependencies [6901aaa]
+- Updated dependencies [c3ab75e]
+- Updated dependencies [75e94d7]
+- Updated dependencies [612f08e]
+- Updated dependencies [05a3b17]
+- Updated dependencies [bd01671]
+- Updated dependencies [e9a5530]
+- Updated dependencies [3fa4b09]
+- Updated dependencies [f324af2]
+  - @memberjunction/core@5.51.4
+  - @memberjunction/core-entities@5.51.4
+  - @memberjunction/global@5.51.4
+  - @memberjunction/ai-core-plus@5.51.4
+  - @memberjunction/aiengine@5.51.4
+  - @memberjunction/templates-base-types@5.51.4
+  - @memberjunction/ai-provider-bundle@5.51.4
+  - @memberjunction/ai@5.51.4
+
 ## 5.51.3
 
 ### Patch Changes

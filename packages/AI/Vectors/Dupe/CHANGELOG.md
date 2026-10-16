@@ -1,5 +1,84 @@
 # Change Log - @memberjunction/ai-vector-dupe
 
+## 5.51.4
+
+### Patch Changes
+
+- ecb32fd: Duplicate detection no longer accumulates the whole run in memory, so whole-entity runs can finish.
+
+  `GetDuplicateRecords` batches its work 500 records at a time, but accumulated its **results** for
+  the entire run — O(records), not O(batch). On a 61,671-record entity that alone exhausted an 8 GB
+  heap and the process died mid-run, so whole-entity detection could not complete at all. Three
+  consecutive attempts on one tenant each ended in `FATAL ERROR: Reached heap limit`, while a full
+  re-embed over the same records succeeded every time — the cost was in the detection path, not the
+  vectorization.
+
+  Retaining every result was never load-bearing: `ProcessBatch` already persists each one as
+  `Duplicate Run Detail` / `Duplicate Run Detail Match` rows as it goes, so the array was a second
+  copy of durable data, kept only to feed the post-pass auto-merge and a single `.length` read.
+
+  Retention is now capped at 1,000 results. Auto-merge carries only candidates that can actually
+  merge — a small fraction by definition, since they must clear the absolute threshold — and still
+  runs **once, after the full pass**, so detection continues to see the pre-merge dataset exactly as
+  before.
+
+  `PotentialDuplicateResponse` gains two optional fields: `TotalRecordsWithDuplicates` (never capped,
+  correct at any scale) and `ResultsTruncated`. Small runs are unaffected — under the cap the
+  response is identical to before.
+
+- bba4ddc: Duplicate detection now queries with the same text vector sync stored (#5198). It rendered each record's template from the record's own fields alone, so every `Entity` template param (a person's Phones, Emails, Addresses...) rendered empty, and dates came through as `Date` objects instead of the view's values. The query vector then described a shorter document than the stored one: duplicates that share contact data fell below the threshold, and records with no contact data over-matched.
+  - **One builder for both sides.** `EntityDocumentTemplateDataBuilder` (new export of `@memberjunction/ai-vector-sync`) loads a batch's related-entity rows and builds each record's template data. `EntityVectorSyncer.GetTemplateData` and `GetRelatedTemplateDataForBatch` keep their signatures and delegate to it.
+  - **Same row as sync.** The detector renders each saved record from its `RunView` row (`ResultType: 'simple'`), one query per sub-batch. An unsaved record renders from its own values with empty related rows, and runs no related-data query.
+  - **Fails loudly.** When a related param's rows can't be loaded, the batch throws instead of rendering the param empty. Rendering skips validation and suppresses its warnings, as sync does, which ends the "Template validation warnings (non-fatal) … Parameter Phones is required" log spam on every run.
+  - A page with no keys (an empty last page) no longer sends `IN ()` to the database for each related param.
+
+- ecb32fd: Duplicate detection checks every record in scope.
+
+  The three record-id loads (list, saved view, entity or filter) now read with
+  `IgnoreMaxRows`. They fell back to the entity's `UserViewMaxRows`, so a run checked only the first
+  1,000 records, set `TotalItemCount` from them, and reported "1000 of 1000 complete" on a
+  61,671-record entity.
+
+- f666326: An entity document's record filter, `Configuration.recordFilter.extraFilter`, now does what its documentation said (#5199). It was declared, with `IsDeleted = 0` as its example, but nothing read it, so records it was meant to exclude were vectorized and offered as duplicates anyway.
+  - **Vector sync** ANDs the filter into every page it reads, with a list run's membership filter (`BuildRecordPageFilter`).
+  - **Duplicate detection** checks only records that pass it: a whole-entity run ANDs it into the run's `ExtraFilter`, and a list or view run is narrowed to the members that pass it.
+  - **Candidates** that fail it are dropped by `FilterNonExistentMatches`, which now takes the filter: their vectors can predate it. `CheckSingleRecord` applies it to its candidates too, and still checks the record it is given. With a filter set, the query over-fetches three times TopK and trims back to TopK after filtering.
+  - **Fails loudly.** If the filter can't be applied, detection throws instead of failing open; without a filter, a failed existence check still fails open as before.
+  - The candidate existence check now reads with `IgnoreMaxRows`, so an entity whose `UserViewMaxRows` is below the 500-key chunk no longer drops valid matches.
+  - New exports from `@memberjunction/ai-vector-sync`: `ParseEntityDocumentConfiguration`, `GetEntityDocumentRecordFilter`, `CombineExtraFilters` (sync and detection now share it).
+  - The READMEs say which SQL the filter can use so it also runs on PostgreSQL: plain comparisons, not T-SQL such as `ISNULL`, `LEN` or `+` concatenation.
+
+- Updated dependencies [4349a70]
+- Updated dependencies [4fe6b23]
+- Updated dependencies [ecb32fd]
+- Updated dependencies [bba4ddc]
+- Updated dependencies [f666326]
+- Updated dependencies [3e25fab]
+- Updated dependencies [a907eae]
+- Updated dependencies [6901aaa]
+- Updated dependencies [c3ab75e]
+- Updated dependencies [75e94d7]
+- Updated dependencies [612f08e]
+- Updated dependencies [e26ad53]
+- Updated dependencies [05a3b17]
+- Updated dependencies [d4b1edf]
+- Updated dependencies [bd01671]
+- Updated dependencies [e9a5530]
+- Updated dependencies [3fa4b09]
+- Updated dependencies [f324af2]
+  - @memberjunction/core@5.51.4
+  - @memberjunction/core-entities@5.51.4
+  - @memberjunction/ai-vector-sync@5.51.4
+  - @memberjunction/ai-prompts@5.51.4
+  - @memberjunction/global@5.51.4
+  - @memberjunction/templates@5.51.4
+  - @memberjunction/ai-core-plus@5.51.4
+  - @memberjunction/aiengine@5.51.4
+  - @memberjunction/ai-vectors@5.51.4
+  - @memberjunction/ai-vectordb@5.51.4
+  - @memberjunction/record-comparison@5.51.4
+  - @memberjunction/ai@5.51.4
+
 ## 5.51.3
 
 ### Patch Changes

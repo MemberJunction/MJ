@@ -1,5 +1,43 @@
 # @memberjunction/ai-prompts
 
+## 5.51.4
+
+### Patch Changes
+
+- a907eae: Backport of #5647: a cancelled prompt stops where it is, instead of failing over through every model candidate (#5548).
+  - **No failover walk after a cancel.** `AIPromptRunner`'s failover loop stops before each candidate once the caller's token is aborted, and after any attempt that fails while it is aborted. Real failures before the cancel are still recorded; a timeout still fails over. The runner's own abort error is classified as a cancellation (`canFailover: false`, `request_cancelled`), so it is no longer read as an unknown, failover-eligible error.
+  - **Logged once, recorded as cancelled.** One info line instead of an `[ERROR] [ModelExecution]` with a stack trace per candidate. The prompt run is saved `Cancelled` / `user_requested`, and the result carries `status: 'Cancelled'` and `cancelled: true`.
+  - **Agent runs end Cancelled.** `BaseAgent` checks the token before treating a failed prompt as a failure, and before counting a failed step toward the consecutive-failure limit. A final answer that had already finished when Stop landed still completes the run.
+  - **Failover fields persist.** A prompt run's failover fields were written while its `Running` INSERT could still be in flight, and the INSERT's reload reset them, so a run that failed over could be saved with `FailoverAttempts = 0`. They are now set again in the queued finalize update.
+  - **No leaked listener.** The prompt runner's race no longer leaves an abort listener on the caller's token after each call.
+  - **Bedrock streaming** iterated the response envelope instead of its body, so every streaming call failed with "stream is not async iterable".
+
+- Updated dependencies [4349a70]
+- Updated dependencies [4fe6b23]
+- Updated dependencies [ecb32fd]
+- Updated dependencies [3e25fab]
+- Updated dependencies [6901aaa]
+- Updated dependencies [c3ab75e]
+- Updated dependencies [75e94d7]
+- Updated dependencies [612f08e]
+- Updated dependencies [e26ad53]
+- Updated dependencies [05a3b17]
+- Updated dependencies [d4b1edf]
+- Updated dependencies [bd01671]
+- Updated dependencies [e9a5530]
+- Updated dependencies [3fa4b09]
+- Updated dependencies [f324af2]
+  - @memberjunction/core@5.51.4
+  - @memberjunction/core-entities@5.51.4
+  - @memberjunction/global@5.51.4
+  - @memberjunction/templates@5.51.4
+  - @memberjunction/ai-engine-base@5.51.4
+  - @memberjunction/ai-core-plus@5.51.4
+  - @memberjunction/aiengine@5.51.4
+  - @memberjunction/credentials@5.51.4
+  - @memberjunction/templates-base-types@5.51.4
+  - @memberjunction/ai@5.51.4
+
 ## 5.51.3
 
 ### Patch Changes

@@ -1,5 +1,31 @@
 # Change Log - @memberjunction/ai-gemini
 
+## 5.51.4
+
+### Patch Changes
+
+- 2e2bef5: `effortLevel` now controls how much Gemini and Vertex models think (#5171, and the Gemini part of #5530).
+
+  **Behavior change:** prompts, prompt-model rows and agents that already set an effort level on a Gemini model will start thinking at that level. Until now the value never reached Google, so every Gemini prompt ran at the model's default. A prompt at effort 10 on a model whose default is high becomes faster and cheaper and may answer worse; re-evaluate such prompts after upgrading. Prompts with no effort level are unchanged.
+  - **The thinking setting is sent with each request**, on streaming and non-streaming calls, for `GeminiLLM` and `VertexLLM`.
+  - **Gemini 3 and later**, and unversioned ids such as `gemini-flash-latest`, get `thinkingLevel`. Effort 1–33 is `LOW`, 34–66 `MEDIUM`, 67–100 `HIGH`, the same bands the OpenAI, Groq and Cerebras drivers use. A number never maps to `MINIMAL`, which several models reject (Gemini 3.8 Flash among them); a named effort (`minimal`, `low`, `medium`, `high`, and other vendors' `none` / `xhigh` / `max`) is sent as that level.
+  - **Gemini 2.5** gets `thinkingBudget`: 1024, 8192 or 24576 tokens by band, 512 for `minimal`. Earlier models and Gemma get no thinking setting, with a one-time warning when an effort is set.
+  - **A level the model rejects does not fail the request.** On a 400 the request is sent once more: a rejected `MINIMAL` with `LOW` (Gemini 3.8 Flash accepts only low, medium and high), any other setting without one. If that succeeds, the replacement is used for that setting on that driver and model for the rest of the process, with a one-time warning; other levels are still sent as asked.
+  - **Thought summaries are requested** whenever a thinking setting is sent, and every thought part is kept (non-streaming kept only the first).
+  - **Thinking tokens count as completion tokens.** Google bills `thoughtsTokenCount` as output, but it was left out of `ModelUsage.completionTokens`, so reported tokens and cost for thinking Gemini models were too low and now rise to match the bill.
+
+- 9a284cd: The Gemini provider (and Vertex, which inherits it) stops sending `temperature`, `topP` and `topK` to the models that no longer honor them. Google has announced that upcoming Gemini models return 400 INVALID_ARGUMENT for these fields.
+  - **Sampling fields stop at Gemini 3.6.** Models before 3.6 still honor `temperature`, `topP` and `topK`, so they keep them unchanged, including the 0.5 `temperature` default. Gemini 3.6+ and Gemini ids with no version (such as `gemini-flash-latest`) get none of the three. A caller-supplied value is dropped for those models with one console warning per model and field per process. Google has ignored these values since Gemini 3.6 Flash, so output from those models does not change. The cutoff is read from the version in the model id, so a newly released model needs no code change. Non-Gemini models served by these drivers (Gemma on Vertex) are unaffected.
+  - **`topP` / `topK` now reach models before 3.6.** They were sent as `top_p` / `top_k`, which `@google/genai` silently drops, so they never took effect. They are now sent as `topP` / `topK`.
+  - **An explicit `temperature: 0` is sent as 0.** `params.temperature || 0.5` turned it into 0.5.
+  - **Removed the thinking configuration, which has not reached Google since November 2025.** The provider built a `thinkingConfig` (`thinkingBudget` on Gemini 2.5, `thinkingLevel` on Gemini 3) and set it on the chat session. `@google/genai` replaces the session config with the per-request config whenever a request passes one, and since November 2025 this provider always passes one, so the thinking config was not sent. Since then Gemini has run at each model's default thinking. `effortLevel` was mapped only after that point, so it has never had an effect. This change removes that code, the private `getThinkingBudget` and `supportsThinking` methods, and the `-3` through `-7` model-name check. What goes out on the wire does not change. Making `effortLevel` work on Gemini is separate follow-up work.
+
+- Updated dependencies [612f08e]
+- Updated dependencies [05a3b17]
+- Updated dependencies [3fa4b09]
+  - @memberjunction/global@5.51.4
+  - @memberjunction/ai@5.51.4
+
 ## 5.51.3
 
 ### Patch Changes

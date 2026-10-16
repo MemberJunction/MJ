@@ -1,5 +1,37 @@
 # @memberjunction/conversations-runtime
 
+## 5.51.4
+
+### Patch Changes
+
+- aaf1fba: Use lts/5 method names (`preload`, `initialize`, `parseMentions`) in code and tests that the #4943 and #5549 backports carried over from next, which renamed them to PascalCase. Fixes the lts/5 build of ng-explorer-core.
+- 2ed739c: `MentionParser` parses a chat message in linear time. Two of its patterns backtracked quadratically on crafted input (CodeQL `js/polynomial-redos` #228 and #231): a message with 80,000 `!` in a mention name, or 60,000 unclosed `@{`, took about 2.5 s to parse.
+  - **JSON mentions** match `@\{[^{}]+\}` instead of `@\{[^}]+\}`, so a match can no longer start at one `@{` and run on through later ones. This also fixes a real miss: an unclosed `@{` earlier in a message no longer swallows a valid JSON mention after it.
+  - **Agent names** lose their trailing punctuation through a loop from the end instead of `/[.,;!?]+$/`, with the same result.
+
+  A JSON mention whose name contains `{` no longer matches. One containing `}` already didn't.
+
+- Updated dependencies [4349a70]
+- Updated dependencies [4fe6b23]
+- Updated dependencies [ecb32fd]
+- Updated dependencies [3e25fab]
+- Updated dependencies [6901aaa]
+- Updated dependencies [c3ab75e]
+- Updated dependencies [75e94d7]
+- Updated dependencies [612f08e]
+- Updated dependencies [05a3b17]
+- Updated dependencies [bd01671]
+- Updated dependencies [e9a5530]
+- Updated dependencies [3fa4b09]
+- Updated dependencies [f324af2]
+  - @memberjunction/core@5.51.4
+  - @memberjunction/core-entities@5.51.4
+  - @memberjunction/graphql-dataprovider@5.51.4
+  - @memberjunction/global@5.51.4
+  - @memberjunction/ai-agent-client@5.51.4
+  - @memberjunction/ai-engine-base@5.51.4
+  - @memberjunction/ai-core-plus@5.51.4
+
 ## 5.51.3
 
 ### Patch Changes

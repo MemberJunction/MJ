@@ -1,5 +1,82 @@
 # @memberjunction/ai-agents
 
+## 5.51.4
+
+### Patch Changes
+
+- 9d60dfc: An agent's conversation response no longer stays "In-Progress" after the run finishes.
+
+  `AgentRunner.RunAgentInConversation` saves each progress message to the agent-response conversation detail, then writes the final status when the run ends. It waited for in-flight progress saves with `EnsureSaveComplete()`, which resolves on the entity's `save` event — and `BaseEntity` raises that event before the save finishes committing. A progress save still committing when the run ended was therefore in flight when the final update called `Save()`, and `BaseEntity.Save()` hands a concurrent caller the in-flight save's promise, so the final `Status`/`Message` were never written: the detail kept `Status: 'In-Progress'` and the last progress message. Progress saves now run one at a time on a promise chain that the final update awaits before saving; a failed progress save is logged and does not break the chain.
+
+- ecb32fd: Duplicate detection no longer accumulates the whole run in memory, so whole-entity runs can finish.
+
+  `GetDuplicateRecords` batches its work 500 records at a time, but accumulated its **results** for
+  the entire run — O(records), not O(batch). On a 61,671-record entity that alone exhausted an 8 GB
+  heap and the process died mid-run, so whole-entity detection could not complete at all. Three
+  consecutive attempts on one tenant each ended in `FATAL ERROR: Reached heap limit`, while a full
+  re-embed over the same records succeeded every time — the cost was in the detection path, not the
+  vectorization.
+
+  Retaining every result was never load-bearing: `ProcessBatch` already persists each one as
+  `Duplicate Run Detail` / `Duplicate Run Detail Match` rows as it goes, so the array was a second
+  copy of durable data, kept only to feed the post-pass auto-merge and a single `.length` read.
+
+  Retention is now capped at 1,000 results. Auto-merge carries only candidates that can actually
+  merge — a small fraction by definition, since they must clear the absolute threshold — and still
+  runs **once, after the full pass**, so detection continues to see the pre-merge dataset exactly as
+  before.
+
+  `PotentialDuplicateResponse` gains two optional fields: `TotalRecordsWithDuplicates` (never capped,
+  correct at any scale) and `ResultsTruncated`. Small runs are unaffected — under the cap the
+  response is identical to before.
+
+- a907eae: Backport of #5647: a cancelled prompt stops where it is, instead of failing over through every model candidate (#5548).
+  - **No failover walk after a cancel.** `AIPromptRunner`'s failover loop stops before each candidate once the caller's token is aborted, and after any attempt that fails while it is aborted. Real failures before the cancel are still recorded; a timeout still fails over. The runner's own abort error is classified as a cancellation (`canFailover: false`, `request_cancelled`), so it is no longer read as an unknown, failover-eligible error.
+  - **Logged once, recorded as cancelled.** One info line instead of an `[ERROR] [ModelExecution]` with a stack trace per candidate. The prompt run is saved `Cancelled` / `user_requested`, and the result carries `status: 'Cancelled'` and `cancelled: true`.
+  - **Agent runs end Cancelled.** `BaseAgent` checks the token before treating a failed prompt as a failure, and before counting a failed step toward the consecutive-failure limit. A final answer that had already finished when Stop landed still completes the run.
+  - **Failover fields persist.** A prompt run's failover fields were written while its `Running` INSERT could still be in flight, and the INSERT's reload reset them, so a run that failed over could be saved with `FailoverAttempts = 0`. They are now set again in the queued finalize update.
+  - **No leaked listener.** The prompt runner's race no longer leaves an abort listener on the caller's token after each call.
+  - **Bedrock streaming** iterated the response envelope instead of its body, so every streaming call failed with "stream is not async iterable".
+
+- f761180: Security (C3): the realtime relay no longer takes authority from a session's `Config` JSON, which the session owner can edit through the generic entity API. `ExecuteRealtimeSessionTool` re-checks `CanRun` on the session's target agent for the caller on every call. The co-agent, prompt, step and paused run ids in `Config` are used only when they are records of the session at the time of use (new `SessionRunIDVerifier`, which reads the database on every use and keeps no result), on the relay, prompt-run mirror, close and remote-browser goal paths. `BaseAgent` rejects a `lastRunId` that is not a UUID before it reaches a filter.
+- Updated dependencies [4349a70]
+- Updated dependencies [4fe6b23]
+- Updated dependencies [ecb32fd]
+- Updated dependencies [bba4ddc]
+- Updated dependencies [ecb32fd]
+- Updated dependencies [f666326]
+- Updated dependencies [3e25fab]
+- Updated dependencies [a907eae]
+- Updated dependencies [6901aaa]
+- Updated dependencies [c3ab75e]
+- Updated dependencies [75e94d7]
+- Updated dependencies [612f08e]
+- Updated dependencies [e26ad53]
+- Updated dependencies [d120f2e]
+- Updated dependencies [05a3b17]
+- Updated dependencies [d4b1edf]
+- Updated dependencies [bd01671]
+- Updated dependencies [e9a5530]
+- Updated dependencies [3fa4b09]
+- Updated dependencies [f324af2]
+  - @memberjunction/core@5.51.4
+  - @memberjunction/core-entities@5.51.4
+  - @memberjunction/ai-vector-dupe@5.51.4
+  - @memberjunction/ai-vector-sync@5.51.4
+  - @memberjunction/ai-prompts@5.51.4
+  - @memberjunction/global@5.51.4
+  - @memberjunction/templates@5.51.4
+  - @memberjunction/actions@5.51.4
+  - @memberjunction/ai-engine-base@5.51.4
+  - @memberjunction/ai-core-plus@5.51.4
+  - @memberjunction/aiengine@5.51.4
+  - @memberjunction/ai-reranker@5.51.4
+  - @memberjunction/actions-base@5.51.4
+  - @memberjunction/storage@5.51.4
+  - @memberjunction/search-engine@5.51.4
+  - @memberjunction/ai@5.51.4
+  - @memberjunction/context-crush@5.51.4
+
 ## 5.51.3
 
 ### Patch Changes

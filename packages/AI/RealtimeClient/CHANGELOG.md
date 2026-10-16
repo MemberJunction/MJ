@@ -1,5 +1,16 @@
 # @memberjunction/ai-realtime-client
 
+## 5.51.4
+
+### Patch Changes
+
+- 5326958: Backport #5155: include PCM provider agent audio in realtime recordings, release recorder setup resources when stopped, and retain microphone capture when agent audio cannot be mixed.
+- Updated dependencies [612f08e]
+- Updated dependencies [05a3b17]
+- Updated dependencies [3fa4b09]
+  - @memberjunction/global@5.51.4
+  - @memberjunction/ai@5.51.4
+
 ## 5.51.3
 
 ### Patch Changes

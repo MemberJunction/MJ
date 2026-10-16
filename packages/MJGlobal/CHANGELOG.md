@@ -1,5 +1,43 @@
 # Change Log - @memberjunction/global
 
+## 5.51.4
+
+### Patch Changes
+
+- 612f08e: Harden `SafeExpressionEvaluator` against a sandbox escape (hand-port of the evaluator fix from #3542).
+
+  **`SafeExpressionEvaluator` sandbox escape closed.** The previous defense was a textual denylist,
+  which a split-token expression walked straight through:
+  `[]["cons"+"tructor"]["cons"+"tructor"]("return process.pid")()` spells none of the banned words yet
+  climbs `[].constructor.constructor` to the `Function` constructor and reaches `process` — a
+  confirmed arbitrary-code route from any metadata-authored expression (field rules, flow/loop agent
+  conditions). Validation is now a **structural AST allowlist**: the expression is parsed and every
+  node checked before compilation, rejecting computed member access whose key is not a literal (the
+  concatenation route), `.constructor`/`__proto__`/`prototype` access, any call outside the
+  safe-method and safe-global lists, and host-global identifiers. Because the check is structural it
+  cannot be defeated by string assembly, and it also stops the denylist's over-rejection of legitimate
+  data — `name == 'constructor'` and a field named `window` are now valid again.
+
+  **The expression grammar NARROWED, and callers should read this list.** The old denylist enforced
+  almost nothing, so the accepted surface was in practice "whatever `new Function` compiles". The
+  structural allowlist accepts what the evaluator's contract always documented — comparisons, logical
+  ops, dotted/indexed access, the `SAFE_METHODS` list, arrow-function array callbacks, `typeof` — plus
+  optional chaining (`payload?.customer?.tier`) and the safe globals below. **Now refused**, where the
+  denylist let them through: `in` / `instanceof`, regex literals (`/x/.test(y)`), and string/array
+  methods outside `SAFE_METHODS` (`.split()`, `.replace()`, `.slice()`, `.substring()`, `.match()`,
+  `.join()`). No metadata shipped in this repo uses any of them; installations authoring their own
+  expressions (field rules, flow/loop agent conditions) should audit the columns that store them
+  before upgrading.
+
+  **Ambient globals stay callable.** `SAFE_EXPRESSION_GLOBALS` (newly exported) — `Math`, `Number`,
+  `String`, `Boolean`, `Array`, `Object`, `JSON`, `Date`, `parseInt`, `parseFloat`, `isNaN`,
+  `isFinite` — may be called as namespace methods (`Math.abs(...)`, `Object.keys(...)`,
+  `JSON.stringify(...)`, `Array.isArray(...)`, `Date.now()`) or as bare functions (`Number(...)`,
+  `parseInt(...)`, `isNaN(...)`).
+
+- 05a3b17: Security: the SQL screens now read quotes, identifiers and comments the way the database does. A new dialect-aware scanner, `ScanSQLForScreening` in `@memberjunction/global`, replaces the regex behind `StripSQLStringLiterals`. It understands T-SQL `[…]` identifiers, double-quoted identifiers, `''` escapes, PostgreSQL `E'…'` and dollar-quoted strings, and `--` and nested block comments. It rejects text it cannot classify, such as an unterminated literal. Before this change, a quote inside a bracket identifier, a comment, or a PostgreSQL string opened a literal the database never saw, so `ValidateUserProvidedSQLClause` and `SQLExpressionValidator` accepted a stacked statement hidden behind it. Providers now pass their dialect to the clause, aggregate and ad-hoc query screens. `SQLValidationOptions.Dialect` and the optional `dialect` argument of the new `ValidateFullQuery` (`validateFullQuery` stays as a deprecated alias) and of `StripSQLStringLiterals` let other callers do the same. Without a dialect, SQL must pass under both SQL Server and PostgreSQL rules. A RunView user search term is screened as the quote-doubled text that the search SQL splices, so a term such as `O'Leary` is still accepted. A full query must open with the unquoted keyword `SELECT` or `WITH`, compared in ASCII. The GetData resolver screens exactly the text it runs: it trims the query, and it no longer screens a copy in which literal `\n`, `\r` and `\t` sequences are rewritten. A query that passed only because of that rewriting, such as one whose first real line follows a `--` comment ending in a literal `\n`, is now refused.
+- 3fa4b09: Security hardening across the data layer: escape/validate composite-key values before SQL interpolation, enforce CanRead on subquery/ad-hoc query entity targets, SELECT-only validation on GetData, bracket-safe SQL Server identifier quoting, and JSON-safe codegen description emission.
+
 ## 5.51.3
 
 ### Patch Changes

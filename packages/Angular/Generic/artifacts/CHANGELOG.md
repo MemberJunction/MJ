@@ -1,5 +1,45 @@
 # @memberjunction/ng-artifacts
 
+## 5.51.4
+
+### Patch Changes
+
+- 80ea6b8: ArtifactsModule no longer preloads React, ReactDOM and Babel from unpkg when it is constructed, so apps that only import a realtime overlay (e.g. a public voice widget) make no third-party CDN requests at bootstrap. MJ Explorer keeps the warm cache by calling AngularAdapterService.Preload() after login. Other hosts that render interactive component artifacts and want a warm cache can call `inject(AngularAdapterService).Preload()` (from `@memberjunction/ng-react`) after authentication; otherwise the runtime loads on first use.
+- aaf1fba: Use lts/5 method names (`preload`, `initialize`, `parseMentions`) in code and tests that the #4943 and #5549 backports carried over from next, which renamed them to PascalCase. Fixes the lts/5 build of ng-explorer-core.
+- e26ad53: Security (#4253, remaining pieces): the JSON artifact viewer's HTML iframe no longer gets `allow-same-origin`. The Gmail provider strips CR/LF from header values. Nunjucks runs with `dev: false`, so render errors no longer carry stack traces. The rest of #4253 (the `CustomWhereClause` Owner gate, stored WhereClause screening, Conditional action hardening) already reached lts/5 through the C1, C8 and C9 ports.
+- Updated dependencies [4349a70]
+- Updated dependencies [4fe6b23]
+- Updated dependencies [ecb32fd]
+- Updated dependencies [45c4c05]
+- Updated dependencies [3e25fab]
+- Updated dependencies [6901aaa]
+- Updated dependencies [c3ab75e]
+- Updated dependencies [75e94d7]
+- Updated dependencies [612f08e]
+- Updated dependencies [05a3b17]
+- Updated dependencies [bd01671]
+- Updated dependencies [e9a5530]
+- Updated dependencies [3fa4b09]
+- Updated dependencies [f324af2]
+  - @memberjunction/core@5.51.4
+  - @memberjunction/core-entities@5.51.4
+  - @memberjunction/ng-markdown@5.51.4
+  - @memberjunction/graphql-dataprovider@5.51.4
+  - @memberjunction/global@5.51.4
+  - @memberjunction/ng-base-forms@5.51.4
+  - @memberjunction/ng-base-types@5.51.4
+  - @memberjunction/ng-code-editor@5.51.4
+  - @memberjunction/ng-media-player@5.51.4
+  - @memberjunction/ng-notifications@5.51.4
+  - @memberjunction/ng-query-viewer@5.51.4
+  - @memberjunction/ng-react@5.51.4
+  - @memberjunction/ng-shared-generic@5.51.4
+  - @memberjunction/ng-trees@5.51.4
+  - @memberjunction/interactive-component-types@5.51.4
+  - @memberjunction/ng-export-service@5.51.4
+  - @memberjunction/ng-pagination@5.51.4
+  - @memberjunction/ng-ui-components@5.51.4
+
 ## 5.51.3
 
 ### Patch Changes

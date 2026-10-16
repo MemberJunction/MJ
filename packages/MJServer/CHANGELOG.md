@@ -1,5 +1,238 @@
 # Change Log - @memberjunction/server
 
+## 5.51.4
+
+### Patch Changes
+
+- 4349a70: Cache-invalidation events no longer carry row data unless the deployment opts in, and the consumers that needed that row now re-read it through an access-controlled path.
+
+  The `cacheInvalidation` subscription is delivered to every connected client with no per-user filter, and both publish sites attached the full row (`JSON.stringify(entity.GetAll())`) to every save. Row-level security and any consumer-side scoping apply on the read path, which a push bypasses — so every signed-in session received the contents of rows it had no right to read.
+
+  **Server.** `recordData` is populated only for entities named in the new `cacheSettings.recordDataBroadcastEntities`, default `[]`. `['*']` restores the previous behaviour wholesale. `EntityName` and `PrimaryKeyValues` still broadcast unconditionally — they disclose nothing a client cannot already derive, and they are what tells a consumer _which_ record changed.
+
+  **Core.** New `ResolveEntityEventRow(event, provider?, contextUser?)` and `ResolveEntityEventKey(event)`. The first returns the row from the live entity (local events), from `recordData` (allowlisted entities), or by re-reading that one record by primary key through the provider — as the signed-in user, so the server decides what comes back. A session that may not read the record gets `null` rather than an exception or someone else's data. The second reads identity from the primary key, which is always present.
+
+  **Consumers.** `ConversationEngine` hydrates once in its already-async event dispatcher and passes the row to its five handlers, which stay synchronous; identity now comes from the primary key, so a conversation delete and a project delete need no row at all. The dispatcher asks `EntityEventRowIsFree(event)` first — a row that is already in hand, from the live entity or from allowlisted `recordData`, is never worth skipping, and the per-entity skips below it are about avoiding THE READ. The AI Agent Run form resolves `Status` the same way, behind its id match; `AgentRunID` on a step cannot be gated that way (it is the foreign key being matched), so while that form is open on a Running agent every step save in the deployment costs it one keyed read, bounded by the run's lifetime. The Form Builder cockpit resolves `Name` only after its id match has already missed. A conversation whose re-read comes back null — refused, gone, or failed — is left as it was rather than handed to `SetMany`, and a remote delete on the detail path no longer re-reads a row that is guaranteed gone.
+
+  **Cost, stated plainly for whoever sets the allowlist.** `BaseEngine` is unchanged in code and is the broadest behavioural change here: it applies a remote save in place only when `recordData` is present, so with the default `[]` every remote save of an `AutoRefresh` entity falls through to a full `RunView` reload of each matching config (`LoadSingleConfig(..., bypassCache=true)`), not a keyed read. Remote deletes still apply in place from the primary key. Engine-cached reference entities that every signed-in user may read are the ones worth listing.
+
+  Without the consumer half, defaulting `recordDataBroadcastEntities` to `[]` would have made `ConversationEngine`'s remote handling a silent no-op — including the eviction whose own comment warns that a warm cache "would keep serving without this row forever".
+
+- ef7738f: The `cacheInvalidation` subscription no longer tells a subscriber the key of a record they could not read. A session whose every read of an entity goes through a row-level security filter now receives the entity, the action and the time only, with no key and no row data, which the client already treats as a whole-entity invalidation; a session with an unfiltered read keeps the key, as before. The entity-level filter is unchanged (#5241).
+- 4fe6b23: `BaseEntityResult.CompleteMessage` now renders a `ValidationErrorInfo` as its prose instead of as a JSON blob.
+
+  The getter mapped its `Errors` array with `err.message || JSON.stringify(err)` — **lowercase** `message` — while MJ's own `ValidationErrorInfo` carries **`Message`**. Every validation error therefore fell through to the JSON fallback, and `CompleteMessage` is what the server hands the client on a failed save (`ResolverBase`'s write-refusal throws put it in the `GraphQLError`; `SaveEntityGraphOperation` puts it in `ErrorMessage`). So a carefully-worded refusal written in a subclass's `ValidateAsync()` — or MJ core's own `EntityField.Validate()` — reached the user as `{"Source":"Name","Message":"Name cannot be longer than 50 characters…","Value":"…the entire rejected value…","Type":"Failure"}`.
+
+  Both readers are fixed through one shared helper, `BaseEntityResult.ErrorText()` (`Message` → `message` → JSON): the `Errors` array and the single `Error` property, which carried the same lowercase-only assumption. The JSON fallback is kept for a shape with neither field, so nothing that used to say something now says nothing.
+
+  A second, independent half of the same user-visible failure is fixed alongside it: only `ResolverBase.CreateRecord` read `CompleteMessage`. `UpdateRecord` and `DeleteRecord` read the bare `Message`, which a validation refusal leaves `null` — so the `?? 'Unknown error'` fallback fired and the reason was discarded entirely. The same rule on the same entity therefore explained itself on a create and said "Unknown error" on an update. Both now read `CompleteMessage`, which is a strict superset of `Message` and still yields `undefined` when there is nothing to say, so the fallback still fires rather than showing a blank error.
+
+- 5f9df91: Security: auto-provisioned users no longer get the `Developer` role by default (#4260)
+
+  `DEFAULT_SERVER_CONFIG.userHandling.newUserRoles` shipped as `['UI', 'Developer']`. On the baseline seed the `Developer` role holds unfiltered `CanUpdate` on 439 of the database's 446 entities, `MJ: Users` among them — where `AllowUpdateAPI` is true and both `Type` and `Name` are updatable fields, with no row-level filter scoping the grant to the caller's own row.
+
+  Every gate in the chain passed: the config default assigned the role, `EntityPermission` granted Update, the entity and field `AllowUpdateAPI` flags allowed it, `BaseEntity.CheckPermissions` passed, and CodeGen had already issued `GRANT EXECUTE ON __mj.spUpdateUser TO cdp_Developer`. So anyone who obtained an account through JWT auto-provisioning or a magic-link redeem could write **any** row of `MJ: Users`, including setting their own `Type` to `'Owner'` — the column MJ's superuser checks read. That is privilege escalation from "can obtain a token from the configured IdP" to "platform Owner".
+
+  This mattered on more than a bare install. `loadConfig()` deep-merges via `mergeConfigs`, so a host writing a _partial_ `userHandling` block inherited this array — the Zod `.default([])` never fired, because the key was never absent after the merge. The shipped default was the effective posture of every deployment that did not name `newUserRoles` explicitly.
+
+  **The default is now `['UI']`**, the seeded end-user role: conversations, views, dashboards, artifacts, settings — and no write on `MJ: Users`. The same correction is applied to the `README` example and the in-repo `MJCLI` reference config, both of which are copied into real deployments.
+
+  **Upgrade impact.** No migration, and no change for a host that sets `newUserRoles` explicitly. If you relied on the default to give new users developer-level access, set it yourself:
+
+  ```js
+  userHandling: {
+    newUserRoles: ["UI", "Developer"];
+  }
+  ```
+
+  Do that only where you're comfortable granting every such identity broad data-plane write across ~439 entities — the guard described below stops it from making them a platform Owner, but the underlying `Developer`/`Integration` update grant is otherwise unfiltered.
+
+  **Re-adding `Developer` is no longer an escalation risk, but is still inadvisable.** It does not reopen the `MJ: Users` privilege escalation described above: `@memberjunction/core-entities-server` ships a server-side guard on `MJ: Users` in this same release (see the `user-elevation-guard` changeset) that refuses privilege-elevating writes — create, delete, and changing `Type`, `Name`, or another user's row — for **any** caller whose `Type` is not `'Owner'`. That guard is role-blind: it holds whatever `newUserRoles` names, `Developer` and `Integration` included, and for custom roles this changeset never anticipated.
+
+  What it does still hand out is broad data-plane access. `Developer` and `Integration` hold unfiltered `CanUpdate` on 439 of the database's 446 entities. That grant is unchanged here — narrowing it is a behavioural change for existing hosts, needs its own migration, and is tracked separately. It is the real reason not to give either role to every auto-provisioned user.
+
+- a959528: security: refuse ad-hoc SQL for scope-limited sessions, and escape the filters `ResolverBase` builds itself
+
+  **Ad-hoc SQL (`AdhocQueryResolver.ExecuteAdhocQuery`).** The resolver runs a raw `SELECT` on the read-only pool — it does not go through `RunView`, entity permissions, or row-level security, so the per-session confinement a magic-link principal relies on (expressed as `{{ScopeResourceID}}` / `{{ScopeResourceType}}` RLS tokens substituted on the entity-read path) does not exist on this path at all. An anonymous magic-link guest or a resource-scoped magic-link session could therefore read the whole database outside its granted scope. Those principals are now refused before a data source is acquired, via a new `IsScopeLimitedPrincipal` predicate exported from `@memberjunction/server`. Ordinary authenticated users — the intended consumers, via `GraphQLDataProvider` — are unaffected.
+
+  **`ResolverBase` filter building.** `findBy` (reachable through `UserByEmail`, `FileByName`, `UserViewsByName` and the other by-value resolvers) and the inline view-name lookup in `RunViewByNameGeneric` interpolated client-supplied values into `ExtraFilter` without escaping. `ExtraFilter` is screened by `SQLExpressionValidator`, which blocks stacked statements, `UNION`, comments and `WAITFOR`, so the residual exposure was a same-clause boolean tautology rather than arbitrary SQL — now closed with `EscapeSQLString`. `findBy`'s unquoted slot (numeric and boolean fields, where there is no quote to escape and a string value would simply _be_ SQL) now rejects anything that is not a real number or boolean instead of interpolating it.
+
+- d120f2e: Security: the `RunAction` mutation now authorizes each action. Scope-limited sessions (magic-link and widget guests, resource-scoped links) are refused. An Owner may run any action. Any other user needs a role that holds an authorization linked to the action through `MJ: Action Authorizations`; an inactive or denied linked authorization grants nothing, even through its parent. The links, the authorizations and their role grants are all read from the request's provider. An action with no such link runs only when the class that runs it declares `BaseAction.AuthorizesCaller` itself (the Database Designer and interactive-form actions do); a subclass does not inherit the marker. The client can no longer switch off the action execution log (`SkipActionLog` is ignored).
+
+  `Calculate Expression` now evaluates with a number-only math parser (mathjs 15.2.0) and an allowlist of operators, functions and constants instead of `new Function`, and `Conditional` evaluates with `SafeExpressionEvaluator`. `Run Ad-hoc Query` applies the same checks as `ExecuteAdhocQuery`: it refuses scope-limited sessions, runs only on the read-only database login, and its SQL must pass `ExecuteAdhocQuery`'s table check and timeout limit. MJServer registers both with the action engine at startup (`ActionEngineServer.SetReadOnlyProviderFactory`, `SetAdhocSQLAuthorizer`). Each can be registered once, and a second registration throws. Without them the action refuses.
+
+- 05a3b17: Security: the SQL screens now read quotes, identifiers and comments the way the database does. A new dialect-aware scanner, `ScanSQLForScreening` in `@memberjunction/global`, replaces the regex behind `StripSQLStringLiterals`. It understands T-SQL `[…]` identifiers, double-quoted identifiers, `''` escapes, PostgreSQL `E'…'` and dollar-quoted strings, and `--` and nested block comments. It rejects text it cannot classify, such as an unterminated literal. Before this change, a quote inside a bracket identifier, a comment, or a PostgreSQL string opened a literal the database never saw, so `ValidateUserProvidedSQLClause` and `SQLExpressionValidator` accepted a stacked statement hidden behind it. Providers now pass their dialect to the clause, aggregate and ad-hoc query screens. `SQLValidationOptions.Dialect` and the optional `dialect` argument of the new `ValidateFullQuery` (`validateFullQuery` stays as a deprecated alias) and of `StripSQLStringLiterals` let other callers do the same. Without a dialect, SQL must pass under both SQL Server and PostgreSQL rules. A RunView user search term is screened as the quote-doubled text that the search SQL splices, so a term such as `O'Leary` is still accepted. A full query must open with the unquoted keyword `SELECT` or `WITH`, compared in ASCII. The GetData resolver screens exactly the text it runs: it trims the query, and it no longer screens a copy in which literal `\n`, `\r` and `\t` sequences are rewritten. A query that passed only because of that rewriting, such as one whose first real line follows a `--` comment ending in a literal `\n`, is now refused.
+- d4b1edf: Security (C2): sandbox template rendering, and authorize on-demand template runs.
+  - **Sandboxed templates.** `HardenNunjucksRuntime()` (new export of `@memberjunction/templates`) guards the nunjucks parser, code generator, runtime and environment lookups that every nunjucks environment in the process shares, including templates loaded through `include` and `import`. The template engine applies it when it loads and checks it before each render. A template that breaks one of the rules below fails with `TemplateSandboxError`.
+    - **Before a template compiles**, `AssertTemplateTreeIsSafe()` (new export) checks its parse tree, because the nunjucks compiler copies template-controlled names into the code it generates. Variable, filter, loop, `set`, macro, import and block names must be plain names (letters, combining marks, digits, connector characters such as `_`, and `$`; filter names can contain dots). A test name, and an extension's registered name and method, must not contain a quote, a backslash or a line break, so `is none` and `is not none` still work. A name that every object inherits (such as `toString` or `constructor`), or `prototype`, must not be used as a dictionary key, a keyword argument, a macro or call-block argument, a `set`, loop, import, macro or block name, or a filter or test name; the code generator also refuses it as a dictionary key or keyword argument. Member reads such as `value.toLocaleString()` are not in this rule; they go through the render-time member check. A called member's name must not contain a backslash or a line break. A loop variable must not reuse an identifier that the generated loop code uses (`context`, `frame`, `runtime`, `env`, `cb`, `next`, `tasks`, `undefined`, ...); a unit test checks this list against the code nunjucks 3.2.4 generates for every kind of loop body, including loops inside macros and blocks. A parse tree may hold only nunjucks nodes, plain values and regular expression literals.
+    - **While a template renders**, it can no longer reach `Function` (for example `{{ range.constructor("...")() }}`), `eval`, `Object`, `Reflect`, `globalThis` or `process`, and it can no longer read a member of the render context, an environment, a loader, a frame, a template or a nunjucks module, or get one of them from a lookup or a call. It could use those to run code on the server, or to change the shared environment for later renders. A filter, test or global resolves only to a name the environment registered itself, never to a member that every object inherits; this also covers test names that `select` and `reject` receive while the template renders, which must be text, a number or another simple value, not an object, a function or a symbol. The member names `constructor`, `prototype` and the `__define/lookup Getter/Setter__` accessors read as empty unless they hold an object's own data that is not a function, and `__proto__` always reads as empty, whether the member name is literal or computed while rendering. A bare name resolves only to a template variable, an own key of the render data, or an own environment global, never to an inherited property. A macro or call-block argument that a call leaves out is filled only from a keyword argument of that name that the call itself passes, never from an inherited member, so otherwise it reads as empty; keyword arguments written at a call site must be a plain object literal with ordinary names, and keyword arguments passed as a value are read through a copy of their own keys.
+  - **Authorized template runs.** The `RunTemplate` mutation and the `Template.Run` remote operation now refuse scope-limited sessions (anonymous magic-link and widget guests, resource-scoped magic-link sessions) and callers without read permission on `MJ: Templates` and `MJ: Template Contents`, before they load anything. The rule is the new `GetTemplateRunRefusal()` export.
+
+- f761180: Security (C3): the realtime relay no longer takes authority from a session's `Config` JSON, which the session owner can edit through the generic entity API. `ExecuteRealtimeSessionTool` re-checks `CanRun` on the session's target agent for the caller on every call. The co-agent, prompt, step and paused run ids in `Config` are used only when they are records of the session at the time of use (new `SessionRunIDVerifier`, which reads the database on every use and keeps no result), on the relay, prompt-run mirror, close and remote-browser goal paths. `BaseAgent` rejects a `lastRunId` that is not a UUID before it reaches a filter.
+- 6140c8f: Close stacked-SQL injection through RunView `Aggregates[].expression`. The provider no longer runs a caller's aggregate text. Each expression must be a single aggregate function call over the entity's columns, and the query runs the SQL that the new `CheckAggregateExpression` (in `@memberjunction/sql-parser`) rebuilds from the checked parse tree, with the dialect's quoting. Any other expression returns a per-aggregate error, and the rows and the other aggregates still load. Some expressions that used to run are now refused: arithmetic or functions around the aggregate call (`SUM(x) + 1`, `ROUND(AVG(x), 2)`, `SUM(x) / COUNT(*)`), `CONVERT` (use `CAST`), window clauses, PostgreSQL `FILTER (WHERE …)` and `EXTRACT`, a backslash inside a quoted string or identifier, and `COUNT_BIG(*)` and `TRY_CAST`, which the parser cannot read. The GraphQL boundary screen that guards ExtraFilter and OrderBy now also screens aggregate expressions. `SQLParser.HasStackedStatements` now reads tokens with the dialect's lexer, so a statement separator after a PostgreSQL `E'…'` string is no longer missed. A column reference in an aggregate resolves by `IdentifierMatches` (new in `@memberjunction/sql-dialect`): a reference that rule does not match to a column is refused, even where the database would resolve it (a look-alike letter such as U+212A KELVIN SIGN never stands in for `k`), and on an entity whose columns differ only by case a reference that is not the exact spelling of one of them is refused. A `LIKE … ESCAPE` clause is refused rather than dropped, a parenthesized `NOT (…)` keeps its grouping in the rebuilt SQL, and the lexer reads a PostgreSQL dollar-quote tag that contains non-ASCII letters.
+- bd01671: Record-name lookups (`GetEntityRecordName` / `GetEntityRecordNames`) now bind primary-key values as SQL parameters, accept only the entity's primary-key fields as key names, and apply the acting user's read row filter (role RLS and API-key row filters). The GraphQL resolver no longer looks a name up without an acting user. The protected `DatabaseProviderBase.BuildEntityRecordNameSQL` now takes the acting user and returns the SQL together with its parameter values.
+- e9a5530: Security: dataset reads no longer run caller SQL or ignore the caller's permissions. The `GetDatasetByName` and `GetDatasetStatusByName` GraphQL queries now screen every `ItemFilters[].Filter` with the same AST screen as a RunView `ExtraFilter` (one statement, read-only, subqueries only over entity base views the caller can read) and pass the session user to the provider; `GetMultipleDatasetStatusByName` passes it too. With a context user, `GenericDatabaseProvider` now requires read permission on each dataset item's entity, applies the user's read row filter to the item query and its status query, and keys the item's cache slot by that filter. A client filter that fails the provider denylist refuses its item. `MJ_Metadata` stays loadable by every authenticated principal. Dataset rows returned over GraphQL get the same encrypted-field API policy as other read paths. On lts/5, `BaseEngine` reads its datasets without a context user on every load, so a shared engine is never narrowed to the permissions of the user whose request refreshed it.
+- d59ca3f: Data Context Items of type `sql` no longer run caller-written SQL unchecked (security C7).
+  - **`GetDataContextData` / `GetDataContextItemData`.** A data context's SQL items now run only for its owner or an administrator (Owner-type user), never for a scope-limited (magic-link) session, and only on the read-only provider. The read-write pool is never used for them. Before it runs, each item's SQL must pass the checks `ExecuteAdhocQuery` applies: a single read statement (`RenderPipeline` with `RequireReadStatement`) whose every table is an entity base view the caller may read in full. Both queries reject an ID that is not a UUID, and items now load for the calling user.
+  - **Per-item results.** A SQL item that may not run is refused on its own. `GetDataContextData` still loads the other items and returns one entry per item, in item order, in `Results` (the data, or null) and `ErrorMessages` (null, or the reason). `Success` is true, and `ErrorMessages` null, only when every item loaded, so a client that treats `Success: false` as an error still sees one.
+  - **`DataContextItemServer.LoadFromSQL`** runs the item's SQL through the data source's `RunQuery({ SQL })` ad-hoc path for the context user. It refuses a raw connection pool, a missing context user, and an item with no SQL. `mssql` is no longer used.
+  - **`MJ: Data Context Items`.** A new server entity class, `MJDataContextItemEntityServer`, lets only an Owner-type user save an item that is a SQL item or holds SQL text: create it, change any of its fields, or move it. It reads the item's values, not which fields changed. It applies the same rule to `ReplayOnly` saves, which skip `Validate()`.
+  - **`UpdateMJDataContextItem` always loads the stored row.** `ResolverBase.UpdateRecord` now always loads the stored row for `MJ: Data Context Items`, as it already does for entities that track record changes. Client-supplied `OldValues___` can no longer decide the item's starting state, so a client cannot hide a SQL item by repeating its new values as old ones or by leaving `Type` and `SQL` out.
+
+  Upgrade note:
+  - Deployments without a read-only database login (`dbReadOnlyUsername` / `dbReadOnlyPassword`) can no longer run SQL data context items. The other items of a data context still load.
+  - Existing SQL items are refused when a non-owner loads them, when their SQL is not a single read over entity base views, or when the ad-hoc path's keyword check refuses it (for example a `REPLACE(` call, which `ExecuteAdhocQuery` already refuses). `GetDataContextItemData` also no longer returns a refused SQL item's cached data.
+  - Users who are not Owner-type can no longer edit any field of a SQL item, including its cached data. They can still delete it, or turn it into another type by removing its SQL.
+
+- 714400d: Security: client SQL fragments reach RunView only through the base-view clause screen. The screen moves from MJServer's `ResolverBase` into `@memberjunction/generic-database-provider` as `ClientClauseScreen`, and the provider exposes it as `ScreenClientClause`. It now also guards `RunViewsWithCacheCheck` (which also gets the `view:batch` API-key scope check), every ad-hoc list source by default (client-supplied, from the list and audience actions, or rebuilt from a stored list snapshot), the REST view routes (which also refuse a `ViewEntity` that was not loaded as an entity), and a saved view's stored WhereClause and sort (on save, and again when the view runs). The screen refuses a subquery over an entity the acting user reads under a row filter (role row-level security), the queried entity included, because a subquery reads the base view without it; the ad-hoc SQL screen uses the same rule. Both screens read table references from a walk of the whole parse tree (subqueries in CASE branches, HAVING and window clauses included, and every FROM item even when an alias repeats), refuse SQL whose SELECT keywords the walk does not account for, refuse a table function in FROM unless it is an unqualified built-in that reads only its arguments, and skip only the parse wrapper's own FROM item. `SQLParser.IdentifierAliases` exposes the names a fallback parse renamed, so bracket-quoted CTE names still resolve. The fallback takes those names from a prefix the SQL does not contain and keeps each one a separate token, so every name in that map is one the parser renamed. `SQLParser.IsIdentifierAliasName` reports that name form, and both screens refuse client SQL that uses it. The ad-hoc SQL screen exempts a FROM item as a CTE reference only when it is unqualified (`dbo` counts as a schema), is in the scope of a WITH that declares the name (its own SELECT or an enclosing one; a CTE body sees the CTEs before it, itself on SQL Server, and every CTE of a PostgreSQL WITH RECURSIVE list), and matches by the dialect's identifier rules (case-insensitive on SQL Server; on PostgreSQL unquoted names fold to lower case and quoted names match exactly). The parse-tree walk takes time linear in the size of the parse tree, and the fallback renaming and the forbidden-function check take time linear in the size of the SQL. A schema-qualified table reference, `dbo` included, resolves only to an entity in that schema. Client clauses may no longer call the functions the dialect forbids in caller SQL (`CallerSQLForbiddenFunctions`), and that shared list now also covers `pg_sleep*` on PostgreSQL and `OPENXML` on SQL Server. Only an Owner-type user may create or change a view with `CustomWhereClause` enabled; such a view's WhereClause is the one stored clause the screen leaves out. On PostgreSQL the screen reads `[Name]` bracket identifiers as the PostgreSQL provider does. Every RunView caller also gets a bracket- and `E''`-aware check that refuses statement separators and comments in filter, sort and search fragments, and a view ID is spliced into SQL only when it is a GUID. A stacked statement hidden from the keyword denylist by a quote inside a bracket identifier no longer reaches the database on these paths.
+- adf661f: Security (C9): a client filter fragment must now be one balanced SQL expression, read the way the database reads it, so it cannot close the parentheses the server wraps it in and take server-side row filters out of force. Text the lexer cannot read with certainty is refused.
+  - **`IsBalancedSQLFragment` (sql-parser).** Reads a WHERE fragment with the dialect's lexer and refuses it when it closes a parenthesis it did not open, leaves one open, ends inside an unterminated string literal, quoted identifier or comment, contains `;`, or contains a comment (allowed only with the new `AllowComments` option, which the provider uses for admin-written custom view WhereClauses). On PostgreSQL it also refuses characters outside ASCII outside string literals and quoted identifiers, dollar-quoted strings and any other `$` outside a name, an escape string followed by another string literal, and a string placed directly after a name containing `@` or `#` (or a number ending in `e`).
+  - **`SplitTopLevelAndTerms` (sql-parser).** Splits a fragment at its top-level ANDs (not inside parentheses, CASE … END or a BETWEEN, and on PostgreSQL not inside a SQL Server-style `[…]` name), or returns `null` when it has a top-level OR.
+  - **`LexSQL` (sql-parser).** A `--` line comment now ends at a CR as well as an LF, as on SQL Server and PostgreSQL.
+  - **MJServer boundary screen.** `assertClientClauseUsesEntityBaseViews` checks the fragment on its own before its wrapped parse, so `1=1) OR (1=1` is refused for `ExtraFilter`, `OrderBy` and `OverrideExcludeFilter` on `RunDynamicView`, `RunViews`, `RunViewByID` and `RunViewByName`. It also refuses a backslash inside a quoted string or identifier, because the screen's parser reads `\'` inside a plain literal as an escaped quote where SQL Server and PostgreSQL do not.
+  - **Provider WHERE assembly.** `GenericDatabaseProvider` checks `ExtraFilter`, `OverrideExcludeFilter` and a stored view's rendered `WhereClause` with its own dialect before splicing them next to row-level security (which also carries guest scope), on every RunView path including the cache check in `RunViewsWithCacheCheck`. When the platform rewrite (`TransformExternalSQLClause`) changes an `ExtraFilter` made of top-level AND terms, the new `PrepareExtraFilterSQL` rewrites, checks and parenthesizes each term on its own, so a predicate a PreRunView hook ANDed on stays a separate term. New protected helpers: `AssertClauseBalanced`, `PrepareExtraFilterSQL`.
+  - **Multi-tenancy hook.** `createTenantPreRunViewHook` refuses a filter that fails the check and builds `(<ExtraFilter>) AND (<tenant predicate>)`, with the tenant predicate in its own parentheses.
+
+- 3fa4b09: Security hardening across the data layer: escape/validate composite-key values before SQL interpolation, enforce CanRead on subquery/ad-hoc query entity targets, SELECT-only validation on GetData, bracket-safe SQL Server identifier quoting, and JSON-safe codegen description emission.
+- f324af2: Saved queries, ad-hoc SQL and composed queries now render and run correctly on SQL Server and PostgreSQL in the shapes that previously failed or returned the wrong rows.
+  - **Row caps and paging.** A query's own `TOP` / `LIMIT` / `OFFSET … FETCH` is kept: when the caller also passes `MaxRows`, the smaller wins and `TotalRowCount` follows. CTEs, `WITH RECURSIVE`, query hints, `SELECT DISTINCT`, set operations, `TOP PERCENT` / `WITH TIES` and SQL the parser cannot read are paged and capped by editing the statement in place, or as a derived table, instead of being rewritten from the syntax tree. Ad-hoc SQL with `MaxRows` is paged in the database instead of fetching every row. A requested cap that cannot be applied is logged; paging a `FOR JSON` / `FOR XML` query fails with an error that says so.
+  - **Composition.** A dependency's trailing `;`, SQL Server `OPTION (…)` hints, template tags (`{% if %}` and similar) and doubled quotes in static values now compose correctly. The real composition token is resolved, not a copy in a comment or string literal. Composing into an outer `WITH` / `WITH RECURSIVE` produces one valid clause, and a dependency CTE that shares a name with one of the outer query's CTEs is renamed instead of declared twice. A query that references the same dependency twice saves one dependency row.
+  - **PostgreSQL.** Pools get the `statement_timeout` and `idle_in_transaction_session_timeout` that match SQL Server's request timeout. Caller-supplied SQL runs in a rolled-back read-only transaction, and the read-only provider gets its own pool on the read-only login. Column references are read as names, and comment stripping no longer breaks dollar-quoted and `E''` strings.
+  - **Caller-supplied SQL** must be a single read query. Ad-hoc SQL over GraphQL (`ExecuteAdhocQuery`) now runs through the read-only provider's own ad-hoc path, so it works on PostgreSQL too and pages the same way everywhere. `RunQueryParams.TimeoutSeconds` (ad-hoc SQL) and `ExecuteSQLOptions.timeoutMs` set a per-call limit that the database enforces: the request is cancelled on SQL Server, and `statement_timeout` applies on PostgreSQL. That limit can shorten the server's own limit but never lengthen it.
+  - **What caller-supplied SQL may call.** Ad-hoc SQL, `TestQuerySQL` and query specs are refused when they call a function that runs SQL given as a string, or reads files or other databases (on PostgreSQL `query_to_xml` and its family, `ts_stat` and `ts_rewrite`, `dblink`, the server-file and large-object functions, and server-administration functions; on SQL Server `OPENROWSET`, `OPENQUERY`, `OPENDATASOURCE` and the trace and audit file readers). The list is the new `SQLDialect.CallerSQLForbiddenFunctions`. On PostgreSQL, advisory locks taken by such SQL are released before its connection returns to the pool, and MJAPI warns at startup when the read-only login can read base tables or server files.
+  - **Dialects.** The rendering pipeline reads `SQLDialect` members (`SelectListPagingOrderBy`, `PagingRequiresOrderBy`, `QueryHintKeyword`, `SupportsEscapeStringLiterals`, `SupportsDollarQuotedStrings`, `StringLiteralPrefix`, `EscapeLikePattern`, `BooleanParameterValue`) instead of checking the platform name, so a new dialect declares its behaviour in one class.
+  - **Text filters.** `sqlString` / `sqlIn` keep non-ASCII text on SQL Server, and the LIKE filters escape `[` (SQL Server) and `\` (PostgreSQL). SQL Server bracket-quoted identifiers escape `]`.
+  - `RunQueryParams.MaxRows` documents that there is no default row limit, and that `MaxRows` limits the rows returned, not the work the database does.
+
+- 4dc13db: Bind `statusUpdates` push-subscription delivery to the authenticated connection identity (fixes a session-hijack, B49).
+
+  The `statusUpdates` GraphQL subscription filtered only on the client-supplied `sessionId` (`payload.sessionId === args.sessionId`) and never checked it against the subscriber's authenticated identity. Because `sessionId` is a client-generated (per-tab) UUID persisted in browser storage, a subscriber who obtained another user's `sessionId` would receive their pushes (agent-run progress, MCP/test/remote-browser progress, notifications).
+
+  **Fix:** every push now carries the authenticated owner's user ID, and the subscription filter additionally requires it to match the subscriber CONNECTION's server-authenticated identity (`context.userPayload.userRecord.ID`, established once at WS connect and refreshed on token expiry). `sessionId` still routes a push to the right browser tab, but is no longer the trust anchor — knowing it is no longer sufficient. The filter fails closed (missing owner or connection identity → no delivery).
+
+  **Centralized so it can't regress:** all ~22 publish sites now route through a single `publishStatusUpdate(pubSub, { sessionId, ownerUserId, message })` helper (resolvers via the new `ResolverBase.PublishStatusUpdate` wrapper; non-resolver services/heartbeat call the helper directly). `ownerUserId` is a **required** field, so the compiler rejects any publish that omits identity — a future publisher physically cannot forget it. Also normalized three previously-malformed publishes that sent no `sessionId`. The security-critical filter is unit-tested in isolation.
+
+  `ownerUserId` is used only server-side by the filter and is deliberately not exposed on the client-facing `PushStatusNotification` (no user IDs leak to subscribers).
+
+- Updated dependencies [9d60dfc]
+- Updated dependencies [4349a70]
+- Updated dependencies [4fe6b23]
+- Updated dependencies [ecb32fd]
+- Updated dependencies [bba4ddc]
+- Updated dependencies [f666326]
+- Updated dependencies [59e42d5]
+- Updated dependencies [3e25fab]
+- Updated dependencies [7ea6fe6]
+- Updated dependencies [a907eae]
+- Updated dependencies [6901aaa]
+- Updated dependencies [c3ab75e]
+- Updated dependencies [75e94d7]
+- Updated dependencies [7ed8f3d]
+- Updated dependencies [612f08e]
+- Updated dependencies [e26ad53]
+- Updated dependencies [d120f2e]
+- Updated dependencies [05a3b17]
+- Updated dependencies [d4b1edf]
+- Updated dependencies [f761180]
+- Updated dependencies [6140c8f]
+- Updated dependencies [bd01671]
+- Updated dependencies [e9a5530]
+- Updated dependencies [d59ca3f]
+- Updated dependencies [714400d]
+- Updated dependencies [adf661f]
+- Updated dependencies [3fa4b09]
+- Updated dependencies [f324af2]
+- Updated dependencies [5f9df91]
+  - @memberjunction/ai-agents@5.51.4
+  - @memberjunction/core@5.51.4
+  - @memberjunction/core-entities@5.51.4
+  - @memberjunction/ai-vector-sync@5.51.4
+  - @memberjunction/sqlserver-dataprovider@5.51.4
+  - @memberjunction/redis-provider@5.51.4
+  - @memberjunction/graphql-dataprovider@5.51.4
+  - @memberjunction/sql-dialect@5.51.4
+  - @memberjunction/ai-prompts@5.51.4
+  - @memberjunction/core-actions@5.51.4
+  - @memberjunction/core-entities-server@5.51.4
+  - @memberjunction/global@5.51.4
+  - @memberjunction/templates@5.51.4
+  - @memberjunction/actions@5.51.4
+  - @memberjunction/generic-database-provider@5.51.4
+  - @memberjunction/sql-parser@5.51.4
+  - @memberjunction/data-context-server@5.51.4
+  - @memberjunction/lists@5.51.4
+  - @memberjunction/codegen-lib@5.51.4
+  - @memberjunction/postgresql-dataprovider@5.51.4
+  - @memberjunction/ai-agent-manager@5.51.4
+  - @memberjunction/scheduling-engine@5.51.4
+  - @memberjunction/testing-engine@5.51.4
+  - @memberjunction/ai-agent-manager-actions@5.51.4
+  - @memberjunction/ai-engine-base@5.51.4
+  - @memberjunction/clustering-engine@5.51.4
+  - @memberjunction/computer-use@5.51.4
+  - @memberjunction/ai-core-plus@5.51.4
+  - @memberjunction/aiengine@5.51.4
+  - @memberjunction/tag-engine@5.51.4
+  - @memberjunction/tag-engine-base@5.51.4
+  - @memberjunction/ai-mcp-client@5.51.4
+  - @memberjunction/computer-use-engine@5.51.4
+  - @memberjunction/ai-bridge-base@5.51.4
+  - @memberjunction/ai-bridge-ringcentral@5.51.4
+  - @memberjunction/ai-bridge-teams@5.51.4
+  - @memberjunction/ai-bridge-twilio@5.51.4
+  - @memberjunction/ai-bridge-vonage@5.51.4
+  - @memberjunction/ai-bridge-server@5.51.4
+  - @memberjunction/remote-browser-base@5.51.4
+  - @memberjunction/remote-browser-cdp@5.51.4
+  - @memberjunction/remote-browser-selfhost@5.51.4
+  - @memberjunction/remote-browser-server@5.51.4
+  - @memberjunction/ai-vectordb@5.51.4
+  - @memberjunction/ai-vectors-pinecone@5.51.4
+  - @memberjunction/api-keys@5.51.4
+  - @memberjunction/actions-apollo@5.51.4
+  - @memberjunction/actions-base@5.51.4
+  - @memberjunction/actions-bizapps-accounting@5.51.4
+  - @memberjunction/actions-bizapps-crm@5.51.4
+  - @memberjunction/actions-bizapps-formbuilders@5.51.4
+  - @memberjunction/actions-bizapps-lms@5.51.4
+  - @memberjunction/actions-bizapps-social@5.51.4
+  - @memberjunction/auth-providers@5.51.4
+  - @memberjunction/communication-types@5.51.4
+  - @memberjunction/communication-engine@5.51.4
+  - @memberjunction/entity-communications-base@5.51.4
+  - @memberjunction/entity-communications-server@5.51.4
+  - @memberjunction/notifications@5.51.4
+  - @memberjunction/communication-ms-graph@5.51.4
+  - @memberjunction/communication-sendgrid@5.51.4
+  - @memberjunction/component-registry-client-sdk@5.51.4
+  - @memberjunction/credentials@5.51.4
+  - @memberjunction/doc-utils@5.51.4
+  - @memberjunction/encryption@5.51.4
+  - @memberjunction/external-change-detection@5.51.4
+  - @memberjunction/integration-engine@5.51.4
+  - @memberjunction/integration-engine-base@5.51.4
+  - @memberjunction/integration-schema-builder@5.51.4
+  - @memberjunction/interactive-component-types@5.51.4
+  - @memberjunction/livekit-room-server@5.51.4
+  - @memberjunction/data-context@5.51.4
+  - @memberjunction/queue@5.51.4
+  - @memberjunction/storage@5.51.4
+  - @memberjunction/record-comparison@5.51.4
+  - @memberjunction/scheduling-actions@5.51.4
+  - @memberjunction/scheduling-engine-base@5.51.4
+  - @memberjunction/schema-engine@5.51.4
+  - @memberjunction/search-engine@5.51.4
+  - @memberjunction/server-extensions-core@5.51.4
+  - @memberjunction/testing-engine-base@5.51.4
+  - @memberjunction/version-history@5.51.4
+  - @memberjunction/esignature@5.51.4
+  - @memberjunction/ai-provider-bundle@5.51.4
+  - @memberjunction/ai@5.51.4
+  - @memberjunction/integration-progress-artifacts@5.51.4
+  - @memberjunction/scheduling-base-types@5.51.4
+  - @memberjunction/config@5.51.4
+  - @memberjunction/lists-base@5.51.4
+
 ## 5.51.3
 
 ### Patch Changes

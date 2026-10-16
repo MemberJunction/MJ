@@ -1,5 +1,16 @@
 # @memberjunction/ai-huggingface
 
+## 5.51.4
+
+### Patch Changes
+
+- Updated dependencies [612f08e]
+- Updated dependencies [05a3b17]
+- Updated dependencies [3fa4b09]
+  - @memberjunction/global@5.51.4
+  - @memberjunction/ai@5.51.4
+  - @memberjunction/ai-openai@5.51.4
+
 ## 5.51.3
 
 ### Patch Changes
