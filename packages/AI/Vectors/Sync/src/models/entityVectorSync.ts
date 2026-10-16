@@ -11,7 +11,9 @@ import { pipeline } from 'node:stream/promises';
 import { EmbeddingData, TemplateParamData, VectorEmeddingData, VectorizeEntityParams, VectorizeEntityResponse, VectorizeProgressUpdate } from '../generic/vectorSync.types';
 import { EntityDocumentConfiguration, EntityDocumentMetadataConfig, EntityDocumentFieldConfig } from '../generic/entityDocumentConfig.types';
 import { EntityDocumentCache } from './EntityDocumentCache';
+import { CombineExtraFilters, GetEntityDocumentRecordFilter, ParseEntityDocumentConfiguration } from '../generic/entityDocumentConfig';
 import { PagedRecords } from './PagedRecords';
+import { EntityDocumentTemplateDataBuilder } from './EntityDocumentTemplateData';
 import { AsyncBatchTransform } from './AsyncBatchTransform';
 import { Transform, TransformCallback, Writable } from 'node:stream';
 import { AIEngine } from '@memberjunction/aiengine';
@@ -411,14 +413,7 @@ export class EntityVectorSyncer extends VectorBase {
    * Returns an empty object if the Configuration column is null or invalid JSON.
    */
   private parseDocumentConfig(entityDocument: MJEntityDocumentEntity): EntityDocumentConfiguration {
-    const raw = entityDocument.Configuration;
-    if (!raw) return {};
-    try {
-      return JSON.parse(raw) as EntityDocumentConfiguration;
-    } catch {
-      LogError(`Invalid JSON in EntityDocument.Configuration for "${entityDocument.Name}", using defaults`);
-      return {};
-    }
+    return ParseEntityDocumentConfiguration(entityDocument);
   }
 
   /** Column types that can never be stored in vector metadata, even by explicit inclusion */
@@ -716,6 +711,16 @@ export class EntityVectorSyncer extends VectorBase {
   }
 
   /**
+   * The filter on the records a run vectorizes: the list's members when the run is for a list,
+   * and the entity document's record filter (`Configuration.recordFilter.extraFilter`) when one
+   * is set, ANDed together. Undefined when neither applies.
+   */
+  protected BuildRecordPageFilter(entity: EntityInfo, params: VectorizeEntityParams, entityDocument: MJEntityDocumentEntity, md: IMetadataProvider): string | undefined {
+    const listFilter = params.listID ? this.BuildListFilter(entity, md.ConfigData.MJCoreSchemaName, params.listID) : undefined;
+    return CombineExtraFilters(listFilter, GetEntityDocumentRecordFilter(entityDocument));
+  }
+
+  /**
    * Starts the async data paging loop that feeds records into the stream pipeline.
    */
   private startDataPaging(
@@ -751,6 +756,7 @@ export class EntityVectorSyncer extends VectorBase {
       }
 
       const useKeysetForThisRun = canUseKeyset && !params.StartingOffset;
+      const pageFilter = this.BuildRecordPageFilter(entity, params, entityDocument, md);
       let pageIndex = 0;
 
       let hasMore = true;
@@ -763,10 +769,7 @@ export class EntityVectorSyncer extends VectorBase {
           AfterKey: useKeysetForThisRun ? lastSeenKey : undefined,
         };
 
-        if (params.listID) {
-          const coreSchema: string = md.ConfigData.MJCoreSchemaName;
-          pageRecordRequest.Filter = this.BuildListFilter(entity, coreSchema, params.listID);
-        }
+        pageRecordRequest.Filter = pageFilter;
 
         const recordsPage: unknown[] = await super.PageRecordsByEntityID<unknown>(pageRecordRequest);
         const relatedData: TemplateParamData[] = await this.GetRelatedTemplateDataForBatch(entity, recordsPage, template);
@@ -1185,77 +1188,21 @@ export class EntityVectorSyncer extends VectorBase {
     return runViewResult.Results;
   }
 
+  /**
+   * The data one record's template renders. Built by {@link EntityDocumentTemplateDataBuilder}, which
+   * duplicate detection renders with too, so the text it queries with matches the text stored here.
+   */
   protected async GetTemplateData(entity: EntityInfo, record: Record<string, unknown>, template: MJTemplateEntityExtended, relatedData: TemplateParamData[]): Promise<Record<string, unknown>> {
-    const templateData: Record<string, unknown> = {};
-    for (const param of template.Params) {
-      switch (param.Type) {
-        case 'Record':
-          // NEW convention: main entity fields are TOP-LEVEL variables (no Entity. prefix).
-          // Spread record fields directly into the root context so templates use {{FieldName}}.
-          Object.assign(templateData, record);
-          break;
-        case 'Entity': {
-          if (templateData[param.Name]) {
-            continue;
-          }
-          const paramData: TemplateParamData | undefined = relatedData.find((rd: TemplateParamData) => rd.ParamName === param.Name);
-          if (!paramData) {
-            LogError(`No related data found for param ${param.Name} in template ${template.ID}`);
-            break;
-          }
-          // Related entities use their relationship name as prefix: {{RelationshipName.FieldName}}
-          const pkValue = record[entity.FirstPrimaryKey.Name];
-          templateData[param.Name] = paramData.Data.filter((rdfr: unknown) => {
-            const typedRdfr = rdfr as Record<string, unknown>;
-            return typedRdfr[param.LinkedParameterField] === pkValue;
-          });
-          break;
-        }
-        case 'Scalar':
-          // Flat convention: entity fields are top-level, so pull directly from record
-          templateData[param.Name] = record[param.Name] ?? '';
-          break;
-        case 'Array':
-        case 'Object':
-          LogError(`Unsupported parameter type ${param.Type} for parameter ${param.Name} in template ${template.ID}`);
-          break;
-      }
-    }
-    return templateData;
+    return this.templateDataBuilder().BuildTemplateData(entity, record, template, relatedData);
   }
 
+  /** The related-entity rows a page of records' templates render; see {@link EntityDocumentTemplateDataBuilder.LoadRelatedData}. */
   protected async GetRelatedTemplateDataForBatch(entity: EntityInfo, records: unknown[], template: MJTemplateEntityExtended): Promise<TemplateParamData[]> {
-    const relatedData: TemplateParamData[] = [];
+    return this.templateDataBuilder().LoadRelatedData(entity, records as Record<string, unknown>[], template);
+  }
 
-    for (const templateParam of template.Params) {
-      if (templateParam.Type !== 'Entity') {
-        continue;
-      }
-
-      const relatedEntity = templateParam.Entity;
-      const relatedField = templateParam.LinkedParameterField;
-      const quotes = entity.FirstPrimaryKey.NeedsQuotes ? "'" : '';
-      const pkName = entity.FirstPrimaryKey.Name;
-      const filter = `${relatedField} in (${records.map((record: unknown) => {
-        const typedRecord = record as Record<string, unknown>;
-        return `${quotes}${typedRecord[pkName]}${quotes}`;
-      }).join(',')})`;
-      const finalFilter = templateParam.ExtraFilter ? `(${filter}) AND (${templateParam.ExtraFilter})` : filter;
-
-      const result = await super.RunView.RunView<Record<string, unknown>>({
-        EntityName: relatedEntity,
-        ExtraFilter: finalFilter,
-        ResultType: 'simple'
-      }, super.CurrentUser);
-
-      if (result && result.Success) {
-        relatedData.push({ ParamName: templateParam.Name, Data: result.Results });
-      } else {
-        LogError(`Error getting related data for entity ${relatedEntity} with filter ${finalFilter}`, undefined, result.ErrorMessage);
-      }
-    }
-
-    return relatedData;
+  private templateDataBuilder(): EntityDocumentTemplateDataBuilder {
+    return new EntityDocumentTemplateDataBuilder(super.RunView, super.CurrentUser);
   }
 
   /**

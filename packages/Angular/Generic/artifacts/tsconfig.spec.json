@@ -4,6 +4,8 @@
     "types": ["vitest/globals", "node"]
   },
   "include": [
+    "src/lib/artifacts.module.ts",
+    "src/lib/artifacts-module-construction.dom.test.ts",
     "src/lib/components/file-artifact-toolbar.component.ts",
     "src/lib/components/file-artifact-toolbar.component.dom.test.ts",
     "src/lib/components/artifact-version-history.component.ts",

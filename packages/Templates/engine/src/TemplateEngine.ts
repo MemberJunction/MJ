@@ -3,8 +3,13 @@ import { MJTemplateCategoryEntity, MJTemplateContentEntity, MJTemplateContentTyp
 import nunjucks from 'nunjucks';
 import { BaseSingleton, MJGlobal, UUIDsEqual } from "@memberjunction/global";
 import { TemplateExtensionBase } from "./extensions/TemplateExtensionBase";
+import { HardenNunjucksRuntime } from "./NunjucksSandbox";
 import { TemplateRenderResult, TemplateEngineBase } from '@memberjunction/templates-base-types'
-  
+
+// Stored templates are user-editable, so nunjucks is guarded as soon as the engine loads. The guard
+// is process-wide: it also covers nunjucks environments that other packages create.
+HardenNunjucksRuntime();
+
 /**
  * This class extends the nunjucks loader to allow adding templates directly to the loader
  */
@@ -141,7 +146,9 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
      * @param autoescape whether the environment HTML-escapes rendered output
      */
     private createConfiguredNunjucksEnv(autoescape: boolean): nunjucks.Environment {
-        const env = new nunjucks.Environment(this._templateLoader as unknown as nunjucks.ILoader, { autoescape, dev: true });
+        // SECURITY: dev must stay false — nunjucks dev mode includes full stack traces in
+        // rendering errors, which can leak server internals to whoever sees template output.
+        const env = new nunjucks.Environment(this._templateLoader as unknown as nunjucks.ILoader, { autoescape, dev: false });
         this.addCustomFilters(env);
         return env;
     }
@@ -352,6 +359,7 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
      * @param data the data to render the template with
      */
     protected async renderTemplateAsync(template: nunjucks.Template, data: any): Promise<string> {
+        HardenNunjucksRuntime(); // no-op unless something replaced a guarded nunjucks hook
         return new Promise((resolve, reject) => {
             template.render(data, (err, result) => {
                 if (err) {

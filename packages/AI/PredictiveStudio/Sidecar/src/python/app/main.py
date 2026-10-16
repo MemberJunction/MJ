@@ -468,7 +468,9 @@ def predict(req: PredictRequest) -> PredictResponse:
     """
     try:
         estimator, _ = artifacts.load_estimator(req.artifact_b64, req.model_id)
-    except ValueError as exc:
+    except (ValueError, artifacts.ArtifactRefusedError) as exc:
+        # ArtifactRefusedError is a ValueError too; named here so the intent is visible:
+        # a refused or malformed artifact is the caller's error, never a 500.
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     if not req.fitted_preprocessing or "output_columns" not in req.fitted_preprocessing:

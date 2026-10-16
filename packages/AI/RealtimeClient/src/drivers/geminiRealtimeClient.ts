@@ -213,6 +213,8 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         this.setState('connecting');
         const { model, liveConfig } = this.parseSessionConfig(config);
         this.playback = this.createPlayback();
+        // Publish client-owned PCM output so recordings include the agent voice.
+        this.publishRemoteMediaStream(this.playback.GetOutputStream?.() ?? null);
         this.session = await this.connectLiveSession({
             Model: model,
             Config: liveConfig,
@@ -244,6 +246,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         this.micCapture = null;
         this.playback?.Close();
         this.playback = null;
+        this.clearRemoteMediaStream();
         if (this.session) {
             try {
                 this.session.close();

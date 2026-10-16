@@ -125,7 +125,10 @@ module.exports = {
   userHandling: {
     autoCreateNewUsers: true,
     newUserLimitedToAuthorizedDomains: false,
-    newUserRoles: ['UI', 'Developer'],
+    // 'UI' is the end-user role. Do NOT add 'Developer' or 'Integration' here: on the baseline
+    // seed both hold unfiltered update on MJ: Users, so an auto-provisioned user could set their
+    // own Type to 'Owner' (issue #4260).
+    newUserRoles: ['UI'],
     contextUserForNewUserCreation: 'admin@example.com',
     CreateUserApplicationRecords: true,
   },
