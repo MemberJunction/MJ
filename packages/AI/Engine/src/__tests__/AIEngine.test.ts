@@ -1896,6 +1896,53 @@ describe('AIEngine', () => {
     });
 
     // ======================================================================
+    // FindActiveAgentConfigurationPreset
+    // ======================================================================
+    describe('FindActiveAgentConfigurationPreset', () => {
+        it('matches Name before DisplayName, trims and compares case-insensitively, and excludes inactive presets', () => {
+            const activePresets = [
+                {
+                    ID: 'p-1',
+                    AgentID: 'agent-1',
+                    Name: 'Standard',
+                    DisplayName: 'Draft',
+                    Status: 'Active',
+                },
+                {
+                    ID: 'p-2',
+                    AgentID: 'agent-1',
+                    Name: 'Draft',
+                    DisplayName: 'Draft Mode (Fast)',
+                    Status: 'Active',
+                },
+            ];
+            mockBaseInstance.GetAgentConfigurationPresets.mockImplementation((agentId: string, activeOnly = true) => {
+                if (agentId !== 'agent-1') return [];
+                const all = [
+                    ...activePresets,
+                    {
+                        ID: 'p-inactive',
+                        AgentID: 'agent-1',
+                        Name: 'Retired',
+                        DisplayName: 'Retired Mode',
+                        Status: 'Inactive',
+                    },
+                ];
+                return activeOnly ? all.filter((p) => p.Status === 'Active') : all;
+            });
+
+            // Name beats DisplayName when another preset has DisplayName='Draft'
+            expect(engine.FindActiveAgentConfigurationPreset('agent-1', '  draft  ')?.ID).toBe('p-2');
+            // Falls back to DisplayName when no Name matches, trimmed and case-insensitive
+            expect(engine.FindActiveAgentConfigurationPreset('agent-1', '  DRAFT MODE (FAST) ')?.ID).toBe('p-2');
+            // Excludes inactive presets because GetAgentConfigurationPresets(agentId, true) is used
+            expect(engine.FindActiveAgentConfigurationPreset('agent-1', 'Retired')).toBeUndefined();
+            // Blank presetName returns undefined
+            expect(engine.FindActiveAgentConfigurationPreset('agent-1', '   ')).toBeUndefined();
+        });
+    });
+
+    // ======================================================================
     // Startup Registration & delayed startup
     // ======================================================================
     describe('Startup Registration', () => {

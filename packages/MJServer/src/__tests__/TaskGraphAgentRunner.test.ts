@@ -25,6 +25,16 @@ vi.mock('@memberjunction/aiengine', () => ({
                 Config: mockEngineConfig,
                 Agents: [MOCK_AGENT],
                 GetAgentConfigurationPresets: mockGetAgentConfigurationPresets,
+                FindActiveAgentConfigurationPreset: (agentId: string, presetName: string) => {
+                    const target = presetName.trim().toLowerCase();
+                    if (!target) return undefined;
+                    const presets = (mockGetAgentConfigurationPresets(agentId, true) ?? []) as Array<{
+                        Name?: string;
+                        DisplayName?: string;
+                    }>;
+                    return presets.find((p) => p.Name?.trim().toLowerCase() === target)
+                        ?? presets.find((p) => p.DisplayName?.trim().toLowerCase() === target);
+                },
             };
         },
     },

@@ -424,6 +424,19 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
     public GetAgentConfigurationPresetByName(agentId: string, presetName: string): MJAIAgentConfigurationEntity | undefined {
         return this.Base.GetAgentConfigurationPresetByName(agentId, presetName);
     }
+    /**
+     * Finds an active configuration preset for `agentId` matching `presetName` by `Name` first,
+     * then `DisplayName` (both trimmed and case-insensitive).
+     */
+    public FindActiveAgentConfigurationPreset(agentId: string, presetName: string): MJAIAgentConfigurationEntity | undefined {
+        const target = presetName.trim().toLowerCase();
+        if (!target) {
+            return undefined;
+        }
+        const presets = this.GetAgentConfigurationPresets(agentId, true);
+        return presets.find((p) => p.Name?.trim().toLowerCase() === target)
+            ?? presets.find((p) => p.DisplayName?.trim().toLowerCase() === target);
+    }
     public AgenteNoteTypeIDByName(agentNoteTypeName: string): string {
         return this.Base.AgenteNoteTypeIDByName(agentNoteTypeName);
     }

@@ -20,7 +20,7 @@ import { GetToolCallingDecision } from '@memberjunction/ai-prompts';
 
 import { AIPromptRunResult, BaseAgentNextStep, AIPromptParams, ExecuteAgentParams, AgentConfiguration, AgentAction, AgentClientToolInvocation, AgentPayloadChangeRequest,
          FormatValidationErrors, ValidateTaskGraphSpec, type TaskGraphSpec,
-    ConfigOf, AgentResponseForm, AgentFinishIf } from '@memberjunction/ai-core-plus';
+    ConfigOf, AgentResponseForm, AgentFinishIf, type AgentHandoffRequest } from '@memberjunction/ai-core-plus';
 import { LogError, LogStatusEx } from '@memberjunction/core';
 import { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import { LoopAgentResponse, LOOP_NEXT_STEP_TYPES } from './loop-agent-response-type';
@@ -257,6 +257,64 @@ export class LoopAgentType extends BaseAgentType {
             return { folded: false, reason: `continuation is '${spec.continuation}', not the default` };
         }
         return { folded: true, reason: 'single agent node, no dependencies, default continuation' };
+    }
+
+    /**
+     * Resolves whether this agent may emit a conversation handoff (`nextStep.type === 'Handoff'`).
+     *
+     * Read from `params.data.__agentTypePromptParams`, which `BaseAgent.determineNextStep`
+     * populates on a shallow copy of `params` from `this._agentTypePromptParams` (with
+     * `withoutHandoff` applied when the run withholds handoff), or which a direct unit caller
+     * supplies in `params.data`. Absent means NO (D14).
+     */
+    private handoffEnabled(params: ExecuteAgentParams<any, any>): boolean {
+        const promptParams = params?.data?.__agentTypePromptParams as Record<string, unknown> | undefined;
+        return promptParams?.enableHandoff === true;
+    }
+
+    /**
+     * Applies a `'Handoff'` emission to the next step: capability gate and shape validation.
+     * Never folds into a Sub-Agent step — a handoff transfers ownership of the conversation turn.
+     */
+    private applyHandoffStep<P>(
+        retVal: Partial<BaseAgentNextStep<P>>,
+        handoff: AgentHandoffRequest | undefined,
+        topLevelMessage: string | undefined,
+        params: ExecuteAgentParams<any, P>,
+    ): void {
+        if (!this.handoffEnabled(params)) {
+            retVal.step = 'Retry';
+            retVal.message =
+                'Handoff is not available here, so nextStep.type must never be "Handoff". ' +
+                'Answer directly, or use nextStep.type "Sub-Agent" or "Actions" instead.';
+            retVal.errorMessage = 'Handoff is not enabled for this agent';
+            return;
+        }
+
+        const agentName = typeof handoff?.agentName === 'string' ? handoff.agentName.trim() : '';
+        const brief = typeof handoff?.brief === 'string' ? handoff.brief.trim() : '';
+        if (!handoff || agentName.length === 0 || brief.length === 0) {
+            retVal.step = 'Retry';
+            retVal.message =
+                'When nextStep.type == "Handoff", nextStep.handoff must specify non-empty "agentName" and "brief" strings';
+            retVal.errorMessage = !handoff
+                ? 'Handoff details not specified for Handoff type'
+                : agentName.length === 0
+                    ? 'Handoff agentName not specified for Handoff type'
+                    : 'Handoff brief not specified for Handoff type';
+            return;
+        }
+
+        const reason = typeof handoff.reason === 'string' ? handoff.reason.trim() : '';
+        retVal.step = 'Handoff' as BaseAgentNextStep['step'];
+        retVal.handoff = {
+            agentName,
+            brief,
+            reason,
+        };
+        if (topLevelMessage !== undefined) {
+            retVal.message = topLevelMessage;
+        }
     }
 
 
@@ -863,6 +921,9 @@ export class LoopAgentType extends BaseAgentType {
                 case 'Tasks':
                     this.applyTasksStep(retVal, response.nextStep.tasks, params);
                     break;
+                case 'Handoff':
+                    this.applyHandoffStep(retVal, response.nextStep.handoff, response.message, params);
+                    break;
                 default:
                     retVal.step = 'Retry';
                     retVal.errorMessage = `Unknown next step type: ${response.nextStep.type}`;
@@ -1010,6 +1071,9 @@ export class LoopAgentType extends BaseAgentType {
             } else if (!lcaseType && response.nextStep.tasks) {
                 response.nextStep.type = 'Tasks'; // update the data structure to have the correct type
                 lcaseType = 'tasks';
+            } else if (!lcaseType && response.nextStep.handoff) {
+                response.nextStep.type = 'Handoff'; // update the data structure to have the correct type
+                lcaseType = 'handoff';
             }
 
             if (!validStepTypes.includes(lcaseType)) {
