@@ -301,6 +301,9 @@ export interface LLMDiscoveryContext {
     confidence: number;
     reasoning: string;
   }>;
+
+  /** Existing indexes on the target table, one formatted line each (see FormatIndexHint) */
+  ExistingIndexes?: string[];
 }
 
 /**
