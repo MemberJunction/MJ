@@ -363,18 +363,15 @@ export class ActionResolver extends ResolverBase {
    * @private
    */
   private createActionResult(result: ActionResult): ActionResultOutput {
+    const x =(result.Params || result.RunParams.Params || [])
+              .filter(p => p.Type.trim().toLowerCase() === 'output' ||
+                           p.Type.trim().toLowerCase() === 'both')     ;
     return {
       Success: result.Success,
       Message: result.Message,
       ResultCode: result.Result?.ResultCode,
-      ResultData: ActionResolver.SerializeOutputParams(result.Params || result.RunParams.Params || [])
+      ResultData: x && x.length > 0 ? JSON.stringify(CopyScalarsAndArrays(x)) : undefined
     };
-  }
-
-  /** `ResultData`: a JSON array of the Output/Both params (copied one by one, so it stays an array), or undefined. */
-  public static SerializeOutputParams(params: ActionParam[]): string | undefined {
-    const outputs = params.filter(p => p.Type.trim().toLowerCase() === 'output' || p.Type.trim().toLowerCase() === 'both');
-    return outputs.length > 0 ? JSON.stringify(outputs.map(p => CopyScalarsAndArrays(p))) : undefined;
   }
 
   /**

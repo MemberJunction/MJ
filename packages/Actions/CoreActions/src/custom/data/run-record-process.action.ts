@@ -1,4 +1,4 @@
-import { ActionParam, ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
+import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
 import { RecordProcessExecutor } from "@memberjunction/record-set-processor";
@@ -73,7 +73,6 @@ export class RunRecordProcessAction extends BaseAction {
             return {
                 Success: succeeded,
                 ResultCode: succeeded ? "SUCCESS" : "FAILED",
-                Params: params.Params,
                 Message: succeeded
                     ? `${dryRun ? 'Previewed' : 'Processed'} ${result.Processed} record(s): ${result.Success} ok, ${result.Error} error, ${result.Skipped} skipped`
                     : (result.ErrorMessage ?? `Run ended with status '${result.Status}'`),
@@ -108,12 +107,6 @@ export class RunRecordProcessAction extends BaseAction {
 
     /** Adds (or replaces) an Output param. */
     private pushOutput(params: RunActionParams, name: string, value: unknown): void {
-        const output: ActionParam = { Name: name, Type: 'Output', Value: value };
-        const index = params.Params.findIndex(p => p.Name.trim().toLowerCase() === name.toLowerCase());
-        if (index >= 0) {
-            params.Params[index] = output;
-        } else {
-            params.Params.push(output);
-        }
+        params.Params.push({ Name: name, Type: 'Output', Value: value });
     }
 }
