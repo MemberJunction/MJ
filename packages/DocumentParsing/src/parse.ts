@@ -167,7 +167,19 @@ function cellToText(value: unknown): string {
     return String(value).trim();
 }
 
-/** The parsers take a Buffer; callers hold whichever they have. */
+/**
+ * The bytes as a Buffer that owns its memory exactly.
+ *
+ * Not `Buffer.from(bytes)`: Node allocates small Buffers out of a shared 8 KB pool, and pdf.js reads
+ * the whole underlying ArrayBuffer rather than the view it was given. A 1 KB PDF in a pooled slab was
+ * parsed together with whatever else the slab held — a workbook's XML, in the run that caught it — and
+ * failed with "bad XRef entry" depending only on what had been allocated before it.
+ */
 function toBuffer(bytes: Uint8Array | Buffer): Buffer {
-    return Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes);
+    if (Buffer.isBuffer(bytes) && bytes.byteOffset === 0 && bytes.byteLength === bytes.buffer.byteLength) {
+        return bytes;
+    }
+    const owned = new Uint8Array(bytes.byteLength);
+    owned.set(bytes);
+    return Buffer.from(owned.buffer);
 }

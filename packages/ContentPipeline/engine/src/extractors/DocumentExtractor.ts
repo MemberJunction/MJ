@@ -69,7 +69,9 @@ export class WordExtractor extends BaseContentExtractor {
 @RegisterClass(BaseContentExtractor, SPREADSHEET_EXTRACTOR)
 export class SpreadsheetExtractor extends BaseContentExtractor {
     public readonly Key = SPREADSHEET_EXTRACTOR;
-    public readonly SupportedFileTypes = ['xlsx', 'xlsm', 'csv'];
+    // Workbooks only. A .csv is text and reads as text: the parser is ExcelJS's .xlsx reader, which
+    // rejects a CSV as "not a zip", so claiming csv here failed every CSV a source held.
+    public readonly SupportedFileTypes = ['xlsx', 'xlsm'];
 
     public async Extract(request: ExtractRequest): Promise<ExtractResult> {
         const blocks: ContentBlock[] = [];

@@ -39,7 +39,7 @@
       "OnChangeEnabled": false,
       "ScheduleEnabled": false,
       "OnDemandEnabled": true,
-      "SkipUnchanged": true,
+      "SkipUnchanged": false,
       "WatermarkStrategy": "Checksum",
       "BatchSize": 25,
       "MaxConcurrency": 4,
@@ -47,9 +47,11 @@
         "Stages": [
           "Extract"
         ],
-        "Tuning": {
-          "MaxArchiveMembers": 10000,
-          "MaxArchiveBytes": 536870912
+        "Options": {
+          "Tuning": {
+            "MaxArchiveMembers": 10000,
+            "MaxArchiveBytes": 536870912
+          }
         }
       }
     },
@@ -70,7 +72,7 @@
       "OnChangeEnabled": false,
       "ScheduleEnabled": false,
       "OnDemandEnabled": true,
-      "SkipUnchanged": true,
+      "SkipUnchanged": false,
       "WatermarkStrategy": "Checksum",
       "BatchSize": 10,
       "MaxConcurrency": 2,
@@ -97,7 +99,7 @@
       "OnChangeEnabled": false,
       "ScheduleEnabled": false,
       "OnDemandEnabled": true,
-      "SkipUnchanged": true,
+      "SkipUnchanged": false,
       "WatermarkStrategy": "Checksum",
       "BatchSize": 25,
       "MaxConcurrency": 4,
@@ -124,7 +126,7 @@
       "OnChangeEnabled": false,
       "ScheduleEnabled": false,
       "OnDemandEnabled": true,
-      "SkipUnchanged": true,
+      "SkipUnchanged": false,
       "WatermarkStrategy": "Checksum",
       "BatchSize": 50,
       "MaxConcurrency": 2,
@@ -215,9 +217,11 @@
         ],
         "IsTest": true,
         "StageBudgetMs": 60000,
-        "Tuning": {
-          "MaxArchiveMembers": 10000,
-          "MaxArchiveBytes": 536870912
+        "Options": {
+          "Tuning": {
+            "MaxArchiveMembers": 10000,
+            "MaxArchiveBytes": 536870912
+          }
         }
       }
     },

@@ -7,7 +7,7 @@
  */
 
 import { BaseEntity, CompositeKey, IMetadataProvider, RunView, UserInfo } from '@memberjunction/core';
-import { WorkingRecord, WorkingRecordEntity } from '@memberjunction/content-pipeline-base';
+import { WellKnownField, WorkingRecord, WorkingRecordEntity } from '@memberjunction/content-pipeline-base';
 
 import { HasContentChanged } from './ChildReconciliation.js';
 import { GetEntityFieldMap, GetEntityName, GetStatusFields } from './EntityFieldMap.js';
@@ -62,7 +62,7 @@ export class WorkingRecordCommitter {
     ): Promise<CommitResult> {
         const entityObject = await this.load(record);
         const created = !record.Identity.IsPersisted;
-        const written = await this.applyChangedFields(record, entityObject);
+        const { written, unresolved } = await this.applyChangedFields(record, entityObject);
         // Columns a stage set directly rather than proposed — a durable copy's FileID, a checksum
         // computed from the text that was just read. Nothing competes for these on confidence, and
         // without this they were silently dropped on every parent commit.
@@ -78,7 +78,7 @@ export class WorkingRecordCommitter {
             written.push(statusField);
         }
 
-        this.applyConfidence(record, entityObject, written);
+        this.applyConfidence(record, entityObject, written, false, unresolved);
         this.applyCompletionSignal(record, entityObject, statusField, written);
 
         if (!(await entityObject.Save())) {
@@ -127,7 +127,7 @@ export class WorkingRecordCommitter {
                 }
             }
         }
-        const written = await this.applyChangedFields(child, entityObject);
+        const { written, unresolved } = await this.applyChangedFields(child, entityObject);
 
         // An existing record whose content is unchanged is a no-op: re-running every downstream
         // stage over identical content would burn a model call and a vector write to arrive at
@@ -148,7 +148,7 @@ export class WorkingRecordCommitter {
             // and looked changed again on every later walk.
             written.push(...this.applyColumns(child, entityObject));
         }
-        this.applyConfidence(child, entityObject, written, rediscovered);
+        this.applyConfidence(child, entityObject, written, rediscovered, unresolved);
         this.applyCompletionSignal(child, entityObject, statusField, written);
 
         if (!(await entityObject.Save())) {
@@ -362,10 +362,19 @@ export class WorkingRecordCommitter {
         };
     }
 
-    /** Write only the well-known fields whose values changed, through the declared column map. */
-    private async applyChangedFields(record: WorkingRecord, entityObject: BaseEntity): Promise<string[]> {
+    /**
+     * Write only the well-known fields whose values changed, through the declared column map.
+     *
+     * @returns The columns written, and the fields whose lookup matched no row — those were NOT
+     *   written, so their confidence must not be recorded either (see {@link applyConfidence}).
+     */
+    private async applyChangedFields(
+        record: WorkingRecord,
+        entityObject: BaseEntity,
+    ): Promise<{ written: string[]; unresolved: Set<WellKnownField> }> {
         const map = GetEntityFieldMap(record.Entity);
         const written: string[] = [];
+        const unresolved = new Set<WellKnownField>();
         for (const field of record.ChangedFields) {
             const mapping = map[field];
             if (!mapping) {
@@ -383,17 +392,32 @@ export class WorkingRecordCommitter {
                 if (id) {
                     entityObject.Set(mapping.Column, id);
                     written.push(mapping.Column);
+                } else {
+                    unresolved.add(field);
                 }
                 continue;
             }
             entityObject.Set(mapping.Column, record.Get(field));
             written.push(mapping.Column);
         }
-        return written;
+        return { written, unresolved };
     }
 
-    /** Persist the provenance of every resolved field alongside the values. */
-    private applyConfidence(record: WorkingRecord, entityObject: BaseEntity, written: string[], reset = false): void {
+    /**
+     * Persist the provenance of every resolved field alongside the values.
+     *
+     * A field whose lookup matched nothing is left out. Its column still holds whatever it held — for
+     * a new item, the source's default — and recording the proposal's confidence against it would
+     * make that default read back as a confident declaration: an `.xlsx` on an "Other" source would
+     * then be routed as "Other" over its own extension.
+     */
+    private applyConfidence(
+        record: WorkingRecord,
+        entityObject: BaseEntity,
+        written: string[],
+        reset = false,
+        unresolved: ReadonlySet<WellKnownField> = new Set(),
+    ): void {
         if (!entityObject.Fields.some((f) => f.Name === 'FieldConfidence')) {
             return;
         }
@@ -401,7 +425,11 @@ export class WorkingRecordCommitter {
         // rather than merging is what lets the stages re-propose into an empty field map and win on
         // their own merit — without it, a re-extraction ties with its own previous result at equal
         // confidence, loses the tie, and the record is marked Complete holding stale text.
-        entityObject.Set('FieldConfidence', reset ? null : JSON.stringify(record.ToFieldConfidence()));
+        const confidence = record.ToFieldConfidence();
+        for (const field of unresolved) {
+            delete confidence[field];
+        }
+        entityObject.Set('FieldConfidence', reset ? null : JSON.stringify(confidence));
         written.push('FieldConfidence');
     }
 

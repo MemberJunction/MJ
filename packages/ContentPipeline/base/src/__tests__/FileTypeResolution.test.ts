@@ -42,6 +42,15 @@ describe('ResolveFileType — precedence', () => {
         expect(resolved).toEqual({ FileType: 'pdf', Evidence: 'Signature' });
     });
 
+    it('lets a named extension beat an AMBIGUOUS signature — every .xlsx is a zip underneath', () => {
+        expect(ResolveFileType({ Signature: 'zip', SignatureIsUnambiguous: false, FileName: 'budget.xlsx' })).toEqual({
+            FileType: 'xlsx',
+            Evidence: 'Extension',
+        });
+        // With no extension to say otherwise, the container is still recognised.
+        expect(ResolveFileType({ Signature: 'zip', SignatureIsUnambiguous: false, FileName: 'upload' }).FileType).toBe('zip');
+    });
+
     it('takes the extension from a URL, ignoring query and fragment', () => {
         expect(ResolveFileType({ FileName: 'https://x.test/a/b/doc.pdf?v=2#page' }).FileType).toBe('pdf');
     });

@@ -64,7 +64,8 @@ const NON_TEXT_FORMATS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 't
  * 2. **A byte-level correction**, but only on unambiguous evidence contradicting the declaration.
  *    Ambiguous byte evidence leaves a declaration standing, because a source that states a type is
  *    usually right and a sniffer that is unsure is usually not.
- * 3. **Byte-signature sniffing**, when nothing was declared.
+ * 3. **Byte-signature sniffing**, when nothing was declared — an unambiguous signature only; an
+ *    ambiguous one (a zip, which every Office Open XML file also is) yields to a named extension.
  * 4. **A filename extension**.
  * 5. **The source's default**, which describes the source rather than the item.
  */
@@ -79,12 +80,17 @@ export function ResolveFileType(inputs: FileTypeInputs): ResolvedFileType {
         }
         return { FileType: declared, Evidence: 'Declared' };
     }
-    if (signature) {
+    const extension = extensionOf(inputs.FileName);
+    if (signature && (inputs.SignatureIsUnambiguous !== false || !extension)) {
         return { FileType: signature, Evidence: 'Signature' };
     }
-    const extension = extensionOf(inputs.FileName);
+    // An ambiguous signature recognises a container without identifying what is in it — every
+    // .xlsx and .docx is a zip underneath — so a named extension says more than it does.
     if (extension) {
         return { FileType: extension, Evidence: 'Extension' };
+    }
+    if (signature) {
+        return { FileType: signature, Evidence: 'Signature' };
     }
     const sourceDefault = normalize(inputs.SourceDefault);
     if (sourceDefault) {
