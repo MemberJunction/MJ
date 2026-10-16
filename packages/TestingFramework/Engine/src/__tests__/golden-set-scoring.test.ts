@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { GoldenSetScorer, type GoldenCase, type GoldenAnswer } from '../drivers/golden-set-scoring';
 
 describe('GoldenSetScorer.WilsonInterval', () => {
-    it('reproduces the assessment band 41/52 = 0.7885 [0.6597, 0.8776]', () => {
+    it('reproduces 41/52 = 0.7885 [0.6597, 0.8776]', () => {
         const w = GoldenSetScorer.WilsonInterval(41, 52);
         expect(w.Lower).toBeCloseTo(0.6597, 4);
         expect(w.Upper).toBeCloseTo(0.8776, 4);

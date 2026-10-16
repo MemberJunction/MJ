@@ -563,10 +563,8 @@ export class AutotagEntity extends AutotagBase {
         }
 
         const map = new Map<string, MJEntityRecordDocumentEntity>();
-        if (result.Success) {
-            for (const erd of result.Results) {
-                map.set(erd.RecordID, erd);
-            }
+        for (const erd of result.Results) {
+            map.set(erd.RecordID, erd);
         }
         return map;
     }
@@ -589,11 +587,9 @@ export class AutotagEntity extends AutotagBase {
         }
 
         const map = new Map<string, MJContentItemEntity>();
-        if (result.Success) {
-            for (const ci of result.Results) {
-                if (ci.EntityRecordDocumentID) {
-                    map.set(NormalizeUUID(ci.EntityRecordDocumentID), ci);
-                }
+        for (const ci of result.Results) {
+            if (ci.EntityRecordDocumentID) {
+                map.set(NormalizeUUID(ci.EntityRecordDocumentID), ci);
             }
         }
         return map;

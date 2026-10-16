@@ -3069,10 +3069,10 @@ export class AIPromptRunner extends BaseModelRunner {
         }
         lastError = error;
         // A strict-parameter refusal cannot be resolved by another attempt
-        const fatal = error instanceof ParameterFidelityError;
+        const refused = error instanceof ParameterFidelityError;
         this.logError(error, {
           category: 'ExecutionRetry',
-          severity: attempt < maxRetries && !fatal ? 'warning' : 'error',
+          severity: attempt < maxRetries && !refused ? 'warning' : 'error',
           metadata: {
             attempt: attempt + 1,
             maxRetries: maxRetries + 1,
@@ -3091,7 +3091,7 @@ export class AIPromptRunner extends BaseModelRunner {
         };
         validationAttempts.push(validationAttempt);
 
-        if (fatal || attempt === maxRetries) {
+        if (refused || attempt === maxRetries) {
           throw error; // Fatal, or the last attempt: propagate the error
         }
       }

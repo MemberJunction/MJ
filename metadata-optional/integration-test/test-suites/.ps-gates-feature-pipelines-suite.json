@@ -2,7 +2,7 @@
   {
     "fields": {
       "Name": "Predictive Studio Gates — Feature Pipelines",
-      "Description": "The five Feature Pipeline gates (C1 → C2.1, C2.2, C2.3, C2.5, C3.3) and the live job-title consistency measurement. Needs bizapps-common installed (its job-title Feature Pipeline is the gate subject). Run with MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1. PR 2's gate registry adopts these rows by name.",
+      "Description": "The five Feature Pipeline gates (C1 → C2.1, C2.2, C2.3, C2.5, C3.3) and the live job-title consistency measurement. Needs bizapps-common installed (its job-title Feature Pipeline is the gate subject). Run with MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1.",
       "Status": "Active"
     },
     "relatedEntities": {

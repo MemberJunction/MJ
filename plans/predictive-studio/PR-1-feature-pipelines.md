@@ -10571,7 +10571,7 @@ duplicate of a `next` mechanism, an unrequested feature, or a near-duplicate tes
 - `f57ea45313`, `664ca5aec6` engine: the `fail` floor policy and record names in dry-run previews cut; previews show only real changes.
 - `7994cca5c0`, `18bcb44bfe` steward, golden set, migration: macro-F1, the orphan-cache DELETE, the PostgreSQL comment and essay descriptions cut (§5.1 synced).
 - `855c611206`, `7e3b785aa2` Explorer: QA fixes at minimal size; the Testing dashboard aggregates and notices cut.
-- Task 9 commit: one-shot rigs, the host sleep guard, the suspension monitor and the cost ledger cut; tests of test helpers shrunk; query-parameter pins and the demo-query rewrite back to `next`; guides, READMEs and one changeset sized to the kept behaviour.
+- `3edfc52d7b` rigs, tooling and docs: one-shot rigs, the host sleep guard, the suspension monitor and the cost ledger cut; tests of test helpers shrunk; query-parameter pins and the demo-query rewrite back to `next`; guides, READMEs and one changeset sized to the kept behaviour.
 
 ## 12. Refresh log (append-only)
 
