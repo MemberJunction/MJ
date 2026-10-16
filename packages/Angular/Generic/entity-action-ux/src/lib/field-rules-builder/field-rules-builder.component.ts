@@ -37,9 +37,9 @@ import { MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
                     <div class="frb-rule-head">
                         <span class="frb-rule-num">{{ $index + 1 }}</span>
                         <span class="frb-set">Set</span>
-                        <select class="mj-input frb-target" [value]="rule.TargetField" (change)="SetTarget($index, $event)">
+                        <select class="mj-input frb-target" (change)="SetTarget($index, $event)">
                             <option value="">— field —</option>
-                            @for (f of WritableFields; track f.Name) { <option [value]="f.Name">{{ f.DisplayNameOrName }}</option> }
+                            @for (f of WritableFields; track f.Name) { <option [value]="f.Name" [selected]="f.Name === rule.TargetField">{{ f.DisplayNameOrName }}</option> }
                         </select>
                         <span class="frb-set">from</span>
                         <select class="mj-input frb-kind" [value]="rule.SourceKind" (change)="SetKind($index, $event)">
@@ -58,9 +58,9 @@ import { MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
                                 <input class="mj-input" placeholder="Value" [value]="rule.StaticValue" (input)="SetField($index, 'StaticValue', $event)" />
                             }
                             @case ('field') {
-                                <select class="mj-input" [value]="rule.SourceField" (change)="SetField($index, 'SourceField', $event)">
+                                <select class="mj-input frb-source-field" (change)="SetField($index, 'SourceField', $event)">
                                     <option value="">— source field —</option>
-                                    @for (f of AllFields; track f.Name) { <option [value]="f.Name">{{ f.DisplayNameOrName }}</option> }
+                                    @for (f of AllFields; track f.Name) { <option [value]="f.Name" [selected]="f.Name === rule.SourceField">{{ f.DisplayNameOrName }}</option> }
                                 </select>
                             }
                             @case ('formula') {
