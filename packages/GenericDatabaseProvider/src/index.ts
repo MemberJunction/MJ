@@ -13,6 +13,8 @@ export {
     useJsonArgShape,
 } from './crudSprocFieldRules.js';
 export { resolveDbPlatformFromEnv } from './dbPlatformEnv.js';
+export { ClientClauseScreen, IsClientClauseScreeningProvider } from './clientClauseScreen.js';
+export type { ClientClauseText, ClientViewClauseSet, EntityBaseViewAllowList, ClientClauseScreeningProvider, StatementReads, StatementRelation } from './clientClauseScreen.js';
 export { SqlLoggingOptions, SqlLoggingSession } from './types.js';
 export { SqlLoggingSessionImpl } from './SqlLogger.js';
 export { QueryCompositionEngine, CompositionCTEInfo, CompositionResult } from './queryCompositionEngine.js';

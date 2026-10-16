@@ -259,6 +259,8 @@ export class AssemblyAIRealtimeClient extends BaseRealtimeClient {
 
         await ready;
         this.playback = this.createPlayback(ASSEMBLYAI_PCM_SAMPLE_RATE);
+        // Publish client-owned PCM output so recordings include the agent voice.
+        this.publishRemoteMediaStream(this.playback.GetOutputStream?.() ?? null);
         this.micCapture = await this.createMicCapture(micStream, ASSEMBLYAI_PCM_SAMPLE_RATE, (base64Pcm16) =>
             this.sendMicChunk(base64Pcm16)
         );
@@ -285,6 +287,7 @@ export class AssemblyAIRealtimeClient extends BaseRealtimeClient {
         this.micCapture = null;
         this.playback?.Close();
         this.playback = null;
+        this.clearRemoteMediaStream();
         if (this.socket) {
             try {
                 this.socket.send(JSON.stringify({ type: 'session.end' }));

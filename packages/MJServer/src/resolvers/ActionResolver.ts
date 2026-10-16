@@ -1,14 +1,17 @@
 import { Resolver, Mutation, Arg, Ctx } from "type-graphql";
 import { ActionEngineServer } from "@memberjunction/actions";
 import { EntityActionEngineServer } from "@memberjunction/actions";
-import { Metadata, UserInfo, BaseEntity, CompositeKey, KeyValuePair, LogError } from "@memberjunction/core";
-import { ActionParam, ActionResult } from "@memberjunction/actions-base";
+import { Metadata, UserInfo, BaseEntity, CompositeKey, KeyValuePair, LogError, RunView, DatabaseProviderBase } from "@memberjunction/core";
+import { ActionParam, ActionResult, MJActionEntityExtended } from "@memberjunction/actions-base";
+import { UserCache } from "@memberjunction/sqlserver-dataprovider";
 import { Field, InputType, ObjectType } from "type-graphql";
 import { KeyValuePairInput } from "../generic/KeyValuePairInput.js";
 import { AppContext, ProviderInfo } from "../types.js";
-import { CopyScalarsAndArrays, UUIDsEqual } from "@memberjunction/global";
+import { CopyScalarsAndArrays, EscapeSQLString, UUIDsEqual } from "@memberjunction/global";
 import { GetReadOnlyProvider } from "../util.js";
 import { ResolverBase } from "../generic/ResolverBase.js";
+import { IsScopeLimitedPrincipal } from "../auth/scopeLimitedPrincipal.js";
+import { EvaluateActionRunAuthorization, IsOwner } from "../auth/actionAuthorization.js";
 
 /**
  * Input type for action parameters
@@ -55,8 +58,8 @@ export class RunActionInput {
   Params?: ActionParamInput[];
 
   /**
-   * Whether to skip logging the action execution
-   * Defaults to false
+   * Ignored. A run started through this API always writes an action execution log row; the field
+   * remains so that clients which send it still validate.
    */
   @Field(() => Boolean, { nullable: true })
   SkipActionLog?: boolean;
@@ -174,7 +177,13 @@ export class ActionResultOutput {
 @Resolver()
 export class ActionResolver extends ResolverBase {
   /**
-   * Mutation for running an action
+   * Mutation for running an action.
+   *
+   * Scope-limited sessions are refused. Any other caller must be authorized for the action — see
+   * {@link EvaluateActionRunAuthorization}: an Owner may run any action; anyone else needs a role that
+   * holds an authorization linked to the action through `MJ: Action Authorizations`, or, when the
+   * action has no such link, an action class that authorizes its caller itself. The run is always
+   * logged.
    * @param input The input parameters for running the action
    * @param ctx The GraphQL context containing user authentication information
    * @returns The result of running the action
@@ -185,26 +194,22 @@ export class ActionResolver extends ResolverBase {
     @Ctx() ctx: AppContext
   ): Promise<ActionResultOutput> {
     try {
+      const user = this.getRunActionPrincipal(ctx);
+
       // Check API key scope authorization for action execution
       await this.CheckAPIKeyScopeAuthorization('action:execute', input.ActionID, ctx.userPayload);
-
-      // Get the user from context
-      const user = ctx.userPayload.userRecord;
-      if (!user) {
-        throw new Error("User is not authenticated");
-      }
 
       // Initialize the action engine
       await ActionEngineServer.Instance.Config(false, user);
 
-      // Get the action by ID
       const action = this.findActionById(input.ActionID);
+      await this.assertCanRunAction(action, user, ctx.providers);
 
       // Parse the parameters
       const params = this.parseActionParameters(input.Params);
 
       // Run the action
-      const result = await this.executeAction(action, user, params, input.SkipActionLog);
+      const result = await this.executeAction(action, user, params);
 
       // Return the result
       return this.createActionResult(result);
@@ -214,13 +219,73 @@ export class ActionResolver extends ResolverBase {
   }
 
   /**
+   * The authenticated caller of RunAction. A scope-limited session is refused: its confinement exists
+   * only as row-level-security filters, and an action can reach data and services those filters never
+   * cover.
+   * @throws Error when there is no user or the session is scope-limited
+   */
+  private getRunActionPrincipal(ctx: AppContext): UserInfo {
+    const user = ctx.userPayload?.userRecord;
+    if (!user) {
+      throw new Error("User is not authenticated");
+    }
+    if (IsScopeLimitedPrincipal(user)) {
+      throw new Error("RunAction is not permitted for scope-limited sessions");
+    }
+    return user;
+  }
+
+  /**
+   * Refuses the run unless the caller is authorized for the action — see
+   * {@link EvaluateActionRunAuthorization}. The `MJ: Action Authorizations` rows, the authorization
+   * tree and the role grants all come from the request's provider, or all from the global provider
+   * when the request carries none.
+   * @throws Error when the caller may not run the action
+   */
+  private async assertCanRunAction(action: MJActionEntityExtended, user: UserInfo, providers: Array<ProviderInfo>): Promise<void> {
+    if (IsOwner(user)) {
+      return; // an Owner may run any action, so nothing needs to be read
+    }
+    const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+    const actionAuthorizationIDs = await this.loadActionAuthorizationIDs(action.ID, provider);
+    const metadata = provider ?? Metadata.Provider; // global-provider-ok: fallback only when the request carries no provider
+    const actionAuthorizesCaller = ActionEngineServer.Instance.ActionAuthorizesCaller(action);
+    const decision = EvaluateActionRunAuthorization(user, actionAuthorizationIDs, metadata, actionAuthorizesCaller);
+    if (!decision.Allowed) {
+      throw new Error(`Not authorized to run action ${action.ID}: ${decision.Reason}`);
+    }
+  }
+
+  /**
+   * The AuthorizationID of each `MJ: Action Authorizations` row for the action. Read as the system
+   * user: this is the server's own authorization decision, so it must not depend on whether the
+   * caller can read that entity.
+   */
+  private async loadActionAuthorizationIDs(actionID: string, provider: DatabaseProviderBase | null): Promise<string[]> {
+    const systemUser = UserCache.Instance.GetSystemUser();
+    if (!systemUser) {
+      throw new Error("System user not found");
+    }
+    const result = await new RunView(provider).RunView<{ AuthorizationID: string }>({
+      EntityName: 'MJ: Action Authorizations',
+      ExtraFilter: `ActionID='${EscapeSQLString(actionID)}'`,
+      Fields: ['AuthorizationID'],
+      ResultType: 'simple'
+    }, systemUser);
+    if (!result.Success) {
+      throw new Error(`Could not read the authorizations for action ${actionID}: ${result.ErrorMessage}`);
+    }
+    return result.Results.map(row => row.AuthorizationID);
+  }
+
+  /**
    * Finds an action by its ID
    * @param actionID The ID of the action to find
    * @returns The action
    * @throws Error if the action is not found
    * @private
    */
-  private findActionById(actionID: string): any {
+  private findActionById(actionID: string): MJActionEntityExtended {
     const action = ActionEngineServer.Instance.Actions.find(a => UUIDsEqual(a.ID, actionID));
     if (!action) {
       throw new Error(`Action with ID ${actionID} not found`);
@@ -262,25 +327,23 @@ export class ActionResolver extends ResolverBase {
   }
 
   /**
-   * Executes an action
+   * Executes an action. The run is always logged: a client cannot switch off the action execution log.
    * @param action The action to execute
    * @param user The user context
    * @param params The action parameters
-   * @param skipActionLog Whether to skip action logging
    * @returns The action result
    * @private
    */
   private async executeAction(
-    action: any, 
-    user: UserInfo, 
-    params: ActionParam[], 
-    skipActionLog?: boolean
+    action: MJActionEntityExtended,
+    user: UserInfo,
+    params: ActionParam[]
   ): Promise<ActionResult> {
     return await ActionEngineServer.Instance.RunAction({
       Action: action,
       ContextUser: user,
       Params: params,
-      SkipActionLog: skipActionLog,
+      SkipActionLog: false,
       Filters: []
     });
   }

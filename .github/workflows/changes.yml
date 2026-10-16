@@ -5,9 +5,37 @@ on:
     branches:
       - next
       - main
+      # This line. `Check migrations` is becoming a REQUIRED status check on the
+      # `lts-lines` ruleset to close EX-2026-003, and a check that never runs on a branch
+      # cannot gate it — the required context never arrives and the pull request sits at
+      # "Expected" forever. A `pull_request` run uses the workflow file from the merge
+      # commit, i.e. THIS branch's copy, so adding `lts/**` on `next` does nothing here;
+      # the entry has to exist on the line itself.
+      #
+      # This is the only workflow on this branch that can serve as the required check.
+      # Every other one that triggers on a pull request here — test.yml, integration.yml,
+      # ci-ui-tokens.yml, docs-site-ci.yml, release-lines-guard.yml — carries a `paths:`
+      # filter, so each one skips on some pull requests, and a skipped workflow reports no
+      # status at all. This file deliberately carries no `paths:` filter (see the CodeGen
+      # tail step on `next` for the full reasoning), which is what makes it usable here.
+      #
+      # Cheap on a line that receives patches rather than schema changes: every
+      # migration-specific step below is gated on `has_migrations`, so a patch-only pull
+      # request skips all of them and reports green in well under a minute. It earns its
+      # place as a tripwire — if a migration ever is backported to this line, the
+      # filename, timestamp, duplicate-version and content validations fire on it.
+      - 'lts/**'
 
+# Keyed by ref rather than the constant `group: "changes"` this file previously used. A
+# constant group is REPO-WIDE: with cancel-in-progress, one pull request's run cancels
+# every other open pull request's run, so the check could only be green on whichever
+# pull request pushed last, and a re-run just moved the cancellation elsewhere. Harmless
+# while the check was advisory. Not harmless once it is REQUIRED — a cancelled run
+# reports no status, so two concurrent pull requests on this line would deadlock each
+# other indefinitely. `github.ref` on a pull request is that pull request's own
+# refs/pull/N/merge, so runs are now independent. Matches `next`'s copy of this file.
 concurrency:
-  group: "changes"
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 # `pull-requests: write` lets the migration-ID-determinism step post a sticky PR
