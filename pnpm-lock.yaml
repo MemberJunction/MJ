@@ -531,6 +531,9 @@ importers:
       '@memberjunction/core-entities':
         specifier: 6.2.0-edge.4
         version: link:../../MJCoreEntities
+      '@memberjunction/generic-database-provider':
+        specifier: 6.2.0-edge.4
+        version: link:../../GenericDatabaseProvider
       '@memberjunction/global':
         specifier: 6.2.0-edge.4
         version: link:../../MJGlobal
@@ -16085,6 +16088,9 @@ importers:
       '@memberjunction/ai-engine-base':
         specifier: 6.2.0-edge.4
         version: link:../../AI/BaseAIEngine
+      '@memberjunction/ai-inception':
+        specifier: 6.2.0-edge.4
+        version: link:../../AI/Providers/Inception
       '@memberjunction/ai-openrouter':
         specifier: 6.2.0-edge.4
         version: link:../../AI/Providers/OpenRouter

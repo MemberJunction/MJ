@@ -1,6 +1,7 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
+import { StorageAccountAccess } from "@memberjunction/storage";
 import { BaseFileStorageAction } from "./base-file-storage.action";
 
 /**
@@ -23,6 +24,11 @@ import { BaseFileStorageAction } from "./base-file-storage.action";
 @RegisterClass(BaseAction, "File Storage: Get Upload URL")
 export class GetUploadUrlAction extends BaseFileStorageAction {
 
+    /** {@inheritDoc BaseFileStorageAction.AccountAccess} — this action WRITES to the account. */
+    protected override get AccountAccess(): StorageAccountAccess {
+        return 'Write';
+    }
+
     /**
      * Generate a pre-authenticated upload URL
      *
@@ -37,7 +43,7 @@ export class GetUploadUrlAction extends BaseFileStorageAction {
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
             // Get and initialize storage driver
-            const { driver, error } = await this.getDriverFromParams(params);
+            const { driver, account, error } = await this.getDriverFromParams(params);
             if (error) return error;
 
             // Get required parameter
@@ -48,6 +54,10 @@ export class GetUploadUrlAction extends BaseFileStorageAction {
                     "MISSING_OBJECTNAME"
                 );
             }
+
+            // Overwrite rule: an object behind an MJ: Files row the caller cannot read may not be replaced
+            const refused = await this.CheckObjectsReadable(account!, driver!, [objectName], params.ContextUser);
+            if (refused) return refused;
 
             // Execute the create upload URL operation
             const result = await driver!.CreatePreAuthUploadUrl(objectName);
