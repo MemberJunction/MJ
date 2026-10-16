@@ -2169,7 +2169,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
 
             // Store the full SourceSpecificConfiguration in the Configuration JSON
             const currentConfig = entity.ConfigurationObject ?? {};
-            currentConfig.SourceSpecificConfiguration = { ...currentConfig.SourceSpecificConfiguration, ...this.FormSourceSpecificConfig };
+            currentConfig.SourceSpecificConfiguration = { ...this.FormSourceSpecificConfig };
             entity.ConfigurationObject = currentConfig;
 
             entity.EmbeddingModelID = this.FormSourceEmbeddingModelID || null;

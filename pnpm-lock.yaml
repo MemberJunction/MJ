@@ -5052,9 +5052,6 @@ importers:
       '@memberjunction/ng-test-utils':
         specifier: 6.2.0-edge.4
         version: link:../../Generic/test-utils
-      '@memberjunction/unit-testing':
-        specifier: 6.2.0-edge.4
-        version: link:../../../UnitTesting
       '@types/d3':
         specifier: ^7.4.0
         version: 7.4.3

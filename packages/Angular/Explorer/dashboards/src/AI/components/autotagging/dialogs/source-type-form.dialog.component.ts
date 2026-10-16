@@ -979,7 +979,7 @@ export class ClassifySourceTypeFormDialogComponent extends BaseAngularComponent 
             const { SourceSpecificConfiguration: _ssc, MaxItemsPerRun: _mipr, Website: _web, ...classifierKnobs } = this.workingConfig;
             Object.assign(currentConfig, classifierKnobs);
 
-            currentConfig.SourceSpecificConfiguration = { ...currentConfig.SourceSpecificConfiguration, ...this.FormSourceSpecificConfig };
+            currentConfig.SourceSpecificConfiguration = { ...this.FormSourceSpecificConfig };
 
             // Persist the quick-edit knobs that don't have their own DB columns
             // (the rest live on the typed Configuration JSON sub-objects). The

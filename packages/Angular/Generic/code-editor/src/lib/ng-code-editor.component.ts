@@ -131,7 +131,10 @@ export class CodeEditorComponent extends BaseAngularComponent implements OnInit,
     this._readonly = val;
     if (this.view) {
       this.SetReadonly(val);
-      this.SetEditable(!val && !this._disabled);
+      // When readonly, also make it non-editable
+      if (val) {
+        this.SetEditable(false);
+      }
     }
   }
 

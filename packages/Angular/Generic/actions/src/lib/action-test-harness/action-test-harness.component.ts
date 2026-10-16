@@ -2,7 +2,6 @@ import { Component, Input, Output, EventEmitter, OnInit, ChangeDetectorRef, Elem
 import { MJActionEntity, MJActionParamEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { SafeJSONParse } from '@memberjunction/global';
 
 // Setting key prefix for action run input caching
 const ACTION_INPUT_CACHE_PREFIX = '__ACTION_DASHBOARD__action-run-inputs/';
@@ -71,22 +70,7 @@ export class ActionTestHarnessComponent extends BaseAngularComponent implements 
     // Public state properties
     public ParamValues: ActionParamValue[] = [];
     public IsExecuting = false;
-    private _executionResult: ActionResult | null = null;
-    /** The `{Name, Value}` params of the last run's ResultData, parsed once per result. */
-    private resultParams: Array<{ Name: string; Value: unknown }> = [];
-
-    /** Setting it parses its ResultData: RunAction returns the Output/Both params as a JSON array. */
-    public get ExecutionResult(): ActionResult | null {
-        return this._executionResult;
-    }
-    public set ExecutionResult(value: ActionResult | null) {
-        this._executionResult = value;
-        const data = value?.ResultData;
-        const parsed: unknown = typeof data === 'string' ? SafeJSONParse<unknown>(data) : data;
-        const items: unknown[] = Array.isArray(parsed) ? parsed : [];
-        this.resultParams = items.filter((p): p is { Name: string; Value: unknown } =>
-            typeof p === 'object' && p !== null && typeof (p as Record<string, unknown>)['Name'] === 'string');
-    }
+    public ExecutionResult: ActionResult | null = null;
     public ExecutionError: string | null = null;
     public ExecutionTime = 0;
     public ShowRawResult = false;
@@ -466,10 +450,10 @@ export class ActionTestHarnessComponent extends BaseAngularComponent implements 
         return this._actionParams.filter(p => p.Type === 'Output' || p.Type === 'Both');
     }
 
-    /** The value the last run returned for a declared output, matched by name case-insensitively as the engine does. */
     public GetOutputParamValue(paramName: string): string {
-        const wanted = paramName.trim().toLowerCase();
-        return this.FormatResultData(this.resultParams.find(p => p.Name.trim().toLowerCase() === wanted)?.Value);
+        if (!this.ExecutionResult?.ResultData) return 'null';
+        const data = this.ExecutionResult.ResultData as Record<string, unknown>;
+        return this.FormatResultData(data[paramName]);
     }
 
     public FormatResultData(data: unknown): string {

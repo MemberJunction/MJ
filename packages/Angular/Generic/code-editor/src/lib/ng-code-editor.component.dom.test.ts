@@ -137,13 +137,4 @@ describe('CodeEditorComponent (DOM — toolbar)', () => {
     expect(actions).toHaveLength(1);
     expect(actions[0].buttonId).toBe('copy');
   });
-
-  it('becomes editable again when readonly is cleared', () => {
-    const f = renderComponentFixture(CodeEditorComponent, { ...MOD });
-    const editable = vi.spyOn(f.componentInstance, 'SetEditable').mockImplementation(() => undefined);
-    vi.spyOn(f.componentInstance, 'SetReadonly').mockImplementation(() => undefined);
-    f.componentInstance.readonly = true;
-    f.componentInstance.readonly = false;
-    expect(editable.mock.calls).toEqual([[false], [true]]);
-  });
 });

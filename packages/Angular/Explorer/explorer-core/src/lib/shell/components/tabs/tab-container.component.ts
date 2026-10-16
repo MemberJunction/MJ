@@ -599,7 +599,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     // configuration emission.
     const nextRecordId = (config['recordId'] as string) || tab.resourceRecordId || '';
     const changed =
-      !TabContainerComponent.IsSameRecordId(existing.ResourceRecordID, nextRecordId) ||
+      (existing.ResourceRecordID || '') !== nextRecordId ||
       (existingConfig['Entity'] as string | undefined) !== (config['Entity'] as string | undefined) ||
       (existingConfig['applicationId'] as string | undefined) !== tab.applicationId;
     if (!changed) {
@@ -2365,14 +2365,13 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
 
   /**
    * Whether two resource record ids name the same record. A component's ResourceRecordSaved
-   * stores a single-field key in the URL-segment form with the server's casing ('ID|<UUID>'), while
-   * its tab may keep the bare lower-case value from a deep link ('<uuid>'). The field name is dropped
-   * only when the other id is a bare value, so two ids that both contain '|' are compared as they are.
-   * Key values compare case-insensitively, as SQL Server's default collation matches them.
+   * stores a single-field key in the URL-segment form ('ID|<uuid>'), while its tab may keep the
+   * bare value ('<uuid>'). The field name is dropped only when the other id is a bare value, so
+   * two ids that both contain '|' are compared as they are.
    */
   public static IsSameRecordId(a: string | null | undefined, b: string | null | undefined): boolean {
-    const left = (a ?? '').trim().toLowerCase();
-    const right = (b ?? '').trim().toLowerCase();
+    const left = (a ?? '').trim();
+    const right = (b ?? '').trim();
     const bareValue = (id: string): string => SINGLE_FIELD_URL_SEGMENT.exec(id)?.[1] ?? id;
     return left === right || bareValue(left) === right || left === bareValue(right);
   }

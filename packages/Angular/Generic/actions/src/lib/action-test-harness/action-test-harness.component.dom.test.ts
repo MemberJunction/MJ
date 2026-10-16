@@ -86,25 +86,4 @@ describe('ActionTestHarnessComponent (DOM)', () => {
     expect(f.componentInstance.ExecutionResult).toBeNull();
     expect(f.componentInstance.ParamValues.length).toBe(2);
   });
-
-  it('maps each declared output to its value from the RunAction ResultData (a JSON array of params)', () => {
-    const outputs = [
-      { ID: 'o1', Name: 'ProcessRunID', Type: 'Output', IsRequired: false, IsArray: false, DefaultValue: null },
-      { ID: 'o2', Name: 'Processed', Type: 'Output', IsRequired: false, IsArray: false, DefaultValue: null },
-    ] as unknown as MJActionParamEntity[];
-    // The shape ActionResolver.createActionResult sends: JSON.stringify of the Output/Both params.
-    const resultData = JSON.stringify([
-      { Name: 'ProcessRunID', Type: 'Output', Value: 'RUN-1' },
-      { Name: 'processed', Type: 'Output', Value: 5 },
-    ]);
-    const f = renderComponentFixture(ActionTestHarnessComponent, {
-      imports: CHILDREN,
-      declarations: [ActionTestHarnessComponent],
-      inputs: { Action: ACTION, ActionParams: [...PARAMS, ...outputs] },
-      setup: (c) => { c.ExecutionResult = { Success: true, ResultData: resultData }; },
-    });
-    const values = Array.from(f.nativeElement.querySelectorAll('.output-param pre')).map((e) => (e as HTMLElement).textContent?.trim());
-    expect(values).toEqual(['RUN-1', '5']);
-    expect(f.componentInstance.GetOutputParamValue('Missing')).toBe('null');
-  });
 });

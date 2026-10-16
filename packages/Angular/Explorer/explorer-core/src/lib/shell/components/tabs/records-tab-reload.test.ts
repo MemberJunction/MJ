@@ -174,14 +174,6 @@ describe('records region — reload on in-place replacement', () => {
     expect(h.loadTabContent).not.toHaveBeenCalled();
   });
 
-  it('does NOT reload a deep-linked tab after its record was saved', () => {
-    // A save rewrites the component's id to the server's URL-segment form; the tab keeps the bare
-    // lower-case id from the URL. Reading that as another record reloaded the pane on every emission.
-    const h = createHarness({ bound: boundResource('Widgets', 'ID|D8A9B7AB-7450-48E5-A0EA-ACD1D86ACF70') });
-    expect(reload(h, tabFor('Widgets', 'd8a9b7ab-7450-48e5-a0ea-acd1d86acf70'))).toBe(false);
-    expect(reload(h, tabFor('Widgets', '11111111-2222-3333-4444-555555555555'))).toBe(true);
-  });
-
   describe('region guards', () => {
     it('stands down during batch tab creation', () => {
       const h = createHarness({ creating: true });

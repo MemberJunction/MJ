@@ -2,10 +2,8 @@ import { Injectable } from '@angular/core';
 import { Observable, BehaviorSubject, from, combineLatest } from 'rxjs';
 import { map, switchMap, shareReplay, tap } from 'rxjs/operators';
 import { RunView, Metadata, IMetadataProvider } from '@memberjunction/core';
-import { UUIDSet } from '@memberjunction/global';
 import { MJTestRunFeedbackEntity } from '@memberjunction/core-entities';
 import { TestEngineBase } from '@memberjunction/testing-engine-base';
-import type { TestingTimeRange } from '../testing-agent-context';
 
 export interface TestingDashboardKPIs {
   TotalTestsActive: number;
@@ -47,8 +45,6 @@ export interface SuiteHierarchyNode {
   level: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   children: SuiteHierarchyNode[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   testCount: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
-  /** Runs of the suite's tests in the period; 0 means there is no pass rate to show. */
-  RunCount: number;
   passRate: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   totalCost: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   averageScore: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
@@ -220,9 +216,6 @@ export class TestingInstrumentationService {
     start: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // Last 30 days
     end: new Date()
   });
-
-  /** The named range loads re-resolve against the current time, or null for an explicit start/end. */
-  private _rollingRange: TestingTimeRange | null = 'month';
 
   /**
    * Agent-driven filter intents for the Runs surface. Published by the Testing
@@ -452,7 +445,6 @@ export class TestingInstrumentationService {
   }
 
   SetDateRange(start: Date, end: Date): void {
-    this._rollingRange = null;
     this._dateRange$.next({ start, end });
   }
 
@@ -467,11 +459,7 @@ export class TestingInstrumentationService {
    * `FilterTestsByTimeRange` tool resolve identical windows.
    */
   SetDateRangeByName(range: 'today' | 'week' | 'month' | '90days'): void {
-    this._rollingRange = range;
-    this._dateRange$.next(TestingInstrumentationService.windowFor(range, new Date()));
-  }
-
-  private static windowFor(range: TestingTimeRange, now: Date): { start: Date; end: Date } {
+    const now = new Date();
     let start: Date;
     switch (range) {
       case 'today':
@@ -489,12 +477,7 @@ export class TestingInstrumentationService {
         start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
         break;
     }
-    return { start, end: now };
-  }
-
-  /** The window a load reads: a named range ends now, so runs started after the app loaded are included. */
-  private currentWindow(): { start: Date; end: Date } {
-    return this._rollingRange ? TestingInstrumentationService.windowFor(this._rollingRange, new Date()) : this._dateRange$.value;
+    this.SetDateRange(start, now);
   }
 
   /** @deprecated Use {@link SetDateRangeByName}. */
@@ -530,7 +513,7 @@ export class TestingInstrumentationService {
   }
 
   private async loadKPIs(): Promise<TestingDashboardKPIs> {
-    const { start, end } = this.currentWindow();
+    const { start, end } = this._dateRange$.value;
     const rv = RunView.FromMetadataProvider(this.Provider);
 
     // Get Tests from TestEngineBase cache instead of querying DB
@@ -628,7 +611,7 @@ export class TestingInstrumentationService {
   }
 
   private async loadTestRuns(): Promise<TestRunSummary[]> {
-    const { start, end } = this.currentWindow();
+    const { start, end } = this._dateRange$.value;
     const suiteFilter = this._suiteFilter$.value;
     const typeFilter = this._testTypeFilter$.value;
 
@@ -636,7 +619,7 @@ export class TestingInstrumentationService {
 
     if (suiteFilter) {
       // Need to join through TestSuiteTest
-      filter += ` AND TestID IN (SELECT TestID FROM [__mj].[vwTestSuiteTests] WHERE SuiteID = '${suiteFilter}')`;
+      filter += ` AND TestID IN (SELECT TestID FROM [__mj].[vwTestSuiteTests] WHERE TestSuiteID = '${suiteFilter}')`;
     }
 
     if (typeFilter) {
@@ -682,7 +665,7 @@ export class TestingInstrumentationService {
   }
 
   private async loadSuiteHierarchy(): Promise<SuiteHierarchyNode[]> {
-    const { start, end } = this.currentWindow();
+    const { start, end } = this._dateRange$.value;
     const rv = RunView.FromMetadataProvider(this.Provider);
 
     // Get Test Suites from TestEngineBase cache instead of querying DB
@@ -708,18 +691,28 @@ export class TestingInstrumentationService {
       level: 0,
       children: [],
       testCount: 0,
-      RunCount: 0,
       passRate: 0,
       totalCost: 0,
       averageScore: 0,
       expanded: false
     }));
 
+    // Calculate metrics for each suite (simplified - would need TestSuiteTest join for accuracy)
+    type SimpleTestRun = {ID: string; TestID: string; Status: string; Score: number; CostUSD: number};
+    const suiteTestRuns = new Map<string, SimpleTestRun[]>();
+
+    testRuns.forEach(run => {
+      // This is simplified - would need to query TestSuiteTest to get actual suite membership
+      const suiteID = run.TestID; // Placeholder
+      if (!suiteTestRuns.has(suiteID)) {
+        suiteTestRuns.set(suiteID, []);
+      }
+      suiteTestRuns.get(suiteID)!.push(run);
+    });
+
     nodes.forEach(node => {
-      const memberIDs = new UUIDSet(engine.GetTestsForSuite(node.id).map(t => t.ID));
-      const runs = testRuns.filter(r => memberIDs.Has(r.TestID));
-      node.testCount = memberIDs.Size;
-      node.RunCount = runs.length;
+      const runs = suiteTestRuns.get(node.id) || [];
+      node.testCount = runs.length;
       node.passRate = runs.length > 0
         ? (runs.filter(r => r.Status === 'Passed').length / runs.length) * 100
         : 0;
@@ -753,7 +746,7 @@ export class TestingInstrumentationService {
   }
 
   private async loadTrends(): Promise<TestTrendData[]> {
-    const { start, end } = this.currentWindow();
+    const { start, end } = this._dateRange$.value;
 
     // Create time buckets
     const buckets = this.createTimeBuckets(start, end);
@@ -819,7 +812,7 @@ export class TestingInstrumentationService {
   }
 
   private async loadAnalytics(): Promise<TestAnalytics> {
-    const { start, end } = this.currentWindow();
+    const { start, end } = this._dateRange$.value;
     const rv = RunView.FromMetadataProvider(this.Provider);
 
     // Use simple result type with only needed fields
@@ -943,7 +936,7 @@ export class TestingInstrumentationService {
   }
 
   private async loadPendingFeedback(): Promise<FeedbackPending[]> {
-    const { start, end } = this.currentWindow();
+    const { start, end } = this._dateRange$.value;
     const rv = RunView.FromMetadataProvider(this.Provider);
 
     // Use simple result types with only needed fields
@@ -1015,7 +1008,7 @@ export class TestingInstrumentationService {
   }
 
   private async loadFeedbackStats(): Promise<FeedbackStats> {
-    const { start, end } = this.currentWindow();
+    const { start, end } = this._dateRange$.value;
     const rv = RunView.FromMetadataProvider(this.Provider);
 
     // Load all feedback for the period - use simple result type with only needed fields
@@ -1183,14 +1176,14 @@ export class TestingInstrumentationService {
    * Load test runs with feedback data joined for evaluation display
    */
   private async loadTestRunsWithFeedback(): Promise<TestRunWithFeedbackSummary[]> {
-    const { start, end } = this.currentWindow();
+    const { start, end } = this._dateRange$.value;
     const suiteFilter = this._suiteFilter$.value;
     const typeFilter = this._testTypeFilter$.value;
 
     let filter = `StartedAt >= '${start.toISOString()}' AND StartedAt <= '${end.toISOString()}'`;
 
     if (suiteFilter) {
-      filter += ` AND TestID IN (SELECT TestID FROM [__mj].[vwTestSuiteTests] WHERE SuiteID = '${suiteFilter}')`;
+      filter += ` AND TestID IN (SELECT TestID FROM [__mj].[vwTestSuiteTests] WHERE TestSuiteID = '${suiteFilter}')`;
     }
 
     if (typeFilter) {

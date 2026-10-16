@@ -144,9 +144,6 @@ interface TestAlert {
                       <span class="suite-health-name">{{ suite.name }}</span>
                       <span class="suite-health-count">{{ suite.testCount }} tests</span>
                     </div>
-                    @if (suite.RunCount === 0) {
-                      <span class="suite-health-none">No runs</span>
-                    } @else {
                     <div class="suite-health-bar-wrapper">
                       <div class="suite-health-bar">
                         <div
@@ -159,7 +156,6 @@ interface TestAlert {
                         {{ suite.passRate | number:'1.0-0' }}%
                       </span>
                     </div>
-                    }
                   </div>
                 } @empty {
                   <mj-empty-state Size="compact" Icon="fa-solid fa-layer-group"
@@ -529,12 +525,6 @@ interface TestAlert {
       transition: width 0.3s ease;
     }
 
-    .suite-health-none {
-      font-size: 12px;
-      color: var(--mj-text-muted);
-      flex-shrink: 0;
-    }
-
     .suite-health-pct {
       font-size: 12px;
       font-weight: 600;
@@ -901,7 +891,7 @@ export class TestingDashboardTabComponent implements OnInit, OnDestroy {
     const alertIds = new Set(alerts.map(a => a.id));
 
     for (const run of runs) {
-      if (run.score < 0.5 && run.status !== 'Running' && run.status !== 'Skipped' && !alertIds.has(run.id)) {
+      if (run.score < 0.5 && run.status !== 'Running' && !alertIds.has(run.id)) {
         alerts.push({
           id: run.id,
           testName: run.testName,
@@ -914,11 +904,11 @@ export class TestingDashboardTabComponent implements OnInit, OnDestroy {
     }
   }
 
-  /** Flatten suite hierarchy and sort by worst health first; suites with no runs in the period go last */
+  /** Flatten suite hierarchy and sort by worst health first */
   private flattenAndSort(nodes: SuiteHierarchyNode[]): SuiteHierarchyNode[] {
     const flat: SuiteHierarchyNode[] = [];
     this.collectNodes(nodes, flat);
-    return flat.sort((a, b) => (a.RunCount === 0 ? 1 : 0) - (b.RunCount === 0 ? 1 : 0) || a.passRate - b.passRate);
+    return flat.sort((a, b) => a.passRate - b.passRate);
   }
 
   private collectNodes(nodes: SuiteHierarchyNode[], out: SuiteHierarchyNode[]): void {
