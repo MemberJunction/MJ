@@ -443,6 +443,28 @@ const result = await runner.ExecuteAgent({
 });
 ```
 
+### With Post-Run Compaction, Scratchpad Pruning & Memory Extraction (`compactAfterRun`)
+
+Programmatic callers and multi-run workflows can opt into automatic post-run cleanup once an agent run settles via `ExecuteAgentParams.compactAfterRun`. When enabled (`true` or an `AgentPostRunCompactionConfig` object), `BaseAgent.finalizeAgentRun` executes a failure-isolated post-run compaction pass after pending step writes and the run record are saved:
+
+1. **Conversation Message Compaction** — When `params.conversationMessages.length >= messageCountThreshold` (default: `12`), older non-system messages (`[1 .. length - preserveRecentCount - 1]`) are compacted via `compactSingleMessage()` while preserving the initial user goal (`index 0`) and the most recent turns.
+2. **Scratchpad Pruning** — When the loop scratchpad contains more notes or completed tasks than `maxScratchpadNotes` (default: `20`), `ScratchpadManager.PruneNotes()` and `ScratchpadManager.EnforceTaskLimit()` prune the oldest low-priority note lines first (preserving `[HIGH]` / `[IMPORTANT]` / `[PINNED]` / `❗` / `⚠️` notes) and trim excess completed tasks.
+3. **Background Memory Extraction** — When `extractMemories !== false` and `agentRun.Success` is `true`, triggers background memory extraction (`triggerPostRunMemoryExtraction`) to harvest durable learnings from the completed run without blocking the caller.
+
+```typescript
+const result = await runner.ExecuteAgent({
+    agentId: 'my-agent-id',
+    conversationMessages: messages,
+    contextUser: currentUser,
+    compactAfterRun: {
+        enabled: true,
+        messageCountThreshold: 12,
+        extractMemories: true,
+        maxScratchpadNotes: 20
+    }
+});
+```
+
 ## Latency Optimizations & Concurrent Sub-Agent Execution
 
 To drastically reduce execution latency, the framework includes the following optimizations:
