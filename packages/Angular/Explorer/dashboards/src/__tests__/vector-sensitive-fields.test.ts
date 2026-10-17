@@ -371,3 +371,32 @@ describe('the asymmetry argument has a limit, and the limit is also pinned', () 
         expect(IsSensitiveFieldName('EmbeddedRecordObject')).toBe(false);
     });
 });
+
+describe('SensitiveFieldsInTemplate reads every identifier in a tag, not only the leading one (#5633)', () => {
+    it('catches a field wrapped in parentheses', () => {
+        expect(SensitiveFieldsInTemplate('{{ (PasswordHash) }}')).toEqual(['PasswordHash']);
+    });
+
+    it('catches a field that is not the first operand of an expression', () => {
+        expect(SensitiveFieldsInTemplate('{{ Name ~ " " ~ PasswordHash }}')).toEqual(['PasswordHash']);
+    });
+
+    it('catches a field read through a {% set %} alias', () => {
+        expect(SensitiveFieldsInTemplate('{% set p = PasswordHash %}{{ p }}')).toEqual(['PasswordHash']);
+    });
+
+    it('catches a field in a whitespace-trimmed control tag', () => {
+        expect(SensitiveFieldsInTemplate('{%- if SSN -%}has one{%- endif -%}')).toEqual(['SSN']);
+    });
+
+    it('does not refuse the tag keywords and filters of a clean template', () => {
+        const tpl =
+            '{% if FirstName %}{{ FirstName | upper }}{% else %}{{ LastName | default("n/a") }}{% endif %}' +
+            '{% for item in Items %}{{ item.Title | truncate(40) }}{% endfor %}';
+        expect(SensitiveFieldsInTemplate(tpl)).toEqual([]);
+    });
+
+    it('still ignores sensitive words in the prose outside the tags', () => {
+        expect(SensitiveFieldsInTemplate('Your password is never shown. {{ FirstName }}')).toEqual([]);
+    });
+});

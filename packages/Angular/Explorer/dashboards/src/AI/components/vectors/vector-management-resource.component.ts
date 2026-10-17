@@ -147,6 +147,8 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
     public EditDocVectorIndexID = '';
     public EditDocStatus = '';
     public EditDocTemplate = '';
+    /** The template text as loaded, so Save can tell whether the user changed it. */
+    private editDocTemplateLoaded = '';
     /** Entity Document Type of the document being edited. Fixed at creation, shown read-only. */
     public EditDocType = '';
     public IsEditRegenerating = false;
@@ -177,6 +179,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         this.EditDocStatus = doc.Status;
         this.EditDocType = doc.Type || '';
         this.EditDocTemplate = '';
+        this.editDocTemplateLoaded = '';
         this.IsEditRegenerating = false;
         this.ShowEditPanel = true;
         this.cdr.detectChanges();
@@ -200,6 +203,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
             });
             if (result.Success && result.Results.length > 0 && result.Results[0].TemplateText) {
                 this.EditDocTemplate = result.Results[0].TemplateText;
+                this.editDocTemplateLoaded = this.EditDocTemplate;
                 this.cdr.detectChanges();
             }
         } catch (error) {
@@ -216,6 +220,16 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         this.IsEditSaving = true;
         this.cdr.detectChanges();
         try {
+            // Only changed text is checked, so a document saved before these checks existed
+            // can still be renamed or re-pointed without first fixing its template.
+            const templateChanged = this.EditDocTemplate !== this.editDocTemplateLoaded;
+            if (templateChanged) {
+                if (!this.EditDocTemplate.trim()) {
+                    throw new Error('The template is empty. Add the fields to embed, or regenerate it.');
+                }
+                this.assertTemplateAllowed(this.EditDocTemplate);
+            }
+
             const md = this.ProviderToUse;
             const doc = await md.GetEntityObject<MJEntityDocumentEntity>('MJ: Entity Documents');
             const loaded = await doc.Load(this.EditDocID);
@@ -237,8 +251,15 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
 
             const saved = await doc.Save();
             if (saved) {
-                // Also save updated template text if changed
-                await this.saveEditDocTemplate(doc.TemplateID);
+                const templateError = templateChanged ? await this.saveEditDocTemplate(doc.TemplateID) : null;
+                if (templateError) {
+                    // The document row is saved; keep the panel open so the edited text isn't lost.
+                    MJNotificationService.Instance.CreateSimpleNotification(
+                        `The document was saved, but its template text was not: ${templateError}`, 'error', 6000
+                    );
+                    await this.LoadData(true);
+                    return;
+                }
                 MJNotificationService.Instance.CreateSimpleNotification('Entity document updated', 'success', 2500);
                 this.ShowEditPanel = false;
                 await this.LoadData(true);
@@ -255,26 +276,35 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         }
     }
 
-    /** Save the edited template text back to the Template Contents record */
-    private async saveEditDocTemplate(templateId: string): Promise<void> {
-        if (!templateId || !this.EditDocTemplate) return;
-        try {
-            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-            const result = await rv.RunView<MJTemplateContentEntity>({
-                EntityName: 'MJ: Template Contents',
-                ExtraFilter: `TemplateID='${templateId}'`,
-                ResultType: 'entity_object',
-                OrderBy: 'Priority ASC',
-                MaxRows: 1,
-            });
-            if (result.Success && result.Results.length > 0) {
-                const content = result.Results[0];
-                content.TemplateText = this.EditDocTemplate;
-                await content.Save();
-            }
-        } catch (error) {
-            console.warn('[VectorManagement] Could not save template text:', error);
+    /**
+     * Writes the edited template text to the template's Template Contents row.
+     * Returns why it was not saved, or null when it was, so the caller never reports a
+     * failed write as a successful save.
+     */
+    private async saveEditDocTemplate(templateId: string): Promise<string | null> {
+        if (!templateId) {
+            return 'this document has no template.';
         }
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+        const result = await rv.RunView<MJTemplateContentEntity>({
+            EntityName: 'MJ: Template Contents',
+            ExtraFilter: `TemplateID='${EscapeSQLString(templateId)}'`,
+            ResultType: 'entity_object',
+            OrderBy: 'Priority ASC',
+            MaxRows: 1,
+        });
+        if (!result.Success) {
+            return result.ErrorMessage || 'the template could not be loaded.';
+        }
+        const content = result.Results[0];
+        if (!content) {
+            return 'the template has no content row to write to.';
+        }
+        content.TemplateText = this.EditDocTemplate;
+        if (await content.Save()) {
+            return null;
+        }
+        return content.LatestResult?.CompleteMessage || 'unknown error.';
     }
 
     /** Regenerate the template using AI for the current edit panel entity */
@@ -1587,18 +1617,15 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         return index.ID;
     }
 
-    /** Create a Template + TemplateContent record for the entity document */
-    private async createTemplateForDocument(entityDoc: MJEntityDocumentEntity): Promise<void> {
-        const md = this.ProviderToUse;
-        const templateText = this.EditableTemplate || this.SuggestionResult?.template || '';
-        if (!templateText) {
-            throw new Error('No template content to save');
-        }
-
-        // LAYER 2: the template is hand-editable after the model returns, so a user can type
-        // a field the picker never offered. Refuse before anything is written — once values
-        // reach the vector index they are retrievable by similarity search, outside the
-        // entity permissions that guard the source column, and not fully reversible.
+    /**
+     * LAYER 2: throws when a template may not be embedded. Runs on create and on an edited
+     * template, because the template is hand-editable after the model returns, so a user
+     * can type a field the picker never offered.
+     */
+    private assertTemplateAllowed(templateText: string): void {
+        // Callers run this before anything is written: once values reach the vector index they
+        // are retrievable by similarity search, outside the entity permissions that guard the
+        // source column, and not fully reversible.
         const sensitive = SensitiveFieldsInTemplate(templateText);
         if (sensitive.length > 0) {
             throw new Error(
@@ -1616,6 +1643,16 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         if (capRefusal) {
             throw new Error(capRefusal);
         }
+    }
+
+    /** Create a Template + TemplateContent record for the entity document */
+    private async createTemplateForDocument(entityDoc: MJEntityDocumentEntity): Promise<void> {
+        const md = this.ProviderToUse;
+        const templateText = this.EditableTemplate || this.SuggestionResult?.template || '';
+        if (!templateText) {
+            throw new Error('No template content to save');
+        }
+        this.assertTemplateAllowed(templateText);
 
         // Find-or-create, so a retry after a mid-flow failure converges on one set of rows.
         const templateName = this.templateNameForDocument();
