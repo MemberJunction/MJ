@@ -109,7 +109,10 @@ export function RealtimeDiagLog(message: string): void {
     if (v === 'true' || v === '1' || v === 'yes') {
         // Strip all control characters (C0/C1, incl. CR/LF/VT/FF/ESC/NEL) plus Unicode
         // line/paragraph separators, to prevent log injection (CWE-117).
-        const sanitized = message.replace(/[\r\n\p{Cc}\p{Zl}\p{Zp}]/gu, ' ');
+        // The trailing `.replace(/\n|\r/g, '')` is a runtime no-op (CR/LF are already gone); it is
+        // the exact form CodeQL's js/log-injection sanitizer model recognizes, which the
+        // replace-with-space above is not.
+        const sanitized = message.replace(/[\r\n\p{Cc}\p{Zl}\p{Zp}]/gu, ' ').replace(/\n|\r/g, '');
         // eslint-disable-next-line no-console
         console.log(sanitized);
     }
