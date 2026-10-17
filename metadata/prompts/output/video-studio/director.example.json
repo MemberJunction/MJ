@@ -1,35 +1,40 @@
 {
   "taskComplete": true,
-  "message": "Defined the Film brief, selected the data-story archetype, inventoried required brand assets and NeverInvent constraints, and bound Q3 revenue metrics.",
+  "message": "Defined the Film brief, selected the KPI Briefing archetype, inventoried required brand assets and NeverInvent constraints, and bound Q3 revenue metrics.",
   "payloadChangeRequest": {
-    "newElements": {
+    "replaceElements": {
       "Film": {
-        "Title": "Q3 Revenue Momentum",
-        "Subject": "Quarterly revenue growth and enterprise retention highlights",
+        "OneSentence": "Q3 annual recurring revenue reached {arr_total} with {ndr_pct} net dollar retention.",
         "Audience": "Executive leadership and board members",
         "Purpose": "Summarize Q3 financial performance with grounded metrics",
-        "Tone": "Authoritative, crisp, and data-driven",
         "DurationSeconds": 18,
-        "Fps": 30,
         "Formats": ["16:9", "9:16"],
-        "KeyMessages": [
-          "Annual recurring revenue reached {arr_total}",
-          "Net dollar retention climbed to {ndr_pct}"
-        ]
+        "Language": "en-US"
       },
       "Archetype": {
-        "ArchetypeID": "data-story",
-        "Overrides": []
+        "ArchetypeID": "A190C806-532E-4650-9A0A-8FA9DC279880",
+        "Name": "KPI Briefing"
       },
       "Assets": {
+        "Approved": [
+          {
+            "Key": "company_logo",
+            "Kind": "Logo",
+            "FileID": "8B4E1A22-5C10-4E91-9A3B-1D2C3E4F5A6B",
+            "Source": "Brand kit primary wordmark",
+            "Provenance": "BrandKit",
+            "Usage": "Primary brand header mark",
+            "MustUse": true
+          }
+        ],
         "Required": [
           {
             "Key": "company_logo",
-            "Kind": "logo",
+            "Kind": "Logo",
             "Description": "Primary company wordmark from the brand kit",
-            "ResolvedFileID": "8B4E1A22-5C10-4E91-9A3B-1D2C3E4F5A6B",
             "MustUse": true,
-            "AllowGenerated": false
+            "AllowGenerated": false,
+            "SatisfiedByAssetKey": "company_logo"
           }
         ],
         "NeverInvent": [
@@ -40,10 +45,11 @@
         "Generate": [
           {
             "Key": "hero_abstract_grid",
-            "Kind": "image",
+            "Kind": "Image",
             "Prompt": "Subtle dark navy geometric data grid background with soft cyan light trails, abstract minimalist corporate style, no text, no people",
-            "AspectRatio": "16:9",
-            "UsedInBeats": ["beat-1"]
+            "Purpose": "Atmospheric abstract backdrop for the opening ARR headline beat",
+            "Format": "16:9",
+            "ReferenceKeys": ["company_logo"]
           }
         ]
       },
@@ -51,27 +57,31 @@
         {
           "Key": "arr_total",
           "Source": {
-            "Kind": "literal",
-            "Value": 48200000
+            "Kind": "Inline"
           },
-          "Format": "currency",
-          "Unit": "USD",
-          "Precision": 1,
+          "Shape": "Scalar",
+          "Format": {
+            "Kind": "Currency",
+            "Currency": "USD",
+            "Decimals": 1
+          },
           "Label": "Annual Recurring Revenue"
         },
         {
           "Key": "ndr_pct",
           "Source": {
-            "Kind": "literal",
-            "Value": 118.4
+            "Kind": "Inline"
           },
-          "Format": "percent",
-          "Precision": 1,
+          "Shape": "Scalar",
+          "Format": {
+            "Kind": "Percent",
+            "Decimals": 1
+          },
           "Label": "Net Dollar Retention"
         }
       ]
     }
   },
-  "reasoning": "All factual figures are bound via DataBindings, the required logo is resolved, and only an abstract illustrative background is requested in Assets.Generate.",
+  "reasoning": "All factual figures are bound via DataBindings, the required logo is satisfied by Assets.Approved, and only an illustrative background is requested in Assets.Generate.",
   "confidence": 0.94
 }

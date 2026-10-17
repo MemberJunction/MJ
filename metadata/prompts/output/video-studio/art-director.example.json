@@ -1,51 +1,105 @@
 {
   "taskComplete": true,
-  "message": "Established concrete Style tokens from the brand kit and reference analyses, including palette, typography scale, motion parameters, layout grid, and Avoid rules.",
+  "message": "Established concrete Style tokens from the brand kit and reference analyses, including Palette, Typography, Composition, Pacing, MotionRules, Keep, Avoid, and References.",
   "payloadChangeRequest": {
-    "newElements": {
+    "replaceElements": {
       "Style": {
-        "Palette": {
-          "Background": "#0B1020",
-          "Foreground": "#F8FAFC",
-          "Primary": "#38BDF8",
-          "Secondary": "#818CF8",
-          "Accents": ["#34D399", "#FBBF24"],
-          "ChartPalette": ["#38BDF8", "#818CF8", "#34D399", "#FBBF24"],
-          "SurfaceGradient": "linear-gradient(135deg, #0B1020 0%, #111827 100%)"
-        },
-        "Typography": {
-          "HeadingFont": "MJ Sans",
-          "BodyFont": "MJ Sans",
-          "MonoFont": "MJ Mono",
-          "HeadingWeight": 700,
-          "BodyWeight": 400,
-          "Scale": {
-            "HeroPx": 84,
-            "H1Px": 56,
-            "H2Px": 40,
-            "BodyPx": 28,
-            "CaptionPx": 20
+        "Palette": [
+          {
+            "Name": "background.primary",
+            "Value": "#0B1020",
+            "Usage": "Primary canvas background across all beats"
+          },
+          {
+            "Name": "text.primary",
+            "Value": "#F8FAFC",
+            "Usage": "Headlines, KPI numerals, and primary labels"
+          },
+          {
+            "Name": "accent.primary",
+            "Value": "#38BDF8",
+            "Usage": "Primary chart series and focal highlights"
+          },
+          {
+            "Name": "accent.positive",
+            "Value": "#34D399",
+            "Usage": "Positive delta badges and expansion metrics"
           }
+        ],
+        "Typography": [
+          {
+            "Role": "Headline",
+            "FontFamily": "MJ Sans",
+            "Weight": 700,
+            "SizeByFormat": {
+              "16:9": "64px",
+              "9:16": "52px"
+            },
+            "LineHeight": "1.15",
+            "LetterSpacing": "-0.02em"
+          },
+          {
+            "Role": "Body",
+            "FontFamily": "MJ Sans",
+            "Weight": 400,
+            "SizeByFormat": {
+              "16:9": "28px",
+              "9:16": "26px"
+            },
+            "LineHeight": "1.4"
+          },
+          {
+            "Role": "MetricValue",
+            "FontFamily": "MJ Mono",
+            "Weight": 700,
+            "SizeByFormat": {
+              "16:9": "76px",
+              "9:16": "64px"
+            },
+            "LineHeight": "1.1"
+          }
+        ],
+        "Composition": "Eye goes first to the primary KPI numeral at upper-center, then to the supporting label and chart below.",
+        "Pacing": {
+          "AvgSecondsBetweenChanges": 5,
+          "HoldRules": "Hold settled KPI figures and the final poster frame for at least 1.5s before transitions.",
+          "MinBeatDurationSeconds": 4,
+          "MaxBeatDurationSeconds": 8
         },
-        "Motion": {
-          "Easing": "cubic-bezier(0.22, 1, 0.36, 1)",
-          "TransitionSeconds": 0.45,
-          "Density": "moderate"
-        },
-        "Layout": {
-          "SafeMarginRatio": 0.08,
-          "CornerRadiusPx": 16,
-          "GridColumns": 12,
-          "ChartStyle": "minimal-dark-grid"
-        },
+        "MotionRules": [
+          {
+            "ObjectClass": "Headline",
+            "Easing": "cubic-bezier(0.22, 1, 0.36, 1)",
+            "DurationMs": 450,
+            "Notes": "Upward 16px reveal with opacity fade-in"
+          },
+          {
+            "ObjectClass": "DataMetric",
+            "Easing": "cubic-bezier(0.16, 1, 0.3, 1)",
+            "DurationMs": 1200,
+            "Notes": "Count-up settles at least 1.5s before beat end"
+          },
+          {
+            "ObjectClass": "Panel",
+            "Easing": "cubic-bezier(0.22, 1, 0.36, 1)",
+            "DurationMs": 500,
+            "Notes": "Staggered card entrance with 80ms offset"
+          }
+        ],
+        "Texture": "Subtle 1px slate hairline borders (#1E293B) over deep navy surface",
+        "Keep": [
+          "Generous 8% outer safe margins",
+          "Monospace tabular numerals for all bound metrics"
+        ],
         "Avoid": [
-          "High-frequencystrobing backgrounds",
+          "High-frequency strobing backgrounds",
           "3D perspective pie charts",
           "Text smaller than 20px at 1080p"
-        ]
+        ],
+        "References": []
       }
     }
   },
-  "reasoning": "Applied brand kit palette and MJ Sans / MJ Mono typography defaults with high-contrast dark surfaces suited to executive financial reporting.",
+  "reasoning": "Applied brand kit ColorToken palette and MJ Sans / MJ Mono TypeSpec rules with explicit Composition, Pacing, and MotionRules suited to executive financial reporting.",
   "confidence": 0.95
 }

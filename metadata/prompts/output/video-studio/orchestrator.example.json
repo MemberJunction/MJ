@@ -1,7 +1,7 @@
 {
   "taskComplete": false,
   "message": "Starting Stage 1 (Director) to establish the Film brief, select an Archetype, inventory required assets, and define DataBindings.",
-  "reasoning": "The VideoGenerationSpec has no Film brief or DataBindings yet. The stage order begins with Video Studio - Director before G1_BriefAndBindings can be evaluated.",
+  "reasoning": "The VideoGenerationSpec has no Film brief or DataBindings yet. The stage order begins with Video Studio - Director before Gate G1 can be evaluated.",
   "nextStep": {
     "type": "Sub-Agent",
     "subAgent": {

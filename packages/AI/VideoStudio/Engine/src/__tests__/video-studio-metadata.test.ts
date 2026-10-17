@@ -2,6 +2,18 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import {
+    ValidateVideoGenerationSpec,
+    VIDEO_STUDIO_SPEC_VERSION,
+    type MJChartKit,
+    type MJVideoRuntime,
+    type ReferenceAnalysis,
+    type RubricCriterionScore,
+    type RubricScoreSummary,
+    type VideoCompositionSource,
+    type VideoDefect,
+    type VideoGenerationSpec,
+} from '@memberjunction/video-studio-core';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, '../../../../../..');
@@ -535,4 +547,368 @@ describe('Video Studio metadata pin (VS-AGT-1)', () => {
             }
         }
     });
+
+    it('validates Director, Art Director, and Storyboard output examples against ValidateVideoGenerationSpec at Briefing, Styled, and Storyboarded', () => {
+        const directorExample = readJson<{
+            payloadChangeRequest: { replaceElements?: Partial<VideoGenerationSpec>; newElements?: unknown };
+        }>('prompts/output/video-studio/director.example.json');
+        const artDirectorExample = readJson<{
+            payloadChangeRequest: { replaceElements?: Partial<VideoGenerationSpec>; newElements?: unknown };
+        }>('prompts/output/video-studio/art-director.example.json');
+        const storyboardExample = readJson<{
+            payloadChangeRequest: { replaceElements?: Partial<VideoGenerationSpec>; newElements?: unknown };
+        }>('prompts/output/video-studio/storyboard.example.json');
+
+        expect(directorExample.payloadChangeRequest.newElements).toBeUndefined();
+        expect(directorExample.payloadChangeRequest.replaceElements).toBeDefined();
+        expect(artDirectorExample.payloadChangeRequest.newElements).toBeUndefined();
+        expect(artDirectorExample.payloadChangeRequest.replaceElements).toBeDefined();
+        expect(storyboardExample.payloadChangeRequest.newElements).toBeUndefined();
+        expect(storyboardExample.payloadChangeRequest.replaceElements).toBeDefined();
+
+        const baseSpec: VideoGenerationSpec = {
+            SpecVersion: VIDEO_STUDIO_SPEC_VERSION,
+            Status: 'Briefing',
+            Archetype: { Name: 'KPI Briefing' },
+            Film: {
+                OneSentence: 'Placeholder',
+                Audience: 'Placeholder',
+                Purpose: 'Placeholder',
+                DurationSeconds: 18,
+                Formats: ['16:9', '9:16'],
+            },
+            Assets: {
+                Approved: [
+                    {
+                        Key: 'company_logo',
+                        Kind: 'Logo',
+                        FileID: '8B4E1A22-5C10-4E91-9A3B-1D2C3E4F5A6B',
+                        Source: 'Brand kit primary wordmark',
+                        Provenance: 'BrandKit',
+                        Usage: 'Primary brand header mark',
+                        MustUse: true,
+                    },
+                ],
+                Required: [],
+                NeverInvent: [],
+            },
+            Style: {
+                Palette: [],
+                Typography: [],
+                Composition: '',
+                Pacing: { AvgSecondsBetweenChanges: 0, HoldRules: '' },
+                MotionRules: [],
+                Keep: [],
+                Avoid: [],
+                References: [],
+            },
+            Beats: [],
+            DataBindings: [],
+            Audio: {
+                Cues: [],
+                Captions: 'Sidecar',
+            },
+            Render: {
+                Renderer: 'HyperFrames',
+                RendererVersion: '0.1.0',
+                Fps: 30,
+                Seed: 42,
+                Quality: 'standard',
+            },
+            Interaction: {
+                Mode: 'Autonomous',
+                MaxRepairRounds: 2,
+            },
+            Deliverables: {
+                Formats: ['16:9', '9:16'],
+                Poster: true,
+                ContactSheets: true,
+                Source: true,
+                Captions: true,
+            },
+            Review: {
+                Gates: [],
+                Rounds: [],
+            },
+        };
+
+        const afterDirector: VideoGenerationSpec = {
+            ...baseSpec,
+            ...directorExample.payloadChangeRequest.replaceElements,
+            Status: 'Briefing',
+        };
+        const briefingResult = ValidateVideoGenerationSpec(afterDirector, 'Briefing');
+        expect(briefingResult.Errors).toEqual([]);
+        expect(briefingResult.Valid).toBe(true);
+
+        const afterArtDirector: VideoGenerationSpec = {
+            ...afterDirector,
+            ...artDirectorExample.payloadChangeRequest.replaceElements,
+            Status: 'Styled',
+        };
+        const styledResult = ValidateVideoGenerationSpec(afterArtDirector, 'Styled');
+        expect(styledResult.Errors).toEqual([]);
+        expect(styledResult.Valid).toBe(true);
+
+        const afterStoryboard: VideoGenerationSpec = {
+            ...afterArtDirector,
+            ...storyboardExample.payloadChangeRequest.replaceElements,
+            Status: 'Storyboarded',
+        };
+        const storyboardedResult = ValidateVideoGenerationSpec(afterStoryboard, 'Storyboarded');
+        expect(storyboardedResult.Errors).toEqual([]);
+        expect(storyboardedResult.Valid).toBe(true);
+    });
+
+    it('verifies Motion Engineer templates and examples use only real MJVideoRuntime, MJChartKit, and VideoCompositionSource members', () => {
+        const validRuntimeMembers = [
+            'Data',
+            'Seed',
+            'Format',
+            'Width',
+            'Height',
+            'Fps',
+            'DurationSeconds',
+            'Random',
+            'Noise',
+            'OnFrame',
+        ] as const satisfies readonly (keyof MJVideoRuntime)[];
+
+        const validChartKitMembers = [
+            'KpiTile',
+            'DeltaBadge',
+            'Bar',
+            'Line',
+            'Area',
+            'Donut',
+            'RankedList',
+            'Sparkline',
+            'TableReveal',
+            'FormatValue',
+            'FormatTableCell',
+        ] as const satisfies readonly (keyof MJChartKit)[];
+
+        const validCompositionKeys = [
+            'Format',
+            'EntryFile',
+            'Files',
+            'AssetKeys',
+        ] as const satisfies readonly (keyof VideoCompositionSource)[];
+
+        const meExample = readJson<{
+            payloadChangeRequest: {
+                replaceElements?: { Output?: { Source?: Record<string, Record<string, unknown>> } };
+                newElements?: unknown;
+            };
+        }>('prompts/output/video-studio/motion-engineer.example.json');
+        expect(meExample.payloadChangeRequest.newElements).toBeUndefined();
+        const sourceMap = meExample.payloadChangeRequest.replaceElements?.Output?.Source;
+        expect(sourceMap).toBeDefined();
+        const comp16x9 = sourceMap!['16:9'];
+        expect(comp16x9).toBeDefined();
+        for (const k of Object.keys(comp16x9)) {
+            expect(validCompositionKeys as readonly string[]).toContain(k);
+        }
+
+        const filesToScan = [
+            resolve(metadataDir, 'prompts/templates/video-studio/motion-engineer.template.md'),
+            resolve(metadataDir, 'prompts/templates/video-studio/motion-engineer-lint-fix.template.md'),
+            resolve(metadataDir, 'prompts/output/video-studio/motion-engineer.example.json'),
+            resolve(metadataDir, 'prompts/output/video-studio/motion-engineer-lint-fix.example.json'),
+        ];
+
+        for (const filePath of filesToScan) {
+            const content = readFileSync(filePath, 'utf8');
+            for (const m of content.matchAll(/MJVideo\.([A-Za-z0-9_]+)/g)) {
+                expect(
+                    validRuntimeMembers as readonly string[],
+                    `Invalid MJVideo.${m[1]} in ${filePath}`,
+                ).toContain(m[1]);
+            }
+            for (const m of content.matchAll(/MJChartKit\.([A-Za-z0-9_]+)/g)) {
+                expect(
+                    validChartKitMembers as readonly string[],
+                    `Invalid MJChartKit.${m[1]} in ${filePath}`,
+                ).toContain(m[1]);
+            }
+        }
+
+        const runtimePromptDoc = readFileSync(
+            resolve(repoRoot, 'packages/AI/VideoStudio/Core/generated-for-prompt/composition-runtime.ts.generated-for-prompt.md'),
+            'utf8',
+        );
+        expect(runtimePromptDoc).toContain('Random(): number;');
+        expect(runtimePromptDoc).toContain('Noise(...keys: (string | number)[]): number;');
+        expect(runtimePromptDoc).toContain('OnFrame(cb: (timeSeconds: number) => void): void;');
+    });
+
+    it('verifies Critic and Reference Analysis output examples against VideoDefect, RubricScoreSummary, and ReferenceAnalysis schemas', () => {
+        const validDefectKeys = [
+            'Key',
+            'Format',
+            'Timestamp',
+            'Beat',
+            'Criterion',
+            'Severity',
+            'Evidence',
+            'Fix',
+            'Status',
+            'AssetKey',
+        ] as const satisfies readonly (keyof VideoDefect | 'AssetKey')[];
+
+        const validScoreSummaryKeys = [
+            'RubricID',
+            'OverallScore',
+            'MaxScore',
+            'Passed',
+            'Criteria',
+        ] as const satisfies readonly (keyof RubricScoreSummary)[];
+
+        const validCriterionScoreKeys = [
+            'Criterion',
+            'Score',
+            'MaxScore',
+            'Passed',
+            'Notes',
+        ] as const satisfies readonly (keyof RubricCriterionScore)[];
+
+        const validReferenceAnalysisKeys = [
+            'SourceKey',
+            'PaletteLearned',
+            'TypographyLearned',
+            'CompositionLearned',
+            'PacingLearned',
+            'MotionLearned',
+            'TextureLearned',
+            'DoNotCopy',
+        ] as const satisfies readonly (keyof ReferenceAnalysis)[];
+
+        const criticExample = readJson<{
+            Defects: Array<Record<string, unknown>>;
+            Scores: Record<string, unknown> & { Criteria: Array<Record<string, unknown>> };
+            Summary: string;
+        }>('prompts/output/video-studio/critic.example.json');
+
+        expect(criticExample.Defects.length).toBeGreaterThan(0);
+        for (const defect of criticExample.Defects) {
+            for (const key of Object.keys(defect)) {
+                expect(validDefectKeys as readonly string[]).toContain(key);
+            }
+        }
+
+        for (const key of Object.keys(criticExample.Scores)) {
+            expect(validScoreSummaryKeys as readonly string[]).toContain(key);
+        }
+
+        const rubricDoc = readJson<{
+            relatedEntities: {
+                'MJ: Rubric Versions': Array<{
+                    relatedEntities: {
+                        'MJ: Rubric Criteria': Array<{ fields: { Key: string } }>;
+                    };
+                }>;
+            };
+        }>('rubrics/.video-production-quality.json');
+        const expectedCriterionKeys = rubricDoc.relatedEntities['MJ: Rubric Versions'][0].relatedEntities[
+            'MJ: Rubric Criteria'
+        ].map((c) => c.fields.Key);
+
+        expect(criticExample.Scores.Criteria.map((c) => c.Criterion)).toEqual(expectedCriterionKeys);
+        for (const item of criticExample.Scores.Criteria) {
+            for (const key of Object.keys(item)) {
+                expect(validCriterionScoreKeys as readonly string[]).toContain(key);
+            }
+        }
+
+        const refExample = readJson<Record<string, unknown>>(
+            'prompts/output/video-studio/reference-analysis.example.json',
+        );
+        for (const key of Object.keys(refExample)) {
+            expect(validReferenceAnalysisKeys as readonly string[]).toContain(key);
+        }
+    });
+
+    it('enforces template vocabulary: every capitalized backticked identifier appears in generated-for-prompt docs or the explicit allow-list', () => {
+        const generatedFiles = [
+            resolve(repoRoot, 'packages/AI/VideoStudio/Core/generated-for-prompt/video-generation-spec.ts.generated-for-prompt.md'),
+            resolve(repoRoot, 'packages/AI/VideoStudio/Core/generated-for-prompt/composition-runtime.ts.generated-for-prompt.md'),
+            resolve(repoRoot, 'packages/AI/VideoStudio/Core/generated-for-prompt/chart-kit-types.ts.generated-for-prompt.md'),
+        ];
+        const generatedVocabulary = new Set<string>();
+        for (const gf of generatedFiles) {
+            const text = readFileSync(gf, 'utf8');
+            for (const m of text.matchAll(/[A-Za-z_][A-Za-z0-9_]*/g)) {
+                generatedVocabulary.add(m[0]);
+            }
+        }
+
+        const nonSchemaAllowList = new Set<string>([
+            'Video Studio - Director',
+            'Video Studio - Art Director',
+            'Video Studio - Storyboard',
+            'Video Studio - Pre-Production',
+            'Video Studio - Motion Engineer',
+            'Video Studio - Render',
+            'Video Studio - Critic',
+            'Research Agent',
+            'Query Builder',
+            'Chat',
+            'Consult',
+            'ChatHandlingOption',
+            'PayloadSelfWritePaths',
+            'MJ_NONDETERMINISTIC_API',
+            'MJ Sans',
+            'MJ Mono',
+            'MJVideo',
+            'BindingKey',
+            'Date',
+            'Inter',
+            'JetBrains Mono',
+            'Arial',
+            'Helvetica',
+            'Path',
+            'Content',
+        ]);
+
+        const templatePaths = [
+            resolve(metadataDir, 'prompts/templates/rubrics/judges/video-studio.template.md'),
+            resolve(metadataDir, 'prompts/templates/video-studio/orchestrator.template.md'),
+            resolve(metadataDir, 'prompts/templates/video-studio/director.template.md'),
+            resolve(metadataDir, 'prompts/templates/video-studio/art-director.template.md'),
+            resolve(metadataDir, 'prompts/templates/video-studio/storyboard.template.md'),
+            resolve(metadataDir, 'prompts/templates/video-studio/motion-engineer.template.md'),
+            resolve(metadataDir, 'prompts/templates/video-studio/motion-engineer-lint-fix.template.md'),
+            resolve(metadataDir, 'prompts/templates/video-studio/critic.template.md'),
+            resolve(metadataDir, 'prompts/templates/video-studio/reference-analysis.template.md'),
+        ];
+
+        for (const tp of templatePaths) {
+            const content = readFileSync(tp, 'utf8');
+            for (const backtickMatch of content.matchAll(/`([^`\n]+)`/g)) {
+                const rawSpan = backtickMatch[1].trim();
+                const unquotedSpan = rawSpan.replace(/^['"]+|['"]+$/g, '');
+                if (nonSchemaAllowList.has(rawSpan) || nonSchemaAllowList.has(unquotedSpan)) {
+                    continue;
+                }
+                for (const idMatch of rawSpan.matchAll(/\b[A-Z][A-Za-z0-9_.]*\b/g)) {
+                    const dotted = idMatch[0];
+                    if (nonSchemaAllowList.has(dotted)) {
+                        continue;
+                    }
+                    const segments = dotted.split('.');
+                    for (const seg of segments) {
+                        if (!/^[A-Z]/.test(seg)) {
+                            continue;
+                        }
+                        const isKnown = generatedVocabulary.has(seg) || nonSchemaAllowList.has(seg);
+                        expect(
+                            isKnown,
+                            `Unknown capitalized identifier "${seg}" (from \`${rawSpan}\`) in ${tp}`,
+                        ).toBe(true);
+                    }
+                }
+            }
+        }
+    });
 });
+

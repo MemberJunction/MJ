@@ -1,24 +1,23 @@
 {
   "taskComplete": true,
-  "message": "Authored deterministic HyperFrames compositions for 16:9 and 9:16 using window.MJVideo.OnFrame, window.MJChartKit components with BindingKey, MJ Sans / MJ Mono fonts, and visible __asOf attribution on the closing beat.",
+  "message": "Authored deterministic HyperFrames compositions in Output.Source using window.MJVideo.OnFrame, window.MJChartKit.KpiTile with BindingKey, MJ Sans / MJ Mono fonts, and visible AsOf attribution.",
   "payloadChangeRequest": {
-    "newElements": {
+    "replaceElements": {
       "Output": {
         "Source": {
-          "Engine": "HyperFrames",
-          "Compositions": {
-            "16:9": {
-              "EntryHtml": "index.html",
-              "Files": {
-                "index.html": "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><link rel=\"stylesheet\" href=\"mj/fonts.css\"><script src=\"mj/runtime.js\"></script><script src=\"mj/chart-kit.js\"></script></head><body style=\"margin:0;background:#0B1020;color:#F8FAFC;font-family:'MJ Sans'\"><div id=\"counter\"></div><footer id=\"as-of\" style=\"font-family:'MJ Mono'\"></footer><script src=\"scene.js\"></script></body></html>",
-                "scene.js": "const counterEl = document.getElementById('counter');\nwindow.MJVideo.BindText('#as-of', '__asOf', (v) => 'Data as of ' + String(v));\nwindow.MJVideo.OnFrame((t, beat) => {\n  window.MJChartKit.Counter(counterEl, { Value: Number(window.MJVideo.Data['arr_total']), BindingKey: 'arr_total', Format: 'currency', Unit: 'USD', Precision: 1, StartSeconds: 0, DurationSeconds: 3.5 }, t);\n});"
-              }
-            }
+          "16:9": {
+            "Format": "16:9",
+            "EntryFile": "index.html",
+            "Files": {
+              "index.html": "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><link rel=\"stylesheet\" href=\"mj/fonts.css\"><script src=\"mj/chart-kit.js\"></script></head><body style=\"margin:0;background:#0B1020;color:#F8FAFC;font-family:'MJ Sans'\"><div id=\"kpi-arr\"></div><footer id=\"as-of\" style=\"font-family:'MJ Mono'\"></footer><script src=\"scene.js\"></script></body></html>",
+              "scene.js": "const kpiEl = document.getElementById('kpi-arr');\nconst asOfEl = document.getElementById('as-of');\nasOfEl.textContent = 'Data as of ' + String(window.MJVideo.Data['__asOf'] ?? '');\nwindow.MJVideo.OnFrame((timeSeconds) => {\n  kpiEl.innerHTML = window.MJChartKit.KpiTile({\n    Frame: { Width: 640, Height: 240, StartSeconds: 0, DurationSeconds: 1.5 },\n    Value: Number(window.MJVideo.Data['arr_total']),\n    Label: 'Annual Recurring Revenue',\n    BindingKey: 'arr_total',\n    Format: { Kind: 'Currency', Currency: 'USD', Decimals: 1 }\n  }, timeSeconds);\n});"
+            },
+            "AssetKeys": ["company_logo"]
           }
         }
       }
     }
   },
-  "reasoning": "All bound values are read from window.MJVideo.Data and formatted via MJChartKit with BindingKey; no non-deterministic timers or external fonts are used.",
+  "reasoning": "All bound values are read from window.MJVideo.Data and rendered via MJChartKit.KpiTile with BindingKey; no non-deterministic timers or external fonts are used.",
   "confidence": 0.94
 }
