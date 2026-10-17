@@ -11,7 +11,7 @@
  * @since 2.49.0
  */
 
-import { MJAIAgentTypeEntity,  MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity, MJAISkillEntity, MJEnvironmentEntityExtended, MJConversationSkillEntity, MJAIVendorEntity, ConversationEngine, type ConversationBranchRow } from '@memberjunction/core-entities';
+import { MJAIAgentTypeEntity,  MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity, MJAISkillEntity, MJEnvironmentEntityExtended, MJConversationSkillEntity, MJAIVendorEntity, MJAIPromptRunEntity, ConversationEngine, type ConversationBranchRow } from '@memberjunction/core-entities';
 import { BuildActionToolSet, FilterDeclarableActions, SanitizeToolName } from './native-tools/action-tool-builder';
 import { BuildNativeToolSet, COMPLETE_TASK_TOOL, SUB_AGENT_TOOL_PREFIX, type NativeToolBinding } from './native-tools/control-tools';
 import { BuildAssistantToolCallTurn, BuildToolResultTurn, CompactToolResultContent, type NativeToolResult } from './native-tools/tool-result-turns';
@@ -75,6 +75,7 @@ import {
     AIPromptRunResult,
     ChildPromptParam,
     ExecuteAgentParams,
+    AgentTreeBudget,
     AgentContextData,
     AgentConfiguration,
     AgentExecutionProgressCallback,
@@ -664,6 +665,22 @@ export class BaseAgent {
      * @private
      */
     private _executeParams: ExecuteAgentParams | undefined;
+
+    /**
+     * Shared root-tree cumulative budget tracking object for the current execution tree.
+     * Initialized at the start of {@link Execute} (or inherited from `params.treeBudget`
+     * when running as a sub-agent) and forwarded to all child and related sub-agent runs.
+     * @protected
+     */
+    protected _treeBudget: AgentTreeBudget | undefined;
+
+    /**
+     * Gets the shared {@link AgentTreeBudget} tracking cumulative steps, tokens, cost,
+     * and elapsed wall-clock duration across the root agent and all descendant sub-agents.
+     */
+    public get TreeBudget(): AgentTreeBudget | undefined {
+        return this._treeBudget;
+    }
 
     /**
      * The agent configuration loaded for the current run — captured so the cross-turn
@@ -2182,9 +2199,15 @@ export class BaseAgent {
     }
 
     public async Execute<C = any, R = any>(params: ExecuteAgentParams<C>): Promise<ExecuteAgentResult<R>> {
+        // Initialize or inherit the shared root-tree cumulative budget before any shallow clone of
+        // `params` occurs so that callers, parent agents, and child runs share one object reference.
+        this._treeBudget = undefined;
+        this.ensureTreeBudget(params);
+
         // Every run, whatever started it: the reserved data keys (scope, agent-type params) count only when the
         // caller set TrustReservedRunData. Everything below reads the cleaned params.
         params = this.withRunDataTrustApplied(params);
+        this.ensureTreeBudget(params);
 
         // Capture per-request provider for the duration of this execution so all entity
         // saves go through the isolated provider, never the global singleton's transaction.
@@ -2278,6 +2301,7 @@ export class BaseAgent {
             // Capture for lifecycle hooks that don't receive params (post-turn compaction
             // inside finalizeAgentRun reads conversationId / verbose / provider from here).
             this._executeParams = wrappedParams;
+            this.ensureTreeBudget(wrappedParams);
             this._agentConfig = undefined;
             this._lastModelSelectionInfo = undefined;
             this._lastVolatileStateMessage = undefined;
@@ -3521,6 +3545,7 @@ export class BaseAgent {
                 data: params.data,
                 TrustReservedRunData: params.TrustReservedRunData, // the session's data, already vetted when it started
                 verbose: params.verbose,
+                treeBudget: this.ensureTreeBudget(params),
                 // Progress streams BOTH to the runner's narration consumer (request.OnProgress —
                 // it paces SendContextNote/RequestSpokenUpdate over the live socket) AND to any
                 // host-level onProgress the parent execution carries.
@@ -7133,8 +7158,236 @@ export class BaseAgent {
                 reason: `Maximum validation retries of ${BaseAgent.MAX_VALIDATION_RETRIES} exceeded. The agent is unable to produce valid output after ${this._generalValidationRetryCount} validation failures.`
             };
         }
+
+        // Synchronize shared tree budget floor with the current agentRun's metrics (handles both
+        // multi-agent trees and direct guardrail invocations with pre-populated agentRun entities)
+        // and evaluate cumulative root-tree ceilings (maxTreeSteps, maxTreeTokens, maxTreeCost, maxTreeDurationMs).
+        const budget = this.ensureTreeBudget(params);
+        if (agentRun) {
+            const runStepsCount = Math.max(agentRun.Steps?.length ?? 0, agentRun.TotalPromptIterations ?? 0);
+            if (runStepsCount > budget.totalSteps) {
+                budget.totalSteps = runStepsCount;
+            }
+            if ((agentRun.TotalTokensUsed ?? 0) > budget.totalTokens) {
+                budget.totalTokens = agentRun.TotalTokensUsed ?? 0;
+            }
+            if ((agentRun.TotalCost ?? 0) > budget.totalCost) {
+                budget.totalCost = agentRun.TotalCost ?? 0;
+            }
+        }
+        const treeBudgetCheck = this.checkTreeBudgetLimit(params);
+        if (treeBudgetCheck.exceeded) {
+            return treeBudgetCheck;
+        }
         
         // No guardrails exceeded
+        return { exceeded: false };
+    }
+
+    /**
+     * Ensures that a shared {@link AgentTreeBudget} instance exists for the current execution tree
+     * and is attached to both `this._treeBudget` and `params.treeBudget`.
+     *
+     * - When `params.treeBudget` is already provided (for example, propagated by a parent agent
+     *   in {@link ExecuteSubAgent} or supplied directly by a caller), that exact object reference
+     *   is reused so all root, sequential child, and parallel child runs mutate the same shared
+     *   counters (`totalSteps`, `totalTokens`, `totalCost`, `startedAtMs`, `breachedReason`).
+     * - When `params.treeBudget` is absent (root run), a new {@link AgentTreeBudget} is created
+     *   and seeded with any top-level convenience ceilings (`maxTreeSteps`, `maxTreeTokens`,
+     *   `maxTreeCost`, `maxTreeDurationMs`) declared on `params`.
+     *
+     * @param params - Optional execution parameters for the current run.
+     * @returns The shared {@link AgentTreeBudget} instance for the execution tree.
+     * @protected
+     */
+    protected ensureTreeBudget(params?: ExecuteAgentParams): AgentTreeBudget {
+        const effectiveParams = params ?? this._executeParams;
+        let budget = effectiveParams?.treeBudget ?? this._treeBudget;
+        if (!budget) {
+            budget = {
+                maxTreeSteps: effectiveParams?.maxTreeSteps,
+                maxTreeTokens: effectiveParams?.maxTreeTokens,
+                maxTreeCost: effectiveParams?.maxTreeCost,
+                maxTreeDurationMs: effectiveParams?.maxTreeDurationMs,
+                totalSteps: 0,
+                totalTokens: 0,
+                totalCost: 0,
+                startedAtMs: Date.now()
+            };
+        } else if (effectiveParams) {
+            if (budget.maxTreeSteps === undefined && effectiveParams.maxTreeSteps !== undefined) {
+                budget.maxTreeSteps = effectiveParams.maxTreeSteps;
+            }
+            if (budget.maxTreeTokens === undefined && effectiveParams.maxTreeTokens !== undefined) {
+                budget.maxTreeTokens = effectiveParams.maxTreeTokens;
+            }
+            if (budget.maxTreeCost === undefined && effectiveParams.maxTreeCost !== undefined) {
+                budget.maxTreeCost = effectiveParams.maxTreeCost;
+            }
+            if (budget.maxTreeDurationMs === undefined && effectiveParams.maxTreeDurationMs !== undefined) {
+                budget.maxTreeDurationMs = effectiveParams.maxTreeDurationMs;
+            }
+        }
+
+        this._treeBudget = budget;
+        if (effectiveParams) {
+            effectiveParams.treeBudget = budget;
+        }
+        if (this._executeParams && this._executeParams !== effectiveParams) {
+            this._executeParams.treeBudget = budget;
+        }
+        return budget;
+    }
+
+    /**
+     * Accumulates token and cost usage from a completed prompt execution into the shared
+     * {@link AgentTreeBudget} for the execution tree.
+     *
+     * Prefers rollup figures on `promptRun` (`TokensUsedRollup` / `TokensPromptRollup` +
+     * `TokensCompletionRollup` and `TotalCost`) so hierarchical child prompts are counted,
+     * falling back to direct `promptRun` columns (`TokensUsed` / `TokensPrompt` + `TokensCompletion`
+     * and `Cost`) or the `AIPromptRunResult` summary fields when `promptRun` is not populated.
+     *
+     * @param promptRun - The persisted or in-memory `MJAIPromptRunEntity` from the prompt execution, if any.
+     * @param promptResult - Optional `AIPromptRunResult` carrying direct token/cost metrics.
+     * @param params - Optional execution parameters for the current run.
+     * @protected
+     */
+    protected recordPromptUsageInTreeBudget(
+        promptRun?: MJAIPromptRunEntity | null,
+        promptResult?: AIPromptRunResult<unknown>,
+        params?: ExecuteAgentParams
+    ): void {
+        const budget = this.ensureTreeBudget(params);
+
+        let tokensDelta = 0;
+        if (promptRun) {
+            if (promptRun.TokensUsedRollup != null && promptRun.TokensUsedRollup > 0) {
+                tokensDelta = promptRun.TokensUsedRollup;
+            } else if ((promptRun.TokensPromptRollup != null && promptRun.TokensPromptRollup > 0) ||
+                       (promptRun.TokensCompletionRollup != null && promptRun.TokensCompletionRollup > 0)) {
+                tokensDelta = (promptRun.TokensPromptRollup ?? 0) + (promptRun.TokensCompletionRollup ?? 0);
+            } else if (promptRun.TokensUsed != null && promptRun.TokensUsed > 0) {
+                tokensDelta = promptRun.TokensUsed;
+            } else if ((promptRun.TokensPrompt != null && promptRun.TokensPrompt > 0) ||
+                       (promptRun.TokensCompletion != null && promptRun.TokensCompletion > 0)) {
+                tokensDelta = (promptRun.TokensPrompt ?? 0) + (promptRun.TokensCompletion ?? 0);
+            }
+        }
+        if (tokensDelta === 0 && promptResult) {
+            if (promptResult.combinedTokensUsed != null && promptResult.combinedTokensUsed > 0) {
+                tokensDelta = promptResult.combinedTokensUsed;
+            } else if ((promptResult.combinedPromptTokens != null && promptResult.combinedPromptTokens > 0) ||
+                       (promptResult.combinedCompletionTokens != null && promptResult.combinedCompletionTokens > 0)) {
+                tokensDelta = (promptResult.combinedPromptTokens ?? 0) + (promptResult.combinedCompletionTokens ?? 0);
+            } else if (promptResult.tokensUsed != null && promptResult.tokensUsed > 0) {
+                tokensDelta = promptResult.tokensUsed;
+            } else if ((promptResult.promptTokens != null && promptResult.promptTokens > 0) ||
+                       (promptResult.completionTokens != null && promptResult.completionTokens > 0)) {
+                tokensDelta = (promptResult.promptTokens ?? 0) + (promptResult.completionTokens ?? 0);
+            }
+        }
+
+        let costDelta = 0;
+        if (promptRun) {
+            if (promptRun.TotalCost != null && promptRun.TotalCost > 0) {
+                costDelta = promptRun.TotalCost;
+            } else if (promptRun.Cost != null && promptRun.Cost > 0) {
+                costDelta = promptRun.Cost;
+            }
+        }
+        if (costDelta === 0 && promptResult) {
+            if (promptResult.combinedCost != null && promptResult.combinedCost > 0) {
+                costDelta = promptResult.combinedCost;
+            } else if (promptResult.cost != null && promptResult.cost > 0) {
+                costDelta = promptResult.cost;
+            }
+        }
+
+        budget.totalTokens += tokensDelta;
+        budget.totalCost += costDelta;
+    }
+
+    /**
+     * Evaluates whether any root-tree cumulative budget ceiling (`maxTreeSteps`, `maxTreeTokens`,
+     * `maxTreeCost`, `maxTreeDurationMs`) on the shared {@link AgentTreeBudget} has been reached
+     * or exceeded.
+     *
+     * When a ceiling is breached, sets `budget.breachedReason` with a descriptive diagnostic
+     * message so both the breaching agent and any ancestor agents in the call tree can terminate
+     * immediately with `step: 'Failed'` and `terminate: true`.
+     *
+     * @param params - Optional execution parameters for the current run.
+     * @returns Guardrail evaluation result indicating whether a tree budget limit was exceeded.
+     * @protected
+     */
+    protected checkTreeBudgetLimit(params?: ExecuteAgentParams): {
+        exceeded: boolean;
+        type?: 'cost' | 'tokens' | 'iterations' | 'time';
+        limit?: number;
+        current?: number;
+        reason?: string;
+    } {
+        const budget = this.ensureTreeBudget(params);
+
+        if (budget.maxTreeSteps != null && budget.totalSteps >= budget.maxTreeSteps) {
+            const reason = budget.breachedReason ?? `Agent tree step budget exceeded (${budget.totalSteps}/${budget.maxTreeSteps} total steps across tree)`;
+            budget.breachedReason = reason;
+            return {
+                exceeded: true,
+                type: 'iterations',
+                limit: budget.maxTreeSteps,
+                current: budget.totalSteps,
+                reason
+            };
+        }
+
+        if (budget.maxTreeTokens != null && budget.totalTokens >= budget.maxTreeTokens) {
+            const reason = budget.breachedReason ?? `Agent tree token budget exceeded (${budget.totalTokens}/${budget.maxTreeTokens} total tokens across tree)`;
+            budget.breachedReason = reason;
+            return {
+                exceeded: true,
+                type: 'tokens',
+                limit: budget.maxTreeTokens,
+                current: budget.totalTokens,
+                reason
+            };
+        }
+
+        if (budget.maxTreeCost != null && budget.totalCost >= budget.maxTreeCost) {
+            const reason = budget.breachedReason ?? `Agent tree cost budget exceeded ($${budget.totalCost.toFixed(4)}/$${budget.maxTreeCost.toFixed(4)} across tree)`;
+            budget.breachedReason = reason;
+            return {
+                exceeded: true,
+                type: 'cost',
+                limit: budget.maxTreeCost,
+                current: budget.totalCost,
+                reason
+            };
+        }
+
+        if (budget.maxTreeDurationMs != null) {
+            const elapsedMs = Date.now() - budget.startedAtMs;
+            if (elapsedMs >= budget.maxTreeDurationMs) {
+                const reason = budget.breachedReason ?? `Agent tree duration budget exceeded (${elapsedMs}ms/${budget.maxTreeDurationMs}ms across tree)`;
+                budget.breachedReason = reason;
+                return {
+                    exceeded: true,
+                    type: 'time',
+                    limit: budget.maxTreeDurationMs,
+                    current: elapsedMs,
+                    reason
+                };
+            }
+        }
+
+        if (budget.breachedReason) {
+            return {
+                exceeded: true,
+                reason: budget.breachedReason
+            };
+        }
+
         return { exceeded: false };
     }
 
@@ -9893,6 +10146,9 @@ The context is now within limits. Please retry your request with the recovered c
             step.TargetLogID = result.promptRun.ID;
             step.PromptRun = result.promptRun; // transient related object (not a persisted field)
         }
+        if (result.promptRun) {
+            this.recordPromptUsageInTreeBudget(result.promptRun, undefined, this._executeParams);
+        }
     }
 
     /**
@@ -11821,6 +12077,7 @@ The context is now within limits. Please retry your request with the recovered c
                 TrustReservedRunData: params.TrustReservedRunData, // the reserved keys left in data are the parent's, already vetted
                 context: subAgentContext, // use subAgentRequest.context if provided, otherwise params.context
                 verbose: params.verbose, // pass verbose flag to sub-agent
+                treeBudget: this.ensureTreeBudget(params), // propagate shared cumulative root-tree budget to sub-agent
                 actionChanges: subAgentActionChanges, // propagate filtered action changes to sub-agent
                 subAgentChanges: subAgentSubAgentChanges, // propagate filtered sub-agent changes to sub-agent
                 PrimaryScopeEntityName: params.PrimaryScopeEntityName, // propagate scope to sub-agent
@@ -13082,6 +13339,9 @@ The context is now within limits. Please retry your request with the recovered c
             this._agentRun.Steps.push(stepEntity);
         }
 
+        // Increment cumulative step count on the shared root-tree budget
+        this.ensureTreeBudget(this._executeParams).totalSteps += 1;
+
         return stepEntity;
     }
 
@@ -13505,6 +13765,23 @@ The context is now within limits. Please retry your request with the recovered c
         previousDecision: BaseAgentNextStep<P> | null,
         stepCount: number = 0
     ): Promise<BaseAgentNextStep<P>> {
+        // Enforce cumulative root-tree budget limits before executing any non-terminal step
+        const currentPayload = (previousDecision?.newPayload ?? previousDecision?.previousPayload ?? params.payload) as P;
+        if (previousDecision?.step !== 'Chat' && previousDecision?.terminate !== true) {
+            const treeBudgetResult = this.checkTreeBudgetLimit(params);
+            if (treeBudgetResult.exceeded) {
+                this.logStatus(`⛔ Execution guardrail exceeded: ${treeBudgetResult.reason}`, false, params);
+                return {
+                    ...(previousDecision ?? {}),
+                    step: 'Failed',
+                    terminate: true,
+                    previousPayload: currentPayload,
+                    newPayload: currentPayload,
+                    message: treeBudgetResult.reason,
+                    errorMessage: treeBudgetResult.reason
+                };
+            }
+        }
         
         // Determine what to execute
         if (!previousDecision) {
@@ -13556,6 +13833,16 @@ The context is now within limits. Please retry your request with the recovered c
                 // so the run shows what was emitted even if the sub-agent then fails.
                 await this.recordFoldedTaskGraph(params, previousDecision);
                 const subAgentResult = await this.processSubAgentStep<P, P>(params, previousDecision!, undefined, undefined, stepCount);
+                if (this._treeBudget?.breachedReason) {
+                    const breachedReason = this._treeBudget.breachedReason;
+                    return {
+                        ...subAgentResult,
+                        step: 'Failed',
+                        terminate: true,
+                        message: breachedReason,
+                        errorMessage: breachedReason
+                    };
+                }
                 const afterSubAgent = (await this.finishAfterSubAgent<P>(params, previousDecision, subAgentResult)) ?? subAgentResult;
                 return this.selfCheckSuccess(params, afterSubAgent, afterSubAgent.newPayload ?? subAgentResult.newPayload);
             }
@@ -13856,6 +14143,7 @@ The context is now within limits. Please retry your request with the recovered c
             
             // Execute the prompt
             const promptResult = await this.executePrompt(promptParams);
+            this.recordPromptUsageInTreeBudget(promptResult.promptRun, promptResult, params);
 
             this.recordToolCallingInstrumentation(stepEntity, promptResult);
 
@@ -19376,6 +19664,7 @@ The context is now within limits. Please retry your request with the recovered c
             });
             if (outcome.PromptRun) {
                 stepEntity.PromptRun = outcome.PromptRun;
+                this.recordPromptUsageInTreeBudget(outcome.PromptRun, undefined, params);
             }
             if (phase === 'post-turn') {
                 // finalizeAgentRun's flush has already run — drain this step's INSERT now.
