@@ -204,6 +204,7 @@ export class RenderWorkerHttpClient {
             req,
             this.requestTimeoutMs,
             signal,
+            this.maxOutputBytes,
         );
     }
 
@@ -219,6 +220,7 @@ export class RenderWorkerHttpClient {
             req,
             this.requestTimeoutMs,
             signal,
+            this.maxOutputBytes,
         );
     }
 
@@ -231,6 +233,7 @@ export class RenderWorkerHttpClient {
             req,
             this.requestTimeoutMs,
             signal,
+            MAX_RENDER_JSON_RESPONSE_BYTES,
         );
     }
 
@@ -246,6 +249,7 @@ export class RenderWorkerHttpClient {
             req,
             this.requestTimeoutMs,
             signal,
+            this.maxOutputBytes,
         );
     }
 
@@ -703,6 +707,7 @@ export class RenderWorkerHttpClient {
         body: TBody,
         timeoutMs: number,
         signal?: AbortSignal,
+        maxResponseBytes: number = MAX_RENDER_JSON_RESPONSE_BYTES,
     ): Promise<TResult> {
         const payload = JSON.stringify(body);
         return this.sendJsonRequest<TResult>(
@@ -711,6 +716,7 @@ export class RenderWorkerHttpClient {
             payload,
             timeoutMs,
             signal,
+            maxResponseBytes,
         );
     }
 
@@ -725,6 +731,7 @@ export class RenderWorkerHttpClient {
             undefined,
             timeoutMs,
             signal,
+            MAX_RENDER_JSON_RESPONSE_BYTES,
         );
     }
 
@@ -734,6 +741,7 @@ export class RenderWorkerHttpClient {
         payload: string | undefined,
         timeoutMs: number,
         signal?: AbortSignal,
+        maxResponseBytes: number = MAX_RENDER_JSON_RESPONSE_BYTES,
     ): Promise<TResult> {
         ThrowIfSignalAborted(signal);
         const targetUrl = this.resolveEndpointUrl(routePath);
@@ -787,20 +795,24 @@ export class RenderWorkerHttpClient {
                 (res) => {
                     activeResponse = res;
                     const status = res.statusCode ?? 0;
+                    const isSuccessStatus = status >= 200 && status < 300;
+                    const responseByteCap = isSuccessStatus
+                        ? maxResponseBytes
+                        : MAX_RENDER_JSON_RESPONSE_BYTES;
                     res.on('data', (chunk: Buffer) => {
                         if (settled) {
                             return;
                         }
                         const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
                         totalBytes += buf.byteLength;
-                        if (totalBytes > MAX_RENDER_JSON_RESPONSE_BYTES) {
+                        if (totalBytes > responseByteCap) {
                             chunks.length = 0;
                             res.destroy();
                             req.destroy();
                             settleReject(
                                 new VideoRenderError(
                                     'BodyTooLarge',
-                                    `Render worker JSON response from ${this.sanitizedBaseUrl}${routePath} exceeded maximum allowed size (${MAX_RENDER_JSON_RESPONSE_BYTES} bytes).`,
+                                    `Render worker JSON response from ${this.sanitizedBaseUrl}${routePath} exceeded maximum allowed size (${responseByteCap} bytes).`,
                                     { Status: 413 },
                                 ),
                             );

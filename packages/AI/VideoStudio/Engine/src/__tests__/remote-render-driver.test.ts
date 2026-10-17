@@ -469,9 +469,17 @@ describe('RemoteRenderDriver and RenderWorkerHttpClient response size caps (fake
         }
     }
 
-    it('rejects Render with BodyTooLarge and aborts download when worker claims 10 bytes and sends 1 MiB', async () => {
+    it('rejects Render with BodyTooLarge and aborts download when worker claims 10 bytes and streams 64 MiB', async () => {
+        const totalStreamBytes = 64 * 1024 * 1024;
+        const chunkBytes = 64 * 1024;
+        const totalChunks = totalStreamBytes / chunkBytes;
+        const chunkBuf = Buffer.alloc(chunkBytes, 0x41);
         let bytesWrittenByServer = 0;
-        const oneMiBChunk = Buffer.alloc(64 * 1024, 0x41);
+        let serverFinishedFullStream = false;
+        let resolveServerStreamDone!: () => void;
+        const serverStreamDone = new Promise<void>((resolve) => {
+            resolveServerStreamDone = resolve;
+        });
 
         await withFakeHttpWorker(
             (req, res) => {
@@ -485,19 +493,27 @@ describe('RemoteRenderDriver and RenderWorkerHttpClient response size caps (fake
                 }
                 if (req.method === 'GET' && req.url === '/videos/vid-claim-10') {
                     res.writeHead(200, { 'content-type': 'video/mp4' });
-                    // Stream up to 1 MiB in 64 KiB chunks unless client aborts early
-                    let remainingChunks = 16;
+                    let remainingChunks = totalChunks;
+                    res.once('close', () => {
+                        resolveServerStreamDone();
+                    });
                     const writeNext = (): void => {
-                        while (remainingChunks > 0 && !res.destroyed) {
-                            remainingChunks--;
-                            bytesWrittenByServer += oneMiBChunk.byteLength;
-                            if (!res.write(oneMiBChunk)) {
-                                res.once('drain', writeNext);
-                                return;
-                            }
+                        if (res.destroyed || res.writableEnded) {
+                            resolveServerStreamDone();
+                            return;
                         }
-                        if (!res.destroyed) {
-                            res.end();
+                        if (remainingChunks <= 0) {
+                            serverFinishedFullStream = true;
+                            res.end(() => resolveServerStreamDone());
+                            return;
+                        }
+                        remainingChunks--;
+                        bytesWrittenByServer += chunkBuf.byteLength;
+                        const canContinue = res.write(chunkBuf);
+                        if (canContinue) {
+                            setImmediate(writeNext);
+                        } else {
+                            res.once('drain', writeNext);
                         }
                     };
                     writeNext();
@@ -519,7 +535,152 @@ describe('RemoteRenderDriver and RenderWorkerHttpClient response size caps (fake
                 expect(renderErr.message).toContain('claimed VideoSizeBytes');
                 expect(renderErr.message).toContain('10');
                 expect(renderErr.message).not.toContain(fakeToken);
+
+                await serverStreamDone;
+                expect(serverFinishedFullStream).toBe(false);
                 expect(bytesWrittenByServer).toBeGreaterThan(10);
+                expect(bytesWrittenByServer).toBeLessThan(16 * 1024 * 1024);
+            },
+        );
+    });
+
+    it('rejects Render with BodyTooLarge before making a GET /videos request when claimed VideoSizeBytes exceeds MaxOutputBytes', async () => {
+        const smallMaxOutputBytes = 1024 * 1024;
+        let videoGetRequests = 0;
+
+        await withFakeHttpWorker(
+            (req, res) => {
+                if (req.method === 'POST' && req.url === '/render') {
+                    req.resume();
+                    req.on('end', () => {
+                        res.writeHead(200, { 'content-type': 'application/x-ndjson' });
+                        res.end(buildFakeResultLine('vid-claim-over-max', 10 * 1024 * 1024));
+                    });
+                    return;
+                }
+                if (req.method === 'GET' && req.url?.startsWith('/videos/')) {
+                    videoGetRequests++;
+                    res.writeHead(200, { 'content-type': 'video/mp4' });
+                    res.end(Buffer.alloc(64, 0x41));
+                    return;
+                }
+                res.writeHead(404).end();
+            },
+            async (url) => {
+                const driver = new RemoteRenderDriver(
+                    makeRemoteSettings(url, fakeToken, undefined, smallMaxOutputBytes),
+                );
+                await expect(driver.Render(CreateMinimalRenderRequest())).rejects.toMatchObject({
+                    name: 'VideoRenderError',
+                    Code: 'BodyTooLarge',
+                });
+                expect(videoGetRequests).toBe(0);
+            },
+        );
+    });
+
+    it('rejects Render with BodyTooLarge when POST /render returns HTTP 500 with a 2 MiB error body', async () => {
+        const twoMiBErrorBody = JSON.stringify({
+            Error: {
+                Code: 'Internal',
+                Message: 'x'.repeat(2 * 1024 * 1024),
+            },
+        });
+
+        await withFakeHttpWorker(
+            (req, res) => {
+                req.resume();
+                req.on('end', () => {
+                    if (req.method === 'POST' && req.url === '/render') {
+                        res.writeHead(500, { 'content-type': 'application/json' });
+                        res.end(twoMiBErrorBody);
+                        return;
+                    }
+                    res.writeHead(404).end();
+                });
+            },
+            async (url) => {
+                const driver = new RemoteRenderDriver(makeRemoteSettings(url, fakeToken));
+                await expect(driver.Render(CreateMinimalRenderRequest())).rejects.toMatchObject({
+                    name: 'VideoRenderError',
+                    Code: 'BodyTooLarge',
+                });
+            },
+        );
+    });
+
+    it('allows a 1.6 MB still in CaptureStills under default MaxOutputBytes, rejects when MaxOutputBytes is smaller, and still caps Check at 1 MiB', async () => {
+        const onePointSixMbPngBase64 = Buffer.alloc(Math.ceil(1.6 * 1024 * 1024), 0x89).toString('base64');
+        const twoMiBPadding = 'x'.repeat(2 * 1024 * 1024);
+
+        await withFakeHttpWorker(
+            (req, res) => {
+                req.resume();
+                req.on('end', () => {
+                    if (req.method === 'POST' && req.url === '/stills') {
+                        res.writeHead(200, { 'content-type': 'application/json' });
+                        res.end(
+                            JSON.stringify({
+                                Stills: [
+                                    {
+                                        Key: 'hero-1080p',
+                                        TimestampSeconds: 1.0,
+                                        Width: 1920,
+                                        Height: 1080,
+                                        MimeType: 'image/png',
+                                        ImageBase64: onePointSixMbPngBase64,
+                                    },
+                                ],
+                                ElapsedMs: 15,
+                            }),
+                        );
+                        return;
+                    }
+                    if (req.method === 'POST' && req.url === '/check') {
+                        res.writeHead(200, { 'content-type': 'application/json' });
+                        res.end(JSON.stringify({ Passed: true, Padding: twoMiBPadding }));
+                        return;
+                    }
+                    res.writeHead(404).end();
+                });
+            },
+            async (url) => {
+                const defaultDriver = new RemoteRenderDriver(makeRemoteSettings(url, fakeToken));
+                const stillsResult = await defaultDriver.CaptureStills({
+                    Bundle: CreateMinimalBundle(),
+                    Width: MINIMAL_BUNDLE_WIDTH,
+                    Height: MINIMAL_BUNDLE_HEIGHT,
+                    Points: [{ Key: 'hero-1080p', TimestampSeconds: 1.0, Role: 'Custom', Label: 'Hero 1080p' }],
+                });
+                expect(stillsResult.Stills).toHaveLength(1);
+                expect(stillsResult.Stills[0].Key).toBe('hero-1080p');
+                expect(stillsResult.Stills[0].ImageBase64.length).toBe(onePointSixMbPngBase64.length);
+
+                const smallCapDriver = new RemoteRenderDriver(
+                    makeRemoteSettings(url, fakeToken, undefined, 512 * 1024),
+                );
+                await expect(
+                    smallCapDriver.CaptureStills({
+                        Bundle: CreateMinimalBundle(),
+                        Width: MINIMAL_BUNDLE_WIDTH,
+                        Height: MINIMAL_BUNDLE_HEIGHT,
+                        Points: [{ Key: 'hero-1080p', TimestampSeconds: 1.0, Role: 'Custom', Label: 'Hero 1080p' }],
+                    }),
+                ).rejects.toMatchObject({
+                    name: 'VideoRenderError',
+                    Code: 'BodyTooLarge',
+                });
+
+                await expect(
+                    defaultDriver.Check({
+                        Bundle: CreateMinimalBundle(),
+                        Width: MINIMAL_BUNDLE_WIDTH,
+                        Height: MINIMAL_BUNDLE_HEIGHT,
+                    }),
+                ).rejects.toMatchObject({
+                    name: 'VideoRenderError',
+                    Code: 'BodyTooLarge',
+                });
             },
         );
     });
