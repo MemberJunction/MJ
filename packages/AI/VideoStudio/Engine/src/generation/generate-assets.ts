@@ -10,12 +10,14 @@
  * @module @memberjunction/video-studio
  */
 
-import type {
-    AIAPIKey,
-    AICredentialScope,
-    MediaInput,
-    VideoKeyframeInput,
+import {
+    ModelUsage,
+    type AIAPIKey,
+    type AICredentialScope,
+    type MediaInput,
+    type VideoKeyframeInput,
 } from '@memberjunction/ai';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import {
     AIImageGenerationRunner,
     AIVideoRunner,
@@ -32,7 +34,7 @@ import {
     type IRunViewProvider,
     type UserInfo,
 } from '@memberjunction/core';
-import { BrandKitEngine, type MJAIModelCostEntity } from '@memberjunction/core-entities';
+import { BrandKitEngine } from '@memberjunction/core-entities';
 import { EscapeSQLString, IndexByUUID, UUIDsEqual } from '@memberjunction/global';
 import { FileStorageEngine } from '@memberjunction/storage';
 import type {
@@ -250,11 +252,15 @@ async function resolvePromptRunCost(
 }
 
 /**
- * Estimates the cost in USD of a single image (`units = 1`, `UnitType = 'Per Image'`) or video
- * (`units = durationSeconds`, `UnitType = 'Per Second'`) generation call by querying the active
- * Realtime row in `MJ: AI Model Costs` via `AIEngine.Instance` (matching `AIVideoRunner.calculateVideoCost`).
+ * Estimates the worst-case cost in USD of a single image (`units = 1`, `usageKind = 'Images'`)
+ * or video (`units = durationSeconds`, `usageKind = 'Seconds'`) generation call by resolving
+ * the carrier prompt (`AIVideoRunner.GENERATIVE_PROMPT_NAME` or
+ * `AIImageGenerationRunner.DEFAULT_PROMPT_NAME`) and pricing every Active/Preview bound
+ * `PromptModel` via `AIEngineBase.Instance.CalculateModelCost` (`VS-GEN-6`).
  *
- * Fails closed by throwing an error when no active price row exists for the modality's unit type.
+ * Fails closed by throwing when the carrier prompt or its `PromptModels` are missing, or when
+ * any bound candidate has no valid price (since `NextBestModel` failover can reach any bound
+ * candidate). Returns the maximum cost across all bound candidates.
  */
 export async function EstimateGenerationCallCost(
     kind: 'Image' | 'Video',
@@ -269,160 +275,60 @@ export async function EstimateGenerationCallCost(
         kind === 'Video'
             ? AIVideoRunner.GENERATIVE_PROMPT_NAME
             : AIImageGenerationRunner.DEFAULT_PROMPT_NAME;
-    const modelTypeName = kind === 'Video' ? 'Video' : 'Image Generator';
-    const unitTypeName = kind === 'Video' ? 'Per Second' : 'Per Image';
-    const usageKind = kind === 'Video' ? 'Seconds' : 'Images';
-    const units = kind === 'Video' ? durationSeconds : 1;
 
-    const unitTypeList = Array.isArray(AIEngine.Instance.ModelPriceUnitTypes)
-        ? AIEngine.Instance.ModelPriceUnitTypes
-        : [];
-    const matchesCostUnit = (cost: MJAIModelCostEntity | null | undefined): cost is MJAIModelCostEntity => {
-        if (!cost) {
-            return false;
-        }
-        const unitTypeRow = unitTypeList.find((put) => put && UUIDsEqual(put.ID, cost.UnitTypeID));
-        if (unitTypeRow) {
-            const nameMatch =
-                (unitTypeRow.Name ?? '').trim().toLowerCase() === unitTypeName.toLowerCase();
-            const usageMatch =
-                (unitTypeRow.UsageType ?? '').trim().toLowerCase() === usageKind.toLowerCase();
-            if (nameMatch || usageMatch) {
-                return true;
-            }
-        }
-        return (cost.UnitType ?? '').trim().toLowerCase() === unitTypeName.toLowerCase();
-    };
-
-    const now = new Date();
-    const isActiveRealtimeCost = (
-        cost: MJAIModelCostEntity | null | undefined,
-    ): cost is MJAIModelCostEntity => {
-        if (!matchesCostUnit(cost)) {
-            return false;
-        }
-        if (cost.Status !== 'Active') {
-            return false;
-        }
-        if ((cost.ProcessingType ?? 'Realtime') !== 'Realtime') {
-            return false;
-        }
-        if (cost.StartedAt && new Date(cost.StartedAt) > now) {
-            return false;
-        }
-        if (cost.EndedAt && new Date(cost.EndedAt) <= now) {
-            return false;
-        }
-        return true;
-    };
-
-    const allCosts = Array.isArray(AIEngine.Instance.ModelCosts)
-        ? AIEngine.Instance.ModelCosts
-        : [];
-    const candidatePairs: Array<{ modelId: string; vendorId?: string | null }> = [];
-
-    const prompts = Array.isArray(AIEngine.Instance.Prompts) ? AIEngine.Instance.Prompts : [];
-    const promptEntity = prompts.find(
-        (p) => p && (p.Name ?? '').trim().toLowerCase() === promptName.toLowerCase(),
+    const promptEntity = AIEngine.Instance.Prompts.find(
+        (p) => (p.Name ?? '').trim().toLowerCase() === promptName.toLowerCase(),
     );
-    if (promptEntity) {
-        const promptModels = (
-            Array.isArray(AIEngine.Instance.PromptModels) ? AIEngine.Instance.PromptModels : []
-        )
-            .filter(
-                (pm) =>
-                    pm &&
-                    UUIDsEqual(pm.PromptID, promptEntity.ID) &&
-                    (pm.Status === 'Active' || pm.Status === 'Preview'),
-            )
-            .sort((a, b) => (b.Priority ?? 0) - (a.Priority ?? 0));
-        for (const pm of promptModels) {
-            if (pm.ModelID) {
-                candidatePairs.push({ modelId: pm.ModelID, vendorId: pm.VendorID });
-            }
-        }
+    if (!promptEntity) {
+        throw new Error(
+            `Carrier prompt "${promptName}" not found in AIEngine.Instance.Prompts for ${kind} generation; refusing to run with an unknown cost.`,
+        );
     }
 
-    const models = (Array.isArray(AIEngine.Instance.Models) ? AIEngine.Instance.Models : [])
-        .filter(
-            (m) =>
-                m &&
-                m.IsActive !== false &&
-                (m.AIModelType ?? '').trim().toLowerCase() === modelTypeName.toLowerCase(),
-        )
-        .sort((a, b) => (b.PowerRank ?? 0) - (a.PowerRank ?? 0));
-    for (const m of models) {
-        if (m.ID) {
-            candidatePairs.push({ modelId: m.ID });
-        }
+    const boundPromptModels = AIEngine.Instance.PromptModels.filter(
+        (pm) =>
+            UUIDsEqual(pm.PromptID, promptEntity.ID) &&
+            (pm.Status === 'Active' || pm.Status === 'Preview'),
+    );
+    if (boundPromptModels.length === 0) {
+        throw new Error(
+            `Carrier prompt "${promptName}" has no Active or Preview PromptModels bound in MJ: AI Prompt Models; refusing to run with an unknown cost.`,
+        );
     }
 
-    let matchedCost: MJAIModelCostEntity | null = null;
-    for (const candidate of candidatePairs) {
-        if (typeof AIEngine.Instance.GetActiveModelCost === 'function' && candidate.vendorId) {
-            const direct = AIEngine.Instance.GetActiveModelCost(
-                candidate.modelId,
-                candidate.vendorId,
-                'Realtime',
+    const usage =
+        kind === 'Video'
+            ? ModelUsage.ForMedia('Seconds', 0, durationSeconds)
+            : ModelUsage.ForMedia('Images', 0, 1);
+
+    let highestCost = -1;
+    for (const pm of boundPromptModels) {
+        const modelId = pm.ModelID?.trim();
+        const vendorId = pm.VendorID?.trim();
+        if (!modelId || !vendorId) {
+            throw new Error(
+                `PromptModel "${pm.ID}" on carrier prompt "${promptName}" is missing ModelID or VendorID; refusing to run with an unknown cost.`,
             );
-            if (isActiveRealtimeCost(direct)) {
-                matchedCost = direct;
-                break;
-            }
         }
-        const matchingForModel = allCosts
-            .filter(
-                (c) =>
-                    isActiveRealtimeCost(c) &&
-                    UUIDsEqual(c.ModelID, candidate.modelId) &&
-                    (!candidate.vendorId || UUIDsEqual(c.VendorID, candidate.vendorId)),
-            )
-            .sort((a, b) => {
-                const aTime = a.StartedAt ? new Date(a.StartedAt).getTime() : 0;
-                const bTime = b.StartedAt ? new Date(b.StartedAt).getTime() : 0;
-                return bTime - aTime;
-            });
-        if (matchingForModel.length > 0) {
-            matchedCost = matchingForModel[0];
-            break;
+
+        const priced = AIEngineBase.Instance.CalculateModelCost(modelId, vendorId, usage);
+        if (
+            !priced ||
+            typeof priced.cost !== 'number' ||
+            !Number.isFinite(priced.cost) ||
+            priced.cost < 0
+        ) {
+            throw new Error(
+                `No active price row found for bound PromptModel candidate (ModelID="${modelId}", VendorID="${vendorId}") on carrier prompt "${promptName}"; refusing to run with an unknown cost.`,
+            );
+        }
+
+        if (priced.cost > highestCost) {
+            highestCost = priced.cost;
         }
     }
 
-    if (!matchedCost) {
-        const matchingByUnit = allCosts
-            .filter((c) => isActiveRealtimeCost(c))
-            .sort((a, b) => {
-                const aTime = a.StartedAt ? new Date(a.StartedAt).getTime() : 0;
-                const bTime = b.StartedAt ? new Date(b.StartedAt).getTime() : 0;
-                return bTime - aTime;
-            });
-        if (matchingByUnit.length > 0) {
-            matchedCost = matchingByUnit[0];
-        }
-    }
-
-    if (!matchedCost) {
-        throw new Error(
-            `No active "${unitTypeName}" price row found in MJ: AI Model Costs for ${kind} generation; refusing to run with an unknown cost.`,
-        );
-    }
-
-    const pricePerUnit = matchedCost.OutputPricePerUnit;
-    if (typeof pricePerUnit !== 'number' || !Number.isFinite(pricePerUnit) || pricePerUnit < 0) {
-        throw new Error(
-            `Active "${unitTypeName}" cost row for ${kind} generation has no valid OutputPricePerUnit; refusing to run with an unknown cost.`,
-        );
-    }
-
-    const unitTypeRow = unitTypeList.find((put) => put && UUIDsEqual(put.ID, matchedCost.UnitTypeID));
-    const unitsPerBilling =
-        unitTypeRow &&
-        typeof unitTypeRow.UnitsPerBillingUnit === 'number' &&
-        unitTypeRow.UnitsPerBillingUnit > 0
-            ? unitTypeRow.UnitsPerBillingUnit
-            : 1;
-
-    return (pricePerUnit / unitsPerBilling) * units;
+    return highestCost;
 }
 
 function resolveRequestAspectRatio(
@@ -1228,6 +1134,8 @@ export async function GenerateRequestedAssets(
                 if (typeof imgOutcome.Cost === 'number') {
                     spendSoFar += imgOutcome.Cost;
                     passSpend += imgOutcome.Cost;
+                } else {
+                    spendSoFar += estimatedImageCost;
                 }
                 generatedKeys.push(request.Key);
                 requestSummaries.push({
@@ -1268,6 +1176,7 @@ export async function GenerateRequestedAssets(
         let videoKeyframes: VideoKeyframeInput[] | undefined;
         let recordedReferenceKeys: string[] = [];
         let stillCost: number | undefined;
+        let estimatedVideoCost: number | undefined;
 
         if (hasExplicitKeyframes) {
             try {
@@ -1308,10 +1217,11 @@ export async function GenerateRequestedAssets(
                 issues,
             );
             if (resolvedRefs.length > 0) {
-                // Case 2: Generate anchor still first via RunImageGeneration, store <key>-still, then pass as keyframe at 0s
+                // Case 2: Pre-price both the anchor still and the video clip before spending on <key>-still
                 let estimatedStillCost: number;
                 try {
                     estimatedStillCost = await EstimateGenerationCallCost('Image', 1, ctx);
+                    estimatedVideoCost = await EstimateGenerationCallCost('Video', durationSeconds, ctx);
                 } catch (err) {
                     const errMsg = err instanceof Error ? err.message : String(err);
                     const failedReason = `GenerationFailed: ${errMsg}`;
@@ -1332,8 +1242,9 @@ export async function GenerateRequestedAssets(
                     continue;
                 }
 
-                if (wouldExceedSpendCap(estimatedStillCost)) {
-                    blockRemainingWithSpendCap(i, estimatedStillCost);
+                const combinedCase2EstimatedCost = estimatedStillCost + estimatedVideoCost;
+                if (wouldExceedSpendCap(combinedCase2EstimatedCost)) {
+                    blockRemainingWithSpendCap(i, combinedCase2EstimatedCost);
                     break;
                 }
 
@@ -1354,6 +1265,8 @@ export async function GenerateRequestedAssets(
                         spendSoFar += stillOutcome.Cost;
                         passSpend += stillOutcome.Cost;
                         stillCost = stillOutcome.Cost;
+                    } else {
+                        spendSoFar += estimatedStillCost;
                     }
                     generatedKeys.push(stillKey);
 
@@ -1390,29 +1303,30 @@ export async function GenerateRequestedAssets(
             }
         }
 
-        // Pre-call spend estimate for the video generation call itself
-        let estimatedVideoCost: number;
-        try {
-            estimatedVideoCost = await EstimateGenerationCallCost('Video', durationSeconds, ctx);
-        } catch (err) {
-            const errMsg = err instanceof Error ? err.message : String(err);
-            const failedReason = `GenerationFailed: ${errMsg}`;
-            request.Status = 'Blocked';
-            request.BlockedReason = failedReason;
-            issues.push({
-                RequestKey: request.Key,
-                Code: 'GenerationFailed',
-                Severity: 'Error',
-                Message: failedReason,
-            });
-            requestSummaries.push({
-                Key: request.Key,
-                Kind: 'Video',
-                Status: 'Blocked',
-                BlockedReason: failedReason,
-                Cost: stillCost,
-            });
-            continue;
+        // Pre-call spend estimate for the video generation call itself (if not already priced in Case 2)
+        if (estimatedVideoCost === undefined) {
+            try {
+                estimatedVideoCost = await EstimateGenerationCallCost('Video', durationSeconds, ctx);
+            } catch (err) {
+                const errMsg = err instanceof Error ? err.message : String(err);
+                const failedReason = `GenerationFailed: ${errMsg}`;
+                request.Status = 'Blocked';
+                request.BlockedReason = failedReason;
+                issues.push({
+                    RequestKey: request.Key,
+                    Code: 'GenerationFailed',
+                    Severity: 'Error',
+                    Message: failedReason,
+                });
+                requestSummaries.push({
+                    Key: request.Key,
+                    Kind: 'Video',
+                    Status: 'Blocked',
+                    BlockedReason: failedReason,
+                    Cost: stillCost,
+                });
+                continue;
+            }
         }
 
         if (wouldExceedSpendCap(estimatedVideoCost)) {
@@ -1513,6 +1427,8 @@ export async function GenerateRequestedAssets(
             if (typeof videoCost === 'number') {
                 spendSoFar += videoCost;
                 passSpend += videoCost;
+            } else {
+                spendSoFar += estimatedVideoCost;
             }
             generatedKeys.push(request.Key);
 

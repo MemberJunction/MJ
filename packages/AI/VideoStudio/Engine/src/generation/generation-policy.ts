@@ -83,23 +83,9 @@ export function ResolveGenerationReferenceAssets(
 }
 
 function readKitNeverInvent(kit: MJBrandKitEntity | null): string[] {
-    if (!kit) {
-        return [];
-    }
-    if (Array.isArray(kit.NeverInventObject)) {
-        return kit.NeverInventObject.filter((entry): entry is string => typeof entry === 'string');
-    }
-    if (typeof kit.NeverInvent === 'string' && kit.NeverInvent.trim().length > 0) {
-        try {
-            const parsed: unknown = JSON.parse(kit.NeverInvent);
-            if (Array.isArray(parsed)) {
-                return parsed.filter((entry): entry is string => typeof entry === 'string');
-            }
-        } catch {
-            // Ignore malformed JSON
-        }
-    }
-    return [];
+    return (kit?.NeverInventObject ?? []).filter(
+        (entry): entry is string => typeof entry === 'string',
+    );
 }
 
 function mergeNeverInvent(

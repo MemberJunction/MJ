@@ -1,10 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AIAPIKey, AICredentialScope } from '@memberjunction/ai';
-import type {
-    AIImageGenerationRunParams,
-    AIImageRunResult,
-    AIVideoGenerationRunParams,
-    AIVideoGenerationRunResult,
+import type { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
+import {
+    AIImageGenerationRunner,
+    AIVideoRunner,
+    type AIImageGenerationRunParams,
+    type AIImageRunResult,
+    type AIVideoGenerationRunParams,
+    type AIVideoGenerationRunResult,
 } from '@memberjunction/ai-prompts';
 import { AIEngine } from '@memberjunction/aiengine';
 import { RunView, type UserInfo } from '@memberjunction/core';
@@ -12,6 +16,7 @@ import {
     BrandKitEngine,
     type MJAIModelCostEntity,
     type MJAIModelPriceUnitTypeEntity,
+    type MJAIPromptModelEntity,
     type MJBrandKitAssetEntity,
     type MJBrandKitEntity,
 } from '@memberjunction/core-entities';
@@ -38,6 +43,8 @@ const FILE_ID_LOGO_MAIN = '22222222-2222-4222-8222-222222222202';
 const FILE_ID_UNFLAGGED_KIT = '33333333-3333-4333-8333-333333333303';
 const UNIT_TYPE_PER_SECOND_ID = '00000000-0000-4000-8000-000000000501';
 const UNIT_TYPE_PER_IMAGE_ID = '00000000-0000-4000-8000-000000000502';
+const PROMPT_VIDEO_ID = '00000000-0000-4000-8000-000000000601';
+const PROMPT_IMAGE_ID = '00000000-0000-4000-8000-000000000602';
 
 const PNG_MAGIC_BYTES = Buffer.from([
     0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x01, 0x02,
@@ -237,6 +244,8 @@ function makeFixtureSpec(): VideoGenerationSpec {
 function createFakeRunners(options?: {
     imageCost?: number;
     videoCost?: number;
+    omitImageCost?: boolean;
+    omitVideoCost?: boolean;
     failImage?: boolean;
     failVideo?: boolean;
 }): {
@@ -259,8 +268,10 @@ function createFakeRunners(options?: {
                 };
             }
             const promptRunId = `prompt-run-img-${imageCalls.length}`;
-            promptRunCosts[promptRunId] =
-                options?.imageCost !== undefined ? options.imageCost : 0.08;
+            if (!options?.omitImageCost) {
+                promptRunCosts[promptRunId] =
+                    options?.imageCost !== undefined ? options.imageCost : 0.08;
+            }
             return {
                 Success: true,
                 ExecutionTimeMS: 0,
@@ -304,7 +315,11 @@ function createFakeRunners(options?: {
                 ModelID: 'model-veo-3-1',
                 ModelName: 'Veo 3.1',
                 JobID: `job-vid-${videoCalls.length}`,
-                Cost: options?.videoCost !== undefined ? options.videoCost : 0.42,
+                Cost: options?.omitVideoCost
+                    ? undefined
+                    : options?.videoCost !== undefined
+                      ? options.videoCost
+                      : 0.42,
                 C2PA: true,
                 Video: {
                     Data: Buffer.from(MP4_FAKE_BYTES),
@@ -380,16 +395,46 @@ describe('GenerateRequestedAssets (VS-GEN-6)', () => {
 
         vi.spyOn(AIEngine.Instance, 'Loaded', 'get').mockReturnValue(true);
         vi.spyOn(AIEngine.Instance, 'Config').mockResolvedValue(undefined);
+        vi.spyOn(AIEngine.Instance, 'Prompts', 'get').mockReturnValue([
+            {
+                ID: PROMPT_VIDEO_ID,
+                Name: AIVideoRunner.GENERATIVE_PROMPT_NAME,
+                Status: 'Active',
+            } as unknown as MJAIPromptEntityExtended,
+            {
+                ID: PROMPT_IMAGE_ID,
+                Name: AIImageGenerationRunner.DEFAULT_PROMPT_NAME,
+                Status: 'Active',
+            } as unknown as MJAIPromptEntityExtended,
+        ]);
+        vi.spyOn(AIEngine.Instance, 'PromptModels', 'get').mockReturnValue([
+            {
+                ID: 'pm-video-veo',
+                PromptID: PROMPT_VIDEO_ID,
+                ModelID: 'model-veo-3-1',
+                VendorID: 'vendor-google',
+                Status: 'Active',
+            } as unknown as MJAIPromptModelEntity,
+            {
+                ID: 'pm-image-imagen',
+                PromptID: PROMPT_IMAGE_ID,
+                ModelID: 'model-imagen-4',
+                VendorID: 'vendor-google',
+                Status: 'Active',
+            } as unknown as MJAIPromptModelEntity,
+        ]);
         vi.spyOn(AIEngine.Instance, 'ModelPriceUnitTypes', 'get').mockReturnValue([
             {
                 ID: UNIT_TYPE_PER_SECOND_ID,
                 Name: 'Per Second',
+                DriverClass: 'Linear',
                 UsageType: 'Seconds',
                 UnitsPerBillingUnit: 1,
             } as unknown as MJAIModelPriceUnitTypeEntity,
             {
                 ID: UNIT_TYPE_PER_IMAGE_ID,
                 Name: 'Per Image',
+                DriverClass: 'Linear',
                 UsageType: 'Images',
                 UnitsPerBillingUnit: 1,
             } as unknown as MJAIModelPriceUnitTypeEntity,
@@ -403,7 +448,9 @@ describe('GenerateRequestedAssets (VS-GEN-6)', () => {
                 ProcessingType: 'Realtime',
                 UnitTypeID: UNIT_TYPE_PER_SECOND_ID,
                 UnitType: 'Per Second',
+                InputPricePerUnit: 0,
                 OutputPricePerUnit: 0.1,
+                Currency: 'USD',
             } as unknown as MJAIModelCostEntity,
             {
                 ID: 'cost-imagen-per-img',
@@ -413,9 +460,18 @@ describe('GenerateRequestedAssets (VS-GEN-6)', () => {
                 ProcessingType: 'Realtime',
                 UnitTypeID: UNIT_TYPE_PER_IMAGE_ID,
                 UnitType: 'Per Image',
+                InputPricePerUnit: 0,
                 OutputPricePerUnit: 0.25,
+                Currency: 'USD',
             } as unknown as MJAIModelCostEntity,
         ]);
+        vi.spyOn(AIEngineBase.Instance, 'ModelPriceUnitTypes', 'get').mockImplementation(
+            () => AIEngine.Instance.ModelPriceUnitTypes,
+        );
+        Object.defineProperty(AIEngineBase.Instance, '_modelCosts', {
+            get: () => AIEngine.Instance.ModelCosts,
+            configurable: true,
+        });
 
         vi.spyOn(FileStorageEngine.Instance, 'Config').mockResolvedValue(undefined);
         vi.spyOn(FileStorageEngine.Instance, 'HasStorageAccounts', 'get').mockReturnValue(true);
@@ -1108,6 +1164,213 @@ describe('GenerateRequestedAssets (VS-GEN-6)', () => {
             expect(res.Spec.Assets.Generate![0].BlockedReason).toContain('GenerationFailed');
             expect(res.Spec.Assets.Generate![1].Status).toBe('Blocked');
             expect(res.Spec.Assets.Generate![1].BlockedReason).toContain('GenerationFailed');
+        }
+
+        // 6d: Multi-model carrier prompt prices the worst-case bound PromptModel candidate ($0.25/s * 6s = $1.50 > $1.00 cap -> SpendCapReached),
+        // and fails closed (GenerationFailed) when any bound candidate has no active ModelCost row
+        {
+            vi.spyOn(AIEngine.Instance, 'PromptModels', 'get').mockReturnValue([
+                {
+                    ID: 'pm-video-veo-std',
+                    PromptID: PROMPT_VIDEO_ID,
+                    ModelID: 'model-veo-3-1',
+                    VendorID: 'vendor-google',
+                    Status: 'Active',
+                } as unknown as MJAIPromptModelEntity,
+                {
+                    ID: 'pm-video-veo-hq',
+                    PromptID: PROMPT_VIDEO_ID,
+                    ModelID: 'model-veo-3-1-hq',
+                    VendorID: 'vendor-google',
+                    Status: 'Active',
+                } as unknown as MJAIPromptModelEntity,
+                {
+                    ID: 'pm-image-imagen',
+                    PromptID: PROMPT_IMAGE_ID,
+                    ModelID: 'model-imagen-4',
+                    VendorID: 'vendor-google',
+                    Status: 'Active',
+                } as unknown as MJAIPromptModelEntity,
+            ]);
+            vi.spyOn(AIEngine.Instance, 'ModelCosts', 'get').mockReturnValue([
+                {
+                    ID: 'cost-veo-per-sec',
+                    ModelID: 'model-veo-3-1',
+                    VendorID: 'vendor-google',
+                    Status: 'Active',
+                    ProcessingType: 'Realtime',
+                    UnitTypeID: UNIT_TYPE_PER_SECOND_ID,
+                    UnitType: 'Per Second',
+                    InputPricePerUnit: 0,
+                    OutputPricePerUnit: 0.1,
+                    Currency: 'USD',
+                } as unknown as MJAIModelCostEntity,
+                {
+                    ID: 'cost-veo-hq-per-sec',
+                    ModelID: 'model-veo-3-1-hq',
+                    VendorID: 'vendor-google',
+                    Status: 'Active',
+                    ProcessingType: 'Realtime',
+                    UnitTypeID: UNIT_TYPE_PER_SECOND_ID,
+                    UnitType: 'Per Second',
+                    InputPricePerUnit: 0,
+                    OutputPricePerUnit: 0.25,
+                    Currency: 'USD',
+                } as unknown as MJAIModelCostEntity,
+                {
+                    ID: 'cost-imagen-per-img',
+                    ModelID: 'model-imagen-4',
+                    VendorID: 'vendor-google',
+                    Status: 'Active',
+                    ProcessingType: 'Realtime',
+                    UnitTypeID: UNIT_TYPE_PER_IMAGE_ID,
+                    UnitType: 'Per Image',
+                    InputPricePerUnit: 0,
+                    OutputPricePerUnit: 0.25,
+                    Currency: 'USD',
+                } as unknown as MJAIModelCostEntity,
+            ]);
+
+            const spec = makeFixtureSpec();
+            const { imageCalls, videoCalls, imageRunner, videoRunner } = createFakeRunners();
+            const res = await GenerateRequestedAssets(spec, {
+                ContextUser: mockUser,
+                ImageRunner: imageRunner,
+                VideoRunner: videoRunner,
+            });
+            expect(videoCalls).toHaveLength(0);
+            expect(imageCalls).toHaveLength(0);
+            expect(res.Spec.Assets.Generate![0].Status).toBe('Blocked');
+            expect(res.Spec.Assets.Generate![0].BlockedReason).toContain('SpendCapReached');
+
+            // Remove the cost row for the second bound candidate -> fails closed with GenerationFailed
+            vi.spyOn(AIEngine.Instance, 'ModelCosts', 'get').mockReturnValue([
+                {
+                    ID: 'cost-veo-per-sec',
+                    ModelID: 'model-veo-3-1',
+                    VendorID: 'vendor-google',
+                    Status: 'Active',
+                    ProcessingType: 'Realtime',
+                    UnitTypeID: UNIT_TYPE_PER_SECOND_ID,
+                    UnitType: 'Per Second',
+                    InputPricePerUnit: 0,
+                    OutputPricePerUnit: 0.1,
+                    Currency: 'USD',
+                } as unknown as MJAIModelCostEntity,
+            ]);
+            const specUnpriced = makeFixtureSpec();
+            specUnpriced.Assets.Generate = [specUnpriced.Assets.Generate![0]];
+            const unpricedRunners = createFakeRunners();
+            const unpricedRes = await GenerateRequestedAssets(specUnpriced, {
+                ContextUser: mockUser,
+                ImageRunner: unpricedRunners.imageRunner,
+                VideoRunner: unpricedRunners.videoRunner,
+            });
+            expect(unpricedRunners.videoCalls).toHaveLength(0);
+            expect(unpricedRes.Spec.Assets.Generate![0].Status).toBe('Blocked');
+            expect(unpricedRes.Spec.Assets.Generate![0].BlockedReason).toContain(
+                'GenerationFailed',
+            );
+        }
+
+        // Restore single-candidate PromptModels and default ModelCosts for 6e and 6f
+        vi.spyOn(AIEngine.Instance, 'PromptModels', 'get').mockReturnValue([
+            {
+                ID: 'pm-video-veo',
+                PromptID: PROMPT_VIDEO_ID,
+                ModelID: 'model-veo-3-1',
+                VendorID: 'vendor-google',
+                Status: 'Active',
+            } as unknown as MJAIPromptModelEntity,
+            {
+                ID: 'pm-image-imagen',
+                PromptID: PROMPT_IMAGE_ID,
+                ModelID: 'model-imagen-4',
+                VendorID: 'vendor-google',
+                Status: 'Active',
+            } as unknown as MJAIPromptModelEntity,
+        ]);
+        vi.spyOn(AIEngine.Instance, 'ModelCosts', 'get').mockReturnValue([
+            {
+                ID: 'cost-veo-per-sec',
+                ModelID: 'model-veo-3-1',
+                VendorID: 'vendor-google',
+                Status: 'Active',
+                ProcessingType: 'Realtime',
+                UnitTypeID: UNIT_TYPE_PER_SECOND_ID,
+                UnitType: 'Per Second',
+                InputPricePerUnit: 0,
+                OutputPricePerUnit: 0.1,
+                Currency: 'USD',
+            } as unknown as MJAIModelCostEntity,
+            {
+                ID: 'cost-imagen-per-img',
+                ModelID: 'model-imagen-4',
+                VendorID: 'vendor-google',
+                Status: 'Active',
+                ProcessingType: 'Realtime',
+                UnitTypeID: UNIT_TYPE_PER_IMAGE_ID,
+                UnitType: 'Per Image',
+                InputPricePerUnit: 0,
+                OutputPricePerUnit: 0.25,
+                Currency: 'USD',
+            } as unknown as MJAIModelCostEntity,
+        ]);
+
+        // 6e: Case 2 styled video clip where combined still + video estimate ($0.25 + 8s * $0.10 = $1.05 > $1.00 cap)
+        // exceeds cap blocks BEFORE calling imageRunner (0 image calls, 0 video calls, no orphan <key>-still)
+        {
+            const spec = makeFixtureSpec();
+            spec.Assets.Generate = [
+                {
+                    Key: 'ref-combined-cap-video',
+                    Kind: 'Video',
+                    Purpose: 'Brand-styled motion background',
+                    Prompt: 'Abstract ribbons in brand colors',
+                    ReferenceKeys: ['logo-main'],
+                    DurationSeconds: 8,
+                },
+            ];
+            const { imageCalls, videoCalls, imageRunner, videoRunner } = createFakeRunners();
+
+            const res = await GenerateRequestedAssets(spec, {
+                ContextUser: mockUser,
+                ImageRunner: imageRunner,
+                VideoRunner: videoRunner,
+            });
+
+            expect(imageCalls).toHaveLength(0);
+            expect(videoCalls).toHaveLength(0);
+            expect(res.Spec.Assets.Generate![0].Status).toBe('Blocked');
+            expect(res.Spec.Assets.Generate![0].BlockedReason).toContain('SpendCapReached');
+            expect(
+                res.Spec.Assets.Approved.some((a) => a.Key === 'ref-combined-cap-video-still'),
+            ).toBe(false);
+        }
+
+        // 6f: When a completed call omits actual Cost, spendSoFar still advances by the pre-call estimate
+        // (8s video estimated at $0.80), blocking the next image request ($0.25 -> $1.05 > $1.00 cap) without fabricating Generation.Cost
+        {
+            const spec = makeFixtureSpec();
+            spec.Assets.Generate![0].DurationSeconds = 8;
+            const { imageCalls, videoCalls, imageRunner, videoRunner } = createFakeRunners({
+                omitVideoCost: true,
+            });
+
+            const res = await GenerateRequestedAssets(spec, {
+                ContextUser: mockUser,
+                ImageRunner: imageRunner,
+                VideoRunner: videoRunner,
+            });
+
+            expect(videoCalls).toHaveLength(1);
+            expect(imageCalls).toHaveLength(0);
+            expect(res.Spec.Assets.Generate![0].Status).toBe('Generated');
+            expect(res.Spec.Assets.Generate![1].Status).toBe('Blocked');
+            expect(res.Spec.Assets.Generate![1].BlockedReason).toContain('SpendCapReached');
+            const genVid = res.Spec.Assets.Approved.find((a) => a.Key === 'ambient-bg');
+            expect(genVid?.Generation?.Cost).toBeUndefined();
+            expect(res.TotalCost).toBe(0);
         }
     });
 
