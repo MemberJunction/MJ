@@ -4,14 +4,24 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import type { RenderProjectBundle } from '@memberjunction/video-studio-core';
+import {
+    BuildDataCheckInputs,
+    BuildRenderDataSnapshot,
+    WithChartKit,
+    type RenderProjectBundle,
+    type VideoGenerationSpec,
+} from '@memberjunction/video-studio-core';
 import { HyperFramesRenderBackend } from '../hyperframes-backend.js';
 import {
     ApplyPreambleToStagedBundle,
     BuildPreambleOptionsFromBundle,
+    MJ_ASOF_CARD_MISSING_CODE,
+    MJ_BOUND_KEY_UNKNOWN_CODE,
+    MJ_BOUND_VALUE_MISMATCH_CODE,
     MJ_MIN_TEXT_SIZE_CODE,
     MJ_SAFE_AREA_CODE,
     MJ_UNBOUND_LITERAL_RENDERED_CODE,
+    MJ_UNBOUND_LITERAL_SOURCE_CODE,
     MJ_UNBUNDLED_FONT_CODE,
     RunCheckJob,
     RunRenderJob,
@@ -656,4 +666,259 @@ describe.skipIf(!RUN_RENDER_TESTS)('VS-RND-5 opt-in real-backend deterministic c
         expect(codes.has('contrast_aa_failure')).toBe(true);
         expect(codes.has('text_box_overflow')).toBe(true);
     }, 90_000);
+
+    it('VS-DAT-3: enforces bound literals, count-up settle frames, MJChartKit KpiTile BindingKey, and final-frame MJVideo.Data.__asOf card', async () => {
+        const spec: Pick<
+            VideoGenerationSpec,
+            'DataBindings' | 'DataSnapshot' | 'Beats' | 'Render'
+        > = {
+            Render: {
+                Renderer: 'HyperFrames',
+                RendererVersion: '0.16.21',
+                Fps: 30,
+                Seed: 42,
+                Quality: 'standard',
+            },
+            DataBindings: [
+                {
+                    Key: 'TotalARR',
+                    Source: { Kind: 'Inline' },
+                    Shape: 'Scalar',
+                    Format: { Kind: 'Currency', Currency: 'USD', Decimals: 1 },
+                },
+            ],
+            DataSnapshot: {
+                AsOf: '2026-10-16T00:00:00.000Z',
+                Sources: ['Inline:TotalARR'],
+                Inline: { TotalARR: 14_200_000 },
+            },
+            Beats: [
+                {
+                    Key: 'b1',
+                    Label: 'Reveal',
+                    StartSeconds: 0,
+                    EndSeconds: 2,
+                    EntryState: 'Blank',
+                    ExitState: 'Settled KPI + AsOf footer',
+                    Purpose: 'Count up ARR to $14.2M with Data as of 2026-10-16 footer',
+                    OnScreenText: ['Total ARR {TotalARR}'],
+                    DataRefs: ['TotalARR'],
+                    AssetRefs: [],
+                    LayoutNotes: { '16:9': 'Centered KPI' },
+                },
+            ],
+        };
+        const values = { TotalARR: 14_200_000 };
+        const checkInputs = BuildDataCheckInputs(spec, values);
+        const dataSnapshot = BuildRenderDataSnapshot(values, '2026-10-16T00:00:00.000Z');
+
+        // 1. A composition with an unbound number fails RunCheckJob (BlockRender: true).
+        const unboundHtml = [
+            '<!doctype html>',
+            '<html>',
+            '<head>',
+            '<meta charset="utf-8" />',
+            '<style>',
+            '  * { box-sizing: border-box; margin: 0; padding: 0; }',
+            '  body { width: 1280px; height: 720px; background: #0f172a; color: #f8fafc; font-family: "MJ Sans", sans-serif; position: relative; }',
+            '  #unbound-kpi { position: absolute; left: 160px; top: 220px; font-size: 64px; color: #f8fafc; }',
+            '  #asof-footer { position: absolute; left: 160px; top: 580px; font-size: 28px; color: #e2e8f0; }',
+            '</style>',
+            '</head>',
+            '<body>',
+            '  <div id="root" data-composition-id="dat3-unbound" data-duration="2" data-fps="30" data-width="1280" data-height="720" data-no-timeline>',
+            '    <div id="unbound-kpi">$99.9M</div>',
+            '    <footer id="asof-footer"></footer>',
+            '  </div>',
+            '  <script>',
+            '    (function() {',
+            '      var asofEl = document.getElementById("asof-footer");',
+            '      if (asofEl && window.MJVideo && window.MJVideo.Data) {',
+            '        asofEl.textContent = String(window.MJVideo.Data.__asOf || "");',
+            '      }',
+            '    })();',
+            '  </script>',
+            '</body>',
+            '</html>',
+        ].join('\n');
+
+        const unboundRes = await RunCheckJob(
+            {
+                Bundle: {
+                    Format: '16:9',
+                    EntryFile: 'index.html',
+                    Files: [{ Path: 'index.html', Content: unboundHtml }],
+                    Assets: [],
+                    DataSnapshot: dataSnapshot,
+                    Seed: 42,
+                },
+                Width: 1280,
+                Height: 720,
+                SampleTimestampsSeconds: [0],
+                AllowedDataLiterals: checkInputs.AllowedDataLiterals,
+                BoundDataLiterals: checkInputs.BoundDataLiterals,
+                SettleTimestampsSeconds: checkInputs.SettleTimestampsSeconds,
+                RequiredFinalFrameText: checkInputs.RequiredFinalFrameText,
+            },
+            backend,
+        );
+        expect(unboundRes.Passed).toBe(false);
+        expect(unboundRes.BlockRender).toBe(true);
+        const unboundCodes = new Set(unboundRes.Issues.map((i) => i.Code));
+        expect(
+            unboundCodes.has(MJ_UNBOUND_LITERAL_SOURCE_CODE) ||
+                unboundCodes.has(MJ_UNBOUND_LITERAL_RENDERED_CODE),
+        ).toBe(true);
+
+        // 2. The same film showing the number via MJChartKit.FormatValue(MJVideo.Data[k], format)
+        // (with an intermediate count-up value at t=1.0 and settled value at t=1.966667) and
+        // showing MJVideo.Data.__asOf on the final frame passes (Passed: true, BlockRender: false).
+        const validCountUpHtml = [
+            '<!doctype html>',
+            '<html>',
+            '<head>',
+            '<meta charset="utf-8" />',
+            '<style>',
+            '  * { box-sizing: border-box; margin: 0; padding: 0; }',
+            '  body { width: 1280px; height: 720px; background: #0f172a; color: #f8fafc; font-family: "MJ Sans", sans-serif; position: relative; }',
+            '  #kpi-value { position: absolute; left: 160px; top: 220px; font-size: 64px; color: #f8fafc; }',
+            '  #asof-footer { position: absolute; left: 160px; top: 580px; font-size: 28px; color: #e2e8f0; }',
+            '</style>',
+            '</head>',
+            '<body>',
+            '  <div id="root" data-composition-id="dat3-countup" data-duration="2" data-fps="30" data-width="1280" data-height="720" data-no-timeline>',
+            '    <div id="kpi-value" data-mj-bound="TotalARR"></div>',
+            '    <footer id="asof-footer"></footer>',
+            '  </div>',
+            '  <script src="mj/chart-kit.js"></script>',
+            '  <script>',
+            '    (function() {',
+            '      var kpiEl = document.getElementById("kpi-value");',
+            '      var asofEl = document.getElementById("asof-footer");',
+            '      var data = (window.MJVideo && window.MJVideo.Data) || {};',
+            '      var target = Number(data.TotalARR || 0);',
+            '      var fmt = { Kind: "Currency", Currency: "USD", Decimals: 1 };',
+            '      if (asofEl) { asofEl.textContent = String(data.__asOf || ""); }',
+            '      function renderAt(t) {',
+            '        var progress = Math.max(0, Math.min(1, t / 1.9));',
+            '        var current = target * progress;',
+            '        if (kpiEl && window.MJChartKit) {',
+            '          kpiEl.textContent = window.MJChartKit.FormatValue(current, fmt);',
+            '        }',
+            '      }',
+            '      renderAt(0);',
+            '      if (window.MJVideo && typeof window.MJVideo.OnFrame === "function") {',
+            '        window.MJVideo.OnFrame(function(t) { renderAt(t); });',
+            '      }',
+            '    })();',
+            '  </script>',
+            '</body>',
+            '</html>',
+        ].join('\n');
+
+        const passRes = await RunCheckJob(
+            {
+                Bundle: WithChartKit({
+                    Format: '16:9',
+                    EntryFile: 'index.html',
+                    Files: [{ Path: 'index.html', Content: validCountUpHtml }],
+                    Assets: [],
+                    DataSnapshot: dataSnapshot,
+                    Seed: 42,
+                }),
+                Width: 1280,
+                Height: 720,
+                SampleTimestampsSeconds: [1.0],
+                AllowedDataLiterals: checkInputs.AllowedDataLiterals,
+                BoundDataLiterals: checkInputs.BoundDataLiterals,
+                SettleTimestampsSeconds: checkInputs.SettleTimestampsSeconds,
+                RequiredFinalFrameText: checkInputs.RequiredFinalFrameText,
+            },
+            backend,
+        );
+
+        const passErrors = passRes.Issues.filter((i) => i.Severity === 'Error');
+        expect(passErrors).toEqual([]);
+        expect(passRes.Passed).toBe(true);
+        expect(passRes.BlockRender).toBe(false);
+
+        // 3 & 4. A kit KpiTile fed a wrong value under a real BindingKey fails MJ_BOUND_VALUE_MISMATCH,
+        // an unknown data-mj-bound key fails MJ_BOUND_KEY_UNKNOWN, and omitting MJVideo.Data.__asOf
+        // on the last frame fails MJ_ASOF_CARD_MISSING.
+        const invalidHtml = [
+            '<!doctype html>',
+            '<html>',
+            '<head>',
+            '<meta charset="utf-8" />',
+            '<style>',
+            '  * { box-sizing: border-box; margin: 0; padding: 0; }',
+            '  body { width: 1280px; height: 720px; background: #0f172a; color: #f8fafc; font-family: "MJ Sans", sans-serif; position: relative; }',
+            '  #kpi-host { position: absolute; left: 160px; top: 160px; width: 420px; height: 220px; }',
+            '  #unknown-bound { position: absolute; left: 160px; top: 440px; font-size: 36px; color: #f8fafc; }',
+            '</style>',
+            '</head>',
+            '<body>',
+            '  <div id="root" data-composition-id="dat3-invalid" data-duration="2" data-fps="30" data-width="1280" data-height="720" data-no-timeline>',
+            '    <div id="kpi-host"></div>',
+            '    <div id="unknown-bound" data-mj-bound="BogusKey"></div>',
+            '  </div>',
+            '  <script src="mj/chart-kit.js"></script>',
+            '  <script>',
+            '    (function() {',
+            '      var host = document.getElementById("kpi-host");',
+            '      var unkEl = document.getElementById("unknown-bound");',
+            '      var data = (window.MJVideo && window.MJVideo.Data) || {};',
+            '      var wrongVal = Number(data.TotalARR || 0) * 2;',
+            '      var frame = { Width: 420, Height: 220, StartSeconds: 0, DurationSeconds: 1.0 };',
+            '      function renderAt(t) {',
+            '        if (host && window.MJChartKit) {',
+            '          host.innerHTML = window.MJChartKit.KpiTile({',
+            '            Frame: frame,',
+            '            Label: "Total ARR",',
+            '            Value: wrongVal,',
+            '            BindingKey: "TotalARR",',
+            '            Format: { Kind: "Currency", Currency: "USD", Decimals: 1 }',
+            '          }, t);',
+            '        }',
+            '      }',
+            '      renderAt(0);',
+            '      if (window.MJVideo && typeof window.MJVideo.OnFrame === "function") {',
+            '        window.MJVideo.OnFrame(function(t) { renderAt(t); });',
+            '      }',
+            '      if (unkEl) { unkEl.textContent = "Metric ready"; }',
+            '    })();',
+            '  </script>',
+            '</body>',
+            '</html>',
+        ].join('\n');
+
+        const failRes = await RunCheckJob(
+            {
+                Bundle: WithChartKit({
+                    Format: '16:9',
+                    EntryFile: 'index.html',
+                    Files: [{ Path: 'index.html', Content: invalidHtml }],
+                    Assets: [],
+                    DataSnapshot: dataSnapshot,
+                    Seed: 42,
+                }),
+                Width: 1280,
+                Height: 720,
+                SampleTimestampsSeconds: [1.0],
+                AllowedDataLiterals: checkInputs.AllowedDataLiterals,
+                BoundDataLiterals: checkInputs.BoundDataLiterals,
+                SettleTimestampsSeconds: checkInputs.SettleTimestampsSeconds,
+                RequiredFinalFrameText: checkInputs.RequiredFinalFrameText,
+            },
+            backend,
+        );
+
+        expect(failRes.Passed).toBe(false);
+        expect(failRes.BlockRender).toBe(true);
+        const failCodes = new Set(failRes.Issues.map((i) => i.Code));
+        expect(failCodes.has(MJ_BOUND_KEY_UNKNOWN_CODE)).toBe(true);
+        expect(failCodes.has(MJ_BOUND_VALUE_MISMATCH_CODE)).toBe(true);
+        expect(failCodes.has(MJ_ASOF_CARD_MISSING_CODE)).toBe(true);
+    }, 90_000);
 });
+

@@ -15,6 +15,7 @@
       "DefaultArtifactTypeID": "@lookup:MJ: Artifact Types.Name=Video Production",
       "ArtifactCreationMode": "Always",
       "IconClass": "fa-solid fa-clapperboard",
+      "MaxCostPerRun": 50,
       "PayloadSelfWritePaths": []
     },
     "relatedEntities": {

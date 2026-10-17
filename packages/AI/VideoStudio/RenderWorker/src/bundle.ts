@@ -353,6 +353,47 @@ export function ResolveCompositionFps(bundle: RenderProjectBundle, defaultFps = 
     return parsedFps;
 }
 
+/**
+ * Reads the entry HTML's `data-duration` attribute on `[data-composition-id]` (or falls back to
+ * `defaultDurationSeconds`), range-checking it against `(0, MAX_DURATION_SECONDS]` with
+ * `RenderWorkerError('InvalidRequest', ...)`.
+ */
+export function ResolveCompositionDuration(
+    bundle: RenderProjectBundle,
+    defaultDurationSeconds = 5,
+): number {
+    if (!bundle || !Array.isArray(bundle.Files)) {
+        return defaultDurationSeconds;
+    }
+    const entry = bundle.Files.find((f) => f && f.Path === bundle.EntryFile);
+    if (!entry || typeof entry.Content !== 'string') {
+        return defaultDurationSeconds;
+    }
+
+    const compositionTagMatch = /<[a-z0-9-]+\b[^>]*\bdata-composition-id\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)[^>]*>/i.exec(
+        entry.Content,
+    );
+    const scope = compositionTagMatch ? compositionTagMatch[0] : entry.Content;
+    const durationMatch = /\bdata-duration\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>"']+))/i.exec(scope);
+    if (!durationMatch) {
+        return defaultDurationSeconds;
+    }
+    const rawDuration = (durationMatch[1] ?? durationMatch[2] ?? durationMatch[3] ?? '').trim();
+    const parsedDuration = Number(rawDuration);
+    if (
+        rawDuration.length === 0 ||
+        !Number.isFinite(parsedDuration) ||
+        parsedDuration <= 0 ||
+        parsedDuration > MAX_DURATION_SECONDS
+    ) {
+        throw new RenderWorkerError(
+            'InvalidRequest',
+            `DurationSeconds must be > 0 and <= ${MAX_DURATION_SECONDS}, got ${rawDuration || String(parsedDuration)}.`,
+        );
+    }
+    return parsedDuration;
+}
+
 
 /**
  * Stages a validated `RenderProjectBundle` into a fresh `mkdtemp` directory and injects the preamble

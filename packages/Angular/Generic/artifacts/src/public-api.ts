@@ -59,3 +59,9 @@ export * from './lib/components/previews/office-preview.logic';
 export * from './lib/components/plugins/image-artifact-viewer.component';
 export * from './lib/components/plugins/video-artifact-viewer.component';
 export * from './lib/components/plugins/audio-artifact-viewer.component';
+export * from './lib/components/previews/video-production-artifact-preview.component';
+export * from './lib/components/plugins/video-production/video-production-markdown';
+export * from './lib/components/plugins/video-production/video-production-storyboard-tab.component';
+export * from './lib/components/plugins/video-production/video-production-review-tab.component';
+export * from './lib/components/plugins/video-production/video-production-viewer.component';
+

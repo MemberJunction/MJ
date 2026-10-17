@@ -1,0 +1,214 @@
+<mj-page-layout>
+  <mj-page-header
+    Title="Productions"
+    Icon="fa-solid fa-clapperboard"
+    Subtitle="Browse, preview, and manage rendered video productions and storyboards"
+  >
+    <div meta>
+      <mj-stat-badge
+        [Count]="FilteredCount"
+        [Total]="TotalCount"
+        Label="Productions"
+      />
+    </div>
+
+    <div actions>
+      <mj-refresh-button
+        [Loading]="IsLoading"
+        (Clicked)="Refresh()"
+      />
+    </div>
+
+    <div toolbar>
+      <mj-page-search
+        Placeholder="Search productions by title, archetype, brand kit, or format..."
+        [Value]="SearchText"
+        (ValueChange)="OnSearchChange($event)"
+      />
+      <mj-filter-popover
+        Label="Filters"
+        Icon="fa-solid fa-filter"
+        [ActiveCount]="ActivePopoverFilterCount"
+        [ShowClearAll]="ActivePopoverFilterCount > 0"
+        (ClearAllRequested)="ClearAllFilters()"
+      >
+        <mj-filter-panel
+          [Fields]="FilterFields"
+          [Values]="FilterValues"
+          [ShowReset]="false"
+          (ValuesChange)="OnFilterValuesChange($event)"
+        />
+        <div class="vs-date-filter-group">
+          <mj-filter-field Label="Updated From">
+            <input
+              type="date"
+              class="vs-date-input"
+              data-testid="productions-date-from"
+              [value]="DateFrom"
+              (input)="OnDateFromChange($any($event.target).value)"
+            />
+          </mj-filter-field>
+          <mj-filter-field Label="Updated To">
+            <input
+              type="date"
+              class="vs-date-input"
+              data-testid="productions-date-to"
+              [value]="DateTo"
+              (input)="OnDateToChange($any($event.target).value)"
+            />
+          </mj-filter-field>
+        </div>
+      </mj-filter-popover>
+    </div>
+  </mj-page-header>
+
+  <mj-page-body>
+    @if (IsLoading && AllProductions.length === 0) {
+      <div class="vs-loading-state" data-testid="productions-loading">
+        <mj-loading text="Loading video productions..." size="medium" />
+      </div>
+    } @else if (LoadError) {
+      <div class="vs-empty-state" role="alert" data-testid="productions-error">
+        <i class="fa-solid fa-triangle-exclamation vs-empty-icon"></i>
+        <h3 class="vs-empty-title">Unable to load productions</h3>
+        <p class="vs-empty-subtitle">{{ LoadError }}</p>
+        <button type="button" mjButton Variant="secondary" (click)="Refresh()">
+          <i class="fa-solid fa-rotate"></i>
+          <span>Try Again</span>
+        </button>
+      </div>
+    } @else if (FilteredProductions.length === 0) {
+      <div class="vs-empty-state" data-testid="productions-empty">
+        <i class="fa-solid fa-clapperboard vs-empty-icon"></i>
+        @if (AllProductions.length === 0) {
+          <h3 class="vs-empty-title">No video productions yet</h3>
+          <p class="vs-empty-subtitle">
+            Ask Sage or the Video Producer agent to generate a video storyboard and render a production.
+          </p>
+        } @else {
+          <h3 class="vs-empty-title">No productions match your filters</h3>
+          <p class="vs-empty-subtitle">
+            Try adjusting your search query or clearing active filter criteria.
+          </p>
+          <button
+            type="button"
+            mjButton
+            Variant="secondary"
+            data-testid="productions-clear-filters"
+            (click)="ClearAllFilters(); OnSearchChange('')"
+          >
+            <i class="fa-solid fa-filter-circle-xmark"></i>
+            <span>Reset Filters</span>
+          </button>
+        }
+      </div>
+    } @else {
+      <div
+        class="vs-productions-workspace"
+        [class.vs-productions-workspace--split]="SelectedProduction !== null"
+      >
+        <div class="vs-productions-grid" data-testid="productions-grid">
+          @for (item of FilteredProductions; track item.ID) {
+            <article
+              class="vs-production-card"
+              [class.vs-production-card--selected]="SelectedProduction?.ID === item.ID"
+              [attr.data-testid]="'production-card-' + item.ID"
+              tabindex="0"
+              role="button"
+              [attr.aria-pressed]="SelectedProduction?.ID === item.ID"
+              (click)="SelectProduction(item)"
+              (keydown.enter)="SelectProduction(item)"
+            >
+              <div class="vs-production-poster">
+                @if (item.PosterUrl) {
+                  <img
+                    class="vs-production-poster-img"
+                    [src]="item.PosterUrl"
+                    [alt]="item.Name + ' poster'"
+                    loading="lazy"
+                  />
+                } @else {
+                  <div class="vs-production-poster-placeholder">
+                    <i class="fa-solid fa-film"></i>
+                  </div>
+                }
+
+                <span [class]="StatusBadgeClass(item.Status)">
+                  {{ item.Status }}
+                </span>
+
+                @if (item.DurationSeconds !== null) {
+                  <span class="vs-production-duration">
+                    <i class="fa-regular fa-clock"></i>
+                    {{ FormatDuration(item.DurationSeconds) }}
+                  </span>
+                }
+              </div>
+
+              <div class="vs-production-card-body">
+                <h3 class="vs-production-title" [title]="item.Name">
+                  {{ item.Name }}
+                </h3>
+                @if (item.Description) {
+                  <p class="vs-production-description">{{ item.Description }}</p>
+                }
+
+                <div class="vs-production-meta-row">
+                  @if (item.Archetype) {
+                    <span class="vs-meta-chip" data-testid="production-archetype-chip">
+                      <i class="fa-solid fa-layer-group"></i>
+                      <span>{{ item.Archetype }}</span>
+                    </span>
+                  }
+                  @if (item.BrandKitName || item.BrandKitID) {
+                    <button
+                      type="button"
+                      class="vs-meta-chip vs-meta-chip--interactive"
+                      title="Open Brand Kit"
+                      (click)="OpenBrandKitRecord(item.BrandKitID, $event)"
+                    >
+                      <i class="fa-solid fa-palette"></i>
+                      <span>{{ item.BrandKitName || 'Brand Kit' }}</span>
+                    </button>
+                  }
+                  @if (item.AspectRatio) {
+                    <span class="vs-meta-chip">
+                      <i class="fa-solid fa-expand"></i>
+                      <span>{{ item.AspectRatio }}</span>
+                    </span>
+                  }
+                </div>
+              </div>
+            </article>
+          }
+        </div>
+
+        @if (SelectedProduction !== null) {
+          <aside class="vs-production-detail-pane" data-testid="production-detail-pane">
+            <mj-artifact-viewer-panel
+              [artifactId]="SelectedProduction.ID"
+              [Provider]="Provider"
+              [CurrentUser]="ProviderToUse.CurrentUser"
+              [canShare]="CanShareSelected"
+              [canEdit]="CanEditSelected"
+              [ShowSaveToCollection]="false"
+              (Closed)="CloseDetailPane()"
+              (ShareRequested)="OpenShareModal($event)"
+              (NavigateToLink)="OnNavigateToArtifactLink($event)"
+            />
+          </aside>
+        }
+      </div>
+    }
+
+    @if (IsShareModalOpen && ShareTargetArtifact) {
+      <mj-artifact-share-modal
+        [IsOpen]="IsShareModalOpen"
+        [Artifact]="ShareTargetArtifact"
+        [CurrentUser]="ProviderToUse.CurrentUser"
+        (Saved)="OnShareSaved()"
+        (cancelled)="CloseShareModal()"
+      />
+    }
+  </mj-page-body>
+</mj-page-layout>

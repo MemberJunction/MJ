@@ -351,8 +351,26 @@ export interface CheckRequest {
     Height: number;
     /** Optional timestamps in seconds at which to run DOM layout/contrast/safe-area audits. */
     SampleTimestampsSeconds?: number[];
-    /** Formatted values derived from `DataBindings` + `DataSnapshot` that are permitted on screen. */
+    /**
+     * Exact formatted strings and their numeric tokens built with `MJChartKit.FormatValue` from
+     * `DataBindings` + `DataSnapshot` that are permitted as unbound numeric literals on screen.
+     */
     AllowedDataLiterals?: string[];
+    /**
+     * Map from `VideoDataBinding.Key` to the exact formatted strings and their numeric tokens
+     * (`MJChartKit.FormatValue`) that an element marked with `data-mj-bound="<Key>"` may display once settled.
+     */
+    BoundDataLiterals?: Record<string, string[]>;
+    /**
+     * Timestamps in seconds (typically `beat.EndSeconds - 1 / fps`) where count-up animations
+     * must have settled and `[data-mj-bound="<Key>"]` elements must match `BoundDataLiterals[Key]`.
+     */
+    SettleTimestampsSeconds?: number[];
+    /**
+     * Text strings that must be visible on the final frame of the composition (such as the
+     * `Data as of YYYY-MM-DD` provenance card when `DataBindings` are present).
+     */
+    RequiredFinalFrameText?: string[];
 }
 
 /**

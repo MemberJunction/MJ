@@ -115,4 +115,30 @@ describe('MJStorageMediaPlayerComponent — streaming-URL resolution', () => {
     expect(tracks).toHaveLength(1);
     expect(tracks[0].Kind).toBe('audio');
   });
+
+  it('sets PosterUrl on the first video track when PosterFileID is set and calls MintMediaAccessUrl once per file', async () => {
+    const provider = stubProvider({
+      'FILE-V1': { Success: true, Url: 'http://localhost:4000/media/FILE-V1?token=v1', MimeType: 'video/mp4' },
+      'FILE-V2': { Success: true, Url: 'http://localhost:4000/media/FILE-V2?token=v2', MimeType: 'video/mp4' },
+      'POSTER-1': { Success: true, Url: 'http://localhost:4000/media/POSTER-1?token=p1', MimeType: 'image/png' },
+    });
+    const fixture = renderComponentFixture(MJStorageMediaPlayerComponent, {
+      inputs: { Provider: provider, FileIDs: ['FILE-V1', 'FILE-V2'], PosterFileID: 'POSTER-1' },
+    });
+    await flush();
+
+    const tracks = fixture.componentInstance.ResolvedTracks;
+    expect(tracks).toHaveLength(2);
+    expect(tracks[0].PosterUrl).toBe('http://localhost:4000/media/POSTER-1?token=p1');
+    expect(tracks[1].PosterUrl).toBeUndefined();
+
+    const executeGql = (provider as unknown as { ExecuteGQL: ReturnType<typeof vi.fn> }).ExecuteGQL;
+    expect(executeGql).toHaveBeenCalledTimes(3);
+    expect(executeGql.mock.calls.map((c: unknown[]) => (c[1] as { fileId: string }).fileId)).toEqual([
+      'FILE-V1',
+      'FILE-V2',
+      'POSTER-1',
+    ]);
+  });
 });
+

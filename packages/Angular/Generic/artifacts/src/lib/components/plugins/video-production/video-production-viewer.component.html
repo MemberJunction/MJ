@@ -1,0 +1,82 @@
+<div class="vp-viewer">
+  @if (!Spec) {
+    <mj-empty-state
+      Variant="warning"
+      Icon="fa-solid fa-triangle-exclamation"
+      Title="Invalid Video Production Content"
+      Message="The artifact content could not be parsed as a valid VideoGenerationSpec."
+    ></mj-empty-state>
+  } @else {
+    <header class="vp-header">
+      <div class="vp-header__titles">
+        <h2 class="vp-header__title">{{ Title }}</h2>
+        <p class="vp-header__one-sentence">{{ Spec.Film.OneSentence }}</p>
+      </div>
+      <div class="vp-header__badges">
+        @if (HasDataBadge) {
+          <span class="vp-badge vp-badge--data">
+            <span class="vp-badge__label">Contains data</span>
+            @if (DataAsOfText) {
+              <span class="vp-badge__separator">·</span>
+              <span class="vp-badge__as-of">{{ DataAsOfText }}</span>
+            }
+          </span>
+        }
+        <span class="vp-badge vp-badge--status" [attr.data-status]="Spec.Status">
+          {{ Spec.Status }}
+        </span>
+        <span class="vp-badge vp-badge--duration">
+          {{ DurationSeconds }}s
+        </span>
+      </div>
+    </header>
+
+    @if (AvailableFormats.length > 0) {
+      <div class="vp-format-switcher" role="group" aria-label="Video format switcher">
+        @for (fmt of AvailableFormats; track fmt) {
+          <button
+            #formatBtn
+            type="button"
+            mjButton
+            size="sm"
+            [variant]="SelectedFormat === fmt ? 'primary' : 'outline'"
+            [attr.aria-pressed]="SelectedFormat === fmt"
+            [attr.data-format]="fmt"
+            (click)="SelectFormat(fmt)"
+          >
+            {{ fmt }}
+          </button>
+        }
+      </div>
+    }
+
+    <div class="vp-stage">
+      @if (HasRenderedOutput && SelectedVideo; as video) {
+        @if (video.FileID) {
+          <mj-storage-media-player
+            [FileID]="video.FileID"
+            [PosterFileID]="Spec.Output?.PosterFileID ?? null"
+            [Provider]="ProviderToUse"
+            [ShowTranscript]="false"
+            [ShowTranscriptToggle]="false"
+            [ShowWaveform]="false"
+          ></mj-storage-media-player>
+        } @else if (video.InlineBase64) {
+          <mj-alert Variant="warning">Stored inline: no file storage account was set up.</mj-alert>
+          <mj-media-player
+            [Tracks]="InlineTracks"
+            [ShowTranscript]="false"
+            [ShowTranscriptToggle]="false"
+            [ShowWaveform]="false"
+          ></mj-media-player>
+        }
+      } @else {
+        <mj-empty-state
+          Icon="fa-solid fa-clapperboard"
+          [Title]="'Status: ' + Spec.Status"
+          [Message]="'No rendered video output is available yet (current status: ' + Spec.Status + ').'"
+        ></mj-empty-state>
+      }
+    </div>
+  }
+</div>

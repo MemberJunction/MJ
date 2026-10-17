@@ -1,0 +1,404 @@
+<mj-page-layout>
+  <mj-page-header
+    Title="Archetypes"
+    Icon="fa-solid fa-layer-group"
+    Subtitle="Explore narrative beat templates, duration envelopes, and pacing rules for video productions"
+  >
+    <div meta>
+      <mj-stat-badge
+        [Count]="FilteredCount"
+        [Total]="TotalCount"
+        Label="Archetypes"
+      />
+    </div>
+
+    <div actions>
+      <mj-refresh-button
+        [Loading]="IsLoading"
+        (Clicked)="Refresh()"
+      />
+    </div>
+
+    <div toolbar>
+      <mj-page-search
+        Placeholder="Search archetypes by name, category, format, or beat..."
+        [Value]="SearchText"
+        (ValueChange)="OnSearchChange($event)"
+      />
+      <mj-filter-popover
+        Label="Filters"
+        Icon="fa-solid fa-filter"
+        [ActiveCount]="ActivePopoverFilterCount"
+        [ShowClearAll]="ActivePopoverFilterCount > 0"
+        (ClearAllRequested)="ClearAllFilters()"
+      >
+        <mj-filter-panel
+          [Fields]="FilterFields"
+          [Values]="FilterValues"
+          [ShowReset]="false"
+          (ValuesChange)="OnFilterValuesChange($event)"
+        />
+      </mj-filter-popover>
+    </div>
+  </mj-page-header>
+
+  <mj-page-body>
+    @if (IsLoading && AllArchetypes.length === 0) {
+      <div class="vs-loading-state" data-testid="archetypes-loading">
+        <mj-loading text="Loading video archetypes..." size="medium" />
+      </div>
+    } @else if (LoadError) {
+      <div class="vs-empty-state" role="alert" data-testid="archetypes-error">
+        <i class="fa-solid fa-triangle-exclamation vs-empty-icon"></i>
+        <h3 class="vs-empty-title">Unable to load archetypes</h3>
+        <p class="vs-empty-subtitle">{{ LoadError }}</p>
+        <button type="button" mjButton Variant="secondary" (click)="Refresh()">
+          <i class="fa-solid fa-rotate"></i>
+          <span>Try Again</span>
+        </button>
+      </div>
+    } @else if (FilteredArchetypes.length === 0) {
+      <div class="vs-empty-state" data-testid="archetypes-empty">
+        <i class="fa-solid fa-layer-group vs-empty-icon"></i>
+        @if (AllArchetypes.length === 0) {
+          <h3 class="vs-empty-title">No video archetypes available</h3>
+          <p class="vs-empty-subtitle">
+            Archetypes define reusable narrative structures, beat templates, and pacing rules.
+          </p>
+        } @else {
+          <h3 class="vs-empty-title">No archetypes match your filters</h3>
+          <p class="vs-empty-subtitle">
+            Try clearing your search query or adjusting the active category/scope filters.
+          </p>
+          <button
+            type="button"
+            mjButton
+            Variant="secondary"
+            data-testid="archetypes-clear-filters"
+            (click)="ClearAllFilters(); OnSearchChange('')"
+          >
+            <i class="fa-solid fa-filter-circle-xmark"></i>
+            <span>Reset Filters</span>
+          </button>
+        }
+      </div>
+    } @else {
+      <div
+        class="vs-archetypes-workspace"
+        [class.vs-archetypes-workspace--split]="SelectedArchetype !== null"
+      >
+        <div class="vs-archetypes-groups" data-testid="archetypes-groups">
+          @for (group of CategoryGroups; track group.Category) {
+            <section
+              class="vs-archetype-category-section"
+              [attr.data-testid]="'archetype-category-' + group.Category"
+            >
+              <header class="vs-category-header">
+                <h2 class="vs-category-title">
+                  {{ FormatCategoryLabel(group.Category) }}
+                </h2>
+                <span class="vs-category-count">
+                  {{ group.Archetypes.length }}
+                </span>
+              </header>
+
+              <div class="vs-archetypes-grid">
+                @for (arch of group.Archetypes; track arch.ID) {
+                  <article
+                    class="vs-archetype-card"
+                    [class.vs-archetype-card--selected]="SelectedArchetype?.ID === arch.ID"
+                    [attr.data-testid]="'archetype-card-' + arch.ID"
+                    tabindex="0"
+                    role="button"
+                    [attr.aria-pressed]="SelectedArchetype?.ID === arch.ID"
+                    (click)="SelectArchetype(arch)"
+                    (keydown.enter)="SelectArchetype(arch)"
+                  >
+                    <div class="vs-archetype-card-header">
+                      <h3 class="vs-archetype-title" [title]="arch.Name">
+                        {{ arch.Name }}
+                      </h3>
+
+                      @if (arch.CompanyName) {
+                        <span
+                          class="vs-company-override-badge"
+                          data-testid="archetype-company-badge"
+                        >
+                          <i class="fa-solid fa-building"></i>
+                          <span>{{ arch.CompanyName }}</span>
+                        </span>
+                      } @else if (arch.IsShipped) {
+                        <span
+                          class="vs-shipped-badge"
+                          data-testid="archetype-shipped-badge"
+                        >
+                          <i class="fa-solid fa-lock"></i>
+                          <span>Shipped</span>
+                        </span>
+                      }
+                    </div>
+
+                    @if (arch.Description) {
+                      <p class="vs-archetype-description">{{ arch.Description }}</p>
+                    }
+
+                    <div class="vs-archetype-meta-badges">
+                      <span class="vs-archetype-badge" data-testid="archetype-duration-badge">
+                        <i class="fa-regular fa-clock"></i>
+                        <span>
+                          {{ arch.DefaultDurationSeconds }}s
+                          [{{ arch.MinDurationSeconds }}–{{ arch.MaxDurationSeconds }}s]
+                        </span>
+                      </span>
+
+                      <span class="vs-archetype-badge" data-testid="archetype-formats-badge">
+                        <i class="fa-solid fa-expand"></i>
+                        <span>{{ arch.DefaultFormats }}</span>
+                      </span>
+                    </div>
+
+                    <div class="vs-beat-timeline-container" data-testid="archetype-beat-timeline">
+                      <div class="vs-beat-timeline-label">
+                        <span>Beat Timeline ({{ arch.Beats.length }} beats)</span>
+                      </div>
+                      <div class="vs-beat-timeline-strip">
+                        @for (beat of arch.Beats; track beat.Key) {
+                          <div
+                            class="vs-beat-timeline-block"
+                            [style.flex-grow]="beat.ComputedDurationSeconds"
+                            [title]="beat.Label + ' (' + beat.ComputedDurationSeconds + 's): ' + beat.Purpose"
+                            data-testid="archetype-beat-block"
+                          >
+                            <span class="vs-beat-timeline-block-label">
+                              {{ beat.Label }}
+                            </span>
+                          </div>
+                        }
+                      </div>
+                    </div>
+                  </article>
+                }
+              </div>
+            </section>
+          }
+        </div>
+
+        @if (SelectedArchetype; as selected) {
+          <aside class="vs-archetype-slideout" data-testid="archetype-slideout">
+            <header class="vs-slideout-header">
+              <div class="vs-slideout-title-wrap">
+                <span class="vs-slideout-category-tag">
+                  {{ FormatCategoryLabel(selected.Category) }}
+                </span>
+                <h2 class="vs-slideout-title">{{ selected.Name }}</h2>
+              </div>
+
+              <div class="vs-slideout-actions">
+                @if (selected.IsShipped) {
+                  <button
+                    type="button"
+                    mjButton
+                    Variant="primary"
+                    Size="sm"
+                    data-testid="archetype-clone-button"
+                    (click)="OpenCloneDialog(selected, $event)"
+                  >
+                    <i class="fa-regular fa-copy"></i>
+                    <span>Clone</span>
+                  </button>
+                } @else {
+                  <button
+                    type="button"
+                    mjButton
+                    Variant="primary"
+                    Size="sm"
+                    data-testid="archetype-edit-record-button"
+                    (click)="EditArchetypeRecord(selected, $event)"
+                  >
+                    <i class="fa-solid fa-pen-to-square"></i>
+                    <span>Edit Record</span>
+                  </button>
+                }
+                <button
+                  type="button"
+                  mjButton
+                  Variant="icon"
+                  Size="sm"
+                  aria-label="Close archetype preview"
+                  data-testid="archetype-slideout-close"
+                  (click)="CloseSlideOut()"
+                >
+                  <i class="fa-solid fa-xmark"></i>
+                </button>
+              </div>
+            </header>
+
+            <div class="vs-slideout-body">
+              @if (selected.IsShipped) {
+                <div class="vs-shipped-readonly-banner" data-testid="archetype-shipped-readonly-banner">
+                  <i class="fa-solid fa-circle-info"></i>
+                  <span>
+                    Shipped archetypes are read-only templates. Clone this archetype to customize it for a specific company.
+                  </span>
+                </div>
+              }
+
+              @if (selected.Description) {
+                <p class="vs-slideout-description">{{ selected.Description }}</p>
+              }
+
+              <div class="vs-slideout-summary-grid">
+                <div class="vs-summary-item">
+                  <span class="vs-summary-label">Default Duration</span>
+                  <span class="vs-summary-value">{{ selected.DefaultDurationSeconds }}s</span>
+                </div>
+                <div class="vs-summary-item">
+                  <span class="vs-summary-label">Duration Range</span>
+                  <span class="vs-summary-value">
+                    {{ selected.MinDurationSeconds }}s – {{ selected.MaxDurationSeconds }}s
+                  </span>
+                </div>
+                <div class="vs-summary-item">
+                  <span class="vs-summary-label">Default Formats</span>
+                  <span class="vs-summary-value">{{ selected.DefaultFormats }}</span>
+                </div>
+                <div class="vs-summary-item">
+                  <span class="vs-summary-label">Interaction Mode</span>
+                  <span class="vs-summary-value">{{ selected.DefaultInteractionMode }}</span>
+                </div>
+              </div>
+
+              <section class="vs-slideout-section">
+                <h3 class="vs-slideout-section-title">
+                  <i class="fa-solid fa-timeline"></i>
+                  <span>Beat Template ({{ selected.Beats.length }})</span>
+                </h3>
+                <div class="vs-slideout-beat-list">
+                  @for (beat of selected.Beats; track beat.Key; let idx = $index) {
+                    <div class="vs-slideout-beat-item" data-testid="slideout-beat-item">
+                      <div class="vs-slideout-beat-header">
+                        <span class="vs-slideout-beat-index">{{ idx + 1 }}</span>
+                        <strong class="vs-slideout-beat-name">{{ beat.Label }}</strong>
+                        <span class="vs-slideout-beat-duration">
+                          {{ beat.ComputedDurationSeconds }}s
+                          ({{ beat.MinDurationSeconds }}–{{ beat.MaxDurationSeconds }}s)
+                        </span>
+                        @if (beat.RequiresDataBinding) {
+                          <span class="vs-data-binding-pill">Data Bound</span>
+                        }
+                      </div>
+                      <p class="vs-slideout-beat-purpose">{{ beat.Purpose }}</p>
+                      @if (beat.Guidance) {
+                        <p class="vs-slideout-beat-guidance">{{ beat.Guidance }}</p>
+                      }
+                    </div>
+                  }
+                </div>
+              </section>
+
+              @if (selected.Pacing) {
+                <section class="vs-slideout-section" data-testid="slideout-pacing-section">
+                  <h3 class="vs-slideout-section-title">
+                    <i class="fa-solid fa-gauge-high"></i>
+                    <span>Pacing Rules</span>
+                  </h3>
+                  <div class="vs-pacing-box">
+                    <div class="vs-pacing-stat">
+                      <span>Avg. Seconds Between Visual Changes:</span>
+                      <strong>{{ selected.Pacing.AvgSecondsBetweenChanges }}s</strong>
+                    </div>
+                    @if (selected.Pacing.HoldRules) {
+                      <p class="vs-pacing-hold-rules">{{ selected.Pacing.HoldRules }}</p>
+                    }
+                  </div>
+                </section>
+              }
+
+              @if (selected.Guidance) {
+                <section class="vs-slideout-section" data-testid="slideout-guidance-section">
+                  <h3 class="vs-slideout-section-title">
+                    <i class="fa-solid fa-compass"></i>
+                    <span>Producer Guidance</span>
+                  </h3>
+                  <p class="vs-guidance-text">{{ selected.Guidance }}</p>
+                </section>
+              }
+            </div>
+          </aside>
+        }
+      </div>
+    }
+
+    @if (CloneSourceArchetype; as cloneSource) {
+      <mj-dialog
+        [Visible]="true"
+        [Title]="'Clone &quot;' + cloneSource.Name + '&quot;'"
+        Width="440px"
+        (Close)="CancelCloneDialog()"
+      >
+        <div class="vs-clone-modal-body" data-testid="archetype-clone-dialog">
+          <p class="vs-clone-modal-subtitle">
+            Create a company-owned copy of this shipped archetype so your team can customize its beats, durations, and pacing rules.
+          </p>
+
+          @if (CloneError) {
+            <div class="vs-clone-error" role="alert" data-testid="archetype-clone-error">
+              <i class="fa-solid fa-circle-exclamation"></i>
+              <span>{{ CloneError }}</span>
+            </div>
+          }
+
+          <label class="vs-clone-field">
+            <span class="vs-clone-field-label">Archetype Name</span>
+            <input
+              type="text"
+              class="vs-clone-input"
+              data-testid="archetype-clone-name-input"
+              [(ngModel)]="CloneName"
+              [disabled]="IsCloning"
+            />
+          </label>
+
+          <label class="vs-clone-field">
+            <span class="vs-clone-field-label">Company</span>
+            <select
+              class="vs-clone-select"
+              data-testid="archetype-clone-company-select"
+              [(ngModel)]="CloneCompanyID"
+              [disabled]="IsCloning"
+            >
+              <option value="">Select a company...</option>
+              @for (comp of AvailableCompanies; track comp.ID) {
+                <option [value]="comp.ID">{{ comp.Name }}</option>
+              }
+            </select>
+          </label>
+        </div>
+
+        <mj-dialog-actions>
+          <button
+            type="button"
+            mjButton
+            Variant="primary"
+            data-testid="archetype-clone-confirm"
+            [disabled]="IsCloning"
+            (click)="ConfirmClone()"
+          >
+            <i class="fa-regular fa-copy"></i>
+            <span>{{ IsCloning ? 'Cloning...' : 'Clone & Edit' }}</span>
+          </button>
+          <button
+            type="button"
+            mjButton
+            Variant="secondary"
+            data-testid="archetype-clone-cancel"
+            [disabled]="IsCloning"
+            (click)="CancelCloneDialog()"
+          >
+            Cancel
+          </button>
+        </mj-dialog-actions>
+      </mj-dialog>
+    }
+  </mj-page-body>
+</mj-page-layout>

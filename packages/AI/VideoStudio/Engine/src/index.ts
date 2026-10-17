@@ -9,6 +9,8 @@ export * from './narration/captions.js';
 export * from './narration/narration-pipeline.js';
 export * from './data/data-snapshot.js';
 export * from './validate-spec-async.js';
+export * from './settings.js';
+export * from './gates.js';
 
 export {
     CreateAbortError,

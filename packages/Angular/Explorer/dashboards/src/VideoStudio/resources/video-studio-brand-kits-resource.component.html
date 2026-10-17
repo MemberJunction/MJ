@@ -1,0 +1,204 @@
+<mj-page-layout>
+  <mj-page-header
+    Title="Brand Kits"
+    Icon="fa-solid fa-palette"
+    Subtitle="Configure palettes, typography, logos, soundtracks, and generation policies for video productions"
+  >
+    <div meta>
+      <mj-stat-badge
+        [Count]="FilteredCount"
+        [Total]="TotalCount"
+        Label="Brand Kits"
+      />
+    </div>
+
+    <div actions>
+      <mj-refresh-button
+        [Loading]="IsLoading"
+        (Clicked)="Refresh()"
+      />
+      <button
+        type="button"
+        mjButton
+        Variant="primary"
+        data-testid="new-brand-kit-button"
+        (click)="CreateNewBrandKit()"
+      >
+        <i class="fa-solid fa-plus"></i>
+        <span>New Brand Kit</span>
+      </button>
+    </div>
+
+    <div toolbar>
+      <mj-page-search
+        Placeholder="Search brand kits by name, description, or company..."
+        [Value]="SearchText"
+        (ValueChange)="OnSearchChange($event)"
+      />
+      <mj-filter-popover
+        Label="Filters"
+        Icon="fa-solid fa-filter"
+        [ActiveCount]="ActivePopoverFilterCount"
+        [ShowClearAll]="ActivePopoverFilterCount > 0"
+        (ClearAllRequested)="ClearAllFilters()"
+      >
+        <mj-filter-panel
+          [Fields]="FilterFields"
+          [Values]="FilterValues"
+          [ShowReset]="false"
+          (ValuesChange)="OnFilterValuesChange($event)"
+        />
+      </mj-filter-popover>
+    </div>
+  </mj-page-header>
+
+  <mj-page-body>
+    @if (IsLoading && AllBrandKits.length === 0) {
+      <div class="vs-loading-state" data-testid="brand-kits-loading">
+        <mj-loading text="Loading brand kits..." size="medium" />
+      </div>
+    } @else if (LoadError) {
+      <div class="vs-empty-state" role="alert" data-testid="brand-kits-error">
+        <i class="fa-solid fa-triangle-exclamation vs-empty-icon"></i>
+        <h3 class="vs-empty-title">Unable to load brand kits</h3>
+        <p class="vs-empty-subtitle">{{ LoadError }}</p>
+        <button type="button" mjButton Variant="secondary" (click)="Refresh()">
+          <i class="fa-solid fa-rotate"></i>
+          <span>Try Again</span>
+        </button>
+      </div>
+    } @else if (FilteredBrandKits.length === 0) {
+      <div class="vs-empty-state" data-testid="brand-kits-empty">
+        <i class="fa-solid fa-palette vs-empty-icon"></i>
+        @if (AllBrandKits.length === 0) {
+          <h3 class="vs-empty-title">No brand kits defined yet</h3>
+          <p class="vs-empty-subtitle">
+            Create a brand kit to establish your palette, typography, logos, and generation policies.
+          </p>
+          <button
+            type="button"
+            mjButton
+            Variant="primary"
+            (click)="CreateNewBrandKit()"
+          >
+            <i class="fa-solid fa-plus"></i>
+            <span>New Brand Kit</span>
+          </button>
+        } @else {
+          <h3 class="vs-empty-title">No brand kits match your filters</h3>
+          <p class="vs-empty-subtitle">
+            Try clearing your search query or adjusting the active filter selections.
+          </p>
+          <button
+            type="button"
+            mjButton
+            Variant="secondary"
+            data-testid="brand-kits-clear-filters"
+            (click)="ClearAllFilters(); OnSearchChange('')"
+          >
+            <i class="fa-solid fa-filter-circle-xmark"></i>
+            <span>Reset Filters</span>
+          </button>
+        }
+      </div>
+    } @else {
+      <div class="vs-brand-kits-grid" data-testid="brand-kits-grid">
+        @for (kit of FilteredBrandKits; track kit.ID) {
+          <article
+            class="vs-brand-kit-card"
+            [attr.data-testid]="'brand-kit-card-' + kit.ID"
+            tabindex="0"
+            role="button"
+            (click)="OpenBrandKit(kit)"
+            (keydown.enter)="OpenBrandKit(kit)"
+          >
+            <div class="vs-palette-strip" data-testid="brand-kit-palette-strip">
+              @if (kit.Swatches.length > 0) {
+                @for (swatch of kit.Swatches; track swatch.Name + swatch.Value) {
+                  <div
+                    class="vs-palette-swatch"
+                    [style.background-color]="swatch.Value"
+                    [title]="swatch.Name + ' (' + swatch.Value + ')'"
+                  ></div>
+                }
+              } @else {
+                <div class="vs-palette-empty">
+                  <span>No palette swatches configured</span>
+                </div>
+              }
+            </div>
+
+            <div class="vs-brand-kit-body">
+              <div class="vs-brand-kit-header">
+                <div class="vs-brand-kit-title-group">
+                  <div class="vs-brand-kit-logo-thumb" data-testid="brand-kit-logo-thumb">
+                    @if (kit.PrimaryLogoUrl) {
+                      <img
+                        class="vs-brand-kit-logo-img"
+                        [src]="kit.PrimaryLogoUrl"
+                        [alt]="kit.Name + ' logo'"
+                        loading="lazy"
+                      />
+                    } @else {
+                      <i class="fa-solid fa-palette"></i>
+                    }
+                  </div>
+                  <h3 class="vs-brand-kit-title" [title]="kit.Name">
+                    {{ kit.Name }}
+                  </h3>
+                  @if (kit.IsDefault) {
+                    <span
+                      class="vs-default-star"
+                      title="Default Brand Kit"
+                      data-testid="brand-kit-default-star"
+                    >
+                      <i class="fa-solid fa-star"></i>
+                      <span>Default</span>
+                    </span>
+                  }
+                </div>
+
+                <span
+                  class="vs-kit-status-badge"
+                  [class.vs-kit-status-badge--active]="kit.Status === 'Active'"
+                  [class.vs-kit-status-badge--inactive]="kit.Status !== 'Active'"
+                >
+                  {{ kit.Status }}
+                </span>
+              </div>
+
+              @if (kit.Description) {
+                <p class="vs-brand-kit-description">{{ kit.Description }}</p>
+              }
+
+              <div class="vs-brand-kit-footer">
+                <span class="vs-company-badge" data-testid="brand-kit-company-badge">
+                  <i class="fa-solid fa-building"></i>
+                  <span>{{ kit.CompanyName || 'Workspace Default' }}</span>
+                </span>
+
+                <span class="vs-asset-count-badge" data-testid="brand-kit-asset-count">
+                  <i class="fa-solid fa-photo-film"></i>
+                  <span>{{ kit.AssetCount }} {{ kit.AssetCount === 1 ? 'asset' : 'assets' }}</span>
+                </span>
+
+                <button
+                  type="button"
+                  mjButton
+                  Variant="danger"
+                  Size="sm"
+                  [attr.data-testid]="'brand-kit-delete-' + kit.ID"
+                  [disabled]="DeletingKitId === kit.ID"
+                  (click)="DeleteBrandKit(kit, $event)"
+                >
+                  <i class="fa-regular fa-trash-can"></i>
+                  <span>Delete</span>
+                </button>
+              </div>
+            </div>
+          </article>
+        }
+      </div>
+    }
+  </mj-page-body>
+</mj-page-layout>

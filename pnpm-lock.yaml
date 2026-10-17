@@ -4749,6 +4749,9 @@ importers:
       '@memberjunction/ng-base-types':
         specifier: 6.2.0-edge.4
         version: link:../../Generic/base-types
+      '@memberjunction/ng-brand-kits':
+        specifier: 6.2.0-edge.4
+        version: link:../../Generic/brand-kits
       '@memberjunction/ng-code-editor':
         specifier: 6.2.0-edge.4
         version: link:../../Generic/code-editor
@@ -4993,6 +4996,9 @@ importers:
       '@memberjunction/ng-base-types':
         specifier: 6.2.0-edge.4
         version: link:../../Generic/base-types
+      '@memberjunction/ng-brand-kits':
+        specifier: 6.2.0-edge.4
+        version: link:../../Generic/brand-kits
       '@memberjunction/ng-clustering':
         specifier: 6.2.0-edge.4
         version: link:../../Generic/clustering
@@ -5116,6 +5122,9 @@ importers:
       '@memberjunction/theme-engine':
         specifier: 6.2.0-edge.4
         version: link:../../../ThemeEngine
+      '@memberjunction/video-studio-core':
+        specifier: 6.2.0-edge.4
+        version: link:../../../AI/VideoStudio/Core
       '@memberjunction/work-queue-base':
         specifier: 6.2.0-edge.4
         version: link:../../../WorkQueue/base
@@ -6508,6 +6517,9 @@ importers:
       '@memberjunction/ng-ui-components':
         specifier: 6.2.0-edge.4
         version: link:../ui-components
+      '@memberjunction/video-studio-core':
+        specifier: 6.2.0-edge.4
+        version: link:../../../AI/VideoStudio/Core
       ag-grid-angular:
         specifier: ^35.0.1
         version: 35.0.1(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))
@@ -6661,6 +6673,58 @@ importers:
       '@angular/compiler-cli':
         specifier: 21.2.22
         version: 21.2.22(@angular/compiler@21.2.22)(typescript@5.9.3)
+      vitest:
+        specifier: ^4.0.18
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+
+  packages/Angular/Generic/brand-kits:
+    dependencies:
+      '@angular/common':
+        specifier: ^21.2.22
+        version: 21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2)
+      '@angular/core':
+        specifier: ^21.2.22
+        version: 21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)
+      '@angular/forms':
+        specifier: ^21.2.22
+        version: 21.2.22(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(@angular/platform-browser@21.2.22(@angular/animations@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)))(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)))(rxjs@7.8.2)
+      '@memberjunction/core':
+        specifier: 6.2.0-edge.4
+        version: link:../../../MJCore
+      '@memberjunction/core-entities':
+        specifier: 6.2.0-edge.4
+        version: link:../../../MJCoreEntities
+      '@memberjunction/global':
+        specifier: 6.2.0-edge.4
+        version: link:../../../MJGlobal
+      '@memberjunction/graphql-dataprovider':
+        specifier: 6.2.0-edge.4
+        version: link:../../../GraphQLDataProvider
+      '@memberjunction/ng-base-types':
+        specifier: 6.2.0-edge.4
+        version: link:../base-types
+      '@memberjunction/ng-file-storage':
+        specifier: 6.2.0-edge.4
+        version: link:../file-storage
+      '@memberjunction/ng-media-player':
+        specifier: 6.2.0-edge.4
+        version: link:../media-player
+      '@memberjunction/ng-ui-components':
+        specifier: 6.2.0-edge.4
+        version: link:../ui-components
+      tslib:
+        specifier: ^2.8.1
+        version: 2.8.1
+    devDependencies:
+      '@angular/compiler':
+        specifier: 21.2.22
+        version: 21.2.22
+      '@angular/compiler-cli':
+        specifier: 21.2.22
+        version: 21.2.22(@angular/compiler@21.2.22)(typescript@5.9.3)
+      '@memberjunction/ng-test-utils':
+        specifier: 6.2.0-edge.4
+        version: link:../test-utils
       vitest:
         specifier: ^4.0.18
         version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
