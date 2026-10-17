@@ -207,6 +207,27 @@ export function SumRecordedGenerationCost(spec: Partial<VideoGenerationSpec>): n
     return total;
 }
 
+/**
+ * Default duration in seconds assumed for a generated video clip when
+ * `request.DurationSeconds` is omitted (`VS-GEN-6`).
+ */
+export const DEFAULT_GENERATED_VIDEO_DURATION_SECONDS = 5;
+
+/**
+ * Resolves the effective duration in seconds for a video generation request,
+ * defaulting to {@link DEFAULT_GENERATED_VIDEO_DURATION_SECONDS} (`5`) when
+ * `DurationSeconds` is omitted or non-positive (`VS-GEN-6`).
+ */
+export function ResolveRequestedVideoSeconds(
+    request: Pick<VideoAssetGenerationRequest, 'DurationSeconds'>,
+): number {
+    return typeof request.DurationSeconds === 'number' &&
+        Number.isFinite(request.DurationSeconds) &&
+        request.DurationSeconds > 0
+        ? request.DurationSeconds
+        : DEFAULT_GENERATED_VIDEO_DURATION_SECONDS;
+}
+
 function sumPriorPassVideoSeconds(
     request: VideoAssetGenerationRequest,
     spec: Partial<VideoGenerationSpec>,
@@ -223,13 +244,8 @@ function sumPriorPassVideoSeconds(
         if (candidate.Status === 'Generated' || candidate.Status === 'Blocked') {
             continue;
         }
-        if (
-            candidate.Kind === 'Video' &&
-            typeof candidate.DurationSeconds === 'number' &&
-            Number.isFinite(candidate.DurationSeconds) &&
-            candidate.DurationSeconds > 0
-        ) {
-            total += candidate.DurationSeconds;
+        if (candidate.Kind === 'Video') {
+            total += ResolveRequestedVideoSeconds(candidate);
         }
     }
     return total;
@@ -342,10 +358,7 @@ export function ScreenGenerationRequest(
             typeof priorPassVideoSeconds === 'number'
                 ? priorPassVideoSeconds
                 : sumPriorPassVideoSeconds(request, spec);
-        const requestedSeconds =
-            typeof request.DurationSeconds === 'number' && Number.isFinite(request.DurationSeconds)
-                ? request.DurationSeconds
-                : 0;
+        const requestedSeconds = ResolveRequestedVideoSeconds(request);
         const projectedSeconds = alreadyGeneratedSeconds + batchPriorSeconds + requestedSeconds;
         if (projectedSeconds > settings.MaxGeneratedVideoSeconds) {
             return {

@@ -24,13 +24,15 @@ import {
     type AIVideoGenerationRunParams,
     type AIVideoGenerationRunResult,
 } from '@memberjunction/ai-prompts';
+import { AIEngine } from '@memberjunction/aiengine';
 import {
+    LogError,
     RunView,
     type IMetadataProvider,
     type IRunViewProvider,
     type UserInfo,
 } from '@memberjunction/core';
-import { BrandKitEngine } from '@memberjunction/core-entities';
+import { BrandKitEngine, type MJAIModelCostEntity } from '@memberjunction/core-entities';
 import { EscapeSQLString, IndexByUUID, UUIDsEqual } from '@memberjunction/global';
 import { FileStorageEngine } from '@memberjunction/storage';
 import type {
@@ -53,6 +55,7 @@ import {
 } from './generation-policy.js';
 import {
     ComposeGenerationPrompt,
+    ResolveRequestedVideoSeconds,
     ScreenGenerationRequest,
     SumRecordedGenerationCost,
     type GenerationBlockCode,
@@ -197,9 +200,6 @@ async function resolveHasStorage(ctx: GenerateRequestedAssetsContext): Promise<b
     if (ctx.StorageAccountID?.trim()) {
         return true;
     }
-    if ((StoreFile as unknown as { mock?: unknown }).mock !== undefined) {
-        return true;
-    }
     try {
         await FileStorageEngine.Instance.Config(false, ctx.ContextUser, ctx.Provider);
         return Boolean(FileStorageEngine.Instance.HasStorageAccounts);
@@ -241,10 +241,188 @@ async function resolvePromptRunCost(
         if (typeof costVal === 'number' && Number.isFinite(costVal) && costVal >= 0) {
             return costVal;
         }
-    } catch {
-        // Absent stays absent when RunView is not configured in unit tests
+    } catch (err) {
+        LogError(
+            `Failed to query MJ: AI Prompt Runs for cost of PromptRunID "${trimmedId}": ${err instanceof Error ? err.message : String(err)}`,
+        );
     }
     return undefined;
+}
+
+/**
+ * Estimates the cost in USD of a single image (`units = 1`, `UnitType = 'Per Image'`) or video
+ * (`units = durationSeconds`, `UnitType = 'Per Second'`) generation call by querying the active
+ * Realtime row in `MJ: AI Model Costs` via `AIEngine.Instance` (matching `AIVideoRunner.calculateVideoCost`).
+ *
+ * Fails closed by throwing an error when no active price row exists for the modality's unit type.
+ */
+export async function EstimateGenerationCallCost(
+    kind: 'Image' | 'Video',
+    durationSeconds: number,
+    ctx: Pick<GenerateRequestedAssetsContext, 'ContextUser' | 'Provider'>,
+): Promise<number> {
+    if (!AIEngine.Instance.Loaded) {
+        await AIEngine.Instance.Config(false, ctx.ContextUser, ctx.Provider);
+    }
+
+    const promptName =
+        kind === 'Video'
+            ? AIVideoRunner.GENERATIVE_PROMPT_NAME
+            : AIImageGenerationRunner.DEFAULT_PROMPT_NAME;
+    const modelTypeName = kind === 'Video' ? 'Video' : 'Image Generator';
+    const unitTypeName = kind === 'Video' ? 'Per Second' : 'Per Image';
+    const usageKind = kind === 'Video' ? 'Seconds' : 'Images';
+    const units = kind === 'Video' ? durationSeconds : 1;
+
+    const unitTypeList = Array.isArray(AIEngine.Instance.ModelPriceUnitTypes)
+        ? AIEngine.Instance.ModelPriceUnitTypes
+        : [];
+    const matchesCostUnit = (cost: MJAIModelCostEntity | null | undefined): cost is MJAIModelCostEntity => {
+        if (!cost) {
+            return false;
+        }
+        const unitTypeRow = unitTypeList.find((put) => put && UUIDsEqual(put.ID, cost.UnitTypeID));
+        if (unitTypeRow) {
+            const nameMatch =
+                (unitTypeRow.Name ?? '').trim().toLowerCase() === unitTypeName.toLowerCase();
+            const usageMatch =
+                (unitTypeRow.UsageType ?? '').trim().toLowerCase() === usageKind.toLowerCase();
+            if (nameMatch || usageMatch) {
+                return true;
+            }
+        }
+        return (cost.UnitType ?? '').trim().toLowerCase() === unitTypeName.toLowerCase();
+    };
+
+    const now = new Date();
+    const isActiveRealtimeCost = (
+        cost: MJAIModelCostEntity | null | undefined,
+    ): cost is MJAIModelCostEntity => {
+        if (!matchesCostUnit(cost)) {
+            return false;
+        }
+        if (cost.Status !== 'Active') {
+            return false;
+        }
+        if ((cost.ProcessingType ?? 'Realtime') !== 'Realtime') {
+            return false;
+        }
+        if (cost.StartedAt && new Date(cost.StartedAt) > now) {
+            return false;
+        }
+        if (cost.EndedAt && new Date(cost.EndedAt) <= now) {
+            return false;
+        }
+        return true;
+    };
+
+    const allCosts = Array.isArray(AIEngine.Instance.ModelCosts)
+        ? AIEngine.Instance.ModelCosts
+        : [];
+    const candidatePairs: Array<{ modelId: string; vendorId?: string | null }> = [];
+
+    const prompts = Array.isArray(AIEngine.Instance.Prompts) ? AIEngine.Instance.Prompts : [];
+    const promptEntity = prompts.find(
+        (p) => p && (p.Name ?? '').trim().toLowerCase() === promptName.toLowerCase(),
+    );
+    if (promptEntity) {
+        const promptModels = (
+            Array.isArray(AIEngine.Instance.PromptModels) ? AIEngine.Instance.PromptModels : []
+        )
+            .filter(
+                (pm) =>
+                    pm &&
+                    UUIDsEqual(pm.PromptID, promptEntity.ID) &&
+                    (pm.Status === 'Active' || pm.Status === 'Preview'),
+            )
+            .sort((a, b) => (b.Priority ?? 0) - (a.Priority ?? 0));
+        for (const pm of promptModels) {
+            if (pm.ModelID) {
+                candidatePairs.push({ modelId: pm.ModelID, vendorId: pm.VendorID });
+            }
+        }
+    }
+
+    const models = (Array.isArray(AIEngine.Instance.Models) ? AIEngine.Instance.Models : [])
+        .filter(
+            (m) =>
+                m &&
+                m.IsActive !== false &&
+                (m.AIModelType ?? '').trim().toLowerCase() === modelTypeName.toLowerCase(),
+        )
+        .sort((a, b) => (b.PowerRank ?? 0) - (a.PowerRank ?? 0));
+    for (const m of models) {
+        if (m.ID) {
+            candidatePairs.push({ modelId: m.ID });
+        }
+    }
+
+    let matchedCost: MJAIModelCostEntity | null = null;
+    for (const candidate of candidatePairs) {
+        if (typeof AIEngine.Instance.GetActiveModelCost === 'function' && candidate.vendorId) {
+            const direct = AIEngine.Instance.GetActiveModelCost(
+                candidate.modelId,
+                candidate.vendorId,
+                'Realtime',
+            );
+            if (isActiveRealtimeCost(direct)) {
+                matchedCost = direct;
+                break;
+            }
+        }
+        const matchingForModel = allCosts
+            .filter(
+                (c) =>
+                    isActiveRealtimeCost(c) &&
+                    UUIDsEqual(c.ModelID, candidate.modelId) &&
+                    (!candidate.vendorId || UUIDsEqual(c.VendorID, candidate.vendorId)),
+            )
+            .sort((a, b) => {
+                const aTime = a.StartedAt ? new Date(a.StartedAt).getTime() : 0;
+                const bTime = b.StartedAt ? new Date(b.StartedAt).getTime() : 0;
+                return bTime - aTime;
+            });
+        if (matchingForModel.length > 0) {
+            matchedCost = matchingForModel[0];
+            break;
+        }
+    }
+
+    if (!matchedCost) {
+        const matchingByUnit = allCosts
+            .filter((c) => isActiveRealtimeCost(c))
+            .sort((a, b) => {
+                const aTime = a.StartedAt ? new Date(a.StartedAt).getTime() : 0;
+                const bTime = b.StartedAt ? new Date(b.StartedAt).getTime() : 0;
+                return bTime - aTime;
+            });
+        if (matchingByUnit.length > 0) {
+            matchedCost = matchingByUnit[0];
+        }
+    }
+
+    if (!matchedCost) {
+        throw new Error(
+            `No active "${unitTypeName}" price row found in MJ: AI Model Costs for ${kind} generation; refusing to run with an unknown cost.`,
+        );
+    }
+
+    const pricePerUnit = matchedCost.OutputPricePerUnit;
+    if (typeof pricePerUnit !== 'number' || !Number.isFinite(pricePerUnit) || pricePerUnit < 0) {
+        throw new Error(
+            `Active "${unitTypeName}" cost row for ${kind} generation has no valid OutputPricePerUnit; refusing to run with an unknown cost.`,
+        );
+    }
+
+    const unitTypeRow = unitTypeList.find((put) => put && UUIDsEqual(put.ID, matchedCost.UnitTypeID));
+    const unitsPerBilling =
+        unitTypeRow &&
+        typeof unitTypeRow.UnitsPerBillingUnit === 'number' &&
+        unitTypeRow.UnitsPerBillingUnit > 0
+            ? unitTypeRow.UnitsPerBillingUnit
+            : 1;
+
+    return (pricePerUnit / unitsPerBilling) * units;
 }
 
 function resolveRequestAspectRatio(
@@ -331,14 +509,7 @@ function isKnownUnflaggedBrandKitAsset(
     if (!brandKitId) {
         return false;
     }
-    const allKitAssets =
-        typeof BrandKitEngine.Instance.GetAssets === 'function'
-            ? (BrandKitEngine.Instance.GetAssets(brandKitId) ?? [])
-            : Array.isArray(BrandKitEngine.Instance.BrandKitAssets)
-              ? BrandKitEngine.Instance.BrandKitAssets.filter(
-                    (a) => a && a.BrandKitID && UUIDsEqual(a.BrandKitID, brandKitId),
-                )
-              : [];
+    const allKitAssets = BrandKitEngine.Instance.GetAssets(brandKitId) ?? [];
     const candidateFileId = candidate.FileID?.trim();
     const matchedKitAsset = allKitAssets.find((ka) => {
         if (!ka) {
@@ -571,6 +742,24 @@ async function resolveKeyframesForRequest(
                     `Keyframe asset "${assetKey}" in Assets.Approved has Kind="${approvedMatch.Kind}" (must be "Image").`,
                 );
             }
+            if (
+                approvedMatch.Provenance === 'BrandKit' ||
+                isKnownUnflaggedBrandKitAsset(spec, policy, {
+                    Key: approvedMatch.Key,
+                    FileID: approvedMatch.FileID,
+                })
+            ) {
+                if (
+                    !isFlaggedBrandKitAsset(policy, {
+                        Key: approvedMatch.Key,
+                        FileID: approvedMatch.FileID,
+                    })
+                ) {
+                    throw new Error(
+                        `Keyframe asset "${assetKey}" is a brand-kit asset with IsGenerationReference=false and cannot be sent to a generator.`,
+                    );
+                }
+            }
             const stored = await ReadStoredFileWithType(
                 approvedMatch.FileID.trim(),
                 ctx.ContextUser,
@@ -726,8 +915,6 @@ async function runAndStoreImageAsset(params: {
     const modelId = runResult.ModelID?.trim() || 'unknown';
     const modelName = runResult.ModelName?.trim() || undefined;
     const promptRunId = runResult.PromptRunID?.trim() || '';
-    const c2pa = (runResult as { C2PA?: boolean }).C2PA;
-    const jobId = (runResult as { JobID?: string }).JobID;
 
     const fileId = await StoreFile({
         Content: extracted.Bytes,
@@ -737,8 +924,6 @@ async function runAndStoreImageAsset(params: {
             modelName,
             modelId,
             promptRunId: promptRunId || undefined,
-            jobId,
-            c2pa,
         }),
         ContextUser: ctx.ContextUser,
         StorageAccountID: ctx.StorageAccountID,
@@ -748,10 +933,9 @@ async function runAndStoreImageAsset(params: {
         throw new Error(`StoreFile returned undefined for generated-${assetKey}.${ext}.`);
     }
 
-    const directCost = (runResult as { Cost?: number }).Cost;
     const cost = await resolvePromptRunCost(
         promptRunId || undefined,
-        directCost,
+        undefined,
         ctx.ContextUser,
         ctx.Provider,
     );
@@ -762,7 +946,6 @@ async function runAndStoreImageAsset(params: {
         Prompt: prompt,
         ReferenceKeys: references.map((r) => r.Key),
         ...(cost !== undefined ? { Cost: cost } : {}),
-        ...(c2pa !== undefined ? { C2PA: c2pa } : {}),
     };
 
     const asset: VideoAsset = {
@@ -793,9 +976,10 @@ async function runAndStoreImageAsset(params: {
  *    If any request is blocked, marks the blocked request(s) `Blocked` with
  *    `BlockedReason = '<Code>: <Reason>'`, leaves the remaining non-generated requests `Pending`,
  *    and returns without invoking either runner.
- * 2. **Per-request execution:** Checks the spend cap before each call, builds the prompt and
- *    filtered reference list, invokes `AIImageGenerationRunner` / `AIVideoRunner`, stores bytes
- *    via `StoreFile`, and records the `Generated` asset on `spec.Assets.Approved`.
+ * 2. **Per-request execution:** Estimates the call cost from `MJ: AI Model Costs` via `AIEngine.Instance`
+ *    and checks `spendSoFar + estimatedCost > MaxGenerationCostPerRun` before each runner invocation,
+ *    builds the prompt and filtered reference list, invokes `AIImageGenerationRunner` / `AIVideoRunner`,
+ *    stores bytes via `StoreFile`, and records the `Generated` asset on `spec.Assets.Approved`.
  */
 export async function GenerateRequestedAssets(
     spec: VideoGenerationSpec,
@@ -876,13 +1060,8 @@ export async function GenerateRequestedAssets(
         } else {
             request.Status = 'Pending';
             delete request.BlockedReason;
-            if (
-                request.Kind === 'Video' &&
-                typeof request.DurationSeconds === 'number' &&
-                Number.isFinite(request.DurationSeconds) &&
-                request.DurationSeconds > 0
-            ) {
-                passVideoSeconds += request.DurationSeconds;
+            if (request.Kind === 'Video') {
+                passVideoSeconds += ResolveRequestedVideoSeconds(request);
             }
         }
     }
@@ -912,6 +1091,55 @@ export async function GenerateRequestedAssets(
     const videoRunner = ctx.VideoRunner ?? new AIVideoRunner();
     let passSpend = 0;
 
+    const maxCostCap =
+        typeof policy.MaxGenerationCostPerRun === 'number' &&
+        Number.isFinite(policy.MaxGenerationCostPerRun)
+            ? policy.MaxGenerationCostPerRun
+            : undefined;
+
+    const wouldExceedSpendCap = (estimatedCallCost: number): boolean => {
+        if (maxCostCap === undefined) {
+            return false;
+        }
+        return spendSoFar >= maxCostCap || spendSoFar + estimatedCallCost > maxCostCap;
+    };
+
+    const blockRemainingWithSpendCap = (
+        startIndex: number,
+        estimatedCallCost: number,
+        currentRequestStillCost?: number,
+    ): void => {
+        const capVal = maxCostCap ?? 0;
+        const projected = spendSoFar + estimatedCallCost;
+        const spendReason =
+            spendSoFar >= capVal
+                ? `SpendCapReached: Generation spend so far ($${spendSoFar.toFixed(2)}) has reached or exceeded MaxGenerationCostPerRun ($${capVal.toFixed(2)}).`
+                : `SpendCapReached: Generation spend so far ($${spendSoFar.toFixed(2)}) plus estimated call cost ($${estimatedCallCost.toFixed(2)} = $${projected.toFixed(2)}) exceeds MaxGenerationCostPerRun ($${capVal.toFixed(2)}).`;
+        for (let j = startIndex; j < requests.length; j += 1) {
+            const rem = requests[j];
+            if (!rem || !rem.Key?.trim() || rem.Status === 'Generated') {
+                continue;
+            }
+            rem.Status = 'Blocked';
+            rem.BlockedReason = spendReason;
+            issues.push({
+                RequestKey: rem.Key,
+                Code: 'SpendCapReached',
+                Severity: 'Error',
+                Message: spendReason,
+            });
+            requestSummaries.push({
+                Key: rem.Key,
+                Kind: rem.Kind,
+                Status: 'Blocked',
+                BlockedReason: spendReason,
+                ...(j === startIndex && currentRequestStillCost !== undefined
+                    ? { Cost: currentRequestStillCost }
+                    : {}),
+            });
+        }
+    };
+
     // Step 2: Execute each Pending request in spec order.
     for (let i = 0; i < requests.length; i += 1) {
         const request = requests[i];
@@ -935,33 +1163,9 @@ export async function GenerateRequestedAssets(
             continue;
         }
 
-        // Check spend cap before each call
-        if (
-            typeof policy.MaxGenerationCostPerRun === 'number' &&
-            Number.isFinite(policy.MaxGenerationCostPerRun) &&
-            spendSoFar >= policy.MaxGenerationCostPerRun
-        ) {
-            const spendReason = `SpendCapReached: Generation spend so far ($${spendSoFar.toFixed(2)}) has reached or exceeded MaxGenerationCostPerRun ($${policy.MaxGenerationCostPerRun.toFixed(2)}).`;
-            for (let j = i; j < requests.length; j += 1) {
-                const rem = requests[j];
-                if (!rem || !rem.Key?.trim() || rem.Status === 'Generated') {
-                    continue;
-                }
-                rem.Status = 'Blocked';
-                rem.BlockedReason = spendReason;
-                issues.push({
-                    RequestKey: rem.Key,
-                    Code: 'SpendCapReached',
-                    Severity: 'Error',
-                    Message: spendReason,
-                });
-                requestSummaries.push({
-                    Key: rem.Key,
-                    Kind: rem.Kind,
-                    Status: 'Blocked',
-                    BlockedReason: spendReason,
-                });
-            }
+        // Check if spendSoFar has already reached MaxGenerationCostPerRun before starting this request
+        if (maxCostCap !== undefined && spendSoFar >= maxCostCap) {
+            blockRemainingWithSpendCap(i, 0);
             break;
         }
 
@@ -970,6 +1174,34 @@ export async function GenerateRequestedAssets(
         const usage = buildUsageString(request);
 
         if (request.Kind === 'Image') {
+            let estimatedImageCost: number;
+            try {
+                estimatedImageCost = await EstimateGenerationCallCost('Image', 1, ctx);
+            } catch (err) {
+                const errMsg = err instanceof Error ? err.message : String(err);
+                const failedReason = `GenerationFailed: ${errMsg}`;
+                request.Status = 'Blocked';
+                request.BlockedReason = failedReason;
+                issues.push({
+                    RequestKey: request.Key,
+                    Code: 'GenerationFailed',
+                    Severity: 'Error',
+                    Message: failedReason,
+                });
+                requestSummaries.push({
+                    Key: request.Key,
+                    Kind: 'Image',
+                    Status: 'Blocked',
+                    BlockedReason: failedReason,
+                });
+                continue;
+            }
+
+            if (wouldExceedSpendCap(estimatedImageCost)) {
+                blockRemainingWithSpendCap(i, estimatedImageCost);
+                break;
+            }
+
             const resolvedRefs = await resolveReferencesForRequest(
                 request,
                 workingSpec,
@@ -1029,6 +1261,7 @@ export async function GenerateRequestedAssets(
         }
 
         // Video generation: three cases
+        const durationSeconds = ResolveRequestedVideoSeconds(request);
         const hasExplicitKeyframes =
             Array.isArray(request.Keyframes) && request.Keyframes.length > 0;
         let videoMode: 'TextToVideo' | 'ImageToVideo' = 'TextToVideo';
@@ -1076,6 +1309,34 @@ export async function GenerateRequestedAssets(
             );
             if (resolvedRefs.length > 0) {
                 // Case 2: Generate anchor still first via RunImageGeneration, store <key>-still, then pass as keyframe at 0s
+                let estimatedStillCost: number;
+                try {
+                    estimatedStillCost = await EstimateGenerationCallCost('Image', 1, ctx);
+                } catch (err) {
+                    const errMsg = err instanceof Error ? err.message : String(err);
+                    const failedReason = `GenerationFailed: ${errMsg}`;
+                    request.Status = 'Blocked';
+                    request.BlockedReason = failedReason;
+                    issues.push({
+                        RequestKey: request.Key,
+                        Code: 'GenerationFailed',
+                        Severity: 'Error',
+                        Message: failedReason,
+                    });
+                    requestSummaries.push({
+                        Key: request.Key,
+                        Kind: 'Video',
+                        Status: 'Blocked',
+                        BlockedReason: failedReason,
+                    });
+                    continue;
+                }
+
+                if (wouldExceedSpendCap(estimatedStillCost)) {
+                    blockRemainingWithSpendCap(i, estimatedStillCost);
+                    break;
+                }
+
                 const stillKey = `${request.Key}-still`;
                 try {
                     const stillOutcome = await runAndStoreImageAsset({
@@ -1129,10 +1390,35 @@ export async function GenerateRequestedAssets(
             }
         }
 
-        const durationSeconds =
-            typeof request.DurationSeconds === 'number' && request.DurationSeconds > 0
-                ? request.DurationSeconds
-                : 5;
+        // Pre-call spend estimate for the video generation call itself
+        let estimatedVideoCost: number;
+        try {
+            estimatedVideoCost = await EstimateGenerationCallCost('Video', durationSeconds, ctx);
+        } catch (err) {
+            const errMsg = err instanceof Error ? err.message : String(err);
+            const failedReason = `GenerationFailed: ${errMsg}`;
+            request.Status = 'Blocked';
+            request.BlockedReason = failedReason;
+            issues.push({
+                RequestKey: request.Key,
+                Code: 'GenerationFailed',
+                Severity: 'Error',
+                Message: failedReason,
+            });
+            requestSummaries.push({
+                Key: request.Key,
+                Kind: 'Video',
+                Status: 'Blocked',
+                BlockedReason: failedReason,
+                Cost: stillCost,
+            });
+            continue;
+        }
+
+        if (wouldExceedSpendCap(estimatedVideoCost)) {
+            blockRemainingWithSpendCap(i, estimatedVideoCost, stillCost);
+            break;
+        }
 
         const videoRunParams: AIVideoGenerationRunParams = {
             Prompt: composedPrompt,

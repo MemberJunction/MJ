@@ -6,9 +6,12 @@ import type {
     AIVideoGenerationRunParams,
     AIVideoGenerationRunResult,
 } from '@memberjunction/ai-prompts';
+import { AIEngine } from '@memberjunction/aiengine';
 import { RunView, type UserInfo } from '@memberjunction/core';
 import {
     BrandKitEngine,
+    type MJAIModelCostEntity,
+    type MJAIModelPriceUnitTypeEntity,
     type MJBrandKitAssetEntity,
     type MJBrandKitEntity,
 } from '@memberjunction/core-entities';
@@ -33,11 +36,15 @@ const BRAND_KIT_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const FILE_ID_BRAND_HERO = '11111111-1111-4111-8111-111111111101';
 const FILE_ID_LOGO_MAIN = '22222222-2222-4222-8222-222222222202';
 const FILE_ID_UNFLAGGED_KIT = '33333333-3333-4333-8333-333333333303';
+const UNIT_TYPE_PER_SECOND_ID = '00000000-0000-4000-8000-000000000501';
+const UNIT_TYPE_PER_IMAGE_ID = '00000000-0000-4000-8000-000000000502';
 
 const PNG_MAGIC_BYTES = Buffer.from([
     0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x01, 0x02,
 ]);
 const MP4_FAKE_BYTES = Buffer.from('00000018667479706d703432c2pa-manifest', 'utf8');
+
+let promptRunCosts: Record<string, number> = {};
 
 function makeFixtureSpec(): VideoGenerationSpec {
     return {
@@ -251,14 +258,22 @@ function createFakeRunners(options?: {
                     ExecutionTimeMS: 0,
                 };
             }
+            const promptRunId = `prompt-run-img-${imageCalls.length}`;
+            promptRunCosts[promptRunId] =
+                options?.imageCost !== undefined ? options.imageCost : 0.08;
             return {
                 Success: true,
                 ExecutionTimeMS: 0,
-                PromptRunID: `prompt-run-img-${imageCalls.length}`,
+                PromptRunID: promptRunId,
                 ModelID: 'model-imagen-4',
                 ModelName: 'Imagen 4',
                 ImageResult: {
                     success: true,
+                    startTime: new Date(0),
+                    endTime: new Date(0),
+                    timeElapsed: 0,
+                    errorMessage: undefined,
+                    exception: undefined,
                     images: [
                         {
                             data: Buffer.from(PNG_MAGIC_BYTES),
@@ -268,9 +283,7 @@ function createFakeRunners(options?: {
                         },
                     ],
                 },
-                ...(options?.imageCost !== undefined ? { Cost: options.imageCost } : { Cost: 0.08 }),
-                C2PA: true,
-            } as AIImageRunResult & { Cost?: number; C2PA?: boolean };
+            };
         }),
     };
 
@@ -323,6 +336,7 @@ describe('GenerateRequestedAssets (VS-GEN-6)', () => {
     beforeEach(() => {
         vi.restoreAllMocks();
         storedFiles = [];
+        promptRunCosts = {};
 
         const mockKit = {
             ID: BRAND_KIT_ID,
@@ -359,6 +373,49 @@ describe('GenerateRequestedAssets (VS-GEN-6)', () => {
         vi.spyOn(BrandKitEngine.Instance, 'GetGenerationReferenceAssets').mockReturnValue([
             flaggedHeroAsset,
         ]);
+        vi.spyOn(BrandKitEngine.Instance, 'GetAssets').mockReturnValue([
+            flaggedHeroAsset,
+            unflaggedKitAsset,
+        ]);
+
+        vi.spyOn(AIEngine.Instance, 'Loaded', 'get').mockReturnValue(true);
+        vi.spyOn(AIEngine.Instance, 'Config').mockResolvedValue(undefined);
+        vi.spyOn(AIEngine.Instance, 'ModelPriceUnitTypes', 'get').mockReturnValue([
+            {
+                ID: UNIT_TYPE_PER_SECOND_ID,
+                Name: 'Per Second',
+                UsageType: 'Seconds',
+                UnitsPerBillingUnit: 1,
+            } as unknown as MJAIModelPriceUnitTypeEntity,
+            {
+                ID: UNIT_TYPE_PER_IMAGE_ID,
+                Name: 'Per Image',
+                UsageType: 'Images',
+                UnitsPerBillingUnit: 1,
+            } as unknown as MJAIModelPriceUnitTypeEntity,
+        ]);
+        vi.spyOn(AIEngine.Instance, 'ModelCosts', 'get').mockReturnValue([
+            {
+                ID: 'cost-veo-per-sec',
+                ModelID: 'model-veo-3-1',
+                VendorID: 'vendor-google',
+                Status: 'Active',
+                ProcessingType: 'Realtime',
+                UnitTypeID: UNIT_TYPE_PER_SECOND_ID,
+                UnitType: 'Per Second',
+                OutputPricePerUnit: 0.1,
+            } as unknown as MJAIModelCostEntity,
+            {
+                ID: 'cost-imagen-per-img',
+                ModelID: 'model-imagen-4',
+                VendorID: 'vendor-google',
+                Status: 'Active',
+                ProcessingType: 'Realtime',
+                UnitTypeID: UNIT_TYPE_PER_IMAGE_ID,
+                UnitType: 'Per Image',
+                OutputPricePerUnit: 0.25,
+            } as unknown as MJAIModelCostEntity,
+        ]);
 
         vi.spyOn(FileStorageEngine.Instance, 'Config').mockResolvedValue(undefined);
         vi.spyOn(FileStorageEngine.Instance, 'HasStorageAccounts', 'get').mockReturnValue(true);
@@ -383,10 +440,25 @@ describe('GenerateRequestedAssets (VS-GEN-6)', () => {
             return `88888888-8888-4888-8888-88888888880${idx}`;
         });
 
-        vi.spyOn(RunView.prototype, 'RunView').mockResolvedValue({
-            Success: true,
-            Results: [],
-        } as never);
+        vi.spyOn(RunView.prototype, 'RunView').mockImplementation((async (params: {
+            EntityName?: string;
+            ExtraFilter?: string;
+        }) => {
+            if (params.EntityName === 'MJ: AI Prompt Runs') {
+                const match = params.ExtraFilter?.match(/ID\s*=\s*'([^']+)'/i);
+                const id = match?.[1];
+                if (id && promptRunCosts[id] !== undefined) {
+                    return {
+                        Success: true,
+                        Results: [{ ID: id, Cost: promptRunCosts[id] }],
+                    };
+                }
+            }
+            return {
+                Success: true,
+                Results: [],
+            };
+        }) as never);
     });
 
     it('1. Plan AC: two requests give two staged Generated assets with full Generation metadata, TextToVideo with no ReferenceImages and no Seed, and pass ValidateVideoGenerationSpec at PreProduced', async () => {
@@ -444,7 +516,6 @@ describe('GenerateRequestedAssets (VS-GEN-6)', () => {
             Prompt: 'Minimalist architectural glass prism on dark slate surface Style: Editorial matte dark slate',
             ReferenceKeys: ['brand:Hero', 'logo-main'],
             Cost: 0.08,
-            C2PA: true,
         });
 
         // Both requests marked Generated
@@ -670,6 +741,35 @@ describe('GenerateRequestedAssets (VS-GEN-6)', () => {
                 'ExceedsGeneratedVideoSecondsCap',
             );
         }
+
+        // Case D: Five video requests without DurationSeconds (each defaults to 5s -> 5 * 5 = 25 > 20 Draft cap)
+        {
+            const spec = makeFixtureSpec();
+            spec.Assets.Generate = [1, 2, 3, 4, 5].map((idx) => ({
+                Key: `undated-clip-${idx}`,
+                Kind: 'Video' as const,
+                Purpose: `Clip ${idx}`,
+                Prompt: `Abstract geometric wave ${idx}`,
+                ReferenceKeys: [],
+            }));
+            const { videoCalls, imageCalls, imageRunner, videoRunner } = createFakeRunners();
+            const res = await GenerateRequestedAssets(spec, {
+                ContextUser: mockUser,
+                Settings: draftSettings,
+                ImageRunner: imageRunner,
+                VideoRunner: videoRunner,
+            });
+            expect(videoCalls).toHaveLength(0);
+            expect(imageCalls).toHaveLength(0);
+            expect(res.Spec.Assets.Generate![0].Status).toBe('Pending');
+            expect(res.Spec.Assets.Generate![1].Status).toBe('Pending');
+            expect(res.Spec.Assets.Generate![2].Status).toBe('Pending');
+            expect(res.Spec.Assets.Generate![3].Status).toBe('Pending');
+            expect(res.Spec.Assets.Generate![4].Status).toBe('Blocked');
+            expect(res.Spec.Assets.Generate![4].BlockedReason).toContain(
+                'ExceedsGeneratedVideoSecondsCap',
+            );
+        }
     });
 
     it('4. Plan AC: AllowGenerated enforcement in screen and ValidateVideoGenerationSpec', async () => {
@@ -888,9 +988,43 @@ describe('GenerateRequestedAssets (VS-GEN-6)', () => {
             expect(imageCalls).toHaveLength(1);
             expect(imgRes.Spec.Assets.Generate![0].Status).toBe('Generated');
         }
+
+        // 5f: Video with Keyframes referencing an unflagged brand-kit asset -> 0 video calls, Blocked with GenerationFailed, and no FILE_ID_UNFLAGGED_KIT bytes sent
+        {
+            vi.spyOn(BrandKitEngine.Instance, 'GetEffectiveGenerationPolicy').mockReturnValue({
+                AllowGeneratedImages: true,
+                AllowGeneratedVideo: true,
+                AllowSyntheticPeople: false,
+                AvoidSubjects: [],
+                MaxGenerationCostPerRun: 5,
+            });
+            const spec = makeFixtureSpec();
+            spec.Assets.Generate = [
+                {
+                    Key: 'kf-unflagged-video',
+                    Kind: 'Video',
+                    Purpose: 'Transition that illegally references unflagged brand asset',
+                    Prompt: 'Camera glide over geometric background',
+                    ReferenceKeys: [],
+                    Keyframes: [{ Seconds: 0, AssetKey: 'brand:UnflaggedSecret' }],
+                    DurationSeconds: 5,
+                },
+            ];
+            const { imageCalls, videoCalls, imageRunner, videoRunner } = createFakeRunners();
+            const res = await GenerateRequestedAssets(spec, {
+                ContextUser: mockUser,
+                ImageRunner: imageRunner,
+                VideoRunner: videoRunner,
+            });
+            expect(imageCalls).toHaveLength(0);
+            expect(videoCalls).toHaveLength(0);
+            expect(res.Spec.Assets.Generate![0].Status).toBe('Blocked');
+            expect(res.Spec.Assets.Generate![0].BlockedReason).toContain('GenerationFailed');
+            expect(JSON.stringify(videoCalls)).not.toContain(FILE_ID_UNFLAGGED_KIT);
+        }
     });
 
-    it('6. Spend cap mid-pass: cap 1.00, first cost 1.00 (or 0.80 with prior 0.20), second is blocked SpendCapReached while first asset is kept', async () => {
+    it('6. Spend cap mid-pass: pre-call spend estimate blocks second call before runner is invoked, blocks Case 2 video call after anchor still reaches cap, and fails closed when no active ModelCost exists', async () => {
         vi.spyOn(BrandKitEngine.Instance, 'GetEffectiveGenerationPolicy').mockReturnValue({
             AllowGeneratedImages: true,
             AllowGeneratedVideo: true,
@@ -899,42 +1033,82 @@ describe('GenerateRequestedAssets (VS-GEN-6)', () => {
             MaxGenerationCostPerRun: 1.0,
         });
 
-        const spec = makeFixtureSpec();
-        // Add a prior generated asset costing 0.20 so after the first request (0.80), spendSoFar reaches 1.00
-        spec.Assets.Approved.push({
-            Key: 'prior-gen-img',
-            Kind: 'Image',
-            FileID: '55555555-5555-4555-8555-555555555555',
-            Source: 'Generated by Imagen 4',
-            Provenance: 'Generated',
-            Usage: 'Prior card',
-            MustUse: false,
-            Generation: {
-                ModelID: 'model-imagen-4',
-                PromptRunID: 'pr-prior-img',
-                Prompt: 'Abstract card',
-                ReferenceKeys: [],
-                Cost: 0.2,
-            },
-        });
+        // 6a: Cap 1.00; first request (6s video, estimated 0.60 <= 1.00, actual 0.80) succeeds;
+        // second request (image, estimated 0.25 -> 0.80 + 0.25 = 1.05 > 1.00) is blocked BEFORE imageRunner is called
+        {
+            const spec = makeFixtureSpec();
+            const { imageCalls, videoCalls, imageRunner, videoRunner } = createFakeRunners({
+                videoCost: 0.8,
+                imageCost: 0.5,
+            });
 
-        const { imageCalls, videoCalls, imageRunner, videoRunner } = createFakeRunners({
-            videoCost: 0.8,
-            imageCost: 0.5,
-        });
+            const res = await GenerateRequestedAssets(spec, {
+                ContextUser: mockUser,
+                ImageRunner: imageRunner,
+                VideoRunner: videoRunner,
+            });
 
-        const res = await GenerateRequestedAssets(spec, {
-            ContextUser: mockUser,
-            ImageRunner: imageRunner,
-            VideoRunner: videoRunner,
-        });
+            expect(videoCalls).toHaveLength(1);
+            expect(imageCalls).toHaveLength(0);
+            expect(res.Spec.Assets.Generate![0].Status).toBe('Generated');
+            expect(res.Spec.Assets.Generate![1].Status).toBe('Blocked');
+            expect(res.Spec.Assets.Generate![1].BlockedReason).toContain('SpendCapReached');
+            expect(res.Spec.Assets.Approved.some((a) => a.Key === 'ambient-bg')).toBe(true);
+        }
 
-        expect(videoCalls).toHaveLength(1);
-        expect(imageCalls).toHaveLength(0);
-        expect(res.Spec.Assets.Generate![0].Status).toBe('Generated');
-        expect(res.Spec.Assets.Generate![1].Status).toBe('Blocked');
-        expect(res.Spec.Assets.Generate![1].BlockedReason).toContain('SpendCapReached');
-        expect(res.Spec.Assets.Approved.some((a) => a.Key === 'ambient-bg')).toBe(true);
+        // 6b: Case 2 video with references where anchor still costs 1.00 -> still kept in Approved, video call blocked before videoRunner is invoked
+        {
+            const spec = makeFixtureSpec();
+            spec.Assets.Generate = [
+                {
+                    Key: 'ref-cap-video',
+                    Kind: 'Video',
+                    Purpose: 'Brand-styled motion background',
+                    Prompt: 'Abstract ribbons in brand colors',
+                    ReferenceKeys: ['logo-main'],
+                    DurationSeconds: 6,
+                },
+            ];
+            const { imageCalls, videoCalls, imageRunner, videoRunner } = createFakeRunners({
+                imageCost: 1.0,
+                videoCost: 0.6,
+            });
+
+            const res = await GenerateRequestedAssets(spec, {
+                ContextUser: mockUser,
+                ImageRunner: imageRunner,
+                VideoRunner: videoRunner,
+            });
+
+            expect(imageCalls).toHaveLength(1);
+            expect(videoCalls).toHaveLength(0);
+            expect(res.Spec.Assets.Generate![0].Status).toBe('Blocked');
+            expect(res.Spec.Assets.Generate![0].BlockedReason).toContain('SpendCapReached');
+            expect(res.Spec.Assets.Approved.some((a) => a.Key === 'ref-cap-video-still')).toBe(
+                true,
+            );
+            expect(res.Spec.Assets.Approved.some((a) => a.Key === 'ref-cap-video')).toBe(false);
+        }
+
+        // 6c: Fails closed when AIEngine.Instance.ModelCosts has no active price row for the candidate model
+        {
+            vi.spyOn(AIEngine.Instance, 'ModelCosts', 'get').mockReturnValue([]);
+            const spec = makeFixtureSpec();
+            const { imageCalls, videoCalls, imageRunner, videoRunner } = createFakeRunners();
+
+            const res = await GenerateRequestedAssets(spec, {
+                ContextUser: mockUser,
+                ImageRunner: imageRunner,
+                VideoRunner: videoRunner,
+            });
+
+            expect(videoCalls).toHaveLength(0);
+            expect(imageCalls).toHaveLength(0);
+            expect(res.Spec.Assets.Generate![0].Status).toBe('Blocked');
+            expect(res.Spec.Assets.Generate![0].BlockedReason).toContain('GenerationFailed');
+            expect(res.Spec.Assets.Generate![1].Status).toBe('Blocked');
+            expect(res.Spec.Assets.Generate![1].BlockedReason).toContain('GenerationFailed');
+        }
     });
 
     it('7. No storage: 0 calls, all requests marked Blocked with NoStorage', async () => {
@@ -1003,7 +1177,7 @@ describe('GenerateRequestedAssets (VS-GEN-6)', () => {
         const spec = makeFixtureSpec();
         spec.Assets.Generate![0].WantAudio = true;
         const apiKeys: AIAPIKey[] = [{ driverClass: 'GoogleVideoGenerator', apiKey: 'test-key-123' }];
-        const credentialScope: AICredentialScope = { CompanyID: 'comp-1' } as unknown as AICredentialScope;
+        const credentialScope: AICredentialScope = 'RuntimeOnly';
 
         const { imageCalls, videoCalls, imageRunner, videoRunner } = createFakeRunners();
         const ctx: GenerateRequestedAssetsContext = {

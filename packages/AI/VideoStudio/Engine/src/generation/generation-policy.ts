@@ -12,7 +12,6 @@
 
 import {
     BrandKitEngine,
-    DEFAULT_BRAND_GENERATION_POLICY,
     type EffectiveBrandGenerationPolicy,
     type MJBrandKitAssetEntity,
     type MJBrandKitEntity,
@@ -31,8 +30,7 @@ export interface ResolvedGenerationPolicy extends EffectiveBrandGenerationPolicy
 }
 
 /**
- * Finds the active `MJBrandKitEntity` referenced by `spec.BrandKitID` within the company scope
- * (falling back to the cached `BrandKits` list when `GetKitsForCompany` is not populated in a test stub).
+ * Finds the active `MJBrandKitEntity` referenced by `spec.BrandKitID` within the company scope.
  */
 export function FindBrandKitForSpec(
     spec: Partial<Pick<VideoGenerationSpec, 'BrandKitID' | 'CompanyID'>>,
@@ -45,28 +43,8 @@ export function FindBrandKitForSpec(
 
     const engine = BrandKitEngine.Instance;
     const effectiveCompanyId = companyId !== undefined ? companyId : (spec.CompanyID ?? null);
-    const scopedKits =
-        typeof engine.GetKitsForCompany === 'function'
-            ? (engine.GetKitsForCompany(effectiveCompanyId) ?? [])
-            : [];
-    const fromScoped = scopedKits.find((kit) => kit && UUIDsEqual(kit.ID, brandKitId));
-    if (fromScoped) {
-        return fromScoped;
-    }
-
-    const allKits = Array.isArray(engine.BrandKits) ? engine.BrandKits : [];
-    return (
-        allKits.find(
-            (kit) =>
-                kit &&
-                (kit.Status === 'Active' || kit.Status == null) &&
-                UUIDsEqual(kit.ID, brandKitId) &&
-                (kit.CompanyID == null ||
-                    (effectiveCompanyId != null &&
-                        effectiveCompanyId.trim().length > 0 &&
-                        UUIDsEqual(kit.CompanyID, effectiveCompanyId))),
-        ) ?? null
-    );
+    const scopedKits = engine.GetKitsForCompany(effectiveCompanyId) ?? [];
+    return scopedKits.find((kit) => kit && UUIDsEqual(kit.ID, brandKitId)) ?? null;
 }
 
 /**
@@ -82,21 +60,9 @@ export function ResolveGenerationPolicy(
     const kit = FindBrandKitForSpec(spec, companyId);
     const engine = BrandKitEngine.Instance;
 
-    const basePolicy: EffectiveBrandGenerationPolicy =
-        typeof engine.GetEffectiveGenerationPolicy === 'function'
-            ? engine.GetEffectiveGenerationPolicy(kit)
-            : {
-                  AllowGeneratedImages: DEFAULT_BRAND_GENERATION_POLICY.AllowGeneratedImages,
-                  AllowGeneratedVideo: DEFAULT_BRAND_GENERATION_POLICY.AllowGeneratedVideo,
-                  AllowSyntheticPeople: DEFAULT_BRAND_GENERATION_POLICY.AllowSyntheticPeople,
-                  AvoidSubjects: [...DEFAULT_BRAND_GENERATION_POLICY.AvoidSubjects],
-              };
-
+    const basePolicy: EffectiveBrandGenerationPolicy = engine.GetEffectiveGenerationPolicy(kit);
     const neverInvent = mergeNeverInvent(spec.Assets?.NeverInvent, readKitNeverInvent(kit));
-    const referenceAssets =
-        kit && typeof engine.GetGenerationReferenceAssets === 'function'
-            ? (engine.GetGenerationReferenceAssets(kit.ID) ?? [])
-            : [];
+    const referenceAssets = kit ? (engine.GetGenerationReferenceAssets(kit.ID) ?? []) : [];
 
     return {
         ...basePolicy,

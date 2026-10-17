@@ -157,8 +157,6 @@ async function resolveAssetExtensionsFromStorage(
     for (const asset of approvedAssets) {
         const fileId = asset.FileID?.trim();
         const avId = asset.ArtifactVersionID?.trim();
-        const isGeneratedWithMeta =
-            asset.Provenance === 'Generated' && asset.Generation !== undefined;
         if (!fileId && !avId) {
             throw new Error(
                 `Cannot stage asset "${asset.Key}": asset has neither FileID nor ArtifactVersionID.`,
@@ -166,9 +164,6 @@ async function resolveAssetExtensionsFromStorage(
         }
         if (fileId) {
             if (!IsValidUUID(fileId)) {
-                if (isGeneratedWithMeta) {
-                    continue;
-                }
                 throw new Error(
                     `Cannot stage asset "${asset.Key}": FileID "${fileId}" is not a valid UUID.`,
                 );
@@ -237,19 +232,12 @@ async function resolveAssetExtensionsFromStorage(
     for (const asset of approvedAssets) {
         const fileId = asset.FileID?.trim();
         const avId = asset.ArtifactVersionID?.trim();
-        const isGeneratedWithMeta =
-            asset.Provenance === 'Generated' && asset.Generation !== undefined;
         const avRow = avId && IsValidUUID(avId) ? avByID.Get(avId) : undefined;
         const effectiveFileId = fileId || avRow?.FileID?.trim() || undefined;
         const fileRow =
             effectiveFileId && IsValidUUID(effectiveFileId)
                 ? fileByID.Get(effectiveFileId)
                 : undefined;
-
-        if (!fileRow && !avRow && isGeneratedWithMeta) {
-            result.set(asset, asset.Kind === 'Video' ? 'mp4' : 'png');
-            continue;
-        }
 
         if (fileId && !fileRow) {
             throw new Error(
