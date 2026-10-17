@@ -16,11 +16,19 @@ import { MJGlobal, UUIDsEqual, IsValidUUID, EscapeSQLString } from '@memberjunct
 import { AIEngine } from '@memberjunction/aiengine';
 import {
     ExecuteAgentResult, ExecuteAgentParams, MediaOutput, FileOutputRef, InputArtifact, ArtifactDirective, ResolvePromptRunUserID,
-    WithAgentRunDataTrustApplied
+    WithAgentRunDataTrustApplied, MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended,
+    AgentHandoffResult, AgentExecutionProgressCallback, AgentExecutionStreamingCallback
 } from '@memberjunction/ai-core-plus';
+import { ResolveConversationAgentPreset, AgentPresetSource } from '@memberjunction/ai-engine-base';
 import { PlanArtifactTarget, IsKnownArtifactBehavior, ArtifactTargetPlan } from './artifact-target-plan';
 import { BaseAgent } from './base-agent';
-import { MJConversationEntity, MJConversationDetailEntity, MJArtifactEntity, MJArtifactVersionEntity, MJConversationDetailArtifactEntity, MJAIAgentRunMediaEntity, MJEnvironmentEntityExtended, ArtifactMetadataEngine, ConversationEngine, ExtractBase64FromDataUrl, DecideInlineStorage } from '@memberjunction/core-entities';
+import { HostAllowedAgentIDs } from './decision-discovery';
+import { ResolveHandoffTarget } from './handoff-target';
+import {
+    MJConversationEntity, MJConversationDetailEntity, MJArtifactEntity, MJArtifactVersionEntity,
+    MJConversationDetailArtifactEntity, MJAIAgentRunMediaEntity, MJAIAgentConfigurationEntity,
+    MJEnvironmentEntityExtended, ArtifactMetadataEngine, ConversationEngine, ExtractBase64FromDataUrl, DecideInlineStorage
+} from '@memberjunction/core-entities';
 import { FileStorageEngine } from '@memberjunction/storage';
 
 /**
@@ -72,6 +80,91 @@ export function selectPrimaryArtifact(
     payloadArtifact: CreatedArtifactInfo | undefined
 ): CreatedArtifactInfo | undefined {
     return SelectPrimaryArtifact(fileArtifacts, payloadArtifact);
+}
+
+/**
+ * Builds the system message injected at index `0` of the target agent's `conversationMessages`
+ * when a conversation is transferred via handoff.
+ */
+export function HandoffBriefMessage(sourceName: string, brief: string, reason?: string): string {
+    const trimmedReason = reason?.trim();
+    return [
+        '<handoff_brief>',
+        `${sourceName} transferred the conversation to you with this brief:`,
+        brief.trim(),
+        ...(trimmedReason ? [`Reason for transfer: ${trimmedReason}`] : []),
+        `Fulfill the user's request directly using this brief without re-asking what the brief already covers.`,
+        '</handoff_brief>',
+    ].join('\n');
+}
+
+/**
+ * Metadata describing a single handoff hop passed to {@link FollowHandoffsHooks}.
+ */
+export interface HandoffHopInfo {
+    hopIndex: number;
+    sourceAgent: MJAIAgentEntityExtended;
+    sourceConversationDetailId: string;
+    targetAgent: MJAIAgentEntityExtended;
+    targetConversationDetailId: string;
+    preset: MJAIAgentConfigurationEntity | null;
+    presetSource: AgentPresetSource;
+    handoff: AgentHandoffResult;
+}
+
+/**
+ * Information about the run that just handed off, passed to `OnHopStart`.
+ */
+export interface HandoffPreviousRunInfo {
+    agentResult: ExecuteAgentResult;
+    conversationDetailId: string;
+}
+
+/**
+ * Callbacks returned by `OnHopStart` for a handoff hop's execution.
+ */
+export interface HandoffHopCallbacks {
+    onProgress?: AgentExecutionProgressCallback;
+    onStreaming?: AgentExecutionStreamingCallback;
+}
+
+/**
+ * Outcome recorded for a single handoff hop by {@link AgentRunner.FollowHandoffs}.
+ */
+export interface HandoffHopOutcome {
+    hopIndex: number;
+    targetAgent: MJAIAgentEntityExtended;
+    targetConversationDetailId: string;
+    preset: MJAIAgentConfigurationEntity | null;
+    presetSource: AgentPresetSource;
+    agentResult?: ExecuteAgentResult;
+    artifactInfo?: CreatedArtifactInfo;
+    error?: string;
+}
+
+/**
+ * Lifecycle hooks for {@link AgentRunner.FollowHandoffs}.
+ */
+export interface FollowHandoffsHooks {
+    OnHopStart?: (
+        hop: HandoffHopInfo,
+        previous: HandoffPreviousRunInfo
+    ) => Promise<HandoffHopCallbacks | void> | HandoffHopCallbacks | void;
+    OnHopEnd?: (hop: HandoffHopInfo, outcome: HandoffHopOutcome) => Promise<void> | void;
+}
+
+/**
+ * Input options for {@link AgentRunner.FollowHandoffs}.
+ */
+export interface FollowHandoffsInput<C = any> {
+    params: ExecuteAgentParams<C>;
+    sourceResult: ExecuteAgentResult;
+    conversationId: string;
+    sourceConversationDetailId: string;
+    createArtifacts?: boolean;
+    hooks?: FollowHandoffsHooks;
+    OnHopStart?: FollowHandoffsHooks['OnHopStart'];
+    OnHopEnd?: FollowHandoffsHooks['OnHopEnd'];
 }
 
 /**
@@ -745,6 +838,374 @@ export class AgentRunner {
             }
             throw error;
         }
+    }
+
+    /**
+     * Executes server-side handoff hops sequentially in the same turn while the active run's
+     * result carries a resolved `handoff`.
+     */
+    public async FollowHandoffs<C = any>(input: FollowHandoffsInput<C>): Promise<HandoffHopOutcome[]> {
+        const outcomes: HandoffHopOutcome[] = [];
+        const onHopStart = input.hooks?.OnHopStart ?? input.OnHopStart;
+        const onHopEnd = input.hooks?.OnHopEnd ?? input.OnHopEnd;
+
+        let currentParams: ExecuteAgentParams<C> = input.params;
+        let currentResult: ExecuteAgentResult = input.sourceResult;
+        let currentRowId: string = input.sourceConversationDetailId;
+        let hopIndex = 0;
+
+        while (currentResult?.handoff) {
+            const handoff = currentResult.handoff;
+            const md = currentParams.provider ?? this._provider;
+            const contextUser = currentParams.contextUser;
+
+            // Load the source ConversationDetail row so we can read its BranchID (and update it on refusal)
+            let sourceRow: MJConversationDetailEntity | undefined;
+            let sourceRowLoaded = false;
+            try {
+                sourceRow = await md.GetEntityObject<MJConversationDetailEntity>(
+                    'MJ: Conversation Details',
+                    contextUser
+                );
+                sourceRowLoaded = await sourceRow.Load(currentRowId);
+            } catch (err) {
+                LogError(`FollowHandoffs: failed to load source conversation detail ${currentRowId}: ${err}`);
+            }
+            const sourceBranchId: string | null = sourceRowLoaded
+                ? (sourceRow?.BranchID ?? currentParams.ConversationBranchID ?? null)
+                : (currentParams.ConversationBranchID ?? null);
+
+            // 1. Re-resolve target agent
+            const trustedData = WithAgentRunDataTrustApplied(currentParams).Params.data;
+            const resolution = await ResolveHandoffTarget({
+                AgentName: handoff.targetAgentName,
+                SourceAgentID: currentParams.agent.ID,
+                HandoffChain: currentParams.handoffChain ?? [],
+                HostAllowedIDs: HostAllowedAgentIDs(trustedData),
+                ContextUser: contextUser,
+                Agents: AIEngine.Instance.Agents,
+            });
+
+            if (resolution.Refusal) {
+                await this.recordRefusedHandoffOnSource(
+                    currentResult,
+                    sourceRowLoaded ? sourceRow : undefined,
+                    handoff.targetAgentName || handoff.targetAgentId,
+                    resolution.Refusal.Message
+                );
+                break;
+            }
+            const resolvedTarget = resolution.Target;
+
+            // 2. Resolve configuration preset for the target agent
+            const presetResult = await ResolveConversationAgentPreset({
+                ConversationID: input.conversationId,
+                AgentID: resolvedTarget.ID,
+                BranchID: sourceBranchId,
+                ContextUser: contextUser,
+                Provider: md,
+            });
+
+            // 3. Create target MJ: Conversation Details row
+            const targetRow = await md.GetEntityObject<MJConversationDetailEntity>(
+                'MJ: Conversation Details',
+                contextUser
+            );
+            targetRow.NewRecord();
+            targetRow.ConversationID = input.conversationId;
+            targetRow.Role = 'AI';
+            targetRow.AgentID = resolvedTarget.ID;
+            targetRow.ParentID = currentRowId;
+            targetRow.BranchID = sourceBranchId;
+            targetRow.Status = 'In-Progress';
+            targetRow.HiddenToUser = false;
+            targetRow.Message = '⏳ Starting...';
+
+            if (!(await targetRow.Save())) {
+                throw new Error(
+                    `Failed to create handoff target conversation detail: ${AgentRunner.saveFailureReason(targetRow)}`
+                );
+            }
+
+            // 4. Update source run's Handoff step OutputData with TargetConversationDetailID and preset details
+            await this.updateSourceHandoffStepOutput(currentResult, targetRow.ID, presetResult);
+
+            // 5. Notify OnHopStart hook
+            const hopInfo: HandoffHopInfo = {
+                hopIndex,
+                sourceAgent: currentParams.agent,
+                sourceConversationDetailId: currentRowId,
+                targetAgent: resolvedTarget,
+                targetConversationDetailId: targetRow.ID,
+                preset: presetResult.Preset,
+                presetSource: presetResult.Source,
+                handoff,
+            };
+            const hopCallbacksResult = await onHopStart?.(hopInfo, {
+                agentResult: currentResult,
+                conversationDetailId: currentRowId,
+            });
+            const hopCallbacks: HandoffHopCallbacks | undefined = hopCallbacksResult || undefined;
+
+            // 6. Build target ExecuteAgentParams (never copying payload, lastRunId, configurationId, override, or parentRun from source)
+            const priorRunId = await this.lookupTargetPriorRunId(
+                input.conversationId,
+                resolvedTarget.ID,
+                sourceBranchId,
+                contextUser,
+                md
+            );
+
+            const targetParams = this.buildHandoffTargetParams(
+                currentParams,
+                resolvedTarget,
+                handoff,
+                sourceBranchId,
+                presetResult.Preset,
+                priorRunId,
+                hopCallbacks
+            );
+
+            // 7. Execute target agent in conversation
+            try {
+                const hopRun = await this.RunAgentInConversation(targetParams, {
+                    conversationId: input.conversationId,
+                    conversationDetailId: targetRow.ID,
+                    createArtifacts: input.createArtifacts,
+                });
+
+                const outcome: HandoffHopOutcome = {
+                    hopIndex,
+                    targetAgent: resolvedTarget,
+                    targetConversationDetailId: targetRow.ID,
+                    preset: presetResult.Preset,
+                    presetSource: presetResult.Source,
+                    agentResult: hopRun.agentResult,
+                    artifactInfo: hopRun.artifactInfo,
+                };
+                await onHopEnd?.(hopInfo, outcome);
+                outcomes.push(outcome);
+
+                if (!hopRun.agentResult?.handoff) {
+                    break;
+                }
+
+                currentParams = targetParams;
+                currentResult = hopRun.agentResult;
+                currentRowId = targetRow.ID;
+                hopIndex++;
+            } catch (error) {
+                const errorMessage = error instanceof Error ? error.message : String(error);
+                LogError(`FollowHandoffs hop ${hopIndex} failed: ${errorMessage}`, undefined, error);
+                try {
+                    if (targetRow.Status === 'In-Progress') {
+                        targetRow.Status = 'Error';
+                        targetRow.Message = errorMessage;
+                        targetRow.Error = errorMessage;
+                        await targetRow.Save();
+                    }
+                } catch (persistError) {
+                    LogError(`FollowHandoffs: failed to persist Error on target detail ${targetRow.ID}: ${persistError}`);
+                }
+
+                const outcome: HandoffHopOutcome = {
+                    hopIndex,
+                    targetAgent: resolvedTarget,
+                    targetConversationDetailId: targetRow.ID,
+                    preset: presetResult.Preset,
+                    presetSource: presetResult.Source,
+                    error: errorMessage,
+                };
+                await onHopEnd?.(hopInfo, outcome);
+                outcomes.push(outcome);
+                break;
+            }
+        }
+
+        return outcomes;
+    }
+
+    private findLatestHandoffStep(result: ExecuteAgentResult): MJAIAgentRunStepEntityExtended | undefined {
+        const steps = result.agentRun?.Steps;
+        if (!Array.isArray(steps)) {
+            return undefined;
+        }
+        const runStepId = result.handoff?.runStepId;
+        if (runStepId) {
+            const matched = steps.find(s => s?.ID && UUIDsEqual(s.ID, runStepId));
+            if (matched) {
+                return matched;
+            }
+        }
+        for (let i = steps.length - 1; i >= 0; i--) {
+            if (steps[i]?.StepType === 'Handoff') {
+                return steps[i];
+            }
+        }
+        return undefined;
+    }
+
+    private async recordRefusedHandoffOnSource(
+        sourceResult: ExecuteAgentResult,
+        sourceRow: MJConversationDetailEntity | undefined,
+        targetLabel: string,
+        refusalMessage: string
+    ): Promise<void> {
+        const handoffStep = this.findLatestHandoffStep(sourceResult);
+        if (handoffStep) {
+            try {
+                handoffStep.Status = 'Failed';
+                handoffStep.ErrorMessage = refusalMessage;
+                handoffStep.CompletedAt = new Date();
+                await handoffStep.Save();
+            } catch (err) {
+                LogError(`FollowHandoffs: failed to save Failed status on Handoff step: ${err}`);
+            }
+        }
+
+        if (sourceRow) {
+            try {
+                const notice = `I couldn't transfer you to ${targetLabel}: ${refusalMessage}.`;
+                sourceRow.Message = sourceRow.Message
+                    ? `${sourceRow.Message}\n\n${notice}`
+                    : notice;
+                await sourceRow.Save();
+            } catch (err) {
+                LogError(`FollowHandoffs: failed to append refusal notice to source detail ${sourceRow.ID}: ${err}`);
+            }
+        }
+    }
+
+    private async updateSourceHandoffStepOutput(
+        sourceResult: ExecuteAgentResult,
+        targetConversationDetailId: string,
+        presetResult: { Preset: MJAIAgentConfigurationEntity | null; Source: AgentPresetSource }
+    ): Promise<void> {
+        const handoffStep = this.findLatestHandoffStep(sourceResult);
+        if (!handoffStep) {
+            return;
+        }
+        try {
+            let parsedOutput: Record<string, unknown> = {};
+            if (handoffStep.OutputData) {
+                try {
+                    const parsed = JSON.parse(handoffStep.OutputData);
+                    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                        parsedOutput = parsed as Record<string, unknown>;
+                    }
+                } catch {
+                    // keep empty object if prior OutputData was not valid JSON
+                }
+            }
+            const presetName = presetResult.Preset
+                ? presetResult.Preset.DisplayName || presetResult.Preset.Name
+                : null;
+            handoffStep.OutputData = JSON.stringify({
+                ...parsedOutput,
+                TargetConversationDetailID: targetConversationDetailId,
+                PresetID: presetResult.Preset?.ID ?? null,
+                PresetName: presetName,
+                PresetSource: presetResult.Source,
+            });
+            await handoffStep.Save();
+        } catch (err) {
+            LogError(`FollowHandoffs: failed to update Handoff step OutputData: ${err}`);
+        }
+    }
+
+    private async lookupTargetPriorRunId(
+        conversationId: string,
+        targetAgentId: string,
+        branchId: string | null,
+        contextUser: UserInfo | undefined,
+        provider: IMetadataProvider
+    ): Promise<string | undefined> {
+        if (!contextUser) {
+            return undefined;
+        }
+        try {
+            const safeConvId = AgentRunner.filterId(conversationId, 'FollowHandoffs conversationId');
+            const safeAgentId = AgentRunner.filterId(targetAgentId, 'FollowHandoffs targetAgentId');
+            const safeBranchId = branchId ? AgentRunner.filterId(branchId, 'FollowHandoffs branchId') : null;
+            const branches = safeBranchId
+                ? await ConversationEngine.LoadBranchesFresh(safeConvId, contextUser, provider)
+                : [];
+            const settled = MJAIAgentRunEntityExtended.SettledStatuses.map(s => `'${s}'`).join(', ');
+            const replyFilter = MJAIAgentRunEntityExtended.BuildReplyOnBranchPathFilter(
+                safeConvId,
+                safeBranchId,
+                branches
+            );
+            const rv = RunView.FromMetadataProvider(provider);
+            const result = await rv.RunView<{ ID: string }>(
+                {
+                    EntityName: 'MJ: AI Agent Runs',
+                    ExtraFilter:
+                        `ConversationID='${safeConvId}' AND Status IN (${settled}) ` +
+                        `AND ParentRunID IS NULL AND AgentID='${safeAgentId}' AND ${replyFilter}`,
+                    OrderBy: '__mj_CreatedAt DESC',
+                    MaxRows: 1,
+                    Fields: ['ID'],
+                    ResultType: 'simple',
+                },
+                contextUser
+            );
+            if (result.Success && result.Results && result.Results.length > 0 && result.Results[0].ID) {
+                return result.Results[0].ID;
+            }
+        } catch (err) {
+            LogError(`FollowHandoffs: failed to look up prior run for agent ${targetAgentId}: ${err}`);
+        }
+        return undefined;
+    }
+
+    private buildHandoffTargetParams<C = any>(
+        sourceParams: ExecuteAgentParams<C>,
+        targetAgent: MJAIAgentEntityExtended,
+        handoff: AgentHandoffResult,
+        branchId: string | null,
+        preset: MJAIAgentConfigurationEntity | null,
+        priorRunId: string | undefined,
+        callbacks?: HandoffHopCallbacks
+    ): ExecuteAgentParams<C> {
+        const sourceName = sourceParams.agent.Name || 'Agent';
+        const briefMsg = HandoffBriefMessage(sourceName, handoff.brief, handoff.reason);
+        const effectiveBranchId = branchId ?? sourceParams.ConversationBranchID;
+
+        const targetParams: ExecuteAgentParams<C> = {
+            agent: targetAgent,
+            conversationMessages: [
+                { role: 'system', content: briefMsg },
+                ...(sourceParams.conversationMessages ?? []),
+            ],
+            contextUser: sourceParams.contextUser,
+            userId: sourceParams.userId,
+            companyId: sourceParams.companyId,
+            PrimaryScopeEntityName: sourceParams.PrimaryScopeEntityName,
+            PrimaryScopeRecordID: sourceParams.PrimaryScopeRecordID,
+            SecondaryScopes: sourceParams.SecondaryScopes,
+            CredentialScope: sourceParams.CredentialScope,
+            apiKeys: sourceParams.apiKeys,
+            Audience: sourceParams.Audience,
+            data: sourceParams.data,
+            TrustReservedRunData: sourceParams.TrustReservedRunData,
+            inputArtifacts: sourceParams.inputArtifacts,
+            planMode: sourceParams.planMode,
+            requestedSkillIDs: sourceParams.requestedSkillIDs,
+            ConversationHistoryFrom: sourceParams.ConversationHistoryFrom,
+            ...(effectiveBranchId !== undefined ? { ConversationBranchID: effectiveBranchId } : {}),
+            sessionID: sourceParams.sessionID,
+            cancellationToken: sourceParams.cancellationToken,
+            provider: sourceParams.provider,
+            context: sourceParams.context,
+            handoffChain: [...(sourceParams.handoffChain ?? []), sourceParams.agent.ID],
+            ...(preset?.AIConfigurationID ? { configurationId: preset.AIConfigurationID } : {}),
+            ...(priorRunId ? { lastRunId: priorRunId, autoPopulateLastRunPayload: true } : {}),
+            ...(callbacks?.onProgress ? { onProgress: callbacks.onProgress } : {}),
+            ...(callbacks?.onStreaming ? { onStreaming: callbacks.onStreaming } : {}),
+        };
+
+        return targetParams;
     }
 
     /**

@@ -118,12 +118,14 @@ export class MJAIAgentRequestEntityServer extends MJAIAgentRequestEntity {
 
         // Run the agent with lastRunId to continue the conversation
         const runner = new AgentRunner();
+        const allowHandoff = !(contextUser?.IsMagicLinkAnonymous || Boolean(contextUser?.WidgetGuestContext));
         const params: ExecuteAgentParams = {
             agent: agentEntity,
             conversationMessages,
             contextUser,
             lastRunId: this.OriginatingAgentRunID!,
             autoPopulateLastRunPayload: true,
+            ...(allowHandoff ? { handoffChain: [] } : {}),
             ...(isPlanResume ? { planMode: true } : {}),
             ...(branchId ? { ConversationBranchID: branchId } : {})
         };
@@ -144,6 +146,16 @@ export class MJAIAgentRequestEntityServer extends MJAIAgentRequestEntity {
             } else {
                 LogError(`Failed to save ResumingAgentRunID for request ${this.ID}`);
             }
+        }
+
+        if (allowHandoff && result.agentResult.handoff && result.conversationId && result.agentResponseDetailId) {
+            await runner.FollowHandoffs({
+                params,
+                sourceResult: result.agentResult,
+                conversationId: result.conversationId,
+                sourceConversationDetailId: result.agentResponseDetailId,
+                createArtifacts: true
+            });
         }
     }
 

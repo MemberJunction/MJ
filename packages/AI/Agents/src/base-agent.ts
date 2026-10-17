@@ -2795,11 +2795,21 @@ export class BaseAgent {
     /**
      * Whether this run withholds Handoff (`enableHandoff` off and the `handoff` response section hidden).
      * True when the run has a `parentRun` (sub-agents cannot transfer the conversation), has no
-     * `conversationDetailId` (there is no conversation reply row to hand over), or has no `handoffChain`
-     * (the host does not carry out handoffs).
+     * `conversationDetailId` (there is no conversation reply row to hand over), has no `handoffChain`
+     * (the host does not carry out handoffs), or runs for an anonymous/widget guest without an explicit
+     * host allow-list (`HostAllowedAgentIDs(data)`).
      */
     private runWithholdsHandoff(params: ExecuteAgentParams): boolean {
-        return Boolean(params.parentRun) || !params.conversationDetailId || !Array.isArray(params.handoffChain);
+        const data = WithAgentRunDataTrustApplied(params).Params.data;
+        const isUnscopedGuest =
+            (params.contextUser?.IsMagicLinkAnonymous || Boolean(params.contextUser?.WidgetGuestContext)) &&
+            HostAllowedAgentIDs(data) === undefined;
+        return (
+            Boolean(params.parentRun) ||
+            !params.conversationDetailId ||
+            !Array.isArray(params.handoffChain) ||
+            isUnscopedGuest
+        );
     }
 
     /**
