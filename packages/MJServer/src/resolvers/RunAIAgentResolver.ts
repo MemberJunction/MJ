@@ -302,7 +302,7 @@ export class RunAIAgentResolver extends ResolverBase {
         conversationBranchId?: string | null,
         /** Whether this invocation may expose Handoff and follow returned handoff decisions.
          *  True only for interactive user sessions (no API key, no widget elevation, not system-user query). */
-        followHandoffs: boolean = !userPayload?.apiKeyHash
+        followHandoffs: boolean = false
     ): Promise<AIAgentRunResult> {
         const startTime = Date.now();
         // Best-effort handle for persistInFlightAgentFailure. Populated from a
