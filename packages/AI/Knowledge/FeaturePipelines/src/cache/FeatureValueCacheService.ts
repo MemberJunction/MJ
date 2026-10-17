@@ -523,6 +523,40 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
     }
 
     /**
+     * The most recent `Source='Pipeline'` value of each named feature of a record, by lower-cased feature name (a
+     * feature with none is absent). One read for all features.
+     * @throws Error when the read fails.
+     */
+    public async GetLatestPipelineValues(p: Omit<FeatureValueRecordRef, 'FeatureName'> & { FeatureNames: string[]; ExcludeProcessRunID?: string | null }): Promise<Map<string, TypedFeatureValue>> {
+        const latest = new Map<string, TypedFeatureValue>();
+        const names = [...new Set(p.FeatureNames)];
+        if (names.length === 0) {
+            return latest;
+        }
+        const exclude = p.ExcludeProcessRunID
+            ? ` AND (ProcessRunID IS NULL OR ProcessRunID <> '${EscapeSQLString(p.ExcludeProcessRunID)}')`
+            : '';
+        const shape = FeatureValueCacheService.LatestValueViewShape();
+        const res = await RunView.FromMetadataProvider(p.Provider).RunView<LatestFeatureValueRow>({
+            ...shape,
+            ExtraFilter: `RecordProcessID = '${EscapeSQLString(p.RecordProcessID)}' AND EntityID = '${EscapeSQLString(p.EntityID)}'`
+                + ` AND RecordID = '${EscapeSQLString(p.RecordID)}' AND FeatureName IN (${names.map((n) => `'${EscapeSQLString(n)}'`).join(', ')})`
+                + `${FeatureValueCacheService.SourceFilter('Pipeline')}${exclude}`,
+        }, p.ContextUser);
+        if (!res.Success) {
+            throw new Error(`FeatureValueCacheService: reading the latest Pipeline values of record '${p.RecordID}' failed: ${res.ErrorMessage}`);
+        }
+        // newest first, so the first row seen of a feature is its latest
+        for (const row of res.Results ?? []) {
+            const key = row.FeatureName.toLowerCase();
+            if (!latest.has(key)) {
+                latest.set(key, FeatureValueCacheService.TypedValueOf(row));
+            }
+        }
+        return latest;
+    }
+
+    /**
      * Upserts the record's Human Feature Value for a feature: one per record and feature (the key carries no pin), so a
      * later observation updates the row in place.
      * @throws FeatureValueSaveError when the row cannot be saved.

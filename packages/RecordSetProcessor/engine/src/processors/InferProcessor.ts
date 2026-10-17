@@ -57,7 +57,6 @@ import {
     FeaturePipelineVersionService,
     type RecordFeatureValuesOutcome,
     type TypedFeatureValue,
-    type FeatureValueRecordRef,
     ConfidenceFloor,
     type BelowConfidenceOutput,
     PromptTemplateContent,
@@ -1310,7 +1309,9 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
         try {
             outcome = await this.UpsertFeatureValues(featureValues);
         } catch (e) {
-            return { ...result, Status: 'Failed', ErrorMessage: this.FeatureValueWriteFailure(e, featureValues.Record) };
+            // on a dry run nothing is written: only the preview's read of the stored values can have failed
+            const message = featureValues.Context.DryRun === true ? this.FeatureValuePreviewFailure(e, featureValues.Record) : this.FeatureValueWriteFailure(e, featureValues.Record);
+            return { ...result, Status: 'Failed', ErrorMessage: message };
         }
         this.featureValueKeys.set(featureValues.Record.RecordID, { Pin: featureValues.Pin, InputHash: featureValues.InputHash });
         const withheld = InferProcessor.WithheldOutputsOf(featureValues.Payload).map((w) => w.OutputName);
@@ -1352,6 +1353,13 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
         return message;
     }
 
+    /** The message a dry-run record fails with when its stored Feature Values cannot be read for the preview; also logged. */
+    protected FeatureValuePreviewFailure(e: unknown, record: RecordRef): string {
+        const message = `Feature Value preview read failed: ${e instanceof Error ? e.message : String(e)}`;
+        LogError(`InferProcessor: ${message} (record '${record.RecordID}')`);
+        return message;
+    }
+
     /**
      * Upserts a record's Feature Values for all outputs, on their key. `OutputConfidence` sets each output's confidence
      * ahead of `Confidence`; `OmitValues` writes every value as null (a superseded decision's row). When deferred
@@ -1380,7 +1388,7 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
     /**
      * On a dry run, works out what the record's outputs with no write target would store and keeps it for
      * {@link PreviewFeatureValues}: each one whose typed answer differs from the record's latest stored value
-     * (a Human value when there is one, else the Pipeline's), or that has none. A withheld output stores nothing, so it is omitted.
+     * (its Pipeline value), or that has none. A withheld output stores nothing, so it is omitted.
      */
     protected async PreviewFeatureValuesOf(params: FeatureValueWriteParams): Promise<void> {
         const recordProcessID = params.Context.recordProcessID;
@@ -1391,17 +1399,24 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
             return;
         }
         const withheld = new Set(InferProcessor.WithheldOutputsOf(params.Payload).map((w) => w.OutputName));
+        const outputs = targetless.filter((o) => !withheld.has(o.Name));
+        if (outputs.length === 0) {
+            this.featureValuePreviews.delete(params.Record.RecordID);
+            return;
+        }
+        // the Pipeline value only: that is what a real run decides Upserted / Unchanged against
+        const stored = await FeatureValueCacheService.Instance.GetLatestPipelineValues({
+            RecordProcessID: recordProcessID, EntityID: entityID, RecordID: params.Record.RecordID, FeatureNames: outputs.map((o) => o.Name),
+            ContextUser: params.Context.contextUser, Provider: provider,
+        });
         const previews: FeatureValuePreview[] = [];
-        for (const output of targetless.filter((o) => !withheld.has(o.Name))) {
+        for (const output of outputs) {
             const resolved = resolveMappingRef(output.Ref, { $: params.Payload });
             const proposed = FeatureValueCacheService.ToTypedValue(resolved !== undefined ? resolved : null, output.Constraint?.Type);
-            const latest = await this.LatestStoredValue({
-                RecordProcessID: recordProcessID, EntityID: entityID, RecordID: params.Record.RecordID, FeatureName: output.Name,
-                ContextUser: params.Context.contextUser, Provider: provider,
-            });
+            const latest = stored.get(output.Name.toLowerCase());
             const proposedValue = FeatureValueCacheService.NativeValueOf(proposed);
             const previousValue = latest ? FeatureValueCacheService.NativeValueOf(latest) : null;
-            if (!latest || !InferProcessor.SameFeatureValue(previousValue, proposedValue)) {
+            if (!latest || !InferProcessor.sameFeatureValue(previousValue, proposedValue)) {
                 previews.push({ FeatureName: output.Name, Previous: previousValue ?? null, Proposed: proposedValue });
             }
         }
@@ -1412,17 +1427,8 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
         }
     }
 
-    /**
-     * The record's latest stored value of a feature: its Human value when it has one (a person's entry is what the
-     * pipeline answers against), else its Pipeline value; null when it has neither.
-     */
-    protected async LatestStoredValue(ref: FeatureValueRecordRef): Promise<TypedFeatureValue | null> {
-        const human = await FeatureValueCacheService.Instance.GetLatestValue({ ...ref, Source: 'Human' });
-        return human ?? FeatureValueCacheService.Instance.GetLatestValue({ ...ref, Source: 'Pipeline' });
-    }
-
     /** Whether two native Feature Values are the same value (dates by instant, objects by content). */
-    private static SameFeatureValue(a: unknown, b: unknown): boolean {
+    private static sameFeatureValue(a: unknown, b: unknown): boolean {
         return Canonicalize(a instanceof Date ? a.toISOString() : a) === Canonicalize(b instanceof Date ? b.toISOString() : b);
     }
 

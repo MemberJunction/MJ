@@ -6,7 +6,7 @@ import type { AIPromptParams, AIPromptRunResult, MJAIPromptEntityExtended } from
 import { ChatResult } from '@memberjunction/ai';
 import type { RecordProcessorContext, RecordRef, RecordResult, WriteBackRunPayload } from '@memberjunction/record-set-processor-base';
 import { FeaturePipelineVersionService, FeatureValueCacheService, type DataFeatureSpec, type TypedFeatureValue } from '@memberjunction/feature-pipelines';
-import { KnowledgeHubMetadataEngine } from '@memberjunction/core-entities';
+import { KnowledgeHubMetadataEngine, type MJFeatureValueCacheEntity } from '@memberjunction/core-entities';
 import { EntitiesOnlyProvider } from '@memberjunction/unit-testing';
 import { InferProcessor } from '../processors/InferProcessor';
 import { WriteBackProcessor } from '../processors/WriteBackProcessor';
@@ -40,13 +40,13 @@ beforeEach(() => {
         ({ success: true, result: modelAnswer, chatResult: new ChatResult(true, new Date(), new Date()) }));
     vi.spyOn(FeatureValueCacheService.Instance, 'Lookup').mockResolvedValue(null);
     vi.spyOn(FeatureValueCacheService.Instance, 'BatchLookup').mockResolvedValue(new Map());
-    vi.spyOn(FeatureValueCacheService.Instance, 'Store').mockResolvedValue(null as never);
+    vi.spyOn(FeatureValueCacheService.Instance, 'Store').mockResolvedValue({ ID: 'cache-1' } as MJFeatureValueCacheEntity);
     vi.spyOn(FeaturePipelineVersionService.Instance, 'ResolveForRun').mockResolvedValue({ Version: 1, Status: 'Active' });
 });
 
-/** The latest stored value per source, as `GetLatestValue` would answer. */
-function storedValues(bySource: { Pipeline?: TypedFeatureValue; Human?: TypedFeatureValue }) {
-    return vi.spyOn(FeatureValueCacheService.Instance, 'GetLatestValue').mockImplementation(async (p) => bySource[p.Source] ?? null);
+/** The latest stored Pipeline value per (lower-cased) feature name, as `GetLatestPipelineValues` would answer. */
+function storedValues(pipeline: Record<string, TypedFeatureValue>) {
+    return vi.spyOn(FeatureValueCacheService.Instance, 'GetLatestPipelineValues').mockImplementation(async () => new Map(Object.entries(pipeline)));
 }
 
 describe('a pipeline whose output has no write target', () => {
@@ -75,15 +75,35 @@ describe('a pipeline whose output has no write target', () => {
         expect(p.PreviewFeatureValues('other')).toEqual([]);
     });
 
-    it('previews the record\'s latest stored value as Previous, preferring a Human value', async () => {
-        storedValues({ Pipeline: { ...EMPTY, ValueNumeric: 3 }, Human: { ...EMPTY, ValueNumeric: 5 } });
+    it('previews the record\'s latest stored Pipeline value as Previous, with one read per record', async () => {
+        const read = storedValues({ years: { ...EMPTY, ValueNumeric: 3 } });
         const p = new InferProcessor('PROMPT-1', undefined, spec, null);
         await p.ProcessRecord(record, { ...context, DryRun: true });
-        expect(p.PreviewFeatureValues('p-1')).toEqual([{ FeatureName: 'Years', Previous: 5, Proposed: 7 }]);
+        expect(p.PreviewFeatureValues('p-1')).toEqual([{ FeatureName: 'Years', Previous: 3, Proposed: 7 }]);
+        expect(read).toHaveBeenCalledTimes(1);
+        expect(read.mock.calls[0][0]).toMatchObject({ RecordProcessID: 'rp-1', EntityID: 'ENT-P', RecordID: 'p-1', FeatureNames: ['Years'] });
+    });
+
+    it('ignores a Human value: the real run compares against the Pipeline value only', async () => {
+        storedValues({ years: { ...EMPTY, ValueNumeric: 7 } });
+        const human = vi.spyOn(FeatureValueCacheService.Instance, 'GetLatestValue').mockResolvedValue({ ...EMPTY, ValueNumeric: 5 });
+        const p = new InferProcessor('PROMPT-1', undefined, spec, null);
+        await p.ProcessRecord(record, { ...context, DryRun: true });
+        expect(p.PreviewFeatureValues('p-1')).toEqual([]);
+        expect(human).not.toHaveBeenCalled();
+    });
+
+    it('fails the record, naming the read, when the stored values cannot be read', async () => {
+        vi.spyOn(FeatureValueCacheService.Instance, 'GetLatestPipelineValues').mockRejectedValue(new Error('db down'));
+        const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        const result = await new InferProcessor('PROMPT-1', undefined, spec, null).ProcessRecord(record, { ...context, DryRun: true });
+        expect(result.Status).toBe('Failed');
+        expect(result.ErrorMessage).toBe('Feature Value preview read failed: db down');
+        expect(logged).toHaveBeenCalled();
     });
 
     it('omits an output whose stored value already equals the proposed one', async () => {
-        storedValues({ Pipeline: { ...EMPTY, ValueNumeric: 7 } });
+        storedValues({ years: { ...EMPTY, ValueNumeric: 7 } });
         const p = new InferProcessor('PROMPT-1', undefined, spec, null);
         await p.ProcessRecord(record, { ...context, DryRun: true });
         expect(p.PreviewFeatureValues('p-1')).toEqual([]);

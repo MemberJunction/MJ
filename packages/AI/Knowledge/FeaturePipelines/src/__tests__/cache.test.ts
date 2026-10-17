@@ -480,6 +480,33 @@ describe('FeatureValueCacheService', () => {
             expect(view?.BypassCache).toBe(true);
         });
 
+        it('reads the newest Pipeline row of each named feature in one view', async () => {
+            const empty = { ValueText: null, ValueNumeric: null, ValueBoolean: null, ValueDate: null, ValueJSON: null };
+            MockRunView.mockResults = [
+                { FeatureName: 'Years', ...empty, ValueNumeric: 7 },
+                { FeatureName: 'years', ...empty, ValueNumeric: 3 },
+                { FeatureName: 'Level', ...empty, ValueText: 'Director' },
+            ];
+            const latest = await FeatureValueCacheService.Instance.GetLatestPipelineValues({ RecordProcessID: 'rp-1', EntityID: 'ENT-P', RecordID: 'person-1',
+                FeatureNames: ['Years', 'Level', 'Years', 'Missing'], ContextUser: mockUser, Provider: lookupProvider });
+            expect([...latest.keys()].sort()).toEqual(['level', 'years']);
+            expect(latest.get('years')?.ValueNumeric).toBe(7);
+            expect(latest.get('level')?.ValueText).toBe('Director');
+            const view = MockRunView.lastParams;
+            expect(view?.ExtraFilter).toContain("FeatureName IN ('Years', 'Level', 'Missing')");
+            expect(view?.ExtraFilter).toContain("Source = 'Pipeline'");
+            expect(view?.OrderBy).toBe(LATEST_ORDER);
+            expect(view?.BypassCache).toBe(true);
+        });
+
+        it('reads nothing for no features', async () => {
+            MockRunView.lastParams = undefined;
+            const latest = await FeatureValueCacheService.Instance.GetLatestPipelineValues({ RecordProcessID: 'rp-1', EntityID: 'ENT-P', RecordID: 'person-1',
+                FeatureNames: [], ContextUser: mockUser, Provider: lookupProvider });
+            expect(latest.size).toBe(0);
+            expect(MockRunView.lastParams).toBeUndefined();
+        });
+
         const humanRef = { RecordProcessID: 'rp-1', EntityID: 'ENT-P', RecordID: 'person-1', FeatureName: 'SeniorityLevel', ContextUser: mockUser, Provider: lookupProvider };
 
         it('retires the record\'s Human rows of a feature through the entity layer', async () => {
