@@ -1,0 +1,47 @@
+[
+  {
+    "name": "name",
+    "description": "Extracts the video production title from Film.OneSentence (truncated to 100 chars), falling back to Archetype.Name or 'Video Production'",
+    "type": "string",
+    "standardProperty": "name",
+    "extractor": "@file:video-production/name.js"
+  },
+  {
+    "name": "description",
+    "description": "Extracts the production purpose from Film.Purpose",
+    "type": "string",
+    "standardProperty": "description",
+    "extractor": "@file:video-production/description.js"
+  },
+  {
+    "name": "archetype",
+    "description": "Extracts the video archetype name from Archetype.Name",
+    "type": "string",
+    "extractor": "@file:video-production/archetype.js"
+  },
+  {
+    "name": "durationSeconds",
+    "description": "Extracts the target runtime in seconds from Film.DurationSeconds",
+    "type": "number",
+    "extractor": "@file:video-production/durationSeconds.js"
+  },
+  {
+    "name": "formats",
+    "description": "Extracts the target aspect ratio formats from Film.Formats",
+    "type": "Array<string>",
+    "extractor": "@file:video-production/formats.js"
+  },
+  {
+    "name": "asOf",
+    "description": "Extracts the frozen data snapshot timestamp from DataSnapshot.AsOf",
+    "type": "string",
+    "extractor": "@file:video-production/asOf.js"
+  },
+  {
+    "name": "displayMarkdown",
+    "description": "Builds a markdown summary of the VideoGenerationSpec including one-sentence heading, archetype, duration, formats, status, data as-of timestamp, and generated asset count",
+    "type": "string",
+    "standardProperty": "displayMarkdown",
+    "extractor": "@file:video-production/displayMarkdown.js"
+  }
+]

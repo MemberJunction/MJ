@@ -3,7 +3,7 @@ import { AppContext, UserPayload } from '../types.js';
 import { DatabaseProviderBase, LogError, LogStatus, Metadata, RunView, UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { MJConversationDetailEntity, MJConversationDetailAttachmentEntity, MJConversationDetailArtifactEntity, MJArtifactVersionEntity, MJAIAgentRequestEntity, ArtifactMetadataEngine, ConversationEngine } from '@memberjunction/core-entities';
 import { RouteArtifact } from './artifact-routing.js';
-import { AgentRunner, ArtifactToolManager, HostAllowedAgentIDs } from '@memberjunction/ai-agents';
+import { AgentRunner, ArtifactToolManager, CanAgentOwnSubAgentConsults, LoadOpenSubAgentConsults, HostAllowedAgentIDs } from '@memberjunction/ai-agents';
 import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, ExecuteAgentResult, ConversationUtility, AttachmentData } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ChatMessage, ChatMessageContent } from '@memberjunction/ai';
@@ -894,40 +894,59 @@ export class RunAIAgentResolver extends ResolverBase {
     }
 
     /**
-     * The ID of this agent's newest root run in the conversation IF the user stopped it, else
-     * null. The query spans the runs that could be the predecessor (settled, or stopped by the
-     * user) and the newest decides, so a stopped run that a later settled run already followed
-     * is not chained to again. Uses the same filter and recognizer as `BaseAgent.findUserStoppedPredecessorRunId`
-     * (`MJAIAgentRunEntityExtended.BuildStoppedPredecessorFilter` / `IsUserStopped`), which carries the stopped run's
-     * completed results into the new run's context, so the two cannot pick different runs.
-     * Fail-soft: a lookup failure means no chaining, never a failed turn.
+     * Discovers whether this agent's newest root run on this conversation/branch path should be
+     * chained by `LastRunID` on a chat-thread reply — either because the user stopped it
+     * (`reason: 'stopped'`) or because it paused on `FinalStep === 'Chat'` with one or more
+     * unanswered sub-agent consultations (`reason: 'open-consult'`).
+     *
+     * The query spans the runs that could be the predecessor (settled, or stopped by the user)
+     * and the newest decides, so a stopped or paused-consult run that a later settled run already
+     * followed is not chained to again. Fail-soft: a lookup failure means no chaining, never a
+     * failed turn.
      */
-    private async findUserStoppedPredecessorRunId(
+    private async findChainablePredecessor(
         conversationId: string,
         agentId: string,
         branchId: string | null,
         contextUser: UserInfo,
         provider: IMetadataProvider
-    ): Promise<string | null> {
+    ): Promise<{ runId: string; reason: 'stopped' | 'open-consult' } | null> {
         try {
             // The run must have replied on this turn's branch path: a run stopped on a sibling branch is not
             // this path's history. The trunk needs no branch rows; a branch needs them to walk its ancestry.
             const branches = branchId ? await ConversationEngine.LoadBranchesFresh(conversationId, contextUser, provider) : [];
             const rv = RunView.FromMetadataProvider(provider);
-            const newest = await rv.RunView<{ ID: string; Status: string; CancellationReason: string | null }>({
+            const newest = await rv.RunView<{
+                ID: string;
+                Status: string;
+                CancellationReason: string | null;
+                FinalStep: string | null;
+            }>({
                 EntityName: 'MJ: AI Agent Runs',
                 ExtraFilter: MJAIAgentRunEntityExtended.BuildStoppedPredecessorFilter(conversationId, agentId, branchId, branches),
                 OrderBy: '__mj_CreatedAt DESC',
                 MaxRows: 1,
-                Fields: ['ID', 'Status', 'CancellationReason'],
+                Fields: ['ID', 'Status', 'CancellationReason', 'FinalStep'],
                 ResultType: 'simple',
-                // The row this looks for was written by the Stop button moments ago; read the database, not a cache.
+                // The row this looks for was written by the Stop button or a Chat pause moments ago; read the database, not a cache.
                 BypassCache: true,
             }, contextUser);
             const run = newest.Success ? newest.Results?.[0] : undefined;
-            return run && MJAIAgentRunEntityExtended.IsUserStopped(run.Status, run.CancellationReason) ? run.ID : null;
+            if (!run) {
+                return null;
+            }
+            if (MJAIAgentRunEntityExtended.IsUserStopped(run.Status, run.CancellationReason)) {
+                return { runId: run.ID, reason: 'stopped' };
+            }
+            if (run.FinalStep === 'Chat' && CanAgentOwnSubAgentConsults(agentId)) {
+                const open = await LoadOpenSubAgentConsults(provider, run.ID, contextUser);
+                if (open.length > 0) {
+                    return { runId: run.ID, reason: 'open-consult' };
+                }
+            }
+            return null;
         } catch (error) {
-            LogError(`findUserStoppedPredecessorRunId failed; the turn runs unchained: ${error instanceof Error ? error.message : String(error)}`);
+            LogError(`findChainablePredecessor failed; the turn runs unchained: ${error instanceof Error ? error.message : String(error)}`);
             return null;
         }
     }
@@ -1124,19 +1143,24 @@ export class RunAIAgentResolver extends ResolverBase {
             // The branch the placeholder row was created on decides which path the run reads.
             const branchId: string | null = currentDetail.BranchID ?? null;
 
-            // A turn that follows a run the user STOPPED continues that run rather than starting
-            // over: chain it by LastRunID (the chat client never sends one) and, when the caller
-            // supplied no payload, roll the stopped run's FinalPayload into this run's start.
+            // A turn that follows a run the user STOPPED or a run paused on FinalStep === 'Chat'
+            // with an open sub-agent consult continues that run rather than starting over: chain it
+            // by LastRunID (the chat client never sends one) and, when the caller supplied no
+            // payload, roll the prior run's FinalPayload into this run's start.
             let effectiveLastRunId = lastRunId;
             let effectiveAutoPopulate = autoPopulateLastRunPayload;
             if (!effectiveLastRunId) {
-                const stoppedRunId = await this.findUserStoppedPredecessorRunId(conversationId, effectiveAgentId, branchId, currentUser, p);
-                if (stoppedRunId) {
-                    effectiveLastRunId = stoppedRunId;
+                const chainable = await this.findChainablePredecessor(conversationId, effectiveAgentId, branchId, currentUser, p);
+                if (chainable) {
+                    effectiveLastRunId = chainable.runId;
                     if (effectiveAutoPopulate === undefined && payload == null) {
                         effectiveAutoPopulate = true;
                     }
-                    LogStatus(`↩️ Continuing from user-stopped run ${stoppedRunId} (chained by LastRunID)`);
+                    if (chainable.reason === 'stopped') {
+                        LogStatus(`↩️ Continuing from user-stopped run ${chainable.runId} (chained by LastRunID)`);
+                    } else {
+                        LogStatus(`Resuming open sub-agent consult(s) from run ${chainable.runId} (chained by LastRunID)`);
+                    }
                 }
             }
 

@@ -1,0 +1,16 @@
+[
+  {
+    "fields": {
+      "Name": "Video Production",
+      "Description": "Production specification, storyboard, style guide, data snapshot, review record, and rendered deliverables manifest for a Video Studio production (VideoGenerationSpec).",
+      "ParentID": "@lookup:MJ: Artifact Types.Name=JSON",
+      "ContentType": "application/vnd.mj.video-production+json",
+      "ExtractRules": "@file:extract-rules/video-production.json",
+      "IsEnabled": true,
+      "Icon": "fa-solid fa-clapperboard"
+    },
+    "primaryKey": {
+      "ID": "2E23F219-E790-4A77-9C86-CB19C711B71E"
+    }
+  }
+]

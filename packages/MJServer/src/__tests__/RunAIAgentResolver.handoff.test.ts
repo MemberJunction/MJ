@@ -70,7 +70,7 @@ interface ResolverSeams {
     CheckAPIKeyScopeAuthorization: Fn;
     GetUserFromPayload: Fn;
     loadConversationHistoryWithAttachments: Fn;
-    findUserStoppedPredecessorRunId: Fn;
+    findChainablePredecessor: Fn;
     validateAgent: Fn;
     persistInFlightAgentFailure: Fn;
     sendFeedbackRequestNotification: Fn;
@@ -87,7 +87,7 @@ function makeResolver(userOverride: Record<string, unknown> = USER): {
     seams.loadConversationHistoryWithAttachments = vi.fn().mockResolvedValue([
         { role: 'user', content: 'Build a product launch video' },
     ]);
-    seams.findUserStoppedPredecessorRunId = vi.fn().mockResolvedValue(null);
+    seams.findChainablePredecessor = vi.fn().mockResolvedValue(null);
     seams.validateAgent = vi.fn().mockResolvedValue({ ID: 'agent-sage', Name: 'Sage' });
     seams.persistInFlightAgentFailure = vi.fn().mockResolvedValue(undefined);
     seams.sendFeedbackRequestNotification = vi.fn().mockResolvedValue(undefined);

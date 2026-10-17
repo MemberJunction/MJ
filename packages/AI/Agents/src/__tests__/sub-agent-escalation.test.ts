@@ -12,7 +12,9 @@ import '../agent-types/loop-agent-type';
 import type { LoopAgentResponse } from '../agent-types/loop-agent-response-type';
 import type { AgentPreExecutionRAGResult } from '../agent-pre-execution-rag';
 import {
+    CanAgentOwnSubAgentConsults,
     FormatReloadedConsultsMessage,
+    LoadOpenSubAgentConsults,
     SubAgentConsultRecord,
 } from '../sub-agent-consult';
 import {
@@ -1227,3 +1229,210 @@ describe('VS-CON-4: Propagated child Chat request creation and open consult relo
         }
     });
 });
+
+// ============================================================================
+// VS-CON-8: LoadOpenSubAgentConsults & CanAgentOwnSubAgentConsults unit tests
+// ============================================================================
+
+describe('VS-CON-8: LoadOpenSubAgentConsults and CanAgentOwnSubAgentConsults', () => {
+    const contextUser = {
+        ID: USER_ID,
+        Name: 'Test User',
+        Email: 'test@example.com',
+        UserRoles: [],
+    } as unknown as UserInfo;
+
+    beforeEach(() => {
+        harness = new EscalationLoopHarness();
+        vi.clearAllMocks();
+    });
+
+    it('1. returns the open SubAgentConsultRecord when a Sub-Agent step has OutputData.consult and no later step has matching InputData.resumeRunId', async () => {
+        const parentRunId = 'aaaaaaaa-2222-4000-8000-000000000101';
+        const childRunId = 'bbbbbbbb-2222-4000-8000-000000000101';
+        harness.priorRunSteps.push({
+            AgentRunID: parentRunId,
+            StepNumber: 1,
+            StepType: 'Sub-Agent',
+            InputData: JSON.stringify({ subAgentName: 'ScriptwriterSubAgent', message: 'Draft script' }),
+            OutputData: JSON.stringify({
+                consult: {
+                    childRunId,
+                    subAgentId: CHILD_SUB_AGENT_ID,
+                    subAgentName: 'ScriptwriterSubAgent',
+                    round: 1,
+                    question: 'What aspect ratio?',
+                },
+            }),
+        });
+
+        const result = await LoadOpenSubAgentConsults(
+            harness.provider as unknown as IMetadataProvider,
+            parentRunId,
+            contextUser
+        );
+
+        expect(result).toEqual([
+            {
+                childRunId,
+                subAgentId: CHILD_SUB_AGENT_ID,
+                subAgentName: 'ScriptwriterSubAgent',
+                round: 1,
+                question: 'What aspect ratio?',
+            },
+        ]);
+    });
+
+    it('2. excludes a consult whose childRunId is matched case-insensitively by a later step InputData.resumeRunId while keeping a second unanswered consult', async () => {
+        const parentRunId = 'aaaaaaaa-2222-4000-8000-000000000102';
+        const answeredChildRunIdLower = 'bbbbbbbb-2222-4000-8000-000000000abc';
+        const answeredChildRunIdUpper = 'BBBBBBBB-2222-4000-8000-000000000ABC';
+        const unansweredChildRunId = 'bbbbbbbb-2222-4000-8000-000000000def';
+
+        harness.priorRunSteps.push(
+            {
+                AgentRunID: parentRunId,
+                StepNumber: 1,
+                StepType: 'Sub-Agent',
+                InputData: JSON.stringify({ subAgentName: 'ScriptwriterSubAgent', message: 'First call' }),
+                OutputData: JSON.stringify({
+                    consult: {
+                        childRunId: answeredChildRunIdLower,
+                        subAgentId: CHILD_SUB_AGENT_ID,
+                        subAgentName: 'ScriptwriterSubAgent',
+                        round: 1,
+                        question: 'First question?',
+                    },
+                }),
+            },
+            {
+                AgentRunID: parentRunId,
+                StepNumber: 2,
+                StepType: 'Sub-Agent',
+                InputData: JSON.stringify({
+                    subAgentName: 'ScriptwriterSubAgent',
+                    message: 'Answer to first question',
+                    resumeRunId: answeredChildRunIdUpper,
+                }),
+                OutputData: JSON.stringify({
+                    consult: {
+                        childRunId: unansweredChildRunId,
+                        subAgentId: SECOND_SUB_AGENT_ID,
+                        subAgentName: 'VoiceCastingAgent',
+                        round: 2,
+                        question: 'Second unanswered question?',
+                    },
+                }),
+            }
+        );
+
+        const result = await LoadOpenSubAgentConsults(
+            harness.provider as unknown as IMetadataProvider,
+            parentRunId,
+            contextUser
+        );
+
+        expect(result).toHaveLength(1);
+        expect(result[0]).toEqual({
+            childRunId: unansweredChildRunId,
+            subAgentId: SECOND_SUB_AGENT_ID,
+            subAgentName: 'VoiceCastingAgent',
+            round: 2,
+            question: 'Second unanswered question?',
+        });
+    });
+
+    it('3. ignores steps with malformed JSON or without OutputData.consult.childRunId / subAgentName', async () => {
+        const parentRunId = 'aaaaaaaa-2222-4000-8000-000000000103';
+        const validChildRunId = 'bbbbbbbb-2222-4000-8000-000000000103';
+
+        harness.priorRunSteps.push(
+            {
+                AgentRunID: parentRunId,
+                StepNumber: 1,
+                StepType: 'Sub-Agent',
+                InputData: '{not-valid-json',
+                OutputData: '{also-not-valid-json',
+            },
+            {
+                AgentRunID: parentRunId,
+                StepNumber: 2,
+                StepType: 'Sub-Agent',
+                InputData: null,
+                OutputData: JSON.stringify({ consult: { childRunId: '', subAgentName: 'MissingChildRunId' } }),
+            },
+            {
+                AgentRunID: parentRunId,
+                StepNumber: 3,
+                StepType: 'Sub-Agent',
+                InputData: null,
+                OutputData: JSON.stringify({ consult: { childRunId: 'bbbbbbbb-2222-4000-8000-000000000999' } }),
+            },
+            {
+                AgentRunID: parentRunId,
+                StepNumber: 4,
+                StepType: 'Sub-Agent',
+                InputData: JSON.stringify({ subAgentName: 'ScriptwriterSubAgent' }),
+                OutputData: JSON.stringify({
+                    consult: {
+                        childRunId: validChildRunId,
+                        subAgentId: CHILD_SUB_AGENT_ID,
+                        subAgentName: 'ScriptwriterSubAgent',
+                        round: 1,
+                        question: 'Valid consult question?',
+                    },
+                }),
+            }
+        );
+
+        const result = await LoadOpenSubAgentConsults(
+            harness.provider as unknown as IMetadataProvider,
+            parentRunId,
+            contextUser
+        );
+
+        expect(result).toHaveLength(1);
+        expect(result[0].childRunId).toBe(validChildRunId);
+    });
+
+    it('4. returns [] when RunView returns Success: false or an empty Results array', async () => {
+        const parentRunId = 'aaaaaaaa-2222-4000-8000-000000000104';
+
+        // Empty Results
+        const emptyResult = await LoadOpenSubAgentConsults(
+            harness.provider as unknown as IMetadataProvider,
+            parentRunId,
+            contextUser
+        );
+        expect(emptyResult).toEqual([]);
+
+        // Success: false
+        const failingProvider = {
+            RunView: async () => ({ Success: false, Results: [{ OutputData: '{}' }] }),
+        } as unknown as IMetadataProvider;
+        const failedResult = await LoadOpenSubAgentConsults(failingProvider, parentRunId, contextUser);
+        expect(failedResult).toEqual([]);
+    });
+
+    it('CanAgentOwnSubAgentConsults supports both agent objects and agent ID strings via AIEngine.Instance.Agents and AgentRelationships', () => {
+        harness.agent.ChatHandlingOption = 'Consult';
+        expect(CanAgentOwnSubAgentConsults({ ID: AGENT_ID, ChatHandlingOption: 'Consult' })).toBe(true);
+        expect(CanAgentOwnSubAgentConsults(AGENT_ID.toUpperCase())).toBe(true);
+
+        harness.agent.ChatHandlingOption = null;
+        expect(CanAgentOwnSubAgentConsults(AGENT_ID)).toBe(false);
+
+        harness.relationships = [
+            {
+                ID: 'cccccccc-0000-4000-8000-000000000010',
+                AgentID: AGENT_ID,
+                SubAgentID: CHILD_SUB_AGENT_ID,
+                Status: 'Active',
+                ChatHandlingOption: 'Consult',
+            },
+        ];
+        expect(CanAgentOwnSubAgentConsults(AGENT_ID.toUpperCase())).toBe(true);
+        expect(CanAgentOwnSubAgentConsults({ ID: AGENT_ID.toUpperCase(), ChatHandlingOption: null })).toBe(true);
+    });
+});
+

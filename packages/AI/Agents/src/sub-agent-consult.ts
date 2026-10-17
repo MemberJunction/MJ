@@ -8,6 +8,9 @@
  */
 
 import { AgentResponseForm, FormQuestion } from '@memberjunction/ai-core-plus';
+import { IMetadataProvider, RunView, UserInfo } from '@memberjunction/core';
+import { AIEngine } from '@memberjunction/aiengine';
+import { UUIDSet, UUIDsEqual } from '@memberjunction/global';
 
 /**
  * Default maximum consultation rounds per `(parent run, sub-agent entity ID)` pair
@@ -135,4 +138,125 @@ export function FormatReloadedConsultsMessage(consults: ReadonlyArray<SubAgentCo
         })
         .join('\n');
 }
+
+/**
+ * Checks whether an agent (given by ID string or entity-like object) can own sub-agent
+ * consultations — either via its own `ChatHandlingOption === 'Consult'` or an active
+ * `MJAIAgentRelationshipEntity` row with `ChatHandlingOption === 'Consult'`.
+ */
+export function CanAgentOwnSubAgentConsults(
+    agentOrId: string | { ID: string; ChatHandlingOption?: string | null }
+): boolean {
+    if (typeof agentOrId === 'object' && agentOrId !== null && agentOrId.ChatHandlingOption === 'Consult') {
+        return true;
+    }
+
+    const agentId = typeof agentOrId === 'string' ? agentOrId : agentOrId?.ID;
+    if (!agentId) {
+        return false;
+    }
+
+    if (typeof agentOrId === 'string') {
+        const agents = AIEngine.Instance?.Agents;
+        if (Array.isArray(agents)) {
+            const found = agents.find(a => UUIDsEqual(a.ID, agentId));
+            if (found?.ChatHandlingOption === 'Consult') {
+                return true;
+            }
+        }
+    }
+
+    const relationships = AIEngine.Instance?.AgentRelationships;
+    if (!Array.isArray(relationships)) {
+        return false;
+    }
+    return relationships.some(
+        ar =>
+            ar.Status === 'Active' &&
+            ar.ChatHandlingOption === 'Consult' &&
+            UUIDsEqual(ar.AgentID, agentId)
+    );
+}
+
+/**
+ * Loads unanswered sub-agent consultations (`OutputData.consult`) from `MJ: AI Agent Run Steps`
+ * for the specified `runId`. Returns every `Sub-Agent` step whose `OutputData.consult` record
+ * does not have a later `Sub-Agent` step in the same run with `InputData.resumeRunId` matching
+ * `consult.childRunId`.
+ */
+export async function LoadOpenSubAgentConsults(
+    provider: IMetadataProvider,
+    runId: string,
+    contextUser: UserInfo
+): Promise<SubAgentConsultRecord[]> {
+    const rv = RunView.FromMetadataProvider(provider);
+    const stepsResult = await rv.RunView<{
+        StepNumber: number;
+        InputData: string | null;
+        OutputData: string | null;
+    }>({
+        EntityName: 'MJ: AI Agent Run Steps',
+        ExtraFilter: `AgentRunID='${runId}' AND StepType='Sub-Agent'`,
+        OrderBy: 'StepNumber ASC',
+        Fields: ['StepNumber', 'InputData', 'OutputData'],
+        ResultType: 'simple',
+        BypassCache: true,
+    }, contextUser);
+
+    const steps = stepsResult.Success ? (stepsResult.Results || []) : [];
+    if (steps.length === 0) {
+        return [];
+    }
+
+    const resumedLater = new UUIDSet();
+    const openConsultsReversed: SubAgentConsultRecord[] = [];
+    for (let i = steps.length - 1; i >= 0; i--) {
+        const consult = readStepConsultRecord(steps[i].OutputData);
+        if (consult && !resumedLater.Has(consult.childRunId)) {
+            openConsultsReversed.push(consult);
+        }
+        const resumedId = readStepResumeRunId(steps[i].InputData);
+        if (resumedId != null) {
+            resumedLater.Add(resumedId);
+        }
+    }
+    return openConsultsReversed.reverse();
+}
+
+/** Parses `OutputData.consult` from a persisted Sub-Agent step row, or returns `null`. */
+function readStepConsultRecord(outputDataJson: string | null): SubAgentConsultRecord | null {
+    if (!outputDataJson) {
+        return null;
+    }
+    try {
+        const parsed: { consult?: Partial<SubAgentConsultRecord> } = JSON.parse(outputDataJson);
+        const c = parsed?.consult;
+        if (!c || typeof c.childRunId !== 'string' || !c.childRunId || typeof c.subAgentName !== 'string') {
+            return null;
+        }
+        return {
+            childRunId: c.childRunId,
+            subAgentId: typeof c.subAgentId === 'string' ? c.subAgentId : '',
+            subAgentName: c.subAgentName,
+            round: typeof c.round === 'number' ? c.round : 1,
+            question: typeof c.question === 'string' ? c.question : null,
+        };
+    } catch {
+        return null;
+    }
+}
+
+/** Parses `InputData.resumeRunId` from a persisted Sub-Agent step row, or returns `null`. */
+function readStepResumeRunId(inputDataJson: string | null): string | null {
+    if (!inputDataJson) {
+        return null;
+    }
+    try {
+        const parsed: { resumeRunId?: unknown } = JSON.parse(inputDataJson);
+        return typeof parsed?.resumeRunId === 'string' && parsed.resumeRunId ? parsed.resumeRunId : null;
+    } catch {
+        return null;
+    }
+}
+
 
