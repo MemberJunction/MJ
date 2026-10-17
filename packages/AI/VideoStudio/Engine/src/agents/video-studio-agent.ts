@@ -156,7 +156,7 @@ export class VideoStudioAgent extends BaseAgent {
             return baseResult;
         }
 
-        const agentName = (agent?.Name ?? 'Video Studio').trim() || 'Video Studio';
+        const agentName = (agent.Name ?? 'Video Studio').trim() || 'Video Studio';
         const normalizedSelf = agentName.toLowerCase();
         const parentHierarchy = this.AgentHierarchy.slice(0, -1);
         const hasCycle = parentHierarchy.some(
@@ -620,6 +620,24 @@ export class VideoStudioAgent extends BaseAgent {
             Rounds: Array.isArray(spec.Review?.Rounds) ? spec.Review.Rounds : [],
         };
 
+        const terminalFailure = FindIntegrityOrGateCriterionFailure(spec, {
+            Settings: this._currentSettings,
+            BrandKitInScope: this._brandKitInScope,
+            EffectiveInteractionMode: effectiveMode,
+            InitialRoundCount: this._initialRoundCount,
+        });
+        if (terminalFailure) {
+            spec.Status = DeriveStatus(spec, gates);
+            return {
+                ...baseResult,
+                step: 'Failed',
+                terminate: true,
+                errorMessage: terminalFailure,
+                previousPayload: currentPayload,
+                newPayload: spec as unknown as P,
+            };
+        }
+
         // Gate G4 Plan checkpoint under ApproveStoryboardAndRoughCut
         const g1 = gates.find((g) => g.Gate === 'G1');
         const g2 = gates.find((g) => g.Gate === 'G2');
@@ -655,24 +673,6 @@ export class VideoStudioAgent extends BaseAgent {
 
         const nonPassing = gates.filter((g) => g.Status !== 'Passed');
         if (nonPassing.length > 0) {
-            const terminalFailure = FindIntegrityOrGateCriterionFailure(spec, {
-                Settings: this._currentSettings,
-                BrandKitInScope: this._brandKitInScope,
-                EffectiveInteractionMode: effectiveMode,
-                InitialRoundCount: this._initialRoundCount,
-            });
-            if (terminalFailure) {
-                spec.Status = DeriveStatus(spec, gates);
-                return {
-                    ...baseResult,
-                    step: 'Failed',
-                    terminate: true,
-                    errorMessage: terminalFailure,
-                    previousPayload: currentPayload,
-                    newPayload: spec as unknown as P,
-                };
-            }
-
             spec.Status = DeriveStatus(spec, gates);
             const primary =
                 nonPassing.find((g) => g.Status === 'Failed' || g.Status === 'Blocked') ??
@@ -750,12 +750,7 @@ export class VideoStudioAgent extends BaseAgent {
                 : {}),
         };
 
-        const awaitingG4 = seeded.Review.Gates.some(
-            (g) => g?.Gate === 'G4' && g.Notes === 'AwaitingApproval',
-        );
-        this._initialRoundCount = awaitingG4
-            ? Math.max(0, seeded.Review.Rounds.length - 1)
-            : seeded.Review.Rounds.length;
+        this._initialRoundCount = seeded.Review.Rounds.length;
 
         seeded.Assets = {
             Approved: Array.isArray(seeded.Assets?.Approved) ? [...seeded.Assets.Approved] : [],

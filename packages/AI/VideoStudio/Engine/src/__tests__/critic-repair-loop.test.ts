@@ -204,8 +204,11 @@ class ScriptedCriticAgent extends VideoStudioCriticAgent {
 }
 
 class ExposedVideoStudioAgent extends VideoStudioAgent {
-    public async InitRoot(params: ExecuteAgentParams<Partial<VideoGenerationSpec>>): Promise<void> {
-        await this.executeAgentInternal(params, {} as AgentConfiguration);
+    public async InitRoot(
+        params: ExecuteAgentParams<Partial<VideoGenerationSpec>>,
+    ): Promise<Partial<VideoGenerationSpec>> {
+        const { finalStep } = await this.executeAgentInternal(params, {} as AgentConfiguration);
+        return finalStep.newPayload!;
     }
 
     public ApplyStage(
@@ -764,40 +767,13 @@ describe('Critic bounded repair loop (MaxRepairRounds = 2)', () => {
         expect(finalStep.newPayload?.Status).not.toBe('Delivered');
     });
 
-    it('returns Retry (not Failed) when RenderedAt is newer than the latest Critic round (including 3 prior rounds at MaxRepairRounds = 2 or a stale non-gate Miss)', async () => {
+    it('returns Retry (not Failed) when RenderedAt is newer than the latest Critic round even after 3 rounds in the current run with an open integrity defect and a failed gate criterion', async () => {
         const spec = CreateDeliveredSpecFixture();
         spec.Interaction = { Mode: 'Autonomous', MaxRepairRounds: 2 };
         spec.Review = {
             Gates: [{ Gate: 'G3', Status: 'Passed', EvidenceRefs: ['cs-1'], Timestamp: '2026-10-17T00:01:00.000Z' }],
-            Rounds: [
-                { Round: 1, Timestamp: '2026-10-17T00:01:05.000Z', Defects: [] },
-                { Round: 2, Timestamp: '2026-10-17T00:01:10.000Z', Defects: [] },
-                { Round: 3, Timestamp: '2026-10-17T00:01:15.000Z', Defects: [] },
-            ],
-            Scores: {
-                RubricID: 'rubric-vpq-001',
-                OverallScore: 0.5,
-                MaxScore: 1,
-                Passed: false,
-                Criteria: [
-                    {
-                        Criterion: 'text-legibility-and-contrast',
-                        Score: 0,
-                        MaxScore: 1,
-                        Passed: false,
-                        Notes: 'Stale non-gate miss from before re-render',
-                    },
-                    {
-                        Criterion: 'generated-assets-are-honest-and-disclosed',
-                        Score: 1,
-                        MaxScore: 1,
-                        Passed: true,
-                    },
-                ],
-            },
+            Rounds: [],
         };
-        // RenderedAt is AFTER Round 3's timestamp
-        spec.Output!.RenderMetadata.RenderedAt = '2026-10-17T00:02:00.000Z';
 
         const rootAgent = new ExposedVideoStudioAgent();
         const params = {
@@ -805,7 +781,52 @@ describe('Critic bounded repair loop (MaxRepairRounds = 2)', () => {
             payload: spec,
         } as unknown as ExecuteAgentParams<Partial<VideoGenerationSpec>>;
 
+        // Seed at run start with 0 rounds so _initialRoundCount = 0
         await rootAgent.InitRoot(params);
+
+        // Add 3 rounds in this run (exhausting MaxRepairRounds = 2) with an Open integrity defect and a failed gate criterion
+        spec.Review = {
+            Gates: [{ Gate: 'G3', Status: 'Passed', EvidenceRefs: ['cs-1'], Timestamp: '2026-10-17T00:01:00.000Z' }],
+            Rounds: [
+                { Round: 1, Timestamp: '2026-10-17T00:01:05.000Z', Defects: [] },
+                { Round: 2, Timestamp: '2026-10-17T00:01:10.000Z', Defects: [] },
+                {
+                    Round: 3,
+                    Timestamp: '2026-10-17T00:01:15.000Z',
+                    Defects: [
+                        {
+                            Key: 'r3-integrity',
+                            Format: '16:9',
+                            Timestamp: 1.0,
+                            Beat: 'hook',
+                            Criterion: 'generated-assets-are-honest-and-disclosed',
+                            Severity: 'Blocker',
+                            Evidence: 'Synthetic speaker shown before re-render',
+                            Fix: 'remove generated speaker clip',
+                            Status: 'Open',
+                            AssetKey: 'synth-speaker-clip',
+                        },
+                    ],
+                },
+            ],
+            Scores: {
+                RubricID: 'rubric-vpq-001',
+                OverallScore: 0,
+                MaxScore: 1,
+                Passed: false,
+                Criteria: [
+                    {
+                        Criterion: 'generated-assets-are-honest-and-disclosed',
+                        Score: 0,
+                        MaxScore: 1,
+                        Passed: false,
+                        Notes: 'Stale integrity miss from before re-render',
+                    },
+                ],
+            },
+        };
+        // Advance RenderedAt past Round 3's timestamp so Round 3 is stale relative to the new render
+        spec.Output!.RenderMetadata.RenderedAt = '2026-10-17T00:02:00.000Z';
 
         const step = await rootAgent.ValidateSuccess(
             params,
@@ -820,6 +841,210 @@ describe('Critic bounded repair loop (MaxRepairRounds = 2)', () => {
         expect(step.retryInstructions).toContain(
             'G5 (Failed): No Review.Rounds entry with Timestamp >= Output.RenderMetadata.RenderedAt',
         );
+    });
+
+    it('returns Failed (not Plan) under ApproveStoryboardAndRoughCut when an open integrity defect or gate criterion fails, and counts the post-approval repair budget from Rounds.length at run start', async () => {
+        const spec = CreateDeliveredSpecFixture();
+        spec.Deliverables.Formats = ['16:9'];
+        spec.Interaction = { Mode: 'ApproveStoryboardAndRoughCut', MaxRepairRounds: 2 };
+        spec.Review = {
+            Gates: [
+                { Gate: 'G1', Status: 'Passed', EvidenceRefs: ['brief'], Timestamp: '2026-10-17T00:00:10.000Z' },
+                { Gate: 'G2', Status: 'Passed', Notes: 'Approved', EvidenceRefs: ['approval:g2'], Timestamp: '2026-10-17T00:00:20.000Z' },
+                { Gate: 'G3', Status: 'Passed', EvidenceRefs: ['cs-1'], Timestamp: '2026-10-17T00:01:00.000Z' },
+            ],
+            Rounds: [],
+        };
+        spec.Output!.RenderMetadata.RenderedAt = '2026-10-17T00:01:00.000Z';
+
+        const rootAgent = new ExposedVideoStudioAgent();
+        const params = {
+            agent: { ID: 'root-id', Name: 'Video Studio' },
+            payload: spec,
+        } as unknown as ExecuteAgentParams<Partial<VideoGenerationSpec>>;
+
+        await rootAgent.InitRoot(params);
+
+        // 3 Critic rounds in this run at MaxRepairRounds = 2 with an Open integrity defect:
+        // ValidateSuccess must return Failed (with the integrity reason), not Plan ("Rough cut ready for approval")
+        spec.Review.Rounds = [
+            { Round: 1, Timestamp: '2026-10-17T00:01:05.000Z', Defects: [] },
+            { Round: 2, Timestamp: '2026-10-17T00:01:10.000Z', Defects: [] },
+            {
+                Round: 3,
+                Timestamp: '2026-10-17T00:01:15.000Z',
+                Defects: [
+                    {
+                        Key: 'r3-integrity',
+                        Format: '16:9',
+                        Timestamp: 1.0,
+                        Beat: 'hook',
+                        Criterion: 'generated-assets-are-honest-and-disclosed',
+                        Severity: 'Blocker',
+                        Evidence: 'Synthetic person shown as a customer speaker',
+                        Fix: 'remove or replace generated asset synth-speaker-clip',
+                        Status: 'Open',
+                        AssetKey: 'synth-speaker-clip',
+                    },
+                ],
+            },
+        ];
+        spec.Review.Scores = {
+            RubricID: 'rubric-vpq-001',
+            OverallScore: 1,
+            MaxScore: 1,
+            Passed: true,
+            Criteria: [
+                {
+                    Criterion: 'generated-assets-are-honest-and-disclosed',
+                    Score: 1,
+                    MaxScore: 1,
+                    Passed: true,
+                },
+            ],
+        };
+
+        const failedBeforePlan = await rootAgent.ValidateSuccess(
+            params,
+            { step: 'Success', terminate: true, newPayload: spec },
+            spec,
+        );
+        expect(failedBeforePlan.step).toBe('Failed');
+        expect(failedBeforePlan.errorMessage).toBe(
+            'Generated asset synth-speaker-clip failed the integrity check: Synthetic person shown as a customer speaker',
+        );
+
+        // An approval turn following a terminal gate-criterion failure still fails instead of delivering
+        const postTerminalSpec = JSON.parse(JSON.stringify(failedBeforePlan.newPayload)) as VideoGenerationSpec;
+        postTerminalSpec.Review.Rounds[2].Defects = [];
+        postTerminalSpec.Review.Scores = {
+            RubricID: 'rubric-vpq-001',
+            OverallScore: 0,
+            MaxScore: 1,
+            Passed: false,
+            Criteria: [
+                {
+                    Criterion: 'generated-assets-are-honest-and-disclosed',
+                    Score: 0,
+                    MaxScore: 1,
+                    Passed: false,
+                    Notes: 'Synthetic speaker remains undisclosed',
+                },
+            ],
+        };
+        const approveAfterFailureAgent = new ExposedVideoStudioAgent();
+        const approveAfterFailureParams = {
+            agent: { ID: 'root-id', Name: 'Video Studio' },
+            payload: postTerminalSpec,
+            conversationMessages: [{ role: 'user', content: 'Approve' }],
+        } as unknown as ExecuteAgentParams<Partial<VideoGenerationSpec>>;
+        const seededPostTerminal = await approveAfterFailureAgent.InitRoot(approveAfterFailureParams);
+        const stepAfterApprovalOnFailed = await approveAfterFailureAgent.ValidateSuccess(
+            approveAfterFailureParams,
+            { step: 'Success', terminate: true, newPayload: seededPostTerminal },
+            seededPostTerminal,
+        );
+        expect(stepAfterApprovalOnFailed.step).toBe('Failed');
+        expect(stepAfterApprovalOnFailed.errorMessage).toBe(
+            'Generated-asset integrity criterion failed: Synthetic speaker remains undisclosed',
+        );
+
+        // When a valid rough cut pauses at G4 after 1 Critic round and the user replies 'Approve',
+        // _initialRoundCount is recorded as Rounds.length (1, not Rounds.length - 1 = 0).
+        const pausedRoughCutSpec = CreateDeliveredSpecFixture();
+        pausedRoughCutSpec.Deliverables.Formats = ['16:9'];
+        pausedRoughCutSpec.Interaction = { Mode: 'ApproveStoryboardAndRoughCut', MaxRepairRounds: 2 };
+        pausedRoughCutSpec.Review = {
+            Gates: [
+                { Gate: 'G1', Status: 'Passed', EvidenceRefs: ['brief'], Timestamp: '2026-10-17T00:00:10.000Z' },
+                { Gate: 'G2', Status: 'Passed', Notes: 'Approved', EvidenceRefs: ['approval:g2'], Timestamp: '2026-10-17T00:00:20.000Z' },
+                { Gate: 'G3', Status: 'Passed', EvidenceRefs: ['cs-1'], Timestamp: '2026-10-17T00:01:00.000Z' },
+                { Gate: 'G4', Status: 'Blocked', Notes: 'AwaitingApproval', EvidenceRefs: [], Timestamp: '2026-10-17T00:01:05.000Z' },
+            ],
+            Rounds: [{ Round: 1, Timestamp: '2026-10-17T00:01:05.000Z', Defects: [] }],
+        };
+        pausedRoughCutSpec.Output!.RenderMetadata.RenderedAt = '2026-10-17T00:02:00.000Z';
+
+        const resumedAgent = new ExposedVideoStudioAgent();
+        const resumedParams = {
+            agent: { ID: 'root-id', Name: 'Video Studio' },
+            payload: pausedRoughCutSpec,
+            conversationMessages: [{ role: 'user', content: 'Approve' }],
+        } as unknown as ExecuteAgentParams<Partial<VideoGenerationSpec>>;
+        const resumedSpec = (await resumedAgent.InitRoot(resumedParams)) as VideoGenerationSpec;
+        // 2 Critic rounds in this post-approval run (Rounds 2 and 3 overall -> currentRunRounds = 3 - 1 = 2, only 1 repair used so far):
+        // With _initialRoundCount = Rounds.length (1), repairBudgetReached is false (whereas Rounds.length - 1 = 0 would make it true!).
+        resumedSpec.Review.Rounds.push(
+            {
+                Round: 2,
+                Timestamp: '2026-10-17T00:02:05.000Z',
+                Defects: [
+                    {
+                        Key: 'r2-int',
+                        Format: '16:9',
+                        Timestamp: 1.0,
+                        Beat: 'hook',
+                        Criterion: 'generated-assets-are-honest-and-disclosed',
+                        Severity: 'Blocker',
+                        Evidence: 'Synthetic speaker in re-render',
+                        Fix: 'remove synth-speaker-clip',
+                        Status: 'Open',
+                        AssetKey: 'synth-speaker-clip',
+                    },
+                ],
+            },
+            {
+                Round: 3,
+                Timestamp: '2026-10-17T00:02:10.000Z',
+                Defects: [
+                    {
+                        Key: 'r3-int',
+                        Format: '16:9',
+                        Timestamp: 1.0,
+                        Beat: 'hook',
+                        Criterion: 'generated-assets-are-honest-and-disclosed',
+                        Severity: 'Blocker',
+                        Evidence: 'Synthetic speaker in re-render',
+                        Fix: 'remove synth-speaker-clip',
+                        Status: 'Open',
+                        AssetKey: 'synth-speaker-clip',
+                    },
+                ],
+            },
+        );
+
+        const retryBeforeCapStep = await resumedAgent.ValidateSuccess(
+            resumedParams,
+            { step: 'Success', terminate: true, newPayload: resumedSpec },
+            resumedSpec,
+        );
+        expect(retryBeforeCapStep.step).toBe('Retry');
+
+        // After the 3rd Critic round of the post-approval run (Round 4 overall -> currentRunRounds = 4 - 1 = 3), cap is reached -> Failed
+        resumedSpec.Review.Rounds.push({
+            Round: 4,
+            Timestamp: '2026-10-17T00:02:15.000Z',
+            Defects: [
+                {
+                    Key: 'r4-int',
+                    Format: '16:9',
+                    Timestamp: 1.0,
+                    Beat: 'hook',
+                    Criterion: 'generated-assets-are-honest-and-disclosed',
+                    Severity: 'Blocker',
+                    Evidence: 'Synthetic speaker in re-render',
+                    Fix: 'remove synth-speaker-clip',
+                    Status: 'Open',
+                    AssetKey: 'synth-speaker-clip',
+                },
+            ],
+        });
+        const failedAtCapStep = await resumedAgent.ValidateSuccess(
+            resumedParams,
+            { step: 'Success', terminate: true, newPayload: resumedSpec },
+            resumedSpec,
+        );
+        expect(failedAtCapStep.step).toBe('Failed');
     });
 
     it('gives a revision of a delivered production its own MaxRepairRounds budget even when the prior run already used all 3 Critic rounds', async () => {
