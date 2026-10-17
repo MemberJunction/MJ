@@ -18,7 +18,7 @@ import {
 } from '@memberjunction/video-studio-core';
 import { LoadDataSnapshotValues } from '../data/data-snapshot.js';
 import type { VideoStudioSettings } from '../settings.js';
-import { ReadStoredFile } from '../storage.js';
+import { ReadStoredFile, ReadStoredFileWithType } from '../storage.js';
 
 /**
  * Maximum number of still capture points emitted by {@link StillPointsFor}.
@@ -70,6 +70,24 @@ export function FrameSizeFor(
     const size = qualityMap[format] ?? qualityMap['16:9'];
     return { Width: size.Width, Height: size.Height };
 }
+
+/**
+ * Resolves the target deliverable aspect formats for `spec`, falling back to `spec.Film.Formats`
+ * and finally `['16:9']` when neither list is populated.
+ */
+export function ResolveDeliverableFormats(spec: Partial<VideoGenerationSpec>): VideoFormat[] {
+    if (
+        Array.isArray(spec.Deliverables?.Formats) &&
+        spec.Deliverables.Formats.length > 0
+    ) {
+        return [...spec.Deliverables.Formats];
+    }
+    if (Array.isArray(spec.Film?.Formats) && spec.Film.Formats.length > 0) {
+        return [...spec.Film.Formats];
+    }
+    return ['16:9'];
+}
+
 
 /**
  * Computes up to {@link MAX_STILL_POINTS} (48) still capture points in priority order:
@@ -174,8 +192,12 @@ export async function ReadAssetBytes(
 ): Promise<{ Bytes: Buffer; MimeType?: string }> {
     const fileId = asset.FileID?.trim();
     if (fileId) {
-        const bytes = await ReadStoredFile(fileId, contextUser, provider);
-        return { Bytes: bytes };
+        const stored = await ReadStoredFileWithType(fileId, contextUser, provider);
+        const mimeType = stored.ContentType?.trim();
+        return {
+            Bytes: stored.Bytes,
+            ...(mimeType ? { MimeType: mimeType } : {}),
+        };
     }
 
     const artifactVersionId = asset.ArtifactVersionID?.trim();
@@ -203,10 +225,10 @@ export async function ReadAssetBytes(
                 `Asset "${asset.Key}" references ArtifactVersion "${artifactVersionId}" which is not backed by a FileID.`,
             );
         }
-        const bytes = await ReadStoredFile(rowFileId, contextUser, provider);
-        const mimeType = row.MimeType?.trim();
+        const stored = await ReadStoredFileWithType(rowFileId, contextUser, provider);
+        const mimeType = row.MimeType?.trim() || stored.ContentType?.trim();
         return {
-            Bytes: bytes,
+            Bytes: stored.Bytes,
             ...(mimeType ? { MimeType: mimeType } : {}),
         };
     }

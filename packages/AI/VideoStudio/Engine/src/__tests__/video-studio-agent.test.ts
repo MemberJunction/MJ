@@ -1,17 +1,23 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MJGlobal } from '@memberjunction/global';
 import { BaseAgent } from '@memberjunction/ai-agents';
 import type {
+    AgentConfiguration,
+    BaseAgentNextStep,
+    ExecuteAgentParams,
     MJAIAgentEntityExtended,
     MJAIAgentRunEntityExtended,
     MJAIAgentRunStepEntityExtended,
 } from '@memberjunction/ai-core-plus';
-import type { UserInfo } from '@memberjunction/core';
+import { RunView, type RunViewParams, type RunViewResult, type UserInfo } from '@memberjunction/core';
+import { BrandKitEngine, VideoStudioEngine } from '@memberjunction/core-entities';
+import type { VideoGenerationSpec } from '@memberjunction/video-studio-core';
 import {
     LoadVideoStudioAgent,
     VIDEO_STUDIO_STAGES,
     VideoStudioAgent,
 } from '../agents/video-studio-agent.js';
+import * as storageModule from '../storage.js';
 
 interface TestHarness {
     agent: VideoStudioAgent;
@@ -217,6 +223,313 @@ describe('VideoStudioAgent cycle guard (VS-INV-2)', () => {
         );
         expect(harness.finalizedSteps).toHaveLength(1);
         expect(harness.finalizedSteps[0].success).toBe(false);
+    });
+});
+
+describe('VideoStudioAgent conversation attachment intake (VS-AGT-6)', () => {
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    function setupBaseMocks(): {
+        getSeededPayload: () => Partial<VideoGenerationSpec> | undefined;
+    } {
+        let capturedSeeded: Partial<VideoGenerationSpec> | undefined;
+
+        vi.spyOn(BrandKitEngine, 'Instance', 'get').mockReturnValue({
+            Config: vi.fn().mockResolvedValue(undefined),
+            BrandKits: [],
+            GetDefaultKit: vi.fn().mockReturnValue(null),
+            GetAssets: vi.fn().mockReturnValue([]),
+        } as unknown as BrandKitEngine);
+
+        vi.spyOn(VideoStudioEngine, 'Instance', 'get').mockReturnValue({
+            Config: vi.fn().mockResolvedValue(undefined),
+            GetArchetypeByName: vi.fn().mockReturnValue(null),
+        } as unknown as VideoStudioEngine);
+
+        vi.spyOn(
+            BaseAgent.prototype as unknown as {
+                executeAgentInternal: (
+                    params: ExecuteAgentParams<Partial<VideoGenerationSpec>>,
+                    config: AgentConfiguration,
+                ) => Promise<{ finalStep: BaseAgentNextStep<Partial<VideoGenerationSpec>>; stepCount: number }>;
+            },
+            'executeAgentInternal',
+        ).mockImplementation(async (params) => {
+            capturedSeeded = params.payload;
+            return {
+                finalStep: {
+                    step: 'Success',
+                    terminate: true,
+                    newPayload: params.payload,
+                } as BaseAgentNextStep<Partial<VideoGenerationSpec>>,
+                stepCount: 1,
+            };
+        });
+
+        return {
+            getSeededPayload: () => capturedSeeded,
+        };
+    }
+
+    it('intakes FileID, ArtifactVersionID, and InlineData attachments from MJ: Conversation Detail Attachments and deduplicates existing entries', async () => {
+        const { getSeededPayload } = setupBaseMocks();
+        const harness = createHarness(['Video Studio']);
+
+        const runViewSpy = vi.spyOn(RunView.prototype, 'RunView').mockResolvedValue({
+            Success: true,
+            Results: [
+                // 1. FileID-backed image
+                {
+                    ID: 'att-1',
+                    MimeType: 'image/png',
+                    FileName: 'moodboard.png',
+                    FileID: 'AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA',
+                    InlineData: null,
+                    ArtifactVersionID: null,
+                },
+                // 2. ArtifactVersionID-backed video
+                {
+                    ID: 'att-2',
+                    MimeType: 'video/mp4',
+                    FileName: 'reference-reel.mp4',
+                    FileID: null,
+                    InlineData: null,
+                    ArtifactVersionID: 'BBBBBBBB-BBBB-4BBB-8BBB-BBBBBBBBBBBB',
+                },
+                // 3. InlineData-only image (uploaded via StoreFile)
+                {
+                    ID: 'att-3',
+                    MimeType: 'image/jpeg',
+                    FileName: 'sketch.jpg',
+                    FileID: null,
+                    InlineData: `data:image/jpeg;base64,${Buffer.from('jpeg-bytes').toString('base64')}`,
+                    ArtifactVersionID: null,
+                },
+                // 4. Already in Assets.Approved (case-insensitive FileID match) -> skipped
+                {
+                    ID: 'att-dup',
+                    MimeType: 'image/png',
+                    FileName: 'dup.png',
+                    FileID: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+                    InlineData: null,
+                    ArtifactVersionID: null,
+                },
+            ],
+        } as unknown as RunViewResult);
+
+        const storeFileSpy = vi
+            .spyOn(storageModule, 'StoreFile')
+            .mockResolvedValue('DDDDDDDD-DDDD-4DDD-8DDD-DDDDDDDDDDDD');
+
+        const invokeInternal = harness.agent as unknown as {
+            executeAgentInternal: (
+                params: ExecuteAgentParams<Partial<VideoGenerationSpec>>,
+                config: AgentConfiguration,
+            ) => Promise<unknown>;
+        };
+
+        await invokeInternal.executeAgentInternal(
+            {
+                agent: harness.agentEntity,
+                contextUser: harness.contextUser,
+                conversationId: "conv-123's-id",
+                conversationMessages: [],
+                payload: {
+                    Assets: {
+                        Approved: [
+                            {
+                                Key: 'existing:logo',
+                                Kind: 'Image',
+                                FileID: 'CCCCCCCC-CCCC-4CCC-8CCC-CCCCCCCCCCCC',
+                                Source: 'Existing',
+                                Provenance: 'Supplied',
+                                Usage: 'Existing',
+                                MustUse: false,
+                            },
+                        ],
+                        Required: [],
+                        NeverInvent: [],
+                    },
+                },
+            },
+            {} as AgentConfiguration,
+        );
+
+        expect(runViewSpy).toHaveBeenCalledTimes(1);
+        const [rvParams, rvUser] = runViewSpy.mock.calls[0] as [RunViewParams, UserInfo | undefined];
+        expect(rvParams.EntityName).toBe('MJ: Conversation Detail Attachments');
+        expect(rvParams.ExtraFilter).toBe(
+            "ConversationDetailID IN (SELECT ID FROM __mj.vwConversationDetails WHERE ConversationID = 'conv-123''s-id') AND (MimeType LIKE 'image/%' OR MimeType LIKE 'video/%')",
+        );
+        expect(rvParams.Fields).toEqual([
+            'ID',
+            'MimeType',
+            'FileName',
+            'FileID',
+            'InlineData',
+            'ArtifactVersionID',
+        ]);
+        expect(rvParams.ResultType).toBe('simple');
+        expect(rvUser).toBe(harness.contextUser);
+
+        expect(storeFileSpy).toHaveBeenCalledTimes(1);
+        expect(storeFileSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                FileName: 'sketch.jpg',
+                MimeType: 'image/jpeg',
+                Content: Buffer.from('jpeg-bytes'),
+            }),
+        );
+
+        const seeded = getSeededPayload();
+        expect(seeded?.Assets?.Approved).toHaveLength(4);
+        expect(seeded?.Assets?.Approved.slice(1)).toEqual([
+            {
+                Key: 'attachment:moodboard.png',
+                Kind: 'Image',
+                FileID: 'AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA',
+                Source: 'Conversation attachment att-1',
+                Provenance: 'Supplied',
+                Usage: 'User-supplied reference',
+                MustUse: false,
+            },
+            {
+                Key: 'attachment:reference-reel.mp4',
+                Kind: 'Video',
+                ArtifactVersionID: 'BBBBBBBB-BBBB-4BBB-8BBB-BBBBBBBBBBBB',
+                Source: 'Conversation attachment att-2',
+                Provenance: 'Supplied',
+                Usage: 'User-supplied reference',
+                MustUse: false,
+            },
+            {
+                Key: 'attachment:sketch.jpg',
+                Kind: 'Image',
+                FileID: 'DDDDDDDD-DDDD-4DDD-8DDD-DDDDDDDDDDDD',
+                Source: 'Conversation attachment att-3',
+                Provenance: 'Supplied',
+                Usage: 'User-supplied reference',
+                MustUse: false,
+            },
+        ]);
+    });
+
+    it('deduplicates inline-only conversation attachments across turns without re-running StoreFile or appending a :2 asset', async () => {
+        const { getSeededPayload } = setupBaseMocks();
+        const harness = createHarness(['Video Studio']);
+
+        const inlineRow = {
+            ID: 'att-inline-1',
+            MimeType: 'image/jpeg',
+            FileName: 'sketch.jpg',
+            FileID: null,
+            InlineData: `data:image/jpeg;base64,${Buffer.from('jpeg-bytes').toString('base64')}`,
+            ArtifactVersionID: null,
+        };
+        vi.spyOn(RunView.prototype, 'RunView').mockResolvedValue({
+            Success: true,
+            Results: [inlineRow],
+        } as unknown as RunViewResult);
+
+        let uploadCounter = 0;
+        const storeFileSpy = vi.spyOn(storageModule, 'StoreFile').mockImplementation(async () => {
+            uploadCounter += 1;
+            return uploadCounter === 1
+                ? 'DDDDDDDD-DDDD-4DDD-8DDD-DDDDDDDDDDDD'
+                : 'EEEEEEEE-EEEE-4EEE-8EEE-EEEEEEEEEEEE';
+        });
+
+        const invokeInternal = harness.agent as unknown as {
+            executeAgentInternal: (
+                params: ExecuteAgentParams<Partial<VideoGenerationSpec>>,
+                config: AgentConfiguration,
+            ) => Promise<unknown>;
+        };
+
+        // Turn 1: initial run intakes the inline attachment via StoreFile
+        await invokeInternal.executeAgentInternal(
+            {
+                agent: harness.agentEntity,
+                contextUser: harness.contextUser,
+                conversationId: 'conv-multi-turn',
+                conversationMessages: [],
+                payload: {},
+            },
+            {} as AgentConfiguration,
+        );
+        const turn1Seeded = getSeededPayload();
+        expect(storeFileSpy).toHaveBeenCalledTimes(1);
+        expect(turn1Seeded?.Assets?.Approved).toHaveLength(1);
+        expect(turn1Seeded?.Assets?.Approved[0]).toMatchObject({
+            Key: 'attachment:sketch.jpg',
+            FileID: 'DDDDDDDD-DDDD-4DDD-8DDD-DDDDDDDDDDDD',
+            Source: 'Conversation attachment att-inline-1',
+        });
+
+        // Turn 2: pass turn 1's seeded payload back in with the same inline attachment row still in the DB
+        await invokeInternal.executeAgentInternal(
+            {
+                agent: harness.agentEntity,
+                contextUser: harness.contextUser,
+                conversationId: 'conv-multi-turn',
+                conversationMessages: [],
+                payload: structuredClone(turn1Seeded),
+            },
+            {} as AgentConfiguration,
+        );
+        const turn2Seeded = getSeededPayload();
+        expect(storeFileSpy).toHaveBeenCalledTimes(1);
+        expect(
+            turn2Seeded?.Assets?.Approved.filter((a) => a.Key.startsWith('attachment:')),
+        ).toHaveLength(1);
+        expect(turn2Seeded?.Assets?.Approved[0].Key).toBe('attachment:sketch.jpg');
+    });
+
+    it('skips attachment RunView when conversationId is omitted and never fails the run when RunView throws or returns Success: false', async () => {
+        const { getSeededPayload } = setupBaseMocks();
+        const harness = createHarness(['Video Studio']);
+
+        const runViewSpy = vi.spyOn(RunView.prototype, 'RunView').mockRejectedValueOnce(
+            new Error('Database connection lost'),
+        );
+
+        const invokeInternal = harness.agent as unknown as {
+            executeAgentInternal: (
+                params: ExecuteAgentParams<Partial<VideoGenerationSpec>>,
+                config: AgentConfiguration,
+            ) => Promise<unknown>;
+        };
+
+        // 1. Omitted conversationId -> RunView is not called
+        await invokeInternal.executeAgentInternal(
+            {
+                agent: harness.agentEntity,
+                contextUser: harness.contextUser,
+                conversationMessages: [],
+                payload: {},
+            },
+            {} as AgentConfiguration,
+        );
+        expect(runViewSpy).not.toHaveBeenCalled();
+
+        // 2. Present conversationId where RunView rejects -> never throws
+        await expect(
+            invokeInternal.executeAgentInternal(
+                {
+                    agent: harness.agentEntity,
+                    contextUser: harness.contextUser,
+                    conversationId: 'conv-err',
+                    conversationMessages: [],
+                    payload: {},
+                },
+                {} as AgentConfiguration,
+            ),
+        ).resolves.toBeDefined();
+        expect(runViewSpy).toHaveBeenCalledTimes(1);
+
+        expect(getSeededPayload()?.Assets?.Approved).toEqual([]);
     });
 });
 

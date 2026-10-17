@@ -2,9 +2,9 @@ import { BaseAgent } from '@memberjunction/ai-agents';
 import type { ChatMessage } from '@memberjunction/ai';
 import {
     AIPromptParams,
+    PickPromptExecutionScope,
     type ExecuteAgentParams,
     type MJAIAgentRunStepEntityExtended,
-    type MJAIPromptEntityExtended,
 } from '@memberjunction/ai-core-plus';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { AIEngine } from '@memberjunction/aiengine';
@@ -25,7 +25,7 @@ export interface StudioPromptRunOutcome<T> {
  * Centralizes prompt execution via {@link RunStudioPrompt} so every prompt call:
  * - Resolves the prompt from `AIEngine.Instance.Prompts`
  * - Records a `'Prompt'` step on the agent's own run (`targetId` = prompt ID, `targetLogId` = prompt run ID)
- * - Forwards the full execution scope (`configurationId`, `apiKeys`, `CredentialScope`, `provider`,
+ * - Forwards the full execution scope (`configurationId`, `apiKeys`, `credentialId`, `CredentialScope`, `provider`,
  *   `cancellationToken`, `contextUser`) onto {@link AIPromptParams}
  * - Catches all errors into `ErrorMessage` without throwing
  */
@@ -50,10 +50,7 @@ export abstract class VideoStudioAgentBase extends BaseAgent {
     ): Promise<StudioPromptRunOutcome<T>> {
         let stepEntity: MJAIAgentRunStepEntityExtended | null = null;
         try {
-            const prompts: MJAIPromptEntityExtended[] = Array.isArray(AIEngine.Instance?.Prompts)
-                ? AIEngine.Instance.Prompts
-                : [];
-            const prompt = prompts.find((p) => p.Name === promptName);
+            const prompt = AIEngine.Instance.Prompts.find((p) => p.Name === promptName);
             if (!prompt) {
                 return {
                     Result: null,
@@ -75,18 +72,14 @@ export abstract class VideoStudioAgentBase extends BaseAgent {
             });
 
             const promptParams = new AIPromptParams();
+            Object.assign(promptParams, PickPromptExecutionScope(params));
+            promptParams.cancellationToken = params.cancellationToken;
             promptParams.prompt = prompt;
             promptParams.data = data;
             if (messages !== undefined) {
                 promptParams.conversationMessages = messages;
             }
             promptParams.attemptJSONRepair = true;
-            promptParams.contextUser = params.contextUser;
-            promptParams.configurationId = params.configurationId;
-            promptParams.apiKeys = params.apiKeys;
-            promptParams.CredentialScope = params.CredentialScope;
-            promptParams.provider = params.provider;
-            promptParams.cancellationToken = params.cancellationToken;
 
             const runner = this.CreatePromptRunner();
             const runResult = await runner.ExecutePrompt<T>(promptParams);
@@ -114,8 +107,8 @@ export abstract class VideoStudioAgentBase extends BaseAgent {
                 };
             }
 
-            const extracted = this.extractPromptResult<T>(runResult.result, runResult.rawResult);
-            if (extracted === null || extracted === undefined) {
+            const result = runResult.result;
+            if (typeof result !== 'object' || result === null || Array.isArray(result)) {
                 const errorMessage = `Prompt "${promptName}" succeeded but returned an empty or unparseable result.`;
                 if (stepEntity) {
                     await this.finalizeStepEntity(stepEntity, false, errorMessage, {
@@ -138,12 +131,12 @@ export abstract class VideoStudioAgentBase extends BaseAgent {
                     promptRunId,
                     targetLogId: promptRunId,
                     success: true,
-                    summary: this.summarizePromptOutput(extracted),
+                    summary: this.summarizePromptOutput(result as Record<string, unknown>),
                 });
             }
 
             return {
-                Result: extracted,
+                Result: result,
                 ...(promptRunId ? { PromptRunID: promptRunId } : {}),
             };
         } catch (err) {
@@ -165,48 +158,20 @@ export abstract class VideoStudioAgentBase extends BaseAgent {
         }
     }
 
-    private extractPromptResult<T>(result: T | undefined, rawResult?: string): T | null {
-        if (result !== undefined && result !== null) {
-            if (typeof result === 'string') {
-                const parsed = this.tryParseJson<T>(result);
-                return parsed !== null ? parsed : (result as unknown as T);
-            }
-            return result;
+    private summarizePromptOutput(record: Record<string, unknown>): Record<string, unknown> {
+        const summary: Record<string, unknown> = {
+            keys: Object.keys(record),
+        };
+        if (Array.isArray(record.Files)) {
+            summary.fileCount = record.Files.length;
         }
-        if (typeof rawResult === 'string' && rawResult.trim().length > 0) {
-            return this.tryParseJson<T>(rawResult);
+        if (typeof record.Notes === 'string') {
+            summary.notes = record.Notes;
         }
-        return null;
-    }
-
-    private tryParseJson<T>(raw: string): T | null {
-        const trimmed = raw.trim();
-        const fenceMatch = /^```(?:json)?\s*([\s\S]*?)\s*```$/i.exec(trimmed);
-        const candidate = fenceMatch ? fenceMatch[1].trim() : trimmed;
-        try {
-            return JSON.parse(candidate) as T;
-        } catch {
-            return null;
+        if (typeof record.Summary === 'string') {
+            summary.summaryText = record.Summary;
         }
-    }
-
-    private summarizePromptOutput(value: unknown): Record<string, unknown> {
-        if (value && typeof value === 'object' && !Array.isArray(value)) {
-            const record = value as Record<string, unknown>;
-            const summary: Record<string, unknown> = {
-                keys: Object.keys(record),
-            };
-            if (Array.isArray(record.Files)) {
-                summary.fileCount = record.Files.length;
-            }
-            if (typeof record.Notes === 'string') {
-                summary.notes = record.Notes;
-            }
-            if (typeof record.Summary === 'string') {
-                summary.summaryText = record.Summary;
-            }
-            return summary;
-        }
-        return { type: typeof value };
+        return summary;
     }
 }
+

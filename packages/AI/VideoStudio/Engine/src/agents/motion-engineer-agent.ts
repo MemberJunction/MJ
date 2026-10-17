@@ -13,7 +13,11 @@ import type {
     VideoGenerationSpec,
 } from '@memberjunction/video-studio-core';
 import { LoadDataSnapshotValues } from '../data/data-snapshot.js';
-import { BuildCheckRequest, BuildRenderBundle } from '../render/bundle.js';
+import {
+    BuildCheckRequest,
+    BuildRenderBundle,
+    ResolveDeliverableFormats,
+} from '../render/bundle.js';
 import { VideoRenderEngine } from '../render/video-render-engine.js';
 import { VideoStudioAgentBase } from './video-studio-agent-base.js';
 
@@ -31,15 +35,8 @@ export const MOTION_ENGINEER_LINT_FIX_PROMPT_NAME = 'Video Studio - Motion Engin
  * Structured output returned by the `Video Studio - Motion Engineer Lint Fix` prompt.
  */
 export interface MotionEngineerLintFixOutput {
-    Files?: Array<{ Path: string; Content: string }> | Record<string, string>;
+    Files?: Array<{ Path: string; Content: string }>;
     Notes?: string;
-}
-
-function cloneSpec<T>(value: T): T {
-    if (value === undefined || value === null) {
-        return {} as T;
-    }
-    return JSON.parse(JSON.stringify(value)) as T;
 }
 
 /**
@@ -63,17 +60,21 @@ export function FormatLintIssue(issue: CheckIssue): string {
     return base;
 }
 
-function resolveDeliverableFormats(spec: Partial<VideoGenerationSpec>): VideoFormat[] {
-    if (
-        Array.isArray(spec.Deliverables?.Formats) &&
-        spec.Deliverables.Formats.length > 0
-    ) {
-        return [...spec.Deliverables.Formats];
+function formatStagedAssets(spec: Partial<VideoGenerationSpec>): string {
+    const lines: string[] = [];
+    for (const asset of spec.Assets?.Approved ?? []) {
+        const stagedPath = asset?.StagedPath?.trim();
+        if (stagedPath) {
+            lines.push(`${asset.Key} (${asset.Kind}): ${stagedPath}`);
+        }
     }
-    if (Array.isArray(spec.Film?.Formats) && spec.Film.Formats.length > 0) {
-        return [...spec.Film.Formats];
+    for (const line of spec.Audio?.Narration?.Script ?? []) {
+        const stagedPath = line?.StagedPath?.trim();
+        if (stagedPath) {
+            lines.push(`${line.Key} (Narration): ${stagedPath}`);
+        }
     }
-    return ['16:9'];
+    return lines.join('\n');
 }
 
 function mergeLintFixFiles(
@@ -81,32 +82,20 @@ function mergeLintFixFiles(
     fixOutput: MotionEngineerLintFixOutput | null | undefined,
 ): Record<string, string> {
     const merged: Record<string, string> = { ...existingFiles };
-    if (!fixOutput || !fixOutput.Files) {
+    if (!fixOutput || !Array.isArray(fixOutput.Files)) {
         return merged;
     }
 
-    if (Array.isArray(fixOutput.Files)) {
-        for (const entry of fixOutput.Files) {
-            if (
-                entry &&
-                typeof entry.Path === 'string' &&
-                entry.Path.trim().length > 0 &&
-                typeof entry.Content === 'string'
-            ) {
-                merged[entry.Path.trim()] = entry.Content;
-            }
-        }
-        return merged;
-    }
-
-    if (typeof fixOutput.Files === 'object') {
-        for (const [filePath, content] of Object.entries(fixOutput.Files)) {
-            if (filePath.trim().length > 0 && typeof content === 'string') {
-                merged[filePath.trim()] = content;
-            }
+    for (const entry of fixOutput.Files) {
+        if (
+            entry &&
+            typeof entry.Path === 'string' &&
+            entry.Path.trim().length > 0 &&
+            typeof entry.Content === 'string'
+        ) {
+            merged[entry.Path.trim()] = entry.Content;
         }
     }
-
     return merged;
 }
 
@@ -142,8 +131,8 @@ export class VideoStudioMotionEngineerAgent extends VideoStudioAgentBase {
             currentPayload ??
             params.payload ??
             {}) as Partial<VideoGenerationSpec>;
-        const workingSpec = cloneSpec(candidateSpec);
-        const formats = resolveDeliverableFormats(workingSpec);
+        const workingSpec = structuredClone(candidateSpec);
+        const formats = ResolveDeliverableFormats(workingSpec);
 
         for (const fmt of formats) {
             const sourceEntry = workingSpec.Output?.Source?.[fmt];
@@ -167,123 +156,140 @@ export class VideoStudioMotionEngineerAgent extends VideoStudioAgentBase {
         const contextUser = params.contextUser as UserInfo;
         const driver = VideoRenderEngine.Instance.Driver;
 
-        let loadedValues: Record<string, unknown> | undefined = undefined;
-        if (workingSpec.DataSnapshot) {
-            try {
-                loadedValues = await LoadDataSnapshotValues(workingSpec.DataSnapshot, {
-                    ContextUser: contextUser,
-                    Provider: this.ProviderToUse,
-                });
-            } catch {
-                loadedValues = undefined;
-            }
-        }
-
         let lastIssuesByFormat: Partial<Record<VideoFormat, CheckIssue[]>> = {};
         let lastFailingFormats: VideoFormat[] = [];
+        let openCheckStep: MJAIAgentRunStepEntityExtended | null = null;
 
-        for (let attempt = 1; attempt <= MAX_LINT_ATTEMPTS; attempt++) {
-            const checkStep = await this.createStepEntity({
-                stepType: 'Validation',
-                stepName: `Lint Check ${attempt}`,
-                contextUser,
-                inputData: {
-                    Attempt: attempt,
-                    Formats: formats,
-                },
-            });
+        try {
+            const loadedValues = workingSpec.DataSnapshot
+                ? await LoadDataSnapshotValues(workingSpec.DataSnapshot, {
+                      ContextUser: contextUser,
+                      Provider: this.ProviderToUse,
+                  })
+                : undefined;
 
-            const issuesByFormat: Partial<Record<VideoFormat, CheckIssue[]>> = {};
-            const failingFormats: VideoFormat[] = [];
+            const stagedAssets = formatStagedAssets(workingSpec);
 
-            for (const fmt of formats) {
-                const bundle = await BuildRenderBundle(
-                    workingSpec as VideoGenerationSpec,
-                    fmt,
-                    {
-                        ContextUser: contextUser,
-                        Provider: this.ProviderToUse,
-                        ...(loadedValues !== undefined ? { Values: loadedValues } : {}),
+            for (let attempt = 1; attempt <= MAX_LINT_ATTEMPTS; attempt++) {
+                openCheckStep = await this.createStepEntity({
+                    stepType: 'Validation',
+                    stepName: `Lint Check ${attempt}`,
+                    contextUser,
+                    inputData: {
+                        Attempt: attempt,
+                        Formats: formats,
                     },
-                );
-                const checkRequest = BuildCheckRequest(
-                    workingSpec as VideoGenerationSpec,
-                    fmt,
-                    bundle,
-                    loadedValues ?? {},
-                );
-                const checkResult = await driver.Check(
-                    checkRequest,
-                    params.cancellationToken,
-                );
-                const fmtIssues = Array.isArray(checkResult?.Issues)
-                    ? checkResult.Issues
-                    : [];
-                issuesByFormat[fmt] = fmtIssues;
+                });
 
-                const hasError = fmtIssues.some((issue) => issue.Severity === 'Error');
-                if (hasError || checkResult?.BlockRender) {
-                    failingFormats.push(fmt);
-                }
-            }
+                const issuesByFormat: Partial<Record<VideoFormat, CheckIssue[]>> = {};
+                const failingFormats: VideoFormat[] = [];
 
-            const allPassed = failingFormats.length === 0;
-            const checkErrorSummary = allPassed
-                ? undefined
-                : `Lint Check ${attempt} failed for format(s): ${failingFormats.join(', ')}`;
-
-            await this.finalizeStepEntity(
-                checkStep,
-                allPassed,
-                checkErrorSummary,
-                {
-                    Attempt: attempt,
-                    Passed: allPassed,
-                    Issues: issuesByFormat,
-                    IssuesByFormat: issuesByFormat,
-                    ...issuesByFormat,
-                },
-            );
-
-            if (allPassed) {
-                return {
-                    ...baseResult,
-                    step: 'Success',
-                    newPayload: workingSpec as unknown as P,
-                };
-            }
-
-            lastIssuesByFormat = issuesByFormat;
-            lastFailingFormats = failingFormats;
-
-            if (attempt < MAX_LINT_ATTEMPTS) {
-                for (const fmt of failingFormats) {
-                    const fmtIssues = issuesByFormat[fmt] ?? [];
-                    const errorIssues = fmtIssues.filter((i) => i.Severity === 'Error');
-                    const issuesForPrompt =
-                        errorIssues.length > 0 ? errorIssues : fmtIssues;
-                    const issueLines = issuesForPrompt.map(FormatLintIssue).join('\n');
-                    const currentSource = workingSpec.Output!.Source![fmt]!;
-
-                    const fixOutcome = await this.RunStudioPrompt<MotionEngineerLintFixOutput>(
-                        params,
-                        MOTION_ENGINEER_LINT_FIX_PROMPT_NAME,
-                        `Lint Fix ${attempt} (${fmt})`,
+                for (const fmt of formats) {
+                    const bundle = await BuildRenderBundle(
+                        workingSpec as VideoGenerationSpec,
+                        fmt,
                         {
-                            format: fmt,
-                            issues: issueLines,
-                            files: JSON.stringify(currentSource.Files, null, 2),
+                            ContextUser: contextUser,
+                            Provider: this.ProviderToUse,
+                            ...(loadedValues !== undefined ? { Values: loadedValues } : {}),
                         },
                     );
+                    const checkRequest = BuildCheckRequest(
+                        workingSpec as VideoGenerationSpec,
+                        fmt,
+                        bundle,
+                        loadedValues ?? {},
+                    );
+                    const checkResult = await driver.Check(
+                        checkRequest,
+                        params.cancellationToken,
+                    );
+                    const fmtIssues = Array.isArray(checkResult?.Issues)
+                        ? checkResult.Issues
+                        : [];
+                    issuesByFormat[fmt] = fmtIssues;
 
-                    if (fixOutcome.Result) {
-                        currentSource.Files = mergeLintFixFiles(
-                            currentSource.Files,
-                            fixOutcome.Result,
+                    const hasError = fmtIssues.some((issue) => issue.Severity === 'Error');
+                    if (hasError || checkResult?.BlockRender) {
+                        failingFormats.push(fmt);
+                    }
+                }
+
+                const allPassed = failingFormats.length === 0;
+                const checkErrorSummary = allPassed
+                    ? undefined
+                    : `Lint Check ${attempt} failed for format(s): ${failingFormats.join(', ')}`;
+
+                const stepToFinalize = openCheckStep;
+                openCheckStep = null;
+                await this.finalizeStepEntity(
+                    stepToFinalize,
+                    allPassed,
+                    checkErrorSummary,
+                    {
+                        Attempt: attempt,
+                        Passed: allPassed,
+                        IssuesByFormat: issuesByFormat,
+                    },
+                );
+
+                if (allPassed) {
+                    return {
+                        ...baseResult,
+                        step: 'Success',
+                        newPayload: workingSpec as unknown as P,
+                    };
+                }
+
+                lastIssuesByFormat = issuesByFormat;
+                lastFailingFormats = failingFormats;
+
+                if (attempt < MAX_LINT_ATTEMPTS) {
+                    for (const fmt of failingFormats) {
+                        const fmtIssues = issuesByFormat[fmt] ?? [];
+                        const errorIssues = fmtIssues.filter((i) => i.Severity === 'Error');
+                        const issuesForPrompt =
+                            errorIssues.length > 0 ? errorIssues : fmtIssues;
+                        const issueLines = issuesForPrompt.map(FormatLintIssue).join('\n');
+                        const currentSource = workingSpec.Output!.Source![fmt]!;
+
+                        const fixOutcome = await this.RunStudioPrompt<MotionEngineerLintFixOutput>(
+                            params,
+                            MOTION_ENGINEER_LINT_FIX_PROMPT_NAME,
+                            `Lint Fix ${attempt} (${fmt})`,
+                            {
+                                format: fmt,
+                                issues: issueLines,
+                                assets: stagedAssets,
+                                files: JSON.stringify(currentSource.Files, null, 2),
+                            },
                         );
+
+                        if (fixOutcome.Result) {
+                            currentSource.Files = mergeLintFixFiles(
+                                currentSource.Files,
+                                fixOutcome.Result,
+                            );
+                        }
                     }
                 }
             }
+        } catch (err) {
+            const errText = err instanceof Error ? err.message : String(err);
+            const errorMessage = `Lint check could not run: ${errText}`;
+            if (openCheckStep) {
+                try {
+                    await this.finalizeStepEntity(openCheckStep, false, errorMessage);
+                } catch {
+                    // Ignore secondary step finalization errors
+                }
+            }
+            return {
+                ...baseResult,
+                step: 'Failed',
+                message: errorMessage,
+                errorMessage,
+            };
         }
 
         const failureSections: string[] = [];
@@ -316,3 +322,4 @@ export function LoadVideoStudioMotionEngineerAgent(): void {
         const _keep: unknown = VideoStudioMotionEngineerAgent;
     }
 }
+

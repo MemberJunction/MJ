@@ -58,8 +58,22 @@ export async function StoreFile(input: StoreFileInput): Promise<string | undefin
 }
 
 /**
- * Loads an `MJ: Files` row as `contextUser` and reads its bytes through
- * `FileStorageEngine.ResolveFileObject(..., 'Read')` and `Driver.GetObject`.
+ * Result returned by {@link ReadStoredFileWithType}.
+ */
+export interface StoredFileWithType {
+    /** Raw file content bytes. */
+    Bytes: Buffer;
+    /** Non-empty MIME type from `MJ: Files.ContentType`, when present on the record. */
+    ContentType?: string;
+}
+
+type StoredFileLocationRow = StorageFileLocation & {
+    ContentType?: string | null;
+};
+
+/**
+ * Loads an `MJ: Files` row (including `ContentType`) as `contextUser` and reads its bytes
+ * through `FileStorageEngine.ResolveFileObject(..., 'Read')` and `Driver.GetObject`.
  *
  * Throws when `fileId` is not a valid UUID, when the `MJ: Files` row is missing or denied,
  * when no storage account resolves for the provider, or when storage access is refused.
@@ -67,22 +81,22 @@ export async function StoreFile(input: StoreFileInput): Promise<string | undefin
  * @param fileId - The `MJ: Files` record ID to read.
  * @param contextUser - The caller whose entity and storage permissions govern the read.
  * @param provider - Optional metadata provider override.
- * @returns The file content as a `Buffer`.
+ * @returns The file content `Buffer` and optional `ContentType` from `MJ: Files.ContentType`.
  */
-export async function ReadStoredFile(
+export async function ReadStoredFileWithType(
     fileId: string,
     contextUser: UserInfo,
     provider?: IMetadataProvider,
-): Promise<Buffer> {
+): Promise<StoredFileWithType> {
     if (!IsValidUUID(fileId)) {
         throw new Error(`Invalid file ID: ${fileId}`);
     }
     const rv = new RunView(provider as unknown as IRunViewProvider);
-    const fileResult = await rv.RunView<StorageFileLocation>(
+    const fileResult = await rv.RunView<StoredFileLocationRow>(
         {
             EntityName: 'MJ: Files',
             ExtraFilter: `ID = '${EscapeSQLString(fileId)}'`,
-            Fields: ['ProviderID', 'ProviderKey', 'Name'],
+            Fields: ['ProviderID', 'ProviderKey', 'Name', 'ContentType'],
             ResultType: 'simple',
         },
         contextUser,
@@ -108,6 +122,36 @@ export async function ReadStoredFile(
     }
 
     const content = await resolved.Driver.GetObject({ fullPath: resolved.ObjectKey });
-    return Buffer.isBuffer(content) ? content : Buffer.from(content);
+    const bytes = Buffer.isBuffer(content) ? content : Buffer.from(content);
+    const contentType =
+        typeof file.ContentType === 'string' && file.ContentType.trim().length > 0
+            ? file.ContentType.trim()
+            : undefined;
+    return {
+        Bytes: bytes,
+        ...(contentType ? { ContentType: contentType } : {}),
+    };
 }
+
+/**
+ * Loads an `MJ: Files` row as `contextUser` and reads its bytes through
+ * `FileStorageEngine.ResolveFileObject(..., 'Read')` and `Driver.GetObject`.
+ *
+ * Throws when `fileId` is not a valid UUID, when the `MJ: Files` row is missing or denied,
+ * when no storage account resolves for the provider, or when storage access is refused.
+ *
+ * @param fileId - The `MJ: Files` record ID to read.
+ * @param contextUser - The caller whose entity and storage permissions govern the read.
+ * @param provider - Optional metadata provider override.
+ * @returns The file content as a `Buffer`.
+ */
+export async function ReadStoredFile(
+    fileId: string,
+    contextUser: UserInfo,
+    provider?: IMetadataProvider,
+): Promise<Buffer> {
+    const stored = await ReadStoredFileWithType(fileId, contextUser, provider);
+    return stored.Bytes;
+}
+
 

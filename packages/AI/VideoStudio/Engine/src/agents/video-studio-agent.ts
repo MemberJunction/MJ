@@ -9,12 +9,17 @@ import {
     type MJAIAgentRunStepEntityExtended,
 } from '@memberjunction/ai-core-plus';
 import {
+    LogError,
+    RunView,
+    type IRunViewProvider,
+} from '@memberjunction/core';
+import {
     BrandKitEngine,
     VideoStudioEngine,
     type MJBrandKitEntity,
     type MJVideoArchetypeEntity,
 } from '@memberjunction/core-entities';
-import { RegisterClass, UUIDSet, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, RegisterClass, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import {
     ValidateVideoGenerationSpec,
     VIDEO_INTERACTION_MODES,
@@ -39,6 +44,7 @@ import {
     ResolveVideoStudioSettings,
     type VideoStudioSettings,
 } from '../settings.js';
+import { StoreFile } from '../storage.js';
 import { ValidateVideoGenerationSpecAsync } from '../validate-spec-async.js';
 
 /**
@@ -195,6 +201,7 @@ export class VideoStudioAgent extends BaseAgent {
         await this.warmEngines(params);
 
         const seeded = this.buildSeededPayload(params, this._currentSettings);
+        await this.intakeConversationAttachments(params, seeded);
         const nextParams: ExecuteAgentParams<P> = {
             ...params,
             payload: seeded as unknown as P,
@@ -800,6 +807,161 @@ export class VideoStudioAgent extends BaseAgent {
                     }
                 }
             }
+        }
+    }
+
+    private async intakeConversationAttachments(
+        params: ExecuteAgentParams,
+        seeded: Partial<VideoGenerationSpec>,
+    ): Promise<void> {
+        const conversationId =
+            typeof params.conversationId === 'string' ? params.conversationId.trim() : '';
+        if (!conversationId) {
+            return;
+        }
+
+        try {
+            const rv = new RunView(this.ProviderToUse as unknown as IRunViewProvider);
+            const escapedId = EscapeSQLString(conversationId);
+            const res = await rv.RunView<{
+                ID: string;
+                MimeType?: string | null;
+                FileName?: string | null;
+                FileID?: string | null;
+                InlineData?: string | null;
+                ArtifactVersionID?: string | null;
+            }>(
+                {
+                    EntityName: 'MJ: Conversation Detail Attachments',
+                    ExtraFilter: `ConversationDetailID IN (SELECT ID FROM __mj.vwConversationDetails WHERE ConversationID = '${escapedId}') AND (MimeType LIKE 'image/%' OR MimeType LIKE 'video/%')`,
+                    Fields: ['ID', 'MimeType', 'FileName', 'FileID', 'InlineData', 'ArtifactVersionID'],
+                    ResultType: 'simple',
+                },
+                params.contextUser,
+            );
+
+            if (!res?.Success || !Array.isArray(res.Results)) {
+                if (res && !res.Success) {
+                    LogError(
+                        `VideoStudioAgent: failed to query conversation attachments for conversation "${conversationId}": ${res.ErrorMessage ?? 'Unknown error'}`,
+                    );
+                }
+                return;
+            }
+
+            if (!seeded.Assets) {
+                seeded.Assets = { Approved: [], Required: [], NeverInvent: [] };
+            }
+            const approvedList = seeded.Assets.Approved;
+            const existingFileIds = new UUIDSet(
+                approvedList.map((a) => a.FileID).filter((id): id is string => Boolean(id)),
+            );
+            const existingArtifactVersionIds = new UUIDSet(
+                approvedList
+                    .map((a) => a.ArtifactVersionID)
+                    .filter((id): id is string => Boolean(id)),
+            );
+            const existingSources = new Set(
+                approvedList
+                    .map((a) => a.Source?.trim().toLowerCase())
+                    .filter((s): s is string => Boolean(s)),
+            );
+
+            for (const row of res.Results) {
+                const rowId = row?.ID?.trim();
+                if (!row || !rowId) {
+                    continue;
+                }
+                try {
+                    const attachmentSource = `Conversation attachment ${rowId}`;
+                    let fileId = row.FileID?.trim() || undefined;
+                    const artifactVersionId = row.ArtifactVersionID?.trim() || undefined;
+
+                    if (fileId && existingFileIds.Has(fileId)) {
+                        continue;
+                    }
+                    if (artifactVersionId && existingArtifactVersionIds.Has(artifactVersionId)) {
+                        continue;
+                    }
+                    if (existingSources.has(attachmentSource.toLowerCase())) {
+                        continue;
+                    }
+
+                    if (!fileId && !artifactVersionId) {
+                        const rawInline = row.InlineData?.trim() ?? '';
+                        if (!rawInline) {
+                            continue;
+                        }
+                        const base64Payload = rawInline.includes(',')
+                            ? rawInline.slice(rawInline.indexOf(',') + 1)
+                            : rawInline;
+                        const content = Buffer.from(base64Payload, 'base64');
+                        const fileName = row.FileName?.trim() || rowId;
+                        const mimeType = row.MimeType?.trim() || 'image/png';
+                        const storedFileId = await StoreFile({
+                            Content: content,
+                            FileName: fileName,
+                            MimeType: mimeType,
+                            Description: 'Conversation attachment',
+                            ContextUser: params.contextUser,
+                            Provider: this.ProviderToUse,
+                        });
+                        if (!storedFileId) {
+                            LogError(
+                                `VideoStudioAgent: StoreFile returned no FileID for inline conversation attachment "${rowId}".`,
+                            );
+                            continue;
+                        }
+                        fileId = storedFileId;
+                        if (existingFileIds.Has(fileId)) {
+                            continue;
+                        }
+                    }
+
+                    const kind: VideoAssetKind = (row.MimeType ?? '')
+                        .toLowerCase()
+                        .startsWith('video/')
+                        ? 'Video'
+                        : 'Image';
+
+                    const baseKey = `attachment:${row.FileName?.trim() || rowId}`;
+                    let uniqueKey = baseKey;
+                    let suffix = 2;
+                    while (approvedList.some((a) => a.Key === uniqueKey)) {
+                        uniqueKey = `${baseKey}:${suffix}`;
+                        suffix++;
+                    }
+
+                    approvedList.push({
+                        Key: uniqueKey,
+                        Kind: kind,
+                        ...(fileId ? { FileID: fileId } : {}),
+                        ...(artifactVersionId ? { ArtifactVersionID: artifactVersionId } : {}),
+                        Source: attachmentSource,
+                        Provenance: 'Supplied',
+                        Usage: 'User-supplied reference',
+                        MustUse: false,
+                    });
+
+                    if (fileId) {
+                        existingFileIds.Add(fileId);
+                    }
+                    if (artifactVersionId) {
+                        existingArtifactVersionIds.Add(artifactVersionId);
+                    }
+                    existingSources.add(attachmentSource.toLowerCase());
+                } catch (rowErr) {
+                    const msg = rowErr instanceof Error ? rowErr.message : String(rowErr);
+                    LogError(
+                        `VideoStudioAgent: failed to intake conversation attachment "${rowId}": ${msg}`,
+                    );
+                }
+            }
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            LogError(
+                `VideoStudioAgent: unexpected error during conversation attachment intake: ${msg}`,
+            );
         }
     }
 

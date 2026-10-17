@@ -388,7 +388,7 @@ describe('Video Studio metadata pin (VS-AGT-1)', () => {
             {
                 name: 'Video Studio - Motion Engineer Lint Fix',
                 kebab: 'motion-engineer-lint-fix',
-                vars: ['format', 'issues', 'files'],
+                vars: ['format', 'issues', 'assets', 'files'],
             },
             {
                 name: 'Video Studio - Critic',
@@ -1185,7 +1185,11 @@ describe('Video Studio discoverability and handoff metadata (VS-INV-1)', () => {
         for (const child of children) {
             expect(
                 AIAgentPermissionHelper.IsDirectlyDiscoverable({
-                    InvocationMode: child.fields.InvocationMode as string | null,
+                    InvocationMode: child.fields.InvocationMode as
+                        | 'Any'
+                        | 'Top-Level'
+                        | 'Sub-Agent'
+                        | null,
                     ParentID: (child.fields.ParentID as string | null) ?? null,
                 }),
                 `Expected child "${String(child.fields.Name)}" to not be directly discoverable`,

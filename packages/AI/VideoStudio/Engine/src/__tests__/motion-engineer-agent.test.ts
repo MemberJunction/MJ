@@ -102,8 +102,10 @@ import {
     type MotionEngineerLintFixOutput,
     VideoStudioMotionEngineerAgent,
 } from '../agents/motion-engineer-agent.js';
+import * as dataSnapshotModule from '../data/data-snapshot.js';
 import { FakeRenderDriver } from '../render/fake-render-driver.js';
 import { VideoRenderEngine } from '../render/video-render-engine.js';
+import * as storageModule from '../storage.js';
 
 // ─── Test helpers ───────────────────────────────────────────────────────────
 
@@ -340,33 +342,69 @@ describe('VideoStudioMotionEngineerAgent (VS-AGT-4)', () => {
         ]);
         expect(agent.RecordedCreatedSteps[1].targetId).toBe(LINT_FIX_PROMPT_ID);
         expect(agent.RecordedCreatedSteps[1].entity.TargetLogID).toBe('prompt-run-fix-1');
+        expect(agent.RecordedFinalizedSteps[0].outputData).toEqual({
+            Attempt: 1,
+            Passed: false,
+            IssuesByFormat: { '16:9': [issue] },
+        });
     });
 
-    it('2. always failing: runs 3 checks and 2 fixes, then returns Failed with remaining issues in message', async () => {
+    it('2. always failing: runs 3 checks and 2 fixes (forwarding round 1 fixed files and round 2 issues to prompt 2), then returns Failed with remaining issues in message', async () => {
         const agent = new VideoStudioMotionEngineerAgent() as unknown as TestableMotionEngineerAgent;
-        const issue = makeIssue({
+        const issueRound1 = makeIssue({
+            Code: 'ROUND_1_ERR',
+            Message: 'First check issue',
+        });
+        const issueRound2 = makeIssue({
+            Code: 'ROUND_2_ERR',
+            Message: 'Second check issue after first fix',
+        });
+        const issueRound3 = makeIssue({
             Code: 'PERSISTENT_ERR',
-            Message: 'Still broken after fix',
+            Message: 'Still broken after second fix',
         });
 
-        const checkSpy = vi.spyOn(driver, 'Check').mockResolvedValue({
-            Passed: false,
-            BlockRender: true,
-            Issues: [issue],
-        });
+        let checkCall = 0;
+        const checkSpy = vi
+            .spyOn(driver, 'Check')
+            .mockImplementation(async (): Promise<CheckResult> => {
+                checkCall += 1;
+                const issueForCall =
+                    checkCall === 1
+                        ? issueRound1
+                        : checkCall === 2
+                          ? issueRound2
+                          : issueRound3;
+                return {
+                    Passed: false,
+                    BlockRender: true,
+                    Issues: [issueForCall],
+                };
+            });
 
-        const executePromptMock = vi.fn().mockResolvedValue({
-            success: true,
-            result: {
-                Files: [
-                    {
-                        Path: 'index.html',
-                        Content: '<!doctype html><html><body>STILL_BROKEN</body></html>',
-                    },
-                ],
-                Notes: 'Attempted repair',
-            },
-            promptRun: { ID: 'prompt-run-fix' },
+        const capturedPromptData: Array<Record<string, unknown>> = [];
+        let fixCall = 0;
+        const executePromptMock = vi.fn(async (promptParams: AIPromptParams) => {
+            fixCall += 1;
+            capturedPromptData.push(
+                structuredClone(promptParams.data as Record<string, unknown>),
+            );
+            return {
+                success: true,
+                result: {
+                    Files: [
+                        {
+                            Path: 'index.html',
+                            Content:
+                                fixCall === 1
+                                    ? '<!doctype html><html><body>ROUND_1_FIXED</body></html>'
+                                    : '<!doctype html><html><body>ROUND_2_FIXED</body></html>',
+                        },
+                    ],
+                    Notes: `Attempted repair ${fixCall}`,
+                },
+                promptRun: { ID: `prompt-run-fix-${fixCall}` },
+            };
         });
         vi.spyOn(agent, 'CreatePromptRunner').mockReturnValue({
             ExecutePrompt: executePromptMock,
@@ -388,9 +426,24 @@ describe('VideoStudioMotionEngineerAgent (VS-AGT-4)', () => {
 
         expect(checkSpy).toHaveBeenCalledTimes(3);
         expect(executePromptMock).toHaveBeenCalledTimes(2);
+
+        // Round 1 prompt receives initial files and round 1 issue
+        expect(capturedPromptData[0].issues).toContain('ROUND_1_ERR');
+        expect(capturedPromptData[0].issues).not.toContain('ROUND_2_ERR');
+        expect(JSON.parse(capturedPromptData[0].files as string)['index.html']).toContain('16:9');
+
+        // Round 2 prompt receives round 1's fixed files and round 2's issues
+        expect(capturedPromptData[1].issues).toContain('ROUND_2_ERR');
+        expect(capturedPromptData[1].issues).toContain('Second check issue after first fix');
+        expect(capturedPromptData[1].issues).not.toContain('ROUND_1_ERR');
+        expect(JSON.parse(capturedPromptData[1].files as string)).toEqual({
+            'index.html': '<!doctype html><html><body>ROUND_1_FIXED</body></html>',
+            'styles.css': '.frame { color: #ffffff; }',
+        });
+
         expect(outcome.step).toBe('Failed');
         expect(outcome.message).toContain('PERSISTENT_ERR');
-        expect(outcome.message).toContain('Still broken after fix');
+        expect(outcome.message).toContain('Still broken after second fix');
         expect(outcome.errorMessage).toContain('PERSISTENT_ERR');
 
         expect(agent.RecordedCreatedSteps.map((s) => s.stepType)).toEqual([
@@ -761,4 +814,251 @@ describe('VideoStudioMotionEngineerAgent (VS-AGT-4)', () => {
         expect(checkSpy).not.toHaveBeenCalled();
         expect(agent.RecordedCreatedSteps).toHaveLength(0);
     });
+
+    it('Fix 1a: when driver.Check rejects, returns Failed without throwing and finalizes the Validation step with success = false', async () => {
+        const agent = new VideoStudioMotionEngineerAgent() as unknown as TestableMotionEngineerAgent;
+        vi.spyOn(driver, 'Check').mockRejectedValue(new Error('Render worker connection refused'));
+
+        const initialSpec = makeSpec(['16:9']);
+        const outcome = await agent.validateSuccessNextStep(
+            { contextUser: MOCK_USER } as ExecuteAgentParams,
+            {
+                step: 'Success',
+                terminate: true,
+            } as BaseAgentNextStep<VideoGenerationSpec>,
+            initialSpec,
+            {} as MJAIAgentRunEntityExtended,
+            {} as MJAIAgentRunStepEntityExtended,
+        );
+
+        expect(outcome.step).toBe('Failed');
+        expect(outcome.message).toBe('Lint check could not run: Render worker connection refused');
+        expect(outcome.errorMessage).toBe(
+            'Lint check could not run: Render worker connection refused',
+        );
+        expect(agent.RecordedCreatedSteps).toHaveLength(1);
+        expect(agent.RecordedCreatedSteps[0].stepName).toBe('Lint Check 1');
+        expect(agent.RecordedFinalizedSteps).toHaveLength(1);
+        expect(agent.RecordedFinalizedSteps[0].success).toBe(false);
+        expect(agent.RecordedFinalizedSteps[0].errorMessage).toBe(
+            'Lint check could not run: Render worker connection refused',
+        );
+    });
+
+    it('Fix 1b: when LoadDataSnapshotValues rejects, returns Failed naming the error and never calls driver.Check', async () => {
+        const agent = new VideoStudioMotionEngineerAgent() as unknown as TestableMotionEngineerAgent;
+        const checkSpy = vi.spyOn(driver, 'Check');
+        vi.spyOn(dataSnapshotModule, 'LoadDataSnapshotValues').mockRejectedValue(
+            new Error('Snapshot file 9f8e7d6c missing from storage'),
+        );
+
+        const initialSpec = makeSpec(['16:9']);
+        initialSpec.DataSnapshot = {
+            FileID: '9f8e7d6c-0000-0000-0000-000000000000',
+            AsOf: '2026-10-17T00:00:00Z',
+            Sources: ['view:MJ: AI Models'],
+        };
+
+        const outcome = await agent.validateSuccessNextStep(
+            { contextUser: MOCK_USER } as ExecuteAgentParams,
+            {
+                step: 'Success',
+                terminate: true,
+            } as BaseAgentNextStep<VideoGenerationSpec>,
+            initialSpec,
+            {} as MJAIAgentRunEntityExtended,
+            {} as MJAIAgentRunStepEntityExtended,
+        );
+
+        expect(outcome.step).toBe('Failed');
+        expect(outcome.message).toBe(
+            'Lint check could not run: Snapshot file 9f8e7d6c missing from storage',
+        );
+        expect(outcome.errorMessage).toBe(
+            'Lint check could not run: Snapshot file 9f8e7d6c missing from storage',
+        );
+        expect(checkSpy).not.toHaveBeenCalled();
+        expect(agent.RecordedCreatedSteps).toHaveLength(0);
+    });
+
+    it('Fix 2: spec with approved asset StagedPath and MissingAsset issue sends prompt data whose assets contains the staged path', async () => {
+        const agent = new VideoStudioMotionEngineerAgent() as unknown as TestableMotionEngineerAgent;
+        vi.spyOn(storageModule, 'ReadStoredFileWithType').mockResolvedValue({
+            Bytes: Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"></svg>', 'utf8'),
+        });
+
+        let checkCall = 0;
+        vi.spyOn(driver, 'Check').mockImplementation(async (): Promise<CheckResult> => {
+            checkCall += 1;
+            if (checkCall === 1) {
+                return {
+                    Passed: false,
+                    BlockRender: true,
+                    Issues: [
+                        makeIssue({
+                            Category: 'MissingAsset',
+                            Code: 'MJ_MISSING_ASSET',
+                            Message: 'Referenced asset "assets/logo.svg" is not staged in bundle',
+                        }),
+                    ],
+                };
+            }
+            return { Passed: true, BlockRender: false, Issues: [] };
+        });
+
+        let capturedPromptData: Record<string, unknown> | undefined;
+        const executePromptMock = vi.fn(async (promptParams: AIPromptParams) => {
+            capturedPromptData = promptParams.data as Record<string, unknown>;
+            return {
+                success: true,
+                result: {
+                    Files: [
+                        {
+                            Path: 'index.html',
+                            Content:
+                                '<!doctype html><html><body><img src="assets/logo-1a2b3c4d.svg" /></body></html>',
+                        },
+                    ],
+                },
+                promptRun: { ID: 'prompt-run-asset-fix' },
+            };
+        });
+        vi.spyOn(agent, 'CreatePromptRunner').mockReturnValue({
+            ExecutePrompt: executePromptMock,
+        } as unknown as AIPromptRunner);
+
+        const initialSpec = makeSpec(['16:9']);
+        initialSpec.Assets = {
+            Approved: [
+                {
+                    Key: 'brand-logo',
+                    Kind: 'Logo',
+                    FileID: '1a2b3c4d-0000-0000-0000-000000000000',
+                    Source: 'Brand Kit',
+                    Provenance: 'BrandKit',
+                    Usage: 'Header logo',
+                    MustUse: true,
+                    StagedPath: 'assets/logo-1a2b3c4d.svg',
+                },
+            ],
+            Required: [],
+            NeverInvent: [],
+        };
+        initialSpec.Audio = {
+            Narration: {
+                VoiceID: 'voice-1',
+                Provider: 'ElevenLabs',
+                Script: [
+                    {
+                        Key: 'line-1',
+                        BeatKey: 'intro',
+                        Text: 'Welcome',
+                        StagedPath: 'audio/line-1.mp3',
+                    },
+                ],
+            },
+            Cues: [],
+            Captions: 'None',
+        };
+
+        const outcome = await agent.validateSuccessNextStep(
+            { contextUser: MOCK_USER } as ExecuteAgentParams,
+            {
+                step: 'Success',
+                terminate: true,
+            } as BaseAgentNextStep<VideoGenerationSpec>,
+            initialSpec,
+            {} as MJAIAgentRunEntityExtended,
+            {} as MJAIAgentRunStepEntityExtended,
+        );
+
+        expect(outcome.step).toBe('Success');
+        expect(capturedPromptData).toBeDefined();
+        expect(capturedPromptData!.assets).toContain('assets/logo-1a2b3c4d.svg');
+        expect(capturedPromptData!.assets).toContain('brand-logo (Logo): assets/logo-1a2b3c4d.svg');
+        expect(capturedPromptData!.assets).toContain('line-1 (Narration): audio/line-1.mp3');
+    });
+
+    it('Fix 4: reads spec from currentPayload when nextStep has no newPayload (real Loop agent call shape)', async () => {
+        const agent = new VideoStudioMotionEngineerAgent() as unknown as TestableMotionEngineerAgent;
+        const checkSpy = vi.spyOn(driver, 'Check').mockResolvedValue({
+            Passed: true,
+            BlockRender: false,
+            Issues: [],
+        });
+
+        const currentPayloadSpec = makeSpec(['16:9']);
+        const preTurnPayloadWithoutSource = {
+            Version: '1.0',
+            Film: currentPayloadSpec.Film,
+            Deliverables: currentPayloadSpec.Deliverables,
+        } as unknown as VideoGenerationSpec;
+
+        const outcome = await agent.validateSuccessNextStep(
+            {
+                contextUser: MOCK_USER,
+                payload: preTurnPayloadWithoutSource,
+            } as ExecuteAgentParams,
+            {
+                step: 'Success',
+                terminate: true,
+            } as BaseAgentNextStep<VideoGenerationSpec>,
+            currentPayloadSpec,
+            {} as MJAIAgentRunEntityExtended,
+            {} as MJAIAgentRunStepEntityExtended,
+        );
+
+        expect(outcome.step).toBe('Success');
+        expect(checkSpy).toHaveBeenCalledTimes(1);
+        expect(outcome.newPayload?.Output?.Source?.['16:9']?.Files['index.html']).toContain('16:9');
+    });
+
+    it('Fix 5b: a success: true prompt run with a string result finalizes the Prompt step as false and leaves files unchanged', async () => {
+        const agent = new VideoStudioMotionEngineerAgent() as unknown as TestableMotionEngineerAgent;
+        const seenHtmlPerCheck: string[] = [];
+        vi.spyOn(driver, 'Check').mockImplementation(
+            async (req: CheckRequest): Promise<CheckResult> => {
+                const html = req.Bundle.Files.find((f) => f.Path === 'index.html')?.Content ?? '';
+                seenHtmlPerCheck.push(html);
+                return {
+                    Passed: false,
+                    BlockRender: true,
+                    Issues: [makeIssue()],
+                };
+            },
+        );
+
+        const executePromptMock = vi.fn().mockResolvedValue({
+            success: true,
+            result: 'not an object result',
+            promptRun: { ID: 'string-result-run' },
+        });
+        vi.spyOn(agent, 'CreatePromptRunner').mockReturnValue({
+            ExecutePrompt: executePromptMock,
+        } as unknown as AIPromptRunner);
+
+        const initialSpec = makeSpec(['16:9']);
+        const outcome = await agent.validateSuccessNextStep(
+            { contextUser: MOCK_USER } as ExecuteAgentParams,
+            {
+                step: 'Success',
+                terminate: true,
+            } as BaseAgentNextStep<VideoGenerationSpec>,
+            initialSpec,
+            {} as MJAIAgentRunEntityExtended,
+            {} as MJAIAgentRunStepEntityExtended,
+        );
+
+        expect(outcome.step).toBe('Failed');
+        expect(seenHtmlPerCheck).toHaveLength(3);
+        expect(seenHtmlPerCheck[1]).toBe(seenHtmlPerCheck[0]);
+        expect(seenHtmlPerCheck[2]).toBe(seenHtmlPerCheck[0]);
+
+        const promptFinalizations = agent.RecordedFinalizedSteps.filter(
+            (f) => f.outputData?.promptName === MOTION_ENGINEER_LINT_FIX_PROMPT_NAME,
+        );
+        expect(promptFinalizations).toHaveLength(2);
+        expect(promptFinalizations.every((f) => f.success === false)).toBe(true);
+    });
 });
+

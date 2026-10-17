@@ -340,18 +340,32 @@ describe('bundle.ts (VS-AGT-3)', () => {
         ).toBe(true);
     });
 
-    it('ReadAssetBytes reads from FileID, reads from file-backed ArtifactVersionID, and throws naming asset.Key when neither resolves', async () => {
-        const readStoredSpy = vi
-            .spyOn(storageModule, 'ReadStoredFile')
-            .mockImplementation(async (fileId: string) => Buffer.from(`bytes:${fileId}`, 'utf8'));
+    it('ReadAssetBytes reads from FileID (propagating MJ: Files.ContentType as MimeType), reads from file-backed ArtifactVersionID, and throws naming asset.Key when neither resolves', async () => {
+        const readWithTypeSpy = vi
+            .spyOn(storageModule, 'ReadStoredFileWithType')
+            .mockImplementation(async (fileId: string) => ({
+                Bytes: Buffer.from(`bytes:${fileId}`, 'utf8'),
+            }));
 
-        // 1. Direct FileID
+        // 1a. Direct FileID via ReadStoredFileWithType spy
         const fromFile = await ReadAssetBytes(
             { Key: 'hero-logo', FileID: 'file-123' },
             mockUser,
         );
         expect(fromFile.Bytes.toString('utf8')).toBe('bytes:file-123');
-        expect(readStoredSpy).toHaveBeenCalledWith('file-123', mockUser, undefined);
+        expect(readWithTypeSpy).toHaveBeenCalledWith('file-123', mockUser, undefined);
+
+        // 1b. Direct FileID via ReadStoredFileWithType returning ContentType from MJ: Files
+        readWithTypeSpy.mockResolvedValueOnce({
+            Bytes: Buffer.from('jpeg-photo-bytes', 'utf8'),
+            ContentType: 'image/jpeg',
+        });
+        const fromFileWithMime = await ReadAssetBytes(
+            { Key: 'attachment:photo', FileID: '11111111-1111-4111-8111-111111111111' },
+            mockUser,
+        );
+        expect(fromFileWithMime.Bytes.toString('utf8')).toBe('jpeg-photo-bytes');
+        expect(fromFileWithMime.MimeType).toBe('image/jpeg');
 
         // 2. File-backed ArtifactVersionID
         const runViewFn = vi.fn().mockResolvedValue({
@@ -397,6 +411,11 @@ describe('bundle.ts (VS-AGT-3)', () => {
     it('BuildRenderBundle collects Output.Source[format].Files, staged approved assets, staged narration clips, mj/chart-kit.js, mj/fonts.css, DataSnapshot, and Seed without mutating spec', async () => {
         vi.spyOn(storageModule, 'ReadStoredFile').mockImplementation(async (fileId: string) =>
             Buffer.from(`content:${fileId}`, 'utf8'),
+        );
+        vi.spyOn(storageModule, 'ReadStoredFileWithType').mockImplementation(
+            async (fileId: string) => ({
+                Bytes: Buffer.from(`content:${fileId}`, 'utf8'),
+            }),
         );
         const loadValuesSpy = vi
             .spyOn(dataSnapshotModule, 'LoadDataSnapshotValues')
