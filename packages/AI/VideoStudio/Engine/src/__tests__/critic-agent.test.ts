@@ -931,4 +931,94 @@ describe('VideoStudioCriticAgent', () => {
         );
         expect(unansweredGate?.Passed).toBe(false);
     });
+
+    it('passes generatedAssetsTable, allowSyntheticPeople, and neverInvent to the Critic prompt template', async () => {
+        const spec = CreateDeliveredSpecFixture();
+        spec.Deliverables.Formats = ['16:9'];
+        spec.Assets = {
+            ...spec.Assets,
+            NeverInvent: ['member testimonials', 'competitor logos'],
+            Approved: [
+                ...(spec.Assets?.Approved ?? []),
+                {
+                    Key: 'gen-clip-1',
+                    Kind: 'Video',
+                    FileID: 'file-gen-1',
+                    Provenance: 'Generated',
+                    Generation: {
+                        ModelID: 'model-veo',
+                        PromptRunID: 'pr-gen-1',
+                        Prompt: 'Abstract glass prisms catching morning light',
+                        ReferenceKeys: [],
+                        DurationSeconds: 5,
+                        Cost: 0.4,
+                        C2PA: true,
+                    },
+                },
+            ],
+            Pending: [],
+        };
+        if (spec.Beats.length > 0) {
+            spec.Beats[0].AssetRefs = [...(spec.Beats[0].AssetRefs ?? []), 'gen-clip-1'];
+        }
+
+        const agent = new TestableCriticAgent();
+        agent.EnqueuePromptOutcome({
+            success: true,
+            result: {
+                Summary: 'All clean',
+                Defects: [],
+                Scores: {
+                    Criteria: [
+                        { Criterion: 'text-legibility', Level: 'Meets' },
+                        { Criterion: 'generated-assets-are-honest-and-disclosed', Level: 'Meets' },
+                    ],
+                },
+            },
+        });
+
+        await agent.RunForTest({
+            agent: { ID: 'critic-id', ParentID: 'root-id' },
+            payload: spec,
+        } as unknown as ExecuteAgentParams<Partial<VideoGenerationSpec>>);
+
+        expect(agent.ExecutedPromptCalls).toHaveLength(1);
+        const callData = agent.ExecutedPromptCalls[0].data;
+        expect(typeof callData.generatedAssetsTable).toBe('string');
+        expect(callData.generatedAssetsTable).toContain('gen-clip-1');
+        expect(callData.generatedAssetsTable).toContain('Abstract glass prisms catching morning light');
+        expect(callData.allowSyntheticPeople).toBe(false);
+        expect(callData.neverInvent).toEqual(['member testimonials', 'competitor logos']);
+    });
+
+    it('throws when a scored rubric criterion has no matching scale', async () => {
+        const brokenRubric = buildPublishedRubric();
+        brokenRubric.nodes = brokenRubric.nodes.map((n) =>
+            n.nodeType === 'Criterion' ? { ...n, scaleId: 'missing-scale-id' } : n,
+        );
+        mockGetLatestPublishedVersion.mockReturnValue(brokenRubric);
+
+        const spec = CreateDeliveredSpecFixture();
+        spec.Deliverables.Formats = ['16:9'];
+
+        const agent = new TestableCriticAgent();
+        agent.EnqueuePromptOutcome({
+            success: true,
+            result: {
+                Summary: 'All clean',
+                Defects: [],
+                Scores: {
+                    Criteria: [{ Criterion: 'text-legibility', Level: 'Meets' }],
+                },
+            },
+        });
+
+        await expect(
+            agent.RunForTest({
+                agent: { ID: 'critic-id', ParentID: 'root-id' },
+                payload: spec,
+            } as unknown as ExecuteAgentParams<Partial<VideoGenerationSpec>>),
+        ).rejects.toThrow(/has no matching scale/);
+    });
 });
+

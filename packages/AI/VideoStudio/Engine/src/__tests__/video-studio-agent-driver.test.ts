@@ -1563,9 +1563,15 @@ describe('VideoStudioAgent driver lifecycle', () => {
         const fileOutputs = (freshAgent as unknown as { FileOutputs: Array<Record<string, unknown>> }).FileOutputs;
         expect(fileOutputs).toEqual([]);
 
-        // Case B: Started with a brief (Film.OneSentence already present) -> version-source
+        // Case B: Started with a brief (Film.OneSentence already present) and no generated assets -> version-source, GenerationProvenance undefined
         const resumeAgent = createAgent();
         const resumeSpec = CreateDeliveredSpecFixture();
+        resumeSpec.Assets = {
+            ...resumeSpec.Assets,
+            Approved: (resumeSpec.Assets?.Approved ?? []).filter((a) => a.Provenance !== 'Generated'),
+            Generate: [],
+            Pending: [],
+        };
         const resumeParams = {
             payload: resumeSpec,
             conversationMessages: [],
@@ -1584,6 +1590,63 @@ describe('VideoStudioAgent driver lifecycle', () => {
             behavior: 'version-source',
         });
         expect((resumeAgent as unknown as { FileOutputs: Array<Record<string, unknown>> }).FileOutputs).toEqual([]);
+        expect(resumedDelivered.newPayload?.Output?.GenerationProvenance).toBeUndefined();
+
+        // Case C: Delivery with generated assets populates Spec.Output.GenerationProvenance
+        const genAgent = createAgent();
+        const genSpec = CreateDeliveredSpecFixture();
+        genSpec.Assets = {
+            ...genSpec.Assets,
+            Approved: [
+                ...(genSpec.Assets?.Approved ?? []).filter((a) => a.Provenance !== 'Generated'),
+                {
+                    Key: 'gen-broll-1',
+                    Kind: 'Video',
+                    FileID: '88888888-8888-4888-8888-888888888881',
+                    Provenance: 'Generated',
+                    Generation: {
+                        ModelID: 'model-veo-id',
+                        PromptRunID: 'pr-veo-1',
+                        Prompt: 'Morning sunlight across glass atrium',
+                        ReferenceKeys: [],
+                        DurationSeconds: 6,
+                        Cost: 0.6,
+                        C2PA: true,
+                    },
+                },
+            ],
+            Pending: [],
+        };
+        const genParams = {
+            payload: genSpec,
+            conversationMessages: [],
+        } as unknown as ExecuteAgentParams<Partial<VideoGenerationSpec>>;
+        await genAgent.executeAgentInternal(genParams, dummyConfig);
+
+        const genDelivered = await genAgent.validateSuccessNextStep(
+            genParams,
+            { step: 'Success', terminate: true, newPayload: genSpec },
+            genSpec,
+            dummyRun,
+            dummyStep,
+        );
+        expect(genDelivered.step).toBe('Success');
+        expect(genDelivered.newPayload?.Output?.GenerationProvenance).toEqual({
+            Assets: [
+                {
+                    AssetKey: 'gen-broll-1',
+                    Kind: 'Video',
+                    ModelID: 'model-veo-id',
+                    PromptRunID: 'pr-veo-1',
+                    DurationSeconds: 6,
+                    Cost: 0.6,
+                    C2PA: true,
+                },
+            ],
+            TotalVideoSeconds: 6,
+            TotalCost: 0.6,
+        });
     });
 });
+
 

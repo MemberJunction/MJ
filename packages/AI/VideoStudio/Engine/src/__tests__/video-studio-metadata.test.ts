@@ -16,6 +16,10 @@ import {
     type VideoDefect,
     type VideoGenerationSpec,
 } from '@memberjunction/video-studio-core';
+import type {
+    CriticPromptCriterionScore,
+    CriticPromptOutput,
+} from '../agents/critic-agent.js';
 import { DELIVERED_SPEC_FIXTURE } from './fixtures/delivered-spec.fixture.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -814,29 +818,29 @@ describe('Video Studio metadata pin (VS-AGT-1)', () => {
 
         const validScoreSummaryKeys = [
             'Criteria',
-        ] as const;
+        ] as const satisfies readonly (keyof NonNullable<CriticPromptOutput['Scores']>)[];
 
         const requiredScoreSummaryKeys = [
             'Criteria',
-        ] as const;
+        ] as const satisfies readonly (keyof NonNullable<CriticPromptOutput['Scores']>)[];
 
         const validCriterionScoreKeys = [
             'Criterion',
             'Level',
             'Notes',
-        ] as const;
+        ] as const satisfies readonly (keyof CriticPromptCriterionScore)[];
 
         const requiredCriterionScoreKeys = [
             'Criterion',
             'Level',
-        ] as const;
+        ] as const satisfies readonly (keyof CriticPromptCriterionScore)[];
 
         const validCriterionLevels = [
             'Meets',
             'Partial',
             'Miss',
             'NotApplicable',
-        ] as const;
+        ] as const satisfies readonly NonNullable<CriticPromptCriterionScore['Level']>[];
 
         const validReferenceAnalysisKeys = [
             'SourceKey',

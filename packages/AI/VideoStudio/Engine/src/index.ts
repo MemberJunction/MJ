@@ -166,6 +166,7 @@ export {
 export {
     BuildBeatsTable,
     BuildBoundValuesTable,
+    BuildGeneratedAssetsTable,
     BuildRepairBrief,
     BuildRubricCriteriaText,
     BuildTimelineTable,

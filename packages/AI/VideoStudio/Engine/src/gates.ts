@@ -9,10 +9,12 @@
  */
 
 import { ConversationUtility, type FormResponseContent, GetValueFromPath } from '@memberjunction/ai-core-plus';
+import { RubricEngineBase } from '@memberjunction/rubrics-base';
 import {
     ValidateVideoGenerationSpec,
     VIDEO_STUDIO_SPEC_VERSION,
     type GateRecord,
+    type RubricCriterionScore,
     type VideoAsset,
     type VideoAssetGenerationRequest,
     type VideoFormat,
@@ -427,6 +429,48 @@ function evaluateGateG4(
     };
 }
 
+/**
+ * Rubric criterion key for generated-asset honesty and disclosure (`D20`).
+ * Open defects on this criterion never defer at repair-budget exhaustion.
+ */
+export const GENERATED_ASSET_INTEGRITY_CRITERION_KEY =
+    'generated-assets-are-honest-and-disclosed' as const;
+
+const DEFAULT_GATE_CRITERION_KEYS = new Set<string>([
+    GENERATED_ASSET_INTEGRITY_CRITERION_KEY,
+    'shown-values-match-the-data-snapshot',
+]);
+
+function findFailedGateCriteria(spec: Partial<VideoGenerationSpec>): RubricCriterionScore[] {
+    const criteria = spec.Review?.Scores?.Criteria;
+    if (!Array.isArray(criteria) || criteria.length === 0) {
+        return [];
+    }
+    const gateKeys = new Set<string>(DEFAULT_GATE_CRITERION_KEYS);
+    const rubricId = spec.Review?.Scores?.RubricID;
+    if (rubricId) {
+        try {
+            const published = RubricEngineBase.Instance?.GetLatestPublishedVersion?.(rubricId);
+            if (published && Array.isArray(published.nodes)) {
+                for (const node of published.nodes) {
+                    if (node?.nodeType === 'Criterion' && node.isGate && node.key) {
+                        gateKeys.add(node.key.trim().toLowerCase());
+                    }
+                }
+            }
+        } catch {
+            // Ignore if RubricEngineBase is not initialized
+        }
+    }
+    return criteria.filter(
+        (c): c is RubricCriterionScore =>
+            Boolean(c) &&
+            c.Passed === false &&
+            typeof c.Criterion === 'string' &&
+            gateKeys.has(c.Criterion.trim().toLowerCase()),
+    );
+}
+
 function evaluateGateG5(
     spec: Partial<VideoGenerationSpec>,
     ctx: GateEvaluationContext,
@@ -444,12 +488,63 @@ function evaluateGateG5(
 
     const rounds = spec.Review?.Rounds ?? [];
     const newestRound = rounds[rounds.length - 1];
-    const openBlockingDefects = (newestRound?.Defects ?? []).filter(
-        (d) => d && d.Status === 'Open' && (d.Severity === 'Blocker' || d.Severity === 'Major'),
+    const openIntegrityDefects = (newestRound?.Defects ?? []).filter(
+        (d) =>
+            d &&
+            d.Status === 'Open' &&
+            d.Criterion === GENERATED_ASSET_INTEGRITY_CRITERION_KEY,
     );
+    const openBlockingDefects = (newestRound?.Defects ?? []).filter(
+        (d) =>
+            d &&
+            d.Status === 'Open' &&
+            (d.Severity === 'Blocker' ||
+                d.Severity === 'Major' ||
+                d.Criterion === GENERATED_ASSET_INTEGRITY_CRITERION_KEY),
+    );
+    const failedGateCriteria = findFailedGateCriteria(spec);
     const repairBudgetReached = rounds.length - 1 >= ctx.Settings.MaxRepairRounds;
 
-    if (openBlockingDefects.length === 0 || repairBudgetReached) {
+    if (openIntegrityDefects.length > 0 && repairBudgetReached) {
+        const firstIntegrity = openIntegrityDefects[0];
+        const key = firstIntegrity?.AssetKey || firstIntegrity?.Beat || 'unknown';
+        return {
+            Gate: 'G5',
+            Status: 'Failed',
+            EvidenceRefs: [],
+            Timestamp: now,
+            Notes: `Generated asset ${key} failed the integrity check: ${firstIntegrity?.Evidence ?? ''}`,
+        };
+    }
+
+    if ((openBlockingDefects.length === 0 || repairBudgetReached) && failedGateCriteria.length > 0) {
+        const failedIntegrity = failedGateCriteria.find(
+            (c) => c.Criterion.trim().toLowerCase() === GENERATED_ASSET_INTEGRITY_CRITERION_KEY,
+        );
+        if (failedIntegrity) {
+            const generatedAsset = (spec.Assets?.Approved ?? []).find(
+                (a) => a?.Provenance === 'Generated',
+            );
+            const key = generatedAsset?.Key || 'unknown';
+            return {
+                Gate: 'G5',
+                Status: 'Failed',
+                EvidenceRefs: [],
+                Timestamp: now,
+                Notes: `Generated asset ${key} failed the integrity check: ${failedIntegrity.Notes || 'criterion scored below gate threshold'}`,
+            };
+        }
+        const firstFailedGate = failedGateCriteria[0];
+        return {
+            Gate: 'G5',
+            Status: 'Failed',
+            EvidenceRefs: [],
+            Timestamp: now,
+            Notes: `Gate criterion "${firstFailedGate.Criterion}" failed (${firstFailedGate.Notes || `score ${firstFailedGate.Score}/${firstFailedGate.MaxScore}`}).`,
+        };
+    }
+
+    if (openBlockingDefects.length === 0 || (repairBudgetReached && openIntegrityDefects.length === 0)) {
         return {
             Gate: 'G5',
             Status: 'Passed',

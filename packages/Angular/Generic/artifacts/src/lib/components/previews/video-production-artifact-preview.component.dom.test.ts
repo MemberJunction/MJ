@@ -107,5 +107,84 @@ describe('VideoProductionArtifactPreviewComponent (DOM)', () => {
     expect(storagePlayerDe).toBeNull();
     expect(query(fixture, '.vp-preview__status')).not.toBeNull();
     expect(text(fixture, '.vp-preview__status-text')).toBe('Storyboarded');
+    expect(query(fixture, '.vp-preview__generated-chip')).toBeNull();
+  });
+
+  it('renders .vp-preview__generated-chip when Assets.Approved contains a Generated asset', () => {
+    const specWithGenerated = {
+      SpecVersion: '1.0',
+      Film: {
+        OneSentence: 'Generated preview test',
+        Audience: 'All',
+        Purpose: 'Demo',
+        DurationSeconds: 10,
+        Formats: ['16:9'],
+        Language: 'en-US',
+      },
+      Status: 'Delivered',
+      Assets: {
+        Approved: [
+          {
+            Key: 'bg-gen',
+            Kind: 'Image',
+            FileID: 'f-bg-1',
+            Provenance: 'Generated',
+            Generation: {
+              ModelID: 'm-1',
+              PromptRunID: 'pr-1',
+              Prompt: 'Abstract background',
+              ReferenceKeys: [],
+            },
+          },
+        ],
+        Required: [],
+        NeverInvent: [],
+      },
+    };
+
+    const withGenFixture = renderComponentFixture(VideoProductionArtifactPreviewComponent, {
+      imports: [ArtifactsModule],
+      inputs: {
+        artifactVersion: makeVersion(JSON.stringify(specWithGenerated)),
+      },
+    });
+    const chip = query(withGenFixture, '.vp-preview__generated-chip');
+    expect(chip).not.toBeNull();
+    expect(chip?.textContent?.trim()).toBe('AI-generated');
+  });
+
+  it('omits .vp-preview__generated-chip when all assets are Uploaded', () => {
+    const specUploadedOnly = {
+      SpecVersion: '1.0',
+      Film: {
+        OneSentence: 'Uploaded preview test',
+        Audience: 'All',
+        Purpose: 'Demo',
+        DurationSeconds: 10,
+        Formats: ['16:9'],
+        Language: 'en-US',
+      },
+      Status: 'Delivered',
+      Assets: {
+        Approved: [
+          {
+            Key: 'bg-up',
+            Kind: 'Image',
+            FileID: 'f-bg-2',
+            Provenance: 'Uploaded',
+          },
+        ],
+        Required: [],
+        NeverInvent: [],
+      },
+    };
+
+    const uploadedFixture = renderComponentFixture(VideoProductionArtifactPreviewComponent, {
+      imports: [ArtifactsModule],
+      inputs: {
+        artifactVersion: makeVersion(JSON.stringify(specUploadedOnly)),
+      },
+    });
+    expect(query(uploadedFixture, '.vp-preview__generated-chip')).toBeNull();
   });
 });

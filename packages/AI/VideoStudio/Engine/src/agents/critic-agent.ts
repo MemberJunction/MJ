@@ -28,13 +28,16 @@ import type {
 } from '@memberjunction/video-studio-core';
 
 import { LoadDataSnapshotValues } from '../data/data-snapshot.js';
+import { ResolveGenerationPolicy } from '../generation/generation-policy.js';
 import { ResolveDeliverableFormats } from '../render/bundle.js';
 import {
     BuildBeatsTable,
     BuildBoundValuesTable,
+    BuildGeneratedAssetsTable,
     BuildRubricCriteriaText,
     BuildTimelineTable,
     PickSheetsForCall,
+    findScaleForNode,
 } from '../review/critic-input.js';
 import { ResolveVideoStudioSettings } from '../settings.js';
 import { ReadStoredFile } from '../storage.js';
@@ -119,6 +122,11 @@ export class VideoStudioCriticAgent extends VideoStudioAgentBase {
         const beatsTable = BuildBeatsTable(incomingPayload);
         const timelineTable = BuildTimelineTable(incomingPayload);
         const boundValues = BuildBoundValuesTable(incomingPayload, snapshot);
+        const generatedAssetsTable = BuildGeneratedAssetsTable(incomingPayload);
+        const generationPolicy = ResolveGenerationPolicy(
+            incomingPayload,
+            incomingPayload.CompanyID ?? null,
+        );
 
         const existingRounds: CriticRound[] = Array.isArray(incomingPayload.Review?.Rounds)
             ? incomingPayload.Review!.Rounds.map((r) => ({
@@ -183,6 +191,9 @@ export class VideoStudioCriticAgent extends VideoStudioAgentBase {
                 beatsTable,
                 timelineTable,
                 boundValues,
+                generatedAssetsTable,
+                allowSyntheticPeople: generationPolicy.AllowSyntheticPeople,
+                neverInvent: generationPolicy.NeverInvent,
                 rubricCriteria,
                 round: roundNumber,
                 maxRounds,
@@ -440,9 +451,11 @@ export class VideoStudioCriticAgent extends VideoStudioAgentBase {
             if (entries.length === 0) {
                 continue;
             }
-            const scale = this.findNodeScale(rubricVersion.scales, node.scaleId);
+            const scale = findScaleForNode(rubricVersion.scales, node.scaleId);
             if (!scale) {
-                continue;
+                throw new Error(
+                    `Rubric criterion "${node.key}" has no matching scale ("${String(node.scaleId)}")`,
+                );
             }
             const effectiveNaPolicy = node.notApplicablePolicy ?? rubricVersion.notApplicablePolicy;
 
@@ -513,9 +526,7 @@ export class VideoStudioCriticAgent extends VideoStudioAgentBase {
                 ? !sn.gateFailed &&
                   (sn.isNotApplicable ||
                       (sn.normalizedScore !== null &&
-                          (threshold === null ||
-                              threshold === undefined ||
-                              normalizedScore >= threshold)))
+                          (threshold === null || normalizedScore >= threshold)))
                 : false;
             const criterionScore: RubricCriterionScore = {
                 Criterion: node.key,
@@ -550,16 +561,6 @@ export class VideoStudioCriticAgent extends VideoStudioAgentBase {
                 UUIDsEqual(n.id, rawKey) ||
                 n.name.toLowerCase() === lower,
         );
-    }
-
-    private findNodeScale(
-        scales: readonly RubricScaleSnapshot[],
-        scaleId: string | null | undefined,
-    ): RubricScaleSnapshot | undefined {
-        if (!scaleId) {
-            return scales[0];
-        }
-        return scales.find((s) => UUIDsEqual(s.id, scaleId)) ?? scales[0];
     }
 
     private resolveCriterionEntryLevel(

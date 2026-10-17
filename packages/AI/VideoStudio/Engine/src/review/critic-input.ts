@@ -9,6 +9,7 @@ import type {
 import {
     BuildBoundDataLiterals,
     CreateMJChartKit,
+    DescribeGeneratedAssets,
     type AudioCue,
     type NarrationLine,
     type VideoBeat,
@@ -53,7 +54,7 @@ export function BuildRubricCriteriaText(version: CachedPublishedVersion): string
     return lines.join('\n');
 }
 
-function findScaleForNode(
+export function findScaleForNode(
     scales: readonly RubricScaleSnapshot[],
     scaleId: string | null | undefined,
 ): RubricScaleSnapshot | undefined {
@@ -259,6 +260,36 @@ export function BuildRepairBrief(spec: Partial<VideoGenerationSpec>): string {
     ].join('\n');
 }
 
+/**
+ * Formats approved generated assets into a markdown table for the Critic prompt
+ * (`generatedAssetsTable`), or returns `''` when no generated assets exist.
+ */
+export function BuildGeneratedAssetsTable(spec: Partial<VideoGenerationSpec>): string {
+    const disclosure = DescribeGeneratedAssets(spec);
+    if (disclosure.Items.length === 0) {
+        return '';
+    }
+
+    const header = '| Key | Kind | Beats | Time Ranges | Prompt |';
+    const divider = '| --- | --- | --- | --- | --- |';
+    const rows = disclosure.Items.map((item) => {
+        const beats =
+            item.Beats.length > 0
+                ? item.Beats.map((b) => escapeCell(b.Key)).join(', ')
+                : '—';
+        const timeRanges =
+            item.Beats.length > 0
+                ? item.Beats
+                      .map((b) => `${b.StartSeconds.toFixed(2)}s-${b.EndSeconds.toFixed(2)}s`)
+                      .join(', ')
+                : '—';
+        return `| ${escapeCell(item.Key)} | ${escapeCell(item.Kind)} | ${beats} | ${timeRanges} | ${escapeCell(item.Prompt)} |`;
+    });
+
+    return [header, divider, ...rows].join('\n');
+}
+
 function escapeCell(value: string): string {
     return (value ?? '').replace(/\|/g, '\\|').replace(/\s+/g, ' ').trim();
 }
+

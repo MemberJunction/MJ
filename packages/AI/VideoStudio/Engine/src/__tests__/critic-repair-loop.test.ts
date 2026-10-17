@@ -290,6 +290,23 @@ describe('Critic bounded repair loop (MaxRepairRounds = 2)', () => {
                     evidenceRequired: false,
                     rationaleRequired: false,
                 },
+                {
+                    id: 'crit-2',
+                    parentId: null,
+                    key: 'generated-assets-are-honest-and-disclosed',
+                    name: 'Generated Assets Are Honest and Disclosed',
+                    description: 'Generated assets are honest and disclosed.',
+                    guidance: 'Check generated assets.',
+                    nodeType: 'Criterion',
+                    sequence: 2,
+                    weight: 1,
+                    scaleId: 'C882E907-2C02-49B1-919F-8AFCCCD4709F',
+                    isAdvisory: false,
+                    isGate: true,
+                    gateMinimumScore: 0.6,
+                    evidenceRequired: false,
+                    rationaleRequired: false,
+                },
             ],
         };
         mockGetLatestPublishedVersion.mockReturnValue(publishedRubric);
@@ -495,4 +512,227 @@ describe('Critic bounded repair loop (MaxRepairRounds = 2)', () => {
             'URL badge slightly clipped on mobile preview',
         );
     });
+
+    it('never defers an open defect on generated-assets-are-honest-and-disclosed when MaxRepairRounds is exhausted and fails the run instead', async () => {
+        const baseSpec = CreateDeliveredSpecFixture();
+        baseSpec.Deliverables.Formats = ['16:9'];
+        baseSpec.Interaction = { Mode: 'Autonomous', MaxRepairRounds: 2 };
+        baseSpec.Assets = {
+            ...baseSpec.Assets,
+            Approved: [
+                ...(baseSpec.Assets?.Approved ?? []).filter((a) => a.Provenance !== 'Generated'),
+                {
+                    Key: 'synth-speaker-clip',
+                    Kind: 'Video',
+                    FileID: 'f-synth',
+                    Provenance: 'Generated',
+                    Generation: {
+                        ModelID: 'm-veo',
+                        PromptRunID: 'pr-1',
+                        Prompt: 'Speaker on stage',
+                        ReferenceKeys: [],
+                        DurationSeconds: 4,
+                        Cost: 0.4,
+                        C2PA: false,
+                    },
+                },
+            ],
+            Generate: [],
+        };
+        baseSpec.Review = {
+            Gates: [{ Gate: 'G3', Status: 'Passed', EvidenceRefs: ['cs-1'], Timestamp: '2026-10-17T00:01:00.000Z' }],
+            Rounds: [
+                {
+                    Round: 1,
+                    Timestamp: '2026-10-17T00:01:15.000Z',
+                    Summary: 'Round 1 integrity defect',
+                    Defects: [
+                        {
+                            Key: 'r1-1',
+                            Format: '16:9',
+                            Timestamp: 1.0,
+                            Beat: 'hook',
+                            Criterion: 'generated-assets-are-honest-and-disclosed',
+                            Severity: 'Blocker',
+                            Evidence: 'Synthetic person shown as a customer speaker',
+                            Fix: 'remove or replace generated asset synth-speaker-clip',
+                            Status: 'Open',
+                            AssetKey: 'synth-speaker-clip',
+                        },
+                    ],
+                },
+                {
+                    Round: 2,
+                    Timestamp: '2026-10-17T00:01:30.000Z',
+                    Summary: 'Round 2 integrity defect',
+                    Defects: [
+                        {
+                            Key: 'r2-1',
+                            Format: '16:9',
+                            Timestamp: 1.0,
+                            Beat: 'hook',
+                            Criterion: 'generated-assets-are-honest-and-disclosed',
+                            Severity: 'Blocker',
+                            Evidence: 'Synthetic person shown as a customer speaker',
+                            Fix: 'remove or replace generated asset synth-speaker-clip',
+                            Status: 'Open',
+                            AssetKey: 'synth-speaker-clip',
+                        },
+                    ],
+                },
+            ],
+        };
+        baseSpec.Output!.RenderMetadata.RenderedAt = '2026-10-17T00:02:00.000Z';
+
+        const rootAgent = new ExposedVideoStudioAgent();
+        const criticAgent = new ScriptedCriticAgent();
+        const params = {
+            agent: { ID: 'root-id', Name: 'Video Studio' },
+            payload: baseSpec,
+        } as unknown as ExecuteAgentParams<Partial<VideoGenerationSpec>>;
+
+        await rootAgent.InitRoot(params);
+
+        // Round 3 (Rounds.length = 3 -> 3 - 1 = 2 >= MaxRepairRounds 2): still has open integrity defect
+        criticAgent.Enqueue({
+            Summary: 'Round 3 still shows synthetic speaker.',
+            Defects: [
+                {
+                    Timestamp: 1.0,
+                    Beat: 'hook',
+                    Criterion: 'generated-assets-are-honest-and-disclosed',
+                    Severity: 'Blocker',
+                    Evidence: 'Synthetic person shown as a customer speaker',
+                    Fix: 'remove or replace generated asset synth-speaker-clip',
+                    AssetKey: 'synth-speaker-clip',
+                },
+            ],
+            Scores: {
+                Criteria: [
+                    { Criterion: 'text-legibility-and-contrast', Level: 'Meets' },
+                    { Criterion: 'generated-assets-are-honest-and-disclosed', Level: 'Miss' },
+                ],
+            },
+        });
+
+        let spec = await criticAgent.RunCritic(baseSpec);
+        spec = rootAgent.ApplyStage(params, 'Video Studio - Critic', spec);
+
+        const g5 = spec.Review?.Gates.find((g) => g.Gate === 'G5');
+        expect(g5?.Status).toBe('Failed');
+        expect(spec.Review?.Rounds?.[2]?.Defects[0]?.Status).toBe('Open');
+
+        const finalStep = await rootAgent.ValidateSuccess(
+            params,
+            {
+                step: 'Success',
+                terminate: true,
+                newPayload: spec,
+            },
+            spec,
+        );
+        expect(finalStep.step).toBe('Failed');
+        expect(finalStep.errorMessage).toBe(
+            'Generated asset synth-speaker-clip failed the integrity check: Synthetic person shown as a customer speaker',
+        );
+        expect(finalStep.newPayload?.Status).toBe('Reviewed');
+        expect(finalStep.newPayload?.Status).not.toBe('Delivered');
+    });
+
+    it('blocks delivery when generated-assets-are-honest-and-disclosed is scored Miss with no Defects (including at the repair cap)', async () => {
+        const baseSpec = CreateDeliveredSpecFixture();
+        baseSpec.Deliverables.Formats = ['16:9'];
+        baseSpec.Interaction = { Mode: 'Autonomous', MaxRepairRounds: 2 };
+        baseSpec.Assets = {
+            ...baseSpec.Assets,
+            Approved: [
+                ...(baseSpec.Assets?.Approved ?? []).filter((a) => a.Provenance !== 'Generated'),
+                {
+                    Key: 'synth-speaker-clip',
+                    Kind: 'Video',
+                    FileID: 'file-synth-speaker',
+                    Provenance: 'Generated',
+                    Generation: {
+                        ModelID: 'model-veo',
+                        PromptRunID: 'pr-synth-1',
+                        Prompt: 'Speaker on stage',
+                        ReferenceKeys: [],
+                        DurationSeconds: 4,
+                        Cost: 0.4,
+                        C2PA: false,
+                    },
+                },
+            ],
+            Generate: [],
+        };
+        baseSpec.Review = {
+            Gates: [{ Gate: 'G3', Status: 'Passed', EvidenceRefs: ['cs-1'], Timestamp: '2026-10-17T00:01:00.000Z' }],
+            Rounds: [
+                {
+                    Round: 1,
+                    Timestamp: '2026-10-17T00:01:15.000Z',
+                    Summary: 'Round 1 finished',
+                    Defects: [],
+                },
+                {
+                    Round: 2,
+                    Timestamp: '2026-10-17T00:01:30.000Z',
+                    Summary: 'Round 2 finished',
+                    Defects: [],
+                },
+            ],
+        };
+        baseSpec.Output!.RenderMetadata.RenderedAt = '2026-10-17T00:02:00.000Z';
+
+        const rootAgent = new ExposedVideoStudioAgent();
+        const criticAgent = new ScriptedCriticAgent();
+        const params = {
+            agent: { ID: 'root-id', Name: 'Video Studio' },
+            payload: baseSpec,
+        } as unknown as ExecuteAgentParams<Partial<VideoGenerationSpec>>;
+
+        await rootAgent.InitRoot(params);
+
+        // Round 3 at repair cap (MaxRepairRounds = 2): no Defects, but integrity gate criterion scored Miss
+        criticAgent.Enqueue({
+            Summary: 'No defect entries, but integrity gate criterion is Miss.',
+            Defects: [],
+            Scores: {
+                Criteria: [
+                    { Criterion: 'text-legibility-and-contrast', Level: 'Meets' },
+                    {
+                        Criterion: 'generated-assets-are-honest-and-disclosed',
+                        Level: 'Miss',
+                        Notes: 'Synthetic speaker appears in hook beat',
+                    },
+                ],
+            },
+        });
+
+        let spec = await criticAgent.RunCritic(baseSpec);
+        spec = rootAgent.ApplyStage(params, 'Video Studio - Critic', spec);
+
+        const g5 = spec.Review?.Gates.find((g) => g.Gate === 'G5');
+        expect(g5?.Status).toBe('Failed');
+        expect(g5?.Notes).toContain(
+            'Generated asset synth-speaker-clip failed the integrity check: Synthetic speaker appears in hook beat',
+        );
+
+        const finalStep = await rootAgent.ValidateSuccess(
+            params,
+            {
+                step: 'Success',
+                terminate: true,
+                newPayload: spec,
+            },
+            spec,
+        );
+        expect(finalStep.step).toBe('Failed');
+        expect(finalStep.errorMessage).toBe(
+            'Generated asset synth-speaker-clip failed the integrity check: Synthetic speaker appears in hook beat',
+        );
+        expect(finalStep.newPayload?.Status).toBe('Reviewed');
+        expect(finalStep.newPayload?.Status).not.toBe('Delivered');
+    });
 });
+

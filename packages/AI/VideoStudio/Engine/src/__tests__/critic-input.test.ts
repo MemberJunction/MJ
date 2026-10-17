@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import type { CachedPublishedVersion, RubricScaleRecord } from '@memberjunction/rubrics-base';
 import type { VideoGenerationSpec } from '@memberjunction/video-studio-core';
@@ -5,11 +8,13 @@ import type { VideoGenerationSpec } from '@memberjunction/video-studio-core';
 import {
     BuildBeatsTable,
     BuildBoundValuesTable,
+    BuildGeneratedAssetsTable,
     BuildRepairBrief,
     BuildRubricCriteriaText,
     BuildTimelineTable,
     PickSheetsForCall,
 } from '../review/critic-input.js';
+import { ComposeHumanReviewNotes } from '../review/human-review-notes.js';
 
 const MEETS_SCALE_ID = 'C882E907-2C02-49B1-919F-8AFCCCD4709F';
 const LEVEL_MISS_ID = 'B555FE53-2E9B-4FB6-A092-0AE8E9557367';
@@ -408,4 +413,186 @@ describe('critic-input pure builders', () => {
             expect(line.startsWith('#')).toBe(false);
         }
     });
+
+    it('BuildGeneratedAssetsTable returns empty string when no generated assets exist and renders table when present', () => {
+        expect(BuildGeneratedAssetsTable({})).toBe('');
+        expect(
+            BuildGeneratedAssetsTable({
+                Assets: {
+                    Approved: [
+                        {
+                            Key: 'logo',
+                            Kind: 'Logo',
+                            FileID: 'f-1',
+                            Provenance: 'Brand',
+                        },
+                    ],
+                    Pending: [],
+                },
+            }),
+        ).toBe('');
+
+        const specWithGen: Partial<VideoGenerationSpec> = {
+            Beats: [
+                {
+                    Key: 'hook',
+                    Role: 'Hook',
+                    DurationSeconds: 5,
+                    StartSeconds: 0,
+                    EndSeconds: 5,
+                    CompositionKey: 'HeroStat',
+                    Props: {},
+                    AssetRefs: ['broll-campus'],
+                    DataRefs: [],
+                },
+                {
+                    Key: 'proof',
+                    Role: 'Proof',
+                    DurationSeconds: 6,
+                    StartSeconds: 5,
+                    EndSeconds: 11,
+                    CompositionKey: 'BarChart',
+                    Props: {},
+                    AssetRefs: ['broll-campus', 'bg-abstract'],
+                    DataRefs: [],
+                },
+            ],
+            Assets: {
+                Approved: [
+                    {
+                        Key: 'broll-campus',
+                        Kind: 'Video',
+                        FileID: 'f-v1',
+                        Provenance: 'Generated',
+                        Generation: {
+                            ModelID: 'veo-model-id',
+                            PromptRunID: 'pr-v1',
+                            Prompt: 'Aerial shot of green campus',
+                            ReferenceKeys: [],
+                            DurationSeconds: 5,
+                            Cost: 0.45,
+                            C2PA: true,
+                        },
+                    },
+                    {
+                        Key: 'bg-abstract',
+                        Kind: 'Image',
+                        FileID: 'f-i1',
+                        Provenance: 'Generated',
+                        Generation: {
+                            ModelID: 'imagen-model-id',
+                            PromptRunID: 'pr-i1',
+                            Prompt: 'Soft blue geometric texture',
+                            ReferenceKeys: [],
+                            Cost: 0.04,
+                            C2PA: false,
+                        },
+                    },
+                ],
+                Pending: [],
+            },
+        };
+
+        const table = BuildGeneratedAssetsTable(specWithGen);
+        expect(table).toContain('| Key | Kind | Beats | Time Ranges | Prompt |');
+        expect(table).toContain(
+            '| broll-campus | Video | hook, proof | 0.00s-5.00s, 5.00s-11.00s | Aerial shot of green campus |',
+        );
+        expect(table).toContain(
+            '| bg-abstract | Image | proof | 5.00s-11.00s | Soft blue geometric texture |',
+        );
+    });
+
+    it('ComposeHumanReviewNotes omits generated-assets section when none exist and includes full AI-generated assets (n) section when present', () => {
+        const cleanNotes = ComposeHumanReviewNotes({});
+        expect(cleanNotes).toBe('No open defects.');
+        expect(cleanNotes).not.toContain('AI-generated assets');
+
+        const specWithGen: Partial<VideoGenerationSpec> = {
+            Beats: [
+                {
+                    Key: 'hook',
+                    Role: 'Hook',
+                    DurationSeconds: 4,
+                    StartSeconds: 0,
+                    EndSeconds: 4,
+                    CompositionKey: 'HeroStat',
+                    Props: {},
+                    AssetRefs: ['clip-hero'],
+                    DataRefs: [],
+                },
+            ],
+            Assets: {
+                Approved: [
+                    {
+                        Key: 'clip-hero',
+                        Kind: 'Video',
+                        FileID: 'f-v1',
+                        Provenance: 'Generated',
+                        Generation: {
+                            ModelID: 'model-veo-3',
+                            PromptRunID: 'pr-1',
+                            Prompt: 'Sunlight on glass atrium',
+                            ReferenceKeys: [],
+                            DurationSeconds: 4,
+                            Cost: 0.4,
+                            C2PA: true,
+                        },
+                    },
+                    {
+                        Key: 'img-card',
+                        Kind: 'Image',
+                        FileID: 'f-i1',
+                        Provenance: 'Generated',
+                        Generation: {
+                            ModelID: 'model-imagen-3',
+                            PromptRunID: 'pr-2',
+                            Prompt: 'Warm gradient card backdrop',
+                            ReferenceKeys: [],
+                            Cost: 0.04,
+                            C2PA: false,
+                        },
+                    },
+                ],
+                Pending: [],
+            },
+        };
+
+        const notes = ComposeHumanReviewNotes(specWithGen);
+        expect(notes).toContain('AI-generated assets (2)');
+        expect(notes).toContain(
+            '- clip-hero (Video, 4s): beats [hook (0s-4s)], model model-veo-3, C2PA: kept',
+        );
+        expect(notes).toContain(
+            '- img-card (Image, —): beats [none], model model-imagen-3, C2PA: none',
+        );
+    });
+
+    it('metadata/rubrics/.video-production-quality.json has criterion generated-assets-are-honest-and-disclosed with IsGate: true and GateMinimumScore: 0.6', () => {
+        const here = dirname(fileURLToPath(import.meta.url));
+        const rubricPath = resolve(
+            here,
+            '../../../../../../metadata/rubrics/.video-production-quality.json',
+        );
+        const raw = JSON.parse(readFileSync(rubricPath, 'utf8')) as {
+            relatedEntities?: {
+                'MJ: Rubric Versions'?: Array<{
+                    relatedEntities?: {
+                        'MJ: Rubric Criteria'?: Array<{
+                            fields?: Record<string, unknown>;
+                        }>;
+                    };
+                }>;
+            };
+        };
+        const versions = raw.relatedEntities?.['MJ: Rubric Versions'] ?? [];
+        const criteria = versions[0]?.relatedEntities?.['MJ: Rubric Criteria'] ?? [];
+        const integrityCriterion = criteria.find(
+            (c) => c.fields?.Key === 'generated-assets-are-honest-and-disclosed',
+        )?.fields;
+        expect(integrityCriterion).toBeDefined();
+        expect(integrityCriterion?.IsGate).toBe(true);
+        expect(integrityCriterion?.GateMinimumScore).toBe(0.6);
+    });
 });
+

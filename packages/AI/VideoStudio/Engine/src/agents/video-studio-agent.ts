@@ -21,6 +21,7 @@ import {
 } from '@memberjunction/core-entities';
 import { EscapeSQLString, RegisterClass, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import {
+    BuildGenerationProvenanceSummary,
     ValidateVideoGenerationSpec,
     VIDEO_INTERACTION_MODES,
     VIDEO_STUDIO_SPEC_VERSION,
@@ -37,6 +38,7 @@ import {
     DescribeStageProgress,
     DescribeStoryboardForApproval,
     EvaluateGates,
+    GENERATED_ASSET_INTEGRITY_CRITERION_KEY,
     ReadApprovalDecision,
     RequestRegeneration,
 } from '../gates.js';
@@ -313,7 +315,11 @@ export class VideoStudioAgent extends BaseAgent {
             if (g5?.Status === 'Passed') {
                 if (newestRound && Array.isArray(newestRound.Defects)) {
                     for (const defect of newestRound.Defects) {
-                        if (defect && defect.Status === 'Open') {
+                        if (
+                            defect &&
+                            defect.Status === 'Open' &&
+                            defect.Criterion !== GENERATED_ASSET_INTEGRITY_CRITERION_KEY
+                        ) {
                             defect.Status = 'Deferred';
                         }
                     }
@@ -638,6 +644,42 @@ export class VideoStudioAgent extends BaseAgent {
 
         const nonPassing = gates.filter((g) => g.Status !== 'Passed');
         if (nonPassing.length > 0) {
+            const rounds = spec.Review?.Rounds ?? [];
+            const newestRound = rounds.length > 0 ? rounds[rounds.length - 1] : undefined;
+            const openDefects = (newestRound?.Defects ?? []).filter(
+                (d) => d && d.Status === 'Open',
+            );
+            const openIntegrityDefect = openDefects.find(
+                (d) => d.Criterion === GENERATED_ASSET_INTEGRITY_CRITERION_KEY,
+            );
+            const g5Gate = nonPassing.find((g) => g.Gate === 'G5' && g.Status === 'Failed');
+            const repairCapReached = rounds.length - 1 >= this._currentSettings.MaxRepairRounds;
+            const hasFailedScoreCriterion = (spec.Review?.Scores?.Criteria ?? []).some(
+                (c) => c && c.Passed === false,
+            );
+            if (
+                g5Gate &&
+                (repairCapReached || (openDefects.length === 0 && hasFailedScoreCriterion))
+            ) {
+                let errMsg: string;
+                if (openIntegrityDefect) {
+                    const assetKey =
+                        openIntegrityDefect.AssetKey || openIntegrityDefect.Beat || 'unknown';
+                    errMsg = `Generated asset ${assetKey} failed the integrity check: ${openIntegrityDefect.Evidence}`;
+                } else {
+                    errMsg = g5Gate.Notes ?? 'Gate G5 failed.';
+                }
+                spec.Status = DeriveStatus(spec, gates);
+                return {
+                    ...baseResult,
+                    step: 'Failed',
+                    terminate: true,
+                    errorMessage: errMsg,
+                    previousPayload: currentPayload,
+                    newPayload: spec as unknown as P,
+                };
+            }
+
             spec.Status = DeriveStatus(spec, gates);
             const primary =
                 nonPassing.find((g) => g.Status === 'Failed' || g.Status === 'Blocked') ??
@@ -658,6 +700,14 @@ export class VideoStudioAgent extends BaseAgent {
 
         spec.Status = 'Delivered';
         spec.Review.HumanReviewNotes = ComposeHumanReviewNotes(spec);
+        const provenance = BuildGenerationProvenanceSummary(spec);
+        if (spec.Output) {
+            if (provenance !== undefined) {
+                spec.Output.GenerationProvenance = provenance;
+            } else {
+                delete spec.Output.GenerationProvenance;
+            }
+        }
 
         const archetypeName = spec.Archetype?.Name?.trim() || 'Video Production';
         const oneSentence = spec.Film?.OneSentence ?? '';

@@ -1,4 +1,10 @@
-import type { VideoDefect, VideoGenerationSpec } from '@memberjunction/video-studio-core';
+import { AIEngine } from '@memberjunction/aiengine';
+import { UUIDsEqual } from '@memberjunction/global';
+import {
+    DescribeGeneratedAssets,
+    type VideoDefect,
+    type VideoGenerationSpec,
+} from '@memberjunction/video-studio-core';
 
 /**
  * Composes the plain-text `Review.HumanReviewNotes` summary for a Video Studio production.
@@ -28,9 +34,22 @@ export function ComposeHumanReviewNotes(spec: Partial<VideoGenerationSpec>): str
         sections.push('No open defects.');
     }
 
-    const genAssets = (spec.Assets?.Approved ?? []).filter((a) => a?.Provenance === 'Generated');
-    if (genAssets.length > 0) {
-        sections.push(`Generated assets disclosed: ${genAssets.map((a) => a.Key).join(', ')}.`);
+    const disclosure = DescribeGeneratedAssets(spec);
+    if (disclosure.Items.length > 0) {
+        const lines = disclosure.Items.map((item) => {
+            const secondsPart =
+                item.DurationSeconds !== undefined ? `${item.DurationSeconds}s` : '—';
+            const beatsPart =
+                item.Beats.length > 0
+                    ? item.Beats
+                          .map((b) => `${b.Key} (${b.StartSeconds}s-${b.EndSeconds}s)`)
+                          .join(', ')
+                    : 'none';
+            const modelLabel = resolveModelName(item.ModelID);
+            const c2paLabel = item.C2PA ? 'C2PA: kept' : 'C2PA: none';
+            return `- ${item.Key} (${item.Kind}, ${secondsPart}): beats [${beatsPart}], model ${modelLabel}, ${c2paLabel}`;
+        });
+        sections.push([`AI-generated assets (${disclosure.Items.length})`, ...lines].join('\n'));
     }
 
     const videos = spec.Output?.Videos ?? {};
@@ -56,5 +75,23 @@ export function ComposeHumanReviewNotes(spec: Partial<VideoGenerationSpec>): str
     }
 
     return sections.join('\n\n');
+}
+
+function resolveModelName(modelId: string): string {
+    if (!modelId) {
+        return 'unknown';
+    }
+    try {
+        const models = AIEngine.Instance?.Models;
+        if (Array.isArray(models)) {
+            const match = models.find((m) => UUIDsEqual(m.ID, modelId));
+            if (match?.Name?.trim()) {
+                return match.Name.trim();
+            }
+        }
+    } catch {
+        // AIEngine not initialized; fall back to ModelID
+    }
+    return modelId;
 }
 
