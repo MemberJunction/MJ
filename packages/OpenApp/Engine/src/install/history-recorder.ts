@@ -417,7 +417,9 @@ export async function CheckSchemaSharedByOtherApps(
       // and let the remove CASCADE-drop a schema another app still lives in.
       ExtraFilter:
         `LOWER(SchemaName) = LOWER('${EscapeSQLString(schemaName)}') ` +
-        `AND ID <> '${EscapeSQLString(excludeAppId)}' ` +
+        // A first install has no app row yet, so excludeAppId is ''; `ID <> ''` fails to convert
+        // to uniqueidentifier on SQL Server and would turn every such check into CheckFailed.
+        (excludeAppId ? `AND ID <> '${EscapeSQLString(excludeAppId)}' ` : '') +
         `AND Status NOT IN ('Removed', 'Removing')`,
       ResultType: 'simple',
     },

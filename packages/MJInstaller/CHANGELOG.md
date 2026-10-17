@@ -1,5 +1,68 @@
 # @memberjunction/installer
 
+## 6.2.0-edge.4
+
+### Patch Changes
+
+- ed668f0: `mj install` now sets up the database itself instead of leaving `mj-db-setup.sql` for the user to run by hand. The database phase signs in as the CodeGen and API logins; when they can't sign in yet, it runs the setup script with an administrator login (asked for interactively, or `MJ_INSTALL_DB_ADMIN_USER` / `MJ_INSTALL_DB_ADMIN_PASSWORD` / `DatabaseAdminUser` / `DatabaseAdminPassword`), then signs in as both logins again to confirm. The administrator login is never saved. Interactive installs can still choose to run the script themselves. `--yes` installs with no administrator login and no database now stop with instructions instead of continuing to a failing migrate. Names and passwords in the generated scripts are now properly quoted. Long database commands (`install`, `app install`, `app upgrade`, `migrate`) also start with a warning not to let the machine sleep until they finish.
+- fec0c86: fix(installer): smoke-test cleanup no longer kills the installer itself on macOS/Linux. `KillByPort` now asks `lsof` for listening sockets only (`-sTCP:LISTEN`); a bare `-ti:<port>` also matched the installer's own health-check connection, so `mj install` exited 137 and left Explorer running.
+- d07faca: `mj install` now installs MemberJunction on PostgreSQL (`MJ_INSTALL_DB_PLATFORM=postgresql`, or pick it at the first prompt). As on SQL Server, the database phase sets everything up itself when given an administrator login: it creates the database, the CodeGen and API login roles (no `CREATEDB` / `CREATEROLE`), MJ's `cdp_*` group roles, the `pgcrypto` / `uuid-ossp` extensions, the `__mj` schema owned by the CodeGen role, and the API role's grants and default privileges. The statements run one at a time through the `pg` driver and are also written to `mj-db-setup.sql` as a `psql` script. `.env` gets `DB_PLATFORM='postgresql'` with the usual `DB_*` and `CODEGEN_DB_*` keys, keeping the CodeGen and API logins separate. SQL Server installs are unchanged.
+- 7d5097d: `mj app install` is more robust for clean installs: package installs run asynchronously with a 30-minute default ceiling (override with `MJ_APP_PACKAGE_INSTALL_TIMEOUT_MS`) instead of a blocking 5-minute `execFileSync`; transient GitHub failures (connection resets, timeouts, 502/503/504) are retried with backoff instead of failing the whole dependency chain; and an app left Disabled because its packages did not install is reported as such — with the real remedy — instead of "Successfully installed" and an "npm auth" guess.
+
+  `mj install --yes` no longer warns that config files were "created with default/empty values" when every value was supplied; it now names only the required connection values that are actually unset.
+
+  On macOS, `mj install`, `mj app install`, `mj app upgrade` and `mj migrate` keep the machine awake while they run (a `caffeinate` assertion tied to the CLI process; `MJ_ALLOW_SLEEP=1` opts out). Sleeping mid-install paused the local database and every connection, and on wake in-flight migration batches reported spurious 300-second timeouts and downloads reported `ECONNRESET` — the cause of every intermittent chained-install failure seen in clean-install testing.
+
+## 6.2.0-edge.3
+
+## 6.2.0-edge.2
+
+### Patch Changes
+
+- 662d68f: Installer: the post-CodeGen artifact check now finds `mj_generatedentities` under `apps/MJAPI/node_modules` as well as the repo root. pnpm (the installer default) links workspace packages into each dependent and never creates the root entry, so a healthy install reported "Failed phase(s): codegen" (MemberJunction/MJ#4599, #4707).
+
+## 6.2.0-edge.1
+
+### Patch Changes
+
+- 80905a1: Rename public class members and exported functions to PascalCase, per MJ's naming convention,
+  **without breaking a single consumer**.
+
+  Every renamed symbol keeps its old name beside the new one as a `@deprecated` stub that forwards to
+  it — a delegating method or function, a getter/setter pair for a property, and for Angular a
+  readable accessor pair for an `@Input` and a second `@Output` sharing the same `EventEmitter`, so a
+  template still binding the old name keeps receiving events. Old names still compile, still resolve,
+  and still behave identically; the deprecation tag rides through to the published `.d.ts`, so editors
+  point callers at the replacement. Where a package re-exports through an explicit `export { … }`
+  list, the new name is added alongside the old, so the correct name is actually on the public surface
+  rather than merely declared.
+
+  The rename is deliberately refused wherever a mechanical stub would not be equivalent, because
+  several of those shapes change a type contract while still compiling in the package that declares
+  them:
+  - an **optional** property or parameter property — TypeScript has no optional accessor, so a stub
+    would promote `foo?` to a required member and break every object literal that omits it;
+  - a class that is a **data shape** (no methods, or `@ObjectType`/`@InputType`) — object literals are
+    assigned to it, and an accessor stub changes what they must supply;
+  - a property whose **subclass redeclares it**, since TypeScript forbids a property overriding an
+    accessor (TS2610);
+  - a name whose PascalCase form is **already bound** in that file or class;
+  - decorated members, `get`/`set` pairs behind a decorator, generators, destructured parameters,
+    overload sets and abstract members.
+
+  **One wire-visible consequence, for version skew only.** `BaseInfo.toJSON` walks `_`-prefixed
+  backing fields and emits them through their public getter, preferring the PascalCase one. Renaming
+  the 23 field aliases in `MJCore/src/generic` therefore changes what `AllMetadata` carries:
+  `EntityInfo.spCreate` and friends now serialize as `SpCreate`. A same-version client is unaffected —
+  `copyInitData` accepts a value through a settable accessor, so either spelling lands on the right
+  field. An OLDER client against a newer server has no such path in its `copyInitData` and drops those
+  fields silently. Same-version deployments, which is the supported configuration, see no change.
+
+  Each package was verified against its own pre-change baseline rather than against zero, because
+  several packages in this repo do not typecheck cleanly to begin with. Angular packages were verified
+  with `ngc`, not `tsc`: a plain typecheck does not compile templates, and an earlier write-only
+  `@Input` alias passed `tsc` while breaking six template reads.
+
 ## 6.2.0-edge.0
 
 ### Minor Changes

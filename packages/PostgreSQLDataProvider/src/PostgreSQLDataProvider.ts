@@ -18,6 +18,8 @@ import {
     IMetadataProvider,
     RunQuerySQLFilterManager,
     RestoreContext,
+    CloneContext,
+    RecordChangeSource,
     RecordChangePayload,
     EntityDeleteOptions,
 } from '@memberjunction/core';
@@ -25,6 +27,7 @@ import {
 
 import { GenericDatabaseProvider, SaveCoercedValue, SaveCallBinding, SaveSQLFragment } from '@memberjunction/generic-database-provider';
 import type { IColocatedVectorHost } from '@memberjunction/ai-vectordb';
+import { BytesToBase64, EscapeSQLString, IsByteArray, TryBase64ToBytes } from '@memberjunction/global';
 import { PostgreSQLDialect, AutoQuotePostgreSQLIdentifiers } from '@memberjunction/sql-dialect';
 import { PGConnectionManager } from './pgConnectionManager.js';
 import { PGQueryParameterProcessor } from './queryParameterProcessor.js';
@@ -71,6 +74,16 @@ export const POSTGRESQL_PROCEDURE_PARAM_LIMIT = 90;
  * - Boolean columns use true/false instead of 1/0
  * - Identifier quoting uses "double quotes" instead of [brackets]
  */
+/**
+ * The `ChangeContext` column and its `$n` placeholder for a Record Change insert, or nothing when
+ * there is no context. Only clones set it, so every other tracked write keeps working on a database
+ * whose RecordChange table doesn't have the column yet (the PostgreSQL migration ships at release).
+ */
+function changeContextSQL(changeContext: string | null | undefined, placeholder: number): { column: string; value: string; parameters: string[] } {
+    if (!changeContext) return { column: '', value: '', parameters: [] };
+    return { column: ', "ChangeContext"', value: `, $${placeholder}::text`, parameters: [changeContext] };
+}
+
 export class PostgreSQLDataProvider extends GenericDatabaseProvider implements IColocatedVectorHost {
     private _connectionManager: PGConnectionManager = new PGConnectionManager();
     private _configData: PostgreSQLProviderConfigData | null = null;
@@ -330,6 +343,7 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
             this._configData = configData;
             this._schemaName = configData.MJCoreSchemaName || '__mj';
             this._connectionManager.InitializeWithExistingPool(existingPool, configData.ConnectionConfig);
+            RunQuerySQLFilterManager.Instance.SetPlatform('postgresql');
             return await super.Config(configData);
         } catch (err) {
             LogError(`PostgreSQLDataProvider.ConfigWithSharedPool failed: ${err instanceof Error ? err.message : String(err)}`);
@@ -371,19 +385,91 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
                 const bypassResult = await bypass.query(quotedQuery, processedParams);
                 return bypassResult.rows as T[];
             }
+            const timeoutMs = this.effectiveTimeoutMs(options?.timeoutMs);
+            // Both protections are skipped only for a statement that will run inside the caller's own
+            // transaction — the same membership resolveQuerySource routes on. Asking "is any transaction
+            // open on this instance?" instead would strip them from an unrelated caller, whose
+            // statement then runs on the pool with neither (#4786).
+            const joinsCallerTransaction = !options?.ignoreAmbientTransaction && this.IsCallerInAmbientTransaction();
+            const readOnly = !!options?.readOnlyTransaction && !joinsCallerTransaction;
+            const timed = timeoutMs !== undefined && !joinsCallerTransaction;
+            if (readOnly || timed) {
+                return await this.executeOnOwnConnection<T>(quotedQuery, processedParams, readOnly, timeoutMs);
+            }
             if (options?.ignoreAmbientTransaction) {
                 // A read that does not join the ambient transaction: straight to the pool (#4514).
                 const poolResult = await this._connectionManager.Pool.query(quotedQuery, processedParams);
                 return poolResult.rows as T[];
             }
-            this.AssertAmbientTransactionUsable();
-            const source = this._transaction ?? this._connectionManager.Pool;
+            const source = this.resolveQuerySource();
             const result = await source.query(quotedQuery, processedParams);
             return result.rows as T[];
         } catch (err) {
             const desc = options?.description ? ` [${options.description}]` : '';
             LogError(`PostgreSQLDataProvider.ExecuteSQL failed${desc}: ${err instanceof Error ? err.message : String(err)}`);
             throw err;
+        }
+    }
+
+    /**
+     * The statement limit for a call that asked for `requested` milliseconds: never longer than
+     * the pool's own `statement_timeout`, so a caller can shorten the limit but not lift it.
+     * `undefined` when the call asked for none.
+     */
+    private effectiveTimeoutMs(requested: number | undefined): number | undefined {
+        if (!requested || requested <= 0) return undefined;
+        const poolLimit = this._connectionManager.Config?.StatementTimeoutMs;
+        const ms = Math.floor(requested);
+        return poolLimit && poolLimit > 0 ? Math.min(ms, poolLimit) : ms;
+    }
+
+    /**
+     * Returns a connection used by {@link executeOnOwnConnection} to the pool after releasing any
+     * advisory lock the statement took: a session-level advisory lock survives the transaction's
+     * end, so it would otherwise stay on the pooled connection. A connection that cannot be cleaned
+     * is discarded instead.
+     */
+    private async releaseOwnConnection(client: pg.PoolClient): Promise<void> {
+        try {
+            await client.query('SELECT pg_advisory_unlock_all()');
+            client.release();
+        } catch (err) {
+            client.release(err instanceof Error ? err : new Error(String(err)));
+        }
+    }
+
+    /**
+     * Runs one statement on its own pooled connection inside a transaction of its own.
+     *
+     * - `readOnly`: `BEGIN READ ONLY … ROLLBACK`. Writes fail, and the rollback undoes any session
+     *   setting the statement made, so the connection goes back to the pool unchanged.
+     * - `timeoutMs`: `SET LOCAL statement_timeout` for this statement only; PostgreSQL cancels it
+     *   when the limit passes. Without `readOnly` the transaction commits, so writes still land.
+     *
+     * Advisory locks the statement took are released before the connection goes back to the pool.
+     */
+    private async executeOnOwnConnection<T>(
+        sql: string,
+        params: unknown[] | undefined,
+        readOnly: boolean,
+        timeoutMs: number | undefined,
+    ): Promise<Array<T>> {
+        const client = await this._connectionManager.AcquireClient();
+        try {
+            await client.query(readOnly ? 'BEGIN READ ONLY' : 'BEGIN');
+            try {
+                if (timeoutMs !== undefined) {
+                    await client.query(`SET LOCAL statement_timeout = ${timeoutMs}`);
+                }
+                const result = await client.query(sql, params);
+                await client.query(readOnly ? 'ROLLBACK' : 'COMMIT');
+                return result.rows as T[];
+            } catch (err) {
+                await client.query('ROLLBACK').catch(() => undefined);
+                throw err;
+            }
+        } finally {
+            await this.releaseOwnConnection(client);
         }
     }
 
@@ -402,16 +488,31 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
 
     /**
      * Execute a parameterized statement for a colocated vector provider against this
-     * connection. Uses the active transaction client when one is open (so vector writes
-     * commit/rollback with the entity write), otherwise the shared pool. Placeholders use
-     * PG's native `$1..$n`. Deliberately bypasses {@link ExecuteSQL}'s PascalCase
-     * auto-quoting — the vector provider emits its own correctly-quoted SQL.
+     * connection. Uses the transaction client when the caller is part of the open transaction
+     * (so vector writes commit/rollback with the entity write), otherwise the shared pool — an
+     * unrelated caller on a shared instance must not join it (#4786). Placeholders use PG's
+     * native `$1..$n`. Deliberately bypasses {@link ExecuteSQL}'s PascalCase auto-quoting — the
+     * vector provider emits its own correctly-quoted SQL.
      */
     public async RunColocatedSQL<T = Record<string, unknown>>(sql: string, params?: ReadonlyArray<unknown>): Promise<T[]> {
-        this.AssertAmbientTransactionUsable();
-        const source = this._transaction ?? this._connectionManager.Pool;
+        const source = this.resolveQuerySource();
         const result = await source.query(sql, params ? [...params] : undefined);
         return result.rows as T[];
+    }
+
+    /**
+     * Where a statement runs: the transaction client when the caller is part of the open transaction,
+     * otherwise the pool — an unrelated caller on a shared instance must not join it (#4786). Checks
+     * membership before {@link AssertAmbientTransactionUsable} so a member of a doomed transaction still
+     * fails loudly even after the handle has been nulled (e.g. by a failed savepoint rollback) — an
+     * unrelated caller falling through to the pool must never depend on that ordering.
+     */
+    private resolveQuerySource(): pg.PoolClient | pg.Pool {
+        if (!this.IsCallerInAmbientTransaction()) {
+            return this._connectionManager.Pool;
+        }
+        this.AssertAmbientTransactionUsable();
+        return this._transaction ?? this._connectionManager.Pool;
     }
 
     // ─── Transaction Management ──────────────────────────────────────
@@ -783,11 +884,11 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
         if (this.UseJsonArgShape(entity.EntityInfo, isUpdate ? 'update' : 'create')) {
             const payload: Record<string, unknown> = {};
             for (const [field, value] of fieldValues) {
-                const processed = PGQueryParameterProcessor.ProcessParameterValue(value);
-                if (this.isBinaryField(field) && processed !== null && processed !== undefined) {
-                    payload[field.Name] = this.encodeBinaryToBase64(processed);
+                if (this.isBinaryField(field) && value !== null && value !== undefined) {
+                    // The JSON-arg sprocs decode with decode(p_data->>'Field', 'base64').
+                    payload[field.Name] = BytesToBase64(this.toBinaryBytes(field, value));
                 } else {
-                    payload[field.Name] = processed;
+                    payload[field.Name] = PGQueryParameterProcessor.ProcessParameterValue(value);
                 }
             }
             // UPDATE: orchestrator skips PK fields (see GenericDatabaseProvider.GenerateSaveSQL),
@@ -809,7 +910,10 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
         const placeholders: string[] = [];
         let paramIndex = 0;
         for (const [field, value] of fieldValues) {
-            values.push(PGQueryParameterProcessor.ProcessParameterValue(value));
+            // A binary field's value is a base64 string; bound as text to a bytea parameter, PG
+            // would store the ASCII of the base64 itself. Bind the decoded bytes instead.
+            const isBinaryValue = this.isBinaryField(field) && value !== null && value !== undefined;
+            values.push(isBinaryValue ? this.toBinaryBytes(field, value) : PGQueryParameterProcessor.ProcessParameterValue(value));
             // Param name via the canonical builder (ParameterRef → `p_<lowercased CodeName>`,
             // no inner separator) so it EXACTLY matches the CRUD function's declared signature,
             // which is emitted by PostgreSQLCodeGenProvider using the same ParameterRef. Using
@@ -879,13 +983,14 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
         const baseValues = saveSQL.parameters ?? [];
         const recordIDExpr = this.buildRecordIDFromCTE(entity.EntityInfo, 'save_result');
         const s = baseValues.length + 1;
+        const cc = changeContextSQL(payload.changeContext, s + 9);
         const fullSQL = `WITH save_result AS (
     ${saveSQL.sql}
 ),
 record_change AS (
     INSERT INTO ${this._schemaName}."RecordChange"
-        ("EntityID", "RecordID", "UserID", "Type", "Source", "ChangesJSON", "ChangesDescription", "FullRecordJSON", "Status", "RestoredFromID", "RestoreReason")
-    SELECT $${s}::uuid, ${recordIDExpr}, $${s + 1}::uuid, $${s + 2}::varchar, $${s + 3}::varchar, $${s + 4}::text, $${s + 5}::text, $${s + 6}::text, 'Complete', $${s + 7}::uuid, $${s + 8}::text
+        ("EntityID", "RecordID", "UserID", "Type", "Source", "ChangesJSON", "ChangesDescription", "FullRecordJSON", "Status", "RestoredFromID", "RestoreReason"${cc.column})
+    SELECT $${s}::uuid, ${recordIDExpr}, $${s + 1}::uuid, $${s + 2}::varchar, $${s + 3}::varchar, $${s + 4}::text, $${s + 5}::text, $${s + 6}::text, 'Complete', $${s + 7}::uuid, $${s + 8}::text${cc.value}
     FROM save_result
     RETURNING "ID"
 )
@@ -901,6 +1006,7 @@ SELECT * FROM save_result`;
             payload.fullRecordJSON,
             payload.restoredFromID,
             payload.restoreReason,
+            ...cc.parameters,
         ];
         return { sql: fullSQL, parameters };
     }
@@ -938,6 +1044,7 @@ SELECT * FROM save_result`;
             );
             if (payload) {
                 const s = paramValues.length + 1;
+                const cc = changeContextSQL(payload.changeContext, s + 7);
                 paramValues.push(
                     payload.entityID,
                     payload.recordID,
@@ -946,14 +1053,15 @@ SELECT * FROM save_result`;
                     payload.fullRecordJSON,
                     payload.restoredFromID,
                     payload.restoreReason,
+                    ...cc.parameters,
                 );
                 const fullSQL = `WITH delete_result AS (
     ${simpleSQL}
 ),
 record_change AS (
     INSERT INTO ${this._schemaName}."RecordChange"
-        ("EntityID", "RecordID", "UserID", "Type", "Source", "ChangesJSON", "ChangesDescription", "FullRecordJSON", "Status", "RestoredFromID", "RestoreReason")
-    SELECT $${s}::uuid, $${s+1}::varchar, $${s+2}::uuid, 'Delete', $${s+3}::varchar, '', 'Record Deleted', $${s+4}::text, 'Complete', $${s+5}::uuid, $${s+6}::text
+        ("EntityID", "RecordID", "UserID", "Type", "Source", "ChangesJSON", "ChangesDescription", "FullRecordJSON", "Status", "RestoredFromID", "RestoreReason"${cc.column})
+    SELECT $${s}::uuid, $${s+1}::varchar, $${s+2}::uuid, 'Delete', $${s+3}::varchar, '', 'Record Deleted', $${s+4}::text, 'Complete', $${s+5}::uuid, $${s+6}::text${cc.value}
     FROM delete_result
     WHERE EXISTS (SELECT 1 FROM delete_result)
     RETURNING "ID"
@@ -1222,16 +1330,27 @@ SELECT * FROM delete_result`;
     /** Field-type predicate for BYTEA / varbinary / image columns. Used by JSON-arg payload. */
     private isBinaryField(field: EntityFieldInfo): boolean {
         const t = (field.Type || '').toLowerCase().trim();
-        return t === 'bytea' || t.startsWith('varbinary') || t.startsWith('image');
+        // Same set as EntityFieldInfo.IsBinaryFieldType — a type both reads and binds as binary or neither.
+        return t === 'bytea' || t.startsWith('varbinary') || t.startsWith('binary') || t.startsWith('image');
     }
 
-    private encodeBinaryToBase64(value: unknown): string {
-        if (value instanceof Uint8Array) return Buffer.from(value).toString('base64');
-        if (Buffer.isBuffer(value)) return value.toString('base64');
-        if (typeof value === 'string') return value; // already encoded
-        // Fallback — coerce via Buffer.from; throws on incompatible types,
-        // surfacing the encoding failure at save time rather than silent corruption.
-        return Buffer.from(value as ArrayBufferLike).toString('base64');
+    /**
+     * Converts a binary field's save value to bytes for a `bytea` parameter.
+     *
+     * A binary field's value in a `BaseEntity` is a base64 string; server code may also hand over
+     * a byte array (e.g. a Buffer). Anything else, including a string that is not valid base64,
+     * throws, so a corrupt value fails the save instead of being stored as garbage.
+     *
+     * @param field - The binary field being written; named in the error message.
+     * @param value - Base64 string or byte array (non-null).
+     * @returns The bytes, as a Node Buffer so the pg driver binds them as `bytea`.
+     */
+    private toBinaryBytes(field: EntityFieldInfo, value: unknown): Buffer {
+        const bytes = IsByteArray(value) ? value : TryBase64ToBytes(typeof value === 'string' ? value : null);
+        if (!bytes) {
+            throw new Error(`Field "${field.Name}" is binary (${field.Type}); its value must be a base64 string, but it is not valid base64`);
+        }
+        return Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
     }
 
     // resolveFieldValue moved to CoerceSaveFieldValue (above).
@@ -1262,6 +1381,7 @@ SELECT * FROM delete_result`;
         type: 'Create' | 'Update' | 'Delete',
         user: UserInfo,
         restoreContext?: RestoreContext | null,
+        cloneContext?: CloneContext | null,
     ): { sql: string; parameters?: unknown[] } | null {
         const payload = this.BuildRecordChangePayload(
             newData,
@@ -1272,12 +1392,14 @@ SELECT * FROM delete_result`;
             user,
             restoreContext,
             "'",
+            cloneContext,
         );
         if (!payload) return null;
 
+        const cc = changeContextSQL(payload.changeContext, 11);
         const sql = `INSERT INTO ${this._schemaName}."RecordChange"
-            ("EntityID", "RecordID", "UserID", "Type", "Source", "ChangesJSON", "ChangesDescription", "FullRecordJSON", "Status", "RestoredFromID", "RestoreReason")
-            VALUES ($1::uuid, $2::varchar, $3::uuid, $4::varchar, $5::varchar, $6::text, $7::text, $8::text, 'Complete', $9::uuid, $10::text)
+            ("EntityID", "RecordID", "UserID", "Type", "Source", "ChangesJSON", "ChangesDescription", "FullRecordJSON", "Status", "RestoredFromID", "RestoreReason"${cc.column})
+            VALUES ($1::uuid, $2::varchar, $3::uuid, $4::varchar, $5::varchar, $6::text, $7::text, $8::text, 'Complete', $9::uuid, $10::text${cc.value})
             RETURNING "ID"`;
 
         const parameters: unknown[] = [
@@ -1291,6 +1413,7 @@ SELECT * FROM delete_result`;
             payload.fullRecordJSON,
             payload.restoredFromID,
             payload.restoreReason,
+            ...cc.parameters,
         ];
 
         return { sql, parameters };
@@ -1307,6 +1430,8 @@ SELECT * FROM delete_result`;
         safeChangesDesc: string,
         safePKValue: string,
         safeUserId: string,
+        source?: RecordChangeSource,
+        changeContext?: string | null,
     ): string {
         const schema = entityInfo.SchemaName || '__mj';
         const view = entityInfo.BaseView;
@@ -1317,18 +1442,24 @@ SELECT * FROM delete_result`;
             .map(pk => `${pk.CodeName}|${safePKValue}`)
             .join('||');
 
+        const sourceVal = source ?? 'Internal';
+        // Named only when set, like the other sites: see changeContextSQL.
+        const changeContextColumn = changeContext ? ', "ChangeContext"' : '';
+        const changeContextValue = changeContext ? `,\n    '${EscapeSQLString(changeContext)}'::text` : '';
+
         return `
 INSERT INTO ${this._schemaName}."RecordChange"
-    ("EntityID", "RecordID", "UserID", "Type", "ChangesJSON", "ChangesDescription", "FullRecordJSON", "Status")
+    ("EntityID", "RecordID", "UserID", "Type", "Source", "ChangesJSON", "ChangesDescription", "FullRecordJSON", "Status"${changeContextColumn})
 SELECT
     '${entityInfo.ID}'::uuid,
     '${recordID}',
     '${safeUserId}'::uuid,
     'Update',
+    '${sourceVal}',
     '${safeChangesJSON}',
     '${safeChangesDesc}',
     row_to_json(r)::text,
-    'Complete'
+    'Complete'${changeContextValue}
 FROM ${pgDialect.QuoteSchema(schema, view)} r
 WHERE ${pgDialect.QuoteIdentifier(pkName)} = '${safePKValue}';`;
     }

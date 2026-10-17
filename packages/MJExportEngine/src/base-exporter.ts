@@ -162,6 +162,13 @@ export abstract class BaseExporter {
     }
 
     switch (column.dataType) {
+      case 'dateonly': {
+        // Re-anchored on UTC midnight of the stored day: Excel's serial arithmetic is UTC, and the
+        // text exporters read the day back with calendarDay().
+        const day = this.calendarDay(value);
+        return day ? new Date(`${day}T00:00:00.000Z`) : value;
+      }
+
       case 'date':
         if (value instanceof Date) {
           return value;
@@ -186,6 +193,30 @@ export abstract class BaseExporter {
       default:
         return value;
     }
+  }
+
+  /**
+   * The calendar day a date-only value stores, as ISO 8601 `YYYY-MM-DD`, or `null` when it names none.
+   *
+   * A SQL `date` arrives as a Date at UTC midnight or as its ISO string, so the day is read from the
+   * UTC parts or the leading `YYYY-MM-DD` of the string — never from local getters, which give the
+   * previous day for anyone west of Greenwich.
+   *
+   * A leading `YYYY-MM-DD` that is not a real day (`2026-13-45`, `2026-02-30`) names none: trusted, it
+   * wrote "Invalid Date" or rolled over to another day (`2026-03-02`). The caller writes the original
+   * value instead.
+   */
+  protected calendarDay(value: unknown): string | null {
+    if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value)) {
+      const day = value.slice(0, 10);
+      const parsed = new Date(`${day}T00:00:00.000Z`);
+      return !isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === day ? day : null;
+    }
+    const date = value instanceof Date ? value : typeof value === 'string' || typeof value === 'number' ? new Date(value) : null;
+    if (!date || isNaN(date.getTime())) {
+      return null;
+    }
+    return date.toISOString().slice(0, 10);
   }
 
   /**

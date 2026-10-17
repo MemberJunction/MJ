@@ -1,5 +1,271 @@
 # Change Log - @memberjunction/ng-explorer-settings
 
+## 6.2.0-edge.4
+
+### Patch Changes
+
+- 382b9aa: Users can change their own avatar on deployments that do not let them update `MJ: Users`.
+
+  My Profile and the login avatar sync used to save the caller's own `MJ: Users` row, which needs Update permission on `MJ: Users`. A locked-down deployment cannot grant that: a row filter restricts rows, not columns, so a user who may update their own row may also rewrite their own `Email`. There, every avatar save failed ("Failed to save avatar") and the login sync failed silently.
+  - `@memberjunction/server`: new `UpdateMyAvatar(ImageURL, IconClass)` mutation returning `UpdateMyAvatarResult { Success, ErrorMessage }`. The caller comes only from the request; their own row is loaded as the system user and only `UserImageURL` and `UserImageIconClass` are written. Input is validated by the exported `ValidateAvatarInput`: a PNG/JPEG/GIF/WEBP base64 data URI of at most 200KB decoded, or an absolute http(s) URL of at most 2048 characters; a lower-case Font Awesome class list of at most 100 characters. `javascript:`, SVG and every other `data:` type are refused. Null clears a column. Scope-limited (magic-link) sessions are refused: an anonymous guest is the shared Anonymous user. Save failures return a generic message; the detail is logged.
+  - `@memberjunction/ng-user-avatar`: `UserAvatarService.UpdateMyAvatar(imageURL, iconClass, provider?)` calls the mutation. `SyncFromImageUrl` uses it instead of `user.Save()`, refuses any user other than the signed-in one, and reloads the entity afterwards. The package now depends on `@memberjunction/graphql-dataprovider`.
+  - `@memberjunction/ng-explorer-settings`: My Profile save and Revert to Default use the mutation, reload the user afterwards, and show the server's message on failure.
+  - `@memberjunction/ng-explorer-core`: after an avatar change the shell also refreshes the user menu's context user entity, so `GetUserDisplayInfo()` stops returning the old avatar.
+  - `@memberjunction/integration-test-suite`: IT106 (`self-avatar-client`, AV1–AV6, mutation tier) proves the mutation over the wire for a user without and a user with Update on `MJ: Users`, using two new seeded `it-avatar-*` users in `metadata-optional/integration-test`. `fls-client.checks.ts` now exports its user-API-key helpers for reuse.
+
+  Behaviour change: an avatar image larger than 200KB, or one served as a non-image content type, is now refused by the server, including on the login sync.
+
+- b8a9e5e: Remove nested `UUIDsEqual` scans where both lists grow with the data or the code runs on every render. Fix one cross-database lookup bug.
+  - **Rubric publish validation could miss advisory parents.** `ValidateRubricTree` looked a raw `parentId` up in a map with normalized keys. On SQL Server (upper-case IDs) the advisory-ancestor walk silently stopped, so a non-advisory criterion under an advisory group was not reported. The map is now a `UUIDMap`.
+  - **Per-render getters no longer rescan the entity list.** The Entity form's `FormChromeCandidates`, the Data Explorer's `RecentEntities` / `FavoriteEntities` and the storage admin's `FilteredAccountRows` now read cached or once-built indexes.
+  - **Entity lookups by ID** in the ERD, the get-entity-details and list-entities actions, recent-access and the form builder now use the provider's indexed `EntityByID`. The application dialog uses a once-built index.
+  - **Other once-built indexes:** tag lookups, permission grantee names, orphaned-conversation owners and flow-editor node moves.
+  - `createFakeProvider` (`ng-test-utils`) now implements `EntityByID`, like a real provider.
+  - **New helper:** `GroupByUUID(items, getId?)` in `@memberjunction/global` groups items by a UUID in one pass, each group in input order.
+  - **Server sites that matched two growing lists:** the user cache (users × user roles), resource-permission deduplication, user/role sync, default-app user applications, scheduled-job statistics, MCP action discovery, REST connector schema introspection and rubric calibration.
+  - **Offline tools:** CodeGen relationship sync and CHECK-constraint value lists, CodeGen's related-entity form lookups, and `mj artifacts reclassify`.
+  - **Angular screens that scale with the data:** the AI Agent form's linked prompts and actions, the prompt priority matrix, the Testing explorer, the conversations message cache, the Query Browser tree, the Actions overview and categories, the dashboard browser, list-form bulk remove and credentials bulk actions.
+
+  Behaviour is unchanged otherwise, and each site has a test that also passes against the old code.
+
+- e8258a1: `@memberjunction/global` gains set-based UUID helpers, so matching one list against another no longer means a nested `UUIDsEqual` scan (#4719).
+  - **Collections:** `UUIDSet` and `UUIDMap` normalize on every insert and lookup, so upper-case and lower-case IDs match without anyone having to remember `NormalizeUUID` on both sides.
+  - **Helpers:** `FilterByUUIDs`, `ExcludeByUUIDs`, `CountByUUID` and `IndexByUUID` cover keeping matches, dropping matches, counting per ID and looking up by ID in one linear pass. Each takes an optional ID selector.
+  - **Faster `UUIDsEqual`:** it now compares without allocating. It produces exactly the old result, falling back to the old path for non-ASCII input.
+  - **New guard:** the UUID compliance scan fails on new nested `UUIDsEqual` scans. The check is AST-based, and a per-file baseline records the sites that predate it.
+  - **Adopted:** the sites fixed in #4716 now use the helpers.
+  - **Guide:** `guides/UUID_COMPARISON_GUIDE.md` Patterns 5 and 8 are rewritten around the new API.
+
+- Updated dependencies [a709bb6]
+- Updated dependencies [d17de94]
+- Updated dependencies [432cb73]
+- Updated dependencies [1d6e3e8]
+- Updated dependencies [dde482c]
+- Updated dependencies [49f26d9]
+- Updated dependencies [1dc0681]
+- Updated dependencies [7384dd6]
+- Updated dependencies [88e6902]
+- Updated dependencies [bb3028a]
+- Updated dependencies [6dc3aa9]
+- Updated dependencies [24fce37]
+- Updated dependencies [c87f87a]
+- Updated dependencies [490cd8d]
+- Updated dependencies [0a7c255]
+- Updated dependencies [d86bcbc]
+- Updated dependencies [7316ac3]
+- Updated dependencies [08b3d7b]
+- Updated dependencies [dbc3462]
+- Updated dependencies [1ea4085]
+- Updated dependencies [aee2d53]
+- Updated dependencies [5e1e343]
+- Updated dependencies [f0c78c3]
+- Updated dependencies [25f7b82]
+- Updated dependencies [90829e3]
+- Updated dependencies [aac148b]
+- Updated dependencies [382b9aa]
+- Updated dependencies [d52f9ba]
+- Updated dependencies [0e5a4cd]
+- Updated dependencies [b968642]
+- Updated dependencies [68a7e3b]
+- Updated dependencies [e7b2ebc]
+- Updated dependencies [e0cf9ed]
+- Updated dependencies [57fea6a]
+- Updated dependencies [1ba9315]
+- Updated dependencies [b8a9e5e]
+- Updated dependencies [e8258a1]
+  - @memberjunction/core-entities@6.2.0-edge.4
+  - @memberjunction/graphql-dataprovider@6.2.0-edge.4
+  - @memberjunction/core@6.2.0-edge.4
+  - @memberjunction/ng-base-forms@6.2.0-edge.4
+  - @memberjunction/ng-shared@6.2.0-edge.4
+  - @memberjunction/ng-shared-generic@6.2.0-edge.4
+  - @memberjunction/ng-ui-components@6.2.0-edge.4
+  - @memberjunction/global@6.2.0-edge.4
+  - @memberjunction/ng-user-avatar@6.2.0-edge.4
+  - @memberjunction/ng-entity-permissions@6.2.0-edge.4
+  - @memberjunction/ng-base-application@6.2.0-edge.4
+  - @memberjunction/ng-entity-form-dialog@6.2.0-edge.4
+  - @memberjunction/ng-simple-record-list@6.2.0-edge.4
+  - @memberjunction/ng-base-types@6.2.0-edge.4
+  - @memberjunction/ng-code-editor@6.2.0-edge.4
+  - @memberjunction/ng-join-grid@6.2.0-edge.4
+  - @memberjunction/ng-notifications@6.2.0-edge.4
+  - @memberjunction/ng-tabstrip@6.2.0-edge.4
+
+## 6.2.0-edge.3
+
+### Patch Changes
+
+- Updated dependencies [25bb295]
+- Updated dependencies [dfe40a4]
+- Updated dependencies [131f3c4]
+- Updated dependencies [0f04590]
+- Updated dependencies [41c2c08]
+- Updated dependencies [29b6ec3]
+- Updated dependencies [279b93e]
+- Updated dependencies [66fd011]
+- Updated dependencies [f41442f]
+- Updated dependencies [196160a]
+- Updated dependencies [d046715]
+- Updated dependencies [60bd774]
+- Updated dependencies [35da130]
+- Updated dependencies [28c92e0]
+- Updated dependencies [d0a8dbf]
+- Updated dependencies [ec97ad4]
+- Updated dependencies [b1b6d3d]
+- Updated dependencies [49e0bd8]
+  - @memberjunction/core-entities@6.2.0-edge.3
+  - @memberjunction/global@6.2.0-edge.3
+  - @memberjunction/core@6.2.0-edge.3
+  - @memberjunction/graphql-dataprovider@6.2.0-edge.3
+  - @memberjunction/ng-base-forms@6.2.0-edge.3
+  - @memberjunction/ng-shared@6.2.0-edge.3
+  - @memberjunction/ng-base-application@6.2.0-edge.3
+  - @memberjunction/ng-ui-components@6.2.0-edge.3
+  - @memberjunction/ng-entity-form-dialog@6.2.0-edge.3
+  - @memberjunction/ng-entity-permissions@6.2.0-edge.3
+  - @memberjunction/ng-simple-record-list@6.2.0-edge.3
+  - @memberjunction/ng-base-types@6.2.0-edge.3
+  - @memberjunction/ng-code-editor@6.2.0-edge.3
+  - @memberjunction/ng-join-grid@6.2.0-edge.3
+  - @memberjunction/ng-notifications@6.2.0-edge.3
+  - @memberjunction/ng-shared-generic@6.2.0-edge.3
+  - @memberjunction/ng-user-avatar@6.2.0-edge.3
+  - @memberjunction/ng-tabstrip@6.2.0-edge.3
+
+## 6.2.0-edge.2
+
+### Patch Changes
+
+- Updated dependencies [e97d95c]
+- Updated dependencies [2552b1e]
+- Updated dependencies [660ef45]
+- Updated dependencies [21f9e15]
+- Updated dependencies [4248fb3]
+- Updated dependencies [f3c6161]
+- Updated dependencies [0adaf76]
+- Updated dependencies [5ee02db]
+- Updated dependencies [ef43cf3]
+- Updated dependencies [ea4080e]
+- Updated dependencies [b44c7cf]
+- Updated dependencies [7e57b48]
+- Updated dependencies [705ab4e]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [93f1254]
+- Updated dependencies [5986939]
+- Updated dependencies [4d647e6]
+- Updated dependencies [c35f7e5]
+- Updated dependencies [369e229]
+- Updated dependencies [d13cf6b]
+- Updated dependencies [2854a2e]
+  - @memberjunction/core@6.2.0-edge.2
+  - @memberjunction/core-entities@6.2.0-edge.2
+  - @memberjunction/graphql-dataprovider@6.2.0-edge.2
+  - @memberjunction/ng-base-forms@6.2.0-edge.2
+  - @memberjunction/global@6.2.0-edge.2
+  - @memberjunction/ng-ui-components@6.2.0-edge.2
+  - @memberjunction/ng-shared@6.2.0-edge.2
+  - @memberjunction/ng-base-application@6.2.0-edge.2
+  - @memberjunction/ng-entity-form-dialog@6.2.0-edge.2
+  - @memberjunction/ng-entity-permissions@6.2.0-edge.2
+  - @memberjunction/ng-simple-record-list@6.2.0-edge.2
+  - @memberjunction/ng-base-types@6.2.0-edge.2
+  - @memberjunction/ng-code-editor@6.2.0-edge.2
+  - @memberjunction/ng-join-grid@6.2.0-edge.2
+  - @memberjunction/ng-notifications@6.2.0-edge.2
+  - @memberjunction/ng-shared-generic@6.2.0-edge.2
+  - @memberjunction/ng-user-avatar@6.2.0-edge.2
+  - @memberjunction/ng-tabstrip@6.2.0-edge.2
+
+## 6.2.0-edge.1
+
+### Patch Changes
+
+- 80905a1: Rename public class members and exported functions to PascalCase, per MJ's naming convention,
+  **without breaking a single consumer**.
+
+  Every renamed symbol keeps its old name beside the new one as a `@deprecated` stub that forwards to
+  it — a delegating method or function, a getter/setter pair for a property, and for Angular a
+  readable accessor pair for an `@Input` and a second `@Output` sharing the same `EventEmitter`, so a
+  template still binding the old name keeps receiving events. Old names still compile, still resolve,
+  and still behave identically; the deprecation tag rides through to the published `.d.ts`, so editors
+  point callers at the replacement. Where a package re-exports through an explicit `export { … }`
+  list, the new name is added alongside the old, so the correct name is actually on the public surface
+  rather than merely declared.
+
+  The rename is deliberately refused wherever a mechanical stub would not be equivalent, because
+  several of those shapes change a type contract while still compiling in the package that declares
+  them:
+  - an **optional** property or parameter property — TypeScript has no optional accessor, so a stub
+    would promote `foo?` to a required member and break every object literal that omits it;
+  - a class that is a **data shape** (no methods, or `@ObjectType`/`@InputType`) — object literals are
+    assigned to it, and an accessor stub changes what they must supply;
+  - a property whose **subclass redeclares it**, since TypeScript forbids a property overriding an
+    accessor (TS2610);
+  - a name whose PascalCase form is **already bound** in that file or class;
+  - decorated members, `get`/`set` pairs behind a decorator, generators, destructured parameters,
+    overload sets and abstract members.
+
+  **One wire-visible consequence, for version skew only.** `BaseInfo.toJSON` walks `_`-prefixed
+  backing fields and emits them through their public getter, preferring the PascalCase one. Renaming
+  the 23 field aliases in `MJCore/src/generic` therefore changes what `AllMetadata` carries:
+  `EntityInfo.spCreate` and friends now serialize as `SpCreate`. A same-version client is unaffected —
+  `copyInitData` accepts a value through a settable accessor, so either spelling lands on the right
+  field. An OLDER client against a newer server has no such path in its `copyInitData` and drops those
+  fields silently. Same-version deployments, which is the supported configuration, see no change.
+
+  Each package was verified against its own pre-change baseline rather than against zero, because
+  several packages in this repo do not typecheck cleanly to begin with. Angular packages were verified
+  with `ngc`, not `tsc`: a plain typecheck does not compile templates, and an earlier write-only
+  `@Input` alias passed `tsc` while breaking six template reads.
+
+- e2fa695: Five nested `UUIDsEqual` scans, each over two lists that grow with the data, now match against a normalized `Set` (or a first-index `Map`) built once. The affected sites are:
+  - the message placeholder getter
+  - the user-row role lookup
+  - the entity-permission fill-in (in Role mode, every entity × every saved row)
+  - the dashboard drop handlers
+  - the flow editor's `HighlightPath` and delete-selection
+
+  Results, ordering and case-insensitive matching are unchanged. New tests pin each one and pass against the old code as well.
+
+- Updated dependencies [a50948e]
+- Updated dependencies [0eeb89d]
+- Updated dependencies [a3539d2]
+- Updated dependencies [41274aa]
+- Updated dependencies [67f6c85]
+- Updated dependencies [eb3a8d3]
+- Updated dependencies [e1dd673]
+- Updated dependencies [307da67]
+- Updated dependencies [62e9e2d]
+- Updated dependencies [62f0ebc]
+- Updated dependencies [a7da50b]
+- Updated dependencies [17cc774]
+- Updated dependencies [80905a1]
+- Updated dependencies [6b08ebf]
+- Updated dependencies [db975fa]
+- Updated dependencies [920bef8]
+- Updated dependencies [e2fa695]
+  - @memberjunction/core-entities@6.2.0-edge.1
+  - @memberjunction/core@6.2.0-edge.1
+  - @memberjunction/graphql-dataprovider@6.2.0-edge.1
+  - @memberjunction/ng-base-forms@6.2.0-edge.1
+  - @memberjunction/global@6.2.0-edge.1
+  - @memberjunction/ng-base-application@6.2.0-edge.1
+  - @memberjunction/ng-code-editor@6.2.0-edge.1
+  - @memberjunction/ng-entity-permissions@6.2.0-edge.1
+  - @memberjunction/ng-join-grid@6.2.0-edge.1
+  - @memberjunction/ng-notifications@6.2.0-edge.1
+  - @memberjunction/ng-shared@6.2.0-edge.1
+  - @memberjunction/ng-shared-generic@6.2.0-edge.1
+  - @memberjunction/ng-simple-record-list@6.2.0-edge.1
+  - @memberjunction/ng-tabstrip@6.2.0-edge.1
+  - @memberjunction/ng-ui-components@6.2.0-edge.1
+  - @memberjunction/ng-user-avatar@6.2.0-edge.1
+  - @memberjunction/ng-entity-form-dialog@6.2.0-edge.1
+  - @memberjunction/ng-base-types@6.2.0-edge.1
+
 ## 6.2.0-edge.0
 
 ### Patch Changes

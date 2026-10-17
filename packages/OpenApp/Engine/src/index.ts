@@ -72,8 +72,8 @@ export type {
 } from './github/github-client.js';
 
 // Install handlers
-export { CreateAppSchema, DropAppSchema, SchemaExists, ValidateSchemaName, EscapeSqlString } from './install/schema-manager.js';
-export type { SchemaOperationResult, SchemaNameValidation, SchemaNameRule } from './install/schema-manager.js';
+export { CheckCanMigrateAppSchema, CreateAppSchema, DropAppSchema, SchemaExists, ValidateSchemaName, EscapeSqlString } from './install/schema-manager.js';
+export type { SchemaOperationResult, SchemaNameValidation, SchemaNameRule, CreateAppSchemaOptions } from './install/schema-manager.js';
 
 export { RunAppMigrations } from './install/migration-runner.js';
 export {
@@ -87,7 +87,7 @@ export {
 export type { RefreshDatabaseConfig } from './install/open-app-metadata-refresh.js';
 export type { MigrationRunOptions, MigrationRunResult, FlywayDatabaseConfig, SkywayDatabaseConfig } from './install/migration-runner.js';
 
-export { AddAppPackages, RemoveAppPackages, RunNpmInstall, RunPackageInstall, BumpPrefixedDependencies, DetectPackageManager, detectPackageManager, HasPnpmCatalog, hasPnpmCatalog } from './install/package-manager.js';
+export { AddAppPackages, RemoveAppPackages, RunNpmInstall, RunPackageInstall, RunPackageInstallAsync, ResolvePackageInstallTimeoutMs, IsDefaultNpmRegistry, DEFAULT_PACKAGE_INSTALL_TIMEOUT_MS, PACKAGE_INSTALL_TIMEOUT_ENV_VAR, BumpPrefixedDependencies, DetectPackageManager, detectPackageManager, HasPnpmCatalog, hasPnpmCatalog } from './install/package-manager.js';
 export type { PackageManagerOptions, PackageOperationResult, PackageManagerType, VersionStrategy, WorkspaceTarget } from './install/package-manager.js';
 
 export {
@@ -95,9 +95,9 @@ export {
     AddClientDynamicPackages,
     RemoveServerDynamicPackages,
     PruneDynamicPackagesNotInManifest,
-    ToggleServerDynamicPackages
-} from './install/config-manager.js';
+    ToggleServerDynamicPackages, SetNewUserTemplate } from './install/config-manager.js';
 export type { DynamicPackageEntry, ConfigOperationResult } from './install/config-manager.js';
+export { OfferTemplateUser, NamesFromEmail, TEMPLATE_USER_ENV, type TemplateUserContext } from './install/template-user.js';
 
 export { AngularConfigManager, DerivePrebundleExcludePatterns } from './install/angular-config-manager.js';
 export type { AngularConfigResult } from './install/angular-config-manager.js';

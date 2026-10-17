@@ -1,0 +1,60 @@
+<article class="dc-card" [class.selected]="Selected" (click)="OnCardClick($event)" (dblclick)="OnCardDoubleClick($event)">
+  <div class="dc-thumb" aria-hidden="true">
+    @if (IsNotSetUp) {
+      <span class="dc-placeholder">
+        <span class="dc-icon-tile"><i class="fa-solid fa-gauge-high"></i></span>
+        <span class="dc-not-set-up">Not set up yet</span>
+      </span>
+    } @else if (Dashboard.Thumbnail) {
+      <img [src]="Dashboard.Thumbnail" alt="" draggable="false" />
+    } @else if (LayoutPreview; as preview) {
+      <mj-dashboard-layout-preview [Preview]="preview"></mj-dashboard-layout-preview>
+    } @else {
+      <span class="dc-placeholder"><span class="dc-icon-tile"><i class="fa-solid fa-gauge-high"></i></span></span>
+    }
+  </div>
+  @if (Selectable) {
+    <label class="dc-select" (click)="$event.stopPropagation()" (dblclick)="$event.stopPropagation()">
+      <input type="checkbox" class="mj-checkbox" [checked]="Selected" [attr.aria-label]="'Select ' + Dashboard.Name"
+        (change)="SelectionToggle.emit(Dashboard)" />
+    </label>
+  }
+  <div class="dc-tools" (dblclick)="$event.stopPropagation()">
+    @if (CanEdit) {
+      <button type="button" class="dc-tool dc-edit" title="Edit" [attr.aria-label]="'Edit ' + Dashboard.Name" (click)="OnAction($event, Edit)">
+        <i class="fa-solid fa-pen" aria-hidden="true"></i>
+      </button>
+    }
+    @if (CanDelete) {
+      <button type="button" class="dc-tool dc-delete" title="Delete" [attr.aria-label]="'Delete ' + Dashboard.Name" (click)="OnAction($event, Delete)">
+        <i class="fa-solid fa-trash-can" aria-hidden="true"></i>
+      </button>
+    }
+    @if (ShowFavorite) {
+      <button type="button" class="dc-tool dc-star" [class.on]="IsFavorite" [attr.aria-pressed]="IsFavorite ? 'true' : 'false'"
+        [attr.aria-label]="'Favorite ' + Dashboard.Name" (click)="OnAction($event, ToggleFavorite)">
+        <i [class]="IsFavorite ? 'fa-solid fa-star' : 'fa-regular fa-star'" aria-hidden="true"></i>
+      </button>
+    }
+  </div>
+  <div class="dc-body">
+    <button type="button" class="dc-name" [attr.aria-label]="'Open ' + Dashboard.Name" [innerHTML]="NameHtml"></button>
+    @if (Dashboard.Description) {
+      <p class="dc-desc" [innerHTML]="DescriptionHtml"></p>
+    }
+    <div class="dc-meta">
+      @if (OwnerLabel) {
+        <span class="dc-owner"><i class="fa-regular fa-user" aria-hidden="true"></i>{{ OwnerLabel }}</span>
+      }
+      @if (IsShared) {
+        <span class="dc-shared" title="Shared with you"><i class="fa-solid fa-share-nodes" aria-hidden="true"></i>Shared</span>
+      }
+      @if (CategoryPath) {
+        <span class="dc-category">{{ CategoryPath }}</span>
+      }
+      @if (UpdatedLabel) {
+        <span class="dc-updated" title="Last updated"><i class="fa-regular fa-clock" aria-hidden="true"></i>{{ UpdatedLabel }}</span>
+      }
+    </div>
+  </div>
+</article>

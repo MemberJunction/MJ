@@ -7,12 +7,12 @@
 export type ViolationPolicy = 'fail' | 'null' | 'coerce-to-other';
 
 export type ValueConstraint =
-  | { Type: 'enum'; Values?: string[]; FromFieldMetadata?: boolean; OnViolation: ViolationPolicy }
+  | { Type: 'enum'; Values?: string[]; FromFieldMetadata?: boolean; ValueDescriptions?: Record<string, string>; OnViolation: ViolationPolicy }
   | { Type: 'lookup'; Entity?: string; MatchField?: string; OnViolation: ViolationPolicy }
-  | { Type: 'numeric'; Min?: number; Max?: number; Integer?: boolean; OnViolation: ViolationPolicy }
+  | { Type: 'numeric'; Min?: number; Max?: number; Integer?: boolean; Levels?: string[]; OnViolation: ViolationPolicy }
   | { Type: 'money'; Min?: number; Max?: number; CurrencyCode?: string; OnViolation: ViolationPolicy }
   | { Type: 'date'; Min?: string; Max?: string; OnViolation: ViolationPolicy }
-  | { Type: 'boolean'; OnViolation: ViolationPolicy }
+  | { Type: 'boolean'; Threshold?: number; OnViolation: ViolationPolicy }
   | { Type: 'freetext'; MaxLength?: number; OnViolation?: ViolationPolicy };
 
 /**
@@ -22,9 +22,12 @@ export interface ResolvedConstraint {
   Type: ValueConstraint['Type'];
   OnViolation: ViolationPolicy;
   AllowedValues?: string[];
+  ValueDescriptions?: Record<string, string>;
   Min?: number;
   Max?: number;
   Integer?: boolean;
+  Levels?: string[];
+  Threshold?: number;
   CurrencyCode?: string;
   MinDate?: string;
   MaxDate?: string;

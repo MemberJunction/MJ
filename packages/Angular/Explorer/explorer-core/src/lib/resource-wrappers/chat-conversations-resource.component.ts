@@ -5,10 +5,12 @@ import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-sha
 import { ResourceData, MJEnvironmentEntityExtended, MJConversationEntity, MJUserSettingEntity, UserInfoEngine, ConversationEngine } from '@memberjunction/core-entities';
 import { ResolveDeepLinkParam } from './chat-deeplink-params.js';
 import { ResolveChatSearchRoute } from './chat-search-routing.js';
-import { ConversationChatAreaComponent, ConversationListComponent, ConversationStreamingService, ActiveTasksService, UICommandHandlerService, ConversationBridgeService, SearchResult } from '@memberjunction/ng-conversations';
+import { ResolveComposeEmailDraft, BuildComposeEmailFallbackNotice } from './compose-email-fallback.js';
+import { ConversationChatAreaComponent, ConversationListComponent, ConversationStreamingService, ActiveTasksService, UICommandHandlerService, ConversationBridgeService, SearchResult, ActionableCommandRequest } from '@memberjunction/ng-conversations';
 import { PendingAttachment } from '@memberjunction/ng-composer';
 import { MentionAutocompleteService } from '@memberjunction/ng-conversations';
-import { ActionableCommand, OpenResourceCommand } from '@memberjunction/ai-core-plus';
+import { ComposeEmailCommand, OpenResourceCommand } from '@memberjunction/ai-core-plus';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { NavigationRequest } from '@memberjunction/ng-artifacts';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { Subject, takeUntil } from 'rxjs';
@@ -80,7 +82,6 @@ import { Subject, takeUntil } from 'rxjs';
               [currentUser]="currentUser"
               [conversationId]="selectedConversationId"
               [conversation]="selectedConversation"
-              [threadId]="selectedThreadId"
               [isNewConversation]="isNewUnsavedConversation"
               [pendingMessage]="pendingMessageToSend"
               [pendingAttachments]="pendingAttachmentsToSend"
@@ -91,8 +92,6 @@ import { Subject, takeUntil } from 'rxjs';
               (sidebarToggleClicked)="expandSidebar()"
               (conversationRenamed)="onConversationRenamed($event)"
               (conversationCreated)="onConversationCreated($event)"
-              (threadOpened)="onThreadOpened($event)"
-              (threadClosed)="onThreadClosed()"
               (pendingArtifactConsumed)="onPendingArtifactConsumed()"
               (pendingMessageConsumed)="onPendingMessageConsumed()"
               (pendingMessageRequested)="onPendingMessageRequested($event)"
@@ -340,16 +339,6 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
   public set selectedConversation(value: MJConversationEntity | null) {
     this.SelectedConversation = value;
   }
-  public SelectedThreadId: string | null = null;
-
-  /** @deprecated Use {@link SelectedThreadId}. */
-  public get selectedThreadId(): string | null {
-    return this.SelectedThreadId;
-  }
-  /** @deprecated Use {@link SelectedThreadId}. */
-  public set selectedThreadId(value: string | null) {
-    this.SelectedThreadId = value;
-  }
   public IsNewUnsavedConversation: boolean = false;
 
   /** @deprecated Use {@link IsNewUnsavedConversation}. */
@@ -565,9 +554,9 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
 
     // Subscribe to actionable commands (open:resource) from the UI command handler service.
     // open:url commands are handled directly by the service; open:resource needs NavigationService.
-    this.uiCommandHandler.actionableCommandRequested
+    this.uiCommandHandler.ActionableCommandRequested
       .pipe(takeUntil(this.destroy$))
-      .subscribe(request => this.handleActionableCommand(request.command));
+      .subscribe(request => this.handleActionableCommand(request));
 
     // Subscribe to bridge switch events so the overlay can hand off a conversation to this workspace
     this.bridge.SwitchEvent$
@@ -968,7 +957,6 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
       } else {
         this.SelectedConversationId = null;
         this.SelectedConversation = null;
-        this.SelectedThreadId = null;
         this.IsNewUnsavedConversation = true;
         this.updateUrl();
       }
@@ -985,7 +973,6 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
    */
   async OnConversationSelected(conversationId: string): Promise<void> {
     await this.selectConversation(conversationId);
-    this.SelectedThreadId = null; // Clear thread when switching conversations
     this.IsNewUnsavedConversation = false;
     this.updateUrl();
     this.updateTabTitle();
@@ -1245,7 +1232,6 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
   OnNewConversationRequested(): void {
     this.SelectedConversationId = null;
     this.SelectedConversation = null;
-    this.SelectedThreadId = null;
     this.IsNewUnsavedConversation = true;
     this.updateUrl();
     this.NotifyDisplayNameChanged('New Conversation');
@@ -1311,30 +1297,6 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
   /** @deprecated Use {@link OnConversationRenamed}. */
   onConversationRenamed(event: { conversationId: string; name: string; description: string }): void {
     return this.OnConversationRenamed(event);
-  }
-
-  /**
-   * Handle thread opened event
-   */
-  OnThreadOpened(threadId: string): void {
-    this.SelectedThreadId = threadId;
-  }
-
-  /** @deprecated Use {@link OnThreadOpened}. */
-  onThreadOpened(threadId: string): void {
-    return this.OnThreadOpened(threadId);
-  }
-
-  /**
-   * Handle thread closed event
-   */
-  OnThreadClosed(): void {
-    this.SelectedThreadId = null;
-  }
-
-  /** @deprecated Use {@link OnThreadClosed}. */
-  onThreadClosed(): void {
-    return this.OnThreadClosed();
   }
 
   /**
@@ -1455,7 +1417,8 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
    *
    * Explorer renders each chat surface as a separate resource, so results for another
    * surface go through NavigationService. Conversations and messages resolve to a
-   * conversation, which this component owns, so they are selected in place.
+   * conversation, which this component owns, so they are selected in place; a message then
+   * opens on its branch at its sequence.
    */
   OnSearchResultSelected(result: SearchResult): void {
     this.CloseSearch();
@@ -1465,6 +1428,10 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
       case 'conversation':
         void this.OnConversationSelected(route.ConversationId);
         break;
+      case 'message':
+        this.openMessageResult(route.ConversationId, route.BranchId, route.Sequence)
+          .catch((error: unknown) => console.error('Failed to open the message from search:', error));
+        break;
       case 'artifact':
         this.navigationService.OpenArtifact(route.ArtifactId, route.Title);
         break;
@@ -1472,6 +1439,16 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
         void this.navigationService.OpenNavItemByName(route.NavItemName, route.Configuration);
         break;
     }
+  }
+
+  /**
+   * Selects the message's conversation, renders it into the chat area, then has the chat area
+   * switch to the message's branch and scroll to it.
+   */
+  private async openMessageResult(conversationId: string, branchId: string | null, sequence: number): Promise<void> {
+    await this.OnConversationSelected(conversationId);
+    this.cdr.detectChanges();
+    await this.ChatArea?.OpenMessage(conversationId, branchId, sequence);
   }
 
   /** @deprecated Use {@link OnOpenEntityRecord}. */
@@ -1506,10 +1483,12 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
   }
 
   /**
-   * Handle actionable commands that require app-specific navigation (open:resource).
-   * open:url commands are already handled directly by UICommandHandlerService.
+   * Handle actionable commands that require app-specific navigation (open:resource, and the
+   * compose:email over-length fallback). open:url commands are already handled directly by
+   * UICommandHandlerService.
    */
-  private handleActionableCommand(command: ActionableCommand): void {
+  private handleActionableCommand(request: ActionableCommandRequest): void {
+    const command = request.command;
     if (command.type === 'open:resource') {
       const resourceCommand = command as OpenResourceCommand;
       if (resourceCommand.resourceType === 'Record') {
@@ -1521,7 +1500,32 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
         // Find the most recent artifact in the active conversation and open it.
         this.openMostRecentArtifact();
       }
+    } else if (command.type === 'compose:email') {
+      // The service handles compose:email directly whenever the draft fits in a mailto: URL, so
+      // reaching here means it did NOT fit. Opening the mail client would hand the user a draft
+      // with the body silently truncated, so the service declined and handed it to us instead —
+      // our job is to show the full draft, which lives in the artifact.
+      this.openComposeEmailDraft(command, request.DraftCopiedToClipboard === true);
     }
+  }
+
+  /**
+   * The compose:email over-length fallback: open the draft artifact and tell the user why their
+   * mail client did not open.
+   *
+   * With no artifactId (it is optional) the conversation's latest artifact opens, since for a
+   * single-artifact turn that IS the draft. A stated artifactId that is not loaded opens nothing:
+   * a different artifact would be passed off as the draft. Every outcome, including "nothing to
+   * open", ends in one notification, so the button never does nothing visible.
+   */
+  private openComposeEmailDraft(command: ComposeEmailCommand, copiedToClipboard: boolean): void {
+    const target = ResolveComposeEmailDraft(this.ChatArea?.ArtifactsByDetailId.values() ?? [], command.artifactId);
+    if (this.ChatArea && (target.Kind === 'stated' || target.Kind === 'most-recent')) {
+      void this.ChatArea.OnArtifactClicked({ artifactId: target.Artifact.ArtifactId, versionId: target.Artifact.ArtifactVersionId });
+    }
+    const notice = BuildComposeEmailFallbackNotice(target, copiedToClipboard);
+    // Longer than the default: the notice is two sentences and explains a changed clipboard.
+    MJNotificationService.Instance?.CreateSimpleNotification(notice.Message, notice.Style, 7000);
   }
 
   /**

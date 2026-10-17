@@ -134,6 +134,30 @@ export function RedactParamsToJSON(
     return JSON.stringify(RedactParams(params, actionParams, entityActionParams));
 }
 
+/**
+ * The name → value form of the redacted parameters, for a persister that stores inputs to be
+ * **re-hydrated into a run** later — `Task.InputPayload` for durable entity-action dispatch, which
+ * `TaskGraphActionRunner` reads back by parameter name.
+ *
+ * Differs from {@link RedactParamsToJSON} on purpose: a log keeps a suppressed parameter's shape so a
+ * run stays diagnosable, but a payload that will be *executed* has no use for a shape record — it
+ * would arrive as the parameter's value. A suppressed parameter is therefore omitted, and the action
+ * sees it as absent, which is the honest consequence of choosing not to persist it.
+ */
+export function RedactParamsToRecord(
+    params: ActionParam[] | undefined | null,
+    actionParams?: MJActionParamEntity[] | null,
+    entityActionParams?: MJEntityActionParamEntity[] | null
+): Record<string, unknown> {
+    const record: Record<string, unknown> = {};
+    for (const p of RedactParams(params, actionParams, entityActionParams)) {
+        if (!IsRedactedParam(p)) {
+            record[p.Name] = p.Value;
+        }
+    }
+    return record;
+}
+
 /** Case-insensitive lookup of a runtime parameter's definition row. */
 function findDefinition(name: string, actionParams?: MJActionParamEntity[] | null): MJActionParamEntity | undefined {
     if (!actionParams || !name) {

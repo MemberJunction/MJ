@@ -92,4 +92,14 @@ describe('EntityCardsComponent (DOM)', () => {
     expect(query(f, '.data-card')).toBeNull();
     expect(query(f, 'mj-empty-state')).not.toBeNull();
   });
+
+  // Pinned because a broken template expression still type-checks and would pass the presence check above.
+  it('names the entity in the empty-state title', () => {
+    const named = { ...ENTITY, DisplayNamePlural: 'Accounts' } as unknown as EntityInfo;
+    expect(text(render({ records: [], entity: named }), '.stub-empty-title')).toBe('No Accounts to display');
+  });
+
+  it('falls back to the generic empty-state title when no entity is set', () => {
+    expect(text(render({ records: [], entity: null }), '.stub-empty-title')).toBe('No records to display');
+  });
 });

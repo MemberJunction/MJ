@@ -27,6 +27,7 @@ export * from './lib/section-indicators/form-section-field-host';
 
 // Form resolution (form-variant / interactive-override picker — Generic, no Explorer deps)
 export * from './lib/resolver/form-resolver.service';
+export * from './lib/resolver/form-variants';
 
 // Presentation-agnostic form host (resolve → load → create → wire → teardown)
 export * from './lib/host/entity-form-host.component';
@@ -49,6 +50,10 @@ export * from './lib/base-form-section-info';
 export * from './lib/form-state.interface';
 export * from './lib/form-state.service';
 export * from './lib/form-record-refresh.coordinator';
+export * from './lib/form-field-edit.coordinator';
+
+// Entry-time duplicate check (flags possible duplicates while a new record is entered)
+export * from './lib/duplicate-entry-check/duplicate-entry-check';
 
 // Components
 export * from './lib/toolbar/form-toolbar.component';
@@ -71,9 +76,15 @@ export * from './lib/isa-related-panel/isa-related-panel.component';
 // authoring guide.
 export * from './lib/panel-slot/base-form-panel';
 export * from './lib/panel-slot/form-panel-slot.component';
+export * from './lib/panel-slot/form-field-panel-slot.component';
+export * from './lib/panel-slot/mount-form-contribution';
 export * from './lib/panel-slot/form-slot-coordinator.service';
 export * from './lib/panel-slot/form-contribution';
 export * from './lib/panel-slot/collect-form-panel-registrations';
+export * from './lib/panel-slot/collect-form-contribution-registrations';
+export * from './lib/panel-slot/panel-hides';
+export * from './lib/panel-slot/placement-preview';
+export * from './lib/panel-slot/placement-preview-panel.component';
 export * from './lib/panel-slot/form-contributions.component';
 export * from './lib/panel-slot/related-entity-grid-panel.component';
 export * from './lib/interactive-form/interactive-form.component';
@@ -82,7 +93,46 @@ export * from './lib/interactive-form/interactive-form.component';
 export * from './lib/chrome/form-chrome';
 export * from './lib/chrome/base-form-policy';
 export * from './lib/chrome/resolve-form-chrome';
+export * from './lib/section-counts/form-section-counts';
 export * from './lib/chrome/load-form-chrome-rules';
 export * from './lib/chrome/form-chrome-coordinator.service';
 export * from './lib/chrome/form-chrome-rail-pref';
 export * from './lib/related-grid-height';
+export * from './lib/interactive-form/interactive-form-panel.component';
+export * from './lib/interactive-form/form-panel-host-props.builder';
+export * from './lib/chrome/form-composition-snapshot';
+export * from './lib/chrome/form-composition-registry';
+
+// Placing a panel: the dialog, its form preview and the form probe, the types a host passes in
+// and gets back, and the helpers that seed the dialog and apply its answer. The other placement
+// rules stay internal.
+export {
+    ApplyDecisionToSpec,
+    PlacementStateFromContribution,
+    type FormPlacementContext,
+    type FormPlacementDecision,
+    type FormPlacementDroppedClaim,
+    type FormPlacementExisting,
+    type FormPlacementField,
+    type FormPlacementRailItem,
+    type FormPlacementRelated,
+    type FormPlacementReplaceMode,
+    type FormPlacementSection,
+    type FormPlacementState,
+} from './lib/apply/form-placement';
+export * from './lib/apply/form-placement-dialog.component';
+export * from './lib/apply/form-placement-preview.component';
+export * from './lib/apply/form-slot-probe.service';
+
+// Managing a form: the drawer and the service it writes through, with the types of their
+// inputs and results. The inventory and audience rules behind them stay internal.
+export type { FormAudience } from './lib/panel-manager/form-audience';
+export type {
+    FormOverrideRow,
+    FormPanelCompiledRow,
+    FormPanelContributionRow,
+    FormPanelRendering,
+    FormPanelStockGridRow,
+} from './lib/panel-manager/form-panel-inventory';
+export * from './lib/panel-manager/form-panel-admin.service';
+export * from './lib/panel-manager/panel-manager.component';

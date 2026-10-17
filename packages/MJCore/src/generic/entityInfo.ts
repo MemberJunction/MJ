@@ -1,14 +1,15 @@
 import { BaseInfo } from "./baseInfo"
 import { Metadata } from "./metadata"
 import { IMetadataProvider } from "./interfaces"
+import { MetadataProviderFor } from "./infoProviderResolution"
 import { RunViewParams } from "../views/runView"
 import { BaseEntity } from "./baseEntity"
 import { RowLevelSecurityFilterInfo, UserInfo, UserRoleInfo } from "./securityInfo"
-import { TypeScriptTypeFromSQLType, SQLFullType, SQLMaxLength, FormatValue, CodeNameFromString } from "./util"
+import { TypeScriptTypeFromSQLType, SQLFullType, SQLMaxLength, SQLMaxByteLength, FormatValue, CodeNameFromString } from "./util"
 import { IsFixedWidthStringSQLType } from "@memberjunction/sql-dialect"
 import { LogError } from "./logging"
 import { CompositeKey } from "./compositeKey"
-import { WarningManager, SafeJSONParse, UUIDsEqual, ordinalCompare } from "@memberjunction/global"
+import { WarningManager, SafeJSONParse, UUIDsEqual, ordinalCompare, GeneratePluralName } from "@memberjunction/global"
 import {
     ParseEntityConfiguration,
     ParseEntityRelationshipConfiguration,
@@ -17,6 +18,9 @@ import {
     type IEntityConfiguration,
     type IEntityRelationshipConfiguration,
     type IEntityFieldConfiguration,
+    type IEntityCloneConfiguration,
+    type ICloneRelationshipPolicy,
+    type IEntityFieldCloneConfiguration,
 } from "./entityConfiguration"
 import type { IEntitySubtypeSelectorConfig } from "./JSONType-interfaces/IEntitySubtypeSelectorConfig"
 
@@ -198,6 +202,15 @@ export class EntityRelationshipInfo extends BaseInfo  {
      */
     get ConfigurationObject(): IEntityRelationshipConfiguration | null {
         return this.Configuration;
+    }
+
+    /**
+     * Parsed clone configuration for this relationship.
+     * Specifies the policy (Deep, Reference, Skip), locked status, field rules, etc.
+     * @see plans/record-cloning/README.md §4.2
+     */
+    get CloneConfig(): ICloneRelationshipPolicy | null {
+        return this.ConfigurationObject?.Clone ?? null;
     }
 
     // virtual fields - returned by the database VIEW
@@ -465,11 +478,16 @@ export class EntityPermissionInfo extends BaseInfo{
                 break;
         }
         if (fID && fID.length > 0) 
-            return Metadata.Provider.RowLevelSecurityFilters.find(f => UUIDsEqual(f.ID, fID));  // global-provider-ok: stateless info class — proxies to global metadata
+            return MetadataProviderFor(this)?.RowLevelSecurityFilters?.find(f => UUIDsEqual(f.ID, fID));
     }
 
-    constructor (initData: any) {
+    /**
+     * @param initData - the raw permission row
+     * @param md - the provider that owns this metadata; RLS filters resolve through it (see {@link BaseInfo.OwningProvider})
+     */
+    constructor (initData: any, md?: IMetadataProvider) {
         super();
+        this.SetOwningProvider(md);
         this.copyInitData(initData);
     }
 }
@@ -803,10 +821,11 @@ export class EntityFieldValueInfo extends BaseInfo {
      * Returns a plain object suitable for JSON serialization.
      * Called automatically by JSON.stringify().
      */
-    toJSON(): { Value: string; Code: string } {
+    toJSON(): { Value: string; Code: string; Description?: string } {
         return {
             Value: this.Value,
             Code: this.Code,
+            Description: this.Description ?? undefined,
         };
     }
 }
@@ -1001,6 +1020,15 @@ export class EntityFieldInfo extends BaseInfo {
      */
     get ConfigurationObject(): IEntityFieldConfiguration | null {
         return this.Configuration;
+    }
+
+    /**
+     * Parsed clone configuration for this field.
+     * Specifies copy/reset/remap/suffix policy, value transformations, JSON remaps, etc.
+     * @see plans/record-cloning/README.md §4.3
+     */
+    get CloneConfig(): IEntityFieldCloneConfiguration | null {
+        return this.ConfigurationObject?.Clone ?? null;
     }
 
     /**
@@ -1990,13 +2018,24 @@ export class EntityFieldInfo extends BaseInfo {
     }
 
     /**
-     * Returns true if the field type is a binary type such as binary, varbinary, or image.
+     * Returns true if the field type is a binary type: SQL Server `binary`, `varbinary` or `image`,
+     * or PostgreSQL `bytea` (MemberJunction's PostgreSQL metadata normally reports `bytea` columns
+     * as `varbinary`; `bytea` is matched too in case a provider reports the native name).
+     *
+     * A binary field's value in a `BaseEntity` is a **base64 string**, or null. The database
+     * providers convert at the database boundary, so the value is JSON-safe everywhere above it:
+     * dirty tracking, Record Changes, caches, GraphQL and other transports. Use `Base64ToBytes`
+     * (or `Base64ToFloat32Vector` for an embedding) from `@memberjunction/global` to get the bytes.
+     *
+     * SQL Server `timestamp` / `rowversion` columns are not included: they are server-generated
+     * row versions, never written by MemberJunction.
      */
     get IsBinaryFieldType(): boolean {
         switch (this.Type.trim().toLowerCase()) {
             case 'binary':
             case 'varbinary':
             case 'image':
+            case 'bytea':
                 return true;
             default:
                 return false;
@@ -2083,6 +2122,14 @@ export class EntityFieldInfo extends BaseInfo {
 
     get MaxLength(): number {
         return SQLMaxLength(this.Type, this.Length);
+    }
+
+    /**
+     * Byte cap of a binary column (`binary(n)` / `varbinary(n)`), or 0 when it has none
+     * (`varbinary(MAX)`, `image`, `bytea`). The binary counterpart of {@link MaxLength}.
+     */
+    get MaxByteLength(): number {
+        return SQLMaxByteLength(this.Type, this.Length);
     }
 
     get ReadOnly(): boolean {
@@ -2491,6 +2538,15 @@ export class EntitySettingInfo extends BaseInfo {
  * Catalog of all entities across all schemas.
  * Contains comprehensive metadata about each entity including its database mappings, security settings, and UI preferences.
  */
+/** Backing list for {@link EntityInfo.ConfigurableAtCreationAttributes}. */
+const ENTITY_CONFIGURABLE_AT_CREATION_ATTRIBUTES = [
+    'IncludeInAPI', 'AllowUserSearchAPI', 'AllowCaching', 'TrackRecordChanges', 'AuditRecordAccess',
+    'AuditViewRuns', 'AllowAllRowsAPI', 'AllowCreateAPI', 'AllowUpdateAPI', 'AllowDeleteAPI', 'UserViewMaxRows',
+] as const satisfies readonly (keyof EntityInfo)[];
+
+/** One of the entity flags in {@link EntityInfo.ConfigurableAtCreationAttributes}. */
+export type EntityConfigurableAtCreationAttribute = typeof ENTITY_CONFIGURABLE_AT_CREATION_ATTRIBUTES[number];
+
 export class EntityInfo extends BaseInfo {
     /**
      * Unique identifier for the entity
@@ -2694,11 +2750,21 @@ export class EntityInfo extends BaseInfo {
      */
     AuditViewRuns: boolean = null
     /**
-     * When true (default), the server-side RunView cache will store and return cached results
-     * for this entity, trusting that all mutations flow through BaseEntity.Save() which fires
-     * cache invalidation events. Set to false for entities whose rows are created as side-effects
-     * of other operations via raw SQL (e.g., Record Changes created by spCreateRecordChange_Internal),
-     * since those inserts bypass BaseEntity and never trigger cache invalidation.
+     * Whether every change to this entity's rows fires a `BaseEntity` event. True (the default)
+     * declares that all mutations flow through `BaseEntity.Save()`/`Delete()`, so a cached copy
+     * kept current by those events can be trusted. False declares that rows can change without an
+     * event: raw SQL, a stored procedure (e.g. Record Changes created by
+     * `spCreateRecordChange_Internal`), or another application writing the same table.
+     *
+     * Each cache layer responds to `false` in the way that suits it:
+     * - **Server RunView cache:** does not cache the entity, since re-validating would cost as
+     *   much as running the query.
+     * - **Client RunView cache:** caches as before; every read is validated against the database.
+     * - **Engine caches (`BaseEngine`):** keep the rows, and the engine sweep re-checks them on its
+     *   interval. The user cache and the metadata sweep do the same for their entities.
+     *
+     * To keep an entity out of caching altogether, set {@link AllowCaching} to false instead.
+     * Setting any `AllowDirectSQL*` flag requires this to be false (a database CHECK enforces it).
      */
     TrustServerCacheCompletely: boolean = true
     /**
@@ -3021,6 +3087,29 @@ export class EntityInfo extends BaseInfo {
     get ConfigurationObject(): IEntityConfiguration | null {
         return this.Configuration;
     }
+
+    /**
+     * Parsed clone configuration for this entity.
+     * Controls clone enablement, not-cloneable status, caps, naming, field rules, etc.
+     * @see plans/record-cloning/README.md §4.1
+     */
+    get CloneConfig(): IEntityCloneConfiguration | null {
+        return this.ConfigurationObject?.Clone ?? null;
+    }
+
+    /**
+     * Returns true if cloning is explicitly enabled for this entity as a ROOT record.
+     */
+    get CloneEnabled(): boolean {
+        return this.CloneConfig?.Enabled === true;
+    }
+
+    /**
+     * Returns true if this entity is strictly not cloneable (neither as root nor child).
+     */
+    get NotCloneable(): boolean {
+        return this.CloneConfig?.NotCloneable === true;
+    }
     /**
      * Date and time when this entity was created
      */
@@ -3199,7 +3288,10 @@ export class EntityInfo extends BaseInfo {
     private _foreignKeysCache: EntityFieldInfo[] | null = null;
     private _encryptedFieldsCache: EntityFieldInfo[] | null = null;
     private _datetimeFieldsCache: EntityFieldInfo[] | null = null;
+    private _binaryFieldsCache: EntityFieldInfo[] | null = null;
     private _nameFieldCache: EntityFieldInfo | null | undefined = undefined;
+    /** Memoized computed plural, keyed by the display name it was derived from (see `DisplayNamePlural`). */
+    private _displayNamePluralCache: { source: string; plural: string } | undefined = undefined;
 
     /**
      * The set of field names this user may NOT READ on this entity — the per-request primitive
@@ -3440,6 +3532,30 @@ export class EntityInfo extends BaseInfo {
     }
 
     /**
+     * Returns the entity's binary fields (SQL Server `binary` / `varbinary` / `image`,
+     * PostgreSQL `bytea`). Cached.
+     *
+     * Binary values are held in a `BaseEntity`, cached and transported as base64 strings. The
+     * database providers convert driver byte arrays to base64 for exactly these fields when rows
+     * are read, and convert back to bytes when a record is saved. RunView leaves these fields out
+     * unless the caller asks for them (see `RunViewParams.IncludeBinaryFields`).
+     * @returns {EntityFieldInfo[]} Array of binary fields, empty for most entities
+     */
+    get BinaryFields(): EntityFieldInfo[] {
+        if (this._binaryFieldsCache === null) {
+            this._binaryFieldsCache = this.Fields.filter((f) => f.IsBinaryFieldType);
+        }
+        return this._binaryFieldsCache;
+    }
+
+    /**
+     * True when the entity has at least one binary field. See {@link BinaryFields}.
+     */
+    get HasBinaryFields(): boolean {
+        return this.BinaryFields.length > 0;
+    }
+
+    /**
      * Gets all fields for this entity with their complete metadata.
      * @returns {EntityFieldInfo[]} Array of all entity fields
      */
@@ -3557,6 +3673,15 @@ export class EntityInfo extends BaseInfo {
     }
 
     /**
+     * Entity flags that a per-table entry in CodeGen's additionalSchemaInfo config may set when CodeGen first
+     * creates the entity, overriding the global `newEntityDefaults`. Typed against `EntityInfo`, so a name that
+     * stops being an entity property fails to compile.
+     */
+    public static get ConfigurableAtCreationAttributes(): readonly EntityConfigurableAtCreationAttribute[] {
+        return ENTITY_CONFIGURABLE_AT_CREATION_ATTRIBUTES;
+    }
+
+    /**
      * This static factory method is used to check to see if the entity in question is active or not
      * If it is not active, it will throw an exception or log a warning depending on the status of the entity being
      * either Deprecated or Disabled.
@@ -3594,6 +3719,40 @@ export class EntityInfo extends BaseInfo {
      */
     get DisplayNameOrName(): string {
         return this.DisplayName ? this.DisplayName : this.Name;
+    }
+
+    /**
+     * Returns a business-user-friendly PLURAL of the entity's display name, e.g. "Contacts", "Companies",
+     * "Addresses". Derived from `DisplayNameOrName` via `GeneratePluralName`, so a per-deployment
+     * `DisplayName` override flows through (rename the entity's DisplayName to "Member" and this returns
+     * "Members"). Handles irregular plurals and the common English rules (`-y` to `-ies`, `-s/ch/sh/x/z` to `-es`).
+     *
+     * This is the seam for surfacing the user's own domain nouns in place of the platform meta-noun
+     * "entity" on business-user surfaces (empty states, counts, headers). It is display-only: never use it
+     * as a lookup key. If the display name is already plural, `GeneratePluralName` returns it unchanged.
+     *
+     * Memoized per instance: templates read this on every change-detection pass, and the source name
+     * is fixed per metadata load (the same assumption `_nameFieldCache` relies on). The cache is keyed
+     * by the source name so it stays correct if `DisplayName` is ever mutated in place.
+     */
+    get DisplayNamePlural(): string {
+        const source = this.DisplayNameOrName;
+        if (this._displayNamePluralCache?.source !== source) {
+            this._displayNamePluralCache = { source, plural: EntityInfo.matchLeadingCase(source, GeneratePluralName(source)) };
+        }
+        return this._displayNamePluralCache.plural;
+    }
+
+    /**
+     * Gives `plural` the same leading-letter case as `source`. The irregular-plural table stores
+     * lowercase values ('person' → 'people'), so without this an empty state reads "No people to
+     * display". Only the first letter is touched: `capitalizeFirstLetterOnly` would also capitalize a
+     * name that deliberately starts lowercase ("iPhone" → "IPhones").
+     */
+    private static matchLeadingCase(source: string, plural: string): string {
+        const lead = source.charAt(0);
+        const startsUpper = lead !== lead.toLowerCase();
+        return startsUpper && plural.length > 0 ? plural.charAt(0).toUpperCase() + plural.slice(1) : plural;
     }
 
     /**
@@ -3645,7 +3804,7 @@ export class EntityInfo extends BaseInfo {
      */
     get ParentEntityInfo(): EntityInfo | null {
         if (!this.ParentID) return null;
-        const p = Metadata.Provider;  // global-provider-ok: stateless info class — proxies to global metadata
+        const p = MetadataProviderFor(this);
         if (p?.EntityByID) {
             return p.EntityByID(this.ParentID) ?? null;
         }
@@ -3662,7 +3821,7 @@ export class EntityInfo extends BaseInfo {
      * only one child type is allowed per parent record (disjoint subtypes).
      */
     get ChildEntities(): EntityInfo[] {
-        return Metadata.Provider?.Entities?.filter(e => UUIDsEqual(e.ParentID, this.ID)) ?? [];  // global-provider-ok: stateless info class — proxies to global metadata
+        return MetadataProviderFor(this)?.Entities?.filter(e => UUIDsEqual(e.ParentID, this.ID)) ?? [];
     }
 
     /**
@@ -4085,7 +4244,7 @@ export class EntityInfo extends BaseInfo {
         const clauses = [...mine]
             .sort((a, b) => a.FilterID.localeCompare(b.FilterID)) // deterministic order for the cache fingerprint (INV-2)
             .map(b => {
-                const filter = Metadata.Provider.RowLevelSecurityFilters.find(f => UUIDsEqual(f.ID, b.FilterID)); // global-provider-ok: same resolution path as RLSFilter() above — stateless info class proxying to global metadata
+                const filter = MetadataProviderFor(this)?.RowLevelSecurityFilters?.find(f => UUIDsEqual(f.ID, b.FilterID));
                 if (!filter) {
                     LogError(`API-key row filter ${b.FilterID} for entity ${this.Name} not found in metadata — resolving to (1=0)`);
                     return '(1=0)';
@@ -4286,7 +4445,7 @@ export class EntityInfo extends BaseInfo {
 
         // Resolve the spoke entity's own organic key (matching by Name) to pull its
         // per-column normalization. Falls back to the hub's expression if not found.
-        const spokeOrganicKey = EntityInfo.resolveSpokeOrganicKey(relatedEntity, organicKey);
+        const spokeOrganicKey = EntityInfo.resolveSpokeOrganicKey(relatedEntity, organicKey, record.EntityInfo?.OwningProvider);
 
         for (let i = 0; i < matchFields.length; i++) {
             const value = record.Get(matchFields[i]);
@@ -4447,8 +4606,15 @@ export class EntityInfo extends BaseInfo {
     }
 
 
-    constructor(initData: any = null) {
+    /**
+     * @param initData - the raw entity row (or another EntityInfo being re-instantiated)
+     * @param md - the provider that owns this metadata. Sibling lookups ({@link ParentEntityInfo},
+     *   {@link ChildEntities}, RLS filters) resolve through it rather than the global provider, so
+     *   they stay correct in a multi-provider process. Optional for backward compatibility.
+     */
+    constructor(initData: any = null, md?: IMetadataProvider) {
         super();
+        this.SetOwningProvider(md);
         if (initData) {
             this.copyInitData(initData);
 
@@ -4474,6 +4640,7 @@ export class EntityInfo extends BaseInfo {
             this._foreignKeysCache = null;
             this._encryptedFieldsCache = null;
             this._datetimeFieldsCache = null;
+            this._binaryFieldsCache = null;
             this._nameFieldCache = undefined;
             this._hasSearchFields = undefined;
             // Added late: HasInactiveFields (Jun 18) post-dates this block (Jun 15) and was never
@@ -4482,7 +4649,9 @@ export class EntityInfo extends BaseInfo {
             const ef = initData.EntityFields || initData._Fields || initData.Fields;
             if (ef) {
                 for (let j = 0; j < ef.length; j++) {
-                    this._fields.push(new EntityFieldInfo(ef[j]));
+                    const field = new EntityFieldInfo(ef[j]);
+                    field.SetOwningProvider(md);
+                    this._fields.push(field);
                 }
             }
 
@@ -4491,7 +4660,7 @@ export class EntityInfo extends BaseInfo {
             const ep = initData.EntityPermissions || initData._Permissions || initData.Permissions;
             if (ep) {
                 for (let j = 0; j < ep.length; j++) {
-                    this._permissions.push(new EntityPermissionInfo(ep[j]));
+                    this._permissions.push(new EntityPermissionInfo(ep[j], md));
                 }
             }
 

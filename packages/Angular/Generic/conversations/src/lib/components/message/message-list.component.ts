@@ -27,6 +27,7 @@ import { MessageItemComponent, MessageAttachment, MessageArtifactRef, MessagePen
 import {
   BeforeResponseFormSubmittedEventArgs,
   AfterResponseFormSubmittedEventArgs,
+  BeforeStopClickedEventArgs,
 } from '../../events/chat-events';
 import { RealtimeSessionTimelineCardComponent } from '../realtime/realtime-session-timeline-card.component';
 import { LazyArtifactInfo } from '../../models/lazy-artifact-info';
@@ -44,6 +45,7 @@ import {
     type DateJumpPeriod,
     type DateJumpOutcome
 } from '../../utils/date-jump';
+import { EMPTY_FORK_CHIPS, type ForkChipOpenRequest, type ForkViewLayout, type LatestTurn, type MessageForkChip } from '../../utils/conversation-forks';
 
 /** Context handed to the `messageRenderer` slot template per message. */
 interface MessageRendererContext {
@@ -118,6 +120,51 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   public get conversation(): MJConversationEntity | null {
     return this.Conversation;
   }
+
+  /** Fork chips per normalized detail id, from the chat area's fork summaries. A new map is pushed into the items on screen. */
+  @Input()
+  public set ForkChipMap(value: ReadonlyMap<string, readonly MessageForkChip[]>) {
+    this._forkChipMap = value ?? new Map();
+    this.applyForkChips();
+  }
+  public get ForkChipMap(): ReadonlyMap<string, readonly MessageForkChip[]> {
+    return this._forkChipMap ?? new Map();
+  }
+  private _forkChipMap: ReadonlyMap<string, readonly MessageForkChip[]> = new Map();
+
+  /** How a fork view draws its rows; null in Main. A new layout is pushed into the items on screen. */
+  @Input()
+  public set ForkLayout(value: ForkViewLayout | null) {
+    this._forkLayout = value ?? null;
+    this.applyForkLayout();
+  }
+  public get ForkLayout(): ForkViewLayout | null {
+    return this._forkLayout ?? null;
+  }
+  private _forkLayout: ForkViewLayout | null = null;
+
+  /** True when the person may start forks; a new value is pushed into the items on screen. False hides the fork actions. */
+  @Input()
+  public set CanFork(value: boolean) {
+    this._canFork = value !== false;
+    this.applyCanFork();
+  }
+  public get CanFork(): boolean {
+    return this._canFork !== false;
+  }
+  private _canFork = true;
+
+  /** The latest turn that in-place Edit and Regenerate may change; null when there is none. A new value is pushed into the items on screen. */
+  @Input()
+  public set InPlaceTurn(value: LatestTurn | null) {
+    this._inPlaceTurn = value ?? null;
+    this.applyInPlaceRoles();
+  }
+  public get InPlaceTurn(): LatestTurn | null {
+    return this._inPlaceTurn ?? null;
+  }
+  private _inPlaceTurn: LatestTurn | null = null;
+
   @Input() public CurrentUser!: UserInfo;
 
   /** @deprecated Use {@link CurrentUser}. */
@@ -222,6 +269,42 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   public get allowMessageDelete(): boolean {
     return this.AllowMessageDelete;
   }
+  /**
+   * Hides response forms and actionable commands on each message.
+   * Restamped onto already-rendered items — they are created dynamically.
+   */
+  @Input()
+  public set ReadOnly(value: boolean) {
+    if (value === this._readOnly) {
+      return;
+    }
+    this._readOnly = value;
+    this.restampAssistantIdentity();
+  }
+  public get ReadOnly(): boolean {
+    return this._readOnly;
+  }
+  private _readOnly = false;
+
+  /** Whether message items offer Stop on an in-progress agent reply. Default true. */
+  @Input() public AllowStopRun = true;
+
+  /**
+   * How many agent replies are in flight in the open view; items offer their own Stop only above
+   * one. Changes mid-session as runs start and finish, so it is restamped onto rendered items.
+   */
+  @Input()
+  public set InFlightCount(value: number) {
+    if (value === this._inFlightCount) {
+      return;
+    }
+    this._inFlightCount = value;
+    this.restampAssistantIdentity();
+  }
+  public get InFlightCount(): number {
+    return this._inFlightCount;
+  }
+  private _inFlightCount = 0;
 
   // ── Windowed-transcript paging state ────────────────────────────────────────
   // The list renders only the LOADED window, not the whole conversation. These two
@@ -482,16 +565,27 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
    * initialise in order, and the other way round this captures undefined.
    */
   @Output() public deleteMessage = this.DeleteMessage;
+  /** Forwarded from MessageItemComponent: the user asked for a new reply in place of an AI reply. */
+  @Output() public RegenerateRequested = new EventEmitter<MJConversationDetailEntity>();
+  /** @deprecated Use {@link RegenerateRequested}. Emits with it, for hosts that still bind the old name. */
   @Output() public RetryMessage = new EventEmitter<MJConversationDetailEntity>();
 
   /**
-   * @deprecated Use {@link RetryMessage}.
+   * @deprecated Use {@link RegenerateRequested}.
    *
    * The same emitter under the old binding name, so a template still binding
    * (retryMessage) keeps working. Must stay AFTER RetryMessage: class fields
    * initialise in order, and the other way round this captures undefined.
    */
   @Output() public retryMessage = this.RetryMessage;
+  /** Forwarded from MessageItemComponent: the user edited a message to save as a new fork. */
+  @Output() public EditResendRequested = new EventEmitter<{ Message: MJConversationDetailEntity; NewText: string }>();
+  /** A chip was clicked in one of the items: a fork to open, or the view and message of an original chip. */
+  @Output() public ForkOpenRequested = new EventEmitter<ForkChipOpenRequest>();
+  /** An item asked to fork the conversation at its message. */
+  @Output() public ForkRequested = new EventEmitter<MJConversationDetailEntity>();
+  /** Forwarded from MessageItemComponent: "Save and resend" saved a user message; the host reruns its turn. */
+  @Output() public ResendInPlaceRequested = new EventEmitter<MJConversationDetailEntity>();
   @Output() public TestFeedbackMessage = new EventEmitter<MJConversationDetailEntity>();
 
   /**
@@ -512,26 +606,6 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
    * initialise in order, and the other way round this captures undefined.
    */
   @Output() public artifactClicked = this.ArtifactClicked;
-  @Output() public ReplyInThread = new EventEmitter<MJConversationDetailEntity>();
-
-  /**
-   * @deprecated Use {@link ReplyInThread}.
-   *
-   * The same emitter under the old binding name, so a template still binding
-   * (replyInThread) keeps working. Must stay AFTER ReplyInThread: class fields
-   * initialise in order, and the other way round this captures undefined.
-   */
-  @Output() public replyInThread = this.ReplyInThread;
-  @Output() public ViewThread = new EventEmitter<MJConversationDetailEntity>();
-
-  /**
-   * @deprecated Use {@link ViewThread}.
-   *
-   * The same emitter under the old binding name, so a template still binding
-   * (viewThread) keeps working. Must stay AFTER ViewThread: class fields
-   * initialise in order, and the other way round this captures undefined.
-   */
-  @Output() public viewThread = this.ViewThread;
   @Output() public MessageEdited = new EventEmitter<MJConversationDetailEntity>();
 
   /**
@@ -582,6 +656,15 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
    * initialise in order, and the other way round this captures undefined.
    */
   @Output() public diagnosticRequested = this.DiagnosticRequested; // emits messageId
+
+  /**
+   * Relays a message item's `BeforeStopClicked`: fired before an in-progress run is stopped,
+   * cancelable by setting `event.Cancel = true`.
+   */
+  @Output() public BeforeStopClicked = new EventEmitter<BeforeStopClickedEventArgs>();
+
+  /** Relays a message item's uncanceled stop request: the host stops the run behind that AI reply. */
+  @Output() public StopMessage = new EventEmitter<MJConversationDetailEntity>();
   @Output() public MessagePinToggled = new EventEmitter<MJConversationDetailEntity>();
 
   /**
@@ -592,6 +675,9 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
    * initialise in order, and the other way round this captures undefined.
    */
   @Output() public messagePinToggled = this.MessagePinToggled;
+
+  /** A message's run has gone quiet; the host should re-read durable state. Emits messageId. */
+  @Output() public LivenessCheckRequested = new EventEmitter<string>();
   /** Emitted with the `MJ: AI Agent Sessions.ID` when a realtime session block's Open affordance is clicked. */
   @Output() public RealtimeSessionOpenRequested = new EventEmitter<string>();
 
@@ -886,6 +972,40 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
    * (not just scroll to it) use this instead of a `[data-message-id]` query, which fails for
    * exactly the cases listed — see {@link scrollToTimelineEntry}.
    */
+  /**
+   * Refreshes one rendered message in place: the streaming path's alternative to replacing the
+   * whole `messages` array, which rebuilds the timeline and re-measures the mounted range on
+   * every delta. Marks the item as streaming so its stylesheet can lift the status-line cap.
+   *
+   * @returns false only when the message has no rendered entry at all, so the caller can fall
+   * back to the full path for that one update. A spacer or a session card standing in for the
+   * message is a no-op: the entity holds the text and a remount renders it.
+   */
+  public RefreshRenderedMessage(message: MJConversationDetailEntity): boolean {
+    const existing = this._renderedMessages.get(this.getMessageKey(message));
+    if (!existing) {
+      return false;
+    }
+    switch (existing.kind) {
+      case 'embedded':
+        existing.ref.context.$implicit = message;
+        existing.ref.context.message = message;
+        if (!existing.ref.destroyed) {
+          existing.ref.detectChanges();
+        }
+        return true;
+      case 'component':
+        existing.ref.instance.message = message;
+        existing.ref.instance.IsStreaming = true;
+        if (!this.isViewDestroyed(existing.ref.changeDetectorRef)) {
+          existing.ref.changeDetectorRef.detectChanges();
+        }
+        return true;
+      default:
+        return true;
+    }
+  }
+
   public FindTimelineElement(messageId: string): HTMLElement | null {
     const detail = this.messages?.find(m => UUIDsEqual(m.ID, messageId));
     if (!detail) {
@@ -980,6 +1100,142 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
       this.updateMessages(this.messages);
     }
 
+    // Watch for agent-run changes so a run refreshed mid-flight reaches the rendered bubble.
+    // `agentRun` is stamped onto each item as static config at create/update time, so a replaced
+    // map alone never reaches an item already on screen — it keeps the object it was given.
+    //
+    // This became load-bearing with per-message liveness (MJ #4222): reconciliation re-reads the
+    // run over HTTP precisely when the socket is dead, and if the fresh `LastHeartbeatAt` cannot
+    // reach the bubble, the pill stays degraded while the client is in fact being told the run is
+    // healthy. Observed directly — the pill held 'checking…' for a full minute across successful
+    // reconciles.
+    // Keyed by whichever input name the host bound — the deprecated alias or the current one.
+    const agentRunMapChanged = changes['AgentRunMap'] ?? changes['agentRunMap'];
+    if (agentRunMapChanged && this.messages && this.MessageContainerRef) {
+      this.updateMessages(this.messages);
+    }
+
+  }
+
+  /** The fork marker shown on its own when the view has no rows (a draft fork with no earlier rows); null otherwise. */
+  public get EmptyViewMarkerText(): string | null {
+    const layout = this.ForkLayout;
+    return layout && !layout.MarkerDetailID ? layout.MarkerText : null;
+  }
+
+  /** The chips placed under a message. */
+  private chipsFor(detailId: string): readonly MessageForkChip[] {
+    return this.ForkChipMap.get(NormalizeUUID(detailId)) ?? EMPTY_FORK_CHIPS;
+  }
+
+  /** Pushes the current chips into every rendered message component. */
+  private applyForkChips(): void {
+    for (const [, rendered] of this._renderedMessages ?? new Map<string, RenderedMessageEntry>()) {
+      if (rendered.kind === 'component') {
+        const instance = rendered.ref.instance as MessageItemComponent;
+        instance.ForkChips = this.chipsFor(instance.message.ID);
+        rendered.ref.changeDetectorRef.markForCheck();
+      }
+    }
+  }
+
+  /** The rail of a row in the current layout. */
+  private railFor(detailId: string): 'Inherited' | 'Own' | null {
+    const layout = this.ForkLayout;
+    if (!layout) {
+      return null;
+    }
+    return layout.InheritedIDs.has(NormalizeUUID(detailId)) ? 'Inherited' : 'Own';
+  }
+
+  /** The fork marker under a row in the current layout. */
+  private markerFor(detailId: string): string | null {
+    const layout = this.ForkLayout;
+    return layout?.MarkerDetailID && UUIDsEqual(layout.MarkerDetailID, detailId) ? layout.MarkerText : null;
+  }
+
+  /** Pushes the current layout into every rendered message component. */
+  private applyForkLayout(): void {
+    for (const [, rendered] of this._renderedMessages ?? new Map<string, RenderedMessageEntry>()) {
+      if (rendered.kind === 'component') {
+        const instance = rendered.ref.instance as MessageItemComponent;
+        instance.ForkRail = this.railFor(instance.message.ID);
+        instance.ForkMarkerText = this.markerFor(instance.message.ID);
+        rendered.ref.changeDetectorRef.markForCheck();
+      }
+    }
+  }
+
+  /** The in-place role of a row in the current turn. */
+  private inPlaceRoleFor(detailId: string): 'User' | 'Answer' | null {
+    const turn = this.InPlaceTurn;
+    if (!turn) {
+      return null;
+    }
+    if (UUIDsEqual(turn.UserDetailID, detailId)) {
+      return 'User';
+    }
+    return turn.AnswerDetailID && UUIDsEqual(turn.AnswerDetailID, detailId) ? 'Answer' : null;
+  }
+
+  /** Pushes the in-place roles into every rendered message component. */
+  private applyInPlaceRoles(): void {
+    for (const [, rendered] of this._renderedMessages ?? new Map<string, RenderedMessageEntry>()) {
+      if (rendered.kind === 'component') {
+        const instance = rendered.ref.instance as MessageItemComponent;
+        instance.InPlaceRole = this.inPlaceRoleFor(instance.message.ID);
+        instance.PendingReplace = this.pendingReplaceFor(instance.message.ID);
+        rendered.ref.changeDetectorRef.markForCheck();
+      }
+    }
+  }
+
+  /** The message whose inline editor is open; null when none is. */
+  private editingDetailId: string | null = null;
+
+  /** True when a message other than `detailId` has its inline editor open. */
+  private editOpenElsewhere(detailId: string): boolean {
+    return this.editingDetailId != null && !UUIDsEqual(this.editingDetailId, detailId);
+  }
+
+  /** True for the latest turn's answer while its user message is edited with "Save and resend". */
+  private pendingReplaceFor(detailId: string): boolean {
+    const turn = this.InPlaceTurn;
+    return !!turn?.AnswerDetailID && this.editingDetailId != null
+      && UUIDsEqual(this.editingDetailId, turn.UserDetailID) && UUIDsEqual(turn.AnswerDetailID, detailId);
+  }
+
+  /** A row's inline editor opened or closed: records it and pushes the edit state into every rendered row. */
+  private onRowEditingChanged(detailId: string, open: boolean): void {
+    if (open) {
+      this.editingDetailId = detailId;
+    } else if (this.editingDetailId != null && UUIDsEqual(this.editingDetailId, detailId)) {
+      this.editingDetailId = null;
+    }
+    this.applyEditState();
+  }
+
+  /** Pushes the edit state (another row editing, answer pending replace) into every rendered message component. */
+  private applyEditState(): void {
+    for (const [, rendered] of this._renderedMessages ?? new Map<string, RenderedMessageEntry>()) {
+      if (rendered.kind === 'component') {
+        const instance = rendered.ref.instance as MessageItemComponent;
+        instance.EditOpenElsewhere = this.editOpenElsewhere(instance.message.ID);
+        instance.PendingReplace = this.pendingReplaceFor(instance.message.ID);
+        rendered.ref.changeDetectorRef.markForCheck();
+      }
+    }
+  }
+
+  /** Pushes {@link CanFork} into every rendered message component. */
+  private applyCanFork(): void {
+    for (const [, rendered] of this._renderedMessages ?? new Map<string, RenderedMessageEntry>()) {
+      if (rendered.kind === 'component') {
+        const instance = rendered.ref.instance as MessageItemComponent;
+        instance.CanFork = this.CanFork;
+        rendered.ref.changeDetectorRef.markForCheck();
+      }
+    }
   }
 
   /**
@@ -1305,12 +1561,19 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
 
       // Remove rendered items (messages AND session blocks) that no longer exist
       const currentKeys = new Set(timeline.map(item => this.getTimelineKey(item)));
+      const editingBefore = this.editingDetailId;
       this._renderedMessages.forEach((entry, key) => {
         if (!currentKeys.has(key)) {
+          if (entry.kind === 'component' && this.editingDetailId != null && UUIDsEqual(entry.ref.instance.message?.ID, this.editingDetailId)) {
+            this.editingDetailId = null;
+          }
           entry.ref.destroy();
           this._renderedMessages.delete(key);
         }
       });
+      if (editingBefore !== this.editingDetailId) {
+        this.applyEditState();
+      }
 
       // Add or update timeline items in chronological order. `renderMessageItem`
       // internally branches on the slot template (messageRenderer) vs the
@@ -1324,6 +1587,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
       // components. The tail and any in-progress message are always kept.
       const range = this.computeMountedRange(timeline);
       const lastMessageKey = this.findLastMessageKey(timeline);
+      const lastUserKey = this.findLastUserMessageKey(timeline);
       for (let i = 0; i < timeline.length; i++) {
         const item = timeline[i];
         const mounted = (i >= range.start && i <= range.end)
@@ -1334,7 +1598,8 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
         } else if (item.Kind === 'session') {
           this.renderSessionBlock(item.Group, i);
         } else {
-          this.renderMessageItem(item.Detail, messages, this.getMessageKey(item.Detail) === lastMessageKey, i);
+          const key = this.getMessageKey(item.Detail);
+          this.renderMessageItem(item.Detail, messages, key === lastMessageKey, key === lastMessageKey || key === lastUserKey, i);
         }
       }
 
@@ -1671,6 +1936,17 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     return null;
   }
 
+  /** The render key of the last User message item in the timeline (the latest turn's user message), or null when none. */
+  private findLastUserMessageKey(timeline: ConversationTimelineItem<MJConversationDetailEntity>[]): string | null {
+    for (let i = timeline.length - 1; i >= 0; i--) {
+      const item = timeline[i];
+      if (item.Kind === 'message' && item.Detail.Role === 'User') {
+        return this.getMessageKey(item.Detail);
+      }
+    }
+    return null;
+  }
+
   /**
    * Creates or updates the ONE timeline card a realtime session collapses to.
    * Click/Open on the card bubbles up via {@link realtimeSessionOpenRequested} so the
@@ -1720,6 +1996,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     message: MJConversationDetailEntity,
     messages: MJConversationDetailEntity[],
     isLastMessage: boolean,
+    isLatestTurn: boolean,
     timelineIndex: number
   ): void {
     const key = this.getMessageKey(message);
@@ -1740,7 +2017,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     }
     if (existing && existing.kind === 'component' && !useCustomRenderer) {
       // Update existing MessageItemComponent in place
-      this.updateMessageItemInstance(existing.ref, message, messages, index);
+      this.updateMessageItemInstance(existing.ref, message, messages, index, isLatestTurn);
       return;
     }
     if (existing) {
@@ -1750,7 +2027,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
       this._renderedMessages.delete(key);
     }
 
-    this.createRenderedEntry(message, messages, index, key, useCustomRenderer, timelineIndex);
+    this.createRenderedEntry(message, messages, index, isLatestTurn, key, useCustomRenderer, timelineIndex);
   }
 
   /**
@@ -1762,12 +2039,18 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     ref: ComponentRef<MessageItemComponent>,
     message: MJConversationDetailEntity,
     messages: MJConversationDetailEntity[],
-    index: number
+    index: number,
+    isLatestTurn: boolean
   ): void {
     const instance = ref.instance;
     const previousMessage = instance.message;
 
     instance.message = message;
+    // Streaming ends with the message. It is deliberately NOT cleared on an in-progress full
+    // render (an artifact landing mid-stream): that would snap the status cap back on for a frame.
+    if (message.Status !== 'In-Progress') {
+      instance.IsStreaming = false;
+    }
     instance.allMessages = messages;
     instance.isProcessing = this.IsProcessing;
     instance.userAvatarMap = this.UserAvatarMap;
@@ -1778,6 +2061,11 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     instance.agentRun = this.AgentRunMap.get(message.ID) || null;
     instance.ratings = this.RatingsMap.get(message.ID);
     instance.attachments = this.AttachmentsMap.get(message.ID) || [];
+    instance.ForkChips = this.chipsFor(message.ID);
+    instance.ForkRail = this.railFor(message.ID);
+    instance.ForkMarkerText = this.markerFor(message.ID);
+    instance.InPlaceRole = this.inPlaceRoleFor(message.ID);
+    this.applyRowTurnState(instance, isLatestTurn);
 
     // After the inputs above, for the same reason as the create path: this can force a
     // synchronous child pass, which would otherwise paint the previous refresh's agent run,
@@ -1788,6 +2076,13 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     if (previousMessage && previousMessage.Status !== message.Status) {
       ref.changeDetectorRef.markForCheck();
     }
+  }
+
+  /** Sets a row's latest-turn flag and its edit state. */
+  private applyRowTurnState(instance: MessageItemComponent, isLatestTurn: boolean): void {
+    instance.IsLatestTurn = isLatestTurn;
+    instance.EditOpenElsewhere = this.editOpenElsewhere(instance.message.ID);
+    instance.PendingReplace = this.pendingReplaceFor(instance.message.ID);
   }
 
   /**
@@ -1803,6 +2098,10 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     instance.allowPinning = this.AllowPinning;
     instance.allowMessageEdit = this.AllowMessageEdit;
     instance.allowMessageDelete = this.AllowMessageDelete;
+    instance.ReadOnly = this.ReadOnly;
+    instance.AllowStopRun = this.AllowStopRun;
+    instance.InFlightCount = this.InFlightCount;
+    instance.CanFork = this.CanFork;
     instance.assistantDisplayName = this.AssistantDisplayName;
     instance.assistantAvatarUrl = this.AssistantAvatarUrl;
   }
@@ -1817,6 +2116,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     message: MJConversationDetailEntity,
     messages: MJConversationDetailEntity[],
     index: number,
+    isLatestTurn: boolean,
     key: string,
     useCustomRenderer: boolean,
     timelineIndex: number
@@ -1852,10 +2152,25 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     instance.agentRun = this.AgentRunMap.get(message.ID) || null;
     instance.ratings = this.RatingsMap.get(message.ID);
     instance.attachments = this.AttachmentsMap.get(message.ID) || [];
+    instance.ForkChips = this.chipsFor(message.ID);
+    instance.ForkRail = this.railFor(message.ID);
+    instance.ForkMarkerText = this.markerFor(message.ID);
+    instance.InPlaceRole = this.inPlaceRoleFor(message.ID);
+    this.applyRowTurnState(instance, isLatestTurn);
+    instance.EditingChanged.subscribe((open: boolean) => this.onRowEditingChanged(instance.message.ID, open));
+    instance.EditResendRequested.subscribe((e) => this.EditResendRequested.emit(e));
+    instance.ForkOpenRequested.subscribe((e: ForkChipOpenRequest) => this.ForkOpenRequested.emit(e));
+    instance.ForkRequested.subscribe((m: MJConversationDetailEntity) => this.ForkRequested.emit(m));
+    instance.ResendInPlaceRequested.subscribe((m: MJConversationDetailEntity) => this.ResendInPlaceRequested.emit(m));
 
     instance.editClicked.subscribe((msg: MJConversationDetailEntity) => this.EditMessage.emit(msg));
     instance.deleteClicked.subscribe((msg: MJConversationDetailEntity) => this.DeleteMessage.emit(msg));
-    instance.retryClicked.subscribe((msg: MJConversationDetailEntity) => this.RetryMessage.emit(msg));
+    instance.RegenerateRequested.subscribe((msg: MJConversationDetailEntity) => {
+      this.RegenerateRequested.emit(msg);
+      this.RetryMessage.emit(msg);
+    });
+    instance.BeforeStopClicked.subscribe((e: BeforeStopClickedEventArgs) => this.BeforeStopClicked.emit(e));
+    instance.StopRequested.subscribe((msg: MJConversationDetailEntity) => this.StopMessage.emit(msg));
     instance.testFeedbackClicked.subscribe((msg: MJConversationDetailEntity) => this.TestFeedbackMessage.emit(msg));
     instance.artifactClicked.subscribe((data: {artifactId: string; versionId?: string}) => this.ArtifactClicked.emit(data));
     instance.messageEdited.subscribe((msg: MJConversationDetailEntity) => this.MessageEdited.emit(msg));
@@ -1863,6 +2178,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     instance.suggestedResponseSelected.subscribe((data: {text: string; customInput?: string}) => this.SuggestedResponseSelected.emit(data));
     instance.attachmentClicked.subscribe((attachment: MessageAttachment) => this.AttachmentClicked.emit(attachment));
     instance.diagnosticRequested.subscribe((messageId: string) => this.DiagnosticRequested.emit(messageId));
+    instance.LivenessCheckRequested.subscribe((messageId: string) => this.LivenessCheckRequested.emit(messageId));
     instance.messagePinToggled.subscribe((msg: MJConversationDetailEntity) => this.MessagePinToggled.emit(msg));
     instance.beforeResponseFormSubmitted.subscribe((e: BeforeResponseFormSubmittedEventArgs) => this.BeforeResponseFormSubmitted.emit(e));
     instance.afterResponseFormSubmitted.subscribe((e: AfterResponseFormSubmittedEventArgs) => this.AfterResponseFormSubmitted.emit(e));

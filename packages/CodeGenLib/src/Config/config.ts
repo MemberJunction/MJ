@@ -5,6 +5,7 @@
  */
 
 import { z } from 'zod';
+import { IntegrityCheckConfigSchema } from './integrity-check-schema';
 import { cosmiconfigSync } from 'cosmiconfig';
 import path from 'path';
 import { logStatus } from '../Misc/status_logging';
@@ -293,12 +294,7 @@ const advancedGenerationSchema = z.object({
   ]),
 });
 
-export type IntegrityCheckConfig = z.infer<typeof integrityCheckConfigSchema>;
-
-const integrityCheckConfigSchema = z.object({
-  enabled: z.boolean(),
-  entityFieldsSequenceCheck: z.boolean(),
-});
+export type IntegrityCheckConfig = z.infer<typeof IntegrityCheckConfigSchema>;
 
 export type ForceRegenerationConfig = z.infer<typeof forceRegenerationConfigSchema>;
 
@@ -577,7 +573,7 @@ const configInfoSchema = z.object({
     // },
   ]),
   advancedGeneration: advancedGenerationSchema.nullish(),
-  integrityChecks: integrityCheckConfigSchema.default({
+  integrityChecks: IntegrityCheckConfigSchema.default({
     enabled: true,
     entityFieldsSequenceCheck: true,
   }),

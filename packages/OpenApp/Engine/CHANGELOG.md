@@ -1,5 +1,186 @@
 # @memberjunction/open-app-engine
 
+## 6.2.0-edge.4
+
+### Minor Changes
+
+- 0e5a4cd: Template users: an account set up to be copied, with its pinned apps, views, settings, dashboards and Skip conversations, so a new user starts with all of it.
+  - **`User.IsTemplate`** (migration). The User form shows it under Account Settings. A copy is never a template itself.
+  - **The `template` preset on `MJ: Users`** copies a template user whole: views, settings, dashboards with their categories and links, conversations with their messages, and the artifacts and versions in them. Dashboard layouts, pinned items and artifact references point at the copies. The planner refuses the preset for any user not flagged `IsTemplate` (`TEMPLATE_SOURCE_REQUIRED`), so one person's private work is never copied to another. Only a template-mode preset may open a Locked edge or copy an entity marked `CloneableFromTemplate` (conversations and their messages); request overrides still cannot.
+  - **First sign-in.** `userHandling.newUserTemplate: { email, preset }` in `mj.config.cjs` makes MJAPI create each new user as a copy of that template. Any problem falls back to a plain user, so sign-in never breaks.
+  - **`mj user clone`** creates a user as a copy of another: `--from`, `--email`, `--first`, `--last`, `--preset` (default `template`), `--inactive`, `--dry-run`.
+  - **Open Apps can ship a template user.** `templateUser: { email, description?, preset?, newUsers?: offer | always | never }` in `mj-app.json`. After install, the installer gets their own copy, from `MJ_INSTALL_USER_EMAIL` / `_FIRST_NAME` / `_LAST_NAME` or prompts. The template can also be set for later sign-ins (`MJ_INSTALL_TEMPLATE_FOR_NEW_USERS`). The step only warns on failure; it never fails the install.
+  - **Explorer** shows a red banner while a template user is signed in, because everything changed there reaches every later copy.
+
+  Fixes found on the way:
+  - **CurrentUser** now returns `IsTemplate`, `FirstLast` and the `Employee*` fields. It returned null for every `UserInfo` field missing from its hand-written list. The list is now `SessionUserFields`, with a test that it covers every field the client requests.
+  - **Artifact version saves inside a transaction.** `MJArtifactVersionEntityServer` read attributes through the global provider. On a server's per-request provider, inside a clone's transaction, each read waited about 30 s on the transaction's own locks. A 23-version copy took 11 minutes instead of seconds. It now reads through the entity's provider.
+  - **Copies keep their rows' order.** The dependency walker reads children oldest first (`__mj_CreatedAt`). A row whose remapped column points only at its own ancestors, such as a copied user's messages naming the new user, now saves within the graph save instead of after it. Copied conversations kept their messages, but showed each answer above its question.
+  - **User copies keep dashboard and view names.** The entities' `(copy)` rename applies only where a name could collide. A user copy owns its rows, so the rename only mislabelled them.
+  - Record cloning: `Child.JoinField` preset keys, case-insensitive key lookup in JSON remap, Golden Layout and top-level-array JSON remap paths, and a descendant's `JsonRemap` merged with the entity's own.
+  - A conversation message can be created during a clone save (`CloneContext`) by a user who doesn't own the conversation yet. Updates and deletes are still checked.
+
+### Patch Changes
+
+- 5b2162c: Use Skyway 0.7.1. Migration errors now keep the real cause: when a failed batch had already aborted its transaction (a timeout or severe error), the follow-up rollback's "Transaction has been aborted" no longer replaces the batch's own error, and driver errors keep their full detail (message number, procedure and line, earlier errors in the batch). Skyway 0.7.0 also lets a migration opt out of its transaction with a Flyway-style `<file>.sql.conf` containing `executeInTransaction=false`; migrations without one behave as before.
+- 7d5097d: `mj app install` is more robust for clean installs: package installs run asynchronously with a 30-minute default ceiling (override with `MJ_APP_PACKAGE_INSTALL_TIMEOUT_MS`) instead of a blocking 5-minute `execFileSync`; transient GitHub failures (connection resets, timeouts, 502/503/504) are retried with backoff instead of failing the whole dependency chain; and an app left Disabled because its packages did not install is reported as such — with the real remedy — instead of "Successfully installed" and an "npm auth" guess.
+
+  `mj install --yes` no longer warns that config files were "created with default/empty values" when every value was supplied; it now names only the required connection values that are actually unset.
+
+  On macOS, `mj install`, `mj app install`, `mj app upgrade` and `mj migrate` keep the machine awake while they run (a `caffeinate` assertion tied to the CLI process; `MJ_ALLOW_SLEEP=1` opts out). Sleeping mid-install paused the local database and every connection, and on wake in-flight migration batches reported spurious 300-second timeouts and downloads reported `ECONNRESET` — the cause of every intermittent chained-install failure seen in clean-install testing.
+
+- Updated dependencies [a709bb6]
+- Updated dependencies [432cb73]
+- Updated dependencies [1d6e3e8]
+- Updated dependencies [49f26d9]
+- Updated dependencies [7384dd6]
+- Updated dependencies [88e6902]
+- Updated dependencies [6dc3aa9]
+- Updated dependencies [c87f87a]
+- Updated dependencies [0a7c255]
+- Updated dependencies [d86bcbc]
+- Updated dependencies [7316ac3]
+- Updated dependencies [08b3d7b]
+- Updated dependencies [20650af]
+- Updated dependencies [1ea4085]
+- Updated dependencies [aee2d53]
+- Updated dependencies [25f7b82]
+- Updated dependencies [90829e3]
+- Updated dependencies [aac148b]
+- Updated dependencies [e1942c7]
+- Updated dependencies [d52f9ba]
+- Updated dependencies [0e5a4cd]
+- Updated dependencies [b968642]
+- Updated dependencies [68a7e3b]
+- Updated dependencies [57fea6a]
+- Updated dependencies [1ba9315]
+- Updated dependencies [b8a9e5e]
+- Updated dependencies [e8258a1]
+  - @memberjunction/core-entities@6.2.0-edge.4
+  - @memberjunction/core@6.2.0-edge.4
+  - @memberjunction/sql-dialect@6.2.0-edge.4
+  - @memberjunction/global@6.2.0-edge.4
+  - @memberjunction/record-cloning@6.2.0-edge.4
+
+## 6.2.0-edge.3
+
+### Patch Changes
+
+- 506f170: `mj app upgrade` now refreshes an app's `SchemaName` from its manifest, so a corrected schema name — in practice a corrected CASING — no longer has to survive as install-time debris.
+
+  `OpenApp.SchemaName` is a denormalized copy of `mj-app.json` → `schema.name`, and it was written ONLY by install. Upgrade rewrote `ManifestJSON` right next to it and left the column alone, so an app whose manifest later fixed its schema name kept the original value forever.
+
+  That stale value is not inert. CodeGen's `spUpdateSchemaInfoFromDatabase` backfills `SchemaInfo.CanonicalSchemaName` FROM this column, and `vwEntities` prefers `CanonicalSchemaName` when deriving entity `ClassName`/`CodeName` — as does the runtime GraphQL type-name path. So stale casing propagated into the GraphQL operation names a client constructs, which no longer matched the server's generated resolvers: every operation on the app's entities failed with `GRAPHQL_VALIDATION_FAILED`. Worse, the backfill only ever FILLS NULLS, so once a wrong casing was frozen onto `SchemaInfo` no later codegen pass corrected it.
+  - `UpgradeApp` writes `SchemaName` alongside `ManifestJSON` in its Step 9 record update, keeping the column in lockstep with the manifest that is the documented source of truth. Written only when the manifest declares a schema, so a schema-less app's column is left untouched.
+  - `UpgradeApp` also calls `PersistCanonicalSchemaName`, mirroring the install path (Steps 6-7), which re-asserts the canonical name on the app's `SchemaInfo` row. Its UPDATE is unconditional rather than fill-NULLs-only, so this is the one path that HEALS a row already frozen from a stale column. Best-effort by contract (warns, never fatal) and idempotent.
+
+  A casing correction is detected as a schema rename by `PruneStaleServerConfig`, which strips the old name's `entityPackageName` mapping and `excludeSchemas` entry — correct, since those config keys are case-sensitive. That detection reads the previous manifest before Step 9 overwrites it, so it is unaffected.
+
+  No behaviour change for an app whose manifest schema name has not changed: both writes resolve to the value already stored.
+
+- Updated dependencies [25bb295]
+- Updated dependencies [dfe40a4]
+- Updated dependencies [131f3c4]
+- Updated dependencies [0f04590]
+- Updated dependencies [41c2c08]
+- Updated dependencies [29b6ec3]
+- Updated dependencies [66fd011]
+- Updated dependencies [196160a]
+- Updated dependencies [60bd774]
+- Updated dependencies [35da130]
+- Updated dependencies [28c92e0]
+- Updated dependencies [ec97ad4]
+- Updated dependencies [49e0bd8]
+  - @memberjunction/core-entities@6.2.0-edge.3
+  - @memberjunction/global@6.2.0-edge.3
+  - @memberjunction/core@6.2.0-edge.3
+  - @memberjunction/sql-dialect@6.2.0-edge.3
+
+## 6.2.0-edge.2
+
+### Patch Changes
+
+- 125f40a: Open App schemas on SQL Server are now created owned by the MJ core schema's owner (usually `dbo`), so ownership chaining lets app views read core tables without per-table grants (MJ#4756). When the installer is not permitted to assign that owner, install still succeeds with a plain `CREATE SCHEMA` and a `Schema` warning names the consequence and the remedy. Upgrades, and installs that reuse an existing schema, now check before changing anything that the login has `CONTROL` on the app schema, which its migrations need to record their history and grant on their objects. If it doesn't, they stop with an error naming the owner, the login and the remedy. PostgreSQL is unchanged. The Open App README documents the retrofit for existing installs, including that `ALTER AUTHORIZATION` drops the schema's grants (objects, columns, types and XML schema collections included).
+- Updated dependencies [e97d95c]
+- Updated dependencies [2552b1e]
+- Updated dependencies [21f9e15]
+- Updated dependencies [4248fb3]
+- Updated dependencies [0adaf76]
+- Updated dependencies [ef43cf3]
+- Updated dependencies [b44c7cf]
+- Updated dependencies [705ab4e]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [5986939]
+- Updated dependencies [4d647e6]
+- Updated dependencies [c35f7e5]
+- Updated dependencies [369e229]
+- Updated dependencies [d13cf6b]
+- Updated dependencies [2854a2e]
+  - @memberjunction/core@6.2.0-edge.2
+  - @memberjunction/core-entities@6.2.0-edge.2
+  - @memberjunction/global@6.2.0-edge.2
+  - @memberjunction/sql-dialect@6.2.0-edge.2
+
+## 6.2.0-edge.1
+
+### Patch Changes
+
+- 80905a1: Rename public class members and exported functions to PascalCase, per MJ's naming convention,
+  **without breaking a single consumer**.
+
+  Every renamed symbol keeps its old name beside the new one as a `@deprecated` stub that forwards to
+  it — a delegating method or function, a getter/setter pair for a property, and for Angular a
+  readable accessor pair for an `@Input` and a second `@Output` sharing the same `EventEmitter`, so a
+  template still binding the old name keeps receiving events. Old names still compile, still resolve,
+  and still behave identically; the deprecation tag rides through to the published `.d.ts`, so editors
+  point callers at the replacement. Where a package re-exports through an explicit `export { … }`
+  list, the new name is added alongside the old, so the correct name is actually on the public surface
+  rather than merely declared.
+
+  The rename is deliberately refused wherever a mechanical stub would not be equivalent, because
+  several of those shapes change a type contract while still compiling in the package that declares
+  them:
+  - an **optional** property or parameter property — TypeScript has no optional accessor, so a stub
+    would promote `foo?` to a required member and break every object literal that omits it;
+  - a class that is a **data shape** (no methods, or `@ObjectType`/`@InputType`) — object literals are
+    assigned to it, and an accessor stub changes what they must supply;
+  - a property whose **subclass redeclares it**, since TypeScript forbids a property overriding an
+    accessor (TS2610);
+  - a name whose PascalCase form is **already bound** in that file or class;
+  - decorated members, `get`/`set` pairs behind a decorator, generators, destructured parameters,
+    overload sets and abstract members.
+
+  **One wire-visible consequence, for version skew only.** `BaseInfo.toJSON` walks `_`-prefixed
+  backing fields and emits them through their public getter, preferring the PascalCase one. Renaming
+  the 23 field aliases in `MJCore/src/generic` therefore changes what `AllMetadata` carries:
+  `EntityInfo.spCreate` and friends now serialize as `SpCreate`. A same-version client is unaffected —
+  `copyInitData` accepts a value through a settable accessor, so either spelling lands on the right
+  field. An OLDER client against a newer server has no such path in its `copyInitData` and drops those
+  fields silently. Same-version deployments, which is the supported configuration, see no change.
+
+  Each package was verified against its own pre-change baseline rather than against zero, because
+  several packages in this repo do not typecheck cleanly to begin with. Angular packages were verified
+  with `ngc`, not `tsc`: a plain typecheck does not compile templates, and an earlier write-only
+  `@Input` alias passed `tsc` while breaking six template reads.
+
+- Updated dependencies [a50948e]
+- Updated dependencies [0eeb89d]
+- Updated dependencies [a3539d2]
+- Updated dependencies [41274aa]
+- Updated dependencies [67f6c85]
+- Updated dependencies [eb3a8d3]
+- Updated dependencies [e1dd673]
+- Updated dependencies [307da67]
+- Updated dependencies [a7da50b]
+- Updated dependencies [17cc774]
+- Updated dependencies [80905a1]
+- Updated dependencies [6b08ebf]
+  - @memberjunction/core-entities@6.2.0-edge.1
+  - @memberjunction/core@6.2.0-edge.1
+  - @memberjunction/global@6.2.0-edge.1
+  - @memberjunction/sql-dialect@6.2.0-edge.1
+
 ## 6.2.0-edge.0
 
 ### Patch Changes

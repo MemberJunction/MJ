@@ -127,6 +127,8 @@ After making code changes, **always compile the affected package** and fix all T
 
 **PostgreSQL is toolchain territory — do not hand-author it, and do not build tooling for it.** A feature PR ships the **T-SQL migration only**. Never write a `migrations-pg/**` counterpart, and never write a script that checks, generates, or gates PG parity. Converting T-SQL to PG is deterministic transpilation (`mj migrate convert`, the SQLConverter package, `/pg-migrate-v2`) run by the **build engineer at release time** — the same cadence as the consolidated metadata-sync migration. LLM-inferred PG SQL and one-off parity scripts are exactly what that toolchain exists to replace: they drift from the converter, gate feature PRs on work that is not theirs, and rot. If PG conversion looks wrong, fix the converter or tell the build engineer — do not route around it. Details: [`migrations/CLAUDE.md`](migrations/CLAUDE.md).
 
+**The API path isn't always at `/`.** MJAPI mounts every route under `MJAPI_BASE_PATH`; `GRAPHQL_ROOT_PATH` is only Apollo's path; `MJAPI_PUBLIC_URL` is where the world reaches MJAPI. Never derive one from another. Server routes and outward URLs go through `ApiRoute()` from `@memberjunction/server`, never `app.use('/x')` or a hand-built `${publicUrl}/x`. CI enforces it (`check:api-root` + a boot test). Rules: [`packages/MJAPI/CLAUDE.md`](packages/MJAPI/CLAUDE.md).
+
 **Record Changes**: MJ has built-in version control for all entities. Don't implement custom versioning.
 
 **Never stage or commit local host artifacts**: Never commit `mj.config.cjs`, `mj.config.json`, or generated host folders (`packages/GeneratedEntities/**`, `packages/MJAPI/src/generated/**`, `packages/MJExplorer/src/app/generated/**`) to the repository. They belong strictly to local running environments.
@@ -154,7 +156,7 @@ Guidance is **loaded on demand**, so it costs nothing until it's relevant. This 
 | Path | Scope |
 |---|---|
 | [`migrations/CLAUDE.md`](migrations/CLAUDE.md) | Migration authoring — naming, hardcoded UUIDs, system columns CodeGen owns, CHECK constraints, CodeGen handoff |
-| [`metadata/CLAUDE.md`](metadata/CLAUDE.md) | Metadata authoring — `@lookup`/`@file`/`@parent` refs, `uuidgen` primary keys, no per-PR sync migrations, seeding lookup tables, application metadata |
+| [`metadata/CLAUDE.md`](metadata/CLAUDE.md) | Metadata authoring — `@lookup`/`@file`/`@parent` refs, `uuidgen` primary keys, metadata ships only as release migrations (no install-time metadata phase), seeding lookup tables, application metadata |
 | [`metadata/components/CLAUDE.md`](metadata/components/CLAUDE.md) | Interactive component authoring — component architecture rules, the `ProductRevenueMatrix` reference implementation |
 | [`docker/CLAUDE.md`](docker/CLAUDE.md) | Docker workbench + MJAPI container configurations |
 | [`stats/CLAUDE.md`](stats/CLAUDE.md) | Repo LOC stats — generated files, do not hand-edit |

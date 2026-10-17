@@ -35,6 +35,9 @@ export const CONDITION_ROOTS: ReadonlySet<string> = new Set([
     'status', 'succeeded', 'failed', 'output', 'errorMessage',
     // flow dialect
     'payload', 'stepResult', 'flowContext', 'data', 'context',
+    // judgment: answers a Decision step resolved BEFORE the condition runs. Reading one never calls
+    // a model; `decisions.<step>.<question>` is checked against the graph's Decision steps at submit.
+    'decisions',
 ]);
 
 /** Names that are grammar, not scope — they resolve without the envelope providing anything. */

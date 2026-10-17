@@ -1,5 +1,168 @@
 # Change Log - @memberjunction/ai-openai
 
+## 6.2.0-edge.4
+
+### Minor Changes
+
+- ecc5658: Add `OpenAIDecision`, a `BaseDecision` driver for OpenAI's Decisions API (`POST https://api.openai.com/v1/decisions`, public beta), and the `GPT-6 Luna Decisions` model (type Decision, `gpt-6-luna`, $0.10 per million input tokens, no output charge). OpenAI's wire differs from the System One format the other decision drivers share — questions are an array of named `predicate` / `choice` / `score` items and answers come back as an array keyed by name — so the driver builds that request and maps the answers back into the System One shape, reusing `BaseSystemOneDecision`'s answer mapping, renormalisation and telemetry. A refused question fails the call with a failover-eligible error. The model is not bound to any prompt; add it to `Default Decision` (or another Decision prompt) to route decisions to it.
+
+### Patch Changes
+
+- 95e5dd9: fix(memory-leaks): round 18 audit — release OpenAI Live session handlers/timer on Close, delete per-session bridge diag flags, sweep and cap the dial-in rate limiter, detach MCP toolsSynced listener on failure, don't arm the telephony dashboard interval after destroy
+- 8bac4d6: OpenAI Live's browser client now reaches MJAPI's WebRTC SDP broker on MJAPI's port when no public URL is set. The driver built the broker URL itself and fell back to port 4103, while MJAPI listens on 4000 by default (`GRAPHQL_PORT`). It now takes MJAPI's origin from the new `ResolveRealtimeProxyBaseHttpUrl` in `@memberjunction/ai`, the http(s) form of `ResolveRealtimeProxyBaseWsUrl` that the relay and proxy drivers use: `Config.proxyBaseUrl` (or the driver's own `Config.brokerBaseUrl`), then `MJAPI_PUBLIC_URL`, then `GRAPHQL_BASE_URL` and `GRAPHQL_PORT`, which default to `http://localhost` and `4000` as in MJAPI's configuration. Only the origin is kept, as for the other realtime drivers: MJAPI serves the broker at its root, so a `MJAPI_PUBLIC_URL` that carries the GraphQL path (`https://host/graphql`) no longer puts the broker under it, and a `brokerBaseUrl` or `proxyBaseUrl` with a path gives its origin. A relative `brokerBaseUrl` (`/`) stays relative. A blank `proxyBaseUrl` no longer hides `brokerBaseUrl`. Both helpers now treat an empty `GRAPHQL_PORT` as unset, as MJAPI does, instead of building a URL with no port.
+- 5a3de97: The server AssemblyAI, ElevenLabs, Inworld and OpenAI Realtime drivers, and the xAI and Hugging Face drivers built on OpenAI's session, drop a video frame passed to `SendInput` instead of sending its bytes to the model as audio. Each session logs a dropped kind and type once (`console.warn`), not once per frame. `RealtimeDroppedInputReporter` (Core) is the shared reporter.
+- 5345e3d: OpenAI Live's `brokerBaseUrl` setting no longer reaches other realtime providers. It is now registered in `REALTIME_SHARED_CONFIG_KEYS` (`@memberjunction/ai`), the list of MJ-side keys drivers keep off the provider wire, and the OpenAI-protocol scrub `ExtractRealtimeFeatures` (`@memberjunction/ai-openai`) removes it, as it does `proxyBaseUrl`. Before, a config bag that set it and reached another driver passed it on as an unknown session field. A co-agent's `realtime.voice.providers.openai` bag is filed onto OpenAI Realtime as well as OpenAI Live, and OpenAI Realtime (with xAI and Hugging Face, which share its scrub) spreads the rest of the bag into the session it sends. Inworld forwarded it the same way, and Gemini merged it into its connect config. OpenAI Live still reads `brokerBaseUrl` for its SDP broker URL.
+- 5e21f50: The server OpenAI Live driver logs the video frames it drops from `SendInput`, once per kind and type, through `RealtimeDroppedInputReporter`, as the other audio-only drivers do: `[OpenAILiveRealtime] Dropped video input of type image/jpeg: this session sends audio only.` It used to drop them without a line. The server Gemini Live driver reports its dropped input through the same class instead of its own copy. Its line keeps its wording, with three differences: an audio type in another letter case is no longer a second line (video types already compared that way), a blank type reads `(no type)`, and a video type is shown as the frame gave it rather than lowercased.
+- 35ed7b5: `IRealtimeSession.SendInput` takes one `RealtimeInputFrame` (`Data`, `Kind`, and optional `MimeType` and `TimestampMs`) instead of `(chunk, kind?)`. A realtime driver outside this repo must change its `SendInput` signature, and a caller passes `{ Data: chunk, Kind: 'audio' }`. The bridge engine passes each inbound frame's type and capture time, and `BridgeMediaFrame` gains an optional `MimeType`. The server Gemini Live driver sends a JPEG or PNG video frame as video instead of as audio, sends audio in the PCM format the frame names, and drops a frame it cannot send, reporting each type once. The other drivers behave as before.
+- Updated dependencies [d17de94]
+- Updated dependencies [7ada797]
+- Updated dependencies [432cb73]
+- Updated dependencies [293c316]
+- Updated dependencies [155aa45]
+- Updated dependencies [6cd23e1]
+- Updated dependencies [51634e7]
+- Updated dependencies [1d6e3e8]
+- Updated dependencies [de2dc2f]
+- Updated dependencies [1da00cb]
+- Updated dependencies [b699a37]
+- Updated dependencies [a4b23b7]
+- Updated dependencies [961d529]
+- Updated dependencies [10c2311]
+- Updated dependencies [4889fb2]
+- Updated dependencies [b2441c3]
+- Updated dependencies [69e19c5]
+- Updated dependencies [7316ac3]
+- Updated dependencies [8ef5e86]
+- Updated dependencies [596855c]
+- Updated dependencies [fdf6669]
+- Updated dependencies [4c682c1]
+- Updated dependencies [f325baa]
+- Updated dependencies [08a4cfc]
+- Updated dependencies [b09fe34]
+- Updated dependencies [8bac4d6]
+- Updated dependencies [5a3de97]
+- Updated dependencies [0d0ba18]
+- Updated dependencies [b6fcb30]
+- Updated dependencies [f73e192]
+- Updated dependencies [8704df6]
+- Updated dependencies [5345e3d]
+- Updated dependencies [22c9074]
+- Updated dependencies [aee2d53]
+- Updated dependencies [5dc3752]
+- Updated dependencies [6c8798b]
+- Updated dependencies [25f7b82]
+- Updated dependencies [35ed7b5]
+- Updated dependencies [d853bf8]
+- Updated dependencies [e293b68]
+- Updated dependencies [afe9eb4]
+- Updated dependencies [d2cb42e]
+- Updated dependencies [cbddadb]
+- Updated dependencies [1ba9315]
+- Updated dependencies [b8a9e5e]
+- Updated dependencies [e8258a1]
+- Updated dependencies [6b487b8]
+  - @memberjunction/ai@6.2.0-edge.4
+  - @memberjunction/global@6.2.0-edge.4
+
+## 6.2.0-edge.3
+
+### Patch Changes
+
+- 279b93e: Multi-agent rooms now take turns properly with full-duplex realtime models, and the Live Room doubles as an agent test bed.
+  - **Model-side addressing.** `IAddressedMatcher` gains a model-judged implementation next to the name-matching one. Full-duplex sessions get two host tools, `i_am_addressed` and `yield_turn`, because neither vendor offers a native signal. `TurnAddressing` (`Auto` | `ModelSide` | `Regex`) is selectable per session; `Auto` uses the model's judgement when the model reports the new `FullDuplex` capability (GPT-Live, Gemini 3.8 Live with always-on proactive audio) and name matching otherwise.
+  - **Floor discipline.** `MultiAgentRoomCoordinator` now grants hand-offs with a TTL (a third agent cannot jump in), keeps backchannels (short "mm-hm" acknowledgements) off the floor, lets a person's speech preempt the holder through the existing barge-in flush path while delegated work keeps running, and caps consecutive agent-to-agent turns (default 8, configurable). A new `FullDuplexTurnGate` enforces it on models that decide for themselves when to speak, so two agents never speak at once even if neither asks first.
+  - **Test bed.** New `GetLiveKitRoomTurnState` query and typed `GraphQLLiveKitClient.GetRoomTurnState`; new `mj-livekit-turn-state` widget; the Live Room gets per-agent turn mode and addressing pickers, roster badges and a live Turns panel (floor holder, hand-offs, backchannels, loop cap, event feed) that also works for a person who joins an existing room.
+  - **Tests.** A deterministic replay harness with twelve recorded room timelines asserts no overlapping agent speech, no run beyond the loop cap, humans always preempt and backchannels never take the floor.
+
+  No schema, metadata or CodeGen changes. Live-model behaviour of the host tools is not yet verified; see the "Multi-agent rooms" section of `plans/realtime/bridges-and-widget/LIVE-CALL-CHECKLIST.md`.
+
+- 72e082b: fix(realtime): a spoken update no longer wipes the session identity it speaks under
+
+  `RequestSpokenUpdate` sent the caller's direction as `response.create`'s per-response
+  `instructions`. On the OpenAI Realtime protocol that field is a **full override of the session
+  system prompt for that response**, not an addition to it — so the one turn riding this method spoke
+  with no identity at all: no persona, no name, none of the standing directives the session was
+  minted with.
+
+  The server-side driver already knew the rule and guarded the BLANK case on it, in its own words:
+  forwarding `''` "would wipe the co-agent identity framing (incl. the `call invoke-target-agent,
+don't do the work yourself` directive)". The non-blank case was never guarded, and it wipes exactly
+  the same framing — just less visibly, because only the requested turn loses it while every other
+  turn in the same session reads correctly.
+
+  Reported from a downstream hiring product (bizapps-caliber#397), where the failure was as visible as
+  it gets: the interviewer's opening turn — the first thing an external candidate hears — introduced
+  her as _"ChatGPT, your friendly voice companion"_, while turns 4, 7 and 12 of the same session all
+  correctly said _"I'm Sam Rivera, Support Team Lead."_ The candidate asked about it unprompted and
+  the model conceded it had broken character.
+
+  Both twins now carry the session prompt ahead of the direction, so the direction stays last (the
+  most recent line is the one a model weights hardest) and no caller has to restate an identity the
+  session already holds:
+  - `@memberjunction/ai-realtime-client` — `OpenAIProtocolRealtimeClient.RequestSpokenUpdate` builds
+    its frame through a new `buildSpokenUpdateEvent`, reading the pact through a
+    `currentSessionInstructions()` seam that each transport answers with the config it actually
+    applied (WebRTC from `sessionConfig`, websocket from `sessionObject`). A blank direction now
+    sends a bare `response.create`, matching the server twin.
+  - `@memberjunction/ai-openai` — `OpenAIRealtimeSession` retains the prompt it last sent in
+    `session.update` and carries it the same way.
+
+  This reaches every caller of the method, not only an opening turn: silence check-ins, progress
+  narration and delegation narration were all speaking without identity on that turn.
+
+  `OpenAILiveClient` is deliberately unchanged — it sends a bare `response.create` after
+  `session.commentary.append`, so the session prompt already governs there and it never had this
+  defect.
+
+- Updated dependencies [25bb295]
+- Updated dependencies [dfe40a4]
+- Updated dependencies [29b6ec3]
+- Updated dependencies [279b93e]
+- Updated dependencies [bea2386]
+  - @memberjunction/ai@6.2.0-edge.3
+  - @memberjunction/global@6.2.0-edge.3
+
+## 6.2.0-edge.2
+
+### Minor Changes
+
+- 79279f2: Text-to-speech, speech-to-text and video now have runners, like chat, embeddings and images.
+  - **`AITextToSpeechRunner`** (`TTS` models), **`AISpeechToTextRunner`** (`Speech to Text` models) and **`AIVideoRunner`** (`Video` models) select a model from a carrier prompt's bindings, or a pinned `ModelID`, resolve its credential, fail over, and record every call as an AI Prompt Run. The run row never holds audio or video. Text-to-speech records the characters sent in the `Characters` measure unless the driver reports its own quantity; speech-to-text records the audio's seconds when the provider reports them; video records seconds only when a driver reports them, which HeyGen's does not. They share their lifecycle through a new `BaseMediaRunner`.
+  - New metadata: the `Default Text To Speech`, `Default Speech To Text` and `Default Video Generation` prompts, which the runners use when no prompt is named.
+  - **`BaseAudioGenerator` is split** into `BaseTextToSpeech` and `BaseSpeechToText`. `BaseAudioGenerator` is deprecated but keeps working: it implements both, and every driver still extends it and stays registered against it under the same key. `OpenAIAudioGenerator` also registers against both new classes, `ElevenLabsAudioGenerator` against `BaseTextToSpeech`, and `GroqAudioGenerator` against `BaseSpeechToText`. The split-and-join transcription loop is also exported as `TranscribeAudioWithSplitting`.
+  - `VideoResult` gains an optional `usage`, for a driver that reports the video's length.
+  - `SpeechResult` and `VideoResult` gain an optional `errorInfo`. The OpenAI, ElevenLabs, Groq and HeyGen audio and video drivers now fill it from the error their SDK threw, keeping its HTTP status, so a caller can tell a rejected request from an outage. The runners fail over on it: a 400 or 422 no longer fails over to every other candidate.
+  - The media runners take `TimeoutMS` and `CancellationToken`, which bound each driver call as `timeoutMS` and `cancellationToken` bound a chat call.
+  - `BaseModelRunner` gains `ResolveUsageToRecord` and `ApplyUsageToRunRecord`, which the image runner now uses too, so every non-chat runner records units the same way.
+
+  Nothing called the audio or video drivers before, so no existing caller changes behavior.
+
+### Patch Changes
+
+- Updated dependencies [ff3097d]
+- Updated dependencies [79279f2]
+- Updated dependencies [2552b1e]
+- Updated dependencies [f3c6161]
+- Updated dependencies [5148534]
+- Updated dependencies [ce1a5c3]
+- Updated dependencies [4d647e6]
+  - @memberjunction/ai@6.2.0-edge.2
+  - @memberjunction/global@6.2.0-edge.2
+
+## 6.2.0-edge.1
+
+### Patch Changes
+
+- Updated dependencies [a50948e]
+- Updated dependencies [15a4333]
+- Updated dependencies [5da3ad2]
+- Updated dependencies [e1dd673]
+- Updated dependencies [c261eb8]
+- Updated dependencies [1d43161]
+- Updated dependencies [80905a1]
+  - @memberjunction/ai@6.2.0-edge.1
+  - @memberjunction/global@6.2.0-edge.1
+
 ## 6.2.0-edge.0
 
 ### Patch Changes

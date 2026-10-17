@@ -1,4 +1,4 @@
-import { ClassFactory, ClassRegistration, DeserializeValidationErrors, IsMemberOverridden, MJEventType, MJGlobal, NormalizeUUID, OptionalKeyedSpecialization, uuidv4, UUIDsEqual, WarningManager, ComputeContentHashAsync } from '@memberjunction/global';
+import { Base64DecodedByteLength, ClassFactory, ClassRegistration, DeserializeValidationErrors, Float32VectorToBase64, IsValidBase64, IsMemberOverridden, MJEventType, MJGlobal, NormalizeUUID, OptionalKeyedSpecialization, uuidv4, UUIDsEqual, WarningManager, ComputeContentHashAsync } from '@memberjunction/global';
 import { GetDataHooks, PreSaveHook } from './dataHooks';
 import { EntityFieldInfo, EntityInfo, EntityFieldTSType, EntityPermissionType, FieldSecurityError, RecordChange, ValidationErrorInfo, ValidationResult, EntityRelationshipInfo } from './entityInfo';
 import { EntitySubtypeResolver } from './entitySubtypeResolver';
@@ -16,6 +16,7 @@ import { COMPANION_PAYLOAD_KEY, EntityCompanion, EntityCompanionDeserializeMode,
 import { EmbeddedRecord, type EmbeddedRecordOptions } from './embeddedRecord';
 import { EntitySavePlan, ExecuteEntitySavePlan } from './entitySavePlan';
 import { EntityTransactionScope } from './entityTransactionScope';
+import { JSONFieldBinding, JSONFieldRuleSet, JSONFieldSeverity, ValidateJSONFieldValue } from './jsonFieldBinding';
 import { BaseRemotableOperation } from './baseRemotableOperation';
 import {
     SAVE_ENTITY_GRAPH_OPERATION_KEY,
@@ -36,6 +37,20 @@ function trimTrailingSpaces(value: string): string {
         end--;
     }
     return end === value.length ? value : value.slice(0, end);
+}
+
+/**
+ * A field's value and dirty-tracking state, as {@link EntityField.GetState} captures them.
+ */
+export interface EntityFieldState {
+    /** The field's value. */
+    Value: unknown;
+    /** The value the field is compared with to decide whether it's dirty. */
+    OldValue: unknown;
+    /** Whether the source the record was hydrated from omitted the field. See {@link EntityField.NotLoaded}. */
+    NotLoaded: boolean;
+    /** Whether the field has had no set since it was created or re-armed. */
+    NeverSet: boolean;
 }
 
 /**
@@ -421,6 +436,9 @@ export class EntityField {
                 result.Success = false;
                 result.Errors.push(new ValidationErrorInfo(ef.Name, `${ef.DisplayNameOrName} cannot be longer than ${ef.MaxLength} characters. Current value is ${this.Value.length} characters`, this.Value));
             }
+            if (ef.IsBinaryFieldType && this.Value !== null && this.Value !== undefined) {
+                this.validateBinaryValue(ef, result);
+            }
             if (ef.TSType == EntityFieldTSType.Date && (this.Value !== null && this.Value !== undefined && !(this.Value instanceof Date)) ) {
                 // invalid non-null date, but that is okay if we are a new record and we have a default value
                 result.Success = false;
@@ -487,6 +505,27 @@ export class EntityField {
         return result;
     }
 
+
+    /**
+     * Validates a non-null binary field value. A binary field (`varbinary` / `bytea`) holds a base64
+     * string in a `BaseEntity`, and the database providers decode it when the record is saved, so a
+     * value that is not base64 — a data URI, raw text, a byte array — would fail the save with a
+     * database error that names no field. Catching it here reports it against the field instead.
+     * A fixed-size column (`varbinary(n)` / `binary(n)`) also has its decoded byte length checked.
+     */
+    private validateBinaryValue(ef: EntityFieldInfo, result: ValidationResult): void {
+        const value: unknown = this.Value;
+        if (typeof value !== 'string' || !IsValidBase64(value)) {
+            result.Success = false;
+            result.Errors.push(new ValidationErrorInfo(ef.Name, `${ef.DisplayNameOrName} is a binary field; its value must be a base64-encoded string`, this.Value));
+            return;
+        }
+        const byteLength = Base64DecodedByteLength(value);
+        if (ef.MaxByteLength > 0 && byteLength > ef.MaxByteLength) {
+            result.Success = false;
+            result.Errors.push(new ValidationErrorInfo(ef.Name, `${ef.DisplayNameOrName} cannot be longer than ${ef.MaxByteLength} bytes. Current value is ${byteLength} bytes`, this.Value));
+        }
+    }
 
     constructor(fieldInfo: EntityFieldInfo, Value?: any) {
         // NOTE: constructing an EntityField for a deprecated/disabled field is always allowed — the
@@ -597,10 +636,28 @@ export class EntityField {
 
     /**
      * Restores the dirty-tracking baseline to a previously captured value.
-     * Used by graph rollback so a retried save still sees the pre-attempt dirty set.
      */
     public RestoreOldValue(value: unknown): void {
         this._oldValue = value;
+    }
+
+    /**
+     * Framework-internal: the field's value and dirty-tracking state, so a unit of work that rolls
+     * back can put them back with {@link RestoreState}.
+     */
+    public GetState(): EntityFieldState {
+        return { Value: this._value, OldValue: this._oldValue, NotLoaded: this._notLoaded, NeverSet: this._neverSet };
+    }
+
+    /**
+     * Framework-internal: puts back a state {@link GetState} captured. It writes the state as it was,
+     * so the read-only and first-set rules of the {@link Value} setter don't apply.
+     */
+    public RestoreState(state: EntityFieldState): void {
+        this._value = state.Value;
+        this._oldValue = state.OldValue;
+        this._notLoaded = state.NotLoaded;
+        this._neverSet = state.NeverSet;
     }
 
     /**
@@ -650,6 +707,47 @@ export interface RestoreContext {
 }
 
 /**
+ * Context describing an in-progress clone operation on a BaseEntity.
+ *
+ * When set on an entity instance via {@link BaseEntity.SetCloneContext}
+ * prior to calling Save(), the data provider will write the resulting
+ * RecordChange row with `Source='Clone'` and the structured JSON
+ * `ChangeContext` column populated.
+ *
+ * @see plans/record-cloning/README.md §10.3
+ */
+export interface CloneContext {
+    /** ID of the RecordCloneLog row coordinating this clone operation. */
+    CloneLogID: string;
+    /** Entity name of the record being cloned. */
+    SourceEntityName: string;
+    /** Compact URL segment of the source key (bare value for single-column keys). */
+    SourceRecordID: string;
+    /** Entity name of the root record of the clone graph. */
+    RootEntityName: string;
+    /** Source key of the root record. */
+    RootSourceRecordID: string;
+    /** Target key of the root record after insertion. */
+    RootTargetRecordID: string;
+    /** Depth within the record graph (0 for root). */
+    Depth: number;
+    /** Relationship route traversed to reach this record. */
+    Route: 'RootSave' | 'Collection' | 'Embedded' | 'IsAChain' | 'Sidecar';
+    /** Kinds and field names only. Values are already in FullRecordJSON. */
+    FieldChangeSummary: Array<{ Kind: string; Fields: string[] }>;
+    /** Optional explanation entered at clone time. */
+    Reason?: string | null;
+}
+
+/**
+ * The `ChangeContext` JSON a clone writes on its Record Change rows (`IRecordChangeContext`,
+ * Kind 'Clone'). The one serializer every provider path uses, so the shape can't drift.
+ */
+export function SerializeCloneChangeContext(context: CloneContext): string {
+    return JSON.stringify({ Version: 1, Kind: 'Clone', Clone: context });
+}
+
+/**
  * Discriminator for the `Source` column of a RecordChange row.
  *
  * - `Internal`: produced by an ordinary BaseEntity Save() / Delete() call
@@ -657,8 +755,10 @@ export interface RestoreContext {
  *   (records the platform discovers via direct SQL changes)
  * - `Restore`: produced by a user-initiated restore — paired with
  *   `RestoredFromID` and optional `RestoreReason` lineage columns
+ * - `Clone`: produced by a record clone operation — paired with
+ *   structured `ChangeContext` JSON provenance
  */
-export type RecordChangeSource = 'Internal' | 'External' | 'Restore';
+export type RecordChangeSource = 'Internal' | 'External' | 'Restore' | 'Clone';
 
 /**
  * Dialect-agnostic payload for a RecordChange row.
@@ -716,6 +816,11 @@ export interface RecordChangePayload {
      * not enter one.
      */
     restoreReason: string | null;
+    /**
+     * When `source === 'Clone'`, serialized JSON bag carrying structured provenance
+     * (shape = `IRecordChangeContext`). Null otherwise.
+     */
+    changeContext: string | null;
 }
 
 export class DataObjectRelatedEntityParam {
@@ -1021,15 +1126,52 @@ function sameEntityName(a: string, b: string): boolean {
 }
 
 /**
- * Base class used for all entity objects. This class is abstract and is sub-classes for each particular entity using the CodeGen tool. This class provides the basic functionality for loading, saving, and validating entity objects.
+ * One record as it was before a unit of work: whether it was saved and loaded, its result history,
+ * and each field with its value and dirty-tracking state. Captured so a unit of work that rolls back
+ * can put the record back.
  */
-/** In-memory baseline captured before a graph runs so a rollback can be retried. */
-type GraphParticipantSnapshot = {
+type RecordSnapshot = {
     entity: BaseEntity;
     wasSaved: boolean;
-    oldValues: { name: string; old: unknown }[];
+    wasLoaded: boolean;
+    resultHistory: BaseEntityResult[];
+    fields: { field: EntityField; state: EntityFieldState }[];
 };
 
+/**
+ * What a unit of work that holds a transaction keeps for the records it writes, so that it can settle
+ * them when it settles. A unit of work is an IS-A chain's save or delete, or a graph.
+ *
+ * - `Snapshots`: each record as it was before the unit wrote it, put back if the unit rolls back. A
+ *   save finalizes its record as saved and clean when the write returns, before the unit commits.
+ * - `DeletedRecords`: the records it deleted, reset with `NewRecord()` once it commits. Resetting a
+ *   record as its delete returns would leave it reset, with a new key, if the unit then rolled back.
+ *
+ * A unit nested in another adds to the outer unit's lists instead of keeping its own: an IS-A chain
+ * that is one of a graph's records, or the graph of an IS-A parent's companions inside its child's
+ * chain. The outermost unit settles everything, so no record is reset before it commits. A nested
+ * unit that rolls back also puts its own records back at once, in case the outer unit goes on.
+ */
+type UnitOfWork = {
+    Snapshots: RecordSnapshot[];
+    DeletedRecords: BaseEntity[];
+};
+
+/**
+ * One unit of work's part in a {@link UnitOfWork}: the unit it owns, or the enclosing unit it joined.
+ * It keeps its own snapshots, and how many deleted records the unit held when it began, so that it can
+ * settle its own share if it rolls back inside a unit that goes on.
+ */
+type UnitOfWorkPart = {
+    unit: UnitOfWork;
+    owns: boolean;
+    snapshots: RecordSnapshot[];
+    deletedMark: number;
+};
+
+/**
+ * Base class used for all entity objects. This class is abstract and is sub-classes for each particular entity using the CodeGen tool. This class provides the basic functionality for loading, saving, and validating entity objects.
+ */
 export abstract class BaseEntity<T = unknown> {
     /**
      * Metadata describing this entity (name, fields, keys, relationships). Populated during
@@ -1307,6 +1449,13 @@ export abstract class BaseEntity<T = unknown> {
     private _entityTransactionScope: EntityTransactionScope | null = null;
 
     /**
+     * The unit of work this record is saved or deleted in, while it runs as part of a larger one: an
+     * IS-A chain's initiator sets it on each parent for the parent's write, and a graph sets it on
+     * each of its records. See {@link UnitOfWork}.
+     */
+    private _unitOfWork: UnitOfWork | null = null;
+
+    /**
      * Companions registered on this entity, keyed by {@link EntityCompanion.Name}.
      *
      * Lazily created so that the overwhelming majority of entities — which declare no companions —
@@ -1426,10 +1575,28 @@ export abstract class BaseEntity<T = unknown> {
             parentEntityInfo.Name,
             this._contextCurrentUser
         );
+        // A chain loaded through the parent is linked the other way too, so the parent's
+        // LeafEntity (and its save hooks) see this child (MJ#4870).
+        this.linkParentBackToThisChild();
         // Recursive: the parent's InitializeParentEntity() was called by GetEntityObject()
 
         // Cache the parent field names for O(1) routing lookups
         this._parentEntityFieldNames = this.EntityInfo.ParentEntityFieldNames;
+    }
+
+    /**
+     * Points this child's disjoint parent back at this instance (`parent._childEntity = this`).
+     *
+     * Same gate as {@link InitializeParentEntity}: a parent that allows several subtypes keeps no
+     * single child. `NewRecord()` sets `_childEntity` to null, so this has to run AFTER the
+     * parent's `NewRecord()` — calling it before is wiped out.
+     */
+    private linkParentBackToThisChild(): void {
+        const parentEntityInfo = this.EntityInfo?.ParentEntityInfo;
+        if (!this._parentEntity || !parentEntityInfo || parentEntityInfo.AllowMultipleSubtypes) {
+            return;
+        }
+        this._parentEntity._childEntity = this;
     }
 
     /**
@@ -1512,8 +1679,9 @@ export abstract class BaseEntity<T = unknown> {
         if (!loaded) {
             // Restore the fresh chain the failed load destroyed: re-seed the parent chain, then put
             // the ORIGINAL minted key back (Set routes to the root), so the record the caller holds
-            // is bit-for-bit the fresh record they built.
+            // is bit-for-bit the fresh record they built. Re-seed nulls the parent's back-link.
             this._parentEntity.NewRecord();
+            this.linkParentBackToThisChild();
             for (const pk of freshPkValues) {
                 if (pk.value != null) {
                     this._parentEntity.Set(pk.name, pk.value);
@@ -1942,7 +2110,26 @@ export abstract class BaseEntity<T = unknown> {
         return e instanceof Error ? e.message : String(e);
     }
 
-    private static _subtypeLookupCache = new Map<string, BaseEntity | null>();
+    /**
+     * The create path's SubtypeSelector lookup memo, partitioned by the provider that ran the lookup. A memo
+     * shared across providers would hand provider B a row loaded through provider A (another connection,
+     * another user's context) or a `null` miss recorded against A's database. Keyed weakly so a
+     * request-scoped provider's memo is collected with it.
+     */
+    private static _subtypeLookupCache = new WeakMap<object, Map<string, BaseEntity | null>>();
+
+    /** Partition key for lookups made by an entity that has no provider at all. */
+    private static readonly _noProviderSubtypeKey: object = {};
+
+    private static subtypeLookupCacheFor(provider: object | null | undefined): Map<string, BaseEntity | null> {
+        const partitionKey = provider ?? BaseEntity._noProviderSubtypeKey;
+        let cache = BaseEntity._subtypeLookupCache.get(partitionKey);
+        if (!cache) {
+            cache = new Map<string, BaseEntity | null>();
+            BaseEntity._subtypeLookupCache.set(partitionKey, cache);
+        }
+        return cache;
+    }
 
     /** Per entity (lowercased name): the resolver asked for load hints, decided once per registration. */
     private static _subtypeLoadHintResolvers = new Map<string, SubtypeLoadHintResolverEntry>();
@@ -1957,7 +2144,7 @@ export abstract class BaseEntity<T = unknown> {
      * reported again.
      */
     public static ClearSubtypeLookupCache(): void {
-        BaseEntity._subtypeLookupCache.clear();
+        BaseEntity._subtypeLookupCache = new WeakMap();
         BaseEntity._subtypeLoadHintResolvers.clear();
         BaseEntity._engineCachedRowIndexes = new WeakMap();
         BaseEntity._loggedSubtypeLoadHintMessages.clear();
@@ -2090,16 +2277,7 @@ export abstract class BaseEntity<T = unknown> {
             this._childEntity = childEntity;
 
             const dirtySnapshots = this.captureChainDirtyState();
-
-            if (this.PrimaryKey && this.PrimaryKey.HasValue) {
-                const loaded = await childEntity.InnerLoad(this.PrimaryKey);
-                if (!loaded) {
-                    this.mirrorSharedKeysToChild(childEntity);
-                }
-            } else {
-                this.mirrorSharedKeysToChild(childEntity);
-            }
-
+            await this.loadOrMirrorChildRow(childEntity);
             this.restoreChainDirtyState(dirtySnapshots);
 
             // Recursively discover grandchildren if the child is also a parent type
@@ -2125,16 +2303,7 @@ export abstract class BaseEntity<T = unknown> {
             this.replaceChildParentChain(childEntity);
 
             const dirtySnapshots = this.captureChainDirtyState();
-
-            if (this.PrimaryKey && this.PrimaryKey.HasValue) {
-                const loaded = await childEntity.InnerLoad(this.PrimaryKey);
-                if (!loaded) {
-                    this.mirrorSharedKeysToChild(childEntity);
-                }
-            } else {
-                this.mirrorSharedKeysToChild(childEntity);
-            }
-
+            await this.loadOrMirrorChildRow(childEntity);
             this.restoreChainDirtyState(dirtySnapshots);
 
             if (childEntity.EntityInfo.IsParentType) {
@@ -2142,6 +2311,33 @@ export abstract class BaseEntity<T = unknown> {
             }
 
             return childEntity;
+        }
+    }
+
+    /**
+     * A new parent's child is new too: there is no row to read, so copy the parent's keys.
+     * A saved parent still reads (promotion's usual answer is "no row"), and that miss is not
+     * an error — the same way a subtype-hint probe treats an empty read (MJ#4859).
+     */
+    private async loadOrMirrorChildRow(childEntity: BaseEntity): Promise<void> {
+        if (this.IsSaved && this.PrimaryKey?.HasValue) {
+            const loaded = await this.loadChildRowQuietly(childEntity);
+            if (!loaded) {
+                this.mirrorSharedKeysToChild(childEntity);
+            }
+            return;
+        }
+        this.mirrorSharedKeysToChild(childEntity);
+    }
+
+    /** Loads the child by the shared key. An empty result is an answer, not a logged error. */
+    private async loadChildRowQuietly(childEntity: BaseEntity): Promise<boolean> {
+        const probe: SubtypeHintProbe = { RowReadFailed: false };
+        childEntity._subtypeHintProbe = probe;
+        try {
+            return await childEntity.InnerLoad(this.PrimaryKey);
+        } finally {
+            childEntity._subtypeHintProbe = null;
         }
     }
 
@@ -2230,28 +2426,29 @@ export abstract class BaseEntity<T = unknown> {
 
     private async getSubtypePathTargetEntity(entityName: string, pkValue: unknown): Promise<BaseEntity | null> {
         const cacheKey = `${entityName.trim().toLowerCase()}|${String(pkValue).trim().toLowerCase()}`;
-        if (BaseEntity._subtypeLookupCache.has(cacheKey)) {
-            return BaseEntity._subtypeLookupCache.get(cacheKey) ?? null;
+        const provider = this.ProviderToUse as unknown as IMetadataProvider;
+        const lookupCache = BaseEntity.subtypeLookupCacheFor(provider);
+        if (lookupCache.has(cacheKey)) {
+            return lookupCache.get(cacheKey) ?? null;
         }
 
         // 1. Check BaseEngineRegistry for loaded cached entities
         const cached = BaseEntity.findSubtypePathTargetInEngineCache(entityName, pkValue);
         if (cached) {
-            BaseEntity._subtypeLookupCache.set(cacheKey, cached);
+            lookupCache.set(cacheKey, cached);
             return cached;
         }
 
         // 2. Fall back to loading via provider
-        const provider = this.ProviderToUse as unknown as IMetadataProvider;
         if (!provider?.GetEntityObject) {
-            BaseEntity._subtypeLookupCache.set(cacheKey, null);
+            lookupCache.set(cacheKey, null);
             return null;
         }
 
         try {
             const targetObj = await provider.GetEntityObject<BaseEntity>(entityName, this._contextCurrentUser);
             if (!targetObj) {
-                BaseEntity._subtypeLookupCache.set(cacheKey, null);
+                lookupCache.set(cacheKey, null);
                 return null;
             }
 
@@ -2266,14 +2463,14 @@ export abstract class BaseEntity<T = unknown> {
 
             const loaded = await targetObj.InnerLoad(key);
             if (loaded) {
-                BaseEntity._subtypeLookupCache.set(cacheKey, targetObj);
+                lookupCache.set(cacheKey, targetObj);
                 return targetObj;
             }
         } catch {
             // On load failure, return null
         }
 
-        BaseEntity._subtypeLookupCache.set(cacheKey, null);
+        lookupCache.set(cacheKey, null);
         return null;
     }
 
@@ -2491,6 +2688,7 @@ export abstract class BaseEntity<T = unknown> {
         // Reset this entity to pristine state: clears _compositeKey, _recordLoaded,
         // _everSaved, and recreates all EntityField instances with _NeverSet = true
         this.init();
+        this.discardJSONFieldObjects();
 
         // Recursively hydrate parent entities first (deepest ancestor resets first).
         // After init(), parent fields have fresh _NeverSet=true, so SetMany can set PKs.
@@ -2610,6 +2808,23 @@ export abstract class BaseEntity<T = unknown> {
         options: RelatedRecordCollectionOptions,
     ): RelatedRecordCollection<TChild> {
         return this.RegisterCompanion(new RelatedRecordCollection<TChild>(this, options));
+    }
+
+    /**
+     * Dynamically registers a database-sourced child collection companion on this entity instance.
+     * Used by generic composite persistence engines (Record Cloning, Metadata Sync) when a relationship
+     * has no static collection companion declared on the generated entity class.
+     *
+     * Refuses duplicate names or re-registering an already existing companion.
+     *
+     * @typeParam TChild - The child entity type.
+     * @param options - The collection declaration options.
+     * @returns The registered collection companion.
+     */
+    public DeclareRelatedRecordsDynamic<TChild extends BaseEntity = BaseEntity>(
+        options: RelatedRecordCollectionOptions,
+    ): RelatedRecordCollection<TChild> {
+        return this.DeclareRelatedRecords<TChild>(options);
     }
 
     /**
@@ -3135,10 +3350,15 @@ export abstract class BaseEntity<T = unknown> {
         const childDeleteOptions = Object.assign(new EntityDeleteOptions(), deleteOptions ?? {});
         childDeleteOptions.GraphVisited = visited;
 
-        // Snapshot dirty/saved bookkeeping so a rolled-back graph can be retried.
-        // Node Save() finalizes each participant as saved+clean; DB rollback does
-        // not undo that, and the next Save() would skip the peer and fail the FK.
-        const participants = this.captureGraphParticipants(plan);
+        // A graph that holds a scope is a unit of work: what its records write is put back if it
+        // rolls back, and what they delete is reset only once it commits (see UnitOfWork). Nested in
+        // another unit — the companions of an IS-A parent deleted in its child's chain, say — it
+        // joins that one. Without a scope each write stands as it runs, so a failure leaves the
+        // records that already wrote as they are, which is what the database holds.
+        const enclosing = this._unitOfWork;
+        const records = plan.Nodes.map(node => node.Entity);
+        const previousUnits = records.map(record => record._unitOfWork);
+        let part: UnitOfWorkPart | null = null;
 
         // Acquired INSIDE the try: a begin failure (pool exhausted, dead connection) is a failed
         // save, and Save()/Delete() report failure by returning false — an escaping throw here
@@ -3149,6 +3369,12 @@ export abstract class BaseEntity<T = unknown> {
                 provider?.SupportsEntityTransactions === true && provider.BeginEntityTransaction
                     ? await provider.BeginEntityTransaction()
                     : null;
+            if (scope) {
+                part = BaseEntity.beginUnitOfWork(enclosing, BaseEntity.captureChains(records));
+                for (const record of records) {
+                    record._unitOfWork = part.unit;
+                }
+            }
             const result = await ExecuteEntitySavePlan(plan, {
                 SaveOptions: childSaveOptions,
                 DeleteOptions: childDeleteOptions,
@@ -3158,13 +3384,14 @@ export abstract class BaseEntity<T = unknown> {
             });
             if (!result.Success) {
                 await scope?.Rollback();
-                this.revertGraphParticipants(participants);
+                BaseEntity.settleRollback(part);
                 this.registerGraphFailure(result.ErrorMessage, operation);
                 this.RaiseEvent('graph_save', { Success: false, NodeCount: plan.NodeCount, Error: result.ErrorMessage });
                 return false;
             }
 
             await scope?.Commit();
+            BaseEntity.settleCommit(part);
             this.acceptCompanionChanges();
             this.RaiseEvent('graph_save', { Success: true, NodeCount: plan.NodeCount });
             return true;
@@ -3180,12 +3407,16 @@ export abstract class BaseEntity<T = unknown> {
                     `${this.EntityInfo?.Name}: ${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`,
                 );
             }
-            this.revertGraphParticipants(participants);
+            BaseEntity.settleRollback(part);
             const detail = e instanceof Error ? e.message : String(e);
             LogError(`BaseEntity.executeGraphLocal failed for ${this.EntityInfo?.Name}: ${detail}`);
             this.registerGraphFailure(detail, operation);
             this.RaiseEvent('graph_save', { Success: false, NodeCount: plan.NodeCount, Error: detail });
             return false;
+        } finally {
+            records.forEach((record, index) => {
+                record._unitOfWork = previousUnits[index];
+            });
         }
     }
 
@@ -3206,40 +3437,73 @@ export abstract class BaseEntity<T = unknown> {
     }
 
     /**
-     * Captures saved/dirty baselines for every plan participant so a rolled-back
-     * graph can be retried without re-INSERTing a "saved" peer or skipping it.
+     * Captures each record's IS-A chain, from its leaf up to its root, so a unit of work that rolls
+     * back can put the chain back with {@link restoreChains}. A record in more than one chain is
+     * captured once.
      */
-    private captureGraphParticipants(plan: EntitySavePlan): GraphParticipantSnapshot[] {
-        return plan.Nodes.map(node => ({
-            entity: node.Entity,
-            wasSaved: node.Entity.IsSaved,
-            oldValues: node.Entity.Fields.map(f => ({ name: f.Name, old: f.OldValue })),
-        }));
+    private static captureChains(entities: BaseEntity[]): RecordSnapshot[] {
+        const captured = new Set<BaseEntity>();
+        const snapshots: RecordSnapshot[] = [];
+        for (const entity of entities) {
+            for (let level: BaseEntity | null = entity.LeafEntity; level && !captured.has(level); level = level._parentEntity) {
+                captured.add(level);
+                snapshots.push({
+                    entity: level,
+                    wasSaved: level._everSaved,
+                    wasLoaded: level._recordLoaded,
+                    resultHistory: [...level._resultHistory],
+                    fields: level.Fields.map(field => ({ field, state: field.GetState() })),
+                });
+            }
+        }
+        return snapshots;
     }
 
     /**
-     * Restores in-memory saved/dirty state after the database rolled the graph back.
+     * Puts back, after a rollback, what the unit of work changed in memory. See {@link restoreSnapshot}.
      */
-    private revertGraphParticipants(snapshots: GraphParticipantSnapshot[]): void {
-        for (const snap of snapshots) {
-            snap.entity.revertUncommittedGraphSave(snap);
+    private static restoreChains(snapshots: RecordSnapshot[]): void {
+        for (const snapshot of snapshots) {
+            snapshot.entity.restoreSnapshot(snapshot);
         }
     }
 
     /**
-     * After a graph node Save() the fields look clean and `_everSaved` is true.
-     * The DB rollback does not undo that. Restore the pre-attempt baseline so
-     * a retry still writes the peer and the owner FK still matches.
+     * Puts this record back as a snapshot captured it, after the unit of work that finalized it
+     * rolled back.
+     *
+     * A save's `finalizeSave()` rebuilds the record's fields from what its write returned, marks it
+     * saved and empties its result history. The database undid the write, so the record gets back
+     * its saved and loaded flags, its result history, and each field's value and tracking state. A
+     * field edited since then keeps the edit, and is compared with its captured baseline again, since
+     * that is what the database holds after the rollback. (A delete leaves nothing to put back: a
+     * record deleted inside a unit of work isn't reset until the unit commits.)
+     *
+     * The history matters to the caller: a save records its failure only when nothing else did,
+     * judged by the history's length when it started, which an emptied history would make wrong.
+     *
+     * A record still holding the captured field objects was never finalized, so nothing about it
+     * changed and it is left alone.
      */
-    private revertUncommittedGraphSave(snap: GraphParticipantSnapshot): void {
-        if (!snap.wasSaved) {
-            this._everSaved = false;
-            this._recordLoaded = false;
+    private restoreSnapshot(snapshot: RecordSnapshot): void {
+        const finalized = snapshot.fields.some(({ field }) => this.GetFieldByName(field.Name) !== field);
+        if (!finalized) {
+            return;
         }
-        for (const captured of snap.oldValues) {
-            const field = this.GetFieldByName(captured.name);
-            if (field) {
-                field.RestoreOldValue(captured.old);
+        this._everSaved = snapshot.wasSaved;
+        this._recordLoaded = snapshot.wasLoaded;
+        this._resultHistory = snapshot.resultHistory;
+        this._compositeKey = null; // cached from the finalized key; rebuilt on the next read
+        for (const { field: capturedField, state } of snapshot.fields) {
+            const field = this.GetFieldByName(capturedField.Name);
+            if (!field) {
+                continue;
+            }
+            if (field.Dirty) {
+                field.RestoreOldValue(state.OldValue);
+            }
+            else {
+                field.RestoreState(state);
             }
         }
     }
@@ -3298,6 +3562,100 @@ export abstract class BaseEntity<T = unknown> {
             await scope.Rollback();
         } catch (rollbackError) {
             LogError(`Error rolling back entity transaction scope for ${this.EntityInfo?.Name}: ${rollbackError}`);
+        }
+    }
+
+    /**
+     * The failure path of a save: rolls back the transaction scope this entity holds, if any, then
+     * settles this save's part in its unit of work (see {@link settleRollback}). `part` is null when
+     * this save took none (see `_innerSave`), and then only the scope is rolled back.
+     */
+    private async rollbackChainSave(part: UnitOfWorkPart | null): Promise<void> {
+        await this.rollbackEntityTransactionScope();
+        BaseEntity.settleRollback(part);
+    }
+
+    /**
+     * Starts a unit of work's part in a {@link UnitOfWork}: joins `enclosing` when the unit runs
+     * inside one, and owns a new one when it doesn't. `snapshots` are the unit's records as they are
+     * before it writes them. They join the unit's, so that the outermost unit can put them back.
+     */
+    private static beginUnitOfWork(enclosing: UnitOfWork | null, snapshots: RecordSnapshot[]): UnitOfWorkPart {
+        const unit = enclosing ?? { Snapshots: [], DeletedRecords: [] };
+        unit.Snapshots.push(...snapshots);
+        return { unit, owns: !enclosing, snapshots, deletedMark: unit.DeletedRecords.length };
+    }
+
+    /**
+     * Runs `work` on `record` as part of `unit` (see {@link UnitOfWork}), and gives the record back
+     * the unit it was in before, however `work` ends. Used for an IS-A parent's delete, which runs
+     * inside its child's chain, along with the graph of its companions if it has any.
+     */
+    private static async inUnitOfWork<T>(
+        record: BaseEntity,
+        unit: UnitOfWork | null,
+        work: (record: BaseEntity) => Promise<T>,
+    ): Promise<T> {
+        const previous = record._unitOfWork;
+        record._unitOfWork = unit;
+        try {
+            return await work(record);
+        }
+        finally {
+            record._unitOfWork = previous;
+        }
+    }
+
+    /**
+     * After a unit of work rolls back: puts its records back as they were before it wrote them, and
+     * drops the deletes the rollback undid, so that nothing resets their records. The owner does this
+     * for everything the unit and the units nested in it wrote. A nested part does it for its own
+     * records only; when the owner then rolls back too, restoring them again changes nothing.
+     */
+    private static settleRollback(part: UnitOfWorkPart | null): void {
+        if (!part) {
+            return;
+        }
+        BaseEntity.restoreChains(part.owns ? part.unit.Snapshots : part.snapshots);
+        part.unit.DeletedRecords.length = part.owns ? 0 : part.deletedMark;
+    }
+
+    /**
+     * After a unit of work commits: its owner resets the records it deleted. A nested part leaves
+     * them to the owner, since the enclosing unit can still roll back.
+     */
+    private static settleCommit(part: UnitOfWorkPart | null): void {
+        if (part?.owns) {
+            BaseEntity.resetDeletedRecords(part.unit.DeletedRecords);
+        }
+    }
+
+    /**
+     * Resets the records a unit of work deleted, once the unit has committed, as each record's own
+     * `Delete()` does when no unit of work is involved. See {@link UnitOfWork}.
+     *
+     * Last-deleted first, skipping a record that no longer reads as saved. `NewRecord()` on a record
+     * also resets every IS-A level above it, and relinks them. A chain's initiator records its delete
+     * after its parents do, so it's reset first, and its parents with it. Resetting a parent again
+     * after that would unlink it from its child and give it a key the child doesn't share.
+     *
+     * The unit has committed, so a reset that throws is logged and the rest still run: the deletes
+     * stand whatever happens here.
+     */
+    private static resetDeletedRecords(records: BaseEntity[]): void {
+        for (let index = records.length - 1; index >= 0; index--) {
+            const record = records[index];
+            if (!record.IsSaved) {
+                continue;
+            }
+            try {
+                record.NewRecord();
+            } catch (e) {
+                LogError(
+                    `BaseEntity.resetDeletedRecords: resetting a deleted ${record.EntityInfo?.Name} record failed: ` +
+                    `${e instanceof Error ? e.message : String(e)}`,
+                );
+            }
         }
     }
 
@@ -4405,6 +4763,7 @@ export abstract class BaseEntity<T = unknown> {
      */
     public NewRecord(newValues?: FieldValueCollection) : boolean {
         this.init();
+        this.discardJSONFieldObjects();
         this._everSaved = false; // Reset save state for new record
 
         // Clear child entity state — new records don't have children yet
@@ -4424,6 +4783,8 @@ export abstract class BaseEntity<T = unknown> {
         // when setting keys.
         if (this._parentEntity) {
             this._parentEntity.NewRecord();
+            // The parent's NewRecord() just nulled its back-link. Put this child back.
+            this.linkParentBackToThisChild();
             for (const pk of this.EntityInfo.PrimaryKeys) {
                 const parentValue = this._parentEntity.Get(pk.Name);
                 if (parentValue != null) {
@@ -4555,6 +4916,47 @@ export abstract class BaseEntity<T = unknown> {
         this._restoreContext = null;
     }
 
+    private _cloneContext: CloneContext | null = null;
+
+    /**
+     * Returns the active clone context for the next save, if any.
+     *
+     * Read by the data provider when generating the RecordChange SQL: when
+     * non-null, the resulting RecordChange row is written with
+     * `Source='Clone'` and `ChangeContext` populated with structured JSON provenance.
+     * Returns null for ordinary saves.
+     */
+    public get CloneContext(): CloneContext | null {
+        return this._cloneContext;
+    }
+
+    /**
+     * Marks the next Save() as part of a record clone operation.
+     *
+     * The provider will write a new RecordChange entry with `Source='Clone'`
+     * and `ChangeContext` populated with structured JSON provenance.
+     *
+     * The context persists on the entity until either (a) overwritten by a
+     * subsequent SetCloneContext() call or (b) explicitly cleared via
+     * ClearCloneContext(). It is NOT auto-cleared inside Save() because
+     * TransactionGroup execution is deferred.
+     *
+     * @param context Structured clone context. Throws if missing required fields.
+     */
+    public SetCloneContext(context: CloneContext): void {
+        if (!context || !context.CloneLogID || !context.SourceRecordID || !context.RootEntityName) {
+            throw new Error('BaseEntity.SetCloneContext: context is required with CloneLogID, SourceRecordID, and RootEntityName');
+        }
+        this._cloneContext = context;
+    }
+
+    /**
+     * Clears any pending clone context. Safe to call when no context is set.
+     */
+    public ClearCloneContext(): void {
+        this._cloneContext = null;
+    }
+
 
     // Holds the current pending save observable (if any)
     private _pendingSave$: Observable<boolean> | null = null;
@@ -4600,6 +5002,10 @@ export abstract class BaseEntity<T = unknown> {
      * @returns Promise<boolean>
      */
     public async Save(options?: EntitySaveOptions): Promise<boolean> {
+        // JSONType safety net: pick up in-place edits made through un-proxied references BEFORE any
+        // dirty evaluation, plan building or SQL construction below reads the raw field values.
+        this.FlushJSONFieldObjects();
+
         // IS-A parent chain saves bypass the debounce to prevent deadlock:
         // Root.Save() → delegates to Leaf.Save() → Leaf saves parent chain →
         // calls Root.Save(IsParentEntitySave=true). Without this bypass, the second
@@ -4676,8 +5082,13 @@ export abstract class BaseEntity<T = unknown> {
         const currentResultCount = this.ResultHistory.length;
         const newResult = new BaseEntityResult();
         newResult.StartedAt = new Date();
+        // The unit of work this save runs inside, if any (see UnitOfWork), and this save's own part
+        // in one, taken only when this entity starts an IS-A chain save whose writes a failure undoes.
+        const enclosing = this._unitOfWork;
+        let part: UnitOfWorkPart | null = null;
 
         try {
+            this.FlushJSONFieldObjects(); // idempotent; covers graph-node saves that bypass Save()
             const initialDirtyState = this.Dirty; // save this because parent entity save cycle, if any, will clear their dirty flags
 
             const _options: EntitySaveOptions = options ? options : new EntitySaveOptions();
@@ -4698,7 +5109,21 @@ export abstract class BaseEntity<T = unknown> {
             // save — this joins it as a savepoint rather than starting a second physical
             // transaction. Before 6.2 this path called BeginISATransaction(), which was blind to
             // any existing transaction and produced torn writes; see EntityTransactionScope.
-            await this.beginEntityTransactionScope(isISAInitiator);
+            const scopeOpened = await this.beginEntityTransactionScope(isISAInitiator);
+
+            // Each level of the chain is finalized as saved and clean when its own write returns,
+            // before the chain commits. A failure that undoes those writes has to put the chain
+            // back in memory too, so the chain save is a unit of work, captured before the parents
+            // save. The writes are undone when this save holds a scope, and on a provider without
+            // entity transactions, which doesn't talk to a database directly: there each parent's
+            // save is recorded in memory and the leaf's one write carries the chain
+            // (GraphQLDataProvider). Anywhere else a level may really have written (in a
+            // TransactionGroup, a level outside the group does), and marking it unsaved would make
+            // the retry insert it twice.
+            if (isISAInitiator && !this.TransactionGroup &&
+                (scopeOpened || this.ProviderToUse?.SupportsEntityTransactions !== true)) {
+                part = BaseEntity.beginUnitOfWork(enclosing, BaseEntity.captureChains([this]));
+            }
 
             // Save parent chain first (root → branch → immediate parent)
             // Parent calls Save() recursively which handles its own parents, permissions, validation
@@ -4715,8 +5140,9 @@ export abstract class BaseEntity<T = unknown> {
 
                 const parentResult = await this._parentEntity.Save(parentSaveOptions); // we know parent entity exists hre
                 if (!parentResult) {
-                    // Parent save failed — rollback if we started the transaction
-                    await this.rollbackEntityTransactionScope();
+                    // Parent save failed — roll back if we started the transaction, and put back
+                    // the levels above it that had already saved
+                    await this.rollbackChainSave(part);
 
                     // RECORD the failure on THIS entity's ResultHistory before returning. Without
                     // this the caller gets `false` with LatestResult === null and an empty
@@ -4870,9 +5296,10 @@ export abstract class BaseEntity<T = unknown> {
                             // this scope exists to prevent.
                             if (result) {
                                 await this.commitEntityTransactionScope();
+                                BaseEntity.settleCommit(part);
                             }
                             else {
-                                await this.rollbackEntityTransactionScope();
+                                await this.rollbackChainSave(part);
                             }
 
                             return result;
@@ -4921,12 +5348,15 @@ export abstract class BaseEntity<T = unknown> {
                 // commit, so later "successful" saves were silently non-durable. Committing an
                 // empty scope writes nothing; it only releases the transaction.
                 await this.commitEntityTransactionScope();
+                BaseEntity.settleCommit(part);
                 return true; // nothing to save since we're not dirty
             }
         }
         catch (e: any) {
-            // Roll back the scope this entity opened, if any. No-op when it holds none.
-            await this.rollbackEntityTransactionScope();
+            // Roll back the scope this entity opened, if any (a no-op when it holds none), and put
+            // back what the chain's saves changed in memory, this entity included when the commit
+            // is what threw. Before the result below, which reads IsSaved and the old values.
+            await this.rollbackChainSave(part);
 
             if (currentResultCount === this.ResultHistory.length) {
                 // this means that NO new results were added to the history anywhere
@@ -5037,7 +5467,8 @@ export abstract class BaseEntity<T = unknown> {
     }
 
     /**
-     * Caches the entity record name in the provider's EntityRecordNameCache for faster lookups.
+     * Offers the record's name to the provider for later synchronous lookups. Only a provider that
+     * serves a single user keeps it; see {@link IMetadataProvider.GetCachedRecordName}.
      * Called automatically after successful Load(), LoadFromData(), and Save() operations.
      */
     private cacheRecordName(): void {
@@ -5311,6 +5742,7 @@ export abstract class BaseEntity<T = unknown> {
      * @returns
      */
     public Revert(): boolean {
+        this.discardJSONFieldObjects(); // unconditional: an un-flushed edit through a stale reference must go too
         if (this.Dirty) {
             for (let field of this.Fields) {
                 field.Value = field.OldValue;
@@ -5353,6 +5785,7 @@ export abstract class BaseEntity<T = unknown> {
             }
 
             const data = await this.readRowForLoad(CompositeKey, EntityRelationshipsToLoad);
+            this.discardJSONFieldObjects(); // a reload replaces the record's data
             if (!data) {
                 // A subtype-hint probe asks whether this row exists, so "no" is an answer, not an error
                 if (!this._subtypeHintProbe) {
@@ -5521,6 +5954,7 @@ export abstract class BaseEntity<T = unknown> {
      * @returns Promise<boolean> - Returns true if the load was successful
      */
     public async LoadFromData(data: any, _replaceOldValues: boolean = false): Promise<boolean> {
+        this.discardJSONFieldObjects(); // the record's data is being replaced: parsed JSON objects are stale
         // IS-A: hydrate parent chain from data before populating self.
         // Hydrate resets each parent via init() (giving fresh _NeverSet=true on PK fields)
         // then populates from data, ensuring correct PK and saved state on parents.
@@ -5636,6 +6070,113 @@ export abstract class BaseEntity<T = unknown> {
     }
 
     /**
+     * Per-field live bindings for JSONType fields, created lazily by {@link GetJSONFieldObject}.
+     * Undefined until a generated `<Field>Object` accessor is first used, so entities without
+     * JSONType fields pay nothing.
+     */
+    private _jsonFieldBindings: Map<string, JSONFieldBinding> | undefined;
+
+    private getJSONFieldBinding(fieldName: string): JSONFieldBinding {
+        this._jsonFieldBindings ??= new Map<string, JSONFieldBinding>();
+        let binding = this._jsonFieldBindings.get(fieldName);
+        if (!binding) {
+            binding = new JSONFieldBinding(
+                fieldName,
+                () => this.Get(fieldName),
+                (raw) => this.Set(fieldName, raw),
+            );
+            this._jsonFieldBindings.set(fieldName, binding);
+        }
+        return binding;
+    }
+
+    /**
+     * Backs the generated typed `<Field>Object` accessor of a JSONType field. Returns a live view of
+     * the parsed JSON: assigning to it, or mutating it in place at any depth (`obj.a.b = 1`,
+     * `arr.push(x)`, `delete obj.k`), updates the raw field through {@link Set}, so the field becomes
+     * dirty and `Save()` persists the edit. Reading after the raw value changed by any other route
+     * (`Load`, `LoadFromData`, `Set`, revert) re-parses; references obtained earlier are then
+     * detached. Use `ToPlainJSON()` to clone/`structuredClone`/`postMessage` a value from here.
+     *
+     * @param fieldName - the JSON text field (its `EntityField.Name`)
+     * @returns the live object/array, a bare primitive for a primitive JSON root, or `null`
+     * @throws Error when the field holds text that is not valid JSON
+     */
+    protected GetJSONFieldObject<TObject>(fieldName: string): TObject | null {
+        return this.getJSONFieldBinding(fieldName).GetValue() as TObject | null;
+    }
+
+    /**
+     * Backs the generated setter of a `<Field>Object` accessor. `null`/`undefined` clears the field.
+     * A plain object/array is adopted, so later edits through the caller's own reference are still
+     * picked up before validation and save (see {@link FlushJSONFieldObjects}).
+     */
+    protected SetJSONFieldObject<TObject>(fieldName: string, value: TObject | null | undefined): void {
+        this.getJSONFieldBinding(fieldName).SetValue(value);
+    }
+
+    /**
+     * Safety net for JSONType accessors: re-serializes every materialized JSON object and writes any
+     * difference to its raw field. Catches an object that was assigned into the tree and then
+     * mutated through the caller's original (un-proxied) reference. Called automatically before
+     * `Validate()` and at the start of `Save()`; cheap because only fields whose object was actually
+     * read are visited.
+     */
+    protected FlushJSONFieldObjects(): void {
+        if (!this._jsonFieldBindings) {
+            return;
+        }
+        for (const binding of this._jsonFieldBindings.values()) {
+            binding.Flush();
+        }
+    }
+
+    /**
+     * Drops every materialized JSON object so the next accessor read re-parses from the raw field and
+     * all earlier references detach. Called wherever the record's data is replaced wholesale
+     * (`Revert`, `NewRecord`, `Hydrate`, `From`, a load) — NOT on the save round trip, so a reference
+     * held across `Save()` stays live.
+     */
+    private discardJSONFieldObjects(): void {
+        if (!this._jsonFieldBindings) {
+            return;
+        }
+        for (const binding of this._jsonFieldBindings.values()) {
+            binding.Invalidate();
+        }
+    }
+
+    /**
+     * Validates one JSONType field against its structural schema and `@CHECK` rules, appending any
+     * problems to `result`. Called from generated `Validate()` overrides for JSONTypes opted in with
+     * `@mjValidate`; the field is checked only when it is dirty or the record is new, so opting a type
+     * in never blocks unrelated edits to existing rows.
+     *
+     * Error `Source`s are dotted/indexed paths (`Configuration.Items[2].EndHour`). `severity` is
+     * `'Warning'` for `@mjValidate warn`: such errors are reported but do not fail the save.
+     *
+     * @param fieldName - the JSON text field
+     * @param schema - structural Zod schema for the whole field value (arrays included)
+     * @param rules - `@CHECK` rules and the type graph to find their scope, or null
+     * @param severity - severity the results are reported at
+     * @param result - the result object to add errors to
+     */
+    protected ValidateJSONField(
+        fieldName: string,
+        schema: z.ZodTypeAny,
+        rules: JSONFieldRuleSet | null,
+        severity: JSONFieldSeverity,
+        result: ValidationResult,
+    ): void {
+        // Flush FIRST: a field changed only through an un-proxied reference is not dirty until flushed.
+        this.FlushJSONFieldObjects();
+        if (this.IsSaved && !this.FieldIsDirty(fieldName)) {
+            return;
+        }
+        ValidateJSONFieldValue(fieldName, this.Get(fieldName), schema, rules, severity, this, result);
+    }
+
+    /**
      * This method is used automatically within Save() and is used to determine if the state of the object is valid relative to the validation rules that are defined in metadata. In addition, sub-classes can
      * override or wrap this base class method to add other logic for validation.
      * 
@@ -5651,6 +6192,9 @@ export abstract class BaseEntity<T = unknown> {
         }
         this._isValidating = true;
         try {
+            // Safety net for JSONType object accessors: an object mutated through the caller's own
+            // (un-proxied) reference must reach the raw field before that field is validated.
+            this.FlushJSONFieldObjects();
             const result = new ValidationResult();
             result.Success = true; // start off with assumption of success, if any field fails, we'll set this to false
 
@@ -5796,6 +6340,13 @@ export abstract class BaseEntity<T = unknown> {
             }
         }
 
+        // IS-A parent chain deletes bypass the debounce, as parent chain saves do: the leaf's
+        // call back up the chain would otherwise wait on the pending delete that handed the
+        // delete to the leaf, and Delete() would never return (MJ#4850).
+        if (options?.IsParentEntityDelete) {
+            return this._innerDelete(options);
+        }
+
         // If a delete is already in progress, return its promise.
         if (this._pendingDelete$) {
             return firstValueFrom(this._pendingDelete$);
@@ -5824,6 +6375,13 @@ export abstract class BaseEntity<T = unknown> {
         const currentResultCount = this.ResultHistory.length;
         const newResult = new BaseEntityResult();
         newResult.StartedAt = new Date();
+        // The unit of work this delete runs inside, if any (see UnitOfWork), and this delete's own
+        // part in one, taken when it opens a scope for an IS-A chain.
+        const enclosing = this._unitOfWork;
+        let part: UnitOfWorkPart | null = null;
+        // Set once this record's own row is deleted. From then on its history holds the provider's
+        // entry for that delete, which doesn't report a failure later in the chain.
+        let ownRowDeleted = false;
 
         try {
             const _options: EntityDeleteOptions = options ? options : new EntityDeleteOptions();
@@ -5879,7 +6437,16 @@ export abstract class BaseEntity<T = unknown> {
                 // Open (or join) a transaction scope for the parent chain — see the matching
                 // comment in _InnerSave and EntityTransactionScope for why this is provider-
                 // arbitrated rather than IS-A-specific.
-                await this.beginEntityTransactionScope(isISAInitiator);
+                const scopeOpened = await this.beginEntityTransactionScope(isISAInitiator);
+
+                // A chain delete that holds a scope is a unit of work. Each parent is deleted inside
+                // it and isn't reset when its delete returns: the unit resets the chain once it
+                // commits, so a failure that rolls it back leaves every level as it was. Without a
+                // scope each delete stands as it runs and resets its record at once, as before.
+                if (scopeOpened) {
+                    part = BaseEntity.beginUnitOfWork(enclosing, BaseEntity.captureChains([this]));
+                }
+                const unit = part?.unit ?? enclosing;
 
                 this.CheckPermissions(EntityPermissionType.Delete, true); // this will throw an error and exit out if we don't have permission
 
@@ -5898,6 +6465,7 @@ export abstract class BaseEntity<T = unknown> {
 
                 // Delete OWN row first (FK constraint: child must be deleted before parent)
                 if (await this.ProviderToUse.Delete(this, _options, this.ActiveUser)) {
+                    ownRowDeleted = true;
                     // IS-A: after own delete succeeds, cascade to parent chain
                     if (hasParentChain) {
                         // For overlapping subtypes, check if other children still reference
@@ -5911,40 +6479,43 @@ export abstract class BaseEntity<T = unknown> {
                             parentDeleteOptions.ReplayOnly = _options.ReplayOnly;
                             parentDeleteOptions.IsParentEntityDelete = true;
 
-                            const parentResult = await this._parentEntity.Delete(parentDeleteOptions);
+                            // The parent's delete belongs to this chain's unit of work, so it doesn't
+                            // reset the parent when it returns: the unit does, once it commits.
+                            const parentResult = await BaseEntity.inUnitOfWork(this._parentEntity, unit,
+                                parent => parent.Delete(parentDeleteOptions));
                             if (!parentResult) {
                                 // Parent delete failed — rollback if we started the transaction
                                 await this.rollbackEntityTransactionScope();
+                                BaseEntity.settleRollback(part);
 
                                 // RECORD the failure on THIS entity's ResultHistory before returning —
-                                // symmetric with the parent-SAVE-failure path in _InnerSave. Without this
-                                // the caller gets `false` with LatestResult === null and an empty
-                                // ResultHistory, because every result was written to the PARENT object,
-                                // which callers have no reference to (`_parentEntity` is private). Note
-                                // THIS entity's own row was already deleted successfully above; it is the
-                                // parent-chain delete that failed and rolled the transaction back.
-                                if (currentResultCount === this.ResultHistory.length) {
-                                    const parentLatest = this._parentEntity.LatestResult;
-                                    const parentErrors = parentLatest?.Errors ?? [];
-                                    // A failed parent commonly reports its detail ONLY in Errors, so fall
-                                    // back to the error text rather than a message that says nothing.
-                                    const detail =
-                                        parentLatest?.Message ||
-                                        parentErrors.map(e => e?.Message ?? String(e)).filter(Boolean).join('; ') ||
-                                        'no error detail was reported by the parent';
-                                    newResult.Success = false;
-                                    newResult.Type = 'delete';
-                                    newResult.Message =
-                                        `Failed to delete parent entity '${this._parentEntity.EntityInfo?.Name}': ${detail}`;
-                                    // Surface the parent's field-level errors so the caller can act on them.
-                                    newResult.Errors = parentErrors;
-                                    // When `detail` was built from `parentErrors` (no parent Message), `Message` already renders
-                                    // them — say so, or CompleteMessage repeats every one.
-                                    newResult.MessageIncludesErrors = !parentLatest?.Message && parentErrors.length > 0;
-                                    newResult.OriginalValues = this.Fields.map(f => { return {FieldName: f.CodeName, Value: f.OldValue} });
-                                    newResult.EndedAt = new Date();
-                                    this.RegisterResultHistoryEntry(newResult);
-                                }
+                                // symmetric with the parent-SAVE-failure path in _InnerSave. Every result
+                                // for the parent's failure was written to the PARENT object, which callers
+                                // have no reference to (`_parentEntity` is private). THIS entity's own row
+                                // was already deleted successfully above, and the only entry its history
+                                // gained is the provider's for that delete, which the rollback just undid.
+                                // So the failure is recorded whatever that entry says: skipping it when
+                                // the history had grown left the caller holding the provider's entry.
+                                const parentLatest = this._parentEntity.LatestResult;
+                                const parentErrors = parentLatest?.Errors ?? [];
+                                // A failed parent commonly reports its detail ONLY in Errors, so fall
+                                // back to the error text rather than a message that says nothing.
+                                const detail =
+                                    parentLatest?.Message ||
+                                    parentErrors.map(e => e?.Message ?? String(e)).filter(Boolean).join('; ') ||
+                                    'no error detail was reported by the parent';
+                                newResult.Success = false;
+                                newResult.Type = 'delete';
+                                newResult.Message =
+                                    `Failed to delete parent entity '${this._parentEntity.EntityInfo?.Name}': ${detail}`;
+                                // Surface the parent's field-level errors so the caller can act on them.
+                                newResult.Errors = parentErrors;
+                                // When `detail` was built from `parentErrors` (no parent Message), `Message` already renders
+                                // them — say so, or CompleteMessage repeats every one.
+                                newResult.MessageIncludesErrors = !parentLatest?.Message && parentErrors.length > 0;
+                                newResult.OriginalValues = this.Fields.map(f => { return {FieldName: f.CodeName, Value: f.OldValue} });
+                                newResult.EndedAt = new Date();
+                                this.RegisterResultHistoryEntry(newResult);
 
                                 return false;
                             }
@@ -5960,8 +6531,16 @@ export abstract class BaseEntity<T = unknown> {
                         // record deleted correctly
                         this.RaiseEvent('delete', {OldValues: oldVals});
 
-                        // wipe out the current data to flush out the DIRTY flags by calling NewRecord()
-                        this.NewRecord(); // will trigger a new record event here too
+                        if (unit) {
+                            // Deleted inside a unit of work, which resets the record once it commits:
+                            // now, when this delete owns the unit and has just committed it.
+                            unit.DeletedRecords.push(this);
+                            BaseEntity.settleCommit(part);
+                        }
+                        else {
+                            // wipe out the current data to flush out the DIRTY flags by calling NewRecord()
+                            this.NewRecord(); // will trigger a new record event here too
+                        }
                     }
                     else {
                         // part of a transaction, wait for the transaction to submit successfully and then
@@ -6005,6 +6584,7 @@ export abstract class BaseEntity<T = unknown> {
                     // every subsequent "committed" write on this provider silently never commits.
                     // (Also: don't wipe out the entity like we do when the Delete() worked.)
                     await this.rollbackEntityTransactionScope();
+                    BaseEntity.settleRollback(part);
                     return false;
                 }
             }
@@ -6012,10 +6592,12 @@ export abstract class BaseEntity<T = unknown> {
         catch (e) {
             // Roll back the scope this entity opened, if any. No-op when it holds none.
             await this.rollbackEntityTransactionScope();
+            BaseEntity.settleRollback(part);
 
-            if (currentResultCount === this.ResultHistory.length) {
-                // this means that NO new results were added to the history anywhere
-                // so we need to add a new result to the history here
+            // Record the failure when nothing else did. Once this record's own row was deleted, its
+            // history holds the provider's entry for that delete, which doesn't report this failure
+            // (a failed commit, most often), so the failure is recorded then too.
+            if (ownRowDeleted || currentResultCount === this.ResultHistory.length) {
                 newResult.Success = false;
                 newResult.Type = 'delete'
                 newResult.Message = e.message || null;
@@ -6287,9 +6869,7 @@ export abstract class BaseEntity<T = unknown> {
         // field that reads like the record itself is broken.
         //
         // Returning null is the same answer callers already handle for "this entity has no name
-        // field", and every one of them degrades to the primary key. It also keeps a denied name
-        // OUT of the provider's record-name cache, which is keyed by entity + primary key and NOT
-        // by user — caching it would leak it to the next caller.
+        // field", and every one of them degrades to the primary key.
         if (!this.EntityInfo.IsFieldReadableByUser(f.Name, this.ActiveUser)) {
             return null;
         }
@@ -6328,6 +6908,7 @@ export abstract class BaseEntity<T = unknown> {
      */
     public From<K extends z.AnyZodObject>(data: unknown, schema?: z.infer<K>): boolean {
         this.init();
+        this.discardJSONFieldObjects();
         if(schema){
             const parseResult = schema.safeParse(data);
             if(parseResult.success){
@@ -6371,13 +6952,14 @@ export abstract class BaseEntity<T = unknown> {
     /**
      * Generates vector embeddings for multiple text fields by their field names.
      * Processes fields in parallel for better performance.
-     * @param fields - Array of field configurations specifying source text field, target vector field, and model ID field names
+     * @param fields - Array of field configurations specifying source text field, target vector field, model ID field
+     *   and, optionally, the binary companion of the vector field (see {@link GenerateEmbedding})
      * @returns Promise that resolves to true if all embeddings were generated successfully, false if any failed
      */
-    protected async GenerateEmbeddingsByFieldName(fields: Array<{fieldName: string, vectorFieldName: string, modelFieldName: string}>): Promise<boolean> {
+    protected async GenerateEmbeddingsByFieldName(fields: Array<{fieldName: string, vectorFieldName: string, modelFieldName: string, binaryVectorFieldName?: string}>): Promise<boolean> {
         const promises = [];
-        for (const {fieldName, vectorFieldName, modelFieldName} of fields) {
-            promises.push(this.GenerateEmbeddingByFieldName(fieldName, vectorFieldName, modelFieldName));
+        for (const {fieldName, vectorFieldName, modelFieldName, binaryVectorFieldName} of fields) {
+            promises.push(this.GenerateEmbeddingByFieldName(fieldName, vectorFieldName, modelFieldName, binaryVectorFieldName));
         }
         const results = await Promise.all(promises);
         return results.every(result => result === true);
@@ -6387,11 +6969,14 @@ export abstract class BaseEntity<T = unknown> {
      * Generates a vector embedding for a single text field identified by field name.
      * Retrieves the field objects and delegates to GenerateEmbedding method.
      * @param fieldName - Name of the text field to generate embedding from
-     * @param vectorFieldName - Name of the field to store the vector embedding
+     * @param vectorFieldName - Name of the field to store the vector embedding (JSON)
      * @param modelFieldName - Name of the field to store the model ID used for embedding
+     * @param binaryVectorFieldName - Optional name of the binary (varbinary/bytea) companion of `vectorFieldName`,
+     *   which receives the same vector as little-endian float32 bytes. Omit for entities without one.
      * @returns Promise that resolves to true if embedding was generated successfully, false otherwise
+     * @throws Error when a named field does not exist on the entity
      */
-    protected async GenerateEmbeddingByFieldName(fieldName: string, vectorFieldName: string, modelFieldName: string): Promise<boolean> {
+    protected async GenerateEmbeddingByFieldName(fieldName: string, vectorFieldName: string, modelFieldName: string, binaryVectorFieldName?: string): Promise<boolean> {
         const field = this.GetFieldByName(fieldName);
         const vectorField = this.GetFieldByName(vectorFieldName);
         const modelField = this.GetFieldByName(modelFieldName);
@@ -6401,20 +6986,27 @@ export abstract class BaseEntity<T = unknown> {
             throw new Error(`Vector field not found: ${vectorFieldName}`);
         if (modelFieldName?.trim().length > 0 && !modelField)
             throw new Error(`Model field not found: ${modelFieldName}`);
-        
-        return await this.GenerateEmbedding(field, vectorField, modelField);
+        let binaryVectorField: EntityField | undefined;
+        if (binaryVectorFieldName?.trim().length) {
+            binaryVectorField = this.GetFieldByName(binaryVectorFieldName);
+            if (!binaryVectorField)
+                throw new Error(`Binary vector field not found: ${binaryVectorFieldName}`);
+        }
+
+        return await this.GenerateEmbedding(field, vectorField, modelField, binaryVectorField);
     }
 
     /**
      * Generates vector embeddings for multiple text fields using EntityField objects.
      * Processes fields in parallel for better performance.
-     * @param fields - Array of field configurations with EntityField objects for source, vector, and model fields
+     * @param fields - Array of field configurations with EntityField objects for source, vector, model and
+     *   (optionally) binary vector fields
      * @returns Promise that resolves to true if all embeddings were generated successfully, false if any failed
      */
-    protected async GenerateEmbeddings(fields: Array<{field: EntityField, vectorField: EntityField, modelField: EntityField}>): Promise<boolean> {
+    protected async GenerateEmbeddings(fields: Array<{field: EntityField, vectorField: EntityField, modelField: EntityField, binaryVectorField?: EntityField}>): Promise<boolean> {
         const promises = [];
-        for (const {field, vectorField, modelField} of fields) {
-            promises.push(this.GenerateEmbedding(field, vectorField, modelField));
+        for (const {field, vectorField, modelField, binaryVectorField} of fields) {
+            promises.push(this.GenerateEmbedding(field, vectorField, modelField, binaryVectorField));
         }
         const results = await Promise.all(promises);
         return results.every(result => result === true);
@@ -6423,13 +7015,23 @@ export abstract class BaseEntity<T = unknown> {
     /**
      * Generates a vector embedding for a single text field using AI engine.
      * Only generates embeddings for new records or when the source field has changed.
-     * Stores both the vector embedding and the model ID used to generate it.
+     * Stores the vector embedding, the model ID used to generate it and, when the entity has one, the
+     * vector's binary companion.
+     *
+     * **Two persisted forms.** The JSON field holds the vector as a JSON number array. The optional
+     * binary field (`varbinary(MAX)` / `bytea`) holds the same vector as little-endian float32 bytes —
+     * set here as a base64 string via `Float32VectorToBase64`, which is how every binary field travels
+     * in MJ. Readers prefer the binary form because decoding it is a copy, not a JSON parse (see
+     * `ReadStoredVector` in `@memberjunction/ai-vectors-memory`). Both are written and cleared together
+     * so they never disagree.
+     *
      * @param field - The EntityField containing the text to embed
      * @param vectorField - The EntityField to store the generated vector embedding (as JSON string)
      * @param modelField - The EntityField to store the ID of the AI model used
+     * @param binaryVectorField - Optional EntityField to store the same vector as base64-encoded float32 bytes
      * @returns Promise that resolves to true if embedding was generated successfully, false otherwise
      */
-    protected async GenerateEmbedding(field: EntityField, vectorField: EntityField, modelField: EntityField): Promise<boolean> {
+    protected async GenerateEmbedding(field: EntityField, vectorField: EntityField, modelField: EntityField, binaryVectorField?: EntityField): Promise<boolean> {
         try {
             if (this._skipEmbeddings) return true;
             if (!this.IsSaved || field.Dirty) {
@@ -6438,23 +7040,27 @@ export abstract class BaseEntity<T = unknown> {
                     const e = await this.EmbedTextLocal(field.Value)
                     if (e && e.vector) {
                         vectorField.Value = JSON.stringify(e.vector);
+                        if (binaryVectorField)
+                            binaryVectorField.Value = Float32VectorToBase64(e.vector);
                         if (modelField)
                             modelField.Value = e.modelID;
                     }
                 }
                 else {
                     vectorField.Value = null;
+                    if (binaryVectorField)
+                        binaryVectorField.Value = null;
                     if (modelField)
                         modelField.Value = null;
                 }
-            }        
+            }
             return true;
         }
         catch (e) {
             console.error("Error generating embedding:", e);
             return false;
         }
-    }    
+    }
 
     /**
      * In the BaseEntity class this method is not implemented. This method shoudl be implemented only in 

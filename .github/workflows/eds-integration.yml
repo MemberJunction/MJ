@@ -34,6 +34,10 @@ on:
       - 'packages/ExternalDataSources/**'
       - '.github/workflows/eds-integration.yml'
 
+# Least-privilege token: nothing in this workflow writes to the repository.
+permissions:
+  contents: read
+
 jobs:
   pg-driver-integration:
     name: Postgres reference driver (integration)

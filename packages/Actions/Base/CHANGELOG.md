@@ -1,5 +1,137 @@
 # Change Log - @memberjunction/actions-base
 
+## 6.2.0-edge.4
+
+### Patch Changes
+
+- Updated dependencies [a709bb6]
+- Updated dependencies [432cb73]
+- Updated dependencies [1d6e3e8]
+- Updated dependencies [49f26d9]
+- Updated dependencies [7384dd6]
+- Updated dependencies [88e6902]
+- Updated dependencies [6dc3aa9]
+- Updated dependencies [c87f87a]
+- Updated dependencies [0a7c255]
+- Updated dependencies [d86bcbc]
+- Updated dependencies [7316ac3]
+- Updated dependencies [08b3d7b]
+- Updated dependencies [1ea4085]
+- Updated dependencies [aee2d53]
+- Updated dependencies [25f7b82]
+- Updated dependencies [90829e3]
+- Updated dependencies [aac148b]
+- Updated dependencies [d52f9ba]
+- Updated dependencies [0e5a4cd]
+- Updated dependencies [b968642]
+- Updated dependencies [68a7e3b]
+- Updated dependencies [57fea6a]
+- Updated dependencies [1ba9315]
+- Updated dependencies [b8a9e5e]
+- Updated dependencies [e8258a1]
+  - @memberjunction/core-entities@6.2.0-edge.4
+  - @memberjunction/core@6.2.0-edge.4
+  - @memberjunction/global@6.2.0-edge.4
+  - @memberjunction/code-execution@6.2.0-edge.4
+
+## 6.2.0-edge.3
+
+### Patch Changes
+
+- bea2386: A run can now be restricted to the credentials its caller supplied, so a customer's work never silently runs on the platform's AI keys.
+
+  Key resolution matched per driver class and fell back to the platform for any class the run did not key. A host running work on a customer's own key had no way to say "only these keys": when the customer's Google key was rejected, failover moved to Vertex, found no customer key, and finished the run on the platform's account — reporting success. Internal prompts that dropped `apiKeys` (AI JSON repair, the parallel result selector) reached the platform key the same way with no failover at all.
+  - **`CredentialScope: 'Any' | 'RuntimeOnly'`** (`AICredentialScope` in `@memberjunction/ai`) on `ExecuteAgentParams` and `AIModelRunParams` (so `AIPromptParams`). Omitting the parameter means `'Any'`, which resolves keys as before (the fixes below change some defaults regardless). `'RuntimeOnly'` allows only `apiKeys` and a prompt's per-request `credentialId`: every platform source — `AICredentialBinding`s, the vendor's default credential and `AI_VENDOR_API_KEY__*` — is skipped.
+  - Every scope decision goes through `CredentialScopeAllows(scope, source)` in `@memberjunction/ai`, where `source` is an `AICredentialSource` — `'Runtime'`, `'PlatformCredential'` or `'Environment'`. Its exhaustive switch makes a new scope value a compile error until it is answered, and an unknown value at runtime throws rather than falling back to the platform.
+  - Enforced in `BaseModelRunner.HasCredentialsAvailable` and `ResolveCredentialForExecution`, which every runner shares. Because candidate selection uses the first, failover stays on vendors the caller keyed; a run they do not cover fails with "No suitable model found … credential scope is RuntimeOnly" instead of running on the platform's key.
+  - `BaseAgent` carries the scope to every prompt, sub-agent, action, realtime delegate and realtime session in the run. `GetAIAPIKey` and `MakeAIAPIKeyResolver` take an optional `scope`; `RealtimeClientSessionService` drops its `getAPIKeyForDriver` seam under `'RuntimeOnly'`; image and media runner params gain `CredentialScope`.
+  - `@memberjunction/actions-base`: `RunActionParams.CredentialScope` (`RuntimeCredentialScope`). Under `'RuntimeOnly'` the `RuntimeAPIKeyResolver`'s answer is final. `Generate Image` honours it, and Summarize Content, Run Ad-hoc Query, Execute AI Prompt and Execute Agent forward it to the prompt or agent they run — they are not handed the run's keys, so under `'RuntimeOnly'` they fail rather than spend the platform's.
+  - Decision calls (FinishIf, decision requests, discovery, catalog narrowing, the payload change check) carry the run's execution scope through `AgentDecisionService` (`AgentDecisionAskParams.ExecutionScope`) to `AIDecisionRunner`, and `LLMDecision`'s own chat prompt runs under it (`LLMDecision.ExecutionScope`). Self-check rubrics do too: `ProviderRubricEngine`, `ProviderPromptService` and `ProviderDecisionService` take an optional execution scope, and the rubric evaluation agent runs under it.
+  - A model driver is never constructed without a key under a scope that rules out environment keys: the OpenAI and Anthropic SDKs read `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` themselves when handed none, which parallel prompt tasks could reach.
+  - Not covered by the scope: retrieval reranking and embeddings outside a prompt run (platform infrastructure), and agent-harness credential grants.
+  - **Prompts started on a run's behalf now run under its scope** — user, provider, configuration, `apiKeys`, `credentialId`, `CredentialScope` — via the new `PickPromptExecutionScope` / `AIPromptExecutionScope`: AI JSON repair, the parallel `PromptSelector` judge, `BaseAgent`'s summarize-range and message-compaction sub-calls, conversation compaction (`CompactIfNeededInput.ExecutionScope`) and conversation naming. Each forwarded `contextUser` at most, so each ran on platform keys and the default configuration inside a customer's run. This applies whatever the scope.
+  - `ErrorAnalyzer` classifies Google's invalid-key and expired-key responses ("API key not valid" / `API_KEY_INVALID`, "API key expired" / `API_KEY_EXPIRED`, HTTP 400) as `Authentication`. It fell through to `VendorValidationError`, so an invalid key failed over to another vendor instead of failing.
+  - **A failed streaming call keeps its driver's classification.** `BaseLLM` rejects a failed stream with its `ChatResult`, not an `Error`. The prompt runner analyzed that object afresh, so an invalid key the driver classified `Authentication`/`Fatal` became `Unknown`/`Transient` with no message: failover continued onto the same dead key, agents retried the step up to their consecutive-failure limit, and every run recorded "Unknown error". `ErrorAnalyzer` now returns an `errorInfo` the value already carries, and the runner records a rejected `ChatResult` as an `Error` with its real message; any other rejected value is classified as itself before it is wrapped. Affects any streamed prompt with a non-retryable error, whatever the credential scope.
+
+- Updated dependencies [25bb295]
+- Updated dependencies [dfe40a4]
+- Updated dependencies [131f3c4]
+- Updated dependencies [0f04590]
+- Updated dependencies [fe39606]
+- Updated dependencies [41c2c08]
+- Updated dependencies [29b6ec3]
+- Updated dependencies [66fd011]
+- Updated dependencies [196160a]
+- Updated dependencies [60bd774]
+- Updated dependencies [35da130]
+- Updated dependencies [28c92e0]
+- Updated dependencies [ec97ad4]
+- Updated dependencies [49e0bd8]
+  - @memberjunction/core-entities@6.2.0-edge.3
+  - @memberjunction/global@6.2.0-edge.3
+  - @memberjunction/core@6.2.0-edge.3
+  - @memberjunction/code-execution@6.2.0-edge.3
+
+## 6.2.0-edge.2
+
+### Patch Changes
+
+- Updated dependencies [e97d95c]
+- Updated dependencies [2552b1e]
+- Updated dependencies [21f9e15]
+- Updated dependencies [4248fb3]
+- Updated dependencies [0adaf76]
+- Updated dependencies [ef43cf3]
+- Updated dependencies [b44c7cf]
+- Updated dependencies [705ab4e]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [5986939]
+- Updated dependencies [200e634]
+- Updated dependencies [4d647e6]
+- Updated dependencies [c35f7e5]
+- Updated dependencies [369e229]
+- Updated dependencies [d13cf6b]
+- Updated dependencies [2854a2e]
+  - @memberjunction/core@6.2.0-edge.2
+  - @memberjunction/core-entities@6.2.0-edge.2
+  - @memberjunction/code-execution@6.2.0-edge.2
+  - @memberjunction/global@6.2.0-edge.2
+
+## 6.2.0-edge.1
+
+### Patch Changes
+
+- 520bd09: Durable entity actions (`EntityAction.RunMode = 'Durable'`) now receive their declared parameters by name (#4794).
+
+  `BuildDurableDeferral` stored the redacted parameters in `Task.InputPayload` as a `LoggedParam[]` array, while `TaskGraphActionRunner` reads that payload back as a name → value object. Every released build with durable dispatch (v6.1.0 onward, including 6.1.4) hit the same failure: the dispatcher's `mergedPayload` only merges plain objects, so it silently dropped the array and the action received NONE of its params. Parameters named `0…n` would only appear if the array reached `TaskGraphActionRunner.buildParams` directly, bypassing that drop. Either way every durable binding ran without its inputs, e.g. `Common.LogActivity` failing with `TypeCode is required. | Title is required.`
+  - `@memberjunction/actions-base`: new `RedactParamsToRecord()` beside `RedactParamsToJSON()`. It applies the same redaction rules and returns `{ Name: Value }`, omitting suppressed parameters, which then arrive at the action as absent rather than as a redaction stub.
+  - `@memberjunction/actions`: `BuildDurableDeferral` submits that record.
+  - `@memberjunction/task-graph`: a task whose `InputPayload` is not a name → value object now **fails** with a message naming the task, instead of running with its input silently dropped.
+  - `@memberjunction/server`: round-trip regression test through `TaskGraphActionRunner`.
+  - `@memberjunction/integration-test-suite`: EA6 now rejects an array `RedactedParams` and checks a bound param arrives by name.
+
+  **Upgrade note:** durable tasks queued before this fix still carry array payloads. They now fail loudly (`Task <id> has an InputPayload that is an array; expected a name → value object…`) instead of running with no inputs. Re-trigger the source save if that work matters, or — from the Workflows run view — use the failed step's **Edit input & retry** control to replace the stored array with a name → value object and retry it in place.
+
+  A durable binding never receives a whole record: `Entity Object` / `Entity Object Data` bindings are always stripped from the durable payload. Pass a key (e.g. `Entity Field 'ID'`) and load the record in the action.
+
+- Updated dependencies [a50948e]
+- Updated dependencies [0eeb89d]
+- Updated dependencies [a3539d2]
+- Updated dependencies [41274aa]
+- Updated dependencies [67f6c85]
+- Updated dependencies [eb3a8d3]
+- Updated dependencies [e1dd673]
+- Updated dependencies [307da67]
+- Updated dependencies [a7da50b]
+- Updated dependencies [17cc774]
+- Updated dependencies [80905a1]
+- Updated dependencies [6b08ebf]
+  - @memberjunction/core-entities@6.2.0-edge.1
+  - @memberjunction/core@6.2.0-edge.1
+  - @memberjunction/code-execution@6.2.0-edge.1
+  - @memberjunction/global@6.2.0-edge.1
+
 ## 6.2.0-edge.0
 
 ### Patch Changes

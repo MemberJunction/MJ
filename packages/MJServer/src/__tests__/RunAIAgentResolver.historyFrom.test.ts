@@ -108,6 +108,8 @@ afterEach(() => {
 describe('RunAIAgentFromConversationDetail — agentHistoryFrom', () => {
     let resolver: RunAIAgentResolver;
     let seams: ResolverSeams;
+    /** The floor's position in executeAIAgent / executeAgentInBackground: third from last, before TrustReservedRunData and the branch. */
+    const FLOOR_ARG = -3;
 
     beforeEach(() => {
         ({ resolver, seams } = makeResolver());
@@ -124,7 +126,7 @@ describe('RunAIAgentFromConversationDetail — agentHistoryFrom', () => {
         expect(loaderArgs[0]).toBe('conv-1');
         expect(loaderArgs[4]).toEqual(['detail-1']);
         expect((loaderArgs[5] as Date).toISOString()).toBe(FLOOR_ISO);
-        const runFloor = seams.executeAIAgent.mock.calls[0].at(-1) as Date;
+        const runFloor = seams.executeAIAgent.mock.calls[0].at(FLOOR_ARG) as Date;
         expect(runFloor.toISOString()).toBe(FLOOR_ISO);
     });
 
@@ -133,7 +135,7 @@ describe('RunAIAgentFromConversationDetail — agentHistoryFrom', () => {
 
         expect(result.success).toBe(true);
         expect(seams.executeAIAgent).not.toHaveBeenCalled();
-        const runFloor = seams.executeAgentInBackground.mock.calls[0].at(-1) as Date;
+        const runFloor = seams.executeAgentInBackground.mock.calls[0].at(FLOOR_ARG) as Date;
         expect(runFloor.toISOString()).toBe(FLOOR_ISO);
     });
 
@@ -141,7 +143,7 @@ describe('RunAIAgentFromConversationDetail — agentHistoryFrom', () => {
         await runMutation(resolver, {});
 
         expect(seams.loadConversationHistoryWithAttachments.mock.calls[0][5]).toBeUndefined();
-        expect(seams.executeAIAgent.mock.calls[0].at(-1)).toBeUndefined();
+        expect(seams.executeAIAgent.mock.calls[0].at(FLOOR_ARG)).toBeUndefined();
     });
 
     it('fails the request on an unreadable floor, before loading or running anything', async () => {
@@ -178,10 +180,20 @@ describe('loadConversationHistoryWithAttachments — history floor', () => {
         }).loadConversationHistoryWithAttachments.bind(resolver);
         await load('conv-1', USER, 20, provider, ['detail-1'], floor);
 
-        expect(loadRows).toHaveBeenCalledWith('conv-1', USER, provider, floor);
+        expect(loadRows).toHaveBeenCalledWith('conv-1', USER, provider, floor, undefined);
         expect(assemble.mock.calls[0][1]).toEqual({ maxTailMessages: 20, excludeDetailIds: ['detail-1'], historyFrom: floor });
     });
 });
+
+function executeArgs(conversationHistoryFrom?: Date): unknown[] {
+    const userPayload = { sessionId: 'session-1', userRecord: USER };
+    return [
+        {}, {}, 'agent-1', userPayload, '[{"role":"user","content":"hi"}]', 'session-1', pubSub,
+        undefined, undefined, undefined, undefined, undefined, undefined, 'detail-1', false, false,
+        undefined, undefined, 'conv-1', undefined, undefined, undefined, undefined,
+        conversationHistoryFrom,
+    ];
+}
 
 describe('executeAIAgent — ConversationHistoryFrom', () => {
     function wire() {
@@ -199,20 +211,10 @@ describe('executeAIAgent — ConversationHistoryFrom', () => {
         return execute;
     }
 
-    function positional(conversationHistoryFrom?: Date): unknown[] {
-        const userPayload = { sessionId: 'session-1', userRecord: USER };
-        return [
-            {}, {}, 'agent-1', userPayload, '[{"role":"user","content":"hi"}]', 'session-1', pubSub,
-            undefined, undefined, undefined, undefined, undefined, undefined, 'detail-1', false, false,
-            undefined, undefined, 'conv-1', undefined, undefined, undefined, undefined,
-            conversationHistoryFrom,
-        ];
-    }
-
     it('puts the floor on the run\'s params', async () => {
         const execute = wire();
         const floor = new Date(FLOOR_ISO);
-        await execute(...positional(floor));
+        await execute(...executeArgs(floor));
 
         const params = hoisted.runAgentInConversation.mock.calls[0][0] as Record<string, unknown>;
         expect(params.ConversationHistoryFrom).toBe(floor);
@@ -220,9 +222,179 @@ describe('executeAIAgent — ConversationHistoryFrom', () => {
 
     it('leaves it unset without a floor', async () => {
         const execute = wire();
-        await execute(...positional());
+        await execute(...executeArgs());
 
         const params = hoisted.runAgentInConversation.mock.calls[0][0] as Record<string, unknown>;
         expect(params.ConversationHistoryFrom).toBeUndefined();
+    });
+});
+
+describe('executeAIAgent — status publishing', () => {
+    const agentRun = {
+        ID: 'run-1',
+        ConversationDetailID: 'detail-1',
+        Steps: [{ StepName: 'Answer' }],
+        GetAll: () => ({ ID: 'run-1', ConversationDetailID: 'detail-1', Agent: 'Betty' }),
+    };
+
+    function envelopes(publish: ReturnType<typeof vi.fn>): Array<Record<string, unknown>> {
+        return publish.mock.calls.map((call) => JSON.parse((call[1] as { message: string }).message) as Record<string, unknown>);
+    }
+
+    it('publishes progress, streamed text, the partial result, and the completion from the runner callbacks', async () => {
+        const { resolver, seams } = makeResolver();
+        seams.validateAgent = vi.fn().mockResolvedValue({ ID: 'agent-1', Name: 'Test Agent' });
+        seams.persistInFlightAgentFailure = vi.fn().mockResolvedValue(undefined);
+        vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        vi.spyOn(console, 'log').mockImplementation(() => undefined);
+        const publish = vi.fn().mockResolvedValue(undefined);
+        (pubSub as unknown as { publish: Fn }).publish = publish;
+        hoisted.runAgentInConversation.mockReset().mockImplementation(async (params: {
+            onProgress?: (progress: { step: string; message?: string; percentage?: number; metadata?: Record<string, unknown> }) => void;
+            onStreaming?: (chunk: { content: string; isComplete: boolean; stepType?: string; kind?: string }) => void;
+        }) => {
+            params.onProgress?.({ step: 'initialization', message: 'noise', metadata: { agentRun } });
+            params.onProgress?.({
+                step: 'prompt_execution',
+                message: 'Writing',
+                percentage: 40,
+                metadata: { agentRun, agentName: 'Betty' },
+            });
+            params.onStreaming?.({ content: 'Hel', isComplete: false, stepType: 'prompt', kind: 'final-response' });
+            return {
+                agentResult: { success: true, agentRun, payload: { text: 'Hello' } },
+                agentResponseDetailId: 'detail-1',
+                conversationId: 'conv-1',
+            };
+        });
+        const execute = (resolver as unknown as {
+            executeAIAgent(...args: unknown[]): Promise<{ success: boolean }>;
+        }).executeAIAgent.bind(resolver);
+
+        const result = await execute(...executeArgs());
+
+        expect(result.success).toBe(true);
+        const sent = envelopes(publish);
+        expect(sent.map((row) => (row.data as { type: string }).type)).toEqual([
+            'progress',
+            'streaming',
+            'partial_result',
+            'complete',
+        ]);
+        expect(sent[0].type).toBe('ExecutionProgress');
+        expect(sent[0].resolver).toBe('RunAIAgentResolver');
+        expect((sent[1].data as { streaming: { content: string } }).streaming.content).toBe('Hel');
+        const completion = sent[3].data as { conversationDetailId: string; agentRunId: string; success: boolean };
+        expect(completion.conversationDetailId).toBe('detail-1');
+        expect(completion.agentRunId).toBe('run-1');
+        expect(completion.success).toBe(true);
+    });
+
+    it('publishes a failure completion when a fire-and-forget run rejects', async () => {
+        const { resolver, seams } = makeResolver();
+        seams.executeAIAgent = vi.fn().mockRejectedValue(new Error('background blew up'));
+        vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        vi.spyOn(console, 'log').mockImplementation(() => undefined);
+        const publish = vi.fn().mockResolvedValue(undefined);
+        const localPubSub = { publish } as unknown as PubSubEngine;
+        const userPayload = { sessionId: 'session-1', userRecord: USER };
+        const runInBackground = (resolver as unknown as {
+            executeAgentInBackground(...args: unknown[]): void;
+        }).executeAgentInBackground.bind(resolver);
+
+        runInBackground(
+            {}, {}, 'agent-1', userPayload, '[]', 'session-1', localPubSub,
+            undefined, undefined, undefined, undefined, undefined, 'detail-1',
+        );
+        await vi.waitFor(() => expect(publish).toHaveBeenCalled());
+
+        const sent = envelopes(publish);
+        expect(sent).toHaveLength(1);
+        expect(sent[0].type).toBe('StreamingContent');
+        expect(sent[0].resolver).toBe('RunAIAgentResolver');
+        const completion = sent[0].data as {
+            type: string;
+            agentRunId: string;
+            conversationDetailId: string;
+            success: boolean;
+            errorMessage: string;
+            result: string;
+        };
+        expect(completion).toMatchObject({
+            type: 'complete',
+            agentRunId: 'unknown',
+            conversationDetailId: 'detail-1',
+            success: false,
+            errorMessage: 'background blew up',
+            result: JSON.stringify({ success: false, errorMessage: 'background blew up' }),
+        });
+    });
+
+    it('saves a Running run reported by progress as Failed when the agent throws', async () => {
+        const { resolver, seams } = makeResolver();
+        seams.validateAgent = vi.fn().mockResolvedValue({ ID: 'agent-1', Name: 'Test Agent' });
+        vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        vi.spyOn(console, 'log').mockImplementation(() => undefined);
+        const runningRun = {
+            ID: 'run-1',
+            Status: 'Running',
+            ErrorMessage: '',
+            CompletedAt: null as Date | null,
+            EnsureSaveComplete: vi.fn().mockResolvedValue(undefined),
+            Save: vi.fn().mockResolvedValue(true),
+        };
+        const detail = {
+            Status: 'Complete',
+            Load: vi.fn().mockResolvedValue(true),
+            Save: vi.fn().mockResolvedValue(true),
+        };
+        const provider = { GetEntityObject: vi.fn().mockResolvedValue(detail) };
+        hoisted.runAgentInConversation.mockReset().mockImplementation(async (params: {
+            onProgress?: (progress: { step: string; metadata?: Record<string, unknown> }) => void;
+        }) => {
+            params.onProgress?.({ step: 'prompt_execution', metadata: { agentRun: runningRun } });
+            throw new Error('agent threw mid-run');
+        });
+        const execute = (resolver as unknown as {
+            executeAIAgent(...args: unknown[]): Promise<{ success: boolean; errorMessage?: string }>;
+        }).executeAIAgent.bind(resolver);
+        const args = executeArgs();
+        args[0] = provider;
+
+        const result = await execute(...args);
+
+        expect(result.success).toBe(false);
+        expect(result.errorMessage).toBe('agent threw mid-run');
+        expect(runningRun.Status).toBe('Failed');
+        expect(runningRun.ErrorMessage).toBe('agent threw mid-run');
+        expect(runningRun.CompletedAt).toBeInstanceOf(Date);
+        expect(runningRun.EnsureSaveComplete).toHaveBeenCalled();
+        expect(runningRun.Save).toHaveBeenCalled();
+        expect(detail.Save).not.toHaveBeenCalled();
+    });
+});
+
+describe('persistInFlightAgentFailure — a refused conversation-detail save logs the reason (MJ#4791)', () => {
+    it('includes LatestResult.CompleteMessage when the Error-status save is refused', async () => {
+        const { resolver } = makeResolver();
+        const errSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        const detail = {
+            Status: 'In-Progress',
+            LatestResult: { CompleteMessage: 'You do not have access to this conversation.' },
+            Load: vi.fn().mockResolvedValue(true),
+            EnsureSaveComplete: vi.fn().mockResolvedValue(undefined),
+            Save: vi.fn().mockResolvedValue(false),
+        };
+        const provider = { GetEntityObject: vi.fn().mockResolvedValue(detail) };
+        const persist = (resolver as unknown as {
+            persistInFlightAgentFailure(...args: unknown[]): Promise<void>;
+        }).persistInFlightAgentFailure.bind(resolver);
+
+        await persist(provider, { sessionId: 'session-1', userRecord: USER }, null, 'detail-1', 'agent threw');
+
+        const lines = errSpy.mock.calls.map((call) => String(call[0]));
+        const line = lines.find((l) => l.includes('Failed to persist Error on conversation detail detail-1'));
+        expect(line).toBeDefined();
+        expect(line).toContain('You do not have access to this conversation.');
     });
 });

@@ -16,7 +16,8 @@ import {  } from '@memberjunction/core-entities';
 import { UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { AgentPayloadChangeRequest } from './agent-payload-change-request';
 import { AgentScratchpad } from './agent-scratchpad';
-import { AIAPIKey } from '@memberjunction/ai';
+import { AgentDecisionRequest, AgentDecisionResult, AgentFinishIf } from './agent-decisions';
+import { AIAPIKey, AICredentialScope } from '@memberjunction/ai';
 import { AgentResponseForm } from './response-forms';
 import { ActionParam } from '@memberjunction/actions-base';
 import { ActionableCommand, AutomaticCommand } from './ui-commands';
@@ -363,6 +364,17 @@ export interface AgentPipelineRequest {
 }
 
 /**
+ * One image a client tool returns for the model to see. `Base64` is raw base64 without a data
+ * URL prefix.
+ */
+export interface ClientToolMediaItem {
+    MimeType: string;
+    Base64: string;
+    Width?: number;
+    Height?: number;
+}
+
+/**
  * Response from a client tool execution — returned to the server when
  * the client finishes running the tool.
  */
@@ -373,6 +385,8 @@ export interface ClientToolResponse {
     Success: boolean;
     /** The tool result (if successful) */
     Result?: unknown;
+    /** Images for the model, when the tool returns any. */
+    Media?: ClientToolMediaItem[];
     /** Error message (if failed) */
     ErrorMessage?: string;
 }
@@ -387,6 +401,8 @@ export interface ClientToolResultSummary {
     Success: boolean;
     /** Result data from the tool */
     Result?: unknown;
+    /** Images for the model, when the tool returns any. */
+    Media?: ClientToolMediaItem[];
     /** Error message if the tool failed */
     ErrorMessage?: string;
 }
@@ -591,6 +607,9 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
      *   they are NOT part of the generated `MJAIAgentRun.FinalStep` union below. Use an explicit
      *   `'Skill' as typeof nextStep.step` / `'Plan' as typeof nextStep.step` assertion at
      *   assignment/switch sites, mirroring the existing 'ClientTools' pattern.
+     * - 'Decision': non-terminal in the same way. Runs {@link decisions} as `Decision` run steps with
+     *   no LLM turn, and returns a 'Retry' carrying {@link decisionResults}. A Flow agent's Decision
+     *   step emits it.
      *
      * Note: To expand a compacted message, set step to 'Retry', set messageIndex to the message to expand,
      * and optionally set expandReason to explain why expansion is needed. The framework will expand the message
@@ -688,6 +707,29 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
      */
     scratchpad?: AgentScratchpad;
     /**
+     * Decision requests from the agent's response.
+     * Processed inline (zero turn cost) alongside payload and scratchpad changes.
+     * Results are injected into the next turn's conversation.
+     *
+     * On a `'Decision'` step these are the step's own requests instead, and their results come back
+     * on {@link decisionResults} rather than into the conversation.
+     */
+    decisions?: AgentDecisionRequest[];
+    /**
+     * The decision prompt a `'Decision'` step's {@link decisions} run on, by name. Omitted means
+     * `Default Decision`.
+     */
+    decisionPromptName?: string;
+    /**
+     * The results of a `'Decision'` step's {@link decisions}, on the `'Retry'` BaseAgent returns once
+     * it has run them.
+     *
+     * These go back to the agent type, which routes on them, rather than to a model. So each Choice's
+     * and Score's answer keeps its whole distribution in `probabilities` (the shape of
+     * `TaskGraphDecisionAnswer`), which a path condition may read.
+     */
+    decisionResults?: AgentDecisionResult[];
+    /**
      * Artifact tool calls from the agent's response.
      * Each entry identifies an artifact and the tool to execute against it.
      * Processed inline (zero turn cost) alongside payload and scratchpad changes.
@@ -766,6 +808,12 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
      * to decide whether to return Success or continue to another prompt.
      */
     terminateAfterExecution?: boolean;
+    /**
+     * Conditional completion gate for Actions or Sub-Agent steps.
+     * When present, if all questions evaluate to a probability >= threshold after the step completes,
+     * the run finishes immediately with `finishIf.message` at zero extra turn cost.
+     */
+    finishIf?: AgentFinishIf;
 }
 
 /**
@@ -1002,6 +1050,48 @@ export interface InputArtifact {
 }
 
 /**
+ * How a run's audience bounds what the run may show. See {@link ExecuteAgentParams.Audience}.
+ * - `'Caller'` — the caller's own reach, exactly as if no audience were set. `UserIDs` must be empty.
+ * - `'Intersection'` — only what the caller **and** every user in `UserIDs` may see.
+ *
+ * Union, anchor and narrowing modes are not offered: a run bounded by a shared record or a tenant
+ * uses `PrimaryScope*` / `SecondaryScopes`.
+ *
+ * @since 6.2.0
+ */
+export type AgentAudienceMode = 'Caller' | 'Intersection';
+
+/**
+ * The people, besides the caller, who will see a run's output. See {@link ExecuteAgentParams.Audience}.
+ *
+ * @since 6.2.0
+ */
+export interface AgentRunAudience {
+    /** How the audience bounds the run. */
+    Mode: AgentAudienceMode;
+    /**
+     * `MJ: Users` IDs of everyone besides the caller who will see the output — for a shared
+     * conversation, its other participants. Required and non-empty, with no blank entry, for
+     * `'Intersection'`; empty for `'Caller'`. Listing the caller, or an ID twice, is harmless. Each ID
+     * must name an existing user: a run whose audience names an unknown ID is refused.
+     */
+    UserIDs: string[];
+}
+
+/**
+ * How a run carries forward the work of a predecessor the user stopped.
+ * - `'full_stack'`: the stopped run's own message stack (its prompts' turns, its action invocations and
+ *   results, delegations) is resumed into this run in the same shape the loop builds while running, so
+ *   the agent picks up where it left off. Falls back to `'summary'` when the stack cannot be resumed.
+ * - `'summary'`: the stopped run's completed action and tool results are rendered into one
+ *   carried-forward message.
+ *
+ * The default is `'full_stack'` (`BaseAgent.DefaultStopContinuationMode`); a caller sets
+ * `ExecuteAgentParams.stopContinuationMode` only to choose `'summary'`.
+ */
+export type StopContinuationMode = 'full_stack' | 'summary';
+
+/**
  * Parameters required to execute an AI Agent.
  *
  * @template TContext - Type of the context object passed through agent and action execution.
@@ -1131,8 +1221,36 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      * Scoped Search binding its skill principal to the run. Set by `ExecuteSubAgent`; hosts need not.
      */
     parentActivatedSkillIDs?: readonly string[];
-    /** Optional data for template rendering and prompt execution, passed to the agent's prompt as well as all sub-agents */
+    /**
+     * Optional data for template rendering and prompt execution, passed to the agent's prompt as well as all sub-agents.
+     *
+     * Its reserved keys (`RESERVED_AGENT_RUN_DATA_KEYS`: `PrimaryScopeEntityName`, `PrimaryScopeEntityID`,
+     * `PrimaryScopeRecordID`, `SecondaryScopes`, `__agentTypePromptParams`) are read only when
+     * {@link TrustReservedRunData} is set; otherwise `BaseAgent.Execute` removes them. Set a run's scope with
+     * {@link PrimaryScopeEntityName}, {@link PrimaryScopeRecordID} and {@link SecondaryScopes} instead.
+     */
     data?: Record<string, any>;
+    /**
+     * **Server-only — never set it from client input.** Lets this run read the reserved keys of {@link data}: the
+     * fallbacks for the run's scope (`PrimaryScopeEntityName`, `PrimaryScopeEntityID`, `PrimaryScopeRecordID`,
+     * `SecondaryScopes`) and its highest-precedence agent-type parameters (`__agentTypePromptParams`, which can turn
+     * on capabilities such as the Loop type's `enableTaskGraphs`).
+     *
+     * Without it, `BaseAgent.Execute` removes those keys from `data` before the run starts and logs their names
+     * (never their values). So whatever reaches `data` from a browser, an action call (Execute Agent, including one a
+     * model makes inside a run), an MCP or A2A request or a Runtime Action script cannot choose a run's tenant, the
+     * memory it reads or what it may do — whichever entry point started it.
+     *
+     * Server code sets a run's scope with the first-class fields — {@link PrimaryScopeEntityName},
+     * {@link PrimaryScopeRecordID}, {@link SecondaryScopes} — which need no marker. Set this only when `data` itself
+     * comes from a caller the server has authenticated as trusted: MJServer's agent-run resolvers set it for the
+     * system user and for an API key that holds the `agent:trusted` scope (never for a widget guest), and a sub-agent
+     * inherits its parent's value
+     * (the model-authored `templateParameters` merged into the child's `data` lose the reserved keys regardless).
+     *
+     * @since 6.2.0
+     */
+    TrustReservedRunData?: boolean;
     /**
      * Optional input artifacts for this run. Consumed by the agent's
      * ArtifactToolManager: each artifact is registered, surfaced in the
@@ -1215,6 +1333,76 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      */
     apiKeys?: AIAPIKey[];
     /**
+     * Which credentials the run may spend; omitted means `'Any'`. `'RuntimeOnly'` restricts the run's
+     * model calls to {@link apiKeys}: a vendor the run carries no key for is not used, rather than
+     * falling back to the platform's credentials. See `AICredentialScope` in `@memberjunction/ai`.
+     *
+     * Covered: every prompt the agent runs and the ones it starts on its own behalf (JSON repair, the
+     * result-selector judge, summarize, compaction, naming), decision calls, self-check rubrics,
+     * sub-agents, realtime sessions and actions. An action that calls a vendor directly gets the run's
+     * key through `RunActionParams.RuntimeAPIKeyResolver`; one that runs its own prompt or agent is
+     * handed only the scope, not the keys, so under `'RuntimeOnly'` it fails rather than spending the
+     * platform's.
+     *
+     * Not covered: retrieval reranking (`AIRerankerRunner`, the search rerankers) and vector
+     * embeddings outside a prompt run, which are platform infrastructure and resolve their own keys.
+     */
+    CredentialScope?: AICredentialScope;
+    /**
+     * Everyone besides the caller who will see this run's output — a shared conversation's other
+     * participants. With `Mode: 'Intersection'` the run may show only what the caller **and** every
+     * reader may see: the caller's reach is the ceiling, each reader's reach lowers it. Omitted (or
+     * `'Caller'`), the run is bounded by the caller alone, as before.
+     *
+     * **Server-only.** Set it from the host's own record of who is in the room (the conversation's
+     * participants), never from client input: it is a typed field and is never read from `data`, so
+     * nothing a client sends through GraphQL, MCP or A2A (whose agent runners pass named fields and put
+     * client JSON in `data`) can set or clear it.
+     *
+     * **Validation fails the run** before any prompt, as a refused permission does: an unknown `Mode`
+     * (including a name `Object.prototype` carries, such as `'toString'`); `'Intersection'` whose
+     * `UserIDs` is empty, not an array, or holds a blank entry; `'Caller'` with any `UserIDs`; or an ID
+     * no user has (after one refresh of the server's user cache). An inactive user is accepted: a reader
+     * only narrows what the run may show. Every gate below fires only when the audience adds a reader
+     * **other than the caller**, so an `'Intersection'` whose only reader is the caller behaves exactly
+     * as `'Caller'`.
+     *
+     * **What it bounds.** Each run (sub-agents included — they inherit it and re-hydrate the IDs) loads
+     * the readers from the user cache and then:
+     * - pre-execution RAG checks every reader's scope permission (a refused reader skips that scope and
+     *   writes a `Forbidden` search-log row naming them) and passes the readers to the search, which
+     *   keeps only results every reader may read;
+     * - agent notes and examples are injected only when shared (`UserID` empty); scope matching still applies;
+     * - agent data-source preloading and the previous turn's tool-result carry-forward are skipped;
+     * - every action call carries `RunActionParams.Audience`. Only the Search and Scoped Search actions
+     *   declare they can honour it; any other action is refused (`AUDIENCE_UNSUPPORTED`) without running
+     *   and is locked out for the run (the model is told it is unavailable in a shared conversation), so an
+     *   agent with other actions is limited to search in a shared room. A malformed audience on an action
+     *   call refuses every action;
+     * - task graphs are not offered, and one the model writes anyway is refused (they are withheld in a
+     *   tenant-scoped run too: a graph runs outside the run's scope);
+     * - client tools are not offered and a client-tools step is refused (they run in the caller's browser),
+     *   and the caller's app context (`data.appContext`) is not injected into the prompt;
+     * - memory writes are not saved (a write's reply is read against the caller's own notes);
+     * - no out-of-conversation `MJ: AI Agent Requests` row is raised for a Chat or Plan step: answered on
+     *   the dashboard or through the API, it would resume the run without the audience. The room answers in
+     *   the conversation, where the host starts the next run with the audience;
+     * - session-driven (realtime / voice / bridge) agent types are refused.
+     *
+     * **Not covered (documented limits).**
+     * - Scope expansion queries and `ServerDerived` dimensions resolve for the caller only
+     *   (`ScopeDimensionResolver` binds one `UserID`); the per-reader result filter covers scopes whose
+     *   lanes carry per-user row filters.
+     * - A run is never resumed with its audience (`MJAIAgentRequestEntityServer.resumeAgent` has no field to
+     *   read it from), so a run with one raises no request to resume from (above); persisting the audience
+     *   needs a column, an open design point shared with bound action parameters. An agent with
+     *   `RequirePlanMode` therefore cannot have a plan approved in a shared conversation.
+     * - The conversation history and artifacts the host passes in are the host's to choose.
+     *
+     * @since 6.2.0
+     */
+    Audience?: AgentRunAudience;
+    /**
      * Optional ID of the last run in a run chain.
      * When provided, this links the new run to a previous run, allowing
      * agents to maintain context across multiple interactions.
@@ -1263,6 +1451,14 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
     ConversationHistoryFrom?: Date;
 
     /**
+     * The conversation branch this run belongs to. Meaningful only with {@link conversationId}.
+     * The framework reads the conversation on the run's behalf only along that branch's path:
+     * history retrieval tools, offered artifacts, cross-turn compaction and the previous
+     * turn's tool results. Omitted, the run reads the trunk (rows with no branch).
+     */
+    ConversationBranchID?: string;
+
+    /**
      * Optional flag to automatically populate the payload from the last run.
      * When true and lastRunId is provided, the framework will:
      * 1. Load the last run's FinalPayload
@@ -1272,6 +1468,13 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      * bandwidth by avoiding passing large payloads back and forth.
      */
     autoPopulateLastRunPayload?: boolean;
+
+    /**
+     * How this run carries forward a predecessor the user stopped (see {@link StopContinuationMode}).
+     * Defaults to `'full_stack'`: the stopped run's message stack is resumed so the agent continues
+     * where it left off. `'summary'` carries only its completed results, for callers that want that.
+     */
+    stopContinuationMode?: StopContinuationMode;
 
     /**
      * Per-request Plan Mode toggle. Defaults OFF (undefined/false) — no behavior change unless
@@ -1841,6 +2044,15 @@ export type AgentChatMessageMetadata = {
     isConversationSummary?: boolean;
     /** On the summary message: the boundary row's Sequence — the summary covers all rows below it */
     summaryBoundarySequence?: number;
+    /**
+     * True on the framework-authored trailing message that carries the loop agent's volatile
+     * per-iteration state (date/time, Scratchpad, Payload, and a relocated specialization) as the
+     * final message of each request. It is appended to a COPY of the history for a
+     * single request and never persisted. Provider adapters may use it to place prompt-cache
+     * breakpoints on the message BEFORE it, so the stable history caches and only this fragment
+     * is re-processed each iteration.
+     */
+    volatileState?: boolean;
 }
 
 /**

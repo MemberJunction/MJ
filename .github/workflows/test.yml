@@ -2,12 +2,21 @@ name: Unit Tests
 
 on:
   workflow_dispatch:
+  # Line branches run this gate too (process doc 5.2 rule 4): lts/* is what a publish
+  # ships from and what customers pin to, so a break discovered after merge is worse
+  # here than on next. The trigger lives on next so every candidate cut inherits it;
+  # lts/5 got it from a line-only commit (6937c7c050) and lts/6.1 was cut without it.
   pull_request:
-    branches: [next]
+    branches: [next, 'lts/**']
     paths:
       - 'package.json'
       - 'pnpm-lock.yaml'
       - 'packages/**'
+      # The citizen-builder template sits outside packages/** but @memberjunction/cli bundles a
+      # copy of it, and the guard that keeps that copy in step runs in the guards job. A PR editing
+      # only citizen-builder/ is exactly the one that can leave the copy behind, so it must trigger.
+      - 'citizen-builder/**'
+      - '.github/scripts/check-citizen-builder-template.mjs'
       - 'vitest.*'
       # A change to ONLY a root tsconfig must trigger the workflow — package tsconfigs extend the
       # root ones, so the grep fallback below matches `tsconfig[^/]*\.json`, but without this paths
@@ -21,6 +30,7 @@ on:
       # The native-ESM import guard + its vitest suite run in this workflow (see the
       # "Native-ESM import guard" step), so changes to them must trigger it.
       - '.github/scripts/check-esm-imports.mjs'
+      - '.github/scripts/check-redis-suites-ran.mjs'
       # The shard planner decides what the test matrix runs; a break in it silently
       # narrows or empties the test tier, so it must run its own suite.
       - '.github/scripts/plan-test-shards.mjs'
@@ -70,6 +80,14 @@ on:
       # workflow that both mints its token and merges a PR writes to next unreviewed — which
       # means a PR that weakens the guard is exactly the PR that must run its suite.
       - '.github/scripts/check-app-token-no-merge.mjs'
+      # The MJExplorer @angular/compiler guard (guards job). The manifest it reads is already
+      # under packages/**; the script is not, so a PR weakening only the guard must still run it.
+      - '.github/scripts/check-explorer-angular-compiler.mjs'
+      # The AI model rank-lineage guard (guards job) reads metadata/ai-models, which is outside
+      # packages/**. Without these entries a PR that edits only the catalog — the one change
+      # that can introduce an inversion — never runs the guard.
+      - '.github/scripts/check-ai-model-ranks.mjs'
+      - 'metadata/ai-models/**'
       # The remote-cache preflight runs as a step in this workflow (see "Verify turbo
       # remote-cache configuration"), and its own suite lives in __tests__ above.
       - '.github/scripts/check-turbo-cache-env.mjs'
@@ -90,7 +108,7 @@ on:
   # break (MJ's dynamic @RegisterClass / ClassFactory wiring can couple packages without a
   # package.json edge that turbo's graph sees) can never slip through PR affected-filtering.
   push:
-    branches: [next]
+    branches: [next, 'lts/**']
   # Nightly full run as a second safety net (catches flaky/resource failures + drift).
   schedule:
     - cron: '0 7 * * *'
@@ -197,6 +215,20 @@ jobs:
         if: ${{ !cancelled() }}
         run: node .github/scripts/check-mj-cli-resolution.mjs packages
 
+      # Citizen-builder template copy guard. `mj agent init` scaffolds from citizen-builder/, and
+      # @memberjunction/cli commits a copy of it under src/init-templates/: that copy is the CLI's
+      # build-cache key for the template and what the CLI's tests scaffold from, so while it is
+      # stale a cache hit restores a dist/ holding the old template and every test still passes.
+      # It lives HERE rather than as a vitest test in the CLI because, on the PR shape that lets
+      # the two drift (only citizen-builder/ changes), that test would neither be selected by the
+      # affected-package filter nor have its turbo cache invalidated. Self-test first: a
+      # comparison whose fixtures regressed must not be trusted to pass the real trees.
+      - name: Citizen-builder template copy guard
+        if: ${{ !cancelled() }}
+        run: |
+          node .github/scripts/check-citizen-builder-template.mjs --self-test
+          node .github/scripts/check-citizen-builder-template.mjs
+
       # App-token-never-merges guard. `blue-cypress-ci-bot` is a BYPASS ACTOR on
       # `next-protect`: the one identity that can land a commit in next with no approving
       # review. It holds that power so publish.yml can push `next` directly after a release,
@@ -215,6 +247,28 @@ jobs:
       - name: App-token-never-merges guard
         if: ${{ !cancelled() }}
         run: node .github/scripts/check-app-token-no-merge.mjs
+
+      # MJExplorer must declare @angular/compiler itself (issue #4427) — see the script header
+      # for why a host repo produced by `mj install` ends up without it. It lives HERE rather
+      # than as a vitest test in @memberjunction/installer, because on the exact PR shape that
+      # breaks it (only packages/MJExplorer/package.json changes) that test would neither be
+      # selected by the affected-package filter (nothing depends on mj_explorer) nor have its
+      # turbo cache invalidated (the manifest is not an input to the installer's test task).
+      # This job has neither problem: it is not affected-filtered, and packages/** triggers it.
+      # Self-test first: a detector whose fixtures regressed must not be trusted to pass the
+      # real manifest.
+      - name: MJExplorer @angular/compiler guard
+        if: ${{ !cancelled() }}
+        run: |
+          node .github/scripts/check-explorer-angular-compiler.mjs --self-test
+          node .github/scripts/check-explorer-angular-compiler.mjs
+
+      # Within a model's version lineage (AIModel.PriorVersionID) a later model must not rank
+      # below the model it succeeds, or rank-based model selection keeps preferring the older
+      # one (MJ#4912). Reads metadata/ai-models only — no DB, no build.
+      - name: AI model rank-lineage guard
+        if: ${{ !cancelled() }}
+        run: node .github/scripts/check-ai-model-ranks.mjs
 
       # Repo-wide compliance scanners. They live in packages/MJGlobal/src/__tests__ for historical
       # reasons but scan `packages/**` off disk and assert about every package, so they belong here
@@ -268,6 +322,15 @@ jobs:
           # the PR run is where it does its work.
           PR_BASE_REF: ${{ github.base_ref || 'next' }}
         run: node .github/scripts/check-dynamic-replace.mjs --base "origin/$PR_BASE_REF"
+
+      # API-root guard (#5674). MJAPI is often served under a prefix (MJAPI_BASE_PATH=/api, with
+      # the CDN forwarding only /api/*), so an Express-app route mounted at a root-relative
+      # literal works locally and 404s in every prefixed deployment. Flags `app.use('/x')` /
+      # `context.app.get(`/x`)` in the server packages; mount through ApiRoute() instead. Its
+      # runtime twin is MJServer's apiRootBoot.test.ts, which runs in the unit suite.
+      - name: API-root guard
+        if: ${{ !cancelled() }}
+        run: pnpm run check:api-root
 
       # Browser class-registration manifest server-leakage gate. A server-only package reaching
       # `ng-bootstrap` / `ng-bootstrap-lite` breaks the Angular bundle with esbuild
@@ -546,7 +609,7 @@ jobs:
       # Cap it by deleting the oldest entries until the total is under CAP_MB. Entries are
       # (<hash>.tar.zst, <hash>-meta.json) pairs, so both are removed together.
       - name: Prune turbo cache to a bounded size
-        if: always() && (github.event_name == 'push' || github.event_name == 'schedule')
+        if: always() && (github.event_name == 'push' || github.event_name == 'schedule') && github.ref_name == 'next'
         env:
           CAP_MB: 3072
         run: |
@@ -586,7 +649,7 @@ jobs:
       # `always()` so a RED run still saves the build outputs it produced — the build succeeding
       # is independent of whether the suite passed, and re-running shouldn't pay for a cold build.
       - name: Save turbo build cache
-        if: always() && (github.event_name == 'push' || github.event_name == 'schedule')
+        if: always() && (github.event_name == 'push' || github.event_name == 'schedule') && github.ref_name == 'next'
         uses: actions/cache/save@v4
         with:
           path: .turbo/cache
@@ -612,11 +675,34 @@ jobs:
       fail-fast: false
       matrix:
         shard: ${{ fromJSON(needs.build.outputs.shards) }}
+    # A real Redis for the shard that draws @memberjunction/redis-provider. Its `integration-*`
+    # test files are `describe.skipIf(!REDIS_URL)`, so without a server they execute-and-skip — the
+    # pub/sub, TTL, key-lock and lease behaviour they pin had NO CI coverage at all, and a
+    # fail-open pruning bug that silently disables cross-server invalidation shipped through a
+    # green run. Every other shard ignores the service; it costs seconds.
+    #
+    # `REDIS_URL` must ALSO be declared on the `test` task in turbo.json: turbo 2.x runs tasks in
+    # strict env mode and strips anything undeclared, so without that the main test step still
+    # skips these suites, and turbo could replay a cached result from a run that had no Redis.
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
     env:
       TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
       TURBO_TEAM: ${{ vars.TURBO_TEAM }}
       TURBO_API: ${{ vars.TURBO_API }}
       TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
+      # Consumed by the Redis-gated suites. No key prefix is set here: those suites choose their
+      # own (`test-integration`), and each job gets its own Redis service container, so there is no
+      # keyspace to share with anyone.
+      REDIS_URL: redis://127.0.0.1:6379
     steps:
       # fetch-depth 1: a shard runs tests against the working tree and never diffs a base ref.
       - name: Checkout repo
@@ -689,6 +775,14 @@ jobs:
           # PR #3231, twice. Sharding reduces but does not remove the risk: the planner spreads
           # the heavy DOM packages across shards, yet a shard can still draw several.
           npx turbo run test --concurrency=4 "${FILTER_ARGS[@]}"
+
+      # A skipped suite and a passing suite look identical in the summary, which is how the
+      # Redis-gated files stayed dormant for a whole release. The step above now runs them for
+      # real; this asserts they were not skipped, which is the one thing a green summary cannot
+      # tell you by itself.
+      - name: Assert the Redis-gated suites really ran
+        if: contains(matrix.shard.packages, '@memberjunction/redis-provider')
+        run: node .github/scripts/check-redis-suites-ran.mjs
 
   # ---------------------------------------------------------------------------------------
   # Native-ESM import guard (#3142, follow-up to #3137): import every BUILT "type": "module"
@@ -816,8 +910,11 @@ jobs:
       # way to stand down: 140 were open by 2026-08-14 against four ever closed. The alarm is now a single
       # rolling issue — red comments on it, green (below) closes it — so a fresh issue means a fresh break.
       # Logic + tests live in .github/scripts/backstop-alarm.mjs.
+      #
+      # next only: the rolling issue is titled for `next`, so a line-branch push (lts/**) must neither
+      # comment on it nor close it. A red line push still shows as a red run, and line PRs gate first.
       - name: Checkout repo
-        if: always() && (github.event_name == 'push' || github.event_name == 'schedule')
+        if: always() && (github.event_name == 'push' || github.event_name == 'schedule') && github.ref_name == 'next'
         uses: actions/checkout@v4
         with:
           persist-credentials: false
@@ -825,7 +922,7 @@ jobs:
           filter: blob:none
 
       - name: Alert on backstop failure
-        if: failure() && (github.event_name == 'push' || github.event_name == 'schedule')
+        if: failure() && (github.event_name == 'push' || github.event_name == 'schedule') && github.ref_name == 'next'
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: node .github/scripts/backstop-alarm.mjs red
@@ -836,7 +933,7 @@ jobs:
       # turn a green backstop red, because that would file an alarm about the alarm. The script logs
       # `::error::` so the failure is still visible in the run summary.
       - name: Resolve backstop alarm on green
-        if: success() && (github.event_name == 'push' || github.event_name == 'schedule')
+        if: success() && (github.event_name == 'push' || github.event_name == 'schedule') && github.ref_name == 'next'
         continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ github.token }}

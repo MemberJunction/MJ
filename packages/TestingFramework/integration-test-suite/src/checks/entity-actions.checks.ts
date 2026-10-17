@@ -23,6 +23,7 @@ import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import {
     MJActionEntity,
     MJActionFilterEntity,
+    MJActionParamEntity,
     MJEntityActionEntity,
     MJEntityActionFilterEntity,
     MJEntityActionInvocationEntity,
@@ -105,6 +106,23 @@ async function resolveAction(ctx: IntegrationCheckContext): Promise<MJActionEnti
     return action!;
 }
 
+/**
+ * The first declared Input/Both parameter of an action, if it has one.
+ *
+ * Used by EA6 to bind a REAL parameter to the Durable binding, so the check can assert the durable
+ * request carries that parameter's declared `Name` as a key — the direct evidence that #4794's shape
+ * bug (params reaching the submitter positionally, as `'0'`, `'1'`, ... or not at all) cannot recur.
+ * Not every Active action necessarily declares one, so this is a lookup that may come back empty
+ * rather than a fixture the caller can assume succeeds.
+ */
+async function resolveBindableActionParam(ctx: IntegrationCheckContext, action: MJActionEntity): Promise<MJActionParamEntity | undefined> {
+    const res = await RunView.FromMetadataProvider(ctx.Provider).RunView<MJActionParamEntity>(
+        { EntityName: 'MJ: Action Params', ExtraFilter: `ActionID='${action.ID}' AND Type IN ('Input', 'Both')`, MaxRows: 1, ResultType: 'entity_object' },
+        ctx.User,
+    );
+    return res.Results?.[0];
+}
+
 /** The invocation-type row for a named lifecycle event. */
 async function resolveInvocationType(ctx: IntegrationCheckContext, name: string): Promise<MJEntityActionInvocationTypeEntity> {
     const res = await RunView.FromMetadataProvider(ctx.Provider).RunView<MJEntityActionInvocationTypeEntity>(
@@ -144,6 +162,24 @@ async function createBinding(
     CREATED.EntityActionInvocations.push(inv.ID);
 
     return binding;
+}
+
+/** Binds a declared action param to a binding as a `Static` value, registered for teardown. */
+async function bindActionParam(
+    ctx: IntegrationCheckContext,
+    binding: MJEntityActionEntity,
+    actionParam: MJActionParamEntity,
+    value: string,
+): Promise<MJEntityActionParamEntity> {
+    const eap = await ctx.Provider.GetEntityObject<MJEntityActionParamEntity>('MJ: Entity Action Params', ctx.User);
+    eap.NewRecord();
+    eap.EntityActionID = binding.ID;
+    eap.ActionParamID = actionParam.ID;
+    eap.ValueType = 'Static';
+    eap.Value = value;
+    Assert(await eap.Save(), `could not bind the action param: ${eap.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+    CREATED.EntityActionParams.push(eap.ID);
+    return eap;
 }
 
 /** Attaches a filter to a binding, from a change-filter expression. */
@@ -441,6 +477,14 @@ export const EntityActionChecks: NamedCheck[] = [
             // is that the provider reaches the seam at all, and hands it a complete request.
             const action = await resolveAction(ctx);
             const binding = await createBinding(ctx, action, 'AfterUpdate', { RunMode: 'Durable' });
+
+            // Bind a real declared param (when the resolved action has one) so the request below can
+            // be checked for the actual regression MJ#4794 introduced: params reaching the submitter
+            // under their declared name, not positionally (as `'0'`, `'1'`, ...) or dropped entirely.
+            const boundParam = await resolveBindableActionParam(ctx, action);
+            if (boundParam) {
+                await bindActionParam(ctx, binding, boundParam, 'mj-it-ea6-value');
+            }
             await refreshEngine(ctx);
 
             const submitter = new RecordingSubmitter();
@@ -462,7 +506,15 @@ export const EntityActionChecks: NamedCheck[] = [
                 AssertEqual(request.InvocationType, 'AfterUpdate', 'the request must name the event that fired it');
                 Assert(NormalizeUUID(request.RecordID).includes(NormalizeUUID(list.ID)), 'the request must carry the record that changed');
                 Assert(!!request.EntityName, 'the request must name the entity, for a readable task');
-                Assert(typeof request.RedactedParams === 'object', 'params must arrive as a plain JSON-safe object');
+                // MJ#4794: the params were persisted as a LoggedParam[] ARRAY — `typeof` alone does not
+                // catch that (arrays are objects), so the shape check has to rule arrays out explicitly.
+                Assert(!Array.isArray(request.RedactedParams),
+                    'RedactedParams must arrive as a name → value object, never an array');
+                if (boundParam) {
+                    Assert(boundParam.Name in request.RedactedParams,
+                        `the bound param '${boundParam.Name}' must be a key of RedactedParams, by its declared Name — ` +
+                        `not a positional index, which is exactly how MJ#4794 lost every param name`);
+                }
 
                 // A submitted run IS logged, and should be: the dispatch happened, it simply handed
                 // the work on. What must NOT happen is the action also executing here — so the

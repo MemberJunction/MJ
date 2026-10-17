@@ -19,6 +19,16 @@ const { hoisted } = vi.hoisted(() => ({
         overrides: new Map<string, { record: Record<string, unknown>; saveOutcome: boolean }>(),
         components: new Map<string, { record: Record<string, unknown>; saveOutcome: boolean }>(),
         runViewResults: [] as Array<Array<Record<string, unknown>>>,
+        /** The ExtraFilter of every RunView, in order. */
+        filters: [] as string[],
+        /** Row IDs whose saves fail. */
+        failingSaves: new Set<string>(),
+        /** The row ID of every save called, failed or not, in order. */
+        saveAttempts: [] as string[],
+        /** When true, every RunView fails. */
+        queryFails: false,
+        /** While a transaction is open, saves are pending and reach `committed` only on Commit. */
+        tx: { supported: false, open: false, pending: [] as string[], committed: [] as string[], rolledBack: 0 },
     },
 }));
 
@@ -51,7 +61,13 @@ vi.mock('@memberjunction/core', async () => {
                 else hoisted.overrides.set(id, state);
                 return true;
             },
-            async Save(): Promise<boolean> { return state.saveOutcome; },
+            async Save(): Promise<boolean> {
+                const id = String(state.record.ID);
+                hoisted.saveAttempts.push(id);
+                if (!state.saveOutcome || hoisted.failingSaves.has(id)) return false;
+                (hoisted.tx.open ? hoisted.tx.pending : hoisted.tx.committed).push(id);
+                return true;
+            },
             NewRecord(): void { /* unused */ },
         };
         return new Proxy(inst, {
@@ -64,6 +80,15 @@ vi.mock('@memberjunction/core', async () => {
         });
     }
     class HoistedProvider {
+        get SupportsEntityTransactions() { return hoisted.tx.supported; }
+        async BeginEntityTransaction() {
+            hoisted.tx.open = true;
+            return {
+                IsNested: false,
+                async Commit() { hoisted.tx.committed.push(...hoisted.tx.pending); hoisted.tx.pending = []; hoisted.tx.open = false; },
+                async Rollback() { hoisted.tx.pending = []; hoisted.tx.open = false; hoisted.tx.rolledBack++; },
+            };
+        }
         EntityByName() { return { ID: 'ENT-1' }; }
         async GetEntityObject<T>(name: string): Promise<T> { return makeHoistedEntity(name) as unknown as T; }
     }
@@ -73,7 +98,9 @@ vi.mock('@memberjunction/core', async () => {
         RunView: class {
             static FromMetadataProvider() {
                 return new (class {
-                    async RunView() {
+                    async RunView(p: { ExtraFilter?: string }) {
+                        hoisted.filters.push(p?.ExtraFilter ?? '');
+                        if (hoisted.queryFails) return { Success: false, Results: [], ErrorMessage: 'boom' };
                         const next = hoisted.runViewResults.shift() ?? [];
                         return { Success: true, Results: next };
                     }
@@ -116,7 +143,32 @@ beforeEach(() => {
     hoisted.overrides.clear();
     hoisted.components.clear();
     hoisted.runViewResults.length = 0;
+    hoisted.failingSaves = new Set();
+    hoisted.saveAttempts = [];
+    hoisted.queryFails = false;
+    hoisted.filters = [];
+    hoisted.tx = { supported: false, open: false, pending: [], committed: [], rolledBack: 0 };
 });
+
+/** The value of an output parameter an action added. */
+function outputOf(p: RunActionParams, name: string): unknown {
+    return p.Params.find((x) => x.Name === name && x.Type === 'Output')?.Value;
+}
+
+/**
+ * Agents change their own personal forms only. A shared form is managed by people, from Form
+ * Builder or the Manage drawer, so a Role or Global override is refused for a member of the role
+ * and for a grant holder alike.
+ */
+const SHARED_CASES = [
+    ['a Role override, for a member of the role', { Scope: 'Role', UserID: null, RoleID: 'R1' }, { ID: 'U1', Name: 'Test', UserRoles: [{ RoleID: 'R1' }] }],
+    ['a Global override, for an Owner', { Scope: 'Global', UserID: null, RoleID: null }, { ID: 'U1', Name: 'Test', Type: 'Owner' }],
+] as const;
+
+function asUser(p: RunActionParams, user: unknown): RunActionParams {
+    (p as unknown as { ContextUser: unknown }).ContextUser = user;
+    return p;
+}
 
 describe('ActivateInteractiveFormVersionAction', () => {
 
@@ -132,19 +184,46 @@ describe('ActivateInteractiveFormVersionAction', () => {
         expect(r.ResultCode).toBe('FORBIDDEN');
     });
 
-    it('FORBIDDEN when the target Override is Role-scope to a role the caller lacks', async () => {
-        seedOverride('OVER-Y', { ComponentID: 'COMP-Y', Scope: 'Role', UserID: null, RoleID: 'ROLE-NOT-MINE', Status: 'Pending' });
-        seedComponent('COMP-Y', { Status: 'Draft' });
-        const r = await run(new ActivateInteractiveFormVersionAction(), mkParams({ OverrideID: 'OVER-Y' }));
-        expect(r.ResultCode).toBe('FORBIDDEN');
+    for (const [label, scope, user] of SHARED_CASES) {
+        it(`FORBIDDEN on ${label}, before any write`, async () => {
+            seedOverride('OVER-S', { ComponentID: 'COMP-S', ...scope, Status: 'Pending' });
+            seedComponent('COMP-S', { Status: 'Draft' });
+            const r = await run(new ActivateInteractiveFormVersionAction(), asUser(mkParams({ OverrideID: 'OVER-S' }), user));
+            expect(r.ResultCode).toBe('FORBIDDEN');
+            expect(r.Message).toMatch(/Form Builder|Manage drawer/);
+            expect(hoisted.components.get('COMP-S')!.record.Status).toBe('Draft');
+            expect(hoisted.tx.committed).toEqual([]);
+        });
+    }
+
+    /** The component and the override flip together or not at all. */
+    it('rolls back the component when the override cannot be flipped to Active', async () => {
+        hoisted.tx.supported = true;
+        seedOverride('OVER-PENDING', { ComponentID: 'COMP-NEW', Status: 'Pending' });
+        seedComponent('COMP-NEW', { Status: 'Draft' });
+        hoisted.failingSaves.add('OVER-PENDING');
+        const r = await run(new ActivateInteractiveFormVersionAction(), mkParams({ OverrideID: 'OVER-PENDING' }));
+        expect(r.ResultCode).toBe('PERSIST_FAILED');
+        expect(hoisted.tx.rolledBack).toBe(1);
+        expect(hoisted.tx.committed).toEqual([]);
     });
 
-    it('FORBIDDEN when the target Override is Global and caller is not an Owner', async () => {
-        seedOverride('OVER-G', { ComponentID: 'COMP-G', Scope: 'Global', UserID: null, RoleID: null, Status: 'Pending' });
-        seedComponent('COMP-G', { Status: 'Draft' });
-        // Default test user has no Owner Type — should be rejected.
-        const r = await run(new ActivateInteractiveFormVersionAction(), mkParams({ OverrideID: 'OVER-G' }));
-        expect(r.ResultCode).toBe('FORBIDDEN');
+    it('commits the component and the override together', async () => {
+        hoisted.tx.supported = true;
+        seedOverride('OVER-PENDING', { ComponentID: 'COMP-NEW', Status: 'Pending' });
+        seedComponent('COMP-NEW', { Status: 'Draft' });
+        const r = await run(new ActivateInteractiveFormVersionAction(), mkParams({ OverrideID: 'OVER-PENDING' }));
+        expect(r.Success).toBe(true);
+        expect(hoisted.tx.committed).toEqual(['COMP-NEW', 'OVER-PENDING']);
+    });
+
+    it('looks for prior Active siblings among the caller\'s own overrides only', async () => {
+        seedOverride('OVER-PENDING', { ComponentID: 'COMP-NEW', Status: 'Pending' });
+        seedComponent('COMP-NEW', { Status: 'Draft' });
+        const r = await run(new ActivateInteractiveFormVersionAction(), mkParams({ OverrideID: 'OVER-PENDING' }));
+        expect(r.Success).toBe(true);
+        expect(hoisted.filters[0]).toContain("Scope='User' AND UserID='U1'");
+        expect(hoisted.filters[0]).toContain("ID <> 'OVER-PENDING'");
     });
 
     it('returns OVERRIDE_NOT_FOUND for an unknown ID', async () => {
@@ -165,6 +244,141 @@ describe('ActivateInteractiveFormVersionAction', () => {
         seedComponent('COMP-1', { Status: 'Deprecated' });
         const r = await run(new ActivateInteractiveFormVersionAction(), mkParams({ OverrideID: 'OVER-INACTIVE' }));
         expect(r.ResultCode).toBe('NOT_PENDING');
+    });
+
+    /**
+     * The prior version is set aside after the promotion's transaction. A save that fails there
+     * fails the action, so the caller learns that two forms are now Active.
+     */
+    it.each([['its override', 'OVER-PRIOR'], ['its component', 'COMP-OLD']])(
+        'fails when the prior Active version cannot be set aside (%s)',
+        async (_label, failingID) => {
+            seedOverride('OVER-PENDING', { ComponentID: 'COMP-NEW', Scope: 'User', Status: 'Pending' });
+            seedComponent('COMP-NEW', { Status: 'Draft' });
+            seedOverride('OVER-PRIOR', { ComponentID: 'COMP-OLD', Scope: 'User', Status: 'Active' });
+            seedComponent('COMP-OLD', { Status: 'Published' });
+            hoisted.runViewResults.push([{ ID: 'OVER-PRIOR', ComponentID: 'COMP-OLD' }]);
+            hoisted.failingSaves.add(failingID);
+
+            const r = await run(new ActivateInteractiveFormVersionAction(), mkParams({ OverrideID: 'OVER-PENDING' }));
+            expect(r.Success).toBe(false);
+            expect(r.ResultCode).toBe('PERSIST_FAILED');
+            expect(r.Message).toContain(failingID);
+            expect(r.Message).toContain('OVER-PENDING');
+        },
+    );
+
+    /** Seeds a Pending target and a prior Active version that the lookup returns. */
+    function seedTargetAndPrior(): void {
+        seedOverride('OVER-PENDING', { ComponentID: 'COMP-NEW', Scope: 'User', Status: 'Pending' });
+        seedComponent('COMP-NEW', { Status: 'Draft' });
+        seedOverride('OVER-PRIOR', { ComponentID: 'COMP-OLD', Scope: 'User', Status: 'Active' });
+        seedComponent('COMP-OLD', { Status: 'Published' });
+        hoisted.runViewResults.push([{ ID: 'OVER-PRIOR', ComponentID: 'COMP-OLD' }]);
+    }
+
+    it('sets the prior override aside before its component, so a component that cannot be saved leaves one Active override', async () => {
+        seedTargetAndPrior();
+        hoisted.failingSaves.add('COMP-OLD');
+        const r = await run(new ActivateInteractiveFormVersionAction(), mkParams({ OverrideID: 'OVER-PENDING' }));
+        expect(r.ResultCode).toBe('PERSIST_FAILED');
+        expect(hoisted.saveAttempts).toEqual(['COMP-NEW', 'OVER-PENDING', 'OVER-PRIOR', 'COMP-OLD']);
+        expect(hoisted.tx.committed).toEqual(['COMP-NEW', 'OVER-PENDING', 'OVER-PRIOR']);
+        expect(r.Message).toContain('Override OVER-PENDING is now Active.');
+        expect(r.Message).toContain('The prior override OVER-PRIOR is set aside, but the status of its component COMP-OLD could not be updated');
+    });
+
+    /** The target is committed Active before the prior is set aside, so a retry takes the no-op path. */
+    it('a retry after PERSIST_FAILED sets aside a prior override whose own save failed', async () => {
+        seedTargetAndPrior();
+        hoisted.failingSaves.add('OVER-PRIOR');
+        const first = await run(new ActivateInteractiveFormVersionAction(), mkParams({ OverrideID: 'OVER-PENDING' }));
+        expect(first.ResultCode).toBe('PERSIST_FAILED');
+        expect(first.Message).toContain('The prior override OVER-PRIOR could not be set aside');
+        expect(hoisted.tx.committed).not.toContain('OVER-PRIOR');
+        expect(hoisted.saveAttempts).not.toContain('COMP-OLD');
+
+        hoisted.failingSaves.clear();
+        hoisted.runViewResults.push([{ ID: 'OVER-PRIOR', ComponentID: 'COMP-OLD' }]);
+        const retry = await run(new ActivateInteractiveFormVersionAction(), mkParams({ OverrideID: 'OVER-PENDING' }));
+        expect(retry.Success).toBe(true);
+        expect(JSON.parse(retry.Message ?? '{}')).toMatchObject({ noop: true, DemotedCount: 1, PreviousActiveOverrideID: 'OVER-PRIOR' });
+        expect(hoisted.filters[1]).toContain("ID <> 'OVER-PENDING'");
+        expect(hoisted.tx.committed).toContain('OVER-PRIOR');
+        expect(hoisted.overrides.get('OVER-PRIOR')!.record.Status).toBe('Inactive');
+        expect(hoisted.components.get('COMP-OLD')!.record.Status).toBe('Deprecated');
+    });
+
+    it('a retry after a failed prior component save does not find that prior again', async () => {
+        seedTargetAndPrior();
+        hoisted.failingSaves.add('COMP-OLD');
+        expect((await run(new ActivateInteractiveFormVersionAction(), mkParams({ OverrideID: 'OVER-PENDING' }))).ResultCode)
+            .toBe('PERSIST_FAILED');
+
+        hoisted.failingSaves.clear();
+        // OVER-PRIOR is Inactive now, so the lookup's Status filter no longer matches it.
+        hoisted.runViewResults.push([]);
+        const retry = await run(new ActivateInteractiveFormVersionAction(), mkParams({ OverrideID: 'OVER-PENDING' }));
+        expect(hoisted.filters[1]).toContain("Status='Active'");
+        expect(JSON.parse(retry.Message ?? '{}')).toMatchObject({ noop: true, DemotedCount: 0 });
+    });
+
+    it('tries every prior, so one prior\'s failed component save still sets the next prior aside', async () => {
+        seedTargetAndPrior();
+        seedOverride('OVER-PRIOR-2', { ComponentID: 'COMP-OLD-2', Scope: 'User', Status: 'Active' });
+        seedComponent('COMP-OLD-2', { Status: 'Published' });
+        hoisted.runViewResults[0].push({ ID: 'OVER-PRIOR-2', ComponentID: 'COMP-OLD-2' });
+        hoisted.failingSaves.add('COMP-OLD');
+        const r = await run(new ActivateInteractiveFormVersionAction(), mkParams({ OverrideID: 'OVER-PENDING' }));
+        expect(r.ResultCode).toBe('PERSIST_FAILED');
+        expect(hoisted.tx.committed).toEqual(['COMP-NEW', 'OVER-PENDING', 'OVER-PRIOR', 'OVER-PRIOR-2', 'COMP-OLD-2']);
+        expect(r.Message).toContain('COMP-OLD');
+        expect(r.Message).not.toContain('OVER-PRIOR-2');
+    });
+
+    it('reports a prior the lookup found but that cannot be loaded, and leaves its component alone', async () => {
+        seedOverride('OVER-PENDING', { ComponentID: 'COMP-NEW', Scope: 'User', Status: 'Pending' });
+        seedComponent('COMP-NEW', { Status: 'Draft' });
+        seedComponent('COMP-OLD', { Status: 'Published' });
+        hoisted.runViewResults.push([{ ID: 'OVER-GONE', ComponentID: 'COMP-OLD' }]);
+        const r = await run(new ActivateInteractiveFormVersionAction(), mkParams({ OverrideID: 'OVER-PENDING' }));
+        expect(r.ResultCode).toBe('PERSIST_FAILED');
+        expect(r.Message).toContain('The prior override OVER-GONE could not be loaded');
+        expect(hoisted.saveAttempts).toEqual(['COMP-NEW', 'OVER-PENDING']);
+    });
+
+    it('returns QUERY_FAILED from the no-op path when the prior lookup fails, and writes nothing', async () => {
+        seedOverride('OVER-A', { ComponentID: 'COMP-A', Scope: 'User', Status: 'Active' });
+        seedComponent('COMP-A', { Status: 'Published' });
+        hoisted.queryFails = true;
+        const r = await run(new ActivateInteractiveFormVersionAction(), mkParams({ OverrideID: 'OVER-A' }));
+        expect(r.ResultCode).toBe('QUERY_FAILED');
+        expect(hoisted.saveAttempts).toEqual([]);
+    });
+
+    it('outputs the prior it set aside as PreviousActiveOverrideID from the no-op path', async () => {
+        seedOverride('OVER-A', { ComponentID: 'COMP-A', Scope: 'User', Status: 'Active' });
+        seedComponent('COMP-A', { Status: 'Published' });
+        seedOverride('OVER-PRIOR', { ComponentID: 'COMP-OLD', Scope: 'User', Status: 'Active' });
+        seedComponent('COMP-OLD', { Status: 'Published' });
+        hoisted.runViewResults.push([{ ID: 'OVER-PRIOR', ComponentID: 'COMP-OLD' }]);
+        const p = mkParams({ OverrideID: 'OVER-A' });
+        const r = await run(new ActivateInteractiveFormVersionAction(), p);
+        expect(r.Success).toBe(true);
+        expect(outputOf(p, 'PreviousActiveOverrideID')).toBe('OVER-PRIOR');
+        expect(outputOf(p, 'OverrideID')).toBe('OVER-A');
+    });
+
+    it('a retry that still cannot set the prior aside returns PERSIST_FAILED', async () => {
+        seedOverride('OVER-A', { ComponentID: 'COMP-A', Scope: 'User', Status: 'Active' });
+        seedComponent('COMP-A', { Status: 'Published' });
+        seedOverride('OVER-PRIOR', { ComponentID: 'COMP-OLD', Scope: 'User', Status: 'Active' });
+        seedComponent('COMP-OLD', { Status: 'Published' });
+        hoisted.runViewResults.push([{ ID: 'OVER-PRIOR', ComponentID: 'COMP-OLD' }]);
+        hoisted.failingSaves.add('OVER-PRIOR');
+        const r = await run(new ActivateInteractiveFormVersionAction(), mkParams({ OverrideID: 'OVER-A' }));
+        expect(r.ResultCode).toBe('PERSIST_FAILED');
+        expect(r.Message).toContain('OVER-PRIOR');
     });
 
     it('promotes Pending → Active and demotes the prior sibling Active', async () => {
@@ -200,6 +414,26 @@ describe('RevertInteractiveFormAction', () => {
         expect(r.ResultCode).toBe('MISSING_PARAMETER');
     });
 
+    it('FORBIDDEN on another user\'s override', async () => {
+        seedOverride('OVER-1', { ComponentID: 'COMP-NEW', Status: 'Active', UserID: 'OTHER-USER' });
+        seedComponent('COMP-NEW', { Name: 'F', Version: '1.1.0', Status: 'Published' });
+        const r = await run(new RevertInteractiveFormAction(), mkParams({ ActiveOverrideID: 'OVER-1', TargetComponentID: 'COMP-NEW' }));
+        expect(r.ResultCode).toBe('FORBIDDEN');
+    });
+
+    for (const [label, scope, user] of SHARED_CASES) {
+        it(`FORBIDDEN on ${label}, before any write`, async () => {
+            seedOverride('OVER-S', { ComponentID: 'COMP-NEW', ...scope, Status: 'Active' });
+            seedComponent('COMP-NEW', { Name: 'F', Version: '1.1.0', Status: 'Published' });
+            seedComponent('COMP-OLD', { Name: 'F', Version: '1.0.0', Status: 'Deprecated' });
+            const r = await run(new RevertInteractiveFormAction(),
+                asUser(mkParams({ ActiveOverrideID: 'OVER-S', TargetComponentID: 'COMP-OLD' }), user));
+            expect(r.ResultCode).toBe('FORBIDDEN');
+            expect(hoisted.overrides.get('OVER-S')!.record.ComponentID).toBe('COMP-NEW');
+            expect(hoisted.tx.committed).toEqual([]);
+        });
+    }
+
     it('NOT_ACTIVE when the override is not currently Active', async () => {
         seedOverride('OVER-PENDING', { ComponentID: 'COMP-1', Status: 'Pending' });
         seedComponent('COMP-1', { Name: 'F' });
@@ -232,6 +466,57 @@ describe('RevertInteractiveFormAction', () => {
         // Target Component is now Published, previous now Deprecated
         expect(hoisted.components.get('COMP-OLD')!.record.Status).toBe('Published');
         expect(hoisted.components.get('COMP-NEW')!.record.Status).toBe('Deprecated');
+    });
+
+    it.each([
+        ['the target component', ['COMP-OLD']],
+        ['the previous component', ['COMP-NEW']],
+        ['both components', ['COMP-OLD', 'COMP-NEW']],
+    ])(
+        'tries both status saves and returns PERSIST_FAILED, not SUCCESS, when the status of %s cannot be saved',
+        async (_label, failingIDs) => {
+            seedOverride('OVER-1', { ComponentID: 'COMP-NEW', Status: 'Active' });
+            seedComponent('COMP-NEW', { Name: 'F', Version: '1.1.0', Status: 'Published' });
+            seedComponent('COMP-OLD', { Name: 'F', Version: '1.0.0', Status: 'Deprecated' });
+            for (const id of failingIDs) hoisted.failingSaves.add(id);
+            const r = await run(new RevertInteractiveFormAction(), mkParams({
+                ActiveOverrideID: 'OVER-1', TargetComponentID: 'COMP-OLD',
+            }));
+            expect(r.Success).toBe(false);
+            expect(r.ResultCode).toBe('PERSIST_FAILED');
+            expect(hoisted.saveAttempts).toEqual(['OVER-1', 'COMP-OLD', 'COMP-NEW']);
+            expect(r.Message).toContain('Override OVER-1 was re-pointed to Component COMP-OLD');
+            for (const id of ['COMP-OLD', 'COMP-NEW']) {
+                if (failingIDs.includes(id)) expect(r.Message).toContain(`the status of Component ${id} was not updated (mock error)`);
+                else expect(r.Message).not.toContain(`the status of Component ${id}`);
+            }
+        },
+    );
+
+    it('returns PERSIST_FAILED naming the target component when it cannot be loaded for its status save', async () => {
+        seedOverride('OVER-1', { ComponentID: 'COMP-NEW', Status: 'Active' });
+        seedComponent('COMP-NEW', { Name: 'F', Version: '1.1.0', Status: 'Published' });
+        hoisted.runViewResults.push([{ ID: 'COMP-GONE', Version: '1.0.0', VersionSequence: 1 }]);
+        const r = await run(new RevertInteractiveFormAction(), mkParams({ ActiveOverrideID: 'OVER-1', TargetVersionSequence: 1 }));
+        expect(r.Success).toBe(false);
+        expect(r.ResultCode).toBe('PERSIST_FAILED');
+        expect(r.Message).toBe(
+            'Override OVER-1 was re-pointed to Component COMP-GONE, but Component COMP-GONE could not be loaded, ' +
+            'so its status was not updated.');
+        expect(hoisted.saveAttempts).toEqual(['OVER-1', 'COMP-NEW']);
+        expect(hoisted.components.get('COMP-NEW')!.record.Status).toBe('Deprecated');
+    });
+
+    it('names each component whose status was not updated in its own clause', async () => {
+        seedOverride('OVER-1', { ComponentID: 'COMP-NEW', Status: 'Active' });
+        seedComponent('COMP-NEW', { Name: 'F', Version: '1.1.0', Status: 'Published' });
+        seedComponent('COMP-OLD', { Name: 'F', Version: '1.0.0', Status: 'Deprecated' });
+        hoisted.failingSaves.add('COMP-OLD');
+        hoisted.failingSaves.add('COMP-NEW');
+        const r = await run(new RevertInteractiveFormAction(), mkParams({ ActiveOverrideID: 'OVER-1', TargetComponentID: 'COMP-OLD' }));
+        expect(r.Message).toBe(
+            'Override OVER-1 was re-pointed to Component COMP-OLD, but the status of Component COMP-OLD was not updated ' +
+            '(mock error); the status of Component COMP-NEW was not updated (mock error).');
     });
 
     it('is a no-op when target Component is already the Active component', async () => {

@@ -187,6 +187,32 @@ describe('CodeGenPhase', () => {
       await expect(phase.Run(ctx)).rejects.toThrow(InstallerError);
     });
 
+    it('should accept mj_generatedentities linked under apps/MJAPI/node_modules (pnpm layout, #4599 / #4707)', async () => {
+      // pnpm links workspace packages into each dependent and never creates the root entry
+      mockFs.DirectoryExists.mockImplementation(async (p: string) => {
+        if (!p.includes('mj_generatedentities')) return true;
+        return p.split(/[\\/]/).includes('MJAPI');
+      });
+
+      const ctx = makeContext();
+      const result = await phase.Run(ctx);
+
+      expect(result.Success).toBe(true);
+      expect(result.ArtifactsVerified).toBe(true);
+    });
+
+    it('should still accept mj_generatedentities at the repo-root node_modules (npm layout)', async () => {
+      mockFs.DirectoryExists.mockImplementation(async (p: string) => {
+        if (!p.includes('mj_generatedentities')) return true;
+        return !p.split(/[\\/]/).includes('MJAPI');
+      });
+
+      const ctx = makeContext();
+      const result = await phase.Run(ctx);
+
+      expect(result.ArtifactsVerified).toBe(true);
+    });
+
     it('should fail when codegen exits 0 but never wrote entity_subclasses.ts (#4477)', async () => {
       mockFs.FileExists.mockImplementation(async (p: string) => !p.includes('entity_subclasses.ts'));
 

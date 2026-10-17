@@ -1,0 +1,23 @@
+{
+  "ManifestVersion": 1,
+  "GeneratedAt": "2026-09-16T12:00:00.000Z",
+  "Transport": { "Name": "AWS-prod", "DriverClass": "AWS", "Configuration": { "Region": "us-east-1" } },
+  "Topics": [
+    {
+      "Name": "email.events",
+      "IsFifo": false,
+      "MaxPayloadBytes": 262144,
+      "Subscriptions": [
+        {
+          "Name": "email.subscriber-update",
+          "Filter": null,
+          "Policy": { "SubscriptionName": "email.subscriber-update", "TopicName": "email.events", "PartitionMode": "Exclusive", "MaxAttempts": 5, "BackoffBaseSeconds": 10, "BackoffMaxSeconds": 900, "LeaseSeconds": 60, "HeartbeatMode": "Auto" },
+          "HostType": "MJWorker",
+          "Status": "Active",
+          "ExternalRef": null,
+          "DriverArtifacts": { "SnsFilterPolicy": null }
+        }
+      ]
+    }
+  ]
+}

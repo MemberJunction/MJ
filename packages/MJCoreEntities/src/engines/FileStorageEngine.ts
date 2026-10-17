@@ -11,6 +11,19 @@ export interface StorageAccountWithProvider {
 }
 
 /**
+ * Outcome of {@link FileStorageEngineBase.ResolveDefaultAccount}: which account the system-wide
+ * fallback chose, and whether the choice was ambiguous (so callers can warn in their own terms).
+ */
+export interface DefaultStorageAccountResolution {
+    /** The chosen account, or `null` when there were no candidates. */
+    Chosen: StorageAccountWithProvider | null;
+    /** Every candidate considered, ordered newest `__mj_UpdatedAt` first (ties by ID). */
+    Candidates: StorageAccountWithProvider[];
+    /** `true` when two or more candidates existed, so the choice fell to the tie-breaker. */
+    Ambiguous: boolean;
+}
+
+/**
  * FileStorageEngineBase provides centralized, cached access to file storage accounts and providers.
  * This engine eliminates redundant database calls by caching the data and making it available
  * across the application. It is safe to use on both client and server — it only deals with
@@ -94,6 +107,59 @@ export class FileStorageEngineBase extends BaseEngine<FileStorageEngineBase> {
                 return { account, provider };
             })
             .filter((item): item is StorageAccountWithProvider => item !== null);
+    }
+
+    /**
+     * Gets storage accounts whose provider is active — the accounts files can actually be written to.
+     */
+    public get ActiveAccounts(): StorageAccountWithProvider[] {
+        return this.AccountsWithProviders.filter(a => a.provider.IsActive);
+    }
+
+    // ========================================
+    // Default account resolution
+    // ========================================
+
+    /**
+     * Picks the storage account to use when no caller-specific default is configured. This is the
+     * single golden path for "which account, if nobody said?" — agents, actions and UI should all use it
+     * so they agree.
+     *
+     * - No candidates → `Chosen` is `null`.
+     * - One candidate → that account.
+     * - Two or more → the account with the most recent `__mj_UpdatedAt`, exact ties broken by ID
+     *   (case-insensitive) so the choice is stable across processes; `Ambiguous` is `true`.
+     *
+     * Works only on cached metadata (no database calls) and does not log — callers decide how to
+     * surface an ambiguous choice.
+     *
+     * @param candidates - Accounts to choose among; defaults to {@link ActiveAccounts}.
+     */
+    public ResolveDefaultAccount(candidates: StorageAccountWithProvider[] = this.ActiveAccounts): DefaultStorageAccountResolution {
+        const sorted = [...candidates].sort(FileStorageEngineBase.compareNewestFirst);
+        return {
+            Chosen: sorted[0] ?? null,
+            Candidates: sorted,
+            Ambiguous: sorted.length > 1,
+        };
+    }
+
+    /**
+     * Convenience form of {@link ResolveDefaultAccount} that returns just the chosen account's ID.
+     * @param candidates - Accounts to choose among; defaults to {@link ActiveAccounts}.
+     * @returns The chosen account ID, or `null` when there are no candidates.
+     */
+    public ResolveDefaultAccountID(candidates?: StorageAccountWithProvider[]): string | null {
+        return this.ResolveDefaultAccount(candidates).Chosen?.account.ID ?? null;
+    }
+
+    /** Orders newest `__mj_UpdatedAt` first, breaking exact ties by ID (case-insensitive). */
+    private static compareNewestFirst(a: StorageAccountWithProvider, b: StorageAccountWithProvider): number {
+        const byUpdated = new Date(b.account.__mj_UpdatedAt).getTime() - new Date(a.account.__mj_UpdatedAt).getTime();
+        if (byUpdated !== 0) return byUpdated;
+        const aId = a.account.ID.toUpperCase();
+        const bId = b.account.ID.toUpperCase();
+        return aId < bId ? -1 : aId > bId ? 1 : 0;
     }
 
     // ========================================

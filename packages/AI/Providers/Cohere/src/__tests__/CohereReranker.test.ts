@@ -117,6 +117,7 @@ describe('CohereReranker', () => {
           topN: 5,
           returnDocuments: false,
         }),
+        { abortSignal: undefined },
       );
     });
 
@@ -138,6 +139,7 @@ describe('CohereReranker', () => {
 
       expect(mockRerank).toHaveBeenCalledWith(
         expect.objectContaining({ topN: 3 }),
+        { abortSignal: undefined },
       );
     });
 

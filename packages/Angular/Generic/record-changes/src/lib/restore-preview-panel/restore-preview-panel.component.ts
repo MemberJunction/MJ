@@ -11,10 +11,10 @@ import {
 import {
   BaseEntity,
   EntityFieldInfo,
-  EntityFieldTSType,
   EntityInfo,
 } from '@memberjunction/core';
 import { MJRecordChangeEntity } from '@memberjunction/core-entities';
+import { ChangeValuesMatch, FormatChangeValue } from '../format-change-value';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
 /**
@@ -480,16 +480,16 @@ export class RestorePreviewPanelComponent extends BaseAngularComponent implement
 
     const isImmutable = !!field && (field.ReadOnly || field.IsPrimaryKey);
     const isMissingInSchema = !field;
-    const isDateField = field?.TSType === EntityFieldTSType.Date;
-
-    const formattedRestore = this.formatValue(snapshotValue, isDateField);
+    const formattedRestore = FormatChangeValue(snapshotValue, field);
     const formattedCurrent = this.Mode === 'undelete'
       ? ''
-      : this.getCurrentFieldValue(fieldName, isDateField);
+      : this.getCurrentFieldValue(fieldName, field);
 
+    // Compared by value, not by the display strings: those drop seconds, so a timestamp that moved
+    // by under a minute would read as unchanged and be left out of the restore.
     const isChanged = this.Mode === 'undelete'
       ? snapshotValue != null && snapshotValue !== ''
-      : formattedCurrent !== formattedRestore;
+      : !ChangeValuesMatch(this.getCurrentRawValue(fieldName), snapshotValue, field);
 
     // Default selection: pre-check changed rows that we can actually apply.
     const selected = isChanged && !isImmutable && !isMissingInSchema;
@@ -508,13 +508,17 @@ export class RestorePreviewPanelComponent extends BaseAngularComponent implement
     };
   }
 
-  private getCurrentFieldValue(fieldName: string, isDateField: boolean): string {
-    if (!this._liveRecord) return '';
+  private getCurrentFieldValue(fieldName: string, entityField: EntityFieldInfo | undefined): string {
+    return FormatChangeValue(this.getCurrentRawValue(fieldName), entityField);
+  }
+
+  /** The live record's raw value for a field, or `undefined` when there is no live record or field. */
+  private getCurrentRawValue(fieldName: string): unknown {
+    if (!this._liveRecord) return undefined;
     const field = this._liveRecord.Fields.find(
       f => f.Name.trim().toLowerCase() === fieldName.trim().toLowerCase(),
     );
-    if (!field) return '';
-    return this.formatValue(field.Value, isDateField);
+    return field?.Value;
   }
 
   private parseSnapshot(json: string | null | undefined): Record<string, unknown> | null {
@@ -545,29 +549,6 @@ export class RestorePreviewPanelComponent extends BaseAngularComponent implement
       return this.resolvedEntityInfo;
     }
     return null;
-  }
-
-  private formatValue(value: unknown, isDateField: boolean): string {
-    if (value == null) return '';
-    if (typeof value === 'object') {
-      const keys = Object.keys(value as Record<string, unknown>);
-      if (keys.length === 0) return '';
-      return JSON.stringify(value);
-    }
-    if (isDateField && typeof value === 'string') {
-      const date = new Date(value);
-      if (!isNaN(date.getTime())) {
-        return new Intl.DateTimeFormat('en-US', {
-          month: 'short',
-          day: 'numeric',
-          year: 'numeric',
-          hour: 'numeric',
-          minute: '2-digit',
-          hour12: true,
-        }).format(date);
-      }
-    }
-    return String(value);
   }
 
   private recountSelected(): void {

@@ -621,12 +621,7 @@ export class RecordProcessor {
     // Determine if we should include external file content in checksum
     const hasExternalizedFields = this.hasExternalizedFields(fields, entityConfig);
 
-    const checksumPayload: Record<string, unknown> = {
-      fields,
-      ...(collections && Object.keys(collections).length > 0 ? { collections } : {}),
-      ...(embeds && Object.keys(embeds).length > 0 ? { embeds } : {}),
-      ...(extension && Object.keys(extension).length > 0 ? { extension } : {}),
-    };
+    const checksumPayload = SyncEngine.BuildRecordChecksumPayload(fields, collections, embeds, extension);
 
     const checksum = hasExternalizedFields
       ? await this.syncEngine.calculateChecksumWithFileContent(checksumPayload, targetDir)

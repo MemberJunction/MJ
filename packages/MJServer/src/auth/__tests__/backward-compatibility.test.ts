@@ -21,6 +21,7 @@ describe('Authentication Provider Backward Compatibility', () => {
   let factory: AuthProviderFactory;
   
   beforeEach(() => {
+    vi.spyOn(AuthProviderFactory, 'DiscoverFromEnvironment').mockReturnValue([]);
     factory = AuthProviderFactory.Instance;
     factory.clear();
   });

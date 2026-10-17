@@ -87,6 +87,32 @@
   color: var(--mj-text-muted);
 }
 
+.fp-card__subhead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.fp-type-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: var(--mj-radius-sm, 4px);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  background: var(--mj-bg-surface-sunken);
+  color: var(--mj-text-secondary);
+  border: 1px solid var(--mj-border-default);
+}
+
+.fp-type-badge--decision {
+  background: var(--mj-status-info-bg);
+  color: var(--mj-status-info-text);
+  border-color: var(--mj-status-info-border);
+}
+
 .fp-card__desc {
   margin: 0;
   font-size: 13px;
