@@ -40,8 +40,11 @@ class FeatureValueOnlyBundle {
     public static readonly TYPE_NAME = 'it126-stub';
     /** Description of the bundle's spec and Record Process. */
     public static readonly DESCRIPTION = 'Integration test pipeline (stub driver, feature-value-only outputs).';
-    /** The native-typed answer the stub gives every input but the low-confidence one. */
-    public static readonly ANSWER: StubAnswer = { Label: 'A', Score: 0.75, ScoreConfidence: 0.9, Flag: true };
+    /**
+     * The answer the stub gives every input but the low-confidence one. `Score` and `Flag` arrive as strings, so the
+     * checks pin the coercion of a target-less output end to end: stored as `ValueNumeric 0.75` and `ValueBoolean true`.
+     */
+    public static readonly ANSWER: StubAnswer = { Label: 'A', Score: '0.75', ScoreConfidence: 0.9, Flag: 'true' };
 
     /** The three `MJ: Entities` rows the bundle processes, in name order; the last one is the low-confidence record. */
     public static Records: Array<{ ID: string; Name: string }> = [];
