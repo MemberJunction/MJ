@@ -99,7 +99,7 @@ describe.skipIf(!RUN_RENDER_TESTS)('VS-RND-5 opt-in real-backend deterministic c
             'const origConnect = net.Socket.prototype.connect;',
             'net.Socket.prototype.connect = function (...args) {',
             '  const rawOpts = Array.isArray(args[0]) ? args[0][0] : args[0];',
-            '  if (rawOpts && typeof rawOpts === "object" && !("path" in rawOpts)) {',
+            '  if (rawOpts && typeof rawOpts === "object" && !(typeof rawOpts.path === "string" && rawOpts.path.length > 0)) {',
             '    const host = String(rawOpts.host ?? "127.0.0.1").toLowerCase();',
             '    const port = Number(rawOpts.port ?? 0);',
             '    const isLoopback = host === "127.0.0.1" || host === "localhost" || host === "::1" || host === "::ffff:127.0.0.1";',
@@ -135,19 +135,22 @@ describe.skipIf(!RUN_RENDER_TESTS)('VS-RND-5 opt-in real-backend deterministic c
         await fs.writeFile(cliAttemptsLogPath, '', 'utf8');
         net.Socket.prototype.connect = function (this: net.Socket, ...args: unknown[]): net.Socket {
             const rawOpts = Array.isArray(args[0]) ? args[0][0] : args[0];
-            if (rawOpts && typeof rawOpts === 'object' && !('path' in rawOpts)) {
-                const opts = rawOpts as { host?: string; port?: number };
-                const host = (opts.host ?? '127.0.0.1').toLowerCase();
-                const port = opts.port ?? 0;
-                const isLoopback =
-                    host === '127.0.0.1' ||
-                    host === 'localhost' ||
-                    host === '::1' ||
-                    host === '::ffff:127.0.0.1';
-                if (!isLoopback) {
-                    inProcessNonLoopbackAttempts.push(`${host}:${port}`);
-                    this.destroy(new Error(`Outbound network connection refused in test process (${host}:${port})`));
-                    return this;
+            if (rawOpts && typeof rawOpts === 'object') {
+                const opts = rawOpts as { host?: string; port?: number; path?: unknown };
+                const isUnixSocket = typeof opts.path === 'string' && opts.path.length > 0;
+                if (!isUnixSocket) {
+                    const host = (opts.host ?? '127.0.0.1').toLowerCase();
+                    const port = opts.port ?? 0;
+                    const isLoopback =
+                        host === '127.0.0.1' ||
+                        host === 'localhost' ||
+                        host === '::1' ||
+                        host === '::ffff:127.0.0.1';
+                    if (!isLoopback) {
+                        inProcessNonLoopbackAttempts.push(`${host}:${port}`);
+                        this.destroy(new Error(`Outbound network connection refused in test process (${host}:${port})`));
+                        return this;
+                    }
                 }
             }
             return (origConnect as (...a: unknown[]) => net.Socket).apply(this, args);
