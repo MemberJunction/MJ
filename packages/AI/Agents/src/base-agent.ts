@@ -6184,15 +6184,12 @@ export class BaseAgent {
                     nextStep.subAgent?.name &&
                     !this.resolveSubAgentByName(params, nextStep.subAgent.name)
                 ) {
-                    const targetName = nextStep.subAgent.name.trim().toLowerCase();
-                    const activeAgentExists =
-                        targetName.length > 0 &&
-                        (AIEngine.Instance.Agents ?? []).some(
-                            (a) =>
-                                a.Status === 'Active' &&
-                                (a.Name ?? '').trim().toLowerCase() === targetName &&
-                                !UUIDsEqual(a.ID, params.agent.ID),
-                        );
+                    const activeAgentExists = AIEngine.Instance.Agents.some(
+                        (a) =>
+                            a.Status === 'Active' &&
+                            a.Name === nextStep.subAgent!.name &&
+                            !UUIDsEqual(a.ID, params.agent.ID),
+                    );
                     if (activeAgentExists) {
                         this.logStatus(
                             `target is not a sub-agent of ${params.agent.Name}; submitting durably`,

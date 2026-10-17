@@ -2977,6 +2977,72 @@ describe('BaseAgent.Execute — single-node task-graph fold vs unfold (VS-SAGE-4
         expect(secondCallText).toContain("Sub-agent 'NonExistent Specialist' not found or not active");
     });
 
+    it('falls through to "not found or not active" Retry when a single-node graph uses a different case for an Active root agent', async () => {
+        harness.agent = makeAgentRow({
+            Name: 'Sage',
+            AgentTypePromptParams: JSON.stringify({ enableTaskGraphs: true }),
+        });
+        const activeRootAgent = {
+            ...makeAgentRow({ ID: UNRELATED_AGENT_ID, Name: 'Marketing Agent' }),
+            ParentID: null,
+            Status: 'Active',
+        };
+        const baseEngine = harness.engineInstance;
+        vi.spyOn(harness, 'engineInstance', 'get').mockReturnValue({
+            ...baseEngine,
+            Agents: [harness.agent, activeRootAgent],
+            AgentRelationships: [],
+            GetSubAgents: () => [],
+        });
+
+        const { agent, runner } = makeAgent([
+            () => llmEnvelope(singleNodeTasksEnvelope('marketing agent')),
+            () => llmEnvelope(successEnvelope('Recovered after case-variant retry')),
+        ]);
+
+        const result = await agent.Execute(makeParams());
+
+        expect(result.success).toBe(true);
+        expect(submitSpy).not.toHaveBeenCalled();
+        expect(runner.Calls).toHaveLength(2);
+        expect((agent as unknown as { _generalValidationRetryCount: number })._generalValidationRetryCount).toBe(1);
+        const secondCallText = JSON.stringify(runner.Calls[1].conversationMessages);
+        expect(secondCallText).toContain("Sub-agent 'marketing agent' not found or not active");
+    });
+
+    it('falls through to "not found or not active" Retry when a single-node graph names a Disabled agent', async () => {
+        harness.agent = makeAgentRow({
+            Name: 'Sage',
+            AgentTypePromptParams: JSON.stringify({ enableTaskGraphs: true }),
+        });
+        const disabledRootAgent = {
+            ...makeAgentRow({ ID: UNRELATED_AGENT_ID, Name: 'Marketing Agent' }),
+            ParentID: null,
+            Status: 'Disabled',
+        };
+        const baseEngine = harness.engineInstance;
+        vi.spyOn(harness, 'engineInstance', 'get').mockReturnValue({
+            ...baseEngine,
+            Agents: [harness.agent, disabledRootAgent],
+            AgentRelationships: [],
+            GetSubAgents: () => [],
+        });
+
+        const { agent, runner } = makeAgent([
+            () => llmEnvelope(singleNodeTasksEnvelope('Marketing Agent')),
+            () => llmEnvelope(successEnvelope('Recovered after disabled-agent retry')),
+        ]);
+
+        const result = await agent.Execute(makeParams());
+
+        expect(result.success).toBe(true);
+        expect(submitSpy).not.toHaveBeenCalled();
+        expect(runner.Calls).toHaveLength(2);
+        expect((agent as unknown as { _generalValidationRetryCount: number })._generalValidationRetryCount).toBe(1);
+        const secondCallText = JSON.stringify(runner.Calls[1].conversationMessages);
+        expect(secondCallText).toContain("Sub-agent 'Marketing Agent' not found or not active");
+    });
+
     it('keeps a single-node graph folded in-run when targeting a ParentID child, relationship target, or skill-granted sub-agent', async () => {
         // 1) ParentID child
         harness.agent = makeAgentRow({
