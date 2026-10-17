@@ -1,10 +1,10 @@
 -- =====================================================================================
--- AI Agent User Policies & User Routine Autonomous Wake Primitives (v6.2.x)
+-- AI Agent User Policies, Communication Provider Governance & User Routine Wake (v6.2.x)
 -- =====================================================================================
 -- 1. Creates [AIAgentUserPolicy] ("MJ: AI Agent User Policies") to store per-(Agent, User)
 --    personalization, permission-narrowing rules (CRUD, RLS, FLS, and time windows that
---    narrow below the invoking user's ceiling), channel modes (Email, Phone, Messaging),
---    and approval policy gates.
+--    narrow below the invoking user's ceiling), channel modes (Email, Phone, Messaging,
+--    Calendar), and approval policy gates.
 -- 2. Extends [UserRoutine] ("MJ: User Routines") to serve as the unified scheduling and
 --    autonomous wake primitive for agents:
 --    - Widens RoutineType CHECK constraint to ('Scheduled', 'Monitoring', 'AgentWake')
@@ -16,6 +16,10 @@
 -- 3. Extends [AIBridgeAgentIdentity] ("MJ: AI Bridge Agent Identities") with nullable
 --    UserID so an email address or phone DID can be bound to a specific user's personal
 --    agent instance (such as their Chief of Staff).
+-- 4. Extends [CommunicationProvider] ("MJ: Communication Providers") with calendar &
+--    free/busy capability flags (SupportsCalendar, SupportsFreeBusy) and enterprise
+--    mailbox governance settings (EnterpriseScopeMode, AllowedEmailDomains,
+--    DefaultCredentialID).
 -- =====================================================================================
 
 -- =====================================================================================
@@ -40,6 +44,7 @@ CREATE TABLE [${flyway:defaultSchema}].[AIAgentUserPolicy] (
     [EmailChannelMode]                      NVARCHAR(20)     NOT NULL CONSTRAINT [DF_AIAgentUserPolicy_EmailChannelMode] DEFAULT ('DraftOnly'),
     [PhoneChannelMode]                      NVARCHAR(20)     NOT NULL CONSTRAINT [DF_AIAgentUserPolicy_PhoneChannelMode] DEFAULT ('InboundOnly'),
     [MessagingChannelMode]                  NVARCHAR(20)     NOT NULL CONSTRAINT [DF_AIAgentUserPolicy_MessagingChannelMode] DEFAULT ('Enabled'),
+    [CalendarChannelMode]                   NVARCHAR(30)     NOT NULL CONSTRAINT [DF_AIAgentUserPolicy_CalendarChannelMode] DEFAULT ('ReadOnly'),
     [AllowInterAgentCoordination]           BIT              NOT NULL CONSTRAINT [DF_AIAgentUserPolicy_AllowInterAgent] DEFAULT (1),
 
     -- Approval Policy Gates (Enforced by BaseAgent before Action / Tool Execution)
@@ -75,6 +80,8 @@ CREATE TABLE [${flyway:defaultSchema}].[AIAgentUserPolicy] (
         CHECK ([PhoneChannelMode] IN ('Disabled', 'InboundOnly', 'OutboundWithApproval', 'OutboundAutonomous')),
     CONSTRAINT [CK_AIAgentUserPolicy_MessagingChannelMode]
         CHECK ([MessagingChannelMode] IN ('Disabled', 'Enabled')),
+    CONSTRAINT [CK_AIAgentUserPolicy_CalendarChannelMode]
+        CHECK ([CalendarChannelMode] IN ('Disabled', 'ReadOnly', 'ProposeWithApproval', 'Autonomous')),
     CONSTRAINT [CK_AIAgentUserPolicy_AutoApproveThreshold]
         CHECK ([AutoApproveAmountThreshold] IS NULL OR [AutoApproveAmountThreshold] >= 0)
 );
@@ -108,6 +115,27 @@ ALTER TABLE [${flyway:defaultSchema}].[AIBridgeAgentIdentity] ADD
     [UserID] UNIQUEIDENTIFIER NULL,
     CONSTRAINT [FK_AIBridgeAgentIdentity_User] FOREIGN KEY ([UserID])
         REFERENCES [${flyway:defaultSchema}].[User]([ID]);
+GO
+
+ALTER TABLE [${flyway:defaultSchema}].[CommunicationProvider] ADD
+    [SupportsCalendar]    BIT              NOT NULL CONSTRAINT [DF_CommunicationProvider_SupportsCalendar] DEFAULT (0),
+    [SupportsFreeBusy]    BIT              NOT NULL CONSTRAINT [DF_CommunicationProvider_SupportsFreeBusy] DEFAULT (0),
+    [EnterpriseScopeMode] NVARCHAR(40)     NOT NULL CONSTRAINT [DF_CommunicationProvider_EnterpriseScopeMode] DEFAULT ('UtilityMailboxesOnly'),
+    [AllowedEmailDomains] NVARCHAR(500)    NULL,
+    [DefaultCredentialID] UNIQUEIDENTIFIER NULL;
+GO
+
+ALTER TABLE [${flyway:defaultSchema}].[CommunicationProvider] ADD CONSTRAINT [CK_CommunicationProvider_EnterpriseScopeMode]
+    CHECK ([EnterpriseScopeMode] IN ('UtilityMailboxesOnly', 'SecurityGroupScoped', 'TenantWide'));
+GO
+
+ALTER TABLE [${flyway:defaultSchema}].[CommunicationProvider] ADD CONSTRAINT [FK_CommunicationProvider_DefaultCredential]
+    FOREIGN KEY ([DefaultCredentialID]) REFERENCES [${flyway:defaultSchema}].[Credential]([ID]);
+GO
+
+UPDATE [${flyway:defaultSchema}].[CommunicationProvider]
+SET [SupportsCalendar] = 1, [SupportsFreeBusy] = 1
+WHERE [Name] IN ('Microsoft Graph', 'Gmail');
 GO
 
 -- =====================================================================================
@@ -203,6 +231,13 @@ EXEC sp_addextendedproperty
     @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
     @level1type = N'TABLE',  @level1name = N'AIAgentUserPolicy',
     @level2type = N'COLUMN', @level2name = N'MessagingChannelMode';
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Calendar channel permission level: Disabled, ReadOnly (check events & free/busy only), ProposeWithApproval (create/modify events or send invites only with explicit user approval), or Autonomous.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'AIAgentUserPolicy',
+    @level2type = N'COLUMN', @level2name = N'CalendarChannelMode';
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
@@ -329,6 +364,41 @@ EXEC sp_addextendedproperty
     @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
     @level1type = N'TABLE',  @level1name = N'AIBridgeAgentIdentity',
     @level2type = N'COLUMN', @level2name = N'UserID';
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Whether the provider supports calendar event reading, creation, updating, and invitation responses.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'CommunicationProvider',
+    @level2type = N'COLUMN', @level2name = N'SupportsCalendar';
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Whether the provider supports checking free/busy schedules and finding optimal meeting times.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'CommunicationProvider',
+    @level2type = N'COLUMN', @level2name = N'SupportsFreeBusy';
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Enterprise mailbox scope posture for this provider: UtilityMailboxesOnly (restricted to shared/agent utility mailboxes), SecurityGroupScoped (Exchange RBAC / Workspace group-scoped user mailboxes), or TenantWide.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'CommunicationProvider',
+    @level2type = N'COLUMN', @level2name = N'EnterpriseScopeMode';
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Optional comma-separated list of corporate email domains permitted for user-scoped mailbox and calendar operations (e.g., "company.com,subsidiary.com").',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'CommunicationProvider',
+    @level2type = N'COLUMN', @level2name = N'AllowedEmailDomains';
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Optional default MJ Credential used by this communication provider when no per-request credential override is supplied.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'CommunicationProvider',
+    @level2type = N'COLUMN', @level2name = N'DefaultCredentialID';
 GO
 
 
@@ -2968,7 +3038,8 @@ CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateAIAgentUserPolicy]
     @ActionPolicyRules_Clear bit = 0,
     @ActionPolicyRules nvarchar(MAX) = NULL,
     @InstructionsOverride_Clear bit = 0,
-    @InstructionsOverride nvarchar(MAX) = NULL
+    @InstructionsOverride nvarchar(MAX) = NULL,
+    @CalendarChannelMode nvarchar(30) = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -2999,7 +3070,8 @@ BEGIN
                 [AutoApproveAmountThreshold],
                 [EntityAccessRules],
                 [ActionPolicyRules],
-                [InstructionsOverride]
+                [InstructionsOverride],
+                [CalendarChannelMode]
             )
         OUTPUT INSERTED.[ID] INTO @InsertedRow
         VALUES
@@ -3024,7 +3096,8 @@ BEGIN
                 CASE WHEN @AutoApproveAmountThreshold_Clear = 1 THEN NULL ELSE ISNULL(@AutoApproveAmountThreshold, NULL) END,
                 CASE WHEN @EntityAccessRules_Clear = 1 THEN NULL ELSE ISNULL(@EntityAccessRules, NULL) END,
                 CASE WHEN @ActionPolicyRules_Clear = 1 THEN NULL ELSE ISNULL(@ActionPolicyRules, NULL) END,
-                CASE WHEN @InstructionsOverride_Clear = 1 THEN NULL ELSE ISNULL(@InstructionsOverride, NULL) END
+                CASE WHEN @InstructionsOverride_Clear = 1 THEN NULL ELSE ISNULL(@InstructionsOverride, NULL) END,
+                ISNULL(@CalendarChannelMode, 'ReadOnly')
             )
     END
     ELSE
@@ -3051,7 +3124,8 @@ BEGIN
                 [AutoApproveAmountThreshold],
                 [EntityAccessRules],
                 [ActionPolicyRules],
-                [InstructionsOverride]
+                [InstructionsOverride],
+                [CalendarChannelMode]
             )
         OUTPUT INSERTED.[ID] INTO @InsertedRow
         VALUES
@@ -3075,7 +3149,8 @@ BEGIN
                 CASE WHEN @AutoApproveAmountThreshold_Clear = 1 THEN NULL ELSE ISNULL(@AutoApproveAmountThreshold, NULL) END,
                 CASE WHEN @EntityAccessRules_Clear = 1 THEN NULL ELSE ISNULL(@EntityAccessRules, NULL) END,
                 CASE WHEN @ActionPolicyRules_Clear = 1 THEN NULL ELSE ISNULL(@ActionPolicyRules, NULL) END,
-                CASE WHEN @InstructionsOverride_Clear = 1 THEN NULL ELSE ISNULL(@InstructionsOverride, NULL) END
+                CASE WHEN @InstructionsOverride_Clear = 1 THEN NULL ELSE ISNULL(@InstructionsOverride, NULL) END,
+                ISNULL(@CalendarChannelMode, 'ReadOnly')
             )
     END
     -- return the new record from the base view, which might have some calculated fields
@@ -3133,7 +3208,8 @@ CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateAIAgentUserPolicy]
     @ActionPolicyRules_Clear bit = 0,
     @ActionPolicyRules nvarchar(MAX) = NULL,
     @InstructionsOverride_Clear bit = 0,
-    @InstructionsOverride nvarchar(MAX) = NULL
+    @InstructionsOverride nvarchar(MAX) = NULL,
+    @CalendarChannelMode nvarchar(30) = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -3159,7 +3235,8 @@ BEGIN
         [AutoApproveAmountThreshold] = CASE WHEN @AutoApproveAmountThreshold_Clear = 1 THEN NULL ELSE ISNULL(@AutoApproveAmountThreshold, [AutoApproveAmountThreshold]) END,
         [EntityAccessRules] = CASE WHEN @EntityAccessRules_Clear = 1 THEN NULL ELSE ISNULL(@EntityAccessRules, [EntityAccessRules]) END,
         [ActionPolicyRules] = CASE WHEN @ActionPolicyRules_Clear = 1 THEN NULL ELSE ISNULL(@ActionPolicyRules, [ActionPolicyRules]) END,
-        [InstructionsOverride] = CASE WHEN @InstructionsOverride_Clear = 1 THEN NULL ELSE ISNULL(@InstructionsOverride, [InstructionsOverride]) END
+        [InstructionsOverride] = CASE WHEN @InstructionsOverride_Clear = 1 THEN NULL ELSE ISNULL(@InstructionsOverride, [InstructionsOverride]) END,
+        [CalendarChannelMode] = ISNULL(@CalendarChannelMode, [CalendarChannelMode])
     WHERE
         [ID] = @ID
 
@@ -6401,4 +6478,729 @@ IF NOT EXISTS (
          UPDATE [${flyway:defaultSchema}].[ApplicationEntity]
          SET [DefaultForNewUser] = 1, [__mj_UpdatedAt] = GETUTCDATE()
          WHERE [EntityID] = '62925804-D598-45A7-A338-B2604AE96F11';
+
+/* SQL text to insert 6 new entity field(s) for CalendarChannelMode & CommunicationProvider governance */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'cf2f9acf-fd11-4d00-8520-6679bb62aaa7' OR (EntityID = '43248F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'SupportsCalendar')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'cf2f9acf-fd11-4d00-8520-6679bb62aaa7',
+            '43248F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: MJ: Communication Providers
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '43248F34-2837-EF11-86D4-6045BDEE16E6'),
+            'SupportsCalendar',
+            'Supports Calendar',
+            'Whether the provider supports calendar event reading, creation, updating, and invitation responses.',
+            'bit',
+            1,
+            1,
+            0,
+            0,
+            '(0)',
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Dropdown',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '7f74ce9c-d214-4f3b-9506-e0901387dd8b' OR (EntityID = '43248F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'SupportsFreeBusy')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '7f74ce9c-d214-4f3b-9506-e0901387dd8b',
+            '43248F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: MJ: Communication Providers
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '43248F34-2837-EF11-86D4-6045BDEE16E6'),
+            'SupportsFreeBusy',
+            'Supports Free Busy',
+            'Whether the provider supports checking free/busy schedules and finding optimal meeting times.',
+            'bit',
+            1,
+            1,
+            0,
+            0,
+            '(0)',
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Dropdown',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '8eba1516-7bc5-4584-be65-471cbe1a24f2' OR (EntityID = '43248F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'EnterpriseScopeMode')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '8eba1516-7bc5-4584-be65-471cbe1a24f2',
+            '43248F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: MJ: Communication Providers
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '43248F34-2837-EF11-86D4-6045BDEE16E6'),
+            'EnterpriseScopeMode',
+            'Enterprise Scope Mode',
+            'Enterprise mailbox scope posture for this provider: UtilityMailboxesOnly (restricted to shared/agent utility mailboxes), SecurityGroupScoped (Exchange RBAC / Workspace group-scoped user mailboxes), or TenantWide.',
+            'nvarchar',
+            80,
+            0,
+            0,
+            0,
+            'UtilityMailboxesOnly',
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Dropdown',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '4cf9c95e-5d34-4e87-89cc-4f1ae66cb221' OR (EntityID = '43248F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'AllowedEmailDomains')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '4cf9c95e-5d34-4e87-89cc-4f1ae66cb221',
+            '43248F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: MJ: Communication Providers
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '43248F34-2837-EF11-86D4-6045BDEE16E6'),
+            'AllowedEmailDomains',
+            'Allowed Email Domains',
+            'Optional comma-separated list of corporate email domains permitted for user-scoped mailbox and calendar operations (e.g., "company.com,subsidiary.com").',
+            'nvarchar',
+            1000,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Dropdown',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'df6d1620-4c4d-4818-ba5a-418961df4ef0' OR (EntityID = '43248F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'DefaultCredentialID')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'df6d1620-4c4d-4818-ba5a-418961df4ef0',
+            '43248F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: MJ: Communication Providers
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '43248F34-2837-EF11-86D4-6045BDEE16E6'),
+            'DefaultCredentialID',
+            'Default Credential ID',
+            'Optional default MJ Credential used by this communication provider when no per-request credential override is supplied.',
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            '7E023DDF-82C6-4B0C-9650-8D35699B9FD0',
+            'ID',
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            'Dropdown',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'ae8babc0-f436-4374-a0d9-c69b1819cfcb' OR (EntityID = '62925804-D598-45A7-A338-B2604AE96F11' AND Name = 'CalendarChannelMode')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'ae8babc0-f436-4374-a0d9-c69b1819cfcb',
+            '62925804-D598-45A7-A338-B2604AE96F11', -- Entity: MJ: AI Agent User Policies
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '62925804-D598-45A7-A338-B2604AE96F11'),
+            'CalendarChannelMode',
+            'Calendar Channel Mode',
+            'Calendar channel permission level: Disabled, ReadOnly (check events & free/busy only), ProposeWithApproval (create/modify events or send invites only with explicit user approval), or Autonomous.',
+            'nvarchar',
+            60,
+            0,
+            0,
+            0,
+            'ReadOnly',
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert entity field values for CalendarChannelMode & EnterpriseScopeMode */
+INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
+   ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
+VALUES
+   ('8e6e5444-fc74-4453-bf0d-c7d03b9e29a7', 'AE8BABC0-F436-4374-A0D9-C69B1819CFCB', 1, 'Autonomous', 'Autonomous', GETUTCDATE(), GETUTCDATE()),
+   ('0e1113ec-36ee-4ea9-9cb6-3de71e0b004f', 'AE8BABC0-F436-4374-A0D9-C69B1819CFCB', 2, 'Disabled', 'Disabled', GETUTCDATE(), GETUTCDATE()),
+   ('12942d04-0c78-483f-81df-7b5c4fdfe128', 'AE8BABC0-F436-4374-A0D9-C69B1819CFCB', 3, 'ProposeWithApproval', 'ProposeWithApproval', GETUTCDATE(), GETUTCDATE()),
+   ('20a079a3-e6b6-458f-8db7-14ab5e79afa7', 'AE8BABC0-F436-4374-A0D9-C69B1819CFCB', 4, 'ReadOnly', 'ReadOnly', GETUTCDATE(), GETUTCDATE());
+
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='AE8BABC0-F436-4374-A0D9-C69B1819CFCB';
+
+INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
+   ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
+VALUES
+   ('5be04022-60fa-4064-b31d-fb56590d2884', '8EBA1516-7BC5-4584-BE65-471CBE1A24F2', 1, 'SecurityGroupScoped', 'SecurityGroupScoped', GETUTCDATE(), GETUTCDATE()),
+   ('3b34cce1-ffb1-48fc-bed3-edbfc3f9cabf', '8EBA1516-7BC5-4584-BE65-471CBE1A24F2', 2, 'TenantWide', 'TenantWide', GETUTCDATE(), GETUTCDATE()),
+   ('dd19166a-3e2c-4d7b-8938-717ae1631e5a', '8EBA1516-7BC5-4584-BE65-471CBE1A24F2', 3, 'UtilityMailboxesOnly', 'UtilityMailboxesOnly', GETUTCDATE(), GETUTCDATE());
+
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='8EBA1516-7BC5-4584-BE65-471CBE1A24F2';
+
+/* Create Entity Relationship: MJ: Credentials -> MJ: Communication Providers (One To Many via DefaultCredentialID) */
+   IF NOT EXISTS (
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'bd48be92-95bd-4f49-93d4-5b08c63144ab'
+   )
+   BEGIN
+      INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
+                    VALUES ('bd48be92-95bd-4f49-93d4-5b08c63144ab', '7E023DDF-82C6-4B0C-9650-8D35699B9FD0', '43248F34-2837-EF11-86D4-6045BDEE16E6', 'DefaultCredentialID', 'One To Many', 1, 1, 14, GETUTCDATE(), GETUTCDATE())
+   END;
+
+/* Index for Foreign Keys for CommunicationProvider */
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_CommunicationProvider_DefaultCredentialID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[CommunicationProvider]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_CommunicationProvider_DefaultCredentialID ON [${flyway:defaultSchema}].[CommunicationProvider] ([DefaultCredentialID]);
+
+/* SQL text to update entity field related entity name field map for entity field ID DF6D1620-4C4D-4818-BA5A-418961DF4EF0 */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='DF6D1620-4C4D-4818-BA5A-418961DF4EF0', @RelatedEntityNameFieldMap='DefaultCredential';
+
+/* Base View SQL for MJ: Communication Providers */
+IF OBJECT_ID('[${flyway:defaultSchema}].[vwCommunicationProviders]', 'V') IS NOT NULL
+    DROP VIEW [${flyway:defaultSchema}].[vwCommunicationProviders];
+GO
+
+CREATE VIEW [${flyway:defaultSchema}].[vwCommunicationProviders]
+AS
+SELECT
+    c.*,
+    MJCredential_DefaultCredentialID.[Name] AS [DefaultCredential]
+FROM
+    [${flyway:defaultSchema}].[CommunicationProvider] AS c
+LEFT OUTER JOIN
+    [${flyway:defaultSchema}].[Credential] AS MJCredential_DefaultCredentialID
+  ON
+    [c].[DefaultCredentialID] = MJCredential_DefaultCredentialID.[ID]
+GO
+GRANT SELECT ON [${flyway:defaultSchema}].[vwCommunicationProviders] TO [cdp_UI], [cdp_Integration], [cdp_Developer];
+
+/* spCreate SQL for MJ: Communication Providers */
+IF OBJECT_ID('[${flyway:defaultSchema}].[spCreateCommunicationProvider]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spCreateCommunicationProvider];
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateCommunicationProvider]
+    @ID uniqueidentifier = NULL,
+    @Name nvarchar(255),
+    @Description_Clear bit = 0,
+    @Description nvarchar(MAX) = NULL,
+    @Status nvarchar(20) = NULL,
+    @SupportsSending bit = NULL,
+    @SupportsReceiving bit = NULL,
+    @SupportsScheduledSending bit = NULL,
+    @SupportsForwarding bit = NULL,
+    @SupportsReplying bit = NULL,
+    @SupportsDrafts bit = NULL,
+    @SupportsCalendar bit = NULL,
+    @SupportsFreeBusy bit = NULL,
+    @EnterpriseScopeMode nvarchar(40) = NULL,
+    @AllowedEmailDomains_Clear bit = 0,
+    @AllowedEmailDomains nvarchar(500) = NULL,
+    @DefaultCredentialID_Clear bit = 0,
+    @DefaultCredentialID uniqueidentifier = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+
+    IF @ID IS NOT NULL
+    BEGIN
+        INSERT INTO [${flyway:defaultSchema}].[CommunicationProvider]
+            (
+                [ID],
+                [Name],
+                [Description],
+                [Status],
+                [SupportsSending],
+                [SupportsReceiving],
+                [SupportsScheduledSending],
+                [SupportsForwarding],
+                [SupportsReplying],
+                [SupportsDrafts],
+                [SupportsCalendar],
+                [SupportsFreeBusy],
+                [EnterpriseScopeMode],
+                [AllowedEmailDomains],
+                [DefaultCredentialID]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @ID,
+                @Name,
+                CASE WHEN @Description_Clear = 1 THEN NULL ELSE ISNULL(@Description, NULL) END,
+                ISNULL(@Status, 'Disabled'),
+                ISNULL(@SupportsSending, 1),
+                ISNULL(@SupportsReceiving, 0),
+                ISNULL(@SupportsScheduledSending, 0),
+                ISNULL(@SupportsForwarding, 0),
+                ISNULL(@SupportsReplying, 0),
+                ISNULL(@SupportsDrafts, 0),
+                ISNULL(@SupportsCalendar, 0),
+                ISNULL(@SupportsFreeBusy, 0),
+                ISNULL(@EnterpriseScopeMode, 'UtilityMailboxesOnly'),
+                CASE WHEN @AllowedEmailDomains_Clear = 1 THEN NULL ELSE ISNULL(@AllowedEmailDomains, NULL) END,
+                CASE WHEN @DefaultCredentialID_Clear = 1 THEN NULL ELSE ISNULL(@DefaultCredentialID, NULL) END
+            )
+    END
+    ELSE
+    BEGIN
+        INSERT INTO [${flyway:defaultSchema}].[CommunicationProvider]
+            (
+                [Name],
+                [Description],
+                [Status],
+                [SupportsSending],
+                [SupportsReceiving],
+                [SupportsScheduledSending],
+                [SupportsForwarding],
+                [SupportsReplying],
+                [SupportsDrafts],
+                [SupportsCalendar],
+                [SupportsFreeBusy],
+                [EnterpriseScopeMode],
+                [AllowedEmailDomains],
+                [DefaultCredentialID]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @Name,
+                CASE WHEN @Description_Clear = 1 THEN NULL ELSE ISNULL(@Description, NULL) END,
+                ISNULL(@Status, 'Disabled'),
+                ISNULL(@SupportsSending, 1),
+                ISNULL(@SupportsReceiving, 0),
+                ISNULL(@SupportsScheduledSending, 0),
+                ISNULL(@SupportsForwarding, 0),
+                ISNULL(@SupportsReplying, 0),
+                ISNULL(@SupportsDrafts, 0),
+                ISNULL(@SupportsCalendar, 0),
+                ISNULL(@SupportsFreeBusy, 0),
+                ISNULL(@EnterpriseScopeMode, 'UtilityMailboxesOnly'),
+                CASE WHEN @AllowedEmailDomains_Clear = 1 THEN NULL ELSE ISNULL(@AllowedEmailDomains, NULL) END,
+                CASE WHEN @DefaultCredentialID_Clear = 1 THEN NULL ELSE ISNULL(@DefaultCredentialID, NULL) END
+            )
+    END
+    SELECT * FROM [${flyway:defaultSchema}].[vwCommunicationProviders] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateCommunicationProvider] TO [cdp_Integration], [cdp_Developer];
+
+/* spUpdate SQL for MJ: Communication Providers */
+IF OBJECT_ID('[${flyway:defaultSchema}].[spUpdateCommunicationProvider]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spUpdateCommunicationProvider];
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateCommunicationProvider]
+    @ID uniqueidentifier,
+    @Name nvarchar(255) = NULL,
+    @Description_Clear bit = 0,
+    @Description nvarchar(MAX) = NULL,
+    @Status nvarchar(20) = NULL,
+    @SupportsSending bit = NULL,
+    @SupportsReceiving bit = NULL,
+    @SupportsScheduledSending bit = NULL,
+    @SupportsForwarding bit = NULL,
+    @SupportsReplying bit = NULL,
+    @SupportsDrafts bit = NULL,
+    @SupportsCalendar bit = NULL,
+    @SupportsFreeBusy bit = NULL,
+    @EnterpriseScopeMode nvarchar(40) = NULL,
+    @AllowedEmailDomains_Clear bit = 0,
+    @AllowedEmailDomains nvarchar(500) = NULL,
+    @DefaultCredentialID_Clear bit = 0,
+    @DefaultCredentialID uniqueidentifier = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[CommunicationProvider]
+    SET
+        [Name] = ISNULL(@Name, [Name]),
+        [Description] = CASE WHEN @Description_Clear = 1 THEN NULL ELSE ISNULL(@Description, [Description]) END,
+        [Status] = ISNULL(@Status, [Status]),
+        [SupportsSending] = ISNULL(@SupportsSending, [SupportsSending]),
+        [SupportsReceiving] = ISNULL(@SupportsReceiving, [SupportsReceiving]),
+        [SupportsScheduledSending] = ISNULL(@SupportsScheduledSending, [SupportsScheduledSending]),
+        [SupportsForwarding] = ISNULL(@SupportsForwarding, [SupportsForwarding]),
+        [SupportsReplying] = ISNULL(@SupportsReplying, [SupportsReplying]),
+        [SupportsDrafts] = ISNULL(@SupportsDrafts, [SupportsDrafts]),
+        [SupportsCalendar] = ISNULL(@SupportsCalendar, [SupportsCalendar]),
+        [SupportsFreeBusy] = ISNULL(@SupportsFreeBusy, [SupportsFreeBusy]),
+        [EnterpriseScopeMode] = ISNULL(@EnterpriseScopeMode, [EnterpriseScopeMode]),
+        [AllowedEmailDomains] = CASE WHEN @AllowedEmailDomains_Clear = 1 THEN NULL ELSE ISNULL(@AllowedEmailDomains, [AllowedEmailDomains]) END,
+        [DefaultCredentialID] = CASE WHEN @DefaultCredentialID_Clear = 1 THEN NULL ELSE ISNULL(@DefaultCredentialID, [DefaultCredentialID]) END
+    WHERE
+        [ID] = @ID
+
+    IF @@ROWCOUNT = 0
+        SELECT TOP 0 * FROM [${flyway:defaultSchema}].[vwCommunicationProviders] WHERE 1=0
+    ELSE
+        SELECT * FROM [${flyway:defaultSchema}].[vwCommunicationProviders] WHERE [ID] = @ID
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateCommunicationProvider] TO [cdp_Integration], [cdp_Developer];
+GO
+
+IF OBJECT_ID('[${flyway:defaultSchema}].[trgUpdateCommunicationProvider]', 'TR') IS NOT NULL
+    DROP TRIGGER [${flyway:defaultSchema}].[trgUpdateCommunicationProvider];
+GO
+CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateCommunicationProvider
+ON [${flyway:defaultSchema}].[CommunicationProvider]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[CommunicationProvider]
+    SET
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM
+        [${flyway:defaultSchema}].[CommunicationProvider] AS _organicTable
+    INNER JOIN
+        INSERTED AS I ON
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+
+/* spDelete SQL for MJ: Communication Providers */
+IF OBJECT_ID('[${flyway:defaultSchema}].[spDeleteCommunicationProvider]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spDeleteCommunicationProvider];
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteCommunicationProvider]
+    @ID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DELETE FROM [${flyway:defaultSchema}].[CommunicationProvider] WHERE [ID] = @ID
+    IF @@ROWCOUNT = 0
+        SELECT NULL AS [ID]
+    ELSE
+        SELECT @ID AS [ID]
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteCommunicationProvider] TO [cdp_Integration], [cdp_Developer];
+
+/* SQL text to insert virtual field DefaultCredential on MJ: Communication Providers */
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '51226919-5a32-4c83-af58-8233add8699e' OR (EntityID = '43248F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'DefaultCredential')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '51226919-5a32-4c83-af58-8233add8699e',
+            '43248F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: MJ: Communication Providers
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '43248F34-2837-EF11-86D4-6045BDEE16E6'),
+            'DefaultCredential',
+            'Default Credential',
+            NULL,
+            'nvarchar',
+            400,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Dropdown',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+-- UPDATE Entity Field Category Info for CalendarChannelMode and CommunicationProvider fields
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET Category = 'Channel Permissions', GeneratedFormSection = 'Category'
+WHERE ID = 'AE8BABC0-F436-4374-A0D9-C69B1819CFCB';
+
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET Category = 'Advanced Capabilities', GeneratedFormSection = 'Category'
+WHERE ID IN ('CF2F9ACF-FD11-4D00-8520-6679BB62AAA7', '7F74CE9C-D214-4F3B-9506-E0901387DD8B');
+
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET Category = 'Operational Settings', GeneratedFormSection = 'Category'
+WHERE ID IN ('8EBA1516-7BC5-4584-BE65-471CBE1A24F2', '4CF9C95E-5D34-4E87-89CC-4F1AE66CB221', 'DF6D1620-4C4D-4818-BA5A-418961DF4EF0', '51226919-5A32-4C83-AF58-8233ADD8699E');
 

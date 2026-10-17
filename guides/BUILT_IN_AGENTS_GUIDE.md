@@ -97,11 +97,11 @@ flowchart LR
 
 ## 4. Chief of Staff Agent & Its BizApps Dependency Graph
 
-While the **Chief of Staff** agent metadata (`metadata/agents/.chief-of-staff-agent.json`), **User Policy Engine** (`@memberjunction/ai-agents`), **4 Chief of Staff Actions** (`@memberjunction/core-actions`), and **3-Tier Wake Gate** (`@memberjunction/scheduling-engine`) live in **MJ Core** so every MemberJunction installation has the foundational primitives, the Chief of Staff's **full organizational work-tracking experience** depends on three peer BizApps packages:
+While the **Chief of Staff** agent metadata (`metadata/agents/.chief-of-staff-agent.json`), **User Policy Engine** (`@memberjunction/ai-agents` + `@memberjunction/ai-core-plus`), **8 Chief of Staff Core Actions** (`@memberjunction/core-actions`), **Calendar / Free-Busy / Preflight Communication Verbs** (`@memberjunction/communication-types`, `@memberjunction/communication-ms-graph`, `@memberjunction/communication-gmail`), and **3-Tier Wake Gate** (`@memberjunction/scheduling-engine`) live in **MJ Core** so every MemberJunction installation has the foundational primitives, the Chief of Staff's **full organizational work-tracking experience** depends on three peer BizApps packages:
 
 ```mermaid
 flowchart TD
-    MJ["@memberjunction/* (MJ Core)<br/>• Users (Security Principal)<br/>• AIAgentUserPolicy (Narrowed Governance)<br/>• UserRoutines + 3-Tier WakeGateEvaluator<br/>• AIBridgeAgentIdentity (Email/Voice)<br/>• Chief of Staff Agent & Core Actions"]
+    MJ["@memberjunction/* (MJ Core)<br/>• Users (Security Principal)<br/>• AIAgentUserPolicy (Narrowed Governance + CalendarChannelMode)<br/>• CommunicationProvider (EnterpriseScopeMode + AllowedEmailDomains)<br/>• UserRoutines + 3-Tier WakeGateEvaluator<br/>• AIBridgeAgentIdentity (Utility Mailboxes & Voice DIDs)<br/>• Chief of Staff Agent & 8 CoS Core Actions"]
     Common["@mj-biz-apps/common (bizapps-common)<br/>• People (LinkedUserID -> MJ: Users)<br/>• Organizations & Relationships<br/>• ContactMethods (Phone / Email / Messaging)"]
     Tasks["@mj-biz-apps/tasks (bizapps-tasks)<br/>• Tasks (Priority Objectives & Key Results)<br/>• HealthStatus, Target/Current Metrics, RollupWeight<br/>• TaskCheckIn (Periodic Progress & AI Rollups)<br/>• TaskAssignment & Approval Requests"]
     Issues["@mj-biz-apps/issues (bizapps-issues)<br/>• Issues (Cross-Team Blockers & Escalations)<br/>• IssueComments, IssueLinks & SLA Tracking"]
@@ -111,6 +111,19 @@ flowchart TD
     Common --> Issues
     Tasks --> Issues
 ```
+
+### Chief of Staff Built-In Core Actions (`@memberjunction/core-actions`)
+
+| Action Name | Purpose & Security Enforcement |
+| :--- | :--- |
+| **`Configure Agent User Policy`** | Creates or updates the calling user's `MJ: AI Agent User Policies` record (`CoordinationMode`, `EmailChannelMode`, `CalendarChannelMode`, `PhoneChannelMode`, `MessagingChannelMode`, approval gates, and narrowed `EntityAccessRules` / `ActionPolicyRules`). |
+| **`Schedule Next Agent Wake`** | Registers or updates a `RoutineType = 'AgentWake'` row in `MJ: User Routines` with `OneShot`, `Adaptive`, or `Recurring` scheduling and a 3-Tier Wake Gate (`WakeConfigurationJSON`). |
+| **`Verify My Communication Capabilities`** | Runs the 4-layer Enterprise Mailbox Security Gate (`EnterpriseScopeMode`, `AllowedEmailDomains`, `MJ: AI Bridge Agent Identities` utility mailbox lookup, and live `VerifyMailboxAccess` preflight) so the agent only offers email/calendar capabilities that the admin's enterprise credential actually permits. |
+| **`Get My Calendar Events and Availability`** | Hard-pinned to `contextUser.Email`: reads calendar events, checks free/busy intervals, computes optimal meeting times across attendees (`Microsoft Graph`, `Gmail`), and queries external scheduling links and availability (`HubSpot` Meetings API v3, `Calendly` API v2). |
+| **`Manage My Calendar Event`** | Hard-pinned to `contextUser.Email` and governed by `CalendarChannelMode` (`Disabled`, `ReadOnly`, `ProposeWithApproval`, `Autonomous`): creates, updates, responds to (`accept`/`tentative`/`decline`), or cancels calendar events, creating an `MJ: AI Agent Requests` approval when required. |
+| **`Manage My Email Inbox and Drafts`** | Hard-pinned to `contextUser.Email` (or the agent's registered Utility Mailbox in `SendAsAgent` mode) and governed by `EmailChannelMode`: lists messages, creates drafts (`DraftOnly`), or sends/replies/forwards emails. |
+| **`Chief of Staff Inter-Agent Request`** | Sends a structured coordination message or creates an approval request between two users' Chief of Staff agents without crossing user permission ceilings. |
+| **`Prepare Chief of Staff Outbound Call`** | Validates `PhoneChannelMode`, builds a mandatory AI disclosure greeting, and structures the call objective, fallback plan, and prohibited commitments before any outbound voice call. |
 
 ### Why These Three Dependencies Exist
 
@@ -126,4 +139,4 @@ flowchart TD
    - Because `bizapps-issues` sits at the leaf of the dependency graph (`MJ` → `bizapps-common` → `bizapps-tasks` → `bizapps-issues`), the comprehensive end-to-end guide for the Chief of Staff Agent lives in the `bizapps-issues` repository.
 
 > [!IMPORTANT]
-> **Full Chief of Staff Documentation**: See **[`Chief-Of-Staff-Agent.md`](../../bizapps-issues/docs/Chief-Of-Staff-Agent.md)** in `bizapps-issues/docs/Chief-Of-Staff-Agent.md` for the complete Chief of Staff architecture, onboarding flow, 3-Tier Wake Gate reference, `AIAgentUserPolicy` JSON schemas, and cross-app operational playbooks.
+> **Full Chief of Staff Documentation**: See **[`Chief-Of-Staff-Agent.md`](../../bizapps-issues/docs/Chief-Of-Staff-Agent.md)** in `bizapps-issues/docs/Chief-Of-Staff-Agent.md` for the complete Chief of Staff architecture, onboarding flow, Enterprise Mailbox Security Gates, Calendar/Availability/HubSpot/Calendly integration, 3-Tier Wake Gate reference, `AIAgentUserPolicy` JSON schemas, and cross-app operational playbooks.

@@ -164,6 +164,15 @@ export class ConfigureAgentUserPolicyAction extends BaseAction {
         ) {
             policy.EmailChannelMode = emailMode;
         }
+        const calendarMode = this.getStringParam(params, 'CalendarChannelMode');
+        if (
+            calendarMode === 'Disabled' ||
+            calendarMode === 'ReadOnly' ||
+            calendarMode === 'ProposeWithApproval' ||
+            calendarMode === 'Autonomous'
+        ) {
+            policy.CalendarChannelMode = calendarMode;
+        }
         const phoneMode = this.getStringParam(params, 'PhoneChannelMode');
         if (
             phoneMode === 'Disabled' ||

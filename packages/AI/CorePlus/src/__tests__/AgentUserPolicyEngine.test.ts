@@ -18,6 +18,7 @@ interface MockPolicyShape {
     CoordinationMode: MJAIAgentUserPolicyEntity['CoordinationMode'];
     DefaultDataAccessMode: MJAIAgentUserPolicyEntity['DefaultDataAccessMode'];
     EmailChannelMode: MJAIAgentUserPolicyEntity['EmailChannelMode'];
+    CalendarChannelMode: MJAIAgentUserPolicyEntity['CalendarChannelMode'];
     PhoneChannelMode: MJAIAgentUserPolicyEntity['PhoneChannelMode'];
     MessagingChannelMode: MJAIAgentUserPolicyEntity['MessagingChannelMode'];
     AllowInterAgentCoordination: boolean;
@@ -44,6 +45,7 @@ function buildPolicy(overrides: Partial<MockPolicyShape> = {}): MJAIAgentUserPol
         CoordinationMode: 'Coordinator',
         DefaultDataAccessMode: 'UserCeiling',
         EmailChannelMode: 'DraftOnly',
+        CalendarChannelMode: 'ProposeWithApproval',
         PhoneChannelMode: 'OutboundWithApproval',
         MessagingChannelMode: 'Enabled',
         AllowInterAgentCoordination: true,
@@ -369,12 +371,30 @@ describe('AgentUserPolicyEngine', () => {
             expect(highUrgencyNudge.verdict).toBe('Allow');
         });
 
-        it('formats BuildPromptPolicyContextBlock with onboarding status and standing instructions', () => {
+        it('formats BuildPromptPolicyContextBlock with onboarding status, CalendarChannelMode, and standing instructions', () => {
             const policy = buildPolicy();
             const block = engine.BuildPromptPolicyContextBlock(policy, aliceUser);
             expect(block).toContain('Maya');
             expect(block).toContain('Coordinator');
+            expect(block).toContain('Calendar=`ProposeWithApproval`');
             expect(block).toContain('Keep executive briefings concise and bulleted.');
+        });
+
+        it('evaluates CalendarChannelMode and EmailChannelMode verdicts accurately', () => {
+            const proposePolicy = buildPolicy({ CalendarChannelMode: 'ProposeWithApproval', EmailChannelMode: 'DraftOnly' });
+            expect(engine.EvaluateCalendarOperation(proposePolicy, false).verdict).toBe('Allow');
+            expect(engine.EvaluateCalendarOperation(proposePolicy, true).verdict).toBe('RequireApproval');
+            expect(engine.EvaluateEmailOperation(proposePolicy, 'Read').verdict).toBe('Allow');
+            expect(engine.EvaluateEmailOperation(proposePolicy, 'Draft').verdict).toBe('Allow');
+            expect(engine.EvaluateEmailOperation(proposePolicy, 'Send').verdict).toBe('Deny');
+
+            const readOnlyCal = buildPolicy({ CalendarChannelMode: 'ReadOnly' });
+            expect(engine.EvaluateCalendarOperation(readOnlyCal, false).verdict).toBe('Allow');
+            expect(engine.EvaluateCalendarOperation(readOnlyCal, true).verdict).toBe('Deny');
+
+            const autonomousCal = buildPolicy({ CalendarChannelMode: 'Autonomous', EmailChannelMode: 'SendAsUser' });
+            expect(engine.EvaluateCalendarOperation(autonomousCal, true).verdict).toBe('Allow');
+            expect(engine.EvaluateEmailOperation(autonomousCal, 'Send').verdict).toBe('RequireApproval');
         });
     });
 });

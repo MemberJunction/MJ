@@ -1215,7 +1215,7 @@ import {
     MJVectorIndexEntityServer,
 } from '@memberjunction/core-entities-server';
 
-// @memberjunction/core-actions (160 classes)
+// @memberjunction/core-actions (164 classes)
 import {
     APIRateLimiterAction,
     ActionSmithAgent,
@@ -1293,6 +1293,7 @@ import {
     GetFormContributionsForEntityAction,
     GetListRecordsAction,
     GetMetadataAction,
+    GetMyCalendarAndAvailabilityAction,
     GetObjectAction,
     GetRecordAction,
     GetRecordListMembershipAction,
@@ -1315,6 +1316,8 @@ import {
     LoadAgentSpecAction,
     LoopAction,
     MCPToolAction,
+    ManageMyCalendarEventAction,
+    ManageMyEmailInboxAction,
     MaterializeListFromViewAction,
     ModifyDocumentSectionAction,
     ModifyFormContributionAction,
@@ -1372,6 +1375,7 @@ import {
     ValidateAddressAction,
     ValidateEmailUniqueAction,
     VectorizeEntityAction,
+    VerifyMyCommunicationCapabilitiesAction,
     VoidSignatureRequestAction,
     WebPageContentAction,
     WebSearchAction,
@@ -2417,6 +2421,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     GetFormContributionsForEntityAction,
     GetListRecordsAction,
     GetMetadataAction,
+    GetMyCalendarAndAvailabilityAction,
     GetObjectAction,
     GetRecordAction,
     GetRecordListMembershipAction,
@@ -2439,16 +2444,18 @@ const CLASS_REGISTRATIONS_4: any[] = [
     LoadAgentSpecAction,
     LoopAction,
     MCPToolAction,
+    ManageMyCalendarEventAction,
+    ManageMyEmailInboxAction,
     MaterializeListFromViewAction,
     ModifyDocumentSectionAction,
     ModifyFormContributionAction,
-    ModifyInteractiveFormAction,
-    MoveListMembersAction,
-    MoveObjectAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    ModifyInteractiveFormAction,
+    MoveListMembersAction,
+    MoveObjectAction,
     OAuthFlowAction,
     ObjectExistsAction,
     PDFExtractorAction,
@@ -2500,6 +2507,7 @@ const CLASS_REGISTRATIONS_5: any[] = [
     ValidateAddressAction,
     ValidateEmailUniqueAction,
     VectorizeEntityAction,
+    VerifyMyCommunicationCapabilitiesAction,
     VoidSignatureRequestAction,
     WebPageContentAction,
     WebSearchAction,
@@ -2546,7 +2554,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1081;
+export const CLASS_REGISTRATIONS_COUNT = 1085;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

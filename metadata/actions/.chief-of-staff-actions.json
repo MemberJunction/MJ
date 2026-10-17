@@ -314,6 +314,20 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
+            "Name": "CalendarChannelMode",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Calendar channel mode: 'Disabled', 'ReadOnly', 'ProposeWithApproval', or 'Autonomous'",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B2F29E01-4C11-4E8A-9B01-1A2B3C4D5E11"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
             "Name": "PhoneChannelMode",
             "Type": "Input",
             "ValueType": "Scalar",
@@ -663,6 +677,579 @@
     },
     "primaryKey": {
       "ID": "B4F29E01-4C11-4E8A-9B01-1A2B3C4D5E00"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Verify My Communication Capabilities",
+      "Description": "Inspects enterprise communication providers, EnterpriseScopeMode, AllowedEmailDomains, live VerifyMailboxAccess preflight for the calling user's email and calendar, dedicated agent utility mailboxes, and external scheduling connectors (HubSpot Meetings API v3 / Calendly API v2).",
+      "DriverClass": "__VerifyMyCommunicationCapabilities",
+      "Type": "Custom",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Agent Management",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-shield-check"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "AgentName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Name of the AI Agent (defaults to 'Chief of Staff')",
+            "IsRequired": false,
+            "DefaultValue": "Chief of Staff"
+          },
+          "primaryKey": {
+            "ID": "B5F29E01-4C11-4E8A-9B01-1A2B3C4D5E01"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CapabilitiesReport",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "Structured report of active providers, mailbox/calendar preflight checks, user channel modes, and external scheduling connectors",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B5F29E01-4C11-4E8A-9B01-1A2B3C4D5E02"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Communication capabilities verified"
+          },
+          "primaryKey": {
+            "ID": "B5F29E01-4C11-4E8A-9B01-1A2B3C4D5E91"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "B5F29E01-4C11-4E8A-9B01-1A2B3C4D5E00"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Get My Calendar Events and Availability",
+      "Description": "Reads the calling user's calendar events, queries free/busy schedules across attendees, finds candidate meeting times, or checks external scheduling availability via HubSpot Meetings API v3 and Calendly API v2. Hard-pinned to ContextUser.Email and gated by EnterpriseMailboxSecurityGate.",
+      "DriverClass": "__GetMyCalendarAndAvailability",
+      "Type": "Custom",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Communication",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-calendar-check"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Operation",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Operation: 'GetEvents', 'GetFreeBusy', 'FindMeetingTimes', or 'CheckExternalSchedulingAvailability'",
+            "IsRequired": false,
+            "DefaultValue": "GetEvents"
+          },
+          "primaryKey": {
+            "ID": "B6F29E01-4C11-4E8A-9B01-1A2B3C4D5E01"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "StartDateTime",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ISO-8601 start of the time window",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B6F29E01-4C11-4E8A-9B01-1A2B3C4D5E02"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "EndDateTime",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ISO-8601 end of the time window",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B6F29E01-4C11-4E8A-9B01-1A2B3C4D5E03"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "AttendeeEmails",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Comma-separated or JSON array of attendee email addresses for GetFreeBusy or FindMeetingTimes",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B6F29E01-4C11-4E8A-9B01-1A2B3C4D5E04"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DurationMinutes",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Meeting duration in minutes for FindMeetingTimes (default: 30)",
+            "IsRequired": false,
+            "DefaultValue": "30"
+          },
+          "primaryKey": {
+            "ID": "B6F29E01-4C11-4E8A-9B01-1A2B3C4D5E05"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ExternalSchedulingSystem",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "External scheduling system when Operation is CheckExternalSchedulingAvailability: 'All', 'HubSpot', or 'Calendly'",
+            "IsRequired": false,
+            "DefaultValue": "All"
+          },
+          "primaryKey": {
+            "ID": "B6F29E01-4C11-4E8A-9B01-1A2B3C4D5E06"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Events",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Normalized calendar events when Operation is GetEvents",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B6F29E01-4C11-4E8A-9B01-1A2B3C4D5E07"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Schedules",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Normalized free/busy schedules when Operation is GetFreeBusy",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B6F29E01-4C11-4E8A-9B01-1A2B3C4D5E08"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Suggestions",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Candidate meeting time suggestions when Operation is FindMeetingTimes",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B6F29E01-4C11-4E8A-9B01-1A2B3C4D5E09"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ExternalAvailabilitySlots",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Available slots returned from HubSpot Meetings API v3 and Calendly API v2",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B6F29E01-4C11-4E8A-9B01-1A2B3C4D5E10"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Calendar and availability retrieved successfully"
+          },
+          "primaryKey": {
+            "ID": "B6F29E01-4C11-4E8A-9B01-1A2B3C4D5E91"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "POLICY_DENIED",
+            "IsSuccess": false,
+            "Description": "Blocked by user CalendarChannelMode policy"
+          },
+          "primaryKey": {
+            "ID": "B6F29E01-4C11-4E8A-9B01-1A2B3C4D5E92"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "B6F29E01-4C11-4E8A-9B01-1A2B3C4D5E00"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Manage My Calendar Event",
+      "Description": "Creates, updates, responds to (Accept/TentativelyAccept/Decline), or cancels a calendar event on the calling user's calendar, or generates a single-use Calendly scheduling link. Enforces CalendarChannelMode (queuing an MJ: AI Agent Requests approval when ProposeWithApproval).",
+      "DriverClass": "__ManageMyCalendarEvent",
+      "Type": "Custom",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Communication",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-calendar-plus"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Operation",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Operation: 'Create', 'Update', 'Respond', 'Cancel', or 'CreateCalendlySingleUseLink'",
+            "IsRequired": true,
+            "DefaultValue": "Create"
+          },
+          "primaryKey": {
+            "ID": "B7F29E01-4C11-4E8A-9B01-1A2B3C4D5E01"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "EventID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "External calendar event ID (required for Update, Respond, and Cancel)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B7F29E01-4C11-4E8A-9B01-1A2B3C4D5E02"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Subject",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Event title/subject",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B7F29E01-4C11-4E8A-9B01-1A2B3C4D5E03"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Body",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Event agenda/description",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B7F29E01-4C11-4E8A-9B01-1A2B3C4D5E04"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "StartTime",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ISO-8601 event start time",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B7F29E01-4C11-4E8A-9B01-1A2B3C4D5E05"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "EndTime",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ISO-8601 event end time",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B7F29E01-4C11-4E8A-9B01-1A2B3C4D5E06"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "AttendeeEmails",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Comma-separated or JSON array of attendee email addresses",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B7F29E01-4C11-4E8A-9B01-1A2B3C4D5E07"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Response",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "RSVP response when Operation is Respond: 'Accept', 'TentativelyAccept', or 'Decline'",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B7F29E01-4C11-4E8A-9B01-1A2B3C4D5E08"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ApprovalRequestID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the created MJ: AI Agent Requests record when CalendarChannelMode is ProposeWithApproval",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B7F29E01-4C11-4E8A-9B01-1A2B3C4D5E09"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Calendar event operation completed"
+          },
+          "primaryKey": {
+            "ID": "B7F29E01-4C11-4E8A-9B01-1A2B3C4D5E91"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "APPROVAL_REQUIRED",
+            "IsSuccess": true,
+            "Description": "Dry-run preview created and queued for user approval in MJ: AI Agent Requests"
+          },
+          "primaryKey": {
+            "ID": "B7F29E01-4C11-4E8A-9B01-1A2B3C4D5E92"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "B7F29E01-4C11-4E8A-9B01-1A2B3C4D5E00"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Manage My Email Inbox and Drafts",
+      "Description": "Lists messages, searches threads, reads single messages, creates email drafts, or replies/forwards in the calling user's personal mailbox or dedicated agent utility mailbox. Hard-pinned to ContextUser.Email or the user's AIBridgeAgentIdentity and gated by EmailChannelMode.",
+      "DriverClass": "__ManageMyEmailInbox",
+      "Type": "Custom",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Communication",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-envelope-open-text"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Operation",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Operation: 'ListMessages', 'SearchMessages', 'GetSingleMessage', 'CreateDraft', 'Reply', or 'Forward'",
+            "IsRequired": true,
+            "DefaultValue": "ListMessages"
+          },
+          "primaryKey": {
+            "ID": "B8F29E01-4C11-4E8A-9B01-1A2B3C4D5E01"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Query",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Search query when Operation is SearchMessages",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B8F29E01-4C11-4E8A-9B01-1A2B3C4D5E02"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MessageID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Message ID for GetSingleMessage, Reply, or Forward",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B8F29E01-4C11-4E8A-9B01-1A2B3C4D5E03"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "To",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Recipient email address for CreateDraft or Forward",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B8F29E01-4C11-4E8A-9B01-1A2B3C4D5E04"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Subject",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Email subject for CreateDraft",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B8F29E01-4C11-4E8A-9B01-1A2B3C4D5E05"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Body",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Email body content for CreateDraft, Reply, or Forward",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B8F29E01-4C11-4E8A-9B01-1A2B3C4D5E06"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Messages",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Retrieved messages for ListMessages or SearchMessages",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B8F29E01-4C11-4E8A-9B01-1A2B3C4D5E07"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DraftID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Created draft ID when Operation is CreateDraft",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B8F29E01-4C11-4E8A-9B01-1A2B3C4D5E08"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Email operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "B8F29E01-4C11-4E8A-9B01-1A2B3C4D5E91"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "POLICY_DENIED",
+            "IsSuccess": false,
+            "Description": "Email operation blocked by user EmailChannelMode policy"
+          },
+          "primaryKey": {
+            "ID": "B8F29E01-4C11-4E8A-9B01-1A2B3C4D5E92"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "B8F29E01-4C11-4E8A-9B01-1A2B3C4D5E00"
     }
   }
 ]

@@ -674,7 +674,7 @@ export class AgentUserPolicyEngine extends BaseSingleton<AgentUserPolicyEngine> 
             `- **Policy Status**: \`${policy.Status}\` | **Onboarding Status**: \`${policy.OnboardingStatus}\``,
             `- **Coordination Mode**: \`${policy.CoordinationMode}\` | **Inter-Agent Coordination**: \`${policy.AllowInterAgentCoordination ? 'Allowed' : 'Disabled'}\``,
             `- **Default Data Access Mode**: \`${policy.DefaultDataAccessMode}\` (always bounded by user's MJ role permissions)`,
-            `- **Channels**: Email=\`${policy.EmailChannelMode}\`, Phone=\`${policy.PhoneChannelMode}\`, Messaging=\`${policy.MessagingChannelMode}\``,
+            `- **Channels**: Email=\`${policy.EmailChannelMode}\`, Calendar=\`${policy.CalendarChannelMode ?? 'ProposeWithApproval'}\`, Phone=\`${policy.PhoneChannelMode}\`, Messaging=\`${policy.MessagingChannelMode}\``,
             `- **Approval Guardrails**: ExternalComms=\`${policy.RequireApprovalForExternalComms ? 'RequireApproval' : 'Auto'}\`, Financials=\`${policy.RequireApprovalForFinancials ? 'RequireApproval' : 'Auto'}\` (Threshold: ${policy.AutoApproveAmountThreshold != null ? `$${policy.AutoApproveAmountThreshold}` : 'None'}), Destructive=\`${policy.RequireApprovalForDestructiveActions ? 'RequireApproval' : 'Auto'}\``,
         ];
 
@@ -683,6 +683,107 @@ export class AgentUserPolicyEngine extends BaseSingleton<AgentUserPolicyEngine> 
         }
 
         return lines.join('\n');
+    }
+
+    /**
+     * Evaluate whether a user's `CalendarChannelMode` permits reading or mutating calendar events.
+     */
+    public EvaluateCalendarOperation(
+        policy: MJAIAgentUserPolicyEntity | null,
+        isMutation: boolean
+    ): { verdict: AgentPolicyVerdict; mode: MJAIAgentUserPolicyEntity['CalendarChannelMode']; reason: string } {
+        const mode: MJAIAgentUserPolicyEntity['CalendarChannelMode'] =
+            policy?.CalendarChannelMode ?? 'ProposeWithApproval';
+        if (policy?.Status === 'Disabled' || mode === 'Disabled') {
+            return {
+                verdict: 'Deny',
+                mode: 'Disabled',
+                reason: 'Calendar channel access is Disabled in the user\'s AI Agent User Policy.',
+            };
+        }
+        if (!isMutation) {
+            return {
+                verdict: 'Allow',
+                mode,
+                reason: `Calendar read permitted under CalendarChannelMode='${mode}'.`,
+            };
+        }
+        if (mode === 'ReadOnly') {
+            return {
+                verdict: 'Deny',
+                mode,
+                reason: 'Calendar mutations are blocked because CalendarChannelMode is ReadOnly.',
+            };
+        }
+        if (mode === 'ProposeWithApproval') {
+            return {
+                verdict: 'RequireApproval',
+                mode,
+                reason: 'Calendar mutations require user approval because CalendarChannelMode is ProposeWithApproval.',
+            };
+        }
+        return {
+            verdict: 'Allow',
+            mode,
+            reason: 'Calendar mutation permitted autonomously under CalendarChannelMode=Autonomous.',
+        };
+    }
+
+    /**
+     * Evaluate whether a user's `EmailChannelMode` permits reading, drafting, or sending email.
+     */
+    public EvaluateEmailOperation(
+        policy: MJAIAgentUserPolicyEntity | null,
+        operation: 'Read' | 'Draft' | 'Send'
+    ): { verdict: AgentPolicyVerdict; mode: MJAIAgentUserPolicyEntity['EmailChannelMode']; reason: string } {
+        const mode: MJAIAgentUserPolicyEntity['EmailChannelMode'] = policy?.EmailChannelMode ?? 'DraftOnly';
+        if (policy?.Status === 'Disabled' || mode === 'Disabled') {
+            return {
+                verdict: 'Deny',
+                mode: 'Disabled',
+                reason: 'Email channel access is Disabled in the user\'s AI Agent User Policy.',
+            };
+        }
+        if (operation === 'Read') {
+            return {
+                verdict: 'Allow',
+                mode,
+                reason: `Email read permitted under EmailChannelMode='${mode}'.`,
+            };
+        }
+        if (mode === 'ReadOnly') {
+            return {
+                verdict: 'Deny',
+                mode,
+                reason: `Email ${operation.toLowerCase()} is blocked because EmailChannelMode is ReadOnly.`,
+            };
+        }
+        if (operation === 'Draft') {
+            return {
+                verdict: 'Allow',
+                mode,
+                reason: `Email draft creation permitted under EmailChannelMode='${mode}'.`,
+            };
+        }
+        if (mode === 'DraftOnly') {
+            return {
+                verdict: 'Deny',
+                mode,
+                reason: 'Direct email sending is blocked because EmailChannelMode is DraftOnly (save a draft instead).',
+            };
+        }
+        if (policy?.RequireApprovalForExternalComms) {
+            return {
+                verdict: 'RequireApproval',
+                mode,
+                reason: `Sending email (${mode}) requires user approval because RequireApprovalForExternalComms is enabled.`,
+            };
+        }
+        return {
+            verdict: 'Allow',
+            mode,
+            reason: `Sending email permitted under EmailChannelMode=${mode}.`,
+        };
     }
 
     // ========================================================================

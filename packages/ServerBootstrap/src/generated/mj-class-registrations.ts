@@ -1485,7 +1485,7 @@ import {
     WebSearchQueryServerOperation,
 } from '@memberjunction/web-search-engine';
 
-// @memberjunction/core-actions (160 classes)
+// @memberjunction/core-actions (164 classes)
 import {
     APIRateLimiterAction,
     ActionSmithAgent,
@@ -1563,6 +1563,7 @@ import {
     GetFormContributionsForEntityAction,
     GetListRecordsAction,
     GetMetadataAction,
+    GetMyCalendarAndAvailabilityAction,
     GetObjectAction,
     GetRecordAction,
     GetRecordListMembershipAction,
@@ -1585,6 +1586,8 @@ import {
     LoadAgentSpecAction,
     LoopAction,
     MCPToolAction,
+    ManageMyCalendarEventAction,
+    ManageMyEmailInboxAction,
     MaterializeListFromViewAction,
     ModifyDocumentSectionAction,
     ModifyFormContributionAction,
@@ -1642,6 +1645,7 @@ import {
     ValidateAddressAction,
     ValidateEmailUniqueAction,
     VectorizeEntityAction,
+    VerifyMyCommunicationCapabilitiesAction,
     VoidSignatureRequestAction,
     WebPageContentAction,
     WebSearchAction,
@@ -2788,6 +2792,7 @@ const CLASS_REGISTRATIONS_5: any[] = [
     GetFormContributionsForEntityAction,
     GetListRecordsAction,
     GetMetadataAction,
+    GetMyCalendarAndAvailabilityAction,
     GetObjectAction,
     GetRecordAction,
     GetRecordListMembershipAction,
@@ -2810,6 +2815,8 @@ const CLASS_REGISTRATIONS_5: any[] = [
     LoadAgentSpecAction,
     LoopAction,
     MCPToolAction,
+    ManageMyCalendarEventAction,
+    ManageMyEmailInboxAction,
     MaterializeListFromViewAction,
     ModifyDocumentSectionAction,
     ModifyFormContributionAction,
@@ -2867,6 +2874,7 @@ const CLASS_REGISTRATIONS_5: any[] = [
     ValidateAddressAction,
     ValidateEmailUniqueAction,
     VectorizeEntityAction,
+    VerifyMyCommunicationCapabilitiesAction,
     VoidSignatureRequestAction,
     WebPageContentAction,
     WebSearchAction,
@@ -2908,7 +2916,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1174;
+export const CLASS_REGISTRATIONS_COUNT = 1178;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

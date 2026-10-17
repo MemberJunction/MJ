@@ -9689,6 +9689,10 @@ export class MJAIAgentUserPolicy_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: "Calendar channel permission level: Disabled, ReadOnly (check events & free/busy only), ProposeWithApproval (create/modify events or send invites only with explicit user approval), or Autonomous."}) 
+    @MaxLength(30)
+    CalendarChannelMode?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Agent?: string;
@@ -9774,6 +9778,9 @@ export class CreateMJAIAgentUserPolicyInput {
     @Field({ nullable: true })
     InstructionsOverride: string | null;
 
+    @Field({ nullable: true })
+    CalendarChannelMode?: string;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -9846,6 +9853,9 @@ export class UpdateMJAIAgentUserPolicyInput {
 
     @Field({ nullable: true })
     InstructionsOverride?: string | null;
+
+    @Field({ nullable: true })
+    CalendarChannelMode?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -30205,6 +30215,28 @@ export class MJCommunicationProvider_ {
     @Field(() => Boolean, {nullable: true, description: "Whether or not the provider supports creating draft messages"}) 
     SupportsDrafts?: boolean;
         
+    @Field(() => Boolean, {nullable: true, description: "Whether the provider supports calendar event reading, creation, updating, and invitation responses."}) 
+    SupportsCalendar?: boolean;
+        
+    @Field(() => Boolean, {nullable: true, description: "Whether the provider supports checking free/busy schedules and finding optimal meeting times."}) 
+    SupportsFreeBusy?: boolean;
+        
+    @Field({nullable: true, description: "Enterprise mailbox scope posture for this provider: UtilityMailboxesOnly (restricted to shared/agent utility mailboxes), SecurityGroupScoped (Exchange RBAC / Workspace group-scoped user mailboxes), or TenantWide."}) 
+    @MaxLength(40)
+    EnterpriseScopeMode?: string;
+        
+    @Field({nullable: true, description: "Optional comma-separated list of corporate email domains permitted for user-scoped mailbox and calendar operations (e.g., \"company.com,subsidiary.com\")."}) 
+    @MaxLength(500)
+    AllowedEmailDomains?: string;
+        
+    @Field({nullable: true, description: "Optional default MJ Credential used by this communication provider when no per-request credential override is supplied."}) 
+    @MaxLength(36)
+    DefaultCredentialID?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    DefaultCredential?: string;
+        
     @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
     ReadableFields___?: string[];
         
@@ -30245,6 +30277,21 @@ export class CreateMJCommunicationProviderInput {
     @Field(() => Boolean, { nullable: true })
     SupportsDrafts?: boolean;
 
+    @Field(() => Boolean, { nullable: true })
+    SupportsCalendar?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    SupportsFreeBusy?: boolean;
+
+    @Field({ nullable: true })
+    EnterpriseScopeMode?: string;
+
+    @Field({ nullable: true })
+    AllowedEmailDomains: string | null;
+
+    @Field({ nullable: true })
+    DefaultCredentialID: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -30284,6 +30331,21 @@ export class UpdateMJCommunicationProviderInput {
 
     @Field(() => Boolean, { nullable: true })
     SupportsDrafts?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    SupportsCalendar?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    SupportsFreeBusy?: boolean;
+
+    @Field({ nullable: true })
+    EnterpriseScopeMode?: string;
+
+    @Field({ nullable: true })
+    AllowedEmailDomains?: string | null;
+
+    @Field({ nullable: true })
+    DefaultCredentialID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

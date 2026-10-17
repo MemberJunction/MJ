@@ -44,6 +44,10 @@
               "Scoped Search",
               "Schedule Next Agent Wake",
               "Configure Agent User Policy",
+              "Verify My Communication Capabilities",
+              "Get My Calendar Events and Availability",
+              "Manage My Calendar Event",
+              "Manage My Email Inbox and Drafts",
               "Chief of Staff Inter-Agent Request",
               "Prepare Chief of Staff Outbound Call",
               "Query Scheduled Jobs",
@@ -264,6 +268,46 @@
           },
           "primaryKey": {
             "ID": "C05A8E01-4C11-4E8A-9B01-1A2B3C4D5E33"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Verify My Communication Capabilities",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "C05A8E01-4C11-4E8A-9B01-1A2B3C4D5E34"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Get My Calendar Events and Availability",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "C05A8E01-4C11-4E8A-9B01-1A2B3C4D5E35"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Manage My Calendar Event",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "C05A8E01-4C11-4E8A-9B01-1A2B3C4D5E36"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Manage My Email Inbox and Drafts",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "C05A8E01-4C11-4E8A-9B01-1A2B3C4D5E37"
           }
         }
       ],

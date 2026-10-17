@@ -4203,6 +4203,18 @@ export const MJAIAgentUserPolicySchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    CalendarChannelMode: z.union([z.literal('Autonomous'), z.literal('Disabled'), z.literal('ProposeWithApproval'), z.literal('ReadOnly')]).describe(`
+        * * Field Name: CalendarChannelMode
+        * * Display Name: Calendar Channel Mode
+        * * SQL Data Type: nvarchar(30)
+        * * Default Value: ReadOnly
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Autonomous
+    *   * Disabled
+    *   * ProposeWithApproval
+    *   * ReadOnly
+        * * Description: Calendar channel permission level: Disabled, ReadOnly (check events & free/busy only), ProposeWithApproval (create/modify events or send invites only with explicit user approval), or Autonomous.`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent Name
@@ -12163,6 +12175,44 @@ export const MJCommunicationProviderSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Whether or not the provider supports creating draft messages`),
+    SupportsCalendar: z.boolean().describe(`
+        * * Field Name: SupportsCalendar
+        * * Display Name: Supports Calendar
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether the provider supports calendar event reading, creation, updating, and invitation responses.`),
+    SupportsFreeBusy: z.boolean().describe(`
+        * * Field Name: SupportsFreeBusy
+        * * Display Name: Supports Free Busy
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether the provider supports checking free/busy schedules and finding optimal meeting times.`),
+    EnterpriseScopeMode: z.union([z.literal('SecurityGroupScoped'), z.literal('TenantWide'), z.literal('UtilityMailboxesOnly')]).describe(`
+        * * Field Name: EnterpriseScopeMode
+        * * Display Name: Enterprise Scope Mode
+        * * SQL Data Type: nvarchar(40)
+        * * Default Value: UtilityMailboxesOnly
+    * * Value List Type: List
+    * * Possible Values 
+    *   * SecurityGroupScoped
+    *   * TenantWide
+    *   * UtilityMailboxesOnly
+        * * Description: Enterprise mailbox scope posture for this provider: UtilityMailboxesOnly (restricted to shared/agent utility mailboxes), SecurityGroupScoped (Exchange RBAC / Workspace group-scoped user mailboxes), or TenantWide.`),
+    AllowedEmailDomains: z.string().nullable().describe(`
+        * * Field Name: AllowedEmailDomains
+        * * Display Name: Allowed Email Domains
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Optional comma-separated list of corporate email domains permitted for user-scoped mailbox and calendar operations (e.g., "company.com,subsidiary.com").`),
+    DefaultCredentialID: z.string().nullable().describe(`
+        * * Field Name: DefaultCredentialID
+        * * Display Name: Default Credential ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Credentials (vwCredentials.ID)
+        * * Description: Optional default MJ Credential used by this communication provider when no per-request credential override is supplied.`),
+    DefaultCredential: z.string().nullable().describe(`
+        * * Field Name: DefaultCredential
+        * * Display Name: Default Credential
+        * * SQL Data Type: nvarchar(200)`),
 });
 
 export type MJCommunicationProviderEntityType = z.infer<typeof MJCommunicationProviderSchema>;
@@ -50488,6 +50538,26 @@ export class MJAIAgentUserPolicyEntity extends BaseEntity<MJAIAgentUserPolicyEnt
     }
 
     /**
+    * * Field Name: CalendarChannelMode
+    * * Display Name: Calendar Channel Mode
+    * * SQL Data Type: nvarchar(30)
+    * * Default Value: ReadOnly
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Autonomous
+    *   * Disabled
+    *   * ProposeWithApproval
+    *   * ReadOnly
+    * * Description: Calendar channel permission level: Disabled, ReadOnly (check events & free/busy only), ProposeWithApproval (create/modify events or send invites only with explicit user approval), or Autonomous.
+    */
+    get CalendarChannelMode(): 'Autonomous' | 'Disabled' | 'ProposeWithApproval' | 'ReadOnly' {
+        return this.Get('CalendarChannelMode');
+    }
+    set CalendarChannelMode(value: 'Autonomous' | 'Disabled' | 'ProposeWithApproval' | 'ReadOnly') {
+        this.Set('CalendarChannelMode', value);
+    }
+
+    /**
     * * Field Name: Agent
     * * Display Name: Agent Name
     * * SQL Data Type: nvarchar(255)
@@ -74912,6 +74982,89 @@ export class MJCommunicationProviderEntity extends BaseEntity<MJCommunicationPro
     }
     set SupportsDrafts(value: boolean) {
         this.Set('SupportsDrafts', value);
+    }
+
+    /**
+    * * Field Name: SupportsCalendar
+    * * Display Name: Supports Calendar
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether the provider supports calendar event reading, creation, updating, and invitation responses.
+    */
+    get SupportsCalendar(): boolean {
+        return this.Get('SupportsCalendar');
+    }
+    set SupportsCalendar(value: boolean) {
+        this.Set('SupportsCalendar', value);
+    }
+
+    /**
+    * * Field Name: SupportsFreeBusy
+    * * Display Name: Supports Free Busy
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether the provider supports checking free/busy schedules and finding optimal meeting times.
+    */
+    get SupportsFreeBusy(): boolean {
+        return this.Get('SupportsFreeBusy');
+    }
+    set SupportsFreeBusy(value: boolean) {
+        this.Set('SupportsFreeBusy', value);
+    }
+
+    /**
+    * * Field Name: EnterpriseScopeMode
+    * * Display Name: Enterprise Scope Mode
+    * * SQL Data Type: nvarchar(40)
+    * * Default Value: UtilityMailboxesOnly
+    * * Value List Type: List
+    * * Possible Values 
+    *   * SecurityGroupScoped
+    *   * TenantWide
+    *   * UtilityMailboxesOnly
+    * * Description: Enterprise mailbox scope posture for this provider: UtilityMailboxesOnly (restricted to shared/agent utility mailboxes), SecurityGroupScoped (Exchange RBAC / Workspace group-scoped user mailboxes), or TenantWide.
+    */
+    get EnterpriseScopeMode(): 'SecurityGroupScoped' | 'TenantWide' | 'UtilityMailboxesOnly' {
+        return this.Get('EnterpriseScopeMode');
+    }
+    set EnterpriseScopeMode(value: 'SecurityGroupScoped' | 'TenantWide' | 'UtilityMailboxesOnly') {
+        this.Set('EnterpriseScopeMode', value);
+    }
+
+    /**
+    * * Field Name: AllowedEmailDomains
+    * * Display Name: Allowed Email Domains
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Optional comma-separated list of corporate email domains permitted for user-scoped mailbox and calendar operations (e.g., "company.com,subsidiary.com").
+    */
+    get AllowedEmailDomains(): string | null {
+        return this.Get('AllowedEmailDomains');
+    }
+    set AllowedEmailDomains(value: string | null) {
+        this.Set('AllowedEmailDomains', value);
+    }
+
+    /**
+    * * Field Name: DefaultCredentialID
+    * * Display Name: Default Credential ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Credentials (vwCredentials.ID)
+    * * Description: Optional default MJ Credential used by this communication provider when no per-request credential override is supplied.
+    */
+    get DefaultCredentialID(): string | null {
+        return this.Get('DefaultCredentialID');
+    }
+    set DefaultCredentialID(value: string | null) {
+        this.Set('DefaultCredentialID', value);
+    }
+
+    /**
+    * * Field Name: DefaultCredential
+    * * Display Name: Default Credential
+    * * SQL Data Type: nvarchar(200)
+    */
+    get DefaultCredential(): string | null {
+        return this.Get('DefaultCredential');
     }
 }
 
