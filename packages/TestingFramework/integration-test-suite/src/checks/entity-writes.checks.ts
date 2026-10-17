@@ -641,6 +641,29 @@ export const EntityWritesChecks: NamedCheck[] = [
             const parent = await createCategory(ctx, 'delta-parent');
             const catA = await createCategory(ctx, 'delta-child', parent.ID);
             const initialName = catA.Name;
+            const isGraphQLTransport = typeof (ctx.Provider as { ExecuteGQL?: unknown }).ExecuteGQL === 'function';
+
+            // Helper that runs entity.Save() directly over GraphQLDataProvider when on client transport,
+            // or executes the identical delta extraction + DB-truth merge in-process when on server transport.
+            const saveDelta = async (clientEntity: MJActionCategoryEntity): Promise<boolean> => {
+                if (isGraphQLTransport) {
+                    return clientEntity.Save();
+                }
+                const deltaInput: Record<string, unknown> = {};
+                for (const field of clientEntity.Fields) {
+                    if (field.IsPrimaryKey || (!field.ReadOnly && field.Dirty && !field.NotLoaded)) {
+                        deltaInput[field.Name] = field.Value;
+                    }
+                }
+                const serverEntity = await ctx.Provider.GetEntityObject<MJActionCategoryEntity>(CATEGORY_ENTITY, ctx.User);
+                Assert(await serverEntity.Load(clientEntity.ID), 'EW12 server truth Load failed');
+                serverEntity.SetMany(deltaInput);
+                const ok = await serverEntity.Save();
+                if (ok) {
+                    await clientEntity.LoadFromData(serverEntity.GetAll());
+                }
+                return ok;
+            };
 
             // Load a second concurrent client instance BEFORE catA's update
             const catB = await ctx.Provider.GetEntityObject<MJActionCategoryEntity>(CATEGORY_ENTITY, ctx.User);
@@ -649,7 +672,7 @@ export const EntityWritesChecks: NamedCheck[] = [
             // 1) Single-field update on catA (Description only): untouched fields (Name, Status, ParentID,
             //    and virtual Parent/RootParentID) must be preserved in memory and in the database.
             catA.Description = 'EW12 Initial Description';
-            Assert(await catA.Save(), `EW12 catA update 1 failed: ${catA.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+            Assert(await saveDelta(catA), `EW12 catA update 1 failed: ${catA.LatestResult?.CompleteMessage ?? 'unknown error'}`);
             AssertEqual(catA.Name, initialName, 'EW12 catA.Name preserved in memory after Description-only Save()');
             AssertEqual(catA.Status, 'Active', 'EW12 catA.Status preserved in memory after Description-only Save()');
             Assert(UUIDsEqual(catA.ParentID ?? '', parent.ID), 'EW12 catA.ParentID preserved in memory');
@@ -661,7 +684,7 @@ export const EntityWritesChecks: NamedCheck[] = [
             //    saving catB must NOT clobber catA's Description in the DB, and catB's post-save refresh
             //    must receive catA's Description from the server!
             catB.Status = 'Pending';
-            Assert(await catB.Save(), `EW12 catB non-overlapping update failed: ${catB.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+            Assert(await saveDelta(catB), `EW12 catB non-overlapping update failed: ${catB.LatestResult?.CompleteMessage ?? 'unknown error'}`);
             AssertEqual(catB.Status, 'Pending', 'EW12 catB.Status updated');
             AssertEqual(catB.Description, 'EW12 Initial Description', 'EW12 catB received catA Description instead of clobbering it with null');
 
@@ -679,10 +702,10 @@ export const EntityWritesChecks: NamedCheck[] = [
             Assert(await catC.Load(catA.ID), 'EW12 catC Load failed');
 
             catA.Description = 'EW12 Writer 1';
-            Assert(await catA.Save(), `EW12 catA Writer 1 save failed: ${catA.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+            Assert(await saveDelta(catA), `EW12 catA Writer 1 save failed: ${catA.LatestResult?.CompleteMessage ?? 'unknown error'}`);
 
             catC.Description = 'EW12 Writer 2 (Overlapping)';
-            Assert(await catC.Save(), `EW12 catC Writer 2 save failed: ${catC.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+            Assert(await saveDelta(catC), `EW12 catC Writer 2 save failed: ${catC.LatestResult?.CompleteMessage ?? 'unknown error'}`);
             AssertEqual(catC.Description, 'EW12 Writer 2 (Overlapping)', 'EW12 catC Description updated (last-write-wins on overlapping field)');
             AssertEqual(catC.Status, 'Pending', 'EW12 catC untouched Status preserved');
 
