@@ -103,6 +103,7 @@ describe('ResolvePromptPrimaryModelId', () => {
     });
 
     it('falls back to null-configuration bindings when no configuration in the chain has matching rows', () => {
+        const UNRELATED_CONFIG_ID = '77777777-7777-4777-8777-777777777777';
         vi.spyOn(AIEngine, 'Instance', 'get').mockReturnValue({
             PromptModels: [
                 makePromptModel({
@@ -110,6 +111,13 @@ describe('ResolvePromptPrimaryModelId', () => {
                     ModelID: MODEL_CLAUDE,
                     ConfigurationID: CHILD_CONFIG_ID,
                     Priority: 10,
+                    Status: 'Active',
+                }),
+                makePromptModel({
+                    PromptID: PROMPT_ID,
+                    ModelID: MODEL_GPT,
+                    ConfigurationID: UNRELATED_CONFIG_ID,
+                    Priority: 50,
                     Status: 'Active',
                 }),
                 makePromptModel({

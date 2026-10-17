@@ -113,12 +113,22 @@ describe('PickReferences', () => {
 });
 
 describe('BuildReferenceBlocks', () => {
-    it('builds a single image_url block with referenceKind "Image" for Image and Screenshot assets without calling extractKeyframes', async () => {
+    it('builds a single image_url block with referenceKind "Image" using the stored file ContentType (e.g. image/jpeg on a Conversation attachment) without calling extractKeyframes', async () => {
         const extractKeyframes = vi.fn();
-        const bytes = Buffer.from('fake-png-bytes');
-        const asset = makeAsset({ Key: 'ref:hero.jpg', Kind: 'Screenshot', Source: 'hero.jpg' });
+        const bytes = Buffer.from('fake-jpeg-bytes');
+        const asset = makeAsset({
+            Key: 'attachment:att-1',
+            Kind: 'Image',
+            Source: 'Conversation attachment att-1',
+        });
 
-        const result = await BuildReferenceBlocks(asset, bytes, true, extractKeyframes);
+        const result = await BuildReferenceBlocks(
+            asset,
+            bytes,
+            true,
+            extractKeyframes,
+            'image/jpeg',
+        );
 
         expect(extractKeyframes).not.toHaveBeenCalled();
         expect(result.referenceKind).toBe('Image');
@@ -134,9 +144,19 @@ describe('BuildReferenceBlocks', () => {
     it('builds a single video_url block with referenceKind "Video (native)" when videoCapable is true and size <= 20 MiB', async () => {
         const extractKeyframes = vi.fn();
         const bytes = Buffer.from('small-mp4-video');
-        const asset = makeAsset({ Key: 'ref:clip.mp4', Kind: 'Video', Source: 'clip.mp4' });
+        const asset = makeAsset({
+            Key: 'attachment:att-2',
+            Kind: 'Video',
+            Source: 'Conversation attachment att-2',
+        });
 
-        const result = await BuildReferenceBlocks(asset, bytes, true, extractKeyframes);
+        const result = await BuildReferenceBlocks(
+            asset,
+            bytes,
+            true,
+            extractKeyframes,
+            'video/mp4',
+        );
 
         expect(extractKeyframes).not.toHaveBeenCalled();
         expect(result.referenceKind).toBe('Video (native)');
@@ -175,10 +195,20 @@ describe('BuildReferenceBlocks', () => {
             Sheets: sheets,
         } satisfies KeyframeResult);
 
-        const bytes = Buffer.from('mp4-for-claude');
-        const asset = makeAsset({ Key: 'ref:demo.webm', Kind: 'Video', Source: 'demo.webm' });
+        const bytes = Buffer.from('webm-for-claude');
+        const asset = makeAsset({
+            Key: 'attachment:att-3',
+            Kind: 'Video',
+            Source: 'Conversation attachment att-3',
+        });
 
-        const result = await BuildReferenceBlocks(asset, bytes, false, extractKeyframes);
+        const result = await BuildReferenceBlocks(
+            asset,
+            bytes,
+            false,
+            extractKeyframes,
+            'video/webm',
+        );
 
         expect(extractKeyframes).toHaveBeenCalledTimes(1);
         expect(extractKeyframes).toHaveBeenCalledWith({
@@ -215,7 +245,13 @@ describe('BuildReferenceBlocks', () => {
         const oversizedBytes = Buffer.alloc(MAX_INLINE_REFERENCE_VIDEO_BYTES + 1, 0x41);
         const asset = makeAsset({ Key: 'ref:large.mp4', Kind: 'Video', Source: 'large.mp4' });
 
-        const result = await BuildReferenceBlocks(asset, oversizedBytes, true, extractKeyframes);
+        const result = await BuildReferenceBlocks(
+            asset,
+            oversizedBytes,
+            true,
+            extractKeyframes,
+            'video/mp4',
+        );
 
         expect(extractKeyframes).toHaveBeenCalledTimes(1);
         expect(result.referenceKind).toBe('Video (keyframes)');

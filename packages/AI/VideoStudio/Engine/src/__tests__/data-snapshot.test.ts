@@ -859,7 +859,7 @@ describe('VS-DAT-1: CaptureDataSnapshot & LoadDataSnapshotValues', () => {
             {
                 EntityName: 'MJ: Files',
                 ExtraFilter: `ID = '${FILE_ID_1}'`,
-                Fields: ['ProviderID', 'ProviderKey', 'Name'],
+                Fields: ['ProviderID', 'ProviderKey', 'Name', 'ContentType'],
                 ResultType: 'simple',
             },
             contextUser,

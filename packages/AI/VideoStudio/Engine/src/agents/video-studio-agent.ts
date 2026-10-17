@@ -853,12 +853,19 @@ export class VideoStudioAgent extends BaseAgent {
                     .map((a) => a.ArtifactVersionID)
                     .filter((id): id is string => Boolean(id)),
             );
+            const existingSources = new Set(
+                approvedList
+                    .map((a) => a.Source?.trim().toLowerCase())
+                    .filter((s): s is string => Boolean(s)),
+            );
 
             for (const row of res.Results) {
-                if (!row || !row.ID) {
+                const rowId = row?.ID?.trim();
+                if (!row || !rowId) {
                     continue;
                 }
                 try {
+                    const attachmentSource = `Conversation attachment ${rowId}`;
                     let fileId = row.FileID?.trim() || undefined;
                     const artifactVersionId = row.ArtifactVersionID?.trim() || undefined;
 
@@ -866,6 +873,9 @@ export class VideoStudioAgent extends BaseAgent {
                         continue;
                     }
                     if (artifactVersionId && existingArtifactVersionIds.Has(artifactVersionId)) {
+                        continue;
+                    }
+                    if (existingSources.has(attachmentSource.toLowerCase())) {
                         continue;
                     }
 
@@ -878,7 +888,7 @@ export class VideoStudioAgent extends BaseAgent {
                             ? rawInline.slice(rawInline.indexOf(',') + 1)
                             : rawInline;
                         const content = Buffer.from(base64Payload, 'base64');
-                        const fileName = row.FileName?.trim() || row.ID;
+                        const fileName = row.FileName?.trim() || rowId;
                         const mimeType = row.MimeType?.trim() || 'image/png';
                         const storedFileId = await StoreFile({
                             Content: content,
@@ -890,7 +900,7 @@ export class VideoStudioAgent extends BaseAgent {
                         });
                         if (!storedFileId) {
                             LogError(
-                                `VideoStudioAgent: StoreFile returned no FileID for inline conversation attachment "${row.ID}".`,
+                                `VideoStudioAgent: StoreFile returned no FileID for inline conversation attachment "${rowId}".`,
                             );
                             continue;
                         }
@@ -906,7 +916,7 @@ export class VideoStudioAgent extends BaseAgent {
                         ? 'Video'
                         : 'Image';
 
-                    const baseKey = `attachment:${row.FileName?.trim() || row.ID}`;
+                    const baseKey = `attachment:${row.FileName?.trim() || rowId}`;
                     let uniqueKey = baseKey;
                     let suffix = 2;
                     while (approvedList.some((a) => a.Key === uniqueKey)) {
@@ -919,7 +929,7 @@ export class VideoStudioAgent extends BaseAgent {
                         Kind: kind,
                         ...(fileId ? { FileID: fileId } : {}),
                         ...(artifactVersionId ? { ArtifactVersionID: artifactVersionId } : {}),
-                        Source: 'Conversation attachment',
+                        Source: attachmentSource,
                         Provenance: 'Supplied',
                         Usage: 'User-supplied reference',
                         MustUse: false,
@@ -931,10 +941,11 @@ export class VideoStudioAgent extends BaseAgent {
                     if (artifactVersionId) {
                         existingArtifactVersionIds.Add(artifactVersionId);
                     }
+                    existingSources.add(attachmentSource.toLowerCase());
                 } catch (rowErr) {
                     const msg = rowErr instanceof Error ? rowErr.message : String(rowErr);
                     LogError(
-                        `VideoStudioAgent: failed to intake conversation attachment "${row.ID}": ${msg}`,
+                        `VideoStudioAgent: failed to intake conversation attachment "${rowId}": ${msg}`,
                     );
                 }
             }

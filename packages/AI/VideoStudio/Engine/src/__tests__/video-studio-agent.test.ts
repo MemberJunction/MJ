@@ -390,7 +390,7 @@ describe('VideoStudioAgent conversation attachment intake (VS-AGT-6)', () => {
                 Key: 'attachment:moodboard.png',
                 Kind: 'Image',
                 FileID: 'AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA',
-                Source: 'Conversation attachment',
+                Source: 'Conversation attachment att-1',
                 Provenance: 'Supplied',
                 Usage: 'User-supplied reference',
                 MustUse: false,
@@ -399,7 +399,7 @@ describe('VideoStudioAgent conversation attachment intake (VS-AGT-6)', () => {
                 Key: 'attachment:reference-reel.mp4',
                 Kind: 'Video',
                 ArtifactVersionID: 'BBBBBBBB-BBBB-4BBB-8BBB-BBBBBBBBBBBB',
-                Source: 'Conversation attachment',
+                Source: 'Conversation attachment att-2',
                 Provenance: 'Supplied',
                 Usage: 'User-supplied reference',
                 MustUse: false,
@@ -408,12 +408,83 @@ describe('VideoStudioAgent conversation attachment intake (VS-AGT-6)', () => {
                 Key: 'attachment:sketch.jpg',
                 Kind: 'Image',
                 FileID: 'DDDDDDDD-DDDD-4DDD-8DDD-DDDDDDDDDDDD',
-                Source: 'Conversation attachment',
+                Source: 'Conversation attachment att-3',
                 Provenance: 'Supplied',
                 Usage: 'User-supplied reference',
                 MustUse: false,
             },
         ]);
+    });
+
+    it('deduplicates inline-only conversation attachments across turns without re-running StoreFile or appending a :2 asset', async () => {
+        const { getSeededPayload } = setupBaseMocks();
+        const harness = createHarness(['Video Studio']);
+
+        const inlineRow = {
+            ID: 'att-inline-1',
+            MimeType: 'image/jpeg',
+            FileName: 'sketch.jpg',
+            FileID: null,
+            InlineData: `data:image/jpeg;base64,${Buffer.from('jpeg-bytes').toString('base64')}`,
+            ArtifactVersionID: null,
+        };
+        vi.spyOn(RunView.prototype, 'RunView').mockResolvedValue({
+            Success: true,
+            Results: [inlineRow],
+        } as unknown as RunViewResult);
+
+        let uploadCounter = 0;
+        const storeFileSpy = vi.spyOn(storageModule, 'StoreFile').mockImplementation(async () => {
+            uploadCounter += 1;
+            return uploadCounter === 1
+                ? 'DDDDDDDD-DDDD-4DDD-8DDD-DDDDDDDDDDDD'
+                : 'EEEEEEEE-EEEE-4EEE-8EEE-EEEEEEEEEEEE';
+        });
+
+        const invokeInternal = harness.agent as unknown as {
+            executeAgentInternal: (
+                params: ExecuteAgentParams<Partial<VideoGenerationSpec>>,
+                config: AgentConfiguration,
+            ) => Promise<unknown>;
+        };
+
+        // Turn 1: initial run intakes the inline attachment via StoreFile
+        await invokeInternal.executeAgentInternal(
+            {
+                agent: harness.agentEntity,
+                contextUser: harness.contextUser,
+                conversationId: 'conv-multi-turn',
+                conversationMessages: [],
+                payload: {},
+            },
+            {} as AgentConfiguration,
+        );
+        const turn1Seeded = getSeededPayload();
+        expect(storeFileSpy).toHaveBeenCalledTimes(1);
+        expect(turn1Seeded?.Assets?.Approved).toHaveLength(1);
+        expect(turn1Seeded?.Assets?.Approved[0]).toMatchObject({
+            Key: 'attachment:sketch.jpg',
+            FileID: 'DDDDDDDD-DDDD-4DDD-8DDD-DDDDDDDDDDDD',
+            Source: 'Conversation attachment att-inline-1',
+        });
+
+        // Turn 2: pass turn 1's seeded payload back in with the same inline attachment row still in the DB
+        await invokeInternal.executeAgentInternal(
+            {
+                agent: harness.agentEntity,
+                contextUser: harness.contextUser,
+                conversationId: 'conv-multi-turn',
+                conversationMessages: [],
+                payload: structuredClone(turn1Seeded),
+            },
+            {} as AgentConfiguration,
+        );
+        const turn2Seeded = getSeededPayload();
+        expect(storeFileSpy).toHaveBeenCalledTimes(1);
+        expect(
+            turn2Seeded?.Assets?.Approved.filter((a) => a.Key.startsWith('attachment:')),
+        ).toHaveLength(1);
+        expect(turn2Seeded?.Assets?.Approved[0].Key).toBe('attachment:sketch.jpg');
     });
 
     it('skips attachment RunView when conversationId is omitted and never fails the run when RunView throws or returns Success: false', async () => {

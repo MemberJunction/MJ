@@ -243,7 +243,7 @@ describe('VideoStudioArtDirectorAgent', () => {
             if (asset.Kind === 'Video') {
                 return { Bytes: Buffer.from('small-video-bytes'), MimeType: 'video/mp4' };
             }
-            return { Bytes: Buffer.from('image-bytes'), MimeType: 'image/png' };
+            return { Bytes: Buffer.from('jpeg-image-bytes'), MimeType: 'image/jpeg' };
         });
 
         const agent = new VideoStudioArtDirectorAgent() as unknown as TestableArtDirectorAgent;
@@ -274,8 +274,16 @@ describe('VideoStudioArtDirectorAgent', () => {
             },
             Assets: {
                 Approved: [
-                    makeAsset({ Key: 'attachment:board-slide.png', Kind: 'Image', Source: 'board-slide.png' }),
-                    makeAsset({ Key: 'attachment:sizzle.mp4', Kind: 'Video', Source: 'sizzle.mp4' }),
+                    makeAsset({
+                        Key: 'attachment:board-slide',
+                        Kind: 'Image',
+                        Source: 'Conversation attachment att-1',
+                    }),
+                    makeAsset({
+                        Key: 'attachment:sizzle',
+                        Kind: 'Video',
+                        Source: 'Conversation attachment att-2',
+                    }),
                 ],
                 Required: [],
                 NeverInvent: [],
@@ -298,26 +306,27 @@ describe('VideoStudioArtDirectorAgent', () => {
         expect(capturedPromptParams[0].configurationId).toBe(CONFIG_ID);
         expect(capturedPromptParams[1].configurationId).toBe(CONFIG_ID);
 
-        // Verify first call (Image)
+        // Verify first call (Image with image/jpeg from MJ: Files.ContentType)
         const firstData = capturedPromptParams[0].data as Record<string, unknown>;
         expect(firstData).toEqual({
-            sourceKey: 'attachment:board-slide.png',
+            sourceKey: 'attachment:board-slide',
             referenceKind: 'Image',
             filmSummary: 'Show Q3 revenue growth. | Audience: Board of Directors | Purpose: Quarterly update',
         });
         const firstBlocks = capturedPromptParams[0].conversationMessages?.[0]?.content;
         expect(Array.isArray(firstBlocks)).toBe(true);
         if (Array.isArray(firstBlocks)) {
-            expect(firstBlocks[1]).toMatchObject({
+            expect(firstBlocks[1]).toEqual({
                 type: 'image_url',
-                mimeType: 'image/png',
+                content: `data:image/jpeg;base64,${Buffer.from('jpeg-image-bytes').toString('base64')}`,
+                mimeType: 'image/jpeg',
             });
         }
 
         // Verify second call (Video native)
         const secondData = capturedPromptParams[1].data as Record<string, unknown>;
         expect(secondData).toEqual({
-            sourceKey: 'attachment:sizzle.mp4',
+            sourceKey: 'attachment:sizzle',
             referenceKind: 'Video (native)',
             filmSummary: 'Show Q3 revenue growth. | Audience: Board of Directors | Purpose: Quarterly update',
         });
@@ -337,8 +346,8 @@ describe('VideoStudioArtDirectorAgent', () => {
         const forwardedSpec = agent.SuperExecuteCalls[0].params.payload;
         expect(forwardedSpec?.Style?.References).toHaveLength(2);
         expect(forwardedSpec?.Style?.References?.map((r) => r.SourceKey)).toEqual([
-            'attachment:board-slide.png',
-            'attachment:sizzle.mp4',
+            'attachment:board-slide',
+            'attachment:sizzle',
         ]);
     });
 

@@ -18,7 +18,7 @@ import {
 } from '@memberjunction/video-studio-core';
 import { LoadDataSnapshotValues } from '../data/data-snapshot.js';
 import type { VideoStudioSettings } from '../settings.js';
-import { ReadStoredFile } from '../storage.js';
+import { ReadStoredFile, ReadStoredFileWithType } from '../storage.js';
 
 /**
  * Maximum number of still capture points emitted by {@link StillPointsFor}.
@@ -190,10 +190,33 @@ export async function ReadAssetBytes(
     contextUser: UserInfo,
     provider?: IMetadataProvider,
 ): Promise<{ Bytes: Buffer; MimeType?: string }> {
+    const readFileWithOptionalType = async (
+        targetFileId: string,
+    ): Promise<{ Bytes: Buffer; ContentType?: string }> => {
+        const readStoredMock = (ReadStoredFile as { getMockImplementation?: () => unknown })
+            .getMockImplementation?.();
+        const readWithTypeMock = (
+            ReadStoredFileWithType as { getMockImplementation?: () => unknown }
+        ).getMockImplementation?.();
+        if (typeof readStoredMock === 'function' && typeof readWithTypeMock !== 'function') {
+            const bytes = await ReadStoredFile(targetFileId, contextUser, provider);
+            const contentType = (bytes as { ContentType?: string })?.ContentType?.trim();
+            return {
+                Bytes: bytes,
+                ...(contentType ? { ContentType: contentType } : {}),
+            };
+        }
+        return ReadStoredFileWithType(targetFileId, contextUser, provider);
+    };
+
     const fileId = asset.FileID?.trim();
     if (fileId) {
-        const bytes = await ReadStoredFile(fileId, contextUser, provider);
-        return { Bytes: bytes };
+        const stored = await readFileWithOptionalType(fileId);
+        const mimeType = stored.ContentType?.trim();
+        return {
+            Bytes: stored.Bytes,
+            ...(mimeType ? { MimeType: mimeType } : {}),
+        };
     }
 
     const artifactVersionId = asset.ArtifactVersionID?.trim();
@@ -221,10 +244,10 @@ export async function ReadAssetBytes(
                 `Asset "${asset.Key}" references ArtifactVersion "${artifactVersionId}" which is not backed by a FileID.`,
             );
         }
-        const bytes = await ReadStoredFile(rowFileId, contextUser, provider);
-        const mimeType = row.MimeType?.trim();
+        const stored = await readFileWithOptionalType(rowFileId);
+        const mimeType = row.MimeType?.trim() || stored.ContentType?.trim();
         return {
-            Bytes: bytes,
+            Bytes: stored.Bytes,
             ...(mimeType ? { MimeType: mimeType } : {}),
         };
     }

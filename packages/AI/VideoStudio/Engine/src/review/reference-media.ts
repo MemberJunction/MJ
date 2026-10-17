@@ -185,27 +185,7 @@ function resolveAssetMimeType(asset: VideoAsset, mimeTypeOverride?: string): str
         return trimmedOverride;
     }
 
-    const hint = (asset.Source || asset.Key || '').toLowerCase();
-    if (asset.Kind === 'Video') {
-        if (hint.endsWith('.webm')) {
-            return 'video/webm';
-        }
-        return 'video/mp4';
-    }
-
-    if (hint.endsWith('.jpg') || hint.endsWith('.jpeg')) {
-        return 'image/jpeg';
-    }
-    if (hint.endsWith('.webp')) {
-        return 'image/webp';
-    }
-    if (hint.endsWith('.gif')) {
-        return 'image/gif';
-    }
-    if (hint.endsWith('.svg')) {
-        return 'image/svg+xml';
-    }
-    return 'image/png';
+    return asset.Kind === 'Video' ? 'video/mp4' : 'image/png';
 }
 
 function normalizeVideoMimeType(mimeType: string): 'video/mp4' | 'video/webm' {
