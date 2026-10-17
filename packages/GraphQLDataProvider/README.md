@@ -165,6 +165,17 @@ async function deleteUser(userId: number) {
 }
 ```
 
+#### Delta-Only `Save()` Wire Protocol on `Update` Mutations
+
+When saving an existing entity (`entity.IsSaved === true`) over `GraphQLDataProvider.Save()`, the provider transmits **only** the record's primary key(s) and dirty writable fields (`f.Dirty === true`, including dirty parent-chain fields in an IS-A hierarchy):
+
+- **`vars.input`**: Contains only primary keys and dirty writable fields. Clean fields, read-only fields (`__mj_CreatedAt`, `__mj_UpdatedAt`), virtual fields, and `NotLoaded` fields are omitted from the mutation input.
+- **`vars.input.OldValues___`**: Contains `Key`/`Value` pairs **only** for primary keys and dirty writable fields (recording their pre-mutation `OldValue` for server-side concurrency conflict detection).
+- **Server-Side Partial-Delta Handling (`ResolverBase`)**: When `ResolverBase.UpdateRecord` receives a partial-delta `OldValues___`, `MustLoadTruthFromDatabase` loads the authoritative row from the database (`InnerLoad`) before `TestAndSetClientOldValuesToDBValues` compares the dirty fields' old values against the database and applies `entityObject.SetMany(clientNewValues)` — preserving all untouched columns in the database.
+- **Full Response Selection**: The GraphQL mutation response selection set still requests all readable fields so `BaseEntity.finalizeSave()` refreshes server-generated timestamps and computed/virtual columns without marking clean fields `NotLoaded`.
+- **Forcing a Full Save (`IgnoreDirtyState: true`)**: Passing `options.IgnoreDirtyState = true` in `EntitySaveOptions` bypasses the dirty-only filter and sends all loaded writable fields in both `vars.input` and `vars.input.OldValues___`.
+- **`Create` Mutations Unchanged**: Creating a new record (`!entity.IsSaved`, or an IS-A promotion create) continues to send all loaded writable fields so client-initialized `NewRecord()` defaults and required `Create*Input` fields are transmitted.
+
 ### Executing Views and Reports
 
 ```typescript
