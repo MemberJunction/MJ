@@ -6,30 +6,17 @@ import {
   EventEmitter,
   inject,
   Input,
-  OnChanges,
   Output,
-  SimpleChanges,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { RunView } from '@memberjunction/core';
+import { LogError, RunView } from '@memberjunction/core';
 import { MJBrandKitAssetEntity, MJBrandKitEntity } from '@memberjunction/core-entities';
+import { UUIDsEqual } from '@memberjunction/global';
 import { GraphQLDataProvider, GraphQLFileStorageClient } from '@memberjunction/graphql-dataprovider';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { FileStorageModule } from '@memberjunction/ng-file-storage';
+import { FileStorageModule, FileUploadEvent } from '@memberjunction/ng-file-storage';
 import { MJStorageMediaPlayerComponent } from '@memberjunction/ng-media-player';
-
-export type BrandKitFileUploadEvent =
-  | {
-      success: true;
-      file: {
-        ID: string;
-        Name?: string;
-      };
-    }
-  | {
-      success: false;
-      file?: unknown;
-    };
+import { MJButtonDirective, MJConfirmService } from '@memberjunction/ng-ui-components';
 
 export type BrandKitAssetType = MJBrandKitAssetEntity['AssetType'];
 
@@ -82,17 +69,18 @@ export const AUDIO_ASSET_TYPES: ReadonlySet<BrandKitAssetType> = new Set<BrandKi
  * Groups assets by `AssetType`, renders type-appropriate previews (minted image URLs via
  * `GraphQLFileStorageClient.CreateMediaAccessToken`, `<mj-storage-media-player>` for audio/video,
  * font display for fonts), edits metadata (`Usage`, `IsPrimary`, `Sequence`, `LicenseNotes`,
- * and `IsGenerationReference` for visual asset types only), and adds new assets via `<mj-files-file-upload>`.
+ * and `IsGenerationReference` for visual asset types only), adds new assets via `<mj-files-file-upload>`,
+ * and deletes existing assets via `asset.Delete()` after confirmation.
  */
 @Component({
   standalone: true,
   selector: 'mj-brand-kit-assets-editor',
-  imports: [CommonModule, FormsModule, FileStorageModule, MJStorageMediaPlayerComponent],
+  imports: [CommonModule, FormsModule, FileStorageModule, MJStorageMediaPlayerComponent, MJButtonDirective],
   templateUrl: './brand-kit-assets-editor.component.html',
   styleUrls: ['./brand-kit-assets-editor.component.css'],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class BrandKitAssetsEditorComponent extends BaseAngularComponent implements OnChanges {
+export class BrandKitAssetsEditorComponent extends BaseAngularComponent {
   private _brandKit: MJBrandKitEntity | null = null;
 
   @Input()
@@ -101,6 +89,7 @@ export class BrandKitAssetsEditorComponent extends BaseAngularComponent implemen
   }
   set BrandKit(value: MJBrandKitEntity | null) {
     this._brandKit = value;
+    void this.LoadAssets();
   }
 
   @Input() Readonly = false;
@@ -114,6 +103,7 @@ export class BrandKitAssetsEditorComponent extends BaseAngularComponent implemen
   public LoadError: string | null = null;
   public SaveError: string | null = null;
   public SavingAssetIds = new Set<string>();
+  public DeletingAssetIds = new Set<string>();
 
   public NewAssetType: BrandKitAssetType = 'Logo';
   public NewAssetName = '';
@@ -123,13 +113,8 @@ export class BrandKitAssetsEditorComponent extends BaseAngularComponent implemen
   public readonly AssetTypeCatalog = ALL_BRAND_KIT_ASSET_TYPES;
 
   private readonly cdr = inject(ChangeDetectorRef);
+  private readonly confirmService = inject(MJConfirmService);
   private loadSequence = 0;
-
-  async ngOnChanges(changes: SimpleChanges): Promise<void> {
-    if ('BrandKit' in changes) {
-      await this.LoadAssets();
-    }
-  }
 
   public async LoadAssets(): Promise<void> {
     const seq = ++this.loadSequence;
@@ -217,6 +202,10 @@ export class BrandKitAssetsEditorComponent extends BaseAngularComponent implemen
     return this.SavingAssetIds.has(asset.ID);
   }
 
+  public IsDeletingAsset(asset: MJBrandKitAssetEntity): boolean {
+    return this.DeletingAssetIds.has(asset.ID);
+  }
+
   public async SaveAsset(asset: MJBrandKitAssetEntity): Promise<boolean> {
     if (this.Readonly) {
       return false;
@@ -249,7 +238,46 @@ export class BrandKitAssetsEditorComponent extends BaseAngularComponent implemen
     }
   }
 
-  public async OnFileUploaded(event: BrandKitFileUploadEvent): Promise<void> {
+  public async DeleteAsset(asset: MJBrandKitAssetEntity): Promise<boolean> {
+    if (this.Readonly) {
+      return false;
+    }
+    const confirmed = await this.confirmService.ConfirmDelete({
+      title: 'Delete Asset',
+      message: `Delete asset "${asset.Name || 'Untitled'}"?`,
+      detail: 'This removes the Brand Kit Asset link. The underlying file remains in storage.',
+    });
+    if (!confirmed) {
+      return false;
+    }
+
+    this.SaveError = null;
+    this.DeletingAssetIds.add(asset.ID);
+    this.cdr.markForCheck();
+
+    try {
+      const deleted = await asset.Delete();
+      if (!deleted) {
+        this.SaveError =
+          asset.LatestResult?.CompleteMessage ||
+          asset.LatestResult?.Message ||
+          `Failed to delete asset "${asset.Name}".`;
+        return false;
+      }
+      this.Assets = this.Assets.filter((a) => !UUIDsEqual(a.ID, asset.ID));
+      this.rebuildGroups();
+      this.AssetsChanged.emit(this.Assets);
+      return true;
+    } catch (err) {
+      this.SaveError = err instanceof Error ? err.message : String(err);
+      return false;
+    } finally {
+      this.DeletingAssetIds.delete(asset.ID);
+      this.cdr.markForCheck();
+    }
+  }
+
+  public async OnFileUploaded(event: FileUploadEvent): Promise<void> {
     if (!event.success || !event.file.ID || !this._brandKit?.ID) {
       if (!event.success) {
         this.SaveError = 'File upload failed.';
@@ -321,12 +349,11 @@ export class BrandKitAssetsEditorComponent extends BaseAngularComponent implemen
   }
 
   private async mintThumbnails(expectedSequence: number): Promise<void> {
-    const provider = this.ProviderToUse as unknown as GraphQLDataProvider | null;
-    if (!provider || typeof provider.ExecuteGQL !== 'function') {
+    if (!(this.ProviderToUse instanceof GraphQLDataProvider)) {
       return;
     }
 
-    const storageClient = new GraphQLFileStorageClient(provider);
+    const storageClient = new GraphQLFileStorageClient(this.ProviderToUse);
     const visualAssets = this.Assets.filter(
       (a) => this.IsImagePreviewType(a.AssetType) && a.FileID && !this.ThumbnailUrls.has(a.FileID)
     );
@@ -338,8 +365,8 @@ export class BrandKitAssetsEditorComponent extends BaseAngularComponent implemen
           if (expectedSequence === this.loadSequence && res.Success && res.Url) {
             this.ThumbnailUrls.set(asset.FileID, res.Url);
           }
-        } catch {
-          // Non-fatal: placeholder icon stays visible if token minting fails
+        } catch (err) {
+          LogError(err instanceof Error ? err.message : String(err));
         }
       })
     );

@@ -1,8 +1,14 @@
 import { EMPTY } from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
+import { IMetadataProvider } from '@memberjunction/core';
 import { BrandKitEngine, MJBrandKitAssetEntity, MJBrandKitEntity } from '@memberjunction/core-entities';
+import {
+  GraphQLDataProvider,
+  GraphQLFileStorageClient,
+} from '@memberjunction/graphql-dataprovider';
 import { NavigationService } from '@memberjunction/ng-shared';
 import { query, queryAll, renderComponentFixture } from '@memberjunction/ng-test-utils';
+import { MJConfirmService } from '@memberjunction/ng-ui-components';
 import { VideoStudioBrandKitsResourceComponent } from './video-studio-brand-kits-resource.component';
 
 function createNavigationServiceStub(): {
@@ -27,11 +33,20 @@ async function flushAsync(): Promise<void> {
 }
 
 describe('VideoStudioBrandKitsResourceComponent DOM', () => {
-  it('renders brand kit cards with palette swatches and asset counts, filters, renders empty state, opens entity forms, calls NotifyLoadComplete once, and publishes agent context', async () => {
+  it('renders brand kit cards with AssetType logo thumbnails, palette swatches, and asset counts, filters, deletes kits after child assets, calls NotifyLoadComplete once, and publishes agent context', async () => {
     const navStub = createNavigationServiceStub();
+    const confirmStub = {
+      ConfirmDelete: vi.fn().mockResolvedValue(true),
+    };
+    const customProvider = Object.create(GraphQLDataProvider.prototype) as IMetadataProvider;
 
-    vi.spyOn(BrandKitEngine.Instance, 'Config').mockResolvedValue(undefined);
-    vi.spyOn(BrandKitEngine.Instance, 'BrandKits', 'get').mockReturnValue([
+    const callOrder: string[] = [];
+    const defaultKitDelete = vi.fn().mockImplementation(async () => {
+      callOrder.push('kit-default');
+      return true;
+    });
+
+    const kits: MJBrandKitEntity[] = [
       {
         ID: 'kit-default',
         Name: 'MJ Default Brand Kit',
@@ -47,6 +62,8 @@ describe('VideoStudioBrandKitsResourceComponent DOM', () => {
           ],
           Typography: [],
         },
+        Delete: defaultKitDelete,
+        LatestResult: null,
       } as unknown as MJBrandKitEntity,
       {
         ID: 'kit-acme',
@@ -60,18 +77,94 @@ describe('VideoStudioBrandKitsResourceComponent DOM', () => {
           Palette: [{ Name: 'Brand', Value: 'rgb(220, 38, 38)' }],
           Typography: [],
         },
+        Delete: vi.fn().mockResolvedValue(true),
+        LatestResult: null,
       } as unknown as MJBrandKitEntity,
-    ]);
+    ];
 
-    vi.spyOn(BrandKitEngine.Instance, 'GetAssets').mockImplementation((id: string) =>
-      id === 'kit-default'
-        ? ([
-            { ID: 'a-1', Usage: 'Logo', IsPrimary: true, FileID: 'file-logo-1' },
-            { ID: 'a-2', Usage: 'Image', IsPrimary: false, FileID: 'file-img-1' },
-            { ID: 'a-3', Usage: 'Font', IsPrimary: false, FileID: 'file-font-1' },
-          ] as unknown as MJBrandKitAssetEntity[])
-        : ([] as unknown as MJBrandKitAssetEntity[]),
-    );
+    const engineStub = {
+      Config: vi.fn().mockResolvedValue(undefined),
+      BrandKits: kits,
+      GetAssets: vi.fn().mockImplementation((id: string) =>
+        id === 'kit-default'
+          ? ([
+              {
+                ID: 'a-1',
+                AssetType: 'Logo',
+                Usage: 'Primary header dark background',
+                IsPrimary: true,
+                Sequence: 10,
+                FileID: 'file-logo-1',
+                Delete: vi.fn().mockImplementation(async () => {
+                  callOrder.push('a-1');
+                  return true;
+                }),
+                LatestResult: null,
+              },
+              {
+                ID: 'a-2',
+                AssetType: 'Image',
+                Usage: 'Hero background',
+                IsPrimary: false,
+                Sequence: 20,
+                FileID: 'file-img-1',
+                Delete: vi.fn().mockImplementation(async () => {
+                  callOrder.push('a-2');
+                  return true;
+                }),
+                LatestResult: null,
+              },
+            ] as unknown as MJBrandKitAssetEntity[])
+          : ([
+              {
+                ID: 'a-3',
+                AssetType: 'LogoMark',
+                Usage: 'Compact icon',
+                IsPrimary: false,
+                Sequence: 5,
+                FileID: 'file-logomark-acme',
+              },
+              {
+                ID: 'a-4',
+                AssetType: 'Logo',
+                Usage: 'Secondary mark',
+                IsPrimary: false,
+                Sequence: 15,
+                FileID: 'file-logo-acme-secondary',
+              },
+            ] as unknown as MJBrandKitAssetEntity[]),
+      ),
+    } as unknown as BrandKitEngine;
+
+    const getProviderInstanceSpy = vi
+      .spyOn(BrandKitEngine, 'GetProviderInstance')
+      .mockReturnValue(engineStub);
+
+    Object.defineProperties(customProvider, {
+      CurrentUser: { value: { ID: 'user-1' }, configurable: true, writable: true },
+      RunView: {
+        value: vi.fn(async () => ({
+          Success: true,
+          Results: engineStub.GetAssets('kit-default'),
+          RowCount: 2,
+          TotalRowCount: 2,
+          ExecutionTime: 1,
+          ErrorMessage: '',
+        })),
+        configurable: true,
+        writable: true,
+      },
+    });
+
+    vi.spyOn(
+      GraphQLFileStorageClient.prototype,
+      'CreateMediaAccessToken',
+    ).mockImplementation(async (fileId: string) => ({
+      Success: true,
+      Url: `https://cdn.example/${fileId}.png`,
+      ExpiresAt: new Date(Date.now() + 60_000).toISOString(),
+      ErrorMessage: undefined,
+    }));
 
     const notifySpy = vi.spyOn(
       VideoStudioBrandKitsResourceComponent.prototype as unknown as {
@@ -81,7 +174,11 @@ describe('VideoStudioBrandKitsResourceComponent DOM', () => {
     );
 
     const fixture = renderComponentFixture(VideoStudioBrandKitsResourceComponent, {
-      providers: [{ provide: NavigationService, useValue: navStub }],
+      inputs: { Provider: customProvider },
+      providers: [
+        { provide: NavigationService, useValue: navStub },
+        { provide: MJConfirmService, useValue: confirmStub },
+      ],
     });
 
     await flushAsync();
@@ -89,7 +186,17 @@ describe('VideoStudioBrandKitsResourceComponent DOM', () => {
 
     const instance = fixture.componentInstance;
     expect(notifySpy).toHaveBeenCalledTimes(1);
+    expect(getProviderInstanceSpy).toHaveBeenCalledWith(customProvider, BrandKitEngine);
     expect(instance.AllBrandKits).toHaveLength(2);
+    expect(instance.AllBrandKits[0].PrimaryLogoFileID).toBe('file-logo-1');
+    expect(instance.AllBrandKits[0].PrimaryLogoUrl).toBe('https://cdn.example/file-logo-1.png');
+    // Tie-break by lowest Sequence when IsPrimary is false on all logo assets
+    expect(instance.AllBrandKits[1].PrimaryLogoFileID).toBe('file-logomark-acme');
+
+    const logoImgs = queryAll(fixture, 'img.vs-brand-kit-logo-img') as HTMLImageElement[];
+    expect(logoImgs.length).toBeGreaterThanOrEqual(1);
+    expect(logoImgs[0].getAttribute('src')).toBe('https://cdn.example/file-logo-1.png');
+
     expect(queryAll(fixture, '[data-testid^="brand-kit-card-"]')).toHaveLength(2);
     expect(query(fixture, '[data-testid="brand-kit-default-star"]')).not.toBeNull();
     expect(navStub.SetAgentClientTools).toHaveBeenCalledTimes(1);
@@ -101,6 +208,15 @@ describe('VideoStudioBrandKitsResourceComponent DOM', () => {
         FilteredBrandKitCount: 2,
       }),
     );
+
+    // Click Delete button on default kit card — deletes child assets first, then kit
+    const deleteBtn = query(fixture, '[data-testid="brand-kit-delete-kit-default"]') as HTMLElement | null;
+    expect(deleteBtn).not.toBeNull();
+    deleteBtn!.click();
+    await flushAsync();
+    fixture.detectChanges();
+    expect(confirmStub.ConfirmDelete).toHaveBeenCalledTimes(1);
+    expect(callOrder).toEqual(['a-1', 'a-2', 'kit-default']);
 
     // Click New Brand Kit button
     const newBtn = query(fixture, '[data-testid="new-brand-kit-button"]') as HTMLElement | null;

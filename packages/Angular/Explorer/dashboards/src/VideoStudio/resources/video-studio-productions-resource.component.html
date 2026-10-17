@@ -72,7 +72,7 @@
         <i class="fa-solid fa-triangle-exclamation vs-empty-icon"></i>
         <h3 class="vs-empty-title">Unable to load productions</h3>
         <p class="vs-empty-subtitle">{{ LoadError }}</p>
-        <button type="button" class="vs-secondary-button" (click)="Refresh()">
+        <button type="button" mjButton Variant="secondary" (click)="Refresh()">
           <i class="fa-solid fa-rotate"></i>
           <span>Try Again</span>
         </button>
@@ -92,7 +92,8 @@
           </p>
           <button
             type="button"
-            class="vs-secondary-button"
+            mjButton
+            Variant="secondary"
             data-testid="productions-clear-filters"
             (click)="ClearAllFilters(); OnSearchChange('')"
           >
@@ -186,7 +187,8 @@
           <aside class="vs-production-detail-pane" data-testid="production-detail-pane">
             <mj-artifact-viewer-panel
               [artifactId]="SelectedProduction.ID"
-              [CurrentUser]="ProviderToUse?.CurrentUser!"
+              [Provider]="Provider"
+              [CurrentUser]="ProviderToUse.CurrentUser"
               [canShare]="CanShareSelected"
               [canEdit]="CanEditSelected"
               [ShowSaveToCollection]="false"
@@ -203,7 +205,7 @@
       <mj-artifact-share-modal
         [IsOpen]="IsShareModalOpen"
         [Artifact]="ShareTargetArtifact"
-        [CurrentUser]="ProviderToUse?.CurrentUser!"
+        [CurrentUser]="ProviderToUse.CurrentUser"
         (Saved)="OnShareSaved()"
         (cancelled)="CloseShareModal()"
       />

@@ -4,44 +4,6 @@
   width: 100%;
 }
 
-.vs-primary-button {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 13px;
-  border-radius: var(--mj-radius-md, 8px);
-  border: 1px solid var(--mj-brand-primary);
-  background: var(--mj-brand-primary);
-  color: var(--mj-text-inverse);
-  font-size: var(--mj-text-xs, 12px);
-  font-weight: var(--mj-font-semibold, 600);
-  cursor: pointer;
-  transition: background 150ms ease, border-color 150ms ease;
-}
-
-.vs-primary-button:hover {
-  background: var(--mj-brand-primary-hover);
-  border-color: var(--mj-brand-primary-hover);
-}
-
-.vs-secondary-button {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 14px;
-  border-radius: var(--mj-radius-md, 8px);
-  border: 1px solid var(--mj-border-default);
-  background: var(--mj-bg-surface);
-  color: var(--mj-text-primary);
-  font-size: var(--mj-text-sm, 13px);
-  font-weight: var(--mj-font-medium, 500);
-  cursor: pointer;
-}
-
-.vs-secondary-button:hover {
-  background: var(--mj-bg-surface-hover);
-}
-
 .vs-loading-state,
 .vs-empty-state {
   display: flex;
@@ -247,7 +209,7 @@
   padding: 0 4px;
   background: color-mix(in srgb, var(--mj-brand-primary) 18%, var(--mj-bg-surface-sunken));
   border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 38%, var(--mj-border-subtle));
-  border-radius: var(--mj-radius-xs, 4px);
+  border-radius: var(--mj-radius-sm, 4px);
   overflow: hidden;
 }
 
@@ -310,24 +272,6 @@
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
-}
-
-.vs-icon-close-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  border-radius: var(--mj-radius-sm, 6px);
-  border: 1px solid var(--mj-border-default);
-  background: var(--mj-bg-surface);
-  color: var(--mj-text-secondary);
-  cursor: pointer;
-}
-
-.vs-icon-close-button:hover {
-  background: var(--mj-bg-surface-hover);
-  color: var(--mj-text-primary);
 }
 
 .vs-slideout-body {
@@ -504,47 +448,7 @@
   line-height: 1.4;
 }
 
-.vs-clone-modal-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 1000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-  background: color-mix(in srgb, var(--mj-bg-page) 60%, transparent);
-}
-
-.vs-clone-modal-card {
-  width: 100%;
-  max-width: 440px;
-  border-radius: var(--mj-radius-lg, 12px);
-  background: var(--mj-bg-surface-card);
-  border: 1px solid var(--mj-border-default);
-  box-shadow: var(--mj-shadow-lg);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.vs-clone-modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 16px 20px;
-  border-bottom: 1px solid var(--mj-border-default);
-}
-
-.vs-clone-modal-title {
-  margin: 0;
-  font-size: var(--mj-text-base, 16px);
-  font-weight: var(--mj-font-semibold, 600);
-  color: var(--mj-text-primary);
-}
-
 .vs-clone-modal-body {
-  padding: 20px;
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -589,15 +493,5 @@
   background: var(--mj-bg-surface);
   color: var(--mj-text-primary);
   font-size: var(--mj-text-sm, 13px);
-}
-
-.vs-clone-modal-footer {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 10px;
-  padding: 14px 20px;
-  border-top: 1px solid var(--mj-border-default);
-  background: var(--mj-bg-surface);
 }
 

@@ -80,6 +80,7 @@
 
         <div class="mj-bka-upload-dropzone">
           <mj-files-file-upload
+            [Provider]="Provider"
             [Disabled]="Loading"
             (FileUpload)="OnFileUploaded($event)">
           </mj-files-file-upload>
@@ -132,12 +133,14 @@
                       }
                     } @else if (IsAudioPreviewType(asset.AssetType)) {
                       <mj-storage-media-player
+                        [Provider]="Provider"
                         [FileID]="asset.FileID"
                         [ShowWaveform]="true"
                         [ShowTranscriptToggle]="false">
                       </mj-storage-media-player>
                     } @else if (IsVideoPreviewType(asset.AssetType)) {
                       <mj-storage-media-player
+                        [Provider]="Provider"
                         [FileID]="asset.FileID"
                         [ShowTranscriptToggle]="false">
                       </mj-storage-media-player>
@@ -226,8 +229,21 @@
                       <div class="mj-bka-actions">
                         <button
                           type="button"
-                          class="mj-bka-save-btn"
-                          [disabled]="IsSavingAsset(asset)"
+                          mjButton
+                          Variant="danger"
+                          Size="sm"
+                          [disabled]="IsDeletingAsset(asset) || IsSavingAsset(asset)"
+                          (click)="DeleteAsset(asset)"
+                          data-testid="bka-asset-delete-btn">
+                          <i class="fa-solid fa-trash" aria-hidden="true"></i>
+                          <span>{{ IsDeletingAsset(asset) ? 'Deleting…' : 'Delete' }}</span>
+                        </button>
+                        <button
+                          type="button"
+                          mjButton
+                          Variant="primary"
+                          Size="sm"
+                          [disabled]="IsSavingAsset(asset) || IsDeletingAsset(asset)"
                           (click)="SaveAsset(asset)"
                           data-testid="bka-asset-save-btn">
                           <i class="fa-solid fa-floppy-disk" aria-hidden="true"></i>

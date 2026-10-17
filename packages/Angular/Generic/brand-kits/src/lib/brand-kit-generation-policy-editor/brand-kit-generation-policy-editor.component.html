@@ -107,7 +107,9 @@
               data-testid="bkgp-new-subject-input" />
             <button
               type="button"
-              class="mj-bkgp-btn mj-bkgp-btn--secondary"
+              mjButton
+              Variant="secondary"
+              Size="sm"
               (click)="AddAvoidSubject()"
               data-testid="bkgp-add-subject-btn">
               <i class="fa-solid fa-plus" aria-hidden="true"></i>
@@ -128,6 +130,7 @@
           [(ngModel)]="MaxGenerationCostPerRun"
           (ngModelChange)="OnFieldChange()"
           [disabled]="Readonly"
+          placeholder="No cap"
           data-testid="bkgp-max-cost" />
       </div>
     </div>
@@ -136,7 +139,9 @@
       <div class="mj-bkgp-actions">
         <button
           type="button"
-          class="mj-bkgp-btn mj-bkgp-btn--primary"
+          mjButton
+          Variant="primary"
+          Size="sm"
           [disabled]="Saving"
           (click)="SavePolicy()"
           data-testid="bkgp-save-btn">

@@ -118,4 +118,54 @@ describe('BrandKitGenerationPolicyEditorComponent (DOM)', () => {
     expect(query(fixture, '[data-testid="bkgp-save-error"]')).toBeNull();
     expect(savedSpy).toHaveBeenCalledTimes(1);
   });
+
+  it('omits MaxGenerationCostPerRun when hydrated from a null policy or cleared, and includes it only when set', () => {
+    const kit = makeStubBrandKit({ GenerationPolicyObject: null });
+    const fixture = renderComponentFixture(BrandKitGenerationPolicyEditorComponent, {
+      inputs: { BrandKit: kit },
+    });
+
+    expect(fixture.componentInstance.MaxGenerationCostPerRun).toBeNull();
+
+    // Toggle AllowGeneratedImages without touching cost
+    const imagesCheckbox = query(fixture, '[data-testid="bkgp-allow-images"]') as HTMLInputElement | null;
+    imagesCheckbox?.click();
+    fixture.detectChanges();
+
+    expect(kit.GenerationPolicyObject).not.toBeNull();
+    expect('MaxGenerationCostPerRun' in (kit.GenerationPolicyObject ?? {})).toBe(false);
+
+    // Set a cost of 5
+    fixture.componentInstance.MaxGenerationCostPerRun = 5;
+    fixture.componentInstance.OnFieldChange();
+    fixture.detectChanges();
+
+    expect(kit.GenerationPolicyObject?.MaxGenerationCostPerRun).toBe(5);
+
+    // Clear the cost back to null
+    fixture.componentInstance.MaxGenerationCostPerRun = null;
+    fixture.componentInstance.OnFieldChange();
+    fixture.detectChanges();
+
+    expect('MaxGenerationCostPerRun' in (kit.GenerationPolicyObject ?? {})).toBe(false);
+
+    // Re-bind BrandKit input and verify setter re-hydrates
+    const secondKit = makeStubBrandKit({
+      ID: 'KIT-2',
+      GenerationPolicyObject: {
+        AllowGeneratedImages: false,
+        AllowGeneratedVideo: true,
+        AllowSyntheticPeople: false,
+        AvoidSubjects: ['stock photos'],
+        StylePrompt: 'Warm documentary',
+        MaxGenerationCostPerRun: 7.5,
+      },
+    });
+    fixture.componentRef.setInput('BrandKit', secondKit);
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.StylePrompt).toBe('Warm documentary');
+    expect(fixture.componentInstance.MaxGenerationCostPerRun).toBe(7.5);
+  });
 });
+

@@ -94,7 +94,7 @@ function makeProductionCard(overrides: Partial<ProductionCardSnapshot> = {}): Pr
         VersionNumber: 2,
         PosterFileID: 'file-1',
         PosterUrl: '/media/file-1?token=abc',
-        Status: 'FinalReady',
+        Status: 'Delivered',
         Archetype: 'DataStory',
         BrandKitID: 'kit-1',
         BrandKitName: 'Association Primary Kit',
@@ -103,7 +103,7 @@ function makeProductionCard(overrides: Partial<ProductionCardSnapshot> = {}): Pr
         DurationSeconds: 60,
         AspectRatio: '16:9',
         SceneCount: 5,
-        UpdatedAt: new Date('2026-06-15T12:00:00.000Z'),
+        UpdatedAt: new Date(2026, 5, 15, 12, 0, 0),
         ...overrides,
     };
 }
@@ -128,33 +128,49 @@ describe('FilterProductionCards & BuildProductionsAgentContext', () => {
             ID: 'prod-2',
             Name: 'Annual Conference Teaser',
             Description: 'Social promo clip',
-            Status: 'Draft',
+            Status: 'Briefing',
             Archetype: 'Social',
             BrandKitID: 'kit-2',
             BrandKitName: 'Conference Sub-Brand',
             CompanyID: 'comp-2',
             CompanyName: 'Global Events Corp',
-            UpdatedAt: new Date('2026-08-01T15:30:00.000Z'),
+            UpdatedAt: new Date(2026, 7, 31, 22, 45, 0),
         }),
     ];
 
-    it('filters by free-text query, archetype, brand kit, company, status, and date range', () => {
+    it('filters by free-text query, archetype, brand kit, company, status, and local-time date range', () => {
         expect(FilterProductionCards(cards, makeProductionFilters()).length).toBe(2);
         expect(FilterProductionCards(cards, makeProductionFilters({ SearchQuery: 'conference' })).map((c) => c.ID)).toEqual(['prod-2']);
         expect(FilterProductionCards(cards, makeProductionFilters({ Archetype: 'DataStory' })).map((c) => c.ID)).toEqual(['prod-1']);
         expect(FilterProductionCards(cards, makeProductionFilters({ BrandKitID: 'kit-2' })).map((c) => c.ID)).toEqual(['prod-2']);
         expect(FilterProductionCards(cards, makeProductionFilters({ CompanyID: 'comp-1' })).map((c) => c.ID)).toEqual(['prod-1']);
-        expect(FilterProductionCards(cards, makeProductionFilters({ Status: 'Draft' })).map((c) => c.ID)).toEqual(['prod-2']);
+        expect(FilterProductionCards(cards, makeProductionFilters({ Status: 'Briefing' })).map((c) => c.ID)).toEqual(['prod-2']);
         expect(
             FilterProductionCards(cards, makeProductionFilters({ FromDate: '2026-07-01', ToDate: '2026-08-31' })).map((c) => c.ID),
         ).toEqual(['prod-2']);
+    });
+
+    it('includes a card updated late in the local day of ToDate and excludes next local day', () => {
+        const lateLocalCard = makeProductionCard({
+            ID: 'prod-late-local',
+            UpdatedAt: new Date(2026, 7, 31, 23, 30, 0),
+        });
+        const nextLocalMorningCard = makeProductionCard({
+            ID: 'prod-next-day',
+            UpdatedAt: new Date(2026, 8, 1, 0, 5, 0),
+        });
+        const matched = FilterProductionCards(
+            [lateLocalCard, nextLocalMorningCard],
+            makeProductionFilters({ FromDate: '2026-08-31', ToDate: '2026-08-31' }),
+        );
+        expect(matched.map((c) => c.ID)).toEqual(['prod-late-local']);
     });
 
     it('counts active popover filters accurately', () => {
         expect(CountActiveProductionPopoverFilters(makeProductionFilters())).toBe(0);
         expect(
             CountActiveProductionPopoverFilters(
-                makeProductionFilters({ Archetype: 'Social', Status: 'Draft', FromDate: '2026-07-01' }),
+                makeProductionFilters({ Archetype: 'Social', Status: 'Briefing', FromDate: '2026-07-01' }),
             ),
         ).toBe(3);
     });
@@ -163,7 +179,7 @@ describe('FilterProductionCards & BuildProductionsAgentContext', () => {
         const input: ProductionsAgentContextInput = {
             TotalCount: 2,
             FilteredCards: [cards[0]],
-            Filters: makeProductionFilters({ Status: 'FinalReady' }),
+            Filters: makeProductionFilters({ Status: 'Delivered' }),
             BrandKitFilterName: null,
             CompanyFilterName: null,
             SelectedProduction: cards[0],
@@ -176,7 +192,7 @@ describe('FilterProductionCards & BuildProductionsAgentContext', () => {
         expect(ctx['Surface']).toBe('VideoStudioProductions');
         expect(ctx['TotalProductionCount']).toBe(2);
         expect(ctx['FilteredProductionCount']).toBe(1);
-        expect(ctx['StatusFilter']).toBe('FinalReady');
+        expect(ctx['StatusFilter']).toBe('Delivered');
         expect(ctx['HasActiveFilters']).toBe(true);
         expect(ctx['SelectedProductionId']).toBe('prod-1');
         expect(ctx['SelectedProductionName']).toBe('Q3 Revenue Recap');

@@ -52,7 +52,7 @@
         <i class="fa-solid fa-triangle-exclamation vs-empty-icon"></i>
         <h3 class="vs-empty-title">Unable to load archetypes</h3>
         <p class="vs-empty-subtitle">{{ LoadError }}</p>
-        <button type="button" class="vs-secondary-button" (click)="Refresh()">
+        <button type="button" mjButton Variant="secondary" (click)="Refresh()">
           <i class="fa-solid fa-rotate"></i>
           <span>Try Again</span>
         </button>
@@ -72,7 +72,8 @@
           </p>
           <button
             type="button"
-            class="vs-secondary-button"
+            mjButton
+            Variant="secondary"
             data-testid="archetypes-clear-filters"
             (click)="ClearAllFilters(); OnSearchChange('')"
           >
@@ -196,7 +197,9 @@
                 @if (selected.IsShipped) {
                   <button
                     type="button"
-                    class="vs-primary-button"
+                    mjButton
+                    Variant="primary"
+                    Size="sm"
                     data-testid="archetype-clone-button"
                     (click)="OpenCloneDialog(selected, $event)"
                   >
@@ -206,7 +209,9 @@
                 } @else {
                   <button
                     type="button"
-                    class="vs-primary-button"
+                    mjButton
+                    Variant="primary"
+                    Size="sm"
                     data-testid="archetype-edit-record-button"
                     (click)="EditArchetypeRecord(selected, $event)"
                   >
@@ -216,7 +221,9 @@
                 }
                 <button
                   type="button"
-                  class="vs-icon-close-button"
+                  mjButton
+                  Variant="icon"
+                  Size="sm"
                   aria-label="Close archetype preview"
                   data-testid="archetype-slideout-close"
                   (click)="CloseSlideOut()"
@@ -323,91 +330,75 @@
     }
 
     @if (CloneSourceArchetype; as cloneSource) {
-      <div
-        class="vs-clone-modal-backdrop"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="vs-clone-modal-title"
-        data-testid="archetype-clone-dialog"
+      <mj-dialog
+        [Visible]="true"
+        [Title]="'Clone &quot;' + cloneSource.Name + '&quot;'"
+        Width="440px"
+        (Close)="CancelCloneDialog()"
       >
-        <div class="vs-clone-modal-card">
-          <header class="vs-clone-modal-header">
-            <h3 id="vs-clone-modal-title" class="vs-clone-modal-title">
-              Clone "{{ cloneSource.Name }}"
-            </h3>
-            <button
-              type="button"
-              class="vs-icon-close-button"
-              aria-label="Close clone dialog"
-              data-testid="archetype-clone-cancel-icon"
-              (click)="CancelCloneDialog()"
-            >
-              <i class="fa-solid fa-xmark"></i>
-            </button>
-          </header>
+        <div class="vs-clone-modal-body" data-testid="archetype-clone-dialog">
+          <p class="vs-clone-modal-subtitle">
+            Create a company-owned copy of this shipped archetype so your team can customize its beats, durations, and pacing rules.
+          </p>
 
-          <div class="vs-clone-modal-body">
-            <p class="vs-clone-modal-subtitle">
-              Create a company-owned copy of this shipped archetype so your team can customize its beats, durations, and pacing rules.
-            </p>
+          @if (CloneError) {
+            <div class="vs-clone-error" role="alert" data-testid="archetype-clone-error">
+              <i class="fa-solid fa-circle-exclamation"></i>
+              <span>{{ CloneError }}</span>
+            </div>
+          }
 
-            @if (CloneError) {
-              <div class="vs-clone-error" role="alert" data-testid="archetype-clone-error">
-                <i class="fa-solid fa-circle-exclamation"></i>
-                <span>{{ CloneError }}</span>
-              </div>
-            }
-
-            <label class="vs-clone-field">
-              <span class="vs-clone-field-label">Archetype Name</span>
-              <input
-                type="text"
-                class="vs-clone-input"
-                data-testid="archetype-clone-name-input"
-                [(ngModel)]="CloneName"
-                [disabled]="IsCloning"
-              />
-            </label>
-
-            <label class="vs-clone-field">
-              <span class="vs-clone-field-label">Company</span>
-              <select
-                class="vs-clone-select"
-                data-testid="archetype-clone-company-select"
-                [(ngModel)]="CloneCompanyID"
-                [disabled]="IsCloning"
-              >
-                <option value="">Select a company...</option>
-                @for (comp of AvailableCompanies; track comp.ID) {
-                  <option [value]="comp.ID">{{ comp.Name }}</option>
-                }
-              </select>
-            </label>
-          </div>
-
-          <footer class="vs-clone-modal-footer">
-            <button
-              type="button"
-              class="vs-secondary-button"
-              data-testid="archetype-clone-cancel"
+          <label class="vs-clone-field">
+            <span class="vs-clone-field-label">Archetype Name</span>
+            <input
+              type="text"
+              class="vs-clone-input"
+              data-testid="archetype-clone-name-input"
+              [(ngModel)]="CloneName"
               [disabled]="IsCloning"
-              (click)="CancelCloneDialog()"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              class="vs-primary-button"
-              data-testid="archetype-clone-confirm"
+            />
+          </label>
+
+          <label class="vs-clone-field">
+            <span class="vs-clone-field-label">Company</span>
+            <select
+              class="vs-clone-select"
+              data-testid="archetype-clone-company-select"
+              [(ngModel)]="CloneCompanyID"
               [disabled]="IsCloning"
-              (click)="ConfirmClone()"
             >
-              <i class="fa-regular fa-copy"></i>
-              <span>{{ IsCloning ? 'Cloning...' : 'Clone & Edit' }}</span>
-            </button>
-          </footer>
+              <option value="">Select a company...</option>
+              @for (comp of AvailableCompanies; track comp.ID) {
+                <option [value]="comp.ID">{{ comp.Name }}</option>
+              }
+            </select>
+          </label>
         </div>
-      </div>
+
+        <mj-dialog-actions>
+          <button
+            type="button"
+            mjButton
+            Variant="primary"
+            data-testid="archetype-clone-confirm"
+            [disabled]="IsCloning"
+            (click)="ConfirmClone()"
+          >
+            <i class="fa-regular fa-copy"></i>
+            <span>{{ IsCloning ? 'Cloning...' : 'Clone & Edit' }}</span>
+          </button>
+          <button
+            type="button"
+            mjButton
+            Variant="secondary"
+            data-testid="archetype-clone-cancel"
+            [disabled]="IsCloning"
+            (click)="CancelCloneDialog()"
+          >
+            Cancel
+          </button>
+        </mj-dialog-actions>
+      </mj-dialog>
     }
   </mj-page-body>
 </mj-page-layout>

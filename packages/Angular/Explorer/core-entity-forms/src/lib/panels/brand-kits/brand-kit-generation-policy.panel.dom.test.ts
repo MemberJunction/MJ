@@ -18,16 +18,17 @@ class CollapsiblePanelStub {
 @Component({
   standalone: true,
   selector: 'mj-brand-kit-generation-policy-editor',
-  template: '<div data-testid="stub-policy-editor">{{ BrandKit?.Name }}</div>',
+  template: '<div data-testid="stub-policy-editor" [attr.data-show-save]="ShowSaveButton">{{ BrandKit?.Name }}</div>',
 })
 class PolicyEditorStub {
   @Input() BrandKit: MJBrandKitEntity | null = null;
   @Input() Provider: unknown = null;
   @Input() Readonly = false;
+  @Input() ShowSaveButton = true;
 }
 
 describe('BrandKitGenerationPolicyPanelComponent (DOM)', () => {
-  it('mounts mj-brand-kit-generation-policy-editor with the host Record', () => {
+  it('mounts mj-brand-kit-generation-policy-editor with the host Record and ShowSaveButton=false', () => {
     TestBed.configureTestingModule({
       imports: [CollapsiblePanelStub, PolicyEditorStub],
       declarations: [BrandKitGenerationPolicyPanelComponent],
@@ -40,6 +41,7 @@ describe('BrandKitGenerationPolicyPanelComponent (DOM)', () => {
     const editor = fixture.nativeElement.querySelector('[data-testid="stub-policy-editor"]');
     expect(editor).not.toBeNull();
     expect(editor.textContent).toContain('Policy Kit');
+    expect(editor.getAttribute('data-show-save')).toBe('false');
   });
 
   it('forwards FormComponent.ProviderToUse via HostProvider getter', () => {

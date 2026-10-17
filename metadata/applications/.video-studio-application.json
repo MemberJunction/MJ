@@ -2,14 +2,11 @@
   {
     "fields": {
       "Name": "Video Studio",
-      "Description": "AI-powered video production studio with reusable brand kits, narrative archetypes, and multi-format rendering.",
-      "Icon": "fa-solid fa-film",
-      "DefaultSequence": 96,
+      "Description": "AI-powered video production workspace for creating, styling, storyboarding, and rendering brand-compliant videos. Manage video productions, brand kits, and reusable video archetypes in one integrated studio.",
+      "Icon": "fa-solid fa-clapperboard",
+      "DefaultForNewUser": false,
       "Color": "#7c3aed",
-      "Status": "Active",
-      "NavigationStyle": "Both",
-      "TopNavLocation": "Left of User Menu",
-      "AutoUpdateDefaultNavItems": true,
+      "DefaultSequence": 1030,
       "DefaultNavItems": [
         {
           "Label": "Productions",

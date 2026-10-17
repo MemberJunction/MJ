@@ -62,26 +62,6 @@
   color: var(--mj-text-secondary);
 }
 
-.vs-secondary-button {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 14px;
-  border-radius: var(--mj-radius-md, 8px);
-  border: 1px solid var(--mj-border-default);
-  background: var(--mj-bg-surface);
-  color: var(--mj-text-primary);
-  font-size: var(--mj-text-sm, 13px);
-  font-weight: var(--mj-font-medium, 500);
-  cursor: pointer;
-  transition: background 150ms ease, border-color 150ms ease;
-}
-
-.vs-secondary-button:hover {
-  background: var(--mj-bg-surface-hover);
-  border-color: var(--mj-border-strong);
-}
-
 .vs-productions-workspace {
   display: grid;
   grid-template-columns: 1fr;

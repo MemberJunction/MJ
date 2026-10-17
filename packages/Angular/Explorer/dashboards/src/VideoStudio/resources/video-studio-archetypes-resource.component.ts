@@ -6,7 +6,7 @@ import {
   OnInit,
   inject,
 } from '@angular/core';
-import { CompositeKey, RunView } from '@memberjunction/core';
+import { CompositeKey, LogError, RunView } from '@memberjunction/core';
 import {
   MJVideoArchetypeEntity,
   ResourceData,
@@ -137,6 +137,7 @@ export class VideoStudioArchetypesResourceComponent
   public IsCloning = false;
   public CloneError: string | null = null;
 
+  private companiesLoadError: string | null = null;
   private readonly cdr = inject(ChangeDetectorRef);
 
   async ngOnInit(): Promise<void> {
@@ -187,13 +188,19 @@ export class VideoStudioArchetypesResourceComponent
     this.cdr.markForCheck();
 
     try {
-      await VideoStudioEngine.Instance.Config(forceRefresh, undefined, this.ProviderToUse);
-      const archetypes = VideoStudioEngine.Instance.Archetypes;
+      const engine = VideoStudioEngine.GetProviderInstance<VideoStudioEngine>(
+        this.ProviderToUse,
+        VideoStudioEngine,
+      ) as VideoStudioEngine;
+      await engine.Config(forceRefresh, undefined, this.ProviderToUse);
+      const archetypes = engine.Archetypes;
       this.AllArchetypes = archetypes.map((arch) => this.mapArchetypeToCard(arch));
       await this.loadAvailableCompanies();
       this.applyFiltersAndSync();
     } catch (err: unknown) {
-      this.LoadError = err instanceof Error ? err.message : String(err);
+      const msg = err instanceof Error ? err.message : String(err);
+      LogError(msg);
+      this.LoadError = msg;
     } finally {
       this.IsLoading = false;
       this.syncAgentContext();
@@ -256,7 +263,7 @@ export class VideoStudioArchetypesResourceComponent
     this.CloneSourceArchetype = item;
     this.CloneName = `${item.Name} (Copy)`;
     this.CloneCompanyID = this.AvailableCompanies[0]?.ID ?? '';
-    this.CloneError = null;
+    this.CloneError = this.companiesLoadError;
     this.IsCloning = false;
     this.cdr.markForCheck();
   }
@@ -292,6 +299,7 @@ export class VideoStudioArchetypesResourceComponent
     try {
       const copy = await this.ProviderToUse.GetEntityObject<MJVideoArchetypeEntity>(
         'MJ: Video Archetypes',
+        this.ProviderToUse.CurrentUser,
       );
       copy.Name = trimmedName;
       copy.Description = source.Description || '';
@@ -322,7 +330,9 @@ export class VideoStudioArchetypesResourceComponent
         CompositeKey.FromID(newId),
       );
     } catch (err: unknown) {
-      this.CloneError = err instanceof Error ? err.message : String(err);
+      const msg = err instanceof Error ? err.message : String(err);
+      LogError(msg);
+      this.CloneError = msg;
     } finally {
       this.IsCloning = false;
       this.cdr.markForCheck();
@@ -337,6 +347,7 @@ export class VideoStudioArchetypesResourceComponent
   }
 
   private async loadAvailableCompanies(): Promise<void> {
+    this.companiesLoadError = null;
     try {
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const res = await rv.RunView<{ ID: string; Name: string }>({
@@ -345,14 +356,24 @@ export class VideoStudioArchetypesResourceComponent
         OrderBy: 'Name ASC',
         ResultType: 'simple',
       });
-      if (res.Success && Array.isArray(res.Results)) {
+      if (!res.Success) {
+        const msg = res.ErrorMessage || 'Failed to load companies.';
+        LogError(msg);
+        this.companiesLoadError = `Couldn't load companies: ${msg}`;
+        this.CloneError = this.companiesLoadError;
+        return;
+      }
+      if (Array.isArray(res.Results)) {
         this.AvailableCompanies = res.Results.map((r) => ({
           ID: r.ID,
           Name: r.Name,
         }));
       }
-    } catch {
-      // Keep existing AvailableCompanies if companies view is unavailable in test stubs
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      LogError(msg);
+      this.companiesLoadError = `Couldn't load companies: ${msg}`;
+      this.CloneError = this.companiesLoadError;
     }
   }
 

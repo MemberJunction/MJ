@@ -43,5 +43,5 @@
     "type": "git",
     "url": "https://github.com/MemberJunction/MJ"
   },
-  "mjUILayer": "surface"
+  "mjUILayer": "widgets"
 }

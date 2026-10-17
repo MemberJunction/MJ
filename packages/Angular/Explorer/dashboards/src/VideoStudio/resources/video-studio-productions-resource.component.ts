@@ -6,11 +6,10 @@ import {
   OnInit,
   inject,
 } from '@angular/core';
-import { CompositeKey, RunView } from '@memberjunction/core';
+import { CompositeKey, LogError, RunView } from '@memberjunction/core';
 import {
   BrandKitEngine,
   MJArtifactEntity,
-  MJArtifactVersionAttributeEntity,
   MJBrandKitEntity,
   ResourceData,
 } from '@memberjunction/core-entities';
@@ -22,11 +21,13 @@ import {
 import { ArtifactPermissionService } from '@memberjunction/ng-conversations';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { FilterFieldConfig } from '@memberjunction/ng-ui-components';
+import { VideoProductionStatus } from '@memberjunction/video-studio-core';
 import {
   BuildProductionsAgentContext,
   CountActiveProductionPopoverFilters,
   FilterProductionCards,
   ProductionCardSnapshot,
+  ProductionCardStatus,
   ProductionFilterState,
   ResolveVideoStudioItem,
 } from '../video-studio-agent-context';
@@ -39,12 +40,30 @@ export const VIDEO_PRODUCTION_ARTIFACT_TYPE_ID = '2E23F219-E790-4A77-9C86-CB19C7
 
 export type VideoProductionCardItem = ProductionCardSnapshot;
 
-interface AttributeGroup {
-  VersionID: string;
-  ArtifactID: string | null;
-  ArtifactVersionName: string | null;
-  Attributes: Map<string, string>;
+interface SimpleArtifactVersionRow {
+  ID: string;
+  ArtifactID: string;
+  VersionNumber: number;
 }
+
+interface SimpleArtifactVersionAttributeRow {
+  ArtifactVersionID: string;
+  Name: string;
+  Value: string | null;
+}
+
+const VALID_PRODUCTION_STATUSES: ReadonlySet<VideoProductionStatus> = new Set<VideoProductionStatus>([
+  'Briefing',
+  'Styled',
+  'Storyboarded',
+  'Approved',
+  'PreProduced',
+  'Composed',
+  'RoughCut',
+  'Reviewed',
+  'Delivered',
+  'Blocked',
+]);
 
 /**
  * Productions resource tab for the Video Studio application.
@@ -149,29 +168,40 @@ export class VideoStudioProductionsResourceComponent
     this.cdr.markForCheck();
 
     try {
-      await BrandKitEngine.Instance.Config(forceRefresh, undefined, this.ProviderToUse);
+      const currentUser = this.ProviderToUse?.CurrentUser;
+      if (!currentUser?.ID) {
+        this.LoadError = 'Unable to load video productions: no current user context.';
+        this.AllProductions = [];
+        this.FilteredProductions = [];
+        return;
+      }
+
+      const brandKitEngine = BrandKitEngine.GetProviderInstance<BrandKitEngine>(
+        this.ProviderToUse,
+        BrandKitEngine,
+      ) as BrandKitEngine;
+      await brandKitEngine.Config(forceRefresh, undefined, this.ProviderToUse);
       this.brandKitsById.clear();
-      for (const kit of BrandKitEngine.Instance.BrandKits) {
+      for (const kit of brandKitEngine.BrandKits) {
         this.brandKitsById.set(kit.ID, kit);
       }
 
-      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-      const currentUser = this.ProviderToUse?.CurrentUser;
-      let readableClause = '';
-      if (currentUser?.ID) {
-        this.artifactPermissionService.Provider = this.ProviderToUse;
-        const readableFilter = await this.artifactPermissionService.GetReadableArtifactsFilter(
-          currentUser.ID,
-          currentUser,
-        );
-        if (readableFilter) {
-          readableClause = ` AND ${readableFilter}`;
-        }
+      this.artifactPermissionService.Provider = this.ProviderToUse;
+      const readableFilter = await this.artifactPermissionService.GetReadableArtifactsFilter(
+        currentUser.ID,
+        currentUser,
+      );
+      if (!readableFilter) {
+        this.LoadError = 'Unable to load video productions: permission filter unavailable.';
+        this.AllProductions = [];
+        this.FilteredProductions = [];
+        return;
       }
 
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const artifactsResult = await rv.RunView<MJArtifactEntity>({
         EntityName: 'MJ: Artifacts',
-        ExtraFilter: `TypeID = '${VIDEO_PRODUCTION_ARTIFACT_TYPE_ID}'${readableClause}`,
+        ExtraFilter: `TypeID = '${VIDEO_PRODUCTION_ARTIFACT_TYPE_ID}' AND ${readableFilter}`,
         OrderBy: '__mj_UpdatedAt DESC',
         ResultType: 'entity_object',
       });
@@ -180,7 +210,6 @@ export class VideoStudioProductionsResourceComponent
         this.LoadError = artifactsResult.ErrorMessage || 'Failed to load video productions.';
         this.AllProductions = [];
         this.FilteredProductions = [];
-        this.syncAgentContext();
         return;
       }
 
@@ -190,28 +219,65 @@ export class VideoStudioProductionsResourceComponent
         this.artifactsById.set(artifact.ID, artifact);
       }
 
-      let attributes: MJArtifactVersionAttributeEntity[] = [];
+      const versionByArtifactId = new Map<string, SimpleArtifactVersionRow>();
+      const attrsByVersionId = new Map<string, Map<string, string>>();
       if (artifacts.length > 0) {
         const quotedIds = artifacts
           .map((a) => `'${a.ID.replace(/'/g, "''")}'`)
           .join(', ');
-        const attributesResult = await rv.RunView<MJArtifactVersionAttributeEntity>({
-          EntityName: 'MJ: Artifact Version Attributes',
-          ExtraFilter: `ArtifactVersionID IN (SELECT v.ID FROM [__mj].[vwArtifactVersions] v INNER JOIN (SELECT ArtifactID, MAX(VersionNumber) AS MaxVer FROM [__mj].[vwArtifactVersions] WHERE ArtifactID IN (${quotedIds}) GROUP BY ArtifactID) latest ON v.ArtifactID = latest.ArtifactID AND v.VersionNumber = latest.MaxVer)`,
-          ResultType: 'entity_object',
-        });
-        if (attributesResult.Success && attributesResult.Results) {
-          attributes = attributesResult.Results;
+        const latestVersionsSubquery = `SELECT v.ID FROM [__mj].[vwArtifactVersions] v INNER JOIN (SELECT ArtifactID, MAX(VersionNumber) AS MaxVer FROM [__mj].[vwArtifactVersions] WHERE ArtifactID IN (${quotedIds}) GROUP BY ArtifactID) latest ON v.ArtifactID = latest.ArtifactID AND v.VersionNumber = latest.MaxVer`;
+        const [versionsResult, attributesResult] = await rv.RunViews([
+          {
+            EntityName: 'MJ: Artifact Versions',
+            ExtraFilter: `ID IN (${latestVersionsSubquery})`,
+            Fields: ['ID', 'ArtifactID', 'VersionNumber'],
+            ResultType: 'simple',
+          },
+          {
+            EntityName: 'MJ: Artifact Version Attributes',
+            ExtraFilter: `ArtifactVersionID IN (${latestVersionsSubquery})`,
+            Fields: ['ArtifactVersionID', 'Name', 'Value'],
+            ResultType: 'simple',
+          },
+        ]);
+
+        if (versionsResult?.Success && Array.isArray(versionsResult.Results)) {
+          for (const row of versionsResult.Results as SimpleArtifactVersionRow[]) {
+            if (row?.ID && row?.ArtifactID) {
+              versionByArtifactId.set(row.ArtifactID.toLowerCase(), row);
+            }
+          }
+        }
+
+        if (attributesResult?.Success && Array.isArray(attributesResult.Results)) {
+          for (const row of attributesResult.Results as SimpleArtifactVersionAttributeRow[]) {
+            if (!row?.ArtifactVersionID || !row.Name || row.Value == null) {
+              continue;
+            }
+            const vKey = row.ArtifactVersionID.toLowerCase();
+            let attrMap = attrsByVersionId.get(vKey);
+            if (!attrMap) {
+              attrMap = new Map<string, string>();
+              attrsByVersionId.set(vKey, attrMap);
+            }
+            attrMap.set(row.Name, String(row.Value));
+          }
         }
       }
 
-      this.AllProductions = this.buildCardItems(artifacts, attributes);
+      this.AllProductions = this.buildCardItems(
+        artifacts,
+        versionByArtifactId,
+        attrsByVersionId,
+      );
       this.rebuildFilterFieldOptions();
       this.applyFiltersAndSync();
       await this.restoreSelectionFromQueryParams();
       await this.mintPosterUrls(this.AllProductions);
     } catch (err: unknown) {
-      this.LoadError = err instanceof Error ? err.message : String(err);
+      const msg = err instanceof Error ? err.message : String(err);
+      LogError(msg);
+      this.LoadError = msg;
     } finally {
       this.IsLoading = false;
       this.syncAgentContext();
@@ -280,7 +346,8 @@ export class VideoStudioProductionsResourceComponent
         );
         this.CanShareSelected = perms.canShare;
         this.CanEditSelected = perms.canEdit;
-      } catch {
+      } catch (err: unknown) {
+        LogError(err instanceof Error ? err.message : String(err));
         this.CanShareSelected = false;
         this.CanEditSelected = false;
       }
@@ -353,28 +420,24 @@ export class VideoStudioProductionsResourceComponent
       : `${secs}s`;
   }
 
-  public StatusBadgeClass(status: string): string {
-    const normalized = status.trim().toLowerCase();
-    if (
-      normalized === 'ready' ||
-      normalized === 'finalready' ||
-      normalized === 'approved' ||
-      normalized === 'completed' ||
-      normalized === 'published'
-    ) {
+  public StatusBadgeClass(status: ProductionCardStatus | string): string {
+    if (status === 'Delivered') {
       return 'vs-status-badge vs-status-badge--ready';
     }
+    if (status === 'Blocked') {
+      return 'vs-status-badge vs-status-badge--error';
+    }
     if (
-      normalized === 'rendering' ||
-      normalized === 'storyboardapproved' ||
-      normalized === 'roughcutready' ||
-      normalized === 'inprogress' ||
-      normalized === 'queued'
+      status === 'Briefing' ||
+      status === 'Styled' ||
+      status === 'Storyboarded' ||
+      status === 'Approved' ||
+      status === 'PreProduced' ||
+      status === 'Composed' ||
+      status === 'RoughCut' ||
+      status === 'Reviewed'
     ) {
       return 'vs-status-badge vs-status-badge--rendering';
-    }
-    if (normalized === 'failed' || normalized === 'error') {
-      return 'vs-status-badge vs-status-badge--error';
     }
     return 'vs-status-badge vs-status-badge--draft';
   }
@@ -532,24 +595,20 @@ export class VideoStudioProductionsResourceComponent
 
   private buildCardItems(
     artifacts: MJArtifactEntity[],
-    attributes: MJArtifactVersionAttributeEntity[],
+    versionByArtifactId: Map<string, SimpleArtifactVersionRow>,
+    attrsByVersionId: Map<string, Map<string, string>>,
   ): ProductionCardSnapshot[] {
-    const groups = this.groupAttributesByVersion(attributes);
-    const usedVersionIds = new Set<string>();
+    return artifacts.map((artifact) => {
+      const versionRow = versionByArtifactId.get(artifact.ID.toLowerCase()) ?? null;
+      const attrMap =
+        (versionRow ? attrsByVersionId.get(versionRow.ID.toLowerCase()) : undefined) ??
+        new Map<string, string>();
 
-    return artifacts.map((artifact, index) => {
-      const matchedGroup = this.matchAttributeGroupForArtifact(
-        artifact,
-        index,
-        groups,
-        usedVersionIds,
-      );
-      if (matchedGroup) {
-        usedVersionIds.add(matchedGroup.VersionID);
-      }
-      const attrMap = matchedGroup?.Attributes ?? new Map<string, string>();
-
-      const rawStatus = this.cleanAttributeValue(attrMap.get('status')) || 'Draft';
+      const statusAttr = this.cleanAttributeValue(attrMap.get('status'));
+      const status: ProductionCardStatus =
+        statusAttr && VALID_PRODUCTION_STATUSES.has(statusAttr as VideoProductionStatus)
+          ? (statusAttr as VideoProductionStatus)
+          : 'Unknown';
       const archetype = this.cleanAttributeValue(attrMap.get('archetype')) || '';
       const posterFileId = this.cleanAttributeValue(attrMap.get('posterFileID'));
       const brandKitId = this.cleanAttributeValue(attrMap.get('brandKitID'));
@@ -576,11 +635,11 @@ export class VideoStudioProductionsResourceComponent
         ID: artifact.ID,
         Name: extractedTitle || artifact.Name || 'Untitled Production',
         Description: artifact.Description ?? '',
-        VersionID: matchedGroup?.VersionID ?? null,
-        VersionNumber: 1,
+        VersionID: versionRow?.ID ?? null,
+        VersionNumber: typeof versionRow?.VersionNumber === 'number' ? versionRow.VersionNumber : 0,
         PosterFileID: posterFileId,
         PosterUrl: null,
-        Status: rawStatus,
+        Status: status,
         Archetype: archetype,
         BrandKitID: brandKit?.ID ?? brandKitId,
         BrandKitName: brandKit?.Name ?? null,
@@ -592,62 +651,6 @@ export class VideoStudioProductionsResourceComponent
         UpdatedAt: updatedDate,
       };
     });
-  }
-
-  private groupAttributesByVersion(
-    attributes: MJArtifactVersionAttributeEntity[],
-  ): AttributeGroup[] {
-    const map = new Map<string, AttributeGroup>();
-    for (const attr of attributes) {
-      const versionId = attr.ArtifactVersionID || 'default';
-      let group = map.get(versionId);
-      if (!group) {
-        const maybeArtifactId = (attr as unknown as { ArtifactID?: string }).ArtifactID ?? null;
-        group = {
-          VersionID: versionId,
-          ArtifactID: maybeArtifactId,
-          ArtifactVersionName: attr.ArtifactVersion ?? null,
-          Attributes: new Map<string, string>(),
-        };
-        map.set(versionId, group);
-      }
-      if (attr.Name && attr.Value != null) {
-        group.Attributes.set(attr.Name, attr.Value);
-      }
-    }
-    return Array.from(map.values());
-  }
-
-  private matchAttributeGroupForArtifact(
-    artifact: MJArtifactEntity,
-    index: number,
-    groups: AttributeGroup[],
-    usedVersionIds: Set<string>,
-  ): AttributeGroup | null {
-    const byArtifactId = groups.find(
-      (g) => g.ArtifactID && UUIDsEqual(g.ArtifactID, artifact.ID),
-    );
-    if (byArtifactId) {
-      return byArtifactId;
-    }
-
-    const byName = groups.find(
-      (g) =>
-        !usedVersionIds.has(g.VersionID) &&
-        g.ArtifactVersionName &&
-        g.ArtifactVersionName.trim().toLowerCase() ===
-          (artifact.Name ?? '').trim().toLowerCase(),
-    );
-    if (byName) {
-      return byName;
-    }
-
-    const positional = groups[index];
-    if (positional && !usedVersionIds.has(positional.VersionID)) {
-      return positional;
-    }
-
-    return null;
   }
 
   private cleanAttributeValue(raw: string | undefined): string | null {
@@ -685,12 +688,11 @@ export class VideoStudioProductionsResourceComponent
   }
 
   private async mintPosterUrls(items: ProductionCardSnapshot[]): Promise<void> {
-    const provider = this.ProviderToUse as unknown as Partial<GraphQLDataProvider> | null;
-    if (!provider || typeof provider.ExecuteGQL !== 'function') {
+    if (!(this.ProviderToUse instanceof GraphQLDataProvider)) {
       return;
     }
 
-    const client = new GraphQLFileStorageClient(this.ProviderToUse as GraphQLDataProvider);
+    const client = new GraphQLFileStorageClient(this.ProviderToUse);
     const itemsWithPosters = items.filter((item) => Boolean(item.PosterFileID));
     if (itemsWithPosters.length === 0) {
       return;
@@ -706,8 +708,8 @@ export class VideoStudioProductionsResourceComponent
           if (token.Success && token.Url) {
             item.PosterUrl = token.Url;
           }
-        } catch {
-          // Non-fatal: card renders placeholder poster when minting fails.
+        } catch (err: unknown) {
+          LogError(err instanceof Error ? err.message : String(err));
         }
       }),
     );
@@ -716,7 +718,7 @@ export class VideoStudioProductionsResourceComponent
 
   private rebuildFilterFieldOptions(): void {
     const archetypes = new Set<string>();
-    const statuses = new Set<string>(['Draft', 'Rendering', 'Ready', 'Approved', 'Failed']);
+    const statuses = new Set<string>();
     const brandKitOptions = new Map<string, string>();
     const companyOptions = new Map<string, string>();
 

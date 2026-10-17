@@ -19,7 +19,8 @@
       />
       <button
         type="button"
-        class="vs-primary-button"
+        mjButton
+        Variant="primary"
         data-testid="new-brand-kit-button"
         (click)="CreateNewBrandKit()"
       >
@@ -61,7 +62,7 @@
         <i class="fa-solid fa-triangle-exclamation vs-empty-icon"></i>
         <h3 class="vs-empty-title">Unable to load brand kits</h3>
         <p class="vs-empty-subtitle">{{ LoadError }}</p>
-        <button type="button" class="vs-secondary-button" (click)="Refresh()">
+        <button type="button" mjButton Variant="secondary" (click)="Refresh()">
           <i class="fa-solid fa-rotate"></i>
           <span>Try Again</span>
         </button>
@@ -76,7 +77,8 @@
           </p>
           <button
             type="button"
-            class="vs-primary-button"
+            mjButton
+            Variant="primary"
             (click)="CreateNewBrandKit()"
           >
             <i class="fa-solid fa-plus"></i>
@@ -89,7 +91,8 @@
           </p>
           <button
             type="button"
-            class="vs-secondary-button"
+            mjButton
+            Variant="secondary"
             data-testid="brand-kits-clear-filters"
             (click)="ClearAllFilters(); OnSearchChange('')"
           >
@@ -178,6 +181,19 @@
                   <i class="fa-solid fa-photo-film"></i>
                   <span>{{ kit.AssetCount }} {{ kit.AssetCount === 1 ? 'asset' : 'assets' }}</span>
                 </span>
+
+                <button
+                  type="button"
+                  mjButton
+                  Variant="danger"
+                  Size="sm"
+                  [attr.data-testid]="'brand-kit-delete-' + kit.ID"
+                  [disabled]="DeletingKitId === kit.ID"
+                  (click)="DeleteBrandKit(kit, $event)"
+                >
+                  <i class="fa-regular fa-trash-can"></i>
+                  <span>Delete</span>
+                </button>
               </div>
             </div>
           </article>

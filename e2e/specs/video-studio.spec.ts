@@ -9,13 +9,16 @@
  *     search + filter popover controls, and either the productions grid or
  *     empty state without runtime errors.
  *   • Brand Kits tab (`VideoStudioBrandKitsResource`) — renders seeded brand
- *     kit cards (e.g. MJ Default Brand Kit), palette swatch strip, company/default
- *     badges, asset count, and opens the `MJ: Brand Kits` entity form with the
- *     custom `BrandKitAssetsPanel` and `BrandKitGenerationPolicyPanel` editors.
+ *     kit cards (e.g. MJ Default Brand Kit), palette swatch strip, logo
+ *     thumbnail, company/default badge, asset count, and opens the
+ *     `MJ: Brand Kits` entity form with BOTH custom `BrandKitAssetsPanel` and
+ *     `BrandKitGenerationPolicyPanel` editors visible + interactive generation
+ *     policy pill toggling.
  *   • Archetypes tab (`VideoStudioArchetypesResource`) — renders seeded
- *     archetypes grouped by category, proportional beat-timeline blocks, and
- *     opens the inline slide-out preview with Beat Template, Pacing, Guidance,
- *     and the "Edit Record" button.
+ *     archetypes grouped by category, proportional beat-timeline blocks, opens
+ *     the inline slide-out preview with Beat Template, Pacing, Guidance, and
+ *     shipped read-only banner + "Clone to Company" button, and exercises the
+ *     Clone `<mj-dialog>` modal.
  *
  * NOTE: VS-UX-2 extends this spec with the second half (conversational
  * Video Producer / Sage storyboard creation + Productions gallery playback).
@@ -52,7 +55,7 @@ test.describe('Video Studio — Brand Kits & Archetypes (VS-UX-1)', () => {
     await expect(gridOrEmpty).toBeVisible({ timeout: 30_000 });
   });
 
-  test('Brand Kits tab renders seeded kit cards with palette swatches and opens Brand Kit form panels', async ({
+  test('Brand Kits tab renders seeded kit cards with palette swatches, logo thumb, company badge, and asset count, then opens Brand Kit form with Assets and Generation Policy editors', async ({
     page,
   }) => {
     await openVideoStudioTab(page, 'Brand Kits');
@@ -63,20 +66,30 @@ test.describe('Video Studio — Brand Kits & Archetypes (VS-UX-1)', () => {
     const grid = page.getByTestId('brand-kits-grid');
     await expect(grid).toBeVisible({ timeout: 30_000 });
 
-    const cards = page.locator('[data-testid^="brand-kit-card-"]');
-    await expect(cards.first()).toBeVisible();
+    const firstCard = page.locator('[data-testid^="brand-kit-card-"]').first();
+    await expect(firstCard).toBeVisible();
 
-    const paletteStrip = cards.first().getByTestId('brand-kit-palette-strip');
-    await expect(paletteStrip).toBeVisible();
+    await expect(firstCard.getByTestId('brand-kit-logo-thumb')).toBeVisible();
+    await expect(firstCard.getByTestId('brand-kit-palette-strip')).toBeVisible();
+    await expect(firstCard.getByTestId('brand-kit-company-badge')).toBeVisible();
+    await expect(firstCard.getByTestId('brand-kit-asset-count')).toBeVisible();
 
     // Clicking the card navigates to the MJ: Brand Kits entity form
-    await cards.first().click();
-    await expect(
-      page.locator('mj-brand-kit-assets-editor, mj-brand-kit-generation-policy-editor').first(),
-    ).toBeVisible({ timeout: 30_000 });
+    await firstCard.click();
+
+    const assetsEditor = page.locator('mj-brand-kit-assets-editor');
+    const policyEditor = page.locator('mj-brand-kit-generation-policy-editor');
+    await expect(assetsEditor).toBeVisible({ timeout: 30_000 });
+    await expect(policyEditor).toBeVisible({ timeout: 30_000 });
+
+    // Exercise generation policy pill toggle in the Generation Policy editor
+    const mutedPill = policyEditor.getByTestId('policy-music-pill-Muted');
+    await expect(mutedPill).toBeVisible();
+    await mutedPill.click();
+    await expect(mutedPill).toHaveClass(/active/);
   });
 
-  test('Archetypes tab groups seeded archetypes by category, renders beat timeline blocks, and opens slide-out preview', async ({
+  test('Archetypes tab groups seeded archetypes by category, renders beat timeline blocks, opens slide-out preview, and exercises Clone to Company modal', async ({
     page,
   }) => {
     await openVideoStudioTab(page, 'Archetypes');
@@ -94,9 +107,28 @@ test.describe('Video Studio — Brand Kits & Archetypes (VS-UX-1)', () => {
     await firstCard.click();
     const slideout = page.getByTestId('archetype-slideout');
     await expect(slideout).toBeVisible();
-    await expect(slideout.getByTestId('archetype-edit-record-button')).toBeVisible();
+
+    // Seeded archetypes are shipped (CompanyID === null): verify read-only banner + Clone button
+    const cloneBtn = slideout.getByTestId('archetype-clone-button');
+    const editBtn = slideout.getByTestId('archetype-edit-record-button');
+    await expect(cloneBtn.or(editBtn)).toBeVisible();
+
+    if (await cloneBtn.isVisible()) {
+      await expect(slideout.getByTestId('archetype-shipped-readonly-banner')).toBeVisible();
+      await cloneBtn.click();
+
+      const cloneDialog = page.getByTestId('archetype-clone-dialog');
+      await expect(cloneDialog).toBeVisible();
+      await expect(cloneDialog.getByTestId('archetype-clone-name-input')).toBeVisible();
+      await expect(cloneDialog.getByTestId('archetype-clone-company-select')).toBeVisible();
+      await expect(cloneDialog.getByTestId('archetype-clone-confirm')).toBeVisible();
+
+      await cloneDialog.getByTestId('archetype-clone-cancel').click();
+      await expect(cloneDialog).toBeHidden();
+    }
 
     await slideout.getByTestId('archetype-slideout-close').click();
     await expect(slideout).toBeHidden();
   });
 });
+

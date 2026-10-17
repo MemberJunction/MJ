@@ -1,6 +1,6 @@
 import { EMPTY } from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
-import { RunView } from '@memberjunction/core';
+import { IMetadataProvider, RunView } from '@memberjunction/core';
 import { MJVideoArchetypeEntity, VideoStudioEngine } from '@memberjunction/core-entities';
 import { NavigationService } from '@memberjunction/ng-shared';
 import { query, queryAll, renderComponentFixture } from '@memberjunction/ng-test-utils';
@@ -28,77 +28,99 @@ async function flushAsync(): Promise<void> {
 describe('VideoStudioArchetypesResourceComponent DOM', () => {
   it('groups archetypes by category, renders proportional beat timeline blocks, opens slide-out preview, supports Clone for shipped archetypes and Edit Record for company archetypes, calls NotifyLoadComplete once, and publishes agent context', async () => {
     const navStub = createNavigationServiceStub();
+    const currentUser = { ID: 'user-clone-1', Name: 'Producer' };
+    const clonedEntities: Record<string, unknown>[] = [];
+    let shouldSaveSucceed = false;
 
-    vi.spyOn(VideoStudioEngine.Instance, 'Config').mockResolvedValue(undefined);
-    vi.spyOn(VideoStudioEngine.Instance, 'Archetypes', 'get').mockReturnValue([
-      {
-        ID: 'arch-briefing',
-        Name: 'Executive Briefing',
-        Description: 'Concise executive update',
-        Category: 'Briefing',
-        Status: 'Active',
-        CompanyID: null,
-        Company: null,
-        DefaultDurationSeconds: 60,
-        MinDurationSeconds: 30,
-        MaxDurationSeconds: 90,
-        DefaultFormats: '16:9, 9:16',
-        DefaultInteractionMode: 'Auto',
-        Guidance: 'Open with the headline metric.',
-        BeatTemplate: '[]',
-        Pacing: '{}',
-        BeatTemplateObject: [
-          {
-            Key: 'hook',
-            Label: 'Hook',
-            Purpose: 'Attention grabber',
-            MinDurationSeconds: 5,
-            MaxDurationSeconds: 10,
-            DefaultDurationSeconds: 8,
+    const customProvider = {
+      CurrentUser: currentUser,
+      GetEntityObject: vi.fn().mockImplementation(async () => {
+        const record: Record<string, unknown> = {
+          ID: 'arch-cloned-1',
+          LatestResult: { CompleteMessage: 'Duplicate archetype name for company' },
+          Save: vi.fn().mockImplementation(async () => shouldSaveSucceed),
+        };
+        clonedEntities.push(record);
+        return record;
+      }),
+    } as unknown as IMetadataProvider;
+
+    const engineStub = {
+      Config: vi.fn().mockResolvedValue(undefined),
+      Archetypes: [
+        {
+          ID: 'arch-briefing',
+          Name: 'Executive Briefing',
+          Description: 'Concise executive update',
+          Category: 'Briefing',
+          Status: 'Active',
+          CompanyID: null,
+          Company: null,
+          DefaultDurationSeconds: 60,
+          MinDurationSeconds: 30,
+          MaxDurationSeconds: 90,
+          DefaultFormats: '16:9, 9:16',
+          DefaultInteractionMode: 'Auto',
+          Guidance: 'Open with the headline metric.',
+          BeatTemplate: '[{"Key":"hook"}]',
+          Pacing: '{"AvgSecondsBetweenChanges":5}',
+          BeatTemplateObject: [
+            {
+              Key: 'hook',
+              Label: 'Hook',
+              Purpose: 'Attention grabber',
+              MinDurationSeconds: 5,
+              MaxDurationSeconds: 10,
+              DefaultDurationSeconds: 8,
+            },
+            {
+              Key: 'kpi',
+              Label: 'KPI Breakdown',
+              Purpose: 'Show core metrics',
+              MinDurationSeconds: 20,
+              MaxDurationSeconds: 40,
+              DefaultDurationSeconds: 30,
+              RequiresDataBinding: true,
+            },
+          ],
+          PacingObject: {
+            AvgSecondsBetweenChanges: 5,
+            HoldRules: 'Hold charts for at least 3 seconds.',
           },
-          {
-            Key: 'kpi',
-            Label: 'KPI Breakdown',
-            Purpose: 'Show core metrics',
-            MinDurationSeconds: 20,
-            MaxDurationSeconds: 40,
-            DefaultDurationSeconds: 30,
-            RequiresDataBinding: true,
-          },
-        ],
-        PacingObject: {
-          AvgSecondsBetweenChanges: 5,
-          HoldRules: 'Hold charts for at least 3 seconds.',
-        },
-      } as unknown as MJVideoArchetypeEntity,
-      {
-        ID: 'arch-social',
-        Name: 'Social Pulse',
-        Description: 'Fast social clip',
-        Category: 'Social',
-        Status: 'Active',
-        CompanyID: 'comp-1',
-        Company: 'Acme Corp',
-        DefaultDurationSeconds: 30,
-        MinDurationSeconds: 15,
-        MaxDurationSeconds: 45,
-        DefaultFormats: '9:16',
-        DefaultInteractionMode: 'PresentOnly',
-        Guidance: 'Keep cuts rapid.',
-        BeatTemplate: '[]',
-        Pacing: null,
-        BeatTemplateObject: [
-          {
-            Key: 'intro',
-            Label: 'Intro',
-            Purpose: 'Quick hook',
-            MinDurationSeconds: 4,
-            MaxDurationSeconds: 8,
-          },
-        ],
-        PacingObject: null,
-      } as unknown as MJVideoArchetypeEntity,
-    ]);
+        } as unknown as MJVideoArchetypeEntity,
+        {
+          ID: 'arch-social',
+          Name: 'Social Pulse',
+          Description: 'Fast social clip',
+          Category: 'Social',
+          Status: 'Active',
+          CompanyID: 'comp-1',
+          Company: 'Acme Corp',
+          DefaultDurationSeconds: 30,
+          MinDurationSeconds: 15,
+          MaxDurationSeconds: 45,
+          DefaultFormats: '9:16',
+          DefaultInteractionMode: 'PresentOnly',
+          Guidance: 'Keep cuts rapid.',
+          BeatTemplate: '[]',
+          Pacing: null,
+          BeatTemplateObject: [
+            {
+              Key: 'intro',
+              Label: 'Intro',
+              Purpose: 'Quick hook',
+              MinDurationSeconds: 4,
+              MaxDurationSeconds: 8,
+            },
+          ],
+          PacingObject: null,
+        } as unknown as MJVideoArchetypeEntity,
+      ],
+    } as unknown as VideoStudioEngine;
+
+    const getProviderInstanceSpy = vi
+      .spyOn(VideoStudioEngine, 'GetProviderInstance')
+      .mockReturnValue(engineStub);
 
     vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
       RunView: vi.fn().mockResolvedValue({
@@ -115,6 +137,7 @@ describe('VideoStudioArchetypesResourceComponent DOM', () => {
     );
 
     const fixture = renderComponentFixture(VideoStudioArchetypesResourceComponent, {
+      inputs: { Provider: customProvider },
       providers: [{ provide: NavigationService, useValue: navStub }],
     });
 
@@ -123,6 +146,7 @@ describe('VideoStudioArchetypesResourceComponent DOM', () => {
 
     const instance = fixture.componentInstance;
     expect(notifySpy).toHaveBeenCalledTimes(1);
+    expect(getProviderInstanceSpy).toHaveBeenCalledWith(customProvider, VideoStudioEngine);
     expect(instance.CategoryGroups).toHaveLength(2);
     expect(queryAll(fixture, '[data-testid^="archetype-card-"]')).toHaveLength(2);
     expect(queryAll(fixture, '[data-testid="archetype-beat-block"]')).toHaveLength(3);
@@ -157,10 +181,41 @@ describe('VideoStudioArchetypesResourceComponent DOM', () => {
     fixture.detectChanges();
     expect(query(fixture, '[data-testid="archetype-clone-dialog"]')).not.toBeNull();
 
-    // Cancel Clone dialog
-    instance.CancelCloneDialog();
+    // First ConfirmClone attempt fails Save() -> surfaces LatestResult.CompleteMessage
+    instance.CloneName = 'Acme Executive Briefing';
+    instance.CloneCompanyID = 'comp-1';
+    await instance.ConfirmClone();
     fixture.detectChanges();
-    expect(query(fixture, '[data-testid="archetype-clone-dialog"]')).toBeNull();
+    expect(customProvider.GetEntityObject).toHaveBeenCalledWith('MJ: Video Archetypes', currentUser);
+    expect(clonedEntities[0]).toMatchObject({
+      Name: 'Acme Executive Briefing',
+      Description: 'Concise executive update',
+      Category: 'Briefing',
+      CompanyID: 'comp-1',
+      DefaultDurationSeconds: 60,
+      MinDurationSeconds: 30,
+      MaxDurationSeconds: 90,
+      DefaultFormats: '16:9, 9:16',
+      DefaultInteractionMode: 'Auto',
+      BeatTemplate: '[{"Key":"hook"}]',
+      Pacing: '{"AvgSecondsBetweenChanges":5}',
+      Guidance: 'Open with the headline metric.',
+      Status: 'Active',
+    });
+    expect(instance.CloneError).toBe('Duplicate archetype name for company');
+    expect(query(fixture, '[data-testid="archetype-clone-error"]')?.textContent).toContain(
+      'Duplicate archetype name for company',
+    );
+
+    // Second ConfirmClone attempt succeeds -> closes dialog, reloads, and navigates to cloned record
+    shouldSaveSucceed = true;
+    await instance.ConfirmClone();
+    fixture.detectChanges();
+    expect(instance.CloneSourceArchetype).toBeNull();
+    expect(navStub.OpenEntityRecord).toHaveBeenCalledWith(
+      'MJ: Video Archetypes',
+      expect.anything(),
+    );
 
     // Click company archetype card — shows Edit Record button and navigates to entity record
     const companyCard = query(fixture, '[data-testid="archetype-card-arch-social"]') as HTMLElement | null;
@@ -180,6 +235,51 @@ describe('VideoStudioArchetypesResourceComponent DOM', () => {
     fixture.detectChanges();
     expect(instance.FilteredArchetypes).toHaveLength(0);
     expect(query(fixture, '[data-testid="archetypes-empty"]')).not.toBeNull();
+
+    fixture.destroy();
+    vi.restoreAllMocks();
+  });
+
+  it('surfaces company load failures inside the Clone dialog when MJ: Companies view fails', async () => {
+    const navStub = createNavigationServiceStub();
+
+    vi.spyOn(VideoStudioEngine, 'GetProviderInstance').mockReturnValue({
+      Config: vi.fn().mockResolvedValue(undefined),
+      Archetypes: [
+        {
+          ID: 'arch-briefing',
+          Name: 'Executive Briefing',
+          Category: 'Briefing',
+          Status: 'Active',
+          CompanyID: null,
+          BeatTemplateObject: [],
+        } as unknown as MJVideoArchetypeEntity,
+      ],
+    } as unknown as VideoStudioEngine);
+
+    vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
+      RunView: vi.fn().mockResolvedValue({
+        Success: false,
+        ErrorMessage: 'Companies view unavailable',
+        Results: [],
+      }),
+    } as unknown as RunView);
+
+    const fixture = renderComponentFixture(VideoStudioArchetypesResourceComponent, {
+      providers: [{ provide: NavigationService, useValue: navStub }],
+    });
+
+    await flushAsync();
+    fixture.detectChanges();
+
+    const instance = fixture.componentInstance;
+    instance.OpenCloneDialog(instance.AllArchetypes[0]);
+    fixture.detectChanges();
+
+    expect(instance.CloneError).toBe("Couldn't load companies: Companies view unavailable");
+    expect(query(fixture, '[data-testid="archetype-clone-error"]')?.textContent).toContain(
+      "Couldn't load companies: Companies view unavailable",
+    );
 
     fixture.destroy();
     vi.restoreAllMocks();

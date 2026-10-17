@@ -25,6 +25,7 @@
  *   database record and is gated behind the user-driven Clone dialog only.
  */
 
+import { VideoProductionStatus } from '@memberjunction/video-studio-core';
 import { AGENT_CONTEXT_NAME_LIST_CAP, BoundNameList } from '../shared/agent-tool-validation';
 
 /**
@@ -112,17 +113,28 @@ export function ResolveVideoStudioItem<T extends NamedVideoStudioItem>(
 // ============================================================================
 
 /**
+ * Card status for a `Video Production` artifact: one of the canonical
+ * {@link VideoProductionStatus} values from `@memberjunction/video-studio-core`,
+ * or `'Unknown'` when the artifact version has no recognized `status` attribute.
+ */
+export type ProductionCardStatus = VideoProductionStatus | 'Unknown';
+
+/**
  * Allowed status filter values on the Productions surface (`'all'` means unfiltered).
  */
 export const PRODUCTION_STATUS_FILTERS = [
     'all',
-    'Draft',
-    'StoryboardApproved',
-    'Rendering',
-    'RoughCutReady',
-    'FinalReady',
+    'Briefing',
+    'Styled',
+    'Storyboarded',
     'Approved',
-    'Failed',
+    'PreProduced',
+    'Composed',
+    'RoughCut',
+    'Reviewed',
+    'Delivered',
+    'Blocked',
+    'Unknown',
 ] as const;
 
 export type ProductionStatusFilter = (typeof PRODUCTION_STATUS_FILTERS)[number];
@@ -139,7 +151,7 @@ export interface ProductionCardSnapshot extends NamedVideoStudioItem {
     VersionNumber: number;
     PosterFileID: string | null;
     PosterUrl: string | null;
-    Status: string;
+    Status: ProductionCardStatus;
     Archetype: string;
     BrandKitID: string | null;
     BrandKitName: string | null;
@@ -232,12 +244,22 @@ export function FilterProductionCards<T extends ProductionCardSnapshot>(
     });
 }
 
+const LOCAL_DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
+
 function ParseFilterDateStart(dateStr: string): number | null {
     const trimmed = (dateStr ?? '').trim();
     if (!trimmed) {
         return null;
     }
-    const parsed = Date.parse(`${trimmed}T00:00:00.000Z`);
+    const match = LOCAL_DATE_PATTERN.exec(trimmed);
+    if (match) {
+        const y = Number(match[1]);
+        const m = Number(match[2]);
+        const d = Number(match[3]);
+        const localStart = new Date(y, m - 1, d, 0, 0, 0, 0).getTime();
+        return Number.isFinite(localStart) ? localStart : null;
+    }
+    const parsed = Date.parse(trimmed);
     return Number.isFinite(parsed) ? parsed : null;
 }
 
@@ -246,7 +268,15 @@ function ParseFilterDateEnd(dateStr: string): number | null {
     if (!trimmed) {
         return null;
     }
-    const parsed = Date.parse(`${trimmed}T23:59:59.999Z`);
+    const match = LOCAL_DATE_PATTERN.exec(trimmed);
+    if (match) {
+        const y = Number(match[1]);
+        const m = Number(match[2]);
+        const d = Number(match[3]);
+        const localEnd = new Date(y, m - 1, d, 23, 59, 59, 999).getTime();
+        return Number.isFinite(localEnd) ? localEnd : null;
+    }
+    const parsed = Date.parse(trimmed);
     return Number.isFinite(parsed) ? parsed : null;
 }
 

@@ -6,7 +6,7 @@ import {
   OnInit,
   inject,
 } from '@angular/core';
-import { CompositeKey } from '@memberjunction/core';
+import { CompositeKey, LogError } from '@memberjunction/core';
 import {
   BrandKitEngine,
   MJBrandKitAssetEntity,
@@ -18,8 +18,9 @@ import {
   GraphQLDataProvider,
   GraphQLFileStorageClient,
 } from '@memberjunction/graphql-dataprovider';
+import { DeleteBrandKitWithAssets } from '@memberjunction/ng-brand-kits';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
-import { FilterFieldConfig } from '@memberjunction/ng-ui-components';
+import { FilterFieldConfig, MJConfirmService } from '@memberjunction/ng-ui-components';
 import {
   BRAND_KIT_STATUS_FILTERS,
   BrandKitCardSnapshot,
@@ -39,7 +40,7 @@ export type BrandKitCardItem = BrandKitCardSnapshot;
  * Displays all `MJ: Brand Kits` from `BrandKitEngine` as cards showing the kit
  * name, primary logo thumbnail, company scope (or "Workspace Default"), default
  * star indicator, status badge, color palette swatch strip (`kit.StyleObject.Palette`),
- * and asset count (`BrandKitEngine.Instance.GetAssets(kit.ID).length`).
+ * and asset count (`engine.GetAssets(kit.ID).length`).
  */
 @RegisterClass(BaseResourceComponent, 'VideoStudioBrandKitsResource')
 @Component({
@@ -55,6 +56,7 @@ export class VideoStudioBrandKitsResourceComponent
 {
   public IsLoading = false;
   public LoadError: string | null = null;
+  public DeletingKitId: string | null = null;
 
   public AllBrandKits: BrandKitCardSnapshot[] = [];
   public FilteredBrandKits: BrandKitCardSnapshot[] = [];
@@ -70,7 +72,9 @@ export class VideoStudioBrandKitsResourceComponent
     companyId: null,
   };
 
+  private kitsById = new Map<string, MJBrandKitEntity>();
   private readonly cdr = inject(ChangeDetectorRef);
+  private readonly confirmService = inject(MJConfirmService);
 
   async ngOnInit(): Promise<void> {
     super.ngOnInit();
@@ -120,14 +124,24 @@ export class VideoStudioBrandKitsResourceComponent
     this.cdr.markForCheck();
 
     try {
-      await BrandKitEngine.Instance.Config(forceRefresh, undefined, this.ProviderToUse);
-      const kits = BrandKitEngine.Instance.BrandKits;
-      this.AllBrandKits = kits.map((kit) => this.mapKitToCard(kit));
+      const engine = BrandKitEngine.GetProviderInstance<BrandKitEngine>(
+        this.ProviderToUse,
+        BrandKitEngine,
+      ) as BrandKitEngine;
+      await engine.Config(forceRefresh, undefined, this.ProviderToUse);
+      const kits = engine.BrandKits;
+      this.kitsById.clear();
+      for (const kit of kits) {
+        this.kitsById.set(kit.ID, kit);
+      }
+      this.AllBrandKits = kits.map((kit) => this.mapKitToCard(kit, engine));
       this.rebuildFilterFieldOptions();
       this.applyFiltersAndSync();
       await this.mintLogoUrls(this.AllBrandKits);
     } catch (err: unknown) {
-      this.LoadError = err instanceof Error ? err.message : String(err);
+      const msg = err instanceof Error ? err.message : String(err);
+      LogError(msg);
+      this.LoadError = msg;
     } finally {
       this.IsLoading = false;
       this.syncAgentContext();
@@ -173,6 +187,37 @@ export class VideoStudioBrandKitsResourceComponent
       CompositeKey.FromID(item.ID),
     );
     this.cdr.markForCheck();
+  }
+
+  public async DeleteBrandKit(card: BrandKitCardSnapshot, event?: Event): Promise<void> {
+    event?.stopPropagation();
+    const kit = this.kitsById.get(card.ID);
+    if (!kit || this.DeletingKitId) {
+      return;
+    }
+    const confirmed = await this.confirmService.ConfirmDelete({
+      title: 'Delete Brand Kit',
+      message: `Delete "${card.Name}" and its ${card.AssetCount} asset(s)?`,
+    });
+    if (!confirmed) {
+      return;
+    }
+
+    this.DeletingKitId = card.ID;
+    this.LoadError = null;
+    this.cdr.markForCheck();
+
+    try {
+      const result = await DeleteBrandKitWithAssets(kit, this.ProviderToUse);
+      if (!result.Success) {
+        this.LoadError = result.ErrorMessage || 'Failed to delete brand kit.';
+        return;
+      }
+      await this.LoadBrandKits(true);
+    } finally {
+      this.DeletingKitId = null;
+      this.cdr.markForCheck();
+    }
   }
 
   // ============================================================================
@@ -278,7 +323,7 @@ export class VideoStudioBrandKitsResourceComponent
     ]);
   }
 
-  private mapKitToCard(kit: MJBrandKitEntity): BrandKitCardSnapshot {
+  private mapKitToCard(kit: MJBrandKitEntity, engine: BrandKitEngine): BrandKitCardSnapshot {
     const styleObj = kit.StyleObject;
     const rawPalette = Array.isArray(styleObj?.Palette) ? styleObj.Palette : [];
     const swatches: BrandKitSwatchView[] = rawPalette
@@ -288,7 +333,7 @@ export class VideoStudioBrandKitsResourceComponent
         Value: entry.Value.trim(),
       }));
 
-    const assets = BrandKitEngine.Instance.GetAssets(kit.ID);
+    const assets = engine.GetAssets(kit.ID);
     const primaryLogoAsset = this.findPrimaryLogoAsset(assets);
 
     return {
@@ -308,21 +353,27 @@ export class VideoStudioBrandKitsResourceComponent
 
   private findPrimaryLogoAsset(assets: MJBrandKitAssetEntity[]): MJBrandKitAssetEntity | null {
     const logoAssets = assets.filter(
-      (a) => a.Usage === 'Logo' || a.Usage === 'LogoMark',
+      (a) => a.AssetType === 'Logo' || a.AssetType === 'LogoMark',
     );
     if (logoAssets.length === 0) {
       return null;
     }
-    return logoAssets.find((a) => Boolean(a.IsPrimary)) ?? logoAssets[0];
+    const explicitPrimary = logoAssets.find((a) => Boolean(a.IsPrimary));
+    if (explicitPrimary) {
+      return explicitPrimary;
+    }
+    const sorted = [...logoAssets].sort(
+      (a, b) => (a.Sequence ?? Number.MAX_SAFE_INTEGER) - (b.Sequence ?? Number.MAX_SAFE_INTEGER),
+    );
+    return sorted[0] ?? null;
   }
 
   private async mintLogoUrls(cards: BrandKitCardSnapshot[]): Promise<void> {
-    const provider = this.ProviderToUse as unknown as Partial<GraphQLDataProvider> | null;
-    if (!provider || typeof provider.ExecuteGQL !== 'function') {
+    if (!(this.ProviderToUse instanceof GraphQLDataProvider)) {
       return;
     }
 
-    const client = new GraphQLFileStorageClient(this.ProviderToUse as GraphQLDataProvider);
+    const client = new GraphQLFileStorageClient(this.ProviderToUse);
     const cardsWithLogos = cards.filter((c) => Boolean(c.PrimaryLogoFileID));
     if (cardsWithLogos.length === 0) {
       return;
@@ -338,8 +389,9 @@ export class VideoStudioBrandKitsResourceComponent
           if (token.Success && token.Url) {
             card.PrimaryLogoUrl = token.Url;
           }
-        } catch {
+        } catch (err: unknown) {
           // Non-fatal: card renders fallback icon when logo token minting fails.
+          LogError(err instanceof Error ? err.message : String(err));
         }
       }),
     );

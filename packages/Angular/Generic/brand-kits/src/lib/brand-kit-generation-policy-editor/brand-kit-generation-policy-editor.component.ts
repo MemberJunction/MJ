@@ -5,9 +5,7 @@ import {
   EventEmitter,
   inject,
   Input,
-  OnChanges,
   Output,
-  SimpleChanges,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -17,6 +15,7 @@ import {
   MJBrandKitEntity_IBrandGenerationPolicy,
 } from '@memberjunction/core-entities';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
+import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 
 export const SYNTHETIC_PEOPLE_POLICY_WARNING =
   'A generated person may never be presented as a member, customer, employee or speaker.';
@@ -32,12 +31,12 @@ export const SYNTHETIC_PEOPLE_POLICY_WARNING =
 @Component({
   standalone: true,
   selector: 'mj-brand-kit-generation-policy-editor',
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, MJButtonDirective],
   templateUrl: './brand-kit-generation-policy-editor.component.html',
   styleUrls: ['./brand-kit-generation-policy-editor.component.css'],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class BrandKitGenerationPolicyEditorComponent extends BaseAngularComponent implements OnChanges {
+export class BrandKitGenerationPolicyEditorComponent extends BaseAngularComponent {
   private _brandKit: MJBrandKitEntity | null = null;
 
   @Input()
@@ -46,6 +45,7 @@ export class BrandKitGenerationPolicyEditorComponent extends BaseAngularComponen
   }
   set BrandKit(value: MJBrandKitEntity | null) {
     this._brandKit = value;
+    this.HydrateFromBrandKit();
   }
 
   @Input() Readonly = false;
@@ -60,7 +60,7 @@ export class BrandKitGenerationPolicyEditorComponent extends BaseAngularComponen
   public AvoidSubjects: string[] = [];
   public NewSubjectInput = '';
   public StylePrompt: string = DEFAULT_BRAND_GENERATION_POLICY.StylePrompt ?? '';
-  public MaxGenerationCostPerRun: number = DEFAULT_BRAND_GENERATION_POLICY.MaxGenerationCostPerRun ?? 10;
+  public MaxGenerationCostPerRun: number | null = null;
 
   public Saving = false;
   public SaveError: string | null = null;
@@ -68,12 +68,6 @@ export class BrandKitGenerationPolicyEditorComponent extends BaseAngularComponen
   public readonly SyntheticPeopleWarning = SYNTHETIC_PEOPLE_POLICY_WARNING;
 
   private readonly cdr = inject(ChangeDetectorRef);
-
-  ngOnChanges(changes: SimpleChanges): void {
-    if ('BrandKit' in changes) {
-      this.HydrateFromBrandKit();
-    }
-  }
 
   public HydrateFromBrandKit(): void {
     this.SaveError = null;
@@ -99,27 +93,30 @@ export class BrandKitGenerationPolicyEditorComponent extends BaseAngularComponen
         ? raw.StylePrompt
         : (DEFAULT_BRAND_GENERATION_POLICY.StylePrompt ?? '');
     this.MaxGenerationCostPerRun =
-      typeof raw?.MaxGenerationCostPerRun === 'number' && Number.isFinite(raw.MaxGenerationCostPerRun) && raw.MaxGenerationCostPerRun >= 0
+      typeof raw?.MaxGenerationCostPerRun === 'number' &&
+      Number.isFinite(raw.MaxGenerationCostPerRun) &&
+      raw.MaxGenerationCostPerRun >= 0
         ? raw.MaxGenerationCostPerRun
-        : (DEFAULT_BRAND_GENERATION_POLICY.MaxGenerationCostPerRun ?? 10);
+        : null;
     this.cdr.markForCheck();
   }
 
   public BuildPolicyObject(): MJBrandKitEntity_IBrandGenerationPolicy {
-    const cost =
-      typeof this.MaxGenerationCostPerRun === 'number' &&
-      Number.isFinite(this.MaxGenerationCostPerRun) &&
-      this.MaxGenerationCostPerRun >= 0
-        ? this.MaxGenerationCostPerRun
-        : (DEFAULT_BRAND_GENERATION_POLICY.MaxGenerationCostPerRun ?? 10);
-    return {
+    const policy: MJBrandKitEntity_IBrandGenerationPolicy = {
       AllowGeneratedImages: Boolean(this.AllowGeneratedImages),
       AllowGeneratedVideo: Boolean(this.AllowGeneratedVideo),
       AllowSyntheticPeople: Boolean(this.AllowSyntheticPeople),
       AvoidSubjects: [...this.AvoidSubjects],
       StylePrompt: this.StylePrompt,
-      MaxGenerationCostPerRun: cost,
     };
+    if (
+      typeof this.MaxGenerationCostPerRun === 'number' &&
+      Number.isFinite(this.MaxGenerationCostPerRun) &&
+      this.MaxGenerationCostPerRun >= 0
+    ) {
+      policy.MaxGenerationCostPerRun = this.MaxGenerationCostPerRun;
+    }
+    return policy;
   }
 
   public OnFieldChange(): void {
