@@ -39,8 +39,11 @@ jobs:
         id: backport
         uses: korthout/backport-action@d07416681cab29bf2661702f925f020aaa962997 # v3 (SHA-pinned)
         with:
-          # Matches labels of the form `backport <branch>`, e.g. `backport lts/5`
-          label_pattern: ^backport ([^ ]+)$
+          # Matches ONLY lts-line labels of the form `backport lts/<line>`, e.g. `backport lts/5`.
+          # Deliberately narrower than `backport <any-branch>`: this workflow holds contents:write,
+          # so an unrestricted pattern would let any triage-permission label push cherry-picks to
+          # arbitrary branches. Backports only ever target LTS lines (plans/lts-process.md §5.2).
+          label_pattern: ^backport (lts\/[A-Za-z0-9.\-]+)$
           merge_commits: skip
           pull_title: "[${target_branch}] ${pull_title}"
           pull_description: |-
