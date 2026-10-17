@@ -11,13 +11,11 @@
  */
 
 import {
-    ModelUsage,
     type AIAPIKey,
     type AICredentialScope,
     type MediaInput,
     type VideoKeyframeInput,
 } from '@memberjunction/ai';
-import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import {
     AIImageGenerationRunner,
     AIVideoRunner,
@@ -57,6 +55,7 @@ import {
 } from './generation-policy.js';
 import {
     ComposeGenerationPrompt,
+    EstimateLoadedGenerationCallCost,
     ResolveRequestedVideoSeconds,
     ScreenGenerationRequest,
     SumRecordedGenerationCost,
@@ -270,65 +269,7 @@ export async function EstimateGenerationCallCost(
     if (!AIEngine.Instance.Loaded) {
         await AIEngine.Instance.Config(false, ctx.ContextUser, ctx.Provider);
     }
-
-    const promptName =
-        kind === 'Video'
-            ? AIVideoRunner.GENERATIVE_PROMPT_NAME
-            : AIImageGenerationRunner.DEFAULT_PROMPT_NAME;
-
-    const promptEntity = AIEngine.Instance.Prompts.find(
-        (p) => (p.Name ?? '').trim().toLowerCase() === promptName.toLowerCase(),
-    );
-    if (!promptEntity) {
-        throw new Error(
-            `Carrier prompt "${promptName}" not found in AIEngine.Instance.Prompts for ${kind} generation; refusing to run with an unknown cost.`,
-        );
-    }
-
-    const boundPromptModels = AIEngine.Instance.PromptModels.filter(
-        (pm) =>
-            UUIDsEqual(pm.PromptID, promptEntity.ID) &&
-            (pm.Status === 'Active' || pm.Status === 'Preview'),
-    );
-    if (boundPromptModels.length === 0) {
-        throw new Error(
-            `Carrier prompt "${promptName}" has no Active or Preview PromptModels bound in MJ: AI Prompt Models; refusing to run with an unknown cost.`,
-        );
-    }
-
-    const usage =
-        kind === 'Video'
-            ? ModelUsage.ForMedia('Seconds', 0, durationSeconds)
-            : ModelUsage.ForMedia('Images', 0, 1);
-
-    let highestCost = -1;
-    for (const pm of boundPromptModels) {
-        const modelId = pm.ModelID?.trim();
-        const vendorId = pm.VendorID?.trim();
-        if (!modelId || !vendorId) {
-            throw new Error(
-                `PromptModel "${pm.ID}" on carrier prompt "${promptName}" is missing ModelID or VendorID; refusing to run with an unknown cost.`,
-            );
-        }
-
-        const priced = AIEngineBase.Instance.CalculateModelCost(modelId, vendorId, usage);
-        if (
-            !priced ||
-            typeof priced.cost !== 'number' ||
-            !Number.isFinite(priced.cost) ||
-            priced.cost < 0
-        ) {
-            throw new Error(
-                `No active price row found for bound PromptModel candidate (ModelID="${modelId}", VendorID="${vendorId}") on carrier prompt "${promptName}"; refusing to run with an unknown cost.`,
-            );
-        }
-
-        if (priced.cost > highestCost) {
-            highestCost = priced.cost;
-        }
-    }
-
-    return highestCost;
+    return EstimateLoadedGenerationCallCost(kind, durationSeconds);
 }
 
 function resolveRequestAspectRatio(
@@ -925,6 +866,21 @@ export async function GenerateRequestedAssets(
     const companyId = ctx.CompanyID !== undefined ? ctx.CompanyID : (workingSpec.CompanyID ?? null);
     const policy = ctx.Policy ?? ResolveGenerationPolicy(workingSpec, companyId);
     const hasStorage = await resolveHasStorage(ctx);
+
+    const hasUncostedGeneratedAsset = workingSpec.Assets.Approved.some(
+        (asset) =>
+            asset &&
+            asset.Provenance === 'Generated' &&
+            (asset.Kind === 'Image' || asset.Kind === 'Video') &&
+            !(
+                typeof asset.Generation?.Cost === 'number' &&
+                Number.isFinite(asset.Generation.Cost) &&
+                asset.Generation.Cost >= 0
+            ),
+    );
+    if (hasUncostedGeneratedAsset && !AIEngine.Instance.Loaded) {
+        await AIEngine.Instance.Config(false, ctx.ContextUser, ctx.Provider);
+    }
 
     let spendSoFar = SumRecordedGenerationCost(workingSpec);
     let passVideoSeconds = 0;

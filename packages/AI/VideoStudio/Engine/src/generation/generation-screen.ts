@@ -8,6 +8,11 @@
  * @module @memberjunction/video-studio
  */
 
+import { ModelUsage } from '@memberjunction/ai';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
+import { AIImageGenerationRunner, AIVideoRunner } from '@memberjunction/ai-prompts';
+import { AIEngine } from '@memberjunction/aiengine';
+import { UUIDsEqual } from '@memberjunction/global';
 import type {
     VideoAssetGenerationRequest,
     VideoGenerationSpec,
@@ -193,25 +198,116 @@ export function SumAlreadyGeneratedVideoSeconds(spec: Partial<VideoGenerationSpe
 }
 
 /**
+ * Default duration in seconds assumed for a generated video clip when
+ * `request.DurationSeconds` is omitted (`VS-GEN-6`).
+ */
+export const DEFAULT_GENERATED_VIDEO_DURATION_SECONDS = 5;
+
+/**
+ * Synchronous pricing helper over already-loaded `AIEngine.Instance` metadata.
+ * Resolves the carrier prompt (`AIVideoRunner.GENERATIVE_PROMPT_NAME` or
+ * `AIImageGenerationRunner.DEFAULT_PROMPT_NAME`) and prices every Active/Preview bound
+ * `PromptModel` via `AIEngineBase.Instance.CalculateModelCost`, returning the highest
+ * candidate cost (`VS-GEN-6`).
+ */
+export function EstimateLoadedGenerationCallCost(
+    kind: 'Image' | 'Video',
+    durationSeconds: number,
+): number {
+    const promptName =
+        kind === 'Video'
+            ? AIVideoRunner.GENERATIVE_PROMPT_NAME
+            : AIImageGenerationRunner.DEFAULT_PROMPT_NAME;
+
+    const promptEntity = AIEngine.Instance.Prompts.find(
+        (p) => (p.Name ?? '').trim().toLowerCase() === promptName.toLowerCase(),
+    );
+    if (!promptEntity) {
+        throw new Error(
+            `Carrier prompt "${promptName}" not found in AIEngine.Instance.Prompts for ${kind} generation; refusing to run with an unknown cost.`,
+        );
+    }
+
+    const boundPromptModels = AIEngine.Instance.PromptModels.filter(
+        (pm) =>
+            UUIDsEqual(pm.PromptID, promptEntity.ID) &&
+            (pm.Status === 'Active' || pm.Status === 'Preview'),
+    );
+    if (boundPromptModels.length === 0) {
+        throw new Error(
+            `Carrier prompt "${promptName}" has no Active or Preview PromptModels bound in MJ: AI Prompt Models; refusing to run with an unknown cost.`,
+        );
+    }
+
+    const usage =
+        kind === 'Video'
+            ? ModelUsage.ForMedia('Seconds', 0, durationSeconds)
+            : ModelUsage.ForMedia('Images', 0, 1);
+
+    let highestCost = -1;
+    for (const pm of boundPromptModels) {
+        const modelId = pm.ModelID;
+        const vendorId = pm.VendorID?.trim();
+        if (!modelId || !vendorId) {
+            throw new Error(
+                `PromptModel "${pm.ID}" on carrier prompt "${promptName}" is missing ModelID or VendorID; refusing to run with an unknown cost.`,
+            );
+        }
+
+        const priced = AIEngineBase.Instance.CalculateModelCost(modelId, vendorId, usage);
+        if (!priced || !Number.isFinite(priced.cost) || priced.cost < 0) {
+            throw new Error(
+                `No active price row found for bound PromptModel candidate (ModelID="${modelId}", VendorID="${vendorId}") on carrier prompt "${promptName}"; refusing to run with an unknown cost.`,
+            );
+        }
+
+        if (priced.cost > highestCost) {
+            highestCost = priced.cost;
+        }
+    }
+
+    return highestCost;
+}
+
+/**
  * Sums recorded `Generation.Cost` across all generated assets in `spec.Assets.Approved`.
+ * When a `Provenance: 'Generated'` asset in `Approved` has no recorded `Generation.Cost`,
+ * re-estimates its cost from its `Kind` and `DurationSeconds` via
+ * {@link EstimateLoadedGenerationCallCost} without mutating `Generation.Cost` (`VS-GEN-6`).
  */
 export function SumRecordedGenerationCost(spec: Partial<VideoGenerationSpec>): number {
     const approved = Array.isArray(spec.Assets?.Approved) ? spec.Assets.Approved : [];
     let total = 0;
     for (const asset of approved) {
-        const cost = asset?.Generation?.Cost;
-        if (typeof cost === 'number' && Number.isFinite(cost) && cost > 0) {
+        if (!asset) {
+            continue;
+        }
+        const cost = asset.Generation?.Cost;
+        if (typeof cost === 'number' && Number.isFinite(cost) && cost >= 0) {
             total += cost;
+            continue;
+        }
+        if (asset.Provenance === 'Generated' && (asset.Kind === 'Image' || asset.Kind === 'Video')) {
+            const legacyDuration = (asset as { DurationSeconds?: number }).DurationSeconds;
+            const rawDuration =
+                typeof asset.Generation?.DurationSeconds === 'number'
+                    ? asset.Generation.DurationSeconds
+                    : legacyDuration;
+            const durationSeconds =
+                asset.Kind === 'Video'
+                    ? typeof rawDuration === 'number' && Number.isFinite(rawDuration) && rawDuration > 0
+                        ? rawDuration
+                        : DEFAULT_GENERATED_VIDEO_DURATION_SECONDS
+                    : 1;
+            try {
+                total += EstimateLoadedGenerationCallCost(asset.Kind, durationSeconds);
+            } catch {
+                // If AIEngine is not configured during a standalone ScreenGenerationRequest call, skip fallback.
+            }
         }
     }
     return total;
 }
-
-/**
- * Default duration in seconds assumed for a generated video clip when
- * `request.DurationSeconds` is omitted (`VS-GEN-6`).
- */
-export const DEFAULT_GENERATED_VIDEO_DURATION_SECONDS = 5;
 
 /**
  * Resolves the effective duration in seconds for a video generation request,

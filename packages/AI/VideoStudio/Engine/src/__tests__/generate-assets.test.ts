@@ -29,6 +29,7 @@ import {
     GenerateRequestedAssets,
     type GenerateRequestedAssetsContext,
 } from '../generation/generate-assets.js';
+import { SumRecordedGenerationCost } from '../generation/generation-screen.js';
 import { DEFAULT_VIDEO_STUDIO_SETTINGS } from '../settings.js';
 import * as storageModule from '../storage.js';
 
@@ -268,7 +269,9 @@ function createFakeRunners(options?: {
                 };
             }
             const promptRunId = `prompt-run-img-${imageCalls.length}`;
-            if (!options?.omitImageCost) {
+            if (options?.omitImageCost) {
+                delete promptRunCosts[promptRunId];
+            } else {
                 promptRunCosts[promptRunId] =
                     options?.imageCost !== undefined ? options.imageCost : 0.08;
             }
@@ -1371,6 +1374,151 @@ describe('GenerateRequestedAssets (VS-GEN-6)', () => {
             const genVid = res.Spec.Assets.Approved.find((a) => a.Key === 'ambient-bg');
             expect(genVid?.Generation?.Cost).toBeUndefined();
             expect(res.TotalCost).toBe(0);
+        }
+
+        // 6g: Two-pass cross-pass spend when a Generated asset in Approved has no recorded Cost:
+        // two 6s clips (c1, c2) with omitVideoCost under a $1.00 cap ($0.60 estimate each).
+        // Pass 1 generates c1 (1 call) and blocks c2 (SpendCapReached), with c1.Generation.Cost === undefined;
+        // Pass 2 over pass1.Spec re-estimates c1's $0.60 spend via SumRecordedGenerationCost and generates nothing more
+        // (0 video calls, c2 remains Blocked SpendCapReached, c1.Generation.Cost stays undefined, TotalCost === 0).
+        {
+            const spec = makeFixtureSpec();
+            spec.Assets.Generate = [
+                {
+                    Key: 'c1',
+                    Kind: 'Video',
+                    Purpose: 'Clip 1',
+                    Prompt: 'Abstract geometric ribbon 1',
+                    ReferenceKeys: [],
+                    DurationSeconds: 6,
+                },
+                {
+                    Key: 'c2',
+                    Kind: 'Video',
+                    Purpose: 'Clip 2',
+                    Prompt: 'Abstract geometric ribbon 2',
+                    ReferenceKeys: [],
+                    DurationSeconds: 6,
+                },
+            ];
+
+            const pass1Runners = createFakeRunners({ omitVideoCost: true });
+            const pass1 = await GenerateRequestedAssets(spec, {
+                ContextUser: mockUser,
+                ImageRunner: pass1Runners.imageRunner,
+                VideoRunner: pass1Runners.videoRunner,
+            });
+
+            expect(pass1Runners.videoCalls).toHaveLength(1);
+            expect(pass1.Spec.Assets.Generate![0].Status).toBe('Generated');
+            expect(pass1.Spec.Assets.Generate![1].Status).toBe('Blocked');
+            expect(pass1.Spec.Assets.Generate![1].BlockedReason).toContain('SpendCapReached');
+            const c1Pass1 = pass1.Spec.Assets.Approved.find((a) => a.Key === 'c1');
+            expect(c1Pass1?.Generation?.Cost).toBeUndefined();
+            expect(SumRecordedGenerationCost(pass1.Spec)).toBeCloseTo(0.6, 5);
+            expect(c1Pass1?.Generation?.Cost).toBeUndefined();
+
+            const pass2Runners = createFakeRunners({ omitVideoCost: true });
+            const pass2 = await GenerateRequestedAssets(pass1.Spec, {
+                ContextUser: mockUser,
+                ImageRunner: pass2Runners.imageRunner,
+                VideoRunner: pass2Runners.videoRunner,
+            });
+
+            expect(pass2Runners.videoCalls).toHaveLength(0);
+            expect(pass2Runners.imageCalls).toHaveLength(0);
+            expect(pass2.Spec.Assets.Generate![0].Status).toBe('Generated');
+            expect(pass2.Spec.Assets.Generate![1].Status).toBe('Blocked');
+            expect(pass2.Spec.Assets.Generate![1].BlockedReason).toContain('SpendCapReached');
+            const c1Pass2 = pass2.Spec.Assets.Approved.find((a) => a.Key === 'c1');
+            expect(c1Pass2?.Generation?.Cost).toBeUndefined();
+            expect(pass2.TotalCost).toBe(0);
+        }
+
+        // 6h: When an Image request omits actual Cost (omitImageCost: true), spendSoFar advances by estimatedImageCost ($0.25),
+        // blocking a subsequent 8s Video request ($0.25 + $0.80 = $1.05 > $1.00 cap) before videoRunner is invoked
+        {
+            const spec = makeFixtureSpec();
+            spec.Assets.Generate = [
+                {
+                    Key: 'chapter-card',
+                    Kind: 'Image',
+                    Purpose: 'Illustrative chapter divider card for Beat 2.',
+                    Prompt: 'Minimalist architectural glass prism on dark slate surface',
+                    ReferenceKeys: ['brand:Hero', 'logo-main'],
+                },
+                {
+                    Key: 'ambient-bg',
+                    Kind: 'Video',
+                    Purpose: 'Ambient geometric background loop behind Beat 1.',
+                    Prompt: 'Soft geometric slate ribbons drifting slowly in warm studio light',
+                    ReferenceKeys: [],
+                    DurationSeconds: 8,
+                },
+            ];
+            const { imageCalls, videoCalls, imageRunner, videoRunner } = createFakeRunners({
+                omitImageCost: true,
+            });
+
+            const res = await GenerateRequestedAssets(spec, {
+                ContextUser: mockUser,
+                ImageRunner: imageRunner,
+                VideoRunner: videoRunner,
+            });
+
+            expect(imageCalls).toHaveLength(1);
+            expect(videoCalls).toHaveLength(0);
+            expect(res.Spec.Assets.Generate![0].Status).toBe('Generated');
+            expect(res.Spec.Assets.Generate![1].Status).toBe('Blocked');
+            expect(res.Spec.Assets.Generate![1].BlockedReason).toContain('SpendCapReached');
+            const genImg = res.Spec.Assets.Approved.find((a) => a.Key === 'chapter-card');
+            expect(genImg?.Generation?.Cost).toBeUndefined();
+            expect(res.TotalCost).toBe(0);
+        }
+
+        // 6i: When a Case 2 anchor still (<key>-still) omits actual Cost (omitImageCost: true), spendSoFar advances by
+        // estimatedStillCost ($0.25) plus the 6s video cost ($0.60) = $0.85, blocking a subsequent Image request
+        // ($0.85 + $0.25 = $1.10 > $1.00 cap) before a second imageRunner call is made
+        {
+            const spec = makeFixtureSpec();
+            spec.Assets.Generate = [
+                {
+                    Key: 'ref-video-uncosted-still',
+                    Kind: 'Video',
+                    Purpose: 'Brand-styled motion background',
+                    Prompt: 'Abstract ribbons in brand colors',
+                    ReferenceKeys: ['logo-main'],
+                    DurationSeconds: 6,
+                },
+                {
+                    Key: 'chapter-card',
+                    Kind: 'Image',
+                    Purpose: 'Illustrative chapter divider card for Beat 2.',
+                    Prompt: 'Minimalist architectural glass prism on dark slate surface',
+                    ReferenceKeys: [],
+                },
+            ];
+            const { imageCalls, videoCalls, imageRunner, videoRunner } = createFakeRunners({
+                omitImageCost: true,
+                videoCost: 0.6,
+            });
+
+            const res = await GenerateRequestedAssets(spec, {
+                ContextUser: mockUser,
+                ImageRunner: imageRunner,
+                VideoRunner: videoRunner,
+            });
+
+            expect(imageCalls).toHaveLength(1);
+            expect(videoCalls).toHaveLength(1);
+            expect(res.Spec.Assets.Generate![0].Status).toBe('Generated');
+            expect(res.Spec.Assets.Generate![1].Status).toBe('Blocked');
+            expect(res.Spec.Assets.Generate![1].BlockedReason).toContain('SpendCapReached');
+            const stillAsset = res.Spec.Assets.Approved.find(
+                (a) => a.Key === 'ref-video-uncosted-still-still',
+            );
+            expect(stillAsset?.Generation?.Cost).toBeUndefined();
+            expect(res.TotalCost).toBeCloseTo(0.6, 5);
         }
     });
 
