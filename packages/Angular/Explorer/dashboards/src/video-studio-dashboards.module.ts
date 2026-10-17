@@ -8,12 +8,15 @@ import {
 } from '@memberjunction/ng-conversations';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import {
+  MJAlertComponent,
   MJButtonDirective,
   MJDialogActionsComponent,
   MJDialogComponent,
+  MJDropdownComponent,
   MJFilterFieldComponent,
   MJFilterPanelComponent,
   MJFilterPopoverComponent,
+  MJNumericInputComponent,
   MJPageBodyComponent,
   MJPageHeaderComponent,
   MJPageLayoutComponent,
@@ -50,9 +53,12 @@ import { VideoStudioStudioResourceComponent } from './VideoStudio/resources/vide
     ArtifactShareModalComponent,
     ArtifactCollectionPickerModalComponent,
     VSCopilotPanelComponent,
+    MJAlertComponent,
     MJButtonDirective,
     MJDialogComponent,
     MJDialogActionsComponent,
+    MJDropdownComponent,
+    MJNumericInputComponent,
     MJPageLayoutComponent,
     MJPageHeaderComponent,
     MJPageBodyComponent,

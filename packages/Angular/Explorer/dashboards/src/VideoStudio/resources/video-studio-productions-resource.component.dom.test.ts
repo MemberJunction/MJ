@@ -1,3 +1,4 @@
+import { By } from '@angular/platform-browser';
 import { EMPTY } from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
 import { IMetadataProvider, RunView } from '@memberjunction/core';
@@ -5,7 +6,8 @@ import { BrandKitEngine, MJBrandKitEntity } from '@memberjunction/core-entities'
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { ArtifactPermissionService } from '@memberjunction/ng-conversations';
 import { NavigationService } from '@memberjunction/ng-shared';
-import { query, queryAll, renderComponentFixture } from '@memberjunction/ng-test-utils';
+import { query, renderComponentFixture } from '@memberjunction/ng-test-utils';
+import { VSCopilotPanelComponent } from '../components/vs-copilot-panel.component';
 import { VideoStudioProductionsResourceComponent } from './video-studio-productions-resource.component';
 
 function createNavigationServiceStub(): {
@@ -446,7 +448,7 @@ describe('VideoStudioProductionsResourceComponent DOM', () => {
     vi.restoreAllMocks();
   });
 
-  it('enables Iterate when a conversation is linked via MJ: Conversation Detail Artifacts -> MJ: Conversation Details and opens docked vs-copilot-panel on click', async () => {
+  it('enables Iterate when a conversation is linked via MJ: Conversation Detail Artifacts -> MJ: Conversation Details and binds ConversationId, PendingArtifactId, and PendingArtifactVersionNumber on vs-copilot-panel', async () => {
     const navStub = createNavigationServiceStub();
     const customProvider = createGraphQLProviderStub('user-1');
     const permStub = {
@@ -500,7 +502,7 @@ describe('VideoStudioProductionsResourceComponent DOM', () => {
       },
       {
         Success: true,
-        Results: [{ ArtifactVersionID: 'ver-iter-1', Name: 'status', Value: 'Ready for Review' }],
+        Results: [{ ArtifactVersionID: 'ver-iter-1', Name: 'status', Value: 'Reviewed' }],
       },
     ]);
 
@@ -542,6 +544,141 @@ describe('VideoStudioProductionsResourceComponent DOM', () => {
     expect(instance.IteratePendingArtifactVersionNumber).toBe(3);
     const copilotEl = query(fixture, '[data-testid="production-iterate-copilot"]');
     expect(copilotEl).not.toBeNull();
+
+    const copilotDebug = fixture.debugElement.query(By.directive(VSCopilotPanelComponent));
+    expect(copilotDebug).not.toBeNull();
+    const copilotInstance = copilotDebug.componentInstance as VSCopilotPanelComponent;
+    expect(copilotInstance.ConversationId).toBe('conv-777');
+    expect(copilotInstance.PendingArtifactId).toBe('prod-iter-1');
+    expect(copilotInstance.PendingArtifactVersionNumber).toBe(3);
+
+    fixture.destroy();
+    vi.restoreAllMocks();
+  });
+
+  it('ignores stale SelectProduction async completions when the user clicks a second production card before the first resolves', async () => {
+    const navStub = createNavigationServiceStub();
+    const customProvider = createGraphQLProviderStub('user-1');
+    const permStub = {
+      Provider: null,
+      GetReadableArtifactsFilter: vi.fn().mockResolvedValue("UserID = 'user-1'"),
+      GetUserPermissions: vi.fn().mockResolvedValue({
+        canRead: true,
+        canEdit: true,
+        canShare: true,
+      }),
+    };
+
+    vi.spyOn(BrandKitEngine, 'GetProviderInstance').mockReturnValue({
+      Config: vi.fn().mockResolvedValue(undefined),
+      BrandKits: [],
+    } as unknown as BrandKitEngine);
+
+    let resolveFirstDetailArtifact!: (value: {
+      Success: boolean;
+      Results: Array<{ ConversationDetailID?: string }>;
+    }) => void;
+
+    const runViewSpy = vi.fn().mockImplementation(async (params: { EntityName: string; ExtraFilter?: string }) => {
+      if (params.EntityName === 'MJ: Artifacts') {
+        return {
+          Success: true,
+          Results: [
+            {
+              ID: 'prod-a',
+              Name: 'Production A',
+              Description: 'First card',
+              __mj_UpdatedAt: new Date('2026-04-15T12:00:00Z'),
+            },
+            {
+              ID: 'prod-b',
+              Name: 'Production B',
+              Description: 'Second card',
+              __mj_UpdatedAt: new Date('2026-04-14T12:00:00Z'),
+            },
+          ],
+        };
+      }
+      if (params.EntityName === 'MJ: Conversation Detail Artifacts') {
+        if (params.ExtraFilter?.includes('prod-a')) {
+          return new Promise((resolve) => {
+            resolveFirstDetailArtifact = resolve;
+          });
+        }
+        return {
+          Success: true,
+          Results: [{ ConversationDetailID: 'cd-b' }],
+        };
+      }
+      if (params.EntityName === 'MJ: Conversation Details') {
+        if (params.ExtraFilter?.includes('cd-a')) {
+          return {
+            Success: true,
+            Results: [{ ConversationID: 'conv-a-stale' }],
+          };
+        }
+        return {
+          Success: true,
+          Results: [{ ConversationID: 'conv-b-active' }],
+        };
+      }
+      return { Success: true, Results: [] };
+    });
+
+    const runViewsSpy = vi.fn().mockResolvedValue([
+      {
+        Success: true,
+        Results: [
+          { ID: 'ver-a', ArtifactID: 'prod-a', VersionNumber: 1 },
+          { ID: 'ver-b', ArtifactID: 'prod-b', VersionNumber: 2 },
+        ],
+      },
+      {
+        Success: true,
+        Results: [],
+      },
+    ]);
+
+    vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
+      RunView: runViewSpy,
+      RunViews: runViewsSpy,
+    } as unknown as RunView);
+
+    const fixture = renderComponentFixture(VideoStudioProductionsResourceComponent, {
+      inputs: { Provider: customProvider },
+      providers: [
+        { provide: NavigationService, useValue: navStub },
+        { provide: ArtifactPermissionService, useValue: permStub },
+      ],
+    });
+
+    await flushAsync();
+    fixture.detectChanges();
+
+    const instance = fixture.componentInstance;
+    const prodA = instance.AllProductions.find((p) => p.ID === 'prod-a')!;
+    const prodB = instance.AllProductions.find((p) => p.ID === 'prod-b')!;
+
+    // Trigger selection of A (slow) then let GetUserPermissions resolve so A is parked inside resolveProductionConversationId
+    const selectAPromise = instance.SelectProduction(prodA);
+    await Promise.resolve();
+    const selectBPromise = instance.SelectProduction(prodB);
+
+    await selectBPromise;
+    expect(instance.SelectedProduction?.ID).toBe('prod-b');
+    expect(instance.SelectedProductionConversationId).toBe('conv-b-active');
+
+    // Now let A's delayed RunView resolve after B has already settled
+    resolveFirstDetailArtifact({
+      Success: true,
+      Results: [{ ConversationDetailID: 'cd-a' }],
+    });
+    await selectAPromise;
+    await flushAsync();
+    fixture.detectChanges();
+
+    expect(instance.SelectedProduction?.ID).toBe('prod-b');
+    expect(instance.SelectedProductionConversationId).toBe('conv-b-active');
 
     fixture.destroy();
     vi.restoreAllMocks();

@@ -5,18 +5,11 @@
     Icon="fa-solid fa-wand-magic-sparkles"
   >
     <div actions>
-      <button
-        mjButton
-        variant="outline"
-        size="sm"
-        type="button"
+      <mj-refresh-button
         data-testid="studio-refresh-button"
-        [disabled]="IsLoading"
-        (click)="Refresh()"
-      >
-        <i class="fa-solid fa-rotate" [class.fa-spin]="IsLoading" aria-hidden="true"></i>
-        <span>Refresh</span>
-      </button>
+        [Loading]="IsLoading"
+        (Clicked)="Refresh()"
+      />
     </div>
   </mj-page-header>
 
@@ -25,10 +18,9 @@
       <!-- Left Pane: Start Form -->
       <section class="vs-studio-form-pane" data-testid="studio-start-form">
         @if (LoadError) {
-          <div class="vs-studio-alert" data-testid="studio-load-error" role="alert">
-            <i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i>
-            <span>{{ LoadError }}</span>
-          </div>
+          <mj-alert Variant="error" data-testid="studio-load-error">
+            {{ LoadError }}
+          </mj-alert>
         }
 
         <!-- 1. Archetype Picker -->
@@ -114,18 +106,19 @@
           </div>
 
           <div class="vs-studio-col vs-studio-col--narrow">
-            <label class="vs-studio-label" for="studio-duration-input">
+            <label id="studio-duration-label" class="vs-studio-label" for="studio-duration-input">
               Duration ({{ MinDurationSeconds }}–{{ MaxDurationSeconds }}s)
             </label>
-            <input
-              id="studio-duration-input"
-              type="number"
-              class="vs-studio-input"
+            <mj-numeric-input
+              InputId="studio-duration-input"
+              AriaLabelledBy="studio-duration-label"
+              AriaLabel="Duration in seconds"
               data-testid="studio-duration-input"
-              [min]="MinDurationSeconds"
-              [max]="MaxDurationSeconds"
-              [value]="DurationSeconds"
-              (change)="OnDurationChange($any($event.target).value)"
+              [Min]="MinDurationSeconds"
+              [Max]="MaxDurationSeconds"
+              [Step]="1"
+              [ngModel]="DurationSeconds"
+              (ngModelChange)="OnDurationChange($event ?? DurationSeconds)"
             />
           </div>
         </div>
@@ -133,37 +126,35 @@
         <!-- 4. Brand Kit (Company-Filtered) -->
         <div class="vs-studio-section">
           <div class="vs-studio-section__header">
-            <label class="vs-studio-label" for="studio-brand-kit-select">4. Brand Kit</label>
+            <span id="studio-brand-kit-label" class="vs-studio-label">4. Brand Kit</span>
             @if (AvailableCompanies.length > 0) {
-              <select
-                class="vs-studio-select vs-studio-select--compact"
+              <mj-dropdown
+                class="vs-studio-select--compact"
                 data-testid="studio-company-filter"
-                aria-label="Filter Brand Kits by Company"
-                [value]="SelectedCompanyId"
-                (change)="OnCompanyFilterChange($any($event.target).value)"
-              >
-                <option value="all">All Companies</option>
-                @for (company of AvailableCompanies; track company.ID) {
-                  <option [value]="company.ID">{{ company.Name }}</option>
-                }
-              </select>
+                AriaLabel="Filter Brand Kits by Company"
+                [Data]="CompanyDropdownOptions"
+                TextField="Name"
+                ValueField="ID"
+                [ValuePrimitive]="true"
+                [ngModel]="SelectedCompanyId"
+                (ValueChange)="OnCompanyFilterChange($any($event))"
+              />
             }
           </div>
 
-          <select
-            id="studio-brand-kit-select"
-            class="vs-studio-select"
+          <mj-dropdown
+            InputId="studio-brand-kit-select"
+            AriaLabelledBy="studio-brand-kit-label"
+            AriaLabel="Brand Kit"
             data-testid="studio-brand-kit-select"
-            [value]="SelectedBrandKit?.ID ?? ''"
-            (change)="SelectBrandKitById($any($event.target).value)"
-          >
-            <option value="">None (use default styling)</option>
-            @for (kit of FilteredBrandKits; track kit.ID) {
-              <option [value]="kit.ID">
-                {{ kit.Name }}{{ kit.CompanyName ? ' (' + kit.CompanyName + ')' : ' (Workspace Default)' }}
-              </option>
-            }
-          </select>
+            DefaultItem="None (use default styling)"
+            [Data]="BrandKitDropdownOptions"
+            TextField="DisplayName"
+            ValueField="ID"
+            [ValuePrimitive]="true"
+            [ngModel]="SelectedBrandKit?.ID ?? null"
+            (ValueChange)="SelectBrandKitById($any($event))"
+          />
         </div>
 
         <!-- 5. Saved Queries -->
@@ -228,6 +219,7 @@
       <!-- Right Pane: Always-present Copilot -->
       <section class="vs-studio-copilot-pane" data-testid="studio-copilot-pane">
         <vs-copilot-panel
+          #copilotPanel
           [Provider]="ProviderToUse"
           [CurrentUser]="CurrentUser"
           [EnvironmentId]="EnvironmentId"

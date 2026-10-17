@@ -4,10 +4,9 @@ import {
   Component,
   EventEmitter,
   Input,
-  OnChanges,
   OnInit,
   Output,
-  SimpleChanges,
+  ViewChild,
   inject,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
@@ -21,7 +20,10 @@ import { UUIDsEqual } from '@memberjunction/global';
 import { NavigationRequest } from '@memberjunction/ng-artifacts';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { PendingAttachment } from '@memberjunction/ng-composer';
-import { ConversationsModule } from '@memberjunction/ng-conversations';
+import {
+  ConversationChatAreaComponent,
+  ConversationsModule,
+} from '@memberjunction/ng-conversations';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 
 /** Canonical AI agent name for the Video Studio orchestrator. */
@@ -55,12 +57,21 @@ export interface VSCopilotConversationCreatedEvent {
 })
 export class VSCopilotPanelComponent
   extends BaseAngularComponent
-  implements OnInit, OnChanges
+  implements OnInit
 {
+  private _conversationId: string | null = null;
+
   @Input() CurrentUser: UserInfo | null = null;
   @Input() EnvironmentId: string = MJEnvironmentEntityExtended.DefaultEnvironmentID;
   @Input() ApplicationId = '';
-  @Input() ConversationId: string | null = null;
+  @Input()
+  set ConversationId(value: string | null) {
+    this._conversationId = value;
+    this.syncConversationMode();
+  }
+  get ConversationId(): string | null {
+    return this._conversationId;
+  }
   @Input() PendingMessage: string | null = null;
   @Input() PendingArtifactId: string | null = null;
   @Input() PendingArtifactVersionNumber: number | null = null;
@@ -73,6 +84,9 @@ export class VSCopilotPanelComponent
   @Output() PendingArtifactConsumed = new EventEmitter<void>();
   @Output() NavigationRequest = new EventEmitter<NavigationRequest>();
   @Output() CloseRequested = new EventEmitter<void>();
+
+  @ViewChild('chatArea')
+  private chatArea?: Pick<ConversationChatAreaComponent, 'OnEmptyStateMessageSent'>;
 
   public VideoStudioAgentId: string | null = null;
   public IsResolvingAgent = true;
@@ -87,14 +101,22 @@ export class VSCopilotPanelComponent
     await this.ResolveVideoStudioAgent();
   }
 
-  ngOnChanges(changes: SimpleChanges): void {
-    if (changes['ConversationId']) {
-      this.syncConversationMode();
+  /**
+   * Starts a brand-new conversation in the underlying `<mj-conversation-chat-area>`
+   * by resetting into new-conversation mode and invoking `OnEmptyStateMessageSent`.
+   */
+  public StartConversation(message: string): void {
+    const trimmed = (message ?? '').trim();
+    if (!trimmed) {
+      return;
     }
+    this.ConversationId = null;
+    this.cdr.detectChanges();
+    void this.chatArea?.OnEmptyStateMessageSent({ text: trimmed, attachments: [] });
   }
 
   /**
-   * Resolves the `'Video Studio'` agent ID via `AIEngineBase.Instance.Agents`.
+   * Resolves the `'Video Studio'` agent ID via `AIEngineBase.GetProviderInstance`.
    * Logs an error and enters the inline missing-agent state if the agent cannot be found.
    */
   public async ResolveVideoStudioAgent(): Promise<void> {
@@ -104,9 +126,13 @@ export class VSCopilotPanelComponent
 
     try {
       const user = this.CurrentUser ?? this.ProviderToUse?.CurrentUser ?? undefined;
-      await AIEngineBase.Instance.Config(false, user, this.ProviderToUse);
+      const aiEngine = AIEngineBase.GetProviderInstance<AIEngineBase>(
+        this.ProviderToUse,
+        AIEngineBase,
+      ) as AIEngineBase;
+      await aiEngine.Config(false, user, this.ProviderToUse);
       const match =
-        AIEngineBase.Instance.Agents?.find(
+        aiEngine.Agents?.find(
           (a) => a.Name?.trim().toLowerCase() === VIDEO_STUDIO_AGENT_NAME.toLowerCase(),
         ) ?? null;
 
@@ -184,5 +210,6 @@ export class VSCopilotPanelComponent
       this.ChatIsNewConversation = true;
       this.ActiveConversation = null;
     }
+    this.cdr.markForCheck();
   }
 }

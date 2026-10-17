@@ -1,9 +1,10 @@
 /**
  * @fileoverview Pure helpers for the Video Studio app's AI-agent integration
- * across all three resource surfaces:
+ * across all four resource surfaces:
  *   1. Productions (`VideoStudioProductionsResource`)
- *   2. Brand Kits (`VideoStudioBrandKitsResource`)
- *   3. Archetypes (`VideoStudioArchetypesResource`)
+ *   2. Studio (`VideoStudioStudioResource`)
+ *   3. Brand Kits (`VideoStudioBrandKitsResource`)
+ *   4. Archetypes (`VideoStudioArchetypesResource`)
  *
  * These functions are intentionally free of Angular / DOM dependencies so they
  * can be unit-tested in Node via Vitest. Each Video Studio resource component
@@ -11,12 +12,18 @@
  * into the key-value `AgentContext` object published via
  * `this.navigationService.SetAgentContext(this, ...)`.
  *
- * 🚨 SAFETY BOUNDARY (READ / NAVIGATE / FILTER / SEARCH / REFRESH ONLY):
- * The Video Studio surfaces expose ONLY read, filter, search, select/open-for-viewing,
- * and refresh operations to the AI agent. They NEVER expose create, edit, clone,
- * share, or delete client tools:
+ * 🚨 SAFETY BOUNDARY (READ / NAVIGATE / FILTER / SEARCH / REFRESH + STUDIO FORM-FILL):
+ * Productions, Brand Kits, and Archetypes expose ONLY read, filter, search,
+ * select/open-for-viewing, and refresh operations to the AI agent — never create,
+ * edit, clone, share, upload, policy, or delete tools. Studio additionally exposes
+ * four reversible in-memory form-fill tools (`SelectStudioArchetype`,
+ * `SelectStudioBrandKit`, `SetStudioFormats`, `SetStudioTopic`) while deliberately
+ * excluding `StartProduction`:
  * - Productions: no create/delete production, no share/permission grant (`ArtifactShareModal`
  *   is user-confirm-only), no storyboard/render mutation.
+ * - Studio: form-fill tools only (`SelectStudioArchetype`, `SelectStudioBrandKit`,
+ *   `SetStudioFormats`, `SetStudioTopic`). `StartProduction` spends model/render tokens
+ *   and creates a conversation, so it stays human-triggered in the UI.
  * - Brand Kits: `OpenBrandKit` opens the `MJ: Brand Kits` entity form for viewing via
  *   `NavigationService.OpenEntityRecord`; no create, save, delete, or asset/policy write
  *   tool is exposed.
@@ -25,6 +32,7 @@
  *   database record and is gated behind the user-driven Clone dialog only.
  */
 
+import { EscapeSQLString } from '@memberjunction/global';
 import { VideoProductionStatus } from '@memberjunction/video-studio-core';
 import { AGENT_CONTEXT_NAME_LIST_CAP, BoundNameList } from '../shared/agent-tool-validation';
 
@@ -41,13 +49,6 @@ export const VIDEO_STUDIO_NAME_LIST_CAP = AGENT_CONTEXT_NAME_LIST_CAP;
  */
 export function CapVideoStudioNames(names: readonly string[]): string[] {
     return BoundNameList(names, VIDEO_STUDIO_NAME_LIST_CAP);
-}
-
-/**
- * Escape single quotes in a string literal for safe embedding in a RunView SQL ExtraFilter.
- */
-export function EscapeSqlLiteral(value: string): string {
-    return (value ?? '').replace(/'/g, "''");
 }
 
 
@@ -807,6 +808,21 @@ export function ClampStudioDuration(
     }
     const rounded = Math.round(value);
     return Math.min(safeMax, Math.max(safeMin, rounded));
+}
+
+/**
+ * Build the `MJ: Queries` RunView `ExtraFilter` for the Studio saved-query picker.
+ * Escapes SQL `LIKE` wildcards (`%`, `_`, `[`, `\`) with `\` + `ESCAPE '\'` and
+ * escapes single quotes via {@link EscapeSQLString} from `@memberjunction/global`.
+ */
+export function BuildSavedQuerySearchFilter(searchText: string): string {
+    const trimmed = (searchText ?? '').trim();
+    if (!trimmed) {
+        return '';
+    }
+    const likeEscaped = trimmed.replace(/[\\%_[]/g, '\\$&');
+    const sqlEscaped = EscapeSQLString(likeEscaped);
+    return `Name LIKE '%${sqlEscaped}%' ESCAPE '\\'`;
 }
 
 /**

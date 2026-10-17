@@ -4,6 +4,7 @@ import {
   Component,
   OnDestroy,
   OnInit,
+  ViewChild,
   inject,
 } from '@angular/core';
 import { LogError, RunView, UserInfo } from '@memberjunction/core';
@@ -18,17 +19,20 @@ import {
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { NavigationRequest } from '@memberjunction/ng-artifacts';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
-import { VSCopilotConversationCreatedEvent } from '../components/vs-copilot-panel.component';
+import {
+  VSCopilotConversationCreatedEvent,
+  VSCopilotPanelComponent,
+} from '../components/vs-copilot-panel.component';
 import {
   ARCHETYPE_CATEGORIES,
   ArchetypeCardSnapshot,
   ArchetypeCategory,
   BrandKitCardSnapshot,
+  BuildSavedQuerySearchFilter,
   BuildStudioAgentContext,
   BuildStudioAppContext,
   ClampStudioDuration,
   ComposeStudioFirstMessage,
-  EscapeSqlLiteral,
   ParseArchetypeDefaultFormats,
   ResolveVideoStudioItem,
   STUDIO_VIDEO_FORMATS,
@@ -96,6 +100,11 @@ export class VideoStudioStudioResourceComponent
 
   public readonly AvailableFormats: readonly StudioVideoFormat[] = STUDIO_VIDEO_FORMATS;
 
+  @ViewChild('copilotPanel')
+  private copilotPanel?: Pick<VSCopilotPanelComponent, 'StartConversation'>;
+
+  private querySearchRequestId = 0;
+
   private readonly cdr = inject(ChangeDetectorRef);
 
   async ngOnInit(): Promise<void> {
@@ -161,6 +170,17 @@ export class VideoStudioStudioResourceComponent
     return Array.from(map.entries())
       .map(([ID, Name]) => ({ ID, Name }))
       .sort((a, b) => a.Name.localeCompare(b.Name));
+  }
+
+  public get CompanyDropdownOptions(): { ID: string; Name: string }[] {
+    return [{ ID: 'all', Name: 'All Companies' }, ...this.AvailableCompanies];
+  }
+
+  public get BrandKitDropdownOptions(): { ID: string; DisplayName: string }[] {
+    return this.FilteredBrandKits.map((kit) => ({
+      ID: kit.ID,
+      DisplayName: `${kit.Name}${kit.CompanyName ? ' (' + kit.CompanyName + ')' : ' (Workspace Default)'}`,
+    }));
   }
 
   public async Refresh(): Promise<void> {
@@ -304,14 +324,12 @@ export class VideoStudioStudioResourceComponent
   public async SearchSavedQueries(searchText: string): Promise<void> {
     this.QuerySearchText = searchText ?? '';
     this.IsSearchingQueries = true;
+    const requestId = ++this.querySearchRequestId;
     this.cdr.markForCheck();
 
     try {
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-      const trimmed = this.QuerySearchText.trim();
-      const extraFilter = trimmed
-        ? `Name LIKE '%${EscapeSqlLiteral(trimmed)}%'`
-        : '';
+      const extraFilter = BuildSavedQuerySearchFilter(this.QuerySearchText);
       const result = await rv.RunView<SimpleSavedQueryRow>({
         EntityName: 'MJ: Queries',
         ExtraFilter: extraFilter,
@@ -320,6 +338,10 @@ export class VideoStudioStudioResourceComponent
         MaxRows: SAVED_QUERIES_MAX_ROWS,
         ResultType: 'simple',
       });
+
+      if (requestId !== this.querySearchRequestId) {
+        return;
+      }
 
       if (result.Success && Array.isArray(result.Results)) {
         this.AvailableQueries = result.Results.map((row) => ({
@@ -330,12 +352,17 @@ export class VideoStudioStudioResourceComponent
         this.AvailableQueries = [];
       }
     } catch (err: unknown) {
+      if (requestId !== this.querySearchRequestId) {
+        return;
+      }
       const msg = err instanceof Error ? err.message : String(err);
       LogError(`VideoStudioStudioResourceComponent.SearchSavedQueries: ${msg}`);
       this.AvailableQueries = [];
     } finally {
-      this.IsSearchingQueries = false;
-      this.cdr.markForCheck();
+      if (requestId === this.querySearchRequestId) {
+        this.IsSearchingQueries = false;
+        this.cdr.markForCheck();
+      }
     }
   }
 
@@ -358,7 +385,8 @@ export class VideoStudioStudioResourceComponent
   /**
    * User-triggered Start production action.
    * Composes the deterministic first message, resets ConversationId to null to start
-   * a fresh conversation, and updates PendingMessage + AppContext on the copilot.
+   * a fresh conversation, updates PendingMessage + AppContext on the copilot, and
+   * dispatches the message through the copilot panel into `mj-conversation-chat-area`.
    */
   public StartProduction(): void {
     if (!this.CanStartProduction || !this.SelectedArchetype) {
@@ -384,7 +412,8 @@ export class VideoStudioStudioResourceComponent
     });
     this.PendingMessage = message;
     this.syncAppAndAgentContext();
-    this.cdr.markForCheck();
+    this.cdr.detectChanges();
+    this.copilotPanel?.StartConversation(message);
   }
 
   public OnCopilotConversationCreated(event: VSCopilotConversationCreatedEvent): void {
@@ -602,7 +631,7 @@ export class VideoStudioStudioResourceComponent
       ? entity.BeatTemplateObject
       : [];
     const beatLabels = rawBeats.map((b, idx) => b.Label || b.Key || `Beat ${idx + 1}`);
-    const companyRaw = (entity as unknown as Record<string, unknown>)['Company'];
+    const companyRaw = entity.Company;
 
     return {
       ID: entity.ID,
@@ -630,7 +659,7 @@ export class VideoStudioStudioResourceComponent
     engine: BrandKitEngine,
   ): BrandKitCardSnapshot {
     const assets = engine.GetAssets(kit.ID) ?? [];
-    const companyRaw = (kit as unknown as Record<string, unknown>)['Company'];
+    const companyRaw = kit.Company;
     return {
       ID: kit.ID,
       Name: kit.Name ?? 'Untitled Brand Kit',

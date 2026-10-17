@@ -1,3 +1,5 @@
+import { FormsModule } from '@angular/forms';
+import { By } from '@angular/platform-browser';
 import { EMPTY } from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
 import { IMetadataProvider, RunView } from '@memberjunction/core';
@@ -9,7 +11,10 @@ import {
 } from '@memberjunction/core-entities';
 import { NavigationService } from '@memberjunction/ng-shared';
 import { query, queryAll, renderComponentFixture } from '@memberjunction/ng-test-utils';
+import { VSCopilotPanelComponent } from '../components/vs-copilot-panel.component';
 import { VideoStudioStudioResourceComponent } from './video-studio-studio-resource.component';
+
+const STUDIO_TEST_IMPORTS = [FormsModule];
 
 function createNavigationServiceStub(): {
   QueryParamChanged$: typeof EMPTY;
@@ -98,19 +103,21 @@ function setupStudioMocks() {
     ],
   } as unknown as BrandKitEngine;
 
+  const runViewFn = vi.fn().mockResolvedValue({
+    Success: true,
+    Results: [
+      { ID: 'query-kpi', Name: 'Monthly Active Users KPI' },
+      { ID: 'query-rev', Name: 'Quarterly Revenue Breakdown' },
+    ],
+  });
+
   vi.spyOn(VideoStudioEngine, 'GetProviderInstance').mockReturnValue(vsEngineStub);
   vi.spyOn(BrandKitEngine, 'GetProviderInstance').mockReturnValue(bkEngineStub);
   vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
-    RunView: vi.fn().mockResolvedValue({
-      Success: true,
-      Results: [
-        { ID: 'query-kpi', Name: 'Monthly Active Users KPI' },
-        { ID: 'query-rev', Name: 'Quarterly Revenue Breakdown' },
-      ],
-    }),
+    RunView: runViewFn,
   } as unknown as RunView);
 
-  return { navStub, customProvider };
+  return { navStub, customProvider, runViewFn };
 }
 
 describe('VideoStudioStudioResourceComponent DOM', () => {
@@ -125,6 +132,7 @@ describe('VideoStudioStudioResourceComponent DOM', () => {
 
     const fixture = renderComponentFixture(VideoStudioStudioResourceComponent, {
       inputs: { Provider: customProvider },
+      imports: STUDIO_TEST_IMPORTS,
       providers: [{ provide: NavigationService, useValue: navStub }],
     });
 
@@ -148,11 +156,12 @@ describe('VideoStudioStudioResourceComponent DOM', () => {
     vi.restoreAllMocks();
   });
 
-  it('disables Start production until topic and archetype are set, then sends PendingMessage and AppContext to vs-copilot-panel', async () => {
+  it('disables Start production until topic and archetype are set, then binds AppContext and PendingMessage and calls StartConversation on vs-copilot-panel', async () => {
     const { navStub, customProvider } = setupStudioMocks();
 
     const fixture = renderComponentFixture(VideoStudioStudioResourceComponent, {
       inputs: { Provider: customProvider },
+      imports: STUDIO_TEST_IMPORTS,
       providers: [{ provide: NavigationService, useValue: navStub }],
     });
 
@@ -180,14 +189,17 @@ describe('VideoStudioStudioResourceComponent DOM', () => {
     expect(instance.CanStartProduction).toBe(true);
     expect(startBtn!.hasAttribute('disabled')).toBe(false);
 
+    const copilotDebug = fixture.debugElement.query(By.directive(VSCopilotPanelComponent));
+    expect(copilotDebug).not.toBeNull();
+    const copilotInstance = copilotDebug.componentInstance as VSCopilotPanelComponent;
+    const startConvSpy = vi.spyOn(copilotInstance, 'StartConversation');
+
     startBtn!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     fixture.detectChanges();
 
-    expect(instance.ActiveConversationId).toBeNull();
-    expect(instance.PendingMessage).toBe(
-      'Make a Product Launch Teaser video, about Announce MJ 3.0 Video Studio release, 45 seconds, formats 16:9, 9:16, brand kit MJ Corporate Brand, data from Monthly Active Users KPI.',
-    );
-    expect(instance.StudioAppContext).toEqual({
+    const expectedMessage =
+      'Make a Product Launch Teaser video, about Announce MJ 3.0 Video Studio release, 45 seconds, formats 16:9, 9:16, brand kit MJ Corporate Brand, data from Monthly Active Users KPI.';
+    const expectedAppContext = {
       VideoStudio: {
         ArchetypeID: 'arch-launch',
         BrandKitID: 'kit-default',
@@ -195,7 +207,83 @@ describe('VideoStudioStudioResourceComponent DOM', () => {
         DurationSeconds: 45,
         QueryIDs: ['query-kpi'],
       },
+    };
+
+    expect(instance.ActiveConversationId).toBeNull();
+    expect(instance.PendingMessage).toBe(expectedMessage);
+    expect(instance.StudioAppContext).toEqual(expectedAppContext);
+
+    expect(copilotInstance.ConversationId).toBeNull();
+    expect(copilotInstance.PendingMessage).toBe(expectedMessage);
+    expect(copilotInstance.AppContext).toEqual(expectedAppContext);
+    expect(startConvSpy).toHaveBeenCalledTimes(1);
+    expect(startConvSpy).toHaveBeenCalledWith(expectedMessage);
+
+    fixture.destroy();
+    vi.restoreAllMocks();
+  });
+
+  it('escapes LIKE wildcards in SearchSavedQueries and discards out-of-order stale search responses', async () => {
+    const { navStub, customProvider, runViewFn } = setupStudioMocks();
+
+    const fixture = renderComponentFixture(VideoStudioStudioResourceComponent, {
+      inputs: { Provider: customProvider },
+      imports: STUDIO_TEST_IMPORTS,
+      providers: [{ provide: NavigationService, useValue: navStub }],
     });
+
+    await flushAsync();
+    fixture.detectChanges();
+
+    const instance = fixture.componentInstance;
+
+    // 1. Verify LIKE wildcard escaping ('50%_off')
+    runViewFn.mockClear();
+    await instance.SearchSavedQueries('50%_off');
+    expect(runViewFn).toHaveBeenCalledTimes(1);
+    expect(runViewFn.mock.calls[0][0]).toMatchObject({
+      EntityName: 'MJ: Queries',
+      ExtraFilter: "Name LIKE '%50\\%\\_off%' ESCAPE '\\'",
+    });
+
+    // 2. Verify out-of-order async completion guard
+    let resolveFirstSearch!: (value: {
+      Success: boolean;
+      Results: Array<{ ID: string; Name: string }>;
+    }) => void;
+
+    runViewFn.mockImplementation((params: { ExtraFilter?: string }) => {
+      if (params.ExtraFilter?.includes('first')) {
+        return new Promise((resolve) => {
+          resolveFirstSearch = resolve;
+        });
+      }
+      return Promise.resolve({
+        Success: true,
+        Results: [{ ID: 'q-second', Name: 'Second Query Winner' }],
+      });
+    });
+
+    const firstPromise = instance.SearchSavedQueries('first');
+    const secondPromise = instance.SearchSavedQueries('second');
+
+    await secondPromise;
+    expect(instance.AvailableQueries).toEqual([
+      { ID: 'q-second', Name: 'Second Query Winner' },
+    ]);
+    expect(instance.IsSearchingQueries).toBe(false);
+
+    resolveFirstSearch({
+      Success: true,
+      Results: [{ ID: 'q-first-stale', Name: 'First Query Stale' }],
+    });
+    await firstPromise;
+    await flushAsync();
+    fixture.detectChanges();
+
+    expect(instance.AvailableQueries).toEqual([
+      { ID: 'q-second', Name: 'Second Query Winner' },
+    ]);
 
     fixture.destroy();
     vi.restoreAllMocks();
@@ -206,6 +294,7 @@ describe('VideoStudioStudioResourceComponent DOM', () => {
 
     const fixture = renderComponentFixture(VideoStudioStudioResourceComponent, {
       inputs: { Provider: customProvider },
+      imports: STUDIO_TEST_IMPORTS,
       providers: [{ provide: NavigationService, useValue: navStub }],
     });
 
