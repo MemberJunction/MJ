@@ -119,7 +119,8 @@ export async function FindMentionPinnedPresetID(
 
 /**
  * Extracts the `configId` / `configurationId` from the first `@mention` of an agent in `message`
- * when that first agent mention targets `agentId`.
+ * when that first agent mention targets `agentId`. Supports both full `@mention` tokens
+ * (`{"type":"agent","id":"...","name":"...","configId":"..."}`) and compact tokens that omit `name`.
  */
 function readAgentConfigFromMention(message: string | null | undefined, agentId: string): string | null {
     if (!message) {
@@ -141,6 +142,32 @@ function readAgentConfigFromMention(message: string | null | undefined, agentId:
         const rawConfig = mention.configurationId ?? mention.configId;
         const trimmed = typeof rawConfig === 'string' ? rawConfig.trim() : '';
         return trimmed.length > 0 ? trimmed : null;
+    }
+
+    // Fallback for compact @{"type":"agent","id":"...","configId":"..."} tokens that omit "name"
+    // (which ConversationUtility.ParseSpecialContent skips because MentionContent requires name).
+    const compactMentionPattern = /@(\{[^{}]+\})/g;
+    let match: RegExpExecArray | null;
+    while ((match = compactMentionPattern.exec(message)) !== null) {
+        try {
+            const parsed = JSON.parse(match[1]) as {
+                type?: string;
+                id?: string;
+                configId?: string;
+                configurationId?: string;
+            };
+            if (parsed.type !== 'agent' || !parsed.id) {
+                continue;
+            }
+            if (!UUIDsEqual(parsed.id, agentId)) {
+                return null;
+            }
+            const rawConfig = parsed.configurationId ?? parsed.configId;
+            const trimmed = typeof rawConfig === 'string' ? rawConfig.trim() : '';
+            return trimmed.length > 0 ? trimmed : null;
+        } catch {
+            // Ignore malformed JSON fragments
+        }
     }
     return null;
 }

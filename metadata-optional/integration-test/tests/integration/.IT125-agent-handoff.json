@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT125 - Agent Handoff",
+    "Description": "Deterministic top-level peer-to-peer agent handoff end to end with a scripted LoopAgentChatDriver stand-in (no live model call): AH1 verifies shipped metadata (Sage enableHandoff, Loop PromptParamsSchema defaults, Research Agent discoverability and default preset); AH2 runs IT: Handoff Source + FollowHandoffs into IT: Handoff Target and asserts the source Handoff step (TargetID, HandoffToAgentID, TargetConversationDetailID), the top-level target run (ParentRunID IS NULL, same ConversationID, Standard preset ConfigurationID), and the target ConversationDetail row; AH3 verifies preset precedence (mj.agentMode.<target id> setting selects High Power; user-message @-mention configId selects Fast); AH4 verifies conversation continuity data for sticky routing; AH5 verifies NotDiscoverable and AlreadyInThisTurn refusals write failed Handoff steps and retry inside the caller's loop; AH6 verifies running without handoffChain omits Handoff from the rendered system prompt and turns a scripted Handoff into a Retry.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "All six checks (AH1-AH6) pass: shipped metadata matches the handoff contract, FollowHandoffs creates a top-level target run and links the source Handoff step to the target run and detail row, preset precedence honours mention > user setting > agent default, continuity query returns the target's row, refusals record failed Handoff steps and retry in-loop, and non-handoff hosts omit Handoff from the prompt and reject Handoff responses."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "agent-handoff"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "5232C094-9841-4CE1-9A52-6CBA6A81E5DF"
+  }
+}

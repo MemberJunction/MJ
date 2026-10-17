@@ -242,18 +242,19 @@ When the LLM determines it needs to delegate work, it returns a `Sub-Agent` step
 
 ### Resolution Order
 
-The agent framework resolves the sub-agent name in this order:
+`BaseAgent.resolveSubAgentByName` resolves the requested sub-agent name by exact case-insensitive match (`name.trim().toLowerCase()`) across three sources in order:
 
-1. **Child agents**: Search agents where `ParentID` matches the current agent
-2. **Related agents**: Search `AIAgentRelationship` records for the current agent
+1. **Child agents**: Active `AIAgent` records where `ParentID` matches the current agent (`Status === 'Active'`)
+2. **Related agents**: Active `AIAgentRelationship` records (`Status === 'Active'`) for the current agent whose target sub-agent is active
+3. **Runtime-granted sub-agents**: Active agents granted for the current run via skill activation (`AISkillAgent`) or caller `subAgentChanges` (`getEffectiveSubAgentsForValidation(params.agent.ID)`)
 
-If the name doesn't match exactly, fuzzy matching (contains search) is attempted. Ambiguous matches produce an error.
+There is **no** fuzzy or substring matching. Unrelated top-level peer agents are never resolved by `Sub-Agent`: to transfer a conversation to another top-level agent so it speaks to the user as itself, use `nextStep.type = "Handoff"`; to dispatch durable multi-step work across peer agents, use `nextStep.type = "Tasks"`.
 
 ### Dispatch
 
 Once resolved, the framework dispatches to the appropriate handler:
 
-- **Child agents** → `executeChildSubAgentStep()`: Computes payload via downstream paths, applies scope wrapping, executes, then merges upstream
+- **Child agents and runtime-granted sub-agents** → `executeChildSubAgentStep()`: Computes payload via downstream paths, applies scope wrapping, executes, then merges upstream
 - **Related agents** → `executeRelatedSubAgentStep()`: Applies input mapping, prepares context paths, configures message mode, executes, then applies output mapping
 
 ### Execution Flow
