@@ -192,6 +192,18 @@ const NO_DETAILS: MJConversationDetailEntity[] = [];
 /** No fork rows; one shared instance for the same reason. */
 const NO_BRANCHES: ConversationBranchRow[] = [];
 
+/** What {@link ConversationChatAreaComponent.StoppableDetailIds} depends on; compared by reference. */
+interface StoppableDetailIdsKey {
+  inFlight: string[];
+  runs: Map<string, MJAIAgentRunEntityExtended>;
+  messages: MJConversationDetailEntity[];
+  messageCount: number;
+  userId: string | null;
+  ownerId: string | null;
+  conversationId: string | null;
+  gated: boolean;
+}
+
 @Component({
   standalone: false,
   selector: 'mj-conversation-chat-area',
@@ -2196,51 +2208,143 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     return this.InProgressMessageIds.length;
   }
 
-  /** What the composer's send slot is: Stop while replies are in flight and the viewer may stop them. */
+  /**
+   * Whether the viewer may stop every run in this conversation: they own it, or hold an
+   * Owner-level grant on it. The same rule as the Share action. Everyone else stops only the
+   * runs they started (see {@link CanStopDetail}).
+   */
+  public get CanStopAnyRun(): boolean {
+    if (!this.Conversation || !this.CurrentUser) {
+      return false;
+    }
+    return this.engine.CanShareConversation(this.Conversation, this.CurrentUser.ID);
+  }
+
+  /**
+   * Whether the viewer may stop this in-flight reply. Read-only views and hosts that turned
+   * stopping off stop nothing; the conversation's owner stops anything; anyone else stops only
+   * a run they started. A run whose starter cannot be told (no run row yet, no user on the
+   * reply or its request) is treated as the viewer's own, so a reply the viewer just sent is
+   * stoppable before its run is known. The run entity enforces the same rule on the server when
+   * the stop is saved (`MJAIAgentRunEntityExtended.StopPermitted`); this decides what the controls offer.
+   */
+  public CanStopDetail(detailId: string): boolean {
+    return this.StoppableDetailIds.some((id) => UUIDsEqual(id, detailId));
+  }
+
+  /**
+   * The in-flight replies the viewer may stop, in flight order. Computed once per change of
+   * what it depends on (the in-flight set, the run rows, the messages, the viewer, the
+   * conversation and the read-only and allow gates) and otherwise the same array, so the
+   * template binding that hands it to the message list is stable between passes.
+   */
+  public get StoppableDetailIds(): string[] {
+    const key: StoppableDetailIdsKey = {
+      inFlight: this.InProgressMessageIds,
+      runs: this.AgentRunsByDetailId,
+      messages: this.messages,
+      messageCount: this.messages?.length ?? 0,
+      userId: this.CurrentUser?.ID ?? null,
+      ownerId: this.Conversation?.UserID ?? null,
+      conversationId: this.Conversation?.ID ?? null,
+      gated: this.EffectiveReadOnly || !this.AllowStopRun,
+    };
+    const memo = this._stoppableDetailIdsMemo;
+    if (memo && (Object.keys(key) as Array<keyof StoppableDetailIdsKey>).every((k) => memo.key[k] === key[k])) {
+      return memo.ids;
+    }
+    const ids = this.computeStoppableDetailIds(key);
+    this._stoppableDetailIdsMemo = { key, ids };
+    return ids;
+  }
+  private _stoppableDetailIdsMemo: { key: StoppableDetailIdsKey; ids: string[] } | null = null;
+
+  /** The rule behind {@link CanStopDetail}, over the whole in-flight set with one message index. */
+  private computeStoppableDetailIds(key: StoppableDetailIdsKey): string[] {
+    if (key.gated) {
+      return [];
+    }
+    if (!this.CurrentUser || this.CanStopAnyRun) {
+      return [...key.inFlight];
+    }
+    const byId = IndexByUUID(key.messages ?? []);
+    const viewerId = this.CurrentUser.ID;
+    // The same rule the run entity enforces on the server when the stop is saved.
+    return key.inFlight.filter((id) => MJAIAgentRunEntityExtended.StopPermitted(viewerId, this.runStarterIdFor(id, byId), false));
+  }
+
+  /** How many in-flight replies the viewer may stop. */
+  public get StoppableCount(): number {
+    return this.StoppableDetailIds.length;
+  }
+
+  /** How many in-flight replies belong to other users, which the viewer may not stop. */
+  public get OthersInFlightCount(): number {
+    return this.InFlightCount - this.StoppableCount;
+  }
+
+  /** What the composer's send slot is: Stop while there are in-flight replies the viewer may stop. */
   public get SendSlotMode(): SendSlotMode {
-    if (this.InFlightCount === 0 || this.EffectiveReadOnly || !this.AllowStopRun) {
+    if (this.StoppableCount === 0) {
       return 'send';
     }
     return this.isAnyStopping() ? 'stopping' : 'stop';
   }
 
-  /** The count the slot shows: the in-flight replies, or none when the slot is Send. */
+  /** The count the slot shows: the in-flight replies the viewer may stop, or none when the slot is Send. */
   public get StopCount(): number {
-    return this.SendSlotMode === 'send' ? 0 : this.InFlightCount;
+    return this.SendSlotMode === 'send' ? 0 : this.StoppableCount;
   }
 
   /** The slot's tooltip and accessible name: "Stop {agent}", or "Stop all N runs". */
   public get StopLabel(): string {
-    const count = this.InFlightCount;
+    const count = this.StoppableCount;
     if (count > 1) {
       return `Stop all ${count} runs`;
     }
-    const agent = this.inFlightAgentName();
+    const agent = this.inFlightAgentName(this.StoppableDetailIds);
     return agent ? `Stop ${agent}` : 'Stop';
   }
 
-  /** The composer's status line: who is working, or what is being stopped. Null when the slot is Send. */
+  /**
+   * The composer's status line: who is working, or what is being stopped. Null when nothing is in
+   * flight. While only other users' runs are in flight the slot stays Send and the line says whose
+   * work it is, so the viewer knows why there is nothing to stop.
+   */
   public get StatusText(): string | null {
     const mode = this.SendSlotMode;
     if (mode === 'send') {
-      return null;
+      return this.othersWorkingText();
     }
-    const count = this.InFlightCount;
-    const agent = this.inFlightAgentName();
+    const count = this.StoppableCount;
+    const agent = this.inFlightAgentName(this.StoppableDetailIds);
     if (mode === 'stopping') {
       return count > 1 ? `Stopping ${count} runs…` : `Stopping ${agent ?? 'the run'}…`;
     }
     return count > 1 ? `${count} agents working` : `${agent ?? 'The agent'} is working`;
   }
 
-  /** The elapsed time after the status line, for a single run that is working. */
+  /** The status line while only other users' runs are in flight, else null. */
+  private othersWorkingText(): string | null {
+    const others = this.OthersInFlightCount;
+    if (others <= 0) {
+      return null;
+    }
+    if (others > 1) {
+      return `${others} agents working for other users`;
+    }
+    const agent = this.inFlightAgentName(this.InProgressMessageIds);
+    return `${agent ?? 'An agent'} is working for another user`;
+  }
+
+  /** The elapsed time after the status line, for a single run of the viewer's that is working. */
   public get StatusElapsed(): string | null {
-    return this.SendSlotMode === 'stop' && this.InFlightCount === 1 ? this.SendSlotElapsed : null;
+    return this.SendSlotMode === 'stop' && this.StoppableCount === 1 ? this.SendSlotElapsed : null;
   }
 
   /**
-   * The composer's stop control. Every in-flight reply is stopped through the same path as the
-   * per-reply pill: `BeforeStopClicked` first (a listener that cancels keeps that run going),
+   * The composer's stop control. Every in-flight reply the viewer may stop (see
+   * {@link CanStopDetail}) is stopped through the same path as the per-reply pill: `BeforeStopClicked` first (a listener that cancels keeps that run going),
    * then {@link OnStopMessage}, which fires `AfterStopClicked` with the outcome. Each reply asked
    * to stop reads as stopping until it leaves In-Progress, or until the retry window passes,
    * when the slot offers Stop again and a toast says the stop did not take.
@@ -2250,7 +2354,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       return;
     }
     const byId = IndexByUUID(this.messages);
-    for (const id of [...this.InProgressMessageIds]) {
+    for (const id of this.StoppableDetailIds) {
       const detail = byId.Get(id);
       if (!detail) {
         continue;
@@ -2273,13 +2377,31 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     return run?.Agent ?? detail?.Agent ?? this.assistantDisplayName ?? null;
   }
 
-  private inFlightAgentName(): string | null {
-    const id = this.InProgressMessageIds[0];
+  /** The agent name of the first of `ids`, or null when there is none. */
+  private inFlightAgentName(ids: string[]): string | null {
+    const id = ids[0];
     return id ? this.agentNameFor(id) : null;
   }
 
+  /**
+   * The user who started an in-flight reply's run: the run's user, else the user on the reply,
+   * else the user on the request the reply answers. Null when none of those is known.
+   */
+  private runStarterIdFor(detailId: string, byId: ReturnType<typeof IndexByUUID<MJConversationDetailEntity>>): string | null {
+    const run = this.AgentRunsByDetailId?.get(detailId);
+    if (run?.UserID) {
+      return run.UserID;
+    }
+    const detail = byId.Get(detailId);
+    if (detail?.UserID) {
+      return detail.UserID;
+    }
+    const request = detail?.ParentID ? byId.Get(detail.ParentID) : undefined;
+    return request?.UserID ?? null;
+  }
+
   private isAnyStopping(): boolean {
-    const inFlight = new UUIDSet(this.InProgressMessageIds);
+    const inFlight = new UUIDSet(this.StoppableDetailIds);
     for (const id of this.StoppingDetailIds ?? []) {
       if (inFlight.Has(id)) {
         return true;
@@ -2341,7 +2463,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   private updateSendSlotElapsed(): void {
-    const id = this.InProgressMessageIds[0];
+    const id = this.StoppableDetailIds[0];
     const detail = id ? this.messages.find((m) => UUIDsEqual(m.ID, id)) : undefined;
     const started = detail?.__mj_CreatedAt ? new Date(detail.__mj_CreatedAt).getTime() : NaN;
     this.SendSlotElapsed = Number.isFinite(started) ? ConversationChatAreaComponent.FormatElapsed(Date.now() - started) : null;

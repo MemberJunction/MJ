@@ -55,6 +55,10 @@ describe('MessageItemComponent — Stop control', () => {
     expect(item({}).CanStopRun).toBe(true);
   });
 
+  it('is hidden when the host says the viewer may not stop this run (another user started it)', () => {
+    expect(item({ StopAllowed: false }).CanStopRun).toBe(false);
+  });
+
   it('is hidden while only one reply is in flight (the composer\'s send slot is the stop control then)', () => {
     expect(item({ InFlightCount: 1 }).CanStopRun).toBe(false);
     expect(item({ InFlightCount: 0 }).CanStopRun).toBe(false);

@@ -21,7 +21,7 @@ import {
 } from '@angular/core';
 import { MJConversationDetailEntity, MJConversationEntity, RatingJSON } from '@memberjunction/core-entities';
 import { UserInfo, CompositeKey } from '@memberjunction/core';
-import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
+import { NormalizeUUID, UUIDsEqual, UUIDSet } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MessageItemComponent, MessageAttachment, MessageArtifactRef, MessagePendingArtifactRef } from './message-item.component';
 import {
@@ -305,6 +305,33 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     return this._inFlightCount;
   }
   private _inFlightCount = 0;
+
+  /**
+   * The in-flight replies the viewer may stop (the host decides: its own runs, or every run when
+   * it owns the conversation). An in-flight reply outside this set shows no Stop. Changes as runs
+   * start and finish, so it is restamped onto rendered items.
+   */
+  @Input()
+  public set StoppableDetailIds(value: string[] | null | undefined) {
+    const next = value ? new UUIDSet(value) : null;
+    const prev = this._stoppableDetailIds;
+    const same = prev === next || (!!prev && !!next && prev.Size === next.Size && value!.every((id) => prev.Has(id)));
+    if (same) {
+      return;
+    }
+    this._stoppableDetailIds = next;
+    this.restampAssistantIdentity();
+  }
+  public get StoppableDetailIds(): string[] {
+    return this._stoppableDetailIds ? [...this._stoppableDetailIds] : [];
+  }
+  /** Null until the host binds the input: then every in-flight reply is stoppable, as before. */
+  private _stoppableDetailIds: UUIDSet | null = null;
+
+  /** Whether the host lets the viewer stop this reply's run. */
+  private stopAllowedFor(detailId: string): boolean {
+    return this._stoppableDetailIds?.Has(detailId) ?? true;
+  }
 
   // ── Windowed-transcript paging state ────────────────────────────────────────
   // The list renders only the LOADED window, not the whole conversation. These two
@@ -2101,6 +2128,8 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     instance.ReadOnly = this.ReadOnly;
     instance.AllowStopRun = this.AllowStopRun;
     instance.InFlightCount = this.InFlightCount;
+    // `message` is set after the flags on the create path (and absent in prototype-built specs).
+    instance.StopAllowed = instance.message ? this.stopAllowedFor(instance.message.ID) : true;
     instance.CanFork = this.CanFork;
     instance.assistantDisplayName = this.AssistantDisplayName;
     instance.assistantAvatarUrl = this.AssistantAvatarUrl;

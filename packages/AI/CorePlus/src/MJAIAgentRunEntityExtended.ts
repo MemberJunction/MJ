@@ -1,10 +1,90 @@
-import { BaseEntity, CompositeKey, LogErrorEx, IMetadataProvider } from "@memberjunction/core";
-import { MJAIAgentRunEntity, ConversationEngine, type ConversationBranchRow } from "@memberjunction/core-entities";
-import { RegisterClass, SafeJSONParse } from "@memberjunction/global";
+import { BaseEntity, BaseEntityResult, CompositeKey, EntitySaveOptions, LogError, LogErrorEx, IMetadataProvider } from "@memberjunction/core";
+import { MJAIAgentRunEntity, ConversationEngine, UserOwnsConversation, type ConversationBranchRow } from "@memberjunction/core-entities";
+import { RegisterClass, SafeJSONParse, UUIDsEqual } from "@memberjunction/global";
 import { MJAIAgentRunStepEntityExtended } from "./MJAIAgentRunStepEntityExtended";
 
 @RegisterClass(BaseEntity, "MJ: AI Agent Runs")
 export class MJAIAgentRunEntityExtended extends MJAIAgentRunEntity {
+    /** What a refused stop reports in `LatestResult`. */
+    public static readonly StopRefusedMessage = 'Only the user who started this run, or the owner of its conversation, can stop it.';
+    /** What a stop reports when the check itself failed. */
+    public static readonly StopCheckFailedMessage = 'Unable to verify who may stop this run.';
+
+    /**
+     * Guards a stop. Saving a run whose `Status` moves to `Cancelled` as a user's stop request
+     * (see {@link IsStopRequest}) is allowed only to the user who started the run or to the owner
+     * of its conversation (the owner, or an Owner-level grant: the same rule as Share). Any
+     * other user gets `false` with {@link StopRefusedMessage} in `LatestResult`. Server-side only:
+     * on a non-database provider the server's own copy of this save runs the check, and the
+     * conversation UI already offers Stop only where this would allow it (`CanStopDetail`).
+     */
+    override async Save(options?: EntitySaveOptions): Promise<boolean> {
+        if (this.IsStopRequest && !(await this.contextUserMayStop())) {
+            return false;
+        }
+        return super.Save(options);
+    }
+
+    /**
+     * Whether this save is a stop request: an existing run whose `Status` is changing to
+     * `Cancelled` with no reason or the user-request reason. The framework's own cancellations
+     * (`Timeout`, `System`) are not stop requests, and neither is a save of a run that is
+     * already `Cancelled` (the agent finalizing after a stop).
+     */
+    public get IsStopRequest(): boolean {
+        if (!this.IsSaved || this.Status !== MJAIAgentRunEntityExtended.CancelledStatus) {
+            return false;
+        }
+        const status = this.GetFieldByName('Status');
+        if (!status?.Dirty) {
+            return false;
+        }
+        const reason = this.CancellationReason;
+        return reason == null || reason === MJAIAgentRunEntityExtended.UserRequestCancellationReason;
+    }
+
+    /**
+     * The rule itself, shared with the conversation UI: `userId` may stop a run that `starterId`
+     * started when they are the same user, when `ownsConversation`, or when the starter is not
+     * recorded (nothing to check against: a run with no user is not a person's).
+     */
+    public static StopPermitted(userId: string, starterId: string | null | undefined, ownsConversation: boolean): boolean {
+        return ownsConversation || starterId == null || UUIDsEqual(starterId, userId);
+    }
+
+    /** {@link StopPermitted} for the context user against this run, on the server. */
+    private async contextUserMayStop(): Promise<boolean> {
+        const provider = this.ProviderToUse as unknown as IMetadataProvider;
+        const user = this.ContextCurrentUser;
+        if (provider?.ProviderType !== 'Database' || !user) {
+            return true;
+        }
+        try {
+            if (MJAIAgentRunEntityExtended.StopPermitted(user.ID, this.UserID, false)) {
+                return true;
+            }
+            if (this.ConversationID && await UserOwnsConversation(provider, user, this.ConversationID)) {
+                return true;
+            }
+            this.recordStopRefused(MJAIAgentRunEntityExtended.StopRefusedMessage);
+            return false;
+        } catch (error) {
+            LogError(`MJAIAgentRunEntityExtended: stop permission check failed for run ${this.ID}: ${error instanceof Error ? error.message : String(error)}`);
+            this.recordStopRefused(MJAIAgentRunEntityExtended.StopCheckFailedMessage);
+            return false;
+        }
+    }
+
+    private recordStopRefused(message: string): void {
+        const result = new BaseEntityResult();
+        result.Success = false;
+        result.Type = 'update';
+        result.Message = message;
+        result.StartedAt = new Date();
+        result.EndedAt = new Date();
+        this.RegisterResultHistoryEntry(result);
+    }
+
     private _runSteps: MJAIAgentRunStepEntityExtended[] = [];
 
     // ---- Run-state vocabulary ---------------------------------------------------------------
