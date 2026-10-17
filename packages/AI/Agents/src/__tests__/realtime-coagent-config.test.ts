@@ -4,7 +4,7 @@
  * resolution/normalization, provider voice matching, prompt-section building, narration pace,
  * and the runtime-override authorization matrix.
  */
-import { describe, it, expect } from 'vitest';
+import { afterEach, describe, it, expect } from 'vitest';
 import {
     DeepMergeConfigs,
     ParseRealtimeTypeConfiguration,
@@ -86,6 +86,26 @@ describe('DeepMergeConfigs', () => {
             { realtime: { modelPreference: 'runtime-model' } }
         );
         expect(merged).toEqual({ realtime: { modelPreference: 'runtime-model', allowUserModelOverride: true } });
+    });
+});
+
+describe('DeepMergeConfigs / ResolveEffectiveRealtimeConfig — prototype pollution (CodeQL #169, #553)', () => {
+    afterEach(() => {
+        delete (Object.prototype as { polluted?: unknown }).polluted;
+    });
+
+    it('a client override layer carrying __proto__ cannot reach Object.prototype', () => {
+        const overrides = '{"__proto__":{"polluted":1},"realtime":{"__proto__":{"polluted":1},"constructor":{"prototype":{"polluted":1}},"modelPreference":"m"}}';
+        const cfg = ResolveEffectiveRealtimeConfig(JSON.stringify({ realtime: { narration: { paceMs: 1 } } }), null, overrides);
+        expect(({} as { polluted?: unknown }).polluted).toBeUndefined();
+        expect(cfg.realtime?.modelPreference).toBe('m');
+        expect(cfg.realtime?.narration?.paceMs).toBe(1);
+    });
+
+    it('DeepMergeConfigs skips __proto__ in a parsed layer', () => {
+        const merged = DeepMergeConfigs({ a: 1 }, JSON.parse('{"__proto__":{"polluted":1}}'));
+        expect(({} as { polluted?: unknown }).polluted).toBeUndefined();
+        expect(merged).toEqual({ a: 1 });
     });
 });
 
