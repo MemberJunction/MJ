@@ -46,6 +46,7 @@ import { BootstrapIntegrationClient } from './bootstrap-client';
 import type { InstrumentedLocalStorageProvider } from './instrumented-cache';
 import type { IntegrationCheckContext, RlsFixture } from './check';
 import { IntegrationCheckRegistry } from './check-registry';
+import { IsCheckSkipped } from './check-skip';
 import { IntegrationTestConfig, IntegrationCheckSelectionConfig } from './types';
 import { IntegrationTier, TIER_ENV_GATE, IsTierEnabled } from './tiers';
 import { TestOutcome, WriteOutcomesFile } from './test-runner';
@@ -297,9 +298,9 @@ export class IntegrationTestDriver extends BaseTestDriver {
             // would double-count the per-check skips.
             if (bundle.length > 0 && outcomes.length > 0 && outcomes.every(o => o.Skipped)) {
                 this.logToTestRun(context, 'warn',
-                    `${bundleType}: all ${outcomes.length} check(s) were gated out — nothing ran. ` +
-                    `Set RUN_MUTATION_TESTS=1 (or the live-model gate) to execute them. This bundle ` +
-                    `verified NOTHING on this run.`);
+                    `${bundleType}: all ${outcomes.length} check(s) were gated out or skipped — nothing ran. ` +
+                    `Each check's reason is logged above; tier gates open with RUN_MUTATION_TESTS=1 (or the ` +
+                    `live-model gate). This bundle verified NOTHING on this run.`);
             }
         } catch (fxErr) {
             // The only throw reachable here is from lifecycle.Setup — runCheck swallows per-check
@@ -398,6 +399,12 @@ export class IntegrationTestDriver extends BaseTestDriver {
             outcomes.push({ Name: name, Passed: true, DurationMs: durationMs });
             this.logToTestRun(context, 'info', `✓ ${id}`);
         } catch (checkErr) {
+            // A check that cannot run on this host says so by throwing CheckSkipped. Recorded
+            // through the same path as the tier gates, so it counts as a skip, never a pass or fail.
+            if (IsCheckSkipped(checkErr)) {
+                this.recordSkippedCheck(context, oracleResults, outcomes, id, name, `SKIPPED: ${checkErr.Reason}`);
+                return;
+            }
             const durationMs = Date.now() - checkStart;
             const message = (checkErr as Error).message;
             oracleResults.push({ oracleType: id, passed: false, score: 0, message, details: { DurationMs: durationMs } });
