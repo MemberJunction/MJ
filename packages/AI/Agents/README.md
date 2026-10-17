@@ -483,10 +483,10 @@ In-memory caching is integrated into `AIEngine.EmbedText` to bypass redundant lo
 `AgentDataPreloader.PreloadAgentData` resolves agent data sources concurrently with a bounded concurrency cap (default 10 in-flight at once) so a long list of sources can't saturate the DB connection pool.
 
 ### 3. Non-blocking Observability DB Logging
-Observability writes (`AIAgentRunStep` records) are completely non-blocking:
-* Step creation and finalization `.Save()` operations are queued immediately into `_pendingSaves` promises.
-* Sequenced queueing via `_stepSavePromises` chains saves on the *same* step ID to prevent database write races (e.g. executing a step `UPDATE` before its initial `INSERT` completes).
-* All pending logging writes are drained with `Promise.allSettled` inside `finalizeAgentRun()` and the queues are cleared, so a reused agent instance doesn't leak settled promises. Save failures (rejected promises OR `Save()===false`) are logged via `LogError` and a summary is folded into `agentRun.ErrorMessage` for visibility.
+Observability writes (`AIAgentRunStep` and `AIPromptRun` records) are non-blocking during step execution and settled at terminal boundaries:
+* **Per-entity and cross-step save chaining (`AgentRunStepSaveQueue`)**: Step creation (`createStepEntity`) and finalization (`finalizeStepEntity`) enqueue `INSERT` and `UPDATE` operations onto `_stepSaveQueue` without blocking the agent loop. Updates on a step are chained behind its initial `INSERT`, and child steps (`ParentID`) are chained behind their parent step's `INSERT`.
+* **In-flight `PayloadAtStartSourceStepID` FK ordering (`FK_AIAgentRunStep_PayloadAtStartSourceStep`)**: `findPayloadAtStartSource` matches the latest non-`Running` step with `PayloadAtEnd` even when that source step's initial `INSERT` is still in flight (`!sourceStep.IsSaved`), avoiding redundant multi-kilobyte `PayloadAtStart` clones on fast sequential steps. When the matched source step is not yet saved, `createStepEntity` chains the new step's `INSERT` after `[parentStepEntity, payloadAtStartSource]` and attaches a `beforeInsert` safety fallback that restores inline `PayloadAtStart` (and clears `PayloadAtStartSourceStepID = null`) if the source step's `INSERT` failed.
+* **Complete terminal settlement**: `_stepSaveQueue.Flush()` and `_promptRunner.FlushPendingSaves()` are awaited across all terminal paths — normal completion (`finalizeAgentRun`), failure (`createFailureResult`), cancellation (`createCancelledResult`), and post-turn conversation compaction (`recordCompactionRunStep`) — before the final `agentRun.Save()` executes, ensuring no orphaned or `Running` steps/prompt runs remain in Flight when `ExecuteAgent()` resolves. Save failures are logged via `LogError` and folded into `agentRun.ErrorMessage` for visibility.
 
 ### 4. Concurrent Sub-Agent Execution
 Loop agents can request multiple sub-agents to run in parallel by returning a `subAgents` array in their `nextStep` decision:

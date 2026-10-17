@@ -1931,6 +1931,120 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
     provider?: IMetadataProvider;
 
     /**
+     * Optional session ID for client tool communication.
+     * When provided, enables the agent to invoke client-side tools via PubSub.
+     * The session ID correlates tool requests/responses between server and client.
+     */
+    sessionID?: string;
+
+    /**
+     * The persisted MJ: AI Agent Sessions record ID this run belongs to, if the run is part of
+     * a real-time/long-lived session. Distinct from the transport `sessionID` (per-connection
+     * correlation id). Used to group the multiple AIAgentRuns of one session and to stamp
+     * ConversationDetail/AIAgentRun rows.
+     */
+    agentSessionID?: string;
+
+    /**
+     * Optional runtime override for client tool timeout (ms).
+     * Takes precedence over the agent's DefaultClientToolTimeoutMs config.
+     */
+    clientToolTimeoutMs?: number;
+
+    /**
+     * Optional wall-clock timeout for the entire agent run, in milliseconds.
+     * When set, BaseAgent wraps the execution in an internal AbortController
+     * that fires after this many ms. The abort propagates through the existing
+     * `cancellationToken` chain — sub-agents, pending prompt calls, and
+     * actions (which carry their own `RunActionParams.AbortSignal`) all see
+     * the cancellation. On timeout, the run terminates with an Aborted result
+     * whose message identifies the timeout origin.
+     *
+     * When omitted, BaseAgent falls back to its `DefaultAgentTimeoutMS`
+     * (currently 2 hours) — generous by default because some Loop agents do
+     * legitimate long iteration; tighten per-run for anything interactive.
+     */
+    maxExecutionTimeMs?: number;
+
+    /**
+     * Shared cumulative budget and live usage counters across an entire root-to-leaf
+     * agent execution tree (including sequential child/related sub-agents and parallel
+     * sub-agent fan-outs).
+     *
+     * When omitted on a root agent run, `BaseAgent.Execute()` automatically initializes
+     * a root `AgentTreeBudget` instance (seeding any limits from `maxTreeSteps`,
+     * `maxTreeTokens`, `maxTreeCost`, and `maxTreeDurationMs`) and propagates the
+     * shared object reference to every sub-agent invocation via `ExecuteAgentParams.treeBudget`.
+     *
+     * Because the budget object is passed by reference in-process, all agents in the
+     * hierarchy increment and evaluate the exact same live counters (`totalSteps`,
+     * `totalTokens`, `totalCost`, `startedAtMs`, `breachedReason`), preventing deep or
+     * wide sub-agent trees from multiplying per-agent guardrails without bound.
+     *
+     * @example
+     * ```typescript
+     * const treeBudget: AgentTreeBudget = {
+     *   maxTreeSteps: 25,
+     *   maxTreeTokens: 100_000,
+     *   maxTreeCost: 2.50,
+     *   maxTreeDurationMs: 120_000,
+     *   totalSteps: 0,
+     *   totalTokens: 0,
+     *   totalCost: 0,
+     *   startedAtMs: Date.now()
+     * };
+     * const result = await runner.RunAgent({
+     *   agent: rootAgent,
+     *   conversationMessages: messages,
+     *   contextUser,
+     *   treeBudget
+     * });
+     * ```
+     */
+    treeBudget?: AgentTreeBudget;
+
+    /**
+     * Convenience top-level limit for the maximum total steps allowed across the entire
+     * root-to-leaf agent execution tree (root agent + all sequential and parallel sub-agents).
+     *
+     * Unlike per-agent `MaxIterationsPerRun` (which applies independently to each individual
+     * agent run), `maxTreeSteps` caps the cumulative number of steps created across the
+     * whole hierarchy. When `treeBudget` is not pre-initialized by the caller, `BaseAgent`
+     * copies this value into `treeBudget.maxTreeSteps`.
+     */
+    maxTreeSteps?: number;
+
+    /**
+     * Convenience top-level limit for the maximum cumulative tokens (prompt + completion)
+     * allowed across the entire root-to-leaf agent execution tree.
+     *
+     * Unlike per-agent `MaxTokensPerRun`, `maxTreeTokens` caps the combined token consumption
+     * across the root agent and all descendant sub-agents. When `treeBudget` is not
+     * pre-initialized by the caller, `BaseAgent` copies this value into `treeBudget.maxTreeTokens`.
+     */
+    maxTreeTokens?: number;
+
+    /**
+     * Convenience top-level limit for the maximum cumulative LLM cost (in USD) allowed
+     * across the entire root-to-leaf agent execution tree.
+     *
+     * Unlike per-agent `MaxCostPerRun`, `maxTreeCost` caps the combined cost accumulated
+     * across the root agent and all descendant sub-agents. When `treeBudget` is not
+     * pre-initialized by the caller, `BaseAgent` copies this value into `treeBudget.maxTreeCost`.
+     */
+    maxTreeCost?: number;
+
+    /**
+     * Convenience top-level limit for the maximum wall-clock duration (in milliseconds)
+     * allowed across the entire root-to-leaf agent execution tree, measured from the
+     * root run's `startedAtMs` timestamp.
+     *
+     * When `treeBudget` is not pre-initialized by the caller, `BaseAgent` copies this
+     * value into `treeBudget.maxTreeDurationMs`.
+     */
+    maxTreeDurationMs?: number;
+
+    /**
      * Optional post-run conversation compaction, memory extraction, and scratchpad pruning
      * configuration.
      *
@@ -1974,42 +2088,40 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      */
     compactAfterRun?: boolean | AgentPostRunCompactionConfig;
 
-    /**
-     * Optional session ID for client tool communication.
-     * When provided, enables the agent to invoke client-side tools via PubSub.
-     * The session ID correlates tool requests/responses between server and client.
-     */
-    sessionID?: string;
-
-    /**
-     * The persisted MJ: AI Agent Sessions record ID this run belongs to, if the run is part of
-     * a real-time/long-lived session. Distinct from the transport `sessionID` (per-connection
-     * correlation id). Used to group the multiple AIAgentRuns of one session and to stamp
-     * ConversationDetail/AIAgentRun rows.
-     */
-    agentSessionID?: string;
-
-    /**
-     * Optional runtime override for client tool timeout (ms).
-     * Takes precedence over the agent's DefaultClientToolTimeoutMs config.
-     */
-    clientToolTimeoutMs?: number;
-
-    /**
-     * Optional wall-clock timeout for the entire agent run, in milliseconds.
-     * When set, BaseAgent wraps the execution in an internal AbortController
-     * that fires after this many ms. The abort propagates through the existing
-     * `cancellationToken` chain — sub-agents, pending prompt calls, and
-     * actions (which carry their own `RunActionParams.AbortSignal`) all see
-     * the cancellation. On timeout, the run terminates with an Aborted result
-     * whose message identifies the timeout origin.
-     *
-     * When omitted, BaseAgent falls back to its `DefaultAgentTimeoutMS`
-     * (currently 2 hours) — generous by default because some Loop agents do
-     * legitimate long iteration; tighten per-run for anything interactive.
-     */
-    maxExecutionTimeMs?: number;
 }
+
+/**
+ * Shared cumulative budget and live usage counters across an entire root-to-leaf
+ * agent execution tree (including sequential and parallel sub-agents).
+ *
+ * A single `AgentTreeBudget` instance is created at the root of an agent execution
+ * (or supplied by the caller on `ExecuteAgentParams.treeBudget`) and passed by
+ * reference into every child, related, and parallel sub-agent invocation. Every
+ * agent in the hierarchy increments the shared counters (`totalSteps`, `totalTokens`,
+ * `totalCost`) and checks the shared ceilings (`maxTreeSteps`, `maxTreeTokens`,
+ * `maxTreeCost`, `maxTreeDurationMs`) before and after executing steps.
+ */
+export interface AgentTreeBudget {
+    /** Maximum total steps allowed across the entire root-to-leaf agent tree */
+    maxTreeSteps?: number;
+    /** Maximum total tokens (prompt + completion) allowed across the entire agent tree */
+    maxTreeTokens?: number;
+    /** Maximum cumulative LLM cost (in USD) allowed across the entire agent tree */
+    maxTreeCost?: number;
+    /** Maximum wall-clock duration (in milliseconds) allowed for the entire agent tree */
+    maxTreeDurationMs?: number;
+    /** Live cumulative step counter shared by reference across the agent tree (initialized to 0) */
+    totalSteps: number;
+    /** Live cumulative token counter shared by reference across the agent tree (initialized to 0) */
+    totalTokens: number;
+    /** Live cumulative cost accumulator shared by reference across the agent tree (initialized to 0) */
+    totalCost: number;
+    /** Epoch timestamp (Date.now()) when the root agent run started */
+    startedAtMs: number;
+    /** Set to the breach reason once any tree limit is exceeded */
+    breachedReason?: string;
+}
+
 
 /**
  * Context data provided to agent prompts during execution.
