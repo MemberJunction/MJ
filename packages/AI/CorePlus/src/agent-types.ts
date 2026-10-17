@@ -1092,6 +1092,35 @@ export interface AgentRunAudience {
 export type StopContinuationMode = 'full_stack' | 'summary';
 
 /**
+ * Configuration for background post-run conversation compaction, memory extraction,
+ * and scratchpad pruning after an agent run completes (`finalizeAgentRun`), so the
+ * next user turn starts with a pre-compacted message window and zero compaction latency.
+ *
+ * When enabled via {@link ExecuteAgentParams.compactAfterRun}, `BaseAgent.finalizeAgentRun`
+ * runs post-run maintenance after flushing step saves and persisting the run record:
+ * 1. **Message Window Pre-Compaction**: Compacts older conversation messages when the
+ *    conversation length reaches {@link messageCountThreshold} (default: `20`), preserving
+ *    the initial goal message (`index 0`) and the most recent messages.
+ * 2. **Scratchpad Pruning**: When {@link maxScratchpadNotes} is specified, prunes excess
+ *    low-priority scratchpad note lines and completed tasks down to the configured limit.
+ * 3. **Memory Extraction Trigger**: When {@link extractMemories} is enabled (default: `true`)
+ *    and the run succeeded, triggers asynchronous memory extraction via `MemoryManagerAgent`.
+ *
+ * All post-run maintenance runs inside defensive error boundaries so failures are logged
+ * diagnostically without ever failing a completed agent run.
+ */
+export interface AgentPostRunCompactionConfig {
+    /** Whether post-run compaction is enabled */
+    enabled: boolean;
+    /** Minimum conversation message count before post-run compaction triggers (default: 20) */
+    messageCountThreshold?: number;
+    /** Whether to trigger async note/example extraction via MemoryManager (default: true) */
+    extractMemories?: boolean;
+    /** Maximum number of scratchpad notes to retain after pruning expired/excess notes (optional) */
+    maxScratchpadNotes?: number;
+}
+
+/**
  * Parameters required to execute an AI Agent.
  *
  * @template TContext - Type of the context object passed through agent and action execution.
@@ -2014,6 +2043,50 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      * value into `treeBudget.maxTreeDurationMs`.
      */
     maxTreeDurationMs?: number;
+
+    /**
+     * Optional post-run conversation compaction, memory extraction, and scratchpad pruning
+     * configuration.
+     *
+     * When set to `true` or an {@link AgentPostRunCompactionConfig} with `enabled: true`,
+     * `BaseAgent.finalizeAgentRun` executes post-run maintenance after flushing step saves
+     * and saving the completed `AIAgentRun` record:
+     * - Compacts older messages in `conversationMessages` when the message count reaches
+     *   `messageCountThreshold` (default: `20`), preserving the initial goal message
+     *   (`index 0`) and the most recent messages.
+     * - Prunes excess scratchpad notes and completed tasks down to `maxScratchpadNotes`
+     *   when specified.
+     * - Triggers asynchronous memory extraction via `MemoryManagerAgent` when
+     *   `extractMemories` is enabled (default: `true`) and the run succeeded.
+     *
+     * Moving compaction to the end of `finalizeAgentRun` shifts maintenance off the
+     * critical user-waiting path so the next user turn starts with a pre-compacted
+     * message window and zero pre-turn compaction latency. Errors during post-run
+     * maintenance are caught and logged diagnostically without ever failing the run.
+     *
+     * @example
+     * ```typescript
+     * // Enable with defaults (messageCountThreshold: 20, extractMemories: true)
+     * const result = await agent.Execute({
+     *   agent: myAgent,
+     *   conversationMessages: messages,
+     *   compactAfterRun: true
+     * });
+     *
+     * // Fine-grained post-run compaction and scratchpad pruning
+     * const result = await agent.Execute({
+     *   agent: myAgent,
+     *   conversationMessages: messages,
+     *   compactAfterRun: {
+     *     enabled: true,
+     *     messageCountThreshold: 12,
+     *     extractMemories: true,
+     *     maxScratchpadNotes: 10
+     *   }
+     * });
+     * ```
+     */
+    compactAfterRun?: boolean | AgentPostRunCompactionConfig;
 
 }
 

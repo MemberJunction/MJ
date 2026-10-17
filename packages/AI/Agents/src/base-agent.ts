@@ -126,6 +126,7 @@ import {
     WithoutHostOnlyAgentRunDataKeys,
     WithAgentRunDataTrustApplied,
     StopContinuationMode,
+    type AgentPostRunCompactionConfig,
     type AIPromptExecutionScope,
     type AgentRunAudience
 } from '@memberjunction/ai-core-plus';
@@ -1634,6 +1635,14 @@ export class BaseAgent {
      * @since 2.46.0
      */
     private _scratchpadManager: ScratchpadManager = new ScratchpadManager();
+
+    /**
+     * Protected accessor for the run's scratchpad manager.
+     * @protected
+     */
+    protected get scratchpadManager(): ScratchpadManager {
+        return this._scratchpadManager;
+    }
 
     /**
      * Manages artifact tools for the current agent run.
@@ -19085,7 +19094,7 @@ The context is now within limits. Please retry your request with the recovered c
     /**
      * Finalizes the agent run with success.
      * 
-     * @private
+     * @protected
      */
     protected async finalizeAgentRun<P>(finalStep: BaseAgentNextStep, payload?: P, contextUser?: UserInfo): Promise<ExecuteAgentResult<P>> {
         // Flush every pending step save AND prompt-run save (success OR failure) via their shared queues,
@@ -19187,6 +19196,22 @@ The context is now within limits. Please retry your request with the recovered c
             // completion event. Errors are contained — a failed pass leaves the conversation
             // untouched and simply re-triggers on a later turn.
             this.startPostTurnCompaction();
+
+            // Post-run conversation message pre-compaction, scratchpad pruning, and memory
+            // extraction (when ExecuteAgentParams.compactAfterRun is enabled). Runs AFTER
+            // _stepSaveQueue.Flush() and _agentRun.Save() inside a defensive try/catch so any
+            // error in post-run maintenance is logged gracefully without turning a successful
+            // agent run into a failure.
+            if (this._executeParams) {
+                try {
+                    await this.runPostRunCompaction(this._executeParams, this._agentRun);
+                } catch (compactionError) {
+                    LogError(
+                        `Post-run compaction error for agent run ${this._agentRun.ID} (contained): ` +
+                        `${compactionError instanceof Error ? compactionError.message : String(compactionError)}`
+                    );
+                }
+            }
         }
 
         // Also promote any media from the final step's promoteMediaOutputs
@@ -19819,6 +19844,257 @@ The context is now within limits. Please retry your request with the recovered c
         }
         messages.length = 0;
         messages.push(...retained);
+    }
+
+    /**
+     * Executes post-run conversation message pre-compaction, scratchpad pruning, and
+     * asynchronous memory extraction after an agent run completes (`finalizeAgentRun`).
+     *
+     * Shifting compaction and maintenance to the end of `finalizeAgentRun` removes
+     * compaction latency from the next user turn's critical path so subsequent turns
+     * start with a pre-compacted message window.
+     *
+     * ### Lifecycle Phases
+     * 1. **Configuration Resolution**: Reads `params.compactAfterRun` (`boolean | AgentPostRunCompactionConfig`).
+     *    When `undefined`, `false`, or `{ enabled: false }`, returns immediately as a no-op.
+     *    When `true`, applies defaults `{ enabled: true, messageCountThreshold: 20, extractMemories: true }`.
+     * 2. **Message Window Pre-Compaction**: When `params.conversationMessages.length >= messageCountThreshold`,
+     *    compacts older messages in `[1 .. length - preserveRecentCount - 1]` while preserving
+     *    the initial goal message (`index 0`) and the most recent messages intact. Delegates to
+     *    {@link compactMessage} (and {@link CompactToolResultContent} for native tool turns) so
+     *    behavior and expansion metadata (`wasCompacted`, `originalContent`, `canExpand`) are
+     *    100% consistent with mid-run message compaction.
+     * 3. **Scratchpad Pruning**: When `maxScratchpadNotes` is configured, prunes excess low-priority
+     *    scratchpad note lines (via {@link ScratchpadManager.PruneNotes}) and completed tasks
+     *    (via {@link ScratchpadManager.EnforceTaskLimit}) down to `maxScratchpadNotes`.
+     * 4. **Memory Extraction Trigger**: When `extractMemories !== false` and `agentRun.Success` is `true`,
+     *    triggers asynchronous note/example extraction via {@link triggerPostRunMemoryExtraction}.
+     *
+     * Every phase is wrapped in its own `try/catch` block so an error in one phase is logged
+     * via `LogError` without aborting the remaining phases or failing the completed agent run.
+     *
+     * @param params - The execution parameters for the completed agent run
+     * @param agentRun - The finalized `MJAIAgentRunEntityExtended` record
+     * @protected
+     */
+    protected async runPostRunCompaction(
+        params: ExecuteAgentParams,
+        agentRun: MJAIAgentRunEntityExtended
+    ): Promise<void> {
+        if (!params?.compactAfterRun) {
+            return;
+        }
+
+        const rawConfig: AgentPostRunCompactionConfig =
+            params.compactAfterRun === true
+                ? { enabled: true, messageCountThreshold: 20, extractMemories: true }
+                : params.compactAfterRun;
+
+        if (!rawConfig.enabled) {
+            return;
+        }
+
+        const messageCountThreshold = rawConfig.messageCountThreshold ?? 20;
+        const extractMemories = rawConfig.extractMemories ?? true;
+        const maxScratchpadNotes = rawConfig.maxScratchpadNotes;
+        if (params.onMessageLifecycle && !this._messageLifecycleCallback) {
+            this._messageLifecycleCallback = params.onMessageLifecycle;
+        }
+
+        // 1. Message Window Pre-Compaction
+        try {
+            const messages = params.conversationMessages;
+            if (Array.isArray(messages) && messages.length >= messageCountThreshold && messages.length >= 3) {
+                const totalMessages = messages.length;
+                const preserveRecentCount = totalMessages <= 3 ? 1 : (totalMessages < 9 ? 2 : 4);
+                const compactEndIndex = totalMessages - preserveRecentCount;
+                const preserveOriginal = params.messageExpirationOverride?.preserveOriginalContent !== false;
+                let compactedCount = 0;
+                let totalTokensSaved = 0;
+
+                for (let i = 1; i < compactEndIndex; i++) {
+                    const msg = messages[i] as AgentChatMessage;
+                    if (
+                        !msg ||
+                        msg.role === 'system' ||
+                        msg.metadata?.wasCompacted === true ||
+                        msg.metadata?.isConversationSummary === true ||
+                        msg.metadata?.volatileState === true
+                    ) {
+                        continue;
+                    }
+
+                    const originalContent = msg.content;
+                    const originalText = ReplaceMediaBlocksWithStubs(originalContent);
+                    const compactMode = msg.metadata?.compactMode
+                        || params.messageExpirationOverride?.compactMode
+                        || 'First N Chars';
+                    const compactLength = msg.metadata?.compactLength
+                        || params.messageExpirationOverride?.compactLength
+                        || 200;
+                    const compactPromptId = msg.metadata?.compactPromptId
+                        || params.messageExpirationOverride?.compactPromptId
+                        || '';
+
+                    if (msg.role === 'tool') {
+                        const compactedTurn = CompactToolResultContent(
+                            msg,
+                            (t) => (t.length > compactLength ? `${t.slice(0, compactLength)}… [compacted from ${t.length} chars]` : t)
+                        );
+                        const saved = Math.max(0, this.estimateTokens(originalContent) - this.estimateTokens(compactedTurn.content));
+                        messages[i] = {
+                            ...compactedTurn,
+                            metadata: {
+                                ...msg.metadata,
+                                wasCompacted: true,
+                                originalContent: preserveOriginal ? originalContent : undefined,
+                                originalLength: originalText.length,
+                                tokensSaved: saved,
+                                canExpand: preserveOriginal,
+                            },
+                        };
+                        totalTokensSaved += saved;
+                        compactedCount++;
+                        this.emitMessageLifecycleEvent({
+                            type: 'message-compacted',
+                            turn: 0,
+                            messageIndex: i,
+                            message: messages[i] as AgentChatMessage,
+                            reason: `Post-run compaction of tool turn (saved ${saved} tokens)`,
+                            tokensSaved: saved,
+                        });
+                        continue;
+                    }
+
+                    const compactedContent = await this.compactMessage(
+                        msg,
+                        {
+                            compactMode,
+                            compactLength,
+                            compactPromptId,
+                            originalLength: originalText.length,
+                        },
+                        params
+                    );
+
+                    const originalTokens = this.estimateTokens(originalContent);
+                    const compactedTokens = this.estimateTokens(compactedContent);
+                    const tokensSaved = Math.max(0, originalTokens - compactedTokens);
+
+                    messages[i] = {
+                        ...msg,
+                        content: compactedContent,
+                        metadata: {
+                            ...msg.metadata,
+                            wasCompacted: true,
+                            originalContent: preserveOriginal ? originalContent : undefined,
+                            originalLength: originalText.length,
+                            tokensSaved,
+                            canExpand: preserveOriginal,
+                        },
+                    };
+                    totalTokensSaved += tokensSaved;
+                    compactedCount++;
+
+                    this.emitMessageLifecycleEvent({
+                        type: 'message-compacted',
+                        turn: 0,
+                        messageIndex: i,
+                        message: messages[i] as AgentChatMessage,
+                        reason: `Post-run compaction using ${compactMode} (saved ${tokensSaved} tokens)`,
+                        tokensSaved,
+                    });
+                }
+
+                if (compactedCount > 0) {
+                    this.logStatus(
+                        `🗜️ [PostRunCompaction] Compacted ${compactedCount} older message(s) (saved ~${totalTokensSaved} tokens; preserved index 0 and last ${preserveRecentCount} message(s))`,
+                        true,
+                        params
+                    );
+                }
+            }
+        } catch (error) {
+            LogError(`Post-run message window compaction failed (contained): ${error instanceof Error ? error.message : String(error)}`);
+        }
+
+        // 2. Scratchpad Pruning
+        if (maxScratchpadNotes !== undefined && maxScratchpadNotes >= 0) {
+            try {
+                const prunedNotes = this._scratchpadManager.PruneNotes(maxScratchpadNotes);
+                const prunedTasks = this._scratchpadManager.EnforceTaskLimit(maxScratchpadNotes);
+                if (prunedNotes > 0 || prunedTasks > 0) {
+                    this.logStatus(
+                        `🧹 [PostRunCompaction] Pruned ${prunedNotes} scratchpad note line(s) and ${prunedTasks} completed task(s) (limit: ${maxScratchpadNotes})`,
+                        true,
+                        params
+                    );
+                }
+            } catch (error) {
+                LogError(`Post-run scratchpad pruning failed (contained): ${error instanceof Error ? error.message : String(error)}`);
+            }
+        }
+
+        // 3. Memory Extraction Trigger
+        if (extractMemories && agentRun?.Success) {
+            try {
+                await this.triggerPostRunMemoryExtraction(params, agentRun);
+            } catch (error) {
+                LogError(`Post-run memory extraction failed (contained): ${error instanceof Error ? error.message : String(error)}`);
+            }
+        }
+    }
+
+    /**
+     * Triggers asynchronous post-run note and example extraction via `MemoryManagerAgent`
+     * when the executing agent has memory injection (`InjectNotes` or `InjectExamples`) enabled.
+     *
+     * No-ops when the executing agent itself is the `MemoryManagerAgent` (preventing recursion)
+     * or when no active `MemoryManagerAgent` is registered in `AIEngine`.
+     *
+     * @param params - The execution parameters for the completed agent run
+     * @param agentRun - The finalized `MJAIAgentRunEntityExtended` record
+     * @protected
+     */
+    protected async triggerPostRunMemoryExtraction(
+        params: ExecuteAgentParams,
+        agentRun: MJAIAgentRunEntityExtended
+    ): Promise<void> {
+        const agent = params?.agent;
+        if (!agent || (!agent.InjectNotes && !agent.InjectExamples)) {
+            return;
+        }
+        if (agent.DriverClass === 'MemoryManagerAgent' || agent.Name === 'Memory Manager') {
+            return;
+        }
+
+        const allAgents = AIEngine.Instance?.Agents ?? [];
+        const memoryManagerEntity = allAgents.find(
+            a => a.Status === 'Active' && (a.DriverClass === 'MemoryManagerAgent' || a.Name === 'Memory Manager')
+        );
+        if (!memoryManagerEntity || !params.contextUser) {
+            return;
+        }
+
+        const driverKey = memoryManagerEntity.DriverClass || 'MemoryManagerAgent';
+        const memoryAgent = MJGlobal.Instance.ClassFactory.CreateInstance<BaseAgent>(BaseAgent, driverKey);
+        if (!memoryAgent) {
+            return;
+        }
+
+        void memoryAgent.Execute({
+            agent: memoryManagerEntity,
+            conversationMessages: [],
+            contextUser: params.contextUser,
+            provider: params.provider,
+            data: {
+                sourceAgentId: agent.ID,
+                sourceAgentRunId: agentRun.ID,
+                conversationId: params.conversationId,
+            },
+        }).catch(error => {
+            LogError(`Async post-run MemoryManager execution failed (contained): ${error instanceof Error ? error.message : String(error)}`);
+        });
     }
 
     /**
