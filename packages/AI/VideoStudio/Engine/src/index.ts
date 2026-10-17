@@ -106,6 +106,7 @@ export {
     FrameSizeFor,
     MAX_STILL_POINTS,
     ReadAssetBytes,
+    ResolveDeliverableFormats,
     SanitizeStageKey,
     StillPointsFor,
     type BuildRenderBundleContext,

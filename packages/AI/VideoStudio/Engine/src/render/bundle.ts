@@ -72,6 +72,24 @@ export function FrameSizeFor(
 }
 
 /**
+ * Resolves the target deliverable aspect formats for `spec`, falling back to `spec.Film.Formats`
+ * and finally `['16:9']` when neither list is populated.
+ */
+export function ResolveDeliverableFormats(spec: Partial<VideoGenerationSpec>): VideoFormat[] {
+    if (
+        Array.isArray(spec.Deliverables?.Formats) &&
+        spec.Deliverables.Formats.length > 0
+    ) {
+        return [...spec.Deliverables.Formats];
+    }
+    if (Array.isArray(spec.Film?.Formats) && spec.Film.Formats.length > 0) {
+        return [...spec.Film.Formats];
+    }
+    return ['16:9'];
+}
+
+
+/**
  * Computes up to {@link MAX_STILL_POINTS} (48) still capture points in priority order:
  * 1. Each beat's midpoint (`Role: 'BeatMidpoint'`)
  * 2. The last frame (`Role: 'Poster'`)

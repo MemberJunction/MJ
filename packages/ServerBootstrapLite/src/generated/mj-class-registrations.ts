@@ -1391,13 +1391,14 @@ import {
     RubricCalibrationTestDriver,
 } from '@memberjunction/testing-engine';
 
-// @memberjunction/video-studio (7 classes)
+// @memberjunction/video-studio (8 classes)
 import {
     DockerRenderDriver,
     LocalWorkerRenderDriver,
     ProduceVideoAction,
     RemoteRenderDriver,
     VideoStudioAgent,
+    VideoStudioMotionEngineerAgent,
     VideoStudioPreProductionAgent,
     VideoStudioRenderAgent,
 } from '@memberjunction/video-studio';
@@ -2523,6 +2524,7 @@ const CLASS_REGISTRATIONS_5: any[] = [
     ProduceVideoAction,
     RemoteRenderDriver,
     VideoStudioAgent,
+    VideoStudioMotionEngineerAgent,
     VideoStudioPreProductionAgent,
     VideoStudioRenderAgent,
     DatabaseTransportDriverFactory,
@@ -2556,7 +2558,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1086;
+export const CLASS_REGISTRATIONS_COUNT = 1087;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
