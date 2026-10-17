@@ -396,7 +396,7 @@ describe('RunCheckJob', () => {
                 {
                     Path: 'index.html',
                     Content:
-                        '<!doctype html><html><body><div id="root" data-composition-id="kpi" data-duration="2" data-fps="30">' +
+                        '<!doctype html><html><body><div id="root" data-composition-id="kpi" data-duration="3" data-fps="30">' +
                         '<div id="kpi" data-mj-bound="TotalARR"></div><footer id="asof"></footer>' +
                         '</div></body></html>',
                 },
@@ -404,8 +404,9 @@ describe('RunCheckJob', () => {
             DataSnapshot: dataSnapshot,
         });
 
-        // Settle timestamp for 2s @ 30fps is 2 - 1/30 = 1.966667
+        // Settle timestamp for beat ending at 2s @ 30fps is 2 - 1/30, while final frame for 3s @ 30fps is 2.966667
         const settleTs = checkInputs.SettleTimestampsSeconds[0]!;
+        const finalFrameTs = 2.966667;
         const passingBackend = new FakeRenderBackend({
             MeasuredTexts: [
                 // Mid-beat t = 1.0s (count-up intermediate value $7.1M is NOT flagged because 1.0 != settleTs)
@@ -425,7 +426,7 @@ describe('RunCheckJob', () => {
                         TimestampSeconds: 1.0,
                     },
                 ],
-                // Settle & final frame t = 1.966667s
+                // Settle frame t = 2 - 1/30
                 [
                     {
                         Text: '$14.2M',
@@ -441,6 +442,23 @@ describe('RunCheckJob', () => {
                         Selector: '#kpi',
                         TimestampSeconds: settleTs,
                     },
+                ],
+                // Final frame t = 2.966667s
+                [
+                    {
+                        Text: '$14.2M',
+                        Left: 200,
+                        Top: 200,
+                        Width: 300,
+                        Height: 60,
+                        FontSizePx: 48,
+                        FontFamily: 'Inter',
+                        FontIsBundled: true,
+                        IsBound: true,
+                        BoundKey: 'TotalARR',
+                        Selector: '#kpi',
+                        TimestampSeconds: finalFrameTs,
+                    },
                     {
                         Text: 'Data as of 2026-10-16',
                         Left: 200,
@@ -452,7 +470,7 @@ describe('RunCheckJob', () => {
                         FontIsBundled: true,
                         IsBound: false,
                         Selector: '#asof',
-                        TimestampSeconds: settleTs,
+                        TimestampSeconds: finalFrameTs,
                     },
                 ],
             ],
@@ -472,7 +490,7 @@ describe('RunCheckJob', () => {
             passingBackend,
         );
 
-        expect(passingBackend.LastMeasuredTimestamps).toEqual([1.0, settleTs]);
+        expect(passingBackend.LastMeasuredTimestamps).toEqual([1.0, 2 - 1 / 30, 2.966667]);
         expect(passResult.Passed).toBe(true);
         expect(passResult.Issues).toEqual([]);
 
@@ -511,6 +529,7 @@ describe('RunCheckJob', () => {
                         TimestampSeconds: settleTs,
                     },
                 ],
+                [],
             ],
         });
 

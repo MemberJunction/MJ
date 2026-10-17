@@ -21,7 +21,7 @@ import type {
 const CHART_KIT = CreateMJChartKit();
 
 /**
- * Reserved key in `window.__MJ_DATA__` holding the formatted provenance end-card text
+ * Reserved key in `window.MJVideo.Data` holding the formatted provenance end-card text
  * (`'Data as of YYYY-MM-DD'`). User `VideoDataBinding.Key` entries may not use this key.
  */
 export const AS_OF_DATA_KEY = '__asOf';
@@ -96,8 +96,8 @@ export function FormatAsOfCardText(asOf: string | Date): string {
 }
 
 /**
- * Returns a frozen render data snapshot cloning `values` and injecting
- * `[AS_OF_DATA_KEY]: FormatAsOfCardText(asOf)` for `window.__MJ_DATA__`.
+ * Returns a render data snapshot cloning `values` and injecting
+ * `[AS_OF_DATA_KEY]: FormatAsOfCardText(asOf)` for `window.MJVideo.Data`.
  *
  * Throws an `Error` if `values` already defines the reserved `__asOf` key or if `asOf` is invalid.
  */
@@ -134,6 +134,7 @@ function addFormattedNumber(
         return;
     }
     target.add(formatted);
+    addTokensFromString(target, formatted);
     if (
         includePlusVariant &&
         n > 0 &&
@@ -141,7 +142,9 @@ function addFormattedNumber(
         !formatted.startsWith('+') &&
         !formatted.startsWith('-')
     ) {
-        target.add(`+${formatted}`);
+        const plusFormatted = `+${formatted}`;
+        target.add(plusFormatted);
+        addTokensFromString(target, plusFormatted);
     }
 }
 
@@ -190,11 +193,7 @@ function collectDeltaLiterals(
 
     const cp = rawValue.ChangePercent;
     if (typeof cp === 'number' && Number.isFinite(cp)) {
-        const pctFormat: VideoDataFormat = {
-            Kind: 'Percent',
-            ...(format?.Decimals !== undefined ? { Decimals: format.Decimals } : {}),
-        };
-        addFormattedNumber(target, cp, pctFormat, true);
+        addFormattedNumber(target, cp, { Kind: 'Percent' }, true);
     } else if (typeof cp === 'string') {
         addTokensFromString(target, cp);
     }
@@ -233,6 +232,7 @@ function collectTableCellLiteral(
         const formatted = FormatTableCell(column, cell, fallbackFormat);
         if (formatted && formatted !== 'n/a') {
             target.add(formatted);
+            addTokensFromString(target, formatted);
         }
         return;
     }

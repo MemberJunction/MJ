@@ -197,9 +197,6 @@ function checkRenderedLiterals(
     issues: CheckIssue[],
 ): void {
     if (item.IsBound) {
-        if (item.BoundKey === undefined && boundAllowedByKey === undefined) {
-            return;
-        }
         const boundKey = (item.BoundKey ?? '').trim();
         const allowedForKey = boundKey.length > 0 ? boundAllowedByKey?.get(boundKey) : undefined;
         if (boundKey.length === 0 || !allowedForKey) {

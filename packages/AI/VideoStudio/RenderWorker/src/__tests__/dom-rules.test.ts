@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { BuildBoundDataLiterals } from '@memberjunction/video-studio-core';
 import {
     EvaluateDomRules,
     MIN_TEXT_SIZE_SHORT_EDGE_RATIO,
@@ -144,11 +145,12 @@ describe('EvaluateDomRules', () => {
     });
 
     describe('MJ_UNBOUND_LITERAL_RENDERED', () => {
-        it('skips IsBound elements, passes allowed literals, and flags every numeric token when AllowedDataLiterals is absent', () => {
+        it('flags a bound element with no BoundDataLiterals as MJ_BOUND_KEY_UNKNOWN, skips AllowedDataLiterals on a listed bound key, passes allowed literals, and flags every numeric token when AllowedDataLiterals is absent', () => {
             const boundItem = makeMeasuredText({
                 Selector: '#chart-tick',
                 Text: '$99.4M (42%)',
                 IsBound: true,
+                BoundKey: 'ChartTick',
             });
             const unboundWithTwoNumbers = makeMeasuredText({
                 Selector: '#kpi-line',
@@ -156,12 +158,27 @@ describe('EvaluateDomRules', () => {
                 IsBound: false,
             });
 
-            // Bound element is skipped even with no AllowedDataLiterals
+            // A bound element with no BoundDataLiterals gets MJ_BOUND_KEY_UNKNOWN; under a listed key it is not checked against AllowedDataLiterals
             expect(
                 EvaluateDomRules([boundItem], {
                     Format: '16:9',
                     Width: 1920,
                     Height: 1080,
+                }),
+            ).toEqual([
+                expect.objectContaining({
+                    Code: MJ_BOUND_KEY_UNKNOWN_CODE,
+                    Category: 'DataLiteral',
+                    Severity: 'Error',
+                    Selector: '#chart-tick',
+                }),
+            ]);
+            expect(
+                EvaluateDomRules([boundItem], {
+                    Format: '16:9',
+                    Width: 1920,
+                    Height: 1080,
+                    BoundDataLiterals: { ChartTick: ['$99.4M', '42%'] },
                 }),
             ).toEqual([]);
 
@@ -234,7 +251,7 @@ describe('EvaluateDomRules', () => {
             ]);
         });
 
-        it('does not flag intermediate count-up values at non-settle timestamps, passes matching settled values, and flags wrong settled values with MJ_BOUND_VALUE_MISMATCH', () => {
+        it('does not flag intermediate count-up values at non-settle timestamps, passes matching settled values (including non-symbol currencies like CAD 1,250 from BuildBoundDataLiterals), and flags wrong settled values with MJ_BOUND_VALUE_MISMATCH', () => {
             const midBeatCountUp = makeMeasuredText({
                 Selector: '#arr-kpi',
                 Text: '$7.1M',
@@ -249,6 +266,13 @@ describe('EvaluateDomRules', () => {
                 BoundKey: 'TotalARR',
                 TimestampSeconds: 1.967,
             });
+            const settledCad = makeMeasuredText({
+                Selector: '#cad-kpi',
+                Text: 'CAD 1,250',
+                IsBound: true,
+                BoundKey: 'Rev',
+                TimestampSeconds: 1.967,
+            });
             const settledWrong = makeMeasuredText({
                 Selector: '#arr-kpi',
                 Text: '$99.9M',
@@ -257,13 +281,32 @@ describe('EvaluateDomRules', () => {
                 TimestampSeconds: 1.967,
             });
 
-            const passingIssues = EvaluateDomRules([midBeatCountUp, settledCorrect], {
+            const boundDataLiterals = BuildBoundDataLiterals(
+                [
+                    {
+                        Key: 'TotalARR',
+                        Source: { Kind: 'Inline' },
+                        Shape: 'Scalar',
+                        Format: { Kind: 'Currency', Currency: 'USD', Decimals: 1 },
+                    },
+                    {
+                        Key: 'Rev',
+                        Source: { Kind: 'Inline' },
+                        Shape: 'Scalar',
+                        Format: { Kind: 'Currency', Currency: 'CAD', Decimals: 0 },
+                    },
+                ],
+                {
+                    TotalARR: 14_200_000,
+                    Rev: 1_250,
+                },
+            );
+
+            const passingIssues = EvaluateDomRules([midBeatCountUp, settledCorrect, settledCad], {
                 Format: '16:9',
                 Width: 1920,
                 Height: 1080,
-                BoundDataLiterals: {
-                    TotalARR: ['$14.2M', '14200000', '14,200,000'],
-                },
+                BoundDataLiterals: boundDataLiterals,
                 SettleTimestampsSeconds: [1.967],
             });
             expect(passingIssues).toEqual([]);
@@ -272,9 +315,7 @@ describe('EvaluateDomRules', () => {
                 Format: '16:9',
                 Width: 1920,
                 Height: 1080,
-                BoundDataLiterals: {
-                    TotalARR: ['$14.2M', '14200000', '14,200,000'],
-                },
+                BoundDataLiterals: boundDataLiterals,
                 SettleTimestampsSeconds: [1.967],
             });
             expect(mismatchIssues).toEqual([

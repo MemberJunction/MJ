@@ -5,6 +5,7 @@ import {
     BuildDataCheckInputs,
     BuildRenderDataSnapshot,
     CreateMJChartKit,
+    ExtractNumericLiteralTokens,
     FormatAsOfCardText,
     FormatTableCell,
 } from '../index.js';
@@ -20,7 +21,11 @@ import type {
 
 describe('VS-DAT-3: data-literals helpers', () => {
     describe('FormatAsOfCardText', () => {
-        it('normalizes ISO-8601 timestamps, YYYY-MM-DD strings, and Date instances to "Data as of YYYY-MM-DD"', () => {
+        it('normalizes ISO-8601 timestamps, YYYY-MM-DD strings, and Date instances to "Data as of YYYY-MM-DD" with no numeric literal tokens', () => {
+            const oct1Card = FormatAsOfCardText('2026-10-01T23:30:00.000Z');
+            expect(oct1Card).toBe('Data as of 2026-10-01');
+            expect(ExtractNumericLiteralTokens(oct1Card)).toEqual([]);
+
             expect(FormatAsOfCardText('2026-10-16T14:22:00Z')).toBe('Data as of 2026-10-16');
             expect(FormatAsOfCardText('2026-10-16')).toBe('Data as of 2026-10-16');
             expect(FormatAsOfCardText(new Date('2026-10-16T00:00:00Z'))).toBe('Data as of 2026-10-16');
@@ -63,7 +68,7 @@ describe('VS-DAT-3: data-literals helpers', () => {
     describe('BuildBoundDataLiterals', () => {
         const kit = CreateMJChartKit();
 
-        it('formats Scalar, Series, Table, and Delta (including + variants and ChangePercent) identically to MJChartKit.FormatValue', () => {
+        it('formats Scalar, Series, Table, and Delta (including + variants, ChangePercent as Percent regardless of binding Decimals, and skipped unbound keys) identically to MJChartKit.FormatValue', () => {
             const seriesPoints: DataSeriesValue = [
                 { Label: 'Q1', Value: 10_500_000 },
                 { Label: 'Q2', Value: 14_200_000 },
@@ -74,10 +79,10 @@ describe('VS-DAT-3: data-literals helpers', () => {
             expect(singlePoint.Label).toBe('Q1');
 
             const deltaValue: DataDeltaValue = {
-                Current: 14_200_000,
-                Previous: 11_100_000,
-                Change: 3_100_000,
-                ChangePercent: 0.279,
+                Current: 1_250,
+                Previous: 1_100,
+                Change: 150,
+                ChangePercent: 0.12,
             };
 
             const bindings: VideoDataBinding[] = [
@@ -86,6 +91,12 @@ describe('VS-DAT-3: data-literals helpers', () => {
                     Source: { Kind: 'Query', QueryID: 'q-arr' },
                     Shape: 'Scalar',
                     Format: { Kind: 'Currency', Currency: 'USD', Decimals: 1 },
+                },
+                {
+                    Key: 'kpi.cad',
+                    Source: { Kind: 'Query', QueryID: 'q-cad' },
+                    Shape: 'Scalar',
+                    Format: { Kind: 'Currency', Currency: 'CAD', Decimals: 0 },
                 },
                 {
                     Key: 'series.quarterly',
@@ -97,32 +108,46 @@ describe('VS-DAT-3: data-literals helpers', () => {
                     Key: 'delta.arr',
                     Source: { Kind: 'Query', QueryID: 'q-delta' },
                     Shape: 'Delta',
-                    Format: { Kind: 'Currency', Currency: 'USD', Decimals: 1 },
+                    Format: { Kind: 'Currency', Currency: 'USD', Decimals: 0 },
                 },
             ];
 
             const bound = BuildBoundDataLiterals(bindings, {
                 'kpi.arr': 14_200_000,
+                'kpi.cad': 1_250,
                 'series.quarterly': seriesPoints,
                 'delta.arr': deltaValue,
+                'unbound.extraKey': 999_999,
             });
+
+            expect(bound['unbound.extraKey']).toBeUndefined();
+            expect(Object.keys(bound)).toEqual([
+                'kpi.arr',
+                'kpi.cad',
+                'series.quarterly',
+                'delta.arr',
+            ]);
 
             expect(bound['kpi.arr']).toEqual([
                 kit.FormatValue(14_200_000, { Kind: 'Currency', Currency: 'USD', Decimals: 1 }),
             ]);
             expect(bound['kpi.arr']).toEqual(['$14.2M']);
 
+            // Non-symbol currency (CAD) keeps both the full formatted string and its extracted numeric token
+            expect(bound['kpi.cad']).toEqual(['CAD 1,250', '1,250']);
+
             expect(bound['series.quarterly']).toEqual(['$10.5M', '$14.2M']);
 
+            // Delta binding with Decimals: 0 still formats ChangePercent (0.12) as default Percent ('12.0%' and '+12.0%')
             expect(bound['delta.arr']).toEqual([
-                '$14.2M',
-                '+$14.2M',
-                '$11.1M',
-                '+$11.1M',
-                '$3.1M',
-                '+$3.1M',
-                '27.9%',
-                '+27.9%',
+                '$1,250',
+                '+$1,250',
+                '$1,100',
+                '+$1,100',
+                '$150',
+                '+$150',
+                '12.0%',
+                '+12.0%',
             ]);
         });
 
@@ -258,6 +283,35 @@ describe('VS-DAT-3: data-literals helpers', () => {
             expect(inputs.SettleTimestampsSeconds?.[0]).toBeCloseTo(3 - 1 / 30, 6);
             expect(inputs.SettleTimestampsSeconds?.[1]).toBeCloseTo(6 - 1 / 30, 6);
             expect(inputs.RequiredFinalFrameText).toEqual(['Data as of 2026-10-16']);
+        });
+
+        it('returns RequiredFinalFrameText: [] when DataBindings is non-empty but DataSnapshot is absent', () => {
+            const inputs = BuildDataCheckInputs(
+                {
+                    DataBindings: [
+                        {
+                            Key: 'kpi.arr',
+                            Source: { Kind: 'Inline' },
+                            Shape: 'Scalar',
+                            Format: { Kind: 'Currency', Currency: 'USD', Decimals: 1 },
+                        },
+                    ],
+                    DataSnapshot: undefined,
+                    Beats: sampleBeats,
+                    Render: {
+                        Renderer: 'HyperFrames',
+                        RendererVersion: '0.1.0',
+                        Fps: 30,
+                        Seed: 42,
+                        Quality: 'standard',
+                    },
+                },
+                { 'kpi.arr': 14_200_000 },
+            );
+
+            expect(inputs.AllowedDataLiterals).toEqual(['$14.2M']);
+            expect(inputs.BoundDataLiterals).toEqual({ 'kpi.arr': ['$14.2M'] });
+            expect(inputs.RequiredFinalFrameText).toEqual([]);
         });
 
         it('returns AllowedDataLiterals: [] and RequiredFinalFrameText: [] when DataBindings is empty', () => {

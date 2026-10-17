@@ -352,13 +352,13 @@ export interface CheckRequest {
     /** Optional timestamps in seconds at which to run DOM layout/contrast/safe-area audits. */
     SampleTimestampsSeconds?: number[];
     /**
-     * Exact formatted strings built with `MJChartKit.FormatValue` from `DataBindings` + `DataSnapshot`
-     * that are permitted as unbound numeric literals on screen.
+     * Exact formatted strings and their numeric tokens built with `MJChartKit.FormatValue` from
+     * `DataBindings` + `DataSnapshot` that are permitted as unbound numeric literals on screen.
      */
     AllowedDataLiterals?: string[];
     /**
-     * Map from `VideoDataBinding.Key` to the exact formatted strings (`MJChartKit.FormatValue`)
-     * that an element marked with `data-mj-bound="<Key>"` may display once settled.
+     * Map from `VideoDataBinding.Key` to the exact formatted strings and their numeric tokens
+     * (`MJChartKit.FormatValue`) that an element marked with `data-mj-bound="<Key>"` may display once settled.
      */
     BoundDataLiterals?: Record<string, string[]>;
     /**

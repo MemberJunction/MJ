@@ -5,7 +5,7 @@
  * SVG markup with every numeric value marked with `data-mj-bound`.
  */
 
-import type { VideoDataFormat } from './video-generation-spec.js';
+import type { VideoDataFormat, VideoTableColumn } from './video-generation-spec.js';
 
 /**
  * Color and typography tokens controlling chart-kit primitive appearance.
@@ -56,14 +56,9 @@ export interface ChartKitPoint {
 }
 
 /**
- * Column definition for `TableRevealProps`.
+ * Column definition for `TableRevealProps` (shared with `VideoDataBinding.Columns`).
  */
-export interface ChartKitColumn {
-    /** Column header text displayed in the table header row. */
-    Header: string;
-    /** Optional display formatting rules applied to numeric cells in this column. */
-    Format?: VideoDataFormat;
-}
+export type ChartKitColumn = VideoTableColumn;
 
 /**
  * Props for `MJChartKit.KpiTile` (animated KPI hero metric with count-up and label).
