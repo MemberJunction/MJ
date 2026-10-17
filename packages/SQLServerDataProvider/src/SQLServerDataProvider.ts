@@ -234,32 +234,29 @@ async function executeSQLCore(
     throw error;
   }
 
-  // Handle logging
-  let logPromise: Promise<void>;
-  if (options && !options.ignoreLogging && context.logSqlStatement) {
-    logPromise = context.logSqlStatement(
-      query,
-      parameters,
-      options.description,
-      options.ignoreLogging,
-      options.isMutation,
-      options.simpleSQLFallback,
-      options.contextUser
-    );
-  } else {
-    logPromise = Promise.resolve();
-  }
-
   try {
     const { request, processedQuery } = buildRequest(connectionSource, query, parameters);
+    const queryPromise = options?.timeoutMs
+      ? QueryWithTimeout<SQLCoreResult>(request, processedQuery, options.timeoutMs)
+      : request.query(processedQuery);
 
-    // Execute query and logging in parallel
-    const [result] = await Promise.all([
-      options?.timeoutMs ? QueryWithTimeout<SQLCoreResult>(request, processedQuery, options.timeoutMs) : request.query(processedQuery),
-      logPromise
-    ]);
+    if (options && !options.ignoreLogging && context.logSqlStatement) {
+      const [result] = await Promise.all([
+        queryPromise,
+        context.logSqlStatement(
+          query,
+          parameters,
+          options.description,
+          options.ignoreLogging,
+          options.isMutation,
+          options.simpleSQLFallback,
+          options.contextUser
+        )
+      ]);
+      return result;
+    }
 
-    return result;
+    return await queryPromise;
   } catch (error: any) {
     // Retry once for stale connection errors on non-transactional queries.
     // Transactions cannot be retried because the connection state is already
@@ -357,8 +354,10 @@ export class SQLServerDataProvider
    * (batch separator, quoted identifiers, etc.) are sourced from
    * `@memberjunction/sql-dialect` rather than hardcoded strings.
    */
+  private static readonly _dialectInstance = new SQLServerDialect();
+
   protected getDialect(): SQLDialect {
-    return new SQLServerDialect();
+    return SQLServerDataProvider._dialectInstance;
   }
 
   public override QuoteIdentifier(name: string): string {
@@ -1159,6 +1158,16 @@ export class SQLServerDataProvider
   }
 
 
+  private static _entityColumnsSQLCache = new WeakMap<
+    EntityInfo,
+    {
+      viewOrderRef: string[] | undefined;
+      fieldCount: number;
+      usedFallback: boolean;
+      sql: string;
+    }
+  >();
+
   private getAllEntityColumnsSQL(entityInfo: EntityInfo): string {
     // This builds the column list for the @ResultTable/@ResultChangesTable that captures
     // `SELECT * FROM <BaseView>` via a POSITIONAL `INSERT INTO @table EXEC ...`. SQL Server maps the
@@ -1183,24 +1192,34 @@ export class SQLServerDataProvider
     // — the only case where a base-column-after-a-join could mis-route by position — we WARN loudly
     // (warnOnViewOrderFallback), because the metadata order can no longer be checked against the view and
     // a silent fallback there would let the very bug this fix prevents persist undetected.
-    let orderedFields: typeof entityInfo.Fields | undefined;
-    let fallbackReason: string | undefined;
     const viewKey = `${entityInfo.SchemaName}.${entityInfo.BaseView}`.toLowerCase();
     const viewOrder = this._viewColumnOrderCache.get(viewKey);
+    const cached = SQLServerDataProvider._entityColumnsSQLCache.get(entityInfo);
+    if (
+      cached &&
+      cached.viewOrderRef === viewOrder &&
+      cached.fieldCount === entityInfo.Fields.length &&
+      !cached.usedFallback
+    ) {
+      return cached.sql;
+    }
+
+    let orderedFields: typeof entityInfo.Fields | undefined;
+    let fallbackReason: string | undefined;
     if (!viewOrder) {
       fallbackReason = `base view not captured in the column-order cache (cache load failed at Config, or a custom/overridden sproc whose view was not read)`;
     } else if (viewOrder.length !== entityInfo.Fields.length) {
       fallbackReason = `base view exposes ${viewOrder.length} column(s) but the entity declares ${entityInfo.Fields.length} field(s) — cannot align 1:1 by position`;
     } else {
-      const fieldByName = new Map(entityInfo.Fields.map((f) => [f.Name.toLowerCase(), f]));
-      const mapped = viewOrder.map((colName) => fieldByName.get(colName.toLowerCase()));
-      if (mapped.every((f) => f !== undefined)) {
+      const mapped = viewOrder.map((colName) => entityInfo.FieldByName(colName));
+      if (mapped.every((f) => f !== null && f !== undefined)) {
         orderedFields = mapped as typeof entityInfo.Fields; // every view column resolved 1:1 to a field
       } else {
-        const unmatched = viewOrder.filter((colName) => !fieldByName.has(colName.toLowerCase()));
+        const unmatched = viewOrder.filter((colName) => !entityInfo.FieldByName(colName));
         fallbackReason = `view column(s) without a matching EntityField: ${unmatched.join(', ')}`;
       }
     }
+    const usedFallback = !orderedFields;
     if (!orderedFields) {
       this.warnIfBaseFieldSequencedAfterVirtual(entityInfo);
       this.warnOnViewOrderFallback(entityInfo, fallbackReason);
@@ -1213,6 +1232,12 @@ export class SQLServerDataProvider
       sRet += '[' + f.Name + '] ' + f.SQLFullType + ' ' + (f.AllowsNull || f.IsVirtual ? 'NULL' : 'NOT NULL');
       outputCount++;
     }
+    SQLServerDataProvider._entityColumnsSQLCache.set(entityInfo, {
+      viewOrderRef: viewOrder,
+      fieldCount: entityInfo.Fields.length,
+      usedFallback,
+      sql: sRet,
+    });
     return sRet;
   }
 
@@ -1341,7 +1366,7 @@ export class SQLServerDataProvider
     if (value && field.Type.trim().toLowerCase() === 'datetimeoffset') {
       return { kind: 'use', value: new Date(value as string | number | Date).toISOString() };
     }
-    if (!isUpdate && field.Type.trim().toLowerCase() === 'uniqueidentifier' && !field.IsPrimaryKey) {
+    if (!isUpdate && field.IsUniqueIdentifier && !field.IsPrimaryKey) {
       if (typeof value === 'string' && value.includes('()')) {
         return { kind: 'skip' };
       }
@@ -1411,9 +1436,7 @@ export class SQLServerDataProvider
     // UPDATE: tail-append PK declarations from the loaded entity's PrimaryKey.
     if (isUpdate && execParams.length > 0) {
       for (const pkv of entity.PrimaryKey.KeyValuePairs) {
-        const f = entity.EntityInfo.Fields.find(
-          (x) => x.Name.trim().toLowerCase() === pkv.FieldName.trim().toLowerCase(),
-        );
+        const f = entity.EntityInfo.FieldByName(pkv.FieldName);
         if (!f) continue;
         const varName = `@${f.CodeName}${uniqueSuffix}`;
         declarations.push(`${varName} ${f.SQLFullType.toUpperCase()}`);
@@ -1560,7 +1583,7 @@ export class SQLServerDataProvider
     if (binding.kind !== 'mssql-declare-exec') {
       throw new Error(`SQLServerDataProvider.WrapSaveCallWithRecordChange: unexpected binding kind '${binding.kind}'`);
     }
-    const recordChangesEntityInfo = this.Entities.find((e) => e.Name === 'MJ: Record Changes');
+    const recordChangesEntityInfo = this.EntityByName('MJ: Record Changes');
     const spName = this.GetCreateUpdateSPName(entity, payload.type === 'Create');
     const concatPKIDString = `CONCAT(${entity.EntityInfo.PrimaryKeys
       .map((pk) => `'${pk.CodeName}','${CompositeKey.DefaultValueDelimiter}',[${pk.Name}]`)
@@ -1893,12 +1916,12 @@ export class SQLServerDataProvider
     let sSQL: string = '';
     const spName: string = entity.EntityInfo.spDelete ? entity.EntityInfo.spDelete : `spDelete${entity.EntityInfo.BaseTableCodeName}`;
     const sParams = entity.PrimaryKey.KeyValuePairs.map((kv) => {
-      const f = entity.EntityInfo.Fields.find((f) => f.Name.trim().toLowerCase() === kv.FieldName.trim().toLowerCase());
+      const f = entity.EntityInfo.FieldByName(kv.FieldName);
       const quotes = f.NeedsQuotes ? "'" : '';
       return `@${f.CodeName}=${quotes}${kv.Value}${quotes}`;
     }).join(', ');
     const sSimpleSQL: string = `EXEC [${entity.EntityInfo.SchemaName}].[${spName}] ${sParams}`;
-    const recordChangesEntityInfo = this.Entities.find((e) => e.Name === 'MJ: Record Changes');
+    const recordChangesEntityInfo = this.EntityByName('MJ: Record Changes');
 
     if (entity.EntityInfo.TrackRecordChanges && !skipRecordChanges && entity.EntityInfo.Name.trim().toLowerCase() !== 'record changes') {
       // don't track changes for the record changes entity
@@ -2149,6 +2172,9 @@ export class SQLServerDataProvider
     return executeSQLCore(query, parameters, context, options);
   }
 
+  private _boundLogSqlStatement?: SQLExecutionContext['logSqlStatement'];
+  private _boundClearTransaction?: () => void;
+
   /**
    * Internal centralized method for executing SQL queries with consistent transaction and connection handling.
    * This method ensures proper request object creation and management to avoid concurrency issues,
@@ -2199,14 +2225,21 @@ export class SQLServerDataProvider
       transaction = this._transaction;
     }
     
+    if (!this._boundLogSqlStatement) {
+      this._boundLogSqlStatement = this._logSqlStatement.bind(this);
+    }
+    if (!this._boundClearTransaction) {
+      this._boundClearTransaction = () => {
+        this._transaction = null;
+      };
+    }
+
     // Create the execution context
     const context: SQLExecutionContext = {
       pool: this._pool,
       transaction: transaction,
-      logSqlStatement: this._logSqlStatement.bind(this),
-      clearTransaction: () => { 
-        this._transaction = null;
-      }
+      logSqlStatement: this._boundLogSqlStatement,
+      clearTransaction: this._boundClearTransaction
     };
     
     // Convert logging options to internal format

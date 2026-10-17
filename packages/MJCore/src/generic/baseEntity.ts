@@ -270,7 +270,7 @@ export class EntityField {
             return false
         else {
             const oldNull = this._oldValue === null || this.OldValue === undefined || Number.isNaN(this.OldValue); // check for NaN because sometimes we have old values that are NaN and we need to account for that
-            const curNull = this.Value === null || this.Value === undefined || Number.isNaN(this.OldValue);
+            const curNull = this.Value === null || this.Value === undefined || Number.isNaN(this.Value);
             if (oldNull && curNull)
                 return false; // BOTH are null or undefined, not dirty
             else {
@@ -286,9 +286,10 @@ export class EntityField {
                     newCompare = this.Value.getTime();
                 }
 
+                const tsType = this._entityFieldInfo.TSType;
+
                 // Special handling for bit/Boolean types - treat truthy values as equivalent
-                if (this._entityFieldInfo.TSType === EntityFieldTSType.Boolean || 
-                    this._entityFieldInfo.Type.toLowerCase() === 'bit') {
+                if (tsType === EntityFieldTSType.Boolean) {
                     // Convert both values to boolean for comparison
                     const oldBool = this.convertToBoolean(oldCompare);
                     const newBool = this.convertToBoolean(newCompare);
@@ -296,7 +297,7 @@ export class EntityField {
                 }
 
                 // Special handling for numeric types - treat numeric strings that convert to same value as equivalent
-                if (this._entityFieldInfo.TSType === EntityFieldTSType.Number || this.isNumericType(this._entityFieldInfo.Type)) {
+                if (tsType === EntityFieldTSType.Number) {
                     const oldNum = this.convertToNumber(oldCompare);
                     const newNum = this.convertToNumber(newCompare);
                     
@@ -313,7 +314,7 @@ export class EntityField {
                 }
 
                 // for string types where the comparisons are not both strings
-                if (this._entityFieldInfo.TSType === EntityFieldTSType.String) {
+                if (tsType === EntityFieldTSType.String) {
                     if (typeof oldCompare === 'object') {
                         // need to convert the object to a string for comparison
                         oldCompare = JSON.stringify(oldCompare);
@@ -537,92 +538,19 @@ export class EntityField {
             this.Value = Value;
         }
         else if (fieldInfo.DefaultValue) {
-            if (fieldInfo.TSType === EntityFieldTSType.Boolean) {
-                // special handling for booleans as we don't want a string passed into a boolean field, we want a true boolean
-                if (typeof fieldInfo.DefaultValue === "string" && fieldInfo.DefaultValue.trim() === "1" || fieldInfo.DefaultValue.trim().toLowerCase() === "true")
-                    this.Value = true;
-                else
-                    this.Value = false;
-            }
-            else if (fieldInfo.TSType === EntityFieldTSType.Number) {
-                // special handling for numbers as we don't want a string passed into a value for a numeric field
-                if (!isNaN(Number(fieldInfo.DefaultValue))) {
-                    this.Value = Number(fieldInfo.DefaultValue);
-                }
-                else if (fieldInfo.DefaultValue.trim().toLowerCase() === "null") {
-                    this.Value = null;
-                }
-            }
-            else if (fieldInfo.IsUniqueIdentifier) {
-                // special handling for GUIDs (SQL Server `uniqueidentifier` / PostgreSQL `uuid`),
-                // we don't want to populate anything here because the server always sets the value, leave blank
-                this.Value = null;
-            }
-            else if (fieldInfo.TSType === EntityFieldTSType.Date) {
-                if (fieldInfo.DefaultValue.trim().length > 0) {
-                    // special handling for dates as we don't want to use getdate() type defaults as is, we want to convert them to a JS Date object
-                    try {
-                        // attempt to convert the default value to a date
-                        const temp = new Date(fieldInfo.DefaultValue);
-                        // if we get here, that means it worked, but we could have an invalid date, so check for that
-                        if (isNaN(temp.getTime())) {
-                            // this is an invalid date, so throw an error
-                            throw new Error(); // blank error because we just end up going to the catch block anyway and in there we have logic to handle this properly
-                        }
-                        else
-                            this.Value = temp;
-                    }
-                    catch (e) {
-                        // if we get here, that means the default value is not a valid date, so we need to check to see if it's a SQL current date function
-                        if (EntityFieldInfo.IsDefaultValueSQLCurrentDateFunction(fieldInfo.DefaultValue)) {
-                            // we have a SQL current date function default, leave the field alone if its a special date field as the server (i.e. database) will handle
-                            //setting the value, otherwise set the value to the current date
-                            if(fieldInfo.IsSpecialDateField){
-                                this.Value = null;
-                            }
-                            else {
-                                this.Value = new Date();
-                            }
-                        }
-                        else {
-                            // we have a default value that is not a valid date and not a getdate() type default, so we need to throw an error
-                            throw new Error(`Invalid default value for ${fieldInfo.Entity}.${fieldInfo.Name} of ${fieldInfo.DefaultValue}. Default values for date fields must be a valid date or a getdate() type default`);
-                        }
-                    }
-                }
-            }
-            else {
-                // For strings: strip PostgreSQL's typed-literal wrapper.
-                //
-                // PG's pg_get_expr() (used by vwSQLColumnsAndEntityFields →
-                // EntityField.DefaultValue) renders a string default like:
-                //   'Single'::character varying
-                //   'pending'::text
-                // SQL Server stores the same default as just `'Single'` or
-                // `'pending'`. If we set the field value to the raw PG form,
-                // the value is `'Single'::character varying` (27 chars), and
-                // a MaxLength=20 constraint immediately fails validation —
-                // even though the actual content is `Single` (6 chars).
-                //
-                // Unwrap a leading single-quoted string followed by a `::type`
-                // suffix. Function-call defaults (`nextval('...')`,
-                // `now() AT TIME ZONE 'UTC'`) deliberately don't match this
-                // shape and are left untouched — the database evaluates them
-                // server-side at INSERT time.
-                const dv = fieldInfo.DefaultValue.trim();
-                const pgTypedLiteral = /^'((?:[^']|'')*)'::[A-Za-z][\w "()\[\],]*$/;
-                const m = dv.match(pgTypedLiteral);
-                if (m) {
-                    // Replace the SQL-escaped doubled quotes back to a single quote.
-                    this.Value = m[1].replace(/''/g, "'");
-                } else {
-                    this.Value = fieldInfo.DefaultValue;
-                }
+            const parsed = typeof fieldInfo.GetParsedDefaultValue === 'function'
+                ? fieldInfo.GetParsedDefaultValue()
+                : EntityFieldInfo.ParseDefaultValue(fieldInfo);
+            if (parsed.isCurrentDateFunction) {
+                this.Value = new Date();
+            } else if (parsed.hasValue) {
+                this.Value = parsed.value instanceof Date ? new Date(parsed.value.getTime()) : parsed.value;
             }
             this._neverSet = true; // set this back to true because we are setting the default value and we want to be able to set this ONCE from BaseEntity when we load
         }
         else {
-            this.Value = null; // we need to set the value to null instead of being undefined as the value is defined, it is NULL
+            this._value = null; // we need to set the value to null instead of being undefined as the value is defined, it is NULL
+            this._oldValue = null;
             this._neverSet = true; // set this back to true because we are setting the value to null;
         }
     }
@@ -1255,7 +1183,7 @@ export abstract class BaseEntity<T = unknown> {
      * remote-invalidate). Exposed publicly via `Event$` so engines and UI components can react
      * to entity lifecycle events.
      */
-    private _eventSubject: Subject<BaseEntityEvent>;
+    private _eventSubject: Subject<BaseEntityEvent> | null = null;
 
     /**
      * Bounded ring of `BaseEntityResult` objects from each Save/Delete attempt. The most
@@ -1509,7 +1437,6 @@ export abstract class BaseEntity<T = unknown> {
     get ISAParentEntity(): BaseEntity | null { return this._parentEntity; }
 
     constructor(Entity: EntityInfo, Provider: IEntityDataProvider | null = null) {
-        this._eventSubject = new Subject<BaseEntityEvent>();
         this._entityInfo = Entity;
         EntityInfo.AssertEntityActiveStatus(Entity, 'BaseEntity::constructor');
         this._provider = Provider;
@@ -3688,6 +3615,9 @@ export abstract class BaseEntity<T = unknown> {
      * @returns
      */
     public RegisterEventHandler(callback: (event: BaseEntityEvent) => void): Subscription {
+        if (!this._eventSubject) {
+            this._eventSubject = new Subject<BaseEntityEvent>();
+        }
         return this._eventSubject.asObservable().subscribe(callback);
     }
 
@@ -3713,6 +3643,9 @@ export abstract class BaseEntity<T = unknown> {
 
 
     private static _baseEventCode = 'BaseEntityEvent';
+    private static readonly _globalEventTypes: ReadonlySet<BaseEntityEvent["type"]> = new Set([
+        'save', 'delete', 'load_complete', 'save_started', 'delete_started', 'load_started'
+    ]);
     /**
      * When a BaseEntity class raises an event with MJGlobal, the eventCode property is set to this value. This is used to identify events that are raised by BaseEntity objects.
      * Any MJGlobal event that is raised by a BaseEntity class will use a BaseEntityEvent type as the args parameter
@@ -3736,12 +3669,11 @@ export abstract class BaseEntity<T = unknown> {
 
         // this is the local event handler that is specific to THIS instance of the entity object
         LogDebug(`BaseEntity.RaiseEvent() - ${type === 'save' ? 'save:' + saveSubType : type} event raised for ${this.EntityInfo.Name}, about to call this._eventSubject.next()`);
-        this._eventSubject.next({type: type, payload: payload, saveSubType: saveSubType, baseEntity: this, provider});
+        this._eventSubject?.next({type: type, payload: payload, saveSubType: saveSubType, baseEntity: this, provider});
 
         // this next call is to MJGlobal to let everyone who cares knows that we had an event on an entity object
         // we broadcast save/delete/load events and their _started counterparts
-        const globalEventTypes: BaseEntityEvent["type"][] = ['save', 'delete', 'load_complete', 'save_started', 'delete_started', 'load_started'];
-        if (globalEventTypes.includes(type)) {
+        if (BaseEntity._globalEventTypes.has(type)) {
             const event = new BaseEntityEvent();
             event.baseEntity = this;
             event.payload = payload;
@@ -3951,6 +3883,11 @@ export abstract class BaseEntity<T = unknown> {
         // Lookup needs an EntityField instance to return — hydrate.
         this.hydrateFieldsIfNeeded();
 
+        if (this._entityInfo && typeof this._entityInfo.FieldIndexByName === 'function' && this._fields.length === this._entityInfo.Fields.length && this._fieldCache === null) {
+            const idx = this._entityInfo.FieldIndexByName(fieldName);
+            return idx >= 0 ? (this._fields[idx] ?? null) : null;
+        }
+
         const lcase = fieldName.trim().toLowerCase(); // do this once as we will use it multiple times
 
         if (this._fieldCache === null) {
@@ -4018,6 +3955,11 @@ export abstract class BaseEntity<T = unknown> {
 
         // Lookup needs an EntityField instance to return — hydrate.
         this.hydrateFieldsIfNeeded();
+
+        if (this._entityInfo && typeof this._entityInfo.FieldIndexByCodeName === 'function' && this._fields.length === this._entityInfo.Fields.length && this._codeNameCache === null) {
+            const idx = this._entityInfo.FieldIndexByCodeName(codeName);
+            return idx >= 0 ? (this._fields[idx] ?? null) : null;
+        }
 
         const lcase = codeName.trim().toLowerCase();
 
@@ -4191,35 +4133,42 @@ export abstract class BaseEntity<T = unknown> {
     private setLocal(FieldName: string, Value: any) {
         const field = this.GetFieldByName(FieldName);
         if (field != null) {
-            if (field.EntityFieldInfo.TSType === EntityFieldTSType.Date && (typeof Value === 'string' || typeof Value === 'number') ) {
-                field.Value = new Date(Value);
-            }
-            else if (field.EntityFieldInfo.TSType === EntityFieldTSType.Number && typeof Value === 'string' && Value !== null && Value !== undefined) {
-                const numericValue = Number(Value);
-                if (!isNaN(numericValue)) {
-                    field.Value = numericValue;
-                } else {
-                    field.Value = Value;
-                }
-            }
-            else if (field.EntityFieldInfo.TSType === EntityFieldTSType.Boolean && Value !== null && Value !== undefined) {
-                if (typeof Value === 'string') {
-                    if (Value.trim() === '1' || Value.trim().toLowerCase() === 'true') {
-                        field.Value = true;
-                    } else if (Value.trim() === '0' || Value.trim().toLowerCase() === 'false') {
-                        field.Value = false;
-                    } else {
-                        field.Value = Value;
-                    }
-                } else if (typeof Value === 'number') {
-                    field.Value = Value !== 0;
-                } else {
-                    field.Value = Value;
-                }
-            }
-            else {
+            this.setFieldValue(field, Value);
+        }
+    }
+
+    private setFieldValue(field: EntityField, Value: any) {
+        const tsType = field.EntityFieldInfo.TSType;
+        if (tsType === EntityFieldTSType.Date && (typeof Value === 'string' || typeof Value === 'number')) {
+            field.Value = new Date(Value);
+        }
+        else if (tsType === EntityFieldTSType.Number && typeof Value === 'string' && Value !== null && Value !== undefined) {
+            const numericValue = Number(Value);
+            if (!isNaN(numericValue)) {
+                field.Value = numericValue;
+            } else {
                 field.Value = Value;
             }
+        }
+        else if (tsType === EntityFieldTSType.Boolean && Value !== null && Value !== undefined) {
+            if (typeof Value === 'string') {
+                const trimmed = Value.trim();
+                const lower = trimmed.toLowerCase();
+                if (trimmed === '1' || lower === 'true') {
+                    field.Value = true;
+                } else if (trimmed === '0' || lower === 'false') {
+                    field.Value = false;
+                } else {
+                    field.Value = Value;
+                }
+            } else if (typeof Value === 'number') {
+                field.Value = Value !== 0;
+            } else {
+                field.Value = Value;
+            }
+        }
+        else {
+            field.Value = Value;
         }
     }
 
@@ -4329,8 +4278,8 @@ export abstract class BaseEntity<T = unknown> {
                 if (checkStatus) {
                     EntityFieldInfo.AssertEntityFieldActiveStatus(field.EntityFieldInfo, 'BaseEntity.SetMany');
                 }
-                // Use SetLocal here so we set on OUR fields (mirrors for parent fields)
-                this.setLocal(key, object[key]);
+                // Use setFieldValue directly so we don't repeat GetFieldByName(key)
+                this.setFieldValue(field, object[key]);
                 if (replaceOldValues) {
                     field.ResetOldValue();
                 }
@@ -4343,8 +4292,8 @@ export abstract class BaseEntity<T = unknown> {
                     if (checkStatus) {
                         EntityFieldInfo.AssertEntityFieldActiveStatus(field.EntityFieldInfo, 'BaseEntity.SetMany');
                     }
-                    // Use SetLocal here so we set on OUR fields (mirrors for parent fields)
-                    this.setLocal(field.Name, object[key]);
+                    // Use setFieldValue directly so we don't repeat GetFieldByName(field.Name)
+                    this.setFieldValue(field, object[key]);
                     if (replaceOldValues) {
                         field.ResetOldValue();
                     }
@@ -4655,37 +4604,46 @@ export abstract class BaseEntity<T = unknown> {
 
         if (!this.EntityInfo) return;
 
-        // 1. Allocate one EntityField per column. Same construction the old `init()` used to do
-        //    up-front — we just deferred it.
-        for (const rawField of this.EntityInfo.Fields) {
-            const key = this.EntityInfo.Name + '.' + rawField.Name;
-            const newField = MJGlobal.Instance.ClassFactory.CreateInstance<EntityField>(EntityField, key, rawField);
-            this._fields.push(newField);
+        // 1. Allocate one EntityField per column. Check once whether any custom EntityField
+        //    subclasses are registered in ClassFactory; in standard deployments none are, so we
+        //    can instantiate EntityField directly without N string concatenations + factory lookups.
+        const hasCustomEntityFieldRegistrations =
+            MJGlobal.Instance.ClassFactory.GetAllRegistrations(EntityField).length > 0;
+        const entityFields = this.EntityInfo.Fields;
+        if (hasCustomEntityFieldRegistrations) {
+            const prefix = this.EntityInfo.Name + '.';
+            for (let i = 0; i < entityFields.length; i++) {
+                const rawField = entityFields[i];
+                const newField = MJGlobal.Instance.ClassFactory.CreateInstance<EntityField>(
+                    EntityField,
+                    prefix + rawField.Name,
+                    rawField
+                );
+                this._fields.push(newField);
+            }
+        } else {
+            for (let i = 0; i < entityFields.length; i++) {
+                this._fields.push(new EntityField(entityFields[i]));
+            }
         }
 
-        // 2. If we have raw data from LoadFromData, populate Fields. The first set of each Field
-        //    runs through the EntityField setter with `_NeverSet=true`, which simultaneously sets
-        //    Value AND OldValue (so the field is not marked dirty). This matches the old
-        //    SetMany(replaceOldValues=true) semantics on initial load.
+        // 2. If we have raw data from LoadFromData, populate Fields and mark omitted fields as
+        //    NotLoaded in a single pass.
         if (this._raw) {
-            for (const field of this._fields) {
-                const value = this._raw[field.Name];
+            const raw = this._raw;
+            for (let i = 0; i < this._fields.length; i++) {
+                const field = this._fields[i];
+                const value = raw[field.Name];
                 if (value !== undefined) {
-                    // Populating fields from the loaded row writes EntityField.Value directly, which does
-                    // not assert active status — so a deprecated column still present in the table emits
-                    // no warning on load (hydration is not user use of the field). No suppression toggle
-                    // is needed now that the assertion lives at BaseEntity.Get/Set/SetMany.
-                    // Date conversion mirrors what SetLocal / Get does for raw string/number dates.
                     if (field.EntityFieldInfo.TSType === EntityFieldTSType.Date && (typeof value === 'string' || typeof value === 'number')) {
                         field.Value = new Date(value);
                     } else {
                         field.Value = value;
                     }
+                } else if (raw[field.CodeName] === undefined) {
+                    field.MarkNotLoaded();
                 }
             }
-            // _raw IS a hydration source (LoadFromData fast path) — fields whose key it omitted
-            // are not-loaded, not defaulted. See EntityField.NotLoaded.
-            this.markFieldsOmittedBySourceAsNotLoaded(this._raw);
             // Raw data has been promoted into Fields — release the reference so we don't carry
             // duplicate state. Fields hold their own copies, so a frozen source no longer
             // constrains anything from here on.
@@ -7101,7 +7059,7 @@ export abstract class BaseEntity<T = unknown> {
      * however it is possible for the string in the map to be any unique key relative to the object so you could have vectors
      * that embed multiple fields if desired.
      */
-    private _vectors: Map<string, number[]> = new Map<string, number[]>();
+    private _vectors: Map<string, number[]> | null = null;
 
     /**
      * When true, GenerateEmbedding() returns immediately without computing vectors.
@@ -7118,6 +7076,9 @@ export abstract class BaseEntity<T = unknown> {
      * use this to track vectors associated with 
      */
     public get Vectors(): Map<string, number[]> {
+        if (!this._vectors) {
+            this._vectors = new Map<string, number[]>();
+        }
         return this._vectors;
     }
 
@@ -7125,7 +7086,7 @@ export abstract class BaseEntity<T = unknown> {
      * Resets the vector embeddings for this entity to an empty state.
      */
     public ResetVectors(): void {
-        this._vectors.clear();
+        this._vectors?.clear();
     }
 
     /**

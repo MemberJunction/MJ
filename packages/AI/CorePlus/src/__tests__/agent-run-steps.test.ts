@@ -1,7 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import type { MJAIAgentRunStepEntity } from '@memberjunction/core-entities';
 import { UUIDMap } from '@memberjunction/global';
-import { InitAgentRunStep, FinalizeAgentRunStep, ResolvePayloadAtStart, ApplyResolvedPayloadAtStart } from '../agent-run-steps';
+import {
+    InitAgentRunStep,
+    FinalizeAgentRunStep,
+    ResolvePayloadAtStart,
+    ApplyResolvedPayloadAtStart,
+    ResolvePayloadAtEnd,
+    ApplyResolvedPayloadAtEnd,
+} from '../agent-run-steps';
 
 /** A minimal mutable stand-in — the helpers only assign/read plain fields, so no BaseEntity machinery is needed. */
 function fakeStep(): MJAIAgentRunStepEntity {
@@ -72,7 +79,7 @@ describe('initAgentRunStep', () => {
         expect(withData.PayloadAtEnd).toBe('{"p":1}');
     });
 
-    it('sets PayloadAtStartSourceStepID when provided', () => {
+    it('sets PayloadAtStartSourceStepID and PayloadAtEndSourceStepID when provided', () => {
         const step = fakeStep();
         InitAgentRunStep(step, {
             AgentRunID: 'r',
@@ -80,14 +87,17 @@ describe('initAgentRunStep', () => {
             StepType: 'Prompt',
             StepName: 'x',
             PayloadAtStartSourceStepID: UUID,
+            PayloadAtEndSourceStepID: UUID,
         });
         expect(step.PayloadAtStartSourceStepID).toBe(UUID);
+        expect(step.PayloadAtEndSourceStepID).toBe(UUID);
     });
 
-    it('leaves PayloadAtStartSourceStepID unset when it is null or undefined', () => {
+    it('leaves PayloadAtStartSourceStepID and PayloadAtEndSourceStepID unset when null or undefined', () => {
         const omitted = fakeStep();
         InitAgentRunStep(omitted, { AgentRunID: 'r', StepNumber: 2, StepType: 'Prompt', StepName: 'x' });
         expect(omitted.PayloadAtStartSourceStepID).toBeUndefined();
+        expect(omitted.PayloadAtEndSourceStepID).toBeUndefined();
 
         const explicitNull = fakeStep();
         InitAgentRunStep(explicitNull, {
@@ -96,8 +106,10 @@ describe('initAgentRunStep', () => {
             StepType: 'Prompt',
             StepName: 'x',
             PayloadAtStartSourceStepID: null,
+            PayloadAtEndSourceStepID: null,
         });
         expect(explicitNull.PayloadAtStartSourceStepID).toBeUndefined();
+        expect(explicitNull.PayloadAtEndSourceStepID).toBeUndefined();
     });
 });
 
@@ -230,3 +242,32 @@ describe('ApplyResolvedPayloadAtStart', () => {
         expect(steps[0].PayloadAtStart).toBe('{"n":1}');
     });
 });
+
+describe('ResolvePayloadAtEnd & ApplyResolvedPayloadAtEnd', () => {
+    type StepRow = Pick<MJAIAgentRunStepEntity, 'ID' | 'PayloadAtEnd' | 'PayloadAtEndSourceStepID'>;
+    const STEP_1 = 'D4E5F6A7-B8C9-4D0E-8F1A-3B4C5D6E7F80';
+    const STEP_2 = 'E5F6A7B8-C9D0-4E1F-9A2B-4C5D6E7F8091';
+    const STEP_3 = 'F6A7B8C9-D0E1-4F2A-8B3C-5D6E7F8091A2';
+    const MISSING_ID = '0718293A-4B5C-4D6E-9F80-91A2B3C4D5E6';
+
+    it('ResolvePayloadAtEnd returns stored PayloadAtEnd or source step PayloadAtEnd', () => {
+        const stepsById = new UUIDMap<Pick<MJAIAgentRunStepEntity, 'PayloadAtEnd'>>([
+            [STEP_1, { PayloadAtEnd: '{"end":1}' }],
+        ]);
+        expect(ResolvePayloadAtEnd({ PayloadAtEnd: '{"own":1}', PayloadAtEndSourceStepID: STEP_1 }, stepsById)).toBe('{"own":1}');
+        expect(ResolvePayloadAtEnd({ PayloadAtEnd: null, PayloadAtEndSourceStepID: STEP_1.toLowerCase() }, stepsById)).toBe('{"end":1}');
+        expect(ResolvePayloadAtEnd({ PayloadAtEnd: null, PayloadAtEndSourceStepID: MISSING_ID }, stepsById)).toBeNull();
+        expect(ResolvePayloadAtEnd({ PayloadAtEnd: null, PayloadAtEndSourceStepID: null }, stepsById)).toBeNull();
+    });
+
+    it('ApplyResolvedPayloadAtEnd fills only rows whose end is null and whose pointer resolves', () => {
+        const steps: StepRow[] = [
+            { ID: STEP_1, PayloadAtEnd: '{"n":1}', PayloadAtEndSourceStepID: null },
+            { ID: STEP_2, PayloadAtEnd: null, PayloadAtEndSourceStepID: STEP_1 },
+            { ID: STEP_3, PayloadAtEnd: null, PayloadAtEndSourceStepID: STEP_1 },
+        ];
+        ApplyResolvedPayloadAtEnd(steps);
+        expect(steps.map((s) => s.PayloadAtEnd)).toEqual(['{"n":1}', '{"n":1}', '{"n":1}']);
+    });
+});
+
