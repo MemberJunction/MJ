@@ -61,6 +61,8 @@ export interface VideoRenderLocalSettings {
 export interface VideoRenderRemoteSettings {
     /** Base `http:` or `https:` URL of the remote render worker (or `VIDEO_STUDIO_RENDER_URL`). */
     Url?: string;
+    /** Optional list of remote render worker base URLs for per-job round-robin pool routing (`videoStudio.render.remote.urls`). */
+    Urls?: readonly string[];
     /** Optional bearer token for the remote render worker (or `VIDEO_STUDIO_RENDER_TOKEN`). */
     Token?: string;
 }
@@ -171,6 +173,7 @@ function readNonEmptyString(
 function readOptionalNonEmptyString(
     rawValue: unknown,
     fieldPath: string,
+    redactValue: boolean = false,
 ): string | undefined {
     if (rawValue === undefined || rawValue === null) {
         return undefined;
@@ -179,9 +182,38 @@ function readOptionalNonEmptyString(
         return rawValue.trim();
     }
     LogWarning(
-        `${fieldPath} '${String(rawValue)}' is not a non-empty string; ignoring setting.`,
+        redactValue
+            ? `${fieldPath} is not a non-empty string; ignoring setting.`
+            : `${fieldPath} '${String(rawValue)}' is not a non-empty string; ignoring setting.`,
     );
     return undefined;
+}
+
+function readOptionalNonEmptyStringArray(
+    rawValue: unknown,
+    fieldPath: string,
+): string[] | undefined {
+    if (rawValue === undefined || rawValue === null) {
+        return undefined;
+    }
+    if (!Array.isArray(rawValue)) {
+        LogWarning(`${fieldPath} is not an array; ignoring setting.`);
+        return undefined;
+    }
+    const items: string[] = [];
+    for (let i = 0; i < rawValue.length; i++) {
+        const entry = rawValue[i];
+        if (typeof entry === 'string' && entry.trim().length > 0) {
+            items.push(entry.trim());
+        } else {
+            LogWarning(`${fieldPath}[${i}] '${String(entry)}' is not a non-empty string; ignoring entry.`);
+        }
+    }
+    if (items.length === 0) {
+        LogWarning(`${fieldPath} contains no non-empty strings; ignoring setting.`);
+        return undefined;
+    }
+    return items;
 }
 
 function readEnvNonEmptyString(envName: string): string | undefined {
@@ -330,9 +362,20 @@ export function ReadVideoRenderSettings(searchFrom: string = process.cwd()): Vid
             if (url !== undefined) {
                 remote.Url = url;
             }
+            const urls = readOptionalNonEmptyStringArray(
+                renderSection.remote.urls,
+                'videoStudio.render.remote.urls',
+            );
+            if (urls !== undefined) {
+                remote.Urls = urls;
+                if (url === undefined) {
+                    delete remote.Url;
+                }
+            }
             const token = readOptionalNonEmptyString(
                 renderSection.remote.token,
                 'videoStudio.render.remote.token',
+                true,
             );
             if (token !== undefined) {
                 remote.Token = token;

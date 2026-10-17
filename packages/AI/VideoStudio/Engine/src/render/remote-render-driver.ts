@@ -15,8 +15,6 @@ import type {
     StillsResult,
 } from '@memberjunction/video-studio-core';
 import {
-    DEFAULT_RENDER_REQUEST_TIMEOUT_MS,
-    DEFAULT_RENDER_TIMEOUT_MS,
     ReadVideoRenderSettings,
     type VideoRenderSettings,
 } from './render-settings.js';
@@ -46,79 +44,91 @@ function sanitizeUrlForDiagnostics(parsed: URL): string {
     return clone.toString().replace(/\/$/, '');
 }
 
-function resolveRemoteString(
-    remoteSection: VideoRenderSettings['Remote'] | undefined,
-    key: 'Url' | 'Token',
-    envName: string,
-): string | undefined {
-    if (remoteSection && key in remoteSection) {
-        const configured = remoteSection[key];
-        if (typeof configured === 'string' && configured.trim().length > 0) {
-            return configured.trim();
-        }
-        return undefined;
-    }
-    const envVal = process.env[envName];
-    if (typeof envVal === 'string' && envVal.trim().length > 0) {
-        return envVal.trim();
-    }
-    return undefined;
-}
+const MISSING_REMOTE_URL_ERROR =
+    'Remote render worker URL is not configured; set videoStudio.render.remote.url or VIDEO_STUDIO_RENDER_URL.';
 
 /**
  * `Remote` render driver (`@RegisterClass(VideoRenderDriverBase, 'Remote')`) (`VS-RND-3`, §7.2, §7.3).
  *
- * Delegates all render, capture, lint/check, and health operations to a single configured
- * remote `@memberjunction/video-studio-render-worker` HTTP/HTTPS endpoint via `RenderWorkerHttpClient`.
+ * Delegates all render, capture, lint/check, and health operations to one or more configured
+ * remote `@memberjunction/video-studio-render-worker` HTTP/HTTPS endpoints via `RenderWorkerHttpClient`.
+ * When `videoStudio.render.remote.urls` provides multiple worker endpoints, each job is pinned to
+ * one worker selected round-robin so both `POST /render` and `GET /videos/<VideoID>` hit the same replica.
  * Does not spawn or manage any child process; `Shutdown()` inherits the base no-op.
  */
 @RegisterClass(VideoRenderDriverBase, 'Remote')
 export class RemoteRenderDriver extends VideoRenderDriverBase {
-    private readonly client?: RenderWorkerHttpClient;
+    private readonly clients: RenderWorkerHttpClient[] = [];
     private readonly configurationError?: string;
+    private nextClientIndex = 0;
 
     public constructor(settings: VideoRenderSettings = ReadVideoRenderSettings()) {
         super();
 
-        const rawUrl = resolveRemoteString(settings.Remote, 'Url', 'VIDEO_STUDIO_RENDER_URL');
-        const token = resolveRemoteString(settings.Remote, 'Token', 'VIDEO_STUDIO_RENDER_TOKEN');
+        const rawUrls: string[] = [];
+        if (settings.Remote.Urls && settings.Remote.Urls.length > 0) {
+            for (const entry of settings.Remote.Urls) {
+                const trimmed = entry.trim();
+                if (trimmed.length > 0) {
+                    rawUrls.push(trimmed);
+                }
+            }
+        } else if (typeof settings.Remote.Url === 'string' && settings.Remote.Url.trim().length > 0) {
+            rawUrls.push(settings.Remote.Url.trim());
+        }
 
-        if (!rawUrl) {
-            this.configurationError =
-                'Remote render worker URL is not configured; set videoStudio.render.remote.url or VIDEO_STUDIO_RENDER_URL.';
+        const token =
+            typeof settings.Remote.Token === 'string' && settings.Remote.Token.trim().length > 0
+                ? settings.Remote.Token.trim()
+                : undefined;
+
+        if (rawUrls.length === 0) {
+            this.configurationError = MISSING_REMOTE_URL_ERROR;
             return;
         }
 
-        let parsedUrl: URL;
-        try {
-            parsedUrl = new URL(rawUrl);
-        } catch {
-            this.configurationError =
-                'Remote render worker URL is invalid; expected a valid http:// or https:// URL.';
-            return;
-        }
+        const renderTimeoutMs = settings.Timeouts.RenderMs;
+        const requestTimeoutMs = settings.Timeouts.RequestMs;
+        const warnedHosts = new Set<string>();
 
-        const sanitizedUrl = sanitizeUrlForDiagnostics(parsedUrl);
-        if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
-            this.configurationError = `Unsupported remote render worker URL protocol '${parsedUrl.protocol}' for '${sanitizedUrl}'; expected 'http:' or 'https:'.`;
-            return;
-        }
+        for (const rawUrl of rawUrls) {
+            let parsedUrl: URL;
+            try {
+                parsedUrl = new URL(rawUrl);
+            } catch {
+                this.clients.length = 0;
+                this.configurationError =
+                    'Remote render worker URL is invalid; expected a valid http:// or https:// URL.';
+                return;
+            }
 
-        if (parsedUrl.protocol === 'http:' && !isLoopbackHostname(parsedUrl.hostname)) {
-            LogWarning(
-                `RemoteRenderDriver: remote worker URL '${sanitizedUrl}' uses plain http:// to a non-loopback host; the bundle data snapshot travels unencrypted in transit. Use https:// to encrypt render traffic.`,
+            const sanitizedUrl = sanitizeUrlForDiagnostics(parsedUrl);
+            if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
+                this.clients.length = 0;
+                this.configurationError = `Unsupported remote render worker URL protocol '${parsedUrl.protocol}' for '${sanitizedUrl}'; expected 'http:' or 'https:'.`;
+                return;
+            }
+
+            if (
+                parsedUrl.protocol === 'http:' &&
+                !isLoopbackHostname(parsedUrl.hostname) &&
+                !warnedHosts.has(sanitizedUrl)
+            ) {
+                warnedHosts.add(sanitizedUrl);
+                LogWarning(
+                    `RemoteRenderDriver: remote worker URL '${sanitizedUrl}' uses plain http:// to a non-loopback host; the bundle data snapshot travels unencrypted in transit. Use https:// to encrypt render traffic.`,
+                );
+            }
+
+            this.clients.push(
+                new RenderWorkerHttpClient({
+                    BaseUrl: rawUrl,
+                    Token: token,
+                    RenderTimeoutMs: renderTimeoutMs,
+                    RequestTimeoutMs: requestTimeoutMs,
+                }),
             );
         }
-
-        const renderTimeoutMs = settings.Timeouts?.RenderMs ?? DEFAULT_RENDER_TIMEOUT_MS;
-        const requestTimeoutMs = settings.Timeouts?.RequestMs ?? DEFAULT_RENDER_REQUEST_TIMEOUT_MS;
-
-        this.client = new RenderWorkerHttpClient({
-            BaseUrl: rawUrl,
-            Token: token,
-            RenderTimeoutMs: renderTimeoutMs,
-            RequestTimeoutMs: requestTimeoutMs,
-        });
     }
 
     /** @inheritdoc */
@@ -128,7 +138,7 @@ export class RemoteRenderDriver extends VideoRenderDriverBase {
         signal?: AbortSignal,
     ): Promise<RenderResult> {
         ThrowIfSignalAborted(signal);
-        return this.requireClient().Render(req, onProgress, signal);
+        return this.requireNextClient().Render(req, onProgress, signal);
     }
 
     /** @inheritdoc */
@@ -137,7 +147,7 @@ export class RemoteRenderDriver extends VideoRenderDriverBase {
         signal?: AbortSignal,
     ): Promise<StillsResult> {
         ThrowIfSignalAborted(signal);
-        return this.requireClient().CaptureStills(req, signal);
+        return this.requireNextClient().CaptureStills(req, signal);
     }
 
     /** @inheritdoc */
@@ -146,7 +156,7 @@ export class RemoteRenderDriver extends VideoRenderDriverBase {
         signal?: AbortSignal,
     ): Promise<ContactSheetResult> {
         ThrowIfSignalAborted(signal);
-        return this.requireClient().BuildContactSheet(req, signal);
+        return this.requireNextClient().BuildContactSheet(req, signal);
     }
 
     /** @inheritdoc */
@@ -155,7 +165,7 @@ export class RemoteRenderDriver extends VideoRenderDriverBase {
         signal?: AbortSignal,
     ): Promise<CheckResult> {
         ThrowIfSignalAborted(signal);
-        return this.requireClient().Check(req, signal);
+        return this.requireNextClient().Check(req, signal);
     }
 
     /** @inheritdoc */
@@ -164,34 +174,47 @@ export class RemoteRenderDriver extends VideoRenderDriverBase {
         signal?: AbortSignal,
     ): Promise<KeyframeResult> {
         ThrowIfSignalAborted(signal);
-        return this.requireClient().ExtractKeyframes(req, signal);
+        return this.requireNextClient().ExtractKeyframes(req, signal);
     }
 
-    /** @inheritdoc */
+    /**
+     * Queries `GET /health` on the remote worker.
+     *
+     * Never throws: if no URL is configured, the worker is unreachable, or authentication fails,
+     * returns `{ Healthy: false, NodeVersion: process.version, HyperFramesVersion: '', Errors: [reason] }`.
+     */
     public override async Health(signal?: AbortSignal): Promise<RenderHealth> {
-        ThrowIfSignalAborted(signal);
-        if (!this.client) {
+        try {
+            ThrowIfSignalAborted(signal);
+            if (this.clients.length === 0) {
+                return {
+                    Healthy: false,
+                    NodeVersion: process.version,
+                    HyperFramesVersion: '',
+                    Errors: [this.configurationError ?? MISSING_REMOTE_URL_ERROR],
+                };
+            }
+            return await this.requireNextClient().Health(signal);
+        } catch (error) {
+            const reason = error instanceof Error ? error.message : String(error);
             return {
                 Healthy: false,
                 NodeVersion: process.version,
                 HyperFramesVersion: '',
-                Errors: [
-                    this.configurationError ??
-                        'Remote render worker URL is not configured; set videoStudio.render.remote.url or VIDEO_STUDIO_RENDER_URL.',
-                ],
+                Errors: [reason],
             };
         }
-        return this.client.Health(signal);
     }
 
-    private requireClient(): RenderWorkerHttpClient {
-        if (!this.client) {
+    private requireNextClient(): RenderWorkerHttpClient {
+        if (this.clients.length === 0) {
             throw new VideoRenderError(
                 'WorkerUnavailable',
-                this.configurationError ??
-                    'Remote render worker URL is not configured; set videoStudio.render.remote.url or VIDEO_STUDIO_RENDER_URL.',
+                this.configurationError ?? MISSING_REMOTE_URL_ERROR,
             );
         }
-        return this.client;
+        const client = this.clients[this.nextClientIndex % this.clients.length]!;
+        this.nextClientIndex = (this.nextClientIndex + 1) % this.clients.length;
+        return client;
     }
 }

@@ -165,9 +165,15 @@ describe('RemoteRenderDriver validation, error handling, warnings, and env fallb
         }
     });
 
-    it('rejects with Unauthorized when the token is wrong and never includes the token in the error message', async () => {
+    it('rejects Check with Unauthorized and returns Healthy: false from Health() when the token is wrong, without leaking the token', async () => {
         const wrongToken = 'wrong-token-never-leak-this-value-999';
         const driver = new RemoteRenderDriver(makeRemoteSettings(baseUrl, wrongToken));
+
+        const health = await driver.Health();
+        expect(health.Healthy).toBe(false);
+        expect(health.Errors.join(' ')).toContain('VIDEO_STUDIO_RENDER_TOKEN');
+        expect(health.Errors.join(' ')).not.toContain(wrongToken);
+        expect(health.Errors.join(' ')).not.toContain(serverToken);
 
         let caught: unknown;
         try {
@@ -223,11 +229,16 @@ describe('RemoteRenderDriver validation, error handling, warnings, and env fallb
         });
     });
 
-    it('rejects with WorkerUnavailable naming the URL (and never the token) when connecting to a closed port', async () => {
+    it('returns Healthy: false naming the URL and rejects Check with WorkerUnavailable when connecting to a closed port (never leaking the token)', async () => {
         const closedPort = await getClosedPort();
         const closedUrl = `http://127.0.0.1:${closedPort}`;
         const secretToken = 'closed-port-secret-token-do-not-leak';
         const driver = new RemoteRenderDriver(makeRemoteSettings(closedUrl, secretToken));
+
+        const health = await driver.Health();
+        expect(health.Healthy).toBe(false);
+        expect(health.Errors.join(' ')).toContain(closedUrl);
+        expect(health.Errors.join(' ')).not.toContain(secretToken);
 
         let caught: unknown;
         try {
@@ -251,12 +262,13 @@ describe('RemoteRenderDriver validation, error handling, warnings, and env fallb
         const warnSpy = vi.spyOn(mjCore, 'LogWarning').mockImplementation(() => undefined);
 
         const nonLoopbackDriver = new RemoteRenderDriver(
-            makeRemoteSettings('http://10.0.0.5:8080', 'secret-token', {
-                RequestMs: 150,
-            }),
+            makeRemoteSettings('http://10.0.0.5:8080', 'secret-token'),
         );
-        await nonLoopbackDriver.Health().catch(() => undefined);
-        await nonLoopbackDriver.Health().catch(() => undefined);
+        const abortedSignal = AbortSignal.abort();
+        const abortedHealth1 = await nonLoopbackDriver.Health(abortedSignal);
+        const abortedHealth2 = await nonLoopbackDriver.Health(abortedSignal);
+        expect(abortedHealth1.Healthy).toBe(false);
+        expect(abortedHealth2.Healthy).toBe(false);
 
         expect(warnSpy).toHaveBeenCalledTimes(1);
         expect(warnSpy.mock.calls[0]![0]).toContain('unencrypted');
@@ -273,9 +285,17 @@ describe('RemoteRenderDriver validation, error handling, warnings, and env fallb
         expect(warnSpy).not.toHaveBeenCalled();
     });
 
-    it('uses VIDEO_STUDIO_RENDER_URL and VIDEO_STUDIO_RENDER_TOKEN env fallback, and mj.config.cjs beats env', async () => {
+    it('uses VIDEO_STUDIO_RENDER_URL and VIDEO_STUDIO_RENDER_TOKEN env fallback via ReadVideoRenderSettings, while direct Remote: {} ignores env', async () => {
         process.env.VIDEO_STUDIO_RENDER_URL = baseUrl;
         process.env.VIDEO_STUDIO_RENDER_TOKEN = serverToken;
+
+        // A driver constructed directly with Remote: {} does not re-read process.env on its own
+        const unconfiguredDirect = new RemoteRenderDriver(makeRemoteSettings(undefined, undefined));
+        const directHealth = await unconfiguredDirect.Health();
+        expect(directHealth.Healthy).toBe(false);
+        expect(directHealth.Errors.join(' ')).toContain(
+            'set videoStudio.render.remote.url or VIDEO_STUDIO_RENDER_URL',
+        );
 
         const emptyDir = await makeTempDir();
         await fs.writeFile(
@@ -313,8 +333,71 @@ describe('RemoteRenderDriver validation, error handling, warnings, and env fallb
         const configHealth = await engineDriver.Health();
         expect(configHealth.Healthy).toBe(true);
     });
+
+    it('scales across multiple worker URLs via Remote.Urls by pinning each job (POST /render + GET /videos/<id>) round-robin to one worker', async () => {
+        const backend1 = new FakeRenderBackend();
+        const backend2 = new FakeRenderBackend();
+        const renderOrder: string[] = [];
+        const origRender1 = backend1.Render.bind(backend1);
+        const origRender2 = backend2.Render.bind(backend2);
+        vi.spyOn(backend1, 'Render').mockImplementation(async (job, onProgress, signal) => {
+            renderOrder.push('worker-1');
+            return origRender1(job, onProgress, signal);
+        });
+        vi.spyOn(backend2, 'Render').mockImplementation(async (job, onProgress, signal) => {
+            renderOrder.push('worker-2');
+            return origRender2(job, onProgress, signal);
+        });
+
+        const poolToken = 'pool-shared-secret-token';
+        const worker1 = CreateRenderWorkerServer({
+            Backend: backend1,
+            Host: '127.0.0.1',
+            Port: 0,
+            Token: poolToken,
+        });
+        const worker2 = CreateRenderWorkerServer({
+            Backend: backend2,
+            Host: '127.0.0.1',
+            Port: 0,
+            Token: poolToken,
+        });
+        const port1 = await worker1.Listen(0, '127.0.0.1');
+        const port2 = await worker2.Listen(0, '127.0.0.1');
+        try {
+            const url1 = `http://127.0.0.1:${port1}`;
+            const url2 = `http://127.0.0.1:${port2}`;
+            const baseSettings = makeRemoteSettings(undefined, poolToken);
+            const poolDriver = new RemoteRenderDriver({
+                ...baseSettings,
+                Remote: {
+                    Urls: [url1, url2],
+                    Token: poolToken,
+                },
+            });
+
+            // Each worker stores its rendered MP4 only in its own in-memory videoStore; if GET /videos/<id>
+            // went to the other worker, Render() would reject with NotFound.
+            const res1 = await poolDriver.Render(CreateMinimalRenderRequest());
+            const res2 = await poolDriver.Render(CreateMinimalRenderRequest());
+            const res3 = await poolDriver.Render(CreateMinimalRenderRequest());
+
+            expect(res1.Video.byteLength).toBeGreaterThan(0);
+            expect(res2.Video.byteLength).toBeGreaterThan(0);
+            expect(res3.Video.byteLength).toBeGreaterThan(0);
+            expect(renderOrder).toEqual(['worker-1', 'worker-2', 'worker-1']);
+        } finally {
+            await worker1.Close();
+            await worker2.Close();
+        }
+    });
 });
 
+// Two-shell opt-in run against a separately started real worker:
+//   Shell 1:
+//     DO_NOT_TRACK=1 HYPERFRAMES_NO_TELEMETRY=1 VIDEO_STUDIO_RENDER_HOST=127.0.0.1 VIDEO_STUDIO_RENDER_PORT=18081 VIDEO_STUDIO_RENDER_TOKEN=test-token node packages/AI/VideoStudio/RenderWorker/dist/main.js
+//   Shell 2:
+//     DO_NOT_TRACK=1 HYPERFRAMES_NO_TELEMETRY=1 VIDEO_STUDIO_RENDER_TESTS=1 VIDEO_STUDIO_RENDER_URL=http://127.0.0.1:18081 VIDEO_STUDIO_RENDER_TOKEN=test-token pnpm --filter @memberjunction/video-studio test
 describe.skipIf(!(OPT_IN_RENDER_TESTS && Boolean(OPT_IN_RENDER_URL)))(
     'RemoteRenderDriver (opt-in real external worker via VIDEO_STUDIO_RENDER_TESTS=1 & VIDEO_STUDIO_RENDER_URL)',
     () => {
