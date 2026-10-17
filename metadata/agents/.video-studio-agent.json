@@ -2,7 +2,7 @@
   {
     "fields": {
       "Name": "Video Studio",
-      "Description": "Produces multi-format videos, topic explainers, product launches, KPI briefings, and data stories from grounded MemberJunction queries, brand kits, and reference assets. Supports Draft, Standard, and High power levels with deterministic HyperFrames rendering, generative B-roll and stills, and multimodal Critic repair loops.",
+      "Description": "Makes short videos: explainers, product films, social clips, announcements and data-story briefings for any video or film request. Ask to make a video about a topic, product promo, social short, KPI or monthly briefing, or explainer animation with brand styling, voice narration, and charts from your own data. Built for motion graphics and animated briefings; no live-action filming, no photoreal people.",
       "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Content Creation",
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
       "Status": "Active",

@@ -133,4 +133,4 @@ export * from './checks/agent-consult.checks';
 export * from './checks/agent-handoff.checks';
 export * from './checks/video-data-snapshot.checks';
 export * from './checks/video-generation-cost.checks';
-
+export * from './checks/video-studio-handoff.checks';
