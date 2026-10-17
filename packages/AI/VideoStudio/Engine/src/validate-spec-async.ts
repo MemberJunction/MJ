@@ -12,7 +12,7 @@
 
 import { RunView, UserInfo } from '@memberjunction/core';
 import { BrandKitEngine, VideoStudioEngine } from '@memberjunction/core-entities';
-import { EscapeSQLString, IsValidUUID, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, IsValidUUID, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import {
     ValidateVideoGenerationSpec,
     VideoFormat,
@@ -95,7 +95,7 @@ function validateBrandKit(spec: VideoGenerationSpec, errors: VideoSpecValidation
         return;
     }
 
-    const allKits = BrandKitEngine.Instance.BrandKits ?? [];
+    const allKits = BrandKitEngine.Instance.BrandKits;
     const matchingKit = allKits.find((k) => UUIDsEqual(k.ID, rawBrandKitId));
     if (matchingKit && matchingKit.Status === 'Active') {
         errors.push({
@@ -149,6 +149,9 @@ function collectFileReferences(spec: VideoGenerationSpec, errors: VideoSpecValid
 
     const recordCandidate = (rawId: unknown, path: string): void => {
         if (rawId === undefined || rawId === null) {
+            return;
+        }
+        if (typeof rawId === 'string' && rawId.trim() === '') {
             return;
         }
         const trimmed = typeof rawId === 'string' ? rawId.trim() : String(rawId);
@@ -236,17 +239,8 @@ async function validateFiles(
         return;
     }
 
-    const uniqueIds: string[] = [];
-    const seenNormalized = new Set<string>();
-    for (const ref of validRefs) {
-        const normalized = NormalizeUUID(ref.id);
-        if (!seenNormalized.has(normalized)) {
-            seenNormalized.add(normalized);
-            uniqueIds.push(ref.id);
-        }
-    }
-
-    const readableNormalized = new Set<string>();
+    const uniqueIds = [...new UUIDSet(validRefs.map((r) => r.id))];
+    const readable = new UUIDSet();
     const rv = new RunView();
 
     for (let offset = 0; offset < uniqueIds.length; offset += FILE_VALIDATION_BATCH_SIZE) {
@@ -262,19 +256,19 @@ async function validateFiles(
             contextUser,
         );
 
-        if (!viewResult || !viewResult.Success) {
-            throw new Error(viewResult?.ErrorMessage || 'RunView on MJ: Files returned Success: false');
+        if (!viewResult.Success) {
+            throw new Error(viewResult.ErrorMessage || 'RunView on MJ: Files returned Success: false');
         }
 
-        for (const row of viewResult.Results ?? []) {
-            if (row && typeof row.ID === 'string') {
-                readableNormalized.add(NormalizeUUID(row.ID));
+        for (const row of viewResult.Results) {
+            if (typeof row.ID === 'string') {
+                readable.Add(row.ID);
             }
         }
     }
 
     for (const ref of validRefs) {
-        if (!readableNormalized.has(NormalizeUUID(ref.id))) {
+        if (!readable.Has(ref.id)) {
             errors.push({
                 Code: 'FileNotReadable',
                 Path: ref.path,

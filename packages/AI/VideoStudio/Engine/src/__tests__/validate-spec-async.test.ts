@@ -439,6 +439,55 @@ describe('ValidateVideoGenerationSpecAsync', () => {
         const manyRes = await ValidateVideoGenerationSpecAsync(manyFilesSpec, 'Briefing', contextUser);
         expect(manyRes.Valid).toBe(true);
         expect(runViewSpy).toHaveBeenCalledTimes(2);
+        const [firstCallParams] = runViewSpy.mock.calls[0] as [RunViewParams, UserInfo];
+        const [secondCallParams] = runViewSpy.mock.calls[1] as [RunViewParams, UserInfo];
+        const firstBatchIds = Array.from(String(firstCallParams.ExtraFilter).matchAll(/'([^']+)'/g), (m) => m[1]);
+        const secondBatchIds = Array.from(String(secondCallParams.ExtraFilter).matchAll(/'([^']+)'/g), (m) => m[1]);
+        expect(firstBatchIds).toHaveLength(500);
+        expect(secondBatchIds).toHaveLength(1);
+        expect(secondBatchIds[0]).toBe(generatedIds[500]);
+
+        // Blank/whitespace FileIDs treated as absent when alternative payload is present -> no errors, no RunView
+        runViewSpy.mockClear();
+        const blankFileIdsSpec = makeCleanBriefingSpec();
+        blankFileIdsSpec.Assets.Approved = [
+            {
+                Key: 'artifact-only-asset',
+                Kind: 'Image',
+                FileID: '  ',
+                ArtifactVersionID: 'ffffffff-0000-4000-8000-000000000001',
+                Source: 'Artifact version backing',
+                Provenance: 'Supplied',
+                Usage: 'Chart slide',
+                MustUse: false,
+            },
+        ];
+        blankFileIdsSpec.Output = {
+            Videos: {
+                '16:9': {
+                    Format: '16:9',
+                    FileID: '',
+                    InlineBase64: 'AAAAHGZ0eXBpc29tAAACAGlzb21pc28yYXZjMW1wNDE=',
+                    MimeType: 'video/mp4',
+                    Width: 1920,
+                    Height: 1080,
+                    DurationSeconds: 10,
+                    FileSizeBytes: 1024,
+                },
+            },
+            RenderMetadata: {
+                Renderer: 'HyperFrames',
+                RendererVersion: '0.1.8',
+                Seed: 42,
+                Fps: 30,
+                DurationByFormat: { '16:9': 10 },
+                RenderedAt: '2026-10-16T00:00:00Z',
+            },
+        };
+        const blankRes = await ValidateVideoGenerationSpecAsync(blankFileIdsSpec, 'Briefing', contextUser);
+        expect(blankRes.Valid).toBe(true);
+        expect(blankRes.Errors).toEqual([]);
+        expect(runViewSpy).not.toHaveBeenCalled();
     });
 
     it('5. fails closed with AsyncValidationFailed (Valid: false, no throw) when RunView returns Success: false or an engine Config rejects', async () => {
