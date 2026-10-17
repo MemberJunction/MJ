@@ -688,6 +688,64 @@ describe('DatabaseProviderBase', () => {
                 __mj_UpdatedAt: updatedAt,
             });
         });
+
+        it('snapshots entity.GetAll() before awaiting ExecuteSQL so concurrent in-flight mutations are not falsely returned as saved', async () => {
+            const createdAt = new Date('2026-04-17T03:00:00.000Z');
+            const updatedAt = new Date('2026-04-17T03:00:00.000Z');
+            let currentStatus = 'Running';
+            let currentResult: string | null = null;
+
+            vi.spyOn(sqlServer, 'ExecuteSQL').mockImplementation(async () => {
+                // Simulate BaseEntitySaveQueue / caller mutating the entity in memory while the initial INSERT is in flight
+                currentStatus = 'Completed';
+                currentResult = '{"answer":42}';
+                return [{ ID: 'prompt-run-1', __mj_CreatedAt: createdAt, __mj_UpdatedAt: updatedAt } as never];
+            });
+
+            const entityInfo = new EntityInfo({
+                ID: 'e-pr',
+                Name: 'MJ: AI Prompt Runs',
+                SchemaName: '__mj',
+                BaseTable: 'AIPromptRun',
+                BaseView: 'vwAIPromptRuns',
+                AllowCreateAPI: true,
+                AllowUpdateAPI: true,
+                TrackRecordChanges: false,
+                Configuration: JSON.stringify({ SaveReturnMode: 'datestamps_only' }),
+                EntityFields: [
+                    { ID: 'f1', EntityID: 'e-pr', Name: 'ID', CodeName: 'ID', Type: 'uniqueidentifier', IsPrimaryKey: true, IsVirtual: false },
+                    { ID: 'f2', EntityID: 'e-pr', Name: 'Status', CodeName: 'Status', Type: 'nvarchar', IsPrimaryKey: false, IsVirtual: false },
+                    { ID: 'f3', EntityID: 'e-pr', Name: 'Result', CodeName: 'Result', Type: 'nvarchar', IsPrimaryKey: false, IsVirtual: false },
+                    { ID: 'f4', EntityID: 'e-pr', Name: '__mj_CreatedAt', CodeName: '__mj_CreatedAt', Type: 'datetimeoffset', IsPrimaryKey: false, IsVirtual: false },
+                    { ID: 'f5', EntityID: 'e-pr', Name: '__mj_UpdatedAt', CodeName: '__mj_UpdatedAt', Type: 'datetimeoffset', IsPrimaryKey: false, IsVirtual: false },
+                ],
+            });
+
+            const mockEntity = {
+                EntityInfo: entityInfo,
+                IsSaved: false,
+                Dirty: true,
+                Fields: [],
+                ResultHistory: [],
+                RegisterResultHistoryEntry: vi.fn(),
+                PrimaryKeys: [{ Name: 'ID', Value: 'prompt-run-1' }],
+                TransactionGroup: null,
+                RegisterTransactionPreprocessing: vi.fn(),
+                GetAll: () => ({ ID: 'prompt-run-1', Status: currentStatus, Result: currentResult }),
+                Get: () => 'prompt-run-1',
+                RaiseReadyForTransaction: vi.fn(),
+            } as unknown as BaseEntity;
+
+            const savedRow = await sqlServer.Save(mockEntity, mockUser, new EntitySaveOptions());
+            // Must reflect the pre-ExecuteSQL snapshot ('Running', null), NOT the in-flight mutation ('Completed', '{"answer":42}')
+            expect(savedRow).toEqual({
+                ID: 'prompt-run-1',
+                Status: 'Running',
+                Result: null,
+                __mj_CreatedAt: createdAt,
+                __mj_UpdatedAt: updatedAt,
+            });
+        });
     });
 });
 
