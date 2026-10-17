@@ -23,6 +23,7 @@ import { PredictiveStudioChecks } from '../checks/predictive-studio.checks';
 import { RemoteOpWireProgressChecks } from '../checks/remote-op-wire-progress.checks';
 import { PromptRunnerChecks } from '../checks/prompt-runner.checks';
 import { AiVendorEffortChecks } from '../checks/ai-vendor-effort.checks';
+import { NativeToolCallingLiveChecks } from '../checks/native-tool-calling-live.checks';
 import { ConcurrentChecks } from '../checks/concurrent.checks';
 import { AgentRunnerChecks } from '../checks/agent-runner.checks';
 import { RemoteOpAiAuthoringChecks } from '../checks/remote-op-ai-authoring.checks';
@@ -147,6 +148,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['remote-op-wire-progress', RemoteOpWireProgressChecks, 1],
         ['prompt-runner', PromptRunnerChecks, 1],
         ['ai-vendor-effort', AiVendorEffortChecks, 2],
+        ['native-tool-calling-live', NativeToolCallingLiveChecks, 4],
         ['concurrent', ConcurrentChecks, 2],
         ['agent-runner', AgentRunnerChecks, 1],
         ['remote-op-ai-authoring', RemoteOpAiAuthoringChecks, 3],
@@ -331,6 +333,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'predictive-studio': 5,
         'prompt-runner': 1,
         'ai-vendor-effort': 2,
+        'native-tool-calling-live': 4,
         'queue': 7,
         'realtime-deterministic': 18,
         'realtime-session-guard': 2,
@@ -403,7 +406,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(123);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(124);
     });
 });
 
@@ -723,6 +726,10 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'agent-skills-live.SL5',
         'agent-wire-callback.WC1',
         'agent-wire-callback.WC2',
+        'native-tool-calling-live.NTC1',
+        'native-tool-calling-live.NTC2',
+        'native-tool-calling-live.NTC3',
+        'native-tool-calling-live.NTC4',
         'performance-benchmark.PB10',
         'performance-benchmark.PB11',
         'performance-benchmark.PB12',
