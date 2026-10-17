@@ -1,3 +1,4 @@
+import { constants as bufferConstants } from 'node:buffer';
 import * as http from 'node:http';
 import * as https from 'node:https';
 import {
@@ -797,7 +798,7 @@ export class RenderWorkerHttpClient {
                     const status = res.statusCode ?? 0;
                     const isSuccessStatus = status >= 200 && status < 300;
                     const responseByteCap = isSuccessStatus
-                        ? maxResponseBytes
+                        ? Math.min(maxResponseBytes, bufferConstants.MAX_STRING_LENGTH)
                         : MAX_RENDER_JSON_RESPONSE_BYTES;
                     res.on('data', (chunk: Buffer) => {
                         if (settled) {

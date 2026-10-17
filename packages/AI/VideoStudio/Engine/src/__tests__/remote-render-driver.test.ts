@@ -1,3 +1,4 @@
+import { constants as bufferConstants } from 'node:buffer';
 import * as fs from 'node:fs/promises';
 import * as http from 'node:http';
 import * as net from 'node:net';
@@ -607,6 +608,58 @@ describe('RemoteRenderDriver and RenderWorkerHttpClient response size caps (fake
         );
     });
 
+    it('rejects CaptureStills with BodyTooLarge when POST /stills returns HTTP 500 with a 2 MiB error body at default MaxOutputBytes and rejects Render with BodyTooLarge when GET /videos/<id> returns HTTP 500 with a 2 MiB error body', async () => {
+        const twoMiBErrorBody = JSON.stringify({
+            Error: {
+                Code: 'Internal',
+                Message: 'x'.repeat(2 * 1024 * 1024),
+            },
+        });
+
+        await withFakeHttpWorker(
+            (req, res) => {
+                req.resume();
+                req.on('end', () => {
+                    if (req.method === 'POST' && req.url === '/stills') {
+                        res.writeHead(500, { 'content-type': 'application/json' });
+                        res.end(twoMiBErrorBody);
+                        return;
+                    }
+                    if (req.method === 'POST' && req.url === '/render') {
+                        res.writeHead(200, { 'content-type': 'application/x-ndjson' });
+                        res.end(buildFakeResultLine('vid-500-err-body', 64));
+                        return;
+                    }
+                    if (req.method === 'GET' && req.url === '/videos/vid-500-err-body') {
+                        res.writeHead(500, { 'content-type': 'application/json' });
+                        res.end(twoMiBErrorBody);
+                        return;
+                    }
+                    res.writeHead(404).end();
+                });
+            },
+            async (url) => {
+                const driver = new RemoteRenderDriver(makeRemoteSettings(url, fakeToken));
+                await expect(
+                    driver.CaptureStills({
+                        Bundle: CreateMinimalBundle(),
+                        Width: MINIMAL_BUNDLE_WIDTH,
+                        Height: MINIMAL_BUNDLE_HEIGHT,
+                        Points: [{ Key: 's1', TimestampSeconds: 0.5, Role: 'Custom', Label: 'S1' }],
+                    }),
+                ).rejects.toMatchObject({
+                    name: 'VideoRenderError',
+                    Code: 'BodyTooLarge',
+                });
+
+                await expect(driver.Render(CreateMinimalRenderRequest())).rejects.toMatchObject({
+                    name: 'VideoRenderError',
+                    Code: 'BodyTooLarge',
+                });
+            },
+        );
+    });
+
     it('allows a 1.6 MB still in CaptureStills under default MaxOutputBytes, rejects when MaxOutputBytes is smaller, and still caps Check at 1 MiB', async () => {
         const onePointSixMbPngBase64 = Buffer.alloc(Math.ceil(1.6 * 1024 * 1024), 0x89).toString('base64');
         const twoMiBPadding = 'x'.repeat(2 * 1024 * 1024);
@@ -826,6 +879,63 @@ describe('RemoteRenderDriver and RenderWorkerHttpClient response size caps (fake
             },
         );
     });
+
+    it.skipIf(!OPT_IN_RENDER_TESTS)(
+        'rejects CaptureStills with BodyTooLarge when a 200 /stills response streams MAX_STRING_LENGTH + 1 bytes (opt-in via VIDEO_STUDIO_RENDER_TESTS=1)',
+        async () => {
+            const targetBytes = bufferConstants.MAX_STRING_LENGTH + 1;
+            const reusedChunk = Buffer.alloc(64 * 1024, 0x61);
+
+            await withFakeHttpWorker(
+                (req, res) => {
+                    req.resume();
+                    req.on('end', () => {
+                        if (req.method === 'POST' && req.url === '/stills') {
+                            res.writeHead(200, { 'content-type': 'application/json' });
+                            let remaining = targetBytes;
+                            const writeNext = (): void => {
+                                while (remaining > 0 && !res.destroyed && !res.writableEnded) {
+                                    const slice =
+                                        remaining >= reusedChunk.byteLength
+                                            ? reusedChunk
+                                            : reusedChunk.subarray(0, remaining);
+                                    remaining -= slice.byteLength;
+                                    if (!res.write(slice)) {
+                                        res.once('drain', writeNext);
+                                        return;
+                                    }
+                                }
+                                if (!res.destroyed && !res.writableEnded) {
+                                    res.end();
+                                }
+                            };
+                            writeNext();
+                            return;
+                        }
+                        res.writeHead(404).end();
+                    });
+                },
+                async (url) => {
+                    const driver = new RemoteRenderDriver(makeRemoteSettings(url, fakeToken));
+                    let caught: unknown;
+                    try {
+                        await driver.CaptureStills({
+                            Bundle: CreateMinimalBundle(),
+                            Width: MINIMAL_BUNDLE_WIDTH,
+                            Height: MINIMAL_BUNDLE_HEIGHT,
+                            Points: [{ Key: 's-max-str', TimestampSeconds: 0.5, Role: 'Custom', Label: 'MaxStr' }],
+                        });
+                    } catch (err) {
+                        caught = err;
+                    }
+                    expect(caught).toBeInstanceOf(VideoRenderError);
+                    const renderErr = caught as VideoRenderError;
+                    expect(renderErr.Code).toBe('BodyTooLarge');
+                    expect(renderErr.message).toContain(String(bufferConstants.MAX_STRING_LENGTH));
+                },
+            );
+        },
+    );
 });
 
 // Two-shell opt-in run against a separately started real worker:
