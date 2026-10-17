@@ -424,8 +424,10 @@ export function CreateMJChartKit(): MJChartKit {
                 }
             }
         }
+        const labelFont = r2(Math.max(12, Math.min(18, f.Height * 0.045)));
+        const barsH = minV < 0 ? plotH - labelFont - 6 : plotH;
         const span = maxV - minV > 0 ? maxV - minV : 1;
-        const zeroY = maxV - minV > 0 ? r2(padTop + (plotH * maxV) / span) : baseY;
+        const zeroY = maxV - minV > 0 ? r2(padTop + (barsH * maxV) / span) : baseY;
 
         let svg = openSvg(f.Width, f.Height, f.Tokens, 'Bar');
         const gridSteps = 3;
@@ -440,7 +442,6 @@ export function CreateMJChartKit(): MJChartKit {
         if (count > 0) {
             const slotW = plotW / count;
             const barW = r2(Math.max(8, slotW * 0.6));
-            const labelFont = r2(Math.max(12, Math.min(18, f.Height * 0.045)));
 
             for (let i = 0; i < count; i++) {
                 const pt = points[i]!;
@@ -448,7 +449,7 @@ export function CreateMJChartKit(): MJChartKit {
                 const easedI = easeOutCubic(pi);
                 const rawVal = Number.isFinite(pt.Value) ? pt.Value : 0;
                 const ratio = Math.min(1, Math.max(0, Math.abs(rawVal) / span));
-                const barH = r2(plotH * ratio * easedI);
+                const barH = r2(barsH * ratio * easedI);
                 const barX = r2(padLeft + i * slotW + (slotW - barW) / 2);
                 const isNegative = rawVal < 0;
                 const barY = isNegative ? zeroY : r2(zeroY - barH);
@@ -466,7 +467,7 @@ export function CreateMJChartKit(): MJChartKit {
                     const currentVal = interpolatedValue(pt.Value, pi, easedI, props.Format);
                     const formatted = formatValue(currentVal, props.Format);
                     const valY = isNegative
-                        ? r2(Math.min(baseY - 4, barY + barH + labelFont))
+                        ? r2(barY + barH + labelFont)
                         : r2(Math.max(padTop * 0.75, barY - 8));
                     svg +=
                         `<text x="${centerX}" y="${valY}" text-anchor="middle" ` +

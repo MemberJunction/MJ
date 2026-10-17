@@ -284,6 +284,14 @@ function srgbChannelToLinear(c: number): number {
     return clamped <= 0.04045 ? clamped / 12.92 : Math.pow((clamped + 0.055) / 1.055, 2.4);
 }
 
+function srgbToLinearRgb(rgb: RgbTriplet): RgbTriplet {
+    return [
+        srgbChannelToLinear(rgb[0]),
+        srgbChannelToLinear(rgb[1]),
+        srgbChannelToLinear(rgb[2]),
+    ];
+}
+
 function applyMatrix3x3(m: Matrix3x3, rgb: RgbTriplet): RgbTriplet {
     return [
         Math.min(1, Math.max(0, m[0][0] * rgb[0] + m[0][1] * rgb[1] + m[0][2] * rgb[2])),
@@ -292,11 +300,7 @@ function applyMatrix3x3(m: Matrix3x3, rgb: RgbTriplet): RgbTriplet {
     ];
 }
 
-function srgbToCieLab(rgb: RgbTriplet): [number, number, number] {
-    const r = srgbChannelToLinear(rgb[0]);
-    const g = srgbChannelToLinear(rgb[1]);
-    const b = srgbChannelToLinear(rgb[2]);
-
+function linearRgbToCieLab([r, g, b]: RgbTriplet): [number, number, number] {
     // D65 reference white
     const x = (r * 0.4124564 + g * 0.3575761 + b * 0.1804375) / 0.95047;
     const y = (r * 0.2126729 + g * 0.7151522 + b * 0.0721750) / 1.0;
@@ -502,7 +506,7 @@ describe('MJChartKit (VS-DAT-2)', () => {
         }
     });
 
-    it('Bar anchors positive bars above and negative bars below the zero line', () => {
+    it('Bar anchors positive bars above and negative bars below the zero line with negative labels outside the bar rect', () => {
         const svg = kit.Bar(
             {
                 Frame: SAMPLE_FRAME,
@@ -535,11 +539,57 @@ describe('MJChartKit (VS-DAT-2)', () => {
         const padTop = Math.round(SAMPLE_FRAME.Height * 0.16 * 100) / 100;
         const padBottom = Math.round(SAMPLE_FRAME.Height * 0.18 * 100) / 100;
         const plotH = SAMPLE_FRAME.Height - padTop - padBottom;
-        const expectedZeroLine = Math.round((padTop + plotH * 0.5) * 100) / 100;
+        const baseY = Math.round((padTop + plotH) * 100) / 100;
+        const labelFont = Math.round(Math.max(12, Math.min(18, SAMPLE_FRAME.Height * 0.045)) * 100) / 100;
+        const barsH = plotH - labelFont - 6;
+        const expectedZeroLine = Math.round((padTop + barsH * 0.5) * 100) / 100;
 
         expect(Math.round((upRect.y + upRect.height) * 100) / 100).toBe(expectedZeroLine);
         expect(downRect.y).toBe(expectedZeroLine);
         expect(upRect.y).not.toBe(downRect.y);
+
+        const boundTexts = [
+            ...svg.matchAll(/<text x="([^"]+)" y="([^"]+)"[^>]*data-mj-bound="net_change">([^<]+)<\/text>/g),
+        ];
+        expect(boundTexts).toHaveLength(2);
+        const downTextY = Number(boundTexts[1]![2]);
+        expect(downTextY - labelFont).toBeGreaterThanOrEqual(downRect.y + downRect.height - 1e-6);
+        expect(downTextY).toBeLessThanOrEqual(baseY);
+
+        const mixedSvg = kit.Bar(
+            {
+                Frame: SAMPLE_FRAME,
+                Points: [
+                    { Label: 'A', Value: 10 },
+                    { Label: 'B', Value: -2 },
+                    { Label: 'C', Value: -6 },
+                ],
+                BindingKey: 'mixed_bars',
+            },
+            start + duration,
+        );
+        const mixedRects = [
+            ...mixedSvg.matchAll(/<rect x="([^"]+)" y="([^"]+)" width="([^"]+)" height="([^"]+)" rx="4"/g),
+        ].map((m) => ({
+            x: Number(m[1]),
+            y: Number(m[2]),
+            height: Number(m[4]),
+        }));
+        const mixedTexts = [
+            ...mixedSvg.matchAll(/<text x="([^"]+)" y="([^"]+)"[^>]*data-mj-bound="mixed_bars">([^<]+)<\/text>/g),
+        ].map((m) => ({
+            y: Number(m[2]),
+            text: m[3]!,
+        }));
+        expect(mixedRects).toHaveLength(3);
+        expect(mixedTexts).toHaveLength(3);
+
+        for (const negIdx of [1, 2]) {
+            const rect = mixedRects[negIdx]!;
+            const valTextY = mixedTexts[negIdx]!.y;
+            expect(valTextY - labelFont).toBeGreaterThanOrEqual(rect.y + rect.height - 1e-6);
+            expect(valTextY).toBeLessThanOrEqual(baseY);
+        }
     });
 
     it('Date-formatted values in KpiTile and TableReveal never count up through intermediate dates', () => {
@@ -721,9 +771,11 @@ describe('MJChartKit (VS-DAT-2)', () => {
             expect(wcagContrastRatio(seriesColor, bg)).toBeGreaterThanOrEqual(3.0);
         }
 
-        const seriesRgb = DEFAULT_CHART_KIT_TOKENS.Series.map(hexToSrgb01);
+        const seriesLinearRgb = DEFAULT_CHART_KIT_TOKENS.Series.map((hex) => srgbToLinearRgb(hexToSrgb01(hex)));
         for (const [, matrix] of Object.entries(MACHADO_CVD_MATRICES)) {
-            const simulatedLabs = seriesRgb.map((rgb) => srgbToCieLab(applyMatrix3x3(matrix, rgb)));
+            const simulatedLabs = seriesLinearRgb.map((linRgb) =>
+                linearRgbToCieLab(applyMatrix3x3(matrix, linRgb)),
+            );
             for (let i = 0; i < simulatedLabs.length; i++) {
                 for (let j = i + 1; j < simulatedLabs.length; j++) {
                     const deltaE = cie76DeltaE(simulatedLabs[i]!, simulatedLabs[j]!);
@@ -731,6 +783,29 @@ describe('MJChartKit (VS-DAT-2)', () => {
                 }
             }
         }
+
+        // Verify linear-RGB Machado math catches the old Round-1 palette confusions (< 10 ΔE76)
+        const c2410cLin = srgbToLinearRgb(hexToSrgb01('#C2410C'));
+        const a16207Lin = srgbToLinearRgb(hexToSrgb01('#A16207'));
+        const be185dLin = srgbToLinearRgb(hexToSrgb01('#BE185D'));
+        expect(
+            cie76DeltaE(
+                linearRgbToCieLab(applyMatrix3x3(MACHADO_CVD_MATRICES.protanopia, c2410cLin)),
+                linearRgbToCieLab(applyMatrix3x3(MACHADO_CVD_MATRICES.protanopia, a16207Lin)),
+            ),
+        ).toBeLessThan(10);
+        expect(
+            cie76DeltaE(
+                linearRgbToCieLab(applyMatrix3x3(MACHADO_CVD_MATRICES.deuteranopia, c2410cLin)),
+                linearRgbToCieLab(applyMatrix3x3(MACHADO_CVD_MATRICES.deuteranopia, a16207Lin)),
+            ),
+        ).toBeLessThan(10);
+        expect(
+            cie76DeltaE(
+                linearRgbToCieLab(applyMatrix3x3(MACHADO_CVD_MATRICES.tritanopia, c2410cLin)),
+                linearRgbToCieLab(applyMatrix3x3(MACHADO_CVD_MATRICES.tritanopia, be185dLin)),
+            ),
+        ).toBeLessThan(10);
 
         const sixPoints = [
             { Label: 'S1', Value: 10 },
