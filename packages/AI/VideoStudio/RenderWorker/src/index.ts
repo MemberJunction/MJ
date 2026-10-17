@@ -33,6 +33,7 @@ export {
     MAX_FRAME_DIMENSION,
     MIN_FPS,
     MIN_FRAME_DIMENSION,
+    ResolveCompositionDuration,
     ResolveCompositionFps,
     StageRenderBundle,
     ValidateBundleRelativePath,
@@ -79,6 +80,9 @@ export {
 export {
     EvaluateDomRules,
     MIN_TEXT_SIZE_SHORT_EDGE_RATIO,
+    MJ_ASOF_CARD_MISSING_CODE,
+    MJ_BOUND_KEY_UNKNOWN_CODE,
+    MJ_BOUND_VALUE_MISMATCH_CODE,
     MJ_MIN_TEXT_SIZE_CODE,
     MJ_SAFE_AREA_CODE,
     MJ_UNBOUND_LITERAL_RENDERED_CODE,
