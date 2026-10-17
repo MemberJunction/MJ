@@ -720,6 +720,310 @@ describe('DockerRenderDriver isolation, hardening, and lifecycle unit tests', ()
             expect(recordedMode).toBe(0o700);
         },
     );
+
+    it('stages outputs under 0o700 <HostWorkspacePath>.out/out, keeps <HostWorkspacePath>.out until Finalize runs, and removes it after Render resolves', async () => {
+        let hostWorkspacePath = '';
+        let resultExistsDuringFinalize = false;
+        let safeOutRootModeDuringFinalize = 0;
+
+        const baseProvider = createProvider();
+        const orderingProvider: ISandboxProvider = {
+            Provision: async (key, config) => {
+                const handle = await baseProvider.Provision(key, config);
+                hostWorkspacePath = handle.HostWorkspacePath ?? '';
+                return handle;
+            },
+            Finalize: async (handle, outcome) => {
+                const safeOutRoot = `${handle.HostWorkspacePath}.out`;
+                const safeResultPath = path.join(safeOutRoot, 'out', 'result.json');
+                const rootStat = await fs.stat(safeOutRoot);
+                safeOutRootModeDuringFinalize = rootStat.mode & 0o777;
+                const resultStat = await fs.stat(safeResultPath);
+                resultExistsDuringFinalize = resultStat.isFile();
+                await baseProvider.Finalize(handle, outcome);
+            },
+        };
+
+        const driver = new DockerRenderDriver(makeDockerSettings(), orderingProvider);
+        const res = await driver.Render(CreateMinimalRenderRequest());
+        expect(res.Video.byteLength).toBeGreaterThan(0);
+        expect(hostWorkspacePath).not.toBe('');
+        expect(resultExistsDuringFinalize).toBe(true);
+        expect(safeOutRootModeDuringFinalize).toBe(0o700);
+        await expect(fs.stat(`${hostWorkspacePath}.out`)).rejects.toMatchObject({
+            code: 'ENOENT',
+        });
+    });
+
+    it('rejects oversized video output and VideoSizeBytes mismatches with Code === "Internal" before handle.readFile() is called', async () => {
+        const probeDir = await makeTempDir();
+        const probeFile = path.join(probeDir, 'probe.txt');
+        await fs.writeFile(probeFile, 'probe', 'utf8');
+        const probeHandle = await fs.open(probeFile, 'r');
+        const fileHandleProto = Object.getPrototypeOf(probeHandle) as {
+            readFile: (...args: unknown[]) => Promise<Buffer>;
+        };
+        await probeHandle.close();
+
+        const origReadFile = fileHandleProto.readFile;
+        const readContents: string[] = [];
+        const readFileSpy = vi
+            .spyOn(fileHandleProto, 'readFile')
+            .mockImplementation(async function (this: unknown, ...args: unknown[]) {
+                const buf = await origReadFile.apply(this, args);
+                readContents.push(Buffer.from(buf).toString('utf8'));
+                return buf;
+            });
+
+        const makeFakeVideoProvider = (videoBytes: Uint8Array, declaredVideoSizeBytes: number): ISandboxProvider => ({
+            Provision: async (key: WorkspaceKey): Promise<SandboxHandle> => {
+                const hostWorkspace = await fs.mkdtemp(
+                    path.join(os.tmpdir(), 'mj-vs-size-cap-ws-'),
+                );
+                tempDirs.push(hostWorkspace);
+
+                const executor: SandboxExecutor = {
+                    Run: (): HarnessProcess => {
+                        const stdout = new PassThrough();
+                        const stderr = new PassThrough();
+                        const stdin = new PassThrough();
+
+                        const exitCode = (async (): Promise<number | null> => {
+                            try {
+                                const outDir = path.join(hostWorkspace, 'out');
+                                await fs.writeFile(
+                                    path.join(outDir, 'result.json'),
+                                    JSON.stringify({
+                                        Format: 'mp4',
+                                        VideoID: 'video.mp4',
+                                        VideoSizeBytes: declaredVideoSizeBytes,
+                                        MimeType: 'video/mp4',
+                                        Width: MINIMAL_BUNDLE_WIDTH,
+                                        Height: MINIMAL_BUNDLE_HEIGHT,
+                                        Fps: MINIMAL_BUNDLE_FPS,
+                                        DurationSeconds: MINIMAL_BUNDLE_DURATION_SECONDS,
+                                        FrameCount: 60,
+                                        HasAudio: false,
+                                        RendererVersion: 'test',
+                                        RenderDurationMs: 10,
+                                    }),
+                                    'utf8',
+                                );
+                                await fs.writeFile(path.join(outDir, 'video.mp4'), videoBytes);
+                                return 0;
+                            } finally {
+                                stdout.end();
+                                stderr.end();
+                            }
+                        })();
+
+                        return {
+                            Stdin: stdin,
+                            Stdout: streamToLines(stdout),
+                            Stderr: streamToLines(stderr),
+                            ExitCode: exitCode,
+                            Kill: () => stdin.end(),
+                        };
+                    },
+                };
+
+                return {
+                    WorkspacePath: '/workspace',
+                    HostWorkspacePath: hostWorkspace,
+                    Key: key,
+                    Ephemeral: true,
+                    Executor: executor,
+                };
+            },
+            Finalize: async (handle) => {
+                if (handle.HostWorkspacePath) {
+                    await fs.rm(handle.HostWorkspacePath, { recursive: true, force: true });
+                }
+            },
+        });
+
+        // 1. Oversized output (128 bytes > MaxOutputBytes = 64 bytes)
+        const oversizedBytes = Buffer.alloc(128, 0x41);
+        const oversizedDriver = new DockerRenderDriver(
+            makeDockerSettings({ MaxOutputBytes: 64 }),
+            makeFakeVideoProvider(oversizedBytes, oversizedBytes.byteLength),
+        );
+        await expect(oversizedDriver.Render(CreateMinimalRenderRequest())).rejects.toMatchObject({
+            name: 'VideoRenderError',
+            Code: 'Internal',
+        });
+        // Only result.json was read; video.mp4 handle.readFile() was never called
+        expect(readFileSpy).toHaveBeenCalledTimes(1);
+        expect(readContents[0]).toContain('"Format":"mp4"');
+
+        // 2. VideoSizeBytes mismatch (file is 32 bytes, metadata declares 48 bytes)
+        readFileSpy.mockClear();
+        readContents.length = 0;
+        const mismatchBytes = Buffer.alloc(32, 0x42);
+        const mismatchDriver = new DockerRenderDriver(
+            makeDockerSettings({ MaxOutputBytes: 1024 }),
+            makeFakeVideoProvider(mismatchBytes, 48),
+        );
+        await expect(mismatchDriver.Render(CreateMinimalRenderRequest())).rejects.toMatchObject({
+            name: 'VideoRenderError',
+            Code: 'Internal',
+        });
+        expect(readFileSpy).toHaveBeenCalledTimes(1);
+        expect(readContents[0]).toContain('"Format":"mp4"');
+
+        // 3. Image-carrying JSON output (CaptureStills > 1 MiB) uses MaxOutputBytes instead of the 1 MiB JSON cap
+        const largeBase64Still = Buffer.alloc(900_000, 0x55).toString('base64'); // ~1.2 MB base64 string (> 1 MiB)
+        const makeLargeStillsProvider = (): ISandboxProvider => ({
+            Provision: async (key: WorkspaceKey): Promise<SandboxHandle> => {
+                const hostWorkspace = await fs.mkdtemp(
+                    path.join(os.tmpdir(), 'mj-vs-large-stills-ws-'),
+                );
+                tempDirs.push(hostWorkspace);
+                return {
+                    WorkspacePath: '/workspace',
+                    HostWorkspacePath: hostWorkspace,
+                    Key: key,
+                    Ephemeral: true,
+                    Executor: {
+                        Run: (): HarnessProcess => {
+                            const stdout = new PassThrough();
+                            const stderr = new PassThrough();
+                            const stdin = new PassThrough();
+                            const exitCode = (async (): Promise<number | null> => {
+                                try {
+                                    await fs.writeFile(
+                                        path.join(hostWorkspace, 'out', 'result.json'),
+                                        JSON.stringify({
+                                            Stills: [
+                                                {
+                                                    Key: 'frame-0',
+                                                    TimestampSeconds: 0,
+                                                    FrameIndex: 0,
+                                                    Width: MINIMAL_BUNDLE_WIDTH,
+                                                    Height: MINIMAL_BUNDLE_HEIGHT,
+                                                    MimeType: 'image/png',
+                                                    ImageBase64: largeBase64Still,
+                                                },
+                                            ],
+                                            CaptureDurationMs: 5,
+                                        }),
+                                        'utf8',
+                                    );
+                                    return 0;
+                                } finally {
+                                    stdout.end();
+                                    stderr.end();
+                                }
+                            })();
+                            return {
+                                Stdin: stdin,
+                                Stdout: streamToLines(stdout),
+                                Stderr: streamToLines(stderr),
+                                ExitCode: exitCode,
+                                Kill: () => stdin.end(),
+                            };
+                        },
+                    },
+                };
+            },
+            Finalize: async (handle) => {
+                if (handle.HostWorkspacePath) {
+                    await fs.rm(handle.HostWorkspacePath, { recursive: true, force: true });
+                }
+            },
+        });
+
+        const stillsOkDriver = new DockerRenderDriver(
+            makeDockerSettings({ MaxOutputBytes: 4 * 1024 * 1024 }),
+            makeLargeStillsProvider(),
+        );
+        const stillsRes = await stillsOkDriver.CaptureStills({
+            Bundle: CreateMinimalRenderRequest().Bundle,
+            Width: MINIMAL_BUNDLE_WIDTH,
+            Height: MINIMAL_BUNDLE_HEIGHT,
+            Points: [{ Key: 'frame-0', TimestampSeconds: 0, Role: 'Custom', Label: 'Frame 0' }],
+        });
+        expect(stillsRes.Stills).toHaveLength(1);
+        expect(stillsRes.Stills[0]!.ImageBase64.length).toBeGreaterThan(1024 * 1024);
+
+        readFileSpy.mockClear();
+        const stillsTooBigDriver = new DockerRenderDriver(
+            makeDockerSettings({ MaxOutputBytes: 512 * 1024 }),
+            makeLargeStillsProvider(),
+        );
+        await expect(
+            stillsTooBigDriver.CaptureStills({
+                Bundle: CreateMinimalRenderRequest().Bundle,
+                Width: MINIMAL_BUNDLE_WIDTH,
+                Height: MINIMAL_BUNDLE_HEIGHT,
+                Points: [{ Key: 'frame-0', TimestampSeconds: 0, Role: 'Custom', Label: 'Frame 0' }],
+            }),
+        ).rejects.toMatchObject({
+            name: 'VideoRenderError',
+            Code: 'Internal',
+        });
+        expect(readFileSpy).toHaveBeenCalledTimes(0);
+    });
+
+    it('fails closed on Windows (process.platform === "win32") naming the Remote driver without starting any container', async () => {
+        const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32');
+        try {
+            const provider = createProvider();
+            const driver = new DockerRenderDriver(makeDockerSettings(), provider);
+
+            await expect(driver.Render(CreateMinimalRenderRequest())).rejects.toMatchObject({
+                name: 'VideoRenderError',
+                Code: 'WorkerUnavailable',
+                message: expect.stringContaining('Remote'),
+            });
+
+            const health = await driver.Health();
+            expect(health.Healthy).toBe(false);
+            expect(health.Errors.join(' ')).toContain('Remote');
+            expect(provider.Provisions).toHaveLength(0);
+        } finally {
+            platformSpy.mockRestore();
+        }
+    });
+
+    it('creates and reuses one per-process 0o700 mkdtemp workspace root when WorkspaceRoot is omitted, and uses configured WorkspaceRoot as-is', async () => {
+        const unconfiguredSettings = makeDockerSettings({
+            Docker: {
+                Image: DEFAULT_DOCKER_RENDER_IMAGE,
+                Cpus: DEFAULT_DOCKER_CPUS,
+                MemoryMb: DEFAULT_DOCKER_MEMORY_MB,
+                PidsLimit: DEFAULT_DOCKER_PIDS_LIMIT,
+                ShmSizeMb: DEFAULT_DOCKER_SHM_SIZE_MB,
+            },
+        });
+        const driverA = new DockerRenderDriver(unconfiguredSettings, createProvider());
+        const driverB = new DockerRenderDriver(unconfiguredSettings, createProvider());
+
+        const rootA = await driverA.ResolveWorkspaceRoot();
+        const rootB = await driverB.ResolveWorkspaceRoot();
+
+        expect(rootA).toBe(rootB);
+        expect(rootA).not.toBe(DEFAULT_DOCKER_WORKSPACE_ROOT);
+        expect(path.dirname(rootA)).toBe(os.tmpdir());
+        expect(path.basename(rootA)).toMatch(/^mj-video-render-.+/);
+        const stat = await fs.stat(rootA);
+        expect(stat.mode & 0o777).toBe(0o700);
+
+        const configuredDriver = new DockerRenderDriver(
+            makeDockerSettings({
+                Docker: {
+                    Image: DEFAULT_DOCKER_RENDER_IMAGE,
+                    WorkspaceRoot: '/custom/explicit/workspace-root',
+                    Cpus: DEFAULT_DOCKER_CPUS,
+                    MemoryMb: DEFAULT_DOCKER_MEMORY_MB,
+                    PidsLimit: DEFAULT_DOCKER_PIDS_LIMIT,
+                    ShmSizeMb: DEFAULT_DOCKER_SHM_SIZE_MB,
+                },
+            }),
+            createProvider(),
+        );
+        expect(await configuredDriver.ResolveWorkspaceRoot()).toBe('/custom/explicit/workspace-root');
+    });
 });
 
 function checkCanRunRealDockerTests(): boolean {

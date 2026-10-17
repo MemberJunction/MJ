@@ -76,8 +76,12 @@ export interface VideoRenderRemoteSettings {
 export interface VideoRenderDockerSettings {
     /** Docker image reference (default: `'mj-video-render-worker:local'`). */
     Image: string;
-    /** Host workspace root directory bind-mounted into per-job containers (default: `path.join(os.tmpdir(), 'mj-video-render')`). */
-    WorkspaceRoot: string;
+    /**
+     * Optional host workspace root directory bind-mounted into per-job containers.
+     * When omitted, `DockerRenderDriver` creates and reuses one per-process `0o700` directory
+     * via `fs.mkdtemp(path.join(os.tmpdir(), 'mj-video-render-'))`.
+     */
+    WorkspaceRoot?: string;
     /** CPU core limit (`--cpus`, default: `2`). */
     Cpus: number;
     /** Container memory limit in megabytes (`--memory <n>m`, default: `4096`). */
@@ -246,7 +250,6 @@ function buildDefaultRemoteSettings(): VideoRenderRemoteSettings {
 function buildDefaultDockerSettings(): VideoRenderDockerSettings {
     return {
         Image: DEFAULT_DOCKER_RENDER_IMAGE,
-        WorkspaceRoot: DEFAULT_DOCKER_WORKSPACE_ROOT,
         Cpus: DEFAULT_DOCKER_CPUS,
         MemoryMb: DEFAULT_DOCKER_MEMORY_MB,
         PidsLimit: DEFAULT_DOCKER_PIDS_LIMIT,
@@ -405,11 +408,13 @@ export function ReadVideoRenderSettings(searchFrom: string = process.cwd()): Vid
                 'videoStudio.render.docker.image',
                 DEFAULT_DOCKER_RENDER_IMAGE,
             );
-            docker.WorkspaceRoot = readNonEmptyString(
+            const workspaceRoot = readOptionalNonEmptyString(
                 renderSection.docker.workspaceRoot,
                 'videoStudio.render.docker.workspaceRoot',
-                DEFAULT_DOCKER_WORKSPACE_ROOT,
             );
+            if (workspaceRoot !== undefined) {
+                docker.WorkspaceRoot = workspaceRoot;
+            }
             docker.Cpus = readPositiveNumber(
                 renderSection.docker.cpus,
                 'videoStudio.render.docker.cpus',
