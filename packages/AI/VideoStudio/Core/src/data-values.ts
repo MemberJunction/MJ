@@ -11,6 +11,8 @@
  * @module @memberjunction/video-studio-core
  */
 
+import type { ChartKitPoint } from './chart-kit-types.js';
+
 /**
  * Frozen value for a `'Scalar'` data binding: the first field of the first row.
  */
@@ -19,15 +21,10 @@ export type DataScalarValue = number | string | null;
 /**
  * Single data point in a frozen `'Series'` binding.
  *
- * Intentionally matches the `{ Label, Value }` point contract consumed by the
- * Video Studio chart kit (`ChartKitPoint`).
+ * Aliased to {@link ChartKitPoint} (`{ Label: string; Value: number }`) so frozen
+ * `'Series'` snapshot arrays pass directly into `MJChartKit` without mapping.
  */
-export interface DataSeriesPoint {
-    /** Category or axis label derived from the first selected field of the row. */
-    Label: string;
-    /** Numeric value derived from the second selected field of the row. */
-    Value: number;
-}
+export type DataSeriesPoint = ChartKitPoint;
 
 /**
  * Frozen value for a `'Series'` data binding: an ordered list of `{ Label, Value }` points.

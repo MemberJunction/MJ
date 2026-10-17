@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
     EvaluateDomRules,
     MIN_TEXT_SIZE_SHORT_EDGE_RATIO,
+    MJ_ASOF_CARD_MISSING_CODE,
+    MJ_BOUND_KEY_UNKNOWN_CODE,
+    MJ_BOUND_VALUE_MISMATCH_CODE,
     MJ_MIN_TEXT_SIZE_CODE,
     MJ_SAFE_AREA_CODE,
     MJ_UNBOUND_LITERAL_RENDERED_CODE,
@@ -187,6 +190,163 @@ describe('EvaluateDomRules', () => {
         });
     });
 
+    describe('MJ_BOUND_KEY_UNKNOWN and MJ_BOUND_VALUE_MISMATCH', () => {
+        it('flags empty or unknown data-mj-bound keys with MJ_BOUND_KEY_UNKNOWN at any timestamp', () => {
+            const emptyKey = makeMeasuredText({
+                Selector: '#empty-bound',
+                Text: '$14.2M',
+                IsBound: true,
+                BoundKey: '',
+                TimestampSeconds: 0.5,
+            });
+            const unknownKey = makeMeasuredText({
+                Selector: '#typo-bound',
+                Text: '$14.2M',
+                IsBound: true,
+                BoundKey: 'TotlARR',
+                TimestampSeconds: 1.0,
+            });
+
+            const issues = EvaluateDomRules([emptyKey, unknownKey], {
+                Format: '16:9',
+                Width: 1920,
+                Height: 1080,
+                BoundDataLiterals: {
+                    TotalARR: ['$14.2M', '14200000'],
+                },
+            });
+
+            expect(issues).toEqual([
+                expect.objectContaining({
+                    Code: MJ_BOUND_KEY_UNKNOWN_CODE,
+                    Category: 'DataLiteral',
+                    Severity: 'Error',
+                    Selector: '#empty-bound',
+                    TimestampSeconds: 0.5,
+                }),
+                expect.objectContaining({
+                    Code: MJ_BOUND_KEY_UNKNOWN_CODE,
+                    Category: 'DataLiteral',
+                    Severity: 'Error',
+                    Selector: '#typo-bound',
+                    TimestampSeconds: 1.0,
+                }),
+            ]);
+        });
+
+        it('does not flag intermediate count-up values at non-settle timestamps, passes matching settled values, and flags wrong settled values with MJ_BOUND_VALUE_MISMATCH', () => {
+            const midBeatCountUp = makeMeasuredText({
+                Selector: '#arr-kpi',
+                Text: '$7.1M',
+                IsBound: true,
+                BoundKey: 'TotalARR',
+                TimestampSeconds: 1.0,
+            });
+            const settledCorrect = makeMeasuredText({
+                Selector: '#arr-kpi',
+                Text: '$14.2M',
+                IsBound: true,
+                BoundKey: 'TotalARR',
+                TimestampSeconds: 1.967,
+            });
+            const settledWrong = makeMeasuredText({
+                Selector: '#arr-kpi',
+                Text: '$99.9M',
+                IsBound: true,
+                BoundKey: 'TotalARR',
+                TimestampSeconds: 1.967,
+            });
+
+            const passingIssues = EvaluateDomRules([midBeatCountUp, settledCorrect], {
+                Format: '16:9',
+                Width: 1920,
+                Height: 1080,
+                BoundDataLiterals: {
+                    TotalARR: ['$14.2M', '14200000', '14,200,000'],
+                },
+                SettleTimestampsSeconds: [1.967],
+            });
+            expect(passingIssues).toEqual([]);
+
+            const mismatchIssues = EvaluateDomRules([midBeatCountUp, settledWrong], {
+                Format: '16:9',
+                Width: 1920,
+                Height: 1080,
+                BoundDataLiterals: {
+                    TotalARR: ['$14.2M', '14200000', '14,200,000'],
+                },
+                SettleTimestampsSeconds: [1.967],
+            });
+            expect(mismatchIssues).toEqual([
+                expect.objectContaining({
+                    Code: MJ_BOUND_VALUE_MISMATCH_CODE,
+                    Category: 'DataLiteral',
+                    Severity: 'Error',
+                    Selector: '#arr-kpi',
+                    TimestampSeconds: 1.967,
+                }),
+            ]);
+        });
+    });
+
+    describe('MJ_ASOF_CARD_MISSING', () => {
+        it('flags missing RequiredFinalFrameText on the final frame and passes when visible on the final frame', () => {
+            const earlierFrameWithAsOf = makeMeasuredText({
+                Selector: '#footer-asof',
+                Text: 'Data as of 2026-10-16',
+                IsBound: true,
+                BoundKey: 'AsOf',
+                TimestampSeconds: 1.0,
+            });
+            const finalFrameWithoutAsOf = makeMeasuredText({
+                Selector: '#closing-cta',
+                Text: 'Thank you',
+                IsBound: false,
+                TimestampSeconds: 4.967,
+            });
+            const finalFrameWithAsOf = makeMeasuredText({
+                Selector: '#footer-asof',
+                Text: 'Source: MJ • Data as of 2026-10-16',
+                IsBound: true,
+                BoundKey: 'AsOf',
+                TimestampSeconds: 4.967,
+            });
+
+            const missingIssues = EvaluateDomRules(
+                [earlierFrameWithAsOf, finalFrameWithoutAsOf],
+                {
+                    Format: '16:9',
+                    Width: 1920,
+                    Height: 1080,
+                    BoundDataLiterals: { AsOf: ['2026-10-16'] },
+                    RequiredFinalFrameText: ['Data as of 2026-10-16'],
+                    FinalFrameTimestampSeconds: 4.967,
+                },
+            );
+            expect(missingIssues).toEqual([
+                expect.objectContaining({
+                    Code: MJ_ASOF_CARD_MISSING_CODE,
+                    Category: 'Provenance',
+                    Severity: 'Error',
+                    TimestampSeconds: 4.967,
+                }),
+            ]);
+
+            const presentIssues = EvaluateDomRules(
+                [earlierFrameWithAsOf, finalFrameWithoutAsOf, finalFrameWithAsOf],
+                {
+                    Format: '16:9',
+                    Width: 1920,
+                    Height: 1080,
+                    BoundDataLiterals: { AsOf: ['2026-10-16'] },
+                    RequiredFinalFrameText: ['Data as of 2026-10-16'],
+                    FinalFrameTimestampSeconds: 4.967,
+                },
+            );
+            expect(presentIssues).toEqual([]);
+        });
+    });
+
     describe('MJ_UNBUNDLED_FONT', () => {
         it('emits a Warning when FontIsBundled is false and passes when FontIsBundled is true', () => {
             const unbundled = makeMeasuredText({
@@ -223,3 +383,4 @@ describe('EvaluateDomRules', () => {
         });
     });
 });
+
