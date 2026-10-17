@@ -1462,11 +1462,11 @@ describe('SqlLoggingSessionImpl', () => {
             const session = new SqlLoggingSessionImpl('test-id', '/tmp/test.sql', {
                 description: 'Test session',
             });
-            expect(session.id).toBe('test-id');
-            expect(session.filePath).toBe('/tmp/test.sql');
-            expect(session.statementCount).toBe(0);
-            expect(session.options.description).toBe('Test session');
-            expect(session.startTime).toBeInstanceOf(Date);
+            expect(session.Id).toBe('test-id');
+            expect(session.FilePath).toBe('/tmp/test.sql');
+            expect(session.StatementCount).toBe(0);
+            expect(session.Options.description).toBe('Test session');
+            expect(session.StartTime).toBeInstanceOf(Date);
         });
     });
 
@@ -1731,8 +1731,8 @@ describe('SqlLoggingSessionImpl', () => {
                 batchSeparator: 'GO',
                 variableBatchThreshold: 200,
             });
-            expect(session.options.variableBatchThreshold).toBe(200);
-            expect(session.options.batchSeparator).toBe('GO');
+            expect(session.Options.variableBatchThreshold).toBe(200);
+            expect(session.Options.batchSeparator).toBe('GO');
         });
 
         it('should fall back to legacy mode when variableBatchThreshold is 0', () => {
@@ -1740,14 +1740,14 @@ describe('SqlLoggingSessionImpl', () => {
                 batchSeparator: 'GO',
                 variableBatchThreshold: 0,
             });
-            expect(session.options.variableBatchThreshold).toBe(0);
+            expect(session.Options.variableBatchThreshold).toBe(0);
         });
 
         it('should default to no threshold when variableBatchThreshold is undefined', () => {
             const session = new SqlLoggingSessionImpl('t', '/tmp/t.sql', {
                 batchSeparator: 'GO',
             });
-            expect(session.options.variableBatchThreshold).toBeUndefined();
+            expect(session.Options.variableBatchThreshold).toBeUndefined();
         });
     });
 });
@@ -3002,6 +3002,36 @@ describe('TransactionFrameTracker', () => {
             t.EndEpoch('committed');
         }
         expect(t.Resolve(first, false).Kind).toBe('drop');
+    });
+});
+
+describe('GenericDatabaseProvider CreateSqlLogger after a size-based split', () => {
+    it('the returned session names the first part, which exists, and lists every part', async () => {
+        const fsMod = await import('fs');
+        const osMod = await import('os');
+        const pathMod = await import('path');
+        const dir = fsMod.mkdtempSync(pathMod.join(osMod.tmpdir(), 'mj-create-sqllog-'));
+        const provider = new TestGenericProvider();
+        Object.defineProperty(provider, 'ConfigData', { get: () => ({ MJCoreSchemaName: '__mj' }) });
+        const basePath = pathMod.join(dir, 'push.sql');
+        try {
+            const session = await provider.CreateSqlLogger(basePath, { maxFileSize: 2000 });
+            const log = (provider as unknown as {
+                _logSqlStatement(q: string, p?: unknown, d?: string, ignore?: boolean, isMutation?: boolean): Promise<void>;
+            })._logSqlStatement.bind(provider);
+            for (let i = 0; i < 30; i++) {
+                await log(`INSERT INTO T VALUES (${i}, '${'x'.repeat(100)}')`, undefined, undefined, false, true);
+            }
+
+            expect(session.FilePaths.length).toBeGreaterThan(1);
+            expect(fsMod.existsSync(basePath)).toBe(false);
+            expect(session.FilePath).toBe(session.FilePaths[0]);
+            expect(fsMod.existsSync(session.FilePath)).toBe(true);
+            await session.Dispose();
+        } finally {
+            await provider.DisposeAllSqlLoggingSessions();
+            fsMod.rmSync(dir, { recursive: true, force: true });
+        }
     });
 });
 

@@ -8,10 +8,11 @@ import { IsStringSQLType } from '@memberjunction/sql-dialect';
 import { SyncEngine, RecordData, DeferrableLookupError, SyncResolutionCollector, BatchContext } from '../lib/sync-engine';
 import { SyncMetadataEngine } from '../lib/sync-metadata-engine';
 import { BatchContextIndex, BatchContextStub } from '../lib/batch-context-index';
-import { loadEntityConfig, loadSyncConfig, EntityConfig, SyncConfig } from '../config';
+import { loadEntityConfig, loadSyncConfig, EntityConfig, SyncConfig, DEFAULT_SQL_LOG_MAX_FILE_SIZE } from '../config';
 import { FileBackupManager } from '../lib/file-backup-manager';
 import { configManager } from '../lib/config-manager';
 import { SQLLogger } from '../lib/sql-logger';
+import { DescribeSqlLogParts } from '../lib/sql-log-parts';
 import { TransactionManager } from '../lib/transaction-manager';
 import { JsonWriteHelper } from '../lib/json-write-helper';
 import { RecordDependencyAnalyzer, FlattenedRecord, groupRecordsByGraphId } from '../lib/record-dependency-analyzer';
@@ -118,7 +119,13 @@ export interface PushResult {
   deferred: number;
   errors: number;
   warnings: string[];
+  /** First (or only) captured SQL migration file. Equals `sqlLogPaths[0]` when logging is enabled. */
   sqlLogPath?: string;
+  /**
+   * All captured SQL migration files, in order. Single-element when the capture fit under
+   * `sqlLogging.maxFileSize`; multiple `*.partNNN.sql` files when size-based splitting triggered.
+   */
+  sqlLogPaths?: string[];
   /** Structured per-record changes captured during the push, for the changes recap. */
   changeLog: RecordChangeDetail[];
 }
@@ -256,8 +263,12 @@ export class PushService {
   private graphBatchSize = 1;
   /** Counts so far, so a failed push can still report what it did. */
   private runningTotals: EntityPushResult = emptyPushTotals();
-  /** The SQL log for this run, when one is being written. */
-  private sqlLogFilePath: string | undefined;
+  /**
+   * The SQL log session for this run, when one is being written. Kept rather than its path: a
+   * size-based split renames the original file to `.part001`, so only the session knows where
+   * the log is now.
+   */
+  private sqlLogSession: SqlLoggingSession | undefined;
   /** Non-atomic mode: creates and updates that were committed outside the push transaction. */
   private committedWrites: CommittedWrite[] = [];
   /** Incremental state, applied only after the push commits. Keyed by path relative to the sync root. */
@@ -387,7 +398,7 @@ export class PushService {
     this.pushedEntityDirs = [];
     this.directoryModes.clear();
     this.runningTotals = emptyPushTotals();
-    this.sqlLogFilePath = undefined;
+    this.sqlLogSession = undefined;
     
     const fileBackupManager = new FileBackupManager();
     
@@ -504,27 +515,36 @@ export class PushService {
         }
       }
       
-      // Close SQL logging session if it was created. dispose() deletes the file when
+      // Close SQL logging session if it was created. Dispose() deletes the file when
       // it's empty (no statements emitted), so only surface a saved path when the log
       // actually has content — otherwise the "SQL log saved to…" line would point at a
-      // file dispose() just unlinked.
+      // file Dispose() just unlinked.
       let sqlLogPath: string | undefined;
+      let sqlLogPaths: string[] | undefined;
       if (sqlLoggingSession) {
-        const filePath = sqlLoggingSession.filePath;
-        const hadStatements = sqlLoggingSession.statementCount > 0;
-        await sqlLoggingSession.dispose();
+        // Capture the (final) part list before dispose — it's stable once logging is done.
+        const paths = [...sqlLoggingSession.FilePaths];
+        const hadStatements = sqlLoggingSession.StatementCount > 0;
+        await sqlLoggingSession.Dispose();
         if (hadStatements) {
-          sqlLogPath = filePath;
-          if (options.verbose) {
-            callbacks?.onLog?.(`📝 SQL log written to: ${filePath}`);
+          sqlLogPaths = paths;
+          sqlLogPath = paths[0];
+          if (paths.length > 1) {
+            // Always surface a multi-part split (not just in verbose) — the user needs to know
+            // the migration is several files so they commit/rename all of them.
+            const effectiveLimit = this.syncConfig?.sqlLogging?.maxFileSize ?? DEFAULT_SQL_LOG_MAX_FILE_SIZE;
+            DescribeSqlLogParts(paths, effectiveLimit).forEach((line) => callbacks?.onLog?.(line));
+          } else if (options.verbose) {
+            callbacks?.onLog?.(`📝 SQL log written to: ${paths[0]}`);
           }
         }
       }
-      
+
       return {
         ...totals,
         warnings: this.warnings,
         sqlLogPath,
+        sqlLogPaths,
         changeLog: this.changeDetails
       };
 
@@ -542,7 +562,7 @@ export class PushService {
       // Close SQL logging session on error
       if (sqlLoggingSession) {
         try {
-          await sqlLoggingSession.dispose();
+          await sqlLoggingSession.Dispose();
         } catch (disposeError) {
           callbacks?.onWarn?.(`Failed to close SQL logging session: ${disposeError}`);
         }
@@ -589,7 +609,6 @@ export class PushService {
         await fs.ensureDir(path.dirname(filepath));
 
         // Create the SQL logging session
-        this.sqlLogFilePath = filepath;
         sqlLoggingSession = await provider.CreateSqlLogger(filepath, {
           formatAsMigration: this.syncConfig?.sqlLogging?.formatAsMigration || false,
           description: 'MetadataSync push operation',
@@ -600,7 +619,12 @@ export class PushService {
           filterPatterns: this.syncConfig?.sqlLogging?.filterPatterns,
           filterType: this.syncConfig?.sqlLogging?.filterType,
           verboseOutput: this.syncConfig?.sqlLogging?.verboseOutput || false,
+          // Split the capture into multiple part files when it would exceed this size, so a
+          // large push stays under host file-size limits (e.g. GitHub's 100 MiB cap). Defaults
+          // to 90 MiB; a `.mj-sync.json` `sqlLogging.maxFileSize` of 0 disables splitting.
+          maxFileSize: this.syncConfig?.sqlLogging?.maxFileSize ?? DEFAULT_SQL_LOG_MAX_FILE_SIZE,
         });
+        this.sqlLogSession = sqlLoggingSession;
         
         if (options.verbose) {
           callbacks?.onLog?.(`📝 SQL logging enabled: ${filepath}`);
@@ -659,9 +683,9 @@ export class PushService {
 
         // Clean up SQL logging session and file if it was created
         if (sqlLoggingSession) {
-          const sqlLogPath = sqlLoggingSession.filePath;
+          const sqlLogPath = sqlLoggingSession.FilePath;
           try {
-            await sqlLoggingSession.dispose();
+            await sqlLoggingSession.Dispose();
             // Delete the empty SQL log file since no operations occurred
             if (await fs.pathExists(sqlLogPath)) {
               await fs.remove(sqlLogPath);
@@ -870,7 +894,7 @@ export class PushService {
       rolledBack,
       committedWrites: [...this.committedWrites],
       totals: { ...this.runningTotals },
-      sqlLogPath: this.sqlLogFilePath,
+      sqlLogPath: this.sqlLogSession?.FilePath,
       cause: error,
     });
   }

@@ -172,7 +172,7 @@ try {
     // All SQL operations are automatically captured
     await provider.ExecuteSQL('INSERT INTO ...');
 } finally {
-    await session.dispose();
+    await session.Dispose();
 }
 ```
 

@@ -3,9 +3,10 @@ import path from 'path';
 import chokidar, { type FSWatcher } from 'chokidar';
 import { BaseEntity, Metadata } from '@memberjunction/core';
 import { SyncEngine, RecordData } from '../lib/sync-engine';
-import { LoadEntityConfig, LoadSyncConfig } from '../config';
+import { LoadEntityConfig, LoadSyncConfig, DEFAULT_SQL_LOG_MAX_FILE_SIZE } from '../config';
 import { FindEntityDirectories } from '../lib/provider-utils';
 import { configManager } from '../lib/config-manager';
+import { DescribeSqlLogParts } from '../lib/sql-log-parts';
 import { JsonWriteHelper } from '../lib/json-write-helper';
 import type { SqlLoggingSession } from '@memberjunction/generic-database-provider';
 
@@ -122,8 +123,15 @@ export class WatchService {
         // Dispose SQL logging session
         if (this.sqlLoggingSession) {
           try {
-            callbacks?.onLog?.(`📝 SQL log written to: ${this.sqlLoggingSession.filePath}`);
-            await this.sqlLoggingSession.dispose();
+            const parts = this.sqlLoggingSession.FilePaths;
+            if (parts.length > 1) {
+              // A split capture is several files; name every one so none is missed when committing.
+              DescribeSqlLogParts(parts, this.sqlLoggingSession.Options.maxFileSize ?? DEFAULT_SQL_LOG_MAX_FILE_SIZE)
+                .forEach((line) => callbacks?.onLog?.(line));
+            } else {
+              callbacks?.onLog?.(`📝 SQL log written to: ${this.sqlLoggingSession.FilePath}`);
+            }
+            await this.sqlLoggingSession.Dispose();
             this.sqlLoggingSession = null;
           } catch (error) {
             callbacks?.onWarn?.(`Failed to close SQL logging session: ${error}`);
@@ -377,8 +385,11 @@ export class WatchService {
             // batchSeparator is intentionally omitted — CreateSqlLogger injects the platform-appropriate
             // separator automatically (GO for SQL Server, nothing for PostgreSQL) via PlatformBatchSeparator.
             variableBatchThreshold: syncConfig.sqlLogging?.variableBatchThreshold ?? 200,
+            // Split into multiple part files past this size so a long watch capture stays under
+            // host file-size limits. Defaults to 90 MiB; `sqlLogging.maxFileSize: 0` disables it.
+            maxFileSize: syncConfig.sqlLogging?.maxFileSize ?? DEFAULT_SQL_LOG_MAX_FILE_SIZE,
           });
-          
+
           callbacks?.onLog?.(`📝 SQL logging enabled: ${filepath}`);
         }
       }
