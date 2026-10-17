@@ -12,7 +12,8 @@
     "build": "tsc && tsc-alias -f",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "test:types": "tsc --noEmit -p tsconfig.spec.json"
   },
   "dependencies": {
     "@memberjunction/ai": "6.2.0-edge.4",
@@ -24,6 +25,7 @@
     "@memberjunction/video-studio-core": "6.2.0-edge.4"
   },
   "devDependencies": {
+    "@memberjunction/core-entities": "6.2.0-edge.4",
     "@types/node": "24.10.11",
     "typescript": "^5.9.3",
     "tsc-alias": "^1.8.10",

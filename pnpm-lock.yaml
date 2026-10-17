@@ -3482,6 +3482,9 @@ importers:
         specifier: 6.2.0-edge.4
         version: link:../Core
     devDependencies:
+      '@memberjunction/core-entities':
+        specifier: 6.2.0-edge.4
+        version: link:../../../MJCoreEntities
       '@types/node':
         specifier: 24.10.11
         version: 24.10.11

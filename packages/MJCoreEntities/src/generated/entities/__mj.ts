@@ -11363,25 +11363,29 @@ export const MJBrandKitSchema = z.object({
     *   * Active
     *   * Inactive
         * * Description: Active kits are offered to users and generators; Inactive kits are kept but hidden.`),
-    Style: z.string().nullable().describe(`
+    Style: z.any().nullable().describe(`
         * * Field Name: Style
         * * Display Name: Style
         * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJBrandKitEntity_IBrandStyle
         * * Description: JSON (IBrandStyle): palette, typography, imagery style, keep and avoid lists, and an optional Motion section.`),
-    Voice: z.string().nullable().describe(`
+    Voice: z.any().nullable().describe(`
         * * Field Name: Voice
         * * Display Name: Voice
         * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJBrandKitEntity_IBrandVoice
         * * Description: JSON (IBrandVoice): text-to-speech provider, voice ID, settings and pronunciation notes.`),
-    GenerationPolicy: z.string().nullable().describe(`
+    GenerationPolicy: z.any().nullable().describe(`
         * * Field Name: GenerationPolicy
         * * Display Name: Generation Policy
         * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJBrandKitEntity_IBrandGenerationPolicy
         * * Description: JSON (IBrandGenerationPolicy): whether generated images and video may be used, a style prompt, subjects to avoid, whether generated people are allowed (default: not allowed), and an optional per-run generation spend cap. NULL applies the defaults.`),
-    NeverInvent: z.string().nullable().describe(`
+    NeverInvent: z.any().nullable().describe(`
         * * Field Name: NeverInvent
         * * Display Name: Never Invent
         * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: Array<MJBrandKitEntity_BrandNeverInventItem>
         * * Description: JSON array of strings: facts about the brand a model must never fabricate, for example product screens, logos, metrics or customer names.`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
@@ -37842,15 +37846,17 @@ export const MJVideoArchetypeSchema = z.object({
         * * Display Name: Default Formats
         * * SQL Data Type: nvarchar(100)
         * * Description: Comma-separated default formats: any of 16:9, 9:16, 1:1.`),
-    BeatTemplate: z.string().describe(`
+    BeatTemplate: z.any().describe(`
         * * Field Name: BeatTemplate
         * * Display Name: Beat Template
         * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: Array<MJVideoArchetypeEntity_VideoBeatTemplate>
         * * Description: JSON array (VideoBeatTemplate[]): the beat slots a film of this archetype follows, with per-beat duration bounds.`),
-    Pacing: z.string().nullable().describe(`
+    Pacing: z.any().nullable().describe(`
         * * Field Name: Pacing
         * * Display Name: Pacing
         * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJVideoArchetypeEntity_VideoPacing
         * * Description: JSON (VideoPacing): cut cadence and hold rules.`),
     Guidance: z.string().nullable().describe(`
         * * Field Name: Guidance
@@ -72602,6 +72608,110 @@ export class MJBrandKitAssetEntity extends BaseEntity<MJBrandKitAssetEntityType>
 
 
 /**
+ * JSON shapes for the `MJ: Brand Kits` columns that store structured brand tokens,
+ * voice settings, generation policy, and guardrail rules.
+ *
+ * This file is the JSONType source. EntityField.JSONTypeDefinition stores it
+ * verbatim, and CodeGen emits it inline, so it cannot import another file.
+ */
+
+/** Named brand color token in a brand kit palette. */
+export interface MJBrandKitEntity_IBrandColor {
+    /** Token name identifying this color in the palette (for example Primary, Accent, Surface). */
+    Name: string;
+    /** CSS hex color value, for example #0076B6. */
+    Value: string;
+    /** Optional notes describing when and how to apply this color. */
+    Usage?: string;
+}
+
+/** Typography assignment for a text role in a brand kit. */
+export interface MJBrandKitEntity_IBrandTypeface {
+    /** Semantic text role (for example Headline, Body, Caption, Monospace). */
+    Role: string;
+    /** Font family name to apply for this role. */
+    FontFamily: string;
+    /** Optional `MJ: Brand Kit Assets` ID of a Font asset providing the font file. */
+    FontAssetID?: string;
+    /** Optional numeric font weight (for example 400, 600, 700). */
+    Weight?: number;
+    /** Optional typography usage notes or sizing guidance. */
+    Notes?: string;
+}
+
+/** Motion timing rule for a specific class of animated object. */
+export interface MJBrandKitEntity_IBrandMotionRule {
+    /** Free text naming what moves (for example Headline, Panel, Camera). */
+    ObjectClass: string;
+    /** CSS or cubic-bezier easing curve to apply to this object class. */
+    Easing: string;
+    /** Optional standard transition duration in milliseconds. */
+    DurationMs?: number;
+    /** Optional motion guidance notes for this object class. */
+    Notes?: string;
+}
+
+/** Motion rules and guidance used by motion and video generators. */
+export interface MJBrandKitEntity_IBrandMotion {
+    /** Per-object-class motion timing and easing rules. */
+    Rules?: MJBrandKitEntity_IBrandMotionRule[];
+    /** General motion direction and choreography notes. */
+    Notes?: string;
+}
+
+/** BrandKit.Style — visual and motion style tokens for a brand kit. */
+export interface MJBrandKitEntity_IBrandStyle {
+    /** Brand color palette tokens. */
+    Palette: MJBrandKitEntity_IBrandColor[];
+    /** Brand typography role assignments. */
+    Typography: MJBrandKitEntity_IBrandTypeface[];
+    /** Optional guidance describing the brand's imagery and illustration style. */
+    ImageryStyle?: string;
+    /** Optional visual patterns and qualities to preserve on brand. */
+    Keep?: string[];
+    /** Optional visual patterns and clichés to avoid. */
+    Avoid?: string[];
+    /** Optional motion rules used by motion and video generators. */
+    Motion?: MJBrandKitEntity_IBrandMotion;
+}
+
+/** BrandKit.Voice — default text-to-speech voice configuration for a brand kit. */
+export interface MJBrandKitEntity_IBrandVoice {
+    /** Speech synthesis provider name (for example ElevenLabs, OpenAI). */
+    Provider: string;
+    /** Provider-specific voice identifier. */
+    VoiceID: string;
+    /** Optional speech model name override for the provider. */
+    ModelName?: string;
+    /** Optional provider-specific voice settings such as stability or similarity boost. */
+    Settings?: Record<string, string | number | boolean>;
+    /** Optional pronunciation guide for brand terms, acronyms, and proper nouns. */
+    PronunciationNotes?: string;
+}
+
+/**
+ * BrandKit.GenerationPolicy — media generation permissions and guardrails for a brand kit.
+ * NULL on the column means "the defaults", and the defaults live in `BrandKitEngine` (VS-FND-5), not here.
+ */
+export interface MJBrandKitEntity_IBrandGenerationPolicy {
+    /** Whether AI-generated still images are permitted (default true). */
+    AllowGeneratedImages?: boolean;
+    /** Whether AI-generated video clips are permitted (default true). */
+    AllowGeneratedVideo?: boolean;
+    /** Whether synthetic people may be generated; a generated person may never be presented as a real member, customer, employee, speaker or beneficiary, and leaving it unset means not allowed (§3.4, default false). */
+    AllowSyntheticPeople?: boolean;
+    /** Optional brand style prompt prepended or merged into media generation prompts. */
+    StylePrompt?: string;
+    /** Optional subjects or motifs that media generators must never depict. */
+    AvoidSubjects?: string[];
+    /** Optional maximum media generation spend in USD per run, like MJ: AI Agents.MaxCostPerRun. */
+    MaxGenerationCostPerRun?: number;
+}
+
+/** Single guardrail rule in `BrandKit.NeverInvent` naming a fact or claim that must never be fabricated. */
+export type MJBrandKitEntity_BrandNeverInventItem = string;
+
+/**
  * MJ: Brand Kits - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: BrandKit
@@ -72720,6 +72830,7 @@ export class MJBrandKitEntity extends BaseEntity<MJBrandKitEntityType> {
     * * Field Name: Style
     * * Display Name: Style
     * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJBrandKitEntity_IBrandStyle
     * * Description: JSON (IBrandStyle): palette, typography, imagery style, keep and avoid lists, and an optional Motion section.
     */
     get Style(): string | null {
@@ -72730,9 +72841,25 @@ export class MJBrandKitEntity extends BaseEntity<MJBrandKitEntityType> {
     }
 
     /**
+    * Typed accessor for Style — a live view of the parsed JSON as MJBrandKitEntity_IBrandStyle.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Style field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get StyleObject(): MJBrandKitEntity_IBrandStyle | null {
+        return this.GetJSONFieldObject<MJBrandKitEntity_IBrandStyle>('Style');
+    }
+    set StyleObject(value: MJBrandKitEntity_IBrandStyle | null) {
+        this.SetJSONFieldObject<MJBrandKitEntity_IBrandStyle>('Style', value);
+    }
+
+    /**
     * * Field Name: Voice
     * * Display Name: Voice
     * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJBrandKitEntity_IBrandVoice
     * * Description: JSON (IBrandVoice): text-to-speech provider, voice ID, settings and pronunciation notes.
     */
     get Voice(): string | null {
@@ -72743,9 +72870,25 @@ export class MJBrandKitEntity extends BaseEntity<MJBrandKitEntityType> {
     }
 
     /**
+    * Typed accessor for Voice — a live view of the parsed JSON as MJBrandKitEntity_IBrandVoice.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Voice field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get VoiceObject(): MJBrandKitEntity_IBrandVoice | null {
+        return this.GetJSONFieldObject<MJBrandKitEntity_IBrandVoice>('Voice');
+    }
+    set VoiceObject(value: MJBrandKitEntity_IBrandVoice | null) {
+        this.SetJSONFieldObject<MJBrandKitEntity_IBrandVoice>('Voice', value);
+    }
+
+    /**
     * * Field Name: GenerationPolicy
     * * Display Name: Generation Policy
     * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJBrandKitEntity_IBrandGenerationPolicy
     * * Description: JSON (IBrandGenerationPolicy): whether generated images and video may be used, a style prompt, subjects to avoid, whether generated people are allowed (default: not allowed), and an optional per-run generation spend cap. NULL applies the defaults.
     */
     get GenerationPolicy(): string | null {
@@ -72756,9 +72899,25 @@ export class MJBrandKitEntity extends BaseEntity<MJBrandKitEntityType> {
     }
 
     /**
+    * Typed accessor for GenerationPolicy — a live view of the parsed JSON as MJBrandKitEntity_IBrandGenerationPolicy.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying GenerationPolicy field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get GenerationPolicyObject(): MJBrandKitEntity_IBrandGenerationPolicy | null {
+        return this.GetJSONFieldObject<MJBrandKitEntity_IBrandGenerationPolicy>('GenerationPolicy');
+    }
+    set GenerationPolicyObject(value: MJBrandKitEntity_IBrandGenerationPolicy | null) {
+        this.SetJSONFieldObject<MJBrandKitEntity_IBrandGenerationPolicy>('GenerationPolicy', value);
+    }
+
+    /**
     * * Field Name: NeverInvent
     * * Display Name: Never Invent
     * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: Array<MJBrandKitEntity_BrandNeverInventItem>
     * * Description: JSON array of strings: facts about the brand a model must never fabricate, for example product screens, logos, metrics or customer names.
     */
     get NeverInvent(): string | null {
@@ -72766,6 +72925,21 @@ export class MJBrandKitEntity extends BaseEntity<MJBrandKitEntityType> {
     }
     set NeverInvent(value: string | null) {
         this.Set('NeverInvent', value);
+    }
+
+    /**
+    * Typed accessor for NeverInvent — a live view of the parsed JSON as Array<MJBrandKitEntity_BrandNeverInventItem>.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying NeverInvent field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get NeverInventObject(): Array<MJBrandKitEntity_BrandNeverInventItem> | null {
+        return this.GetJSONFieldObject<Array<MJBrandKitEntity_BrandNeverInventItem>>('NeverInvent');
+    }
+    set NeverInventObject(value: Array<MJBrandKitEntity_BrandNeverInventItem> | null) {
+        this.SetJSONFieldObject<Array<MJBrandKitEntity_BrandNeverInventItem>>('NeverInvent', value);
     }
 
     /**
@@ -144189,6 +144363,51 @@ export class MJVersionLabelEntity extends BaseEntity<MJVersionLabelEntityType> {
 
 
 /**
+ * JSON shapes for the `MJ: Video Archetypes` columns (`BeatTemplate` and `Pacing`).
+ *
+ * These declarations mirror `@memberjunction/video-studio-core`; the Engine package's
+ * `test:types` fails if they drift. This file is the JSONType source:
+ * `EntityField.JSONTypeDefinition` stores it verbatim and CodeGen emits it inline,
+ * so it cannot import another file.
+ */
+
+/**
+ * Reusable beat slot definition within an `MJ: Video Archetypes` beat template (§4.3).
+ */
+export interface MJVideoArchetypeEntity_VideoBeatTemplate {
+    /** Stable identifier for the beat slot (e.g., 'hook', 'problem', 'reveal', 'proof', 'close'). */
+    Key: string;
+    /** Narrative role label displayed in storyboards (e.g., 'Hook', 'Problem', 'Reveal', 'Proof', 'Close'). */
+    Label: string;
+    /** What this beat must accomplish in the narrative arc. */
+    Purpose: string;
+    /** Minimum duration in seconds permitted for this beat. */
+    MinDurationSeconds: number;
+    /** Maximum duration in seconds permitted for this beat. */
+    MaxDurationSeconds: number;
+    /** Suggested default duration in seconds before narration clip timing fit. */
+    DefaultDurationSeconds?: number;
+    /** Direction for the Storyboard and Motion Engineer on visual and audio treatment. */
+    Guidance?: string;
+    /** Whether this beat slot typically requires at least one bound metric or chart. */
+    RequiresDataBinding?: boolean;
+}
+
+/**
+ * Cut cadence and hold rules governing how quickly visual states change in a film (§3.1, §4.3).
+ */
+export interface MJVideoArchetypeEntity_VideoPacing {
+    /** Target average interval in seconds between visual state changes. */
+    AvgSecondsBetweenChanges: number;
+    /** Rules governing minimum hold times on key numbers, headlines, and end cards. */
+    HoldRules: string;
+    /** Optional minimum duration in seconds allowed for any single beat. */
+    MinBeatDurationSeconds?: number;
+    /** Optional maximum duration in seconds allowed for any single beat. */
+    MaxBeatDurationSeconds?: number;
+}
+
+/**
  * MJ: Video Archetypes - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: VideoArchetype
@@ -144367,6 +144586,7 @@ export class MJVideoArchetypeEntity extends BaseEntity<MJVideoArchetypeEntityTyp
     * * Field Name: BeatTemplate
     * * Display Name: Beat Template
     * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: Array<MJVideoArchetypeEntity_VideoBeatTemplate>
     * * Description: JSON array (VideoBeatTemplate[]): the beat slots a film of this archetype follows, with per-beat duration bounds.
     */
     get BeatTemplate(): string {
@@ -144377,9 +144597,25 @@ export class MJVideoArchetypeEntity extends BaseEntity<MJVideoArchetypeEntityTyp
     }
 
     /**
+    * Typed accessor for BeatTemplate — a live view of the parsed JSON as Array<MJVideoArchetypeEntity_VideoBeatTemplate>.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying BeatTemplate field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get BeatTemplateObject(): Array<MJVideoArchetypeEntity_VideoBeatTemplate> {
+        return this.GetJSONFieldObject<Array<MJVideoArchetypeEntity_VideoBeatTemplate>>('BeatTemplate')!;
+    }
+    set BeatTemplateObject(value: Array<MJVideoArchetypeEntity_VideoBeatTemplate>) {
+        this.SetJSONFieldObject<Array<MJVideoArchetypeEntity_VideoBeatTemplate>>('BeatTemplate', value);
+    }
+
+    /**
     * * Field Name: Pacing
     * * Display Name: Pacing
     * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJVideoArchetypeEntity_VideoPacing
     * * Description: JSON (VideoPacing): cut cadence and hold rules.
     */
     get Pacing(): string | null {
@@ -144387,6 +144623,21 @@ export class MJVideoArchetypeEntity extends BaseEntity<MJVideoArchetypeEntityTyp
     }
     set Pacing(value: string | null) {
         this.Set('Pacing', value);
+    }
+
+    /**
+    * Typed accessor for Pacing — a live view of the parsed JSON as MJVideoArchetypeEntity_VideoPacing.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Pacing field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get PacingObject(): MJVideoArchetypeEntity_VideoPacing | null {
+        return this.GetJSONFieldObject<MJVideoArchetypeEntity_VideoPacing>('Pacing');
+    }
+    set PacingObject(value: MJVideoArchetypeEntity_VideoPacing | null) {
+        this.SetJSONFieldObject<MJVideoArchetypeEntity_VideoPacing>('Pacing', value);
     }
 
     /**
