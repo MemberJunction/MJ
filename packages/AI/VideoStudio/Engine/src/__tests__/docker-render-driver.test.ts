@@ -1,3 +1,4 @@
+import { constants as bufferConstants } from 'node:buffer';
 import { spawnSync } from 'node:child_process';
 import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
@@ -6,14 +7,15 @@ import { createInterface } from 'node:readline';
 import { PassThrough, Readable } from 'node:stream';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as mjCore from '@memberjunction/core';
-import type {
-    HarnessProcess,
-    HarnessProcessSpec,
-    ISandboxProvider,
-    SandboxConfig,
-    SandboxExecutor,
-    SandboxHandle,
-    WorkspaceKey,
+import {
+    DockerSandboxProvider,
+    type HarnessProcess,
+    type HarnessProcessSpec,
+    type ISandboxProvider,
+    type SandboxConfig,
+    type SandboxExecutor,
+    type SandboxHandle,
+    type WorkspaceKey,
 } from '@memberjunction/ai-agent-harness';
 import { FakeRenderBackend, RunOneShot } from '@memberjunction/video-studio-render-worker';
 import {
@@ -22,7 +24,6 @@ import {
     DEFAULT_DOCKER_PIDS_LIMIT,
     DEFAULT_DOCKER_RENDER_IMAGE,
     DEFAULT_DOCKER_SHM_SIZE_MB,
-    DEFAULT_DOCKER_WORKSPACE_ROOT,
     DEFAULT_RENDER_REQUEST_TIMEOUT_MS,
     DEFAULT_RENDER_STARTUP_TIMEOUT_MS,
     DEFAULT_RENDER_TIMEOUT_MS,
@@ -191,7 +192,6 @@ function makeDockerSettings(overrides?: Partial<VideoRenderSettings>): VideoRend
         Remote: {},
         Docker: {
             Image: DEFAULT_DOCKER_RENDER_IMAGE,
-            WorkspaceRoot: DEFAULT_DOCKER_WORKSPACE_ROOT,
             Cpus: DEFAULT_DOCKER_CPUS,
             MemoryMb: DEFAULT_DOCKER_MEMORY_MB,
             PidsLimit: DEFAULT_DOCKER_PIDS_LIMIT,
@@ -755,25 +755,38 @@ describe('DockerRenderDriver isolation, hardening, and lifecycle unit tests', ()
         });
     });
 
-    it('rejects oversized video output and VideoSizeBytes mismatches with Code === "Internal" before handle.readFile() is called', async () => {
+    it('rejects oversized video output and VideoSizeBytes mismatches with Code === "Internal" before reading file bytes', async () => {
         const probeDir = await makeTempDir();
         const probeFile = path.join(probeDir, 'probe.txt');
         await fs.writeFile(probeFile, 'probe', 'utf8');
         const probeHandle = await fs.open(probeFile, 'r');
         const fileHandleProto = Object.getPrototypeOf(probeHandle) as {
+            read: (
+                buffer: Buffer,
+                offset: number,
+                length: number,
+                position: number | null,
+            ) => Promise<{ bytesRead: number; buffer: Buffer }>;
             readFile: (...args: unknown[]) => Promise<Buffer>;
         };
         await probeHandle.close();
 
-        const origReadFile = fileHandleProto.readFile;
+        const origRead = fileHandleProto.read;
         const readContents: string[] = [];
-        const readFileSpy = vi
-            .spyOn(fileHandleProto, 'readFile')
-            .mockImplementation(async function (this: unknown, ...args: unknown[]) {
-                const buf = await origReadFile.apply(this, args);
-                readContents.push(Buffer.from(buf).toString('utf8'));
-                return buf;
+        const readSpy = vi
+            .spyOn(fileHandleProto, 'read')
+            .mockImplementation(async function (
+                this: unknown,
+                buffer: Buffer,
+                offset: number,
+                length: number,
+                position: number | null,
+            ) {
+                const res = await origRead.call(this, buffer, offset, length, position);
+                readContents.push(buffer.subarray(offset, offset + res.bytesRead).toString('utf8'));
+                return res;
             });
+        const readFileSpy = vi.spyOn(fileHandleProto, 'readFile');
 
         const makeFakeVideoProvider = (videoBytes: Uint8Array, declaredVideoSizeBytes: number): ISandboxProvider => ({
             Provision: async (key: WorkspaceKey): Promise<SandboxHandle> => {
@@ -852,12 +865,13 @@ describe('DockerRenderDriver isolation, hardening, and lifecycle unit tests', ()
             name: 'VideoRenderError',
             Code: 'Internal',
         });
-        // Only result.json was read; video.mp4 handle.readFile() was never called
-        expect(readFileSpy).toHaveBeenCalledTimes(1);
+        // Only result.json was read via handle.read; video.mp4 was never read and handle.readFile() was never called
+        expect(readFileSpy).toHaveBeenCalledTimes(0);
+        expect(readSpy).toHaveBeenCalledTimes(1);
         expect(readContents[0]).toContain('"Format":"mp4"');
 
         // 2. VideoSizeBytes mismatch (file is 32 bytes, metadata declares 48 bytes)
-        readFileSpy.mockClear();
+        readSpy.mockClear();
         readContents.length = 0;
         const mismatchBytes = Buffer.alloc(32, 0x42);
         const mismatchDriver = new DockerRenderDriver(
@@ -868,7 +882,8 @@ describe('DockerRenderDriver isolation, hardening, and lifecycle unit tests', ()
             name: 'VideoRenderError',
             Code: 'Internal',
         });
-        expect(readFileSpy).toHaveBeenCalledTimes(1);
+        expect(readFileSpy).toHaveBeenCalledTimes(0);
+        expect(readSpy).toHaveBeenCalledTimes(1);
         expect(readContents[0]).toContain('"Format":"mp4"');
 
         // 3. Image-carrying JSON output (CaptureStills > 1 MiB) uses MaxOutputBytes instead of the 1 MiB JSON cap
@@ -946,7 +961,7 @@ describe('DockerRenderDriver isolation, hardening, and lifecycle unit tests', ()
         expect(stillsRes.Stills).toHaveLength(1);
         expect(stillsRes.Stills[0]!.ImageBase64.length).toBeGreaterThan(1024 * 1024);
 
-        readFileSpy.mockClear();
+        readSpy.mockClear();
         const stillsTooBigDriver = new DockerRenderDriver(
             makeDockerSettings({ MaxOutputBytes: 512 * 1024 }),
             makeLargeStillsProvider(),
@@ -960,9 +975,468 @@ describe('DockerRenderDriver isolation, hardening, and lifecycle unit tests', ()
             }),
         ).rejects.toMatchObject({
             name: 'VideoRenderError',
-            Code: 'Internal',
+            Code: 'BodyTooLarge',
         });
+        expect(readSpy).toHaveBeenCalledTimes(0);
         expect(readFileSpy).toHaveBeenCalledTimes(0);
+
+        // 4. Image result cap is clamped at buffer.constants.MAX_STRING_LENGTH even when MaxOutputBytes is larger
+        const makeSparseOverStringLimitStillsProvider = (): ISandboxProvider => ({
+            Provision: async (key: WorkspaceKey): Promise<SandboxHandle> => {
+                const hostWorkspace = await fs.mkdtemp(
+                    path.join(os.tmpdir(), 'mj-vs-sparse-stills-ws-'),
+                );
+                tempDirs.push(hostWorkspace);
+                return {
+                    WorkspacePath: '/workspace',
+                    HostWorkspacePath: hostWorkspace,
+                    Key: key,
+                    Ephemeral: true,
+                    Executor: {
+                        Run: (): HarnessProcess => {
+                            const stdout = new PassThrough();
+                            const stderr = new PassThrough();
+                            const stdin = new PassThrough();
+                            const exitCode = (async (): Promise<number | null> => {
+                                try {
+                                    const resultPath = path.join(
+                                        hostWorkspace,
+                                        'out',
+                                        'result.json',
+                                    );
+                                    await fs.writeFile(resultPath, '', 'utf8');
+                                    await fs.truncate(
+                                        resultPath,
+                                        bufferConstants.MAX_STRING_LENGTH + 1,
+                                    );
+                                    return 0;
+                                } finally {
+                                    stdout.end();
+                                    stderr.end();
+                                }
+                            })();
+                            return {
+                                Stdin: stdin,
+                                Stdout: streamToLines(stdout),
+                                Stderr: streamToLines(stderr),
+                                ExitCode: exitCode,
+                                Kill: () => stdin.end(),
+                            };
+                        },
+                    },
+                };
+            },
+            Finalize: async (handle) => {
+                if (handle.HostWorkspacePath) {
+                    await fs.rm(handle.HostWorkspacePath, { recursive: true, force: true });
+                }
+            },
+        });
+
+        readSpy.mockClear();
+        const overStringLimitDriver = new DockerRenderDriver(
+            makeDockerSettings({ MaxOutputBytes: bufferConstants.MAX_STRING_LENGTH + 1024 * 1024 }),
+            makeSparseOverStringLimitStillsProvider(),
+        );
+        await expect(
+            overStringLimitDriver.CaptureStills({
+                Bundle: CreateMinimalRenderRequest().Bundle,
+                Width: MINIMAL_BUNDLE_WIDTH,
+                Height: MINIMAL_BUNDLE_HEIGHT,
+                Points: [{ Key: 'frame-0', TimestampSeconds: 0, Role: 'Custom', Label: 'Frame 0' }],
+            }),
+        ).rejects.toMatchObject({
+            name: 'VideoRenderError',
+            Code: 'BodyTooLarge',
+            message: expect.stringContaining(String(bufferConstants.MAX_STRING_LENGTH)),
+        });
+        expect(readSpy).toHaveBeenCalledTimes(0);
+    });
+
+    it('reads only the checked stat.size bytes with handle.read in a loop when video.mp4 grows to 1 MiB after stat, and rejects Internal if the file shrinks while reading', async () => {
+        const probeDir = await makeTempDir();
+        const probeFile = path.join(probeDir, 'probe-stat.txt');
+        await fs.writeFile(probeFile, 'probe', 'utf8');
+        const probeHandle = await fs.open(probeFile, 'r');
+        const fileHandleProto = Object.getPrototypeOf(probeHandle) as {
+            stat: (...args: unknown[]) => Promise<import('node:fs').Stats>;
+        };
+        await probeHandle.close();
+
+        let currentSafeVideoPath = '';
+        let truncateAfterStatBytes: number | undefined;
+        const origStat = fileHandleProto.stat;
+        vi.spyOn(fileHandleProto, 'stat').mockImplementation(async function (
+            this: unknown,
+            ...args: unknown[]
+        ) {
+            const st = await origStat.apply(this, args);
+            if (st.size === 32 && truncateAfterStatBytes !== undefined && currentSafeVideoPath) {
+                await fs.truncate(currentSafeVideoPath, truncateAfterStatBytes);
+            }
+            return st;
+        });
+
+        const makeGrowingFileProvider = (): ISandboxProvider => ({
+            Provision: async (key: WorkspaceKey): Promise<SandboxHandle> => {
+                const hostWorkspace = await fs.mkdtemp(
+                    path.join(os.tmpdir(), 'mj-vs-grow-after-stat-ws-'),
+                );
+                tempDirs.push(hostWorkspace);
+                currentSafeVideoPath = path.join(`${hostWorkspace}.out`, 'out', 'video.mp4');
+
+                return {
+                    WorkspacePath: '/workspace',
+                    HostWorkspacePath: hostWorkspace,
+                    Key: key,
+                    Ephemeral: true,
+                    Executor: {
+                        Run: (): HarnessProcess => {
+                            const stdout = new PassThrough();
+                            const stderr = new PassThrough();
+                            const stdin = new PassThrough();
+                            const exitCode = (async (): Promise<number | null> => {
+                                try {
+                                    const outDir = path.join(hostWorkspace, 'out');
+                                    await fs.writeFile(
+                                        path.join(outDir, 'result.json'),
+                                        JSON.stringify({
+                                            Format: 'mp4',
+                                            VideoID: 'video.mp4',
+                                            VideoSizeBytes: 32,
+                                            MimeType: 'video/mp4',
+                                            Width: MINIMAL_BUNDLE_WIDTH,
+                                            Height: MINIMAL_BUNDLE_HEIGHT,
+                                            Fps: MINIMAL_BUNDLE_FPS,
+                                            DurationSeconds: MINIMAL_BUNDLE_DURATION_SECONDS,
+                                            FrameCount: 60,
+                                            HasAudio: false,
+                                            RendererVersion: 'test',
+                                            RenderDurationMs: 10,
+                                        }),
+                                        'utf8',
+                                    );
+                                    await fs.writeFile(
+                                        path.join(outDir, 'video.mp4'),
+                                        Buffer.alloc(32, 0x37),
+                                    );
+                                    return 0;
+                                } finally {
+                                    stdout.end();
+                                    stderr.end();
+                                }
+                            })();
+                            return {
+                                Stdin: stdin,
+                                Stdout: streamToLines(stdout),
+                                Stderr: streamToLines(stderr),
+                                ExitCode: exitCode,
+                                Kill: () => stdin.end(),
+                            };
+                        },
+                    },
+                };
+            },
+            Finalize: async (handle) => {
+                if (handle.HostWorkspacePath) {
+                    await fs.rm(handle.HostWorkspacePath, { recursive: true, force: true });
+                }
+            },
+        });
+
+        // 1. Grow video.mp4 from 32 bytes to 1 MiB right after stat returns -> Render reads exactly 32 bytes (never > MaxOutputBytes: 64)
+        truncateAfterStatBytes = 1024 * 1024;
+        const growDriver = new DockerRenderDriver(
+            makeDockerSettings({ MaxOutputBytes: 64 }),
+            makeGrowingFileProvider(),
+        );
+        const res = await growDriver.Render(CreateMinimalRenderRequest());
+        expect(res.Video.byteLength).toBe(32);
+        expect(res.Video.byteLength).toBeLessThanOrEqual(64);
+        expect(Buffer.from(res.Video).equals(Buffer.alloc(32, 0x37))).toBe(true);
+
+        // 2. Shrink video.mp4 from 32 bytes to 10 bytes right after stat returns -> rejects Internal
+        truncateAfterStatBytes = 10;
+        const shrinkDriver = new DockerRenderDriver(
+            makeDockerSettings({ MaxOutputBytes: 64 }),
+            makeGrowingFileProvider(),
+        );
+        await expect(shrinkDriver.Render(CreateMinimalRenderRequest())).rejects.toMatchObject({
+            name: 'VideoRenderError',
+            Code: 'Internal',
+            message: expect.stringContaining('shrank while reading'),
+        });
+    });
+
+    it('enforces the 1 MiB (1048576-byte) cap on non-image result.json (check) and error.json even when MaxOutputBytes is 4 MiB', async () => {
+        const oneMiBPlusOne = 1024 * 1024 + 1;
+
+        // 1. Check result.json of 1 MiB + 1 byte rejects Internal naming 1048576
+        const oversizedCheckProvider: ISandboxProvider = {
+            Provision: async (key: WorkspaceKey): Promise<SandboxHandle> => {
+                const hostWorkspace = await fs.mkdtemp(
+                    path.join(os.tmpdir(), 'mj-vs-check-json-cap-ws-'),
+                );
+                tempDirs.push(hostWorkspace);
+                return {
+                    WorkspacePath: '/workspace',
+                    HostWorkspacePath: hostWorkspace,
+                    Key: key,
+                    Ephemeral: true,
+                    Executor: {
+                        Run: (): HarnessProcess => {
+                            const stdout = new PassThrough();
+                            const stderr = new PassThrough();
+                            const stdin = new PassThrough();
+                            const exitCode = (async (): Promise<number | null> => {
+                                try {
+                                    await fs.writeFile(
+                                        path.join(hostWorkspace, 'out', 'result.json'),
+                                        Buffer.alloc(oneMiBPlusOne, 0x20),
+                                    );
+                                    return 0;
+                                } finally {
+                                    stdout.end();
+                                    stderr.end();
+                                }
+                            })();
+                            return {
+                                Stdin: stdin,
+                                Stdout: streamToLines(stdout),
+                                Stderr: streamToLines(stderr),
+                                ExitCode: exitCode,
+                                Kill: () => stdin.end(),
+                            };
+                        },
+                    },
+                };
+            },
+            Finalize: async (handle) => {
+                if (handle.HostWorkspacePath) {
+                    await fs.rm(handle.HostWorkspacePath, { recursive: true, force: true });
+                }
+            },
+        };
+
+        const checkDriver = new DockerRenderDriver(
+            makeDockerSettings({ MaxOutputBytes: 4 * 1024 * 1024 }),
+            oversizedCheckProvider,
+        );
+        await expect(
+            checkDriver.Check({
+                Bundle: CreateMinimalRenderRequest().Bundle,
+                Width: MINIMAL_BUNDLE_WIDTH,
+                Height: MINIMAL_BUNDLE_HEIGHT,
+            }),
+        ).rejects.toMatchObject({
+            name: 'VideoRenderError',
+            Code: 'Internal',
+            message: expect.stringContaining('1048576'),
+        });
+
+        // 2. error.json of 1 MiB + 1 byte on exit 1 gives the generic Internal error, not the code inside it
+        const prefix = '{"Code":"LintBlocked","Message":"';
+        const suffix = '"}';
+        const paddedMessage = 'x'.repeat(oneMiBPlusOne - prefix.length - suffix.length);
+        const oversizedErrorJson = `${prefix}${paddedMessage}${suffix}`;
+        expect(Buffer.byteLength(oversizedErrorJson, 'utf8')).toBe(oneMiBPlusOne);
+
+        const oversizedErrorProvider: ISandboxProvider = {
+            Provision: async (key: WorkspaceKey): Promise<SandboxHandle> => {
+                const hostWorkspace = await fs.mkdtemp(
+                    path.join(os.tmpdir(), 'mj-vs-error-json-cap-ws-'),
+                );
+                tempDirs.push(hostWorkspace);
+                return {
+                    WorkspacePath: '/workspace',
+                    HostWorkspacePath: hostWorkspace,
+                    Key: key,
+                    Ephemeral: true,
+                    Executor: {
+                        Run: (): HarnessProcess => {
+                            const stdout = new PassThrough();
+                            const stderr = new PassThrough();
+                            const stdin = new PassThrough();
+                            const exitCode = (async (): Promise<number | null> => {
+                                try {
+                                    await fs.writeFile(
+                                        path.join(hostWorkspace, 'out', 'error.json'),
+                                        oversizedErrorJson,
+                                        'utf8',
+                                    );
+                                    return 1;
+                                } finally {
+                                    stdout.end();
+                                    stderr.end();
+                                }
+                            })();
+                            return {
+                                Stdin: stdin,
+                                Stdout: streamToLines(stdout),
+                                Stderr: streamToLines(stderr),
+                                ExitCode: exitCode,
+                                Kill: () => stdin.end(),
+                            };
+                        },
+                    },
+                };
+            },
+            Finalize: async (handle) => {
+                if (handle.HostWorkspacePath) {
+                    await fs.rm(handle.HostWorkspacePath, { recursive: true, force: true });
+                }
+            },
+        };
+
+        const errorDriver = new DockerRenderDriver(
+            makeDockerSettings({ MaxOutputBytes: 4 * 1024 * 1024 }),
+            oversizedErrorProvider,
+        );
+        let caught: unknown;
+        try {
+            await errorDriver.Render(CreateMinimalRenderRequest());
+        } catch (err) {
+            caught = err;
+        }
+        expect(caught).toBeInstanceOf(VideoRenderError);
+        const renderErr = caught as VideoRenderError;
+        expect(renderErr.Code).toBe('Internal');
+        expect(renderErr.Code).not.toBe('LintBlocked');
+        expect(renderErr.message).toContain('without writing a structured error.json');
+    });
+
+    it('never deletes the workspace or .out directory when the container may still be running (stop+kill fail -> neither deleted, one log each; stop fails+kill works -> both deleted; inspect errors -> treated as running)', async () => {
+        const logErrorSpy = vi.spyOn(mjCore, 'LogError').mockImplementation(() => undefined);
+        const wsRoot = await makeTempDir();
+
+        const makeOneShotExecutor = (hostPath: string): SandboxExecutor => ({
+            Run: (spec: HarnessProcessSpec): HarnessProcess => {
+                const stdout = new PassThrough();
+                const stderr = new PassThrough();
+                const stdin = new PassThrough();
+                const translatedArgs = spec.Args.slice(1).map((arg) =>
+                    arg.startsWith('/workspace/')
+                        ? path.join(hostPath, arg.slice('/workspace/'.length))
+                        : arg,
+                );
+                const backend = new FakeRenderBackend({ StepDelayMs: 5 });
+                const exitCode = (async (): Promise<number | null> => {
+                    try {
+                        return await RunOneShot(translatedArgs, backend, stdout, {
+                            Stderr: stderr,
+                            Stdin: stdin,
+                        });
+                    } finally {
+                        stdout.end();
+                        stderr.end();
+                    }
+                })();
+                return {
+                    Stdin: stdin,
+                    Stdout: streamToLines(stdout),
+                    Stderr: streamToLines(stderr),
+                    ExitCode: exitCode,
+                    Kill: () => stdin.end(),
+                };
+            },
+        });
+
+        // 1. stop fails and kill fails (inspect -> 'true') => neither folder deleted, one LogError each
+        let lastHostPath = '';
+        const providerStopKillFail = new DockerSandboxProvider({
+            hostRootPath: wsRoot,
+            dockerRunner: async (args: string[]): Promise<string> => {
+                if (args[0] === 'run') {
+                    return 'cid-stop-kill-fail';
+                }
+                if (args[0] === 'stop') {
+                    throw new Error('stop failed');
+                }
+                if (args[0] === 'kill') {
+                    throw new Error('kill failed');
+                }
+                if (args[0] === 'container' && args[1] === 'inspect') {
+                    return 'true';
+                }
+                return '';
+            },
+            executorFactory: (_containerName, hostPath) => {
+                lastHostPath = hostPath;
+                return makeOneShotExecutor(hostPath);
+            },
+        });
+        const driver1 = new DockerRenderDriver(makeDockerSettings(), providerStopKillFail);
+        const res1 = await driver1.Render(CreateMinimalRenderRequest());
+        expect(res1.Video.byteLength).toBeGreaterThan(0);
+        expect((await fs.stat(lastHostPath)).isDirectory()).toBe(true);
+        expect((await fs.stat(`${lastHostPath}.out`)).isDirectory()).toBe(true);
+        expect(logErrorSpy).toHaveBeenCalledTimes(2);
+        expect(String(logErrorSpy.mock.calls[0]?.[0] ?? '')).toContain(lastHostPath);
+        expect(String(logErrorSpy.mock.calls[1]?.[0] ?? '')).toContain(`${lastHostPath}.out`);
+
+        // 2. stop fails and kill works (inspect -> 'false') => both folders deleted, zero LogErrors
+        logErrorSpy.mockClear();
+        lastHostPath = '';
+        const providerKillOk = new DockerSandboxProvider({
+            hostRootPath: wsRoot,
+            dockerRunner: async (args: string[]): Promise<string> => {
+                if (args[0] === 'run') {
+                    return 'cid-kill-ok';
+                }
+                if (args[0] === 'stop') {
+                    throw new Error('stop failed');
+                }
+                if (args[0] === 'kill') {
+                    return 'killed';
+                }
+                if (args[0] === 'container' && args[1] === 'inspect') {
+                    return 'false';
+                }
+                return '';
+            },
+            executorFactory: (_containerName, hostPath) => {
+                lastHostPath = hostPath;
+                return makeOneShotExecutor(hostPath);
+            },
+        });
+        const driver2 = new DockerRenderDriver(makeDockerSettings(), providerKillOk);
+        const res2 = await driver2.Render(CreateMinimalRenderRequest());
+        expect(res2.Video.byteLength).toBeGreaterThan(0);
+        await expect(fs.stat(lastHostPath)).rejects.toMatchObject({ code: 'ENOENT' });
+        await expect(fs.stat(`${lastHostPath}.out`)).rejects.toMatchObject({ code: 'ENOENT' });
+        expect(logErrorSpy).toHaveBeenCalledTimes(0);
+
+        // 3. inspect errors => treated as running (neither folder deleted, one LogError each)
+        logErrorSpy.mockClear();
+        lastHostPath = '';
+        const providerInspectErr = new DockerSandboxProvider({
+            hostRootPath: wsRoot,
+            dockerRunner: async (args: string[]): Promise<string> => {
+                if (args[0] === 'run') {
+                    return 'cid-inspect-err';
+                }
+                if (args[0] === 'stop') {
+                    throw new Error('stop failed');
+                }
+                if (args[0] === 'kill') {
+                    return 'killed';
+                }
+                if (args[0] === 'container' && args[1] === 'inspect') {
+                    throw new Error('inspect failed');
+                }
+                return '';
+            },
+            executorFactory: (_containerName, hostPath) => {
+                lastHostPath = hostPath;
+                return makeOneShotExecutor(hostPath);
+            },
+        });
+        const driver3 = new DockerRenderDriver(makeDockerSettings(), providerInspectErr);
+        const res3 = await driver3.Render(CreateMinimalRenderRequest());
+        expect(res3.Video.byteLength).toBeGreaterThan(0);
+        expect((await fs.stat(lastHostPath)).isDirectory()).toBe(true);
+        expect((await fs.stat(`${lastHostPath}.out`)).isDirectory()).toBe(true);
+        expect(logErrorSpy).toHaveBeenCalledTimes(2);
     });
 
     it('fails closed on Windows (process.platform === "win32") naming the Remote driver without starting any container', async () => {
@@ -1003,7 +1477,7 @@ describe('DockerRenderDriver isolation, hardening, and lifecycle unit tests', ()
         const rootB = await driverB.ResolveWorkspaceRoot();
 
         expect(rootA).toBe(rootB);
-        expect(rootA).not.toBe(DEFAULT_DOCKER_WORKSPACE_ROOT);
+        expect(rootA).not.toBe(path.join(os.tmpdir(), 'mj-video-render'));
         expect(path.dirname(rootA)).toBe(os.tmpdir());
         expect(path.basename(rootA)).toMatch(/^mj-video-render-.+/);
         const stat = await fs.stat(rootA);

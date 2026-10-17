@@ -9,7 +9,6 @@ import {
     DEFAULT_DOCKER_PIDS_LIMIT,
     DEFAULT_DOCKER_RENDER_IMAGE,
     DEFAULT_DOCKER_SHM_SIZE_MB,
-    DEFAULT_DOCKER_WORKSPACE_ROOT,
     DEFAULT_RENDER_MAX_OUTPUT_BYTES,
     DEFAULT_RENDER_REQUEST_TIMEOUT_MS,
     DEFAULT_RENDER_STARTUP_TIMEOUT_MS,
@@ -106,7 +105,6 @@ describe('ReadVideoRenderSettings', () => {
         await fs.writeFile(path.join(dir, 'mj.config.cjs'), 'module.exports = {};\n', 'utf8');
 
         const settings = ReadVideoRenderSettings(dir);
-        expect(DEFAULT_DOCKER_WORKSPACE_ROOT).toContain('mj-video-render');
         expect(settings.Docker.WorkspaceRoot).toBeUndefined();
         expect(settings).toEqual({
             Driver: DEFAULT_VIDEO_RENDER_DRIVER,

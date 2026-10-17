@@ -1,3 +1,4 @@
+import { constants as bufferConstants } from 'node:buffer';
 import { randomUUID } from 'node:crypto';
 import { constants as fsConstants } from 'node:fs';
 import * as fs from 'node:fs/promises';
@@ -136,6 +137,7 @@ function buildProvisionUnavailableMessage(image: string, cause: unknown): string
 interface ReadRegularFileOptions {
     maxBytes: number;
     expectedBytes?: number;
+    overMaxCode?: RenderWorkerErrorCode;
 }
 
 async function moveAndVerifySafeOutDir(
@@ -186,7 +188,7 @@ async function readRegularFileNoFollow(
         }
         if (stat.size > options.maxBytes) {
             throw new VideoRenderError(
-                'Internal',
+                options.overMaxCode ?? 'Internal',
                 `Docker render worker operation '${op}' output file '${path.basename(filePath)}' size (${stat.size} bytes) exceeds maximum allowed (${options.maxBytes} bytes).`,
             );
         }
@@ -196,7 +198,19 @@ async function readRegularFileNoFollow(
                 `Docker render worker operation '${op}' output file '${path.basename(filePath)}' size (${stat.size} bytes) does not match claimed VideoSizeBytes (${options.expectedBytes} bytes).`,
             );
         }
-        return await handle.readFile();
+        const buffer = Buffer.alloc(stat.size);
+        let offset = 0;
+        while (offset < stat.size) {
+            const { bytesRead } = await handle.read(buffer, offset, stat.size - offset, offset);
+            if (bytesRead <= 0) {
+                throw new VideoRenderError(
+                    'Internal',
+                    `Docker render worker operation '${op}' output file '${path.basename(filePath)}' shrank while reading (${offset} of ${stat.size} bytes read).`,
+                );
+            }
+            offset += bytesRead;
+        }
+        return buffer;
     } catch (error) {
         if (error instanceof VideoRenderError) {
             throw error;
@@ -209,6 +223,25 @@ async function readRegularFileNoFollow(
         );
     } finally {
         await handle?.close().catch(() => undefined);
+    }
+}
+
+type SandboxProviderWithRunningCheck = ISandboxProvider & {
+    IsContainerRunning?: (handle: SandboxHandle) => Promise<boolean>;
+};
+
+async function isProviderContainerRunning(
+    provider: ISandboxProvider,
+    handle: SandboxHandle,
+): Promise<boolean> {
+    const providerWithCheck = provider as SandboxProviderWithRunningCheck;
+    if (typeof providerWithCheck.IsContainerRunning !== 'function') {
+        return false;
+    }
+    try {
+        return await providerWithCheck.IsContainerRunning(handle);
+    } catch {
+        return true;
     }
 }
 
@@ -639,13 +672,15 @@ export class DockerRenderDriver extends VideoRenderDriverBase {
 
             const safeOutDir = await moveAndVerifySafeOutDir(hostOutDir, safeOutRoot, op);
 
-            const resultMaxBytes =
-                op === 'stills' || op === 'contact-sheet' || op === 'keyframes'
-                    ? this.maxOutputBytes
-                    : MAX_RENDER_JSON_RESPONSE_BYTES;
+            const isImageResultOp =
+                op === 'stills' || op === 'contact-sheet' || op === 'keyframes';
+            const resultMaxBytes = isImageResultOp
+                ? Math.min(this.maxOutputBytes, bufferConstants.MAX_STRING_LENGTH)
+                : MAX_RENDER_JSON_RESPONSE_BYTES;
             const resultRaw = (
                 await readRegularFileNoFollow(path.join(safeOutDir, 'result.json'), op, {
                     maxBytes: resultMaxBytes,
+                    overMaxCode: isImageResultOp ? 'BodyTooLarge' : 'Internal',
                 })
             ).toString('utf8');
             const parsedResult = JSON.parse(resultRaw) as unknown;
@@ -699,13 +734,20 @@ export class DockerRenderDriver extends VideoRenderDriverBase {
         } finally {
             await provider.Finalize(handle, outcome);
             if (safeOutRoot) {
-                try {
-                    await fs.rm(safeOutRoot, { recursive: true, force: true });
-                } catch (rmError) {
-                    const detail = rmError instanceof Error ? rmError.message : String(rmError);
+                const containerRunning = await isProviderContainerRunning(provider, handle);
+                if (containerRunning) {
                     LogError(
-                        `Failed to remove Docker render output directory ${safeOutRoot}: ${detail}`,
+                        `Leaving Docker render output directory ${safeOutRoot} in place because container mj-harness-${handle.Key.RunId} may still be running.`,
                     );
+                } else {
+                    try {
+                        await fs.rm(safeOutRoot, { recursive: true, force: true });
+                    } catch (rmError) {
+                        const detail = rmError instanceof Error ? rmError.message : String(rmError);
+                        LogError(
+                            `Failed to remove Docker render output directory ${safeOutRoot}: ${detail}`,
+                        );
+                    }
                 }
             }
         }

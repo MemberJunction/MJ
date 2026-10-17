@@ -1,5 +1,3 @@
-import * as os from 'node:os';
-import * as path from 'node:path';
 import { cosmiconfigSync } from 'cosmiconfig';
 import { LogWarning } from '@memberjunction/core';
 
@@ -20,9 +18,6 @@ export const DEFAULT_RENDER_MAX_OUTPUT_BYTES = 512 * 1024 * 1024;
 
 /** Default Docker image tag for `DockerRenderDriver` (`VS-RND-4`). */
 export const DEFAULT_DOCKER_RENDER_IMAGE = 'mj-video-render-worker:local';
-
-/** Default host workspace root directory for `DockerRenderDriver` bind mounts (`VS-RND-4`). */
-export const DEFAULT_DOCKER_WORKSPACE_ROOT = path.join(os.tmpdir(), 'mj-video-render');
 
 /** Default CPU core limit (`--cpus`) for `DockerRenderDriver` containers (`VS-RND-4`). */
 export const DEFAULT_DOCKER_CPUS = 2;

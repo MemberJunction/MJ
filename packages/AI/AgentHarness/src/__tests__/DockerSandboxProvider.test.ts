@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import * as mjCore from '@memberjunction/core';
 
 const spawnMock = vi.hoisted(() => vi.fn());
 
@@ -48,6 +49,7 @@ describe('DockerSandboxProvider and LocalDirectorySandboxProvider', () => {
     });
 
     afterEach(async () => {
+        vi.restoreAllMocks();
         await rm(tempRoot, { recursive: true, force: true });
     });
 
@@ -173,5 +175,97 @@ describe('DockerSandboxProvider and LocalDirectorySandboxProvider', () => {
         expect(dirStat.isDirectory()).toBe(true);
 
         await provider.Finalize(handle, 'success');
+    });
+
+    it('Finalize tries docker kill when docker stop fails, skips deleting the workspace with one LogError when the container is still running, deletes when kill succeeds, and treats inspect errors as running', async () => {
+        const logErrorSpy = vi.spyOn(mjCore, 'LogError').mockImplementation(() => undefined);
+
+        // Case 1: stop fails and kill fails (inspect -> 'true') => workspace NOT deleted, one LogError
+        const provider1 = new DockerSandboxProvider({
+            hostRootPath: tempRoot,
+            dockerRunner: async (args: string[]): Promise<string> => {
+                if (args[0] === 'run') {
+                    return 'cid-1';
+                }
+                if (args[0] === 'stop') {
+                    throw new Error('stop timed out');
+                }
+                if (args[0] === 'kill') {
+                    throw new Error('kill failed');
+                }
+                if (args[0] === 'container' && args[1] === 'inspect') {
+                    return 'true';
+                }
+                return '';
+            },
+        });
+        const handle1 = await provider1.Provision(
+            { Scope: 'run', AgentId: 'video-studio-render', RunId: 'stop-kill-fail' },
+            { NetworkPolicy: 'none' },
+        );
+        const hostDir1 = join(tempRoot, 'run', 'stop-kill-fail');
+        await provider1.Finalize(handle1, 'failure');
+        expect((await stat(hostDir1)).isDirectory()).toBe(true);
+        expect(logErrorSpy).toHaveBeenCalledTimes(1);
+        expect(String(logErrorSpy.mock.calls[0]?.[0] ?? '')).toContain(hostDir1);
+
+        // Case 2: stop fails and kill works (inspect -> 'false') => workspace IS deleted, zero LogErrors
+        logErrorSpy.mockClear();
+        const provider2 = new DockerSandboxProvider({
+            hostRootPath: tempRoot,
+            dockerRunner: async (args: string[]): Promise<string> => {
+                if (args[0] === 'run') {
+                    return 'cid-2';
+                }
+                if (args[0] === 'stop') {
+                    throw new Error('stop timed out');
+                }
+                if (args[0] === 'kill') {
+                    return 'mj-harness-stop-fail-kill-ok';
+                }
+                if (args[0] === 'container' && args[1] === 'inspect') {
+                    return 'false';
+                }
+                return '';
+            },
+        });
+        const handle2 = await provider2.Provision(
+            { Scope: 'run', AgentId: 'video-studio-render', RunId: 'stop-fail-kill-ok' },
+            { NetworkPolicy: 'none' },
+        );
+        const hostDir2 = join(tempRoot, 'run', 'stop-fail-kill-ok');
+        await provider2.Finalize(handle2, 'failure');
+        await expect(stat(hostDir2)).rejects.toMatchObject({ code: 'ENOENT' });
+        expect(logErrorSpy).toHaveBeenCalledTimes(0);
+
+        // Case 3: inspect errors (or returns unclear output) => treated as running (fail-safe true)
+        logErrorSpy.mockClear();
+        const provider3 = new DockerSandboxProvider({
+            hostRootPath: tempRoot,
+            dockerRunner: async (args: string[]): Promise<string> => {
+                if (args[0] === 'run') {
+                    return 'cid-3';
+                }
+                if (args[0] === 'stop') {
+                    throw new Error('stop timed out');
+                }
+                if (args[0] === 'kill') {
+                    return 'mj-harness-inspect-err';
+                }
+                if (args[0] === 'container' && args[1] === 'inspect') {
+                    throw new Error('docker daemon unreachable');
+                }
+                return '';
+            },
+        });
+        const handle3 = await provider3.Provision(
+            { Scope: 'run', AgentId: 'video-studio-render', RunId: 'inspect-err' },
+            { NetworkPolicy: 'none' },
+        );
+        expect(await provider3.IsContainerRunning(handle3)).toBe(true);
+        const hostDir3 = join(tempRoot, 'run', 'inspect-err');
+        await provider3.Finalize(handle3, 'failure');
+        expect((await stat(hostDir3)).isDirectory()).toBe(true);
+        expect(logErrorSpy).toHaveBeenCalledTimes(1);
     });
 });
