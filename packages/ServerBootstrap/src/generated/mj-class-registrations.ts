@@ -243,7 +243,7 @@ import {
     WorkOSProvider,
 } from '@memberjunction/auth-providers';
 
-// @memberjunction/core-entities (451 classes)
+// @memberjunction/core-entities (454 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -368,6 +368,8 @@ import {
     MJAuthenticationProviderEntity,
     MJAuthorizationEntity,
     MJAuthorizationRoleEntity,
+    MJBrandKitAssetEntity,
+    MJBrandKitEntity,
     MJClusterAnalysisClusterEntity,
     MJClusterAnalysisEntity,
     MJCollectionArtifactEntity,
@@ -684,6 +686,7 @@ import {
     MJVersionLabelEntity,
     MJVersionLabelItemEntity,
     MJVersionLabelRestoreEntity,
+    MJVideoArchetypeEntity,
     MJViewTypeEntity,
     MJWebSearchProviderEntity,
     MJWorkQueueDeduplicationEntity,
@@ -1881,15 +1884,17 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJAuthenticationProviderEntity,
     MJAuthorizationEntity,
     MJAuthorizationRoleEntity,
+    MJBrandKitAssetEntity,
+    MJBrandKitEntity,
     MJClusterAnalysisClusterEntity,
     MJClusterAnalysisEntity,
     MJCollectionArtifactEntity,
-    MJCollectionEntity,
-    MJCollectionPermissionEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJCollectionEntity,
+    MJCollectionPermissionEntity,
     MJCollectionPermissionEntityExtended,
     MJCommunicationBaseMessageTypeEntity,
     MJCommunicationLogEntity,
@@ -2088,12 +2093,12 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJQueryPermissionEntity,
     MJQuerySQLEntity,
     MJQueueEntity,
-    MJQueueTaskEntity,
-    MJQueueTypeEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJQueueTaskEntity,
+    MJQueueTypeEntity,
     MJRSUPendingWorkEntity,
     MJRecommendationEntity,
     MJRecommendationItemEntity,
@@ -2205,6 +2210,7 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJVersionLabelEntity,
     MJVersionLabelItemEntity,
     MJVersionLabelRestoreEntity,
+    MJVideoArchetypeEntity,
     MJViewTypeEntity,
     MJWebSearchProviderEntity,
     MJWorkQueueDeduplicationEntity,
@@ -2291,13 +2297,13 @@ const CLASS_REGISTRATIONS_2: any[] = [
     ExportJotFormCSVAction,
     ExportSurveyMonkeyCSVAction,
     ExportTypeformCSVAction,
-    GetGoogleFormAction,
-    GetGoogleFormsStatisticsAction,
-    GetJotFormAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    GetGoogleFormAction,
+    GetGoogleFormsStatisticsAction,
+    GetJotFormAction,
     GetJotFormStatisticsAction,
     GetJotFormSubmissionsAction,
     GetSingleGoogleFormsResponseAction,
@@ -2495,13 +2501,13 @@ const CLASS_REGISTRATIONS_3: any[] = [
     OpenAIReRanker,
     OpenSearchSearchProvider,
     SearchScopePermissionResolver,
-    StorageSearchProvider,
-    TagSearchProvider,
-    TypesenseSearchProvider,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    StorageSearchProvider,
+    TagSearchProvider,
+    TypesenseSearchProvider,
     VectorSearchProvider,
     VoyageReRanker,
     AISkillExportMarkdownServerOperation,
@@ -2699,13 +2705,13 @@ const CLASS_REGISTRATIONS_4: any[] = [
     AddDocumentContentAction,
     AddRecordsToListAction,
     AddViewResultsToListAction,
-    AggregateDataAction,
-    AssignUserRolesAction,
-    BraveSearchAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    AggregateDataAction,
+    AssignUserRolesAction,
+    BraveSearchAction,
     BulkUpdateListItemStatusAction,
     BusinessDaysCalculatorAction,
     CSVParserAction,
@@ -2888,7 +2894,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1166;
+export const CLASS_REGISTRATIONS_COUNT = 1169;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

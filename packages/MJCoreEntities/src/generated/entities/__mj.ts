@@ -11231,6 +11231,177 @@ export const MJAuthorizationSchema = z.object({
 export type MJAuthorizationEntityType = z.infer<typeof MJAuthorizationSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Brand Kit Assets
+ */
+export const MJBrandKitAssetSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    BrandKitID: z.string().describe(`
+        * * Field Name: BrandKitID
+        * * Display Name: Brand Kit ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Brand Kits (vwBrandKits.ID)
+        * * Description: The brand kit this file belongs to.`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Display name of the asset.`),
+    AssetType: z.union([z.literal('Font'), z.literal('Image'), z.literal('Logo'), z.literal('LogoMark'), z.literal('Music'), z.literal('Other'), z.literal('Screenshot'), z.literal('SoundEffect'), z.literal('Video')]).describe(`
+        * * Field Name: AssetType
+        * * Display Name: Asset Type
+        * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Font
+    *   * Image
+    *   * Logo
+    *   * LogoMark
+    *   * Music
+    *   * Other
+    *   * Screenshot
+    *   * SoundEffect
+    *   * Video
+        * * Description: Logo, LogoMark, Font, Image, Screenshot, Video, Music, SoundEffect or Other.`),
+    FileID: z.string().describe(`
+        * * Field Name: FileID
+        * * Display Name: File ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Files (vwFiles.ID)
+        * * Description: The stored file (MJ: Files).`),
+    Usage: z.string().nullable().describe(`
+        * * Field Name: Usage
+        * * Display Name: Usage
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: When and how to use the asset.`),
+    IsPrimary: z.boolean().describe(`
+        * * Field Name: IsPrimary
+        * * Display Name: Is Primary
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: The main asset of its type, for example the primary logo.`),
+    Sequence: z.number().describe(`
+        * * Field Name: Sequence
+        * * Display Name: Sequence
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Order within the kit; lower first.`),
+    LicenseNotes: z.string().nullable().describe(`
+        * * Field Name: LicenseNotes
+        * * Display Name: License Notes
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Who may use the file, and where (fonts, music, stock imagery).`),
+    IsGenerationReference: z.boolean().describe(`
+        * * Field Name: IsGenerationReference
+        * * Display Name: Is Generation Reference
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When set, the file may be sent to image or video generation models as a style or subject reference. Allowed only for Image, Screenshot, Logo, LogoMark and Video assets.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    BrandKit: z.string().describe(`
+        * * Field Name: BrandKit
+        * * Display Name: Brand Kit
+        * * SQL Data Type: nvarchar(255)`),
+    File: z.string().describe(`
+        * * Field Name: File
+        * * Display Name: File
+        * * SQL Data Type: nvarchar(500)`),
+});
+
+export type MJBrandKitAssetEntityType = z.infer<typeof MJBrandKitAssetSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Brand Kits
+ */
+export const MJBrandKitSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Display name of the brand kit.`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: What the kit is for and when to use it.`),
+    CompanyID: z.string().nullable().describe(`
+        * * Field Name: CompanyID
+        * * Display Name: Company ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Companies (vwCompanies.ID)
+        * * Description: The company this kit belongs to. NULL means org-wide: available to all companies.`),
+    IsDefault: z.boolean().describe(`
+        * * Field Name: IsDefault
+        * * Display Name: Is Default
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: The kit used when a caller names none. At most one default per CompanyID scope (NULL is its own scope), enforced on save by the server entity.`),
+    Status: z.union([z.literal('Active'), z.literal('Inactive')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Inactive
+        * * Description: Active kits are offered to users and generators; Inactive kits are kept but hidden.`),
+    Style: z.string().nullable().describe(`
+        * * Field Name: Style
+        * * Display Name: Style
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON (IBrandStyle): palette, typography, imagery style, keep and avoid lists, and an optional Motion section.`),
+    Voice: z.string().nullable().describe(`
+        * * Field Name: Voice
+        * * Display Name: Voice
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON (IBrandVoice): text-to-speech provider, voice ID, settings and pronunciation notes.`),
+    GenerationPolicy: z.string().nullable().describe(`
+        * * Field Name: GenerationPolicy
+        * * Display Name: Generation Policy
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON (IBrandGenerationPolicy): whether generated images and video may be used, a style prompt, subjects to avoid, whether generated people are allowed (default: not allowed), and an optional per-run generation spend cap. NULL applies the defaults.`),
+    NeverInvent: z.string().nullable().describe(`
+        * * Field Name: NeverInvent
+        * * Display Name: Never Invent
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array of strings: facts about the brand a model must never fabricate, for example product screens, logos, metrics or customer names.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Company: z.string().nullable().describe(`
+        * * Field Name: Company
+        * * Display Name: Company
+        * * SQL Data Type: nvarchar(50)`),
+});
+
+export type MJBrandKitEntityType = z.infer<typeof MJBrandKitSchema>;
+
+/**
  * zod schema definition for the entity MJ: Cluster Analysis
  */
 export const MJClusterAnalysisSchema = z.object({
@@ -37603,6 +37774,119 @@ export const MJVersionLabelSchema = z.object({
 export type MJVersionLabelEntityType = z.infer<typeof MJVersionLabelSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Video Archetypes
+ */
+export const MJVideoArchetypeSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Archetype name, unique within its CompanyID scope.`),
+    Description: z.string().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: What the archetype is for; the Director reads it to pick one.`),
+    CompanyID: z.string().nullable().describe(`
+        * * Field Name: CompanyID
+        * * Display Name: Company ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Companies (vwCompanies.ID)
+        * * Description: The company that owns this archetype. NULL means shipped or org-wide: available to all companies.`),
+    Category: z.union([z.literal('Announcement'), z.literal('Briefing'), z.literal('DataStory'), z.literal('Explainer'), z.literal('Product'), z.literal('Social'), z.literal('Tutorial')]).describe(`
+        * * Field Name: Category
+        * * Display Name: Category
+        * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Announcement
+    *   * Briefing
+    *   * DataStory
+    *   * Explainer
+    *   * Product
+    *   * Social
+    *   * Tutorial
+        * * Description: Explainer, Product, DataStory, Social, Tutorial, Announcement or Briefing.`),
+    Status: z.union([z.literal('Active'), z.literal('Inactive')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Inactive
+        * * Description: Active archetypes are offered; Inactive are hidden.`),
+    DefaultDurationSeconds: z.number().describe(`
+        * * Field Name: DefaultDurationSeconds
+        * * Display Name: Default Duration Seconds
+        * * SQL Data Type: int
+        * * Description: Default film length, in seconds.`),
+    MinDurationSeconds: z.number().describe(`
+        * * Field Name: MinDurationSeconds
+        * * Display Name: Min Duration Seconds
+        * * SQL Data Type: int
+        * * Description: Shortest film length, in seconds.`),
+    MaxDurationSeconds: z.number().describe(`
+        * * Field Name: MaxDurationSeconds
+        * * Display Name: Max Duration Seconds
+        * * SQL Data Type: int
+        * * Description: Longest film length, in seconds.`),
+    DefaultFormats: z.string().describe(`
+        * * Field Name: DefaultFormats
+        * * Display Name: Default Formats
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Comma-separated default formats: any of 16:9, 9:16, 1:1.`),
+    BeatTemplate: z.string().describe(`
+        * * Field Name: BeatTemplate
+        * * Display Name: Beat Template
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array (VideoBeatTemplate[]): the beat slots a film of this archetype follows, with per-beat duration bounds.`),
+    Pacing: z.string().nullable().describe(`
+        * * Field Name: Pacing
+        * * Display Name: Pacing
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON (VideoPacing): cut cadence and hold rules.`),
+    Guidance: z.string().nullable().describe(`
+        * * Field Name: Guidance
+        * * Display Name: Guidance
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Markdown guidance for the Director and Storyboard.`),
+    DefaultInteractionMode: z.union([z.literal('ApproveStoryboard'), z.literal('ApproveStoryboardAndRoughCut'), z.literal('Autonomous')]).describe(`
+        * * Field Name: DefaultInteractionMode
+        * * Display Name: Default Interaction Mode
+        * * SQL Data Type: nvarchar(30)
+        * * Default Value: Autonomous
+    * * Value List Type: List
+    * * Possible Values 
+    *   * ApproveStoryboard
+    *   * ApproveStoryboardAndRoughCut
+    *   * Autonomous
+        * * Description: Default approval mode: Autonomous, ApproveStoryboard or ApproveStoryboardAndRoughCut.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Company: z.string().nullable().describe(`
+        * * Field Name: Company
+        * * Display Name: Company
+        * * SQL Data Type: nvarchar(50)`),
+});
+
+export type MJVideoArchetypeEntityType = z.infer<typeof MJVideoArchetypeSchema>;
+
+/**
  * zod schema definition for the entity MJ: View Types
  */
 export const MJViewTypeSchema = z.object({
@@ -39998,6 +40282,41 @@ export class MJAIAgentConfigurationEntity extends BaseEntity<MJAIAgentConfigurat
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * MJ: AI Agent Configurations - Delete method override to wrap in transaction since CascadeDeletes is true.
+    * Wrapping in a transaction ensures that all cascade delete operations are handled atomically.
+    * @public
+    * @method
+    * @override
+    * @memberof MJAIAgentConfigurationEntity
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    */
+    public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
+        if (Metadata.Provider.ProviderType === ProviderType.Database) { // global-provider-ok: codegen runs offline against a single provider
+            // For database providers, use the transaction methods directly
+            const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: codegen runs offline against a single provider
+            
+            try {
+                await provider.BeginTransaction();
+                const result = await super.Delete(options);
+                
+                if (result) {
+                    await provider.CommitTransaction();
+                    return true;
+                } else {
+                    await provider.RollbackTransaction();
+                    return false;
+                }
+            } catch (error) {
+                await provider.RollbackTransaction();
+                throw error;
+            }
+        } else {
+            // For network providers, cascading deletes are handled server-side
+            return super.Delete(options);
+        }
     }
 
     /**
@@ -72062,6 +72381,420 @@ export class MJAuthorizationEntity extends BaseEntity<MJAuthorizationEntityType>
     */
     get ParentIDChildCount(): number | null {
         return this.Get('ParentIDChildCount');
+    }
+}
+
+
+/**
+ * MJ: Brand Kit Assets - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: BrandKitAsset
+ * * Base View: vwBrandKitAssets
+ * * @description A file in a brand kit, with usage guidance, license notes, and whether generation models may receive it as a reference.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Brand Kit Assets')
+export class MJBrandKitAssetEntity extends BaseEntity<MJBrandKitAssetEntityType> {
+    /**
+    * Loads the MJ: Brand Kit Assets record from the database
+    * @param ID: string - primary key value to load the MJ: Brand Kit Assets record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJBrandKitAssetEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: BrandKitID
+    * * Display Name: Brand Kit ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Brand Kits (vwBrandKits.ID)
+    * * Description: The brand kit this file belongs to.
+    */
+    get BrandKitID(): string {
+        return this.Get('BrandKitID');
+    }
+    set BrandKitID(value: string) {
+        this.Set('BrandKitID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Display name of the asset.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: AssetType
+    * * Display Name: Asset Type
+    * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Font
+    *   * Image
+    *   * Logo
+    *   * LogoMark
+    *   * Music
+    *   * Other
+    *   * Screenshot
+    *   * SoundEffect
+    *   * Video
+    * * Description: Logo, LogoMark, Font, Image, Screenshot, Video, Music, SoundEffect or Other.
+    */
+    get AssetType(): 'Font' | 'Image' | 'Logo' | 'LogoMark' | 'Music' | 'Other' | 'Screenshot' | 'SoundEffect' | 'Video' {
+        return this.Get('AssetType');
+    }
+    set AssetType(value: 'Font' | 'Image' | 'Logo' | 'LogoMark' | 'Music' | 'Other' | 'Screenshot' | 'SoundEffect' | 'Video') {
+        this.Set('AssetType', value);
+    }
+
+    /**
+    * * Field Name: FileID
+    * * Display Name: File ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Files (vwFiles.ID)
+    * * Description: The stored file (MJ: Files).
+    */
+    get FileID(): string {
+        return this.Get('FileID');
+    }
+    set FileID(value: string) {
+        this.Set('FileID', value);
+    }
+
+    /**
+    * * Field Name: Usage
+    * * Display Name: Usage
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: When and how to use the asset.
+    */
+    get Usage(): string | null {
+        return this.Get('Usage');
+    }
+    set Usage(value: string | null) {
+        this.Set('Usage', value);
+    }
+
+    /**
+    * * Field Name: IsPrimary
+    * * Display Name: Is Primary
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: The main asset of its type, for example the primary logo.
+    */
+    get IsPrimary(): boolean {
+        return this.Get('IsPrimary');
+    }
+    set IsPrimary(value: boolean) {
+        this.Set('IsPrimary', value);
+    }
+
+    /**
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Order within the kit; lower first.
+    */
+    get Sequence(): number {
+        return this.Get('Sequence');
+    }
+    set Sequence(value: number) {
+        this.Set('Sequence', value);
+    }
+
+    /**
+    * * Field Name: LicenseNotes
+    * * Display Name: License Notes
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Who may use the file, and where (fonts, music, stock imagery).
+    */
+    get LicenseNotes(): string | null {
+        return this.Get('LicenseNotes');
+    }
+    set LicenseNotes(value: string | null) {
+        this.Set('LicenseNotes', value);
+    }
+
+    /**
+    * * Field Name: IsGenerationReference
+    * * Display Name: Is Generation Reference
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When set, the file may be sent to image or video generation models as a style or subject reference. Allowed only for Image, Screenshot, Logo, LogoMark and Video assets.
+    */
+    get IsGenerationReference(): boolean {
+        return this.Get('IsGenerationReference');
+    }
+    set IsGenerationReference(value: boolean) {
+        this.Set('IsGenerationReference', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: BrandKit
+    * * Display Name: Brand Kit
+    * * SQL Data Type: nvarchar(255)
+    */
+    get BrandKit(): string {
+        return this.Get('BrandKit');
+    }
+
+    /**
+    * * Field Name: File
+    * * Display Name: File
+    * * SQL Data Type: nvarchar(500)
+    */
+    get File(): string {
+        return this.Get('File');
+    }
+}
+
+
+/**
+ * MJ: Brand Kits - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: BrandKit
+ * * Base View: vwBrandKits
+ * * @description A brand kit: colors, type, voice, generation policy, facts never to invent, and the files (logos, fonts, reference imagery, music) that generators, forms and applications use to stay on brand. CompanyID NULL makes the kit available to all companies.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Brand Kits')
+export class MJBrandKitEntity extends BaseEntity<MJBrandKitEntityType> {
+    /**
+    * Loads the MJ: Brand Kits record from the database
+    * @param ID: string - primary key value to load the MJ: Brand Kits record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJBrandKitEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Display name of the brand kit.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: What the kit is for and when to use it.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: CompanyID
+    * * Display Name: Company ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Companies (vwCompanies.ID)
+    * * Description: The company this kit belongs to. NULL means org-wide: available to all companies.
+    */
+    get CompanyID(): string | null {
+        return this.Get('CompanyID');
+    }
+    set CompanyID(value: string | null) {
+        this.Set('CompanyID', value);
+    }
+
+    /**
+    * * Field Name: IsDefault
+    * * Display Name: Is Default
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: The kit used when a caller names none. At most one default per CompanyID scope (NULL is its own scope), enforced on save by the server entity.
+    */
+    get IsDefault(): boolean {
+        return this.Get('IsDefault');
+    }
+    set IsDefault(value: boolean) {
+        this.Set('IsDefault', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Inactive
+    * * Description: Active kits are offered to users and generators; Inactive kits are kept but hidden.
+    */
+    get Status(): 'Active' | 'Inactive' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Inactive') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: Style
+    * * Display Name: Style
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON (IBrandStyle): palette, typography, imagery style, keep and avoid lists, and an optional Motion section.
+    */
+    get Style(): string | null {
+        return this.Get('Style');
+    }
+    set Style(value: string | null) {
+        this.Set('Style', value);
+    }
+
+    /**
+    * * Field Name: Voice
+    * * Display Name: Voice
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON (IBrandVoice): text-to-speech provider, voice ID, settings and pronunciation notes.
+    */
+    get Voice(): string | null {
+        return this.Get('Voice');
+    }
+    set Voice(value: string | null) {
+        this.Set('Voice', value);
+    }
+
+    /**
+    * * Field Name: GenerationPolicy
+    * * Display Name: Generation Policy
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON (IBrandGenerationPolicy): whether generated images and video may be used, a style prompt, subjects to avoid, whether generated people are allowed (default: not allowed), and an optional per-run generation spend cap. NULL applies the defaults.
+    */
+    get GenerationPolicy(): string | null {
+        return this.Get('GenerationPolicy');
+    }
+    set GenerationPolicy(value: string | null) {
+        this.Set('GenerationPolicy', value);
+    }
+
+    /**
+    * * Field Name: NeverInvent
+    * * Display Name: Never Invent
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of strings: facts about the brand a model must never fabricate, for example product screens, logos, metrics or customer names.
+    */
+    get NeverInvent(): string | null {
+        return this.Get('NeverInvent');
+    }
+    set NeverInvent(value: string | null) {
+        this.Set('NeverInvent', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Company
+    * * Display Name: Company
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Company(): string | null {
+        return this.Get('Company');
     }
 }
 
@@ -143451,6 +144184,270 @@ export class MJVersionLabelEntity extends BaseEntity<MJVersionLabelEntityType> {
     */
     get ParentIDChildCount(): number | null {
         return this.Get('ParentIDChildCount');
+    }
+}
+
+
+/**
+ * MJ: Video Archetypes - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: VideoArchetype
+ * * Base View: vwVideoArchetypes
+ * * @description A Video Studio film template: duration bounds, default formats, a beat template, pacing, and guidance for the Director and Storyboard. CompanyID NULL marks a shipped or org-wide archetype.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Video Archetypes')
+export class MJVideoArchetypeEntity extends BaseEntity<MJVideoArchetypeEntityType> {
+    /**
+    * Loads the MJ: Video Archetypes record from the database
+    * @param ID: string - primary key value to load the MJ: Video Archetypes record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJVideoArchetypeEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Archetype name, unique within its CompanyID scope.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: What the archetype is for; the Director reads it to pick one.
+    */
+    get Description(): string {
+        return this.Get('Description');
+    }
+    set Description(value: string) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: CompanyID
+    * * Display Name: Company ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Companies (vwCompanies.ID)
+    * * Description: The company that owns this archetype. NULL means shipped or org-wide: available to all companies.
+    */
+    get CompanyID(): string | null {
+        return this.Get('CompanyID');
+    }
+    set CompanyID(value: string | null) {
+        this.Set('CompanyID', value);
+    }
+
+    /**
+    * * Field Name: Category
+    * * Display Name: Category
+    * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Announcement
+    *   * Briefing
+    *   * DataStory
+    *   * Explainer
+    *   * Product
+    *   * Social
+    *   * Tutorial
+    * * Description: Explainer, Product, DataStory, Social, Tutorial, Announcement or Briefing.
+    */
+    get Category(): 'Announcement' | 'Briefing' | 'DataStory' | 'Explainer' | 'Product' | 'Social' | 'Tutorial' {
+        return this.Get('Category');
+    }
+    set Category(value: 'Announcement' | 'Briefing' | 'DataStory' | 'Explainer' | 'Product' | 'Social' | 'Tutorial') {
+        this.Set('Category', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Inactive
+    * * Description: Active archetypes are offered; Inactive are hidden.
+    */
+    get Status(): 'Active' | 'Inactive' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Inactive') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: DefaultDurationSeconds
+    * * Display Name: Default Duration Seconds
+    * * SQL Data Type: int
+    * * Description: Default film length, in seconds.
+    */
+    get DefaultDurationSeconds(): number {
+        return this.Get('DefaultDurationSeconds');
+    }
+    set DefaultDurationSeconds(value: number) {
+        this.Set('DefaultDurationSeconds', value);
+    }
+
+    /**
+    * * Field Name: MinDurationSeconds
+    * * Display Name: Min Duration Seconds
+    * * SQL Data Type: int
+    * * Description: Shortest film length, in seconds.
+    */
+    get MinDurationSeconds(): number {
+        return this.Get('MinDurationSeconds');
+    }
+    set MinDurationSeconds(value: number) {
+        this.Set('MinDurationSeconds', value);
+    }
+
+    /**
+    * * Field Name: MaxDurationSeconds
+    * * Display Name: Max Duration Seconds
+    * * SQL Data Type: int
+    * * Description: Longest film length, in seconds.
+    */
+    get MaxDurationSeconds(): number {
+        return this.Get('MaxDurationSeconds');
+    }
+    set MaxDurationSeconds(value: number) {
+        this.Set('MaxDurationSeconds', value);
+    }
+
+    /**
+    * * Field Name: DefaultFormats
+    * * Display Name: Default Formats
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Comma-separated default formats: any of 16:9, 9:16, 1:1.
+    */
+    get DefaultFormats(): string {
+        return this.Get('DefaultFormats');
+    }
+    set DefaultFormats(value: string) {
+        this.Set('DefaultFormats', value);
+    }
+
+    /**
+    * * Field Name: BeatTemplate
+    * * Display Name: Beat Template
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array (VideoBeatTemplate[]): the beat slots a film of this archetype follows, with per-beat duration bounds.
+    */
+    get BeatTemplate(): string {
+        return this.Get('BeatTemplate');
+    }
+    set BeatTemplate(value: string) {
+        this.Set('BeatTemplate', value);
+    }
+
+    /**
+    * * Field Name: Pacing
+    * * Display Name: Pacing
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON (VideoPacing): cut cadence and hold rules.
+    */
+    get Pacing(): string | null {
+        return this.Get('Pacing');
+    }
+    set Pacing(value: string | null) {
+        this.Set('Pacing', value);
+    }
+
+    /**
+    * * Field Name: Guidance
+    * * Display Name: Guidance
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Markdown guidance for the Director and Storyboard.
+    */
+    get Guidance(): string | null {
+        return this.Get('Guidance');
+    }
+    set Guidance(value: string | null) {
+        this.Set('Guidance', value);
+    }
+
+    /**
+    * * Field Name: DefaultInteractionMode
+    * * Display Name: Default Interaction Mode
+    * * SQL Data Type: nvarchar(30)
+    * * Default Value: Autonomous
+    * * Value List Type: List
+    * * Possible Values 
+    *   * ApproveStoryboard
+    *   * ApproveStoryboardAndRoughCut
+    *   * Autonomous
+    * * Description: Default approval mode: Autonomous, ApproveStoryboard or ApproveStoryboardAndRoughCut.
+    */
+    get DefaultInteractionMode(): 'ApproveStoryboard' | 'ApproveStoryboardAndRoughCut' | 'Autonomous' {
+        return this.Get('DefaultInteractionMode');
+    }
+    set DefaultInteractionMode(value: 'ApproveStoryboard' | 'ApproveStoryboardAndRoughCut' | 'Autonomous') {
+        this.Set('DefaultInteractionMode', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Company
+    * * Display Name: Company
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Company(): string | null {
+        return this.Get('Company');
     }
 }
 

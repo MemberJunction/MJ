@@ -35,7 +35,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (451 classes)
+// @memberjunction/core-entities (454 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -160,6 +160,8 @@ import {
     MJAuthenticationProviderEntity,
     MJAuthorizationEntity,
     MJAuthorizationRoleEntity,
+    MJBrandKitAssetEntity,
+    MJBrandKitEntity,
     MJClusterAnalysisClusterEntity,
     MJClusterAnalysisEntity,
     MJCollectionArtifactEntity,
@@ -476,6 +478,7 @@ import {
     MJVersionLabelEntity,
     MJVersionLabelItemEntity,
     MJVersionLabelRestoreEntity,
+    MJVideoArchetypeEntity,
     MJViewTypeEntity,
     MJWebSearchProviderEntity,
     MJWorkQueueDeduplicationEntity,
@@ -987,6 +990,8 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJAuthenticationProviderEntity,
     MJAuthorizationEntity,
     MJAuthorizationRoleEntity,
+    MJBrandKitAssetEntity,
+    MJBrandKitEntity,
     MJClusterAnalysisClusterEntity,
     MJClusterAnalysisEntity,
     MJCollectionArtifactEntity,
@@ -1050,12 +1055,12 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJDashboardCategoryLinkEntity,
     MJDashboardCategoryPermissionEntity,
     MJDashboardEntity,
-    MJDashboardEntityExtended,
-    MJDashboardPartTypeEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJDashboardEntityExtended,
+    MJDashboardPartTypeEntity,
     MJDashboardPermissionEntity,
     MJDashboardPermissionEntityExtended,
     MJDashboardUserPreferenceEntity,
@@ -1254,12 +1259,12 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJSignatureRequestLogEntity,
     MJSignatureRequestRecipientEntity,
     MJSkillEntity,
-    MJStateProvinceEntity,
-    MJTagAuditLogEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJStateProvinceEntity,
+    MJTagAuditLogEntity,
     MJTagCoOccurrenceEntity,
     MJTagEntity,
     MJTagScopeEntity,
@@ -1311,6 +1316,7 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJVersionLabelEntity,
     MJVersionLabelItemEntity,
     MJVersionLabelRestoreEntity,
+    MJVideoArchetypeEntity,
     MJViewTypeEntity,
     MJWebSearchProviderEntity,
     MJWorkQueueDeduplicationEntity,
@@ -1457,13 +1463,13 @@ const CLASS_REGISTRATIONS_2: any[] = [
     RubricEvaluationComparePanel,
     RubricEvaluationFormPolicy,
     RubricEvaluationResultPanel,
-    RubricFormPolicy,
-    RubricPublishPanel,
-    RubricScaleFormPolicy,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    RubricFormPolicy,
+    RubricPublishPanel,
+    RubricScaleFormPolicy,
     RubricScaleLevelsPanel,
     RubricVersionFormPolicy,
     RubricVersionSummaryPanel,
@@ -1614,7 +1620,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 736;
+export const CLASS_REGISTRATIONS_COUNT = 739;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

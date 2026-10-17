@@ -221,7 +221,7 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/core-entities (451 classes)
+// @memberjunction/core-entities (454 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -346,6 +346,8 @@ import {
     MJAuthenticationProviderEntity,
     MJAuthorizationEntity,
     MJAuthorizationRoleEntity,
+    MJBrandKitAssetEntity,
+    MJBrandKitEntity,
     MJClusterAnalysisClusterEntity,
     MJClusterAnalysisEntity,
     MJCollectionArtifactEntity,
@@ -662,6 +664,7 @@ import {
     MJVersionLabelEntity,
     MJVersionLabelItemEntity,
     MJVersionLabelRestoreEntity,
+    MJVideoArchetypeEntity,
     MJViewTypeEntity,
     MJWebSearchProviderEntity,
     MJWorkQueueDeduplicationEntity,
@@ -1602,6 +1605,8 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJAuthenticationProviderEntity,
     MJAuthorizationEntity,
     MJAuthorizationRoleEntity,
+    MJBrandKitAssetEntity,
+    MJBrandKitEntity,
     MJClusterAnalysisClusterEntity,
     MJClusterAnalysisEntity,
     MJCollectionArtifactEntity,
@@ -1615,12 +1620,12 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJCommunicationRunEntity,
     MJCompanyEntity,
     MJCompanyIntegrationEntity,
-    MJCompanyIntegrationEntityMapEntity,
-    MJCompanyIntegrationFieldMapEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJCompanyIntegrationEntityMapEntity,
+    MJCompanyIntegrationFieldMapEntity,
     MJCompanyIntegrationRecordMapEntity,
     MJCompanyIntegrationRunAPILogEntity,
     MJCompanyIntegrationRunDetailEntity,
@@ -1819,12 +1824,12 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJRecordChangeEntity,
     MJRecordChangeReplayRunEntity,
     MJRecordCloneLogEntity,
-    MJRecordCloneLogItemEntity,
-    MJRecordGeoCodeEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJRecordCloneLogItemEntity,
+    MJRecordGeoCodeEntity,
     MJRecordLinkEntity,
     MJRecordMergeDeletionLogEntity,
     MJRecordMergeLogEntity,
@@ -1926,6 +1931,7 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJVersionLabelEntity,
     MJVersionLabelItemEntity,
     MJVersionLabelRestoreEntity,
+    MJVideoArchetypeEntity,
     MJViewTypeEntity,
     MJWebSearchProviderEntity,
     MJWorkQueueDeduplicationEntity,
@@ -2022,13 +2028,13 @@ const CLASS_REGISTRATIONS_2: any[] = [
     UpdateJotFormAction,
     UpdateSurveyMonkeyAction,
     UpdateTypeformAction,
-    WatchNewJotFormSubmissionsAction,
-    WatchNewSurveyMonkeyResponsesAction,
-    WatchNewTypeformResponsesAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    WatchNewJotFormSubmissionsAction,
+    WatchNewSurveyMonkeyResponsesAction,
+    WatchNewTypeformResponsesAction,
     AttachTagsAction,
     CreateUserAction_actions_bizapps_lms,
     DetachTagsAction,
@@ -2226,13 +2232,13 @@ const CLASS_REGISTRATIONS_3: any[] = [
     PredictiveStudioPromoteModelServerOperation,
     PredictiveStudioRunExperimentAction,
     PredictiveStudioRunFeaturePipelineServerOperation,
-    PredictiveStudioScheduleModelScoringAction,
-    PredictiveStudioScoreRecordSetAction,
-    PredictiveStudioScoreRecordSetServerOperation,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    PredictiveStudioScheduleModelScoringAction,
+    PredictiveStudioScoreRecordSetAction,
+    PredictiveStudioScoreRecordSetServerOperation,
     PredictiveStudioStartExperimentSessionServerOperation,
     PredictiveStudioTrainModelAction,
     PredictiveStudioTrainModelServerOperation,
@@ -2430,13 +2436,13 @@ const CLASS_REGISTRATIONS_4: any[] = [
     OAuthFlowAction,
     ObjectExistsAction,
     PDFExtractorAction,
-    ParallelExecuteAction,
-    PasswordStrengthAction,
-    PerplexitySearchAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    ParallelExecuteAction,
+    PasswordStrengthAction,
+    PerplexitySearchAction,
     PostalCodeLookupAction,
     PreviewDocumentAction,
     QRCodeAction,
@@ -2526,7 +2532,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1073;
+export const CLASS_REGISTRATIONS_COUNT = 1076;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
