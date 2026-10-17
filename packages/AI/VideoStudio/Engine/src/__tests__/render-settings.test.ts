@@ -4,12 +4,27 @@ import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as mjCore from '@memberjunction/core';
 import {
+    DEFAULT_DOCKER_CPUS,
+    DEFAULT_DOCKER_MEMORY_MB,
+    DEFAULT_DOCKER_PIDS_LIMIT,
+    DEFAULT_DOCKER_RENDER_IMAGE,
+    DEFAULT_DOCKER_SHM_SIZE_MB,
+    DEFAULT_DOCKER_WORKSPACE_ROOT,
     DEFAULT_RENDER_REQUEST_TIMEOUT_MS,
     DEFAULT_RENDER_STARTUP_TIMEOUT_MS,
     DEFAULT_RENDER_TIMEOUT_MS,
     DEFAULT_VIDEO_RENDER_DRIVER,
     ReadVideoRenderSettings,
 } from '../index.js';
+
+const DEFAULT_DOCKER_SETTINGS = {
+    Image: DEFAULT_DOCKER_RENDER_IMAGE,
+    WorkspaceRoot: DEFAULT_DOCKER_WORKSPACE_ROOT,
+    Cpus: DEFAULT_DOCKER_CPUS,
+    MemoryMb: DEFAULT_DOCKER_MEMORY_MB,
+    PidsLimit: DEFAULT_DOCKER_PIDS_LIMIT,
+    ShmSizeMb: DEFAULT_DOCKER_SHM_SIZE_MB,
+};
 
 describe('ReadVideoRenderSettings', () => {
     const tempDirs: string[] = [];
@@ -80,6 +95,7 @@ describe('ReadVideoRenderSettings', () => {
                 MaxOldSpaceMb: 4096,
             },
             Remote: {},
+            Docker: DEFAULT_DOCKER_SETTINGS,
         });
     });
 
@@ -97,6 +113,7 @@ describe('ReadVideoRenderSettings', () => {
             },
             Local: {},
             Remote: {},
+            Docker: DEFAULT_DOCKER_SETTINGS,
         });
     });
 
@@ -116,6 +133,14 @@ describe('ReadVideoRenderSettings', () => {
                         workerEntry: '   ',
                         maxOldSpaceMb: -1024,
                     },
+                    docker: {
+                        image: '   ',
+                        workspaceRoot: '',
+                        cpus: -2,
+                        memoryMb: 0,
+                        pidsLimit: -10,
+                        shmSizeMb: 'invalid',
+                    },
                 },
             },
         };\n`;
@@ -131,8 +156,40 @@ describe('ReadVideoRenderSettings', () => {
             },
             Local: {},
             Remote: {},
+            Docker: DEFAULT_DOCKER_SETTINGS,
         });
         expect(warnSpy).toHaveBeenCalled();
+    });
+
+    it('reads videoStudio.render.docker from mj.config.cjs', async () => {
+        const dir = await makeTempDir();
+        const configContent = `module.exports = {
+            videoStudio: {
+                render: {
+                    driver: 'Docker',
+                    docker: {
+                        image: 'custom-registry.example.com/mj-render:v2',
+                        workspaceRoot: '/var/tmp/mj-render-workspaces',
+                        cpus: 8,
+                        memoryMb: 8192,
+                        pidsLimit: 512,
+                        shmSizeMb: 2048,
+                    },
+                },
+            },
+        };\n`;
+        await fs.writeFile(path.join(dir, 'mj.config.cjs'), configContent, 'utf8');
+
+        const settings = ReadVideoRenderSettings(dir);
+        expect(settings.Driver).toBe('Docker');
+        expect(settings.Docker).toEqual({
+            Image: 'custom-registry.example.com/mj-render:v2',
+            WorkspaceRoot: '/var/tmp/mj-render-workspaces',
+            Cpus: 8,
+            MemoryMb: 8192,
+            PidsLimit: 512,
+            ShmSizeMb: 2048,
+        });
     });
 
     it('reads videoStudio.render.remote from mj.config.cjs', async () => {

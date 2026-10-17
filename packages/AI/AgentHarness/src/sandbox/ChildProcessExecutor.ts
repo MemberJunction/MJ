@@ -12,6 +12,7 @@ import { HarnessProcess, HarnessProcessSpec, SandboxExecutor } from './SandboxEx
  */
 export function WrapChildProcess(child: ChildProcessWithoutNullStreams): HarnessProcess {
     return {
+        Stdin: child.stdin,
         Stdout: readLines(child.stdout),
         Stderr: readLines(child.stderr),
         ExitCode: new Promise<number | null>((resolve) => {

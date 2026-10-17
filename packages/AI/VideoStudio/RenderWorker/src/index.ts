@@ -130,3 +130,12 @@ export {
     type RenderWorkerServer,
     type RenderWorkerServerOptions,
 } from './server.js';
+
+export {
+    ONE_SHOT_OPERATIONS,
+    ONE_SHOT_USAGE,
+    RunOneShot,
+    type OneShotOperation,
+    type RunOneShotOptions,
+} from './one-shot.js';
+

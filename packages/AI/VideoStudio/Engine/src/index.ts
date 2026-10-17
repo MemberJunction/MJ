@@ -20,11 +20,18 @@ export {
 } from './render/video-render-driver-base.js';
 
 export {
+    DEFAULT_DOCKER_CPUS,
+    DEFAULT_DOCKER_MEMORY_MB,
+    DEFAULT_DOCKER_PIDS_LIMIT,
+    DEFAULT_DOCKER_RENDER_IMAGE,
+    DEFAULT_DOCKER_SHM_SIZE_MB,
+    DEFAULT_DOCKER_WORKSPACE_ROOT,
     DEFAULT_RENDER_REQUEST_TIMEOUT_MS,
     DEFAULT_RENDER_STARTUP_TIMEOUT_MS,
     DEFAULT_RENDER_TIMEOUT_MS,
     DEFAULT_VIDEO_RENDER_DRIVER,
     ReadVideoRenderSettings,
+    type VideoRenderDockerSettings,
     type VideoRenderLocalSettings,
     type VideoRenderRemoteSettings,
     type VideoRenderSettings,
@@ -43,6 +50,11 @@ export {
 } from './render/local-worker-render-driver.js';
 
 export { RemoteRenderDriver } from './render/remote-render-driver.js';
+
+export {
+    DOCKER_RENDER_IMAGE_BUILD_COMMAND,
+    DockerRenderDriver,
+} from './render/docker-render-driver.js';
 
 export {
     FAKE_DRIVER_MP4_BYTES,

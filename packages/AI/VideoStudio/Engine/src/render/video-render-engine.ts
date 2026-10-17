@@ -5,6 +5,7 @@ import {
     ShutdownRegistry,
     type IShutdownable,
 } from '@memberjunction/global';
+import { DockerRenderDriver } from './docker-render-driver.js';
 import { LocalWorkerRenderDriver } from './local-worker-render-driver.js';
 import { RemoteRenderDriver } from './remote-render-driver.js';
 import { ReadVideoRenderSettings } from './render-settings.js';
@@ -14,6 +15,7 @@ import {
 } from './video-render-driver-base.js';
 
 // Ensure side-effect registration of built-in drivers with MJGlobal.ClassFactory.
+void DockerRenderDriver;
 void LocalWorkerRenderDriver;
 void RemoteRenderDriver;
 

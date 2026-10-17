@@ -10,6 +10,12 @@ import {
     type RenderWorkerServer,
 } from '@memberjunction/video-studio-render-worker';
 import {
+    DEFAULT_DOCKER_CPUS,
+    DEFAULT_DOCKER_MEMORY_MB,
+    DEFAULT_DOCKER_PIDS_LIMIT,
+    DEFAULT_DOCKER_RENDER_IMAGE,
+    DEFAULT_DOCKER_SHM_SIZE_MB,
+    DEFAULT_DOCKER_WORKSPACE_ROOT,
     DEFAULT_RENDER_REQUEST_TIMEOUT_MS,
     DEFAULT_RENDER_STARTUP_TIMEOUT_MS,
     DEFAULT_RENDER_TIMEOUT_MS,
@@ -47,6 +53,14 @@ function makeRemoteSettings(
         Remote: {
             ...(url !== undefined ? { Url: url } : {}),
             ...(token !== undefined ? { Token: token } : {}),
+        },
+        Docker: {
+            Image: DEFAULT_DOCKER_RENDER_IMAGE,
+            WorkspaceRoot: DEFAULT_DOCKER_WORKSPACE_ROOT,
+            Cpus: DEFAULT_DOCKER_CPUS,
+            MemoryMb: DEFAULT_DOCKER_MEMORY_MB,
+            PidsLimit: DEFAULT_DOCKER_PIDS_LIMIT,
+            ShmSizeMb: DEFAULT_DOCKER_SHM_SIZE_MB,
         },
     };
 }

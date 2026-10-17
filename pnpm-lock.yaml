@@ -3463,6 +3463,9 @@ importers:
       '@memberjunction/ai':
         specifier: 6.2.0-edge.4
         version: link:../../Core
+      '@memberjunction/ai-agent-harness':
+        specifier: 6.2.0-edge.4
+        version: link:../../AgentHarness
       '@memberjunction/ai-engine-base':
         specifier: 6.2.0-edge.4
         version: link:../../BaseAIEngine

@@ -1,0 +1,532 @@
+import { spawnSync } from 'node:child_process';
+import * as fs from 'node:fs/promises';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import { createInterface } from 'node:readline';
+import { PassThrough, Readable } from 'node:stream';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import * as mjCore from '@memberjunction/core';
+import type {
+    HarnessProcess,
+    HarnessProcessSpec,
+    ISandboxProvider,
+    SandboxConfig,
+    SandboxExecutor,
+    SandboxHandle,
+    WorkspaceKey,
+} from '@memberjunction/ai-agent-harness';
+import { FakeRenderBackend, RunOneShot } from '@memberjunction/video-studio-render-worker';
+import {
+    DEFAULT_DOCKER_CPUS,
+    DEFAULT_DOCKER_MEMORY_MB,
+    DEFAULT_DOCKER_PIDS_LIMIT,
+    DEFAULT_DOCKER_RENDER_IMAGE,
+    DEFAULT_DOCKER_SHM_SIZE_MB,
+    DEFAULT_DOCKER_WORKSPACE_ROOT,
+    DEFAULT_RENDER_REQUEST_TIMEOUT_MS,
+    DEFAULT_RENDER_STARTUP_TIMEOUT_MS,
+    DEFAULT_RENDER_TIMEOUT_MS,
+    DOCKER_RENDER_IMAGE_BUILD_COMMAND,
+    DockerRenderDriver,
+    LOCAL_WORKER_NETWORK_WARNING,
+    ReadVideoRenderSettings,
+    VideoRenderEngine,
+    VideoRenderError,
+    type VideoRenderSettings,
+} from '../index.js';
+import {
+    CreateHangRenderRequest,
+    CreateMinimalRenderRequest,
+    CreateRemoteUrlBundle,
+    MINIMAL_BUNDLE_DURATION_SECONDS,
+    MINIMAL_BUNDLE_FPS,
+    MINIMAL_BUNDLE_HEIGHT,
+    MINIMAL_BUNDLE_WIDTH,
+} from './fixtures/minimal-bundle.js';
+import { DescribeRenderDriverContract } from './render-driver-contract.js';
+
+type SandboxOutcome = 'success' | 'failure' | 'cancelled';
+
+interface RecordedProvision {
+    Key: WorkspaceKey;
+    Config: SandboxConfig;
+}
+
+interface RecordedFinalization {
+    Handle: SandboxHandle;
+    Outcome: SandboxOutcome;
+}
+
+async function* streamToLines(stream: Readable): AsyncIterable<string> {
+    const rl = createInterface({ input: stream, crlfDelay: Infinity });
+    for await (const line of rl) {
+        yield line;
+    }
+}
+
+class InProcessOneShotSandboxProvider implements ISandboxProvider {
+    public readonly Provisions: RecordedProvision[] = [];
+    public readonly ProcessSpecs: HarnessProcessSpec[] = [];
+    public readonly Finalizations: RecordedFinalization[] = [];
+    public readonly TempDirs: string[] = [];
+
+    private readonly stepDelayMs: number;
+    private readonly failProvisionWithError?: Error;
+
+    public constructor(options?: { StepDelayMs?: number; FailProvisionWithError?: Error }) {
+        this.stepDelayMs = options?.StepDelayMs ?? 15;
+        this.failProvisionWithError = options?.FailProvisionWithError;
+    }
+
+    public async Provision(key: WorkspaceKey, config: SandboxConfig): Promise<SandboxHandle> {
+        this.Provisions.push({ Key: key, Config: config });
+        if (this.failProvisionWithError) {
+            throw this.failProvisionWithError;
+        }
+
+        const hostWorkspace = await fs.mkdtemp(
+            path.join(os.tmpdir(), 'mj-vs-fake-docker-workspace-'),
+        );
+        this.TempDirs.push(hostWorkspace);
+
+        const executor: SandboxExecutor = {
+            Run: (spec: HarnessProcessSpec): HarnessProcess => {
+                this.ProcessSpecs.push(spec);
+                return this.runTranslatedOneShot(hostWorkspace, spec);
+            },
+        };
+
+        return {
+            WorkspacePath: '/workspace',
+            HostWorkspacePath: hostWorkspace,
+            Key: key,
+            Ephemeral: true,
+            Executor: executor,
+        };
+    }
+
+    public async Finalize(handle: SandboxHandle, outcome: SandboxOutcome): Promise<void> {
+        this.Finalizations.push({ Handle: handle, Outcome: outcome });
+        if (handle.HostWorkspacePath) {
+            await fs.rm(handle.HostWorkspacePath, { recursive: true, force: true });
+        }
+    }
+
+    public async CleanupAll(): Promise<void> {
+        while (this.TempDirs.length > 0) {
+            const dir = this.TempDirs.pop()!;
+            await fs.rm(dir, { recursive: true, force: true });
+        }
+    }
+
+    private runTranslatedOneShot(
+        hostWorkspace: string,
+        spec: HarnessProcessSpec,
+    ): HarnessProcess {
+        const stdout = new PassThrough();
+        const stderr = new PassThrough();
+        const stdin = new PassThrough();
+        const abortController = new AbortController();
+
+        const translatedArgs = spec.Args.slice(1).map((arg) => {
+            if (arg === '/workspace') {
+                return hostWorkspace;
+            }
+            if (arg.startsWith('/workspace/')) {
+                return path.join(hostWorkspace, arg.slice('/workspace/'.length));
+            }
+            return arg;
+        });
+
+        let killed = false;
+        const triggerKill = (): void => {
+            if (!killed) {
+                killed = true;
+                abortController.abort();
+            }
+        };
+
+        if (spec.CancellationToken) {
+            if (spec.CancellationToken.aborted) {
+                triggerKill();
+            } else {
+                spec.CancellationToken.addEventListener('abort', triggerKill, { once: true });
+            }
+        }
+
+        const backend = new FakeRenderBackend({ StepDelayMs: this.stepDelayMs });
+        const exitCode = (async (): Promise<number | null> => {
+            try {
+                const code = await RunOneShot(translatedArgs, backend, stdout, {
+                    Stderr: stderr,
+                    Stdin: stdin,
+                    Signal: abortController.signal,
+                });
+                return killed ? 130 : code;
+            } finally {
+                stdout.end();
+                stderr.end();
+            }
+        })();
+
+        return {
+            Stdin: stdin,
+            Stdout: streamToLines(stdout),
+            Stderr: streamToLines(stderr),
+            ExitCode: exitCode,
+            Kill: triggerKill,
+        };
+    }
+}
+
+function makeDockerSettings(overrides?: Partial<VideoRenderSettings>): VideoRenderSettings {
+    return {
+        Driver: 'Docker',
+        Timeouts: {
+            StartupMs: DEFAULT_RENDER_STARTUP_TIMEOUT_MS,
+            RenderMs: DEFAULT_RENDER_TIMEOUT_MS,
+            RequestMs: DEFAULT_RENDER_REQUEST_TIMEOUT_MS,
+        },
+        Local: {},
+        Remote: {},
+        Docker: {
+            Image: DEFAULT_DOCKER_RENDER_IMAGE,
+            WorkspaceRoot: DEFAULT_DOCKER_WORKSPACE_ROOT,
+            Cpus: DEFAULT_DOCKER_CPUS,
+            MemoryMb: DEFAULT_DOCKER_MEMORY_MB,
+            PidsLimit: DEFAULT_DOCKER_PIDS_LIMIT,
+            ShmSizeMb: DEFAULT_DOCKER_SHM_SIZE_MB,
+        },
+        ...overrides,
+    };
+}
+
+describe('DockerRenderDriver (fake ISandboxProvider + RunOneShot)', () => {
+    const providers: InProcessOneShotSandboxProvider[] = [];
+
+    afterEach(async () => {
+        while (providers.length > 0) {
+            const p = providers.pop()!;
+            await p.CleanupAll();
+        }
+    });
+
+    DescribeRenderDriverContract('DockerRenderDriver (fake ISandboxProvider + RunOneShot)', () => {
+        const provider = new InProcessOneShotSandboxProvider({ StepDelayMs: 15 });
+        providers.push(provider);
+        return new DockerRenderDriver(makeDockerSettings(), provider);
+    });
+});
+
+describe('DockerRenderDriver isolation, hardening, and lifecycle unit tests', () => {
+    const tempDirs: string[] = [];
+    const providers: InProcessOneShotSandboxProvider[] = [];
+
+    async function makeTempDir(): Promise<string> {
+        const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'mj-vs-docker-driver-test-'));
+        tempDirs.push(dir);
+        return dir;
+    }
+
+    function createProvider(options?: {
+        StepDelayMs?: number;
+        FailProvisionWithError?: Error;
+    }): InProcessOneShotSandboxProvider {
+        const p = new InProcessOneShotSandboxProvider(options);
+        providers.push(p);
+        return p;
+    }
+
+    beforeEach(() => {
+        process.env.SUPER_SECRET_PARENT_ENV_VAR = 'top-secret-value-never-pass-to-container';
+    });
+
+    afterEach(async () => {
+        vi.restoreAllMocks();
+        delete process.env.SUPER_SECRET_PARENT_ENV_VAR;
+        await VideoRenderEngine.Instance.Shutdown();
+        VideoRenderEngine.Instance.SetSettingsSearchDir(undefined);
+        while (providers.length > 0) {
+            const p = providers.pop()!;
+            await p.CleanupAll();
+        }
+        while (tempDirs.length > 0) {
+            const dir = tempDirs.pop()!;
+            await fs.rm(dir, { recursive: true, force: true });
+        }
+    });
+
+    it('resolves DockerRenderDriver from VideoRenderEngine when driver is Docker, sets IsNetworkIsolated === true, and does NOT log LOCAL_WORKER_NETWORK_WARNING', async () => {
+        const warnSpy = vi.spyOn(mjCore, 'LogWarning').mockImplementation(() => undefined);
+        const dir = await makeTempDir();
+        await fs.writeFile(
+            path.join(dir, 'mj.config.cjs'),
+            `module.exports = { videoStudio: { render: { driver: 'Docker' } } };\n`,
+            'utf8',
+        );
+
+        VideoRenderEngine.Instance.SetSettingsSearchDir(dir);
+        const driver = VideoRenderEngine.Instance.Driver;
+
+        expect(driver).toBeInstanceOf(DockerRenderDriver);
+        expect(driver.IsNetworkIsolated).toBe(true);
+        const warningMessages = warnSpy.mock.calls.map((c) => String(c[0]));
+        expect(warningMessages.some((m) => m.includes(LOCAL_WORKER_NETWORK_WARNING))).toBe(false);
+    });
+
+    it('passes hardened SandboxConfig to Provision (NetworkPolicy: none, ReadOnlyRoot: true, DropCapabilities: true, resource limits, and platform User)', async () => {
+        const provider = createProvider();
+        const settings = makeDockerSettings({
+            Docker: {
+                Image: 'custom-render-worker:test',
+                WorkspaceRoot: '/tmp/custom-ws',
+                Cpus: 6,
+                MemoryMb: 6144,
+                PidsLimit: 300,
+                ShmSizeMb: 1536,
+            },
+        });
+        const driver = new DockerRenderDriver(settings, provider);
+
+        const health = await driver.Health();
+        expect(health.Healthy).toBe(true);
+        expect(provider.Provisions).toHaveLength(1);
+
+        const { Key: key, Config: config } = provider.Provisions[0]!;
+        expect(key.Scope).toBe('run');
+        expect(config.NetworkPolicy).toBe('none');
+        expect(config.ReadOnlyRoot).toBe(true);
+        expect(config.DropCapabilities).toBe(true);
+        expect(config.Image).toBe('custom-render-worker:test');
+        expect(config.Cpus).toBe(6);
+        expect(config.MemoryMb).toBe(6144);
+        expect(config.PidsLimit).toBe(300);
+        expect(config.ShmSizeMb).toBe(1536);
+
+        if (
+            process.platform === 'linux' &&
+            typeof process.getuid === 'function' &&
+            typeof process.getgid === 'function'
+        ) {
+            expect(config.User).toBe(`${process.getuid()}:${process.getgid()}`);
+        } else {
+            expect(config.User).toBeUndefined();
+        }
+    });
+
+    it('passes ONLY HOME and TMPDIR in Environment to Executor.Run (no parent process.env secrets)', async () => {
+        const provider = createProvider();
+        const driver = new DockerRenderDriver(makeDockerSettings(), provider);
+
+        await driver.Health();
+        expect(provider.ProcessSpecs).toHaveLength(1);
+
+        const env = provider.ProcessSpecs[0]!.Environment;
+        expect(Object.keys(env).sort()).toEqual(['HOME', 'TMPDIR']);
+        expect(env).toEqual({
+            HOME: '/workspace/home',
+            TMPDIR: '/workspace/tmp',
+        });
+        expect(env.SUPER_SECRET_PARENT_ENV_VAR).toBeUndefined();
+    });
+
+    it('calls Finalize exactly once with success on a clean run, failure on a lint-blocked run, and cancelled on an aborted run', async () => {
+        const provider = createProvider({ StepDelayMs: 25 });
+        const driver = new DockerRenderDriver(makeDockerSettings(), provider);
+
+        // 1. Clean run -> 'success'
+        const okResult = await driver.Render(CreateMinimalRenderRequest());
+        expect(Buffer.from(okResult.Video.subarray(4, 8)).toString('ascii')).toBe('ftyp');
+        expect(provider.Finalizations).toHaveLength(1);
+        expect(provider.Finalizations[0]!.Outcome).toBe('success');
+
+        // 2. Lint-blocked run -> 'failure'
+        await expect(
+            driver.Render({
+                Bundle: CreateRemoteUrlBundle(),
+                Width: MINIMAL_BUNDLE_WIDTH,
+                Height: MINIMAL_BUNDLE_HEIGHT,
+                Fps: MINIMAL_BUNDLE_FPS,
+                DurationSeconds: MINIMAL_BUNDLE_DURATION_SECONDS,
+                Quality: 'standard',
+            }),
+        ).rejects.toMatchObject({
+            name: 'VideoRenderError',
+            Code: 'LintBlocked',
+        });
+        expect(provider.Finalizations).toHaveLength(2);
+        expect(provider.Finalizations[1]!.Outcome).toBe('failure');
+
+        // 3. Aborted run -> 'cancelled'
+        const controller = new AbortController();
+        const renderPromise = driver.Render(
+            CreateHangRenderRequest(),
+            () => {
+                if (!controller.signal.aborted) {
+                    controller.abort();
+                }
+            },
+            controller.signal,
+        );
+        await expect(renderPromise).rejects.toMatchObject({
+            name: 'AbortError',
+        });
+        expect(provider.Finalizations).toHaveLength(3);
+        expect(provider.Finalizations[2]!.Outcome).toBe('cancelled');
+    });
+
+    it('when Provision rejects, Health() returns Healthy: false (never throws) with the docker build command in Errors, and Render() rejects with WorkerUnavailable naming the docker build command', async () => {
+        const provider = createProvider({
+            FailProvisionWithError: new Error(
+                'Unable to find image mj-video-render-worker:local locally',
+            ),
+        });
+        const driver = new DockerRenderDriver(makeDockerSettings(), provider);
+
+        const health = await driver.Health();
+        expect(health.Healthy).toBe(false);
+        expect(health.Errors.join(' ')).toContain(DOCKER_RENDER_IMAGE_BUILD_COMMAND);
+
+        let caught: unknown;
+        try {
+            await driver.Render(CreateMinimalRenderRequest());
+        } catch (err) {
+            caught = err;
+        }
+        expect(caught).toBeInstanceOf(VideoRenderError);
+        const renderErr = caught as VideoRenderError;
+        expect(renderErr.Code).toBe('WorkerUnavailable');
+        expect(renderErr.message).toContain(DOCKER_RENDER_IMAGE_BUILD_COMMAND);
+    });
+
+    it('closing proc.Stdin terminates the in-container one-shot process (ExitCode !== 0 and Finalize called)', async () => {
+        let capturedStdin: PassThrough | undefined;
+        let capturedExitCode: Promise<number | null> | undefined;
+        const finalizations: RecordedFinalization[] = [];
+
+        const stdinClosingProvider: ISandboxProvider = {
+            Provision: async (key: WorkspaceKey): Promise<SandboxHandle> => {
+                const hostWorkspace = await fs.mkdtemp(
+                    path.join(os.tmpdir(), 'mj-vs-stdin-close-ws-'),
+                );
+                tempDirs.push(hostWorkspace);
+
+                const executor: SandboxExecutor = {
+                    Run: (spec: HarnessProcessSpec): HarnessProcess => {
+                        const stdout = new PassThrough();
+                        const stderr = new PassThrough();
+                        const stdin = new PassThrough();
+                        capturedStdin = stdin;
+
+                        const translatedArgs = spec.Args.slice(1).map((arg) =>
+                            arg.startsWith('/workspace/')
+                                ? path.join(hostWorkspace, arg.slice('/workspace/'.length))
+                                : arg,
+                        );
+
+                        const backend = new FakeRenderBackend({ StepDelayMs: 100 });
+                        const exitCode = (async (): Promise<number | null> => {
+                            try {
+                                return await RunOneShot(translatedArgs, backend, stdout, {
+                                    Stderr: stderr,
+                                    Stdin: stdin,
+                                });
+                            } finally {
+                                stdout.end();
+                                stderr.end();
+                            }
+                        })();
+                        capturedExitCode = exitCode;
+
+                        // Close stdin shortly after start to simulate parent container exec disconnect
+                        setTimeout(() => {
+                            stdin.end();
+                        }, 30);
+
+                        return {
+                            Stdin: stdin,
+                            Stdout: streamToLines(stdout),
+                            Stderr: streamToLines(stderr),
+                            ExitCode: exitCode,
+                            Kill: () => stdin.end(),
+                        };
+                    },
+                };
+
+                return {
+                    WorkspacePath: '/workspace',
+                    HostWorkspacePath: hostWorkspace,
+                    Key: key,
+                    Ephemeral: true,
+                    Executor: executor,
+                };
+            },
+            Finalize: async (handle, outcome) => {
+                finalizations.push({ Handle: handle, Outcome: outcome });
+                if (handle.HostWorkspacePath) {
+                    await fs.rm(handle.HostWorkspacePath, { recursive: true, force: true });
+                }
+            },
+        };
+
+        const driver = new DockerRenderDriver(makeDockerSettings(), stdinClosingProvider);
+        await expect(driver.Render(CreateHangRenderRequest())).rejects.toThrow();
+
+        expect(capturedStdin).toBeDefined();
+        expect(capturedExitCode).toBeDefined();
+        const code = await capturedExitCode!;
+        expect(code).not.toBe(0);
+        expect(finalizations).toHaveLength(1);
+    });
+});
+
+function checkCanRunRealDockerTests(): boolean {
+    if (process.env.VIDEO_STUDIO_DOCKER_TESTS !== '1') {
+        return false;
+    }
+    const res = spawnSync('docker', ['image', 'inspect', DEFAULT_DOCKER_RENDER_IMAGE], {
+        stdio: 'ignore',
+    });
+    return res.status === 0;
+}
+
+const CAN_RUN_REAL_DOCKER_TESTS = checkCanRunRealDockerTests();
+
+describe.skipIf(!CAN_RUN_REAL_DOCKER_TESTS)(
+    'DockerRenderDriver (opt-in real Docker container via VIDEO_STUDIO_DOCKER_TESTS=1)',
+    () => {
+        const configDirs: string[] = [];
+
+        afterEach(() => {
+            const psRes = spawnSync(
+                'docker',
+                ['ps', '-q', '--filter', `ancestor=${DEFAULT_DOCKER_RENDER_IMAGE}`],
+                { encoding: 'utf8' },
+            );
+            expect((psRes.stdout ?? '').trim()).toBe('');
+        });
+
+        afterAll(async () => {
+            while (configDirs.length > 0) {
+                const dir = configDirs.pop()!;
+                await fs.rm(dir, { recursive: true, force: true });
+            }
+        });
+
+        DescribeRenderDriverContract(
+            'DockerRenderDriver (real Docker container)',
+            async () => {
+                const dockerConfigDir = await fs.mkdtemp(
+                    path.join(os.tmpdir(), 'mj-vs-real-docker-cfg-'),
+                );
+                configDirs.push(dockerConfigDir);
+                await fs.writeFile(
+                    path.join(dockerConfigDir, 'mj.config.cjs'),
+                    `module.exports = { videoStudio: { render: { driver: 'Docker' } } };\n`,
+                    'utf8',
+                );
+                return new DockerRenderDriver(ReadVideoRenderSettings(dockerConfigDir));
+            },
+        );
+    },
+);
