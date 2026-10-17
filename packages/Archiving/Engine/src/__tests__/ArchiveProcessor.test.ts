@@ -1,8 +1,9 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { BaseEntity, UserInfo, RunView } from '@memberjunction/core';
-import type { ArchiveFieldConfiguration } from '../types';
+import type { ArchiveFieldConfiguration, ArchiveRecordContext } from '../types';
 import type { ArchiveStorageManager } from '../ArchiveStorageManager';
 import type { FileStorageBase } from '@memberjunction/storage';
+import type { MJArchiveConfigurationEntity, MJArchiveConfigurationEntityEntity } from '@memberjunction/core-entities';
 
 // ---- Mocks ----
 
@@ -11,14 +12,26 @@ const mockRunViewResults: { Success: boolean; Results: MockBaseEntity[]; ErrorMe
     Results: [],
 };
 
+const mockRunViewCalls: Array<{ EntityName: string; ExtraFilter?: string }> = [];
+
+const mockDetailSave = vi.fn(() => Promise.resolve(true));
+
 vi.mock('@memberjunction/core', () => ({
     LogError: vi.fn(),
     LogStatus: vi.fn(),
     Metadata: class MockMetadata {
         GetEntityObject = vi.fn().mockResolvedValue(createMockEntity());
+        static Provider = {
+            GetEntityObject: vi.fn(() =>
+                Promise.resolve({ Set: vi.fn(), Save: mockDetailSave })
+            ),
+        };
     },
     RunView: class MockRunView {
-        RunView = vi.fn().mockImplementation(() => Promise.resolve(mockRunViewResults));
+        RunView = vi.fn().mockImplementation((params: { EntityName: string; ExtraFilter?: string }) => {
+            mockRunViewCalls.push(params);
+            return Promise.resolve(mockRunViewResults);
+        });
     },
 }));
 
@@ -26,7 +39,7 @@ vi.mock('@memberjunction/global', () => ({
     MJGlobal: {
         Instance: {
             ClassFactory: {
-                CreateInstance: vi.fn().mockReturnValue(null),
+                TryCreateInstance: vi.fn(() => ({ Resolved: false, Instance: null, Reason: 'not registered' })),
             },
         },
     },
@@ -61,6 +74,12 @@ interface MockBaseEntity {
     Set: ReturnType<typeof vi.fn>;
     GetAll: ReturnType<typeof vi.fn>;
     Save: ReturnType<typeof vi.fn>;
+    RetentionDays?: number | null;
+    Entity?: string;
+    DateField?: string;
+    FilterExpression?: string | null;
+    DefaultRetentionDays?: number;
+    StorageMode?: 'Store' | 'Purge';
 }
 
 function createMockPrimaryKey(id: string) {
@@ -85,16 +104,19 @@ function createMockEntity(overrides?: Partial<MockBaseEntity>): MockBaseEntity {
     };
 }
 
-function createMockConfigEntity(fieldConfigJson: string): MockBaseEntity {
-    const entity = createMockEntity({ ID: 'config-entity-1' });
+function createMockConfigEntity(fieldConfigJson: string, overrides?: Partial<MockBaseEntity>): MockBaseEntity {
+    const entity = createMockEntity({
+        ID: 'config-entity-1',
+        RetentionDays: null,
+        DateField: '__mj_CreatedAt',
+        FilterExpression: null,
+        ...overrides,
+    });
     entity.Get.mockImplementation((field: string) => {
         switch (field) {
             case 'EntityName': return 'Test Entity';
             case 'DriverClass': return null;
             case 'FieldConfiguration': return fieldConfigJson;
-            case 'RetentionDays': return null;
-            case 'DateField': return null;
-            case 'FilterExpression': return null;
             case 'BatchSize': return null;
             default: return null;
         }
@@ -102,8 +124,8 @@ function createMockConfigEntity(fieldConfigJson: string): MockBaseEntity {
     return entity;
 }
 
-function createMockConfig(): MockBaseEntity {
-    const config = createMockEntity({ ID: 'config-1' });
+function createMockConfig(overrides?: Partial<MockBaseEntity>): MockBaseEntity {
+    const config = createMockEntity({ ID: 'config-1', DefaultRetentionDays: 365, StorageMode: 'Store', ...overrides });
     config.Get.mockImplementation((field: string) => {
         switch (field) {
             case 'RootPath': return 'archives';
@@ -147,6 +169,7 @@ describe('ArchiveProcessor', () => {
         mockRunViewResults.Success = true;
         mockRunViewResults.Results = [];
         mockRunViewResults.ErrorMessage = undefined;
+        mockRunViewCalls.length = 0;
         mockShouldArchive.mockReturnValue(true);
         mockArchiveRecord.mockResolvedValue({
             Success: true,
@@ -175,8 +198,8 @@ describe('ArchiveProcessor', () => {
             const contextUser = { ID: 'user-1' } as unknown as UserInfo;
 
             const result = await processor.ProcessEntity(
-                configEntity as unknown as BaseEntity,
-                config as unknown as BaseEntity,
+                configEntity as unknown as MJArchiveConfigurationEntityEntity,
+                config as unknown as MJArchiveConfigurationEntity,
                 archiveRun as unknown as BaseEntity,
                 storageManager as unknown as ArchiveStorageManager,
                 contextUser
@@ -200,8 +223,8 @@ describe('ArchiveProcessor', () => {
             const contextUser = { ID: 'user-1' } as unknown as UserInfo;
 
             const result = await processor.ProcessEntity(
-                configEntity as unknown as BaseEntity,
-                config as unknown as BaseEntity,
+                configEntity as unknown as MJArchiveConfigurationEntityEntity,
+                config as unknown as MJArchiveConfigurationEntity,
                 archiveRun as unknown as BaseEntity,
                 storageManager as unknown as ArchiveStorageManager,
                 contextUser
@@ -228,8 +251,8 @@ describe('ArchiveProcessor', () => {
             const contextUser = { ID: 'user-1' } as unknown as UserInfo;
 
             const result = await processor.ProcessEntity(
-                configEntity as unknown as BaseEntity,
-                config as unknown as BaseEntity,
+                configEntity as unknown as MJArchiveConfigurationEntityEntity,
+                config as unknown as MJArchiveConfigurationEntity,
                 archiveRun as unknown as BaseEntity,
                 storageManager as unknown as ArchiveStorageManager,
                 contextUser
@@ -249,8 +272,8 @@ describe('ArchiveProcessor', () => {
             const contextUser = { ID: 'user-1' } as unknown as UserInfo;
 
             const result = await processor.ProcessEntity(
-                configEntity as unknown as BaseEntity,
-                config as unknown as BaseEntity,
+                configEntity as unknown as MJArchiveConfigurationEntityEntity,
+                config as unknown as MJArchiveConfigurationEntity,
                 archiveRun as unknown as BaseEntity,
                 storageManager as unknown as ArchiveStorageManager,
                 contextUser
@@ -292,8 +315,8 @@ describe('ArchiveProcessor', () => {
             const contextUser = { ID: 'user-1' } as unknown as UserInfo;
 
             const result = await processor.ProcessEntity(
-                configEntity as unknown as BaseEntity,
-                config as unknown as BaseEntity,
+                configEntity as unknown as MJArchiveConfigurationEntityEntity,
+                config as unknown as MJArchiveConfigurationEntity,
                 archiveRun as unknown as BaseEntity,
                 storageManager as unknown as ArchiveStorageManager,
                 contextUser
@@ -344,8 +367,8 @@ describe('ArchiveProcessor', () => {
             const contextUser = { ID: 'user-1' } as unknown as UserInfo;
 
             const result = await processor.ProcessEntity(
-                configEntity as unknown as BaseEntity,
-                config as unknown as BaseEntity,
+                configEntity as unknown as MJArchiveConfigurationEntityEntity,
+                config as unknown as MJArchiveConfigurationEntity,
                 archiveRun as unknown as BaseEntity,
                 storageManager as unknown as ArchiveStorageManager,
                 contextUser
@@ -370,8 +393,8 @@ describe('ArchiveProcessor', () => {
 
             // Should not throw - falls back to DefaultArchiveDriver
             const result = await processor.ProcessEntity(
-                configEntity as unknown as BaseEntity,
-                config as unknown as BaseEntity,
+                configEntity as unknown as MJArchiveConfigurationEntityEntity,
+                config as unknown as MJArchiveConfigurationEntity,
                 archiveRun as unknown as BaseEntity,
                 storageManager as unknown as ArchiveStorageManager,
                 contextUser
@@ -380,7 +403,7 @@ describe('ArchiveProcessor', () => {
             expect(result).toBeDefined();
         });
 
-        it('should fall back to DefaultArchiveDriver when ClassFactory returns null for unknown class', async () => {
+        it('should reject before reading records when the DriverClass is not registered', async () => {
             mockRunViewResults.Results = [];
 
             const configEntity = createMockConfigEntity(validFieldConfigJson);
@@ -401,16 +424,14 @@ describe('ArchiveProcessor', () => {
             const storageManager = createMockStorageManager();
             const contextUser = { ID: 'user-1' } as unknown as UserInfo;
 
-            // Should not throw - ClassFactory returns null, so falls back
-            const result = await processor.ProcessEntity(
-                configEntity as unknown as BaseEntity,
-                config as unknown as BaseEntity,
+            await expect(processor.ProcessEntity(
+                configEntity as unknown as MJArchiveConfigurationEntityEntity,
+                config as unknown as MJArchiveConfigurationEntity,
                 archiveRun as unknown as BaseEntity,
                 storageManager as unknown as ArchiveStorageManager,
                 contextUser
-            );
-
-            expect(result).toBeDefined();
+            )).rejects.toThrow('Archive driver "NonExistentDriver" is not registered');
+            expect(mockRunViewCalls).toHaveLength(0);
         });
     });
 
@@ -424,8 +445,8 @@ describe('ArchiveProcessor', () => {
 
             await expect(
                 processor.ProcessEntity(
-                    configEntity as unknown as BaseEntity,
-                    config as unknown as BaseEntity,
+                    configEntity as unknown as MJArchiveConfigurationEntityEntity,
+                    config as unknown as MJArchiveConfigurationEntity,
                     archiveRun as unknown as BaseEntity,
                     storageManager as unknown as ArchiveStorageManager,
                     contextUser
@@ -449,8 +470,8 @@ describe('ArchiveProcessor', () => {
 
             await expect(
                 processor.ProcessEntity(
-                    configEntity as unknown as BaseEntity,
-                    config as unknown as BaseEntity,
+                    configEntity as unknown as MJArchiveConfigurationEntityEntity,
+                    config as unknown as MJArchiveConfigurationEntity,
                     archiveRun as unknown as BaseEntity,
                     storageManager as unknown as ArchiveStorageManager,
                     contextUser
@@ -468,8 +489,8 @@ describe('ArchiveProcessor', () => {
 
             await expect(
                 processor.ProcessEntity(
-                    configEntity as unknown as BaseEntity,
-                    config as unknown as BaseEntity,
+                    configEntity as unknown as MJArchiveConfigurationEntityEntity,
+                    config as unknown as MJArchiveConfigurationEntity,
                     archiveRun as unknown as BaseEntity,
                     storageManager as unknown as ArchiveStorageManager,
                     contextUser
@@ -488,8 +509,8 @@ describe('ArchiveProcessor', () => {
             // Should not throw - ArchiveFullRecord:true with empty Fields is valid
             await expect(
                 processor.ProcessEntity(
-                    configEntity as unknown as BaseEntity,
-                    config as unknown as BaseEntity,
+                    configEntity as unknown as MJArchiveConfigurationEntityEntity,
+                    config as unknown as MJArchiveConfigurationEntity,
                     archiveRun as unknown as BaseEntity,
                     storageManager as unknown as ArchiveStorageManager,
                     contextUser
@@ -507,13 +528,127 @@ describe('ArchiveProcessor', () => {
 
             await expect(
                 processor.ProcessEntity(
-                    configEntity as unknown as BaseEntity,
-                    config as unknown as BaseEntity,
+                    configEntity as unknown as MJArchiveConfigurationEntityEntity,
+                    config as unknown as MJArchiveConfigurationEntity,
                     archiveRun as unknown as BaseEntity,
                     storageManager as unknown as ArchiveStorageManager,
                     contextUser
                 )
             ).rejects.toThrow('non-empty FieldName');
+        });
+    });
+
+    describe('Retention filter', () => {
+        const now = new Date('2026-10-15T00:00:00.000Z');
+
+        beforeEach(() => {
+            vi.useFakeTimers({ toFake: ['Date'] });
+            vi.setSystemTime(now);
+        });
+
+        afterEach(() => {
+            vi.useRealTimers();
+        });
+
+        async function filterFor(configEntity: MockBaseEntity, config: MockBaseEntity): Promise<string | undefined> {
+            await processor.ProcessEntity(
+                configEntity as unknown as MJArchiveConfigurationEntityEntity,
+                config as unknown as MJArchiveConfigurationEntity,
+                createMockEntity({ ID: 'run-1' }) as unknown as BaseEntity,
+                createMockStorageManager() as unknown as ArchiveStorageManager,
+                { ID: 'user-1' } as unknown as UserInfo
+            );
+            return mockRunViewCalls[0]?.ExtraFilter;
+        }
+
+        it('should use the configuration DefaultRetentionDays when the entity RetentionDays is null', async () => {
+            const filter = await filterFor(
+                createMockConfigEntity(validFieldConfigJson, { RetentionDays: null }),
+                createMockConfig({ DefaultRetentionDays: 30 })
+            );
+            expect(filter).toBe("__mj_CreatedAt < '2026-09-15T00:00:00.000Z'");
+        });
+
+        it('should use the entity RetentionDays over the configuration default', async () => {
+            const filter = await filterFor(
+                createMockConfigEntity(validFieldConfigJson, { RetentionDays: 7 }),
+                createMockConfig({ DefaultRetentionDays: 30 })
+            );
+            expect(filter).toBe("__mj_CreatedAt < '2026-10-08T00:00:00.000Z'");
+        });
+
+        it('should append the FilterExpression to the retention cutoff', async () => {
+            const filter = await filterFor(
+                createMockConfigEntity(validFieldConfigJson, { RetentionDays: 7, FilterExpression: "Status = 'Closed'" }),
+                createMockConfig()
+            );
+            expect(filter).toBe("__mj_CreatedAt < '2026-10-08T00:00:00.000Z' AND (Status = 'Closed')");
+        });
+
+        it('should refuse a negative retention period without reading any records', async () => {
+            await expect(filterFor(
+                createMockConfigEntity(validFieldConfigJson, { Entity: 'MJ: AI Prompt Runs', RetentionDays: -5 }),
+                createMockConfig()
+            )).rejects.toThrow('Entity "MJ: AI Prompt Runs" has a negative retention period (-5 days)');
+            expect(mockRunViewCalls).toHaveLength(0);
+        });
+
+        it('should build the cutoff at the current time when RetentionDays is 0', async () => {
+            const filter = await filterFor(
+                createMockConfigEntity(validFieldConfigJson, { RetentionDays: 0 }),
+                createMockConfig({ DefaultRetentionDays: 30 })
+            );
+            expect(filter).toBe("__mj_CreatedAt < '2026-10-15T00:00:00.000Z'");
+        });
+
+        it('should refuse to select records when the entity has no DateField', async () => {
+            await expect(filterFor(
+                createMockConfigEntity(validFieldConfigJson, { DateField: '' }),
+                createMockConfig()
+            )).rejects.toThrow('has no DateField');
+        });
+    });
+
+    describe('StorageMode', () => {
+        async function processOneRecord(
+            storageMode: 'Store' | 'Purge',
+            storageManager: ReturnType<typeof createMockStorageManager> | null
+        ): Promise<ArchiveRecordContext> {
+            mockRunViewResults.Results = [createMockEntity({ ID: 'rec-1' })];
+            await processor.ProcessEntity(
+                createMockConfigEntity(validFieldConfigJson) as unknown as MJArchiveConfigurationEntityEntity,
+                createMockConfig({ StorageMode: storageMode }) as unknown as MJArchiveConfigurationEntity,
+                createMockEntity({ ID: 'run-1' }) as unknown as BaseEntity,
+                storageManager as unknown as ArchiveStorageManager | null,
+                { ID: 'user-1' } as unknown as UserInfo
+            );
+            return mockArchiveRecord.mock.calls[0][0] as ArchiveRecordContext;
+        }
+
+        it('should pass no storage driver and the Purge mode to the driver', async () => {
+            const context = await processOneRecord('Purge', null);
+            expect(context.StorageDriver).toBeNull();
+            expect(context.StorageMode).toBe('Purge');
+        });
+
+        it('should not log a run detail for a purged record', async () => {
+            mockArchiveRecord.mockResolvedValue({ Success: true, StoragePath: null, BytesArchived: 0 });
+            await processOneRecord('Purge', null);
+            expect(mockDetailSave).not.toHaveBeenCalled();
+        });
+
+        it('should log a run detail for a record that fails to purge', async () => {
+            mockArchiveRecord.mockResolvedValue({ Success: false, StoragePath: null, BytesArchived: 0, ErrorMessage: 'save blocked' });
+            await processOneRecord('Purge', null);
+            expect(mockDetailSave).toHaveBeenCalledOnce();
+        });
+
+        it('should pass the storage driver and log a run detail for every stored record', async () => {
+            const storageManager = createMockStorageManager();
+            const context = await processOneRecord('Store', storageManager);
+            expect(context.StorageDriver).toBe(storageManager.Driver);
+            expect(context.StorageMode).toBe('Store');
+            expect(mockDetailSave).toHaveBeenCalledOnce();
         });
     });
 });
