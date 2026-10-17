@@ -208,6 +208,21 @@ picks one agent per turn, in this order, skipping any agent `AllowedAgentIDs` le
 
 The package README's "Chats with several people" section has the full table and an example.
 
+### Handing a conversation to another agent
+
+When a top-level agent determines that another directly discoverable peer agent is a better fit for the conversation (`nextStep.type = "Handoff"`), the host transfers the conversation to that target agent rather than running it as a child sub-agent:
+
+- **What happens in the thread:** The source agent finishes its turn on its reply row with its brief handoff message (`"Transferring you to **<targetAgentName>**…"` when the model omitted `message`) and records a completed `Handoff` `AIAgentRunStep` linking the source run to the target run and detail. Immediately below it in the same thread, the host creates a new `In-Progress` assistant `ConversationDetail` row with `ParentID` pointing to the source agent's completed detail row and `AgentID` set to the target agent, then runs the target agent at top level (`depth = 0`) and streams its progress and final response live on that new detail ID.
+- **Stickiness and `@Sage`:** Because the target agent writes the newest assistant message on the branch with its own `AgentID`, routing rule #2 (**Continuity** — the last non-manager agent that answered) automatically routes the user's subsequent follow-up turns directly to the target agent. The user can switch back to the conversation manager at any time by explicitly `@`-mentioning `@Sage` in the composer.
+- **Target preset resolution order:** When a host starts the target agent on a handoff (via `ResolveConversationAgentPreset` in `@memberjunction/ai-engine-base`), it resolves the target agent's configuration preset in strict order:
+  1. **`@mention` pin on the branch path:** Newest-first scan of the active branch path (`ConversationEngine.BranchPathFilterFresh`) for an `@{"type":"agent","id":"<targetAgentId>","name":"<targetAgentName>","configId":"<presetId>"}` token matching the target agent with an `Active` `AIAgentConfiguration` owned by that agent.
+  2. **Saved user preference:** The user's `mj.agentMode.<targetAgentId lowercased>` entry in `MJ: User Settings`, matched against preset `Name` exactly on the target agent's `Active` presets.
+  3. **Agent default preset:** The target agent's `Active` `AIAgentConfiguration` with `IsDefault === true`.
+  4. **`None`:** Passes no `configurationId`.
+- **Which hosts follow a handoff — and which never offer it:**
+  - **Offer and follow handoffs** (hosts that pass `handoffChain`, up to `MAX_HANDOFF_HOPS = 3` per user turn with cycle rejection): interactive user turns in `RunAIAgentFromConversationDetail` and `RunAIAgent` (where `AllowedAgentIDs`, when provided by the host, narrows the handoff target catalog), and `MJAIAgentRequestEntityServer.resumeAgent` when resuming a top-level conversation after user feedback.
+  - **Never offer handoffs** (hosts that omit `handoffChain`, so `Handoff` is omitted from the prompt catalog and rejected if emitted): `RunAIAgentSystemUser`, API-key callers with `apiKeyHash`, guests unless `ALL_AVAILABLE_AGENTS` is set under `TrustReservedRunData`, scheduled jobs, evaluation harnesses, MCP tool invocations, and any sub-agent run (`depth > 0` or `parentRun` present).
+
 ---
 
 ## 6. The slot system (extension surface)

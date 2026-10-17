@@ -164,9 +164,21 @@ Does this approach work for you?
   "nextStep": {
     "type": "Tasks",
     "tasks": {
-      "workflowName": "...",
-      "reasoning": "...",
-      "tasks": []
+      "workflowName": "Research and Analyze AI Market",
+      "reasoning": "User approved the multi-step research and analysis plan",
+      "tasks": [
+        {
+          "tempId": "task1",
+          "name": "Research Data",
+          "description": "Query associations database for revenue and location data",
+          "kind": "Agent",
+          "configuration": { "agentName": "Research Agent" },
+          "dependsOn": [],
+          "inputPayload": {
+            "query": "associations with 5-30M revenue in USA"
+          }
+        }
+      ]
     }
   }
 }

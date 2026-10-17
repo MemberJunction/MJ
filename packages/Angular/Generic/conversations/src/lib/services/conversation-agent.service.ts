@@ -3,7 +3,7 @@ import { Observable } from 'rxjs';
 import { Metadata, IMetadataProvider, RunView, UserInfo } from '@memberjunction/core';
 import { GraphQLDataProvider, GraphQLAIClient, type RunDecisionParams, type RunDecisionResult } from '@memberjunction/graphql-dataprovider';
 import { ExecuteAgentResult, AgentExecutionProgressCallback, coerceFailedExecuteAgentResult } from '@memberjunction/ai-core-plus';
-import { AIEngineBase } from '@memberjunction/ai-engine-base';
+import { AIEngineBase, FindMentionPinnedPresetID } from '@memberjunction/ai-engine-base';
 import {
   ConversationEngine,
   MJConversationDetailEntity,
@@ -24,12 +24,6 @@ import {
   GroupVersionsByArtifact,
   type AgentArtifactSummary
 } from '../utils/agent-artifact-summary';
-
-/**
- * Rows the configuration-preset lookup parses before giving up. The SQL prefilter is a LIKE,
- * so a few candidates may not be real mention blobs; this bounds how many we inspect.
- */
-const CONFIG_PRESET_CANDIDATE_ROWS = 5;
 
 /**
  * Cap on artifact versions listed for the intent classifier.
@@ -122,7 +116,7 @@ export class ConversationAgentService {
 
   constructor(
     _bootstrap: ConversationsRuntimeBootstrap,
-    private mentionParser: MentionParserService,
+    _mentionParser: MentionParserService,
     private agentClientService: AgentClientService
   ) {
     // Injecting `_bootstrap` forces the runtime's INotificationAdapter +
@@ -307,49 +301,19 @@ export class ConversationAgentService {
     agentId: string,
     branchId?: string | null
   ): Promise<string | undefined> {
-    type MentionRow = Pick<MJConversationDetailEntity, 'ID' | 'Message'>;
-    const pathFilter = await this.branchPathFilter(conversationId, branchId);
-    if (pathFilter == null) {
-      return undefined;
+    const configurationId = await FindMentionPinnedPresetID(
+      conversationId,
+      agentId,
+      branchId,
+      this.Provider.CurrentUser ?? undefined,
+      this.Provider
+    );
+    if (configurationId) {
+      console.log(`\u{1F3AF} Found configuration preset from @mention: ${configurationId}`);
     }
-
-    const rv = RunView.FromMetadataProvider(this.Provider);
-    const result = await rv.RunView<MentionRow>({
-      EntityName: 'MJ: Conversation Details',
-      ExtraFilter: `${pathFilter} AND Role='User'`
-        + ` AND Message LIKE '%"configId"%' AND Message LIKE '%${agentId}%'`,
-      OrderBy: 'Sequence DESC',
-      // >1 because LIKE cannot tell a mention blob from the same id appearing elsewhere in
-      // the prose; the parse below is authoritative and picks the newest genuine match.
-      MaxRows: CONFIG_PRESET_CANDIDATE_ROWS,
-      Fields: ['ID', 'Message'],
-      ResultType: 'simple'
-    }, this.Provider.CurrentUser ?? undefined);
-
-    if (!result.Success) {
-      console.error('Failed to resolve configuration preset:', result.ErrorMessage);
-      return undefined;
-    }
-
-    for (const row of result.Results || []) {
-      const configurationId = this.readAgentConfigFromMention(row.Message, agentId);
-      if (configurationId) {
-        console.log(`\u{1F3AF} Found configuration preset from @mention: ${configurationId}`);
-        return configurationId;
-      }
-    }
-    return undefined;
+    return configurationId;
   }
 
-  /** Returns the configId this message pins for `agentId`, or null when it pins none. */
-  private readAgentConfigFromMention(message: string | null, agentId: string): string | null {
-    if (!message) {
-      return null;
-    }
-    const parsed = this.mentionParser.parseMentions(message, AIEngineBase.Instance.ReadableAgents, []);
-    const mention = parsed.agentMention;
-    return mention?.id === agentId && mention.configurationId ? mention.configurationId : null;
-  }
 
 
   /**

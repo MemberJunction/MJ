@@ -71,6 +71,10 @@ vi.mock('@memberjunction/actions', () => ({
 vi.mock('@memberjunction/ai-engine-base', () => ({
     AIAgentPermissionHelper: {
         HasPermission: async (): Promise<boolean> => true,
+        IsDirectlyDiscoverable: (agent: { InvocationMode?: string | null; ParentID?: string | null }): boolean =>
+            agent.InvocationMode !== 'Sub-Agent' && (agent.ParentID == null || agent.ParentID.trim() === ''),
+        FilterRunnableAgents: async <T extends { Status?: string }>(agents: T[]): Promise<T[]> =>
+            agents.filter((a) => a.Status === 'Active'),
     },
 }));
 
@@ -598,7 +602,9 @@ describe('BaseAgent.Execute — Handoff gate and execution (VS-SAGE-1)', () => {
 
         expect(result.success).toBe(true);
         expect(result.handoff).toBeUndefined();
-        expect(harness.steps.map((s) => s.StepType)).not.toContain('Handoff');
+        const handoffSteps = harness.steps.filter((s) => s.StepType === 'Handoff');
+        expect(handoffSteps).toHaveLength(1);
+        expect(handoffSteps[0].Status).toBe('Failed');
         expect(runner.Calls).toHaveLength(2);
         const turn2Messages = (runner.Calls[1].conversationMessages ?? []).map((m) =>
             typeof m.content === 'string' ? m.content : JSON.stringify(m.content),

@@ -243,6 +243,12 @@ export class LoopAgentType extends BaseAgentType {
      * The reason is carried onto the run step rather than discarded: a user who edits a two-node
      * graph down to one changes its durability and observability, and should be able to read that
      * off the run record instead of inferring it.
+     *
+     * Note: `LoopAgentType` only checks structural eligibility here because it has no view of the
+     * run's effective sub-agent set (`ParentID` children, active relationships, and runtime skill /
+     * `subAgentChanges` grants). If the folded target is not resolvable via
+     * `BaseAgent.resolveSubAgentByName`, `BaseAgent.validateNextStep` unfolds the step back to
+     * `'Tasks'` (`folded: false`) so it submits durably instead of failing sub-agent validation.
      */
     private describeFold(spec: TaskGraphSpec): { folded: boolean; reason: string } {
         if (spec.tasks.length !== 1) return { folded: false, reason: `graph has ${spec.tasks.length} nodes` };

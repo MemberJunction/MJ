@@ -197,6 +197,7 @@ import {
     IsOpeningTurn,
     MentionsAgent,
 } from './decision-discovery';
+import { ResolveHandoffTarget } from './handoff-target';
 import {
     BuildFinishIfQuestions,
     CapFinishIfState,
@@ -2796,11 +2797,23 @@ export class BaseAgent {
     /**
      * Whether this run withholds Handoff (`enableHandoff` off and the `handoff` response section hidden).
      * True when the run has a `parentRun` (sub-agents cannot transfer the conversation), has no
-     * `conversationDetailId` (there is no conversation reply row to hand over), or has no `handoffChain`
-     * (the host does not carry out handoffs).
+     * `conversationDetailId` (there is no conversation reply row to hand over), has no `handoffChain`
+     * (the host does not carry out handoffs), or runs for an anonymous/widget guest without a trusted
+     * host allow-list (`TrustReservedRunData === true` and `HostAllowedAgentIDs(params.data)` defined).
      */
     private runWithholdsHandoff(params: ExecuteAgentParams): boolean {
-        return Boolean(params.parentRun) || !params.conversationDetailId || !Array.isArray(params.handoffChain);
+        const hasTrustedHostAllowList =
+            params.TrustReservedRunData === true &&
+            HostAllowedAgentIDs(params.data) !== undefined;
+        const isUnscopedGuest =
+            Boolean(params.contextUser?.IsMagicLinkAnonymous || params.contextUser?.WidgetGuestContext) &&
+            !hasTrustedHostAllowList;
+        return (
+            Boolean(params.parentRun) ||
+            !params.conversationDetailId ||
+            !Array.isArray(params.handoffChain) ||
+            isUnscopedGuest
+        );
     }
 
     /**
@@ -6169,7 +6182,35 @@ export class BaseAgent {
 
         // for next step, let's do a little quick validation here for sub-agent and actions to ensure requests are valid
         switch (nextStep.step) {
-            case 'Sub-Agent':           
+            case 'Sub-Agent':
+                if (
+                    nextStep.taskGraph?.folded &&
+                    nextStep.subAgent?.name &&
+                    !this.resolveSubAgentByName(params, nextStep.subAgent.name)
+                ) {
+                    const activeAgentExists = AIEngine.Instance.Agents.some(
+                        (a) =>
+                            a.Status === 'Active' &&
+                            a.Name === nextStep.subAgent!.name &&
+                            !UUIDsEqual(a.ID, params.agent.ID),
+                    );
+                    if (activeAgentExists) {
+                        this.logStatus(
+                            `target is not a sub-agent of ${params.agent.Name}; submitting durably`,
+                            false,
+                            params
+                        );
+                        return {
+                            ...nextStep,
+                            step: 'Tasks' as typeof nextStep.step,
+                            subAgent: undefined,
+                            taskGraph: {
+                                spec: nextStep.taskGraph.spec,
+                                folded: false,
+                            },
+                        };
+                    }
+                }
                 return this.validateSubAgentNextStep<P>(params, nextStep, currentPayload, agentRun, currentStep);
             case 'Actions':
                 return this.validateActionsNextStep<P>(params, nextStep, currentPayload, agentRun, currentStep);
@@ -6703,9 +6744,11 @@ export class BaseAgent {
 
     /**
      * Validates a `'Handoff'` next step: re-checks the runtime withholding conditions (sub-agent run,
-     * missing `conversationDetailId`, or missing `handoffChain`) and resolves the target agent by name
-     * over active agents in {@link AIEngine}. Stores the resolved target ID and name for
-     * {@link executeHandoffStep}.
+     * missing `conversationDetailId`, or missing `handoffChain`) and validates the requested target
+     * via {@link ResolveHandoffTarget} (Active status, `'view'` and `'run'` permissions, direct
+     * discoverability, host allow-list, cycle check, and hop limit). On refusal, writes a Failed
+     * `'Handoff'` step and returns a `'Retry'` step naming up to 20 candidate agents; on approval,
+     * stores the resolved target ID and name for {@link executeHandoffStep}.
      *
      * @protected
      */
@@ -6730,14 +6773,44 @@ export class BaseAgent {
             };
         }
 
-        const requestedName = nextStep.handoff?.agentName?.trim() ?? '';
-        const target = (AIEngine.Instance.Agents ?? []).find(
-            a => a.Status === 'Active' && a.Name?.trim().toLowerCase() === requestedName.toLowerCase()
-        );
-        if (!requestedName || !target) {
-            this.logError(`Handoff target agent '${nextStep.handoff?.agentName}' not found or not active for agent '${params.agent.Name}'`, {
+        const requestedName = nextStep.handoff?.agentName ?? '';
+        const brief = nextStep.handoff?.brief ?? '';
+        const reason = nextStep.handoff?.reason ?? '';
+        const data = WithAgentRunDataTrustApplied(params).Params.data;
+        const resolution = await ResolveHandoffTarget({
+            AgentName: requestedName,
+            SourceAgentID: params.agent.ID,
+            HandoffChain: params.handoffChain ?? [],
+            HostAllowedIDs: HostAllowedAgentIDs(data),
+            ContextUser: params.contextUser,
+            Agents: AIEngine.Instance.Agents,
+        });
+
+        if (resolution.Refusal) {
+            const refusal = resolution.Refusal;
+            this.logError(`Handoff target agent '${requestedName}' refused (${refusal.Reason}) for agent '${params.agent.Name}': ${refusal.Message}`, {
                 agent: params.agent,
                 category: 'NextStepValidation'
+            });
+            await this.createStepEntity({
+                stepType: 'Handoff',
+                stepName: `Handoff: ${requestedName.trim() || '(unknown)'}`,
+                contextUser: params.contextUser,
+                inputData: {
+                    agentName: requestedName,
+                    brief,
+                    reason
+                },
+                completed: {
+                    success: false,
+                    errorMessage: refusal.Message,
+                    outputData: {
+                        RefusalReason: refusal.Reason,
+                        AgentName: requestedName,
+                        Brief: brief,
+                        Reason: reason
+                    }
+                }
             });
             if (nextStep.step !== 'Retry') {
                 this._generalValidationRetryCount++;
@@ -6745,10 +6818,12 @@ export class BaseAgent {
             return {
                 step: 'Retry',
                 terminate: false,
-                errorMessage: `Handoff target agent '${nextStep.handoff?.agentName}' not found or not active`
+                message: refusal.Message,
+                errorMessage: refusal.Message
             };
         }
 
+        const target = resolution.Target;
         this._resolvedHandoffTarget = { id: target.ID, name: target.Name };
         if (nextStep.handoff) {
             nextStep.handoff = { ...nextStep.handoff, agentName: target.Name };
