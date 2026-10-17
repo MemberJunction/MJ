@@ -185,17 +185,57 @@
 
         @if (SelectedProduction !== null) {
           <aside class="vs-production-detail-pane" data-testid="production-detail-pane">
-            <mj-artifact-viewer-panel
-              [artifactId]="SelectedProduction.ID"
-              [Provider]="Provider"
-              [CurrentUser]="ProviderToUse.CurrentUser"
-              [canShare]="CanShareSelected"
-              [canEdit]="CanEditSelected"
-              [ShowSaveToCollection]="false"
-              (Closed)="CloseDetailPane()"
-              (ShareRequested)="OpenShareModal($event)"
-              (NavigateToLink)="OnNavigateToArtifactLink($event)"
-            />
+            <div class="vs-production-detail-toolbar" data-testid="production-detail-toolbar">
+              <span class="vs-production-detail-toolbar__title">{{ SelectedProduction.Name }}</span>
+              <button
+                mjButton
+                variant="outline"
+                size="sm"
+                type="button"
+                data-testid="production-iterate-button"
+                [disabled]="!SelectedProductionConversationId"
+                [attr.title]="
+                  SelectedProductionConversationId
+                    ? 'Iterate on this production in its conversation'
+                    : 'Made outside a conversation. Start a new production in Studio.'
+                "
+                (click)="StartIterate()"
+              >
+                <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i>
+                <span>Iterate</span>
+              </button>
+            </div>
+            <div class="vs-production-detail-body">
+              <div class="vs-production-detail-viewer">
+                <mj-artifact-viewer-panel
+                  [artifactId]="SelectedProduction.ID"
+                  [Provider]="Provider"
+                  [CurrentUser]="ProviderToUse.CurrentUser"
+                  [canShare]="CanShareSelected"
+                  [canEdit]="CanEditSelected"
+                  [ShowSaveToCollection]="false"
+                  (Closed)="CloseDetailPane()"
+                  (ShareRequested)="OpenShareModal($event)"
+                  (NavigateToLink)="OnNavigateToArtifactLink($event)"
+                />
+              </div>
+              @if (IsIterating && SelectedProductionConversationId) {
+                <div class="vs-production-detail-copilot" data-testid="production-iterate-copilot">
+                  <vs-copilot-panel
+                    [Provider]="ProviderToUse"
+                    [CurrentUser]="CurrentUser"
+                    [EnvironmentId]="EnvironmentId"
+                    [ApplicationId]="ApplicationId"
+                    [ConversationId]="SelectedProductionConversationId"
+                    [PendingArtifactId]="IteratePendingArtifactId"
+                    [PendingArtifactVersionNumber]="IteratePendingArtifactVersionNumber"
+                    [ShowCloseButton]="true"
+                    (PendingArtifactConsumed)="OnIteratePendingArtifactConsumed()"
+                    (CloseRequested)="CloseIterate()"
+                  ></vs-copilot-panel>
+                </div>
+              }
+            </div>
           </aside>
         }
       </div>

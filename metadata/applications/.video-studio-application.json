@@ -14,7 +14,14 @@
           "ResourceType": "Custom",
           "DriverClass": "VideoStudioProductionsResource",
           "isDefault": true,
-          "Description": "Production gallery with status, archetype, brand kit, and format filters."
+          "Description": "Production gallery with archetype, status, brand kit, company, and date filters."
+        },
+        {
+          "Label": "Studio",
+          "Icon": "fa-solid fa-wand-magic-sparkles",
+          "ResourceType": "Custom",
+          "DriverClass": "VideoStudioStudioResource",
+          "Description": "Start new video productions and collaborate with the Video Studio copilot."
         },
         {
           "Label": "Brand Kits",

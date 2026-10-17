@@ -6,11 +6,12 @@ import {
   OnInit,
   inject,
 } from '@angular/core';
-import { CompositeKey, LogError, RunView } from '@memberjunction/core';
+import { CompositeKey, LogError, RunView, UserInfo } from '@memberjunction/core';
 import {
   BrandKitEngine,
   MJArtifactEntity,
   MJBrandKitEntity,
+  MJEnvironmentEntityExtended,
   ResourceData,
 } from '@memberjunction/core-entities';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
@@ -25,6 +26,7 @@ import { VideoProductionStatus } from '@memberjunction/video-studio-core';
 import {
   BuildProductionsAgentContext,
   CountActiveProductionPopoverFilters,
+  EscapeSqlLiteral,
   FilterProductionCards,
   ProductionCardSnapshot,
   ProductionCardStatus,
@@ -325,6 +327,26 @@ export class VideoStudioProductionsResourceComponent
     this.applyFiltersAndSync();
   }
 
+  public SelectedProductionConversationId: string | null = null;
+  public IsIterating = false;
+  public IteratePendingArtifactId: string | null = null;
+  public IteratePendingArtifactVersionNumber: number | null = null;
+
+  public get CurrentUser(): UserInfo | null {
+    return this.ProviderToUse?.CurrentUser ?? null;
+  }
+
+  public get EnvironmentId(): string {
+    return (
+      (this.Data?.Configuration?.['environmentId'] as string | undefined) ||
+      MJEnvironmentEntityExtended.DefaultEnvironmentID
+    );
+  }
+
+  public get ApplicationId(): string {
+    return (this.Data?.Configuration?.['applicationId'] as string | undefined) ?? '';
+  }
+
   public async SelectProduction(
     item: ProductionCardSnapshot | null,
     updateUrl = true,
@@ -332,6 +354,10 @@ export class VideoStudioProductionsResourceComponent
     this.SelectedProduction = item;
     this.CanShareSelected = false;
     this.CanEditSelected = false;
+    this.SelectedProductionConversationId = null;
+    this.IsIterating = false;
+    this.IteratePendingArtifactId = null;
+    this.IteratePendingArtifactVersionNumber = null;
 
     if (updateUrl) {
       this.UpdateQueryParams({ production: item ? item.ID : null });
@@ -353,8 +379,90 @@ export class VideoStudioProductionsResourceComponent
       }
     }
 
+    if (item) {
+      this.SelectedProductionConversationId =
+        await this.resolveProductionConversationId(item.ID);
+    }
+
     this.syncAgentContext();
     this.cdr.markForCheck();
+  }
+
+  public StartIterate(): void {
+    if (!this.SelectedProduction || !this.SelectedProductionConversationId) {
+      return;
+    }
+    this.IteratePendingArtifactId = this.SelectedProduction.ID;
+    this.IteratePendingArtifactVersionNumber = this.SelectedProduction.VersionNumber;
+    this.IsIterating = true;
+    this.cdr.markForCheck();
+  }
+
+  public CloseIterate(): void {
+    this.IsIterating = false;
+    this.IteratePendingArtifactId = null;
+    this.IteratePendingArtifactVersionNumber = null;
+    this.cdr.markForCheck();
+  }
+
+  public OnIteratePendingArtifactConsumed(): void {
+    this.IteratePendingArtifactId = null;
+    this.IteratePendingArtifactVersionNumber = null;
+    this.cdr.markForCheck();
+  }
+
+  private async resolveProductionConversationId(
+    artifactId: string,
+  ): Promise<string | null> {
+    const trimmedId = (artifactId ?? '').trim();
+    if (!trimmedId) {
+      return null;
+    }
+    try {
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+      const escapedId = EscapeSqlLiteral(trimmedId);
+      const detailArtifactResult = await rv.RunView<{
+        ConversationDetailID?: string | null;
+      }>({
+        EntityName: 'MJ: Conversation Detail Artifacts',
+        ExtraFilter: `ArtifactVersionID IN (SELECT ID FROM [__mj].[vwArtifactVersions] WHERE ArtifactID = '${escapedId}') AND Direction = 'Output'`,
+        OrderBy: '__mj_CreatedAt DESC',
+        Fields: ['ConversationDetailID'],
+        MaxRows: 1,
+        ResultType: 'simple',
+      });
+
+      const detailId =
+        detailArtifactResult.Success &&
+        Array.isArray(detailArtifactResult.Results) &&
+        detailArtifactResult.Results.length > 0
+          ? (detailArtifactResult.Results[0].ConversationDetailID ?? '').trim()
+          : '';
+      if (!detailId) {
+        return null;
+      }
+
+      const escapedDetailId = EscapeSqlLiteral(detailId);
+      const detailResult = await rv.RunView<{ ConversationID?: string | null }>({
+        EntityName: 'MJ: Conversation Details',
+        ExtraFilter: `ID = '${escapedDetailId}'`,
+        Fields: ['ConversationID'],
+        MaxRows: 1,
+        ResultType: 'simple',
+      });
+
+      const conversationId =
+        detailResult.Success &&
+        Array.isArray(detailResult.Results) &&
+        detailResult.Results.length > 0
+          ? (detailResult.Results[0].ConversationID ?? '').trim()
+          : '';
+
+      return conversationId.length > 0 ? conversationId : null;
+    } catch (err: unknown) {
+      LogError(err instanceof Error ? err.message : String(err));
+      return null;
+    }
   }
 
   public CloseDetailPane(): void {

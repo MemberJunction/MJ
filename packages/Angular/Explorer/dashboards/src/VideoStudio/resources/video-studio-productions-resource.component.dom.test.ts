@@ -274,4 +274,192 @@ describe('VideoStudioProductionsResourceComponent DOM', () => {
     fixture.destroy();
     vi.restoreAllMocks();
   });
+
+  it('enables Iterate when a conversation is linked via MJ: Conversation Detail Artifacts -> MJ: Conversation Details and opens docked vs-copilot-panel on click', async () => {
+    const navStub = createNavigationServiceStub();
+    const customProvider = createGraphQLProviderStub('user-1');
+    const permStub = {
+      Provider: null,
+      GetReadableArtifactsFilter: vi.fn().mockResolvedValue("UserID = 'user-1'"),
+      GetUserPermissions: vi.fn().mockResolvedValue({
+        canRead: true,
+        canEdit: true,
+        canShare: true,
+      }),
+    };
+
+    vi.spyOn(BrandKitEngine, 'GetProviderInstance').mockReturnValue({
+      Config: vi.fn().mockResolvedValue(undefined),
+      BrandKits: [],
+    } as unknown as BrandKitEngine);
+
+    const runViewSpy = vi.fn().mockImplementation(async (params: { EntityName: string; ExtraFilter?: string }) => {
+      if (params.EntityName === 'MJ: Artifacts') {
+        return {
+          Success: true,
+          Results: [
+            {
+              ID: 'prod-iter-1',
+              Name: 'Launch Video v3',
+              Description: 'Created in Studio',
+              __mj_UpdatedAt: new Date('2026-04-15T12:00:00Z'),
+            },
+          ],
+        };
+      }
+      if (params.EntityName === 'MJ: Conversation Detail Artifacts') {
+        return {
+          Success: true,
+          Results: [{ ConversationDetailID: 'cd-999' }],
+        };
+      }
+      if (params.EntityName === 'MJ: Conversation Details') {
+        return {
+          Success: true,
+          Results: [{ ConversationID: 'conv-777' }],
+        };
+      }
+      return { Success: true, Results: [] };
+    });
+
+    const runViewsSpy = vi.fn().mockResolvedValue([
+      {
+        Success: true,
+        Results: [{ ID: 'ver-iter-1', ArtifactID: 'prod-iter-1', VersionNumber: 3 }],
+      },
+      {
+        Success: true,
+        Results: [{ ArtifactVersionID: 'ver-iter-1', Name: 'status', Value: 'Ready for Review' }],
+      },
+    ]);
+
+    vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
+      RunView: runViewSpy,
+      RunViews: runViewsSpy,
+    } as unknown as RunView);
+
+    const fixture = renderComponentFixture(VideoStudioProductionsResourceComponent, {
+      inputs: { Provider: customProvider },
+      providers: [
+        { provide: NavigationService, useValue: navStub },
+        { provide: ArtifactPermissionService, useValue: permStub },
+      ],
+    });
+
+    await flushAsync();
+    fixture.detectChanges();
+
+    const card = query(fixture, '[data-testid^="production-card-"]');
+    expect(card).not.toBeNull();
+    card!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await flushAsync();
+    await flushAsync();
+    fixture.detectChanges();
+
+    const instance = fixture.componentInstance;
+    expect(instance.SelectedProductionConversationId).toBe('conv-777');
+
+    const iterateBtn = query(fixture, '[data-testid="production-iterate-button"]');
+    expect(iterateBtn).not.toBeNull();
+    expect(iterateBtn!.hasAttribute('disabled')).toBe(false);
+
+    iterateBtn!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    fixture.detectChanges();
+
+    expect(instance.IsIterating).toBe(true);
+    expect(instance.IteratePendingArtifactId).toBe('prod-iter-1');
+    expect(instance.IteratePendingArtifactVersionNumber).toBe(3);
+    const copilotEl = query(fixture, '[data-testid="production-iterate-copilot"]');
+    expect(copilotEl).not.toBeNull();
+
+    fixture.destroy();
+    vi.restoreAllMocks();
+  });
+
+  it('disables Iterate with tooltip when production was made outside a conversation', async () => {
+    const navStub = createNavigationServiceStub();
+    const customProvider = createGraphQLProviderStub('user-1');
+    const permStub = {
+      Provider: null,
+      GetReadableArtifactsFilter: vi.fn().mockResolvedValue("UserID = 'user-1'"),
+      GetUserPermissions: vi.fn().mockResolvedValue({
+        canRead: true,
+        canEdit: true,
+        canShare: true,
+      }),
+    };
+
+    vi.spyOn(BrandKitEngine, 'GetProviderInstance').mockReturnValue({
+      Config: vi.fn().mockResolvedValue(undefined),
+      BrandKits: [],
+    } as unknown as BrandKitEngine);
+
+    const runViewSpy = vi.fn().mockImplementation(async (params: { EntityName: string }) => {
+      if (params.EntityName === 'MJ: Artifacts') {
+        return {
+          Success: true,
+          Results: [
+            {
+              ID: 'prod-standalone',
+              Name: 'Imported Production',
+              Description: 'No conversation link',
+              __mj_UpdatedAt: new Date('2026-04-15T12:00:00Z'),
+            },
+          ],
+        };
+      }
+      return { Success: true, Results: [] };
+    });
+
+    const runViewsSpy = vi.fn().mockResolvedValue([
+      {
+        Success: true,
+        Results: [{ ID: 'ver-standalone', ArtifactID: 'prod-standalone', VersionNumber: 1 }],
+      },
+      {
+        Success: true,
+        Results: [],
+      },
+    ]);
+
+    vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
+      RunView: runViewSpy,
+      RunViews: runViewsSpy,
+    } as unknown as RunView);
+
+    const fixture = renderComponentFixture(VideoStudioProductionsResourceComponent, {
+      inputs: { Provider: customProvider },
+      providers: [
+        { provide: NavigationService, useValue: navStub },
+        { provide: ArtifactPermissionService, useValue: permStub },
+      ],
+    });
+
+    await flushAsync();
+    fixture.detectChanges();
+
+    const card = query(fixture, '[data-testid^="production-card-"]');
+    expect(card).not.toBeNull();
+    card!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await flushAsync();
+    await flushAsync();
+    fixture.detectChanges();
+
+    const instance = fixture.componentInstance;
+    expect(instance.SelectedProductionConversationId).toBeNull();
+
+    const iterateBtn = query(fixture, '[data-testid="production-iterate-button"]');
+    expect(iterateBtn).not.toBeNull();
+    expect(iterateBtn!.hasAttribute('disabled')).toBe(true);
+    expect(iterateBtn!.getAttribute('title')).toBe('Made outside a conversation. Start a new production in Studio.');
+
+    iterateBtn!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    fixture.detectChanges();
+    expect(instance.IsIterating).toBe(false);
+    expect(query(fixture, '[data-testid="production-iterate-copilot"]')).toBeNull();
+
+    fixture.destroy();
+    vi.restoreAllMocks();
+  });
 });
+
