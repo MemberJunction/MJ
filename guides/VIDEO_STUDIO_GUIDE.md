@@ -299,16 +299,16 @@ The `MJ: Brand Kits` entity form is extended with two `after-fields` form panels
 The root `Video Studio` agent (`ID: 00151C2D-3284-4F43-973E-947A7222DC24`, `TypeID: Loop`, `DriverClass: VideoStudioAgent`, `InvocationMode: Any`, `ExposeAsAction: true`, `ChatHandlingOption: Consult` in [`metadata/agents/.video-studio-agent.json`](../metadata/agents/.video-studio-agent.json)) orchestrates seven direct child Loop sub-agents (`ParentID = 00151C2D-3284-4F43-973E-947A7222DC24`, all with `InvocationMode: 'Sub-Agent'`):
 
 1. `Video Studio - Director` (`ExecutionOrder: 1`)
-2. `Video Studio - Art Director` (`ExecutionOrder: 2`, `DriverClass: VideoStudioArtDirectorAgent`)
+2. `Video Studio - Art Director` (`ExecutionOrder: 2`)
 3. `Video Studio - Storyboard` (`ExecutionOrder: 3`)
-4. `Video Studio - Pre-Production` (`ExecutionOrder: 4`, `DriverClass: VideoStudioPreProductionAgent`)
-5. `Video Studio - Motion Engineer` (`ExecutionOrder: 5`, `DriverClass: VideoStudioMotionEngineerAgent`)
-6. `Video Studio - Render` (`ExecutionOrder: 6`, `DriverClass: VideoStudioRenderAgent`)
-7. `Video Studio - Critic` (`ExecutionOrder: 7`, `DriverClass: VideoStudioCriticAgent`)
+4. `Video Studio - Pre-Production` (`ExecutionOrder: 4`)
+5. `Video Studio - Motion Engineer` (`ExecutionOrder: 5`)
+6. `Video Studio - Render` (`ExecutionOrder: 6`)
+7. `Video Studio - Critic` (`ExecutionOrder: 7`)
 
 ### 1. Sage peer-to-peer hand-off (`nextStep.type = 'Handoff'`)
 
-When a user asks Sage in chat to make a video, product film, social clip, or animated KPI briefing, Sage discovers and transfers the conversation to `Video Studio`:
+When a user asks Sage in chat to make a video, product film, social clip, or animated KPI briefing, Sage discovers and transfers the conversation to `Video Studio` (for the full client/server hand-off contract, see [Handing a conversation to another agent](CONVERSATIONS_UX_STACK_GUIDE.md#handing-a-conversation-to-another-agent)):
 
 1. **Semantic discovery (`AI Agents Search` + `IsDirectlyDiscoverable`):**
    - The `AI Agents Search` EntityDocument (`ID: DA9AD383-A4DC-4C0C-93A8-EAC99C75054B` in [`metadata/entity-documents/.entity-documents.json`](../metadata/entity-documents/.entity-documents.json)) is `Status: 'Active'`, indexing `MJ: AI Agents` for `FindCandidateAgentsAction` ([`packages/Actions/CoreActions/src/custom/ai/find-candidate-agents.action.ts`](../packages/Actions/CoreActions/src/custom/ai/find-candidate-agents.action.ts)) and `FindBestAgentAction` ([`packages/Actions/CoreActions/src/custom/ai/find-best-agent.action.ts`](../packages/Actions/CoreActions/src/custom/ai/find-best-agent.action.ts)).
@@ -316,9 +316,9 @@ When a user asks Sage in chat to make a video, product film, social clip, or ani
 2. **Top-level transfer (`AgentRunner.FollowHandoffs`):**
    - Sage (`metadata/prompts/templates/sage/sage.template.md`) emits `nextStep.type = 'Handoff'` with `handoff: { agentName: "Video Studio", brief, reason }` and `taskComplete: false`.
    - `AgentRunner.FollowHandoffs` ([`packages/AI/Agents/src/AgentRunner.ts`](../packages/AI/Agents/src/AgentRunner.ts)) records a completed `Handoff` step on the source run (`TargetID`, `HandoffToAgentID`, `TargetConversationDetailID`), creates a new `MJ: Conversation Details` row for `Video Studio` (`ParentID` = source detail row, `Role = 'AI'`), and executes `Video Studio` as a root run (`ParentRunID IS NULL`) on the same `ConversationID`. Subsequent user turns in that conversation route directly to `Video Studio`.
-3. **Target preset resolution:**
-   - Handoff drops the source agent's `ConfigurationID`. `Video Studio` resolves its own preset via `AgentModeSettingKey('00151C2D-3284-4F43-973E-947A7222DC24')` (`mj.agentMode.00151c2d-3284-4f43-973e-947a7222dc24` in [`packages/AI/BaseAIEngine/src/agent-preset-resolution.ts`](../packages/AI/BaseAIEngine/src/agent-preset-resolution.ts)) when the user has a saved `MJ: User Settings` preference, or falls back to its default preset `Standard` (`AIConfigurationID: 2144CA24-5FD1-4C07-A4F5-FF0685DE32A1`).
-   - This end-to-end flow is verified without live LLM calls by the `video-studio-handoff` integration check bundle (`VSH1`–`VSH3` in [`packages/TestingFramework/integration-test-suite/src/checks/video-studio-handoff.checks.ts`](../packages/TestingFramework/integration-test-suite/src/checks/video-studio-handoff.checks.ts)).
+3. **Target preset resolution (`ResolveConversationAgentPreset`):**
+   - Handoff drops the source agent's `ConfigurationID`. `ResolveConversationAgentPreset` ([`packages/AI/BaseAIEngine/src/agent-preset-resolution.ts`](../packages/AI/BaseAIEngine/src/agent-preset-resolution.ts)) resolves `Video Studio`'s preset by checking `@mention` pins on the active branch path, then the user's saved `MJ: User Settings` preference at `AgentModeSettingKey('00151C2D-3284-4F43-973E-947A7222DC24')` (`mj.agentMode.00151c2d-3284-4f43-973e-947a7222dc24`), and falling back to its default preset `Standard` (`AIConfigurationID: 2144CA24-5FD1-4C07-A4F5-FF0685DE32A1`).
+   - This end-to-end flow is verified without live LLM calls by `IT150` (`video-studio-handoff` check bundle `VSH1`–`VSH3` in [`packages/TestingFramework/integration-test-suite/src/checks/video-studio-handoff.checks.ts`](../packages/TestingFramework/integration-test-suite/src/checks/video-studio-handoff.checks.ts): `VSH1` direct discoverability and real top-level transfer, `VSH2` target preset resolution, and `VSH3` the continuity `ConversationDetail` row).
 
 ### 2. Direct `@Video Studio` mention and preset selection
 
@@ -341,22 +341,22 @@ Users can invoke `@Video Studio` directly from the conversation composer and pic
 
 When `Query Builder` calls `Video Studio`, `SubAgentInputMapping` populates `DataSnapshot.Inline.caller.{rows,columns}` on the seeded `VideoGenerationSpec`, and `Video Studio - Director` (`metadata/prompts/templates/video-studio/director.template.md`) either binds `Source.Kind: 'Inline'` with key `'caller'` or prefers `Source.Kind: 'Query'` with `savedQueryId` when present in `SubAgentContextPaths`.
 
-### 4. The `Produce Video` action (`ProduceVideoAction`)
+### 4. The `Produce Video` action (`ProduceVideoAction`) and MCP tools
 
-Workflows (`Flow` agents), task graphs, MCP clients, and server code can invoke `Video Studio` through the **`Produce Video`** action (`@RegisterClass(BaseAction, 'Produce Video')`, `PRODUCE_VIDEO_DRIVER_CLASS = 'Produce Video'` in [`packages/AI/VideoStudio/Engine/src/actions/produce-video.action.ts`](../packages/AI/VideoStudio/Engine/src/actions/produce-video.action.ts) and [`packages/AI/VideoStudio/Engine/src/actions/produce-video.mapping.ts`](../packages/AI/VideoStudio/Engine/src/actions/produce-video.mapping.ts)).
+Workflows (`Flow` agents), task graphs, MCP clients, and server code can invoke `Video Studio` through the **`Produce Video`** action (`@RegisterClass(BaseAction, 'Produce Video')`, `PRODUCE_VIDEO_DRIVER_CLASS = 'Produce Video'` in [`packages/AI/VideoStudio/Engine/src/actions/produce-video.action.ts`](../packages/AI/VideoStudio/Engine/src/actions/produce-video.action.ts) and [`packages/AI/VideoStudio/Engine/src/actions/produce-video.mapping.ts`](../packages/AI/VideoStudio/Engine/src/actions/produce-video.mapping.ts), seeded in [`metadata/actions/.video-studio-produce-video.json`](../metadata/actions/.video-studio-produce-video.json)). When exposed through `@memberjunction/ai-mcp-server` ([`packages/AI/MCPServer/src/Server.ts`](../packages/AI/MCPServer/src/Server.ts)), MCP tool names are configuration-driven: `Execute_Produce_Video_Action` for the action (`Server.ts:1769`) and `Execute_Video_Studio_Agent` or `Run_Agent` for direct agent execution (`Server.ts:1859`, `:2777`).
 
 #### Input parameters (`ProduceVideoInput`)
 
 | Parameter | Required | Type | Behavior (`BuildProduceVideoRequest` in `produce-video.mapping.ts`) |
 |---|---|---|---|
-| `Topic` | Yes | `string` | Non-empty topic/brief string; used as the initial user message and seeds `Film.Topic` and `Film.WorkingTitle`. |
+| `Topic` | Yes | `string` | Non-empty topic/brief string; used as the initial user message and seeds `Film.Topic` and `Film.WorkingTitle`. Always sets `Interaction.Mode: 'Autonomous'` on the seeded spec. |
 | `Archetype` | No | `string` | Archetype `Name` or `ID` (UUID), resolved via `VideoStudioEngine.Instance` in `CompanyID` scope. When omitted, `Archetype` is left unset on the seeded spec; unknown or out-of-scope values fail with `NOT_FOUND`. |
-| `BrandKit` | No | `string` | Brand kit `Name` or `ID` (UUID), resolved via `BrandKitEngine.Instance` in `CompanyID` scope. When omitted, defaults to `BrandKitEngine.Instance.GetDefaultKit(companyId ?? null)`; unknown or out-of-scope values fail with `NOT_FOUND`. |
+| `BrandKit` | No | `string` | Brand kit `Name` or `ID` (UUID), resolved via `BrandKitEngine.Instance.GetKitsForCompany` / `BrandKits` in `CompanyID` scope. When omitted, defaults to `BrandKitEngine.Instance.GetDefaultKit(companyId ?? null)`; unknown or out-of-scope values fail with `NOT_FOUND`. |
 | `Formats` | No | `VideoFormat[] \| string` | Array, JSON array string, or comma-separated list of `'16:9' \| '9:16' \| '1:1'`. Defaults to the resolved archetype's `DefaultFormats`, or `['16:9']` when no archetype is specified. |
 | `DurationSeconds` | No | `number` | Positive duration in seconds. When an archetype is set, must fall within `MinDurationSeconds`..`MaxDurationSeconds`; when omitted, defaults to `archetype.DefaultDurationSeconds` if positive, else `undefined`. |
 | `CompanyID` | No | `string` | UUID validated via `IsValidUUID`. Scopes archetype and brand kit resolution and is forwarded as `companyId` on `AgentRunner.RunAgent` and `CompanyID` on `VideoGenerationSpec`. |
 | `PowerLevel` | No | `'Draft' \| 'Standard' \| 'High'` | Preset name resolved via `AIEngine.Instance.FindActiveAgentConfigurationPreset` (or `GetDefaultAgentConfigurationPreset` when omitted) to pass `configurationId` (`AIConfigurationID`) to `RunAgent`. |
-| `DataRefs` | No | `ProduceVideoDataRefInput[] \| string` | Array or JSON array string of `{ Key, Kind: 'Query' \| 'View' \| 'Artifact', QueryID?, QueryName?, Parameters?, EntityName?, ExtraFilter?, Fields?, ArtifactVersionID?, Shape: 'SingleValue' \| 'Comparison' \| 'Series' \| 'Table', Format?: { Kind, Currency?, Decimals?, Prefix?, Suffix? }, Label? }`. Seeded into `DataBindings`; `'Inline'` and duplicate `Key` values fail with `INVALID_PARAMS`. |
+| `DataRefs` | No | `ProduceVideoDataRefInput[] \| string` | Array or JSON array string of `{ Key, Kind: 'Query' \| 'View' \| 'Artifact', QueryID?, QueryName?, Parameters?, EntityName?, ExtraFilter?, Fields?, ArtifactVersionID?, Shape: 'SingleValue' \| 'Comparison' \| 'Series' \| 'Table', Format?: { Kind, Currency?, Decimals?, Prefix?, Suffix? }, Label? }` (`Key` and `Shape` required). Seeded into `DataBindings`; `'Inline'` and duplicate `Key` values fail with `INVALID_PARAMS`. |
 
 #### Result codes and output parameters
 
