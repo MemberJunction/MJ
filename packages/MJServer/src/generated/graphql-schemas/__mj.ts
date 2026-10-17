@@ -72444,7 +72444,7 @@ export class MJQueueTask_ {
     QueueID?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(10)
+    @MaxLength(20)
     Status?: string;
         
     @Field({nullable: true}) 

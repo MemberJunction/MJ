@@ -11007,7 +11007,7 @@ export const MJAuditLogSchema = z.object({
         * * Field Name: Status
         * * Display Name: Status
         * * SQL Data Type: nvarchar(50)
-        * * Default Value: Allow
+        * * Default Value: Success
     * * Value List Type: List
     * * Possible Values 
     *   * Failed
@@ -11209,7 +11209,7 @@ export const MJAuthorizationRoleSchema = z.object({
         * * Field Name: Type
         * * Display Name: Type
         * * SQL Data Type: nchar(10)
-        * * Default Value: grant
+        * * Default Value: Allow
     * * Value List Type: List
     * * Possible Values 
     *   * Allow
@@ -15111,7 +15111,7 @@ export const MJConversationDetailSchema = z.object({
         * * Field Name: Role
         * * Display Name: Role
         * * SQL Data Type: nvarchar(20)
-        * * Default Value: user_name()
+        * * Default Value: User
     * * Value List Type: List
     * * Possible Values 
     *   * AI
@@ -18187,7 +18187,7 @@ export const MJEntityAIActionSchema = z.object({
         * * Field Name: TriggerEvent
         * * Display Name: Trigger Event
         * * SQL Data Type: nchar(15)
-        * * Default Value: After Save
+        * * Default Value: after save
     * * Value List Type: List
     * * Possible Values 
     *   * after save
@@ -18202,7 +18202,7 @@ export const MJEntityAIActionSchema = z.object({
         * * Field Name: OutputType
         * * Display Name: Output Type
         * * SQL Data Type: nchar(10)
-        * * Default Value: FIeld
+        * * Default Value: field
     * * Value List Type: List
     * * Possible Values 
     *   * entity
@@ -28051,16 +28051,17 @@ export const MJQueueTaskSchema = z.object({
         * * Display Name: Queue ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Queues (vwQueues.ID)`),
-    Status: z.union([z.literal('Completed'), z.literal('Failed'), z.literal('In Progress')]).describe(`
+    Status: z.union([z.literal('Completed'), z.literal('Failed'), z.literal('In Progress'), z.literal('Pending')]).describe(`
         * * Field Name: Status
         * * Display Name: Status
-        * * SQL Data Type: nchar(10)
+        * * SQL Data Type: nvarchar(20)
         * * Default Value: Pending
     * * Value List Type: List
     * * Possible Values 
     *   * Completed
     *   * Failed
-    *   * In Progress`),
+    *   * In Progress
+    *   * Pending`),
     StartedAt: z.date().nullable().describe(`
         * * Field Name: StartedAt
         * * Display Name: Started At
@@ -29247,7 +29248,7 @@ export const MJRecordMergeLogSchema = z.object({
         * * Field Name: ProcessingStatus
         * * Display Name: Processing Status
         * * SQL Data Type: nvarchar(10)
-        * * Default Value: Pending
+        * * Default Value: Started
     * * Value List Type: List
     * * Possible Values 
     *   * Complete
@@ -37345,7 +37346,7 @@ export const MJVersionInstallationSchema = z.object({
         * * Field Name: Type
         * * Display Name: Installation Type
         * * SQL Data Type: nvarchar(20)
-        * * Default Value: System
+        * * Default Value: New
     * * Value List Type: List
     * * Possible Values 
     *   * New
@@ -71673,7 +71674,7 @@ export class MJAuditLogEntity extends BaseEntity<MJAuditLogEntityType> {
     * * Field Name: Status
     * * Display Name: Status
     * * SQL Data Type: nvarchar(50)
-    * * Default Value: Allow
+    * * Default Value: Success
     * * Value List Type: List
     * * Possible Values 
     *   * Failed
@@ -72184,7 +72185,7 @@ export class MJAuthorizationRoleEntity extends BaseEntity<MJAuthorizationRoleEnt
     * * Field Name: Type
     * * Display Name: Type
     * * SQL Data Type: nchar(10)
-    * * Default Value: grant
+    * * Default Value: Allow
     * * Value List Type: List
     * * Possible Values 
     *   * Allow
@@ -82792,7 +82793,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
     * * Field Name: Role
     * * Display Name: Role
     * * SQL Data Type: nvarchar(20)
-    * * Default Value: user_name()
+    * * Default Value: User
     * * Value List Type: List
     * * Possible Values 
     *   * AI
@@ -91112,7 +91113,7 @@ export class MJEntityAIActionEntity extends BaseEntity<MJEntityAIActionEntityTyp
     * * Field Name: TriggerEvent
     * * Display Name: Trigger Event
     * * SQL Data Type: nchar(15)
-    * * Default Value: After Save
+    * * Default Value: after save
     * * Value List Type: List
     * * Possible Values 
     *   * after save
@@ -91143,7 +91144,7 @@ export class MJEntityAIActionEntity extends BaseEntity<MJEntityAIActionEntityTyp
     * * Field Name: OutputType
     * * Display Name: Output Type
     * * SQL Data Type: nchar(10)
-    * * Default Value: FIeld
+    * * Default Value: field
     * * Value List Type: List
     * * Possible Values 
     *   * entity
@@ -117016,18 +117017,19 @@ export class MJQueueTaskEntity extends BaseEntity<MJQueueTaskEntityType> {
     /**
     * * Field Name: Status
     * * Display Name: Status
-    * * SQL Data Type: nchar(10)
+    * * SQL Data Type: nvarchar(20)
     * * Default Value: Pending
     * * Value List Type: List
     * * Possible Values 
     *   * Completed
     *   * Failed
     *   * In Progress
+    *   * Pending
     */
-    get Status(): 'Completed' | 'Failed' | 'In Progress' {
+    get Status(): 'Completed' | 'Failed' | 'In Progress' | 'Pending' {
         return this.Get('Status');
     }
-    set Status(value: 'Completed' | 'Failed' | 'In Progress') {
+    set Status(value: 'Completed' | 'Failed' | 'In Progress' | 'Pending') {
         this.Set('Status', value);
     }
 
@@ -120183,7 +120185,7 @@ export class MJRecordMergeLogEntity extends BaseEntity<MJRecordMergeLogEntityTyp
     * * Field Name: ProcessingStatus
     * * Display Name: Processing Status
     * * SQL Data Type: nvarchar(10)
-    * * Default Value: Pending
+    * * Default Value: Started
     * * Value List Type: List
     * * Possible Values 
     *   * Complete
@@ -143026,7 +143028,7 @@ export class MJVersionInstallationEntity extends BaseEntity<MJVersionInstallatio
     * * Field Name: Type
     * * Display Name: Installation Type
     * * SQL Data Type: nvarchar(20)
-    * * Default Value: System
+    * * Default Value: New
     * * Value List Type: List
     * * Possible Values 
     *   * New

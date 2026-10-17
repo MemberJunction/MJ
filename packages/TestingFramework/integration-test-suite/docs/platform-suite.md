@@ -23,7 +23,7 @@ Every bundle in this family belongs to the **"Integration Tests — Deterministi
 
 | Bundle | Checks | IT record | Transport | Tier notes |
 |---|---|---|---|---|
-| `metadata-consistency` | 7 (MC1–MC6, MC8) | IT24 - Metadata/DB Consistency Audit | server (documented exception — `sys.*` has no client surface) | deterministic; skips-as-pass on PostgreSQL (no mssql pool) |
+| `metadata-consistency` | 8 (MC1–MC6, MC8, MC9) | IT24 - Metadata/DB Consistency Audit | server (documented exception — `sys.*` has no client surface) | deterministic; MC1–MC8 skip-as-pass on PostgreSQL (no mssql pool), MC9 reads metadata only and runs everywhere |
 | `codegen-determinism` | 6 (CD1–CD6) | IT50 - CodeGen Artifact Consistency | client | deterministic; CD6 source legs skip outside the repo tree |
 | `metadata-sync` | 9 (MS1–MS9) | IT49 - MetadataSync Parsing Contracts | server | deterministic; zero DB writes |
 | `class-resolution` | 5 (CR1–CR5) | IT48 - ClassFactory Resolution Contracts | server | deterministic; read-only |
@@ -45,7 +45,7 @@ Every bundle in this family belongs to the **"Integration Tests — Deterministi
 
 ## 1. Metadata and CodeGen integrity
 
-### 1.1 `metadata-consistency` (MC1–MC6, MC8) — IT24
+### 1.1 `metadata-consistency` (MC1–MC6, MC8, MC9) — IT24
 
 **Machinery under test.** The agreement between MJ's entity-metadata cache and the *physical* SQL Server catalog: generated base views and CRUD procedures in `sys.objects`, CHECK-constraint value lists vs `EntityFieldValue` rows, CodeGen's `IDX_AUTO_MJ_FKEY_{Table}_{Column}` FK indexes, field `Sequence` integrity vs base-view column order, `MS_Description` extended properties, and `MJ: Schema Info` coverage/casing. This is the highest value-per-effort audit in the catalog (Domain 1) because CodeGen is *supposed* to keep all of it in lockstep — every red here means a migration was applied without CodeGen, or CodeGen itself misfired (which it demonstrably has: see B24/B26 below).
 
@@ -64,6 +64,7 @@ Every bundle in this family belongs to the **"Integration Tests — Deterministi
 | `metadata-consistency.MC5` | field sequences gapless from 1 + match base-view column order | per entity: no duplicate `Sequence`, gapless 1..N; then positional agreement between Sequence-ordered field names and the base view's physical `column_id` order (order leg only when the sequence is sound and a real view exists) | sequence corruption from partial CodeGen runs; a regenerated view whose column order no longer matches metadata (breaks positional consumers) |
 | `metadata-consistency.MC6` | every core-schema physical field carries an MS_Description | for core-schema (`ctx.Schema ?? '__mj'`) describable fields (excluding virtual, `__mj_` system, PKs and FKs — the exact `migrations/CLAUDE.md` exemption), a description exists in metadata OR as a physical `MS_Description`; **ratchet: offender count `<= MC6_DEBT_CEILING = 270`**, non-core schemas reported informationally, never gated | a NEW column shipped without `sp_addextendedproperty` (the count rising past the ceiling fails the build; the 270-column legacy debt does not) |
 | `metadata-consistency.MC8` | SchemaInfo covers every entity schema with casing-correct names | every entity schema physically exists in `sys.schemas`, has an `MJ: Schema Info` row, metadata casing matches physical casing, and `CanonicalSchemaName` — *when set* — names the same schema (NULL is legitimate and NOT asserted: it means fall-back-to-SchemaName, which is every SQL Server install) | the PG lowercase-folding bug class from the POSTGRES_SCHEMA_CASING_GUIDE — a CanonicalSchemaName pointing at a different schema, or an unregistered schema |
+| `metadata-consistency.MC9` | every List field default is a member of its own value list | for each field with `ValueListType='List'` and a default, the (normalized) `DefaultValue` is an EXACT, case-sensitive member of its `EntityFieldValues` (numeric fields compared by value); metadata only, no catalog query | a column default outside its own CHECK — refused whenever a create omits the field, because `spCreate` applies it through `ISNULL(@Param, <default>)` — or a case variant the CI collation accepts but the generated union and a PostgreSQL CHECK refuse (MJ #3985: eight such fields in core) |
 
 **Pinned gaps, ratchets, and bug-register cross-references.**
 

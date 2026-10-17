@@ -1,5 +1,5 @@
 /**
- * queue.checks.ts — the 'queue' bundle (QU1–QU7): the MJQueue subsystem's deterministic
+ * queue.checks.ts — the 'queue' bundle (QU1–QU9): the MJQueue subsystem's deterministic
  * lifecycle, exercised against the REAL engine (QueueBase's timer loop + StartTask) and the
  * REAL DB substrate (`MJ: Queue Types` / `MJ: Queues` / `MJ: Queue Tasks`) — a subsystem that
  * previously had only mocked unit coverage (packages/MJQueue).
@@ -31,18 +31,20 @@
  *          documented 'Queue Type ... not found.' error BEFORE any DB write; instance AddTask
  *          against the fixture INACTIVE type honors the tolerant-catch contract (undefined,
  *          no task row created).
+ *   - QU8  A task created at its default Status persists as 'Pending' — the status
+ *          QueueManager.AddTask writes. Before MJ #3985 `CK_QueueTask_Status` allowed only
+ *          'In Progress' | 'Completed' | 'Failed', so that save always failed.
+ *   - QU9  Every listed Status persists, including 'In Progress', which the old nchar(10)
+ *          column truncated (MJ #3985).
  *
  * ⚠️ Schema findings this bundle deliberately WORKS AROUND (documented, not asserted, so a
  * product-side fix cannot turn the CI gate red):
- *   1. `CK_QueueTask_Status` allows only 'In Progress' | 'Completed' | 'Failed', while BOTH
- *      the column default AND `spCreateQueueTask`'s `ISNULL(@Status,'Pending')` produce
- *      'Pending' — so every insert that doesn't set an explicit valid Status fails the CHECK.
- *      QueueManager.AddTask writes 'Pending' explicitly and therefore cannot persist a task
- *      against the current schema (why QU3–QU5 drive QueueBase directly with rows this bundle
- *      creates using valid statuses).
- *   2. `Status` is nchar(10), so the CHECK-listed value 'In Progress' (11 chars) cannot be
- *      stored at all. Fixture rows use 'Failed'/'Completed' initial values and assert the
- *      TRANSITION the engine performs. (nchar padding ⇒ all Status reads are trimmed.)
+ *   1. (Fixed by MJ #3985, now asserted by QU8.) The CHECK used to refuse 'Pending', which is why
+ *      QU3–QU5 drive QueueBase directly with rows this bundle creates at 'Completed'/'Failed'.
+ *   2. (Fixed by MJ #3985, now asserted by QU9.) `Status` was nchar(10), so the listed
+ *      'In Progress' (11 chars) could not be stored. Fixture rows still start at
+ *      'Failed'/'Completed' and assert the TRANSITION the engine performs; reads stay trimmed
+ *      so the bundle also runs against a database that predates the widening.
  *
  * Self-cleaning: Teardown stops every stub queue, then deletes task rows → queue row →
  * fixture queue type (FK-safe order). The seeded queue types are reference-only.
@@ -67,7 +69,7 @@ const FIXTURE_TAG = '(mj-integration-test — safe to delete)';
 /** ≤50 chars — MJ: Queues.Name / MJ: Queue Types.Name are nvarchar(50). */
 const QUEUE_NAME = 'mj-it-queue-fixture (mj-it)';
 const INACTIVE_TYPE_NAME = 'mj-it-inactive-type (mj-it)';
-/** Statuses the QueueTask CHECK constraint accepts AND nchar(10) can hold (see header ⚠️). */
+/** Initial statuses for fixture rows: they persist on any schema, including one from before MJ #3985 (see header ⚠️). */
 type PersistableTaskStatus = 'Completed' | 'Failed';
 
 interface QueueFixture {
@@ -117,9 +119,10 @@ async function loadQueueRecord(ctx: IntegrationCheckContext): Promise<MJQueueEnt
 }
 
 /**
- * Creates a persisted MJ: Queue Tasks row with an EXPLICIT persistable initial status (see
- * header ⚠️ for why 'Pending' is impossible), registered for teardown before the assert so a
- * failed save can never orphan a row.
+ * Creates a persisted MJ: Queue Tasks row with an EXPLICIT initial status, registered for
+ * teardown before the assert so a failed save can never orphan a row. 'Pending' persists since
+ * MJ #3985 (QU8), but these fixtures keep 'Completed'/'Failed' so the bundle also runs against
+ * a database from before that fix (see header ⚠️).
  */
 async function createTaskRow(ctx: IntegrationCheckContext, initialStatus: PersistableTaskStatus,
     data: Record<string, unknown>): Promise<MJQueueTaskEntity> {
@@ -387,6 +390,66 @@ export const QueueChecks: NamedCheck[] = [
             AssertEqual(await countFixtureTasks(ctx), before, 'the inactive-type attempt must not create any task row');
 
             console.log(`      → unknown name threw the documented error; inactive type → undefined with zero DB writes`);
+        }
+    },
+    {
+        Id: 'queue.QU8',
+        Name: 'QU8: a task created at its default Status persists as Pending (the status QueueManager.AddTask writes)',
+        Fn: async (ctx: IntegrationCheckContext) => {
+            // QueueManager.AddTask saves a NEW task with Status 'Pending', which is also the column
+            // default. Until MJ #3985 the CHECK omitted 'Pending', so that save could never succeed.
+            const task = await ctx.Provider.GetEntityObject<MJQueueTaskEntity>('MJ: Queue Tasks', ctx.User);
+            task.NewRecord();
+            task.QueueID = fx().QueueID;
+            task.Data = JSON.stringify({ probe: 'qu8' });
+            task.Comments = FIXTURE_TAG;
+            AssertEqual(task.Status, 'Pending', 'NewRecord must seed Status from the column default');
+            const saved = await task.Save();
+            if (task.ID) {
+                fx().TaskIds.push(task.ID);
+            }
+            Assert(saved, `a task at its default Status must save: ${task.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+
+            const result = await new RunView().RunView<{ Status: string }>({
+                EntityName: 'MJ: Queue Tasks',
+                ExtraFilter: `ID='${task.ID}'`,
+                Fields: ['Status'],
+                ResultType: 'simple',
+                BypassCache: true
+            }, ctx.User);
+            Assert(result.Success, `reading back the QU8 task failed: ${result.ErrorMessage}`);
+            AssertEqual((result.Results?.[0]?.Status ?? '').trim(), 'Pending', 'the persisted Status must be Pending'); // nchar(10) pads
+            console.log(`      → default-status task ${task.ID} persisted as 'Pending'`);
+        }
+    },
+    {
+        Id: 'queue.QU9',
+        Name: "QU9: every listed Status value persists, including 'In Progress'",
+        Fn: async (ctx: IntegrationCheckContext) => {
+            // Status was nchar(10), so the listed 'In Progress' (11 chars) failed with
+            // "String or binary data would be truncated" until MJ #3985 widened the column.
+            const task = await ctx.Provider.GetEntityObject<MJQueueTaskEntity>('MJ: Queue Tasks', ctx.User);
+            task.NewRecord();
+            task.QueueID = fx().QueueID;
+            task.Status = 'In Progress';
+            task.Data = JSON.stringify({ probe: 'qu9' });
+            task.Comments = FIXTURE_TAG;
+            const saved = await task.Save();
+            if (task.ID) {
+                fx().TaskIds.push(task.ID);
+            }
+            Assert(saved, `a task at Status 'In Progress' must save: ${task.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+
+            const result = await new RunView().RunView<{ Status: string }>({
+                EntityName: 'MJ: Queue Tasks',
+                ExtraFilter: `ID='${task.ID}'`,
+                Fields: ['Status'],
+                ResultType: 'simple',
+                BypassCache: true
+            }, ctx.User);
+            Assert(result.Success, `reading back the QU9 task failed: ${result.ErrorMessage}`);
+            AssertEqual(result.Results?.[0]?.Status, 'In Progress', "the persisted Status must be exactly 'In Progress'");
+            console.log(`      → task ${task.ID} persisted as 'In Progress'`);
         }
     }
 ];
