@@ -16,7 +16,7 @@ import { BaseEntity, BaseEntityEvent, IEntityDataProvider, IMetadataProvider, IR
          RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewWithCacheCheckResult,
          RunQueryWithCacheCheckParams, RunQueriesWithCacheCheckResponse, RunQueryWithCacheCheckResult,
          KeyValuePair, getGraphQLTypeNameBase, AggregateExpression, InMemoryLocalStorageProvider, ReadableFieldsTransportKey,
-         SearchEntityParams, EntitySearchResult, ScoredCandidate, RemoteOpInvokeOptions, RemoteOpResult, RemoteOpProgress } from "@memberjunction/core";
+         SearchEntityParams, EntitySearchResult, ScoredCandidate, RemoteOpInvokeOptions, RemoteOpResult, RemoteOpProgress, ResolveMJAPIURL } from "@memberjunction/core";
 import { MJGlobal, MJEventType, UUIDsEqual, GetGlobalObjectStore, DeserializeValidationErrors } from "@memberjunction/global";
 import { MJUserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
 
@@ -192,6 +192,14 @@ export class GraphQLProviderConfigData extends ProviderConfigDataBase {
      * WSURL is the URL to the GraphQL websocket endpoint. This is used for subscriptions, if you are not using subscriptions, you can pass in a blank string for this
      */
     get WSURL(): string { return this.Data.WSURL }
+
+    /**
+     * URL of the MJAPI server for routes other than GraphQL, such as `/oauth/*` and `/media/*` (MJ #5674),
+     * set from the host's `MJAPI_URI`. `undefined` when the host has not configured one; callers then keep
+     * their pre-#5674 behaviour.
+     */
+    get MJAPIURL(): string | undefined { return ResolveMJAPIURL(this.Data.MJAPIURL) }
+    set MJAPIURL(url: string) { this.Data.MJAPIURL = url }
 
     /**
      * Opt in to logging the *values* of GraphQL variables when a request fails.

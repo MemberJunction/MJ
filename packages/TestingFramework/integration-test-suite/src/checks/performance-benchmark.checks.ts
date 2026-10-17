@@ -101,45 +101,45 @@ const SCRIPTED_API_KEYS = CHAT_DRIVER_CLASSES.map((driverClass) => ({
 }));
 
 export interface PrimitiveBenchmarkMetrics {
-    classFactoryAndObjectCacheMs?: number;
-    entityHydrateAndFlsMs?: number;
-    localCacheWritesAndStatsMs?: number;
-    templateRenderSimpleMs?: number;
-    actionSnapshotAndEngineLookupMs?: number;
-    payloadApplyAndDeepDiffMs?: number;
+    ClassFactoryAndObjectCacheMs?: number;
+    EntityHydrateAndFlsMs?: number;
+    LocalCacheWritesAndStatsMs?: number;
+    TemplateRenderSimpleMs?: number;
+    ActionSnapshotAndEngineLookupMs?: number;
+    PayloadApplyAndDeepDiffMs?: number;
 }
 
 export interface AgentRunTreeMetrics {
-    label: string;
-    agentName: string;
-    mode: 'deterministic-testllm' | 'live-model';
-    rootRunId: string;
-    wallTimeMs: number;
-    llmPromptExecutionMs: number;
-    frameworkOverheadMs: number;
-    totalRunsInTree: number;
-    totalStepsInTree: number;
-    promptSteps: number;
-    actionSteps: number;
-    subAgentSteps: number;
-    payloadAtStartBytes: number;
-    payloadAtEndBytes: number;
-    inputDataBytes: number;
-    outputDataBytes: number;
-    totalStepStorageBytes: number;
-    payloadAtStartPointerSteps: number;
-    payloadAtEndPointerSteps: number;
-    unDeduplicatedPayloadBytesEstimate: number;
-    storageSavingsPercent: number;
+    Label: string;
+    AgentName: string;
+    Mode: 'deterministic-testllm' | 'live-model';
+    RootRunId: string;
+    WallTimeMs: number;
+    LlmPromptExecutionMs: number;
+    FrameworkOverheadMs: number;
+    TotalRunsInTree: number;
+    TotalStepsInTree: number;
+    PromptSteps: number;
+    ActionSteps: number;
+    SubAgentSteps: number;
+    PayloadAtStartBytes: number;
+    PayloadAtEndBytes: number;
+    InputDataBytes: number;
+    OutputDataBytes: number;
+    TotalStepStorageBytes: number;
+    PayloadAtStartPointerSteps: number;
+    PayloadAtEndPointerSteps: number;
+    UnDeduplicatedPayloadBytesEstimate: number;
+    StorageSavingsPercent: number;
 }
 
 export interface PerformanceBenchmarkReport {
-    timestamp: string;
-    database: string;
-    primitives: PrimitiveBenchmarkMetrics;
-    primitivesTotalMs: number;
-    deterministicAgentRuns: AgentRunTreeMetrics[];
-    liveAgentRuns: AgentRunTreeMetrics[];
+    Timestamp: string;
+    Database: string;
+    Primitives: PrimitiveBenchmarkMetrics;
+    PrimitivesTotalMs: number;
+    DeterministicAgentRuns: AgentRunTreeMetrics[];
+    LiveAgentRuns: AgentRunTreeMetrics[];
 }
 
 interface BenchmarkFixture {
@@ -370,33 +370,33 @@ async function collectAgentRunTreeMetrics(
     const frameworkOverheadMs = Math.max(0, Number((wallTimeMs - llmPromptExecutionMs).toFixed(2)));
 
     const metrics: AgentRunTreeMetrics = {
-        label,
-        agentName,
-        mode,
-        rootRunId,
-        wallTimeMs: Number(wallTimeMs.toFixed(2)),
-        llmPromptExecutionMs: Number(llmPromptExecutionMs.toFixed(2)),
-        frameworkOverheadMs,
-        totalRunsInTree: visitedRuns.size,
-        totalStepsInTree: allSteps.length,
-        promptSteps,
-        actionSteps,
-        subAgentSteps,
-        payloadAtStartBytes,
-        payloadAtEndBytes,
-        inputDataBytes,
-        outputDataBytes,
-        totalStepStorageBytes,
-        payloadAtStartPointerSteps,
-        payloadAtEndPointerSteps,
-        unDeduplicatedPayloadBytesEstimate,
-        storageSavingsPercent,
+        Label: label,
+        AgentName: agentName,
+        Mode: mode,
+        RootRunId: rootRunId,
+        WallTimeMs: Number(wallTimeMs.toFixed(2)),
+        LlmPromptExecutionMs: Number(llmPromptExecutionMs.toFixed(2)),
+        FrameworkOverheadMs: frameworkOverheadMs,
+        TotalRunsInTree: visitedRuns.size,
+        TotalStepsInTree: allSteps.length,
+        PromptSteps: promptSteps,
+        ActionSteps: actionSteps,
+        SubAgentSteps: subAgentSteps,
+        PayloadAtStartBytes: payloadAtStartBytes,
+        PayloadAtEndBytes: payloadAtEndBytes,
+        InputDataBytes: inputDataBytes,
+        OutputDataBytes: outputDataBytes,
+        TotalStepStorageBytes: totalStepStorageBytes,
+        PayloadAtStartPointerSteps: payloadAtStartPointerSteps,
+        PayloadAtEndPointerSteps: payloadAtEndPointerSteps,
+        UnDeduplicatedPayloadBytesEstimate: unDeduplicatedPayloadBytesEstimate,
+        StorageSavingsPercent: storageSavingsPercent,
     };
 
     console.log(
-        `      → [${label}] wall=${metrics.wallTimeMs}ms (llm=${metrics.llmPromptExecutionMs}ms, framework=${metrics.frameworkOverheadMs}ms) | ` +
-            `runs=${metrics.totalRunsInTree}, steps=${metrics.totalStepsInTree} (P:${promptSteps}/A:${actionSteps}/SA:${subAgentSteps}) | ` +
-            `DB bytes=${metrics.totalStepStorageBytes} (start=${payloadAtStartBytes}, end=${payloadAtEndBytes}, in=${inputDataBytes}, out=${outputDataBytes}) | ` +
+        `      → [${label}] wall=${metrics.WallTimeMs}ms (llm=${metrics.LlmPromptExecutionMs}ms, framework=${metrics.FrameworkOverheadMs}ms) | ` +
+            `runs=${metrics.TotalRunsInTree}, steps=${metrics.TotalStepsInTree} (P:${promptSteps}/A:${actionSteps}/SA:${subAgentSteps}) | ` +
+            `DB bytes=${metrics.TotalStepStorageBytes} (start=${payloadAtStartBytes}, end=${payloadAtEndBytes}, in=${inputDataBytes}, out=${outputDataBytes}) | ` +
             `pointers=(start:${payloadAtStartPointerSteps}, end:${payloadAtEndPointerSteps})`
     );
 
@@ -519,7 +519,7 @@ export const PerformanceBenchmarkChecks: NamedCheck[] = [
                 }
             }
             const elapsedMs = Number((performance.now() - t0).toFixed(2));
-            fx.Primitives.classFactoryAndObjectCacheMs = elapsedMs;
+            fx.Primitives.ClassFactoryAndObjectCacheMs = elapsedMs;
             AssertEqual(foundCount, ITERS, 'PB1: all ClassFactory and ObjectCache lookups resolved accurately');
             console.log(`      → PB1 ClassFactory + ObjectCache (10k iters over 450 classes): ${elapsedMs} ms`);
         },
@@ -684,7 +684,7 @@ export const PerformanceBenchmarkChecks: NamedCheck[] = [
                 }
             }
             const elapsedMs = Number((performance.now() - t0).toFixed(2));
-            fx.Primitives.entityHydrateAndFlsMs = elapsedMs;
+            fx.Primitives.EntityHydrateAndFlsMs = elapsedMs;
             AssertEqual(hydratedCount, ROWS, 'PB2: all 2,000 BaseEntity rows hydrated and checked FLS accurately');
             console.log(`      → PB2 BaseEntity Hydration + FLS (2,000 rows x 25 fields): ${elapsedMs} ms`);
         },
@@ -761,7 +761,7 @@ export const PerformanceBenchmarkChecks: NamedCheck[] = [
             }
             const stats = await lcm.GetStats();
             const elapsedMs = Number((performance.now() - t0).toFixed(2));
-            fx.Primitives.localCacheWritesAndStatsMs = elapsedMs;
+            fx.Primitives.LocalCacheWritesAndStatsMs = elapsedMs;
             Assert(stats.totalEntries >= 80, `PB3: expected >= 80 cached entries, got ${stats.totalEntries}`);
             console.log(`      → PB3 LocalCacheManager writes + GetStats (80 large entries): ${elapsedMs} ms`);
         },
@@ -810,7 +810,7 @@ export const PerformanceBenchmarkChecks: NamedCheck[] = [
                 }
             }
             const elapsedMs = Number((performance.now() - t0).toFixed(2));
-            fx.Primitives.templateRenderSimpleMs = elapsedMs;
+            fx.Primitives.TemplateRenderSimpleMs = elapsedMs;
             AssertEqual(successRenders, 1_000, 'PB4: all 1,000 prompt templates rendered cleanly');
             console.log(`      → PB4 TemplateEngineServer.RenderTemplateSimple (1,000 renders): ${elapsedMs} ms`);
         },
@@ -861,7 +861,7 @@ export const PerformanceBenchmarkChecks: NamedCheck[] = [
                 }
             }
             const elapsedMs = Number((performance.now() - t0).toFixed(2));
-            fx.Primitives.actionSnapshotAndEngineLookupMs = elapsedMs;
+            fx.Primitives.ActionSnapshotAndEngineLookupMs = elapsedMs;
             AssertEqual(checkCount, ITERS, 'PB5: all 500 ActionParam snapshots and AIEngine permission checks succeeded');
             console.log(`      → PB5 RedactParamsToJSON + AIEngineBase permissions (500 iters): ${elapsedMs} ms`);
         },
@@ -922,7 +922,7 @@ export const PerformanceBenchmarkChecks: NamedCheck[] = [
                 currentPayload = res.result;
             }
             const elapsedMs = Number((performance.now() - t0).toFixed(2));
-            fx.Primitives.payloadApplyAndDeepDiffMs = elapsedMs;
+            fx.Primitives.PayloadApplyAndDeepDiffMs = elapsedMs;
             AssertEqual(currentPayload.metadata.version, TURNS + 1, 'PB6: 50 turns of payload change requests applied');
             console.log(`      → PB6 PayloadManager.applyAgentChangeRequest + DeepDiffer (50 turns): ${elapsedMs} ms`);
         },
@@ -982,9 +982,9 @@ export const PerformanceBenchmarkChecks: NamedCheck[] = [
             if (!metrics) {
                 return;
             }
-            Assert(metrics.totalStepsInTree >= 7, `PB7: expected >= 7 steps in Sage run, got ${metrics.totalStepsInTree}`);
-            Assert(metrics.promptSteps >= 4, `PB7: expected >= 4 Prompt steps, got ${metrics.promptSteps}`);
-            Assert(metrics.actionSteps >= 3, `PB7: expected >= 3 Action steps, got ${metrics.actionSteps}`);
+            Assert(metrics.TotalStepsInTree >= 7, `PB7: expected >= 7 steps in Sage run, got ${metrics.TotalStepsInTree}`);
+            Assert(metrics.PromptSteps >= 4, `PB7: expected >= 4 Prompt steps, got ${metrics.PromptSteps}`);
+            Assert(metrics.ActionSteps >= 3, `PB7: expected >= 3 Action steps, got ${metrics.ActionSteps}`);
         },
     },
     {
@@ -1070,10 +1070,10 @@ export const PerformanceBenchmarkChecks: NamedCheck[] = [
                 return;
             }
             Assert(
-                metrics.totalRunsInTree >= 2,
-                `PB8: expected >= 2 runs in Query Builder tree (parent + child), got ${metrics.totalRunsInTree}`
+                metrics.TotalRunsInTree >= 2,
+                `PB8: expected >= 2 runs in Query Builder tree (parent + child), got ${metrics.TotalRunsInTree}`
             );
-            Assert(metrics.subAgentSteps >= 1, `PB8: expected >= 1 Sub-Agent step, got ${metrics.subAgentSteps}`);
+            Assert(metrics.SubAgentSteps >= 1, `PB8: expected >= 1 Sub-Agent step, got ${metrics.SubAgentSteps}`);
         },
     },
     {
@@ -1149,10 +1149,10 @@ export const PerformanceBenchmarkChecks: NamedCheck[] = [
                 return;
             }
             Assert(
-                metrics.totalRunsInTree >= 2,
-                `PB9: expected >= 2 runs in Research Agent tree (parent + child), got ${metrics.totalRunsInTree}`
+                metrics.TotalRunsInTree >= 2,
+                `PB9: expected >= 2 runs in Research Agent tree (parent + child), got ${metrics.TotalRunsInTree}`
             );
-            Assert(metrics.subAgentSteps >= 1, `PB9: expected >= 1 Sub-Agent step, got ${metrics.subAgentSteps}`);
+            Assert(metrics.SubAgentSteps >= 1, `PB9: expected >= 1 Sub-Agent step, got ${metrics.SubAgentSteps}`);
         },
     },
     {
@@ -1214,7 +1214,7 @@ export const PerformanceBenchmarkChecks: NamedCheck[] = [
                 ctx.User
             );
             fx.LiveAgentRuns.push(metrics);
-            Assert(metrics.totalStepsInTree > 0, 'PB10: Live Sage produced finalized steps');
+            Assert(metrics.TotalStepsInTree > 0, 'PB10: Live Sage produced finalized steps');
         },
     },
     {
@@ -1254,7 +1254,7 @@ export const PerformanceBenchmarkChecks: NamedCheck[] = [
                 ctx.User
             );
             fx.LiveAgentRuns.push(metrics);
-            Assert(metrics.totalStepsInTree > 0, 'PB11: Live Query Builder produced finalized steps');
+            Assert(metrics.TotalStepsInTree > 0, 'PB11: Live Query Builder produced finalized steps');
         },
     },
     {
@@ -1295,7 +1295,7 @@ export const PerformanceBenchmarkChecks: NamedCheck[] = [
                 ctx.User
             );
             fx.LiveAgentRuns.push(metrics);
-            Assert(metrics.totalStepsInTree > 0, 'PB12: Live Research Agent produced finalized steps');
+            Assert(metrics.TotalStepsInTree > 0, 'PB12: Live Research Agent produced finalized steps');
         },
     },
 ];
@@ -1308,21 +1308,21 @@ function buildBenchmarkReport(fx: BenchmarkFixture): PerformanceBenchmarkReport 
     const p = fx.Primitives;
     const primitivesTotalMs = Number(
         (
-            (p.classFactoryAndObjectCacheMs ?? 0) +
-            (p.entityHydrateAndFlsMs ?? 0) +
-            (p.localCacheWritesAndStatsMs ?? 0) +
-            (p.templateRenderSimpleMs ?? 0) +
-            (p.actionSnapshotAndEngineLookupMs ?? 0) +
-            (p.payloadApplyAndDeepDiffMs ?? 0)
+            (p.ClassFactoryAndObjectCacheMs ?? 0) +
+            (p.EntityHydrateAndFlsMs ?? 0) +
+            (p.LocalCacheWritesAndStatsMs ?? 0) +
+            (p.TemplateRenderSimpleMs ?? 0) +
+            (p.ActionSnapshotAndEngineLookupMs ?? 0) +
+            (p.PayloadApplyAndDeepDiffMs ?? 0)
         ).toFixed(2)
     );
     return {
-        timestamp: new Date().toISOString(),
-        database: process.env.DB_DATABASE ?? 'unknown',
-        primitives: p,
-        primitivesTotalMs,
-        deterministicAgentRuns: fx.DeterministicAgentRuns,
-        liveAgentRuns: fx.LiveAgentRuns,
+        Timestamp: new Date().toISOString(),
+        Database: process.env.DB_DATABASE ?? 'unknown',
+        Primitives: p,
+        PrimitivesTotalMs: primitivesTotalMs,
+        DeterministicAgentRuns: fx.DeterministicAgentRuns,
+        LiveAgentRuns: fx.LiveAgentRuns,
     };
 }
 
@@ -1330,24 +1330,24 @@ function printBenchmarkSummary(report: PerformanceBenchmarkReport): void {
     console.log('\n╔══════════════════════════════════════════════════════════════════════════════════════════╗');
     console.log('║                    MJ PERFORMANCE & AGENT OVERHEAD BENCHMARK SUMMARY                     ║');
     console.log('╚══════════════════════════════════════════════════════════════════════════════════════════╝');
-    console.log(`  Database: ${report.database}`);
-    console.log(`  Primitives Total CPU Time: ${report.primitivesTotalMs} ms`);
-    console.log(`    - PB1 ClassFactory & ObjectCache (10k iters):         ${report.primitives.classFactoryAndObjectCacheMs ?? 'n/a'} ms`);
-    console.log(`    - PB2 BaseEntity Hydration & FLS (2,000 rows):        ${report.primitives.entityHydrateAndFlsMs ?? 'n/a'} ms`);
-    console.log(`    - PB3 LocalCacheManager Writes & GetStats:            ${report.primitives.localCacheWritesAndStatsMs ?? 'n/a'} ms`);
-    console.log(`    - PB4 TemplateEngineServer RenderSimple (1,000x):     ${report.primitives.templateRenderSimpleMs ?? 'n/a'} ms`);
-    console.log(`    - PB5 SnapshotActionParams & AIEngine Permissions:    ${report.primitives.actionSnapshotAndEngineLookupMs ?? 'n/a'} ms`);
-    console.log(`    - PB6 PayloadManager.applyAgentChangeRequest (50x):   ${report.primitives.payloadApplyAndDeepDiffMs ?? 'n/a'} ms`);
+    console.log(`  Database: ${report.Database}`);
+    console.log(`  Primitives Total CPU Time: ${report.PrimitivesTotalMs} ms`);
+    console.log(`    - PB1 ClassFactory & ObjectCache (10k iters):         ${report.Primitives.ClassFactoryAndObjectCacheMs ?? 'n/a'} ms`);
+    console.log(`    - PB2 BaseEntity Hydration & FLS (2,000 rows):        ${report.Primitives.EntityHydrateAndFlsMs ?? 'n/a'} ms`);
+    console.log(`    - PB3 LocalCacheManager Writes & GetStats:            ${report.Primitives.LocalCacheWritesAndStatsMs ?? 'n/a'} ms`);
+    console.log(`    - PB4 TemplateEngineServer RenderSimple (1,000x):     ${report.Primitives.TemplateRenderSimpleMs ?? 'n/a'} ms`);
+    console.log(`    - PB5 SnapshotActionParams & AIEngine Permissions:    ${report.Primitives.ActionSnapshotAndEngineLookupMs ?? 'n/a'} ms`);
+    console.log(`    - PB6 PayloadManager.applyAgentChangeRequest (50x):   ${report.Primitives.PayloadApplyAndDeepDiffMs ?? 'n/a'} ms`);
 
-    const allRuns = [...report.deterministicAgentRuns, ...report.liveAgentRuns];
+    const allRuns = [...report.DeterministicAgentRuns, ...report.LiveAgentRuns];
     if (allRuns.length > 0) {
         console.log('\n  Agent Run Benchmarks (Deterministic TestLLM & Live Model):');
         for (const r of allRuns) {
             console.log(
-                `    - ${r.label}: wall=${r.wallTimeMs}ms (llm=${r.llmPromptExecutionMs}ms, framework=${r.frameworkOverheadMs}ms), ` +
-                    `runs=${r.totalRunsInTree}, steps=${r.totalStepsInTree}, ` +
-                    `stepStorageBytes=${r.totalStepStorageBytes} (start=${r.payloadAtStartBytes}, end=${r.payloadAtEndBytes}, in=${r.inputDataBytes}, out=${r.outputDataBytes}), ` +
-                    `pointers=(start:${r.payloadAtStartPointerSteps}, end:${r.payloadAtEndPointerSteps})`
+                `    - ${r.Label}: wall=${r.WallTimeMs}ms (llm=${r.LlmPromptExecutionMs}ms, framework=${r.FrameworkOverheadMs}ms), ` +
+                    `runs=${r.TotalRunsInTree}, steps=${r.TotalStepsInTree}, ` +
+                    `stepStorageBytes=${r.TotalStepStorageBytes} (start=${r.PayloadAtStartBytes}, end=${r.PayloadAtEndBytes}, in=${r.InputDataBytes}, out=${r.OutputDataBytes}), ` +
+                    `pointers=(start:${r.PayloadAtStartPointerSteps}, end:${r.PayloadAtEndPointerSteps})`
             );
         }
     }

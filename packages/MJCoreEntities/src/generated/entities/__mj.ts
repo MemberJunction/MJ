@@ -3368,6 +3368,70 @@ export const MJAIAgentSessionChannelSchema = z.object({
 export type MJAIAgentSessionChannelEntityType = z.infer<typeof MJAIAgentSessionChannelSchema>;
 
 /**
+ * zod schema definition for the entity MJ: AI Agent Session Recording Shards
+ */
+export const MJAIAgentSessionRecordingShardSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    AgentSessionID: z.string().describe(`
+        * * Field Name: AgentSessionID
+        * * Display Name: Agent Session
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agent Sessions (vwAIAgentSessions.ID)`),
+    Index: z.number().describe(`
+        * * Field Name: Index
+        * * Display Name: Index
+        * * SQL Data Type: int
+        * * Description: Zero-based position of the shard in the recording. Unique per session; a retry of the same index with the same bytes is acknowledged, with different bytes it is refused.`),
+    StartSample: z.number().describe(`
+        * * Field Name: StartSample
+        * * Display Name: Start Sample
+        * * SQL Data Type: bigint
+        * * Description: Sample position (48 kHz) where this shard's audio starts in the recording.`),
+    SampleCount: z.number().describe(`
+        * * Field Name: SampleCount
+        * * Display Name: Sample Count
+        * * SQL Data Type: int
+        * * Description: Number of audio samples (48 kHz) the shard covers.`),
+    Bytes: z.number().describe(`
+        * * Field Name: Bytes
+        * * Display Name: Bytes
+        * * SQL Data Type: int
+        * * Description: Size of Data in bytes.`),
+    Sha256: z.string().describe(`
+        * * Field Name: Sha256
+        * * Display Name: SHA-256
+        * * SQL Data Type: nvarchar(64)
+        * * Description: Lowercase hex SHA-256 of Data; decides whether a repeated upload of the same index is a retry or a conflict.`),
+    Data: z.string().describe(`
+        * * Field Name: Data
+        * * Display Name: Data
+        * * SQL Data Type: varbinary(MAX)
+        * * Description: The shard bytes as uploaded (MJOPUS1 header followed by length-prefixed Opus packets).`),
+    ReceivedAt: z.date().describe(`
+        * * Field Name: ReceivedAt
+        * * Display Name: Received At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: sysdatetimeoffset()
+        * * Description: When the server first stored this shard.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type MJAIAgentSessionRecordingShardEntityType = z.infer<typeof MJAIAgentSessionRecordingShardSchema>;
+
+/**
  * zod schema definition for the entity MJ: AI Agent Sessions
  */
 export const MJAIAgentSessionSchema = z.object({
@@ -3480,6 +3544,39 @@ export const MJAIAgentSessionSchema = z.object({
         * * Display Name: Linked Record ID
         * * SQL Data Type: nvarchar(500)
         * * Description: Polymorphic counterparty-identity record key. The primary-key value of the record (within LinkedEntityID's entity) this session resolved to, serialized as a string so any entity type can be referenced regardless of PK shape (UUID, int, composite). NVARCHAR(500), intentionally NOT FK-constrained. Used together with LinkedEntityID — see CK_AIAgentSession_LinkBinding. NULL while the session's counterparty is anonymous/unresolved.`),
+    RecordingStatus: z.union([z.literal('Assembling'), z.literal('Complete'), z.literal('Failed'), z.literal('Partial'), z.literal('Pending')]).nullable().describe(`
+        * * Field Name: RecordingStatus
+        * * Display Name: Recording Status
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Assembling
+    *   * Complete
+    *   * Failed
+    *   * Partial
+    *   * Pending
+        * * Description: State of the server-side recording assembly for a client-direct session recorded as Opus shards: Pending (shards or a terminal signal are waiting to be assembled), Assembling (claimed by one server instance), Complete (recording.wav holds every captured sample), Partial (assembled with silent gaps, listed in RecordingGaps), Failed (a shard conflict or an assembly error needs a human). NULL when the session was not recorded this way.`),
+    RecordingExpectedShards: z.number().nullable().describe(`
+        * * Field Name: RecordingExpectedShards
+        * * Display Name: Expected Shards
+        * * SQL Data Type: int
+        * * Description: Number of recording shards the browser reported in its terminal signal (last shard index + 1). NULL until a terminal signal arrives.`),
+    RecordingCapturedSamples: z.number().nullable().describe(`
+        * * Field Name: RecordingCapturedSamples
+        * * Display Name: Captured Samples
+        * * SQL Data Type: bigint
+        * * Description: Total audio samples (48 kHz mono) the browser captured, from its terminal signal. The assembled recording.wav is exactly this long. NULL until a terminal signal arrives.`),
+    RecordingGaps: z.string().nullable().describe(`
+        * * Field Name: RecordingGaps
+        * * Display Name: Recording Gaps
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array of the silent gaps in a Partial recording: [{startSample, sampleCount, indexes}], sample positions at 48 kHz and the shard indexes that were missing. Empty or NULL when nothing is missing.`),
+    RecordingAssemblyVersion: z.number().describe(`
+        * * Field Name: RecordingAssemblyVersion
+        * * Display Name: Assembly Version
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Incremented by every assembly claim. The assembler finishes only if the version is still the one it claimed, so a newer assembly always wins over a slower older one.`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent
@@ -47702,6 +47799,244 @@ export class MJAIAgentSessionChannelEntity extends BaseEntity<MJAIAgentSessionCh
 
 
 /**
+ * MJ: AI Agent Session Recording Shards - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIAgentSessionRecordingShard
+ * * Base View: vwAIAgentSessionRecordingShards
+ * * @description One 5-second Opus recording shard (MJOPUS1 format) uploaded by the browser during a client-direct realtime call, staged here until the server assembles the session recording. Deleted once the recording is Complete, or by the session janitor after its lookback window.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Agent Session Recording Shards')
+export class MJAIAgentSessionRecordingShardEntity extends BaseEntity<MJAIAgentSessionRecordingShardEntityType> {
+    /**
+    * Loads the MJ: AI Agent Session Recording Shards record from the database
+    * @param ID: string - primary key value to load the MJ: AI Agent Session Recording Shards record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJAIAgentSessionRecordingShardEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: AI Agent Session Recording Shards entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Index: The index must be zero or a positive number.
+    * * Table-Level: Start sample, sample count, and byte count must each be zero or greater to ensure recording data measurements are valid and non-negative.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateIndexNonNegative(result);
+        this.ValidateStartSampleSampleCountAndBytesNonNegative(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * The index must be zero or a positive number.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateIndexNonNegative(result: ValidationResult) {
+    	if (this.Index != null && this.Index < 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"Index",
+    			"Index must be greater than or equal to 0.",
+    			this.Index,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * Start sample, sample count, and byte count must each be zero or greater to ensure recording data measurements are valid and non-negative.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateStartSampleSampleCountAndBytesNonNegative(result: ValidationResult) {
+    	if (this.StartSample != null && this.StartSample < 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"StartSample",
+    			"Start sample must be greater than or equal to 0.",
+    			this.StartSample,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    	if (this.SampleCount != null && this.SampleCount < 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"SampleCount",
+    			"Sample count must be greater than or equal to 0.",
+    			this.SampleCount,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    	if (this.Bytes != null && this.Bytes < 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"Bytes",
+    			"Bytes must be greater than or equal to 0.",
+    			this.Bytes,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: AgentSessionID
+    * * Display Name: Agent Session
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Sessions (vwAIAgentSessions.ID)
+    */
+    get AgentSessionID(): string {
+        return this.Get('AgentSessionID');
+    }
+    set AgentSessionID(value: string) {
+        this.Set('AgentSessionID', value);
+    }
+
+    /**
+    * * Field Name: Index
+    * * Display Name: Index
+    * * SQL Data Type: int
+    * * Description: Zero-based position of the shard in the recording. Unique per session; a retry of the same index with the same bytes is acknowledged, with different bytes it is refused.
+    */
+    get Index(): number {
+        return this.Get('Index');
+    }
+    set Index(value: number) {
+        this.Set('Index', value);
+    }
+
+    /**
+    * * Field Name: StartSample
+    * * Display Name: Start Sample
+    * * SQL Data Type: bigint
+    * * Description: Sample position (48 kHz) where this shard's audio starts in the recording.
+    */
+    get StartSample(): number {
+        return this.Get('StartSample');
+    }
+    set StartSample(value: number) {
+        this.Set('StartSample', value);
+    }
+
+    /**
+    * * Field Name: SampleCount
+    * * Display Name: Sample Count
+    * * SQL Data Type: int
+    * * Description: Number of audio samples (48 kHz) the shard covers.
+    */
+    get SampleCount(): number {
+        return this.Get('SampleCount');
+    }
+    set SampleCount(value: number) {
+        this.Set('SampleCount', value);
+    }
+
+    /**
+    * * Field Name: Bytes
+    * * Display Name: Bytes
+    * * SQL Data Type: int
+    * * Description: Size of Data in bytes.
+    */
+    get Bytes(): number {
+        return this.Get('Bytes');
+    }
+    set Bytes(value: number) {
+        this.Set('Bytes', value);
+    }
+
+    /**
+    * * Field Name: Sha256
+    * * Display Name: SHA-256
+    * * SQL Data Type: nvarchar(64)
+    * * Description: Lowercase hex SHA-256 of Data; decides whether a repeated upload of the same index is a retry or a conflict.
+    */
+    get Sha256(): string {
+        return this.Get('Sha256');
+    }
+    set Sha256(value: string) {
+        this.Set('Sha256', value);
+    }
+
+    /**
+    * * Field Name: Data
+    * * Display Name: Data
+    * * SQL Data Type: varbinary(MAX)
+    * * Binary Value: base64-encoded string. Decode with Base64ToBytes() — or Base64ToFloat32Vector() for an embedding — from @memberjunction/global.
+    * * Description: The shard bytes as uploaded (MJOPUS1 header followed by length-prefixed Opus packets).
+    */
+    get Data(): string {
+        return this.Get('Data');
+    }
+    set Data(value: string) {
+        this.Set('Data', value);
+    }
+
+    /**
+    * * Field Name: ReceivedAt
+    * * Display Name: Received At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: sysdatetimeoffset()
+    * * Description: When the server first stored this shard.
+    */
+    get ReceivedAt(): Date {
+        return this.Get('ReceivedAt');
+    }
+    set ReceivedAt(value: Date) {
+        this.Set('ReceivedAt', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
  * MJ: AI Agent Sessions - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: AIAgentSession
@@ -48011,6 +48346,79 @@ export class MJAIAgentSessionEntity extends BaseEntity<MJAIAgentSessionEntityTyp
     }
     set LinkedRecordID(value: string | null) {
         this.Set('LinkedRecordID', value);
+    }
+
+    /**
+    * * Field Name: RecordingStatus
+    * * Display Name: Recording Status
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Assembling
+    *   * Complete
+    *   * Failed
+    *   * Partial
+    *   * Pending
+    * * Description: State of the server-side recording assembly for a client-direct session recorded as Opus shards: Pending (shards or a terminal signal are waiting to be assembled), Assembling (claimed by one server instance), Complete (recording.wav holds every captured sample), Partial (assembled with silent gaps, listed in RecordingGaps), Failed (a shard conflict or an assembly error needs a human). NULL when the session was not recorded this way.
+    */
+    get RecordingStatus(): 'Assembling' | 'Complete' | 'Failed' | 'Partial' | 'Pending' | null {
+        return this.Get('RecordingStatus');
+    }
+    set RecordingStatus(value: 'Assembling' | 'Complete' | 'Failed' | 'Partial' | 'Pending' | null) {
+        this.Set('RecordingStatus', value);
+    }
+
+    /**
+    * * Field Name: RecordingExpectedShards
+    * * Display Name: Expected Shards
+    * * SQL Data Type: int
+    * * Description: Number of recording shards the browser reported in its terminal signal (last shard index + 1). NULL until a terminal signal arrives.
+    */
+    get RecordingExpectedShards(): number | null {
+        return this.Get('RecordingExpectedShards');
+    }
+    set RecordingExpectedShards(value: number | null) {
+        this.Set('RecordingExpectedShards', value);
+    }
+
+    /**
+    * * Field Name: RecordingCapturedSamples
+    * * Display Name: Captured Samples
+    * * SQL Data Type: bigint
+    * * Description: Total audio samples (48 kHz mono) the browser captured, from its terminal signal. The assembled recording.wav is exactly this long. NULL until a terminal signal arrives.
+    */
+    get RecordingCapturedSamples(): number | null {
+        return this.Get('RecordingCapturedSamples');
+    }
+    set RecordingCapturedSamples(value: number | null) {
+        this.Set('RecordingCapturedSamples', value);
+    }
+
+    /**
+    * * Field Name: RecordingGaps
+    * * Display Name: Recording Gaps
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of the silent gaps in a Partial recording: [{startSample, sampleCount, indexes}], sample positions at 48 kHz and the shard indexes that were missing. Empty or NULL when nothing is missing.
+    */
+    get RecordingGaps(): string | null {
+        return this.Get('RecordingGaps');
+    }
+    set RecordingGaps(value: string | null) {
+        this.Set('RecordingGaps', value);
+    }
+
+    /**
+    * * Field Name: RecordingAssemblyVersion
+    * * Display Name: Assembly Version
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Incremented by every assembly claim. The assembler finishes only if the version is still the one it claimed, so a newer assembly always wins over a slower older one.
+    */
+    get RecordingAssemblyVersion(): number {
+        return this.Get('RecordingAssemblyVersion');
+    }
+    set RecordingAssemblyVersion(value: number) {
+        this.Set('RecordingAssemblyVersion', value);
     }
 
     /**
