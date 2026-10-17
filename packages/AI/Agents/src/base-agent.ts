@@ -19,6 +19,7 @@ import { LooksLikeLoopEnvelope } from './native-tools/dual-channel';
 import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptEntityExtended, MJAIAgentEntityExtended, MJAIModelEntityExtended, MJAIPromptRunEntityExtended, ResolvePromptRunUserID } from "@memberjunction/ai-core-plus";
 import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled, IMetadataProvider, DatabaseProviderBase, ToPlainJSON } from '@memberjunction/core';
 import { AgentRunWatchdog } from './agent-run-watchdog';
+import { MatchAgentConfigurationPreset } from './agent-preset-match';
 import { AIPromptRunner, GetToolCallingDecision, AIDecisionRunResult } from '@memberjunction/ai-prompts';
 import { ChatMessage, ChatMessageContent, AIErrorType, AIAPIKeyResolver, BaseRealtimeModel, GetAIAPIKey, CredentialScopeAllows, MakeAIAPIKeyResolver, IRealtimeSession, IsPrefixPromptCache, JSONObject, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage, ChatToolChoice, DecisionQuestion, DecisionAnswer } from '@memberjunction/ai';
 import { BaseAgentType } from './agent-types/base-agent-type';
@@ -6417,10 +6418,10 @@ export class BaseAgent {
             }
 
             if (req.presetName != null && req.presetName.trim() !== '') {
-                const matchedPreset = AIEngine.Instance.FindActiveAgentConfigurationPreset(subAgent.ID, req.presetName);
+                const activePresets = AIEngine.Instance.GetAgentConfigurationPresets(subAgent.ID, true);
+                const matchedPreset = MatchAgentConfigurationPreset(activePresets, req.presetName);
                 if (!matchedPreset) {
-                    const availablePresets = AIEngine.Instance.GetAgentConfigurationPresets(subAgent.ID, true)
-                        .map(p => p.Name);
+                    const availablePresets = activePresets.map(p => p.Name);
                     const availableList = availablePresets.length > 0 ? availablePresets.join(', ') : 'none';
                     const errorMessage = `Sub-agent '${subAgent.Name}' has no preset '${req.presetName}'. Available: ${availableList}.`;
                     this.logError(errorMessage, {
@@ -12461,7 +12462,10 @@ The context is now within limits. Please retry your request with the recovered c
         subAgent: MJAIAgentEntityExtended
     ): { configurationId: string | undefined; presetName?: string; presetId?: string } {
         if (subAgentRequest.presetName != null && subAgentRequest.presetName.trim() !== '') {
-            const preset = AIEngine.Instance.FindActiveAgentConfigurationPreset(subAgent.ID, subAgentRequest.presetName);
+            const preset = MatchAgentConfigurationPreset(
+                AIEngine.Instance.GetAgentConfigurationPresets(subAgent.ID, true),
+                subAgentRequest.presetName
+            );
             if (preset) {
                 return {
                     configurationId: preset.AIConfigurationID ?? undefined,

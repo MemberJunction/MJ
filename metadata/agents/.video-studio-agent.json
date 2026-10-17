@@ -78,6 +78,62 @@
           }
         }
       ],
+      "MJ: AI Agent Relationships": [
+        {
+          "fields": {
+            "AgentID": "@lookup:MJ: AI Agents.Name=Query Builder",
+            "SubAgentID": "@parent:ID",
+            "Status": "Active",
+            "ChatHandlingOption": "Consult",
+            "ConfigurationPresetID": "@lookup:MJ: AI Agent Configurations.Name=Standard&AgentID=@parent:ID",
+            "SubAgentInputMapping": {
+              "rows": "DataSnapshot.Inline.caller.rows",
+              "columns": "DataSnapshot.Inline.caller.columns"
+            },
+            "SubAgentContextPaths": [
+              "title",
+              "interpretation",
+              "savedQueryId",
+              "savedQueryName",
+              "metadata.sql"
+            ],
+            "SubAgentOutputMapping": {
+              "Status": "video.Status",
+              "Film.OneSentence": "video.OneSentence",
+              "Output.Videos": "video.Videos",
+              "Output.PosterFileID": "video.PosterFileID",
+              "Review.HumanReviewNotes": "video.HumanReviewNotes"
+            }
+          },
+          "primaryKey": {
+            "ID": "8833E6C6-17B4-468A-BC74-70C145FF4BB9"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@lookup:MJ: AI Agents.Name=Research Report Writer",
+            "SubAgentID": "@parent:ID",
+            "Status": "Active",
+            "ChatHandlingOption": "Consult",
+            "ConfigurationPresetID": "@lookup:MJ: AI Agent Configurations.Name=Standard&AgentID=@parent:ID",
+            "SubAgentContextPaths": [
+              "synthesis",
+              "report",
+              "sources"
+            ],
+            "SubAgentOutputMapping": {
+              "Status": "video.Status",
+              "Film.OneSentence": "video.OneSentence",
+              "Output.Videos": "video.Videos",
+              "Output.PosterFileID": "video.PosterFileID",
+              "Review.HumanReviewNotes": "video.HumanReviewNotes"
+            }
+          },
+          "primaryKey": {
+            "ID": "39DD52B1-9707-473B-AC7D-8EEBA1F3F37A"
+          }
+        }
+      ],
       "MJ: AI Agent Rubrics": [
         {
           "fields": {

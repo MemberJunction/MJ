@@ -118,6 +118,7 @@
     "@memberjunction/task-graph": "6.2.0-edge.4",
     "@memberjunction/templates": "6.2.0-edge.4",
     "@memberjunction/testing-engine": "6.2.0-edge.4",
+    "@memberjunction/video-studio": "6.2.0-edge.4",
     "@memberjunction/work-queue-engine": "6.2.0-edge.4",
     "@memberjunction/work-queue-samples": "6.2.0-edge.4"
   },
