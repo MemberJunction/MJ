@@ -13433,25 +13433,30 @@ The context is now within limits. Please retry your request with the recovered c
         // during createStepEntity), an in-flight source step is allowed because createStepEntity chains
         // the new step's INSERT after the source step on _stepSaveQueue.
         const requireSavedSource = beforeStep != null;
+        let candidateStep: MJAIAgentRunStepEntityExtended | undefined;
         for (let i = startIdx; i >= 0; i--) {
             const step = steps[i];
             if (step.Status !== 'Running' && (step.PayloadAtEnd != null || step.PayloadAtEndSourceStepID != null)) {
-                if (requireSavedSource && !step.IsSaved) {
-                    return undefined;
-                }
-                const source = step.PayloadAtEndSourceStepID
-                    ? steps.find(s => UUIDsEqual(s.ID, step.PayloadAtEndSourceStepID))
-                    : step;
-                if (!source) {
-                    return undefined;
-                }
-                if (requireSavedSource && !source.IsSaved) {
-                    return undefined;
-                }
-                return source.PayloadAtEnd === serializedPayload ? source : undefined;
+                candidateStep = step;
+                break;
             }
         }
-        return undefined;
+        if (!candidateStep) {
+            return undefined;
+        }
+        if (requireSavedSource && !candidateStep.IsSaved) {
+            return undefined;
+        }
+        const source = candidateStep.PayloadAtEndSourceStepID
+            ? steps.find(s => UUIDsEqual(s.ID, candidateStep.PayloadAtEndSourceStepID))
+            : candidateStep;
+        if (!source) {
+            return undefined;
+        }
+        if (requireSavedSource && !source.IsSaved) {
+            return undefined;
+        }
+        return source.PayloadAtEnd === serializedPayload ? source : undefined;
     }
 
     /**

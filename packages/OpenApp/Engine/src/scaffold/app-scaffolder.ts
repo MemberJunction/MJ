@@ -956,4 +956,5 @@ export function ScaffoldOpenApp(options: AppScaffoldOptions): AppScaffoldResult 
     };
 }
 
+/** @deprecated Use {@link ScaffoldOpenApp} instead. */
 export const scaffoldOpenApp = ScaffoldOpenApp;
