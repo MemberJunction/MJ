@@ -1942,8 +1942,11 @@ export class MCPClientManager extends BaseSingleton<MCPClientManager> {
             return;
         }
         try {
-            // Client.close() closes its transport; fall back to the transport when no client was built
-            await (client ? client.close() : transport.close());
+            // Client.close() delegates to this._transport?.close(), which is a no-op if connect()
+            // failed before attaching a transport or if Protocol._onclose() already cleared it.
+            // Fall back to transport.close() directly whenever the client has no transport attached.
+            const clientHasTransport = Boolean(client && (!('transport' in client) || client.transport));
+            await (clientHasTransport && client ? client.close() : transport.close());
         } catch (closeError) {
             LogError(`[MCPClient] Failed to release transport for ${connectionId}: ${closeError}`);
         }

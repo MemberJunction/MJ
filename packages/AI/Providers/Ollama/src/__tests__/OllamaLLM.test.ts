@@ -594,6 +594,38 @@ describe('OllamaLLM', () => {
       await expect(callCreateStream(controller.signal)).rejects.toThrow('boom');
       expect(getEventListeners(controller.signal, 'abort')).toHaveLength(0);
     });
+
+    it('detaches from the token when iterator.return() rejects on early break or when stream throws mid-flight', async () => {
+      const earlyBreak = new AbortController();
+      const throwingReturnStream: AsyncIterable<unknown> = {
+        [Symbol.asyncIterator]: () => ({
+          next: async () => ({ value: { message: { content: 'a' } }, done: false }),
+          return: async () => {
+            throw new Error('return failed');
+          },
+        }),
+      };
+      mockChat.mockResolvedValueOnce(throwingReturnStream);
+      const s1 = await callCreateStream(earlyBreak.signal) as AsyncIterable<unknown>;
+      for await (const _ of s1) { break; }
+      expect(getEventListeners(earlyBreak.signal, 'abort')).toHaveLength(0);
+
+      const midFlight = new AbortController();
+      const returnSpy = vi.fn().mockRejectedValue(new Error('return failed'));
+      const failingStream: AsyncIterable<unknown> = {
+        [Symbol.asyncIterator]: () => ({
+          next: async () => {
+            throw new Error('stream aborted');
+          },
+          return: returnSpy,
+        }),
+      };
+      mockChat.mockResolvedValueOnce(failingStream);
+      const s2 = await callCreateStream(midFlight.signal) as AsyncIterable<unknown>;
+      await expect((async () => { for await (const _ of s2) { /* drain */ } })()).rejects.toThrow('stream aborted');
+      expect(returnSpy).not.toHaveBeenCalled();
+      expect(getEventListeners(midFlight.signal, 'abort')).toHaveLength(0);
+    });
   });
 });
 

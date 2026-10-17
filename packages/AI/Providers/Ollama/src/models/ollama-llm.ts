@@ -106,13 +106,24 @@ export class OllamaLLM extends BaseLLM {
         const originalIterator = stream[Symbol.asyncIterator].bind(stream);
         const wrapped = async function* (): AsyncGenerator<unknown> {
             const iterator = originalIterator();
+            let completed = false;
             try {
                 for (let step = await iterator.next(); !step.done; step = await iterator.next()) {
                     yield step.value;
                 }
+                completed = true;
+            } catch (error) {
+                completed = true;
+                throw error;
             } finally {
                 scoped.Dispose();
-                await iterator.return?.();
+                if (!completed) {
+                    try {
+                        await iterator.return?.();
+                    } catch {
+                        // Do not mask consumer exit or close error
+                    }
+                }
             }
         };
         (stream as { [Symbol.asyncIterator]: () => AsyncIterator<unknown> })[Symbol.asyncIterator] = wrapped;

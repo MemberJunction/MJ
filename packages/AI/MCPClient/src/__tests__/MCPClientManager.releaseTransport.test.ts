@@ -8,6 +8,7 @@ import { MCPClientManager } from '../MCPClientManager.js';
 
 interface Closable {
     close: ReturnType<typeof vi.fn>;
+    transport?: Closable;
 }
 
 type ReleaseFn = (connectionId: string, client: Closable | undefined, transport: Closable | undefined) => Promise<void>;
@@ -41,6 +42,17 @@ describe('MCPClientManager.releaseUnregisteredTransport', () => {
 
         await release('conn-1', undefined, transport);
 
+        expect(transport.close).toHaveBeenCalledTimes(1);
+    });
+
+    it('closes the transport directly when client.transport is undefined (e.g. connect failed before attaching)', async () => {
+        const { release } = newManager();
+        const client: Closable = { close: vi.fn().mockResolvedValue(undefined), transport: undefined };
+        const transport = closable();
+
+        await release('conn-1', client, transport);
+
+        expect(client.close).not.toHaveBeenCalled();
         expect(transport.close).toHaveBeenCalledTimes(1);
     });
 
