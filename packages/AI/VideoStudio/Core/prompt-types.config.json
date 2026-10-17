@@ -10,5 +10,10 @@
   {
     "src": "composition-runtime.ts",
     "supplementary": null
+  },
+  {
+    "src": "chart-kit-types.ts",
+    "supplementary": null
   }
 ]
+
