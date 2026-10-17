@@ -64,7 +64,7 @@
       ],
       "Audio": {
         "Narration": {
-          "VoiceID": "en-US-Studio-O",
+          "VoiceID": "brand-voice-default",
           "Provider": "ElevenLabs",
           "Script": [
             {

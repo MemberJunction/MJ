@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import {
     ValidateVideoGenerationSpec,
     VIDEO_STUDIO_SPEC_VERSION,
+    type DefectSeverity,
     type MJChartKit,
     type MJVideoRuntime,
     type ReferenceAnalysis,
@@ -558,6 +559,9 @@ describe('Video Studio metadata pin (VS-AGT-1)', () => {
         const storyboardExample = readJson<{
             payloadChangeRequest: { replaceElements?: Partial<VideoGenerationSpec>; newElements?: unknown };
         }>('prompts/output/video-studio/storyboard.example.json');
+        const referenceAnalysisExample = readJson<ReferenceAnalysis>(
+            'prompts/output/video-studio/reference-analysis.example.json',
+        );
 
         expect(directorExample.payloadChangeRequest.newElements).toBeUndefined();
         expect(directorExample.payloadChangeRequest.replaceElements).toBeDefined();
@@ -565,6 +569,11 @@ describe('Video Studio metadata pin (VS-AGT-1)', () => {
         expect(artDirectorExample.payloadChangeRequest.replaceElements).toBeDefined();
         expect(storyboardExample.payloadChangeRequest.newElements).toBeUndefined();
         expect(storyboardExample.payloadChangeRequest.replaceElements).toBeDefined();
+
+        expect(directorExample.payloadChangeRequest.replaceElements?.Archetype).toBeDefined();
+        expect(
+            'ArchetypeID' in (directorExample.payloadChangeRequest.replaceElements?.Archetype ?? {}),
+        ).toBe(false);
 
         const baseSpec: VideoGenerationSpec = {
             SpecVersion: VIDEO_STUDIO_SPEC_VERSION,
@@ -600,11 +609,16 @@ describe('Video Studio metadata pin (VS-AGT-1)', () => {
                 MotionRules: [],
                 Keep: [],
                 Avoid: [],
-                References: [],
+                References: [referenceAnalysisExample],
             },
             Beats: [],
             DataBindings: [],
             Audio: {
+                Narration: {
+                    VoiceID: 'brand-voice-default',
+                    Provider: 'ElevenLabs',
+                    Script: [],
+                },
                 Cues: [],
                 Captions: 'Sidecar',
             },
@@ -649,6 +663,7 @@ describe('Video Studio metadata pin (VS-AGT-1)', () => {
         const styledResult = ValidateVideoGenerationSpec(afterArtDirector, 'Styled');
         expect(styledResult.Errors).toEqual([]);
         expect(styledResult.Valid).toBe(true);
+        expect(afterArtDirector.Style.References).toEqual(baseSpec.Style.References);
 
         const afterStoryboard: VideoGenerationSpec = {
             ...afterArtDirector,
@@ -658,6 +673,8 @@ describe('Video Studio metadata pin (VS-AGT-1)', () => {
         const storyboardedResult = ValidateVideoGenerationSpec(afterStoryboard, 'Storyboarded');
         expect(storyboardedResult.Errors).toEqual([]);
         expect(storyboardedResult.Valid).toBe(true);
+        expect(afterStoryboard.Audio.Narration?.VoiceID).toBe(baseSpec.Audio.Narration?.VoiceID);
+        expect(afterStoryboard.Audio.Narration?.Provider).toBe(baseSpec.Audio.Narration?.Provider);
     });
 
     it('verifies Motion Engineer templates and examples use only real MJVideoRuntime, MJChartKit, and VideoCompositionSource members', () => {
@@ -695,6 +712,13 @@ describe('Video Studio metadata pin (VS-AGT-1)', () => {
             'AssetKeys',
         ] as const satisfies readonly (keyof VideoCompositionSource)[];
 
+        const requiredCompositionKeys = [
+            'Format',
+            'EntryFile',
+            'Files',
+            'AssetKeys',
+        ] as const satisfies readonly (keyof VideoCompositionSource)[];
+
         const meExample = readJson<{
             payloadChangeRequest: {
                 replaceElements?: { Output?: { Source?: Record<string, Record<string, unknown>> } };
@@ -709,12 +733,25 @@ describe('Video Studio metadata pin (VS-AGT-1)', () => {
         for (const k of Object.keys(comp16x9)) {
             expect(validCompositionKeys as readonly string[]).toContain(k);
         }
+        for (const reqKey of requiredCompositionKeys) {
+            expect(Object.keys(comp16x9)).toContain(reqKey);
+        }
+
+        const meTemplatePath = resolve(metadataDir, 'prompts/templates/video-studio/motion-engineer.template.md');
+        const meLintFixTemplatePath = resolve(metadataDir, 'prompts/templates/video-studio/motion-engineer-lint-fix.template.md');
+        const meExamplePath = resolve(metadataDir, 'prompts/output/video-studio/motion-engineer.example.json');
+        const meLintFixExamplePath = resolve(metadataDir, 'prompts/output/video-studio/motion-engineer-lint-fix.example.json');
+
+        expect(readFileSync(meTemplatePath, 'utf8')).toContain('Math.random');
+        for (const pathWithoutDataAsOf of [meTemplatePath, meExamplePath, meLintFixExamplePath]) {
+            expect(readFileSync(pathWithoutDataAsOf, 'utf8')).not.toContain('Data as of');
+        }
 
         const filesToScan = [
-            resolve(metadataDir, 'prompts/templates/video-studio/motion-engineer.template.md'),
-            resolve(metadataDir, 'prompts/templates/video-studio/motion-engineer-lint-fix.template.md'),
-            resolve(metadataDir, 'prompts/output/video-studio/motion-engineer.example.json'),
-            resolve(metadataDir, 'prompts/output/video-studio/motion-engineer-lint-fix.example.json'),
+            meTemplatePath,
+            meLintFixTemplatePath,
+            meExamplePath,
+            meLintFixExamplePath,
         ];
 
         for (const filePath of filesToScan) {
@@ -756,8 +793,31 @@ describe('Video Studio metadata pin (VS-AGT-1)', () => {
             'AssetKey',
         ] as const satisfies readonly (keyof VideoDefect | 'AssetKey')[];
 
+        const requiredDefectKeys = [
+            'Timestamp',
+            'Beat',
+            'Criterion',
+            'Severity',
+            'Evidence',
+            'Fix',
+            'Status',
+        ] as const satisfies readonly (keyof VideoDefect)[];
+
+        const validDefectSeverities = [
+            'Blocker',
+            'Major',
+            'Minor',
+        ] as const satisfies readonly DefectSeverity[];
+
         const validScoreSummaryKeys = [
             'RubricID',
+            'OverallScore',
+            'MaxScore',
+            'Passed',
+            'Criteria',
+        ] as const satisfies readonly (keyof RubricScoreSummary)[];
+
+        const requiredScoreSummaryKeys = [
             'OverallScore',
             'MaxScore',
             'Passed',
@@ -772,6 +832,13 @@ describe('Video Studio metadata pin (VS-AGT-1)', () => {
             'Notes',
         ] as const satisfies readonly (keyof RubricCriterionScore)[];
 
+        const requiredCriterionScoreKeys = [
+            'Criterion',
+            'Score',
+            'MaxScore',
+            'Passed',
+        ] as const satisfies readonly (keyof RubricCriterionScore)[];
+
         const validReferenceAnalysisKeys = [
             'SourceKey',
             'PaletteLearned',
@@ -783,6 +850,16 @@ describe('Video Studio metadata pin (VS-AGT-1)', () => {
             'DoNotCopy',
         ] as const satisfies readonly (keyof ReferenceAnalysis)[];
 
+        const requiredReferenceAnalysisKeys = [
+            'SourceKey',
+            'PaletteLearned',
+            'TypographyLearned',
+            'CompositionLearned',
+            'PacingLearned',
+            'MotionLearned',
+            'DoNotCopy',
+        ] as const satisfies readonly (keyof ReferenceAnalysis)[];
+
         const criticExample = readJson<{
             Defects: Array<Record<string, unknown>>;
             Scores: Record<string, unknown> & { Criteria: Array<Record<string, unknown>> };
@@ -791,13 +868,22 @@ describe('Video Studio metadata pin (VS-AGT-1)', () => {
 
         expect(criticExample.Defects.length).toBeGreaterThan(0);
         for (const defect of criticExample.Defects) {
-            for (const key of Object.keys(defect)) {
+            const defectKeys = Object.keys(defect);
+            for (const key of defectKeys) {
                 expect(validDefectKeys as readonly string[]).toContain(key);
             }
+            for (const reqKey of requiredDefectKeys) {
+                expect(defectKeys).toContain(reqKey);
+            }
+            expect(validDefectSeverities as readonly string[]).toContain(String(defect.Severity));
         }
 
-        for (const key of Object.keys(criticExample.Scores)) {
+        const scoreSummaryKeys = Object.keys(criticExample.Scores);
+        for (const key of scoreSummaryKeys) {
             expect(validScoreSummaryKeys as readonly string[]).toContain(key);
+        }
+        for (const reqKey of requiredScoreSummaryKeys) {
+            expect(scoreSummaryKeys).toContain(reqKey);
         }
 
         const rubricDoc = readJson<{
@@ -815,16 +901,24 @@ describe('Video Studio metadata pin (VS-AGT-1)', () => {
 
         expect(criticExample.Scores.Criteria.map((c) => c.Criterion)).toEqual(expectedCriterionKeys);
         for (const item of criticExample.Scores.Criteria) {
-            for (const key of Object.keys(item)) {
+            const itemKeys = Object.keys(item);
+            for (const key of itemKeys) {
                 expect(validCriterionScoreKeys as readonly string[]).toContain(key);
+            }
+            for (const reqKey of requiredCriterionScoreKeys) {
+                expect(itemKeys).toContain(reqKey);
             }
         }
 
         const refExample = readJson<Record<string, unknown>>(
             'prompts/output/video-studio/reference-analysis.example.json',
         );
-        for (const key of Object.keys(refExample)) {
+        const refKeys = Object.keys(refExample);
+        for (const key of refKeys) {
             expect(validReferenceAnalysisKeys as readonly string[]).toContain(key);
+        }
+        for (const reqKey of requiredReferenceAnalysisKeys) {
+            expect(refKeys).toContain(reqKey);
         }
     });
 
@@ -862,6 +956,7 @@ describe('Video Studio metadata pin (VS-AGT-1)', () => {
             'MJVideo',
             'BindingKey',
             'Date',
+            'Math',
             'Inter',
             'JetBrains Mono',
             'Arial',

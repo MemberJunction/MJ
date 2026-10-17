@@ -2,7 +2,7 @@
   "Files": [
     {
       "Path": "scene.js",
-      "Content": "const kpiEl = document.getElementById('kpi-arr');\nconst asOfEl = document.getElementById('as-of');\nasOfEl.textContent = 'Data as of ' + String(window.MJVideo.Data['__asOf'] ?? '');\nwindow.MJVideo.OnFrame((timeSeconds) => {\n  kpiEl.innerHTML = window.MJChartKit.KpiTile({\n    Frame: { Width: 640, Height: 240, StartSeconds: 0, DurationSeconds: 1.5 },\n    Value: Number(window.MJVideo.Data['arr_total']),\n    Label: 'Annual Recurring Revenue',\n    BindingKey: 'arr_total',\n    Format: { Kind: 'Currency', Currency: 'USD', Decimals: 1 }\n  }, timeSeconds);\n});"
+      "Content": "const kpiEl = document.getElementById('kpi-arr');\nconst asOfEl = document.getElementById('as-of');\nasOfEl.textContent = String(window.MJVideo.Data['__asOf'] ?? '');\nwindow.MJVideo.OnFrame((timeSeconds) => {\n  kpiEl.innerHTML = window.MJChartKit.KpiTile({\n    Frame: { Width: 640, Height: 240, StartSeconds: 0, DurationSeconds: 1.5 },\n    Value: Number(window.MJVideo.Data['arr_total']),\n    Label: 'Annual Recurring Revenue',\n    BindingKey: 'arr_total',\n    Format: { Kind: 'Currency', Currency: 'USD', Decimals: 1 }\n  }, timeSeconds);\n});"
     }
   ],
   "Notes": "Replaced non-deterministic requestAnimationFrame loop with window.MJVideo.OnFrame((timeSeconds) => ...) callback to satisfy MJ_NONDETERMINISTIC_API."

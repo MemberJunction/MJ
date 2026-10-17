@@ -9,9 +9,9 @@ Run the sub-agents in this sequence:
 1. **`Video Studio - Director`** — establishes `Film`, selects `Archetype`, inventories `Assets.Required` and `Assets.NeverInvent`, declares `DataBindings`, and optionally adds illustrative `Assets.Generate`.
 2. **`Video Studio - Art Director`** — resolves `Style` from the brand kit and driver-analyzed `Style.References`, sets concrete tokens and `Style.Avoid`, and optionally adds illustrative `Assets.Generate`.
 3. **`Video Studio - Storyboard`** — produces contiguous `Beats` with `{BindingKey}` placeholders and per-format `LayoutNotes`, `StateList`, `Audio.Narration.Script`, `Audio.Cues`, and `Audio.Captions`.
-4. **`Video Studio - Pre-Production`** — executes `DataBindings` into `DataSnapshot`, synthesizes narration/music/SFX, generates `Output.CaptionsFileID`, and fulfills `Assets.Generate` into `Assets.Approved` (`Provenance: 'Generated'`).
+4. **`Video Studio - Pre-Production`** — executes `DataBindings` into `DataSnapshot`, synthesizes narration (`Audio.Narration`) and `Output.CaptionsFileID`, and stages approved assets (`StagedPath`).
 5. **`Video Studio - Motion Engineer`** — authors deterministic HyperFrames compositions (`Output.Source`) for each target format.
-6. **`Video Studio - Render`** — renders MP4s, posters, contact sheets, and beat frames (`Output.Videos`, `Output.PosterFileID`, `Output.ContactSheetFileIDs`) and evaluates `Review.Gates` (`G3`, `G4`, `G5`, `G6`).
+6. **`Video Studio - Render`** — renders MP4s, posters, contact sheets, and beat frames (`Output.Videos`, `Output.PosterFileID`, `Output.ContactSheetFileIDs`) and records `Review.Gates` (`G3`).
 7. **`Video Studio - Critic`** — inspects rendered contact sheets and beat frames, records `Review.Rounds` and `Review.Scores`, and triggers bounded repair rounds back through `Video Studio - Motion Engineer` (and `Video Studio - Render`) when configured.
 
 ## Gates, escalations, and consults
