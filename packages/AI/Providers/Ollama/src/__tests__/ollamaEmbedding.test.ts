@@ -1,3 +1,4 @@
+import { getEventListeners } from 'node:events';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { EmbeddingsRequest, EmbeddingsResponse, Fetch } from 'ollama';
 
@@ -98,7 +99,18 @@ describe('OllamaEmbedding cancellation', () => {
         expect(h.embeddingsCalls[0]).not.toBe(h.clients[0]); // a per-request client, not the shared one
         expect(h.embeddingsCalls[0].fetch).toBeDefined();
         expect(fetchSpy).toHaveBeenCalledTimes(1);
-        expect(fetchSpy.mock.calls[0][1]?.signal).toBe(controller.signal);
+        expect(fetchSpy.mock.calls[0][1]?.signal).toBeInstanceOf(AbortSignal);
+    });
+
+    it('leaves no abort listener on the caller token after EmbedText / EmbedTexts, success or failure', async () => {
+        const controller = new AbortController();
+        h.handler = async () => ({ embedding: [1, 2] });
+        const e = new OllamaEmbedding();
+        await e.EmbedText({ text: 'a', model: 'nomic-embed-text', CancellationToken: controller.signal });
+        await e.EmbedTexts({ texts: ['a', 'b'], model: 'nomic-embed-text', CancellationToken: controller.signal });
+        h.handler = async () => { throw new Error('boom'); };
+        await expect(e.EmbedText({ text: 'a', model: 'nomic-embed-text', CancellationToken: controller.signal })).rejects.toThrow('boom');
+        expect(getEventListeners(controller.signal, 'abort')).toHaveLength(0);
     });
 
     it('stops the per-text loop once aborted and reports the call as cancelled', async () => {
