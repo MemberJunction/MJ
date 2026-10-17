@@ -198,7 +198,13 @@ export class VideoStudioAgent extends BaseAgent {
                 '';
             if (isVideoStudioStageName(stageName)) {
                 const candidatePayload = (result.newPayload ?? params.payload ?? {}) as Partial<VideoGenerationSpec>;
-                const updatedPayload = this.ApplyStageResult(params, stageName, candidatePayload);
+                const stageSucceeded = result.step !== 'Failed';
+                const updatedPayload = this.ApplyStageResult(
+                    params,
+                    stageName,
+                    candidatePayload,
+                    stageSucceeded,
+                );
                 return {
                     ...result,
                     newPayload: updatedPayload as unknown as P,
@@ -211,20 +217,26 @@ export class VideoStudioAgent extends BaseAgent {
 
     /**
      * Applies post-stage invariants after a Video Studio stage sub-agent finishes:
-     * clears stale downstream evidence, evaluates `G1`–`G6`, derives `Status`, and emits a
-     * single live progress update.
+     * clears stale downstream evidence (when the stage succeeded), evaluates `G1`–`G6`,
+     * derives `Status`, and emits a single live progress update.
      */
     protected ApplyStageResult(
         params: ExecuteAgentParams,
         stageName: string,
         payload: Partial<VideoGenerationSpec>,
+        stageSucceeded: boolean = true,
     ): Partial<VideoGenerationSpec> {
         const cloned = cloneSpec(payload ?? {});
 
         this.syncDeliverableFormats(cloned);
         this.applyArchetypeDefaultModeIfUnset(cloned);
 
-        ClearStaleEvidence(stageName, cloned);
+        if (stageSucceeded) {
+            ClearStaleEvidence(stageName, cloned);
+            if (normalizeStageKey(stageName) === 'Pre-Production') {
+                cloned.Status = 'PreProduced';
+            }
+        }
 
         const gates = EvaluateGates(cloned, {
             Settings: this._currentSettings,
@@ -255,6 +267,36 @@ export class VideoStudioAgent extends BaseAgent {
         }
 
         return cloned;
+    }
+
+    protected override async validateNextStep<P>(
+        params: ExecuteAgentParams,
+        nextStep: BaseAgentNextStep<P>,
+        currentPayload: P,
+        agentRun: MJAIAgentRunEntityExtended,
+        currentStep: MJAIAgentRunStepEntityExtended,
+    ): Promise<BaseAgentNextStep<P>> {
+        if (nextStep.step === 'ForEach' && isVideoStudioStageName(nextStep.forEach?.subAgent?.name)) {
+            const msg = 'Call stages with a Sub-Agent step, one at a time';
+            return {
+                ...nextStep,
+                step: 'Retry',
+                terminate: false,
+                retryInstructions: msg,
+                errorMessage: msg,
+            };
+        }
+        if (nextStep.step === 'While' && isVideoStudioStageName(nextStep.while?.subAgent?.name)) {
+            const msg = 'Call stages with a Sub-Agent step, one at a time';
+            return {
+                ...nextStep,
+                step: 'Retry',
+                terminate: false,
+                retryInstructions: msg,
+                errorMessage: msg,
+            };
+        }
+        return super.validateNextStep(params, nextStep, currentPayload, agentRun, currentStep);
     }
 
     protected override async validateSubAgentNextStep<P>(
@@ -296,6 +338,17 @@ export class VideoStudioAgent extends BaseAgent {
 
         if (stageRequests.length === 0) {
             return baseResult;
+        }
+
+        if (stageRequests.some((req) => req?.terminateAfter === true)) {
+            const msg = 'Stages never end the run; finish with Success';
+            return {
+                ...baseResult,
+                step: 'Retry',
+                terminate: false,
+                retryInstructions: msg,
+                errorMessage: msg,
+            };
         }
 
         const stageReq = stageRequests[0];
@@ -499,6 +552,12 @@ export class VideoStudioAgent extends BaseAgent {
             };
         }
 
+        if (!spec.Interaction) {
+            spec.Interaction = {
+                Mode: 'Autonomous',
+                MaxRepairRounds: this._currentSettings.MaxRepairRounds,
+            };
+        }
         spec.Status = 'Delivered';
         spec.Review.HumanReviewNotes = this.buildHumanReviewNotes(spec);
 
@@ -515,16 +574,8 @@ export class VideoStudioAgent extends BaseAgent {
     // -----------------------------------------------------------------------
 
     private async warmEngines(params: ExecuteAgentParams): Promise<void> {
-        try {
-            await VideoStudioEngine.Instance.Config(false, params.contextUser);
-        } catch {
-            // Engine config may be unavailable in pure unit test environments
-        }
-        try {
-            await BrandKitEngine.Instance.Config(false, params.contextUser);
-        } catch {
-            // Engine config may be unavailable in pure unit test environments
-        }
+        await VideoStudioEngine.Instance.Config(false, params.contextUser, this.ProviderToUse);
+        await BrandKitEngine.Instance.Config(false, params.contextUser, this.ProviderToUse);
     }
 
     private buildSeededPayload(
@@ -573,36 +624,43 @@ export class VideoStudioAgent extends BaseAgent {
 
         // Interaction mode & repair budget seeding
         const callerMode = seeded.Interaction?.Mode;
-        const rawParams = params as unknown as Record<string, unknown>;
         const isBelowRoot =
             Boolean(params.parentRun) ||
-            Boolean(rawParams.parentRunId) ||
-            Boolean(rawParams.parentAgentName) ||
             (Array.isArray(this.AgentHierarchy) && this.AgentHierarchy.length > 1);
 
-        let resolvedMode: VideoInteractionMode = 'Autonomous';
         if (isValidInteractionMode(callerMode)) {
-            resolvedMode = callerMode;
             this._modeExplicitlySet = true;
+            seeded.Interaction = {
+                Mode: callerMode,
+                MaxRepairRounds: settings.MaxRepairRounds,
+            };
         } else if (params.planMode === true) {
-            resolvedMode = 'ApproveStoryboard';
             this._modeExplicitlySet = true;
+            seeded.Interaction = {
+                Mode: 'ApproveStoryboard',
+                MaxRepairRounds: settings.MaxRepairRounds,
+            };
         } else if (isBelowRoot) {
-            resolvedMode = 'Autonomous';
             this._modeExplicitlySet = true;
+            seeded.Interaction = {
+                Mode: 'Autonomous',
+                MaxRepairRounds: settings.MaxRepairRounds,
+            };
         } else {
             this._modeExplicitlySet = false;
             const archetypeDefault = this.lookupArchetypeDefaultMode(
                 seeded.Archetype?.Name,
                 companyId,
             );
-            resolvedMode = archetypeDefault ?? 'Autonomous';
+            if (archetypeDefault) {
+                seeded.Interaction = {
+                    Mode: archetypeDefault,
+                    MaxRepairRounds: settings.MaxRepairRounds,
+                };
+            } else {
+                delete seeded.Interaction;
+            }
         }
-
-        seeded.Interaction = {
-            Mode: resolvedMode,
-            MaxRepairRounds: settings.MaxRepairRounds,
-        };
 
         this.syncDeliverableFormats(seeded);
 
@@ -620,9 +678,8 @@ export class VideoStudioAgent extends BaseAgent {
         if (fromSpec) {
             return fromSpec;
         }
-        const rawParams = params as unknown as Record<string, unknown>;
-        if (typeof rawParams.companyId === 'string' && rawParams.companyId.trim()) {
-            return rawParams.companyId.trim();
+        if (typeof params.companyId === 'string' && params.companyId.trim()) {
+            return params.companyId.trim();
         }
         const dataObj = params.data as Record<string, unknown> | undefined;
         if (typeof dataObj?.CompanyID === 'string' && dataObj.CompanyID.trim()) {
@@ -641,113 +698,97 @@ export class VideoStudioAgent extends BaseAgent {
         this._brandKitInScope = true;
         let kit: MJBrandKitEntity | null = null;
 
-        try {
-            const engine = BrandKitEngine.Instance;
-            if (seeded.BrandKitID?.trim()) {
-                const allKits = Array.isArray(engine.BrandKits) ? engine.BrandKits : [];
-                kit = allKits.find((k) => UUIDsEqual(k.ID, seeded.BrandKitID)) ?? null;
-                if (!kit && allKits.length > 0) {
-                    this._brandKitInScope = false;
-                }
-            } else if (typeof engine.GetDefaultKit === 'function') {
-                kit = engine.GetDefaultKit(companyId) ?? null;
-            }
-
+        const engine = BrandKitEngine.Instance;
+        if (seeded.BrandKitID?.trim()) {
+            const allKits = Array.isArray(engine.BrandKits) ? engine.BrandKits : [];
+            kit = allKits.find((k) => UUIDsEqual(k.ID, seeded.BrandKitID)) ?? null;
             if (!kit) {
+                this._brandKitInScope = false;
                 return;
             }
+        } else {
+            kit = engine.GetDefaultKit(companyId) ?? null;
+        }
 
-            if (!seeded.BrandKitID) {
-                seeded.BrandKitID = kit.ID;
+        if (!kit) {
+            return;
+        }
+
+        if (!seeded.BrandKitID) {
+            seeded.BrandKitID = kit.ID;
+        }
+
+        this._brandKitInScope =
+            !kit.CompanyID || Boolean(companyId && UUIDsEqual(kit.CompanyID, companyId));
+
+        // 1. Seed Brand Kit assets into Assets.Approved
+        const kitAssets = engine.GetAssets(kit.ID) ?? [];
+        const approvedList = seeded.Assets!.Approved;
+        const existingFileIds = new UUIDSet(
+            approvedList.map((a) => a.FileID).filter((id): id is string => Boolean(id)),
+        );
+        for (const asset of kitAssets) {
+            if (!asset || !asset.FileID) {
+                continue;
             }
-
-            this._brandKitInScope =
-                !kit.CompanyID || Boolean(companyId && UUIDsEqual(kit.CompanyID, companyId));
-
-            // 1. Seed Brand Kit assets into Assets.Approved
-            const kitAssets = typeof engine.GetAssets === 'function' ? engine.GetAssets(kit.ID) ?? [] : [];
-            const approvedList = seeded.Assets!.Approved;
-            const existingFileIds = new UUIDSet(
-                approvedList.map((a) => a.FileID).filter((id): id is string => Boolean(id)),
-            );
-            for (const asset of kitAssets) {
-                if (!asset || !asset.FileID) {
-                    continue;
-                }
-                if (existingFileIds.Has(asset.FileID)) {
-                    continue;
-                }
-                const baseKey = `brand:${(asset.Name ?? 'asset').trim()}`;
-                let uniqueKey = baseKey;
-                let suffix = 2;
-                while (approvedList.some((a) => a.Key === uniqueKey)) {
-                    uniqueKey = `${baseKey}:${suffix}`;
-                    suffix++;
-                }
-                const rawAsset = asset as unknown as {
-                    AssetType?: string;
-                    Kind?: string;
-                    MustUse?: boolean;
-                };
-                approvedList.push({
-                    Key: uniqueKey,
-                    Kind: ((rawAsset.Kind ?? rawAsset.AssetType ?? 'Other') as VideoAssetKind),
-                    FileID: asset.FileID,
-                    Source: kit.Name || 'BrandKit',
-                    Provenance: 'BrandKit',
-                    Usage: asset.Usage ?? '',
-                    MustUse: Boolean(rawAsset.MustUse),
-                });
-                existingFileIds.Add(asset.FileID);
+            if (existingFileIds.Has(asset.FileID)) {
+                continue;
             }
+            const baseKey = `brand:${(asset.Name ?? 'asset').trim()}`;
+            let uniqueKey = baseKey;
+            let suffix = 2;
+            while (approvedList.some((a) => a.Key === uniqueKey)) {
+                uniqueKey = `${baseKey}:${suffix}`;
+                suffix++;
+            }
+            approvedList.push({
+                Key: uniqueKey,
+                Kind: (asset.AssetType ?? 'Other') as VideoAssetKind,
+                FileID: asset.FileID,
+                Source: kit.Name || 'BrandKit',
+                Provenance: 'BrandKit',
+                Usage: asset.Usage ?? '',
+                MustUse: false,
+            });
+            existingFileIds.Add(asset.FileID);
+        }
 
-            // 2. Merge NeverInventObject entries
-            const kitNeverInvent = kit.NeverInventObject;
-            if (Array.isArray(kitNeverInvent)) {
-                const existingSet = new Set(seeded.Assets!.NeverInvent);
-                for (const item of kitNeverInvent) {
-                    if (typeof item === 'string' && item.trim() && !existingSet.has(item.trim())) {
-                        seeded.Assets!.NeverInvent.push(item.trim());
-                        existingSet.add(item.trim());
+        // 2. Merge NeverInventObject entries
+        const kitNeverInvent = kit.NeverInventObject;
+        if (Array.isArray(kitNeverInvent)) {
+            const existingSet = new Set(seeded.Assets!.NeverInvent);
+            for (const item of kitNeverInvent) {
+                if (typeof item === 'string' && item.trim() && !existingSet.has(item.trim())) {
+                    seeded.Assets!.NeverInvent.push(item.trim());
+                    existingSet.add(item.trim());
+                }
+            }
+        }
+
+        // 3. Default VoiceID / Provider on Audio.Narration when empty
+        const voiceObj = kit.VoiceObject;
+        if (voiceObj && typeof voiceObj === 'object') {
+            const defaultVoiceId = (voiceObj.VoiceID ?? '').trim();
+            const defaultProvider = (voiceObj.Provider ?? '').trim();
+            if (defaultVoiceId || defaultProvider) {
+                if (!seeded.Audio) {
+                    seeded.Audio = { Cues: [], Captions: 'None' };
+                }
+                if (!seeded.Audio.Narration) {
+                    seeded.Audio.Narration = {
+                        VoiceID: defaultVoiceId,
+                        Provider: defaultProvider,
+                        Script: [],
+                    };
+                } else {
+                    if (!seeded.Audio.Narration.VoiceID?.trim() && defaultVoiceId) {
+                        seeded.Audio.Narration.VoiceID = defaultVoiceId;
+                    }
+                    if (!seeded.Audio.Narration.Provider?.trim() && defaultProvider) {
+                        seeded.Audio.Narration.Provider = defaultProvider;
                     }
                 }
             }
-
-            // 3. Default VoiceID / Provider on Audio.Narration when empty
-            const voiceObj = kit.VoiceObject as
-                | {
-                      VoiceID?: string;
-                      DefaultVoiceID?: string;
-                      Provider?: string;
-                      VoiceProvider?: string;
-                  }
-                | null
-                | undefined;
-            if (voiceObj && typeof voiceObj === 'object') {
-                const defaultVoiceId = (voiceObj.VoiceID ?? voiceObj.DefaultVoiceID ?? '').trim();
-                const defaultProvider = (voiceObj.Provider ?? voiceObj.VoiceProvider ?? '').trim();
-                if (defaultVoiceId || defaultProvider) {
-                    if (!seeded.Audio) {
-                        seeded.Audio = { Cues: [], Captions: 'None' };
-                    }
-                    if (!seeded.Audio.Narration) {
-                        seeded.Audio.Narration = {
-                            VoiceID: defaultVoiceId,
-                            Provider: defaultProvider,
-                            Script: [],
-                        };
-                    } else {
-                        if (!seeded.Audio.Narration.VoiceID?.trim() && defaultVoiceId) {
-                            seeded.Audio.Narration.VoiceID = defaultVoiceId;
-                        }
-                        if (!seeded.Audio.Narration.Provider?.trim() && defaultProvider) {
-                            seeded.Audio.Narration.Provider = defaultProvider;
-                        }
-                    }
-                }
-            }
-        } catch {
-            // Ignore BrandKitEngine access errors when unconfigured in tests
         }
     }
 
@@ -774,7 +815,7 @@ export class VideoStudioAgent extends BaseAgent {
     }
 
     private applyArchetypeDefaultModeIfUnset(spec: Partial<VideoGenerationSpec>): void {
-        if (this._modeExplicitlySet) {
+        if (this._modeExplicitlySet || isValidInteractionMode(spec.Interaction?.Mode)) {
             return;
         }
         const archetypeMode = this.lookupArchetypeDefaultMode(
@@ -863,6 +904,12 @@ export class VideoStudioAgent extends BaseAgent {
     ): VideoGenerationSpec {
         const cloned = cloneSpec(spec) as VideoGenerationSpec;
         cloned.Status = stage;
+        if (!cloned.Interaction) {
+            cloned.Interaction = {
+                Mode: 'Autonomous',
+                MaxRepairRounds: this._currentSettings.MaxRepairRounds,
+            };
+        }
         if (cloned.Render && cloned.Render.Renderer === 'HyperFrames' && !cloned.Render.RendererVersion?.trim()) {
             cloned.Render.RendererVersion = '0.0.0';
         }
@@ -927,7 +974,7 @@ export class VideoStudioAgent extends BaseAgent {
             if (brandKitId) {
                 kit = (engine.BrandKits ?? []).find((k) => UUIDsEqual(k.ID, brandKitId)) ?? null;
             }
-            if (!kit && typeof engine.GetDefaultKit === 'function') {
+            if (!kit) {
                 kit = engine.GetDefaultKit(companyId) ?? null;
             }
             if (!kit) {
@@ -1034,13 +1081,10 @@ export class VideoStudioAgent extends BaseAgent {
 
     private safeFormatHierarchicalMessage(message: string): string {
         try {
-            if (typeof this.formatHierarchicalMessage === 'function') {
-                return this.formatHierarchicalMessage(message);
-            }
+            return this.formatHierarchicalMessage(message);
         } catch {
-            // Fallback whenAgentRun is not populated in unit tests
+            return message;
         }
-        return message;
     }
 }
 

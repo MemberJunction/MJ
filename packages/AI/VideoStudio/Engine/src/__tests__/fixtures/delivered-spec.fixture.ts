@@ -71,15 +71,12 @@ export const DELIVERED_SPEC_FIXTURE: VideoGenerationSpec = {
                 MustUse: false,
                 Generation: {
                     ModelID: 'A1B2C3D4-E5F6-4789-8012-34567890ABCD',
-                    ModelName: 'FLUX 3',
-                    ProviderName: 'Black Forest Labs',
                     PromptRunID: 'B2C3D4E5-F6A7-4890-9123-4567890ABCDE',
                     Prompt: 'Subtle dark navy geometric data grid background with soft cyan light trails, abstract minimalist corporate style, no text, no people',
-                    PromptHash: 'sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08',
                     Seed: 42,
-                    RequestKey: 'hero_abstract_grid',
-                    CostUSD: 0.04,
-                    GeneratedAt: '2026-10-17T00:00:30.000Z',
+                    ReferenceKeys: ['company_logo'],
+                    Cost: 0.04,
+                    C2PA: true,
                 },
             },
         ],
@@ -323,7 +320,6 @@ export const DELIVERED_SPEC_FIXTURE: VideoGenerationSpec = {
         Narration: {
             VoiceID: 'brand-voice-default',
             Provider: 'ElevenLabs',
-            MixedAudioFileID: '45454545-6767-4898-9090-343434343434',
             Script: [
                 {
                     Key: 'nar-1',

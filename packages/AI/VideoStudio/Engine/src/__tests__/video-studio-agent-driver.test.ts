@@ -30,6 +30,7 @@ const {
     class HoistedMockBaseAgent {
         protected _agentRun: Partial<MJAIAgentRunEntityExtended> | null = null;
         protected _hierarchy: string[] = ['Video Studio'];
+        protected ProviderToUse: unknown = undefined;
 
         public get AgentRun(): MJAIAgentRunEntityExtended | null {
             return this._agentRun as MJAIAgentRunEntityExtended | null;
@@ -81,6 +82,16 @@ const {
                     newPayload: params.payload,
                 } as BaseAgentNextStep<P>)
             );
+        }
+
+        protected async validateNextStep<P = unknown>(
+            _params: ExecuteAgentParams,
+            nextStep: BaseAgentNextStep<P>,
+            _currentPayload: P,
+            _agentRun: MJAIAgentRunEntityExtended,
+            _currentStep: MJAIAgentRunStepEntityExtended,
+        ): Promise<BaseAgentNextStep<P>> {
+            return nextStep;
         }
 
         protected async validateSubAgentNextStep<P = unknown>(
@@ -161,6 +172,13 @@ type TestableVideoStudioAgent = VideoStudioAgent & {
         previousDecision: BaseAgentNextStep<P> | null,
         stepCount?: number,
     ): Promise<BaseAgentNextStep<P>>;
+    validateNextStep<P = Partial<VideoGenerationSpec>>(
+        params: ExecuteAgentParams,
+        nextStep: BaseAgentNextStep<P>,
+        currentPayload: P,
+        agentRun: MJAIAgentRunEntityExtended,
+        currentStep: MJAIAgentRunStepEntityExtended,
+    ): Promise<BaseAgentNextStep<P>>;
     validateSubAgentNextStep<P = Partial<VideoGenerationSpec>>(
         params: ExecuteAgentParams,
         nextStep: BaseAgentNextStep<P>,
@@ -180,6 +198,7 @@ type TestableVideoStudioAgent = VideoStudioAgent & {
         params: ExecuteAgentParams,
         stageName: string,
         payload: Partial<VideoGenerationSpec>,
+        stageSucceeded?: boolean,
     ): Partial<VideoGenerationSpec>;
 };
 
@@ -193,14 +212,16 @@ describe('VideoStudioAgent driver lifecycle', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         mockGetConfigurationParamsWithInheritance.mockReturnValue([]);
+        mockBrandKitEngineInstance.Config.mockResolvedValue(undefined);
         mockBrandKitEngineInstance.BrandKits = [];
         mockBrandKitEngineInstance.GetDefaultKit.mockReturnValue(null);
         mockBrandKitEngineInstance.GetAssets.mockReturnValue([]);
+        mockVideoStudioEngineInstance.Config.mockResolvedValue(undefined);
         mockVideoStudioEngineInstance.GetArchetypeByName.mockReturnValue(null);
         mockVideoStudioEngineInstance.GetArchetypesForCompany.mockReturnValue([]);
     });
 
-    it('(1) normalizes an empty payload {}, resolves Standard settings, and disables base Plan Mode', async () => {
+    it('(1) normalizes an empty payload {}, leaves Interaction unset until Archetype is known, and applies archetype DefaultInteractionMode after Director', async () => {
         const agent = createAgent();
         const planGate = await agent.resolvePlanModeGate({} as ExecuteAgentParams);
         expect(planGate).toEqual({ active: false, approved: false });
@@ -221,11 +242,24 @@ describe('VideoStudioAgent driver lifecycle', () => {
         expect(Array.isArray(seededPayload?.Review?.Gates)).toBe(true);
         expect(Array.isArray(seededPayload?.Assets?.Approved)).toBe(true);
         expect(seededPayload?.Render?.Fps).toBe(30);
-        expect(seededPayload?.Interaction?.Mode).toBe('Autonomous');
-        expect(seededPayload?.Interaction?.MaxRepairRounds).toBe(2);
+        expect(seededPayload?.Interaction).toBeUndefined();
+
+        // When Director sets Archetype.Name = 'Customer Story' (which has DefaultInteractionMode = 'ApproveStoryboardAndRoughCut'),
+        // ApplyStageResult fills spec.Interaction.Mode from the archetype default
+        mockVideoStudioEngineInstance.GetArchetypeByName.mockImplementation((name: string) =>
+            name === 'Customer Story'
+                ? { Name: 'Customer Story', DefaultInteractionMode: 'ApproveStoryboardAndRoughCut' }
+                : null,
+        );
+        const afterDirector = agent.ApplyStageResult(params, 'Video Studio - Director', {
+            ...seededPayload,
+            Archetype: { Name: 'Customer Story' },
+        });
+        expect(afterDirector.Interaction?.Mode).toBe('ApproveStoryboardAndRoughCut');
+        expect(afterDirector.Interaction?.MaxRepairRounds).toBe(2);
     });
 
-    it('(2) seeds BrandKit assets with brand:<Name> and :2 dedup, skips duplicate FileIDs, merges NeverInvent, and defaults VoiceID/Provider', async () => {
+    it('(2) seeds BrandKit assets via AssetType with brand:<Name> and :2 dedup, skips duplicate FileIDs, merges NeverInvent, defaults VoiceID/Provider, and marks missing BrandKitID out of scope', async () => {
         const agent = createAgent();
         const kit = {
             ID: '10101010-2020-4030-8040-505050505050',
@@ -243,21 +277,19 @@ describe('VideoStudioAgent driver lifecycle', () => {
         mockBrandKitEngineInstance.GetAssets.mockReturnValue([
             {
                 Name: 'Wordmark',
-                Kind: 'Logo',
+                AssetType: 'Logo',
                 FileID: 'AAAAAAAA-1111-4222-8333-444444444444',
                 Usage: 'Primary header logo',
-                MustUse: true,
             },
             {
                 Name: 'Wordmark',
-                Kind: 'Logo',
+                AssetType: 'Logo',
                 FileID: 'BBBBBBBB-1111-4222-8333-444444444444',
                 Usage: 'Monochrome footer logo',
-                MustUse: false,
             },
             {
                 Name: 'Duplicate File Entry',
-                Kind: 'Logo',
+                AssetType: 'Logo',
                 FileID: 'AAAAAAAA-1111-4222-8333-444444444444',
                 Usage: 'Should be skipped because FileID already exists',
             },
@@ -279,10 +311,34 @@ describe('VideoStudioAgent driver lifecycle', () => {
         expect(seeded?.BrandKitID).toBe(kit.ID);
         expect(seeded?.Assets?.Approved).toHaveLength(2);
         expect(seeded?.Assets?.Approved[0]?.Key).toBe('brand:Wordmark');
+        expect(seeded?.Assets?.Approved[0]?.Kind).toBe('Logo');
+        expect(seeded?.Assets?.Approved[0]?.MustUse).toBe(false);
         expect(seeded?.Assets?.Approved[1]?.Key).toBe('brand:Wordmark:2');
         expect(seeded?.Assets?.NeverInvent).toContain('Competitor logos');
         expect(seeded?.Audio?.Narration?.VoiceID).toBe('voice-acme-default');
         expect(seeded?.Audio?.Narration?.Provider).toBe('ElevenLabs');
+
+        // When BrandKitID is set on the spec and BrandKitEngine.BrandKits is empty, _brandKitInScope is false
+        const missingKitAgent = createAgent();
+        mockBrandKitEngineInstance.BrandKits = [];
+        const specWithMissingKit = CreateDeliveredSpecFixture();
+        specWithMissingKit.BrandKitID = '99999999-8888-4777-8666-555555555555';
+        const missingKitParams = {
+            payload: specWithMissingKit,
+            conversationMessages: [],
+        } as unknown as ExecuteAgentParams<Partial<VideoGenerationSpec>>;
+        await missingKitAgent.executeAgentInternal(missingKitParams, dummyConfig);
+        const afterStageWithMissingKit = missingKitAgent.ApplyStageResult(
+            missingKitParams,
+            'Video Studio - Director',
+            specWithMissingKit,
+        );
+        expect(afterStageWithMissingKit.Status).toBe('Blocked');
+        expect(afterStageWithMissingKit.Review?.Gates.find((g) => g.Gate === 'G1')?.Status).toBe('Blocked');
+
+        // When engine Config fails, warmEngines propagates the rejection
+        mockVideoStudioEngineInstance.Config.mockRejectedValueOnce(new Error('DB connection failed'));
+        await expect(agent.executeAgentInternal(params, dummyConfig)).rejects.toThrow('DB connection failed');
     });
 
     it('(3) marks G1 Blocked and Status = Blocked after Director when a MustUse requirement is unmet, refusing Art Director', async () => {
@@ -328,7 +384,7 @@ describe('VideoStudioAgent driver lifecycle', () => {
         expect(refusal.retryInstructions).toContain('UnmetMustUseRequirement');
     });
 
-    it('(4) refuses parallel stage sub-agent invocations in validateSubAgentNextStep', async () => {
+    it('(4) refuses parallel stage sub-agents, ForEach/While stage loops, and stage Sub-Agent steps with terminateAfter = true', async () => {
         const agent = createAgent();
         const spec = CreateDeliveredSpecFixture();
         const params = { payload: spec } as unknown as ExecuteAgentParams<Partial<VideoGenerationSpec>>;
@@ -351,6 +407,58 @@ describe('VideoStudioAgent driver lifecycle', () => {
         );
         expect(validated.step).toBe('Retry');
         expect(validated.retryInstructions).toContain('Only one Video Studio stage sub-agent may run at a time');
+
+        // ForEach targeting a stage sub-agent is refused
+        const forEachStep: BaseAgentNextStep<Partial<VideoGenerationSpec>> = {
+            step: 'ForEach',
+            terminate: false,
+            forEach: {
+                collectionPath: 'Beats',
+                subAgent: {
+                    name: 'Video Studio - Motion Engineer',
+                    message: 'Compose beat',
+                },
+            },
+        };
+        const refusedForEach = await agent.validateNextStep(params, forEachStep, spec, dummyRun, dummyStep);
+        expect(refusedForEach.step).toBe('Retry');
+        expect(refusedForEach.retryInstructions).toBe('Call stages with a Sub-Agent step, one at a time');
+
+        // While targeting a stage sub-agent is refused
+        const whileStep: BaseAgentNextStep<Partial<VideoGenerationSpec>> = {
+            step: 'While',
+            terminate: false,
+            while: {
+                condition: 'payload.Review.Rounds.length < 2',
+                subAgent: {
+                    name: 'Video Studio - Critic',
+                    message: 'Review again',
+                },
+            },
+        };
+        const refusedWhile = await agent.validateNextStep(params, whileStep, spec, dummyRun, dummyStep);
+        expect(refusedWhile.step).toBe('Retry');
+        expect(refusedWhile.retryInstructions).toBe('Call stages with a Sub-Agent step, one at a time');
+
+        // Sub-Agent targeting a stage with terminateAfter: true is refused
+        const terminateAfterStep: BaseAgentNextStep<Partial<VideoGenerationSpec>> = {
+            step: 'Sub-Agent',
+            terminate: false,
+            subAgent: {
+                name: 'Video Studio - Critic',
+                message: 'Final review',
+                terminateAfter: true,
+            },
+        };
+        const refusedTerminateAfter = await agent.validateSubAgentNextStep(
+            params,
+            terminateAfterStep,
+            spec,
+            dummyRun,
+            dummyStep,
+        );
+        expect(refusedTerminateAfter.step).toBe('Retry');
+        expect(refusedTerminateAfter.retryInstructions).toBe('Stages never end the run; finish with Success');
     });
 
     it('(5) pauses with step = Plan at G2 under ApproveStoryboard before Pre-Production, and advances on next turn when user approves', async () => {
@@ -455,7 +563,7 @@ describe('VideoStudioAgent driver lifecycle', () => {
         expect(g2?.Notes).toBeUndefined();
     });
 
-    it('(7) clears stale Output.Videos and ContactSheetFileIDs when Motion Engineer repairs after Critic failure', async () => {
+    it('(7) clears stale Output.Videos, ContactSheetFileIDs, and G4 approval when Motion Engineer succeeds, but preserves evidence when a stage sub-agent fails and advances silent Pre-Production only on success', async () => {
         const agent = createAgent();
         const spec = CreateDeliveredSpecFixture();
         spec.Review.Rounds = [
@@ -467,10 +575,9 @@ describe('VideoStudioAgent driver lifecycle', () => {
                     {
                         Beat: 'beat-1',
                         Timestamp: 2.0,
-                        Category: 'Overflow',
                         Severity: 'Major',
                         Evidence: 'Text overflow',
-                        SuggestedFix: 'Shrink heading',
+                        Fix: 'Shrink heading',
                         Status: 'Open',
                     },
                 ],
@@ -483,6 +590,74 @@ describe('VideoStudioAgent driver lifecycle', () => {
         expect(afterMotion.Output?.ContactSheetFileIDs).toBeUndefined();
         expect(afterMotion.Status).toBe('Composed');
         expect(afterMotion.Review?.Gates.find((g) => g.Gate === 'G4')?.Status).toBe('Failed');
+
+        // When a stage sub-agent fails (result.step === 'Failed'), executeNextStep does NOT clear downstream evidence
+        const specBeforeFailedMotion = CreateDeliveredSpecFixture();
+        const progressEvents: unknown[] = [];
+        const failedStepParams = {
+            payload: specBeforeFailedMotion,
+            onProgress: (ev: unknown) => progressEvents.push(ev),
+            __mockNextStepResult: {
+                step: 'Failed',
+                terminate: true,
+                newPayload: specBeforeFailedMotion,
+            },
+        } as unknown as ExecuteAgentParams<Partial<VideoGenerationSpec>>;
+        const previousSubAgentDecision: BaseAgentNextStep<Partial<VideoGenerationSpec>> = {
+            step: 'Sub-Agent',
+            terminate: false,
+            subAgent: {
+                name: 'Video Studio - Motion Engineer',
+                message: 'Attempt repair',
+                terminateAfter: false,
+            },
+        };
+        const failedResult = await agent.executeNextStep(
+            failedStepParams,
+            dummyConfig,
+            previousSubAgentDecision,
+            1,
+        );
+        expect(failedResult.step).toBe('Failed');
+        expect(failedResult.newPayload?.Output?.Videos).toBeDefined();
+        expect(failedResult.newPayload?.Output?.ContactSheetFileIDs).toBeDefined();
+        expect(progressEvents).toHaveLength(1);
+
+        // Silent film (no narration, no bindings, no asset generation):
+        // Pre-Production failure keeps Status === 'Approved', whereas Pre-Production success advances Status to 'PreProduced'
+        const silentSpec = CreateDeliveredSpecFixture();
+        silentSpec.Archetype = { Name: 'product-launch' };
+        delete silentSpec.Output;
+        silentSpec.Review.Rounds = [];
+        silentSpec.DataBindings = [];
+        delete silentSpec.DataSnapshot;
+        silentSpec.Assets.Generate = [];
+        silentSpec.Assets.Approved = silentSpec.Assets.Approved.filter((a) => a.Provenance !== 'Generated');
+        silentSpec.Audio = { Cues: [], Captions: 'None' };
+        silentSpec.Deliverables.Captions = false;
+        for (const beat of silentSpec.Beats) {
+            delete beat.NarrationKey;
+            beat.DataRefs = [];
+            beat.OnScreenText = ['Headline'];
+        }
+        silentSpec.Film.OneSentence = 'Q3 revenue momentum reached record highs.';
+        silentSpec.Status = 'Approved';
+
+        const afterFailedPreProd = agent.ApplyStageResult(
+            { payload: silentSpec } as unknown as ExecuteAgentParams<Partial<VideoGenerationSpec>>,
+            'Video Studio - Pre-Production',
+            silentSpec,
+            false,
+        );
+        expect(afterFailedPreProd.Status).toBe('Approved');
+
+        const afterSuccessfulPreProd = agent.ApplyStageResult(
+            { payload: silentSpec } as unknown as ExecuteAgentParams<Partial<VideoGenerationSpec>>,
+            'Video Studio - Pre-Production',
+            silentSpec,
+            true,
+        );
+        expect(afterSuccessfulPreProd.Status).toBe('PreProduced');
     });
 
     it('(8) refuses a 3rd Motion Engineer repair round when MaxRepairRounds is 2 and populates HumanReviewNotes on final delivery', async () => {
@@ -498,10 +673,9 @@ describe('VideoStudioAgent driver lifecycle', () => {
                     {
                         Beat: 'beat-1',
                         Timestamp: 1.0,
-                        Category: 'Overflow',
                         Severity: 'Major',
                         Evidence: 'd1',
-                        SuggestedFix: 'f1',
+                        Fix: 'f1',
                         Status: 'Open',
                     },
                 ],
@@ -514,10 +688,9 @@ describe('VideoStudioAgent driver lifecycle', () => {
                     {
                         Beat: 'beat-1',
                         Timestamp: 1.0,
-                        Category: 'Overflow',
                         Severity: 'Major',
                         Evidence: 'd2',
-                        SuggestedFix: 'f2',
+                        Fix: 'f2',
                         Status: 'Open',
                     },
                 ],
@@ -530,10 +703,9 @@ describe('VideoStudioAgent driver lifecycle', () => {
                     {
                         Beat: 'beat-1',
                         Timestamp: 1.0,
-                        Category: 'Overflow',
                         Severity: 'Major',
                         Evidence: 'Remaining minor overflow on 9:16',
-                        SuggestedFix: 'Adjust card padding',
+                        Fix: 'Adjust card padding',
                         Status: 'Open',
                     },
                 ],

@@ -253,9 +253,16 @@ function evaluateGateG2(
                 }
               : spec.Deliverables;
 
+    const normalizedInteraction =
+        spec.Interaction ?? {
+            Mode: 'Autonomous' as const,
+            MaxRepairRounds: ctx.Settings.MaxRepairRounds,
+        };
+
     const candidateSpec = {
         ...spec,
         Status: 'Storyboarded',
+        Interaction: normalizedInteraction,
         ...(normalizedRender ? { Render: normalizedRender } : {}),
         ...(normalizedDeliverables ? { Deliverables: normalizedDeliverables } : {}),
     } as VideoGenerationSpec;
@@ -263,14 +270,20 @@ function evaluateGateG2(
     const storyboardValidation = ValidateVideoGenerationSpec(candidateSpec, 'Storyboarded', {
         MaxGeneratedVideoSeconds: ctx.Settings.MaxGeneratedVideoSeconds,
     });
+    const isSilentFilm =
+        !spec.Audio?.Narration?.Script?.length &&
+        !(Array.isArray(spec.Beats) && spec.Beats.some((b) => Boolean(b?.NarrationKey)));
+    const g2Errors = isSilentFilm
+        ? storyboardValidation.Errors.filter((e) => e.Code !== 'MissingNarrationScript')
+        : storyboardValidation.Errors;
 
-    if (!storyboardValidation.Valid) {
+    if (g2Errors.length > 0) {
         return {
             Gate: 'G2',
             Status: 'Failed',
             EvidenceRefs: [],
             Timestamp: now,
-            Notes: storyboardValidation.Errors.map((e) => `${e.Code} (${e.Path}): ${e.Message}`).join('; '),
+            Notes: g2Errors.map((e) => `${e.Code} (${e.Path}): ${e.Message}`).join('; '),
         };
     }
 
@@ -732,7 +745,7 @@ function clearRenderEvidenceOnSpec(spec: Partial<VideoGenerationSpec>): void {
         delete spec.Output.RenderMetadata;
     }
     if (Array.isArray(spec.Review?.Gates)) {
-        spec.Review.Gates = spec.Review.Gates.filter((g) => g && g.Gate !== 'G3');
+        spec.Review.Gates = spec.Review.Gates.filter((g) => g && g.Gate !== 'G3' && g.Gate !== 'G4');
     }
 }
 
@@ -775,8 +788,9 @@ export function ClearStaleEvidence<T extends Partial<VideoGenerationSpec>>(
  *
  * 1. Inspects `@form:` / `@{"_mode":"form",...}` tokens via `ConversationUtility.ParseSpecialContent(text)`
  *    for a `decision` field (`'approve'` or `'reject'`).
- * 2. Otherwise strips an optional leading `'Approved.'` / `'Rejected.'` prefix, returns `null` on
- *    empty text, `'Approve'` when the reply starts with `'approve'` (case-insensitive), and
+ * 2. When no form token has a `decision`, checks if the first line is `'Approved.'` or `'Rejected.'`.
+ * 3. Otherwise strips an optional leading `'Approved.'` prefix, returns `null` on empty text,
+ *    `'Approve'` when the trimmed remainder starts with `'approve'` (case-insensitive), and
  *    `'Reject'` otherwise.
  */
 export function ReadApprovalDecision(text: string | null | undefined): 'Approve' | 'Reject' | null {
@@ -836,7 +850,7 @@ export function ReadApprovalDecision(text: string | null | undefined): 'Approve'
         }
     }
 
-    // 2. Strip special content tokens and optional leading Approved. / Rejected. prefix
+    // 2. Strip special content tokens
     let remaining = text;
     for (let i = tokens.length - 1; i >= 0; i--) {
         const t = tokens[i];
@@ -847,9 +861,17 @@ export function ReadApprovalDecision(text: string | null | undefined): 'Approve'
         return null;
     }
 
-    const stripped = remaining.replace(/^(?:approved|rejected)\.\s*/i, '').trim();
+    const firstLine = remaining.split(/\r?\n/)[0]?.trim() ?? '';
+    if (/^rejected\.$/i.test(firstLine) || /^rejected\./i.test(remaining)) {
+        return 'Reject';
+    }
+    if (/^approved\.$/i.test(firstLine)) {
+        return 'Approve';
+    }
+
+    const stripped = remaining.replace(/^approved\.\s*/i, '').trim();
     if (!stripped) {
-        return /^approved\./i.test(remaining) ? 'Approve' : 'Reject';
+        return 'Approve';
     }
 
     return /^approve/i.test(stripped) ? 'Approve' : 'Reject';
