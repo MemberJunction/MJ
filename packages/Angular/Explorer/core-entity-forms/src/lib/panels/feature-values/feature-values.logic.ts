@@ -75,6 +75,11 @@ export class FeatureValuesPanelModel {
         return '';
     }
 
+    /** A history row's display value; "no value" for a valueless row (an abstention or a cleared value). */
+    public static HistoryValue(row: FeatureValueRow): string {
+        return FeatureValuesPanelModel.hasValue(row) ? FeatureValuesPanelModel.DisplayValue(row) : 'no value';
+    }
+
     private static hasValue(row: FeatureValueRow): boolean {
         return row.ValueNumeric != null || row.ValueBoolean != null || row.ValueDate != null
             || (row.ValueJSON != null && row.ValueJSON !== '') || row.ValueText != null;

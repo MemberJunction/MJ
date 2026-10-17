@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { Component, Input } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { RunView, type BaseEntity, type RunViewParams, type RunViewResult } from '@memberjunction/core';
+import { RunView, type BaseEntity, type CompositeKey, type EntityInfo, type RunViewParams, type RunViewResult, type UserInfo } from '@memberjunction/core';
+import type { FormContext } from '@memberjunction/ng-base-forms';
 import { query, queryAll } from '@memberjunction/ng-test-utils';
 import { FeatureValuesPanel } from './feature-values.panel';
 import type { FeatureValueRow } from './feature-values.logic';
@@ -17,10 +18,15 @@ class CollapsiblePanelStub {
   @Input() SectionName = '';
   @Input() Icon = '';
   @Input() Order: number | null = null;
-  @Input() Form: unknown;
-  @Input() FormContext: unknown;
+  @Input() Form: FormDouble | null = null;
+  @Input() FormContext: FormContext | null = null;
   @Input() BadgeCount: number | null = null;
 }
+
+/** The record members the panel reads: whether it is saved, its entity's ID and its compact key. */
+type RecordDouble = Pick<BaseEntity, 'IsSaved'> & { EntityInfo: Pick<EntityInfo, 'ID'>; PrimaryKey: Pick<CompositeKey, 'ToCompactURLSegment'> };
+/** The form members the panel reads: the provider's current user. */
+interface FormDouble { ProviderToUse: { CurrentUser: Pick<UserInfo, 'ID'> } }
 
 const fv = (over: Partial<FeatureValueRow>): FeatureValueRow => ({
   ID: 'r', RecordProcessID: 'p1', RecordProcess: 'Churn Features', FeatureName: 'tenure',
@@ -38,18 +44,19 @@ function stubRunView(rows: FeatureValueRow[]): RunViewParams[] {
   return calls;
 }
 
-async function render(record: Record<string, unknown>): Promise<ComponentFixture<FeatureValuesPanel>> {
+async function render(record: RecordDouble): Promise<ComponentFixture<FeatureValuesPanel>> {
   TestBed.configureTestingModule({ imports: [CollapsiblePanelStub], declarations: [FeatureValuesPanel] });
   const fixture = TestBed.createComponent(FeatureValuesPanel);
-  fixture.componentRef.setInput('Record', record as unknown as BaseEntity);
-  fixture.componentRef.setInput('FormComponent', { ProviderToUse: { CurrentUser: { ID: 'user-1' } } });
+  const form: FormDouble = { ProviderToUse: { CurrentUser: { ID: 'user-1' } } };
+  fixture.componentRef.setInput('Record', record);
+  fixture.componentRef.setInput('FormComponent', form);
   fixture.detectChanges(false);
   await new Promise((resolve) => setTimeout(resolve, 0));
   fixture.detectChanges(false);
   return fixture;
 }
 
-const saved = { IsSaved: true, EntityInfo: { ID: 'ent-1' }, PrimaryKey: { ToCompactURLSegment: () => "rec'1" } };
+const saved: RecordDouble = { IsSaved: true, EntityInfo: { ID: 'ent-1' }, PrimaryKey: { ToCompactURLSegment: () => "rec'1" } };
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -128,5 +135,35 @@ describe('FeatureValuesPanel (DOM)', () => {
     const items = queryAll(fixture, '.fvp-history-item');
     expect(items).toHaveLength(1);
     expect(items[0].textContent).toContain('10');
+  });
+
+  it('shows "no value" for a valueless history row instead of a blank', async () => {
+    stubRunView([
+      fv({ ID: 'a', ValueNumeric: 14, ComputedAt: '2026-02-01T00:00:00Z' }),
+      fv({ ID: 'b', ComputedAt: '2026-01-01T00:00:00Z' }),
+    ]);
+    const fixture = await render(saved);
+    (query(fixture, '.fvp-toggle') as HTMLButtonElement).click();
+    fixture.detectChanges(false);
+    const items = queryAll(fixture, '.fvp-history-item .fvp-value');
+    expect(items.map((i) => i.textContent?.trim())).toEqual(['no value']);
+  });
+
+  it('drops an earlier load that answers after a later one', async () => {
+    const answers: Array<(rows: FeatureValueRow[]) => void> = [];
+    vi.spyOn(RunView.prototype, 'RunView').mockImplementation((() => new Promise<RunViewResult>((resolve) => {
+      answers.push((rows) => resolve({ Success: true, Results: rows, RowCount: rows.length, TotalRowCount: rows.length, ExecutionTime: 0, ErrorMessage: '', UserViewRunID: '' }));
+    })) as typeof RunView.prototype.RunView);
+    const fixture = await render(saved); // load 1 (ngOnInit) is pending
+    const second = fixture.componentInstance.Refresh(); // load 2
+    answers[1]([fv({ ID: 'new', ValueText: 'fresh' })]);
+    await second;
+    answers[0]([fv({ ID: 'old', ValueText: 'stale' })]);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    fixture.detectChanges(false);
+    expect(fixture.componentInstance.Cards.map((c) => c.DisplayValue)).toEqual(['fresh']);
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(text).toContain('fresh');
+    expect(text).not.toContain('stale');
   });
 });

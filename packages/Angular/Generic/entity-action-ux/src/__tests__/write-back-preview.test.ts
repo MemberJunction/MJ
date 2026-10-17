@@ -22,6 +22,21 @@ describe('WriteBackPreviewModel.Build', () => {
         ]);
     });
 
+    it('treats an undefined Previous as an addition, as a null one', () => {
+        const rows = WriteBackPreviewModel.Build('r1', previewOf({ previewFeatureValues: [{ FeatureName: 'Score', Previous: undefined, Proposed: 0.75 }] }));
+
+        expect(rows.Changes).toEqual([{ Field: 'Score (feature value)', OldValue: undefined, NewValue: 0.75, Applied: true, Changed: true, IsAddition: true }]);
+    });
+
+    it('lists field rows before feature-value rows', () => {
+        const rows = WriteBackPreviewModel.Build('r1', previewOf({
+            previewFeatureValues: [{ FeatureName: 'Score', Previous: 0.5, Proposed: 0.75 }],
+            previewFields: { Tier: 'Gold' },
+        }));
+
+        expect(rows.Changes.map((c) => c.Field)).toEqual(['Tier', 'Score (feature value)']);
+    });
+
     it('shows each previewed field with the value the write stores', () => {
         const { Changes } = WriteBackPreviewModel.Build('id-1', { ...base, previewFields: { Tier: 'Gold' } });
 

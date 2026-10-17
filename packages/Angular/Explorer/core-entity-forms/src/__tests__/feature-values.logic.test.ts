@@ -35,6 +35,14 @@ describe('FeatureValuesPanelModel.DisplayValue', () => {
     });
 });
 
+describe('FeatureValuesPanelModel.HistoryValue', () => {
+    it('says "no value" for a valueless row and shows a valued one as DisplayValue does', () => {
+        expect(FeatureValuesPanelModel.HistoryValue(row({}))).toBe('no value');
+        expect(FeatureValuesPanelModel.HistoryValue(row({ ValueNumeric: 0 }))).toBe('0');
+        expect(FeatureValuesPanelModel.HistoryValue(row({ ValueText: '' }))).toBe('');
+    });
+});
+
 describe('FeatureValuesPanelModel.Latest', () => {
     it('picks the newest valued row per pipeline+feature and skips valueless rows', () => {
         const rows = [

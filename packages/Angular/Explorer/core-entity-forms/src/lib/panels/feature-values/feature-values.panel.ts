@@ -35,6 +35,8 @@ export class FeatureValuesPanel extends BaseFormPanel implements OnInit {
     public ExpandedKey: string | null = null;
 
     private rows: FeatureValueRow[] = [];
+    /** Sequence number of the latest load; an older load's answer is dropped. */
+    private loadSequence = 0;
 
     public async ngOnInit(): Promise<void> {
         await this.Refresh();
@@ -45,8 +47,9 @@ export class FeatureValuesPanel extends BaseFormPanel implements OnInit {
         void this.Refresh();
     }
 
-    /** Reload the feature values for the current record (one RunView). */
+    /** Reload the feature values for the current record (one RunView); a load overtaken by a later one is dropped. */
     public async Refresh(): Promise<void> {
+        const sequence = ++this.loadSequence;
         const entityId = this.Record?.EntityInfo?.ID ?? null;
         // Same encoding the pipeline writes into RecordID: bare value for a single key, F1|v1||F2|v2 for composite.
         const recordId = this.Record?.PrimaryKey?.ToCompactURLSegment() ?? '';
@@ -71,6 +74,9 @@ export class FeatureValuesPanel extends BaseFormPanel implements OnInit {
                 },
                 this.contextUser(),
             );
+            if (sequence !== this.loadSequence) {
+                return;
+            }
             if (!result.Success) {
                 LogError(`[FeatureValuesPanel] Failed to load feature values: ${result.ErrorMessage}`);
                 this.rows = [];
@@ -79,13 +85,15 @@ export class FeatureValuesPanel extends BaseFormPanel implements OnInit {
             }
             this.Cards = FeatureValuesPanelModel.Latest(this.rows);
         } catch (e) {
+            if (sequence !== this.loadSequence) {
+                return;
+            }
             LogError(`[FeatureValuesPanel] ${e instanceof Error ? e.message : String(e)}`);
             this.rows = [];
             this.Cards = [];
-        } finally {
-            this.Loaded = true;
-            this.cdr.markForCheck();
         }
+        this.Loaded = true;
+        this.cdr.markForCheck();
     }
 
     /** Expand/collapse a card's reasoning + history. */
@@ -98,9 +106,9 @@ export class FeatureValuesPanel extends BaseFormPanel implements OnInit {
         return FeatureValuesPanelModel.History(this.rows, card);
     }
 
-    /** Display string for a history row. */
+    /** Display string for a history row ("no value" for a valueless one). */
     public ValueOf(row: FeatureValueRow): string {
-        return FeatureValuesPanelModel.DisplayValue(row);
+        return FeatureValuesPanelModel.HistoryValue(row);
     }
 
     private runView(): RunView {
@@ -112,6 +120,3 @@ export class FeatureValuesPanel extends BaseFormPanel implements OnInit {
         return this.FormComponent?.ProviderToUse?.CurrentUser ?? new Metadata().CurrentUser;
     }
 }
-
-/** Tree-shake guard — call this from the consuming module's loader. */
-export function LoadFeatureValuesPanel(): void { /* no-op marker */ }
