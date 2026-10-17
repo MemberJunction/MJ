@@ -47,6 +47,18 @@ function sanitizeUrlForDiagnostics(parsed: URL): string {
 const MISSING_REMOTE_URL_ERROR =
     'Remote render worker URL is not configured; set videoStudio.render.remote.url or VIDEO_STUDIO_RENDER_URL.';
 
+interface RemoteWorkerPoolEntry {
+    SanitizedUrl: string;
+    Client: RenderWorkerHttpClient;
+}
+
+function prefixWithWorkerUrl(sanitizedUrl: string, message: string): string {
+    if (message.includes(sanitizedUrl)) {
+        return message;
+    }
+    return `${sanitizedUrl}: ${message}`;
+}
+
 /**
  * `Remote` render driver (`@RegisterClass(VideoRenderDriverBase, 'Remote')`) (`VS-RND-3`, §7.2, §7.3).
  *
@@ -58,7 +70,7 @@ const MISSING_REMOTE_URL_ERROR =
  */
 @RegisterClass(VideoRenderDriverBase, 'Remote')
 export class RemoteRenderDriver extends VideoRenderDriverBase {
-    private readonly clients: RenderWorkerHttpClient[] = [];
+    private readonly workers: RemoteWorkerPoolEntry[] = [];
     private readonly configurationError?: string;
     private nextClientIndex = 0;
 
@@ -89,6 +101,7 @@ export class RemoteRenderDriver extends VideoRenderDriverBase {
 
         const renderTimeoutMs = settings.Timeouts.RenderMs;
         const requestTimeoutMs = settings.Timeouts.RequestMs;
+        const maxOutputBytes = settings.MaxOutputBytes;
         const warnedHosts = new Set<string>();
 
         for (const rawUrl of rawUrls) {
@@ -96,7 +109,7 @@ export class RemoteRenderDriver extends VideoRenderDriverBase {
             try {
                 parsedUrl = new URL(rawUrl);
             } catch {
-                this.clients.length = 0;
+                this.workers.length = 0;
                 this.configurationError =
                     'Remote render worker URL is invalid; expected a valid http:// or https:// URL.';
                 return;
@@ -104,7 +117,7 @@ export class RemoteRenderDriver extends VideoRenderDriverBase {
 
             const sanitizedUrl = sanitizeUrlForDiagnostics(parsedUrl);
             if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
-                this.clients.length = 0;
+                this.workers.length = 0;
                 this.configurationError = `Unsupported remote render worker URL protocol '${parsedUrl.protocol}' for '${sanitizedUrl}'; expected 'http:' or 'https:'.`;
                 return;
             }
@@ -120,14 +133,16 @@ export class RemoteRenderDriver extends VideoRenderDriverBase {
                 );
             }
 
-            this.clients.push(
-                new RenderWorkerHttpClient({
+            this.workers.push({
+                SanitizedUrl: sanitizedUrl,
+                Client: new RenderWorkerHttpClient({
                     BaseUrl: rawUrl,
                     Token: token,
                     RenderTimeoutMs: renderTimeoutMs,
                     RequestTimeoutMs: requestTimeoutMs,
+                    MaxOutputBytes: maxOutputBytes,
                 }),
-            );
+            });
         }
     }
 
@@ -178,15 +193,16 @@ export class RemoteRenderDriver extends VideoRenderDriverBase {
     }
 
     /**
-     * Queries `GET /health` on the remote worker.
+     * Queries `GET /health` on every configured remote worker in the pool without advancing the per-job rotation.
      *
-     * Never throws: if no URL is configured, the worker is unreachable, or authentication fails,
-     * returns `{ Healthy: false, NodeVersion: process.version, HyperFramesVersion: '', Errors: [reason] }`.
+     * Never throws: if no URL is configured, any worker is unreachable, or authentication fails,
+     * returns `Healthy: false` with each failing worker's sanitized URL prefixed on its error.
+     * Returns `Healthy: true` only when every configured worker is healthy.
      */
     public override async Health(signal?: AbortSignal): Promise<RenderHealth> {
         try {
             ThrowIfSignalAborted(signal);
-            if (this.clients.length === 0) {
+            if (this.workers.length === 0) {
                 return {
                     Healthy: false,
                     NodeVersion: process.version,
@@ -194,7 +210,52 @@ export class RemoteRenderDriver extends VideoRenderDriverBase {
                     Errors: [this.configurationError ?? MISSING_REMOTE_URL_ERROR],
                 };
             }
-            return await this.requireNextClient().Health(signal);
+
+            let allHealthy = true;
+            let firstHealthyResult: RenderHealth | undefined;
+            let firstResult: RenderHealth | undefined;
+            const errors: string[] = [];
+
+            for (const worker of this.workers) {
+                try {
+                    const result = await worker.Client.Health(signal);
+                    if (!firstResult) {
+                        firstResult = result;
+                    }
+                    if (result.Healthy) {
+                        if (!firstHealthyResult) {
+                            firstHealthyResult = result;
+                        }
+                    } else {
+                        allHealthy = false;
+                        const workerErrors =
+                            Array.isArray(result.Errors) && result.Errors.length > 0
+                                ? result.Errors
+                                : ['worker reported Healthy: false'];
+                        for (const errMsg of workerErrors) {
+                            errors.push(prefixWithWorkerUrl(worker.SanitizedUrl, errMsg));
+                        }
+                    }
+                } catch (error) {
+                    allHealthy = false;
+                    const reason = error instanceof Error ? error.message : String(error);
+                    errors.push(prefixWithWorkerUrl(worker.SanitizedUrl, reason));
+                }
+            }
+
+            const versionSource = firstHealthyResult ?? firstResult;
+            return {
+                Healthy: allHealthy,
+                NodeVersion: versionSource?.NodeVersion ?? process.version,
+                HyperFramesVersion: versionSource?.HyperFramesVersion ?? '',
+                ...(versionSource?.FfmpegVersion !== undefined
+                    ? { FfmpegVersion: versionSource.FfmpegVersion }
+                    : {}),
+                ...(versionSource?.ChromiumVersion !== undefined
+                    ? { ChromiumVersion: versionSource.ChromiumVersion }
+                    : {}),
+                Errors: errors,
+            };
         } catch (error) {
             const reason = error instanceof Error ? error.message : String(error);
             return {
@@ -207,14 +268,14 @@ export class RemoteRenderDriver extends VideoRenderDriverBase {
     }
 
     private requireNextClient(): RenderWorkerHttpClient {
-        if (this.clients.length === 0) {
+        if (this.workers.length === 0) {
             throw new VideoRenderError(
                 'WorkerUnavailable',
                 this.configurationError ?? MISSING_REMOTE_URL_ERROR,
             );
         }
-        const client = this.clients[this.nextClientIndex % this.clients.length]!;
-        this.nextClientIndex = (this.nextClientIndex + 1) % this.clients.length;
-        return client;
+        const entry = this.workers[this.nextClientIndex % this.workers.length]!;
+        this.nextClientIndex = (this.nextClientIndex + 1) % this.workers.length;
+        return entry.Client;
     }
 }

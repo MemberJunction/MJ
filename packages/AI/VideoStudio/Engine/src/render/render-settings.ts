@@ -15,6 +15,9 @@ export const DEFAULT_RENDER_TIMEOUT_MS = 35 * 60 * 1_000;
 /** Default non-render request timeout in milliseconds (10 minutes). */
 export const DEFAULT_RENDER_REQUEST_TIMEOUT_MS = 10 * 60 * 1_000;
 
+/** Default hard maximum MP4 output size in bytes (512 MiB = 536,870,912 bytes). */
+export const DEFAULT_RENDER_MAX_OUTPUT_BYTES = 512 * 1024 * 1024;
+
 /** Default Docker image tag for `DockerRenderDriver` (`VS-RND-4`). */
 export const DEFAULT_DOCKER_RENDER_IMAGE = 'mj-video-render-worker:local';
 
@@ -91,6 +94,8 @@ export interface VideoRenderDockerSettings {
 export interface VideoRenderSettings {
     /** Registered `VideoRenderDriverBase` key (`'LocalWorker'`, `'Remote'`, or `'Docker'`). */
     Driver: string;
+    /** Hard maximum allowed MP4 output size in bytes (default: `536_870_912` / 512 MiB). */
+    MaxOutputBytes?: number;
     /** Shared timeout thresholds in milliseconds. */
     Timeouts: VideoRenderTimeoutsSettings;
     /** Configuration specific to the `LocalWorker` driver. */
@@ -106,6 +111,7 @@ export interface VideoRenderSettings {
  */
 interface RawVideoRenderConfig {
     driver?: unknown;
+    maxOutputBytes?: unknown;
     timeouts?: unknown;
     local?: unknown;
     remote?: unknown;
@@ -257,6 +263,7 @@ function buildDefaultDockerSettings(): VideoRenderDockerSettings {
 export function ReadVideoRenderSettings(searchFrom: string = process.cwd()): VideoRenderSettings {
     const defaults: VideoRenderSettings = {
         Driver: DEFAULT_VIDEO_RENDER_DRIVER,
+        MaxOutputBytes: DEFAULT_RENDER_MAX_OUTPUT_BYTES,
         Timeouts: {
             StartupMs: DEFAULT_RENDER_STARTUP_TIMEOUT_MS,
             RenderMs: DEFAULT_RENDER_TIMEOUT_MS,
@@ -303,6 +310,11 @@ export function ReadVideoRenderSettings(searchFrom: string = process.cwd()): Vid
         renderSection.driver,
         'videoStudio.render.driver',
         DEFAULT_VIDEO_RENDER_DRIVER,
+    );
+    const maxOutputBytes = readPositiveNumber(
+        renderSection.maxOutputBytes,
+        'videoStudio.render.maxOutputBytes',
+        DEFAULT_RENDER_MAX_OUTPUT_BYTES,
     );
 
     const timeouts: VideoRenderTimeoutsSettings = { ...defaults.Timeouts };
@@ -423,6 +435,7 @@ export function ReadVideoRenderSettings(searchFrom: string = process.cwd()): Vid
 
     return {
         Driver: driver,
+        MaxOutputBytes: maxOutputBytes,
         Timeouts: timeouts,
         Local: local,
         Remote: remote,

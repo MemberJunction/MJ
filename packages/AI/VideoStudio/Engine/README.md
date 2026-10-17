@@ -17,6 +17,8 @@ module.exports = {
     render: {
       // 'LocalWorker' (default) | 'Remote' (VS-RND-3) | 'Docker' (VS-RND-4)
       driver: 'LocalWorker',
+      // Maximum rendered MP4 download size in bytes (512 MiB default)
+      maxOutputBytes: 536870912,
       timeouts: {
         startupMs: 60000,     // 60 s default
         renderMs: 2100000,    // 35 min default
@@ -31,7 +33,9 @@ module.exports = {
       remote: {
         // Single remote render worker HTTP/HTTPS URL (or env VIDEO_STUDIO_RENDER_URL)
         // url: 'https://render-worker.internal.example.com',
-        // Or a pool of worker URLs; RemoteRenderDriver pins each job round-robin to one URL for both POST /render and GET /videos/<VideoID>
+        // Or a pool of worker URLs (`urls` wins when both `url` and `urls` are set);
+        // RemoteRenderDriver pins each job round-robin to one URL for both POST /render and GET /videos/<VideoID>,
+        // and Health() probes every worker in the pool without advancing the job rotation.
         // urls: ['https://render-worker-1.internal.example.com', 'https://render-worker-2.internal.example.com'],
         // Bearer token sent in Authorization: Bearer <token> (or env VIDEO_STUDIO_RENDER_TOKEN)
         // token: process.env.VIDEO_STUDIO_RENDER_TOKEN,
@@ -56,7 +60,7 @@ module.exports = {
 | Driver (`videoStudio.render.driver`) | Description | Network Isolation (`Driver.IsNetworkIsolated`) |
 | --- | --- | --- |
 | `LocalWorker` *(default)* | Managed local child process (`LocalWorkerRenderDriver`). Spawns `@memberjunction/video-studio-render-worker` (`mj-video-render-worker`) on `127.0.0.1:0` with a sanitized environment allowlist (`BuildWorkerEnv` — never passes MJAPI database or vendor secrets) and a fresh 32-byte random bearer token per spawn. Cannot run as root (`uid === 0`): the worker refuses root unless `VIDEO_STUDIO_RENDER_ALLOW_ROOT=1` is set, and `BuildWorkerEnv` never forwards that variable. | `false` — **Development / single-node trusted compositions only.** Logs a one-time startup warning (`LOCAL_WORKER_NETWORK_WARNING`) when selected. |
-| `Remote` | Stateless HTTP/HTTPS client (`RemoteRenderDriver`) targeting one or more external render worker endpoints via `RenderWorkerHttpClient`. Configured via `videoStudio.render.remote.url` / `.urls` / `.token` (with fallback to `VIDEO_STUDIO_RENDER_URL` / `VIDEO_STUDIO_RENDER_TOKEN`; `mj.config.cjs` wins over env). Logs a one-time warning per driver instance if a plain `http://` URL targets a non-loopback host because the bundle's frozen data snapshot travels in the request body. | `false` — `RemoteRenderDriver.IsNetworkIsolated` is always `false` (`VideoRenderDriverBase.IsNetworkIsolated`). |
+| `Remote` | Stateless HTTP/HTTPS client (`RemoteRenderDriver`) targeting one or more external render worker endpoints via `RenderWorkerHttpClient`. Configured via `videoStudio.render.remote.url` / `.urls` / `.token` (`urls` takes precedence when both `url` and `urls` are set; falls back to `VIDEO_STUDIO_RENDER_URL` / `VIDEO_STUDIO_RENDER_TOKEN` when neither is set; `mj.config.cjs` wins over env). `Health()` probes every worker in the pool without advancing the per-job rotation and reports `Healthy: true` only when all workers are healthy. Logs a one-time warning per distinct worker URL per driver instance if a plain `http://` URL targets a non-loopback host because the bundle's frozen data snapshot travels in the request body. | `false` — `RemoteRenderDriver.IsNetworkIsolated` is always `false` (`VideoRenderDriverBase.IsNetworkIsolated`). |
 | `Docker` | Hardened one-container-per-job driver (`DockerRenderDriver`) provisioned via `@memberjunction/ai-agent-harness` (`DockerSandboxProvider`). Runs `node /app/dist/main.js run <op>` over a bind-mounted workspace with `--network none`, `--read-only`, `--tmpfs /tmp:rw,size=256m`, `--cap-drop ALL`, `--security-opt no-new-privileges`, `--cpus`, `--memory`, `--pids-limit`, and `--shm-size`, passing only `TMPDIR` and `HOME` in the process environment. | `true` — **Required boundary for untrusted compositions (Decision 4 / D15).** |
 
 ### Running the `Docker` Driver (`DockerRenderDriver`)
@@ -91,9 +95,9 @@ docker run --rm -p 127.0.0.1:18080:8080 \
 ```
 
 - **Bearer token is the only credential:** The worker refuses to bind to a non-loopback address without `VIDEO_STUDIO_RENDER_TOKEN` and checks `Authorization: Bearer <token>` on every route (including `GET /health`). The worker never holds database, storage, or AI vendor credentials; that bearer token is the only credential the worker ever holds.
-- **TLS termination:** Composition bundles include the frozen `data.json` snapshot. Terminate TLS at your ingress or reverse proxy and point `videoStudio.render.remote.url` / `videoStudio.render.remote.urls` (or `VIDEO_STUDIO_RENDER_URL`) at the `https://` endpoint(s). Plain `http://` to a non-loopback address is permitted for cluster-internal networks that terminate TLS at the mesh/ingress layer, and logs one warning per driver instance.
+- **TLS termination:** Composition bundles include the frozen `data.json` snapshot. Terminate TLS at your ingress or reverse proxy and point `videoStudio.render.remote.url` / `videoStudio.render.remote.urls` (or `VIDEO_STUDIO_RENDER_URL`) at the `https://` endpoint(s). Plain `http://` to a non-loopback address is permitted for cluster-internal networks that terminate TLS at the mesh/ingress layer, and logs one warning per distinct worker URL per driver instance.
 - **Ingress request body limit:** An ingress or reverse-proxy body limit applies before the worker's 256 MB cap (`VIDEO_STUDIO_RENDER_MAX_BODY_MB=256`). For example, nginx ingress defaults `client_max_body_size` to `1m`, so most composition bundles and keyframe payloads will fail with `413 BodyTooLarge` until the ingress body limit is raised to match `VIDEO_STUDIO_RENDER_MAX_BODY_MB`.
-- **Scaling & replica affinity:** Each worker runs one render job at a time by default (`VIDEO_STUDIO_RENDER_CONCURRENCY=1`) and keeps rendered MP4 bytes in memory inside that replica's ephemeral store until the immediate `GET /videos/<VideoID>` fetch completes. Both `POST /render` and `GET /videos/<VideoID>` for a job **must** reach the same worker replica (`RenderWorkerHttpClient` stores no cookies, so cookie stickiness and per-request load balancing lose the video with `NotFound`). The supported way to scale a pool is to list each worker replica URL in `videoStudio.render.remote.urls`: `RemoteRenderDriver` selects one worker URL per job (round-robin) and pins both `POST /render` and `GET /videos/<VideoID>` to that same worker with no load balancer required. If you place a load balancer in front of multiple workers under a single `videoStudio.render.remote.url`, configure client-IP affinity (e.g., Kubernetes Service `sessionAffinity: ClientIP` or nginx `ip_hash`) so all requests from an MJAPI host reach the same replica.
+- **Scaling & replica affinity:** Each worker runs one render job at a time by default (`VIDEO_STUDIO_RENDER_CONCURRENCY=1`) and keeps rendered MP4 bytes in memory inside that replica's ephemeral store until the immediate `GET /videos/<VideoID>` fetch completes. Both `POST /render` and `GET /videos/<VideoID>` for a job **must** reach the same worker replica (`RenderWorkerHttpClient` stores no cookies, so cookie stickiness and per-request load balancing lose the video with `NotFound`). The supported way to scale a pool is to list each worker replica URL in `videoStudio.render.remote.urls` (`urls` takes precedence if both `url` and `urls` are configured): `RemoteRenderDriver` selects one worker URL per job (round-robin) and pins both `POST /render` and `GET /videos/<VideoID>` to that same worker with no load balancer required, while `Health()` probes every worker in `urls` without advancing the job rotation and returns `Healthy: true` only when all workers are healthy. If you place a load balancer in front of multiple workers under a single `videoStudio.render.remote.url`, configure client-IP affinity (e.g., Kubernetes Service `sessionAffinity: ClientIP` or nginx `ip_hash`) so all requests from an MJAPI host reach the same replica.
 
 
 

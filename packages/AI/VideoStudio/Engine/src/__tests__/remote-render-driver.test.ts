@@ -1,4 +1,5 @@
 import * as fs from 'node:fs/promises';
+import * as http from 'node:http';
 import * as net from 'node:net';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -16,6 +17,7 @@ import {
     DEFAULT_DOCKER_RENDER_IMAGE,
     DEFAULT_DOCKER_SHM_SIZE_MB,
     DEFAULT_DOCKER_WORKSPACE_ROOT,
+    DEFAULT_RENDER_MAX_OUTPUT_BYTES,
     DEFAULT_RENDER_REQUEST_TIMEOUT_MS,
     DEFAULT_RENDER_STARTUP_TIMEOUT_MS,
     DEFAULT_RENDER_TIMEOUT_MS,
@@ -41,9 +43,11 @@ function makeRemoteSettings(
     url?: string,
     token?: string,
     overrides?: Partial<VideoRenderSettings['Timeouts']>,
+    maxOutputBytes: number = DEFAULT_RENDER_MAX_OUTPUT_BYTES,
 ): VideoRenderSettings {
     return {
         Driver: 'Remote',
+        MaxOutputBytes: maxOutputBytes,
         Timeouts: {
             StartupMs: overrides?.StartupMs ?? DEFAULT_RENDER_STARTUP_TIMEOUT_MS,
             RenderMs: overrides?.RenderMs ?? DEFAULT_RENDER_TIMEOUT_MS,
@@ -171,6 +175,7 @@ describe('RemoteRenderDriver validation, error handling, warnings, and env fallb
 
         const health = await driver.Health();
         expect(health.Healthy).toBe(false);
+        expect(health.Errors.join(' ')).toContain(baseUrl);
         expect(health.Errors.join(' ')).toContain('VIDEO_STUDIO_RENDER_TOKEN');
         expect(health.Errors.join(' ')).not.toContain(wrongToken);
         expect(health.Errors.join(' ')).not.toContain(serverToken);
@@ -334,7 +339,7 @@ describe('RemoteRenderDriver validation, error handling, warnings, and env fallb
         expect(configHealth.Healthy).toBe(true);
     });
 
-    it('scales across multiple worker URLs via Remote.Urls by pinning each job (POST /render + GET /videos/<id>) round-robin to one worker', async () => {
+    it('scales across multiple worker URLs via Remote.Urls without Health() advancing the job rotation', async () => {
         const backend1 = new FakeRenderBackend();
         const backend2 = new FakeRenderBackend();
         const renderOrder: string[] = [];
@@ -376,6 +381,11 @@ describe('RemoteRenderDriver validation, error handling, warnings, and env fallb
                 },
             });
 
+            // Health() probes the entire pool and must not advance nextClientIndex before Render() calls.
+            const health = await poolDriver.Health();
+            expect(health.Healthy).toBe(true);
+            expect(health.Errors).toEqual([]);
+
             // Each worker stores its rendered MP4 only in its own in-memory videoStore; if GET /videos/<id>
             // went to the other worker, Render() would reject with NotFound.
             const res1 = await poolDriver.Render(CreateMinimalRenderRequest());
@@ -390,6 +400,272 @@ describe('RemoteRenderDriver validation, error handling, warnings, and env fallb
             await worker1.Close();
             await worker2.Close();
         }
+    });
+
+    it('probes every worker in Remote.Urls during Health() and reports Healthy: false on every call when one member is closed (naming the closed URL and never leaking the token)', async () => {
+        const closedPort = await getClosedPort();
+        const closedUrl = `http://127.0.0.1:${closedPort}`;
+        const baseSettings = makeRemoteSettings(undefined, serverToken);
+        const poolDriver = new RemoteRenderDriver({
+            ...baseSettings,
+            Remote: {
+                Urls: [baseUrl, closedUrl],
+                Token: serverToken,
+            },
+        });
+
+        const health1 = await poolDriver.Health();
+        const health2 = await poolDriver.Health();
+
+        expect(health1.Healthy).toBe(false);
+        expect(health2.Healthy).toBe(false);
+        expect(health1.Errors.join(' ')).toContain(closedUrl);
+        expect(health2.Errors.join(' ')).toContain(closedUrl);
+        expect(health1.Errors.join(' ')).not.toContain(serverToken);
+        expect(health2.Errors.join(' ')).not.toContain(serverToken);
+        expect(health1.FfmpegVersion).toBeTruthy();
+    });
+});
+
+describe('RemoteRenderDriver and RenderWorkerHttpClient response size caps (fake worker)', () => {
+    const fakeToken = 'fake-worker-cap-test-token';
+
+    function buildFakeResultLine(videoId: string, videoSizeBytes?: number): string {
+        const resultPayload: Record<string, unknown> = {
+            Format: 'HyperFramesBundle',
+            VideoID: videoId,
+            MimeType: 'video/mp4',
+            Width: MINIMAL_BUNDLE_WIDTH,
+            Height: MINIMAL_BUNDLE_HEIGHT,
+            Fps: 30,
+            DurationSeconds: 1,
+            FrameCount: 30,
+            HasAudio: false,
+            RendererVersion: 'fake-1.0',
+            RenderDurationMs: 12,
+        };
+        if (videoSizeBytes !== undefined) {
+            resultPayload.VideoSizeBytes = videoSizeBytes;
+        }
+        return JSON.stringify({ Type: 'Result', Result: resultPayload }) + '\n';
+    }
+
+    async function withFakeHttpWorker(
+        handler: (req: http.IncomingMessage, res: http.ServerResponse) => void,
+        fn: (url: string) => Promise<void>,
+    ): Promise<void> {
+        const srv = http.createServer(handler);
+        await new Promise<void>((resolve, reject) => {
+            srv.once('error', reject);
+            srv.listen(0, '127.0.0.1', () => resolve());
+        });
+        const addr = srv.address();
+        const port = typeof addr === 'object' && addr ? addr.port : 0;
+        const url = `http://127.0.0.1:${port}`;
+        try {
+            await fn(url);
+        } finally {
+            await new Promise<void>((resolve) => srv.close(() => resolve()));
+        }
+    }
+
+    it('rejects Render with BodyTooLarge and aborts download when worker claims 10 bytes and sends 1 MiB', async () => {
+        let bytesWrittenByServer = 0;
+        const oneMiBChunk = Buffer.alloc(64 * 1024, 0x41);
+
+        await withFakeHttpWorker(
+            (req, res) => {
+                if (req.method === 'POST' && req.url === '/render') {
+                    req.resume();
+                    req.on('end', () => {
+                        res.writeHead(200, { 'content-type': 'application/x-ndjson' });
+                        res.end(buildFakeResultLine('vid-claim-10', 10));
+                    });
+                    return;
+                }
+                if (req.method === 'GET' && req.url === '/videos/vid-claim-10') {
+                    res.writeHead(200, { 'content-type': 'video/mp4' });
+                    // Stream up to 1 MiB in 64 KiB chunks unless client aborts early
+                    let remainingChunks = 16;
+                    const writeNext = (): void => {
+                        while (remainingChunks > 0 && !res.destroyed) {
+                            remainingChunks--;
+                            bytesWrittenByServer += oneMiBChunk.byteLength;
+                            if (!res.write(oneMiBChunk)) {
+                                res.once('drain', writeNext);
+                                return;
+                            }
+                        }
+                        if (!res.destroyed) {
+                            res.end();
+                        }
+                    };
+                    writeNext();
+                    return;
+                }
+                res.writeHead(404).end();
+            },
+            async (url) => {
+                const driver = new RemoteRenderDriver(makeRemoteSettings(url, fakeToken));
+                let caught: unknown;
+                try {
+                    await driver.Render(CreateMinimalRenderRequest());
+                } catch (err) {
+                    caught = err;
+                }
+                expect(caught).toBeInstanceOf(VideoRenderError);
+                const renderErr = caught as VideoRenderError;
+                expect(renderErr.Code).toBe('BodyTooLarge');
+                expect(renderErr.message).toContain('claimed VideoSizeBytes');
+                expect(renderErr.message).toContain('10');
+                expect(renderErr.message).not.toContain(fakeToken);
+                expect(bytesWrittenByServer).toBeGreaterThan(10);
+            },
+        );
+    });
+
+    it('rejects Render with BodyTooLarge when worker omits VideoSizeBytes and sends more than MaxOutputBytes', async () => {
+        const smallMaxOutputBytes = 2048;
+
+        await withFakeHttpWorker(
+            (req, res) => {
+                if (req.method === 'POST' && req.url === '/render') {
+                    req.resume();
+                    req.on('end', () => {
+                        // Omit VideoSizeBytes from the Result payload to exercise the MaxOutputBytes hard cap
+                        res.writeHead(200, { 'content-type': 'application/x-ndjson' });
+                        res.end(buildFakeResultLine('vid-no-claim'));
+                    });
+                    return;
+                }
+                if (req.method === 'GET' && req.url === '/videos/vid-no-claim') {
+                    res.writeHead(200, { 'content-type': 'video/mp4' });
+                    res.end(Buffer.alloc(16 * 1024, 0x42));
+                    return;
+                }
+                res.writeHead(404).end();
+            },
+            async (url) => {
+                const driver = new RemoteRenderDriver(
+                    makeRemoteSettings(url, fakeToken, undefined, smallMaxOutputBytes),
+                );
+                let caught: unknown;
+                try {
+                    await driver.Render(CreateMinimalRenderRequest());
+                } catch (err) {
+                    caught = err;
+                }
+                expect(caught).toBeInstanceOf(VideoRenderError);
+                const renderErr = caught as VideoRenderError;
+                expect(renderErr.Code).toBe('BodyTooLarge');
+                expect(renderErr.message).toContain(String(smallMaxOutputBytes));
+            },
+        );
+    });
+
+    it('rejects Render with Internal when claimed VideoSizeBytes and actual streamed size differ', async () => {
+        await withFakeHttpWorker(
+            (req, res) => {
+                if (req.method === 'POST' && req.url === '/render') {
+                    req.resume();
+                    req.on('end', () => {
+                        res.writeHead(200, { 'content-type': 'application/x-ndjson' });
+                        res.end(buildFakeResultLine('vid-mismatch', 500));
+                    });
+                    return;
+                }
+                if (req.method === 'GET' && req.url === '/videos/vid-mismatch') {
+                    res.writeHead(200, { 'content-type': 'video/mp4' });
+                    res.end(Buffer.alloc(200, 0x43));
+                    return;
+                }
+                res.writeHead(404).end();
+            },
+            async (url) => {
+                const driver = new RemoteRenderDriver(makeRemoteSettings(url, fakeToken));
+                let caught: unknown;
+                try {
+                    await driver.Render(CreateMinimalRenderRequest());
+                } catch (err) {
+                    caught = err;
+                }
+                expect(caught).toBeInstanceOf(VideoRenderError);
+                const renderErr = caught as VideoRenderError;
+                expect(renderErr.Code).toBe('Internal');
+                expect(renderErr.message).toContain('200');
+                expect(renderErr.message).toContain('500');
+            },
+        );
+    });
+
+    it('rejects Render when worker sends a 2 MiB NDJSON line and rejects Check when JSON body exceeds 1 MiB', async () => {
+        const twoMiBLine = 'x'.repeat(2 * 1024 * 1024);
+
+        await withFakeHttpWorker(
+            (req, res) => {
+                req.resume();
+                req.on('end', () => {
+                    if (req.method === 'POST' && req.url === '/render') {
+                        res.writeHead(200, { 'content-type': 'application/x-ndjson' });
+                        res.end(twoMiBLine + '\n');
+                        return;
+                    }
+                    if (req.method === 'POST' && req.url === '/check') {
+                        res.writeHead(200, { 'content-type': 'application/json' });
+                        res.end(JSON.stringify({ Passed: true, Padding: twoMiBLine }));
+                        return;
+                    }
+                    res.writeHead(404).end();
+                });
+            },
+            async (url) => {
+                const driver = new RemoteRenderDriver(makeRemoteSettings(url, fakeToken));
+
+                await expect(driver.Render(CreateMinimalRenderRequest())).rejects.toMatchObject({
+                    name: 'VideoRenderError',
+                    Code: 'BodyTooLarge',
+                });
+
+                await expect(
+                    driver.Check({
+                        Bundle: CreateMinimalBundle(),
+                        Width: MINIMAL_BUNDLE_WIDTH,
+                        Height: MINIMAL_BUNDLE_HEIGHT,
+                    }),
+                ).rejects.toMatchObject({
+                    name: 'VideoRenderError',
+                    Code: 'BodyTooLarge',
+                });
+            },
+        );
+    });
+
+    it('returns the exact MP4 bytes on a normal render within limits', async () => {
+        const expectedBytes = Buffer.from([0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70, 0x6d, 0x70, 0x34, 0x32]);
+
+        await withFakeHttpWorker(
+            (req, res) => {
+                if (req.method === 'POST' && req.url === '/render') {
+                    req.resume();
+                    req.on('end', () => {
+                        res.writeHead(200, { 'content-type': 'application/x-ndjson' });
+                        res.end(buildFakeResultLine('vid-normal', expectedBytes.byteLength));
+                    });
+                    return;
+                }
+                if (req.method === 'GET' && req.url === '/videos/vid-normal') {
+                    res.writeHead(200, { 'content-type': 'video/mp4' });
+                    res.end(expectedBytes);
+                    return;
+                }
+                res.writeHead(404).end();
+            },
+            async (url) => {
+                const driver = new RemoteRenderDriver(makeRemoteSettings(url, fakeToken));
+                const result = await driver.Render(CreateMinimalRenderRequest());
+                expect(Buffer.from(result.Video).equals(expectedBytes)).toBe(true);
+            },
+        );
     });
 });
 

@@ -10,6 +10,7 @@ import {
     DEFAULT_DOCKER_RENDER_IMAGE,
     DEFAULT_DOCKER_SHM_SIZE_MB,
     DEFAULT_DOCKER_WORKSPACE_ROOT,
+    DEFAULT_RENDER_MAX_OUTPUT_BYTES,
     DEFAULT_RENDER_REQUEST_TIMEOUT_MS,
     DEFAULT_RENDER_STARTUP_TIMEOUT_MS,
     DEFAULT_RENDER_TIMEOUT_MS,
@@ -68,6 +69,7 @@ describe('ReadVideoRenderSettings', () => {
             videoStudio: {
                 render: {
                     driver: 'LocalWorker',
+                    maxOutputBytes: 104857600,
                     timeouts: {
                         startupMs: 45000,
                         renderMs: 1200000,
@@ -85,6 +87,7 @@ describe('ReadVideoRenderSettings', () => {
         const settings = ReadVideoRenderSettings(dir);
         expect(settings).toEqual({
             Driver: 'LocalWorker',
+            MaxOutputBytes: 104_857_600,
             Timeouts: {
                 StartupMs: 45_000,
                 RenderMs: 1_200_000,
@@ -106,6 +109,7 @@ describe('ReadVideoRenderSettings', () => {
         const settings = ReadVideoRenderSettings(dir);
         expect(settings).toEqual({
             Driver: DEFAULT_VIDEO_RENDER_DRIVER,
+            MaxOutputBytes: DEFAULT_RENDER_MAX_OUTPUT_BYTES,
             Timeouts: {
                 StartupMs: DEFAULT_RENDER_STARTUP_TIMEOUT_MS,
                 RenderMs: DEFAULT_RENDER_TIMEOUT_MS,
@@ -124,6 +128,7 @@ describe('ReadVideoRenderSettings', () => {
             videoStudio: {
                 render: {
                     driver: '',
+                    maxOutputBytes: -100,
                     timeouts: {
                         startupMs: -50,
                         renderMs: 'invalid',
@@ -149,6 +154,7 @@ describe('ReadVideoRenderSettings', () => {
         const settings = ReadVideoRenderSettings(dir);
         expect(settings).toEqual({
             Driver: DEFAULT_VIDEO_RENDER_DRIVER,
+            MaxOutputBytes: DEFAULT_RENDER_MAX_OUTPUT_BYTES,
             Timeouts: {
                 StartupMs: DEFAULT_RENDER_STARTUP_TIMEOUT_MS,
                 RenderMs: DEFAULT_RENDER_TIMEOUT_MS,
