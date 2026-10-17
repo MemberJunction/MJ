@@ -38,6 +38,7 @@ import {
     DescribeStageProgress,
     DescribeStoryboardForApproval,
     EvaluateGates,
+    FindIntegrityOrGateCriterionFailure,
     GENERATED_ASSET_INTEGRITY_CRITERION_KEY,
     ReadApprovalDecision,
     RequestRegeneration,
@@ -145,6 +146,7 @@ export class VideoStudioAgent extends BaseAgent {
     private _callerPayloadMode: VideoInteractionMode | null = null;
     private _callerMode: VideoInteractionMode | null = null;
     private _startedWithBrief: boolean = false;
+    private _initialRoundCount: number = 0;
 
     protected override async validateAgent(
         agent: MJAIAgentEntityExtended,
@@ -154,7 +156,7 @@ export class VideoStudioAgent extends BaseAgent {
             return baseResult;
         }
 
-        const agentName = (agent.Name ?? 'Video Studio').trim() || 'Video Studio';
+        const agentName = (agent?.Name ?? 'Video Studio').trim() || 'Video Studio';
         const normalizedSelf = agentName.toLowerCase();
         const parentHierarchy = this.AgentHierarchy.slice(0, -1);
         const hasCycle = parentHierarchy.some(
@@ -278,6 +280,7 @@ export class VideoStudioAgent extends BaseAgent {
             Settings: this._currentSettings,
             BrandKitInScope: this._brandKitInScope,
             EffectiveInteractionMode: effectiveMode,
+            InitialRoundCount: this._initialRoundCount,
         });
         cloned.Review = {
             ...(cloned.Review ?? { Rounds: [] }),
@@ -466,6 +469,7 @@ export class VideoStudioAgent extends BaseAgent {
             Settings: this._currentSettings,
             BrandKitInScope: this._brandKitInScope,
             EffectiveInteractionMode: effectiveMode,
+            InitialRoundCount: this._initialRoundCount,
         });
         spec.Review = {
             ...(spec.Review ?? { Rounds: [] }),
@@ -499,7 +503,13 @@ export class VideoStudioAgent extends BaseAgent {
             }
         }
 
-        const refusal = CheckStagePrerequisite(stageName, spec, gates, this._currentSettings);
+        const refusal = CheckStagePrerequisite(
+            stageName,
+            spec,
+            gates,
+            this._currentSettings,
+            this._initialRoundCount,
+        );
         if (refusal) {
             return {
                 ...baseResult,
@@ -602,6 +612,7 @@ export class VideoStudioAgent extends BaseAgent {
             Settings: this._currentSettings,
             BrandKitInScope: this._brandKitInScope,
             EffectiveInteractionMode: effectiveMode,
+            InitialRoundCount: this._initialRoundCount,
         });
         spec.Review = {
             ...(spec.Review ?? { Rounds: [] }),
@@ -644,37 +655,19 @@ export class VideoStudioAgent extends BaseAgent {
 
         const nonPassing = gates.filter((g) => g.Status !== 'Passed');
         if (nonPassing.length > 0) {
-            const rounds = spec.Review?.Rounds ?? [];
-            const newestRound = rounds.length > 0 ? rounds[rounds.length - 1] : undefined;
-            const openDefects = (newestRound?.Defects ?? []).filter(
-                (d) => d && d.Status === 'Open',
-            );
-            const openIntegrityDefect = openDefects.find(
-                (d) => d.Criterion === GENERATED_ASSET_INTEGRITY_CRITERION_KEY,
-            );
-            const g5Gate = nonPassing.find((g) => g.Gate === 'G5' && g.Status === 'Failed');
-            const repairCapReached = rounds.length - 1 >= this._currentSettings.MaxRepairRounds;
-            const hasFailedScoreCriterion = (spec.Review?.Scores?.Criteria ?? []).some(
-                (c) => c && c.Passed === false,
-            );
-            if (
-                g5Gate &&
-                (repairCapReached || (openDefects.length === 0 && hasFailedScoreCriterion))
-            ) {
-                let errMsg: string;
-                if (openIntegrityDefect) {
-                    const assetKey =
-                        openIntegrityDefect.AssetKey || openIntegrityDefect.Beat || 'unknown';
-                    errMsg = `Generated asset ${assetKey} failed the integrity check: ${openIntegrityDefect.Evidence}`;
-                } else {
-                    errMsg = g5Gate.Notes ?? 'Gate G5 failed.';
-                }
+            const terminalFailure = FindIntegrityOrGateCriterionFailure(spec, {
+                Settings: this._currentSettings,
+                BrandKitInScope: this._brandKitInScope,
+                EffectiveInteractionMode: effectiveMode,
+                InitialRoundCount: this._initialRoundCount,
+            });
+            if (terminalFailure) {
                 spec.Status = DeriveStatus(spec, gates);
                 return {
                     ...baseResult,
                     step: 'Failed',
                     terminate: true,
-                    errorMessage: errMsg,
+                    errorMessage: terminalFailure,
                     previousPayload: currentPayload,
                     newPayload: spec as unknown as P,
                 };
@@ -756,6 +749,13 @@ export class VideoStudioAgent extends BaseAgent {
                 ? { HumanReviewNotes: seeded.Review.HumanReviewNotes }
                 : {}),
         };
+
+        const awaitingG4 = seeded.Review.Gates.some(
+            (g) => g?.Gate === 'G4' && g.Notes === 'AwaitingApproval',
+        );
+        this._initialRoundCount = awaitingG4
+            ? Math.max(0, seeded.Review.Rounds.length - 1)
+            : seeded.Review.Rounds.length;
 
         seeded.Assets = {
             Approved: Array.isArray(seeded.Assets?.Approved) ? [...seeded.Assets.Approved] : [],

@@ -44,7 +44,7 @@ export function BuildRubricCriteriaText(version: CachedPublishedVersion): string
         const guidance = (node.guidance ?? '').trim();
         const details = [description, guidance].filter((part) => part.length > 0).join(' ');
         const gateTag = node.isGate ? ' [GATE]' : '';
-        const scale = findScaleForNode(version.scales, node.scaleId);
+        const scale = FindScaleForNode(version.scales, node.scaleId);
         const levelText = formatCriterionLevels(node, scale);
         const levelSuffix = levelText ? ` | Levels — ${levelText}` : '';
         lines.push(
@@ -54,7 +54,7 @@ export function BuildRubricCriteriaText(version: CachedPublishedVersion): string
     return lines.join('\n');
 }
 
-export function findScaleForNode(
+export function FindScaleForNode(
     scales: readonly RubricScaleSnapshot[],
     scaleId: string | null | undefined,
 ): RubricScaleSnapshot | undefined {

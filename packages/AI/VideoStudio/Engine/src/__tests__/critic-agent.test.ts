@@ -57,6 +57,9 @@ vi.mock('@memberjunction/aiengine', () => ({
             get Prompts() {
                 return mockPrompts;
             },
+            get Models() {
+                return [];
+            },
             GetConfigurationParamsWithInheritance: mockGetConfigurationParamsWithInheritance,
         },
     },
@@ -991,6 +994,95 @@ describe('VideoStudioCriticAgent', () => {
         expect(callData.generatedAssetsTable).toContain('Abstract glass prisms catching morning light');
         expect(callData.allowSyntheticPeople).toBe(false);
         expect(callData.neverInvent).toEqual(['member testimonials', 'competitor logos']);
+
+        const { BrandKitEngine } = await import('@memberjunction/core-entities');
+        const kitIdNullPolicy = '11111111-2222-4333-8444-555555555555';
+        const kitIdAllowSynth = '66666666-7777-4888-8999-000000000000';
+        const getKitsSpy = vi
+            .spyOn(BrandKitEngine.Instance, 'GetKitsForCompany')
+            .mockImplementation(() => [
+                {
+                    ID: kitIdNullPolicy,
+                    Name: 'Null Policy Kit',
+                    GenerationPolicy: null,
+                    GenerationPolicyObject: null,
+                    NeverInvent: null,
+                    NeverInventObject: null,
+                } as unknown as ReturnType<typeof BrandKitEngine.Instance.GetKitsForCompany>[number],
+                {
+                    ID: kitIdAllowSynth,
+                    Name: 'Synthetic Allowed Kit',
+                    GenerationPolicyObject: {
+                        AllowGeneratedImages: true,
+                        AllowGeneratedVideo: true,
+                        AllowSyntheticPeople: true,
+                        AvoidSubjects: [],
+                    },
+                    NeverInvent: null,
+                    NeverInventObject: ['competitor trademarks'],
+                } as unknown as ReturnType<typeof BrandKitEngine.Instance.GetKitsForCompany>[number],
+            ]);
+        const getRefAssetsSpy = vi
+            .spyOn(BrandKitEngine.Instance, 'GetGenerationReferenceAssets')
+            .mockReturnValue([]);
+
+        try {
+            // Case 2: Brand kit with a NULL GenerationPolicy -> allowSyntheticPeople: false
+            const specNullPolicy: Partial<VideoGenerationSpec> = {
+                ...spec,
+                BrandKitID: kitIdNullPolicy,
+            };
+            agent.EnqueuePromptOutcome({
+                success: true,
+                result: {
+                    Summary: 'Clean with null policy kit',
+                    Defects: [],
+                    Scores: {
+                        Criteria: [
+                            { Criterion: 'text-legibility', Level: 'Meets' },
+                            { Criterion: 'generated-assets-are-honest-and-disclosed', Level: 'Meets' },
+                        ],
+                    },
+                },
+            });
+            await agent.RunForTest({
+                agent: { ID: 'critic-id', ParentID: 'root-id' },
+                payload: specNullPolicy,
+            } as unknown as ExecuteAgentParams<Partial<VideoGenerationSpec>>);
+            expect(agent.ExecutedPromptCalls[1].data.allowSyntheticPeople).toBe(false);
+
+            // Case 3: Brand kit with AllowSyntheticPeople: true -> allowSyntheticPeople: true
+            const specAllowSynth: Partial<VideoGenerationSpec> = {
+                ...spec,
+                BrandKitID: kitIdAllowSynth,
+            };
+            agent.EnqueuePromptOutcome({
+                success: true,
+                result: {
+                    Summary: 'Clean with synthetic allowed kit',
+                    Defects: [],
+                    Scores: {
+                        Criteria: [
+                            { Criterion: 'text-legibility', Level: 'Meets' },
+                            { Criterion: 'generated-assets-are-honest-and-disclosed', Level: 'Meets' },
+                        ],
+                    },
+                },
+            });
+            await agent.RunForTest({
+                agent: { ID: 'critic-id', ParentID: 'root-id' },
+                payload: specAllowSynth,
+            } as unknown as ExecuteAgentParams<Partial<VideoGenerationSpec>>);
+            expect(agent.ExecutedPromptCalls[2].data.allowSyntheticPeople).toBe(true);
+            expect(agent.ExecutedPromptCalls[2].data.neverInvent).toEqual([
+                'member testimonials',
+                'competitor logos',
+                'competitor trademarks',
+            ]);
+        } finally {
+            getKitsSpy.mockRestore();
+            getRefAssetsSpy.mockRestore();
+        }
     });
 
     it('throws when a scored rubric criterion has no matching scale', async () => {

@@ -1,5 +1,5 @@
 import { ChangeDetectorRef, Component, Input, OnInit, inject } from '@angular/core';
-import { RunView } from '@memberjunction/core';
+import { LogError, RunView } from '@memberjunction/core';
 import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import {
@@ -468,7 +468,8 @@ export class VideoProductionReviewTabComponent extends BaseAngularComponent impl
       } else {
         this._modelRows = [];
       }
-    } catch {
+    } catch (err) {
+      LogError(err);
       if (token !== this._resolveToken) {
         return;
       }

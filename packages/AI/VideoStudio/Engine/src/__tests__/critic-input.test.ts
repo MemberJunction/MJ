@@ -15,6 +15,7 @@ import {
     PickSheetsForCall,
 } from '../review/critic-input.js';
 import { ComposeHumanReviewNotes } from '../review/human-review-notes.js';
+import { GENERATED_ASSET_INTEGRITY_CRITERION_KEY } from '../gates.js';
 
 const MEETS_SCALE_ID = 'C882E907-2C02-49B1-919F-8AFCCCD4709F';
 const LEVEL_MISS_ID = 'B555FE53-2E9B-4FB6-A092-0AE8E9557367';
@@ -612,7 +613,7 @@ describe('critic-input pure builders', () => {
         const versions = raw.relatedEntities?.['MJ: Rubric Versions'] ?? [];
         const criteria = versions[0]?.relatedEntities?.['MJ: Rubric Criteria'] ?? [];
         const integrityCriterion = criteria.find(
-            (c) => c.fields?.Key === 'generated-assets-are-honest-and-disclosed',
+            (c) => c.fields?.Key === GENERATED_ASSET_INTEGRITY_CRITERION_KEY,
         )?.fields;
         expect(integrityCriterion).toBeDefined();
         expect(integrityCriterion?.IsGate).toBe(true);

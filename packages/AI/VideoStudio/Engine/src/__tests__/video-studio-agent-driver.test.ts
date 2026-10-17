@@ -142,6 +142,7 @@ vi.mock('@memberjunction/aiengine', () => ({
     AIEngine: {
         get Instance() {
             return {
+                Models: [],
                 GetConfigurationParamsWithInheritance: mockGetConfigurationParamsWithInheritance,
             };
         },
@@ -1179,6 +1180,11 @@ describe('VideoStudioAgent driver lifecycle', () => {
         const agent = createAgent();
         const spec = CreateDeliveredSpecFixture();
         delete spec.Review.HumanReviewNotes;
+        spec.Review.Rounds = [];
+
+        const params = { payload: spec } as unknown as ExecuteAgentParams<Partial<VideoGenerationSpec>>;
+        await agent.executeAgentInternal(params, dummyConfig);
+
         spec.Review.Rounds = [
             {
                 Round: 1,
@@ -1226,9 +1232,6 @@ describe('VideoStudioAgent driver lifecycle', () => {
                 ],
             },
         ];
-
-        const params = { payload: spec } as unknown as ExecuteAgentParams<Partial<VideoGenerationSpec>>;
-        await agent.executeAgentInternal(params, dummyConfig);
 
         const motionStep: BaseAgentNextStep<Partial<VideoGenerationSpec>> = {
             step: 'Sub-Agent',

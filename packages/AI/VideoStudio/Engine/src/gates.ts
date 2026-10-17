@@ -32,6 +32,7 @@ export interface GateEvaluationContext {
     Now?: string;
     BrandKitInScope?: boolean;
     EffectiveInteractionMode?: VideoGenerationSpec['Interaction']['Mode'];
+    InitialRoundCount?: number;
 }
 
 /**
@@ -436,30 +437,30 @@ function evaluateGateG4(
 export const GENERATED_ASSET_INTEGRITY_CRITERION_KEY =
     'generated-assets-are-honest-and-disclosed' as const;
 
-const DEFAULT_GATE_CRITERION_KEYS = new Set<string>([
-    GENERATED_ASSET_INTEGRITY_CRITERION_KEY,
-    'shown-values-match-the-data-snapshot',
-]);
+function getCurrentRunRoundCount(
+    spec: Partial<VideoGenerationSpec>,
+    initialRoundCount = 0,
+): number {
+    const rounds = Array.isArray(spec.Review?.Rounds) ? spec.Review.Rounds : [];
+    const offset = Math.max(0, Math.min(initialRoundCount, rounds.length));
+    return rounds.length - offset;
+}
 
 function findFailedGateCriteria(spec: Partial<VideoGenerationSpec>): RubricCriterionScore[] {
     const criteria = spec.Review?.Scores?.Criteria;
     if (!Array.isArray(criteria) || criteria.length === 0) {
         return [];
     }
-    const gateKeys = new Set<string>(DEFAULT_GATE_CRITERION_KEYS);
+    const gateKeys = new Set<string>([GENERATED_ASSET_INTEGRITY_CRITERION_KEY]);
     const rubricId = spec.Review?.Scores?.RubricID;
     if (rubricId) {
-        try {
-            const published = RubricEngineBase.Instance?.GetLatestPublishedVersion?.(rubricId);
-            if (published && Array.isArray(published.nodes)) {
-                for (const node of published.nodes) {
-                    if (node?.nodeType === 'Criterion' && node.isGate && node.key) {
-                        gateKeys.add(node.key.trim().toLowerCase());
-                    }
+        const published = RubricEngineBase.Instance.GetLatestPublishedVersion(rubricId);
+        if (published && Array.isArray(published.nodes)) {
+            for (const node of published.nodes) {
+                if (node?.nodeType === 'Criterion' && node.isGate && node.key) {
+                    gateKeys.add(node.key.trim().toLowerCase());
                 }
             }
-        } catch {
-            // Ignore if RubricEngineBase is not initialized
         }
     }
     return criteria.filter(
@@ -471,19 +472,22 @@ function findFailedGateCriteria(spec: Partial<VideoGenerationSpec>): RubricCrite
     );
 }
 
-function evaluateGateG5(
+/**
+ * Checks whether a post-render Critic round produced a terminal G5 failure — either an open
+ * `generated-assets-are-honest-and-disclosed` defect at the repair cap, or a rubric gate
+ * criterion (`IsGate = true` / `generated-assets-are-honest-and-disclosed`) scored below its
+ * gate minimum when no repairable blocking defects remain or the repair budget is reached.
+ *
+ * Returns `null` when there is no Critic round on or after `Output.RenderMetadata.RenderedAt`
+ * (so a stale pre-render Critic round never triggers a terminal failure), or when G5 is
+ * passing / still has repair rounds available.
+ */
+export function FindIntegrityOrGateCriterionFailure(
     spec: Partial<VideoGenerationSpec>,
     ctx: GateEvaluationContext,
-    now: string,
-): GateRecord {
+): string | null {
     if (!hasCriticRoundOnOrAfterRender(spec)) {
-        return {
-            Gate: 'G5',
-            Status: 'Failed',
-            EvidenceRefs: [],
-            Timestamp: now,
-            Notes: 'No Review.Rounds entry with Timestamp >= Output.RenderMetadata.RenderedAt.',
-        };
+        return null;
     }
 
     const rounds = spec.Review?.Rounds ?? [];
@@ -503,18 +507,14 @@ function evaluateGateG5(
                 d.Criterion === GENERATED_ASSET_INTEGRITY_CRITERION_KEY),
     );
     const failedGateCriteria = findFailedGateCriteria(spec);
-    const repairBudgetReached = rounds.length - 1 >= ctx.Settings.MaxRepairRounds;
+    const currentRunRounds = getCurrentRunRoundCount(spec, ctx.InitialRoundCount);
+    const repairBudgetReached =
+        currentRunRounds > 0 && currentRunRounds - 1 >= ctx.Settings.MaxRepairRounds;
 
     if (openIntegrityDefects.length > 0 && repairBudgetReached) {
         const firstIntegrity = openIntegrityDefects[0];
         const key = firstIntegrity?.AssetKey || firstIntegrity?.Beat || 'unknown';
-        return {
-            Gate: 'G5',
-            Status: 'Failed',
-            EvidenceRefs: [],
-            Timestamp: now,
-            Notes: `Generated asset ${key} failed the integrity check: ${firstIntegrity?.Evidence ?? ''}`,
-        };
+        return `Generated asset ${key} failed the integrity check: ${firstIntegrity?.Evidence ?? ''}`;
     }
 
     if ((openBlockingDefects.length === 0 || repairBudgetReached) && failedGateCriteria.length > 0) {
@@ -522,27 +522,60 @@ function evaluateGateG5(
             (c) => c.Criterion.trim().toLowerCase() === GENERATED_ASSET_INTEGRITY_CRITERION_KEY,
         );
         if (failedIntegrity) {
-            const generatedAsset = (spec.Assets?.Approved ?? []).find(
-                (a) => a?.Provenance === 'Generated',
-            );
-            const key = generatedAsset?.Key || 'unknown';
-            return {
-                Gate: 'G5',
-                Status: 'Failed',
-                EvidenceRefs: [],
-                Timestamp: now,
-                Notes: `Generated asset ${key} failed the integrity check: ${failedIntegrity.Notes || 'criterion scored below gate threshold'}`,
-            };
+            return `Generated-asset integrity criterion failed: ${failedIntegrity.Notes || 'criterion scored below gate threshold'}`;
         }
         const firstFailedGate = failedGateCriteria[0];
+        return `Gate criterion "${firstFailedGate.Criterion}" failed (${firstFailedGate.Notes || `score ${firstFailedGate.Score}/${firstFailedGate.MaxScore}`}).`;
+    }
+
+    return null;
+}
+
+function evaluateGateG5(
+    spec: Partial<VideoGenerationSpec>,
+    ctx: GateEvaluationContext,
+    now: string,
+): GateRecord {
+    if (!hasCriticRoundOnOrAfterRender(spec)) {
         return {
             Gate: 'G5',
             Status: 'Failed',
             EvidenceRefs: [],
             Timestamp: now,
-            Notes: `Gate criterion "${firstFailedGate.Criterion}" failed (${firstFailedGate.Notes || `score ${firstFailedGate.Score}/${firstFailedGate.MaxScore}`}).`,
+            Notes: 'No Review.Rounds entry with Timestamp >= Output.RenderMetadata.RenderedAt.',
         };
     }
+
+    const terminalFailure = FindIntegrityOrGateCriterionFailure(spec, ctx);
+    if (terminalFailure) {
+        return {
+            Gate: 'G5',
+            Status: 'Failed',
+            EvidenceRefs: [],
+            Timestamp: now,
+            Notes: terminalFailure,
+        };
+    }
+
+    const rounds = spec.Review?.Rounds ?? [];
+    const newestRound = rounds[rounds.length - 1];
+    const openIntegrityDefects = (newestRound?.Defects ?? []).filter(
+        (d) =>
+            d &&
+            d.Status === 'Open' &&
+            d.Criterion === GENERATED_ASSET_INTEGRITY_CRITERION_KEY,
+    );
+    const openBlockingDefects = (newestRound?.Defects ?? []).filter(
+        (d) =>
+            d &&
+            d.Status === 'Open' &&
+            (d.Severity === 'Blocker' ||
+                d.Severity === 'Major' ||
+                d.Criterion === GENERATED_ASSET_INTEGRITY_CRITERION_KEY),
+    );
+    const currentRunRounds = getCurrentRunRoundCount(spec, ctx.InitialRoundCount);
+    const repairBudgetReached =
+        currentRunRounds > 0 && currentRunRounds - 1 >= ctx.Settings.MaxRepairRounds;
 
     if (openBlockingDefects.length === 0 || (repairBudgetReached && openIntegrityDefects.length === 0)) {
         return {
@@ -552,7 +585,7 @@ function evaluateGateG5(
             Timestamp: now,
             ...(openBlockingDefects.length > 0
                 ? {
-                      Notes: `Repair budget reached (${rounds.length - 1}/${ctx.Settings.MaxRepairRounds}); ${openBlockingDefects.length} open Major/Blocker defect(s) deferred to HumanReviewNotes.`,
+                      Notes: `Repair budget reached (${currentRunRounds - 1}/${ctx.Settings.MaxRepairRounds}); ${openBlockingDefects.length} open Major/Blocker defect(s) deferred to HumanReviewNotes.`,
                   }
                 : {}),
         };
@@ -775,6 +808,7 @@ export function CheckStagePrerequisite(
     spec: Partial<VideoGenerationSpec>,
     gates: ReadonlyArray<GateRecord>,
     settings: VideoStudioSettings,
+    initialRoundCount = 0,
 ): string | null {
     const safeSpec = spec ?? {};
     const stage = normalizeStageName(stageName);
@@ -820,7 +854,8 @@ export function CheckStagePrerequisite(
         }
 
         const rounds = Array.isArray(safeSpec.Review?.Rounds) ? safeSpec.Review.Rounds : [];
-        if (rounds.length > 0 && rounds.length - 1 >= settings.MaxRepairRounds) {
+        const currentRunRounds = getCurrentRunRoundCount(safeSpec, initialRoundCount);
+        if (currentRunRounds > 0 && currentRunRounds - 1 >= settings.MaxRepairRounds) {
             return `G5 (Repair): maximum repair rounds (${settings.MaxRepairRounds}) reached after Critic round ${rounds.length}; deliver with HumanReviewNotes instead of repairing again`;
         }
 

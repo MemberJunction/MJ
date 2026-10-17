@@ -36,8 +36,8 @@ import {
     BuildGeneratedAssetsTable,
     BuildRubricCriteriaText,
     BuildTimelineTable,
+    FindScaleForNode,
     PickSheetsForCall,
-    findScaleForNode,
 } from '../review/critic-input.js';
 import { ResolveVideoStudioSettings } from '../settings.js';
 import { ReadStoredFile } from '../storage.js';
@@ -147,6 +147,7 @@ export class VideoStudioCriticAgent extends VideoStudioAgentBase {
                 .filter((key): key is string => typeof key === 'string' && key.trim().length > 0),
         );
 
+        const leafNodes = rubricVersion.nodes.filter((n) => n.nodeType === 'Criterion');
         const roundContactSheets: Partial<Record<VideoFormat, string[]>> = {};
         const roundDefects: VideoDefect[] = [];
         const formatSummaries: string[] = [];
@@ -219,6 +220,7 @@ export class VideoStudioCriticAgent extends VideoStudioAgentBase {
                 roundNumber,
                 format,
                 approvedAssetKeys,
+                leafNodes,
             );
             roundDefects.push(...formatDefects);
 
@@ -337,6 +339,7 @@ export class VideoStudioCriticAgent extends VideoStudioAgentBase {
         roundNumber: number,
         format: VideoFormat,
         approvedAssetKeys: Set<string>,
+        leafNodes: readonly RubricNodeSnapshot[],
     ): VideoDefect[] {
         if (!Array.isArray(rawDefects) || rawDefects.length === 0) {
             return [];
@@ -358,14 +361,17 @@ export class VideoStudioCriticAgent extends VideoStudioAgentBase {
 
         const topDefects = indexed.slice(0, MAX_DEFECTS_PER_FORMAT);
         return topDefects.map(({ defect }, idx) => {
+            const rawCriterion =
+                typeof defect.Criterion === 'string' ? defect.Criterion.trim() : '';
+            const normalizedCriterion = rawCriterion
+                ? (this.findCriterionNode(leafNodes, rawCriterion)?.key ?? rawCriterion)
+                : '';
             const normalized: VideoDefect = {
                 Key: `r${roundNumber}-${format}-${idx + 1}`,
                 Format: format,
                 Timestamp: typeof defect.Timestamp === 'number' ? defect.Timestamp : 0,
                 Beat: typeof defect.Beat === 'string' && defect.Beat.trim() ? defect.Beat.trim() : 'unknown',
-                ...(typeof defect.Criterion === 'string' && defect.Criterion.trim()
-                    ? { Criterion: defect.Criterion.trim() }
-                    : {}),
+                ...(normalizedCriterion ? { Criterion: normalizedCriterion } : {}),
                 Severity: this.normalizeSeverity(defect.Severity),
                 Evidence: typeof defect.Evidence === 'string' ? defect.Evidence : '',
                 Fix: typeof defect.Fix === 'string' ? defect.Fix : '',
@@ -451,7 +457,7 @@ export class VideoStudioCriticAgent extends VideoStudioAgentBase {
             if (entries.length === 0) {
                 continue;
             }
-            const scale = findScaleForNode(rubricVersion.scales, node.scaleId);
+            const scale = FindScaleForNode(rubricVersion.scales, node.scaleId);
             if (!scale) {
                 throw new Error(
                     `Rubric criterion "${node.key}" has no matching scale ("${String(node.scaleId)}")`,

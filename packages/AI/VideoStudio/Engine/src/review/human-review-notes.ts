@@ -81,16 +81,12 @@ function resolveModelName(modelId: string): string {
     if (!modelId) {
         return 'unknown';
     }
-    try {
-        const models = AIEngine.Instance?.Models;
-        if (Array.isArray(models)) {
-            const match = models.find((m) => UUIDsEqual(m.ID, modelId));
-            if (match?.Name?.trim()) {
-                return match.Name.trim();
-            }
+    const models = AIEngine.Instance.Models;
+    if (Array.isArray(models)) {
+        const match = models.find((m) => UUIDsEqual(m.ID, modelId));
+        if (match?.Name?.trim()) {
+            return match.Name.trim();
         }
-    } catch {
-        // AIEngine not initialized; fall back to ModelID
     }
     return modelId;
 }
