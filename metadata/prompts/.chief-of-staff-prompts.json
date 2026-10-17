@@ -55,7 +55,7 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=GPT 5.5",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT-6.1 Sol",
             "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
             "Priority": 1
           },
@@ -66,7 +66,7 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.1 Pro",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 4 Argon",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
             "ConfigurationID": "@lookup:MJ: AI Configurations.Name=High Power",
             "Priority": 4
@@ -78,8 +78,8 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Flash",
-            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 4 Argon",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
             "ConfigurationID": "@lookup:MJ: AI Configurations.Name=High Power",
             "Priority": 3
           },
@@ -90,7 +90,7 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Claude Opus 4.7",
+            "ModelID": "@lookup:MJ: AI Models.Name=Claude Opus 5.5",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
             "ConfigurationID": "@lookup:MJ: AI Configurations.Name=High Power",
             "Priority": 2
@@ -102,7 +102,7 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=GPT 5.5",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT-6 Astra",
             "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
             "ConfigurationID": "@lookup:MJ: AI Configurations.Name=High Power",
             "Priority": 1
