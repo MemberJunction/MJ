@@ -18607,7 +18607,7 @@ The context is now within limits. Please retry your request with the recovered c
      * 
      * @private
      */
-    private async finalizeAgentRun<P>(finalStep: BaseAgentNextStep, payload?: P, contextUser?: UserInfo): Promise<ExecuteAgentResult<P>> {
+    protected async finalizeAgentRun<P>(finalStep: BaseAgentNextStep, payload?: P, contextUser?: UserInfo): Promise<ExecuteAgentResult<P>> {
         // Flush every pending step save AND prompt-run save (success OR failure) via their shared queues,
         // which allSettle so a single failure doesn't shadow the rest and drain themselves so a reused
         // instance doesn't leak settled promises. Surface the step failure count on the run for visibility.
