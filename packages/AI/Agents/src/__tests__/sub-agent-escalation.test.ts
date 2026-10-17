@@ -50,8 +50,8 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
             static FromMetadataProvider(p?: unknown): MockRunView {
                 return new MockRunView(p);
             }
-            public RunView(params: { EntityName: string; ExtraFilter?: string; OrderBy?: string }) {
-                return this.p.RunView(params);
+            public RunView(params: { EntityName: string; ExtraFilter?: string; OrderBy?: string }, contextUser?: unknown) {
+                return (this.p.RunView as (p: unknown, u?: unknown) => unknown)(params, contextUser);
             }
             public RunViews(params: Array<{ EntityName: string; ExtraFilter?: string; OrderBy?: string }>) {
                 return this.p.RunViews(params);
@@ -1395,7 +1395,7 @@ describe('VS-CON-8: LoadOpenSubAgentConsults and CanAgentOwnSubAgentConsults', (
         expect(result[0].childRunId).toBe(validChildRunId);
     });
 
-    it('4. returns [] when RunView returns Success: false or an empty Results array', async () => {
+    it('3. returns [] when RunView returns Success: false (even with a valid consult row) or an empty Results array', async () => {
         const parentRunId = 'aaaaaaaa-2222-4000-8000-000000000104';
 
         // Empty Results
@@ -1406,12 +1406,60 @@ describe('VS-CON-8: LoadOpenSubAgentConsults and CanAgentOwnSubAgentConsults', (
         );
         expect(emptyResult).toEqual([]);
 
-        // Success: false
+        // Success: false with a valid OutputData.consult row
         const failingProvider = {
-            RunView: async () => ({ Success: false, Results: [{ OutputData: '{}' }] }),
+            RunView: async () => ({
+                Success: false,
+                Results: [
+                    {
+                        StepNumber: 1,
+                        InputData: null,
+                        OutputData: JSON.stringify({
+                            consult: {
+                                childRunId: 'bbbbbbbb-2222-4000-8000-000000000777',
+                                subAgentId: CHILD_SUB_AGENT_ID,
+                                subAgentName: 'ScriptwriterSubAgent',
+                                round: 1,
+                                question: 'Should not be returned when Success is false',
+                            },
+                        }),
+                    },
+                ],
+            }),
         } as unknown as IMetadataProvider;
         const failedResult = await LoadOpenSubAgentConsults(failingProvider, parentRunId, contextUser);
         expect(failedResult).toEqual([]);
+    });
+
+    it('4. queries MJ: AI Agent Run Steps with exact ExtraFilter, OrderBy, Fields, ResultType, and BypassCache, and rejects invalid runId without calling RunView', async () => {
+        const parentRunId = 'aaaaaaaa-2222-4000-8000-000000000105';
+        const capturedCalls: Array<{ params: unknown; user: unknown }> = [];
+        const capturingProvider = {
+            RunView: async (params: unknown, user: unknown) => {
+                capturedCalls.push({ params, user });
+                return { Success: true, Results: [] };
+            },
+        } as unknown as IMetadataProvider;
+
+        const invalidResult = await LoadOpenSubAgentConsults(
+            capturingProvider,
+            "x' OR 1=1 --",
+            contextUser
+        );
+        expect(invalidResult).toEqual([]);
+        expect(capturedCalls).toHaveLength(0);
+
+        await LoadOpenSubAgentConsults(capturingProvider, parentRunId, contextUser);
+        expect(capturedCalls).toHaveLength(1);
+        expect(capturedCalls[0].params).toEqual({
+            EntityName: 'MJ: AI Agent Run Steps',
+            ExtraFilter: `AgentRunID='${parentRunId}' AND StepType='Sub-Agent'`,
+            OrderBy: 'StepNumber ASC',
+            Fields: ['StepNumber', 'InputData', 'OutputData'],
+            ResultType: 'simple',
+            BypassCache: true,
+        });
+        expect(capturedCalls[0].user).toBe(contextUser);
     });
 
     it('CanAgentOwnSubAgentConsults supports both agent objects and agent ID strings via AIEngine.Instance.Agents and AgentRelationships', () => {
