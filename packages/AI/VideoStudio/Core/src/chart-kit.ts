@@ -9,6 +9,7 @@
 import type {
     AreaChartProps,
     BarChartProps,
+    ChartKitColumn,
     ChartKitFrame,
     ChartKitPoint,
     ChartKitTokens,
@@ -40,7 +41,7 @@ export const DEFAULT_CHART_KIT_TOKENS: Readonly<ChartKitTokens> = Object.freeze(
     MutedText: '#475569',
     Background: '#F8FAFC',
     Grid: '#CBD5E1',
-    Series: ['#005AB5', '#C2410C', '#0F766E', '#7E22CE', '#A16207', '#BE185D'],
+    Series: ['#005AB5', '#C2410C', '#0F766E', '#7E22CE', '#9F1239', '#0891B2'],
     Positive: '#15803D',
     Negative: '#B91C1C',
 });
@@ -59,7 +60,7 @@ export function CreateMJChartKit(): MJChartKit {
         MutedText: '#475569',
         Background: '#F8FAFC',
         Grid: '#CBD5E1',
-        Series: ['#005AB5', '#C2410C', '#0F766E', '#7E22CE', '#A16207', '#BE185D'],
+        Series: ['#005AB5', '#C2410C', '#0F766E', '#7E22CE', '#9F1239', '#0891B2'],
         Positive: '#15803D',
         Negative: '#B91C1C',
     };
@@ -265,6 +266,30 @@ export function CreateMJChartKit(): MJChartKit {
         return `${sign}${prefix}${body}`;
     }
 
+    function formatTableCell(
+        column: ChartKitColumn | undefined,
+        value: number | string,
+        fallbackFormat?: VideoDataFormat,
+    ): string {
+        const colFormat = column && column.Format ? column.Format : fallbackFormat;
+        if (typeof value === 'number') {
+            return formatValue(value, colFormat);
+        }
+        return formatValue(String(value), colFormat);
+    }
+
+    function interpolatedValue(
+        finalVal: number,
+        progress: number,
+        eased: number,
+        format?: VideoDataFormat,
+    ): number {
+        if (progress >= 1 || (format && format.Kind === 'Date')) {
+            return finalVal;
+        }
+        return finalVal * eased;
+    }
+
     function formatDeltaValue(delta: number, format?: VideoDataFormat): string {
         if (typeof delta !== 'number' || !Number.isFinite(delta)) {
             return 'n/a';
@@ -303,7 +328,7 @@ export function CreateMJChartKit(): MJChartKit {
             `${escapeXml(props.Label)}</text>`;
 
         if (p > 0) {
-            const currentVal = p >= 1 ? props.Value : props.Value * eased;
+            const currentVal = interpolatedValue(props.Value, p, eased, props.Format);
             const formatted = formatValue(currentVal, props.Format);
             svg +=
                 `<text x="${r2(pad + 20)}" y="${r2(f.Height * 0.68)}" ` +
@@ -362,7 +387,7 @@ export function CreateMJChartKit(): MJChartKit {
         }
 
         if (p > 0) {
-            const currentDelta = p >= 1 ? props.Delta : props.Delta * eased;
+            const currentDelta = interpolatedValue(props.Delta, p, eased, props.Format);
             const formatted = formatDeltaValue(currentDelta, props.Format);
             svg +=
                 `<text x="${r2(arrowCx + pillH * 0.35)}" y="${r2(arrowCy + fontSize * 0.35)}" ` +
@@ -386,16 +411,21 @@ export function CreateMJChartKit(): MJChartKit {
         const plotH = Math.max(10, f.Height - padTop - padBottom);
         const baseY = r2(padTop + plotH);
 
-        let maxAbs = 0;
+        let minV = 0;
+        let maxV = 0;
         for (let i = 0; i < points.length; i++) {
-            const v = Math.abs(points[i]?.Value ?? 0);
-            if (Number.isFinite(v) && v > maxAbs) {
-                maxAbs = v;
+            const v = points[i]?.Value ?? 0;
+            if (Number.isFinite(v)) {
+                if (v < minV) {
+                    minV = v;
+                }
+                if (v > maxV) {
+                    maxV = v;
+                }
             }
         }
-        if (maxAbs <= 0) {
-            maxAbs = 1;
-        }
+        const span = maxV - minV > 0 ? maxV - minV : 1;
+        const zeroY = maxV - minV > 0 ? r2(padTop + (plotH * maxV) / span) : baseY;
 
         let svg = openSvg(f.Width, f.Height, f.Tokens, 'Bar');
         const gridSteps = 3;
@@ -416,10 +446,12 @@ export function CreateMJChartKit(): MJChartKit {
                 const pt = points[i]!;
                 const pi = staggeredProgress(timeSeconds, f.Start, f.Duration, i, count);
                 const easedI = easeOutCubic(pi);
-                const ratio = Math.min(1, Math.max(0, Math.abs(pt.Value) / maxAbs));
+                const rawVal = Number.isFinite(pt.Value) ? pt.Value : 0;
+                const ratio = Math.min(1, Math.max(0, Math.abs(rawVal) / span));
                 const barH = r2(plotH * ratio * easedI);
                 const barX = r2(padLeft + i * slotW + (slotW - barW) / 2);
-                const barY = r2(baseY - barH);
+                const isNegative = rawVal < 0;
+                const barY = isNegative ? zeroY : r2(zeroY - barH);
                 const centerX = r2(barX + barW / 2);
                 const color = seriesColor(f.Tokens, i);
 
@@ -431,10 +463,13 @@ export function CreateMJChartKit(): MJChartKit {
                     `fill="${escapeXml(f.Tokens.MutedText)}" font-size="${labelFont}">${escapeXml(pt.Label)}</text>`;
 
                 if (pi > 0) {
-                    const currentVal = pi >= 1 ? pt.Value : pt.Value * easedI;
+                    const currentVal = interpolatedValue(pt.Value, pi, easedI, props.Format);
                     const formatted = formatValue(currentVal, props.Format);
+                    const valY = isNegative
+                        ? r2(Math.min(baseY - 4, barY + barH + labelFont))
+                        : r2(Math.max(padTop * 0.75, barY - 8));
                     svg +=
-                        `<text x="${centerX}" y="${r2(Math.max(padTop * 0.75, barY - 8))}" text-anchor="middle" ` +
+                        `<text x="${centerX}" y="${valY}" text-anchor="middle" ` +
                         `fill="${escapeXml(f.Tokens.Text)}" font-size="${labelFont}" font-weight="600" ` +
                         `opacity="${r2(easedI)}" data-mj-bound="${bound}">${escapeXml(formatted)}</text>`;
                 }
@@ -528,7 +563,7 @@ export function CreateMJChartKit(): MJChartKit {
                 for (let i = 0; i < coords.length; i++) {
                     const c = coords[i]!;
                     const isLast = i === coords.length - 1;
-                    const currentVal = p >= 1 ? c.Pt.Value : c.Pt.Value * eased;
+                    const currentVal = interpolatedValue(c.Pt.Value, p, eased, props.Format);
                     const formatted = formatValue(currentVal, props.Format);
                     svg +=
                         `<circle cx="${c.X}" cy="${c.Y}" r="${isLast ? 6 : 4}" ` +
@@ -581,7 +616,8 @@ export function CreateMJChartKit(): MJChartKit {
             const pt = points[i]!;
             const pi = staggeredProgress(timeSeconds, f.Start, f.Duration, i, count);
             const easedI = easeOutCubic(pi);
-            const sliceFraction = Math.max(0, Math.abs(pt.Value)) / total;
+            const v = Number.isFinite(pt.Value) ? Math.abs(pt.Value) : 0;
+            const sliceFraction = Math.max(0, v) / total;
             const fullSweep = sliceFraction * Math.PI * 2;
             const currentSweep = Math.min(fullSweep * easedI, Math.PI * 1.999);
             const midAngle = startAngle + fullSweep / 2;
@@ -609,7 +645,7 @@ export function CreateMJChartKit(): MJChartKit {
             }
 
             if (pi > 0) {
-                const currentVal = pi >= 1 ? pt.Value : pt.Value * easedI;
+                const currentVal = interpolatedValue(pt.Value, pi, easedI, props.Format);
                 const formatted = formatValue(currentVal, props.Format);
                 svg +=
                     `<text x="${lx}" y="${r2(ly + labelFont * 1.15)}" text-anchor="${anchor}" ` +
@@ -627,11 +663,25 @@ export function CreateMJChartKit(): MJChartKit {
     function renderRankedList(props: RankedListProps, timeSeconds: number): string {
         const f = resolveFrame(props.Frame);
         const allPoints: ChartKitPoint[] = Array.isArray(props.Points) ? props.Points : [];
+        const sortedPoints = allPoints.slice().sort((a, b) => {
+            const aFin = typeof a?.Value === 'number' && Number.isFinite(a.Value);
+            const bFin = typeof b?.Value === 'number' && Number.isFinite(b.Value);
+            if (aFin && bFin) {
+                return b.Value - a.Value;
+            }
+            if (aFin && !bFin) {
+                return -1;
+            }
+            if (!aFin && bFin) {
+                return 1;
+            }
+            return 0;
+        });
         const maxItems =
             typeof props.MaxItems === 'number' && Number.isFinite(props.MaxItems) && props.MaxItems > 0
                 ? Math.trunc(props.MaxItems)
-                : allPoints.length;
-        const items = allPoints.slice(0, maxItems);
+                : sortedPoints.length;
+        const items = sortedPoints.slice(0, maxItems);
         const bound = escapeXml(props.BindingKey ?? '');
 
         let maxAbs = 0;
@@ -664,7 +714,8 @@ export function CreateMJChartKit(): MJChartKit {
             const textY = r2(rowTop + rowH * 0.58);
             const barH = r2(Math.max(6, rowH * 0.34));
             const barY = r2(rowTop + (rowH - barH) / 2);
-            const ratio = Math.min(1, Math.max(0, Math.abs(item.Value) / maxAbs));
+            const rawVal = Number.isFinite(item.Value) ? Math.abs(item.Value) : 0;
+            const ratio = Math.min(1, Math.max(0, rawVal / maxAbs));
             const barW = r2(barMaxW * ratio * easedI);
             const color = seriesColor(f.Tokens, i);
 
@@ -679,7 +730,7 @@ export function CreateMJChartKit(): MJChartKit {
                 `fill="${escapeXml(color)}" />`;
 
             if (pi > 0) {
-                const currentVal = pi >= 1 ? item.Value : item.Value * easedI;
+                const currentVal = interpolatedValue(item.Value, pi, easedI, props.Format);
                 const formatted = formatValue(currentVal, props.Format);
                 svg +=
                     `<text x="${r2(f.Width - padX)}" y="${textY}" text-anchor="end" ` +
@@ -745,7 +796,7 @@ export function CreateMJChartKit(): MJChartKit {
                 lastX = x;
                 lastY = y;
 
-                const currentVal = p >= 1 ? v : v * eased;
+                const currentVal = interpolatedValue(v, p, eased, props.Format);
                 const formatted = formatValue(currentVal, props.Format);
                 const isLast = i === count - 1;
                 if (isLast) {
@@ -823,15 +874,14 @@ export function CreateMJChartKit(): MJChartKit {
                 if (rawCell === undefined || rawCell === null) {
                     continue;
                 }
-                const colFormat = columns[c]?.Format ?? props.Format;
+                const col = columns[c];
+                const colFormat = col && col.Format ? col.Format : props.Format;
                 const cellX = r2(padX + c * colW + 8);
-                let cellText: string;
-                if (typeof rawCell === 'number') {
-                    const currentVal = pr >= 1 ? rawCell : rawCell * easedR;
-                    cellText = formatValue(currentVal, colFormat);
-                } else {
-                    cellText = formatValue(String(rawCell), colFormat);
-                }
+                const cellValue =
+                    typeof rawCell === 'number'
+                        ? interpolatedValue(rawCell, pr, easedR, colFormat)
+                        : String(rawCell);
+                const cellText = formatTableCell(col, cellValue, props.Format);
                 svg +=
                     `<text x="${cellX}" y="${rowBaseline}" fill="${escapeXml(f.Tokens.Text)}" ` +
                     `font-size="${fontSize}" opacity="${r2(easedR)}" ` +
@@ -854,7 +904,22 @@ export function CreateMJChartKit(): MJChartKit {
         Sparkline: renderSparkline,
         TableReveal: renderTableReveal,
         FormatValue: formatValue,
+        FormatTableCell: formatTableCell,
     };
+}
+
+const SHARED_CHART_KIT = CreateMJChartKit();
+
+/**
+ * Formats a single table cell using the column's `Format` (or optional fallback `Format`) via `FormatValue`.
+ * Shared between `TableReveal` rendering and VS-DAT-3 bound literal validation.
+ */
+export function FormatTableCell(
+    column: ChartKitColumn | undefined,
+    value: number | string,
+    fallbackFormat?: VideoDataFormat,
+): string {
+    return SHARED_CHART_KIT.FormatTableCell(column, value, fallbackFormat);
 }
 
 /**

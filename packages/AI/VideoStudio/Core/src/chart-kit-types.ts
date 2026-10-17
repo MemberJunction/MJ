@@ -157,7 +157,10 @@ export interface DonutChartProps {
 export interface RankedListProps {
     /** Viewport geometry, animation window, and brand tokens. */
     Frame: ChartKitFrame;
-    /** Ordered items to display in the ranked list. */
+    /**
+     * Items to display in the ranked list. Automatically stable-sorted by `Value` descending
+     * (with non-finite values placed last) before slicing to `MaxItems`.
+     */
     Points: ChartKitPoint[];
     /** Optional cap on the maximum number of items rendered. */
     MaxItems?: number;
@@ -222,4 +225,10 @@ export interface MJChartKit {
     TableReveal: (props: TableRevealProps, timeSeconds: number) => string;
     /** Formats a bound numeric or date value deterministically without `Intl`. */
     FormatValue: (value: number | string, format?: VideoDataFormat) => string;
+    /** Formats a single table cell using the column's `Format` (or optional fallback `Format`) via `FormatValue`. */
+    FormatTableCell: (
+        column: ChartKitColumn | undefined,
+        value: number | string,
+        fallbackFormat?: VideoDataFormat,
+    ) => string;
 }

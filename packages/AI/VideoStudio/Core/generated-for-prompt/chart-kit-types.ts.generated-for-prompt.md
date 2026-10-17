@@ -73,7 +73,7 @@ interface DonutChartProps {
 
 interface RankedListProps {
     Frame: ChartKitFrame;  // Viewport geometry, animation window, and brand tokens.
-    Points: ChartKitPoint[];  // Ordered items to display in the ranked list.
+    Points: ChartKitPoint[];  // Items to display in the ranked list. Automatically stable-sorted by `Value` descending
     MaxItems?: number;  // Optional cap on the maximum number of items rendered.
     BindingKey?: string;  // Optional `VideoDataBinding.Key` written to `data-mj-bound` on item value elements.
     Format?: VideoDataFormat;  // Optional display formatting rules for item values.
@@ -105,5 +105,10 @@ interface MJChartKit {
     Sparkline: (props: SparklineProps, timeSeconds: number) => string;  // Renders a compact progressive sparkline with terminal marker and direct value label as SVG markup.
     TableReveal: (props: TableRevealProps, timeSeconds: number) => string;  // Renders a staggered row-by-row table reveal as SVG markup.
     FormatValue: (value: number | string, format?: VideoDataFormat) => string;  // Formats a bound numeric or date value deterministically without `Intl`.
+    FormatTableCell: (
+        column: ChartKitColumn | undefined,
+        value: number | string,
+        fallbackFormat?: VideoDataFormat,
+    ) => string;  // Formats a single table cell using the column's `Format` (or optional fallback `Format`) via...
 }
 ```
