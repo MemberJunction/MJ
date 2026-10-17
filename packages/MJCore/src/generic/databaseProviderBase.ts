@@ -3,6 +3,7 @@ import { UserInfo } from "./securityInfo";
 import { EntityDependency, EntityFieldInfo, EntityFieldTSType, EntityInfo, EntityPermissionType, RecordChange, RecordDependency, RecordMergeRequest, RecordMergeResult, RecordMergeDetailResult } from "./entityInfo";
 import { BaseEntity, BaseEntityResult, CloneContext, RecordChangePayload, RecordChangeSource, RestoreContext, SerializeCloneChangeContext } from "./baseEntity";
 import { EntitySaveOptions, EntityDeleteOptions, EntityMergeOptions, PotentialDuplicateRequest, PotentialDuplicateResponse, RemoteOpInvokeOptions, RemoteOpResult } from "./interfaces";
+import { EntitySaveReturnMode } from "./entityConfiguration";
 import { DispatchRemoteOperationInProcess } from "./remoteOperationDispatch";
 import { TransactionItem } from "./transactionGroup";
 import { CompositeKey } from "./compositeKey";
@@ -1783,6 +1784,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
 
                 // Step 4: Generate provider-specific SQL
                 const sqlDetails = await this.GenerateSaveSQL(entity, bNewRecord, user, options);
+                const effectiveReturnMode: EntitySaveReturnMode = options?.SaveReturnMode ?? entity.EntityInfo.SaveReturnMode;
 
                 if (entity.TransactionGroup && !bReplay) {
                     // ---- Transaction Group path ----
@@ -1808,7 +1810,10 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                                 if (success && transactionResult) {
                                     this.OnAfterSaveExecute(entity, user, options, saveContext);
                                     entityResult.Success = true;
-                                    entityResult.NewValues = this.MapTransactionResultToNewValues(transactionResult);
+                                    const mergedResult: Record<string, unknown> = effectiveReturnMode === 'datestamps_only'
+                                        ? { ...(entity.GetAll() as Record<string, unknown>), ...transactionResult }
+                                        : transactionResult;
+                                    entityResult.NewValues = this.MapTransactionResultToNewValues(mergedResult);
                                 } else {
                                     entityResult.Success = false;
                                     entityResult.Message = 'Transaction Failed';
@@ -1842,15 +1847,22 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                         this.OnAfterSaveExecute(entity, user, options, saveContext);
                         entityResult.Success = true;
 
+                        // In 'datestamps_only' mode, the SP/query returned only the PK and
+                        // __mj_CreatedAt/__mj_UpdatedAt columns. Merge those returned values
+                        // onto the entity's in-memory state so caller-set fields remain intact.
+                        const mergedRow: Record<string, unknown> = effectiveReturnMode === 'datestamps_only'
+                            ? { ...(entity.GetAll() as Record<string, unknown>), ...result[0] }
+                            : result[0];
+
                         // OnSaveCompleted may return patch fields (e.g., updated lat/lng
                         // from geocoding) that need to be merged onto the SP result before
                         // the entity loads the data via finalizeSave().
                         const patches = await this.OnSaveCompleted(entity, sqlDetails, user, options, saveContext);
                         if (patches) {
-                            Object.assign(result[0], patches);
+                            Object.assign(mergedRow, patches);
                         }
 
-                        return result[0];
+                        return mergedRow;
                     } else {
                         if (bNewRecord)
                             throw new Error(`SQL Error: Error creating new record, no rows returned from SQL: ${sqlDetails.fullSQL}`);

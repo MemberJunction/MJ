@@ -2452,7 +2452,7 @@ export const MJAIAgentRunStepSchema = z.object({
         * * Field Name: PayloadAtEnd
         * * Display Name: Payload At End
         * * SQL Data Type: nvarchar(MAX)
-        * * Description: JSON serialization of the Payload state at the end of this step`),
+        * * Description: JSON serialization of the Payload state at the end of this step. NULL when PayloadAtEndSourceStepID is set; the ending payload is then the PayloadAtEnd of that step.`),
     FinalPayloadValidationResult: z.union([z.literal('Fail'), z.literal('Fail'), z.literal('Pass'), z.literal('Pass'), z.literal('Retry'), z.literal('Retry'), z.literal('Warn'), z.literal('Warn')]).nullable().describe(`
         * * Field Name: FinalPayloadValidationResult
         * * Display Name: Validation Result
@@ -2525,6 +2525,12 @@ detailed information about what validation rules failed.`),
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Agent Run Steps (vwAIAgentRunSteps.ID)
         * * Description: When set, PayloadAtStart is not stored on this row because it equals the PayloadAtEnd of the referenced step in the same run. Read that step's PayloadAtEnd to get this step's starting payload.`),
+    PayloadAtEndSourceStepID: z.string().nullable().describe(`
+        * * Field Name: PayloadAtEndSourceStepID
+        * * Display Name: Payload At End Source Step ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agent Run Steps (vwAIAgentRunSteps.ID)
+        * * Description: When set, PayloadAtEnd is not stored on this row because it equals the PayloadAtEnd of the referenced step in the same run. Read that step's PayloadAtEnd to get this step's ending payload.`),
     AgentRun: z.string().nullable().describe(`
         * * Field Name: AgentRun
         * * Display Name: Agent Run Context
@@ -2536,6 +2542,10 @@ detailed information about what validation rules failed.`),
     PayloadAtStartSourceStep: z.string().nullable().describe(`
         * * Field Name: PayloadAtStartSourceStep
         * * Display Name: Payload At Start Source Step
+        * * SQL Data Type: nvarchar(255)`),
+    PayloadAtEndSourceStep: z.string().nullable().describe(`
+        * * Field Name: PayloadAtEndSourceStep
+        * * Display Name: Payload At End Source Step
         * * SQL Data Type: nvarchar(255)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
@@ -45488,7 +45498,7 @@ export class MJAIAgentRunStepEntity extends BaseEntity<MJAIAgentRunStepEntityTyp
     * * Field Name: PayloadAtEnd
     * * Display Name: Payload At End
     * * SQL Data Type: nvarchar(MAX)
-    * * Description: JSON serialization of the Payload state at the end of this step
+    * * Description: JSON serialization of the Payload state at the end of this step. NULL when PayloadAtEndSourceStepID is set; the ending payload is then the PayloadAtEnd of that step.
     */
     get PayloadAtEnd(): string | null {
         return this.Get('PayloadAtEnd');
@@ -45665,6 +45675,20 @@ detailed information about what validation rules failed.
     }
 
     /**
+    * * Field Name: PayloadAtEndSourceStepID
+    * * Display Name: Payload At End Source Step ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Run Steps (vwAIAgentRunSteps.ID)
+    * * Description: When set, PayloadAtEnd is not stored on this row because it equals the PayloadAtEnd of the referenced step in the same run. Read that step's PayloadAtEnd to get this step's ending payload.
+    */
+    get PayloadAtEndSourceStepID(): string | null {
+        return this.Get('PayloadAtEndSourceStepID');
+    }
+    set PayloadAtEndSourceStepID(value: string | null) {
+        this.Set('PayloadAtEndSourceStepID', value);
+    }
+
+    /**
     * * Field Name: AgentRun
     * * Display Name: Agent Run Context
     * * SQL Data Type: nvarchar(255)
@@ -45689,6 +45713,15 @@ detailed information about what validation rules failed.
     */
     get PayloadAtStartSourceStep(): string | null {
         return this.Get('PayloadAtStartSourceStep');
+    }
+
+    /**
+    * * Field Name: PayloadAtEndSourceStep
+    * * Display Name: Payload At End Source Step
+    * * SQL Data Type: nvarchar(255)
+    */
+    get PayloadAtEndSourceStep(): string | null {
+        return this.Get('PayloadAtEndSourceStep');
     }
 
     /**
