@@ -1,6 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { EntityInfo, UserInfo, type RunViewParams, type RunViewResult } from '@memberjunction/core';
-import { MJRecordProcessEntity, MJScheduledJobEntity, MJScheduledJobRunEntity, type MJTestRunEntity } from '@memberjunction/core-entities';
+import { MJRecordProcessEntity, MJScheduledJobEntity, MJScheduledJobRunEntity, type MJProcessRunEntity, type MJTestRunEntity } from '@memberjunction/core-entities';
 import type { DataFeatureSpec } from '@memberjunction/feature-pipelines';
 import { EntitiesOnlyProvider } from '@memberjunction/unit-testing';
 import type { ScheduledJobExecutionContext } from '../BaseScheduledJob';
@@ -56,18 +56,22 @@ class TestStewardJobRun extends MJScheduledJobRunEntity {
 }
 
 type TestRunRow = Pick<MJTestRunEntity, 'ID' | 'Status' | 'ErrorMessage'>;
+type ProcessRunRow = Pick<MJProcessRunEntity, 'ID' | 'StartTime'>;
+type ReadRow = MJRecordProcessEntity | TestRunRow | ProcessRunRow;
 
-/** The steward's reads: Record Processes and Test Runs from memory; every read is recorded. */
+/** The steward's reads: Record Processes, Test Runs and running Process Runs from memory; every read is recorded. */
 class StewardReadProvider extends EntitiesOnlyProvider {
     public RecordProcesses: MJRecordProcessEntity[] = [];
     public TestRuns: TestRunRow[] = [];
+    public RunningProcessRuns: ProcessRunRow[] = [];
     public readonly Views: RunViewParams[] = [];
     constructor() {
         super([]);
     }
-    public Answer(params: RunViewParams): RunViewResult<MJRecordProcessEntity | TestRunRow> {
+    public Answer(params: RunViewParams): RunViewResult<ReadRow> {
         this.Views.push(params);
-        const rows: Array<MJRecordProcessEntity | TestRunRow> = params.EntityName === 'MJ: Record Processes' ? this.RecordProcesses : this.TestRuns;
+        const rows: ReadRow[] = params.EntityName === 'MJ: Record Processes' ? this.RecordProcesses
+            : params.EntityName === 'MJ: Process Runs' ? this.RunningProcessRuns : this.TestRuns;
         return { Success: true, Results: rows, RowCount: rows.length, TotalRowCount: rows.length, ExecutionTime: 0, ErrorMessage: '' };
     }
 }
@@ -89,6 +93,9 @@ beforeEach(() => {
     provider = new StewardReadProvider();
     provider.RecordProcesses = [new TestRecordProcess('RP-1')];
     vi.spyOn(provider, 'RunView').mockImplementation(async (params: RunViewParams) => provider.Answer(params));
+});
+afterEach(() => {
+    vi.useRealTimers();
 });
 
 describe('FeaturePipelineVersionSteward.RunOnce', () => {
@@ -166,7 +173,7 @@ describe('FeaturePipelineVersionSteward.RunOnce', () => {
     // a failed backfill is marked done only when its run attempted every named record; otherwise the next pass reruns it
     it.each([
         ['failed before any record', 'error', ['r1'], { Processed: 0 }],
-        ['attempted every record (one failed, one skipped)', 'backfilled', ['r1', 'r2'], { Processed: 2, Success: 0, Error: 1, Skipped: 1 }],
+        ['attempted every record (one failed, one skipped)', 'error', ['r1', 'r2'], { Processed: 2, Success: 0, Error: 1, Skipped: 1 }],
         ['stopped after one of two records', 'error', ['r1', 'r2'], { Processed: 1, Success: 0, Error: 1 }],
         ['had no records, only the version to activate', 'error', [], { Total: 0, Processed: 0, Success: 0 }],
     ])('a failed backfill run that %s ends as %s', async (_case, action: string, recordIDs: string[], counts: Partial<typeof completedRun>) => {
@@ -174,6 +181,56 @@ describe('FeaturePipelineVersionSteward.RunOnce', () => {
         runByID.mockResolvedValue({ ...completedRun, ...counts, Status: 'Failed', ErrorMessage: 'version refused' });
         expect(await steward.RunOnce({ ContextUser: user, Provider: provider })).toMatchObject([{ Action: action, ProcessRunID: 'PR-1' }]);
         expect(markBackfilled).toHaveBeenCalledTimes(action === 'backfilled' ? 1 : 0);
+    });
+
+    it('marks the version backfilled only when no record failed; the failed ones are retried on the next pass', async () => {
+        const recordIDs = Array.from({ length: 1308 }, (_v, i) => `r${i}`);
+        plan.mockResolvedValue({ Kind: 'backfill', Version: 2, RecordIDs: recordIDs });
+        runByID.mockResolvedValueOnce({ ProcessRunID: 'PR-1', Status: 'Failed', Total: 1308, Processed: 1308, Success: 1267, Error: 41, Skipped: 0 });
+        expect(await steward.RunOnce({ ContextUser: user, Provider: provider })).toMatchObject([{
+            Action: 'error', ProcessRunID: 'PR-1',
+            Detail: 'backfill run Failed: 1308 processed, 41 failed, 0 skipped; 41 record(s) retried on the next pass',
+        }]);
+        expect(markBackfilled).not.toHaveBeenCalled();
+        runByID.mockResolvedValueOnce({ ProcessRunID: 'PR-2', Status: 'Completed', Total: 41, Processed: 41, Success: 41, Error: 0, Skipped: 0 });
+        expect(await steward.RunOnce({ ContextUser: user, Provider: provider })).toMatchObject([{ Action: 'backfilled', ProcessRunID: 'PR-2' }]);
+        expect(markBackfilled).toHaveBeenCalledTimes(1);
+    });
+
+    it('defers a backfill while another run of the pipeline is still running, and starts one when none is', async () => {
+        plan.mockResolvedValue({ Kind: 'backfill', Version: 2, RecordIDs: ['r1', 'r2'] });
+        provider.RunningProcessRuns = [{ ID: 'PR-0', StartTime: new Date('2026-10-17T04:03:41Z') }];
+        expect(await steward.RunOnce({ ContextUser: user, Provider: provider })).toMatchObject([{
+            Action: 'held', Version: 2, ProcessRunID: 'PR-0',
+            Detail: 'backfill deferred: Process Run PR-0 (started 2026-10-17T04:03:41.000Z) is still running',
+        }]);
+        expect(runByID).not.toHaveBeenCalled();
+        expect(markBackfilled).not.toHaveBeenCalled();
+        expect(provider.Views.find((v) => v.EntityName === 'MJ: Process Runs')).toMatchObject({
+            ExtraFilter: "RecordProcessID='RP-1' AND Status='Running' AND DryRun=0", BypassCache: true, MaxRows: 1,
+        });
+        provider.RunningProcessRuns = [];
+        runByID.mockResolvedValue(completedRun);
+        expect((await steward.RunOnce({ ContextUser: user, Provider: provider })).map((o) => o.Action)).toEqual(['backfilled']);
+        expect(runByID).toHaveBeenCalledTimes(1);
+    });
+
+    it('renews the lease every minute while a backfill runs, however long its batches take, and stops after it', async () => {
+        vi.useFakeTimers();
+        plan.mockResolvedValue({ Kind: 'backfill', Version: 2, RecordIDs: ['r1', 'r2'] });
+        // one batch of ten minutes: the executor reports no progress until it ends
+        runByID.mockImplementation(() => new Promise((resolve) => setTimeout(() => resolve(completedRun), 10 * 60_000)));
+        const heartbeat = vi.fn();
+        const pass = steward.RunOnce({ ContextUser: user, Provider: provider, Heartbeat: heartbeat });
+        for (let minute = 1; minute <= 10; minute++) {
+            await vi.advanceTimersByTimeAsync(60_000);
+            expect(heartbeat.mock.calls.length).toBeGreaterThanOrEqual(minute);
+        }
+        expect((await pass).map((o) => o.Action)).toEqual(['backfilled']);
+        const afterPass = heartbeat.mock.calls.length;
+        await vi.advanceTimersByTimeAsync(5 * 60_000);
+        expect(heartbeat).toHaveBeenCalledTimes(afterPass);
+        expect(vi.getTimerCount()).toBe(0);
     });
 
     it('records an evaluation that returned no result as an error, naming the test', async () => {

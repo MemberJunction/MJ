@@ -6,7 +6,7 @@
  */
 import { BaseSingleton, EscapeSQLString } from '@memberjunction/global';
 import { IMetadataProvider, RunView, UserInfo } from '@memberjunction/core';
-import type { MJRecordProcessEntity, MJTestRunEntity } from '@memberjunction/core-entities';
+import type { MJProcessRunEntity, MJRecordProcessEntity, MJTestRunEntity } from '@memberjunction/core-entities';
 import { FeaturePipelineVersionService, type FeaturePipelineStewardPlan } from '@memberjunction/feature-pipelines';
 import { InferProcessor, RecordProcessExecutor } from '@memberjunction/record-set-processor';
 import type { ProcessRunResult, RecordProcessorContext } from '@memberjunction/record-set-processor-base';
@@ -25,7 +25,7 @@ export interface StewardOutcome {
     Detail: string;
     /** The golden-set test run the decision rests on (`evaluated`, or `held` after an earlier evaluation). */
     TestRunID?: string;
-    /** The backfill's `MJ: Process Runs` row. */
+    /** The backfill's `MJ: Process Runs` row; for a deferred backfill, the run still running. */
     ProcessRunID?: string;
 }
 
@@ -45,7 +45,21 @@ type ActionablePlan = Extract<FeaturePipelineStewardPlan, { Kind: 'evaluate' | '
 /** The fields of a golden-set test run the steward reads. */
 type EvaluationRun = Pick<MJTestRunEntity, 'ID' | 'Status' | 'ErrorMessage'>;
 
-/** The steward of Feature Pipeline version changes. */
+/** The fields of a pipeline's running Process Run the steward reads. */
+type RunningProcessRun = Pick<MJProcessRunEntity, 'ID' | 'StartTime'>;
+
+/** How often a running backfill renews the pass's lease; the engine throttles effective beats itself. */
+const BACKFILL_HEARTBEAT_MS = 60_000;
+
+/**
+ * The steward of Feature Pipeline version changes.
+ *
+ * A version is marked backfilled only by a run in which every named record was attempted and none failed; the next
+ * pass re-selects the records whose latest value is still under another version, so it retries exactly the failed
+ * ones. A record that fails permanently therefore keeps its version unbackfilled (the executor's circuit breaker
+ * covers a systematic failure). A backfill is deferred while another non-dry run of the pipeline is still running,
+ * so two runs never write the same scope at once.
+ */
 export class FeaturePipelineVersionSteward extends BaseSingleton<FeaturePipelineVersionSteward> {
     public static get Instance(): FeaturePipelineVersionSteward {
         return super.getInstance<FeaturePipelineVersionSteward>();
@@ -154,21 +168,42 @@ export class FeaturePipelineVersionSteward extends BaseSingleton<FeaturePipeline
     /**
      * The one backfill of a changed version: over the named records, without the watermark skip (a watermark written
      * before the change would skip records that need a value under this version). Only a run that attempted every
-     * record marks the version backfilled; any other run is recorded `error` and retried on the next pass.
+     * record with no failure marks the version backfilled; any other run is recorded `error` and its unfinished records
+     * are retried on the next pass. Deferred (`held`) while another run of the pipeline is running. The lease is renewed
+     * on a timer while the run is awaited, so its cadence does not depend on how long a batch takes.
      */
     protected async Backfill(rp: MJRecordProcessEntity, plan: Extract<ActionablePlan, { Kind: 'backfill' }>, p: StewardRunParams): Promise<StewardOutcome> {
-        const run = await new RecordProcessExecutor().RunByID(rp.ID, {
-            contextUser: p.ContextUser,
-            provider: p.Provider,
-            triggeredBy: 'OnDemand',
-            scope: { Kind: 'records', RecordIDs: plan.RecordIDs },
-            SkipUnchanged: false,
-            scheduledJobRunID: p.ScheduledJobRunID,
-            onProgress: () => p.Heartbeat?.(),
-        });
+        const running = await this.RunningProcessRun(rp.ID, p);
+        if (running) {
+            const started = running.StartTime ? new Date(running.StartTime).toISOString() : 'at an unknown time';
+            return {
+                ...this.Outcome(rp, plan.Version, 'held', `backfill deferred: Process Run ${running.ID} (started ${started}) is still running`),
+                ProcessRunID: running.ID,
+            };
+        }
+        const heartbeat = p.Heartbeat ? setInterval(() => p.Heartbeat?.(), BACKFILL_HEARTBEAT_MS) : null;
+        let run: ProcessRunResult;
+        try {
+            run = await new RecordProcessExecutor().RunByID(rp.ID, {
+                contextUser: p.ContextUser,
+                provider: p.Provider,
+                triggeredBy: 'OnDemand',
+                scope: { Kind: 'records', RecordIDs: plan.RecordIDs },
+                SkipUnchanged: false,
+                scheduledJobRunID: p.ScheduledJobRunID,
+                onProgress: () => p.Heartbeat?.(),
+            });
+        } finally {
+            if (heartbeat) {
+                clearInterval(heartbeat);
+            }
+        }
         const summary = `backfill run ${run.Status}: ${run.Processed} processed, ${run.Error} failed, ${run.Skipped} skipped${run.ErrorMessage ? ` (${run.ErrorMessage})` : ''}`;
         if (!this.AttemptedEveryRecord(run, plan.RecordIDs.length)) {
             return { ...this.Outcome(rp, plan.Version, 'error', `${summary}; retried on the next pass`), ProcessRunID: run.ProcessRunID };
+        }
+        if (run.Error > 0) {
+            return { ...this.Outcome(rp, plan.Version, 'error', `${summary}; ${run.Error} record(s) retried on the next pass`), ProcessRunID: run.ProcessRunID };
         }
         await FeaturePipelineVersionService.Instance.MarkBackfilled(rp.ID, plan.Version, p.ContextUser, p.Provider);
         return { ...this.Outcome(rp, plan.Version, 'backfilled', summary), ProcessRunID: run.ProcessRunID };
@@ -183,6 +218,22 @@ export class FeaturePipelineVersionSteward extends BaseSingleton<FeaturePipeline
             return true;
         }
         return run.Status === 'Failed' && recordCount > 0 && run.Processed >= recordCount;
+    }
+
+    /** A non-dry run of the pipeline still `Running`, if any; read fresh. */
+    protected async RunningProcessRun(recordProcessID: string, p: StewardRunParams): Promise<RunningProcessRun | null> {
+        const rv = await RunView.FromMetadataProvider(p.Provider).RunView<RunningProcessRun>({
+            EntityName: 'MJ: Process Runs',
+            ExtraFilter: `RecordProcessID='${EscapeSQLString(recordProcessID)}' AND Status='Running' AND DryRun=0`,
+            OrderBy: 'StartTime DESC',
+            Fields: ['ID', 'StartTime'],
+            MaxRows: 1,
+            BypassCache: true,
+        }, p.ContextUser);
+        if (!rv.Success) {
+            throw new Error(`Reading MJ: Process Runs failed: ${rv.ErrorMessage}`);
+        }
+        return rv.Results?.[0] || null;
     }
 
     /**
