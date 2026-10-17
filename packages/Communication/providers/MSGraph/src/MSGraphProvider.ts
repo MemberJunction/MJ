@@ -459,7 +459,7 @@ export class MSGraphProvider extends BaseCommunicationProvider {
                 comment: params.Message.ProcessedBody || params.Message.ProcessedHTMLBody
             };
 
-            // `ContextData.Email` FIRST, as eleven sibling operations already read it. Without it this
+            // `ContextData.Email` FIRST, as nine sibling operations already read it. Without it this
             // site could only resolve `creds.accountEmail` — which the `Azure Service Principal`
             // credential type declares no property for, and which `disableEnvironmentFallback` removes
             // the environment source for. Reply was therefore unreachable on exactly the stored
