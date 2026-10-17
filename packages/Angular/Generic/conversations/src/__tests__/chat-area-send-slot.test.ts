@@ -66,7 +66,19 @@ describe('ConversationChatArea — the send slot as the stop control', () => {
     expect(createHarness({ readOnly: true }).component.SendSlotMode).toBe('send');
     expect(createHarness({ allow: false }).component.SendSlotMode).toBe('send');
     expect(createHarness({ inFlight: [] }).component.StatusText).toBeNull();
+    expect(createHarness({ inFlight: [] }).component.StatusElapsed).toBeNull();
     expect(createHarness({ inFlight: [] }).component.StopCount).toBe(0);
+  });
+
+  it('the status line is information, not a control: it shows for a reply in flight even when the slot is Send', () => {
+    const readOnly = createHarness({ readOnly: true });
+    expect(readOnly.component.SendSlotMode).toBe('send');
+    expect(readOnly.component.StatusText).toBe('Sage is working');
+    expect(readOnly.component.StatusElapsed).toBe('0:41');
+    const rows: Row[] = [{ ID: 'a1', Role: 'AI', Agent: 'Sage' }, { ID: 'a2', Role: 'AI', Agent: 'Research Agent' }];
+    const two = createHarness({ rows, inFlight: ['a1', 'a2'], readOnly: true, runs: [['a1', { ID: 'run-1', Agent: 'Sage' }], ['a2', { ID: 'run-2', Agent: 'Research Agent' }]] });
+    expect(two.component.StatusText).toBe('2 agents working');
+    expect(two.component.StatusElapsed).toBeNull();
   });
 
   it('with one run: Stop, named for the agent, with a status line and the elapsed time', () => {
@@ -145,10 +157,11 @@ describe('ConversationChatArea — the send slot as the stop control', () => {
     expect(off.component.ComposerPlaceholderFor('conv-1')).toBe('Type a message... (Ctrl+Enter to send)');
   });
 
-  it('with stopping off, a reply in flight leaves the slot as Send, with no status line and nothing to stop', async () => {
+  it('with stopping off, a reply in flight leaves the slot as Send and nothing to stop, but the status line still shows', async () => {
     const off = createHarness({ allow: false });
     expect(off.component.SendSlotMode).toBe('send');
-    expect(off.component.StatusText).toBeNull();
+    expect(off.component.StatusText).toBe('Sage is working');
+    expect(off.component.StatusElapsed).toBe('0:41');
     expect(off.component.StopCount).toBe(0);
     await off.component.OnComposerStopClicked();
     expect(off.cancelAgent).not.toHaveBeenCalled();
