@@ -502,3 +502,22 @@ describe('FeatureValueCacheService', () => {
         });
     });
 });
+
+describe('FeatureValueCacheService.ToTypedValue with a constraint type', () => {
+    it('coerces a numeric string under a numeric constraint', () => {
+        expect(FeatureValueCacheService.ToTypedValue('0.75', 'numeric')).toMatchObject({ ValueNumeric: 0.75, ValueText: null });
+    });
+    it('coerces a boolean string under a boolean constraint', () => {
+        expect(FeatureValueCacheService.ToTypedValue('TRUE', 'boolean')).toMatchObject({ ValueBoolean: true, ValueText: null });
+    });
+    it('coerces a date string under a date constraint', () => {
+        expect(FeatureValueCacheService.ToTypedValue('2026-10-16', 'date').ValueDate).toBeInstanceOf(Date);
+    });
+    it('stores a string that does not parse as typed', () => {
+        expect(FeatureValueCacheService.ToTypedValue('abc', 'numeric')).toMatchObject({ ValueText: 'abc', ValueNumeric: null });
+        expect(FeatureValueCacheService.ToTypedValue('', 'numeric')).toMatchObject({ ValueText: '', ValueNumeric: null });
+    });
+    it('keeps the JavaScript-type mapping with no constraint', () => {
+        expect(FeatureValueCacheService.ToTypedValue('0.75')).toMatchObject({ ValueText: '0.75', ValueNumeric: null });
+    });
+});

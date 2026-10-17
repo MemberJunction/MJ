@@ -4,6 +4,7 @@
  * @module @memberjunction/feature-pipelines
  */
 import { ResolveConstraint, type DataFeatureOutput, type EntityMetadataStub, type FieldMetadataStub } from '../spec/data-feature-spec.js';
+import { OutputTargets } from '../spec/output-target.js';
 import type { ResolvedConstraint } from '../spec/value-constraint.js';
 import { LookupConstraintValues, type LookupValueRow } from './lookup-values.js';
 
@@ -44,11 +45,10 @@ export class OutputConstraintResolver {
 
     /** The target field a constrained field-target output resolves against; undefined for any other output. */
     protected static FieldOf(output: DataFeatureOutput, entity: EntityMetadataStub | undefined): FieldMetadataStub | undefined {
-        const target = output.Target;
-        if (!output.Constraint || target.Mode !== 'field' || !entity) {
+        if (!output.Constraint || !OutputTargets.HasWriteTarget(output) || output.Target.Mode !== 'field' || !entity) {
             return undefined;
         }
-        const wanted = target.EntityFieldName.toLowerCase();
+        const wanted = output.Target.EntityFieldName.toLowerCase();
         return entity.Fields.find((f) => f.Name.toLowerCase() === wanted);
     }
 }

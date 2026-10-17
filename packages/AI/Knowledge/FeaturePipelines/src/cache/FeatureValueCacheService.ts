@@ -6,6 +6,7 @@
 
 import { BaseSingleton, Canonicalize, ComputeContentHashAsync, EscapeSQLString } from '@memberjunction/global';
 import { IMetadataProvider, LogError, Metadata, RunView, type RunViewParams, UserInfo } from '@memberjunction/core';
+import type { ValueConstraint } from '../spec/value-constraint.js';
 import { FeatureValueKey, type FeatureValueSource } from '../spec/feature-value-key.js';
 import type { MJFeatureValueCacheEntity, MJFeatureValueEntity } from '@memberjunction/core-entities';
 
@@ -66,6 +67,8 @@ export interface CacheStoreParams extends FeatureValueCacheScope {
 export interface FeatureValueOutputItem {
     featureName: string;
     value: unknown;
+    /** The output's declared constraint type; lets a string answer land in its typed column. */
+    constraintType?: ValueConstraint['Type'];
     reasoning?: string | null;
     confidence?: number | null;
 }
@@ -388,7 +391,7 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
         row: MJFeatureValueEntity | undefined,
         supersededByAnotherKey: boolean
     ): Promise<FeatureValueWriteResult> {
-        const typed = FeatureValueCacheService.ToTypedValue(out.value);
+        const typed = FeatureValueCacheService.ToTypedValue(out.value, out.constraintType);
         const unchanged = !!row && this.IsUnchanged(row, typed, out);
         if (unchanged && !supersededByAnotherKey) {
             return 'Unchanged';
@@ -594,8 +597,15 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
         return v.ValueJSON !== null ? JSON.parse(v.ValueJSON) : null;
     }
 
-    /** A value in the typed column its JavaScript type maps to. */
-    public static ToTypedValue(val: FeatureValueOutputItem['value']): TypedFeatureValue {
+    /**
+     * A value in the typed column its JavaScript type maps to. A string answer to a numeric/money, boolean or date
+     * constraint is coerced into that constraint's column when it parses; otherwise it is stored as typed.
+     */
+    public static ToTypedValue(val: FeatureValueOutputItem['value'], constraintType?: ValueConstraint['Type']): TypedFeatureValue {
+        const coerced = FeatureValueCacheService.CoerceByConstraint(val, constraintType);
+        if (coerced !== undefined) {
+            return coerced;
+        }
         return {
             ValueText: typeof val === 'string' ? val : null,
             ValueNumeric: typeof val === 'number' ? val : null,
@@ -603,6 +613,25 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
             ValueDate: val instanceof Date ? val : null,
             ValueJSON: val !== null && typeof val === 'object' && !(val instanceof Date) ? JSON.stringify(val) : null,
         };
+    }
+
+    /** The typed value a string answer coerces to under its constraint type; undefined when no coercion applies. */
+    protected static CoerceByConstraint(val: FeatureValueOutputItem['value'], constraintType?: ValueConstraint['Type']): TypedFeatureValue | undefined {
+        if (typeof val !== 'string' || !constraintType) {
+            return undefined;
+        }
+        const text = val.trim();
+        const empty: TypedFeatureValue = { ValueText: null, ValueNumeric: null, ValueBoolean: null, ValueDate: null, ValueJSON: null };
+        if ((constraintType === 'numeric' || constraintType === 'money') && text !== '' && Number.isFinite(Number(text))) {
+            return { ...empty, ValueNumeric: Number(text) };
+        }
+        if (constraintType === 'boolean' && /^(true|false)$/i.test(text)) {
+            return { ...empty, ValueBoolean: text.toLowerCase() === 'true' };
+        }
+        if (constraintType === 'date' && !Number.isNaN(Date.parse(text))) {
+            return { ...empty, ValueDate: new Date(text) };
+        }
+        return undefined;
     }
 
     /** A copy of a row's typed value columns. */

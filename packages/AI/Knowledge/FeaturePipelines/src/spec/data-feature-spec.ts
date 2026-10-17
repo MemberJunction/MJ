@@ -6,7 +6,7 @@
 
 import type { MJFeaturePipelineVersionEntity } from '@memberjunction/core-entities';
 import type { ValueConstraint, ResolvedConstraint } from './value-constraint.js';
-import type { OutputTarget } from './output-target.js';
+import { OutputTargets, type OutputTarget } from './output-target.js';
 import { ConfidenceFloor, type LowConfidencePolicy } from './confidence-floor.js';
 
 export interface DataFeatureSpec {
@@ -127,7 +127,8 @@ export interface DataFeatureOutput {
   /** Narrowing/policy ON TOP of what field metadata already implies (D23). */
   Constraint?: ValueConstraint;
   /** Where this output lands (D19). */
-  Target: OutputTarget;
+  /** Where the value is written. Absent = feature value only: the value lives only in MJ: Feature Values. */
+  Target?: OutputTarget;
   /** How Predictive Studio should treat it when consumed as a model feature. */
   FeatureKind?: FeatureKind;
   /** Optional human-readable description / instructions for this output. */
@@ -293,13 +294,25 @@ export function ValidateSpec(
       }
 
       // Target mode validation
-      if (!out.Target) {
-        issues.push({
-          Path: `${basePath}.Target`,
-          Message: `Output '${out.Name || i}' is missing a Target configuration.`,
-          FixRecommendation: 'Configure a target Mode: "field", "child", or "tags".',
-          Severity: 'error',
-        });
+      if (!OutputTargets.HasWriteTarget(out)) {
+        const name = out.Name || String(i);
+        const c = out.Constraint;
+        if (c?.Type === 'enum' && c.FromFieldMetadata) {
+          issues.push({
+            Path: `${basePath}.Constraint`,
+            Message: `Output '${name}' has no write target, so its enum constraint cannot read a field's value list: list Constraint.Values, or give the output a field target.`,
+            FixRecommendation: 'List Constraint.Values, or give the output a field target.',
+            Severity: 'error',
+          });
+        }
+        if (c?.Type === 'lookup' && !c.Entity) {
+          issues.push({
+            Path: `${basePath}.Constraint`,
+            Message: `Output '${name}' has no write target, so its lookup constraint has no entity: set Constraint.Entity, or give the output a field target.`,
+            FixRecommendation: 'Set Constraint.Entity, or give the output a field target.',
+            Severity: 'error',
+          });
+        }
         continue;
       }
 
@@ -788,7 +801,7 @@ export function ResolveConstraint(
         Type: 'lookup',
         OnViolation: c.OnViolation,
         RelatedEntityName: c.Entity ?? field?.RelatedEntity,
-        LookupMatchField: c.MatchField ?? (output.Target.Mode === 'field' ? output.Target.LookupMatchField : undefined) ?? 'Name',
+        LookupMatchField: c.MatchField ?? (output.Target?.Mode === 'field' ? output.Target.LookupMatchField : undefined) ?? 'Name',
         DisplayFields: c.DisplayFields,
         Filter: c.Filter,
         ItemRef: c.ItemRef,
@@ -804,7 +817,7 @@ export function ResolveConstraint(
   }
 
   // 2. Implicit constraint derived from field metadata if target is Mode: 'field'
-  if (output.Target.Mode === 'field' && field) {
+  if (output.Target?.Mode === 'field' && field) {
     if (field.EntityFieldValues && field.EntityFieldValues.length > 0) {
       const valueDescriptions: Record<string, string> = {};
       for (const efv of field.EntityFieldValues) {

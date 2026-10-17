@@ -964,3 +964,32 @@ describe('DataFeatureSpec — Unattended validation', () => {
     expect(unattendedPaths(unattended(null))).toEqual(['Unattended']);
   });
 });
+
+describe('outputs without a write target', () => {
+  const base = { Name: 'P', PromptID: 'x', PipelineType: 'LLM' as const, Context: { Fields: ['Bio'] } };
+  const messages = (outputs: DataFeatureSpec['Outputs']): string[] => ValidateSpec(specOf({ ...base, Outputs: outputs })).map((i) => i.Message);
+
+  it('accepts an output with no Target', () => {
+    const issues = ValidateSpec(specOf({ ...base, Outputs: [{ Name: 'Years', Ref: '$.Years', Constraint: { Type: 'numeric', Min: 0, Max: 60, OnViolation: 'null' } }] }));
+    expect(issues.filter((i) => i.Severity === 'error')).toEqual([]);
+  });
+  it('rejects an enum FromFieldMetadata constraint with no field target', () => {
+    expect(messages([{ Name: 'Kind', Ref: '$.Kind', Constraint: { Type: 'enum', FromFieldMetadata: true, OnViolation: 'fail' } }]))
+      .toContain("Output 'Kind' has no write target, so its enum constraint cannot read a field's value list: list Constraint.Values, or give the output a field target.");
+  });
+  it('rejects a lookup constraint without Entity and no field target', () => {
+    expect(messages([{ Name: 'Fn', Ref: '$.Fn', Constraint: { Type: 'lookup', OnViolation: 'fail' } }]))
+      .toContain("Output 'Fn' has no write target, so its lookup constraint has no entity: set Constraint.Entity, or give the output a field target.");
+  });
+  it('accepts a lookup with Entity and no target', () => {
+    const issues = ValidateSpec(specOf({ ...base, Outputs: [{ Name: 'Fn', Ref: '$.Fn', Constraint: { Type: 'lookup', Entity: 'MJ: AI Models', MatchField: 'Name', OnViolation: 'fail' } }] }));
+    expect(issues.filter((i) => i.Severity === 'error')).toEqual([]);
+  });
+  it('still validates Target.Mode when a target is present', () => {
+    interface BogusTarget { Mode: string }
+    const bogus: BogusTarget = { Mode: 'bogus' };
+    const output = { Name: 'X', Ref: '$.X', Target: bogus };
+    const issues = ValidateSpec(parsedSpec(specOf({ ...base, Outputs: [output as unknown as DataFeatureSpec['Outputs'][number]] })));
+    expect(issues.map((i) => i.Message).join('\n')).toMatch(/invalid or missing target Mode 'bogus'/);
+  });
+});
