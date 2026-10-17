@@ -34,6 +34,7 @@ import {
     DataFeatureOutput,
     ValueConstraint,
     OutputTarget,
+    OutputTargets,
     ViolationPolicy,
     RenderConstraintBlock,
     OutputConstraintResolver,
@@ -64,6 +65,9 @@ export interface PipelineTypeOption {
     DisplayName?: string;
     Description?: string | null;
 }
+
+/** The target-mode picker's values: a write mode, or `none` for a Feature-Value-only output (no `Target`). */
+type BuilderTargetMode = OutputTarget['Mode'] | 'none';
 
 export interface EscalationTargetCandidate extends MinimalEscalationTargetRow {
     Description?: string | null;
@@ -238,7 +242,7 @@ export function ParseConfidenceFloor(raw: string): number {
                                                 <option value="" disabled [selected]="true">— Select Target Mode —</option>
                                             }
                                             @for (m of AvailableTargetModes; track m.Value) {
-                                                <option [value]="m.Value" [selected]="m.Value === output.Target.Mode">{{ m.Label }}</option>
+                                                <option [value]="m.Value" [selected]="m.Value === (output.Target?.Mode ?? 'none')">{{ m.Label }}</option>
                                             }
                                         </select>
                                     </div>
@@ -246,7 +250,14 @@ export function ParseConfidenceFloor(raw: string): number {
 
                                 <!-- Target details -->
                                 <div class="rpe-grid3 rpe-mt">
-                                    @if (output.Target.Mode === 'field') {
+                                    @if (!output.Target) {
+                                        <div class="field">
+                                            <label>Target</label>
+                                            <p class="muted">Stored as a Feature Value on each record; nothing is written to the entity.</p>
+                                        </div>
+                                    }
+
+                                    @if (output.Target && output.Target.Mode === 'field') {
                                         <div class="field">
                                             <label>Target Field</label>
                                             <select class="mj-input" (change)="updateFieldTarget(outputIndex, $event)">
@@ -258,7 +269,7 @@ export function ParseConfidenceFloor(raw: string): number {
                                         </div>
                                     }
 
-                                    @if (output.Target.Mode === 'child') {
+                                    @if (output.Target && output.Target.Mode === 'child') {
                                         <div class="field">
                                             <label>Child Entity</label>
                                             <select class="mj-input" (change)="updateChildTargetEntity(outputIndex, $event)">
@@ -697,14 +708,15 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
         return opt?.Description ?? '';
     }
 
-    public get AvailableTargetModes(): Array<{ Value: OutputTarget['Mode']; Label: string }> {
+    /** `none` (Feature Value only) is always offered, first: it writes nothing, so no driver capability gates it. */
+    public get AvailableTargetModes(): Array<{ Value: BuilderTargetMode; Label: string }> {
         const all: Array<{ Value: OutputTarget['Mode']; Label: string }> = [
             { Value: 'field', Label: 'Entity Column (field)' },
             { Value: 'child', Label: 'Child Rows (child)' },
             { Value: 'tags', Label: 'Taxonomy Tags (tags)' },
         ];
         const supported = this.CurrentCapabilities.TargetModes;
-        return all.filter((m) => supported.includes(m.Value));
+        return [{ Value: 'none', Label: 'Feature value only (no write-back)' }, ...all.filter((m) => supported.includes(m.Value))];
     }
 
     /** Every constraint type the pipeline type's driver declares, plus `none` when an unconstrained output is allowed. */
@@ -764,7 +776,7 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
 
     /** Whether the target mode picker lists the output's saved mode. */
     public IsTargetModeOffered(output: DataFeatureOutput): boolean {
-        return this.AvailableTargetModes.some((m) => m.Value === output.Target.Mode);
+        return this.AvailableTargetModes.some((m) => m.Value === (output.Target?.Mode ?? 'none'));
     }
 
     /** Whether the target field picker lists a field named `name`. */
@@ -1318,9 +1330,11 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
     }
 
     public UpdateTargetMode(index: number, event: Event): void {
-        const mode = (event.target as HTMLSelectElement).value as OutputTarget['Mode'];
+        const mode = (event.target as HTMLSelectElement).value as BuilderTargetMode;
         const current = this.spec.Outputs[index];
-        if (mode === 'field') {
+        if (mode === 'none') {
+            delete current.Target;
+        } else if (mode === 'field') {
             current.Target = {
                 Mode: 'field',
                 EntityFieldName: this.EntityFields.length > 0 ? this.EntityFields[0].Name : '',
@@ -1349,7 +1363,7 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
     public UpdateFieldTarget(index: number, event: Event): void {
         const fieldName = (event.target as HTMLSelectElement).value;
         const target = this.spec.Outputs[index].Target;
-        if (target.Mode === 'field') {
+        if (target?.Mode === 'field') {
             target.EntityFieldName = fieldName;
             if (this.spec.Outputs[index].Constraint?.Type === 'enum') {
                 this.prefillEnumValuesFromField(this.spec.Outputs[index]);
@@ -1366,7 +1380,7 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
     public UpdateChildTargetEntity(index: number, event: Event): void {
         const entityName = (event.target as HTMLSelectElement).value;
         const target = this.spec.Outputs[index].Target;
-        if (target.Mode === 'child') {
+        if (target?.Mode === 'child') {
             target.EntityName = entityName;
         }
         this.emitChanges();
@@ -1817,7 +1831,7 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
     }
 
     private prefillEnumValuesFromField(output: DataFeatureOutput): void {
-        if (output.Target.Mode !== 'field' || output.Constraint?.Type !== 'enum') {
+        if (!OutputTargets.HasWriteTarget(output) || output.Target.Mode !== 'field' || output.Constraint?.Type !== 'enum') {
             return;
         }
         const fieldName = output.Target.EntityFieldName;
@@ -1869,7 +1883,7 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
         if (!this.Record) return;
         const fields: Record<string, string> = Object.create(null);
         for (const out of this.spec.Outputs) {
-            if (out.Target.Mode === 'field' && out.Target.EntityFieldName) {
+            if (out.Target?.Mode === 'field' && out.Target.EntityFieldName) {
                 fields[out.Target.EntityFieldName] = out.Ref;
             }
         }

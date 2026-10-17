@@ -180,7 +180,7 @@ describe('FeaturePipelineBuilderComponent (DOM & Type Switching)', () => {
     });
     const f = render(rec);
     expect(f.componentInstance.IsDecisionPipeline).toBe(true);
-    expect(f.componentInstance.AvailableTargetModes.map((m) => m.Value)).toEqual(['field']);
+    expect(f.componentInstance.AvailableTargetModes.map((m) => m.Value)).toEqual(['none', 'field']);
     expect(f.componentInstance.AvailableConstraintTypes.map((c) => c.Value)).toEqual(['boolean', 'enum', 'numeric']);
   });
 
@@ -1300,5 +1300,63 @@ describe('the constraint type picker and the lookup editor', () => {
     f.componentInstance.UpdateConstraintType(0, eventWithValue('lookup'));
 
     expect(savedConstraint(f)).toEqual(SAVED_LOOKUP);
+  });
+});
+
+describe('FeaturePipelineBuilderComponent (feature value only target)', () => {
+  const FV_ONLY_TEXT = 'Stored as a Feature Value on each record; nothing is written to the entity.';
+
+  const targetModeSelect = (f: ComponentFixture<FeaturePipelineBuilderComponent>): HTMLSelectElement => {
+    const field = Array.from((f.nativeElement as Element).querySelectorAll('.field')).find((el) => el.querySelector('label')?.textContent?.trim() === 'Target Mode');
+    const select = field?.querySelector('select');
+    if (!select) {
+      throw new Error("no select labelled 'Target Mode'");
+    }
+    return select;
+  };
+
+  /** Drives the real select the way a user does: picks the option, fires change, lets the view settle. */
+  const chooseTargetMode = (f: ComponentFixture<FeaturePipelineBuilderComponent>, value: string): void => {
+    const select = targetModeSelect(f);
+    select.value = value;
+    select.dispatchEvent(new Event('change'));
+    f.detectChanges();
+  };
+
+  const mapping = (record: MJRecordProcessEntity): { fields: Record<string, string> } => JSON.parse(record.OutputMapping ?? '{}');
+
+  it('offers "Feature value only (no write-back)" first in the target mode select', () => {
+    const f = render(makeRecord());
+    const options = Array.from(targetModeSelect(f).options).map((o) => o.textContent?.trim());
+    expect(options[0]).toBe('Feature value only (no write-back)');
+    expect(f.componentInstance.AvailableTargetModes[0].Value).toBe('none');
+  });
+
+  it('removes the target, explains it, and drops the output from OutputMapping when chosen', () => {
+    const record = makeRecord();
+    const f = render(record);
+    f.componentInstance.UpdateOutputProp(0, 'Name', eventWithValue('ChurnRisk', 'input'));
+    expect(mapping(record).fields).toEqual({ Rating: 'risk' });
+
+    chooseTargetMode(f, 'none');
+
+    expect(f.componentInstance.spec.Outputs[0].Target).toBeUndefined();
+    expect(savedSpec(record)?.Outputs[0].Target).toBeUndefined();
+    expect((f.nativeElement as Element).textContent).toContain(FV_ONLY_TEXT);
+    expect(mapping(record).fields).toEqual({});
+    expect(targetModeSelect(f).value).toBe('none');
+  });
+
+  it('recreates a field target when "field" is chosen again', () => {
+    const record = makeRecord();
+    const f = render(record);
+    chooseTargetMode(f, 'none');
+
+    chooseTargetMode(f, 'field');
+
+    const target = f.componentInstance.spec.Outputs[0].Target;
+    expect(target?.Mode).toBe('field');
+    expect((f.nativeElement as Element).textContent).not.toContain(FV_ONLY_TEXT);
+    expect(savedSpec(record)?.Outputs[0].Target?.Mode).toBe('field');
   });
 });
