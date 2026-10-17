@@ -1,0 +1,272 @@
+[
+  {
+    "_comments": [
+      "Configures MJ: AI Agent Run Steps to use SaveReturnMode = datestamps_only so spCreate/spUpdate return only [ID], [__mj_CreatedAt], [__mj_UpdatedAt] from BaseTable instead of re-reading BaseView."
+    ],
+    "fields": {
+      "Name": "MJ: AI Agent Run Steps",
+      "Configuration": {
+        "SaveReturnMode": "datestamps_only"
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: AI Agent Run Steps"
+    },
+    "sync": {
+      "lastModified": "2026-10-17T20:26:32.083Z",
+      "checksum": "9752a05ad098751976a69578ce695146feb100266f848ce1852a4d52dc560e45"
+    }
+  },
+  {
+    "_comments": [
+      "Configures MJ: AI Prompt Runs to use SaveReturnMode = datestamps_only so spCreate/spUpdate return only [ID], [__mj_CreatedAt], [__mj_UpdatedAt] from BaseTable instead of re-reading BaseView."
+    ],
+    "fields": {
+      "Name": "MJ: AI Prompt Runs",
+      "Configuration": {
+        "SaveReturnMode": "datestamps_only"
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: AI Prompt Runs"
+    },
+    "sync": {
+      "lastModified": "2026-10-17T20:26:32.142Z",
+      "checksum": "2297f874d4bbc9751a0e97af589b90d50f4cf9ffee758dbd75035d76408312c0"
+    }
+  },
+  {
+    "_comments": [
+      "Configures MJ: AI Agent Run Medias to use SaveReturnMode = datestamps_only so spCreate/spUpdate return only [ID], [__mj_CreatedAt], [__mj_UpdatedAt] from BaseTable instead of re-reading BaseView."
+    ],
+    "fields": {
+      "Name": "MJ: AI Agent Run Medias",
+      "Configuration": {
+        "SaveReturnMode": "datestamps_only"
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: AI Agent Run Medias"
+    },
+    "sync": {
+      "lastModified": "2026-10-17T20:26:32.204Z",
+      "checksum": "13c7dd863aa62b9b9d882aee73f73886d9ec836f81ab9d01b8b369451359988c"
+    }
+  },
+  {
+    "_comments": [
+      "Configures MJ: AI Prompt Run Medias to use SaveReturnMode = datestamps_only so spCreate/spUpdate return only [ID], [__mj_CreatedAt], [__mj_UpdatedAt] from BaseTable instead of re-reading BaseView."
+    ],
+    "fields": {
+      "Name": "MJ: AI Prompt Run Medias",
+      "Configuration": {
+        "SaveReturnMode": "datestamps_only"
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: AI Prompt Run Medias"
+    },
+    "sync": {
+      "lastModified": "2026-10-17T20:26:32.254Z",
+      "checksum": "180b3eab1fced14d8cf22e1d1837b6b9b23729670c9fb95852075064957a8b81"
+    }
+  },
+  {
+    "_comments": [
+      "Configures MJ: MCP Tool Execution Logs to use SaveReturnMode = datestamps_only so spCreate/spUpdate return only [ID], [__mj_CreatedAt], [__mj_UpdatedAt] from BaseTable instead of re-reading BaseView."
+    ],
+    "fields": {
+      "Name": "MJ: MCP Tool Execution Logs",
+      "Configuration": {
+        "SaveReturnMode": "datestamps_only"
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: MCP Tool Execution Logs"
+    },
+    "sync": {
+      "lastModified": "2026-10-17T20:26:32.304Z",
+      "checksum": "5d09229d4e2f4a03aa3d40687747fe8b721135c0bdb7ffe44028ff3425667be1"
+    }
+  },
+  {
+    "_comments": [
+      "Configures MJ: Search Execution Logs to use SaveReturnMode = datestamps_only so spCreate/spUpdate return only [ID], [__mj_CreatedAt], [__mj_UpdatedAt] from BaseTable instead of re-reading BaseView."
+    ],
+    "fields": {
+      "Name": "MJ: Search Execution Logs",
+      "Configuration": {
+        "SaveReturnMode": "datestamps_only"
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Search Execution Logs"
+    },
+    "sync": {
+      "lastModified": "2026-10-17T20:26:32.345Z",
+      "checksum": "c624948e3a27f7e71278e24515280eb2897422736229266a4cbcef266bcf6b89"
+    }
+  },
+  {
+    "_comments": [
+      "Configures MJ: API Key Usage Logs to use SaveReturnMode = datestamps_only so spCreate/spUpdate return only [ID], [__mj_CreatedAt], [__mj_UpdatedAt] from BaseTable instead of re-reading BaseView."
+    ],
+    "fields": {
+      "Name": "MJ: API Key Usage Logs",
+      "Configuration": {
+        "SaveReturnMode": "datestamps_only"
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: API Key Usage Logs"
+    },
+    "sync": {
+      "lastModified": "2026-10-17T20:26:32.396Z",
+      "checksum": "15765ccde3f2dbe288528caedd1b6a981033e46f5a0a144323c0a2c49e595123"
+    }
+  },
+  {
+    "_comments": [
+      "Configures MJ: Company Integration Run API Logs to use SaveReturnMode = datestamps_only so spCreate/spUpdate return only [ID], [__mj_CreatedAt], [__mj_UpdatedAt] from BaseTable instead of re-reading BaseView."
+    ],
+    "fields": {
+      "Name": "MJ: Company Integration Run API Logs",
+      "Configuration": {
+        "SaveReturnMode": "datestamps_only"
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Company Integration Run API Logs"
+    },
+    "sync": {
+      "lastModified": "2026-10-17T20:26:32.438Z",
+      "checksum": "1a06c2b6b8ac457a9d18d838b451a68dbe3b81230eee36330abf9466946427a7"
+    }
+  },
+  {
+    "_comments": [
+      "Configures MJ: Company Integration Run Details to use SaveReturnMode = datestamps_only so spCreate/spUpdate return only [ID], [__mj_CreatedAt], [__mj_UpdatedAt] from BaseTable instead of re-reading BaseView."
+    ],
+    "fields": {
+      "Name": "MJ: Company Integration Run Details",
+      "Configuration": {
+        "SaveReturnMode": "datestamps_only"
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Company Integration Run Details"
+    },
+    "sync": {
+      "lastModified": "2026-10-17T20:26:32.498Z",
+      "checksum": "06885f19b76f933eaa9b8a3c97475ed0610eed0d14b5cec42c91e55ddb87a87d"
+    }
+  },
+  {
+    "_comments": [
+      "Configures MJ: Content Process Run Details to use SaveReturnMode = datestamps_only so spCreate/spUpdate return only [ID], [__mj_CreatedAt], [__mj_UpdatedAt] from BaseTable instead of re-reading BaseView."
+    ],
+    "fields": {
+      "Name": "MJ: Content Process Run Details",
+      "Configuration": {
+        "SaveReturnMode": "datestamps_only"
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Content Process Run Details"
+    },
+    "sync": {
+      "lastModified": "2026-10-17T20:26:32.540Z",
+      "checksum": "8b6ecb1ea31c777c8c119de8eced6bc9d75d4a733b44e84a001bab91bec06d55"
+    }
+  },
+  {
+    "_comments": [
+      "Configures MJ: Queue Tasks to use SaveReturnMode = datestamps_only so spCreate/spUpdate return only [ID], [__mj_CreatedAt], [__mj_UpdatedAt] from BaseTable instead of re-reading BaseView."
+    ],
+    "fields": {
+      "Name": "MJ: Queue Tasks",
+      "Configuration": {
+        "SaveReturnMode": "datestamps_only"
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Queue Tasks"
+    },
+    "sync": {
+      "lastModified": "2026-10-17T20:26:32.587Z",
+      "checksum": "d7d7b70fe8eb8409b4d0f4bd99197a5920af83095bcd54251ada7c299fa62c38"
+    }
+  },
+  {
+    "_comments": [
+      "Configures MJ: Work Queue Messages to use SaveReturnMode = datestamps_only so spCreate/spUpdate return only [ID], [__mj_CreatedAt], [__mj_UpdatedAt] from BaseTable instead of re-reading BaseView."
+    ],
+    "fields": {
+      "Name": "MJ: Work Queue Messages",
+      "Configuration": {
+        "SaveReturnMode": "datestamps_only"
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Work Queue Messages"
+    },
+    "sync": {
+      "lastModified": "2026-10-17T20:26:32.639Z",
+      "checksum": "c9dd90a414775a60fe1902137e15cb86b3212c33cf1fca37492b7538cf46f425"
+    }
+  },
+  {
+    "_comments": [
+      "Configures MJ: Work Queue Deliveries to use SaveReturnMode = datestamps_only so spCreate/spUpdate return only [ID], [__mj_CreatedAt], [__mj_UpdatedAt] from BaseTable instead of re-reading BaseView."
+    ],
+    "fields": {
+      "Name": "MJ: Work Queue Deliveries",
+      "Configuration": {
+        "SaveReturnMode": "datestamps_only"
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Work Queue Deliveries"
+    },
+    "sync": {
+      "lastModified": "2026-10-17T20:26:32.675Z",
+      "checksum": "7c58499a0d9cd27ccc475726b8e72da3a67b3ef5d2dc0806f440dcc4efb66dea"
+    }
+  },
+  {
+    "_comments": [
+      "Configures MJ: Test Runs to use SaveReturnMode = datestamps_only so spCreate/spUpdate return only [ID], [__mj_CreatedAt], [__mj_UpdatedAt] from BaseTable instead of re-reading BaseView."
+    ],
+    "fields": {
+      "Name": "MJ: Test Runs",
+      "Configuration": {
+        "SaveReturnMode": "datestamps_only"
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Test Runs"
+    },
+    "sync": {
+      "lastModified": "2026-10-17T20:26:32.718Z",
+      "checksum": "9930b5708c746e543434b4be14e4c4788df342b73cfb3d3ac882bb5a1e49ef3d"
+    }
+  },
+  {
+    "_comments": [
+      "Configures MJ: Test Run Outputs to use SaveReturnMode = datestamps_only so spCreate/spUpdate return only [ID], [__mj_CreatedAt], [__mj_UpdatedAt] from BaseTable instead of re-reading BaseView."
+    ],
+    "fields": {
+      "Name": "MJ: Test Run Outputs",
+      "Configuration": {
+        "SaveReturnMode": "datestamps_only"
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Test Run Outputs"
+    },
+    "sync": {
+      "lastModified": "2026-10-17T20:26:32.758Z",
+      "checksum": "bc3ee60d4978ffaada76e305ef039db2684e4ad9e2f4b69d1edbe2f69c2a197e"
+    }
+  }
+]

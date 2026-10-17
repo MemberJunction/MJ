@@ -228,6 +228,13 @@ if (saved) {
 await newUser.Delete();
 ```
 
+#### High-Throughput Saves with `SaveReturnMode: 'datestamps_only'`
+
+When saving high-write entities (such as `AIPromptRun`, `AIAgentRun`, `AIAgentRunStep`, `ConversationDetail`, or `AuditLog`) whose UUID primary keys are pre-populated on `NewRecord()` and whose `BaseView` includes expensive joins or large `NVARCHAR(MAX)` columns, `SQLServerDataProvider` supports `SaveReturnMode: 'datestamps_only'` at both the entity level (`Entity.Configuration.SaveReturnMode`) and per-save (`EntitySaveOptions.SaveReturnMode`):
+
+- **Entity-level `SaveReturnMode: 'datestamps_only'`**: CodeGen generates `spCreate*` and `spUpdate*` procedures that return only `[PK], [__mj_CreatedAt], [__mj_UpdatedAt]` directly from `BaseTable` (skipping `BaseView`). When `TrackRecordChanges` is enabled, `SQLServerDataProvider` declares a narrow `@ResultTable` matching only those primary key and timestamp columns, captures the `EXEC` output, and returns `SELECT [PK], [__mj_CreatedAt], [__mj_UpdatedAt] FROM @ResultTable`.
+- **Per-save `options.SaveReturnMode = 'datestamps_only'` on a `'full'` entity**: Even when the stored procedure returns the full view row, `SQLServerDataProvider` projects only `SELECT [PK], [__mj_CreatedAt], [__mj_UpdatedAt] FROM @ResultTable` over the wire and merges the returned primary key and database-generated timestamps onto the in-memory `BaseEntity` fields so optimistic concurrency checking (`__mj_UpdatedAt`) remains accurate without transferring large columns back from SQL Server.
+
 ### Transaction Groups
 
 Transaction groups execute multiple entity operations within a single database transaction, with automatic rollback on failure.
