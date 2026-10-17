@@ -389,7 +389,7 @@ describe('EvaluateDomRules', () => {
     });
 
     describe('MJ_UNBUNDLED_FONT', () => {
-        it('emits a Warning when FontIsBundled is false and passes when FontIsBundled is true', () => {
+        it('emits an Error when FontIsBundled is false and passes when FontIsBundled is true', () => {
             const unbundled = makeMeasuredText({
                 Selector: '#sys-heading',
                 FontFamily: 'Arial',
@@ -410,7 +410,7 @@ describe('EvaluateDomRules', () => {
                 expect.objectContaining({
                     Code: MJ_UNBUNDLED_FONT_CODE,
                     Category: 'Lint',
-                    Severity: 'Warning',
+                    Severity: 'Error',
                     Selector: '#sys-heading',
                 }),
             ]);

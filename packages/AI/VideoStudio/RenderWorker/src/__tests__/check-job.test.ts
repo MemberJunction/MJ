@@ -133,8 +133,39 @@ describe('RunCheckJob', () => {
         ]);
     });
 
-    it('sets Passed=true and BlockRender=false when only Warnings are present', async () => {
-        const backend = new FakeRenderBackend({
+    it('sets Passed=true and BlockRender=false when only Warnings are present, and blocks render when MJ_UNBUNDLED_FONT (Error) is emitted', async () => {
+        const warningOnlyBackend = new FakeRenderBackend({
+            CheckCliIssues: [
+                {
+                    Code: 'minor_layout_notice',
+                    Category: 'Layout',
+                    Severity: 'Warning',
+                    Message: 'Non-blocking layout warning',
+                    Selector: '#title',
+                },
+            ],
+        });
+
+        const warningResult = await RunCheckJob(
+            {
+                Bundle: makeCleanBundle(),
+                Width: 1920,
+                Height: 1080,
+            },
+            warningOnlyBackend,
+        );
+
+        expect(warningResult.Passed).toBe(true);
+        expect(warningResult.BlockRender).toBe(false);
+        expect(warningResult.Issues).toEqual([
+            expect.objectContaining({
+                Code: 'minor_layout_notice',
+                Category: 'Layout',
+                Severity: 'Warning',
+            }),
+        ]);
+
+        const unbundledFontBackend = new FakeRenderBackend({
             MeasuredTexts: [
                 [
                     {
@@ -154,22 +185,22 @@ describe('RunCheckJob', () => {
             ],
         });
 
-        const result = await RunCheckJob(
+        const unbundledResult = await RunCheckJob(
             {
                 Bundle: makeCleanBundle(),
                 Width: 1920,
                 Height: 1080,
             },
-            backend,
+            unbundledFontBackend,
         );
 
-        expect(result.Passed).toBe(true);
-        expect(result.BlockRender).toBe(false);
-        expect(result.Issues).toEqual([
+        expect(unbundledResult.Passed).toBe(false);
+        expect(unbundledResult.BlockRender).toBe(true);
+        expect(unbundledResult.Issues).toEqual([
             expect.objectContaining({
                 Code: MJ_UNBUNDLED_FONT_CODE,
                 Category: 'Lint',
-                Severity: 'Warning',
+                Severity: 'Error',
             }),
         ]);
     });
