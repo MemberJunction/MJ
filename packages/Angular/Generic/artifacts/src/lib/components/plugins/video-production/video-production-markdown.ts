@@ -1,4 +1,3 @@
-import * as VideoStudioCore from '@memberjunction/video-studio-core';
 import type {
   VideoDataFormat,
   VideoDataSource,
@@ -26,29 +25,6 @@ export function EscapeMarkdown(value: unknown): string {
     .replace(/>/g, '&gt;')
     .replace(/#/g, '\\#')
     .replace(/\r?\n/g, ' ');
-}
-
-/**
- * Formats an ISO-8601 `AsOf` timestamp into `"Data as of YYYY-MM-DD"` in UTC.
- * Delegates to `@memberjunction/video-studio-core`'s `FormatAsOfCardText` when available.
- */
-export function FormatAsOfCardText(asOf: string): string {
-  const coreFormatter = (VideoStudioCore as Record<string, unknown>)['FormatAsOfCardText'];
-  if (typeof coreFormatter === 'function') {
-    return (coreFormatter as (val: string) => string)(asOf);
-  }
-  if (!asOf || typeof asOf !== 'string' || !asOf.trim()) {
-    throw new Error(`Invalid AsOf timestamp: "${String(asOf)}"`);
-  }
-  const time = Date.parse(asOf);
-  if (Number.isNaN(time)) {
-    throw new Error(`Invalid AsOf timestamp: "${asOf}"`);
-  }
-  const date = new Date(time);
-  const year = date.getUTCFullYear();
-  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
-  const day = String(date.getUTCDate()).padStart(2, '0');
-  return `Data as of ${year}-${month}-${day}`;
 }
 
 /**

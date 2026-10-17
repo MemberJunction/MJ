@@ -16,8 +16,10 @@
         @if (HasDataBadge) {
           <span class="vp-badge vp-badge--data">
             <span class="vp-badge__label">Contains data</span>
-            <span class="vp-badge__separator">·</span>
-            <span class="vp-badge__as-of">{{ DataAsOfText }}</span>
+            @if (DataAsOfText) {
+              <span class="vp-badge__separator">·</span>
+              <span class="vp-badge__as-of">{{ DataAsOfText }}</span>
+            }
           </span>
         }
         <span class="vp-badge vp-badge--status" [attr.data-status]="Spec.Status">

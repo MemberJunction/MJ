@@ -10,7 +10,6 @@ import {
   BuildDataMarkdown,
   BuildStyleMarkdown,
   EscapeMarkdown,
-  FormatAsOfCardText,
 } from '../lib/components/plugins/video-production/video-production-markdown';
 import { VideoProductionViewerComponent } from '../lib/components/plugins/video-production/video-production-viewer.component';
 import { VideoProductionArtifactPreviewComponent } from '../lib/components/previews/video-production-artifact-preview.component';
@@ -262,11 +261,6 @@ describe('VideoProductionViewer markdown helpers & static registration contract'
     expect(EscapeMarkdown('a | b `c` *d* _e_ [f] <g> #h\ni')).toBe(
       'a \\| b \\`c\\` \\*d\\* \\_e\\_ \\[f\\] &lt;g&gt; \\#h i',
     );
-  });
-
-  it('FormatAsOfCardText formats UTC date and throws on invalid input', () => {
-    expect(FormatAsOfCardText('2026-10-01T23:59:59.000Z')).toBe('Data as of 2026-10-01');
-    expect(() => FormatAsOfCardText('not-a-date')).toThrow();
   });
 
   it('CanHandlePreview returns true for "Video Production" (case-insensitive) and false for other types', () => {

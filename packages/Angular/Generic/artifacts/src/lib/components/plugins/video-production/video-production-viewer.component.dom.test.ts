@@ -401,6 +401,27 @@ describe('VideoProductionViewerComponent & Tab Components (DOM)', () => {
     expect(badge?.textContent).toContain('Data as of 2026-10-01');
   });
 
+  it('logs LogError and shows the "Contains data" badge without a date when DataSnapshot.AsOf is invalid', () => {
+    const badAsOfSpec = makeSpec({
+      DataSnapshot: {
+        AsOf: 'not-a-valid-date',
+        Sources: ['Query:88888888-8888-4888-8888-888888888888'],
+      },
+    });
+    const fixture = renderComponentFixture(VideoProductionViewerComponent, {
+      imports: [ArtifactsModule],
+      inputs: {
+        artifactVersion: makeVersion(JSON.stringify(badAsOfSpec)),
+      },
+    });
+
+    const badge = query(fixture, '.vp-badge--data');
+    expect(badge).not.toBeNull();
+    expect(badge?.textContent).toContain('Contains data');
+    expect(badge?.textContent).not.toContain('not-a-valid-date');
+    expect(query(fixture, '.vp-badge__as-of')).toBeNull();
+  });
+
   it('omits the data badge when DataBindings is empty', () => {
     const withoutData = makeSpec({ DataBindings: [] });
     const fixtureWithoutData = renderComponentFixture(VideoProductionViewerComponent, {

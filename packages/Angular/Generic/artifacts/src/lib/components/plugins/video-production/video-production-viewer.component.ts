@@ -1,12 +1,13 @@
 import { AfterViewChecked, Component, ElementRef, OnInit, QueryList, Type, ViewChildren } from '@angular/core';
-import { DataSnapshot } from '@memberjunction/core';
+import { DataSnapshot, LogError } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { MediaTrack } from '@memberjunction/ng-media-player';
-import type {
-  VideoCompositionSource,
-  VideoFormat,
-  VideoGenerationSpec,
-  VideoRenderedFormatOutput,
+import {
+  FormatAsOfCardText,
+  type VideoCompositionSource,
+  type VideoFormat,
+  type VideoGenerationSpec,
+  type VideoRenderedFormatOutput,
 } from '@memberjunction/video-studio-core';
 import { IArtifactPreviewComponent } from '../../../interfaces/artifact-viewer-plugin.interface';
 import {
@@ -18,7 +19,6 @@ import {
   BuildBriefMarkdown,
   BuildDataMarkdown,
   BuildStyleMarkdown,
-  FormatAsOfCardText,
 } from './video-production-markdown';
 import { VideoProductionReviewTabComponent } from './video-production-review-tab.component';
 import { VideoProductionStoryboardTabComponent } from './video-production-storyboard-tab.component';
@@ -48,6 +48,9 @@ export class VideoProductionViewerComponent
   public AvailableFormats: VideoFormat[] = [];
   public SelectedFormat: VideoFormat = '16:9';
   public InlineTracks: MediaTrack[] = [];
+
+  private cachedAsOfInput: string | undefined = undefined;
+  private cachedAsOfText = '';
 
   @ViewChildren('formatBtn')
   private formatButtonRefs?: QueryList<ElementRef<HTMLButtonElement>>;
@@ -96,11 +99,7 @@ export class VideoProductionViewerComponent
   }
 
   public get HasDataBadge(): boolean {
-    return Boolean(
-      this.Spec?.DataBindings &&
-        this.Spec.DataBindings.length > 0 &&
-        this.Spec?.DataSnapshot?.AsOf,
-    );
+    return Boolean(this.Spec?.DataBindings && this.Spec.DataBindings.length > 0);
   }
 
   public get DataAsOfText(): string {
@@ -108,11 +107,21 @@ export class VideoProductionViewerComponent
     if (!asOf) {
       return '';
     }
-    try {
-      return FormatAsOfCardText(asOf);
-    } catch {
-      return `Data as of ${asOf}`;
+    if (this.cachedAsOfInput === asOf) {
+      return this.cachedAsOfText;
     }
+    this.cachedAsOfInput = asOf;
+    try {
+      this.cachedAsOfText = FormatAsOfCardText(asOf);
+    } catch (err) {
+      LogError(
+        `VideoProductionViewerComponent: invalid DataSnapshot.AsOf "${asOf}": ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+      this.cachedAsOfText = '';
+    }
+    return this.cachedAsOfText;
   }
 
   public SelectFormat(format: VideoFormat): void {
@@ -218,6 +227,8 @@ export class VideoProductionViewerComponent
     this.Spec = null;
     this.AvailableFormats = [];
     this.InlineTracks = [];
+    this.cachedAsOfInput = undefined;
+    this.cachedAsOfText = '';
 
     if (!this.artifactVersion?.Content) {
       return;
