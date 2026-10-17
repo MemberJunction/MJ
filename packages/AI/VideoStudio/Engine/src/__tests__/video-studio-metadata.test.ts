@@ -17,6 +17,7 @@ import {
     type VideoDefect,
     type VideoGenerationSpec,
 } from '@memberjunction/video-studio-core';
+import { DELIVERED_SPEC_FIXTURE } from './fixtures/delivered-spec.fixture.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, '../../../../../..');
@@ -135,6 +136,7 @@ describe('Video Studio metadata pin (VS-AGT-1)', () => {
         expect(root.fields.DefaultArtifactTypeID).toBe('@lookup:MJ: Artifact Types.Name=Video Production');
         expect(root.fields.ArtifactCreationMode).toBe('Always');
         expect(root.fields.IconClass).toBe('fa-solid fa-clapperboard');
+        expect(root.fields.MaxCostPerRun).toBe(50);
         expect(root.fields.PayloadSelfWritePaths).toEqual([]);
 
         const rootPrompts = root.relatedEntities?.['MJ: AI Agent Prompts'] ?? [];
@@ -1045,94 +1047,7 @@ describe('Video Studio caller relationships (VS-INV-2)', () => {
         'Review.HumanReviewNotes': 'video.HumanReviewNotes',
     };
 
-    const deliveredSpecFixture: VideoGenerationSpec = {
-        SpecVersion: VIDEO_STUDIO_SPEC_VERSION,
-        ...directorExample.payloadChangeRequest.replaceElements,
-        ...artDirectorExample.payloadChangeRequest.replaceElements,
-        ...storyboardExample.payloadChangeRequest.replaceElements,
-        Status: 'Delivered',
-        DataSnapshot: {
-            AsOf: '2026-10-17T00:00:00.000Z',
-            Sources: ['Query: Q3 Pipeline Summary'],
-            Inline: {
-                q3_pipeline_total: { Value: 4200000, Formatted: '$4.2M' },
-                q3_yoy_growth: { Value: 18, Formatted: '+18%' },
-            },
-        },
-        Render: {
-            Renderer: 'HyperFrames',
-            RendererVersion: '0.1.0',
-            Fps: 30,
-            Seed: 42,
-            Quality: 'standard',
-        },
-        Interaction: {
-            Mode: 'Autonomous',
-            MaxRepairRounds: 2,
-        },
-        Deliverables: {
-            Formats: ['16:9', '9:16'],
-            Poster: true,
-            ContactSheets: true,
-            Source: true,
-            Captions: true,
-        },
-        Output: {
-            Videos: {
-                '16:9': {
-                    Format: '16:9',
-                    FileID: '11111111-2222-4333-8444-555555555555',
-                    MimeType: 'video/mp4',
-                    Width: 1920,
-                    Height: 1080,
-                    DurationSeconds: 18,
-                    FileSizeBytes: 2450000,
-                },
-                '9:16': {
-                    Format: '9:16',
-                    FileID: '66666666-7777-4888-9999-000000000000',
-                    MimeType: 'video/mp4',
-                    Width: 1080,
-                    Height: 1920,
-                    DurationSeconds: 18,
-                    FileSizeBytes: 2150000,
-                },
-            },
-            PosterFileID: 'AAAAAAAA-BBBB-4CCC-8DDD-EEEEEEEEEEEE',
-            ContactSheetFileIDs: {
-                '16:9': ['12121212-3434-4565-8787-989898989898'],
-                '9:16': ['23232323-4545-4676-8989-010101010101'],
-            },
-            CaptionsFileID: '34343434-5656-4787-9090-121212121212',
-            RenderMetadata: {
-                Renderer: 'HyperFrames',
-                RendererVersion: '0.1.0',
-                Seed: 42,
-                Fps: 30,
-                DurationByFormat: { '16:9': 18, '9:16': 18 },
-                RenderedAt: '2026-10-17T00:01:00.000Z',
-            },
-        },
-        Review: {
-            Gates: [
-                { Gate: 'G1', Status: 'Passed', EvidenceRefs: ['step-g1'], Timestamp: '2026-10-17T00:00:10.000Z' },
-                { Gate: 'G2', Status: 'Passed', EvidenceRefs: ['step-g2'], Timestamp: '2026-10-17T00:00:20.000Z', Notes: 'Approved' },
-                { Gate: 'G3', Status: 'Passed', EvidenceRefs: ['step-g3'], Timestamp: '2026-10-17T00:01:05.000Z' },
-                { Gate: 'G4', Status: 'Passed', EvidenceRefs: ['step-g4'], Timestamp: '2026-10-17T00:01:15.000Z' },
-                { Gate: 'G5', Status: 'Passed', EvidenceRefs: ['step-g5'], Timestamp: '2026-10-17T00:01:15.000Z' },
-                { Gate: 'G6', Status: 'Passed', EvidenceRefs: ['step-g6'], Timestamp: '2026-10-17T00:01:20.000Z' },
-            ],
-            Rounds: [
-                {
-                    Round: 1,
-                    Timestamp: '2026-10-17T00:01:10.000Z',
-                    Defects: [],
-                    Summary: 'Clean delivery across all formats.',
-                },
-            ],
-            HumanReviewNotes: 'No open items.',
-        },
-    };
+    const deliveredSpecFixture: VideoGenerationSpec = DELIVERED_SPEC_FIXTURE;
 
     it('1. defines exactly two caller rows under Video Studio with SubAgentID=@parent:ID, Consult, and the Standard preset lookup', () => {
         expect(callerRelationships).toHaveLength(2);
