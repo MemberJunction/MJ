@@ -43,8 +43,9 @@ import {
     BettyBotLLM,
 } from '@memberjunction/ai-betty-bot';
 
-// @memberjunction/ai-blackforestlabs (1 classes)
+// @memberjunction/ai-blackforestlabs (2 classes)
 import {
+    FLUX3VideoGenerator,
     FLUXImageGenerator,
 } from '@memberjunction/ai-blackforestlabs';
 
@@ -221,7 +222,7 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/core-entities (451 classes)
+// @memberjunction/core-entities (454 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -346,6 +347,8 @@ import {
     MJAuthenticationProviderEntity,
     MJAuthorizationEntity,
     MJAuthorizationRoleEntity,
+    MJBrandKitAssetEntity,
+    MJBrandKitEntity,
     MJClusterAnalysisClusterEntity,
     MJClusterAnalysisEntity,
     MJCollectionArtifactEntity,
@@ -662,6 +665,7 @@ import {
     MJVersionLabelEntity,
     MJVersionLabelItemEntity,
     MJVersionLabelRestoreEntity,
+    MJVideoArchetypeEntity,
     MJViewTypeEntity,
     MJWebSearchProviderEntity,
     MJWorkQueueDeduplicationEntity,
@@ -1207,7 +1211,7 @@ import {
     MJVectorIndexEntityServer,
 } from '@memberjunction/core-entities-server';
 
-// @memberjunction/core-actions (156 classes)
+// @memberjunction/core-actions (157 classes)
 import {
     APIRateLimiterAction,
     ActionSmithAgent,
@@ -1271,6 +1275,7 @@ import {
     GammaGeneratePresentationAction,
     GenerateImageAction,
     GenerateIntegrationActionAction,
+    GenerateVideoAction,
     GeocodeAddressAction,
     GetActiveFormForEntityAction,
     GetDefaultFormScaffoldForEntityAction,
@@ -1425,6 +1430,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     BedrockLLM,
     BettyLLM,
     BettyBotLLM,
+    FLUX3VideoGenerator,
     FLUXImageGenerator,
     CerebrasLLM,
     CloudflareDecision,
@@ -1602,6 +1608,8 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJAuthenticationProviderEntity,
     MJAuthorizationEntity,
     MJAuthorizationRoleEntity,
+    MJBrandKitAssetEntity,
+    MJBrandKitEntity,
     MJClusterAnalysisClusterEntity,
     MJClusterAnalysisEntity,
     MJCollectionArtifactEntity,
@@ -1614,13 +1622,13 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJCommunicationProviderMessageTypeEntity,
     MJCommunicationRunEntity,
     MJCompanyEntity,
-    MJCompanyIntegrationEntity,
-    MJCompanyIntegrationEntityMapEntity,
-    MJCompanyIntegrationFieldMapEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJCompanyIntegrationEntity,
+    MJCompanyIntegrationEntityMapEntity,
+    MJCompanyIntegrationFieldMapEntity,
     MJCompanyIntegrationRecordMapEntity,
     MJCompanyIntegrationRunAPILogEntity,
     MJCompanyIntegrationRunDetailEntity,
@@ -1818,13 +1826,13 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJRecommendationRunEntity,
     MJRecordChangeEntity,
     MJRecordChangeReplayRunEntity,
-    MJRecordCloneLogEntity,
-    MJRecordCloneLogItemEntity,
-    MJRecordGeoCodeEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJRecordCloneLogEntity,
+    MJRecordCloneLogItemEntity,
+    MJRecordGeoCodeEntity,
     MJRecordLinkEntity,
     MJRecordMergeDeletionLogEntity,
     MJRecordMergeLogEntity,
@@ -1926,6 +1934,7 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJVersionLabelEntity,
     MJVersionLabelItemEntity,
     MJVersionLabelRestoreEntity,
+    MJVideoArchetypeEntity,
     MJViewTypeEntity,
     MJWebSearchProviderEntity,
     MJWorkQueueDeduplicationEntity,
@@ -2021,14 +2030,14 @@ const CLASS_REGISTRATIONS_2: any[] = [
     GetTypeformStatisticsAction,
     UpdateJotFormAction,
     UpdateSurveyMonkeyAction,
-    UpdateTypeformAction,
-    WatchNewJotFormSubmissionsAction,
-    WatchNewSurveyMonkeyResponsesAction,
-    WatchNewTypeformResponsesAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    UpdateTypeformAction,
+    WatchNewJotFormSubmissionsAction,
+    WatchNewSurveyMonkeyResponsesAction,
+    WatchNewTypeformResponsesAction,
     AttachTagsAction,
     CreateUserAction_actions_bizapps_lms,
     DetachTagsAction,
@@ -2225,14 +2234,14 @@ const CLASS_REGISTRATIONS_3: any[] = [
     PredictiveStudioPromoteModelAction,
     PredictiveStudioPromoteModelServerOperation,
     PredictiveStudioRunExperimentAction,
-    PredictiveStudioRunFeaturePipelineServerOperation,
-    PredictiveStudioScheduleModelScoringAction,
-    PredictiveStudioScoreRecordSetAction,
-    PredictiveStudioScoreRecordSetServerOperation,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    PredictiveStudioRunFeaturePipelineServerOperation,
+    PredictiveStudioScheduleModelScoringAction,
+    PredictiveStudioScoreRecordSetAction,
+    PredictiveStudioScoreRecordSetServerOperation,
     PredictiveStudioStartExperimentSessionServerOperation,
     PredictiveStudioTrainModelAction,
     PredictiveStudioTrainModelServerOperation,
@@ -2387,6 +2396,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     GammaGeneratePresentationAction,
     GenerateImageAction,
     GenerateIntegrationActionAction,
+    GenerateVideoAction,
     GeocodeAddressAction,
     GetActiveFormForEntityAction,
     GetDefaultFormScaffoldForEntityAction,
@@ -2428,15 +2438,15 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MoveListMembersAction,
     MoveObjectAction,
     OAuthFlowAction,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_5: any[] = [
     ObjectExistsAction,
     PDFExtractorAction,
     ParallelExecuteAction,
     PasswordStrengthAction,
     PerplexitySearchAction,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_5: any[] = [
     PostalCodeLookupAction,
     PreviewDocumentAction,
     QRCodeAction,
@@ -2526,7 +2536,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1073;
+export const CLASS_REGISTRATIONS_COUNT = 1078;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

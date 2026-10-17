@@ -2131,6 +2131,11 @@ export class AgentRunner {
                         } else {
                             mediaEntity.InlineData = mediaOutput.data;
                         }
+                    } else if (!mediaOutput.promptRunMediaId && mediaOutput.fileId) {
+                        const extension = this.getMimeTypeExtension(mediaOutput.mimeType);
+                        const fileName = mediaOutput.label || `${mediaOutput.modality.toLowerCase()}_${i + 1}.${extension}`;
+                        mediaEntity.FileID = mediaOutput.fileId;
+                        mediaEntity.FileName = fileName;
                     }
 
                     // Set dimensions if available

@@ -1385,8 +1385,8 @@ export class BaseAgent {
 
                 for (let i = 0; i < mediaItems.length; i++) {
                     const media = mediaItems[i];
-                    // Only intercept if there's substantial data
-                    if (media.data && media.data.length > BaseAgent.LARGE_BINARY_THRESHOLD) {
+                    // Intercept when already stored in MJ Storage (fileId) or when inline data exceeds threshold
+                    if (media.fileId || (media.data && media.data.length > BaseAgent.LARGE_BINARY_THRESHOLD)) {
                         // Generate unique reference ID
                         const refId = `media-${Date.now().toString(36)}-${i}-${Math.random().toString(36).substring(2, 8)}`;
 
@@ -18131,7 +18131,7 @@ The context is now within limits. Please retry your request with the recovered c
             sourceAgentId: params.agent.ID,
             brief: handoff.brief,
             reason: handoff.reason,
-            runStepId: stepEntity?.ID ?? ''
+            runStepId: stepEntity.ID
         };
 
         return {

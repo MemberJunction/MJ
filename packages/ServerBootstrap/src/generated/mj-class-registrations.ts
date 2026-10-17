@@ -43,8 +43,9 @@ import {
     BettyBotLLM,
 } from '@memberjunction/ai-betty-bot';
 
-// @memberjunction/ai-blackforestlabs (1 classes)
+// @memberjunction/ai-blackforestlabs (2 classes)
 import {
+    FLUX3VideoGenerator,
     FLUXImageGenerator,
 } from '@memberjunction/ai-blackforestlabs';
 
@@ -243,7 +244,7 @@ import {
     WorkOSProvider,
 } from '@memberjunction/auth-providers';
 
-// @memberjunction/core-entities (451 classes)
+// @memberjunction/core-entities (454 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -368,6 +369,8 @@ import {
     MJAuthenticationProviderEntity,
     MJAuthorizationEntity,
     MJAuthorizationRoleEntity,
+    MJBrandKitAssetEntity,
+    MJBrandKitEntity,
     MJClusterAnalysisClusterEntity,
     MJClusterAnalysisEntity,
     MJCollectionArtifactEntity,
@@ -684,6 +687,7 @@ import {
     MJVersionLabelEntity,
     MJVersionLabelItemEntity,
     MJVersionLabelRestoreEntity,
+    MJVideoArchetypeEntity,
     MJViewTypeEntity,
     MJWebSearchProviderEntity,
     MJWorkQueueDeduplicationEntity,
@@ -1477,7 +1481,7 @@ import {
     WebSearchQueryServerOperation,
 } from '@memberjunction/web-search-engine';
 
-// @memberjunction/core-actions (156 classes)
+// @memberjunction/core-actions (157 classes)
 import {
     APIRateLimiterAction,
     ActionSmithAgent,
@@ -1541,6 +1545,7 @@ import {
     GammaGeneratePresentationAction,
     GenerateImageAction,
     GenerateIntegrationActionAction,
+    GenerateVideoAction,
     GeocodeAddressAction,
     GetActiveFormForEntityAction,
     GetDefaultFormScaffoldForEntityAction,
@@ -1694,6 +1699,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     BedrockLLM,
     BettyLLM,
     BettyBotLLM,
+    FLUX3VideoGenerator,
     FLUXImageGenerator,
     CerebrasLLM,
     CloudflareDecision,
@@ -1881,15 +1887,17 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJAuthenticationProviderEntity,
     MJAuthorizationEntity,
     MJAuthorizationRoleEntity,
+    MJBrandKitAssetEntity,
+    MJBrandKitEntity,
     MJClusterAnalysisClusterEntity,
     MJClusterAnalysisEntity,
-    MJCollectionArtifactEntity,
-    MJCollectionEntity,
-    MJCollectionPermissionEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJCollectionArtifactEntity,
+    MJCollectionEntity,
+    MJCollectionPermissionEntity,
     MJCollectionPermissionEntityExtended,
     MJCommunicationBaseMessageTypeEntity,
     MJCommunicationLogEntity,
@@ -2087,13 +2095,13 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJQueryParameterEntity,
     MJQueryPermissionEntity,
     MJQuerySQLEntity,
-    MJQueueEntity,
-    MJQueueTaskEntity,
-    MJQueueTypeEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJQueueEntity,
+    MJQueueTaskEntity,
+    MJQueueTypeEntity,
     MJRSUPendingWorkEntity,
     MJRecommendationEntity,
     MJRecommendationItemEntity,
@@ -2205,6 +2213,7 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJVersionLabelEntity,
     MJVersionLabelItemEntity,
     MJVersionLabelRestoreEntity,
+    MJVideoArchetypeEntity,
     MJViewTypeEntity,
     MJWebSearchProviderEntity,
     MJWorkQueueDeduplicationEntity,
@@ -2290,14 +2299,14 @@ const CLASS_REGISTRATIONS_2: any[] = [
     ExportGoogleFormsCSVAction,
     ExportJotFormCSVAction,
     ExportSurveyMonkeyCSVAction,
-    ExportTypeformCSVAction,
-    GetGoogleFormAction,
-    GetGoogleFormsStatisticsAction,
-    GetJotFormAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    ExportTypeformCSVAction,
+    GetGoogleFormAction,
+    GetGoogleFormsStatisticsAction,
+    GetJotFormAction,
     GetJotFormStatisticsAction,
     GetJotFormSubmissionsAction,
     GetSingleGoogleFormsResponseAction,
@@ -2494,14 +2503,14 @@ const CLASS_REGISTRATIONS_3: any[] = [
     NoopReRanker,
     OpenAIReRanker,
     OpenSearchSearchProvider,
-    SearchScopePermissionResolver,
-    StorageSearchProvider,
-    TagSearchProvider,
-    TypesenseSearchProvider,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    SearchScopePermissionResolver,
+    StorageSearchProvider,
+    TagSearchProvider,
+    TypesenseSearchProvider,
     VectorSearchProvider,
     VoyageReRanker,
     AISkillExportMarkdownServerOperation,
@@ -2698,14 +2707,14 @@ const CLASS_REGISTRATIONS_4: any[] = [
     ActivateInteractiveFormVersionAction,
     AddDocumentContentAction,
     AddRecordsToListAction,
-    AddViewResultsToListAction,
-    AggregateDataAction,
-    AssignUserRolesAction,
-    BraveSearchAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    AddViewResultsToListAction,
+    AggregateDataAction,
+    AssignUserRolesAction,
+    BraveSearchAction,
     BulkUpdateListItemStatusAction,
     BusinessDaysCalculatorAction,
     CSVParserAction,
@@ -2758,6 +2767,7 @@ const CLASS_REGISTRATIONS_5: any[] = [
     GammaGeneratePresentationAction,
     GenerateImageAction,
     GenerateIntegrationActionAction,
+    GenerateVideoAction,
     GeocodeAddressAction,
     GetActiveFormForEntityAction,
     GetDefaultFormScaffoldForEntityAction,
@@ -2888,7 +2898,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1166;
+export const CLASS_REGISTRATIONS_COUNT = 1171;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

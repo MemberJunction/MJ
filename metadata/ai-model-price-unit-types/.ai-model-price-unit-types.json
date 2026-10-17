@@ -104,5 +104,17 @@
       "lastModified": "2026-09-01T17:00:06.101Z",
       "checksum": "369e87899813b03c1fd7f3e494058fb5c3e3c4c837f8ad782ca9e3edc332fc33"
     }
+  },
+  {
+    "fields": {
+      "Name": "Per Second",
+      "Description": "Linear pricing per second of output or input media, e.g. generated video. Cost rows state the price for ONE second.",
+      "DriverClass": "Linear",
+      "UsageTypeID": "@lookup:MJ: AI Usage Types.Name=Seconds",
+      "UnitsPerBillingUnit": 1
+    },
+    "primaryKey": {
+      "ID": "F220A9BB-5884-459D-BF26-9144FBC4C768"
+    }
   }
 ]

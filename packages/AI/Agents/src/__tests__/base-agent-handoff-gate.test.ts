@@ -611,4 +611,97 @@ describe('BaseAgent.Execute — Handoff gate and execution (VS-SAGE-1)', () => {
         );
         expect(turn2Messages.some((c) => /not found or not active/i.test(c))).toBe(true);
     });
+
+    it('6. second-line withholding in validateHandoffNextStep and executeHandoffStep refuses withheld runs directly', async () => {
+        class DirectHandoffAgent extends BaseAgent {
+            public callValidateHandoffNextStep<P>(
+                params: ExecuteAgentParams,
+                nextStep: Parameters<BaseAgent['validateHandoffNextStep']>[1],
+            ) {
+                return this.validateHandoffNextStep(
+                    params,
+                    nextStep,
+                    {} as P,
+                    new FakeAgentRun() as unknown as MJAIAgentRunEntityExtended,
+                    new MockStepEntity(1) as unknown as Parameters<BaseAgent['validateHandoffNextStep']>[4],
+                );
+            }
+
+            public callExecuteHandoffStep<P>(
+                params: ExecuteAgentParams,
+                decision: Parameters<BaseAgent['executeHandoffStep']>[1],
+            ) {
+                return this.executeHandoffStep(params, decision);
+            }
+        }
+
+        const makeHandoffStep = (): Parameters<BaseAgent['validateHandoffNextStep']>[1] => ({
+            step: 'Handoff',
+            terminate: false,
+            handoff: {
+                agentName: 'Video Studio',
+                brief: 'Goal: 60-second product demo reel.',
+                reason: 'User asked to produce a video reel',
+            },
+        });
+
+        const withheldCases: Array<{ label: string; overrides: Partial<ExecuteAgentParams> }> = [
+            {
+                label: 'parentRun set',
+                overrides: {
+                    parentRun: { ID: 'aaaaaaaa-5555-4000-8000-000000000001' } as unknown as MJAIAgentRunEntityExtended,
+                    handoffChain: [],
+                    conversationDetailId: CONV_DETAIL_ID,
+                },
+            },
+            {
+                label: 'handoffChain absent',
+                overrides: {
+                    conversationDetailId: CONV_DETAIL_ID,
+                },
+            },
+            {
+                label: 'conversationDetailId absent',
+                overrides: {
+                    handoffChain: [],
+                },
+            },
+        ];
+
+        for (const { overrides } of withheldCases) {
+            const directAgent = new DirectHandoffAgent();
+            const validated = await directAgent.callValidateHandoffNextStep(
+                makeParams(overrides),
+                makeHandoffStep(),
+            );
+            expect(validated.step).toBe('Retry');
+            expect(validated.message).toMatch(/Handoff is not available here.*Sub-Agent.*Actions/);
+            expect(validated.errorMessage).toMatch(/not available on this run/i);
+            expect((directAgent as unknown as { _resolvedHandoffTarget: unknown })._resolvedHandoffTarget).toBeNull();
+        }
+
+        const execAgent = new DirectHandoffAgent();
+        await execAgent.callValidateHandoffNextStep(
+            makeParams({
+                handoffChain: [],
+                conversationDetailId: CONV_DETAIL_ID,
+            }),
+            makeHandoffStep(),
+        );
+        expect((execAgent as unknown as { _resolvedHandoffTarget: unknown })._resolvedHandoffTarget).toEqual({
+            id: TARGET_AGENT_ID,
+            name: 'Video Studio',
+        });
+
+        const execResult = await execAgent.callExecuteHandoffStep(
+            makeParams({
+                conversationDetailId: CONV_DETAIL_ID,
+            }),
+            makeHandoffStep(),
+        );
+        expect(execResult.step).toBe('Failed');
+        expect(execResult.terminate).toBe(true);
+        expect(execResult.errorMessage).toMatch(/not available on this run/i);
+        expect(harness.steps).toHaveLength(0);
+    });
 });

@@ -288,6 +288,7 @@ export class LoopAgentType extends BaseAgentType {
         topLevelMessage: string | undefined,
         params: ExecuteAgentParams<any, P>,
     ): void {
+        retVal.terminate = false;
         if (!this.handoffEnabled(params)) {
             retVal.step = 'Retry';
             retVal.message =
@@ -747,7 +748,7 @@ export class LoopAgentType extends BaseAgentType {
             // Similarly, if a valid finishIf completion gate is attached to an Actions or
             // Sub-Agent step, let the step execute and evaluate the gate instead of
             // short-circuiting to immediate success.
-            if (response.taskComplete && !hasClientTools && !hasFinishIfStep) {
+            if (response.taskComplete && !hasClientTools && !hasFinishIfStep && response.nextStep?.type !== 'Handoff') {
                 LogStatusEx({
                     message: '✅ Loop Agent: Task completed successfully. Message: ' + response.message,
                     verboseOnly: true
