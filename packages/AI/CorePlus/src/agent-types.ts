@@ -1931,42 +1931,6 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
     provider?: IMetadataProvider;
 
     /**
-     * Optional session ID for client tool communication.
-     * When provided, enables the agent to invoke client-side tools via PubSub.
-     * The session ID correlates tool requests/responses between server and client.
-     */
-    sessionID?: string;
-
-    /**
-     * The persisted MJ: AI Agent Sessions record ID this run belongs to, if the run is part of
-     * a real-time/long-lived session. Distinct from the transport `sessionID` (per-connection
-     * correlation id). Used to group the multiple AIAgentRuns of one session and to stamp
-     * ConversationDetail/AIAgentRun rows.
-     */
-    agentSessionID?: string;
-
-    /**
-     * Optional runtime override for client tool timeout (ms).
-     * Takes precedence over the agent's DefaultClientToolTimeoutMs config.
-     */
-    clientToolTimeoutMs?: number;
-
-    /**
-     * Optional wall-clock timeout for the entire agent run, in milliseconds.
-     * When set, BaseAgent wraps the execution in an internal AbortController
-     * that fires after this many ms. The abort propagates through the existing
-     * `cancellationToken` chain — sub-agents, pending prompt calls, and
-     * actions (which carry their own `RunActionParams.AbortSignal`) all see
-     * the cancellation. On timeout, the run terminates with an Aborted result
-     * whose message identifies the timeout origin.
-     *
-     * When omitted, BaseAgent falls back to its `DefaultAgentTimeoutMS`
-     * (currently 2 hours) — generous by default because some Loop agents do
-     * legitimate long iteration; tighten per-run for anything interactive.
-     */
-    maxExecutionTimeMs?: number;
-
-    /**
      * Optional post-run conversation compaction, memory extraction, and scratchpad pruning
      * configuration.
      *
@@ -2010,6 +1974,41 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      */
     compactAfterRun?: boolean | AgentPostRunCompactionConfig;
 
+    /**
+     * Optional session ID for client tool communication.
+     * When provided, enables the agent to invoke client-side tools via PubSub.
+     * The session ID correlates tool requests/responses between server and client.
+     */
+    sessionID?: string;
+
+    /**
+     * The persisted MJ: AI Agent Sessions record ID this run belongs to, if the run is part of
+     * a real-time/long-lived session. Distinct from the transport `sessionID` (per-connection
+     * correlation id). Used to group the multiple AIAgentRuns of one session and to stamp
+     * ConversationDetail/AIAgentRun rows.
+     */
+    agentSessionID?: string;
+
+    /**
+     * Optional runtime override for client tool timeout (ms).
+     * Takes precedence over the agent's DefaultClientToolTimeoutMs config.
+     */
+    clientToolTimeoutMs?: number;
+
+    /**
+     * Optional wall-clock timeout for the entire agent run, in milliseconds.
+     * When set, BaseAgent wraps the execution in an internal AbortController
+     * that fires after this many ms. The abort propagates through the existing
+     * `cancellationToken` chain — sub-agents, pending prompt calls, and
+     * actions (which carry their own `RunActionParams.AbortSignal`) all see
+     * the cancellation. On timeout, the run terminates with an Aborted result
+     * whose message identifies the timeout origin.
+     *
+     * When omitted, BaseAgent falls back to its `DefaultAgentTimeoutMS`
+     * (currently 2 hours) — generous by default because some Loop agents do
+     * legitimate long iteration; tighten per-run for anything interactive.
+     */
+    maxExecutionTimeMs?: number;
 }
 
 /**
