@@ -573,7 +573,7 @@ describe('Runtime union value lists stay in sync with video-generation-spec.ts u
 
 describe('One fixture per VideoSpecErrorCode (each proving that code and ONLY that code fires)', () => {
     const singleCodeFixtures: Record<
-        VideoSpecErrorCode,
+        (typeof VIDEO_SPEC_ERROR_CODES)[number],
         {
             spec: VideoGenerationSpec;
             stage?: VideoProductionStatus;
