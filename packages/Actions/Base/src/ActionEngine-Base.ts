@@ -1,4 +1,4 @@
-import { BaseEngine, IMetadataProvider, UserInfo, RunView, BaseEnginePropertyConfig } from "@memberjunction/core";
+import { BaseEngine, BaseEntity, IMetadataProvider, UserInfo, RunView, BaseEnginePropertyConfig } from "@memberjunction/core";
 import { EntityChangeContext } from './EntityChangeContext';
 import { MJActionCategoryEntity, MJActionEntity, MJActionExecutionLogEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity, MJEntityActionEntity, MJEntityActionParamEntity } from "@memberjunction/core-entities";
 import { MJActionEntityExtended } from "./MJActionEntityExtended";
@@ -565,6 +565,38 @@ export class ActionEngineBase extends BaseEngine<ActionEngineBase> {
     private _paramsByActionId = new Map<string, MJActionParamEntity[]>();
     private _indexedResultCodesRef?: MJActionResultCodeEntity[];
     private _resultCodesByActionId = new Map<string, MJActionResultCodeEntity[]>();
+
+    /**
+     * Marks every lookup index stale so the next lookup rebuilds it.
+     *
+     * The ref-and-size checks in the `ensure*Index` methods catch a reloaded array, but not a save or
+     * delete that {@link BaseEngine} applies in place: replacing an element (an update) keeps both the
+     * reference and the length, so a param whose `LogValue` changed or an action that was renamed would
+     * keep resolving to the old entity until restart.
+     */
+    private invalidateLookupIndexes(): void {
+       this._indexedActionsRef = undefined;
+       this._indexedCategoriesRef = undefined;
+       this._indexedParamsRef = undefined;
+       this._indexedResultCodesRef = undefined;
+    }
+
+    /** Invalidates the lookup indexes before DataChange$ subscribers run, since they may call a lookup. */
+    protected override NotifyDataChange(
+       config: BaseEnginePropertyConfig,
+       data: unknown[],
+       changeType: 'refresh' | 'add' | 'update' | 'delete' = 'refresh',
+       affectedEntity?: BaseEntity
+    ): void {
+       this.invalidateLookupIndexes();
+       super.NotifyDataChange(config, data, changeType, affectedEntity);
+    }
+
+    /** Invalidates the lookup indexes on every in-place array mutation BaseEngine applies. */
+    protected override emitPropertyChange(propertyName: string): void {
+       this.invalidateLookupIndexes();
+       super.emitPropertyChange(propertyName);
+    }
 
     private ensureActionIndex(): void {
        if (!this._Actions) return;
