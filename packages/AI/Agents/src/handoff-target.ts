@@ -230,21 +230,34 @@ async function buildRefusal<T extends DecisionDiscoveryAgent>(
     };
 }
 
-function formatRefusalMessage(reason: HandoffRefusalReason, targetLabel: string, nextAction: string): string {
+/**
+ * User-safe sentence explaining why a handoff to `targetLabel` was refused, without model-facing
+ * retry instructions (`Hand off to one of: ...` / `Answer the user yourself.`).
+ */
+export function HandoffRefusalReasonText(reason: HandoffRefusalReason, targetLabel: string): string {
     switch (reason) {
         case 'NotFound':
-            return `Agent '${targetLabel}' not found or not active. ${nextAction}`;
+            return `Agent '${targetLabel}' not found or not active.`;
         case 'Self':
-            return `You cannot hand off the conversation to yourself (${targetLabel}). ${nextAction}`;
+            return `You cannot hand off the conversation to yourself (${targetLabel}).`;
         case 'NotDiscoverable':
-            return `${targetLabel} can't be reached directly via Handoff (it is a sub-agent or child agent). ${nextAction}`;
+            return `${targetLabel} can't be reached directly via Handoff (it is a sub-agent or child agent).`;
         case 'NotAllowedHere':
-            return `${targetLabel} is not available in this host environment. ${nextAction}`;
+            return `${targetLabel} is not available in this host environment.`;
         case 'NoRunPermission':
-            return `The current user does not have permission to run ${targetLabel}. ${nextAction}`;
+            return `The current user does not have permission to run ${targetLabel}.`;
         case 'AlreadyInThisTurn':
-            return `${targetLabel} has already participated in this turn and cannot be handed back to in the same turn. Answer the user yourself.`;
+            return `${targetLabel} has already participated in this turn and cannot be handed back to in the same turn.`;
         case 'HopLimit':
-            return `The maximum handoff limit (${MAX_HANDOFF_HOPS} hops) for this turn has been reached; cannot hand off to ${targetLabel}. Answer the user yourself.`;
+            return `The maximum handoff limit (${MAX_HANDOFF_HOPS} hops) for this turn has been reached; cannot hand off to ${targetLabel}.`;
     }
 }
+
+function formatRefusalMessage(reason: HandoffRefusalReason, targetLabel: string, nextAction: string): string {
+    const baseReason = HandoffRefusalReasonText(reason, targetLabel);
+    if (reason === 'AlreadyInThisTurn' || reason === 'HopLimit') {
+        return `${baseReason} Answer the user yourself.`;
+    }
+    return `${baseReason} ${nextAction}`;
+}
+

@@ -258,13 +258,6 @@ export class RunAIAgentResolver extends ResolverBase {
     }
 
     /**
-     * Tracks elevated `UserPayload` objects minted by `RunAIAgentFromConversationDetail` for widget
-     * guests so `executeAIAgent` knows the run is widget-elevated without shifting the trailing
-     * positional arguments inspected by existing unit-test spies.
-     */
-    private readonly widgetElevatedPayloads = new WeakSet<UserPayload>();
-
-    /**
      * Internal method that handles the core AI agent execution logic.
      * This method is called by both the regular and system user resolvers.
      * @private
@@ -309,7 +302,7 @@ export class RunAIAgentResolver extends ResolverBase {
         conversationBranchId?: string | null,
         /** Whether this invocation may expose Handoff and follow returned handoff decisions.
          *  True only for interactive user sessions (no API key, no widget elevation, not system-user query). */
-        followHandoffs: boolean = !userPayload?.apiKeyHash && !this.widgetElevatedPayloads.has(userPayload)
+        followHandoffs: boolean = !userPayload?.apiKeyHash
     ): Promise<AIAgentRunResult> {
         const startTime = Date.now();
         // Best-effort handle for persistInFlightAgentFailure. Populated from a
@@ -353,23 +346,22 @@ export class RunAIAgentResolver extends ResolverBase {
 
             // The publisher owns every status message. The resolver still copies the run into
             // agentRunRef, including noise steps, for the fire-and-forget liveness pulse.
-            let currentPublisher = new AgentRunStatusPublisher(pubSub, userPayload, sessionId);
+            const sourcePublisher = new AgentRunStatusPublisher(pubSub, userPayload, sessionId);
+            let currentPublisher = sourcePublisher;
 
             // A widget- or guest-hosted run must not get a handoffChain unless the host also passes an
             // allow-list under trusted run data.
             const isGuestOrWidgetUser = Boolean(
-                currentUser.IsMagicLinkAnonymous
-                || currentUser.WidgetGuestContext
-                || this.widgetElevatedPayloads.has(userPayload)
+                currentUser.IsMagicLinkAnonymous || currentUser.WidgetGuestContext
             );
             const allowHandoff = followHandoffs && (
                 !isGuestOrWidgetUser
-                || (trustReservedRunData && typeof HostAllowedAgentIDs === 'function' && HostAllowedAgentIDs(parsedData) !== undefined)
+                || (trustReservedRunData && HostAllowedAgentIDs(parsedData) !== undefined)
             );
 
             const sourceParams = {
                 agent: agentEntity,
-                conversationMessages: parsedMessages,
+                conversationMessages: [...parsedMessages],
                 payload: payload ? SafeJSONParse(payload) : undefined,
                 contextUser: currentUser,
                 sessionID: sessionId,
@@ -378,9 +370,9 @@ export class RunAIAgentResolver extends ResolverBase {
                     if (isAgentRunEntity(fromEvent)) {
                         agentRunRef.current = fromEvent;
                     }
-                    currentPublisher.OnProgress(progress);
+                    sourcePublisher.OnProgress(progress);
                 },
-                onStreaming: currentPublisher.OnStreaming,
+                onStreaming: sourcePublisher.OnStreaming,
                 lastRunId: lastRunId,
                 autoPopulateLastRunPayload: autoPopulateLastRunPayload,
                 configurationId: configurationId,
@@ -433,55 +425,68 @@ export class RunAIAgentResolver extends ResolverBase {
 
             if (allowHandoff && result.handoff && conversationResult.conversationId && conversationResult.agentResponseDetailId) {
                 const outcomes = await agentRunner.FollowHandoffs({
-                    params: sourceParams,
+                    params: { ...sourceParams, conversationMessages: parsedMessages },
                     sourceResult: result,
                     conversationId: conversationResult.conversationId,
                     sourceConversationDetailId: conversationResult.agentResponseDetailId,
                     createArtifacts: createArtifacts || false,
-                    OnHopStart: (_hop, previousRun) => {
-                        const prevSanitized = JSON.stringify(this.sanitizeAgentResult(previousRun.agentResult));
-                        currentPublisher.PublishFinal(
-                            previousRun.agentResult,
-                            previousRun.agentResult.agentRun?.ConversationDetailID ?? previousRun.conversationDetailId,
-                            prevSanitized
-                        );
-                        currentPublisher = new AgentRunStatusPublisher(pubSub, userPayload, sessionId);
-                        return {
-                            onProgress: (progress) => {
-                                const fromEvent = progress.metadata?.agentRun;
-                                if (isAgentRunEntity(fromEvent)) {
-                                    agentRunRef.current = fromEvent;
-                                }
-                                currentPublisher.OnProgress(progress);
-                            },
-                            onStreaming: currentPublisher.OnStreaming,
-                        };
-                    },
-                    OnHopEnd: async (_hop, outcome) => {
-                        if (!outcome.agentResult) {
-                            return;
-                        }
-                        if (outcome.agentResult.agentRun) {
-                            agentRunRef.current = outcome.agentResult.agentRun;
-                        }
-                        await this.runPostExecutionNotifications(
-                            outcome.agentResult,
-                            outcome.artifactInfo,
-                            conversationResult.conversationId,
-                            outcome.targetConversationDetailId,
-                            undefined,
-                            undefined,
-                            createNotification,
-                            currentUser,
-                            pubSub,
-                            userPayload,
-                            p
-                        );
+                    hooks: {
+                        OnHopStart: (_hop, previousRun) => {
+                            const prevSanitized = JSON.stringify(this.sanitizeAgentResult(previousRun.agentResult));
+                            currentPublisher.PublishFinal(
+                                previousRun.agentResult,
+                                previousRun.agentResult.agentRun?.ConversationDetailID ?? previousRun.conversationDetailId,
+                                prevSanitized
+                            );
+                            currentPublisher = new AgentRunStatusPublisher(pubSub, userPayload, sessionId);
+                            return {
+                                onProgress: (progress) => {
+                                    const fromEvent = progress.metadata?.agentRun;
+                                    if (isAgentRunEntity(fromEvent)) {
+                                        agentRunRef.current = fromEvent;
+                                    }
+                                    currentPublisher.OnProgress(progress);
+                                },
+                                onStreaming: currentPublisher.OnStreaming,
+                            };
+                        },
+                        OnHopEnd: async (_hop, outcome) => {
+                            if (!outcome.agentResult) {
+                                return;
+                            }
+                            if (outcome.agentResult.agentRun) {
+                                agentRunRef.current = outcome.agentResult.agentRun;
+                            }
+                            await this.runPostExecutionNotifications(
+                                outcome.agentResult,
+                                outcome.artifactInfo,
+                                conversationResult.conversationId,
+                                outcome.targetConversationDetailId,
+                                undefined,
+                                undefined,
+                                createNotification,
+                                currentUser,
+                                pubSub,
+                                userPayload,
+                                p
+                            );
+                        },
                     },
                 });
-                const lastOutcomeWithResult = [...outcomes].reverse().find((o) => o.agentResult !== undefined);
-                if (lastOutcomeWithResult?.agentResult) {
-                    result = lastOutcomeWithResult.agentResult;
+                const lastOutcome = outcomes[outcomes.length - 1];
+                if (lastOutcome?.error) {
+                    const executionTime = Date.now() - startTime;
+                    currentPublisher.PublishFailure(lastOutcome.targetConversationDetailId, lastOutcome.error);
+                    LogError(`AI Agent handoff hop failed: ${lastOutcome.error}`);
+                    return {
+                        success: false,
+                        errorMessage: lastOutcome.error,
+                        executionTimeMs: executionTime,
+                        result: JSON.stringify({ success: false, errorMessage: lastOutcome.error })
+                    };
+                }
+                if (lastOutcome?.agentResult) {
+                    result = lastOutcome.agentResult;
                 }
             }
 
@@ -1091,15 +1096,13 @@ export class RunAIAgentResolver extends ResolverBase {
         const widgetElevation = await ResolveWidgetGuestRunContext(userPayload, p);
         const effectiveAgentId = widgetElevation ? widgetElevation.PinnedAgentId : agentId;
         const effectiveUserPayload = widgetElevation ? ElevateUserPayload(userPayload, widgetElevation.ElevatedUser) : userPayload;
-        if (widgetElevation) {
-            this.widgetElevatedPayloads.add(effectiveUserPayload);
-        }
         // Only the system user or an API key holding the agent:trusted scope may set a run's scope and agent-type
         // params through data (ExecuteAgentParams.TrustReservedRunData). Judged on the caller's own payload: a widget
         // guest runs under an elevated server principal but is never trusted.
         const trustRunData = await IsTrustedAgentRunCaller({
             UserPayload: userPayload, IsWidgetGuestRun: widgetElevation !== null, AgentID: agentId,
         });
+        const followHandoffs = !userPayload.apiKeyHash && !widgetElevation;
 
         try {
             // Parsed before anything loads: a floor the caller asked for must never be dropped.
@@ -1164,7 +1167,8 @@ export class RunAIAgentResolver extends ResolverBase {
                     undefined, // taskGraphDebug
                     historyFrom,
                     trustRunData,
-                    branchId
+                    branchId,
+                    followHandoffs
                 );
 
                 LogStatus(`🔥 Fire-and-forget: Agent ${effectiveAgentId} execution started in background for session ${sessionId}`);
@@ -1202,7 +1206,8 @@ export class RunAIAgentResolver extends ResolverBase {
                 undefined, // taskGraphDebug
                 historyFrom,
                 trustRunData,
-                branchId
+                branchId,
+                followHandoffs
             );
         } catch (error) {
             const errorMessage = (error as Error).message || 'Unknown error loading conversation history';
@@ -1430,7 +1435,7 @@ export class RunAIAgentResolver extends ResolverBase {
         /** The conversation branch of the run — threaded through to ExecuteAgentParams.ConversationBranchID. */
         conversationBranchId?: string | null,
         /** Whether this invocation may expose Handoff and follow returned handoff decisions. */
-        followHandoffs?: boolean
+        followHandoffs: boolean = false
     ): void {
         // Ref the liveness pulse reads to enrich heartbeats once the run is created.
         const runRef: { current: MJAIAgentRunEntityExtended | null } = { current: null };
@@ -1450,8 +1455,7 @@ export class RunAIAgentResolver extends ResolverBase {
             data, payload, undefined, lastRunId, autoPopulateLastRunPayload,
             configurationId, conversationDetailId, createArtifacts, createNotification,
             sourceArtifactId, sourceArtifactVersionId, conversationId, runRef, planMode, requestedSkillIDs, taskGraphDebug,
-            conversationHistoryFrom, trustReservedRunData, conversationBranchId,
-            ...(followHandoffs !== undefined ? [followHandoffs] : [])
+            conversationHistoryFrom, trustReservedRunData, conversationBranchId, followHandoffs
         ).catch((error: unknown) => {
             // Background execution failed unexpectedly (executeAIAgent has its own try-catch,
             // so this would only fire for truly unexpected errors).

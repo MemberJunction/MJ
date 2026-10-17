@@ -193,9 +193,12 @@ interface FakeHandoffStep {
     Save: ReturnType<typeof vi.fn>;
 }
 
-function makeHandoffStep(initialOutput: Record<string, unknown> = { targetAgentId: AGENT_STORYBOARD_ID }): FakeHandoffStep {
+function makeHandoffStep(
+    initialOutput: Record<string, unknown> = { targetAgentId: AGENT_STORYBOARD_ID },
+    id = '00000000-0000-4000-8000-000000000901'
+): FakeHandoffStep {
     return {
-        ID: 'step-handoff-1',
+        ID: id,
         StepType: 'Handoff',
         Status: 'Completed',
         OutputData: JSON.stringify(initialOutput),
@@ -317,6 +320,7 @@ describe('VS-SAGE-3: Server-side Handoff Execution', () => {
                     sourceAgentId: sourceAgent.ID,
                     brief: 'Build a 3-scene storyboard.',
                     reason: 'User asked for storyboard.',
+                    runStepId: handoffStep.ID,
                 },
             };
 
@@ -667,7 +671,7 @@ describe('VS-SAGE-3: Server-side Handoff Execution', () => {
             expect(paramsHop2.handoffChain).toEqual([sourceAgent.ID, targetAgent.ID]);
         });
 
-        it('handles re-resolution refusal: creates no target row, marks source Handoff step Failed, and appends notice to source row', async () => {
+        it('handles re-resolution refusal: creates no target row, marks source Handoff step Failed, and appends clean reason-only notice to source row', async () => {
             const sourceRow = makeDetail('detail-source', null, 'Here is my analysis.');
             const provider = makeProvider([sourceRow]);
             const runner = new AgentRunner(provider);
@@ -675,9 +679,10 @@ describe('VS-SAGE-3: Server-side Handoff Execution', () => {
             mockResolveHandoffTarget.mockResolvedValue({
                 Refusal: {
                     Reason: 'NoRunPermission',
-                    Message: 'You do not have permission to run Storyboard Artist',
+                    Message:
+                        'The current user does not have permission to run Storyboard Artist. Hand off to one of: Producer, or call Find Candidate Agents.',
                 },
-                Candidates: [],
+                Candidates: [{ ID: AGENT_PRODUCER_ID, Name: 'Producer' }],
             });
 
             const handoffStep = makeHandoffStep({ targetAgentId: targetAgent.ID });
@@ -702,6 +707,7 @@ describe('VS-SAGE-3: Server-side Handoff Execution', () => {
                         targetAgentName: 'Storyboard Artist',
                         sourceAgentId: sourceAgent.ID,
                         brief: 'Brief',
+                        runStepId: handoffStep.ID,
                     },
                 },
                 conversationId: CONV_ID,
@@ -711,11 +717,15 @@ describe('VS-SAGE-3: Server-side Handoff Execution', () => {
             expect(outcomes).toEqual([]);
             expect(runInConvSpy).not.toHaveBeenCalled();
             expect(handoffStep.Status).toBe('Failed');
-            expect(handoffStep.ErrorMessage).toBe('You do not have permission to run Storyboard Artist');
+            expect(handoffStep.ErrorMessage).toBe(
+                'The current user does not have permission to run Storyboard Artist.'
+            );
             expect(handoffStep.Save).toHaveBeenCalledTimes(1);
             expect(sourceRow.Message).toBe(
-                "Here is my analysis.\n\nI couldn't transfer you to Storyboard Artist: You do not have permission to run Storyboard Artist."
+                "Here is my analysis.\n\nI couldn't transfer you to Storyboard Artist: The current user does not have permission to run Storyboard Artist."
             );
+            expect(sourceRow.Message).not.toContain('Producer');
+            expect(sourceRow.Message).not.toContain('Find Candidate Agents');
             expect(sourceRow.Save).toHaveBeenCalledTimes(1);
         });
 
@@ -757,6 +767,198 @@ describe('VS-SAGE-3: Server-side Handoff Execution', () => {
             expect(targetRow.Error).toBe('Target LLM crashed');
             expect(onHopEnd).toHaveBeenCalledTimes(1);
         });
+
+        it('preserves prior hop outcomes and records refusal when a subsequent target row Save() returns false', async () => {
+            const rowA = makeDetail('detail-a', BRANCH_MAIN);
+            const rowB = makeDetail('detail-b', BRANCH_MAIN, 'Hop 1 output.');
+            const rowBReloaded = rowB;
+            const rowC = makeDetail('detail-c', BRANCH_MAIN);
+            rowC.Save.mockResolvedValue(false);
+            Object.assign(rowC, { LatestResult: { CompleteMessage: 'FK constraint failure' } });
+
+            const provider = makeProvider([rowA, rowB, rowBReloaded, rowC]);
+            const runner = new AgentRunner(provider);
+
+            const hop1HandoffStep = makeHandoffStep(
+                { targetAgentId: secondTargetAgent.ID },
+                '00000000-0000-4000-8000-000000000902'
+            );
+
+            mockResolveHandoffTarget
+                .mockResolvedValueOnce({ Target: targetAgent, Candidates: [] })
+                .mockResolvedValueOnce({ Target: secondTargetAgent, Candidates: [] });
+
+            vi.spyOn(runner, 'RunAgentInConversation').mockResolvedValueOnce({
+                agentResult: {
+                    success: true,
+                    agentRun: {
+                        ID: 'run-hop-1',
+                        Steps: [hop1HandoffStep as unknown as MJAIAgentRunStepEntityExtended],
+                    } as unknown as MJAIAgentRunEntityExtended,
+                    handoff: {
+                        targetAgentId: secondTargetAgent.ID,
+                        targetAgentName: secondTargetAgent.Name!,
+                        sourceAgentId: targetAgent.ID,
+                        brief: 'Hand off from B to C',
+                        runStepId: hop1HandoffStep.ID,
+                    },
+                } as ExecuteAgentResult,
+                conversationId: CONV_ID,
+                agentResponseDetailId: 'detail-b',
+            });
+
+            const outcomes = await runner.FollowHandoffs({
+                params: {
+                    agent: sourceAgent,
+                    conversationMessages: [{ role: 'user', content: 'Start chain' }],
+                    contextUser: USER,
+                    handoffChain: [],
+                    provider,
+                },
+                sourceResult: {
+                    success: true,
+                    handoff: {
+                        targetAgentId: targetAgent.ID,
+                        targetAgentName: targetAgent.Name!,
+                        sourceAgentId: sourceAgent.ID,
+                        brief: 'Hand off from A to B',
+                    },
+                } as ExecuteAgentResult,
+                conversationId: CONV_ID,
+                sourceConversationDetailId: 'detail-a',
+            });
+
+            expect(outcomes).toHaveLength(1);
+            expect(outcomes[0].targetConversationDetailId).toBe('detail-b');
+            expect(hop1HandoffStep.Status).toBe('Failed');
+            expect(hop1HandoffStep.ErrorMessage).toContain('FK constraint failure');
+            expect(rowB.Message).toContain("I couldn't transfer you to Producer:");
+        });
+
+        it('does not overwrite a completed target row or double-call OnHopEnd when OnHopEnd throws', async () => {
+            const sourceRow = makeDetail('detail-source', null);
+            const targetRow = makeDetail('detail-target', null);
+            const provider = makeProvider([sourceRow, targetRow]);
+            const runner = new AgentRunner(provider);
+
+            vi.spyOn(runner, 'RunAgentInConversation').mockImplementation(async () => {
+                targetRow.Status = 'Complete';
+                targetRow.Message = 'Completed storyboard output';
+                return {
+                    agentResult: {
+                        success: true,
+                        agentRun: { ID: 'run-target-ok' } as unknown as MJAIAgentRunEntityExtended,
+                    } as ExecuteAgentResult,
+                    conversationId: CONV_ID,
+                    agentResponseDetailId: targetRow.ID,
+                };
+            });
+
+            const onHopEnd = vi.fn().mockRejectedValue(new Error('Notification service down'));
+
+            const outcomes = await runner.FollowHandoffs({
+                params: {
+                    agent: sourceAgent,
+                    conversationMessages: [],
+                    contextUser: USER,
+                    handoffChain: [],
+                    provider,
+                },
+                sourceResult: {
+                    success: true,
+                    handoff: {
+                        targetAgentId: targetAgent.ID,
+                        targetAgentName: targetAgent.Name!,
+                        sourceAgentId: sourceAgent.ID,
+                        brief: 'Brief',
+                    },
+                } as ExecuteAgentResult,
+                conversationId: CONV_ID,
+                sourceConversationDetailId: sourceRow.ID,
+                hooks: { OnHopEnd: onHopEnd },
+            });
+
+            expect(onHopEnd).toHaveBeenCalledTimes(1);
+            expect(outcomes).toHaveLength(1);
+            expect(outcomes[0].error).toBeUndefined();
+            expect(targetRow.Status).toBe('Complete');
+            expect(targetRow.Message).toBe('Completed storyboard output');
+        });
+
+        it('does not leak in-place conversationMessages mutations from hop 1 into hop 2 or input.params', async () => {
+            const rowA = makeDetail('detail-a', BRANCH_MAIN);
+            const rowB = makeDetail('detail-b', BRANCH_MAIN);
+            const rowBReloaded = makeDetail('detail-b', BRANCH_MAIN);
+            const rowC = makeDetail('detail-c', BRANCH_MAIN);
+            const provider = makeProvider([rowA, rowB, rowBReloaded, rowC]);
+            const runner = new AgentRunner(provider);
+
+            mockResolveHandoffTarget
+                .mockResolvedValueOnce({ Target: targetAgent, Candidates: [] })
+                .mockResolvedValueOnce({ Target: secondTargetAgent, Candidates: [] });
+
+            const hop2MessagesSnapshot: Array<{ role: string; content: unknown }> = [];
+            vi.spyOn(runner, 'RunAgentInConversation')
+                .mockImplementationOnce(async (hop1Params) => {
+                    // Simulate BaseAgent pushing a retry turn onto hop 1's conversationMessages in place.
+                    hop1Params.conversationMessages.push({
+                        role: 'user',
+                        content: 'Retrying due to: malformed JSON',
+                    });
+                    return {
+                        agentResult: {
+                            success: true,
+                            handoff: {
+                                targetAgentId: secondTargetAgent.ID,
+                                targetAgentName: secondTargetAgent.Name!,
+                                sourceAgentId: targetAgent.ID,
+                                brief: 'Brief for C',
+                            },
+                        } as ExecuteAgentResult,
+                        conversationId: CONV_ID,
+                        agentResponseDetailId: 'detail-b',
+                    };
+                })
+                .mockImplementationOnce(async (hop2Params) => {
+                    hop2MessagesSnapshot.push(...hop2Params.conversationMessages);
+                    return {
+                        agentResult: { success: true } as ExecuteAgentResult,
+                        conversationId: CONV_ID,
+                        agentResponseDetailId: 'detail-c',
+                    };
+                });
+
+            const callerMessages = [{ role: 'user' as const, content: 'Original user turn' }];
+            await runner.FollowHandoffs({
+                params: {
+                    agent: sourceAgent,
+                    conversationMessages: callerMessages,
+                    contextUser: USER,
+                    handoffChain: [],
+                    provider,
+                },
+                sourceResult: {
+                    success: true,
+                    handoff: {
+                        targetAgentId: targetAgent.ID,
+                        targetAgentName: targetAgent.Name!,
+                        sourceAgentId: sourceAgent.ID,
+                        brief: 'Brief for B',
+                    },
+                } as ExecuteAgentResult,
+                conversationId: CONV_ID,
+                sourceConversationDetailId: 'detail-a',
+            });
+
+            expect(callerMessages).toEqual([{ role: 'user', content: 'Original user turn' }]);
+            expect(hop2MessagesSnapshot).toEqual([
+                {
+                    role: 'system',
+                    content: HandoffBriefMessage('Storyboard Artist', 'Brief for C'),
+                },
+                { role: 'user', content: 'Original user turn' },
+            ]);
+        });
     });
 
     describe('BaseAgent.runWithholdsHandoff guest/widget guard', () => {
@@ -784,8 +986,15 @@ describe('VS-SAGE-3: Server-side Handoff Execution', () => {
             expect(callWithholdsHandoff({ contextUser: widgetGuest, handoffChain: [] })).toBe(true);
         });
 
-        it('allows Handoff when an explicit trusted ALL_AVAILABLE_AGENTS allow-list is provided', () => {
+        it('withholds Handoff when ALL_AVAILABLE_AGENTS is supplied without TrustReservedRunData: true, and allows it when trusted', () => {
             const widgetGuest = { ...USER, WidgetGuestContext: { widgetId: 'w-1' } } as unknown as UserInfo;
+            expect(
+                callWithholdsHandoff({
+                    contextUser: widgetGuest,
+                    handoffChain: [],
+                    data: { ALL_AVAILABLE_AGENTS: [{ ID: targetAgent.ID }] },
+                })
+            ).toBe(true);
             expect(
                 callWithholdsHandoff({
                     contextUser: widgetGuest,
@@ -799,7 +1008,7 @@ describe('VS-SAGE-3: Server-side Handoff Execution', () => {
     });
 
     describe('MJAIAgentRequestEntityServer.resumeAgent handoff follow-through', () => {
-        it('passes handoffChain: [] on resumed runs and invokes FollowHandoffs when the resumed run returns a handoff', async () => {
+        it('passes handoffChain: [] on resumed runs and invokes FollowHandoffs with clean initial messages even if RunAgentInConversation mutates its copy', async () => {
             const originatingRun = {
                 ID: 'run-orig-1',
                 AgentID: sourceAgent.ID,
@@ -832,15 +1041,23 @@ describe('VS-SAGE-3: Server-side Handoff Execution', () => {
                 sourceAgentId: sourceAgent.ID,
                 brief: 'Proceed after approval',
             };
-            const runInConvSpy = vi.spyOn(AgentRunner.prototype, 'RunAgentInConversation').mockResolvedValue({
-                agentResult: {
-                    success: true,
-                    agentRun: { ID: 'run-resumed-1' } as unknown as MJAIAgentRunEntityExtended,
-                    handoff: handoffPayload,
-                },
-                conversationId: CONV_ID,
-                agentResponseDetailId: 'detail-resumed-1',
-            });
+            const runInConvSpy = vi.spyOn(AgentRunner.prototype, 'RunAgentInConversation').mockImplementation(
+                async (resumedParams) => {
+                    resumedParams.conversationMessages.push({
+                        role: 'user',
+                        content: 'Retrying due to: malformed JSON',
+                    });
+                    return {
+                        agentResult: {
+                            success: true,
+                            agentRun: { ID: 'run-resumed-1' } as unknown as MJAIAgentRunEntityExtended,
+                            handoff: handoffPayload,
+                        },
+                        conversationId: CONV_ID,
+                        agentResponseDetailId: 'detail-resumed-1',
+                    };
+                }
+            );
             const followHandoffsSpy = vi.spyOn(AgentRunner.prototype, 'FollowHandoffs').mockResolvedValue([]);
 
             const fakeRequest = Object.create(MJAIAgentRequestEntityServer.prototype) as MJAIAgentRequestEntityServer & {
@@ -870,13 +1087,13 @@ describe('VS-SAGE-3: Server-side Handoff Execution', () => {
             expect(resumedParams.ConversationBranchID).toBe(BRANCH_1);
 
             expect(followHandoffsSpy).toHaveBeenCalledTimes(1);
-            expect(followHandoffsSpy).toHaveBeenCalledWith({
-                params: resumedParams,
-                sourceResult: expect.objectContaining({ handoff: handoffPayload }),
-                conversationId: CONV_ID,
-                sourceConversationDetailId: 'detail-resumed-1',
-                createArtifacts: true,
-            });
+            const followCall = followHandoffsSpy.mock.calls[0][0];
+            expect(followCall.conversationId).toBe(CONV_ID);
+            expect(followCall.sourceConversationDetailId).toBe('detail-resumed-1');
+            expect(followCall.createArtifacts).toBe(true);
+            expect(followCall.params.conversationMessages).toEqual([
+                { role: 'user', content: 'Approved.\n\nLooks good, go ahead.' },
+            ]);
         });
     });
 });

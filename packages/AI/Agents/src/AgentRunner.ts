@@ -14,6 +14,7 @@ import { createHash } from 'crypto';
 import { BaseEntity, LogError, LogStatusEx, IsVerboseLoggingEnabled, LogStatus, Metadata, RunView, RunQuery, UserInfo, IMetadataProvider, DatabaseProviderBase, ProviderType } from '@memberjunction/core';
 import { MJGlobal, UUIDsEqual, IsValidUUID, EscapeSQLString } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
+import { ChatMessage } from '@memberjunction/ai';
 import {
     ExecuteAgentResult, ExecuteAgentParams, MediaOutput, FileOutputRef, InputArtifact, ArtifactDirective, ResolvePromptRunUserID,
     WithAgentRunDataTrustApplied, MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended,
@@ -23,7 +24,7 @@ import { ResolveConversationAgentPreset, AgentPresetSource } from '@memberjuncti
 import { PlanArtifactTarget, IsKnownArtifactBehavior, ArtifactTargetPlan } from './artifact-target-plan';
 import { BaseAgent } from './base-agent';
 import { HostAllowedAgentIDs } from './decision-discovery';
-import { ResolveHandoffTarget } from './handoff-target';
+import { ResolveHandoffTarget, HandoffRefusalReasonText } from './handoff-target';
 import {
     MJConversationEntity, MJConversationDetailEntity, MJArtifactEntity, MJArtifactVersionEntity,
     MJConversationDetailArtifactEntity, MJAIAgentRunMediaEntity, MJAIAgentConfigurationEntity,
@@ -163,8 +164,6 @@ export interface FollowHandoffsInput<C = any> {
     sourceConversationDetailId: string;
     createArtifacts?: boolean;
     hooks?: FollowHandoffsHooks;
-    OnHopStart?: FollowHandoffsHooks['OnHopStart'];
-    OnHopEnd?: FollowHandoffsHooks['OnHopEnd'];
 }
 
 /**
@@ -846,8 +845,9 @@ export class AgentRunner {
      */
     public async FollowHandoffs<C = any>(input: FollowHandoffsInput<C>): Promise<HandoffHopOutcome[]> {
         const outcomes: HandoffHopOutcome[] = [];
-        const onHopStart = input.hooks?.OnHopStart ?? input.OnHopStart;
-        const onHopEnd = input.hooks?.OnHopEnd ?? input.OnHopEnd;
+        const onHopStart = input.hooks?.OnHopStart;
+        const onHopEnd = input.hooks?.OnHopEnd;
+        const baseHistory: ChatMessage[] = [...(input.params.conversationMessages ?? [])];
 
         let currentParams: ExecuteAgentParams<C> = input.params;
         let currentResult: ExecuteAgentResult = input.sourceResult;
@@ -887,11 +887,12 @@ export class AgentRunner {
             });
 
             if (resolution.Refusal) {
+                const targetLabel = handoff.targetAgentName || handoff.targetAgentId;
                 await this.recordRefusedHandoffOnSource(
                     currentResult,
                     sourceRowLoaded ? sourceRow : undefined,
-                    handoff.targetAgentName || handoff.targetAgentId,
-                    resolution.Refusal.Message
+                    targetLabel,
+                    HandoffRefusalReasonText(resolution.Refusal.Reason, targetLabel)
                 );
                 break;
             }
@@ -922,9 +923,15 @@ export class AgentRunner {
             targetRow.Message = '⏳ Starting...';
 
             if (!(await targetRow.Save())) {
-                throw new Error(
-                    `Failed to create handoff target conversation detail: ${AgentRunner.saveFailureReason(targetRow)}`
+                const saveReason = AgentRunner.saveFailureReason(targetRow);
+                LogError(`Failed to create handoff target conversation detail: ${saveReason}`);
+                await this.recordRefusedHandoffOnSource(
+                    currentResult,
+                    sourceRowLoaded ? sourceRow : undefined,
+                    resolvedTarget.Name || handoff.targetAgentName || handoff.targetAgentId,
+                    saveReason
                 );
+                break;
             }
 
             // 4. Update source run's Handoff step OutputData with TargetConversationDetailID and preset details
@@ -958,6 +965,7 @@ export class AgentRunner {
 
             const targetParams = this.buildHandoffTargetParams(
                 currentParams,
+                baseHistory,
                 resolvedTarget,
                 handoff,
                 sourceBranchId,
@@ -967,6 +975,8 @@ export class AgentRunner {
             );
 
             // 7. Execute target agent in conversation
+            let outcome: HandoffHopOutcome;
+            let hopSucceeded = false;
             try {
                 const hopRun = await this.RunAgentInConversation(targetParams, {
                     conversationId: input.conversationId,
@@ -974,7 +984,7 @@ export class AgentRunner {
                     createArtifacts: input.createArtifacts,
                 });
 
-                const outcome: HandoffHopOutcome = {
+                outcome = {
                     hopIndex,
                     targetAgent: resolvedTarget,
                     targetConversationDetailId: targetRow.ID,
@@ -983,32 +993,27 @@ export class AgentRunner {
                     agentResult: hopRun.agentResult,
                     artifactInfo: hopRun.artifactInfo,
                 };
-                await onHopEnd?.(hopInfo, outcome);
-                outcomes.push(outcome);
-
-                if (!hopRun.agentResult?.handoff) {
-                    break;
-                }
-
-                currentParams = targetParams;
-                currentResult = hopRun.agentResult;
-                currentRowId = targetRow.ID;
-                hopIndex++;
+                hopSucceeded = true;
             } catch (error) {
                 const errorMessage = error instanceof Error ? error.message : String(error);
                 LogError(`FollowHandoffs hop ${hopIndex} failed: ${errorMessage}`, undefined, error);
                 try {
+                    await targetRow.Load(targetRow.ID);
                     if (targetRow.Status === 'In-Progress') {
                         targetRow.Status = 'Error';
                         targetRow.Message = errorMessage;
                         targetRow.Error = errorMessage;
-                        await targetRow.Save();
+                        if (!(await targetRow.Save())) {
+                            LogError(
+                                `FollowHandoffs: failed to persist Error on target detail ${targetRow.ID}: ${AgentRunner.saveFailureReason(targetRow)}`
+                            );
+                        }
                     }
                 } catch (persistError) {
                     LogError(`FollowHandoffs: failed to persist Error on target detail ${targetRow.ID}: ${persistError}`);
                 }
 
-                const outcome: HandoffHopOutcome = {
+                outcome = {
                     hopIndex,
                     targetAgent: resolvedTarget,
                     targetConversationDetailId: targetRow.ID,
@@ -1016,10 +1021,23 @@ export class AgentRunner {
                     presetSource: presetResult.Source,
                     error: errorMessage,
                 };
+            }
+
+            try {
                 await onHopEnd?.(hopInfo, outcome);
-                outcomes.push(outcome);
+            } catch (hookError) {
+                LogError(`FollowHandoffs OnHopEnd hook failed on hop ${hopIndex}: ${hookError}`, undefined, hookError);
+            }
+            outcomes.push(outcome);
+
+            if (!hopSucceeded || !outcome.agentResult?.handoff) {
                 break;
             }
+
+            currentParams = targetParams;
+            currentResult = outcome.agentResult;
+            currentRowId = targetRow.ID;
+            hopIndex++;
         }
 
         return outcomes;
@@ -1027,37 +1045,31 @@ export class AgentRunner {
 
     private findLatestHandoffStep(result: ExecuteAgentResult): MJAIAgentRunStepEntityExtended | undefined {
         const steps = result.agentRun?.Steps;
-        if (!Array.isArray(steps)) {
+        const runStepId = result.handoff?.runStepId;
+        if (!Array.isArray(steps) || !runStepId) {
             return undefined;
         }
-        const runStepId = result.handoff?.runStepId;
-        if (runStepId) {
-            const matched = steps.find(s => s?.ID && UUIDsEqual(s.ID, runStepId));
-            if (matched) {
-                return matched;
-            }
-        }
-        for (let i = steps.length - 1; i >= 0; i--) {
-            if (steps[i]?.StepType === 'Handoff') {
-                return steps[i];
-            }
-        }
-        return undefined;
+        return steps.find(s => s?.ID && UUIDsEqual(s.ID, runStepId));
     }
 
     private async recordRefusedHandoffOnSource(
         sourceResult: ExecuteAgentResult,
         sourceRow: MJConversationDetailEntity | undefined,
         targetLabel: string,
-        refusalMessage: string
+        refusalReason: string
     ): Promise<void> {
+        const cleanReason = refusalReason.replace(/\.+$/, '');
         const handoffStep = this.findLatestHandoffStep(sourceResult);
         if (handoffStep) {
             try {
                 handoffStep.Status = 'Failed';
-                handoffStep.ErrorMessage = refusalMessage;
+                handoffStep.ErrorMessage = refusalReason;
                 handoffStep.CompletedAt = new Date();
-                await handoffStep.Save();
+                if (!(await handoffStep.Save())) {
+                    LogError(
+                        `FollowHandoffs: failed to save Failed status on Handoff step ${handoffStep.ID}: ${AgentRunner.saveFailureReason(handoffStep)}`
+                    );
+                }
             } catch (err) {
                 LogError(`FollowHandoffs: failed to save Failed status on Handoff step: ${err}`);
             }
@@ -1065,11 +1077,15 @@ export class AgentRunner {
 
         if (sourceRow) {
             try {
-                const notice = `I couldn't transfer you to ${targetLabel}: ${refusalMessage}.`;
+                const notice = `I couldn't transfer you to ${targetLabel}: ${cleanReason}.`;
                 sourceRow.Message = sourceRow.Message
                     ? `${sourceRow.Message}\n\n${notice}`
                     : notice;
-                await sourceRow.Save();
+                if (!(await sourceRow.Save())) {
+                    LogError(
+                        `FollowHandoffs: failed to append refusal notice to source detail ${sourceRow.ID}: ${AgentRunner.saveFailureReason(sourceRow)}`
+                    );
+                }
             } catch (err) {
                 LogError(`FollowHandoffs: failed to append refusal notice to source detail ${sourceRow.ID}: ${err}`);
             }
@@ -1107,7 +1123,11 @@ export class AgentRunner {
                 PresetName: presetName,
                 PresetSource: presetResult.Source,
             });
-            await handoffStep.Save();
+            if (!(await handoffStep.Save())) {
+                LogError(
+                    `FollowHandoffs: failed to update Handoff step OutputData on ${handoffStep.ID}: ${AgentRunner.saveFailureReason(handoffStep)}`
+                );
+            }
         } catch (err) {
             LogError(`FollowHandoffs: failed to update Handoff step OutputData: ${err}`);
         }
@@ -1161,6 +1181,7 @@ export class AgentRunner {
 
     private buildHandoffTargetParams<C = any>(
         sourceParams: ExecuteAgentParams<C>,
+        baseHistory: readonly ChatMessage[],
         targetAgent: MJAIAgentEntityExtended,
         handoff: AgentHandoffResult,
         branchId: string | null,
@@ -1176,7 +1197,7 @@ export class AgentRunner {
             agent: targetAgent,
             conversationMessages: [
                 { role: 'system', content: briefMsg },
-                ...(sourceParams.conversationMessages ?? []),
+                ...baseHistory,
             ],
             contextUser: sourceParams.contextUser,
             userId: sourceParams.userId,

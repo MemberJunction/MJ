@@ -119,9 +119,10 @@ export class MJAIAgentRequestEntityServer extends MJAIAgentRequestEntity {
         // Run the agent with lastRunId to continue the conversation
         const runner = new AgentRunner();
         const allowHandoff = !(contextUser?.IsMagicLinkAnonymous || Boolean(contextUser?.WidgetGuestContext));
+        const initialMessages = [...conversationMessages];
         const params: ExecuteAgentParams = {
             agent: agentEntity,
-            conversationMessages,
+            conversationMessages: [...initialMessages],
             contextUser,
             lastRunId: this.OriginatingAgentRunID!,
             autoPopulateLastRunPayload: true,
@@ -150,7 +151,7 @@ export class MJAIAgentRequestEntityServer extends MJAIAgentRequestEntity {
 
         if (allowHandoff && result.agentResult.handoff && result.conversationId && result.agentResponseDetailId) {
             await runner.FollowHandoffs({
-                params,
+                params: { ...params, conversationMessages: initialMessages },
                 sourceResult: result.agentResult,
                 conversationId: result.conversationId,
                 sourceConversationDetailId: result.agentResponseDetailId,

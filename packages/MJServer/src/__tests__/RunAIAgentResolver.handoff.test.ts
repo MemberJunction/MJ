@@ -36,7 +36,6 @@ const hoisted = vi.hoisted(() => ({
     followHandoffs: vi.fn(),
     resolveWidgetGuestRunContext: vi.fn().mockResolvedValue(null),
     elevateUserPayload: vi.fn(),
-    isTrustedAgentRunCaller: vi.fn().mockResolvedValue(false),
 }));
 
 vi.mock('@memberjunction/ai-agents', async (importOriginal) => {
@@ -58,10 +57,6 @@ vi.mock('@memberjunction/ai-agents', async (importOriginal) => {
 vi.mock('../realtimeWidget/widgetGuestElevation.js', () => ({
     ResolveWidgetGuestRunContext: (...args: unknown[]) => hoisted.resolveWidgetGuestRunContext(...args),
     ElevateUserPayload: (...args: unknown[]) => hoisted.elevateUserPayload(...args),
-}));
-
-vi.mock('../resolvers/agentRunDataTrust.js', () => ({
-    IsTrustedAgentRunCaller: (...args: unknown[]) => hoisted.isTrustedAgentRunCaller(...args),
 }));
 
 import { RunAIAgentResolver } from '../resolvers/RunAIAgentResolver.js';
@@ -131,7 +126,6 @@ beforeEach(() => {
     hoisted.followHandoffs.mockReset();
     hoisted.resolveWidgetGuestRunContext.mockReset().mockResolvedValue(null);
     hoisted.elevateUserPayload.mockReset();
-    hoisted.isTrustedAgentRunCaller.mockReset().mockResolvedValue(false);
 });
 
 afterEach(() => {
@@ -325,8 +319,7 @@ describe('RunAIAgentResolver — FollowHandoffs & PubSub ordering', () => {
                 handoff: handoffPayload,
             };
 
-            const onHopStart = input.OnHopStart ?? input.hooks?.OnHopStart;
-            const callbacks = await onHopStart?.(
+            const callbacks = await input.hooks?.OnHopStart?.(
                 hopInfo,
                 {
                     agentResult: input.sourceResult,
@@ -364,8 +357,7 @@ describe('RunAIAgentResolver — FollowHandoffs & PubSub ordering', () => {
                 agentResult: finalHopResult,
             };
 
-            const onHopEnd = input.OnHopEnd ?? input.hooks?.OnHopEnd;
-            await onHopEnd?.(hopInfo, outcome);
+            await input.hooks?.OnHopEnd?.(hopInfo, outcome);
 
             return [outcome];
         });
@@ -384,12 +376,6 @@ describe('RunAIAgentResolver — FollowHandoffs & PubSub ordering', () => {
         expect(response.success).toBe(true);
         expect(hoisted.followHandoffs).toHaveBeenCalledTimes(1);
 
-        // Verify the order:
-        // 1. Source progress frame
-        // 2. Target placeholder row created in FollowHandoffs before OnHopStart
-        // 3. Source partial_result + complete published inside OnHopStart
-        // 4. Target progress + streaming frames
-        // 5. Target partial_result + complete published after FollowHandoffs settles
         expect(timeline).toEqual([
             'pubsub:progress:run-sage',
             'target-row-created:detail-director',
@@ -421,6 +407,137 @@ describe('RunAIAgentResolver — FollowHandoffs & PubSub ordering', () => {
 
         // Verify OnHopEnd triggered post-execution notifications for the hop
         expect(seams.sendFeedbackRequestNotification).toHaveBeenCalledTimes(1);
+    });
+
+    it('publishes a failure completion frame for the failing hop and does not re-publish the source completion when a hop fails after OnHopStart', async () => {
+        const publish = vi.fn().mockResolvedValue(undefined);
+        const pubSub = { publish } as unknown as PubSubEngine;
+        const { resolver } = makeResolver();
+
+        const sageRun = {
+            ID: 'run-sage',
+            ConversationDetailID: 'detail-sage',
+            Steps: [],
+            GetAll: () => ({ ID: 'run-sage', ConversationDetailID: 'detail-sage', Agent: 'Sage' }),
+        };
+        const handoffPayload = {
+            targetAgentId: 'agent-director',
+            targetAgentName: 'Director',
+            reason: 'Ready to produce video',
+            brief: 'Produce a 15s vertical product launch teaser.',
+        };
+
+        hoisted.runAgentInConversation.mockResolvedValue({
+            agentResult: {
+                success: true,
+                agentRun: sageRun,
+                handoff: handoffPayload,
+            } as unknown as ExecuteAgentResult,
+            agentResponseDetailId: 'detail-sage',
+            conversationId: 'conv-1',
+        });
+
+        hoisted.followHandoffs.mockImplementation(async (input: FollowHandoffsInput) => {
+            const hopInfo = {
+                hopIndex: 0,
+                sourceAgent: { ID: 'agent-sage', Name: 'Sage' } as never,
+                sourceConversationDetailId: input.sourceConversationDetailId,
+                targetAgent: { ID: 'agent-director', Name: 'Director' } as never,
+                targetConversationDetailId: 'detail-director',
+                preset: null,
+                presetSource: 'None' as const,
+                handoff: handoffPayload,
+            };
+
+            await input.hooks?.OnHopStart?.(hopInfo, {
+                agentResult: input.sourceResult,
+                conversationDetailId: input.sourceConversationDetailId,
+            });
+
+            const failedOutcome = {
+                hopIndex: 0,
+                targetAgent: { ID: 'agent-director', Name: 'Director' } as never,
+                targetConversationDetailId: 'detail-director',
+                preset: null,
+                presetSource: 'None' as const,
+                error: 'Model rate limit exceeded',
+            };
+            await input.hooks?.OnHopEnd?.(hopInfo, failedOutcome);
+            return [failedOutcome];
+        });
+
+        const response = await resolver.RunAIAgentFromConversationDetail(
+            'detail-user', 'agent-sage', makeContext(), 'session-1', pubSub,
+        );
+
+        expect(response.success).toBe(false);
+        expect(response.errorMessage).toBe('Model rate limit exceeded');
+
+        const envelopes = parseEnvelopes(publish);
+        const completeFrames = envelopes.filter(
+            (env) => (env.data as { type?: string }).type === 'complete',
+        );
+        expect(completeFrames).toHaveLength(2);
+        expect(completeFrames[0].data).toMatchObject({
+            type: 'complete',
+            success: true,
+            conversationDetailId: 'detail-sage',
+        });
+        expect(completeFrames[1].data).toMatchObject({
+            type: 'complete',
+            success: false,
+            conversationDetailId: 'detail-director',
+            errorMessage: 'Model rate limit exceeded',
+        });
+    });
+
+    it('passes unmutated conversationMessages into FollowHandoffs even when the source RunAgentInConversation mutates its copy in place', async () => {
+        const pubSub = { publish: vi.fn().mockResolvedValue(undefined) } as unknown as PubSubEngine;
+        const { resolver } = makeResolver();
+
+        const sageRun = {
+            ID: 'run-sage',
+            ConversationDetailID: 'detail-sage',
+            Steps: [],
+            GetAll: () => ({ ID: 'run-sage', ConversationDetailID: 'detail-sage', Agent: 'Sage' }),
+        };
+        const handoffPayload = {
+            targetAgentId: 'agent-director',
+            targetAgentName: 'Director',
+            brief: 'Brief',
+        };
+
+        hoisted.runAgentInConversation.mockImplementation(async (params: {
+            conversationMessages: Array<{ role: string; content: unknown }>;
+        }) => {
+            params.conversationMessages.push({
+                role: 'user',
+                content: 'Retrying due to: invalid JSON',
+            });
+            return {
+                agentResult: {
+                    success: true,
+                    agentRun: sageRun,
+                    handoff: handoffPayload,
+                } as unknown as ExecuteAgentResult,
+                agentResponseDetailId: 'detail-sage',
+                conversationId: 'conv-1',
+            };
+        });
+
+        let followHandoffsMessages: unknown;
+        hoisted.followHandoffs.mockImplementation(async (input: FollowHandoffsInput) => {
+            followHandoffsMessages = input.params.conversationMessages;
+            return [];
+        });
+
+        await resolver.RunAIAgentFromConversationDetail(
+            'detail-user', 'agent-sage', makeContext(), 'session-1', pubSub,
+        );
+
+        expect(followHandoffsMessages).toEqual([
+            { role: 'user', content: 'Build a product launch video' },
+        ]);
     });
 
     it('preserves handoff in sanitizeAgentResult when returned directly', () => {

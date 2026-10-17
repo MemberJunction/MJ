@@ -2796,14 +2796,16 @@ export class BaseAgent {
      * Whether this run withholds Handoff (`enableHandoff` off and the `handoff` response section hidden).
      * True when the run has a `parentRun` (sub-agents cannot transfer the conversation), has no
      * `conversationDetailId` (there is no conversation reply row to hand over), has no `handoffChain`
-     * (the host does not carry out handoffs), or runs for an anonymous/widget guest without an explicit
-     * host allow-list (`HostAllowedAgentIDs(data)`).
+     * (the host does not carry out handoffs), or runs for an anonymous/widget guest without a trusted
+     * host allow-list (`TrustReservedRunData === true` and `HostAllowedAgentIDs(params.data)` defined).
      */
     private runWithholdsHandoff(params: ExecuteAgentParams): boolean {
-        const data = WithAgentRunDataTrustApplied(params).Params.data;
+        const hasTrustedHostAllowList =
+            params.TrustReservedRunData === true &&
+            HostAllowedAgentIDs(params.data) !== undefined;
         const isUnscopedGuest =
-            (params.contextUser?.IsMagicLinkAnonymous || Boolean(params.contextUser?.WidgetGuestContext)) &&
-            HostAllowedAgentIDs(data) === undefined;
+            Boolean(params.contextUser?.IsMagicLinkAnonymous || params.contextUser?.WidgetGuestContext) &&
+            !hasTrustedHostAllowList;
         return (
             Boolean(params.parentRun) ||
             !params.conversationDetailId ||

@@ -113,18 +113,18 @@ describe('RunAIAgentFromConversationDetail — branch', () => {
     it('loads history on the placeholder row\'s branch and hands the branch to the run', async () => {
         await runMutation(resolver, 'branch-b');
         expect(seams.loadConversationHistoryWithAttachments.mock.calls[0][6]).toBe('branch-b');
-        expect(seams.executeAIAgent.mock.calls[0].at(-1)).toBe('branch-b');
+        expect(seams.executeAIAgent.mock.calls[0].at(-2)).toBe('branch-b');
     });
 
     it('passes the branch to the background path too', async () => {
         await runMutation(resolver, 'branch-b', true);
-        expect(seams.executeAgentInBackground.mock.calls[0].at(-1)).toBe('branch-b');
+        expect(seams.executeAgentInBackground.mock.calls[0].at(-2)).toBe('branch-b');
     });
 
     it('reads the trunk when the placeholder has no branch (control)', async () => {
         await runMutation(resolver, null);
         expect(seams.loadConversationHistoryWithAttachments.mock.calls[0][6]).toBeNull();
-        expect(seams.executeAIAgent.mock.calls[0].at(-1)).toBeNull();
+        expect(seams.executeAIAgent.mock.calls[0].at(-2)).toBeNull();
     });
 });
 
