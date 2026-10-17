@@ -43,11 +43,28 @@ function getDeliverableFormats(spec: Partial<VideoGenerationSpec>): VideoFormat[
     return [];
 }
 
+const CANONICAL_STAGE_SUFFIXES = [
+    'Director',
+    'Art Director',
+    'Storyboard',
+    'Pre-Production',
+    'Motion Engineer',
+    'Render',
+    'Critic',
+] as const;
+
 function normalizeStageName(stageName: string): string {
-    return (stageName ?? '')
+    const stripped = (stageName ?? '')
         .trim()
         .replace(/^video\s+studio\s*-\s*/i, '')
         .trim();
+    const lower = stripped.toLowerCase();
+    for (const canonical of CANONICAL_STAGE_SUFFIXES) {
+        if (lower === canonical.toLowerCase()) {
+            return canonical;
+        }
+    }
+    return stripped;
 }
 
 function findExistingGate(
@@ -132,7 +149,7 @@ function evaluateGateG1(
         },
         Interaction: {
             Mode: effectiveMode,
-            MaxRepairRounds: spec.Interaction?.MaxRepairRounds ?? ctx.Settings.MaxRepairRounds,
+            MaxRepairRounds: ctx.Settings.MaxRepairRounds,
         },
         Deliverables: {
             Formats: formats.length > 0 ? formats : ['16:9'],
@@ -259,7 +276,7 @@ function evaluateGateG2(
     const effectiveMode = ctx.EffectiveInteractionMode ?? spec.Interaction?.Mode ?? 'Autonomous';
     const normalizedInteraction = {
         Mode: effectiveMode,
-        MaxRepairRounds: spec.Interaction?.MaxRepairRounds ?? ctx.Settings.MaxRepairRounds,
+        MaxRepairRounds: ctx.Settings.MaxRepairRounds,
     };
 
     const candidateSpec = {
