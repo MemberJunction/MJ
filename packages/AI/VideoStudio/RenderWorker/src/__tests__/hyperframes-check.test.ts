@@ -1,7 +1,27 @@
+import type * as childProcess from 'node:child_process';
+import * as fssync from 'node:fs';
 import * as fs from 'node:fs/promises';
+import * as os from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+const execFileSpy = vi.fn();
+
+vi.mock('node:child_process', async (importOriginal) => {
+    const actual = await importOriginal<typeof childProcess>();
+    return {
+        ...actual,
+        execFile: (...args: unknown[]) => {
+            if (execFileSpy.getMockImplementation()) {
+                return execFileSpy(...args);
+            }
+            return (actual.execFile as (...a: unknown[]) => unknown)(...args);
+        },
+    };
+});
+
+import { HyperFramesRenderBackend } from '../hyperframes-backend.js';
 import {
     BuildCheckCliFailedIssue,
     BuildReducedCheckCliEnv,
@@ -169,6 +189,97 @@ describe('MapHyperFramesCheckOutput', () => {
             } else {
                 process.env.OPENAI_API_KEY = prevOpenAi;
             }
+        }
+    });
+
+    it('HyperFramesRenderBackend.RunCheckCli passes --no-browser-gpu, exact 6-key reduced env with HYPERFRAMES_BROWSER_PATH===CHROME_PATH, and removes the temporary HOME directory after completion', async () => {
+        const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'mj-runcheckcli-test-'));
+        const fakeBrowserPath = path.join(tempRoot, 'fake-chrome-binary');
+        const bundleDir = path.join(tempRoot, 'bundle');
+        await fs.mkdir(bundleDir, { recursive: true });
+        await fs.writeFile(fakeBrowserPath, '#!/bin/sh\n', 'utf8');
+        await fs.writeFile(path.join(bundleDir, 'index.html'), '<!doctype html><html><body></body></html>', 'utf8');
+
+        const prevChromePath = process.env.CHROME_PATH;
+        const prevOpenAi = process.env.OPENAI_API_KEY;
+        process.env.CHROME_PATH = fakeBrowserPath;
+        process.env.OPENAI_API_KEY = 'sk-should-not-leak';
+
+        let capturedFile = '';
+        let capturedArgs: string[] = [];
+        let capturedEnv: NodeJS.ProcessEnv | undefined;
+        let homeExistedDuringCall = false;
+
+        execFileSpy.mockImplementation(
+            (
+                file: string,
+                args: readonly string[],
+                options: { env?: NodeJS.ProcessEnv },
+                cb: (err: Error | null, result: { stdout: string; stderr: string }) => void,
+            ) => {
+                capturedFile = file;
+                capturedArgs = [...args];
+                capturedEnv = options?.env ? { ...options.env } : undefined;
+                if (capturedEnv?.HOME) {
+                    homeExistedDuringCall = fssync.existsSync(capturedEnv.HOME);
+                }
+                cb(null, {
+                    stdout: JSON.stringify({
+                        ok: true,
+                        layout: { findings: [] },
+                        contrast: { findings: [] },
+                        motion: { findings: [] },
+                    }),
+                    stderr: '',
+                });
+            },
+        );
+
+        try {
+            const backend = new HyperFramesRenderBackend();
+            const issues = await backend.RunCheckCli({
+                RootDir: bundleDir,
+                EntryFile: 'index.html',
+                Width: 1280,
+                Height: 720,
+                Fps: 30,
+            });
+            expect(issues).toEqual([]);
+            expect(capturedFile).toBe(process.execPath);
+            expect(capturedArgs).toContain('check');
+            expect(capturedArgs).toContain('--json');
+            expect(capturedArgs).toContain('--no-proxy');
+            expect(capturedArgs).toContain('--no-browser-gpu');
+            expect(capturedArgs[capturedArgs.length - 1]).toBe(bundleDir);
+
+            expect(capturedEnv).toBeDefined();
+            expect(Object.keys(capturedEnv ?? {})).toEqual([
+                'PATH',
+                'TMPDIR',
+                'HOME',
+                'HYPERFRAMES_NO_TELEMETRY',
+                'DO_NOT_TRACK',
+                'HYPERFRAMES_BROWSER_PATH',
+            ]);
+            expect(capturedEnv?.HYPERFRAMES_NO_TELEMETRY).toBe('1');
+            expect(capturedEnv?.DO_NOT_TRACK).toBe('1');
+            expect(capturedEnv?.HYPERFRAMES_BROWSER_PATH).toBe(fakeBrowserPath);
+            expect(capturedEnv?.OPENAI_API_KEY).toBeUndefined();
+            expect(homeExistedDuringCall).toBe(true);
+            expect(fssync.existsSync(capturedEnv?.HOME ?? '')).toBe(false);
+        } finally {
+            execFileSpy.mockReset();
+            if (prevChromePath === undefined) {
+                delete process.env.CHROME_PATH;
+            } else {
+                process.env.CHROME_PATH = prevChromePath;
+            }
+            if (prevOpenAi === undefined) {
+                delete process.env.OPENAI_API_KEY;
+            } else {
+                process.env.OPENAI_API_KEY = prevOpenAi;
+            }
+            await fs.rm(tempRoot, { recursive: true, force: true }).catch(() => undefined);
         }
     });
 });

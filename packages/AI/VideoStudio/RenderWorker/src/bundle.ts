@@ -322,6 +322,39 @@ export function ValidateCompositionGeometryMatch(
 }
 
 /**
+ * Reads the entry HTML's `data-fps` attribute on `[data-composition-id]` (or falls back to `defaultFps`),
+ * range-checking it against `MIN_FPS..MAX_FPS` with `RenderWorkerError('InvalidRequest', ...)`.
+ */
+export function ResolveCompositionFps(bundle: RenderProjectBundle, defaultFps = 30): number {
+    if (!bundle || !Array.isArray(bundle.Files)) {
+        return defaultFps;
+    }
+    const entry = bundle.Files.find((f) => f && f.Path === bundle.EntryFile);
+    if (!entry || typeof entry.Content !== 'string') {
+        return defaultFps;
+    }
+
+    const compositionTagMatch = /<[a-z0-9-]+\b[^>]*\bdata-composition-id\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)[^>]*>/i.exec(
+        entry.Content,
+    );
+    const scope = compositionTagMatch ? compositionTagMatch[0] : entry.Content;
+    const fpsMatch = /\bdata-fps\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>"']+))/i.exec(scope);
+    if (!fpsMatch) {
+        return defaultFps;
+    }
+    const rawFps = (fpsMatch[1] ?? fpsMatch[2] ?? fpsMatch[3] ?? '').trim();
+    const parsedFps = Number(rawFps);
+    if (rawFps.length === 0 || !Number.isFinite(parsedFps) || parsedFps < MIN_FPS || parsedFps > MAX_FPS) {
+        throw new RenderWorkerError(
+            'InvalidRequest',
+            `Fps must be in ${MIN_FPS}..${MAX_FPS}, got ${rawFps || String(parsedFps)}.`,
+        );
+    }
+    return parsedFps;
+}
+
+
+/**
  * Stages a validated `RenderProjectBundle` into a fresh `mkdtemp` directory and injects the preamble
  * into every `.html` / `.htm` file (unless `options.InjectPreamble === false`).
  */

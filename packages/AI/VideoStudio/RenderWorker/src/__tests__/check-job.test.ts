@@ -1,3 +1,5 @@
+import * as fs from 'node:fs/promises';
+import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { RenderProjectBundle } from '@memberjunction/video-studio-core';
 import {
@@ -7,6 +9,7 @@ import {
     MJ_MIN_TEXT_SIZE_CODE,
     MJ_MISSING_ASSET_CODE,
     MJ_NETWORK_API_CODE,
+    MJ_NON_BUNDLE_URL_CODE,
     MJ_SAFE_AREA_CODE,
     MJ_UNBUNDLED_FONT_CODE,
     RunCheckJob,
@@ -163,7 +166,7 @@ describe('RunCheckJob', () => {
         ]);
     });
 
-    it('returns lint issues immediately and calls neither RunCheckCli nor MeasureText when lint-blocked', async () => {
+    it('returns lint issues immediately and calls neither RunCheckCli nor MeasureText when lint-blocked (including Asset script, Asset module import, and missing gsap/dist path)', async () => {
         const backend = new FakeRenderBackend({
             CheckCliIssues: [
                 {
@@ -199,6 +202,56 @@ describe('RunCheckJob', () => {
         expect(result.Issues.some((i) => i.Code === MJ_NETWORK_API_CODE)).toBe(true);
         expect(backend.RunCheckCliCallCount).toBe(0);
         expect(backend.MeasureTextCallCount).toBe(0);
+
+        const assetJsBase64 = Buffer.from('fetch("https://evil.example.com");', 'utf8').toString('base64');
+        const scriptProbes: RenderProjectBundle[] = [
+            makeCleanBundle({
+                Files: [
+                    {
+                        Path: 'index.html',
+                        Content:
+                            '<!doctype html><html><body><div id="root" data-composition-id="c" data-duration="2"><script src="assets/evil.js"></script></div></body></html>',
+                    },
+                ],
+                Assets: [{ Key: 'evil', RelativePath: 'assets/evil.js', MimeType: 'text/javascript', DataBase64: assetJsBase64 }],
+            }),
+            makeCleanBundle({
+                Files: [
+                    {
+                        Path: 'index.html',
+                        Content:
+                            '<!doctype html><html><body><div id="root" data-composition-id="c" data-duration="2"><script type="module" src="app.js"></script></div></body></html>',
+                    },
+                    { Path: 'app.js', Content: 'import "./assets/evil.js";\n' },
+                ],
+                Assets: [{ Key: 'evil', RelativePath: 'assets/evil.js', MimeType: 'text/javascript', DataBase64: assetJsBase64 }],
+            }),
+            makeCleanBundle({
+                Files: [
+                    {
+                        Path: 'index.html',
+                        Content:
+                            '<!doctype html><html><body><div id="root" data-composition-id="c" data-duration="2"><script src="vendor/gsap/dist/gsap.min.js"></script></div></body></html>',
+                    },
+                ],
+            }),
+        ];
+
+        for (const probeBundle of scriptProbes) {
+            const probeRes = await RunCheckJob(
+                {
+                    Bundle: probeBundle,
+                    Width: 1920,
+                    Height: 1080,
+                },
+                backend,
+            );
+            expect(probeRes.Passed).toBe(false);
+            expect(probeRes.BlockRender).toBe(true);
+            expect(probeRes.Issues.some((i) => i.Code === MJ_NON_BUNDLE_URL_CODE)).toBe(true);
+            expect(backend.RunCheckCliCallCount).toBe(0);
+            expect(backend.MeasureTextCallCount).toBe(0);
+        }
     });
 
     it('turns a throwing MeasureText or RunCheckCli into Warning issues instead of crashing the job', async () => {
@@ -259,5 +312,59 @@ describe('RunCheckJob', () => {
         expect(backend.LintCallCount).toBe(0);
         expect(backend.RunCheckCliCallCount).toBe(0);
         expect(backend.MeasureTextCallCount).toBe(0);
+    });
+
+    it('parses data-fps from the composition root, passes it to StageRenderBundle and FakeRenderBackend.MeasureText, and range-checks invalid data-fps', async () => {
+        let stagedIndexHtml = '';
+        class InspectingBackend extends FakeRenderBackend {
+            public override async MeasureText(
+                ...args: Parameters<FakeRenderBackend['MeasureText']>
+            ): Promise<Awaited<ReturnType<FakeRenderBackend['MeasureText']>>> {
+                const [job] = args;
+                stagedIndexHtml = await fs.readFile(path.join(job.RootDir, job.EntryFile), 'utf8');
+                return super.MeasureText(...args);
+            }
+        }
+        const backend = new InspectingBackend();
+
+        const fps24Bundle = makeCleanBundle({
+            Files: [
+                {
+                    Path: 'index.html',
+                    Content:
+                        '<!doctype html><html><body><div id="root" data-composition-id="film-24" data-fps="24" data-duration="2"><h1 id="title">24fps Film</h1></div></body></html>',
+                },
+            ],
+        });
+
+        await RunCheckJob(
+            {
+                Bundle: fps24Bundle,
+                Width: 1920,
+                Height: 1080,
+                SampleTimestampsSeconds: [0.55],
+            },
+            backend,
+        );
+
+        expect(backend.LastMeasureTextJob?.Fps).toBe(24);
+        expect(backend.LastCheckCliJob?.Fps).toBe(24);
+        expect(stagedIndexHtml).toContain('Fps: 24');
+
+        for (const badFps of ['0', '240', 'abc', '']) {
+            const badBundle = makeCleanBundle({
+                Files: [
+                    {
+                        Path: 'index.html',
+                        Content: `<!doctype html><html><body><div id="root" data-composition-id="bad-fps" data-fps="${badFps}"></div></body></html>`,
+                    },
+                ],
+            });
+            await expect(
+                RunCheckJob({ Bundle: badBundle, Width: 1920, Height: 1080 }, backend),
+            ).rejects.toMatchObject({
+                Code: 'InvalidRequest',
+            });
+        }
     });
 });

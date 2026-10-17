@@ -28,6 +28,7 @@ import {
     type RenderBackend,
 } from './backend.js';
 import {
+    ResolveCompositionFps,
     StageRenderBundle,
     ValidateCompositionGeometryMatch,
     ValidateRenderGeometry,
@@ -63,7 +64,7 @@ export interface RunJobCommonOptions {
 
 /**
  * Executes a `/check` job (VS-RND-5 Step 8):
- * 1. Validate request & geometry (including composition root attribute match)
+ * 1. Validate request & geometry (including composition root attribute match and `data-fps` range)
  * 2. Stage bundle (with preamble injected on a single line so line numbers stay unchanged and
  *    `@hyperframes/lint` sees `window.__timelines` for `OnFrame`-only compositions)
  * 3. Run RND-1 lint gate (`RunLintGate`); if lint-blocked, return lint issues immediately
@@ -126,10 +127,11 @@ export async function RunCheckJob(
         Width: req.Width,
         Height: req.Height,
     });
+    const resolvedFps = ResolveCompositionFps(req.Bundle, 30);
 
     const staged = await StageRenderBundle(req.Bundle, {
         TempRoot: options?.TempRoot,
-        Geometry: { Width: req.Width, Height: req.Height, Fps: 30 },
+        Geometry: { Width: req.Width, Height: req.Height, Fps: resolvedFps },
     });
     try {
         const lintResult = await RunLintGate(req.Bundle, staged.RootDir, backend);
@@ -146,6 +148,7 @@ export async function RunCheckJob(
             EntryFile: req.Bundle.EntryFile,
             Width: req.Width,
             Height: req.Height,
+            Fps: resolvedFps,
         };
 
         const cliIssues = await runCheckCliSafely(backend, checkJob, signal);

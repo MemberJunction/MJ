@@ -234,6 +234,8 @@ export class FakeRenderBackend implements RenderBackend {
     public RunCheckCliCallCount = 0;
     public MeasureTextCallCount = 0;
     public LastMeasuredTimestamps: number[] = [];
+    public LastCheckCliJob?: BackendCheckJob;
+    public LastMeasureTextJob?: BackendCheckJob;
     public LastCheckCliSignal?: AbortSignal;
     public LastMeasureTextSignal?: AbortSignal;
 
@@ -251,9 +253,10 @@ export class FakeRenderBackend implements RenderBackend {
         };
     }
 
-    public async RunCheckCli(_job: BackendCheckJob, signal?: AbortSignal): Promise<CheckIssue[]> {
+    public async RunCheckCli(job: BackendCheckJob, signal?: AbortSignal): Promise<CheckIssue[]> {
         throwIfAborted(signal);
         this.RunCheckCliCallCount++;
+        this.LastCheckCliJob = { ...job };
         this.LastCheckCliSignal = signal;
         if (this.options.ThrowOnCheckCli) {
             throw this.options.ThrowOnCheckCli;
@@ -262,12 +265,13 @@ export class FakeRenderBackend implements RenderBackend {
     }
 
     public async MeasureText(
-        _job: BackendCheckJob,
+        job: BackendCheckJob,
         timestampsSeconds: readonly number[],
         signal?: AbortSignal,
     ): Promise<MeasuredText[][]> {
         throwIfAborted(signal);
         this.MeasureTextCallCount++;
+        this.LastMeasureTextJob = { ...job };
         this.LastMeasureTextSignal = signal;
         this.LastMeasuredTimestamps = [...timestampsSeconds];
         if (this.options.ThrowOnMeasureText) {

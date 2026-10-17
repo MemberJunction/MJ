@@ -1,7 +1,9 @@
 import * as fs from 'node:fs/promises';
+import * as net from 'node:net';
+import * as os from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { RenderProjectBundle } from '@memberjunction/video-studio-core';
 import { HyperFramesRenderBackend } from '../hyperframes-backend.js';
 import {
@@ -78,12 +80,92 @@ async function loadGoldenBundle(): Promise<RenderProjectBundle> {
 
 describe.skipIf(!RUN_RENDER_TESTS)('VS-RND-5 opt-in real-backend deterministic checks', () => {
     const backend = new HyperFramesRenderBackend();
+    const realExecPath = process.execPath;
+    const origConnect = net.Socket.prototype.connect;
+    let offlineGuardDir = '';
+    let cliAttemptsLogPath = '';
+    let inProcessNonLoopbackAttempts: string[] = [];
 
-    afterAll(async () => {
-        await backend.Shutdown();
+    beforeAll(async () => {
+        offlineGuardDir = await fs.mkdtemp(path.join(os.tmpdir(), 'mj-rnd5-offline-guard-'));
+        cliAttemptsLogPath = path.join(offlineGuardDir, 'cli-attempts.log');
+        const preloadPath = path.join(offlineGuardDir, 'offline-preload.cjs');
+        const wrapperPath = path.join(offlineGuardDir, 'node-offline-wrapper.sh');
+
+        const preloadSource = [
+            'const fs = require("node:fs");',
+            'const net = require("node:net");',
+            `const logPath = ${JSON.stringify(cliAttemptsLogPath)};`,
+            'const origConnect = net.Socket.prototype.connect;',
+            'net.Socket.prototype.connect = function (...args) {',
+            '  const rawOpts = Array.isArray(args[0]) ? args[0][0] : args[0];',
+            '  if (rawOpts && typeof rawOpts === "object" && !("path" in rawOpts)) {',
+            '    const host = String(rawOpts.host ?? "127.0.0.1").toLowerCase();',
+            '    const port = Number(rawOpts.port ?? 0);',
+            '    const isLoopback = host === "127.0.0.1" || host === "localhost" || host === "::1" || host === "::ffff:127.0.0.1";',
+            '    if (!isLoopback) {',
+            '      try { fs.appendFileSync(logPath, `${host}:${port}\\n`, "utf8"); } catch {}',
+            '      this.destroy(new Error(`Outbound network connection refused in CLI child (${host}:${port})`));',
+            '      return this;',
+            '    }',
+            '  }',
+            '  return origConnect.apply(this, args);',
+            '};',
+        ].join('\n');
+
+        await fs.writeFile(preloadPath, preloadSource, 'utf8');
+        await fs.writeFile(
+            wrapperPath,
+            `#!/bin/sh\nexec ${JSON.stringify(realExecPath)} --require ${JSON.stringify(preloadPath)} "$@"\n`,
+            { mode: 0o755 },
+        );
+        process.execPath = wrapperPath;
     });
 
-    it('measures FontIsBundled=true on the Roboto golden fixture and passes a clean MJ Sans composition through RunCheckJob and RunRenderJob with zero outbound HTTP requests', async () => {
+    afterAll(async () => {
+        process.execPath = realExecPath;
+        await backend.Shutdown();
+        if (offlineGuardDir) {
+            await fs.rm(offlineGuardDir, { recursive: true, force: true }).catch(() => undefined);
+        }
+    });
+
+    beforeEach(async () => {
+        inProcessNonLoopbackAttempts = [];
+        await fs.writeFile(cliAttemptsLogPath, '', 'utf8');
+        net.Socket.prototype.connect = function (this: net.Socket, ...args: unknown[]): net.Socket {
+            const rawOpts = Array.isArray(args[0]) ? args[0][0] : args[0];
+            if (rawOpts && typeof rawOpts === 'object' && !('path' in rawOpts)) {
+                const opts = rawOpts as { host?: string; port?: number };
+                const host = (opts.host ?? '127.0.0.1').toLowerCase();
+                const port = opts.port ?? 0;
+                const isLoopback =
+                    host === '127.0.0.1' ||
+                    host === 'localhost' ||
+                    host === '::1' ||
+                    host === '::ffff:127.0.0.1';
+                if (!isLoopback) {
+                    inProcessNonLoopbackAttempts.push(`${host}:${port}`);
+                    this.destroy(new Error(`Outbound network connection refused in test process (${host}:${port})`));
+                    return this;
+                }
+            }
+            return (origConnect as (...a: unknown[]) => net.Socket).apply(this, args);
+        } as typeof net.Socket.prototype.connect;
+    });
+
+    afterEach(async () => {
+        net.Socket.prototype.connect = origConnect;
+        const cliLogRaw = await fs.readFile(cliAttemptsLogPath, 'utf8').catch(() => '');
+        const cliAttempts = cliLogRaw
+            .split(/\r?\n/)
+            .map((line) => line.trim())
+            .filter((line) => line.length > 0);
+        expect(inProcessNonLoopbackAttempts).toEqual([]);
+        expect(cliAttempts).toEqual([]);
+    });
+
+    it('measures FontIsBundled=true on the Roboto golden fixture and passes a clean MJ Sans composition through RunCheckJob and RunRenderJob with zero non-loopback in-process Node fetch calls', async () => {
         const goldenBundle = await loadGoldenBundle();
 
         const staged = await StageRenderBundle(goldenBundle, { InjectPreamble: false });
@@ -177,8 +259,6 @@ describe.skipIf(!RUN_RENDER_TESTS)('VS-RND-5 opt-in real-backend deterministic c
                     Bundle: cleanBundle,
                     Width: 1280,
                     Height: 720,
-                    Fps: 15,
-                    DurationSeconds: 2,
                     SampleTimestampsSeconds: [0, 1],
                 },
                 backend,
@@ -285,7 +365,7 @@ describe.skipIf(!RUN_RENDER_TESTS)('VS-RND-5 opt-in real-backend deterministic c
         expect(failCodes.has(MJ_MIN_TEXT_SIZE_CODE)).toBe(true);
     }, 90_000);
 
-    it('Fix 3: OnFrame-only composition that writes "$9.9M" only when t >= 1 passes at [0] and reports MJ_UNBOUND_LITERAL_RENDERED at TimestampSeconds=1.5 when sampled at [1.5]', async () => {
+    it('Fix 3: OnFrame-only composition that writes "$9.9M" only when t >= 1 passes at [0], reports MJ_UNBOUND_LITERAL_RENDERED at TimestampSeconds=1.5, and quantizes data-fps="24" at t=0.55 to 542ms with MJVideo.Fps===24', async () => {
         const onFrameHtml = [
             '<!doctype html>',
             '<html>',
@@ -334,8 +414,6 @@ describe.skipIf(!RUN_RENDER_TESTS)('VS-RND-5 opt-in real-backend deterministic c
                 Bundle: bundle,
                 Width: 1280,
                 Height: 720,
-                Fps: 30,
-                DurationSeconds: 3,
                 SampleTimestampsSeconds: [0],
                 AllowedDataLiterals: [],
             },
@@ -348,8 +426,6 @@ describe.skipIf(!RUN_RENDER_TESTS)('VS-RND-5 opt-in real-backend deterministic c
                 Bundle: bundle,
                 Width: 1280,
                 Height: 720,
-                Fps: 30,
-                DurationSeconds: 3,
                 SampleTimestampsSeconds: [1.5],
                 AllowedDataLiterals: [],
             },
@@ -365,9 +441,83 @@ describe.skipIf(!RUN_RENDER_TESTS)('VS-RND-5 opt-in real-backend deterministic c
                 TimestampSeconds: 1.5,
             }),
         ]);
+
+        const fps24Html = [
+            '<!doctype html>',
+            '<html>',
+            '<head>',
+            '<meta charset="utf-8" />',
+            '<style>',
+            '  * { box-sizing: border-box; margin: 0; padding: 0; }',
+            '  body, #root { width: 1280px; height: 720px; background: #0f172a; color: #f8fafc; font-family: "MJ Sans", sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; }',
+            '  #ms-probe, #fps-probe { font-size: 48px; }',
+            '</style>',
+            '</head>',
+            '<body>',
+            '  <div id="root" data-composition-id="fps24-probe" data-duration="2" data-fps="24" data-width="1280" data-height="720">',
+            '    <div id="ms-probe">init</div>',
+            '    <div id="fps-probe">init</div>',
+            '  </div>',
+            '  <script>',
+            '    (function() {',
+            '      var msEl = document.getElementById("ms-probe");',
+            '      var fpsEl = document.getElementById("fps-probe");',
+            '      if (window.MJVideo && typeof window.MJVideo.OnFrame === "function") {',
+            '        window.MJVideo.OnFrame(function(t) {',
+            '          if (msEl) msEl.textContent = "ms:" + String(Math.round(t * 1000));',
+            '          if (fpsEl) fpsEl.textContent = "fps:" + String(window.MJVideo.Fps);',
+            '        });',
+            '      }',
+            '    })();',
+            '  </script>',
+            '</body>',
+            '</html>',
+        ].join('\n');
+
+        const fps24Bundle: RenderProjectBundle = {
+            Format: '16:9',
+            EntryFile: 'index.html',
+            Files: [{ Path: 'index.html', Content: fps24Html }],
+            Assets: [],
+            DataSnapshot: {},
+            Seed: 1,
+        };
+
+        const stagedFps24 = await StageRenderBundle(fps24Bundle, {
+            Geometry: { Width: 1280, Height: 720, Fps: 24 },
+        });
+        try {
+            const measured24 = await backend.MeasureText(
+                {
+                    RootDir: stagedFps24.RootDir,
+                    EntryFile: 'index.html',
+                    Width: 1280,
+                    Height: 720,
+                    Fps: 24,
+                },
+                [0.55],
+            );
+            const probeItems = measured24[0] ?? [];
+            expect(probeItems.find((i) => i.Selector === '#ms-probe')?.Text).toBe('ms:542');
+            expect(probeItems.find((i) => i.Selector === '#fps-probe')?.Text).toBe('fps:24');
+        } finally {
+            await stagedFps24.Cleanup();
+        }
+
+        const fps24CheckRes = await RunCheckJob(
+            {
+                Bundle: fps24Bundle,
+                Width: 1280,
+                Height: 720,
+                SampleTimestampsSeconds: [0.55],
+                AllowedDataLiterals: ['542', '24'],
+            },
+            backend,
+        );
+        expect(fps24CheckRes.Issues.filter((i) => i.Code === MJ_UNBOUND_LITERAL_RENDERED_CODE)).toEqual([]);
     }, 90_000);
 
-    it('Fix 4: Arial heading measures FontIsBundled=true via injectDeterministicFontFaces while a generic sans-serif-only heading reports MJ_UNBUNDLED_FONT', async () => {
+    it('Fix 4: Arial and generic sans-serif headings measure FontIsBundled=true via normalizeSystemFontPrimaryFamilies + injectDeterministicFontFaces while a script-assigned Brand Display family reports MJ_UNBUNDLED_FONT', async () => {
         const fontHtml = [
             '<!doctype html>',
             '<html>',
@@ -376,15 +526,23 @@ describe.skipIf(!RUN_RENDER_TESTS)('VS-RND-5 opt-in real-backend deterministic c
             '<style>',
             '  * { box-sizing: border-box; margin: 0; padding: 0; }',
             '  body { width: 1280px; height: 720px; background: #0f172a; color: #f8fafc; position: relative; }',
-            '  #arial-heading { position: absolute; left: 160px; top: 180px; font-size: 42px; font-family: Arial, sans-serif; }',
-            '  #generic-heading { position: absolute; left: 160px; top: 320px; font-size: 42px; font-family: sans-serif; }',
+            '  #arial-heading { position: absolute; left: 160px; top: 160px; font-size: 42px; font-family: Arial, sans-serif; }',
+            '  #generic-heading { position: absolute; left: 160px; top: 280px; font-size: 42px; font-family: sans-serif; }',
+            '  #brand-heading { position: absolute; left: 160px; top: 400px; font-size: 42px; font-family: "MJ Sans", sans-serif; }',
             '</style>',
             '</head>',
             '<body>',
             '  <div id="root" data-composition-id="font-parity" data-duration="2" data-fps="30" data-width="1280" data-height="720" data-no-timeline>',
             '    <h2 id="arial-heading">Catalog Arial Heading</h2>',
             '    <h2 id="generic-heading">Generic Sans Heading</h2>',
+            '    <h2 id="brand-heading">Runtime Brand Display Heading</h2>',
             '  </div>',
+            '  <script>',
+            '    (function() {',
+            '      var el = document.getElementById("brand-heading");',
+            '      if (el) el.style.fontFamily = "Brand Display";',
+            '    })();',
+            '  </script>',
             '</body>',
             '</html>',
         ].join('\n');
@@ -419,8 +577,12 @@ describe.skipIf(!RUN_RENDER_TESTS)('VS-RND-5 opt-in real-backend deterministic c
             const items = measured[0] ?? [];
             const arialItem = items.find((t) => t.Selector === '#arial-heading');
             const genericItem = items.find((t) => t.Selector === '#generic-heading');
+            const brandItem = items.find((t) => t.Selector === '#brand-heading');
             expect(arialItem?.FontIsBundled).toBe(true);
-            expect(genericItem?.FontIsBundled).toBe(false);
+            expect(genericItem?.FontFamily.toLowerCase()).toBe('inter');
+            expect(genericItem?.FontIsBundled).toBe(true);
+            expect(brandItem?.FontFamily).toBe('Brand Display');
+            expect(brandItem?.FontIsBundled).toBe(false);
         } finally {
             await staged.Cleanup();
         }
@@ -438,7 +600,7 @@ describe.skipIf(!RUN_RENDER_TESTS)('VS-RND-5 opt-in real-backend deterministic c
         expect(unbundledIssues).toEqual([
             expect.objectContaining({
                 Code: MJ_UNBUNDLED_FONT_CODE,
-                Selector: '#generic-heading',
+                Selector: '#brand-heading',
                 Severity: 'Warning',
             }),
         ]);

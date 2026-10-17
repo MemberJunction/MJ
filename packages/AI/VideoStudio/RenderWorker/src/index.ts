@@ -33,6 +33,7 @@ export {
     MAX_FRAME_DIMENSION,
     MIN_FPS,
     MIN_FRAME_DIMENSION,
+    ResolveCompositionFps,
     StageRenderBundle,
     ValidateBundleRelativePath,
     ValidateCompositionGeometryMatch,

@@ -6,6 +6,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
+import { normalizeSystemFontPrimaryFamilies } from '@hyperframes/core/fonts/embed';
 import {
     captureFrameToBuffer,
     closeCaptureSession,
@@ -129,6 +130,7 @@ export class HyperFramesRenderBackend implements RenderBackend {
         throwIfAborted(signal);
         const browserPath = ensureBrowserBinaryEnv();
         await EnsureIndexHtmlForServer(job.RootDir, job.EntryFile);
+        await compileOfflineEntryFonts(job.RootDir);
 
         const cliBinPath = resolveHyperFramesCliBinPath();
         const homeDir = await fs.mkdtemp(path.join(os.tmpdir(), 'mj-video-check-home-'));
@@ -171,18 +173,7 @@ export class HyperFramesRenderBackend implements RenderBackend {
         const browserBinary = ensureBrowserBinaryEnv();
         const fpsInt = Math.max(1, Math.round(job.Fps ?? 30));
         await EnsureIndexHtmlForServer(job.RootDir, job.EntryFile);
-
-        const indexHtmlPath = path.join(job.RootDir, 'index.html');
-        const rawIndexHtml = await fs.readFile(indexHtmlPath, 'utf8');
-        const compiledHtml = await injectDeterministicFontFaces(rawIndexHtml, {
-            fetchImpl: async () => {
-                throw new Error('Network disabled in render worker');
-            },
-            allowSystemFontCapture: false,
-        });
-        if (compiledHtml !== rawIndexHtml) {
-            await fs.writeFile(indexHtmlPath, compiledHtml, 'utf8');
-        }
+        await compileOfflineEntryFonts(job.RootDir);
 
         const server = await createFileServer({
             projectDir: job.RootDir,
@@ -757,6 +748,21 @@ function throwIfAborted(signal?: AbortSignal): void {
 function resolveHyperFramesCliBinPath(): string {
     const pkgJsonPath = nodeRequire.resolve('hyperframes/package.json');
     return path.join(path.dirname(pkgJsonPath), 'bin', 'hyperframes.mjs');
+}
+
+async function compileOfflineEntryFonts(rootDir: string): Promise<void> {
+    const indexHtmlPath = path.join(rootDir, 'index.html');
+    const rawIndexHtml = await fs.readFile(indexHtmlPath, 'utf8');
+    const normalizedHtml = normalizeSystemFontPrimaryFamilies(rawIndexHtml);
+    const compiledHtml = await injectDeterministicFontFaces(normalizedHtml, {
+        fetchImpl: async () => {
+            throw new Error('Network disabled in render worker');
+        },
+        allowSystemFontCapture: false,
+    });
+    if (compiledHtml !== rawIndexHtml) {
+        await fs.writeFile(indexHtmlPath, compiledHtml, 'utf8');
+    }
 }
 
 function extractStdoutFromExecError(error: unknown): string | undefined {
