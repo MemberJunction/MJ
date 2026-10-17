@@ -370,7 +370,10 @@ export class SQLCodeGenBase {
             //
             // Pass 1 (in manage-metadata.ts) already discovered all changes and populated _newEntityList ∪ _modifiedEntityList.
             // Pass 2 (this call) only re-runs to pick up new virtual fields from regenerated views and to apply advanced
-            // generation. Scoping to changed entities collapses the SP scans to seeks; an empty list means no work to do.
+            // generation. Scoping to changed entities collapses the SP scans to seeks; an empty list means no schema-sync
+            // work to do. It does NOT skip the orphan prune — Step 2 above regenerated every included entity's base view,
+            // so a view may have LOST columns on an entity that appears in neither list, and the prune has to scan wide to
+            // find it (#4050). manageEntityFields runs that prune unscoped regardless of this filter.
             // forceRegeneration override skips the scoping so all entities get reprocessed (used when prompts change, etc.).
             const pass2EntityFilter: string[] | undefined = configInfo.forceRegeneration?.enabled
                 ? undefined
