@@ -172,3 +172,30 @@ export function computeFieldsList(
 ): string[] {
     return ComputeFieldsList(entityInfo, gridState, hostColumnFields);
 }
+
+/**
+ * Whether a saved column list can be believed to describe `entity`: true when at least one of the
+ * names is a field of the entity, false when NONE of them are.
+ *
+ * Zero matches is not a column preference, it is evidence the saved layout was captured from a
+ * DIFFERENT entity — the cross-entity state of MemberJunction/MJ#4244. A partial match stays true on
+ * purpose: from the saved names alone it is indistinguishable from a view whose entity has since lost
+ * a field, and that view's remaining settings are the user's real preference. With no names, or no
+ * entity, there is no evidence either way, so the layout is trusted.
+ *
+ * This is the rule `mj-entity-data-grid` applies before rendering a saved state's columns and computing
+ * its aggregates. It is exported so every surface that READS a saved layout — the grid, the view
+ * settings panel — reaches the same verdict; a surface that disagreed would let a foreign layout back
+ * in through the side the grid does not guard. Matching is case-insensitive, as the grid's is.
+ */
+export function SavedColumnsMatchEntity(
+    columnNames: readonly string[] | null | undefined,
+    entity: EntityInfo | null | undefined,
+): boolean {
+    if (!entity || !columnNames?.length) {
+        return true;
+    }
+    return columnNames.some(name =>
+        entity.Fields.some(f => f.Name.toLowerCase() === name.toLowerCase())
+    );
+}

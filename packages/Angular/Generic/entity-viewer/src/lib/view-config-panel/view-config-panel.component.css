@@ -908,6 +908,7 @@
    surrounding margins from the bespoke banners are preserved here. */
 .view-config-alert-pos { margin-top: 12px; }
 .view-config-alert-pos-mb { margin-bottom: 12px; }
+.view-config-foreign-layout-alert { display: block; margin: 12px 12px 0; }
 .view-config-validation-pos { margin: 0 16px 12px; }
 
 /* Filter Mode Selector */

@@ -90,6 +90,12 @@
 
   <!-- Panel Content -->
   <div class="panel-content">
+    <!-- A saved layout from a different entity: say why its columns and aggregates are not shown,
+         and what saving will do, rather than leaving the user to wonder where they went. -->
+    @if (ForeignSavedLayout) {
+      <mj-alert Variant="warning" Size="sm" Role="status" class="view-config-foreign-layout-alert">{{ ForeignSavedLayoutMessage }}</mj-alert>
+    }
+
     <!-- Columns Tab -->
     @if (ActiveTab === 'columns' && !FormatEditingColumn) {
       <div class="tab-content">

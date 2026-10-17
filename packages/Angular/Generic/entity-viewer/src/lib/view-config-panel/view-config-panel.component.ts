@@ -21,6 +21,7 @@ import {
   CreateEmptyFilter
 } from '@memberjunction/ng-filter-builder';
 import { ViewConfigSummary } from '../types';
+import { SavedColumnsMatchEntity } from '../utils/record.util';
 
 /**
  * Column configuration for the view (internal use)
@@ -231,6 +232,36 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
 
   // Aggregates state
   public Aggregates: ViewGridAggregate[] = [];
+
+  /**
+   * True when the saved layout this panel was opened on belongs to a DIFFERENT entity — its column
+   * list names none of this entity's fields (the cross-entity state of MemberJunction/MJ#4244). The
+   * panel then shows the entity's default columns and does not load the layout's aggregates, and
+   * says so: a layout that silently fails to apply leaves the user staring at missing columns and
+   * cards with no idea why.
+   */
+  public ForeignSavedLayout = false;
+
+  /** How many of the foreign layout's aggregates were not loaded, so the notice can name them. */
+  public RefusedAggregateCount = 0;
+
+  /**
+   * Whether the saved layout carried any aggregates at all. Decides what an EMPTY aggregates list
+   * means on save: with none to begin with it is "no opinion", but when there were some — the user
+   * removed them, or they were refused as foreign — it means "none", and must be said explicitly.
+   */
+  private savedLayoutHadAggregates = false;
+
+  /** The user-facing explanation for {@link ForeignSavedLayout}; empty when the layout is this entity's. */
+  public get ForeignSavedLayoutMessage(): string {
+    if (!this.ForeignSavedLayout) {
+      return '';
+    }
+    const n = this.RefusedAggregateCount;
+    const aggregates = n > 0 ? `, and its ${n} ${n === 1 ? 'aggregate is' : 'aggregates are'} not calculated` : '';
+    return `This view's saved layout was set up for a different kind of record, so it can't be applied here. ` +
+      `Showing the default columns instead${aggregates}. Saving replaces the old layout.`;
+  }
   public ShowAggregateDialog: boolean = false;
   public EditingAggregate: ViewGridAggregate | null = null;
 
@@ -434,10 +465,24 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
    * Priority for column state: currentGridState > viewEntity.Columns > entity defaults
    */
   private initializeFromEntity(): void {
+    this.ForeignSavedLayout = false;
+    this.RefusedAggregateCount = 0;
+    this.savedLayoutHadAggregates = false;
+
     if (!this.Entity) {
       this.Columns = [];
       return;
     }
+
+    // A saved layout whose column list names none of this entity's fields came from a different
+    // entity. Applying it hides every column (nothing matches, and the apply step hides first, then
+    // shows matches), and its aggregates would be saved straight back next to this entity's real
+    // columns — at which point the grid believes the layout and computes them. Same rule the grid
+    // applies; see SavedColumnsMatchEntity.
+    const liveStateIsForeign = !SavedColumnsMatchEntity(
+      this.CurrentGridState?.columnSettings?.map(c => c.Name),
+      this.Entity
+    );
 
     // Initialize columns from entity fields (including __mj_ fields for audit/timestamp info).
     //
@@ -462,8 +507,12 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
         format: undefined
       }));
 
+    if (liveStateIsForeign) {
+      this.ForeignSavedLayout = true;
+    }
+
     // Priority 1: Use currentGridState if available (reflects live grid state including resizes)
-    if (this.CurrentGridState?.columnSettings && this.CurrentGridState.columnSettings.length > 0) {
+    if (this.CurrentGridState?.columnSettings && this.CurrentGridState.columnSettings.length > 0 && !liveStateIsForeign) {
       this.applyGridStateToColumns(this.CurrentGridState.columnSettings);
 
       // Also apply sort from currentGridState (supports multi-sort)
@@ -482,7 +531,13 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
     // Priority 2: If we have a view, apply its column configuration
     else if (this.ViewEntity) {
       const viewColumns = this.ViewEntity.Columns;
-      if (viewColumns && viewColumns.length > 0) {
+      // The record's columns are parsed from its saved state, so a polluted record carries the same
+      // foreign names here; treat them the same way.
+      const viewColumnsAreForeign = !SavedColumnsMatchEntity(viewColumns?.map(c => c.Name ?? ''), this.Entity);
+      if (viewColumnsAreForeign) {
+        this.ForeignSavedLayout = true;
+      }
+      if (viewColumns && viewColumns.length > 0 && !viewColumnsAreForeign) {
         // Mark all columns as hidden initially
         this.Columns.forEach(c => c.visible = false);
 
@@ -579,11 +634,16 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
       }
     }
 
-    // Load aggregates from currentGridState if available
-    if (this.CurrentGridState?.aggregates?.expressions) {
-      this.Aggregates = [...this.CurrentGridState.aggregates.expressions];
-    } else {
+    // Load aggregates from currentGridState if available — unless the layout is another entity's.
+    // Its aggregates are raw SQL with their own labels; against this entity they are a plausible
+    // number under someone else's label, which is why the grid refuses them too.
+    const savedAggregates = this.CurrentGridState?.aggregates?.expressions ?? [];
+    this.savedLayoutHadAggregates = savedAggregates.length > 0;
+    if (liveStateIsForeign) {
       this.Aggregates = [];
+      this.RefusedAggregateCount = savedAggregates.length;
+    } else {
+      this.Aggregates = [...savedAggregates];
     }
 
     this.cdr.detectChanges();
@@ -1896,7 +1956,15 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
    * Build aggregates config from current state
    */
   private buildAggregatesConfig(): ViewGridAggregatesConfig | null {
-    if (this.Aggregates.length === 0) return null;
+    if (this.Aggregates.length === 0) {
+      // `null` reads as "no opinion": `view-workspace` then keeps the aggregates from the live grid
+      // state. That is right when the layout never had any, and wrong when it did — the user removed
+      // the last one (the deletion silently did not stick), or they were refused as another entity's
+      // (they were restored next to this entity's real columns and computed). Say "none" explicitly.
+      return this.savedLayoutHadAggregates
+        ? { display: { ...DEFAULT_AGGREGATE_DISPLAY }, expressions: [] }
+        : null;
+    }
 
     return {
       display: { ...DEFAULT_AGGREGATE_DISPLAY },
