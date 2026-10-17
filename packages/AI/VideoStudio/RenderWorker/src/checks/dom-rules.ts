@@ -292,7 +292,7 @@ function checkBundledFont(item: MeasuredText, issues: CheckIssue[]): void {
         issues.push({
             Code: MJ_UNBUNDLED_FONT_CODE,
             Category: 'Lint',
-            Severity: 'Warning',
+            Severity: 'Error',
             Message: `Text element "${item.Selector}" uses unbundled font family "${item.FontFamily}".`,
             Selector: item.Selector,
             TimestampSeconds: item.TimestampSeconds,

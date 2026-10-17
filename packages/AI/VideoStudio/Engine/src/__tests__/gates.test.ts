@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { GateRecord } from '@memberjunction/video-studio-core';
+import { ValidateVideoGenerationSpec, type GateRecord } from '@memberjunction/video-studio-core';
 import {
     CheckStagePrerequisite,
     ClearStaleEvidence,
@@ -71,7 +71,7 @@ describe('VideoStudio gates', () => {
             const spec = CreateDeliveredSpecFixture();
             spec.Assets.Required.push({
                 Key: 'missing_exec_headshot',
-                Kind: 'Photo',
+                Kind: 'Image',
                 Description: 'Executive portrait',
                 MustUse: true,
                 AllowGenerated: false,
@@ -115,11 +115,17 @@ describe('VideoStudio gates', () => {
     });
 
     describe('Gate G2 (Plan)', () => {
-        it('passes in Autonomous mode when Storyboarded validation passes', () => {
+        it('passes in Autonomous mode when Storyboarded validation passes, even when Interaction is omitted', () => {
             const spec = CreateDeliveredSpecFixture();
             spec.Review.Gates = [];
             const g2 = getGate(EvaluateGates(spec, standardCtx), 'G2');
             expect(g2.Status).toBe('Passed');
+
+            const withoutInteraction = CreateDeliveredSpecFixture() as Partial<ReturnType<typeof CreateDeliveredSpecFixture>>;
+            delete withoutInteraction.Interaction;
+            withoutInteraction.Review = { Gates: [], Rounds: [] };
+            const g2WithoutInteraction = getGate(EvaluateGates(withoutInteraction, standardCtx), 'G2');
+            expect(g2WithoutInteraction.Status).toBe('Passed');
         });
 
         it('returns Pending with AwaitingApproval in ApproveStoryboard mode without approval, and Passed once Approved', () => {
@@ -143,11 +149,21 @@ describe('VideoStudio gates', () => {
             expect(approved.Notes).toBe('Approved');
         });
 
-        it('fails when ValidateVideoGenerationSpec at Storyboarded fails', () => {
+        it('fails when ValidateVideoGenerationSpec at Storyboarded fails (including a narration-less storyboard with MissingNarrationScript)', () => {
             const spec = CreateDeliveredSpecFixture();
             spec.Beats[0].StartSeconds = 3; // breaks contiguous 0-start beats invariant
             const g2 = getGate(EvaluateGates(spec, standardCtx), 'G2');
             expect(g2.Status).toBe('Failed');
+
+            const silentSpec = CreateDeliveredSpecFixture();
+            silentSpec.Audio = { Cues: [], Captions: 'None' };
+            silentSpec.Deliverables.Captions = false;
+            for (const beat of silentSpec.Beats) {
+                delete beat.NarrationKey;
+            }
+            const g2Silent = getGate(EvaluateGates(silentSpec, standardCtx), 'G2');
+            expect(g2Silent.Status).toBe('Failed');
+            expect(g2Silent.Notes).toContain('MissingNarrationScript');
         });
     });
 
@@ -231,10 +247,9 @@ describe('VideoStudio gates', () => {
                 {
                     Beat: 'beat-1',
                     Timestamp: 2.0,
-                    Category: 'Overlap',
                     Severity: 'Major',
                     Evidence: 'Headline overlaps KPI label on 9:16',
-                    SuggestedFix: 'Reduce headline font size on 9:16',
+                    Fix: 'Reduce headline font size on 9:16',
                     Status: 'Open',
                 },
             ];
@@ -252,10 +267,9 @@ describe('VideoStudio gates', () => {
                         {
                             Beat: 'beat-1',
                             Timestamp: 1.5,
-                            Category: 'Overflow',
                             Severity: 'Blocker',
                             Evidence: 'Clipped text',
-                            SuggestedFix: 'Shrink text',
+                            Fix: 'Shrink text',
                             Status: 'Open',
                         },
                     ],
@@ -272,8 +286,11 @@ describe('VideoStudio gates', () => {
     });
 
     describe('Gate G6 (Final)', () => {
-        it('passes on DELIVERED_SPEC_FIXTURE', () => {
+        it('passes on DELIVERED_SPEC_FIXTURE and ValidateVideoGenerationSpec at Delivered returns Valid = true', () => {
             expect(getGate(EvaluateGates(DELIVERED_SPEC_FIXTURE, standardCtx), 'G6').Status).toBe('Passed');
+            const validation = ValidateVideoGenerationSpec(CreateDeliveredSpecFixture(), 'Delivered');
+            expect(validation.Valid).toBe(true);
+            expect(validation.Errors).toEqual([]);
         });
 
         it('fails when a deliverable format is missing in Output.Videos', () => {
@@ -311,7 +328,7 @@ describe('VideoStudio gates', () => {
             const blockedGates = EvaluateGates(blockedSpec, { ...standardCtx, BrandKitInScope: false });
             expect(DeriveStatus(blockedSpec, blockedGates)).toBe('Blocked');
 
-            const fullSpec = CreateDeliveredSpecFixture();
+        const fullSpec = CreateDeliveredSpecFixture();
             const fullGates = EvaluateGates(fullSpec, standardCtx);
             expect(DeriveStatus(fullSpec, fullGates)).toBe('Reviewed');
         });
@@ -352,7 +369,7 @@ describe('VideoStudio gates', () => {
     });
 
     describe('ReadApprovalDecision', () => {
-        it('parses structured form tokens and explicit prefix approval tokens conservatively', () => {
+        it('parses structured form tokens and explicit prefix approval tokens conservatively, with leading Approved./Rejected. line taking precedence', () => {
             expect(
                 ReadApprovalDecision(
                     'Approved.\n\n@{"_mode":"form","action":"form","fields":[{"name":"decision","value":"approve"}]}',
@@ -360,9 +377,21 @@ describe('VideoStudio gates', () => {
             ).toBe('Approve');
             expect(
                 ReadApprovalDecision(
+                    'Rejected.\n\n@{"_mode":"form","action":"form","fields":[{"name":"decision","value":"approve"}]}',
+                ),
+            ).toBe('Reject');
+            expect(
+                ReadApprovalDecision(
+                    'Approved.\n\n@{"_mode":"form","action":"form","fields":[{"name":"decision","value":"reject"}]}',
+                ),
+            ).toBe('Approve');
+            expect(
+                ReadApprovalDecision(
                     '@{"_mode":"form","action":"form","fields":[{"name":"decision","value":"reject"}]}',
                 ),
             ).toBe('Reject');
+            expect(ReadApprovalDecision('Rejected.\n\nApprove once beat 2 is shorter')).toBe('Reject');
+            expect(ReadApprovalDecision('Approved.\n\nlooks great')).toBe('Approve');
             expect(ReadApprovalDecision('@form:{"decision":"approve"}')).toBe('Approve');
             expect(ReadApprovalDecision('@form:{"decision":"reject"}')).toBe('Reject');
             expect(ReadApprovalDecision('Approve')).toBe('Approve');
@@ -419,7 +448,7 @@ describe('VideoStudio gates', () => {
     });
 
     describe('ClearStaleEvidence and formatting helpers', () => {
-        it('clears G2/G3/G4, Output.Source, and render evidence after Storyboard, and clears render evidence + G3 after Motion Engineer', () => {
+        it('clears G2/G3/G4, Output.Source, and render evidence after Storyboard, and clears render evidence + G3/G4 after Motion Engineer and Pre-Production', () => {
             const afterStoryboard = CreateDeliveredSpecFixture();
             ClearStaleEvidence('Video Studio - Storyboard', afterStoryboard);
             expect(afterStoryboard.Output?.Source).toBeUndefined();
@@ -437,7 +466,12 @@ describe('VideoStudio gates', () => {
             expect(afterMotion.Output?.Videos).toBeUndefined();
             expect(afterMotion.Output?.ContactSheetFileIDs).toBeUndefined();
             expect(afterMotion.Review.Gates.some((g) => g.Gate === 'G2')).toBe(true);
-            expect(afterMotion.Review.Gates.some((g) => g.Gate === 'G3')).toBe(false);
+            expect(afterMotion.Review.Gates.some((g) => g.Gate === 'G3' || g.Gate === 'G4')).toBe(false);
+
+            const afterPreProd = CreateDeliveredSpecFixture();
+            ClearStaleEvidence('Video Studio - Pre-Production', afterPreProd);
+            expect(afterPreProd.Review.Gates.some((g) => g.Gate === 'G2')).toBe(true);
+            expect(afterPreProd.Review.Gates.some((g) => g.Gate === 'G3' || g.Gate === 'G4')).toBe(false);
         });
 
         it('formats DescribeStoryboardForApproval and DescribeStageProgress cleanly', () => {
