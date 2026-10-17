@@ -221,7 +221,7 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/core-entities (452 classes)
+// @memberjunction/core-entities (453 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -270,6 +270,7 @@ import {
     MJAIAgentStepEntity,
     MJAIAgentStepPathEntity,
     MJAIAgentTypeEntity,
+    MJAIAgentUserPolicyEntity,
     MJAIArchitectureEntity,
     MJAIBridgeAgentIdentityEntity,
     MJAIBridgeProviderChannelEntity,
@@ -1533,6 +1534,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJAIAgentStepEntity,
     MJAIAgentStepPathEntity,
     MJAIAgentTypeEntity,
+    MJAIAgentUserPolicyEntity,
     MJAIArchitectureEntity,
     MJAIBridgeAgentIdentityEntity,
     MJAIBridgeProviderChannelEntity,
@@ -1623,11 +1625,11 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJCommunicationRunEntity,
     MJCompanyEntity,
     MJCompanyIntegrationEntity,
-    MJCompanyIntegrationEntityMapEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJCompanyIntegrationEntityMapEntity,
     MJCompanyIntegrationFieldMapEntity,
     MJCompanyIntegrationRecordMapEntity,
     MJCompanyIntegrationRunAPILogEntity,
@@ -1827,11 +1829,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJRecordChangeEntity,
     MJRecordChangeReplayRunEntity,
     MJRecordCloneLogEntity,
-    MJRecordCloneLogItemEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJRecordCloneLogItemEntity,
     MJRecordGeoCodeEntity,
     MJRecordLinkEntity,
     MJRecordMergeDeletionLogEntity,
@@ -2031,11 +2033,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     UpdateSurveyMonkeyAction,
     UpdateTypeformAction,
     WatchNewJotFormSubmissionsAction,
-    WatchNewSurveyMonkeyResponsesAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    WatchNewSurveyMonkeyResponsesAction,
     WatchNewTypeformResponsesAction,
     AttachTagsAction,
     CreateUserAction_actions_bizapps_lms,
@@ -2235,11 +2237,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     PredictiveStudioPipelineBuilderAgent,
     PredictiveStudioPromoteModelAction,
     PredictiveStudioPromoteModelServerOperation,
-    PredictiveStudioRunExperimentAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    PredictiveStudioRunExperimentAction,
     PredictiveStudioRunFeaturePipelineServerOperation,
     PredictiveStudioScheduleModelScoringAction,
     PredictiveStudioScoreRecordSetAction,
@@ -2439,11 +2441,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MoveObjectAction,
     OAuthFlowAction,
     ObjectExistsAction,
-    PDFExtractorAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    PDFExtractorAction,
     ParallelExecuteAction,
     PasswordStrengthAction,
     PerplexitySearchAction,
@@ -2536,7 +2538,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1076;
+export const CLASS_REGISTRATIONS_COUNT = 1077;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

@@ -125,6 +125,7 @@ import {
     WithoutHostOnlyAgentRunDataKeys,
     WithAgentRunDataTrustApplied,
     StopContinuationMode,
+    AgentUserPolicyEngine,
     type AIPromptExecutionScope,
     type AgentRunAudience
 } from '@memberjunction/ai-core-plus';
@@ -10217,8 +10218,19 @@ The context is now within limits. Please retry your request with the recovered c
             // The client tools and the app context (per-run, from extraData) — neither under an audience (callerContextSections).
             const { clientToolDetails, appContext } = this.callerContextSections(agent, extraData, withholding?.CallerContext === true);
 
+            let cachedUserPolicy = _contextUser?.ID
+                ? AgentUserPolicyEngine.Instance.GetCachedPolicy(agent.ID, _contextUser.ID)
+                : null;
+            if (!cachedUserPolicy && _contextUser?.ID) {
+                try {
+                    cachedUserPolicy = await AgentUserPolicyEngine.Instance.GetPolicyForUser(agent.ID, _contextUser);
+                } catch {
+                    cachedUserPolicy = null;
+                }
+            }
+
             const contextData: AgentContextData = {
-                agentName: agent.Name,
+                agentName: cachedUserPolicy?.DisplayNameOverride?.trim() || agent.Name,
                 agentDescription: agent.Description,
                 parentAgentName: agent.Parent ? agent.Parent.trim() : "",
                 subAgentCount: subAgentCount,
@@ -10238,7 +10250,15 @@ The context is now within limits. Please retry your request with the recovered c
             // is built separately with proper merge precedence (schema < agent < runtime)
             const result: AgentContextData & Record<string, unknown> = {
                 ...contextData,
-                __agentTypePromptParams: agentTypePromptParams
+                __agentTypePromptParams: agentTypePromptParams,
+                ...(cachedUserPolicy
+                    ? {
+                          userPolicyContext: AgentUserPolicyEngine.Instance.BuildPromptPolicyContextBlock(
+                              cachedUserPolicy,
+                              _contextUser
+                          ),
+                      }
+                    : {}),
             };
 
             if (extraData) {
@@ -11480,6 +11500,12 @@ The context is now within limits. Please retry your request with the recovered c
             }
         }
 
+        // Enforce per-(Agent, User) action policy narrowing rules when a user policy is active
+        const policyBlocked = this.checkUserActionPolicy(params, action, actionEntity, contextUser ?? params.contextUser);
+        if (policyBlocked) {
+            return policyBlocked;
+        }
+
         // The run's audience, hydrated once per run — lazily here, since this method is also called outside
         // Execute (the pipeline executor, tests). An unusable audience refuses the call: nothing is dispatched.
         const audience = await this.audienceReadersFor(params);
@@ -11515,6 +11541,57 @@ The context is now within limits. Please retry your request with the recovered c
             });
             throw new Error(`Error executing actions: ${error.message}`);
         }
+    }
+
+    /**
+     * Checks per-(Agent, User) action policy narrowing rules (`MJ: AI Agent User Policies`)
+     * before dispatching an action. Returns a synthetic ActionResult when the action is denied,
+     * deferred outside a configured time window, or requires explicit user approval.
+     */
+    protected checkUserActionPolicy(
+        params: ExecuteAgentParams,
+        action: AgentAction,
+        actionEntity: MJActionEntityExtended,
+        contextUser?: UserInfo
+    ): ActionResult | null {
+        if (!contextUser?.ID || !params?.agent?.ID) {
+            return null;
+        }
+        const policy = AgentUserPolicyEngine.Instance.GetCachedPolicy(params.agent.ID, contextUser.ID);
+        if (!policy) {
+            return null;
+        }
+        const actionParamsRecord: Record<string, string | number | boolean | null | undefined> = {};
+        if (action.params) {
+            for (const [key, val] of Object.entries(action.params)) {
+                if (val == null || typeof val === 'string' || typeof val === 'number' || typeof val === 'boolean') {
+                    actionParamsRecord[key] = val as string | number | boolean | null | undefined;
+                } else {
+                    actionParamsRecord[key] = JSON.stringify(val);
+                }
+            }
+        }
+        const evaluation = AgentUserPolicyEngine.Instance.EvaluateActionExecution(policy, {
+            actionId: actionEntity.ID,
+            actionName: actionEntity.Name || action.name,
+            actionCategoryName: actionEntity.Category || undefined,
+            params: actionParamsRecord,
+        });
+        if (evaluation.verdict === 'Allow') {
+            return null;
+        }
+        const resultCode =
+            evaluation.verdict === 'Deny'
+                ? 'POLICY_DENIED'
+                : evaluation.verdict === 'DeferUntilNextWindow'
+                ? 'POLICY_DEFERRED_OUTSIDE_TIME_WINDOW'
+                : 'POLICY_APPROVAL_REQUIRED';
+        return {
+            Success: false,
+            ResultCode: resultCode,
+            Message: evaluation.reason,
+            Params: [],
+        };
     }
 
     /**
