@@ -579,8 +579,8 @@ export const EntityWritesChecks: NamedCheck[] = [
         }
     },
     {
-        Id: 'entity-writes.EW11',
-        Name: 'EW11: delta-only Save() preserves untouched fields, merges non-overlapping concurrent edits, and detects overlapping field edits',
+        Id: 'entity-writes.EW12',
+        Name: 'EW12: delta-only Save() preserves untouched fields, merges non-overlapping concurrent edits, and detects overlapping field edits',
         RequiresMutation: true,
         Fn: async (ctx: IntegrationCheckContext) => {
             const f = fx(ctx);
@@ -590,47 +590,47 @@ export const EntityWritesChecks: NamedCheck[] = [
 
             // Load a second concurrent client instance BEFORE catA's update
             const catB = await ctx.Provider.GetEntityObject<MJActionCategoryEntity>(CATEGORY_ENTITY, ctx.User);
-            Assert(await catB.Load(catA.ID), 'EW11 catB Load failed');
+            Assert(await catB.Load(catA.ID), 'EW12 catB Load failed');
 
             // 1) Single-field update on catA (Description only): untouched fields (Name, Status, ParentID,
             //    and virtual Parent/RootParentID) must be preserved in memory and in the database.
-            catA.Description = 'EW11 Initial Description';
-            Assert(await catA.Save(), `EW11 catA update 1 failed: ${catA.LatestResult?.CompleteMessage ?? 'unknown error'}`);
-            AssertEqual(catA.Name, initialName, 'EW11 catA.Name preserved in memory after Description-only Save()');
-            AssertEqual(catA.Status, 'Active', 'EW11 catA.Status preserved in memory after Description-only Save()');
-            Assert(UUIDsEqual(catA.ParentID ?? '', parent.ID), 'EW11 catA.ParentID preserved in memory');
-            AssertEqual(catA.Parent, parent.Name, 'EW11 catA.Parent virtual column refreshed in memory');
-            AssertEqual(catA.Description, 'EW11 Initial Description', 'EW11 catA.Description updated in memory');
+            catA.Description = 'EW12 Initial Description';
+            Assert(await catA.Save(), `EW12 catA update 1 failed: ${catA.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+            AssertEqual(catA.Name, initialName, 'EW12 catA.Name preserved in memory after Description-only Save()');
+            AssertEqual(catA.Status, 'Active', 'EW12 catA.Status preserved in memory after Description-only Save()');
+            Assert(UUIDsEqual(catA.ParentID ?? '', parent.ID), 'EW12 catA.ParentID preserved in memory');
+            AssertEqual(catA.Parent, parent.Name, 'EW12 catA.Parent virtual column refreshed in memory');
+            AssertEqual(catA.Description, 'EW12 Initial Description', 'EW12 catA.Description updated in memory');
 
             // 2) Non-overlapping concurrent update on catB (Status only): catB was loaded when Description
             //    was still null. Because delta-only Save() sends ONLY primary keys + dirty fields (ID, Status),
             //    saving catB must NOT clobber catA's Description in the DB, and catB's post-save refresh
             //    must receive catA's Description from the server!
             catB.Status = 'Pending';
-            Assert(await catB.Save(), `EW11 catB non-overlapping update failed: ${catB.LatestResult?.CompleteMessage ?? 'unknown error'}`);
-            AssertEqual(catB.Status, 'Pending', 'EW11 catB.Status updated');
-            AssertEqual(catB.Description, 'EW11 Initial Description', 'EW11 catB received catA Description instead of clobbering it with null');
+            Assert(await catB.Save(), `EW12 catB non-overlapping update failed: ${catB.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+            AssertEqual(catB.Status, 'Pending', 'EW12 catB.Status updated');
+            AssertEqual(catB.Description, 'EW12 Initial Description', 'EW12 catB received catA Description instead of clobbering it with null');
 
             const verifyMerged = await ctx.Provider.GetEntityObject<MJActionCategoryEntity>(CATEGORY_ENTITY, ctx.User);
-            Assert(await verifyMerged.Load(catA.ID), 'EW11 verifyMerged Load failed');
-            AssertEqual(verifyMerged.Name, initialName, 'EW11 DB Name preserved after non-overlapping concurrent saves');
-            AssertEqual(verifyMerged.Description, 'EW11 Initial Description', 'EW11 DB Description preserved after catB Status-only save');
-            AssertEqual(verifyMerged.Status, 'Pending', 'EW11 DB Status reflects catB update');
+            Assert(await verifyMerged.Load(catA.ID), 'EW12 verifyMerged Load failed');
+            AssertEqual(verifyMerged.Name, initialName, 'EW12 DB Name preserved after non-overlapping concurrent saves');
+            AssertEqual(verifyMerged.Description, 'EW12 Initial Description', 'EW12 DB Description preserved after catB Status-only save');
+            AssertEqual(verifyMerged.Status, 'Pending', 'EW12 DB Status reflects catB update');
 
             // 3) Overlapping concurrent update on the SAME field (Description): load catC while Description
-            //    is 'EW11 Initial Description', update Description via catA first, then update Description
+            //    is 'EW12 Initial Description', update Description via catA first, then update Description
             //    via stale catC. Server loads DB truth, detects the OldValues___ overlap on Description,
-            //    and records the true DB oldValue ('EW11 Writer 1') in Record Changes.
+            //    and records the true DB oldValue ('EW12 Writer 1') in Record Changes.
             const catC = await ctx.Provider.GetEntityObject<MJActionCategoryEntity>(CATEGORY_ENTITY, ctx.User);
-            Assert(await catC.Load(catA.ID), 'EW11 catC Load failed');
+            Assert(await catC.Load(catA.ID), 'EW12 catC Load failed');
 
-            catA.Description = 'EW11 Writer 1';
-            Assert(await catA.Save(), `EW11 catA Writer 1 save failed: ${catA.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+            catA.Description = 'EW12 Writer 1';
+            Assert(await catA.Save(), `EW12 catA Writer 1 save failed: ${catA.LatestResult?.CompleteMessage ?? 'unknown error'}`);
 
-            catC.Description = 'EW11 Writer 2 (Overlapping)';
-            Assert(await catC.Save(), `EW11 catC Writer 2 save failed: ${catC.LatestResult?.CompleteMessage ?? 'unknown error'}`);
-            AssertEqual(catC.Description, 'EW11 Writer 2 (Overlapping)', 'EW11 catC Description updated (last-write-wins on overlapping field)');
-            AssertEqual(catC.Status, 'Pending', 'EW11 catC untouched Status preserved');
+            catC.Description = 'EW12 Writer 2 (Overlapping)';
+            Assert(await catC.Save(), `EW12 catC Writer 2 save failed: ${catC.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+            AssertEqual(catC.Description, 'EW12 Writer 2 (Overlapping)', 'EW12 catC Description updated (last-write-wins on overlapping field)');
+            AssertEqual(catC.Status, 'Pending', 'EW12 catC untouched Status preserved');
 
             // Poll Record Changes until all 5 rows (1 Create + 4 Updates) land
             let changes = await fetchRecordChanges(ctx, f.ActionCategoryEntityID, catA.ID);
@@ -639,16 +639,16 @@ export const EntityWritesChecks: NamedCheck[] = [
                 await new Promise(resolve => setTimeout(resolve, 500));
                 changes = await fetchRecordChanges(ctx, f.ActionCategoryEntityID, catA.ID);
             }
-            AssertEqual(changes.length, 5, `EW11 Record Change count for ${catA.ID}`);
+            AssertEqual(changes.length, 5, `EW12 Record Change count for ${catA.ID}`);
 
             const writer2Change = changes.find(
-                c => c.Type === 'Update' && parseChanges(c, 'EW11 writer2').Description?.newValue === 'EW11 Writer 2 (Overlapping)'
+                c => c.Type === 'Update' && parseChanges(c, 'EW12 writer2').Description?.newValue === 'EW12 Writer 2 (Overlapping)'
             );
-            Assert(writer2Change != null, 'EW11 no Record Change captured Writer 2 update');
-            const descChange = parseChanges(writer2Change!, 'EW11 writer2').Description;
+            Assert(writer2Change != null, 'EW12 no Record Change captured Writer 2 update');
+            const descChange = parseChanges(writer2Change!, 'EW12 writer2').Description;
             // Because ResolverBase loaded truth from DB on partial-delta OldValues___, the audit row's
-            // oldValue is 'EW11 Writer 1' (true DB state), never catC's stale 'EW11 Initial Description'.
-            AssertEqual(descChange.oldValue, 'EW11 Writer 1', 'EW11 overlapping save Record Change oldValue reflects true DB state');
+            // oldValue is 'EW12 Writer 1' (true DB state), never catC's stale 'EW12 Initial Description'.
+            AssertEqual(descChange.oldValue, 'EW12 Writer 1', 'EW12 overlapping save Record Change oldValue reflects true DB state');
 
             console.log('      → delta-only Save() preserved untouched fields, merged non-overlapping concurrent edits, and tracked true DB oldValue on overlapping edit');
         }
