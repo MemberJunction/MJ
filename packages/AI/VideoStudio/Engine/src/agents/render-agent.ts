@@ -420,7 +420,10 @@ export class VideoStudioRenderAgent extends BaseAgent {
                     StorageAccountID: storageAccountId,
                 });
                 if (!storedVideoFileId) {
-                    if (videoBytes.byteLength <= outputSettings.InlineMaxBytes) {
+                    if (
+                        outputSettings.InlineMaxBytes > 0 &&
+                        videoBytes.byteLength <= outputSettings.InlineMaxBytes
+                    ) {
                         workingSpec.Output.Videos[fmt] = {
                             Format: fmt,
                             InlineBase64: videoBytes.toString('base64'),

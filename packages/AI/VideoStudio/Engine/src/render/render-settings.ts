@@ -33,14 +33,14 @@ export const DEFAULT_DOCKER_PIDS_LIMIT = 512;
 /** Default `/dev/shm` size in megabytes (`--shm-size <n>m`) for `DockerRenderDriver` containers (`VS-RND-4`). */
 export const DEFAULT_DOCKER_SHM_SIZE_MB = 1024;
 
-/** Default inline MP4 storage cap in bytes when no MJStorage account is configured (2 MiB, `VS-ART-2`). */
-export const VIDEO_STUDIO_INLINE_MAX_BYTES = 2 * 1024 * 1024;
+/** Default inline MP4 storage cap in bytes when no MJStorage account is configured (0 = disabled by default, `VS-ART-2`). */
+export const VIDEO_STUDIO_INLINE_MAX_BYTES = 0;
 
 /**
  * Normalized PascalCase settings for Video Studio output storage (`VS-ART-2`).
  */
 export interface VideoStudioOutputSettings {
-    /** Maximum rendered MP4 size in bytes permitted for inline `InlineBase64` fallback (default: 2,097,152 / 2 MiB). */
+    /** Maximum rendered MP4 size in bytes permitted for inline `InlineBase64` fallback (default: 0 / disabled). */
     InlineMaxBytes: number;
 }
 
@@ -403,6 +403,23 @@ export function ReadVideoRenderSettings(searchFrom: string = process.cwd()): Vid
     };
 }
 
+function readNonNegativeNumber(
+    rawValue: unknown,
+    fieldPath: string,
+    defaultValue: number,
+): number {
+    if (rawValue === undefined || rawValue === null) {
+        return defaultValue;
+    }
+    if (typeof rawValue === 'number' && Number.isFinite(rawValue) && rawValue >= 0) {
+        return rawValue;
+    }
+    LogWarning(
+        `${fieldPath} '${String(rawValue)}' is not a non-negative finite number; using default ${defaultValue}.`,
+    );
+    return defaultValue;
+}
+
 /**
  * Reads `videoStudio.outputs` from `mj.config.cjs` (searching upward from `searchFrom`) and returns
  * normalized PascalCase `VideoStudioOutputSettings` (`VS-ART-2`).
@@ -447,7 +464,7 @@ export function ReadVideoStudioOutputSettings(searchFrom: string = process.cwd()
     }
 
     const outputsSection = videoStudioSection.outputs as RawVideoStudioOutputsConfig;
-    const inlineMaxBytes = readPositiveNumber(
+    const inlineMaxBytes = readNonNegativeNumber(
         outputsSection.inlineMaxBytes,
         'videoStudio.outputs.inlineMaxBytes',
         VIDEO_STUDIO_INLINE_MAX_BYTES,

@@ -11,6 +11,7 @@ import type { UserInfo } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
 import type { VideoGenerationSpec } from '@memberjunction/video-studio-core';
 import * as storageModule from '../storage.js';
+import * as renderSettingsModule from '../render/render-settings.js';
 import { FAKE_DRIVER_MP4_BYTES, FakeRenderDriver } from '../render/fake-render-driver.js';
 import { VideoRenderEngine } from '../render/video-render-engine.js';
 import {
@@ -640,7 +641,48 @@ describe('VideoStudioRenderAgent (VS-AGT-3)', () => {
         expect(result.finalStep.newPayload.Output?.Videos['16:9']?.InlineBase64).toBeUndefined();
     });
 
-    it('VS-ART-2: StoreFile returning undefined for a 1 MB MP4 stores InlineBase64 (no FileID) and finishes step with { Stored: "Inline", Bytes }', async () => {
+    it('VS-ART-2: default config (inlineMaxBytes = 0) with StoreFile returning undefined for a 1 MB MP4 fails with setup hint', async () => {
+        const oneMbBytes = Buffer.alloc(1024 * 1024, 0x42);
+        const fakeDriver = new FakeRenderDriver();
+        const originalRender = fakeDriver.Render.bind(fakeDriver);
+        vi.spyOn(fakeDriver, 'Render').mockImplementation(async (req, onProgress, signal) => {
+            const res = await originalRender(req, onProgress, signal);
+            return { ...res, Video: new Uint8Array(oneMbBytes) };
+        });
+        VideoRenderEngine.Instance.UseDriver(fakeDriver);
+
+        let fileCounter = 0;
+        vi.spyOn(storageModule, 'StoreFile').mockImplementation(async (input) => {
+            if (input.FileName.endsWith('.mp4')) {
+                return undefined;
+            }
+            fileCounter += 1;
+            return `stored-${fileCounter}-${input.FileName}`;
+        });
+
+        const { finalizedSteps, execute } = createRenderAgentHarness();
+        const spec = makeDualFormatSpec();
+        spec.Film.Formats = ['16:9'];
+        spec.Deliverables.Formats = ['16:9'];
+
+        const result = await execute(spec);
+
+        expect(result.finalStep.step).toBe('Failed');
+        expect(result.finalStep.message).toBe(
+            "The rendered 16:9 video is 1.0 MB and could not be stored in MJStorage. Inline storage is limited to 0.0 MB. Set Default Storage Account on the 'Content Creation' agent category or on the Video Studio agent.",
+        );
+        const renderStep = finalizedSteps.find((s) => s.stepName === 'Render 16:9');
+        expect(renderStep?.success).toBe(false);
+        expect(renderStep?.errorMessage).toContain('1.0 MB');
+        expect(renderStep?.errorMessage).toContain('0.0 MB');
+        expect(renderStep?.errorMessage).toContain("Set Default Storage Account on the 'Content Creation' agent category");
+    });
+
+    it('VS-ART-2: when inlineMaxBytes is configured, StoreFile returning undefined for a 1 MB MP4 stores InlineBase64 (no FileID) and finishes step with { Stored: "Inline", Bytes }', async () => {
+        vi.spyOn(renderSettingsModule, 'ReadVideoStudioOutputSettings').mockReturnValue({
+            InlineMaxBytes: 2 * 1024 * 1024,
+        });
+
         const oneMbBytes = Buffer.alloc(1024 * 1024, 0x42);
         const fakeDriver = new FakeRenderDriver();
         const originalRender = fakeDriver.Render.bind(fakeDriver);
@@ -681,7 +723,11 @@ describe('VideoStudioRenderAgent (VS-AGT-3)', () => {
         });
     });
 
-    it('VS-ART-2: StoreFile returning undefined for a 3 MB MP4 fails with message naming size, cap, and storage setup hint', async () => {
+    it('VS-ART-2: when inlineMaxBytes is 2 MB, StoreFile returning undefined for a 3 MB MP4 fails with message naming size, cap, and storage setup hint', async () => {
+        vi.spyOn(renderSettingsModule, 'ReadVideoStudioOutputSettings').mockReturnValue({
+            InlineMaxBytes: 2 * 1024 * 1024,
+        });
+
         const threeMbBytes = Buffer.alloc(3 * 1024 * 1024, 0x24);
         const fakeDriver = new FakeRenderDriver();
         const originalRender = fakeDriver.Render.bind(fakeDriver);

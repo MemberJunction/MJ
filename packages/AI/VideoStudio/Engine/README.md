@@ -8,7 +8,7 @@
 
 ### `mj.config.cjs` Configuration
 
-Add the optional `videoStudio.render` block to `mj.config.cjs` (omitted fields fall back to defaults; invalid values log a warning and fall back to defaults without throwing):
+Add the optional `videoStudio.render` and `videoStudio.outputs` blocks to `mj.config.cjs` (omitted fields fall back to defaults; invalid values log a warning and fall back to defaults without throwing):
 
 ```javascript
 module.exports = {
@@ -44,6 +44,12 @@ module.exports = {
         pidsLimit: 512,   // --pids-limit 512
         shmSizeMb: 1024,  // --shm-size 1024m
       },
+    },
+    outputs: {
+      // Max MP4 bytes allowed to fall back to InlineBase64 when MJStorage fails (default: 0, disabled).
+      // Setting this above 0 puts the base64 into the spec payload and every later root prompt
+      // (about 1.4M characters per MB) and is meant for local testing only.
+      inlineMaxBytes: 0,
     },
   },
 };

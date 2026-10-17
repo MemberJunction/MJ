@@ -251,7 +251,7 @@ describe('ReadVideoRenderSettings', () => {
         });
     });
 
-    it('ReadVideoStudioOutputSettings: reads inlineMaxBytes from temp mj.config.cjs, defaults to 2 MB when absent, and logs a warning + uses default on invalid values', async () => {
+    it('ReadVideoStudioOutputSettings: reads inlineMaxBytes from temp mj.config.cjs, defaults to 0 when absent, and logs a warning + uses default on invalid values', async () => {
         const customDir = await makeTempDir();
         await fs.writeFile(
             path.join(customDir, 'mj.config.cjs'),
@@ -273,7 +273,7 @@ describe('ReadVideoRenderSettings', () => {
         expect(ReadVideoStudioOutputSettings(absentDir)).toEqual({
             InlineMaxBytes: VIDEO_STUDIO_INLINE_MAX_BYTES,
         });
-        expect(VIDEO_STUDIO_INLINE_MAX_BYTES).toBe(2 * 1024 * 1024);
+        expect(VIDEO_STUDIO_INLINE_MAX_BYTES).toBe(0);
 
         const warnSpy = vi.spyOn(mjCore, 'LogWarning').mockImplementation(() => undefined);
         const badDir = await makeTempDir();

@@ -1484,7 +1484,7 @@ describe('VideoStudioAgent driver lifecycle', () => {
         expect(acceptedSuccess.newPayload?.Status).toBe('Delivered');
     });
 
-    it('(11) VS-ART-2: delivery pushes one System Only FileOutputRef per stored format (without fileData), deduplicates on repeat validateSuccessNextStep, skips inline formats, never sets promoteMediaOutputs/mediaOutputs, and sets artifactDirective (create-new <= 120 chars when started without brief, version-source when started with brief)', async () => {
+    it('(11) VS-ART-2: delivery leaves FileOutputs empty so the payload artifact is the primary artifact, never sets promoteMediaOutputs/mediaOutputs, and sets artifactDirective (create-new <= 120 chars when started without brief, version-source when started with brief)', async () => {
         // Case A: Started without a brief (fresh run, empty payload)
         const freshAgent = createAgent();
         const freshInitParams = {
@@ -1535,6 +1535,9 @@ describe('VideoStudioAgent driver lifecycle', () => {
         );
         expect(firstDelivered.step).toBe('Success');
         expect(firstDelivered.newPayload?.Status).toBe('Delivered');
+        expect(firstDelivered.newPayload?.Output?.Videos?.['16:9']?.FileID).toBe(
+            '77777777-7777-4777-8777-777777777771',
+        );
         expect(firstDelivered.newPayload?.Review?.HumanReviewNotes).toContain('Storage');
         expect(firstDelivered.newPayload?.Review?.HumanReviewNotes).toContain('9:16 (1.1 MB)');
         expect((firstDelivered as Record<string, unknown>).promoteMediaOutputs).toBeUndefined();
@@ -1548,7 +1551,7 @@ describe('VideoStudioAgent driver lifecycle', () => {
             'Show key product highlights to enterprise buyers.',
         );
 
-        // Calling validateSuccessNextStep a second time must not duplicate FileOutputs
+        // FileOutputs remains empty so SelectPrimaryArtifact selects the Video Production payload artifact
         await freshAgent.validateSuccessNextStep(
             freshInitParams,
             { step: 'Success', terminate: true, newPayload: deliveredSpec },
@@ -1558,15 +1561,7 @@ describe('VideoStudioAgent driver lifecycle', () => {
         );
 
         const fileOutputs = (freshAgent as unknown as { FileOutputs: Array<Record<string, unknown>> }).FileOutputs;
-        expect(fileOutputs).toHaveLength(1);
-        expect(fileOutputs[0]).toEqual({
-            fileName: 'video-16x9.mp4',
-            mimeType: 'video/mp4',
-            fileId: '77777777-7777-4777-8777-777777777771',
-            sizeBytes: 8_420_000,
-            visibility: 'System Only',
-        });
-        expect(fileOutputs[0]).not.toHaveProperty('fileData');
+        expect(fileOutputs).toEqual([]);
 
         // Case B: Started with a brief (Film.OneSentence already present) -> version-source
         const resumeAgent = createAgent();
@@ -1588,6 +1583,7 @@ describe('VideoStudioAgent driver lifecycle', () => {
         expect(resumedDelivered.artifactDirective).toEqual({
             behavior: 'version-source',
         });
+        expect((resumeAgent as unknown as { FileOutputs: Array<Record<string, unknown>> }).FileOutputs).toEqual([]);
     });
 });
 
