@@ -6,6 +6,7 @@
  * a {@link MockRealtimeModel} (no provider SDK / DB), engine config is a no-op, and delegation is
  * stubbed. No network, no DB — fully deterministic.
  */
+import { getEventListeners } from 'node:events';
 import { describe, it, expect, vi, beforeEach, afterEach, beforeAll } from 'vitest';
 import type { RealtimeAvatarResolution } from '../realtime/realtime-avatar-resolution';
 import {
@@ -679,6 +680,21 @@ describe('RealtimeClientSessionService.CancelInFlightDelegations', () => {
         const result = await pending;
         expect(result.Success).toBe(false);
         expect(JSON.parse(result.ResultJson)).toEqual({ success: false, output: 'cancelled' });
+    });
+
+    it('leaves no abort listener on a reused caller AbortSignal once ExecuteRelayedTool finishes', async () => {
+        const svc = new TestableService();
+        const callerController = new AbortController();
+
+        for (let i = 0; i < 5; i++) {
+            await svc.ExecuteRelayedTool(
+                makeToolInput(`c-${i}`, { AbortSignal: callerController.signal }),
+                contextUser,
+                provider
+            );
+        }
+
+        expect(getEventListeners(callerController.signal, 'abort')).toHaveLength(0);
     });
 });
 
@@ -1656,21 +1672,26 @@ describe('RealtimeClientSessionService.delegateToTarget (real path)', () => {
         expect(runAgentMock.mock.calls[0][0].cancellationToken).toBe(brokerSignal);
     });
 
-    it('combines the caller barge-in signal with the broker signal — either aborts the run', async () => {
-        let token: AbortSignal | undefined;
+    it('combines the caller barge-in signal with the broker signal — either aborts the run and detaches on completion', async () => {
+        const caller = new AbortController();
+        let tokenDuringRun: AbortSignal | undefined;
+        let abortedBeforeSignal = true;
+        let abortedAfterSignal = false;
         runAgentMock.mockImplementation(async (params: { cancellationToken?: AbortSignal }) => {
-            token = params.cancellationToken;
+            tokenDuringRun = params.cancellationToken;
+            abortedBeforeSignal = tokenDuringRun?.aborted ?? true;
+            caller.abort(); // caller-side barge-in flips the combined token while the run is in flight
+            abortedAfterSignal = tokenDuringRun?.aborted ?? false;
             return { success: true, agentRun: { ID: 'r1', Status: 'Completed', Message: 'done' } };
         });
-        const caller = new AbortController();
         const svc = new DelegateTestService();
 
         await svc.CallDelegate(makeDelegateInput({ AbortSignal: caller.signal }), makeDelegateRequest());
 
-        expect(token).toBeInstanceOf(AbortSignal);
-        expect(token!.aborted).toBe(false);
-        caller.abort(); // caller-side barge-in flips the combined token
-        expect(token!.aborted).toBe(true);
+        expect(tokenDuringRun).toBeInstanceOf(AbortSignal);
+        expect(abortedBeforeSignal).toBe(false);
+        expect(abortedAfterSignal).toBe(true);
+        expect(getEventListeners(caller.signal, 'abort')).toHaveLength(0);
     });
 
     it('hands RunAgent an already-aborted token when the caller signal was pre-aborted', async () => {

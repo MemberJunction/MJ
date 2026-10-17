@@ -184,7 +184,7 @@ describe('MJAuth0Provider', () => {
         isAuthenticated: true,
         claims: { __raw: 'valid.jwt.token', exp: futureExp, scope: 'openid profile email' },
       });
-      const provider = new MJAuth0Provider(mockAuth as unknown as InstanceType<typeof auth0Mock.AuthService>);
+      const provider = new MJAuth0Provider(mockAuth as unknown as ConstructorParameters<typeof MJAuth0Provider>[0]);
 
       expect(await provider.getIdToken()).toBe('valid.jwt.token');
       const tokenInfo = await provider.getTokenInfo();
@@ -202,7 +202,7 @@ describe('MJAuth0Provider', () => {
         isAuthenticated: true,
         claims: { __raw: 'expired.jwt.token', exp: expiredExp },
       });
-      const provider = new MJAuth0Provider(mockAuth as unknown as InstanceType<typeof auth0Mock.AuthService>);
+      const provider = new MJAuth0Provider(mockAuth as unknown as ConstructorParameters<typeof MJAuth0Provider>[0]);
 
       expect(await provider.getIdToken()).toBeNull();
       expect(await provider.getTokenInfo()).toBeNull();
@@ -225,7 +225,7 @@ describe('MJAuth0Provider', () => {
         return of('fresh-access-token');
       });
 
-      const provider = new MJAuth0Provider(mockAuth as unknown as InstanceType<typeof auth0Mock.AuthService>);
+      const provider = new MJAuth0Provider(mockAuth as unknown as ConstructorParameters<typeof MJAuth0Provider>[0]);
       await provider.initialize();
 
       expect(mockAuth.getAccessTokenSilently).toHaveBeenCalledWith({
@@ -249,7 +249,7 @@ describe('MJAuth0Provider', () => {
         throwError(() => ({ error: 'missing_refresh_token', message: 'Missing Refresh Token' }))
       );
 
-      const provider = new MJAuth0Provider(mockAuth as unknown as InstanceType<typeof auth0Mock.AuthService>);
+      const provider = new MJAuth0Provider(mockAuth as unknown as ConstructorParameters<typeof MJAuth0Provider>[0]);
       await provider.initialize();
 
       // Provider must report unauthenticated and null userInfo so login screen shows immediately
@@ -267,7 +267,7 @@ describe('MJAuth0Provider', () => {
     it('classifies missing_refresh_token, invalid_grant, and timeout errors as TOKEN_EXPIRED', async () => {
       const MJAuth0Provider = await importProvider();
       const mockAuth = createMockAuthService();
-      const provider = new MJAuth0Provider(mockAuth as unknown as InstanceType<typeof auth0Mock.AuthService>);
+      const provider = new MJAuth0Provider(mockAuth as unknown as ConstructorParameters<typeof MJAuth0Provider>[0]);
 
       expect(provider.classifyError({ error: 'missing_refresh_token', message: 'Missing Refresh Token' }).type)
         .toBe(AuthErrorType.TOKEN_EXPIRED);

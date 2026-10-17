@@ -17,8 +17,8 @@
       "ID": "@lookup:MJ: Entities.Name=MJ: Record Clone Logs"
     },
     "sync": {
-      "lastModified": "2026-10-17T20:26:30.646Z",
-      "checksum": "bbe06828dd382f9d6b21bc3a631db85eba2693dda3c9dd95158c546d6515b425"
+      "lastModified": "2026-10-02T21:42:42.104Z",
+      "checksum": "a48ad55393953f06ca82bbac9f9c275cac0f14dfc31fc0871a98abe0cc33b26b"
     }
   },
   {
@@ -39,8 +39,8 @@
       "ID": "@lookup:MJ: Entities.Name=MJ: Record Clone Log Items"
     },
     "sync": {
-      "lastModified": "2026-10-17T20:26:30.692Z",
-      "checksum": "8c4aedb62ae807e85378e423dd04dd245e87e02576a2c9a78db43cabc5f8cf4f"
+      "lastModified": "2026-10-02T21:42:42.129Z",
+      "checksum": "5028358b4bf32274cd14b6ea0a9689c5c37dae8e0ecef57c6611ee901e11020f"
     }
   },
   {
@@ -690,8 +690,8 @@
       "ID": "@lookup:MJ: Entities.Name=MJ: AI Agent Runs"
     },
     "sync": {
-      "lastModified": "2026-10-17T20:26:30.763Z",
-      "checksum": "129498e141545f8255f78c3962fc25e1d9ed17accd4318beacd322433ba73459"
+      "lastModified": "2026-10-02T21:42:42.376Z",
+      "checksum": "020b4a5271f5bfdae2968c84bf106485c746c78d2ef7671c78a82ab24ff43454"
     }
   },
   {
@@ -1004,8 +1004,8 @@
       "ID": "@lookup:MJ: Entities.Name=MJ: Action Execution Logs"
     },
     "sync": {
-      "lastModified": "2026-10-17T20:26:30.813Z",
-      "checksum": "5d684de95d0537b5dd75984a4695eda41126fafa576d3d09931e2eac45a0fdde"
+      "lastModified": "2026-10-02T21:42:42.629Z",
+      "checksum": "614ef8f06894dfb862df3b5d21bb8ad3d1d286f48ac7905bd218c3afffb2fea8"
     }
   },
   {
@@ -1027,8 +1027,8 @@
       "ID": "@lookup:MJ: Entities.Name=MJ: Scheduled Job Runs"
     },
     "sync": {
-      "lastModified": "2026-10-17T20:26:30.863Z",
-      "checksum": "b5f4b2dce5b9e22b8bff8aa8db4654098b85395219f13ec16b88b4a1dcf90134"
+      "lastModified": "2026-10-02T21:42:42.676Z",
+      "checksum": "c0768684eae6090f923c1fc5e33ae969fdba75c8ee4838e3e96213d5beaaa57d"
     }
   },
   {
@@ -1897,6 +1897,7 @@
     ],
     "fields": {
       "Name": "MJ: Process Run Details",
+      "TrackRecordChanges": false,
       "Configuration": {
         "Clone": {
           "Enabled": false,
@@ -1910,8 +1911,8 @@
       "ID": "@lookup:MJ: Entities.Name=MJ: Process Run Details"
     },
     "sync": {
-      "lastModified": "2026-10-17T20:26:30.949Z",
-      "checksum": "8969cd605eda54007f12656b81cf14c698d5532c78a2737efe7d190fcf3e72d1"
+      "lastModified": "2026-10-02T21:42:43.437Z",
+      "checksum": "d9cc78cbdd8d1e01d526848941c60baf6efa58ee936e52c0d7a8bf99cd848f86"
     }
   },
   {
@@ -2129,8 +2130,8 @@
       "ID": "@lookup:MJ: Entities.Name=MJ: Record Changes"
     },
     "sync": {
-      "lastModified": "2026-10-17T20:26:31.003Z",
-      "checksum": "dea935777abc067d02386232b5e65d3f80f96c5ffbb679853cd21d3a0b6a8f22"
+      "lastModified": "2026-10-02T21:42:43.834Z",
+      "checksum": "82fae40b7d6e27869f74c1f375289cd0696902e9916b0ec166b3eab4a73a1463"
     }
   },
   {
@@ -2152,8 +2153,8 @@
       "ID": "@lookup:MJ: Entities.Name=MJ: Audit Logs"
     },
     "sync": {
-      "lastModified": "2026-10-17T20:26:31.051Z",
-      "checksum": "86f08d310822cb096b2c76c05f3d586b474918663da511233128539676c0cc06"
+      "lastModified": "2026-10-02T21:42:43.883Z",
+      "checksum": "8ba2f71d3250b342cac19bb3befc237aab845574ee1dd5ae1347eaae36becfa5"
     }
   },
   {
@@ -2175,8 +2176,8 @@
       "ID": "@lookup:MJ: Entities.Name=MJ: Error Logs"
     },
     "sync": {
-      "lastModified": "2026-10-17T20:26:31.093Z",
-      "checksum": "42992a6fecd30ffb58586b4ccd9486d764bc9fceed70cd1e147b4ebae979b1b3"
+      "lastModified": "2026-10-02T21:42:43.934Z",
+      "checksum": "e708ca615b44817723bacfe7c1b00dc38b103a8a025180c6b45ab1df9b90f7a2"
     }
   },
   {
@@ -2198,8 +2199,8 @@
       "ID": "@lookup:MJ: Entities.Name=MJ: User Record Logs"
     },
     "sync": {
-      "lastModified": "2026-10-17T20:26:31.135Z",
-      "checksum": "18e39bc3ab7d40cf11fa1fc892a4326ddecf90ecbaeb68c598de54aef1c38c7a"
+      "lastModified": "2026-10-02T21:42:43.984Z",
+      "checksum": "f9c48c3b2a5fbb2823bf19de0891a1cae24428e968a39a9cd1f8191d506fbbd5"
     }
   },
   {
