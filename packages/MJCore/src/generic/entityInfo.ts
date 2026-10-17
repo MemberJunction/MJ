@@ -1604,15 +1604,17 @@ export class EntityFieldInfo extends BaseInfo {
     ): EntityFieldUserPermissionInfo {
         const allow = { CanRead: false, CanUpdate: false, CanCreate: false };
         const deny = { CanRead: false, CanUpdate: false, CanCreate: false };
+        const userRoleIds = getUserRoleIdSet(user);
 
-        for (const fp of rules) {
-            const roleMatch: UserRoleInfo = user?.UserRoles?.find((r) => UUIDsEqual(r.RoleID, fp.RoleID));
-            if (!roleMatch) {
-                continue; // user does not hold this role
+        if (userRoleIds.size > 0) {
+            for (const fp of rules) {
+                if (!fp.RoleID || !userRoleIds.has(fp.RoleID.trim().toLowerCase())) {
+                    continue; // user does not hold this role
+                }
+                EntityFieldInfo.applyAccessToBuckets(fp.ReadAccess, allow, deny, 'CanRead');
+                EntityFieldInfo.applyAccessToBuckets(fp.UpdateAccess, allow, deny, 'CanUpdate');
+                EntityFieldInfo.applyAccessToBuckets(fp.CreateAccess, allow, deny, 'CanCreate');
             }
-            EntityFieldInfo.applyAccessToBuckets(fp.ReadAccess, allow, deny, 'CanRead');
-            EntityFieldInfo.applyAccessToBuckets(fp.UpdateAccess, allow, deny, 'CanUpdate');
-            EntityFieldInfo.applyAccessToBuckets(fp.CreateAccess, allow, deny, 'CanCreate');
         }
 
         const effective: EntityFieldUserPermissionInfo = {
@@ -1654,21 +1656,29 @@ export class EntityFieldInfo extends BaseInfo {
         }
     }
 
+    private _valueListTypeEnumCache: EntityFieldValueListType | undefined = undefined;
+
     /**
      * Returns the ValueListType using the EntityFieldValueListType enum.
      */
     get ValueListTypeEnum(): EntityFieldValueListType {
-        if (this.ValueListType == null)
-            return EntityFieldValueListType.None;
-        else  {
-            // iterate through list of possibilities from enum and compare lcase
-            for (let enumMember in EntityFieldValueListType) {
-                if (typeof EntityFieldValueListType[enumMember] === 'string' && 
-                    enumMember.toLowerCase().trim() === this.ValueListType.toLowerCase().trim()) {
-                    return EntityFieldValueListType[enumMember as keyof typeof EntityFieldValueListType];
-                }
+        if (this._valueListTypeEnumCache !== undefined) {
+            return this._valueListTypeEnumCache;
+        }
+        if (this.ValueListType == null) {
+            this._valueListTypeEnumCache = EntityFieldValueListType.None;
+            return this._valueListTypeEnumCache;
+        }
+        const target = this.ValueListType.toLowerCase().trim();
+        for (const enumMember in EntityFieldValueListType) {
+            if (typeof EntityFieldValueListType[enumMember] === 'string' &&
+                enumMember.toLowerCase().trim() === target) {
+                this._valueListTypeEnumCache = EntityFieldValueListType[enumMember as keyof typeof EntityFieldValueListType];
+                return this._valueListTypeEnumCache;
             }
         }
+        this._valueListTypeEnumCache = EntityFieldValueListType.None;
+        return this._valueListTypeEnumCache;
     }
 
     /**
@@ -2188,24 +2198,36 @@ export class EntityFieldInfo extends BaseInfo {
         return this.IsCreatedAtField || this.IsUpdatedAtField || this.IsDeletedAtField;
     }
 
+    private _isCreatedAtFieldCache: boolean | undefined = undefined;
+    private _isUpdatedAtFieldCache: boolean | undefined = undefined;
+    private _isDeletedAtFieldCache: boolean | undefined = undefined;
+    private _isUniqueIdentifierCache: boolean | undefined = undefined;
+    private _fixedWidthColumnCache: boolean | undefined = undefined;
+
     /**
      * Returns true if the field is the CreatedAt field, a special field that is used to track the creation date of a record. This is only used when the entity has TrackRecordChanges=1
      */
     get IsCreatedAtField(): boolean {
-        return this.Name.trim().toLowerCase() === EntityInfo.CreatedAtFieldName.trim().toLowerCase();
+        if (this._isCreatedAtFieldCache !== undefined) return this._isCreatedAtFieldCache;
+        this._isCreatedAtFieldCache = this.Name.trim().toLowerCase() === EntityInfo.CreatedAtFieldName.trim().toLowerCase();
+        return this._isCreatedAtFieldCache;
     }
     /**
      * Returns true if the field is the UpdatedAt field, a special field that is used to track the last update date of a record. This is only used when the entity has TrackRecordChanges=1
      */
     get IsUpdatedAtField(): boolean {
-        return this.Name.trim().toLowerCase() === EntityInfo.UpdatedAtFieldName.trim().toLowerCase();
+        if (this._isUpdatedAtFieldCache !== undefined) return this._isUpdatedAtFieldCache;
+        this._isUpdatedAtFieldCache = this.Name.trim().toLowerCase() === EntityInfo.UpdatedAtFieldName.trim().toLowerCase();
+        return this._isUpdatedAtFieldCache;
     }
 
     /**
      * Returns true if the field is the DeletedAt field, a special field that is used to track the deletion date of a record. This is only used when the entity has DeleteType=Soft
      */
     get IsDeletedAtField(): boolean {
-        return this.Name.trim().toLowerCase() === EntityInfo.DeletedAtFieldName.trim().toLowerCase();
+        if (this._isDeletedAtFieldCache !== undefined) return this._isDeletedAtFieldCache;
+        this._isDeletedAtFieldCache = this.Name.trim().toLowerCase() === EntityInfo.DeletedAtFieldName.trim().toLowerCase();
+        return this._isDeletedAtFieldCache;
     }
 
     /**
@@ -2215,8 +2237,10 @@ export class EntityFieldInfo extends BaseInfo {
      * `uuid`, so a `uniqueidentifier`-only check would miss every UUID column.
      */
     get IsUniqueIdentifier(): boolean {
+        if (this._isUniqueIdentifierCache !== undefined) return this._isUniqueIdentifierCache;
         const t = this.Type.trim().toLowerCase();
-        return t === 'uniqueidentifier' || t === 'uuid';
+        this._isUniqueIdentifierCache = t === 'uniqueidentifier' || t === 'uuid';
+        return this._isUniqueIdentifierCache;
     }
 
     /**
@@ -2230,7 +2254,9 @@ export class EntityFieldInfo extends BaseInfo {
      * (un-padded) form of the value.
      */
     get FixedWidthColumn(): boolean {
-        return IsFixedWidthStringSQLType(this.Type);
+        if (this._fixedWidthColumnCache !== undefined) return this._fixedWidthColumnCache;
+        this._fixedWidthColumnCache = IsFixedWidthStringSQLType(this.Type);
+        return this._fixedWidthColumnCache;
     }
 
     /**
@@ -2470,7 +2496,144 @@ export class EntityFieldInfo extends BaseInfo {
             normalizedValue.includes(func)
         );
     }
+
+    private static readonly PG_TYPED_LITERAL_REGEX = /^'((?:[^']|'')*)'::[A-Za-z][\w "()\[\],]*$/;
+    private _parsedDefaultValueCache: {
+        source: unknown;
+        hasValue: boolean;
+        value: unknown;
+        isCurrentDateFunction: boolean;
+    } | undefined = undefined;
+
+    /**
+     * Parses a field's SQL DefaultValue into its runtime JS representation.
+     * Exposed as a static helper so unit tests passing plain-object mocks for EntityFieldInfo
+     * work identically to real EntityFieldInfo instances.
+     */
+    public static ParseDefaultValue(
+        field: Pick<EntityFieldInfo, 'DefaultValue' | 'TSType' | 'Entity' | 'Name'> & Partial<Pick<EntityFieldInfo, 'IsUniqueIdentifier' | 'IsSpecialDateField' | 'Type'>>
+    ): { source: unknown; hasValue: boolean; value: unknown; isCurrentDateFunction: boolean } {
+        const rawDefault = field.DefaultValue;
+        if (!rawDefault) {
+            return { source: rawDefault, hasValue: true, value: null, isCurrentDateFunction: false };
+        }
+
+        if (field.TSType === EntityFieldTSType.Boolean) {
+            const val = typeof rawDefault === 'string' &&
+                (rawDefault.trim() === '1' || rawDefault.trim().toLowerCase() === 'true');
+            return { source: rawDefault, hasValue: true, value: val, isCurrentDateFunction: false };
+        }
+
+        if (field.TSType === EntityFieldTSType.Number) {
+            const num = Number(rawDefault);
+            if (!isNaN(num)) {
+                return { source: rawDefault, hasValue: true, value: num, isCurrentDateFunction: false };
+            }
+            if (typeof rawDefault === 'string' && rawDefault.trim().toLowerCase() === 'null') {
+                return { source: rawDefault, hasValue: true, value: null, isCurrentDateFunction: false };
+            }
+            return { source: rawDefault, hasValue: false, value: undefined, isCurrentDateFunction: false };
+        }
+
+        const isUniqueId = field.IsUniqueIdentifier !== undefined
+            ? field.IsUniqueIdentifier
+            : (typeof field.Type === 'string' && (field.Type.trim().toLowerCase() === 'uniqueidentifier' || field.Type.trim().toLowerCase() === 'uuid'));
+        if (isUniqueId) {
+            return { source: rawDefault, hasValue: true, value: null, isCurrentDateFunction: false };
+        }
+
+        if (field.TSType === EntityFieldTSType.Date) {
+            if (typeof rawDefault === 'string' && rawDefault.trim().length > 0) {
+                const temp = new Date(rawDefault);
+                if (!isNaN(temp.getTime())) {
+                    return { source: rawDefault, hasValue: true, value: temp, isCurrentDateFunction: false };
+                }
+                if (EntityFieldInfo.IsDefaultValueSQLCurrentDateFunction(rawDefault)) {
+                    if (field.IsSpecialDateField) {
+                        return { source: rawDefault, hasValue: true, value: null, isCurrentDateFunction: false };
+                    }
+                    return { source: rawDefault, hasValue: true, value: null, isCurrentDateFunction: true };
+                }
+                throw new Error(`Invalid default value for ${field.Entity}.${field.Name} of ${rawDefault}. Default values for date fields must be a valid date or a getdate() type default`);
+            }
+            return { source: rawDefault, hasValue: false, value: undefined, isCurrentDateFunction: false };
+        }
+
+        const dv = typeof rawDefault === 'string' ? rawDefault.trim() : String(rawDefault);
+        const m = dv.match(EntityFieldInfo.PG_TYPED_LITERAL_REGEX);
+        const strVal = m ? m[1].replace(/''/g, "'") : rawDefault;
+        return { source: rawDefault, hasValue: true, value: strVal, isCurrentDateFunction: false };
+    }
+
+    /**
+     * Parses and memoizes the SQL DefaultValue into its runtime JS representation once per
+     * EntityFieldInfo instead of re-parsing (trimming, regex matching, Number/Date parsing)
+     * on every EntityField instantiation.
+     */
+    public GetParsedDefaultValue(): { hasValue: boolean; value: unknown; isCurrentDateFunction: boolean } {
+        const rawDefault = this.DefaultValue;
+        if (this._parsedDefaultValueCache !== undefined && this._parsedDefaultValueCache.source === rawDefault) {
+            return this._parsedDefaultValueCache;
+        }
+        this._parsedDefaultValueCache = EntityFieldInfo.ParseDefaultValue(this);
+        return this._parsedDefaultValueCache;
+    }
 }
+
+const _emptyStringSet: Set<string> = new Set<string>();
+const _userRoleIdSetCache = new WeakMap<UserInfo, {
+    rolesRef: UserRoleInfo[] | undefined;
+    rolesLen: number;
+    firstRoleId: string | undefined;
+    roleIds: Set<string>;
+}>();
+
+function getUserRoleIdSet(user: UserInfo | null | undefined): Set<string> {
+    if (!user?.UserRoles || user.UserRoles.length === 0) {
+        return _emptyStringSet;
+    }
+    const roles = user.UserRoles;
+    const len = roles.length;
+    const firstId = roles[0]?.RoleID;
+    const cached = _userRoleIdSetCache.get(user);
+    if (cached && cached.rolesRef === roles && cached.rolesLen === len && cached.firstRoleId === firstId) {
+        return cached.roleIds;
+    }
+    const roleIds = new Set<string>();
+    for (let i = 0; i < len; i++) {
+        const rid = roles[i]?.RoleID;
+        if (rid) {
+            roleIds.add(rid.trim().toLowerCase());
+        }
+    }
+    _userRoleIdSetCache.set(user, { rolesRef: roles, rolesLen: len, firstRoleId: firstId, roleIds });
+    return roleIds;
+}
+
+const _entityFieldIndexCache = new WeakMap<EntityInfo, {
+    fieldsRef: EntityFieldInfo[];
+    fieldsLen: number;
+    byName: Map<string, number>;
+    byCodeName: Map<string, number>;
+}>();
+
+const _entityDeniedFieldsCache = new WeakMap<EntityInfo, WeakMap<UserInfo, {
+    fieldsRef: EntityFieldInfo[];
+    fieldsLen: number;
+    totalPerms: number;
+    rolesRef: UserRoleInfo[] | undefined;
+    rolesLen: number;
+    read?: Set<string>;
+    update?: Set<string>;
+    create?: Set<string>;
+}>>();
+
+const _entityChildEntitiesCache = new WeakMap<EntityInfo, {
+    provider: IMetadataProvider | undefined;
+    entitiesRef: EntityInfo[] | undefined;
+    entitiesLen: number;
+    children: EntityInfo[];
+}>();
 
 
 
@@ -3337,7 +3500,7 @@ export class EntityInfo extends BaseInfo {
      * `size === 0` as the single "nothing to do" condition.
      */
     public GetDeniedReadFields(user: UserInfo): Set<string> {
-        return this.getDeniedFields(user, (p) => !p.CanRead);
+        return this.getCachedDeniedFields(user, 'read', (p) => !p.CanRead);
     }
 
     /**
@@ -3410,7 +3573,7 @@ export class EntityInfo extends BaseInfo {
      * actually need rather than relying on that.
      */
     public GetDeniedUpdateFields(user: UserInfo): Set<string> {
-        return this.getDeniedFields(user, (p) => !p.CanUpdate);
+        return this.getCachedDeniedFields(user, 'update', (p) => !p.CanUpdate);
     }
 
     /**
@@ -3421,7 +3584,57 @@ export class EntityInfo extends BaseInfo {
      * create-denied field is dropped and the column takes its default.
      */
     public GetDeniedCreateFields(user: UserInfo): Set<string> {
-        return this.getDeniedFields(user, (p) => !p.CanCreate);
+        return this.getCachedDeniedFields(user, 'create', (p) => !p.CanCreate);
+    }
+
+    private getCachedDeniedFields(
+        user: UserInfo,
+        verb: 'read' | 'update' | 'create',
+        isDenied: (permissions: EntityFieldUserPermissionInfo) => boolean
+    ): Set<string> {
+        if (!this.EnableFieldLevelSecurity) {
+            return new Set<string>();
+        }
+        if (!user || typeof user !== 'object') {
+            return this.getDeniedFields(user, isDenied);
+        }
+        let totalPerms = 0;
+        for (let i = 0; i < this._fields.length; i++) {
+            totalPerms += this._fields[i].FieldPermissions.length;
+        }
+        const rolesRef = user.UserRoles;
+        const rolesLen = rolesRef?.length ?? 0;
+
+        let byUser = _entityDeniedFieldsCache.get(this);
+        if (!byUser) {
+            byUser = new WeakMap();
+            _entityDeniedFieldsCache.set(this, byUser);
+        }
+        let entry = byUser.get(user);
+        if (
+            !entry ||
+            entry.fieldsRef !== this._fields ||
+            entry.fieldsLen !== this._fields.length ||
+            entry.totalPerms !== totalPerms ||
+            entry.rolesRef !== rolesRef ||
+            entry.rolesLen !== rolesLen
+        ) {
+            entry = {
+                fieldsRef: this._fields,
+                fieldsLen: this._fields.length,
+                totalPerms,
+                rolesRef,
+                rolesLen,
+            };
+            byUser.set(user, entry);
+        }
+        const existing = entry[verb];
+        if (existing !== undefined) {
+            return existing;
+        }
+        const computed = this.getDeniedFields(user, isDenied);
+        entry[verb] = computed;
+        return computed;
     }
 
     /**
@@ -3484,6 +3697,48 @@ export class EntityInfo extends BaseInfo {
             this._fieldByNameMap = map;
         }
         return this._fieldByNameMap.get(name.trim().toLowerCase());
+    }
+
+    private ensureFieldIndexEntry(): { byName: Map<string, number>; byCodeName: Map<string, number> } {
+        let entry = _entityFieldIndexCache.get(this);
+        if (!entry || entry.fieldsRef !== this._fields || entry.fieldsLen !== this._fields.length) {
+            const byName = new Map<string, number>();
+            const byCodeName = new Map<string, number>();
+            for (let i = 0; i < this._fields.length; i++) {
+                const f = this._fields[i];
+                if (f.Name != null) {
+                    const nameKey = f.Name.trim().toLowerCase();
+                    if (!byName.has(nameKey)) {
+                        byName.set(nameKey, i);
+                    }
+                    const codeKey = f.CodeName.trim().toLowerCase();
+                    if (!byCodeName.has(codeKey)) {
+                        byCodeName.set(codeKey, i);
+                    }
+                }
+            }
+            entry = { fieldsRef: this._fields, fieldsLen: this._fields.length, byName, byCodeName };
+            _entityFieldIndexCache.set(this, entry);
+        }
+        return entry;
+    }
+
+    /**
+     * O(1) case-insensitive lookup of a field's positional index in `Fields` by `Name`.
+     * Shared across all `BaseEntity` instances of this `EntityInfo` so individual entity
+     * instances do not need to allocate their own `Map<string, EntityField>` on hydration.
+     */
+    public FieldIndexByName(name: string): number {
+        if (!name) return -1;
+        return this.ensureFieldIndexEntry().byName.get(name.trim().toLowerCase()) ?? -1;
+    }
+
+    /**
+     * O(1) case-insensitive lookup of a field's positional index in `Fields` by `CodeName`.
+     */
+    public FieldIndexByCodeName(codeName: string): number {
+        if (!codeName) return -1;
+        return this.ensureFieldIndexEntry().byCodeName.get(codeName.trim().toLowerCase()) ?? -1;
     }
 
     /**
@@ -3850,7 +4105,23 @@ export class EntityInfo extends BaseInfo {
      * only one child type is allowed per parent record (disjoint subtypes).
      */
     get ChildEntities(): EntityInfo[] {
-        return MetadataProviderFor(this)?.Entities?.filter(e => UUIDsEqual(e.ParentID, this.ID)) ?? [];
+        const provider = MetadataProviderFor(this);
+        const entities = provider?.Entities;
+        if (!entities || entities.length === 0) {
+            return [];
+        }
+        const cached = _entityChildEntitiesCache.get(this);
+        if (cached && cached.provider === provider && cached.entitiesRef === entities && cached.entitiesLen === entities.length) {
+            return cached.children;
+        }
+        const children = entities.filter(e => UUIDsEqual(e.ParentID, this.ID));
+        _entityChildEntitiesCache.set(this, {
+            provider,
+            entitiesRef: entities,
+            entitiesLen: entities.length,
+            children,
+        });
+        return children;
     }
 
     /**
@@ -4041,25 +4312,22 @@ export class EntityInfo extends BaseInfo {
      */
     public GetUserPermisions(user: UserInfo ): EntityUserPermissionInfo {
         try {
-            const permissionList: EntityPermissionInfo[] =[];
-
-            for (let j: number = 0; j < this.Permissions.length; j++) {
-                const ep: EntityPermissionInfo = this.Permissions[j];
-                const roleMatch: UserRoleInfo = user.UserRoles?.find((r) => UUIDsEqual(r.RoleID, ep.RoleID))
-                if (roleMatch) // user has this role
-                    permissionList.push(ep)
-            }
-
-            // Aggregate Allow and Deny separately, then subtract Deny from Allow per action.
+            const _ = user.UserRoles; // preserve throw-on-null behavior
+            const userRoleIds = getUserRoleIdSet(user);
             const allow = { CanCreate: false, CanRead: false, CanUpdate: false, CanDelete: false };
             const deny = { CanCreate: false, CanRead: false, CanUpdate: false, CanDelete: false };
-            for (const ep of permissionList) {
-                const isDeny = ep.IsDeny;
-                const bucket = isDeny ? deny : allow;
-                bucket.CanCreate = bucket.CanCreate || !!ep.CanCreate;
-                bucket.CanRead   = bucket.CanRead   || !!ep.CanRead;
-                bucket.CanUpdate = bucket.CanUpdate || !!ep.CanUpdate;
-                bucket.CanDelete = bucket.CanDelete || !!ep.CanDelete;
+
+            if (userRoleIds.size > 0) {
+                for (let j: number = 0; j < this.Permissions.length; j++) {
+                    const ep: EntityPermissionInfo = this.Permissions[j];
+                    if (ep.RoleID && userRoleIds.has(ep.RoleID.trim().toLowerCase())) {
+                        const bucket = ep.IsDeny ? deny : allow;
+                        bucket.CanCreate = bucket.CanCreate || !!ep.CanCreate;
+                        bucket.CanRead   = bucket.CanRead   || !!ep.CanRead;
+                        bucket.CanUpdate = bucket.CanUpdate || !!ep.CanUpdate;
+                        bucket.CanDelete = bucket.CanDelete || !!ep.CanDelete;
+                    }
+                }
             }
 
             // An API-driven action also requires that the entity ALLOWS that action at all
@@ -4097,13 +4365,17 @@ export class EntityInfo extends BaseInfo {
      * @returns 
      */
     public UserExemptFromRowLevelSecurity(user: UserInfo, type: EntityPermissionType): boolean {
+        const _ = user.UserRoles; // preserve throw-on-null behavior if user is null/undefined
+        const userRoleIds = getUserRoleIdSet(user);
+        if (userRoleIds.size === 0) {
+            return false;
+        }
         for (let j: number = 0; j < this.Permissions.length; j++) {
             const ep: EntityPermissionInfo = this.Permissions[j];
             if (ep.IsDeny) {
                 continue; // a Deny row's Can* flags are denials, never grants — it cannot exempt anyone
             }
-            const roleMatch: UserRoleInfo = user.UserRoles?.find((r) => UUIDsEqual(r.RoleID, ep.RoleID))
-            if (roleMatch) { // user has this role 
+            if (ep.RoleID && userRoleIds.has(ep.RoleID.trim().toLowerCase())) { // user has this role 
                 switch (type) {
                     case EntityPermissionType.Create:
                         if (ep.CanCreate && !ep.CreateRLSFilterID)
@@ -4146,14 +4418,18 @@ export class EntityInfo extends BaseInfo {
      * @returns 
      */
     public GetUserRowLevelSecurityInfo(user: UserInfo, type: EntityPermissionType): RowLevelSecurityFilterInfo[] {
+        const _ = user.UserRoles; // preserve throw-on-null behavior if user is null/undefined
         const rlsList: RowLevelSecurityFilterInfo[] = [];
+        const userRoleIds = getUserRoleIdSet(user);
+        if (userRoleIds.size === 0) {
+            return rlsList;
+        }
         for (let j: number = 0; j < this.Permissions.length; j++) {
             const ep: EntityPermissionInfo = this.Permissions[j];
             if (ep.IsDeny) {
                 continue; // never a grant — see the doc comment
             }
-            const roleMatch: UserRoleInfo = user.UserRoles?.find((r) => UUIDsEqual(r.RoleID, ep.RoleID))
-            if (roleMatch) { // user has this role
+            if (ep.RoleID && userRoleIds.has(ep.RoleID.trim().toLowerCase())) { // user has this role
                 let matchObject: RowLevelSecurityFilterInfo = null;
                 switch (type) {
                     case EntityPermissionType.Create:

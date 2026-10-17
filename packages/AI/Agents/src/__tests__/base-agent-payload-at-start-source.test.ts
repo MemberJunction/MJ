@@ -13,7 +13,7 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import { BaseAgent } from '../base-agent';
-import { ResolvePayloadAtStart, type AgentPayloadChangeRequest, type BaseAgentNextStep, type ForEachOperation } from '@memberjunction/ai-core-plus';
+import { ResolvePayloadAtStart, ResolvePayloadAtEnd, type AgentPayloadChangeRequest, type BaseAgentNextStep, type ForEachOperation } from '@memberjunction/ai-core-plus';
 import { IndexByUUID } from '@memberjunction/global';
 
 // ============================================================================
@@ -120,7 +120,7 @@ const PROMPT_CONFIG: PromptConfig = { childPrompt: CHILD_PROMPT };
 type StepRow = Pick<MockStep,
     | 'ID' | 'AgentRunID' | 'StepNumber' | 'StepType' | 'StepName' | 'TargetID' | 'TargetLogID' | 'ParentID'
     | 'Status' | 'StartedAt' | 'CompletedAt' | 'Success' | 'ErrorMessage' | 'InputData' | 'OutputData'
-    | 'PayloadAtStart' | 'PayloadAtStartSourceStepID' | 'PayloadAtEnd' | 'Skills'>;
+    | 'PayloadAtStart' | 'PayloadAtStartSourceStepID' | 'PayloadAtEnd' | 'PayloadAtEndSourceStepID' | 'Skills'>;
 
 /** How long a step's saves take. */
 interface SaveTiming {
@@ -178,6 +178,7 @@ class MockStep {
 
     private payloadAtEnd: string | null = null;
     private payloadAtStartSourceStepID: string | null = null;
+    private payloadAtEndSourceStepID: string | null = null;
     private pendingSave: Promise<boolean> | null = null;
     private reloading = false;
     private saveCount = 0;
@@ -187,13 +188,13 @@ class MockStep {
      * @param seq Creation order; gives the step its label and its client-generated ID.
      * @param saveLog Shared log of `<label>:<save number>:start|end` entries.
      * @param timing How long this step's saves take. A slow save is what lets other work overtake it.
-     * @param onPointer Called when this step is given a PayloadAtStartSourceStepID.
+     * @param onPointer Called when this step is given a PayloadAtStartSourceStepID or PayloadAtEndSourceStepID.
      */
     constructor(
         seq: number,
         private readonly saveLog: string[],
         private readonly timing: SaveTiming,
-        private readonly onPointer: (sourceId: string) => void,
+        private readonly onPointer: (sourceId: string, pointerStepId: string) => void,
     ) {
         this.Label = `step${seq}`;
         this.idSuffix = String(seq).padStart(12, '0');
@@ -217,7 +218,18 @@ class MockStep {
     public set PayloadAtStartSourceStepID(value: string | null) {
         this.payloadAtStartSourceStepID = value;
         if (value && !this.reloading) {
-            this.onPointer(value);
+            this.onPointer(value, this.ID);
+        }
+    }
+
+    public get PayloadAtEndSourceStepID(): string | null {
+        return this.payloadAtEndSourceStepID;
+    }
+
+    public set PayloadAtEndSourceStepID(value: string | null) {
+        this.payloadAtEndSourceStepID = value;
+        if (value && !this.reloading) {
+            this.onPointer(value, this.ID);
         }
     }
 
@@ -279,6 +291,7 @@ class MockStep {
             PayloadAtStart: this.PayloadAtStart,
             PayloadAtStartSourceStepID: this.PayloadAtStartSourceStepID,
             PayloadAtEnd: this.PayloadAtEnd,
+            PayloadAtEndSourceStepID: this.PayloadAtEndSourceStepID,
             Skills: this.Skills,
         };
     }
@@ -402,7 +415,7 @@ class Harness {
         this.Internals._activeProvider = {
             GetEntityObject: async () => {
                 const timing: SaveTiming = { InsertDelayMs: this.InsertDelayMs, UpdateDelayMs: this.UpdateDelayMs };
-                const step = new MockStep(this.Steps.length + 1, this.SaveLog, timing, (sourceId) => this.markPointedAt(sourceId));
+                const step = new MockStep(this.Steps.length + 1, this.SaveLog, timing, (sourceId, pointerStepId) => this.markPointedAt(sourceId, pointerStepId));
                 this.Steps.push(step);
                 return step;
             },
@@ -464,7 +477,18 @@ class Harness {
         return step.SavedRow ? ResolvePayloadAtStart(step.SavedRow, rowsById) : null;
     }
 
-    private markPointedAt(sourceId: string): void {
+    /** A step's end payload as a reader resolves it from the saved rows: the stored copy, or the source row's start/end. */
+    public SavedEnd(step: MockStep): string | null {
+        const rows = this.Steps.flatMap((s) => (s.SavedRow ? [s.SavedRow] : []));
+        const rowsById = IndexByUUID(rows);
+        expect(step.SavedRow).not.toBeNull();
+        return step.SavedRow ? ResolvePayloadAtEnd(step.SavedRow, rowsById) : null;
+    }
+
+    private markPointedAt(sourceId: string, pointerStepId: string): void {
+        if (sourceId === pointerStepId) {
+            return; // Self-pointer (PayloadAtEndSourceStepID === step.ID) points to the step's own PayloadAtStart
+        }
         this.Steps.find((s) => s.ID === sourceId)?.MarkPointedAt();
     }
 }
@@ -815,7 +839,7 @@ describe("BaseAgent — the Rule: a step's PayloadAtEnd does not change after a 
         expect(h.SavedStart(next)).toBe(JSON.stringify(rewritten));
     });
 
-    it.each(PROMPT_FAILURES)('prompt failure (the model call %s): the end set on the failed step is the end that is saved', async (_kind, executePrompt) => {
+    it.each(PROMPT_FAILURES)('prompt failure (the model call %s): the end set on the failed step is the end that is saved, and retry deduplicates both start and end via PayloadAtStartSourceStepID/PayloadAtEndSourceStepID', async (_kind, executePrompt) => {
         const h = new Harness();
         const payload = { question: 'Which renewals are due?' };
         h.Internals._agentTypeInstance = { GetPromptForStep: async () => CHILD_PROMPT };
@@ -828,13 +852,18 @@ describe("BaseAgent — the Rule: a step's PayloadAtEnd does not change after a 
         await h.Flush();
         h.InsertDelayMs = 0;
         await h.Internals.executePromptStep(parentParams(), PROMPT_CONFIG, failed); // the retry
+        await h.Flush();
 
         const [failedStep, retryStep] = h.Steps;
         expect(failedStep.SavedRow?.PayloadAtEnd).toBe(JSON.stringify(payload));
+        expect(failedStep.SavedRow?.PayloadAtEndSourceStepID).toBeNull();
         expect(retryStep.PayloadAtStart).toBeNull();
         expect(retryStep.PayloadAtStartSourceStepID).toBe(failedStep.ID);
+        expect(retryStep.SavedRow?.PayloadAtEnd).toBeNull();
+        expect(retryStep.SavedRow?.PayloadAtEndSourceStepID).toBe(failedStep.ID);
         await h.ExpectRuleHolds();
         expect(h.SavedStart(retryStep)).toBe(JSON.stringify(payload));
+        expect(h.SavedEnd(retryStep)).toBe(JSON.stringify(payload));
     });
 
     it('child sub-agent: the merged end is the end that is saved, so the next step points at it', async () => {
@@ -860,6 +889,108 @@ describe("BaseAgent — the Rule: a step's PayloadAtEnd does not change after a 
         expect(subAgentStep.SavedRow?.PayloadAtEnd).toBe(JSON.stringify(result.newPayload));
         expect(next.PayloadAtStartSourceStepID).toBe(subAgentStep.ID);
         await h.ExpectRuleHolds();
+    });
+});
+
+describe('BaseAgent.finalizeStepEntity — PayloadAtEndSourceStepID deduplicates unchanged end payloads', () => {
+    it('stores the canonical PayloadAtEnd on the first step and a 1-hop pointer (PayloadAtEndSourceStepID === step1.ID) on subsequent steps that leave the payload unchanged', async () => {
+        const h = new Harness();
+        const payload = { customer: 'Acme', status: 'open' };
+
+        const step1 = await h.CreateFinished({
+            stepType: 'Prompt',
+            stepName: 'Execute Agent Prompt',
+            payloadAtStart: payload,
+            payloadAtEnd: payload,
+        });
+        const step2 = await h.CreateFinished({
+            stepType: 'Actions',
+            stepName: 'Execute Action: Lookup Account',
+            payloadAtStart: payload,
+            payloadAtEnd: payload,
+        });
+        const step3 = await h.CreateFinished({
+            stepType: 'Prompt',
+            stepName: 'Execute Agent Prompt',
+            payloadAtStart: payload,
+            payloadAtEnd: payload,
+        });
+
+        expect(step1.SavedRow?.PayloadAtStart).toBe(JSON.stringify(payload));
+        expect(step1.SavedRow?.PayloadAtEnd).toBe(JSON.stringify(payload));
+        expect(step1.SavedRow?.PayloadAtEndSourceStepID).toBeNull();
+
+        for (const laterStep of [step2, step3]) {
+            expect(laterStep.SavedRow?.PayloadAtStart).toBeNull();
+            expect(laterStep.SavedRow?.PayloadAtStartSourceStepID).toBe(step1.ID);
+            expect(laterStep.SavedRow?.PayloadAtEnd).toBeNull();
+            expect(laterStep.SavedRow?.PayloadAtEndSourceStepID).toBe(step1.ID);
+            expect(h.SavedStart(laterStep)).toBe(JSON.stringify(payload));
+            expect(h.SavedEnd(laterStep)).toBe(JSON.stringify(payload));
+        }
+        expect(BaseAgent.LastStepPayload(h.Steps.map(s => s.SavedRow!))).toBe(JSON.stringify(payload));
+    });
+});
+
+describe('BaseAgent InputData deduplication — Prompt step delta messages & Sub-Agent omission', () => {
+    it('strips volatile <mj-runtime-state> messages and stores only per-turn deltas on subsequent Prompt steps', async () => {
+        const h = new Harness();
+        const payload = { query: 'status' };
+        h.Internals._agentTypeInstance = { GetPromptForStep: async () => CHILD_PROMPT };
+        h.Internals.preparePromptParams = async () => ({});
+        h.Internals.executePrompt = async () => ({ success: false, errorMessage: 'Simulated failure' });
+
+        const msg1 = { role: 'user', content: 'Hello agent' };
+        const volatileMsg = { role: 'user', content: '<mj-runtime-state>{"turn":1}</mj-runtime-state>', metadata: { volatileState: true } };
+        const msg2 = { role: 'assistant', content: 'Checking account...' };
+        const params = {
+            agent: { ID: PARENT_AGENT_ID, Name: 'Parent Agent' },
+            contextUser: CONTEXT_USER,
+            conversationMessages: [msg1, volatileMsg],
+        };
+
+        await h.Internals.executePromptStep(params, PROMPT_CONFIG, { step: 'Retry', terminate: false, newPayload: payload });
+        params.conversationMessages.push(msg2);
+        await h.Internals.executePromptStep(params, PROMPT_CONFIG, { step: 'Retry', terminate: false, newPayload: payload });
+        await h.Flush();
+
+        const [promptStep1, promptStep2] = h.Steps;
+        const input1 = JSON.parse(promptStep1.SavedRow?.InputData ?? '{}');
+        const input2 = JSON.parse(promptStep2.SavedRow?.InputData ?? '{}');
+
+        // First prompt step stores non-volatile initial messages without volatileMsg
+        expect(input1.conversationMessages).toEqual([msg1]);
+        expect(input1.conversationMessagesDelta).toBeUndefined();
+
+        // Second prompt step stores only the newly appended msg2 with conversationMessagesDelta: true
+        expect(input2.conversationMessages).toEqual([msg2]);
+        expect(input2.conversationMessagesDelta).toBe(true);
+    });
+
+    it('omits conversationMessages from Sub-Agent step InputData', async () => {
+        const h = new Harness();
+        const payload = { topic: 'renewals' };
+        await h.CreateFinished({ stepType: 'Prompt', stepName: 'Execute Agent Prompt', payloadAtEnd: payload });
+        h.Internals.ExecuteSubAgent = async () => ({ success: true, payload: { summary: 'done' } });
+
+        const params = {
+            agent: { ID: PARENT_AGENT_ID, Name: 'Parent Agent' },
+            contextUser: CONTEXT_USER,
+            conversationMessages: [{ role: 'user', content: 'Long conversation history' }],
+        };
+        await h.Internals.processSubAgentStep(params, {
+            step: 'Sub-Agent',
+            terminate: false,
+            previousPayload: payload,
+            newPayload: payload,
+            subAgent: { name: 'ChildAgent1', message: 'Summarize the renewals', terminateAfter: false },
+        });
+        await h.Flush();
+
+        const subAgentStep = h.Only('Sub-Agent');
+        const subInput = JSON.parse(subAgentStep.SavedRow?.InputData ?? '{}');
+        expect(subInput.conversationMessages).toBeUndefined();
+        expect(subInput.subAgentName).toBe('ChildAgent1');
     });
 });
 

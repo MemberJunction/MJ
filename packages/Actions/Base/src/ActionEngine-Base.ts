@@ -557,6 +557,97 @@ export class ActionEngineBase extends BaseEngine<ActionEngineBase> {
       return this.__coreRootCategoryID;
    }
 
+    private _indexedActionsRef?: MJActionEntityExtended[];
+    private _actionsByName = new Map<string, MJActionEntityExtended>();
+    private _indexedCategoriesRef?: MJActionCategoryEntity[];
+    private _categoriesById = new Map<string, MJActionCategoryEntity>();
+    private _indexedParamsRef?: MJActionParamEntity[];
+    private _paramsByActionId = new Map<string, MJActionParamEntity[]>();
+    private _indexedResultCodesRef?: MJActionResultCodeEntity[];
+    private _resultCodesByActionId = new Map<string, MJActionResultCodeEntity[]>();
+
+    private ensureActionIndex(): void {
+       if (!this._Actions) return;
+       if (this._indexedActionsRef === this._Actions && this._actionsByName.size === this._Actions.length) return;
+       this._actionsByName.clear();
+       for (let i = 0; i < this._Actions.length; i++) {
+          const a = this._Actions[i];
+          if (a.Name) {
+             const key = a.Name.trim().toLowerCase();
+             if (!this._actionsByName.has(key)) {
+                this._actionsByName.set(key, a);
+             }
+          }
+       }
+       this._indexedActionsRef = this._Actions;
+    }
+
+    private ensureCategoryIndex(): void {
+       if (!this._ActionCategories) return;
+       if (this._indexedCategoriesRef === this._ActionCategories && this._categoriesById.size === this._ActionCategories.length) return;
+       this._categoriesById.clear();
+       for (let i = 0; i < this._ActionCategories.length; i++) {
+          const c = this._ActionCategories[i];
+          if (c.ID) {
+             this._categoriesById.set(c.ID.trim().toLowerCase(), c);
+          }
+       }
+       this._indexedCategoriesRef = this._ActionCategories;
+    }
+
+    private ensureParamsIndex(): void {
+       if (!this._Params) return;
+       if (this._indexedParamsRef === this._Params) return;
+       this._paramsByActionId.clear();
+       for (let i = 0; i < this._Params.length; i++) {
+          const p = this._Params[i];
+          if (p.ActionID) {
+             const key = p.ActionID.trim().toLowerCase();
+             let bucket = this._paramsByActionId.get(key);
+             if (!bucket) {
+                bucket = [];
+                this._paramsByActionId.set(key, bucket);
+             }
+             bucket.push(p);
+          }
+       }
+       this._indexedParamsRef = this._Params;
+    }
+
+    private ensureResultCodesIndex(): void {
+       if (!this._ActionResultCodes) return;
+       if (this._indexedResultCodesRef === this._ActionResultCodes) return;
+       this._resultCodesByActionId.clear();
+       for (let i = 0; i < this._ActionResultCodes.length; i++) {
+          const r = this._ActionResultCodes[i];
+          if (r.ActionID) {
+             const key = r.ActionID.trim().toLowerCase();
+             let bucket = this._resultCodesByActionId.get(key);
+             if (!bucket) {
+                bucket = [];
+                this._resultCodesByActionId.set(key, bucket);
+             }
+             bucket.push(r);
+          }
+       }
+       this._indexedResultCodesRef = this._ActionResultCodes;
+    }
+
+    public GetParamsByActionID(actionId: string): MJActionParamEntity[] {
+       if (!actionId || !this._Params) return [];
+       this.ensureParamsIndex();
+       return this._paramsByActionId.get(actionId.trim().toLowerCase()) ?? [];
+    }
+
+    public GetResultCode(actionId: string, resultCode: string): MJActionResultCodeEntity | undefined {
+       if (!actionId || !resultCode || !this._ActionResultCodes) return undefined;
+       this.ensureResultCodesIndex();
+       const bucket = this._resultCodesByActionId.get(actionId.trim().toLowerCase());
+       if (!bucket) return undefined;
+       const target = resultCode.trim().toLowerCase();
+       return bucket.find(r => r.ResultCode.trim().toLowerCase() === target);
+    }
+
    /**
     * Utility method that determines if a given Action Category ID is a child of the specified parent category ID.
     * @param categoryId - The ID of the category to check.
@@ -567,15 +658,18 @@ export class ActionEngineBase extends BaseEngine<ActionEngineBase> {
       if (!categoryId || !parentCategoryId) {
          return false;
       }
-      if (categoryId.trim().toLowerCase() === parentCategoryId.trim().toLowerCase()) {
+      const catKey = categoryId.trim().toLowerCase();
+      const parentKey = parentCategoryId.trim().toLowerCase();
+      if (catKey === parentKey) {
          return true;
       }
-      const category = this._ActionCategories.find(c => c.ID.trim().toLowerCase() === categoryId.trim().toLowerCase());
-      if (!category) {
+      this.ensureCategoryIndex();
+      const category = this._categoriesById.get(catKey);
+      if (!category || !category.ParentID) {
          return false;
       }
       // Check if the parent ID matches the parentCategoryId or if it is a child of the parentCategoryId
-      if (category.ParentID?.trim().toLowerCase() === parentCategoryId.trim().toLowerCase()) {
+      if (category.ParentID.trim().toLowerCase() === parentKey) {
          return true;
       }
       // If the parent ID is not the parentCategoryId, recursively check the parent category
@@ -615,7 +709,8 @@ export class ActionEngineBase extends BaseEngine<ActionEngineBase> {
       if (!actionName || actionName.trim().length === 0) {
          throw new Error("Action name cannot be null or empty.");
       }
-      return this.Actions.find(a => a.Name.trim().toLowerCase() === actionName.trim().toLowerCase());
+      this.ensureActionIndex();
+      return this._actionsByName.get(actionName.trim().toLowerCase());
    }
 
    /**
