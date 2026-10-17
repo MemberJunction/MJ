@@ -30,7 +30,9 @@ const {
             Name: 'Video Studio - Critic',
         },
     ],
-    mockGetConfigurationParamsWithInheritance: vi.fn(() => []),
+    mockGetConfigurationParamsWithInheritance: vi.fn<
+        (_id: string) => Array<{ Name: string; Value: string; Type: string }>
+    >(() => []),
 }));
 
 vi.mock('@memberjunction/ai-agents', () => ({
@@ -91,35 +93,89 @@ vi.mock('../data/data-snapshot.js', async (importOriginal) => {
 });
 
 import {
+    RubricScoring,
+    type CachedPublishedVersion,
+    type RubricAnswer,
+    type RubricScaleRecord,
+} from '@memberjunction/rubrics-base';
+import {
     MISSING_CRITIC_RUBRIC_ERROR_MESSAGE,
     VideoStudioCriticAgent,
+    type CriticPromptCriterionScore,
     type CriticPromptOutput,
 } from '../agents/critic-agent.js';
 import { VideoStudioAgent } from '../agents/video-studio-agent.js';
 import { CreateDeliveredSpecFixture } from './fixtures/delivered-spec.fixture.js';
 
-const RUBRIC_ID = 'rubric-vpq-001';
+const RUBRIC_ID = 'B5AEAEF4-C4E6-45C2-92A1-4CA2BE7EDDE7';
+const VERSION_ID = 'F60BC0C3-2D42-484D-AD12-E41DD38EC338';
+const MEETS_SCALE_ID = 'C882E907-2C02-49B1-919F-8AFCCCD4709F';
+const LEVEL_MISS_ID = 'B555FE53-2E9B-4FB6-A092-0AE8E9557367';
+const LEVEL_PARTIAL_ID = 'A9E1A258-D99F-47A4-87EF-646C160D0282';
+const LEVEL_MEETS_ID = '42707415-F55B-4658-BDED-E6C63CEBAA5C';
 
-function buildPublishedRubric() {
+const MEETS_SCALE: RubricScaleRecord = {
+    id: MEETS_SCALE_ID,
+    name: 'Meets / Partial / Miss',
+    scaleType: 'Levels',
+    higherIsBetter: true,
+    levels: [
+        {
+            id: LEVEL_MISS_ID,
+            label: 'Miss',
+            value: 0,
+            normalizedValue: 0,
+            sequence: 1,
+        },
+        {
+            id: LEVEL_PARTIAL_ID,
+            label: 'Partial',
+            value: 0.5,
+            normalizedValue: 0.5,
+            sequence: 2,
+        },
+        {
+            id: LEVEL_MEETS_ID,
+            label: 'Meets',
+            value: 1,
+            normalizedValue: 1,
+            sequence: 3,
+        },
+    ],
+};
+
+function buildPublishedRubric(): CachedPublishedVersion {
     return {
+        id: VERSION_ID,
         rubricId: RUBRIC_ID,
-        rubricName: 'Video Production Quality',
-        versionId: 'ver-1',
-        versionNumber: 1,
-        status: 'Published',
-        scoringMode: 'Weighted',
-        passThresholdScore: 75,
+        majorVersion: 1,
+        minorVersion: 0,
+        patchVersion: 0,
+        instructions: 'Evaluate every rendered deliverable format against the production quality rubric.',
+        passThreshold: 0.7,
+        minimumCompleteness: null,
+        notApplicablePolicy: 'NotAllowed',
+        scoreDisplayMin: 0,
+        scoreDisplayMax: 1,
+        scales: [MEETS_SCALE],
+        bands: [],
         nodes: [
             {
                 id: 'group-1',
+                parentId: null,
                 key: 'visual-craft',
                 name: 'Visual Craft',
                 description: 'Visual hierarchy',
                 guidance: '',
                 nodeType: 'Group',
                 sequence: 1,
-                weight: 50,
+                weight: 1,
+                scaleId: null,
+                isAdvisory: false,
                 isGate: false,
+                gateMinimumScore: null,
+                evidenceRequired: false,
+                rationaleRequired: false,
             },
             {
                 id: 'crit-1',
@@ -130,8 +186,13 @@ function buildPublishedRubric() {
                 guidance: 'Check contrast and overflow.',
                 nodeType: 'Criterion',
                 sequence: 1,
-                weight: 50,
+                weight: 1,
+                scaleId: MEETS_SCALE_ID,
+                isAdvisory: false,
                 isGate: false,
+                gateMinimumScore: null,
+                evidenceRequired: false,
+                rationaleRequired: false,
             },
             {
                 id: 'crit-2',
@@ -142,10 +203,76 @@ function buildPublishedRubric() {
                 guidance: 'Inspect generated assets.',
                 nodeType: 'Criterion',
                 sequence: 2,
-                weight: 50,
+                weight: 1,
+                scaleId: MEETS_SCALE_ID,
+                isAdvisory: false,
                 isGate: true,
+                gateMinimumScore: 0.6,
+                evidenceRequired: false,
+                rationaleRequired: false,
+                anchors: [
+                    {
+                        scaleLevelId: LEVEL_MEETS_ID,
+                        descriptor: 'Generated assets are purely illustrative, clean of garbled text, and disclosed.',
+                    },
+                    {
+                        scaleLevelId: LEVEL_PARTIAL_ID,
+                        descriptor: 'Minor background artifacting on a decorative generated asset.',
+                    },
+                    {
+                        scaleLevelId: LEVEL_MISS_ID,
+                        descriptor: 'Generated person presented as real or garbled generated text.',
+                    },
+                ],
             },
         ],
+    };
+}
+
+function buildNineCriterionRubric(): CachedPublishedVersion {
+    const criterionDefs: Array<{ key: string; name: string; isGate: boolean }> = [
+        { key: 'hook-lands-in-the-first-two-seconds', name: 'Hook Lands in the First Two Seconds', isGate: false },
+        { key: 'readable-at-phone-size', name: 'Readable at Phone Size', isGate: false },
+        { key: 'type-and-color-stay-consistent', name: 'Type and Color Stay Consistent', isGate: false },
+        { key: 'motion-has-weight-and-a-clear-focus', name: 'Motion Has Weight and a Clear Focus', isGate: false },
+        { key: 'sound-is-in-sync-with-the-picture', name: 'Sound Is in Sync with the Picture', isGate: false },
+        { key: 'stays-on-brand', name: 'Stays on Brand', isGate: false },
+        { key: 'shown-values-match-the-data-snapshot', name: 'Shown Values Match the Data Snapshot', isGate: true },
+        { key: 'final-frame-works-as-a-poster', name: 'Final Frame Works as a Poster', isGate: false },
+        { key: 'generated-assets-are-honest-and-disclosed', name: 'Generated Assets Are Honest and Disclosed', isGate: true },
+    ];
+
+    return {
+        id: VERSION_ID,
+        rubricId: RUBRIC_ID,
+        majorVersion: 1,
+        minorVersion: 0,
+        patchVersion: 0,
+        instructions: 'Evaluate every rendered deliverable format against the production quality rubric.',
+        passThreshold: 0.7,
+        minimumCompleteness: null,
+        notApplicablePolicy: 'NotAllowed',
+        scoreDisplayMin: 0,
+        scoreDisplayMax: 1,
+        scales: [MEETS_SCALE],
+        bands: [],
+        nodes: criterionDefs.map((def, idx) => ({
+            id: `crit-node-${idx + 1}`,
+            parentId: null,
+            key: def.key,
+            name: def.name,
+            description: `${def.name} description.`,
+            guidance: `${def.name} guidance.`,
+            nodeType: 'Criterion' as const,
+            sequence: idx + 1,
+            weight: 1,
+            scaleId: MEETS_SCALE_ID,
+            isAdvisory: false,
+            isGate: def.isGate,
+            gateMinimumScore: def.isGate ? 0.6 : null,
+            evidenceRequired: false,
+            rationaleRequired: false,
+        })),
     };
 }
 
@@ -275,12 +402,9 @@ describe('VideoStudioCriticAgent', () => {
                     },
                 ],
                 Scores: {
-                    OverallScore: 0.5,
-                    MaxScore: 1,
-                    Passed: false,
                     Criteria: [
-                        { Key: 'text-legibility', Level: 'Miss', Score: 0, Passed: false },
-                        { Key: 'generated-assets-are-honest-and-disclosed', Level: 'Meets', Score: 1, Passed: true },
+                        { Criterion: 'text-legibility', Level: 'Miss' },
+                        { Criterion: 'generated-assets-are-honest-and-disclosed', Level: 'Meets' },
                     ],
                 },
             },
@@ -300,12 +424,9 @@ describe('VideoStudioCriticAgent', () => {
                     },
                 ],
                 Scores: {
-                    OverallScore: 1,
-                    MaxScore: 1,
-                    Passed: true,
                     Criteria: [
-                        { Key: 'text-legibility', Level: 'Meets', Score: 1, Passed: true },
-                        { Key: 'generated-assets-are-honest-and-disclosed', Level: 'Meets', Score: 1, Passed: true },
+                        { Criterion: 'text-legibility', Level: 'Meets' },
+                        { Criterion: 'generated-assets-are-honest-and-disclosed', Level: 'Meets' },
                     ],
                 },
             },
@@ -329,7 +450,15 @@ describe('VideoStudioCriticAgent', () => {
         expect(firstCall.data.beatsTable).toContain('beat-1');
         expect(firstCall.data.timelineTable).toContain('Narration');
         expect(firstCall.data.boundValues).toBeDefined();
-        expect(firstCall.data.rubricCriteria).toContain('generated-assets-are-honest-and-disclosed');
+        expect(firstCall.data.rubricCriteria).toContain(
+            'Evaluate every rendered deliverable format against the production quality rubric.',
+        );
+        expect(firstCall.data.rubricCriteria).toContain(
+            '- generated-assets-are-honest-and-disclosed [GATE]',
+        );
+        expect(firstCall.data.rubricCriteria).toContain(
+            'Meets: Generated assets are purely illustrative, clean of garbled text, and disclosed.',
+        );
 
         const firstBlocks = firstCall.messages?.[0]?.content as ChatMessageContentBlock[];
         const firstImages = firstBlocks.filter((b) => b.type === 'image_url');
@@ -420,7 +549,7 @@ describe('VideoStudioCriticAgent', () => {
                         Fix: 'Increase padding',
                     },
                 ],
-                Scores: { OverallScore: 0.5, MaxScore: 1, Passed: false, Criteria: [] },
+                Scores: { Criteria: [] },
             },
         });
 
@@ -467,7 +596,7 @@ describe('VideoStudioCriticAgent', () => {
                         AssetKey: 'non_existent_asset_key_999',
                     },
                 ],
-                Scores: { OverallScore: 0.5, MaxScore: 1, Passed: false, Criteria: [] },
+                Scores: { Criteria: [] },
             },
         });
 
@@ -532,12 +661,9 @@ describe('VideoStudioCriticAgent', () => {
                 Summary: 'Clean pass',
                 Defects: [],
                 Scores: {
-                    OverallScore: 1,
-                    MaxScore: 1,
-                    Passed: true,
                     Criteria: [
-                        { Key: 'text-legibility', Level: 'Meets' },
-                        { Key: 'generated-assets-are-honest-and-disclosed', Level: 'Meets' },
+                        { Criterion: 'text-legibility', Level: 'Meets' },
+                        { Criterion: 'generated-assets-are-honest-and-disclosed', Level: 'Meets' },
                     ],
                 },
             },
@@ -557,9 +683,11 @@ describe('VideoStudioCriticAgent', () => {
     });
 
     it('(7) resolves maxRounds from ResolveVideoStudioSettings(configId).MaxRepairRounds + 1 regardless of payload Interaction.MaxRepairRounds', async () => {
-        mockGetConfigurationParamsWithInheritance.mockReturnValue([
-            { Name: 'VideoStudio.MaxRepairRounds', Value: '3', Type: 'number' },
-        ]);
+        mockGetConfigurationParamsWithInheritance.mockImplementation((id: string) =>
+            id === 'cfg-high'
+                ? [{ Name: 'VideoStudio.MaxRepairRounds', Value: '3', Type: 'number' }]
+                : [],
+        );
 
         const specWithOverride = CreateDeliveredSpecFixture();
         specWithOverride.Deliverables.Formats = ['16:9'];
@@ -572,6 +700,7 @@ describe('VideoStudioCriticAgent', () => {
         });
         await agent1.RunForTest({
             agent: { ID: 'critic-id', ParentID: 'root-id' },
+            configurationId: 'cfg-high',
             payload: specWithOverride,
         } as unknown as ExecuteAgentParams<Partial<VideoGenerationSpec>>);
 
@@ -588,6 +717,7 @@ describe('VideoStudioCriticAgent', () => {
         });
         await agent2.RunForTest({
             agent: { ID: 'critic-id', ParentID: 'root-id' },
+            configurationId: 'cfg-high',
             payload: specWithoutInteraction,
         } as unknown as ExecuteAgentParams<Partial<VideoGenerationSpec>>);
 
@@ -673,85 +803,132 @@ describe('VideoStudioCriticAgent', () => {
         expect(g5?.Status).toBe('Failed');
     });
 
-    it('(9) computes scores via RubricScoring.Compute so a failed gate or omitted Scores produces Passed: false', async () => {
-        mockGetLatestPublishedVersion.mockReturnValue({
-            rubricId: RUBRIC_ID,
-            rubricName: 'Video Production Quality',
-            versionId: 'ver-1',
-            versionNumber: 1,
-            status: 'Published',
-            scoringMode: 'Weighted',
-            passThresholdScore: 0.7,
-            nodes: [
-                {
-                    id: 'crit-1',
-                    key: 'text-legibility',
-                    name: 'Text Legibility',
-                    description: 'Text is legible.',
-                    guidance: '',
-                    nodeType: 'Criterion',
-                    sequence: 1,
-                    weight: 50,
-                    isGate: false,
-                },
-                {
-                    id: 'crit-2',
-                    key: 'generated-assets-are-honest-and-disclosed',
-                    name: 'Generated Assets Are Honest and Disclosed',
-                    description: 'Assets are honest.',
-                    guidance: '',
-                    nodeType: 'Criterion',
-                    sequence: 2,
-                    weight: 50,
-                    isGate: true,
-                    gateMinimumScore: 0.6,
-                },
-            ],
-        });
+    it('(9) computes scores via RubricScoring.Compute on RUB-1 nine criteria (two gates): (a) gate Miss fails review, (b) two non-gate Partials pass review, (c) numeric Score without Level is unanswered and fails gate', async () => {
+        const nineCritRubric = buildNineCriterionRubric();
+        mockGetLatestPublishedVersion.mockReturnValue(nineCritRubric);
 
         const spec = CreateDeliveredSpecFixture();
         spec.Deliverables.Formats = ['16:9'];
         spec.Review.Rounds = [];
 
-        const agent = new TestableCriticAgent();
-        // Normal criterion at Meets (1.0) and gate criterion at Partial (0.5 < 0.6 gateMinimumScore):
-        // weighted mean is 0.75 (>= 0.7 passThreshold), but gate fails so Passed must be false!
-        agent.EnqueuePromptOutcome({
+        // (a) All Meets except generated-assets-are-honest-and-disclosed at Miss
+        const answersA: RubricAnswer[] = nineCritRubric.nodes.map((node) => ({
+            criterionId: node.id,
+            scaleLevelId:
+                node.key === 'generated-assets-are-honest-and-disclosed'
+                    ? LEVEL_MISS_ID
+                    : LEVEL_MEETS_ID,
+            rawValue: node.key === 'generated-assets-are-honest-and-disclosed' ? 0 : 1,
+        }));
+        const expectedA = RubricScoring.Compute({ version: nineCritRubric, answers: answersA });
+
+        const agentA = new TestableCriticAgent();
+        agentA.EnqueuePromptOutcome({
             success: true,
             result: {
-                Summary: 'Gate failed despite weighted score above threshold',
+                Summary: 'Case (a): gate Miss',
                 Defects: [],
                 Scores: {
-                    Criteria: [
-                        { Key: 'text-legibility', Level: 'Meets' },
-                        { Key: 'generated-assets-are-honest-and-disclosed', Level: 'Partial' },
-                    ],
+                    Criteria: nineCritRubric.nodes.map((node) => ({
+                        Criterion: node.key,
+                        Level:
+                            node.key === 'generated-assets-are-honest-and-disclosed'
+                                ? 'Miss'
+                                : 'Meets',
+                    })),
                 },
             },
         });
 
-        const { finalStep } = await agent.RunForTest({
+        const { finalStep: stepA } = await agentA.RunForTest({
             agent: { ID: 'critic-id', ParentID: 'root-id' },
             payload: spec,
         } as unknown as ExecuteAgentParams<Partial<VideoGenerationSpec>>);
 
-        expect(finalStep.newPayload?.Review?.Scores?.OverallScore).toBe(0.75);
-        expect(finalStep.newPayload?.Review?.Scores?.Passed).toBe(false);
+        expect(stepA.newPayload?.Review?.Scores?.OverallScore).toBe(expectedA.normalizedScore);
+        expect(stepA.newPayload?.Review?.Scores?.OverallScore).toBe(0.888889);
+        expect(stepA.newPayload?.Review?.Scores?.Passed).toBe(expectedA.passed);
+        expect(stepA.newPayload?.Review?.Scores?.Passed).toBe(false);
 
-        // Also verify that when Scores is omitted by the prompt, Passed is false
-        const agentNoScores = new TestableCriticAgent();
-        agentNoScores.EnqueuePromptOutcome({
+        // (b) Two non-gate criteria at Partial and the rest Meets -> review passes (8/9 = 0.888889 >= 0.7)
+        const partialKeys = new Set(['readable-at-phone-size', 'stays-on-brand']);
+        const answersB: RubricAnswer[] = nineCritRubric.nodes.map((node) => ({
+            criterionId: node.id,
+            scaleLevelId: partialKeys.has(node.key) ? LEVEL_PARTIAL_ID : LEVEL_MEETS_ID,
+            rawValue: partialKeys.has(node.key) ? 0.5 : 1,
+        }));
+        const expectedB = RubricScoring.Compute({ version: nineCritRubric, answers: answersB });
+
+        const agentB = new TestableCriticAgent();
+        agentB.EnqueuePromptOutcome({
             success: true,
             result: {
-                Summary: 'Scores omitted by LLM',
+                Summary: 'Case (b): two non-gate Partials pass overall review',
                 Defects: [],
+                Scores: {
+                    Criteria: nineCritRubric.nodes.map((node) => ({
+                        Criterion: node.key,
+                        Level: partialKeys.has(node.key) ? 'Partial' : 'Meets',
+                    })),
+                },
             },
         });
-        const { finalStep: emptyScoresStep } = await agentNoScores.RunForTest({
+
+        const { finalStep: stepB } = await agentB.RunForTest({
             agent: { ID: 'critic-id', ParentID: 'root-id' },
             payload: spec,
         } as unknown as ExecuteAgentParams<Partial<VideoGenerationSpec>>);
 
-        expect(emptyScoresStep.newPayload?.Review?.Scores?.Passed).toBe(false);
+        expect(stepB.newPayload?.Review?.Scores?.OverallScore).toBe(expectedB.normalizedScore);
+        expect(stepB.newPayload?.Review?.Scores?.Passed).toBe(expectedB.passed);
+        expect(stepB.newPayload?.Review?.Scores?.Passed).toBe(true);
+        const partialCriterionEntry = stepB.newPayload?.Review?.Scores?.Criteria.find(
+            (c) => c.Criterion === 'readable-at-phone-size',
+        );
+        expect(partialCriterionEntry?.Score).toBe(0.5);
+        expect(partialCriterionEntry?.Passed).toBe(false);
+
+        // (c) Criterion entry with only Score: 1 (no Level) counts as unanswered, so a gate given only Score: 1 fails
+        const answersC: RubricAnswer[] = nineCritRubric.nodes
+            .filter((node) => node.key !== 'generated-assets-are-honest-and-disclosed')
+            .map((node) => ({
+                criterionId: node.id,
+                scaleLevelId: LEVEL_MEETS_ID,
+                rawValue: 1,
+            }));
+        const expectedC = RubricScoring.Compute({ version: nineCritRubric, answers: answersC });
+        expect(expectedC.outcome).toBe('GateFailed');
+        expect(expectedC.passed).toBe(false);
+
+        const agentC = new TestableCriticAgent();
+        agentC.EnqueuePromptOutcome({
+            success: true,
+            result: {
+                Summary: 'Case (c): gate given Score: 1 without Level is unanswered',
+                Defects: [],
+                Scores: {
+                    Criteria: nineCritRubric.nodes.map((node) =>
+                        node.key === 'generated-assets-are-honest-and-disclosed'
+                            ? ({
+                                  Criterion: node.key,
+                                  Score: 1,
+                              } as unknown as CriticPromptCriterionScore)
+                            : { Criterion: node.key, Level: 'Meets' },
+                    ),
+                },
+            },
+        });
+
+        const { finalStep: stepC } = await agentC.RunForTest({
+            agent: { ID: 'critic-id', ParentID: 'root-id' },
+            payload: spec,
+        } as unknown as ExecuteAgentParams<Partial<VideoGenerationSpec>>);
+
+        expect(stepC.newPayload?.Review?.Scores?.OverallScore).toBe(expectedC.normalizedScore);
+        expect(stepC.newPayload?.Review?.Scores?.Passed).toBe(false);
+        const unansweredGate = stepC.newPayload?.Review?.Scores?.Criteria.find(
+            (c) => c.Criterion === 'generated-assets-are-honest-and-disclosed',
+        );
+        expect(unansweredGate?.Passed).toBe(false);
     });
 });

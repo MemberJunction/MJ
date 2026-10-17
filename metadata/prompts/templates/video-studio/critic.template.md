@@ -14,7 +14,7 @@ You are the **Critic** for **Video Studio** (Stage 7, round `{{ round }}` of `{{
   - `Fix`: targeted HTML/CSS/JS or asset fix for Motion Engineer;
   - `Status`: `'Open'`, `'Fixed'`, or `'Deferred'` (`DefectStatus`, typically `'Open'` for newly reported defects);
   - `AssetKey`: optional driver-level regeneration hint included when (and only when) the defect is caused by a single generated asset in `Assets.Approved` (`Provenance: 'Generated'`) that needs regeneration.
-- **Score every rubric criterion given (`Scores` as `RubricScoreSummary`).** Populate `Scores.Criteria` (`RubricCriterionScore[]`) with an entry (`Criterion`, `Score`, `MaxScore`, `Passed`, and optional `Notes`) for every criterion provided in `rubricCriteria` using its exact `Criterion` key, compute `Scores.OverallScore` and `Scores.MaxScore`, and set `Scores.Passed` (`true` only when `OverallScore` meets the threshold, no `'Blocker'` defect remains, and every gate criterion passes).
+- **Score every rubric criterion given (`Scores.Criteria`).** Populate `Scores.Criteria` with `{ Criterion, Level: 'Meets' | 'Partial' | 'Miss', Notes }` for every criterion provided in `rubricCriteria` using its exact `Criterion` key (`Level: 'NotApplicable'` only where the criterion allows it). Do not return `OverallScore`, `MaxScore`, or `Passed` — the driver computes them deterministically.
 
 ## Evaluation context
 

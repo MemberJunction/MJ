@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { RubricNodeSnapshot } from '@memberjunction/rubrics-base';
+import type { CachedPublishedVersion, RubricScaleRecord } from '@memberjunction/rubrics-base';
 import type { VideoGenerationSpec } from '@memberjunction/video-studio-core';
 
 import {
@@ -11,70 +11,140 @@ import {
     PickSheetsForCall,
 } from '../review/critic-input.js';
 
+const MEETS_SCALE_ID = 'C882E907-2C02-49B1-919F-8AFCCCD4709F';
+const LEVEL_MISS_ID = 'B555FE53-2E9B-4FB6-A092-0AE8E9557367';
+const LEVEL_PARTIAL_ID = 'A9E1A258-D99F-47A4-87EF-646C160D0282';
+const LEVEL_MEETS_ID = '42707415-F55B-4658-BDED-E6C63CEBAA5C';
+
+const MEETS_SCALE: RubricScaleRecord = {
+    id: MEETS_SCALE_ID,
+    name: 'Meets / Partial / Miss',
+    scaleType: 'Levels',
+    higherIsBetter: true,
+    levels: [
+        {
+            id: LEVEL_MISS_ID,
+            label: 'Miss',
+            value: 0,
+            normalizedValue: 0,
+            sequence: 1,
+            description: 'Text is clipped or illegible.',
+        },
+        {
+            id: LEVEL_PARTIAL_ID,
+            label: 'Partial',
+            value: 0.5,
+            normalizedValue: 0.5,
+            sequence: 2,
+            description: 'Minor crowding in one beat.',
+        },
+        {
+            id: LEVEL_MEETS_ID,
+            label: 'Meets',
+            value: 1,
+            normalizedValue: 1,
+            sequence: 3,
+            description: 'Every text element is crisp and readable.',
+        },
+    ],
+};
+
+function buildVersionFixture(overrides: Partial<CachedPublishedVersion> = {}): CachedPublishedVersion {
+    return {
+        id: 'F60BC0C3-2D42-484D-AD12-E41DD38EC338',
+        rubricId: 'B5AEAEF4-C4E6-45C2-92A1-4CA2BE7EDDE7',
+        majorVersion: 1,
+        minorVersion: 0,
+        patchVersion: 0,
+        instructions: null,
+        passThreshold: 0.7,
+        minimumCompleteness: null,
+        notApplicablePolicy: 'NotAllowed',
+        scoreDisplayMin: 0,
+        scoreDisplayMax: 1,
+        scales: [MEETS_SCALE],
+        bands: [],
+        nodes: [],
+        ...overrides,
+    };
+}
+
 describe('critic-input pure builders', () => {
     it('BuildRubricCriteriaText lists every Criterion node, omits Group nodes, and includes generated-assets-are-honest-and-disclosed', () => {
-        const nodes: RubricNodeSnapshot[] = [
-            {
-                id: 'group-1',
-                key: 'visual-craft',
-                name: 'Visual Craft',
-                description: 'Visual hierarchy and motion',
-                guidance: 'Check layout and timing',
-                nodeType: 'Group',
-                sequence: 1,
-                weight: 40,
-                isAdvisory: false,
-                isGate: false,
-                evidenceRequired: false,
-                rationaleRequired: false,
-            },
-            {
-                id: 'crit-1',
-                parentId: 'group-1',
-                key: 'text-legibility-and-contrast',
-                name: 'Text Legibility and Contrast',
-                description: 'All on-screen text is readable at target resolution.',
-                guidance: 'Inspect headlines and captions across frames.',
-                nodeType: 'Criterion',
-                sequence: 1,
-                weight: 20,
-                isAdvisory: false,
-                isGate: false,
-                evidenceRequired: true,
-                rationaleRequired: true,
-            },
-            {
-                id: 'group-2',
-                key: 'integrity',
-                name: 'Integrity & Disclosure',
-                description: 'Truthfulness of data and assets',
-                guidance: 'Verify bound data and generated assets',
-                nodeType: 'Group',
-                sequence: 2,
-                weight: 60,
-                isAdvisory: false,
-                isGate: true,
-                evidenceRequired: false,
-                rationaleRequired: false,
-            },
-            {
-                id: 'crit-2',
-                parentId: 'group-2',
-                key: 'generated-assets-are-honest-and-disclosed',
-                name: 'Generated Assets Are Honest and Disclosed',
-                description: 'No generated person is presented as real, no garbled generated text or look-alike logos.',
-                guidance: 'Verify provenance and visual integrity of generated assets.',
-                nodeType: 'Criterion',
-                sequence: 1,
-                weight: 30,
-                isAdvisory: false,
-                isGate: true,
-                evidenceRequired: true,
-                rationaleRequired: true,
-            },
-        ];
+        const version = buildVersionFixture({
+            nodes: [
+                {
+                    id: 'group-1',
+                    parentId: null,
+                    key: 'visual-craft',
+                    name: 'Visual Craft',
+                    description: 'Visual hierarchy and motion',
+                    guidance: 'Check layout and timing',
+                    nodeType: 'Group',
+                    sequence: 1,
+                    weight: 40,
+                    scaleId: null,
+                    isAdvisory: false,
+                    isGate: false,
+                    gateMinimumScore: null,
+                    evidenceRequired: false,
+                    rationaleRequired: false,
+                },
+                {
+                    id: 'crit-1',
+                    parentId: 'group-1',
+                    key: 'text-legibility-and-contrast',
+                    name: 'Text Legibility and Contrast',
+                    description: 'All on-screen text is readable at target resolution.',
+                    guidance: 'Inspect headlines and captions across frames.',
+                    nodeType: 'Criterion',
+                    sequence: 1,
+                    weight: 20,
+                    scaleId: MEETS_SCALE_ID,
+                    isAdvisory: false,
+                    isGate: false,
+                    gateMinimumScore: null,
+                    evidenceRequired: true,
+                    rationaleRequired: true,
+                },
+                {
+                    id: 'group-2',
+                    parentId: null,
+                    key: 'integrity',
+                    name: 'Integrity & Disclosure',
+                    description: 'Truthfulness of data and assets',
+                    guidance: 'Verify bound data and generated assets',
+                    nodeType: 'Group',
+                    sequence: 2,
+                    weight: 60,
+                    scaleId: null,
+                    isAdvisory: false,
+                    isGate: true,
+                    gateMinimumScore: null,
+                    evidenceRequired: false,
+                    rationaleRequired: false,
+                },
+                {
+                    id: 'crit-2',
+                    parentId: 'group-2',
+                    key: 'generated-assets-are-honest-and-disclosed',
+                    name: 'Generated Assets Are Honest and Disclosed',
+                    description: 'No generated person is presented as real, no garbled generated text or look-alike logos.',
+                    guidance: 'Verify provenance and visual integrity of generated assets.',
+                    nodeType: 'Criterion',
+                    sequence: 1,
+                    weight: 30,
+                    scaleId: MEETS_SCALE_ID,
+                    isAdvisory: false,
+                    isGate: true,
+                    gateMinimumScore: 0.6,
+                    evidenceRequired: true,
+                    rationaleRequired: true,
+                },
+            ],
+        });
 
-        const text = BuildRubricCriteriaText(nodes);
+        const text = BuildRubricCriteriaText(version);
 
         expect(text).toContain(
             '- text-legibility-and-contrast (Text Legibility and Contrast, weight 20): All on-screen text is readable at target resolution. Inspect headlines and captions across frames.',
@@ -88,64 +158,50 @@ describe('critic-input pure builders', () => {
     });
 
     it('BuildRubricCriteriaText renders version instructions, [GATE] markers, and Meets/Partial/Miss level descriptions when given a version snapshot', () => {
-        const version = {
-            rubricId: 'rubric-vpq-001',
-            rubricName: 'Video Production Quality',
-            versionId: 'ver-1',
-            versionNumber: 1,
-            status: 'Published' as const,
+        const version = buildVersionFixture({
             instructions: 'Evaluate every deliverable format against all criteria before scoring.',
-            scales: [
-                {
-                    id: 'scale-3level',
-                    name: 'Three-Level',
-                    scaleType: 'Levels' as const,
-                    higherIsBetter: true,
-                    levels: [
-                        { id: 'level-meets', label: 'Meets', value: 2, normalizedValue: 1, sequence: 3, description: 'Every text element is crisp and readable.' },
-                        { id: 'level-partial', label: 'Partial', value: 1, normalizedValue: 0.5, sequence: 2, description: 'Minor crowding in one beat.' },
-                        { id: 'level-miss', label: 'Miss', value: 0, normalizedValue: 0, sequence: 1, description: 'Text is clipped or illegible.' },
-                    ],
-                },
-            ],
             nodes: [
                 {
                     id: 'crit-1',
+                    parentId: null,
                     key: 'text-legibility-and-contrast',
                     name: 'Text Legibility and Contrast',
                     description: 'All on-screen text is readable.',
                     guidance: 'Inspect headlines.',
-                    nodeType: 'Criterion' as const,
+                    nodeType: 'Criterion',
                     sequence: 1,
                     weight: 20,
-                    scaleId: 'scale-3level',
+                    scaleId: MEETS_SCALE_ID,
                     isAdvisory: false,
                     isGate: false,
+                    gateMinimumScore: null,
                     evidenceRequired: true,
                     rationaleRequired: true,
                 },
                 {
                     id: 'crit-2',
+                    parentId: null,
                     key: 'generated-assets-are-honest-and-disclosed',
                     name: 'Generated Assets Are Honest and Disclosed',
                     description: 'No misleading generated assets.',
                     guidance: 'Verify asset honesty.',
-                    nodeType: 'Criterion' as const,
+                    nodeType: 'Criterion',
                     sequence: 2,
                     weight: 15,
-                    scaleId: 'scale-3level',
+                    scaleId: MEETS_SCALE_ID.toLowerCase(),
                     isAdvisory: false,
                     isGate: true,
+                    gateMinimumScore: 0.6,
                     evidenceRequired: true,
                     rationaleRequired: true,
                     anchors: [
-                        { id: 'a1', scaleLevelId: 'level-meets', descriptor: 'All generated assets are clean and disclosed.' },
-                        { id: 'a2', scaleLevelId: 'level-partial', descriptor: 'Slight artifacting on background asset.' },
-                        { id: 'a3', scaleLevelId: 'level-miss', descriptor: 'Garbled text or undisclosed synthetic person.' },
+                        { scaleLevelId: LEVEL_MEETS_ID.toLowerCase(), descriptor: 'All generated assets are clean and disclosed.' },
+                        { scaleLevelId: LEVEL_PARTIAL_ID, descriptor: 'Slight artifacting on background asset.' },
+                        { scaleLevelId: LEVEL_MISS_ID, descriptor: 'Garbled text or undisclosed synthetic person.' },
                     ],
                 },
             ],
-        };
+        });
 
         const text = BuildRubricCriteriaText(version);
 

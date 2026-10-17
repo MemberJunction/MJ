@@ -1,8 +1,10 @@
+import { UUIDsEqual } from '@memberjunction/global';
 import type {
+    CachedPublishedVersion,
     RubricLevelAnchorSnapshot,
     RubricNodeSnapshot,
+    RubricScaleLevelSnapshot,
     RubricScaleSnapshot,
-    RubricVersionSnapshot,
 } from '@memberjunction/rubrics-base';
 import {
     BuildBoundDataLiterals,
@@ -18,27 +20,6 @@ import {
 const MAX_GRIDS_PER_CALL = 4;
 const CHART_KIT = CreateMJChartKit();
 
-const KNOWN_SCALE_LEVEL_LABELS: Record<string, string> = {
-    'e11f5b7e-9a5c-4d30-bf94-c5b0e9a84457': 'Meets',
-    'a3c58d64-d5eb-4f4b-b21b-74351908dbac': 'Partial',
-    'b1f561df-5c22-4de2-a532-d1b2a1ca0e0a': 'Miss',
-    'level-meets': 'Meets',
-    'level-partial': 'Partial',
-    'level-miss': 'Miss',
-    meets: 'Meets',
-    partial: 'Partial',
-    miss: 'Miss',
-};
-
-/**
- * Input accepted by {@link BuildRubricCriteriaText}: either a full (or partial) published
- * {@link RubricVersionSnapshot} or a flat array of {@link RubricNodeSnapshot} nodes.
- */
-export type RubricCriteriaTextInput =
-    | readonly RubricNodeSnapshot[]
-    | (Pick<RubricVersionSnapshot, 'nodes'> &
-          Partial<Pick<RubricVersionSnapshot, 'instructions' | 'scales' | 'notApplicablePolicy'>>);
-
 /**
  * Renders every `Criterion` node in a published rubric tree as a bulleted plain-text list
  * suitable for the `Video Studio - Critic` prompt's `rubricCriteria` template variable.
@@ -46,32 +27,24 @@ export type RubricCriteriaTextInput =
  * Includes version-level `instructions` (when present), per-criterion `[GATE]` flags, and
  * `Meets` / `Partial` / `Miss` level anchor descriptions. `Group` nodes are omitted.
  */
-export function BuildRubricCriteriaText(input: RubricCriteriaTextInput): string {
-    const isArrayInput = Array.isArray(input);
-    const nodes: readonly RubricNodeSnapshot[] = isArrayInput
-        ? input
-        : ((input as Pick<RubricVersionSnapshot, 'nodes'>)?.nodes ?? []);
-    const instructions = isArrayInput
-        ? ''
-        : ((input as Partial<RubricVersionSnapshot>)?.instructions ?? '').trim();
-    const scales: readonly RubricScaleSnapshot[] = isArrayInput
-        ? []
-        : ((input as Partial<RubricVersionSnapshot>)?.scales ?? []);
+export function BuildRubricCriteriaText(version: CachedPublishedVersion): string {
+    const instructions = (version.instructions ?? '').trim();
 
     const lines: string[] = [];
     if (instructions.length > 0) {
         lines.push(`Instructions: ${instructions}`);
     }
 
-    for (const node of nodes ?? []) {
-        if (!node || node.nodeType !== 'Criterion') {
+    for (const node of version.nodes) {
+        if (node.nodeType !== 'Criterion') {
             continue;
         }
         const description = (node.description ?? '').trim();
         const guidance = (node.guidance ?? '').trim();
         const details = [description, guidance].filter((part) => part.length > 0).join(' ');
         const gateTag = node.isGate ? ' [GATE]' : '';
-        const levelText = formatCriterionLevels(node, scales);
+        const scale = findScaleForNode(version.scales, node.scaleId);
+        const levelText = formatCriterionLevels(node, scale);
         const levelSuffix = levelText ? ` | Levels — ${levelText}` : '';
         lines.push(
             `- ${node.key}${gateTag} (${node.name}, weight ${node.weight}): ${details}${levelSuffix}`.trimEnd(),
@@ -80,17 +53,34 @@ export function BuildRubricCriteriaText(input: RubricCriteriaTextInput): string 
     return lines.join('\n');
 }
 
+function findScaleForNode(
+    scales: readonly RubricScaleSnapshot[],
+    scaleId: string | null | undefined,
+): RubricScaleSnapshot | undefined {
+    if (!scaleId) {
+        return undefined;
+    }
+    return scales.find((candidate) => UUIDsEqual(candidate.id, scaleId));
+}
+
+function findScaleLevel(
+    scale: RubricScaleSnapshot | undefined,
+    scaleLevelId: string,
+): RubricScaleLevelSnapshot | undefined {
+    if (!scale || !scaleLevelId) {
+        return undefined;
+    }
+    return scale.levels.find((lvl) => UUIDsEqual(lvl.id, scaleLevelId));
+}
+
 function formatCriterionLevels(
     node: RubricNodeSnapshot,
-    scales: readonly RubricScaleSnapshot[],
+    scale: RubricScaleSnapshot | undefined,
 ): string {
     const anchors: readonly RubricLevelAnchorSnapshot[] = node.anchors ?? [];
-    const scale =
-        scales.find((candidate) => candidate.id === node.scaleId) ??
-        (scales.length === 1 ? scales[0] : undefined);
 
     if (anchors.length === 0) {
-        if (!scale || !Array.isArray(scale.levels) || scale.levels.length === 0) {
+        if (!scale || scale.levels.length === 0) {
             return '';
         }
         const levelLabels = [...scale.levels]
@@ -103,16 +93,13 @@ function formatCriterionLevels(
 
     const parts: string[] = [];
     for (const anchor of anchors) {
-        const descriptor = (anchor?.descriptor ?? '').trim();
+        const descriptor = (anchor.descriptor ?? '').trim();
         if (!descriptor) {
             continue;
         }
-        const matchedLevel = scale?.levels?.find((lvl) => lvl.id === anchor.scaleLevelId);
         const rawLevelId = (anchor.scaleLevelId ?? '').trim();
-        const label =
-            matchedLevel?.label ??
-            KNOWN_SCALE_LEVEL_LABELS[rawLevelId.toLowerCase()] ??
-            (rawLevelId || 'Level');
+        const matchedLevel = findScaleLevel(scale, rawLevelId);
+        const label = matchedLevel?.label ?? (rawLevelId || 'Level');
         parts.push(`${label}: ${descriptor}`);
     }
     return parts.join('; ');

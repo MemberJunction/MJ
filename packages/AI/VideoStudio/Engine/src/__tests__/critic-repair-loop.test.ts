@@ -246,26 +246,53 @@ describe('Critic bounded repair loop (MaxRepairRounds = 2)', () => {
                 priority: 1,
             },
         ]);
-        mockGetLatestPublishedVersion.mockReturnValue({
+        const publishedRubric: import('@memberjunction/rubrics-base').CachedPublishedVersion = {
+            id: 'F60BC0C3-2D42-484D-AD12-E41DD38EC338',
             rubricId: 'rubric-vpq-001',
-            rubricName: 'Video Production Quality',
-            versionId: 'ver-1',
-            versionNumber: 1,
-            status: 'Published',
+            majorVersion: 1,
+            minorVersion: 0,
+            patchVersion: 0,
+            instructions: 'Evaluate every rendered frame.',
+            passThreshold: 0.7,
+            minimumCompleteness: null,
+            notApplicablePolicy: 'NotAllowed',
+            scoreDisplayMin: 0,
+            scoreDisplayMax: 1,
+            scales: [
+                {
+                    id: 'C882E907-2C02-49B1-919F-8AFCCCD4709F',
+                    name: 'Meets / Partial / Miss',
+                    scaleType: 'Levels',
+                    higherIsBetter: true,
+                    levels: [
+                        { id: 'B555FE53-2E9B-4FB6-A092-0AE8E9557367', label: 'Miss', value: 0, normalizedValue: 0, sequence: 1 },
+                        { id: 'A9E1A258-D99F-47A4-87EF-646C160D0282', label: 'Partial', value: 0.5, normalizedValue: 0.5, sequence: 2 },
+                        { id: '42707415-F55B-4658-BDED-E6C63CEBAA5C', label: 'Meets', value: 1, normalizedValue: 1, sequence: 3 },
+                    ],
+                },
+            ],
+            bands: [],
             nodes: [
                 {
                     id: 'crit-1',
+                    parentId: null,
                     key: 'text-legibility-and-contrast',
                     name: 'Text Legibility and Contrast',
                     description: 'All text is legible.',
                     guidance: 'Check margins and contrast.',
                     nodeType: 'Criterion',
                     sequence: 1,
-                    weight: 100,
+                    weight: 1,
+                    scaleId: 'C882E907-2C02-49B1-919F-8AFCCCD4709F',
+                    isAdvisory: false,
                     isGate: false,
+                    gateMinimumScore: null,
+                    evidenceRequired: false,
+                    rationaleRequired: false,
                 },
             ],
-        });
+        };
+        mockGetLatestPublishedVersion.mockReturnValue(publishedRubric);
         mockLoadDataSnapshotValues.mockResolvedValue({});
         mockReadStoredFile.mockResolvedValue(Buffer.from('fake-png', 'utf8'));
     });
@@ -310,7 +337,7 @@ describe('Critic bounded repair loop (MaxRepairRounds = 2)', () => {
                     Fix: 'Shift subtitle up by 24px',
                 },
             ],
-            Scores: { OverallScore: 65, MaxScore: 100, Passed: false, Criteria: [] },
+            Scores: { Criteria: [{ Criterion: 'text-legibility-and-contrast', Level: 'Partial' }] },
         });
 
         let spec = await criticAgent.RunCritic(baseSpec);
@@ -368,7 +395,7 @@ describe('Critic bounded repair loop (MaxRepairRounds = 2)', () => {
                     Fix: 'Darken button background to #0F172A',
                 },
             ],
-            Scores: { OverallScore: 74, MaxScore: 100, Passed: false, Criteria: [] },
+            Scores: { Criteria: [{ Criterion: 'text-legibility-and-contrast', Level: 'Partial' }] },
         });
 
         spec = await criticAgent.RunCritic(spec);
@@ -423,7 +450,7 @@ describe('Critic bounded repair loop (MaxRepairRounds = 2)', () => {
                     Fix: 'Increase bottom margin by 12px',
                 },
             ],
-            Scores: { OverallScore: 78, MaxScore: 100, Passed: false, Criteria: [] },
+            Scores: { Criteria: [{ Criterion: 'text-legibility-and-contrast', Level: 'Partial' }] },
         });
 
         spec = await criticAgent.RunCritic(spec);

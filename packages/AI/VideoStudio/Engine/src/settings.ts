@@ -180,31 +180,20 @@ export function ParseVideoStudioSettings(
  */
 export function ResolveVideoStudioSettings(configurationId?: string | null): VideoStudioSettings {
     const trimmed = typeof configurationId === 'string' ? configurationId.trim() : '';
-    const engine = AIEngine.Instance as {
-        GetConfigurationParamsWithInheritance?: (
-            id: string,
-        ) => Array<{ Name?: string; Value?: unknown }> | null | undefined;
-    } | null | undefined;
-
-    if (typeof engine?.GetConfigurationParamsWithInheritance !== 'function') {
+    if (!trimmed) {
         return { ...DEFAULT_VIDEO_STUDIO_SETTINGS };
     }
 
     try {
-        const rawParams = engine.GetConfigurationParamsWithInheritance(trimmed) ?? [];
-        if (!trimmed && rawParams.length === 0) {
-            return { ...DEFAULT_VIDEO_STUDIO_SETTINGS };
-        }
+        const rawParams = AIEngine.Instance.GetConfigurationParamsWithInheritance(trimmed) ?? [];
         const pairs = rawParams.map((p) => ({
             Name: String(p.Name ?? ''),
             Value: String(p.Value ?? ''),
         }));
         return ParseVideoStudioSettings(pairs);
     } catch (err: unknown) {
-        if (trimmed) {
-            const msg = err instanceof Error ? err.message : String(err);
-            LogError(`[VideoStudioSettings] Failed to read configuration params for "${trimmed}": ${msg}`);
-        }
+        const msg = err instanceof Error ? err.message : String(err);
+        LogError(`[VideoStudioSettings] Failed to read configuration params for "${trimmed}": ${msg}`);
         return { ...DEFAULT_VIDEO_STUDIO_SETTINGS };
     }
 }

@@ -12,8 +12,6 @@ import {
     type MJChartKit,
     type MJVideoRuntime,
     type ReferenceAnalysis,
-    type RubricCriterionScore,
-    type RubricScoreSummary,
     type VideoCompositionSource,
     type VideoDefect,
     type VideoGenerationSpec,
@@ -815,34 +813,30 @@ describe('Video Studio metadata pin (VS-AGT-1)', () => {
         ] as const satisfies readonly DefectSeverity[];
 
         const validScoreSummaryKeys = [
-            'RubricID',
-            'OverallScore',
-            'MaxScore',
-            'Passed',
             'Criteria',
-        ] as const satisfies readonly (keyof RubricScoreSummary)[];
+        ] as const;
 
         const requiredScoreSummaryKeys = [
-            'OverallScore',
-            'MaxScore',
-            'Passed',
             'Criteria',
-        ] as const satisfies readonly (keyof RubricScoreSummary)[];
+        ] as const;
 
         const validCriterionScoreKeys = [
             'Criterion',
-            'Score',
-            'MaxScore',
-            'Passed',
+            'Level',
             'Notes',
-        ] as const satisfies readonly (keyof RubricCriterionScore)[];
+        ] as const;
 
         const requiredCriterionScoreKeys = [
             'Criterion',
-            'Score',
-            'MaxScore',
-            'Passed',
-        ] as const satisfies readonly (keyof RubricCriterionScore)[];
+            'Level',
+        ] as const;
+
+        const validCriterionLevels = [
+            'Meets',
+            'Partial',
+            'Miss',
+            'NotApplicable',
+        ] as const;
 
         const validReferenceAnalysisKeys = [
             'SourceKey',
@@ -913,6 +907,7 @@ describe('Video Studio metadata pin (VS-AGT-1)', () => {
             for (const reqKey of requiredCriterionScoreKeys) {
                 expect(itemKeys).toContain(reqKey);
             }
+            expect(validCriterionLevels as readonly string[]).toContain(String(item.Level));
         }
 
         const refExample = readJson<Record<string, unknown>>(
@@ -968,6 +963,11 @@ describe('Video Studio metadata pin (VS-AGT-1)', () => {
             'Helvetica',
             'Path',
             'Content',
+            'Level',
+            'Meets',
+            'Partial',
+            'Miss',
+            'NotApplicable',
         ]);
 
         const templatePaths = [

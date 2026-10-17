@@ -6,7 +6,7 @@ import type {
     ExecuteAgentParams,
 } from '@memberjunction/ai-core-plus';
 import type { IMetadataProvider } from '@memberjunction/core';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import {
     RubricEngineBase,
     RubricScoring,
@@ -16,7 +16,6 @@ import {
     type RubricNodeSnapshot,
     type RubricScaleLevelSnapshot,
     type RubricScaleSnapshot,
-    type RubricVersionSnapshot,
 } from '@memberjunction/rubrics-base';
 import type {
     CriticRound,
@@ -37,9 +36,9 @@ import {
     BuildTimelineTable,
     PickSheetsForCall,
 } from '../review/critic-input.js';
+import { ResolveVideoStudioSettings } from '../settings.js';
 import { ReadStoredFile } from '../storage.js';
 import { VideoStudioAgentBase } from './video-studio-agent-base.js';
-import { ResolveVideoStudioSettings } from './video-studio-agent.js';
 
 /**
  * Error message returned when the `Video Production Quality` rubric is not linked to the parent agent
@@ -50,37 +49,6 @@ export const MISSING_CRITIC_RUBRIC_ERROR_MESSAGE =
 
 const CRITIC_PROMPT_NAME = 'Video Studio - Critic';
 const MAX_DEFECTS_PER_FORMAT = 3;
-
-const DEFAULT_THREE_LEVEL_SCALE_ID = '96B4F43A-2E7B-4BC7-8D9D-59C217F0E93B';
-const DEFAULT_THREE_LEVEL_SCALE: RubricScaleSnapshot = {
-    id: DEFAULT_THREE_LEVEL_SCALE_ID,
-    name: 'Three-Level Production Quality (Miss / Partial / Meets)',
-    scaleType: 'Levels',
-    higherIsBetter: true,
-    levels: [
-        {
-            id: 'B1F561DF-5C22-4DE2-A532-D1B2A1CA0E0A',
-            label: 'Miss',
-            value: 0,
-            normalizedValue: 0,
-            sequence: 1,
-        },
-        {
-            id: 'A3C58D64-D5EB-4F4B-B21B-74351908DBAC',
-            label: 'Partial',
-            value: 1,
-            normalizedValue: 0.5,
-            sequence: 2,
-        },
-        {
-            id: 'E11F5B7E-9A5C-4D30-BF94-C5B0E9A84457',
-            label: 'Meets',
-            value: 2,
-            normalizedValue: 1,
-            sequence: 3,
-        },
-    ],
-};
 
 const SEVERITY_ORDER: Record<DefectSeverity, number> = {
     Blocker: 0,
@@ -96,9 +64,6 @@ export interface CriticPromptCriterionScore {
     Key?: string;
     Level?: 'Meets' | 'Partial' | 'Miss' | 'NotApplicable' | string;
     NotApplicable?: boolean;
-    Score?: number;
-    MaxScore?: number;
-    Passed?: boolean;
     Notes?: string;
     Rationale?: string;
 }
@@ -117,9 +82,6 @@ export interface CriticPromptOutput {
         AssetKey?: string;
     }>;
     Scores?: {
-        OverallScore?: number;
-        MaxScore?: number;
-        Passed?: boolean;
         Criteria?: CriticPromptCriterionScore[];
     };
     Summary?: string;
@@ -167,9 +129,7 @@ export class VideoStudioCriticAgent extends VideoStudioAgentBase {
             : [];
 
         const roundNumber = existingRounds.length + 1;
-        const configId =
-            params.configurationId ??
-            ((this.AgentRun as { ConfigurationID?: string | null } | null)?.ConfigurationID ?? null);
+        const configId = params.configurationId ?? this.AgentRun?.ConfigurationID ?? null;
         const settings = ResolveVideoStudioSettings(configId);
         const maxRounds = settings.MaxRepairRounds + 1;
         const formats = ResolveDeliverableFormats(incomingPayload);
@@ -438,14 +398,13 @@ export class VideoStudioCriticAgent extends VideoStudioAgentBase {
     }
 
     private aggregateScores(
-        rawVersion: CachedPublishedVersion,
+        rubricVersion: CachedPublishedVersion,
         formatScores: Array<NonNullable<CriticPromptOutput['Scores']>>,
     ): RubricScoreSummary {
-        const snapshot = this.normalizeRubricVersionSnapshot(rawVersion);
         if (formatScores.length === 0) {
-            const emptyScored = RubricScoring.Compute({ version: snapshot, answers: [] });
+            const emptyScored = RubricScoring.Compute({ version: rubricVersion, answers: [] });
             return {
-                RubricID: snapshot.rubricId,
+                RubricID: rubricVersion.rubricId,
                 OverallScore: emptyScored.normalizedScore ?? 0,
                 MaxScore: 1,
                 Passed: emptyScored.passed === true,
@@ -453,7 +412,7 @@ export class VideoStudioCriticAgent extends VideoStudioAgentBase {
             };
         }
 
-        const leafNodes = snapshot.nodes.filter((n) => n.nodeType === 'Criterion');
+        const leafNodes = rubricVersion.nodes.filter((n) => n.nodeType === 'Criterion');
         const perCriterionEntries = new Map<string, CriticPromptCriterionScore[]>();
 
         for (const scoreBlock of formatScores) {
@@ -465,12 +424,7 @@ export class VideoStudioCriticAgent extends VideoStudioAgentBase {
                 if (!rawKey) {
                     continue;
                 }
-                const matchedNode = leafNodes.find(
-                    (n) =>
-                        n.key.toLowerCase() === rawKey.toLowerCase() ||
-                        n.id.toLowerCase() === rawKey.toLowerCase() ||
-                        n.name.toLowerCase() === rawKey.toLowerCase(),
-                );
+                const matchedNode = this.findCriterionNode(leafNodes, rawKey);
                 const canonicalKey = matchedNode ? matchedNode.key : rawKey;
                 const list = perCriterionEntries.get(canonicalKey) ?? [];
                 list.push(c);
@@ -486,11 +440,11 @@ export class VideoStudioCriticAgent extends VideoStudioAgentBase {
             if (entries.length === 0) {
                 continue;
             }
-            const scale =
-                snapshot.scales.find((s) => s.id === node.scaleId) ??
-                snapshot.scales[0] ??
-                DEFAULT_THREE_LEVEL_SCALE;
-            const effectiveNaPolicy = node.notApplicablePolicy ?? snapshot.notApplicablePolicy;
+            const scale = this.findNodeScale(rubricVersion.scales, node.scaleId);
+            if (!scale) {
+                continue;
+            }
+            const effectiveNaPolicy = node.notApplicablePolicy ?? rubricVersion.notApplicablePolicy;
 
             let worstLevel: RubricScaleLevelSnapshot | null = null;
             let sawNotApplicable = false;
@@ -544,8 +498,9 @@ export class VideoStudioCriticAgent extends VideoStudioAgentBase {
             }
         }
 
-        const scored = RubricScoring.Compute({ version: snapshot, answers });
+        const scored = RubricScoring.Compute({ version: rubricVersion, answers });
         const scoredNodeById = new Map(scored.nodes.map((sn) => [sn.id, sn]));
+        const threshold = rubricVersion.passThreshold;
 
         const criteria: RubricCriterionScore[] = [];
         for (const node of leafNodes) {
@@ -554,12 +509,13 @@ export class VideoStudioCriticAgent extends VideoStudioAgentBase {
             }
             const sn = scoredNodeById.get(node.id);
             const normalizedScore = sn?.normalizedScore ?? 0;
-            const minPassScore = node.isGate
-                ? (node.gateMinimumScore ?? 0.6)
-                : (snapshot.passThreshold ?? 0.7);
             const passed = sn
                 ? !sn.gateFailed &&
-                  (sn.isNotApplicable || (sn.normalizedScore !== null && normalizedScore >= minPassScore))
+                  (sn.isNotApplicable ||
+                      (sn.normalizedScore !== null &&
+                          (threshold === null ||
+                              threshold === undefined ||
+                              normalizedScore >= threshold)))
                 : false;
             const criterionScore: RubricCriterionScore = {
                 Criterion: node.key,
@@ -575,12 +531,35 @@ export class VideoStudioCriticAgent extends VideoStudioAgentBase {
         }
 
         return {
-            RubricID: snapshot.rubricId,
+            RubricID: rubricVersion.rubricId,
             OverallScore: scored.normalizedScore ?? 0,
             MaxScore: 1,
             Passed: scored.passed === true,
             Criteria: criteria,
         };
+    }
+
+    private findCriterionNode(
+        leafNodes: readonly RubricNodeSnapshot[],
+        rawKey: string,
+    ): RubricNodeSnapshot | undefined {
+        const lower = rawKey.toLowerCase();
+        return leafNodes.find(
+            (n) =>
+                n.key.toLowerCase() === lower ||
+                UUIDsEqual(n.id, rawKey) ||
+                n.name.toLowerCase() === lower,
+        );
+    }
+
+    private findNodeScale(
+        scales: readonly RubricScaleSnapshot[],
+        scaleId: string | null | undefined,
+    ): RubricScaleSnapshot | undefined {
+        if (!scaleId) {
+            return scales[0];
+        }
+        return scales.find((s) => UUIDsEqual(s.id, scaleId)) ?? scales[0];
     }
 
     private resolveCriterionEntryLevel(
@@ -606,109 +585,14 @@ export class VideoStudioCriticAgent extends VideoStudioAgentBase {
             const matched = scale.levels.find(
                 (lvl) =>
                     lvl.label.trim().toLowerCase() === rawLevel ||
-                    lvl.id.trim().toLowerCase() === rawLevel,
+                    UUIDsEqual(lvl.id, rawLevel),
             );
             if (matched) {
                 return { isNotApplicable: false, level: matched };
             }
         }
 
-        if (typeof entry.Score === 'number' && !Number.isNaN(entry.Score)) {
-            const max =
-                typeof entry.MaxScore === 'number' && entry.MaxScore > 0
-                    ? entry.MaxScore
-                    : entry.Score > 1
-                      ? 100
-                      : 1;
-            const norm = Math.max(0, Math.min(1, entry.Score / max));
-            const sorted = [...scale.levels].sort((a, b) => a.normalizedValue - b.normalizedValue);
-            if (sorted.length === 0) {
-                return { isNotApplicable: false, level: null };
-            }
-            let closest = sorted[0];
-            for (const candidate of sorted) {
-                if (
-                    Math.abs(candidate.normalizedValue - norm) <
-                    Math.abs(closest.normalizedValue - norm)
-                ) {
-                    closest = candidate;
-                }
-            }
-            if (entry.Passed === false && closest.normalizedValue >= 1 && sorted.length > 1) {
-                closest = sorted[sorted.length - 2];
-            }
-            return { isNotApplicable: false, level: closest };
-        }
-
         return { isNotApplicable: false, level: null };
-    }
-
-    private normalizeRubricVersionSnapshot(raw: CachedPublishedVersion): RubricVersionSnapshot {
-        const scales: RubricScaleSnapshot[] =
-            Array.isArray(raw.scales) && raw.scales.length > 0
-                ? raw.scales
-                : [DEFAULT_THREE_LEVEL_SCALE];
-        const defaultScaleId = scales[0].id;
-        const nodeIds = new Set(raw.nodes.map((n) => n.id));
-
-        const legacyThresholdScore = (raw as { passThresholdScore?: number }).passThresholdScore;
-        const rawThreshold =
-            typeof raw.passThreshold === 'number'
-                ? raw.passThreshold
-                : typeof legacyThresholdScore === 'number'
-                  ? legacyThresholdScore
-                  : 0.7;
-        const passThreshold = rawThreshold > 1 ? rawThreshold / 100 : rawThreshold;
-
-        const nodes: RubricNodeSnapshot[] = raw.nodes.map((node) => {
-            const hasValidParent =
-                typeof node.parentId === 'string' &&
-                node.parentId.length > 0 &&
-                nodeIds.has(node.parentId);
-            const scaleId =
-                node.nodeType === 'Criterion'
-                    ? node.scaleId && scales.some((s) => s.id === node.scaleId)
-                        ? node.scaleId
-                        : defaultScaleId
-                    : (node.scaleId ?? null);
-            const isGate = Boolean(node.isGate);
-            const gateMinimumScore = isGate
-                ? typeof node.gateMinimumScore === 'number'
-                    ? node.gateMinimumScore
-                    : 0.6
-                : (node.gateMinimumScore ?? null);
-
-            return {
-                ...node,
-                parentId: hasValidParent ? node.parentId : null,
-                scaleId,
-                weight: typeof node.weight === 'number' ? node.weight : 1,
-                isAdvisory: Boolean(node.isAdvisory),
-                isGate,
-                gateMinimumScore,
-                evidenceRequired: Boolean(node.evidenceRequired),
-                rationaleRequired: Boolean(node.rationaleRequired),
-                sequence: typeof node.sequence === 'number' ? node.sequence : 1,
-            };
-        });
-
-        return {
-            id: raw.id ?? 'rubric-version-1',
-            rubricId: raw.rubricId,
-            majorVersion: raw.majorVersion ?? 1,
-            minorVersion: raw.minorVersion ?? 0,
-            patchVersion: raw.patchVersion ?? 0,
-            instructions: raw.instructions ?? null,
-            passThreshold,
-            minimumCompleteness:
-                typeof raw.minimumCompleteness === 'number' ? raw.minimumCompleteness : 1,
-            notApplicablePolicy: raw.notApplicablePolicy ?? 'ExcludeAndRedistribute',
-            scoreDisplayMin: typeof raw.scoreDisplayMin === 'number' ? raw.scoreDisplayMin : 0,
-            scoreDisplayMax: typeof raw.scoreDisplayMax === 'number' ? raw.scoreDisplayMax : 1,
-            nodes,
-            scales,
-            bands: Array.isArray(raw.bands) ? raw.bands : [],
-        };
     }
 
     private buildFailedOutcome<P>(
