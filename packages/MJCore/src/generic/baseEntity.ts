@@ -6178,11 +6178,17 @@ export abstract class BaseEntity<T = unknown> {
                 }
             }
 
+            // Blank name (#4683) is checked BEFORE the per-field rules: when it fires it is that field's
+            // one, most specific message, and the field's own rules are skipped below.
+            const blankNameField = this.validateNameFieldNotBlank(result);
+
             // Validate own fields — for IS-A entities, skip parent field mirrors since
             // those are validated via _parentEntity above
             for (let field of this.Fields) {
                 if (this._parentEntityFieldNames?.has(field.Name))
                     continue; // skip parent field mirrors — authoritative validation is on _parentEntity
+                if (field === blankNameField)
+                    continue; // already refused above — one mistake, one message
 
                 const err = field.Validate();
                 err.Errors.forEach(element => {
@@ -6215,6 +6221,64 @@ export abstract class BaseEntity<T = unknown> {
         for (const companion of this.Companions) {
             companion.Validate(result);
         }
+    }
+
+    /**
+     * Refuses a blank or whitespace-only value in the entity's name field (MJ #4683).
+     *
+     * The name field is how every other surface REFERS to the record — FK display, CodeGen's JOIN
+     * aliases, search, pickers, related-record grids. A blank one does not corrupt the row; it makes
+     * the row unidentifiable everywhere it is referenced from. SQL Server accepts `''` in a NOT NULL
+     * column and `EntityField.Validate()` only refuses null, so nothing else catches it.
+     *
+     * This lives here rather than in `EntityField.Validate()` because the rule needs to know whether the
+     * RECORD is new, and only the entity knows that: a field stores the first value set on a new record
+     * as its old value, so a new record's blank name and a saved record's blank name look identical to
+     * the field. Deliberately narrow:
+     *   - Only the field `EntityInfo.NameField` RESOLVES to (`EntityFieldInfo.IsEntityNameField`). 45
+     *     entities flag several fields `IsNameField` (e.g. `Name` + `DisplayName`), and blanking a
+     *     `DisplayName` stays legal.
+     *   - Only when that column is NOT NULL. A nullable name field permits null, so it permits `''`;
+     *     the column's own declaration is the authority.
+     *   - Only on a new record, or when the name itself is being changed. A saved record that ALREADY
+     *     has a blank name (written before this rule, or by direct SQL) still saves when something else
+     *     changes — an automated save of its status must not start failing because of data it did not
+     *     touch. Giving that record a different blank name is refused.
+     *   - Skipped under the same conditions as every other field rule: read-only, `SkipValidation`,
+     *     not loaded (the save does not write it), or an IS-A parent mirror (the parent validates it).
+     *   - One mistake, one message: it runs before the per-field rules, and the caller skips the
+     *     refused field's own rules (a blank name on a value-list field would otherwise also fail
+     *     the list).
+     *
+     * @param result - The accumulating result the refusal is added to.
+     * @returns The refused name field, or null when the rule did not fire.
+     */
+    private validateNameFieldNotBlank(result: ValidationResult): EntityField | null {
+        const nameFieldInfo = this.EntityInfo?.NameField;
+        if (!nameFieldInfo || this._parentEntityFieldNames?.has(nameFieldInfo.Name)) {
+            return null;
+        }
+        const field = this.GetFieldByName(nameFieldInfo.Name);
+        if (!field || !this.isBlankRequiredNameValue(nameFieldInfo, field)) {
+            return null;
+        }
+        if (this.IsSaved && !field.Dirty) {
+            return null; // an existing blank name the caller is not changing — see the remarks above
+        }
+        result.Success = false;
+        result.Errors.push(new ValidationErrorInfo(field.Name, `${nameFieldInfo.DisplayNameOrName} cannot be blank — it is the name this record is identified by`, field.Value));
+        return field;
+    }
+
+    /**
+     * Whether a name field is subject to the blank-name rule and currently holds a blank string.
+     */
+    private isBlankRequiredNameValue(fieldInfo: EntityFieldInfo, field: EntityField): boolean {
+        if (fieldInfo.AllowsNull || fieldInfo.ReadOnly || fieldInfo.SkipValidation || field.NotLoaded) {
+            return false;
+        }
+        const value = field.Value;
+        return fieldInfo.TSType === EntityFieldTSType.String && typeof value === 'string' && value.trim().length === 0;
     }
 
     /**

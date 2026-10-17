@@ -1424,6 +1424,20 @@ export class EntityFieldInfo extends BaseInfo {
         return parsed;
     }
 
+    /**
+     * Whether this is the field its entity is identified by: the one {@link EntityInfo.NameField}
+     * resolves to (MJ #4683). NOT the same as `IsNameField` — 45 entities flag several fields, and
+     * `NameField` applies the tie-break (prefer the field literally named `Name`). The entity is
+     * resolved through the provider that built this field ({@link BaseInfo.OwningProvider}), so a
+     * multi-provider process reads the right server's metadata.
+     */
+    get IsEntityNameField(): boolean {
+        const p = MetadataProviderFor(this);
+        const entity = p?.EntityByID ? p.EntityByID(this.EntityID) : p?.Entities?.find(e => UUIDsEqual(e.ID, this.EntityID));
+        const nameField = entity?.NameField;
+        return !!nameField && nameField.Name === this.Name;
+    }
+
     get EntityFieldValues(): EntityFieldValueInfo[] {
         if (!this._entityFieldValuesConstructed && this._rawEntityFieldValues) {
             this._EntityFieldValues = this._rawEntityFieldValues.map(v => new EntityFieldValueInfo(v));
