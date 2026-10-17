@@ -9,7 +9,7 @@ import {
     DEFAULT_DOCKER_PIDS_LIMIT,
     DEFAULT_DOCKER_RENDER_IMAGE,
     DEFAULT_DOCKER_SHM_SIZE_MB,
-    DEFAULT_DOCKER_WORKSPACE_ROOT,
+    DEFAULT_RENDER_MAX_OUTPUT_BYTES,
     DEFAULT_RENDER_REQUEST_TIMEOUT_MS,
     DEFAULT_RENDER_STARTUP_TIMEOUT_MS,
     DEFAULT_RENDER_TIMEOUT_MS,
@@ -21,7 +21,6 @@ import {
 
 const DEFAULT_DOCKER_SETTINGS = {
     Image: DEFAULT_DOCKER_RENDER_IMAGE,
-    WorkspaceRoot: DEFAULT_DOCKER_WORKSPACE_ROOT,
     Cpus: DEFAULT_DOCKER_CPUS,
     MemoryMb: DEFAULT_DOCKER_MEMORY_MB,
     PidsLimit: DEFAULT_DOCKER_PIDS_LIMIT,
@@ -70,6 +69,7 @@ describe('ReadVideoRenderSettings', () => {
             videoStudio: {
                 render: {
                     driver: 'LocalWorker',
+                    maxOutputBytes: 104857600,
                     timeouts: {
                         startupMs: 45000,
                         renderMs: 1200000,
@@ -87,6 +87,7 @@ describe('ReadVideoRenderSettings', () => {
         const settings = ReadVideoRenderSettings(dir);
         expect(settings).toEqual({
             Driver: 'LocalWorker',
+            MaxOutputBytes: 104_857_600,
             Timeouts: {
                 StartupMs: 45_000,
                 RenderMs: 1_200_000,
@@ -106,8 +107,10 @@ describe('ReadVideoRenderSettings', () => {
         await fs.writeFile(path.join(dir, 'mj.config.cjs'), 'module.exports = {};\n', 'utf8');
 
         const settings = ReadVideoRenderSettings(dir);
+        expect(settings.Docker.WorkspaceRoot).toBeUndefined();
         expect(settings).toEqual({
             Driver: DEFAULT_VIDEO_RENDER_DRIVER,
+            MaxOutputBytes: DEFAULT_RENDER_MAX_OUTPUT_BYTES,
             Timeouts: {
                 StartupMs: DEFAULT_RENDER_STARTUP_TIMEOUT_MS,
                 RenderMs: DEFAULT_RENDER_TIMEOUT_MS,
@@ -126,6 +129,7 @@ describe('ReadVideoRenderSettings', () => {
             videoStudio: {
                 render: {
                     driver: '',
+                    maxOutputBytes: -100,
                     timeouts: {
                         startupMs: -50,
                         renderMs: 'invalid',
@@ -151,6 +155,7 @@ describe('ReadVideoRenderSettings', () => {
         const settings = ReadVideoRenderSettings(dir);
         expect(settings).toEqual({
             Driver: DEFAULT_VIDEO_RENDER_DRIVER,
+            MaxOutputBytes: DEFAULT_RENDER_MAX_OUTPUT_BYTES,
             Timeouts: {
                 StartupMs: DEFAULT_RENDER_STARTUP_TIMEOUT_MS,
                 RenderMs: DEFAULT_RENDER_TIMEOUT_MS,
@@ -292,6 +297,55 @@ describe('ReadVideoRenderSettings', () => {
             InlineMaxBytes: VIDEO_STUDIO_INLINE_MAX_BYTES,
         });
         expect(warnSpy).toHaveBeenCalled();
+    });
+
+    it('logs one warning without leaking the raw token value when videoStudio.render.remote.token is not a string', async () => {
+        const warnSpy = vi.spyOn(mjCore, 'LogWarning').mockImplementation(() => undefined);
+        const dir = await makeTempDir();
+        const configContent = `module.exports = {
+            videoStudio: {
+                render: {
+                    driver: 'Remote',
+                    remote: {
+                        url: 'https://render.internal.example.com',
+                        token: 98765432123,
+                    },
+                },
+            },
+        };\n`;
+        await fs.writeFile(path.join(dir, 'mj.config.cjs'), configContent, 'utf8');
+
+        const settings = ReadVideoRenderSettings(dir);
+        expect(settings.Remote).toEqual({
+            Url: 'https://render.internal.example.com',
+        });
+        expect(warnSpy).toHaveBeenCalledTimes(1);
+        const warnMsg = String(warnSpy.mock.calls[0]?.[0] ?? '');
+        expect(warnMsg).toContain('videoStudio.render.remote.token');
+        expect(warnMsg).not.toContain('98765432123');
+    });
+
+    it('reads videoStudio.render.remote.urls and clears VIDEO_STUDIO_RENDER_URL fallback when urls is configured without url', async () => {
+        process.env.VIDEO_STUDIO_RENDER_URL = 'http://127.0.0.1:18081';
+        const dir = await makeTempDir();
+        const configContent = `module.exports = {
+            videoStudio: {
+                render: {
+                    driver: 'Remote',
+                    remote: {
+                        urls: ['https://worker-1.internal.example.com', 'https://worker-2.internal.example.com'],
+                        token: 'pool-token',
+                    },
+                },
+            },
+        };\n`;
+        await fs.writeFile(path.join(dir, 'mj.config.cjs'), configContent, 'utf8');
+
+        const settings = ReadVideoRenderSettings(dir);
+        expect(settings.Remote).toEqual({
+            Urls: ['https://worker-1.internal.example.com', 'https://worker-2.internal.example.com'],
+            Token: 'pool-token',
+        });
     });
 });
 

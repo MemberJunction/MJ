@@ -1,3 +1,4 @@
+import { constants as bufferConstants } from 'node:buffer';
 import * as http from 'node:http';
 import * as https from 'node:https';
 import {
@@ -20,11 +21,18 @@ import {
     type StillsRequest,
     type StillsResult,
 } from '@memberjunction/video-studio-core';
+import { DEFAULT_RENDER_MAX_OUTPUT_BYTES } from './render-settings.js';
 import {
     CreateAbortError,
     ThrowIfSignalAborted,
     VideoRenderError,
 } from './video-render-driver-base.js';
+
+/** Hard maximum size in bytes for a single NDJSON line or buffer on `POST /render` (1 MiB). */
+export const MAX_RENDER_NDJSON_LINE_BYTES = 1024 * 1024;
+
+/** Hard maximum size in bytes for a JSON response body from the render worker (1 MiB). */
+export const MAX_RENDER_JSON_RESPONSE_BYTES = 1024 * 1024;
 
 /**
  * Configuration options for `RenderWorkerHttpClient`.
@@ -38,6 +46,8 @@ export interface RenderWorkerHttpClientOptions {
     RenderTimeoutMs: number;
     /** Socket/request timeout in milliseconds for non-render requests (`Check`, `CaptureStills`, `BuildContactSheet`, `ExtractKeyframes`, `Health`). */
     RequestTimeoutMs: number;
+    /** Hard maximum allowed MP4 output size in bytes (default: `DEFAULT_RENDER_MAX_OUTPUT_BYTES` = 512 MiB). */
+    MaxOutputBytes?: number;
 }
 
 const VALID_ERROR_CODES: ReadonlySet<RenderWorkerErrorCode> = new Set<RenderWorkerErrorCode>([
@@ -112,6 +122,7 @@ export class RenderWorkerHttpClient {
     private readonly token?: string;
     private readonly renderTimeoutMs: number;
     private readonly requestTimeoutMs: number;
+    private readonly maxOutputBytes: number;
 
     public constructor(options: RenderWorkerHttpClientOptions) {
         this.baseUrl = new URL(options.BaseUrl);
@@ -125,6 +136,12 @@ export class RenderWorkerHttpClient {
         this.token = options.Token;
         this.renderTimeoutMs = options.RenderTimeoutMs;
         this.requestTimeoutMs = options.RequestTimeoutMs;
+        this.maxOutputBytes =
+            typeof options.MaxOutputBytes === 'number' &&
+            Number.isFinite(options.MaxOutputBytes) &&
+            options.MaxOutputBytes > 0
+                ? options.MaxOutputBytes
+                : DEFAULT_RENDER_MAX_OUTPUT_BYTES;
     }
 
     /**
@@ -139,8 +156,38 @@ export class RenderWorkerHttpClient {
         ThrowIfSignalAborted(signal);
         const resultMeta = await this.streamRenderMetadata(req, onProgress, signal);
         ThrowIfSignalAborted(signal);
+
+        const rawClaimedSize = (resultMeta as Partial<RenderResultMetadata>).VideoSizeBytes;
+        let claimedSizeBytes: number | undefined;
+        if (rawClaimedSize !== undefined) {
+            if (
+                typeof rawClaimedSize !== 'number' ||
+                !Number.isFinite(rawClaimedSize) ||
+                !Number.isInteger(rawClaimedSize) ||
+                rawClaimedSize < 0
+            ) {
+                throw new VideoRenderError(
+                    'Internal',
+                    `Render worker returned invalid VideoSizeBytes '${String(rawClaimedSize)}' for VideoID '${String(resultMeta.VideoID)}'.`,
+                );
+            }
+            if (rawClaimedSize > this.maxOutputBytes) {
+                throw new VideoRenderError(
+                    'BodyTooLarge',
+                    `Render worker claimed VideoSizeBytes (${rawClaimedSize}) exceeding maxOutputBytes (${this.maxOutputBytes}).`,
+                    { Status: 413 },
+                );
+            }
+            claimedSizeBytes = rawClaimedSize;
+        }
+
         const videoPath = `${RENDER_WORKER_ROUTES.Video}/${encodeURIComponent(resultMeta.VideoID)}`;
-        const videoBytes = await this.httpGetBinary(videoPath, this.renderTimeoutMs, signal);
+        const videoBytes = await this.httpGetBinary(
+            videoPath,
+            this.renderTimeoutMs,
+            signal,
+            claimedSizeBytes,
+        );
 
         const { VideoID: _videoId, VideoSizeBytes: _videoSizeBytes, ...metadataWithoutWireFields } = resultMeta;
         return {
@@ -158,6 +205,7 @@ export class RenderWorkerHttpClient {
             req,
             this.requestTimeoutMs,
             signal,
+            this.maxOutputBytes,
         );
     }
 
@@ -173,6 +221,7 @@ export class RenderWorkerHttpClient {
             req,
             this.requestTimeoutMs,
             signal,
+            this.maxOutputBytes,
         );
     }
 
@@ -185,6 +234,7 @@ export class RenderWorkerHttpClient {
             req,
             this.requestTimeoutMs,
             signal,
+            MAX_RENDER_JSON_RESPONSE_BYTES,
         );
     }
 
@@ -200,6 +250,7 @@ export class RenderWorkerHttpClient {
             req,
             this.requestTimeoutMs,
             signal,
+            this.maxOutputBytes,
         );
     }
 
@@ -346,16 +397,44 @@ export class RenderWorkerHttpClient {
 
                     if (status < 200 || status >= 300) {
                         const chunks: Buffer[] = [];
-                        res.on('data', (chunk: Buffer) => chunks.push(Buffer.from(chunk)));
+                        let errorBytes = 0;
+                        res.on('data', (chunk: Buffer) => {
+                            if (settled) {
+                                return;
+                            }
+                            const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+                            errorBytes += buf.byteLength;
+                            if (errorBytes > MAX_RENDER_JSON_RESPONSE_BYTES) {
+                                chunks.length = 0;
+                                res.destroy();
+                                req.destroy();
+                                settleReject(
+                                    new VideoRenderError(
+                                        'BodyTooLarge',
+                                        `Render worker error response from ${this.sanitizedBaseUrl}${routePath} exceeded maximum allowed size (${MAX_RENDER_JSON_RESPONSE_BYTES} bytes).`,
+                                        { Status: 413 },
+                                    ),
+                                );
+                                return;
+                            }
+                            chunks.push(buf);
+                        });
                         res.on('end', () => {
+                            if (settled) {
+                                chunks.length = 0;
+                                return;
+                            }
                             if (signal?.aborted) {
+                                chunks.length = 0;
                                 settleReject(CreateAbortError(signal));
                                 return;
                             }
-                            const bodyText = Buffer.concat(chunks).toString('utf8');
+                            const bodyText = Buffer.concat(chunks, errorBytes).toString('utf8');
+                            chunks.length = 0;
                             settleReject(this.parseErrorResponse(status, bodyText, routePath));
                         });
                         res.on('error', (err) => {
+                            chunks.length = 0;
                             if (signal?.aborted) {
                                 settleReject(CreateAbortError(signal));
                                 return;
@@ -391,14 +470,31 @@ export class RenderWorkerHttpClient {
                     };
 
                     const processLine = (rawLine: string): void => {
+                        if (settled) {
+                            return;
+                        }
+                        if (Buffer.byteLength(rawLine, 'utf8') > MAX_RENDER_NDJSON_LINE_BYTES) {
+                            lineBuffer = '';
+                            res.destroy();
+                            req.destroy();
+                            settleReject(
+                                new VideoRenderError(
+                                    'BodyTooLarge',
+                                    `Render stream NDJSON line from ${this.sanitizedBaseUrl}${routePath} exceeded maximum allowed size (${MAX_RENDER_NDJSON_LINE_BYTES} bytes).`,
+                                    { Status: 413 },
+                                ),
+                            );
+                            return;
+                        }
                         const trimmed = rawLine.trim();
-                        if (!trimmed || settled) {
+                        if (!trimmed) {
                             return;
                         }
                         let event: RenderStreamEvent;
                         try {
                             event = JSON.parse(trimmed) as RenderStreamEvent;
                         } catch (parseErr) {
+                            lineBuffer = '';
                             settleReject(
                                 new VideoRenderError(
                                     'Internal',
@@ -426,6 +522,7 @@ export class RenderWorkerHttpClient {
                                 });
                             }
                         } else if (event.Type === 'Error') {
+                            lineBuffer = '';
                             if (signal?.aborted) {
                                 settleReject(CreateAbortError(signal));
                                 res.destroy();
@@ -450,21 +547,55 @@ export class RenderWorkerHttpClient {
 
                     res.setEncoding('utf8');
                     res.on('data', (chunk: string) => {
+                        if (settled) {
+                            return;
+                        }
+                        if (
+                            Buffer.byteLength(lineBuffer, 'utf8') + Buffer.byteLength(chunk, 'utf8') >
+                                MAX_RENDER_NDJSON_LINE_BYTES &&
+                            !chunk.includes('\n')
+                        ) {
+                            lineBuffer = '';
+                            res.destroy();
+                            req.destroy();
+                            settleReject(
+                                new VideoRenderError(
+                                    'BodyTooLarge',
+                                    `Render stream NDJSON line from ${this.sanitizedBaseUrl}${routePath} exceeded maximum allowed size (${MAX_RENDER_NDJSON_LINE_BYTES} bytes).`,
+                                    { Status: 413 },
+                                ),
+                            );
+                            return;
+                        }
                         lineBuffer += chunk;
                         let newlineIdx = lineBuffer.indexOf('\n');
-                        while (newlineIdx !== -1) {
+                        while (newlineIdx !== -1 && !settled) {
                             const line = lineBuffer.slice(0, newlineIdx);
                             lineBuffer = lineBuffer.slice(newlineIdx + 1);
                             processLine(line);
                             newlineIdx = lineBuffer.indexOf('\n');
                         }
+                        if (!settled && Buffer.byteLength(lineBuffer, 'utf8') > MAX_RENDER_NDJSON_LINE_BYTES) {
+                            lineBuffer = '';
+                            res.destroy();
+                            req.destroy();
+                            settleReject(
+                                new VideoRenderError(
+                                    'BodyTooLarge',
+                                    `Render stream NDJSON line from ${this.sanitizedBaseUrl}${routePath} exceeded maximum allowed size (${MAX_RENDER_NDJSON_LINE_BYTES} bytes).`,
+                                    { Status: 413 },
+                                ),
+                            );
+                        }
                     });
 
                     res.on('end', () => {
                         if (settled) {
+                            lineBuffer = '';
                             return;
                         }
                         if (signal?.aborted) {
+                            lineBuffer = '';
                             settleReject(CreateAbortError(signal));
                             return;
                         }
@@ -488,6 +619,7 @@ export class RenderWorkerHttpClient {
                     });
 
                     res.on('error', (err) => {
+                        lineBuffer = '';
                         if (signal?.aborted) {
                             settleReject(CreateAbortError(signal));
                             return;
@@ -576,6 +708,7 @@ export class RenderWorkerHttpClient {
         body: TBody,
         timeoutMs: number,
         signal?: AbortSignal,
+        maxResponseBytes: number = MAX_RENDER_JSON_RESPONSE_BYTES,
     ): Promise<TResult> {
         const payload = JSON.stringify(body);
         return this.sendJsonRequest<TResult>(
@@ -584,6 +717,7 @@ export class RenderWorkerHttpClient {
             payload,
             timeoutMs,
             signal,
+            maxResponseBytes,
         );
     }
 
@@ -598,6 +732,7 @@ export class RenderWorkerHttpClient {
             undefined,
             timeoutMs,
             signal,
+            MAX_RENDER_JSON_RESPONSE_BYTES,
         );
     }
 
@@ -607,6 +742,7 @@ export class RenderWorkerHttpClient {
         payload: string | undefined,
         timeoutMs: number,
         signal?: AbortSignal,
+        maxResponseBytes: number = MAX_RENDER_JSON_RESPONSE_BYTES,
     ): Promise<TResult> {
         ThrowIfSignalAborted(signal);
         const targetUrl = this.resolveEndpointUrl(routePath);
@@ -621,6 +757,8 @@ export class RenderWorkerHttpClient {
             let settled = false;
             let timedOut = false;
             let activeResponse: http.IncomingMessage | undefined;
+            const chunks: Buffer[] = [];
+            let totalBytes = 0;
 
             const cleanup = (): void => {
                 if (signal) {
@@ -634,6 +772,7 @@ export class RenderWorkerHttpClient {
                     return;
                 }
                 settled = true;
+                chunks.length = 0;
                 cleanup();
                 reject(err);
             };
@@ -643,6 +782,7 @@ export class RenderWorkerHttpClient {
                     return;
                 }
                 settled = true;
+                chunks.length = 0;
                 cleanup();
                 resolve(val);
             };
@@ -656,14 +796,42 @@ export class RenderWorkerHttpClient {
                 (res) => {
                     activeResponse = res;
                     const status = res.statusCode ?? 0;
-                    const chunks: Buffer[] = [];
-                    res.on('data', (chunk: Buffer) => chunks.push(Buffer.from(chunk)));
+                    const isSuccessStatus = status >= 200 && status < 300;
+                    const responseByteCap = isSuccessStatus
+                        ? Math.min(maxResponseBytes, bufferConstants.MAX_STRING_LENGTH)
+                        : MAX_RENDER_JSON_RESPONSE_BYTES;
+                    res.on('data', (chunk: Buffer) => {
+                        if (settled) {
+                            return;
+                        }
+                        const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+                        totalBytes += buf.byteLength;
+                        if (totalBytes > responseByteCap) {
+                            chunks.length = 0;
+                            res.destroy();
+                            req.destroy();
+                            settleReject(
+                                new VideoRenderError(
+                                    'BodyTooLarge',
+                                    `Render worker JSON response from ${this.sanitizedBaseUrl}${routePath} exceeded maximum allowed size (${responseByteCap} bytes).`,
+                                    { Status: 413 },
+                                ),
+                            );
+                            return;
+                        }
+                        chunks.push(buf);
+                    });
                     res.on('end', () => {
+                        if (settled) {
+                            chunks.length = 0;
+                            return;
+                        }
                         if (signal?.aborted) {
                             settleReject(CreateAbortError(signal));
                             return;
                         }
-                        const bodyText = Buffer.concat(chunks).toString('utf8');
+                        const bodyText = Buffer.concat(chunks, totalBytes).toString('utf8');
+                        chunks.length = 0;
                         if (routePath === RENDER_WORKER_ROUTES.Health && status === 503) {
                             try {
                                 const maybeHealth = JSON.parse(bodyText) as Partial<RenderHealth>;
@@ -771,15 +939,22 @@ export class RenderWorkerHttpClient {
         routePath: string,
         timeoutMs: number,
         signal?: AbortSignal,
+        claimedSizeBytes?: number,
     ): Promise<Uint8Array> {
         ThrowIfSignalAborted(signal);
         const targetUrl = this.resolveEndpointUrl(routePath);
         const transport = targetUrl.protocol === 'https:' ? https : http;
+        const effectiveMaxBytes =
+            claimedSizeBytes !== undefined
+                ? Math.min(claimedSizeBytes, this.maxOutputBytes)
+                : this.maxOutputBytes;
 
         return new Promise<Uint8Array>((resolve, reject) => {
             let settled = false;
             let timedOut = false;
             let activeResponse: http.IncomingMessage | undefined;
+            const chunks: Buffer[] = [];
+            let totalBytes = 0;
 
             const cleanup = (): void => {
                 if (signal) {
@@ -793,6 +968,7 @@ export class RenderWorkerHttpClient {
                     return;
                 }
                 settled = true;
+                chunks.length = 0;
                 cleanup();
                 reject(err);
             };
@@ -802,6 +978,7 @@ export class RenderWorkerHttpClient {
                     return;
                 }
                 settled = true;
+                chunks.length = 0;
                 cleanup();
                 resolve(bytes);
             };
@@ -815,21 +992,68 @@ export class RenderWorkerHttpClient {
                 (res) => {
                     activeResponse = res;
                     const status = res.statusCode ?? 0;
-                    const chunks: Buffer[] = [];
-                    res.on('data', (chunk: Buffer) => chunks.push(Buffer.from(chunk)));
+                    const maxAllowedForStatus =
+                        status >= 200 && status < 300
+                            ? effectiveMaxBytes
+                            : MAX_RENDER_JSON_RESPONSE_BYTES;
+
+                    res.on('data', (chunk: Buffer) => {
+                        if (settled) {
+                            return;
+                        }
+                        const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+                        totalBytes += buf.byteLength;
+                        if (totalBytes > maxAllowedForStatus) {
+                            chunks.length = 0;
+                            res.destroy();
+                            req.destroy();
+                            const limitLabel =
+                                status >= 200 && status < 300
+                                    ? claimedSizeBytes !== undefined && claimedSizeBytes <= this.maxOutputBytes
+                                        ? `claimed VideoSizeBytes (${claimedSizeBytes} bytes)`
+                                        : `maxOutputBytes (${this.maxOutputBytes} bytes)`
+                                    : `maximum error response size (${MAX_RENDER_JSON_RESPONSE_BYTES} bytes)`;
+                            settleReject(
+                                new VideoRenderError(
+                                    'BodyTooLarge',
+                                    `Downloaded response from ${this.sanitizedBaseUrl}${routePath} exceeded ${limitLabel}.`,
+                                    { Status: 413 },
+                                ),
+                            );
+                            return;
+                        }
+                        chunks.push(buf);
+                    });
                     res.on('end', () => {
+                        if (settled) {
+                            chunks.length = 0;
+                            return;
+                        }
                         if (signal?.aborted) {
                             settleReject(CreateAbortError(signal));
                             return;
                         }
-                        const combined = Buffer.concat(chunks);
                         if (status < 200 || status >= 300) {
+                            const errorText = Buffer.concat(chunks, totalBytes).toString('utf8');
+                            chunks.length = 0;
                             settleReject(
-                                this.parseErrorResponse(status, combined.toString('utf8'), routePath),
+                                this.parseErrorResponse(status, errorText, routePath),
                             );
                             return;
                         }
-                        settleResolve(new Uint8Array(combined));
+                        if (claimedSizeBytes !== undefined && totalBytes !== claimedSizeBytes) {
+                            chunks.length = 0;
+                            settleReject(
+                                new VideoRenderError(
+                                    'Internal',
+                                    `Downloaded video size (${totalBytes} bytes) from ${this.sanitizedBaseUrl}${routePath} did not match claimed VideoSizeBytes (${claimedSizeBytes} bytes).`,
+                                ),
+                            );
+                            return;
+                        }
+                        const combined = Buffer.concat(chunks, totalBytes);
+                        chunks.length = 0;
+                        settleResolve(new Uint8Array(combined.buffer, combined.byteOffset, combined.byteLength));
                     });
                     res.on('error', (err) => {
                         if (signal?.aborted) {

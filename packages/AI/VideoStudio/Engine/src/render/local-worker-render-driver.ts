@@ -188,6 +188,7 @@ export class LocalWorkerRenderDriver extends VideoRenderDriverBase {
                 Token: this.activeWorker.Token,
                 RenderTimeoutMs: effectiveTimeoutMs,
                 RequestTimeoutMs: this.settings.Timeouts.RequestMs,
+                MaxOutputBytes: this.settings.MaxOutputBytes,
             });
             return scopedClient.Render(req, onProgress, signal);
         }
@@ -400,6 +401,7 @@ export class LocalWorkerRenderDriver extends VideoRenderDriverBase {
             Token: token,
             RenderTimeoutMs: this.settings.Timeouts.RenderMs,
             RequestTimeoutMs: this.settings.Timeouts.RequestMs,
+            MaxOutputBytes: this.settings.MaxOutputBytes,
         });
 
         try {

@@ -27,7 +27,7 @@ export {
     DEFAULT_DOCKER_PIDS_LIMIT,
     DEFAULT_DOCKER_RENDER_IMAGE,
     DEFAULT_DOCKER_SHM_SIZE_MB,
-    DEFAULT_DOCKER_WORKSPACE_ROOT,
+    DEFAULT_RENDER_MAX_OUTPUT_BYTES,
     DEFAULT_RENDER_REQUEST_TIMEOUT_MS,
     DEFAULT_RENDER_STARTUP_TIMEOUT_MS,
     DEFAULT_RENDER_TIMEOUT_MS,
@@ -44,6 +44,8 @@ export {
 } from './render/render-settings.js';
 
 export {
+    MAX_RENDER_JSON_RESPONSE_BYTES,
+    MAX_RENDER_NDJSON_LINE_BYTES,
     RenderWorkerHttpClient,
     type RenderWorkerHttpClientOptions,
 } from './render/worker-http-client.js';
