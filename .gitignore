@@ -215,6 +215,9 @@ packages/DBAutoDoc/autocare-config.json
 # Local test/credential directories
 amith-sf/
 benchmark-*/
+!packages/TestingFramework/integration-test-suite/benchmark-logs/
+!packages/TestingFramework/integration-test-suite/benchmark-logs/**
+packages/TestingFramework/integration-test-suite/benchmark-logs/benchmark-*
 Demos/sample-skip-code-fix-prompt.json
 
 # Per-run artifacts from /audit-memory-leaks
