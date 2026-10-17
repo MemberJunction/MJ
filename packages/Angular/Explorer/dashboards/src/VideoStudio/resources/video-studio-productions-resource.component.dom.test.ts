@@ -1,7 +1,7 @@
 import { EMPTY } from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
 import { RunView } from '@memberjunction/core';
-import { BrandKitEngine } from '@memberjunction/core-entities';
+import { BrandKitEngine, MJBrandKitEntity } from '@memberjunction/core-entities';
 import { ArtifactPermissionService } from '@memberjunction/ng-conversations';
 import { NavigationService } from '@memberjunction/ng-shared';
 import { query, queryAll, renderComponentFixture } from '@memberjunction/ng-test-utils';
@@ -54,7 +54,7 @@ describe('VideoStudioProductionsResourceComponent DOM', () => {
         Name: 'Acme Primary Kit',
         CompanyID: 'comp-1',
         Company: 'Acme Corp',
-      } as never,
+      } as unknown as MJBrandKitEntity,
     ]);
 
     const runViewSpy = vi.fn().mockImplementation(async (params: { EntityName: string }) => {
@@ -110,7 +110,7 @@ describe('VideoStudioProductionsResourceComponent DOM', () => {
 
     vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
       RunView: runViewSpy,
-    } as never);
+    } as unknown as RunView);
 
     const notifySpy = vi.spyOn(
       VideoStudioProductionsResourceComponent.prototype as unknown as {

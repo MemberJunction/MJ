@@ -1,6 +1,6 @@
 import { EMPTY } from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
-import { BrandKitEngine } from '@memberjunction/core-entities';
+import { BrandKitEngine, MJBrandKitAssetEntity, MJBrandKitEntity } from '@memberjunction/core-entities';
 import { NavigationService } from '@memberjunction/ng-shared';
 import { query, queryAll, renderComponentFixture } from '@memberjunction/ng-test-utils';
 import { VideoStudioBrandKitsResourceComponent } from './video-studio-brand-kits-resource.component';
@@ -47,7 +47,7 @@ describe('VideoStudioBrandKitsResourceComponent DOM', () => {
           ],
           Typography: [],
         },
-      } as never,
+      } as unknown as MJBrandKitEntity,
       {
         ID: 'kit-acme',
         Name: 'Acme Brand Kit',
@@ -60,7 +60,7 @@ describe('VideoStudioBrandKitsResourceComponent DOM', () => {
           Palette: [{ Name: 'Brand', Value: 'rgb(220, 38, 38)' }],
           Typography: [],
         },
-      } as never,
+      } as unknown as MJBrandKitEntity,
     ]);
 
     vi.spyOn(BrandKitEngine.Instance, 'GetAssets').mockImplementation((id: string) =>
@@ -69,8 +69,8 @@ describe('VideoStudioBrandKitsResourceComponent DOM', () => {
             { ID: 'a-1', Usage: 'Logo', IsPrimary: true, FileID: 'file-logo-1' },
             { ID: 'a-2', Usage: 'Image', IsPrimary: false, FileID: 'file-img-1' },
             { ID: 'a-3', Usage: 'Font', IsPrimary: false, FileID: 'file-font-1' },
-          ] as never)
-        : ([] as never),
+          ] as unknown as MJBrandKitAssetEntity[])
+        : ([] as unknown as MJBrandKitAssetEntity[]),
     );
 
     const notifySpy = vi.spyOn(

@@ -637,13 +637,15 @@ import {
     RubricEngineBase,
 } from '@memberjunction/rubrics-base';
 
-// @memberjunction/ng-core-entity-forms (72 classes)
+// @memberjunction/ng-core-entity-forms (74 classes)
 import {
     AIAgentCategoryHeaderPanel,
     AIAgentCategoryHierarchyPanel,
     AIAgentCategoryOverviewPanel,
     AIPromptCategoryHierarchyPanel,
     ActionCategoryHierarchyPanel,
+    BrandKitAssetsPanelComponent,
+    BrandKitGenerationPolicyPanelComponent,
     CompanyHeaderPanel,
     CompanyOverviewPanel,
     ContentItemHierarchyPanel,
@@ -1285,6 +1287,8 @@ const CLASS_REGISTRATIONS_2: any[] = [
     AIAgentCategoryOverviewPanel,
     AIPromptCategoryHierarchyPanel,
     ActionCategoryHierarchyPanel,
+    BrandKitAssetsPanelComponent,
+    BrandKitGenerationPolicyPanelComponent,
     CompanyHeaderPanel,
     CompanyOverviewPanel,
     ContentItemHierarchyPanel,
@@ -1328,12 +1332,12 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJTestSuiteRunFormComponentExtended,
     MLModelFormComponentExtended,
     MLModelFormPolicy,
-    ProjectHierarchyPanel,
-    QueryCategoryHierarchyPanel,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    ProjectHierarchyPanel,
+    QueryCategoryHierarchyPanel,
     RecordProcessCategoryHierarchyPanel,
     RecordProcessFormComponentExtended,
     RecordProcessFormPolicy,
@@ -1370,7 +1374,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 622;
+export const CLASS_REGISTRATIONS_COUNT = 624;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

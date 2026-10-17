@@ -634,13 +634,15 @@ import {
     RubricEngineBase,
 } from '@memberjunction/rubrics-base';
 
-// @memberjunction/ng-core-entity-forms (72 classes)
+// @memberjunction/ng-core-entity-forms (74 classes)
 import {
     AIAgentCategoryHeaderPanel,
     AIAgentCategoryHierarchyPanel,
     AIAgentCategoryOverviewPanel,
     AIPromptCategoryHierarchyPanel,
     ActionCategoryHierarchyPanel,
+    BrandKitAssetsPanelComponent,
+    BrandKitGenerationPolicyPanelComponent,
     CompanyHeaderPanel,
     CompanyOverviewPanel,
     ContentItemHierarchyPanel,
@@ -715,7 +717,7 @@ import {
     TagEngineBase,
 } from '@memberjunction/tag-engine-base';
 
-// @memberjunction/ng-dashboards (110 classes)
+// @memberjunction/ng-dashboards (113 classes)
 import {
     AIAnalyticsResourceComponent,
     AIOverviewHubComponent,
@@ -822,6 +824,9 @@ import {
     VersionHistoryGraphResourceComponent,
     VersionHistoryLabelsResourceComponent,
     VersionHistoryRestoreResourceComponent,
+    VideoStudioArchetypesResourceComponent,
+    VideoStudioBrandKitsResourceComponent,
+    VideoStudioProductionsResourceComponent,
     VisualizeResourceComponent,
     WorkQueueDashboardComponent,
     WorkflowRunsResourceComponent,
@@ -1412,6 +1417,8 @@ const CLASS_REGISTRATIONS_2: any[] = [
     AIAgentCategoryOverviewPanel,
     AIPromptCategoryHierarchyPanel,
     ActionCategoryHierarchyPanel,
+    BrandKitAssetsPanelComponent,
+    BrandKitGenerationPolicyPanelComponent,
     CompanyHeaderPanel,
     CompanyOverviewPanel,
     ContentItemHierarchyPanel,
@@ -1462,12 +1469,12 @@ const CLASS_REGISTRATIONS_2: any[] = [
     RecordProcessFormPolicy,
     RubricAuthorPanel,
     RubricDiffPanel,
-    RubricEvaluationComparePanel,
-    RubricEvaluationFormPolicy,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    RubricEvaluationComparePanel,
+    RubricEvaluationFormPolicy,
     RubricEvaluationResultPanel,
     RubricFormPolicy,
     RubricPublishPanel,
@@ -1589,6 +1596,9 @@ const CLASS_REGISTRATIONS_3: any[] = [
     VersionHistoryGraphResourceComponent,
     VersionHistoryLabelsResourceComponent,
     VersionHistoryRestoreResourceComponent,
+    VideoStudioArchetypesResourceComponent,
+    VideoStudioBrandKitsResourceComponent,
+    VideoStudioProductionsResourceComponent,
     VisualizeResourceComponent,
     WorkQueueDashboardComponent,
     WorkflowRunsResourceComponent,
@@ -1622,7 +1632,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 740;
+export const CLASS_REGISTRATIONS_COUNT = 745;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

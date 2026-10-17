@@ -1,7 +1,7 @@
 import { EMPTY } from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
 import { RunView } from '@memberjunction/core';
-import { VideoStudioEngine } from '@memberjunction/core-entities';
+import { MJVideoArchetypeEntity, VideoStudioEngine } from '@memberjunction/core-entities';
 import { NavigationService } from '@memberjunction/ng-shared';
 import { query, queryAll, renderComponentFixture } from '@memberjunction/ng-test-utils';
 import { VideoStudioArchetypesResourceComponent } from './video-studio-archetypes-resource.component';
@@ -70,7 +70,7 @@ describe('VideoStudioArchetypesResourceComponent DOM', () => {
           AvgSecondsBetweenChanges: 5,
           HoldRules: 'Hold charts for at least 3 seconds.',
         },
-      } as never,
+      } as unknown as MJVideoArchetypeEntity,
       {
         ID: 'arch-social',
         Name: 'Social Pulse',
@@ -97,7 +97,7 @@ describe('VideoStudioArchetypesResourceComponent DOM', () => {
           },
         ],
         PacingObject: null,
-      } as never,
+      } as unknown as MJVideoArchetypeEntity,
     ]);
 
     vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
@@ -105,7 +105,7 @@ describe('VideoStudioArchetypesResourceComponent DOM', () => {
         Success: true,
         Results: [{ ID: 'comp-1', Name: 'Acme Corp' }],
       }),
-    } as never);
+    } as unknown as RunView);
 
     const notifySpy = vi.spyOn(
       VideoStudioArchetypesResourceComponent.prototype as unknown as {
