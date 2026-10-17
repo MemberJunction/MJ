@@ -43,7 +43,7 @@ export type SaveCallBinding =
           kind: 'mssql-declare-exec';
           /** `DECLARE @x_<suffix> type, @y_<suffix> type` — empty if no params. Suffix: GenericDatabaseProvider.allocateSaveCallSuffix. */
           preambleSQL: string;
-          /** `SET @x_<suffix> = N'value'\nSET @y_<suffix> = 1` — empty if no params. */
+          /** `SET @x_<suffix> = N'value'\nSET @y_<suffix> = 1` — empty if no params. SQL Server's executed form sets `@x$ = @p$0` (see its saveParameters.ts). */
           setSQL: string;
           /** Comma-joined `@CodeName=@x_<suffix>, ...` for the EXEC line. */
           callArgsSQL: string;
@@ -81,13 +81,17 @@ export type SaveCallBinding =
  * and `WrapSaveCallWithRecordChange`. Returned by `GenericDatabaseProvider`
  * via `SaveSQLResult`.
  *
- * For SQL Server, `parameters` is typically omitted — the binding inlines
- * everything via DECLARE/SET. For PostgreSQL, `parameters` carries the
- * positional or JSON-arg values that bind to the `$N` placeholders.
+ * For SQL Server, `parameters` carries the statement's typed inputs (the
+ * `SET @x = @p$n` references) and `literalSQL` the same statement with the
+ * values written in; a transaction-group save carries only the literal form.
+ * For PostgreSQL, `parameters` carries the positional or JSON-arg values that
+ * bind to the `$N` placeholders.
  */
 export interface SaveSQLFragment {
     sql: string;
     parameters?: unknown[];
+    /** `sql` with its parameter values written in as literals (see `SaveSQLResult.literalSQL`). */
+    literalSQL?: string;
 }
 
 // Re-export `RecordChangePayload` from `@memberjunction/core` for convenience.
