@@ -316,12 +316,27 @@
         {
           "fields": {
             "AgentID": "@parent:ID",
+            "Name": "Draft",
+            "DisplayName": "Draft",
+            "Description": "Fast/Lower Quality",
+            "AIConfigurationID": "@lookup:MJ: AI Configurations.Name=Fast",
+            "IsDefault": false,
+            "Priority": 1,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "C05A8E01-4C11-4E8A-9B01-1A2B3C4D5E40"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
             "Name": "Standard",
             "DisplayName": "Standard",
-            "Description": "Frontier Executive Reasoning — Claude Sonnet 4.6, GPT 5.4, Gemini 3.1 Pro",
+            "Description": "Balanced Quality/Speed",
             "AIConfigurationID": "@lookup:MJ: AI Configurations.Name=Standard",
             "IsDefault": true,
-            "Priority": 1,
+            "Priority": 2,
             "Status": "Active"
           },
           "primaryKey": {
@@ -331,12 +346,12 @@
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "Name": "High Power",
-            "DisplayName": "High Power",
-            "Description": "Deep Executive Synthesis — Claude Opus 4.7",
+            "Name": "High",
+            "DisplayName": "High",
+            "Description": "Highest Quality/Slower",
             "AIConfigurationID": "@lookup:MJ: AI Configurations.Name=High Power",
             "IsDefault": false,
-            "Priority": 2,
+            "Priority": 3,
             "Status": "Active"
           },
           "primaryKey": {
