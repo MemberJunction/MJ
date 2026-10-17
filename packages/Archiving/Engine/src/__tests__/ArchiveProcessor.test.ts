@@ -75,6 +75,7 @@ interface MockBaseEntity {
     GetAll: ReturnType<typeof vi.fn>;
     Save: ReturnType<typeof vi.fn>;
     RetentionDays?: number | null;
+    Entity?: string;
     DateField?: string;
     FilterExpression?: string | null;
     DefaultRetentionDays?: number;
@@ -582,6 +583,22 @@ describe('ArchiveProcessor', () => {
                 createMockConfig()
             );
             expect(filter).toBe("__mj_CreatedAt < '2026-10-08T00:00:00.000Z' AND (Status = 'Closed')");
+        });
+
+        it('should refuse a negative retention period without reading any records', async () => {
+            await expect(filterFor(
+                createMockConfigEntity(validFieldConfigJson, { Entity: 'MJ: AI Prompt Runs', RetentionDays: -5 }),
+                createMockConfig()
+            )).rejects.toThrow('Entity "MJ: AI Prompt Runs" has a negative retention period (-5 days)');
+            expect(mockRunViewCalls).toHaveLength(0);
+        });
+
+        it('should build the cutoff at the current time when RetentionDays is 0', async () => {
+            const filter = await filterFor(
+                createMockConfigEntity(validFieldConfigJson, { RetentionDays: 0 }),
+                createMockConfig({ DefaultRetentionDays: 30 })
+            );
+            expect(filter).toBe("__mj_CreatedAt < '2026-10-15T00:00:00.000Z'");
         });
 
         it('should refuse to select records when the entity has no DateField', async () => {

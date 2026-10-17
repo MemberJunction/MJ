@@ -128,7 +128,7 @@ export class ArchiveProcessor {
     /**
      * Builds the SQL filter expression for querying eligible records: the retention cutoff
      * (the entity's RetentionDays, else the configuration's DefaultRetentionDays) plus any
-     * custom filter expression.
+     * custom filter expression. Throws when the resolved retention period is negative.
      */
     private buildRecordFilter(
         configEntity: MJArchiveConfigurationEntityEntity,
@@ -140,6 +140,9 @@ export class ArchiveProcessor {
         }
 
         const retentionDays = configEntity.RetentionDays ?? config.DefaultRetentionDays;
+        if (retentionDays < 0) {
+            throw new Error(`Entity "${configEntity.Entity}" has a negative retention period (${retentionDays} days)`);
+        }
         // Dialect-neutral retention cutoff: compute in JS and inject an ISO-8601
         // literal rather than DATEADD/GETUTCDATE, which don't exist on PostgreSQL.
         const cutoffIso = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000).toISOString();

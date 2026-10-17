@@ -10193,7 +10193,7 @@ export const MJArchiveConfigurationSchema = z.object({
     * * Possible Values 
     *   * Purge
     *   * Store
-        * * Description: Whether runs keep a copy of the data they remove. Store (default): each record's archive document is written to the storage account before the mode changes the source row. Purge: the mode is applied with no copy written, StorageAccountID is not needed, and cleared data cannot be restored. A Purge run refuses entities in ArchiveOnly mode and entities that track Record Changes.`),
+        * * Description: Whether runs keep a copy of the data they remove. Store (default): each record's archive document is written to the storage account before the mode changes the source row. Purge: the mode is applied with no copy written, StorageAccountID is not needed, and cleared data cannot be restored. A Purge run refuses entities in ArchiveOnly mode, entities missing from metadata, entities that track Record Changes, entities whose driver is not registered or does not support purge, and HardDelete entities that use soft delete or whose delete cascade reaches an entity that tracks Record Changes or uses soft delete.`),
     StorageAccount: z.string().nullable().describe(`
         * * Field Name: StorageAccount
         * * Display Name: Storage Account Name
@@ -69659,7 +69659,7 @@ export class MJArchiveConfigurationEntity extends BaseEntity<MJArchiveConfigurat
     * * Possible Values 
     *   * Purge
     *   * Store
-    * * Description: Whether runs keep a copy of the data they remove. Store (default): each record's archive document is written to the storage account before the mode changes the source row. Purge: the mode is applied with no copy written, StorageAccountID is not needed, and cleared data cannot be restored. A Purge run refuses entities in ArchiveOnly mode and entities that track Record Changes.
+    * * Description: Whether runs keep a copy of the data they remove. Store (default): each record's archive document is written to the storage account before the mode changes the source row. Purge: the mode is applied with no copy written, StorageAccountID is not needed, and cleared data cannot be restored. A Purge run refuses entities in ArchiveOnly mode, entities missing from metadata, entities that track Record Changes, entities whose driver is not registered or does not support purge, and HardDelete entities that use soft delete or whose delete cascade reaches an entity that tracks Record Changes or uses soft delete.
     */
     get StorageMode(): 'Purge' | 'Store' {
         return this.Get('StorageMode');

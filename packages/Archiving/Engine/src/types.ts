@@ -159,4 +159,6 @@ export interface ArchiveRunResult {
     TotalBytesArchived: number;
     /** Error message if Success is false */
     ErrorMessage?: string;
+    /** The configuration's StorageMode; absent when the run never loaded a configuration */
+    StorageMode?: ArchiveStorageMode;
 }

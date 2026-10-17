@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { BaseEntity, UserInfo } from '@memberjunction/core';
+import type { BaseEntity, EntityInfo, UserInfo } from '@memberjunction/core';
+import type { MJArchiveRunEntity } from '@memberjunction/core-entities';
 
 // ---- Mock state ----
 
@@ -18,6 +19,15 @@ interface MockBaseEntity {
     Entity?: string;
     Mode?: string | null;
     DriverClass?: string | null;
+    Status?: MJArchiveRunEntity['Status'];
+    CompletedAt?: Date | null;
+    ErrorLog?: string | null;
+    Name?: string;
+    TotalRecords?: number;
+    ArchivedRecords?: number;
+    FailedRecords?: number;
+    SkippedRecords?: number;
+    TotalBytesArchived?: number;
 }
 
 function createMockEntity(overrides?: Partial<MockBaseEntity>): MockBaseEntity {
@@ -56,13 +66,14 @@ interface MockEntityInfo {
     ID: string;
     Name: string;
     TrackRecordChanges: boolean;
+    DeleteType: EntityInfo['DeleteType'];
     RelatedEntities: MockRelationship[];
 }
 
 let mockEntityByNameHandler: (name: string) => MockEntityInfo | undefined;
 
 function mockEntityInfo(name: string, overrides: Partial<MockEntityInfo> = {}): MockEntityInfo {
-    return { ID: `${name}-id`, Name: name, TrackRecordChanges: false, RelatedEntities: [], ...overrides };
+    return { ID: `${name}-id`, Name: name, TrackRecordChanges: false, DeleteType: 'Hard', RelatedEntities: [], ...overrides };
 }
 
 function oneToMany(parent: MockEntityInfo, childName: string): MockRelationship {
@@ -71,12 +82,17 @@ function oneToMany(parent: MockEntityInfo, childName: string): MockRelationship 
 
 /**
  * Builds a metadata lookup for a cascade: Parent -> Child -> Grandchild, where Parent also
- * has a self reference that must be ignored. Only the grandchild tracks Record Changes.
+ * has a self reference that must be ignored. By default only the grandchild tracks Record
+ * Changes; the overrides replace the child's and grandchild's settings.
  */
-function buildTrackedCascade(parentName: string): (name: string) => MockEntityInfo | undefined {
+function buildTrackedCascade(
+    parentName: string,
+    childOverrides: Partial<MockEntityInfo> = {},
+    grandchildOverrides: Partial<MockEntityInfo> = { TrackRecordChanges: true }
+): (name: string) => MockEntityInfo | undefined {
     const parent = mockEntityInfo(parentName);
-    const child = mockEntityInfo('Child Entity');
-    const grandchild = mockEntityInfo('Grandchild Entity', { TrackRecordChanges: true });
+    const child = mockEntityInfo('Child Entity', childOverrides);
+    const grandchild = mockEntityInfo('Grandchild Entity', grandchildOverrides);
     parent.RelatedEntities = [
         { Type: 'One To Many', RelatedEntityID: parent.ID, RelatedEntity: parentName, RelatedEntityJoinField: 'ParentRunID' },
         oneToMany(parent, child.Name),
@@ -181,6 +197,59 @@ vi.mock('../ArchiveRecovery', () => ({
 vi.mock('../ArchiveDriverResolver', () => ({
     ResolveArchiveDriver: (...args: unknown[]) => mockResolveArchiveDriver(...args),
 }));
+
+// ---- Run fixtures ----
+
+/**
+ * Sets up one active configuration (Purge by default) with one entity configuration and
+ * returns the run and entity-configuration mocks.
+ */
+function setupPurgeRun(
+    configEntityOverrides: Partial<MockBaseEntity> = {},
+    configOverrides: Partial<MockBaseEntity> = {}
+): { archiveRunRecord: MockBaseEntity; configEntityRecord: MockBaseEntity } {
+    const configRecord = createMockEntity({
+        ID: 'config-1',
+        Name: 'Purge Config',
+        StorageMode: 'Purge',
+        DefaultMode: 'StripFields',
+        ...configOverrides,
+    });
+    configRecord.InnerLoad.mockResolvedValue(true);
+    configRecord.Get.mockImplementation((field: string) => {
+        if (field === 'IsActive') return true;
+        if (field === 'Status') return 'Idle';
+        if (field === 'Name') return 'Purge Config';
+        if (field === 'StorageAccountID') return 'storage-account-1';
+        return null;
+    });
+
+    const archiveRunRecord = createMockEntity({ ID: 'run-1' });
+    const configEntityRecord = createMockEntity({
+        ID: 'ce-1',
+        Entity: 'MJ: AI Prompt Runs',
+        Mode: null,
+        DriverClass: null,
+        ...configEntityOverrides,
+    });
+
+    mockGetEntityObjectHandler = (entityName: string) => {
+        if (entityName === 'MJ: Archive Configurations') return configRecord;
+        if (entityName === 'MJ: Archive Runs') return archiveRunRecord;
+        return createMockEntity();
+    };
+    mockRunViewHandler = (params) => params.EntityName === 'MJ: Archive Configuration Entities'
+        ? { Success: true, Results: [configEntityRecord] }
+        : { Success: true, Results: [] };
+
+    return { archiveRunRecord, configEntityRecord };
+}
+
+function expectRefusedBeforeRun(archiveRunRecord: MockBaseEntity): void {
+    expect(archiveRunRecord.Save).not.toHaveBeenCalled();
+    expect(mockStorageInitialize).not.toHaveBeenCalled();
+    expect(mockProcessEntity).not.toHaveBeenCalled();
+}
 
 // ---- Tests ----
 
@@ -440,41 +509,6 @@ describe('ArchiveEngine', () => {
             expect(result.TotalRecords).toBe(0);
         });
 
-        it('should return failure when storage initialization fails', async () => {
-            const configRecord = createMockEntity({ ID: 'config-1' });
-            configRecord.InnerLoad.mockResolvedValue(true);
-            configRecord.Get.mockImplementation((field: string) => {
-                if (field === 'IsActive') return true;
-                if (field === 'Status') return 'Idle';
-                if (field === 'Name') return 'Test Config';
-                if (field === 'StorageAccountID') return 'bad-storage-id';
-                return null;
-            });
-
-            const archiveRunRecord = createMockEntity({ ID: 'run-1' });
-            const configEntityRecord = createMockEntity({ ID: 'ce-1' });
-
-            mockGetEntityObjectHandler = (entityName: string) => {
-                if (entityName === 'MJ: Archive Configurations') return configRecord;
-                if (entityName === 'MJ: Archive Runs') return archiveRunRecord;
-                return createMockEntity();
-            };
-
-            mockRunViewHandler = (params) => {
-                if (params.EntityName === 'MJ: Archive Configuration Entities') {
-                    return { Success: true, Results: [configEntityRecord] };
-                }
-                return { Success: true, Results: [] };
-            };
-
-            mockStorageInitialize.mockRejectedValue(new Error('Storage account not found'));
-
-            const result = await ArchiveEngine.Instance.RunArchive('config-1', contextUser);
-
-            expect(result.Success).toBe(false);
-            expect(result.ErrorMessage).toContain('Storage account not found');
-        });
-
         it('should return failure when configuration has no StorageAccountID', async () => {
             const configRecord = createMockEntity({ ID: 'config-1' });
             configRecord.InnerLoad.mockResolvedValue(true);
@@ -507,55 +541,128 @@ describe('ArchiveEngine', () => {
             expect(result.Success).toBe(false);
             expect(result.ErrorMessage).toContain('StorageAccountID');
         });
+
+        describe('Run finalization on a thrown error', () => {
+            type RunSnapshot = Pick<MockBaseEntity,
+                'Status' | 'CompletedAt' | 'ErrorLog' | 'ArchivedRecords' | 'FailedRecords' | 'SkippedRecords' | 'TotalRecords' | 'TotalBytesArchived'>;
+
+            /** Records the run's fields at the moment of each Save call. */
+            function captureSaves(archiveRunRecord: MockBaseEntity): RunSnapshot[] {
+                const snapshots: RunSnapshot[] = [];
+                archiveRunRecord.Save.mockImplementation(() => {
+                    const { Status, CompletedAt, ErrorLog, ArchivedRecords, FailedRecords, SkippedRecords, TotalRecords, TotalBytesArchived } = archiveRunRecord;
+                    snapshots.push({ Status, CompletedAt, ErrorLog, ArchivedRecords, FailedRecords, SkippedRecords, TotalRecords, TotalBytesArchived });
+                    return Promise.resolve(true);
+                });
+                return snapshots;
+            }
+
+            function expectRunFailed(snapshots: RunSnapshot[], message: string): RunSnapshot {
+                expect(snapshots).toHaveLength(2);
+                const failed = snapshots[1];
+                expect(failed.Status).toBe('Failed');
+                expect(failed.CompletedAt).toBeInstanceOf(Date);
+                expect(failed.ErrorLog).toContain(message);
+                return failed;
+            }
+
+            it('should mark the run Failed when entity processing throws', async () => {
+                const { archiveRunRecord } = setupPurgeRun({}, { StorageMode: 'Store' });
+                const snapshots = captureSaves(archiveRunRecord);
+                mockProcessEntity.mockRejectedValue(new Error('Invalid FieldConfiguration JSON'));
+
+                const result = await ArchiveEngine.Instance.RunArchive('config-1', contextUser);
+
+                expect(result.Success).toBe(false);
+                expect(result.ErrorMessage).toContain('Invalid FieldConfiguration JSON');
+                expect(result.ArchiveRunId).toBe('run-1');
+                expect(result.StorageMode).toBe('Store');
+                expectRunFailed(snapshots, 'Invalid FieldConfiguration JSON');
+            });
+
+            it('should mark the run Failed when storage initialization throws', async () => {
+                const { archiveRunRecord } = setupPurgeRun({}, { StorageMode: 'Store' });
+                const snapshots = captureSaves(archiveRunRecord);
+                mockStorageInitialize.mockRejectedValue(new Error('Storage account not found'));
+
+                const result = await ArchiveEngine.Instance.RunArchive('config-1', contextUser);
+
+                expect(result.Success).toBe(false);
+                expect(result.ErrorMessage).toContain('Storage account not found');
+                expect(result.ArchiveRunId).toBe('run-1');
+                expect(mockProcessEntity).not.toHaveBeenCalled();
+                expectRunFailed(snapshots, 'Storage account not found');
+            });
+
+            it('should keep the counts of entities processed before the error on the Failed run', async () => {
+                const { archiveRunRecord, configEntityRecord } = setupPurgeRun();
+                const secondEntity = createMockEntity({ ID: 'ce-2', Entity: 'MJ: Second Entity', Mode: null, DriverClass: null });
+                mockRunViewHandler = (params) => params.EntityName === 'MJ: Archive Configuration Entities'
+                    ? { Success: true, Results: [configEntityRecord, secondEntity] }
+                    : { Success: true, Results: [] };
+                const snapshots = captureSaves(archiveRunRecord);
+                mockProcessEntity
+                    .mockResolvedValueOnce({ Archived: 7, Failed: 1, Skipped: 2, Bytes: 512 })
+                    .mockRejectedValueOnce(new Error('Second entity failed'));
+
+                const result = await ArchiveEngine.Instance.RunArchive('config-1', contextUser);
+
+                expect(result.ErrorMessage).toBe('Second entity failed');
+                expect(result.ArchivedRecords).toBe(7);
+                expect(result.FailedRecords).toBe(1);
+                expect(result.SkippedRecords).toBe(2);
+                expect(result.TotalRecords).toBe(10);
+                expect(result.TotalBytesArchived).toBe(512);
+                const failed = expectRunFailed(snapshots, 'Second entity failed');
+                expect(failed.ArchivedRecords).toBe(7);
+                expect(failed.FailedRecords).toBe(1);
+                expect(failed.SkippedRecords).toBe(2);
+                expect(failed.TotalRecords).toBe(10);
+                expect(failed.TotalBytesArchived).toBe(512);
+            });
+
+            it('should return the original error when the Failed status cannot be saved', async () => {
+                const { archiveRunRecord } = setupPurgeRun({}, { StorageMode: 'Store' });
+                archiveRunRecord.Save.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+                mockProcessEntity.mockRejectedValue(new Error('Driver exploded'));
+
+                const result = await ArchiveEngine.Instance.RunArchive('config-1', contextUser);
+
+                expect(result.ErrorMessage).toBe('Driver exploded');
+                expect(result.ArchiveRunId).toBe('run-1');
+                expect(archiveRunRecord.Save).toHaveBeenCalledTimes(2);
+            });
+
+            it('should return the original error when saving the Failed status throws', async () => {
+                const { archiveRunRecord } = setupPurgeRun({}, { StorageMode: 'Store' });
+                archiveRunRecord.Save.mockResolvedValueOnce(true).mockRejectedValueOnce(new Error('db down'));
+                mockProcessEntity.mockRejectedValue(new Error('Driver exploded'));
+
+                const result = await ArchiveEngine.Instance.RunArchive('config-1', contextUser);
+
+                expect(result.Success).toBe(false);
+                expect(result.ErrorMessage).toBe('Driver exploded');
+                expect(result.ArchiveRunId).toBe('run-1');
+                expect(archiveRunRecord.Save).toHaveBeenCalledTimes(2);
+            });
+
+            it('should not mark any run Failed when the run row cannot be created', async () => {
+                const { archiveRunRecord } = setupPurgeRun({}, { StorageMode: 'Store' });
+                archiveRunRecord.Save.mockResolvedValueOnce(false);
+
+                const result = await ArchiveEngine.Instance.RunArchive('config-1', contextUser);
+
+                expect(result.Success).toBe(false);
+                expect(result.ErrorMessage).toContain('Failed to create ArchiveRun record');
+                expect(result.ArchiveRunId).toBe('');
+                expect(result.StorageMode).toBe('Store');
+                expect(archiveRunRecord.Save).toHaveBeenCalledOnce();
+                expect(mockProcessEntity).not.toHaveBeenCalled();
+            });
+        });
     });
 
     describe('StorageMode Purge', () => {
-        function setupPurgeRun(
-            configEntityOverrides: Partial<MockBaseEntity> = {},
-            configOverrides: Partial<MockBaseEntity> = {}
-        ): { archiveRunRecord: MockBaseEntity; configEntityRecord: MockBaseEntity } {
-            const configRecord = createMockEntity({
-                ID: 'config-1',
-                StorageMode: 'Purge',
-                DefaultMode: 'StripFields',
-                ...configOverrides,
-            });
-            configRecord.InnerLoad.mockResolvedValue(true);
-            configRecord.Get.mockImplementation((field: string) => {
-                if (field === 'IsActive') return true;
-                if (field === 'Status') return 'Idle';
-                if (field === 'Name') return 'Purge Config';
-                if (field === 'StorageAccountID') return 'storage-account-1';
-                return null;
-            });
-
-            const archiveRunRecord = createMockEntity({ ID: 'run-1' });
-            const configEntityRecord = createMockEntity({
-                ID: 'ce-1',
-                Entity: 'MJ: AI Prompt Runs',
-                Mode: null,
-                DriverClass: null,
-                ...configEntityOverrides,
-            });
-
-            mockGetEntityObjectHandler = (entityName: string) => {
-                if (entityName === 'MJ: Archive Configurations') return configRecord;
-                if (entityName === 'MJ: Archive Runs') return archiveRunRecord;
-                return createMockEntity();
-            };
-            mockRunViewHandler = (params) => params.EntityName === 'MJ: Archive Configuration Entities'
-                ? { Success: true, Results: [configEntityRecord] }
-                : { Success: true, Results: [] };
-
-            return { archiveRunRecord, configEntityRecord };
-        }
-
-        function expectRefusedBeforeRun(archiveRunRecord: MockBaseEntity): void {
-            expect(archiveRunRecord.Save).not.toHaveBeenCalled();
-            expect(mockStorageInitialize).not.toHaveBeenCalled();
-            expect(mockProcessEntity).not.toHaveBeenCalled();
-        }
-
         it('should run without a storage account and pass no storage manager to the processor', async () => {
             const { archiveRunRecord } = setupPurgeRun();
             mockProcessEntity.mockResolvedValue({ Archived: 4, Failed: 0, Skipped: 0, Bytes: 0 });
@@ -567,6 +674,7 @@ describe('ArchiveEngine', () => {
             expect(mockStorageInitialize).not.toHaveBeenCalled();
             expect(mockProcessEntity.mock.calls[0][3]).toBeNull();
             expect(archiveRunRecord.StorageMode).toBe('Purge');
+            expect(result.StorageMode).toBe('Purge');
         });
 
         it('should refuse an entity in ArchiveOnly mode', async () => {
@@ -576,6 +684,7 @@ describe('ArchiveEngine', () => {
 
             expect(result.Success).toBe(false);
             expect(result.ErrorMessage).toContain('ArchiveOnly');
+            expect(result.StorageMode).toBe('Purge');
             expect(mockProcessEntity).not.toHaveBeenCalled();
         });
 
@@ -669,6 +778,49 @@ describe('ArchiveEngine', () => {
                 expect(result.Success).toBe(false);
                 expect(result.ErrorMessage).toContain('dependent entity "Unknown Child" was not found in metadata');
                 expectRefusedBeforeRun(archiveRunRecord);
+            });
+
+            it('should refuse an entity that uses soft delete', async () => {
+                const { archiveRunRecord } = setupPurgeRun({ Mode: 'HardDelete' });
+                mockEntityByNameHandler = (name: string) => mockEntityInfo(name, { DeleteType: 'Soft' });
+
+                const result = await ArchiveEngine.Instance.RunArchive('config-1', contextUser);
+
+                expect(result.Success).toBe(false);
+                expect(result.ErrorMessage).toContain('Entity "MJ: AI Prompt Runs" uses soft delete, so HardDelete would keep its rows');
+                expectRefusedBeforeRun(archiveRunRecord);
+            });
+
+            it('should refuse when a level-1 dependent entity uses soft delete', async () => {
+                const { archiveRunRecord } = setupPurgeRun({ Mode: 'HardDelete' });
+                mockEntityByNameHandler = buildTrackedCascade('MJ: AI Prompt Runs', { DeleteType: 'Soft' }, {});
+
+                const result = await ArchiveEngine.Instance.RunArchive('config-1', contextUser);
+
+                expect(result.Success).toBe(false);
+                expect(result.ErrorMessage).toContain('Entity "MJ: AI Prompt Runs" cannot be purged with HardDelete');
+                expect(result.ErrorMessage).toContain('dependent entity "Child Entity" uses soft delete');
+                expectRefusedBeforeRun(archiveRunRecord);
+            });
+
+            it('should allow a soft-delete entity in StripFields mode', async () => {
+                setupPurgeRun({ Mode: 'StripFields' });
+                mockEntityByNameHandler = (name: string) => mockEntityInfo(name, { DeleteType: 'Soft' });
+
+                const result = await ArchiveEngine.Instance.RunArchive('config-1', contextUser);
+
+                expect(result.Success).toBe(true);
+                expect(mockProcessEntity).toHaveBeenCalledOnce();
+            });
+
+            it('should allow a soft-delete dependent when StorageMode is Store', async () => {
+                setupPurgeRun({ Mode: 'HardDelete' }, { StorageMode: 'Store' });
+                mockEntityByNameHandler = buildTrackedCascade('MJ: AI Prompt Runs', { DeleteType: 'Soft' }, {});
+
+                const result = await ArchiveEngine.Instance.RunArchive('config-1', contextUser);
+
+                expect(mockProcessEntity).toHaveBeenCalledOnce();
+                expect(result.ErrorMessage).toBeUndefined();
             });
 
             it('should allow the same cascade in StripFields mode', async () => {

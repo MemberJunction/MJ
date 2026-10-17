@@ -82,7 +82,11 @@
           <div class="run-card-stats">
             <span class="run-stat">
               <i class="fa-solid fa-box-archive"></i>
-              {{ run.RecordsArchived }} archived
+              @if (run.StorageMode === 'Purge') {
+                {{ run.RecordsArchived }} purged
+              } @else {
+                {{ run.RecordsArchived }} archived
+              }
             </span>
             @if (run.RecordsFailed > 0) {
               <span class="run-stat run-stat-error">
@@ -150,7 +154,11 @@
       <div class="drawer-stats">
         <div class="drawer-stat">
           <span class="drawer-stat-value">{{ SelectedRun.RecordsArchived }}</span>
-          <span class="drawer-stat-label">Archived</span>
+          @if (SelectedRun.StorageMode === 'Purge') {
+            <span class="drawer-stat-label">Purged</span>
+          } @else {
+            <span class="drawer-stat-label">Archived</span>
+          }
         </div>
         <div class="drawer-stat drawer-stat-error">
           <span class="drawer-stat-value">{{ SelectedRun.RecordsFailed }}</span>

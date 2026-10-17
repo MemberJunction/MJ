@@ -13,6 +13,8 @@
 --   * ArchiveRun.StorageMode
 --       The configuration's StorageMode when the run started, so run history
 --       stays correct after the configuration changes.
+--   * CHECK constraints keep ArchiveConfiguration.DefaultRetentionDays and
+--     ArchiveConfigurationEntity.RetentionDays at zero or above.
 --
 -- Existing rows default to 'Store'.
 -- =============================================================================
@@ -37,9 +39,20 @@ ADD CONSTRAINT CK_ArchiveRun_StorageMode
     CHECK (StorageMode IN (N'Store', N'Purge'));
 GO
 
+-- Retention periods cannot be negative (a NULL RetentionDays uses the configuration default).
+ALTER TABLE [${flyway:defaultSchema}].[ArchiveConfiguration]
+ADD CONSTRAINT CK_ArchiveConfiguration_DefaultRetentionDays
+    CHECK (DefaultRetentionDays >= 0);
+GO
+
+ALTER TABLE [${flyway:defaultSchema}].[ArchiveConfigurationEntity]
+ADD CONSTRAINT CK_ArchiveConfigEntity_RetentionDays
+    CHECK (RetentionDays >= 0);
+GO
+
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Whether runs keep a copy of the data they remove. Store (default): each record''s archive document is written to the storage account before the mode changes the source row. Purge: the mode is applied with no copy written, StorageAccountID is not needed, and cleared data cannot be restored. A Purge run refuses entities in ArchiveOnly mode and entities that track Record Changes.',
+    @value = N'Whether runs keep a copy of the data they remove. Store (default): each record''s archive document is written to the storage account before the mode changes the source row. Purge: the mode is applied with no copy written, StorageAccountID is not needed, and cleared data cannot be restored. A Purge run refuses entities in ArchiveOnly mode, entities missing from metadata, entities that track Record Changes, entities whose driver is not registered or does not support purge, and HardDelete entities that use soft delete or whose delete cascade reaches an entity that tracks Record Changes or uses soft delete.',
     @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
     @level1type = N'TABLE',  @level1name = N'ArchiveConfiguration',
     @level2type = N'COLUMN', @level2name = N'StorageMode';
@@ -221,7 +234,7 @@ GO
             (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '4873B8B1-11E9-49E7-AC26-497C17C9CD04'),
             'StorageMode',
             'Storage Mode',
-            'Whether runs keep a copy of the data they remove. Store (default): each record''s archive document is written to the storage account before the mode changes the source row. Purge: the mode is applied with no copy written, StorageAccountID is not needed, and cleared data cannot be restored. A Purge run refuses entities in ArchiveOnly mode and entities that track Record Changes.',
+            'Whether runs keep a copy of the data they remove. Store (default): each record''s archive document is written to the storage account before the mode changes the source row. Purge: the mode is applied with no copy written, StorageAccountID is not needed, and cleared data cannot be restored. A Purge run refuses entities in ArchiveOnly mode, entities missing from metadata, entities that track Record Changes, entities whose driver is not registered or does not support purge, and HardDelete entities that use soft delete or whose delete cascade reaches an entity that tracks Record Changes or uses soft delete.',
             'nvarchar',
             40,
             0,
