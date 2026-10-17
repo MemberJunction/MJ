@@ -1,7 +1,7 @@
 import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as mjCore from '@memberjunction/core';
 import {
     DEFAULT_RENDER_REQUEST_TIMEOUT_MS,
@@ -13,6 +13,8 @@ import {
 
 describe('ReadVideoRenderSettings', () => {
     const tempDirs: string[] = [];
+    let savedRenderUrl: string | undefined;
+    let savedRenderToken: string | undefined;
 
     async function makeTempDir(): Promise<string> {
         const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'mj-vs-render-settings-'));
@@ -20,8 +22,25 @@ describe('ReadVideoRenderSettings', () => {
         return dir;
     }
 
+    beforeEach(() => {
+        savedRenderUrl = process.env.VIDEO_STUDIO_RENDER_URL;
+        savedRenderToken = process.env.VIDEO_STUDIO_RENDER_TOKEN;
+        delete process.env.VIDEO_STUDIO_RENDER_URL;
+        delete process.env.VIDEO_STUDIO_RENDER_TOKEN;
+    });
+
     afterEach(async () => {
         vi.restoreAllMocks();
+        if (savedRenderUrl === undefined) {
+            delete process.env.VIDEO_STUDIO_RENDER_URL;
+        } else {
+            process.env.VIDEO_STUDIO_RENDER_URL = savedRenderUrl;
+        }
+        if (savedRenderToken === undefined) {
+            delete process.env.VIDEO_STUDIO_RENDER_TOKEN;
+        } else {
+            process.env.VIDEO_STUDIO_RENDER_TOKEN = savedRenderToken;
+        }
         while (tempDirs.length > 0) {
             const dir = tempDirs.pop()!;
             await fs.rm(dir, { recursive: true, force: true });
@@ -60,6 +79,7 @@ describe('ReadVideoRenderSettings', () => {
                 WorkerEntry: '/custom/worker/main.js',
                 MaxOldSpaceMb: 4096,
             },
+            Remote: {},
         });
     });
 
@@ -76,6 +96,7 @@ describe('ReadVideoRenderSettings', () => {
                 RequestMs: DEFAULT_RENDER_REQUEST_TIMEOUT_MS,
             },
             Local: {},
+            Remote: {},
         });
     });
 
@@ -109,7 +130,65 @@ describe('ReadVideoRenderSettings', () => {
                 RequestMs: DEFAULT_RENDER_REQUEST_TIMEOUT_MS,
             },
             Local: {},
+            Remote: {},
         });
         expect(warnSpy).toHaveBeenCalled();
+    });
+
+    it('reads videoStudio.render.remote from mj.config.cjs', async () => {
+        const dir = await makeTempDir();
+        const configContent = `module.exports = {
+            videoStudio: {
+                render: {
+                    driver: 'Remote',
+                    remote: {
+                        url: 'https://render.internal.example.com',
+                        token: 'cfg-secret-token',
+                    },
+                },
+            },
+        };\n`;
+        await fs.writeFile(path.join(dir, 'mj.config.cjs'), configContent, 'utf8');
+
+        const settings = ReadVideoRenderSettings(dir);
+        expect(settings.Driver).toBe('Remote');
+        expect(settings.Remote).toEqual({
+            Url: 'https://render.internal.example.com',
+            Token: 'cfg-secret-token',
+        });
+    });
+
+    it('falls back to VIDEO_STUDIO_RENDER_URL and VIDEO_STUDIO_RENDER_TOKEN env vars, and config beats env', async () => {
+        process.env.VIDEO_STUDIO_RENDER_URL = 'http://127.0.0.1:18081';
+        process.env.VIDEO_STUDIO_RENDER_TOKEN = 'env-secret-token';
+
+        const emptyDir = await makeTempDir();
+        await fs.writeFile(path.join(emptyDir, 'mj.config.cjs'), 'module.exports = {};\n', 'utf8');
+
+        const envSettings = ReadVideoRenderSettings(emptyDir);
+        expect(envSettings.Remote).toEqual({
+            Url: 'http://127.0.0.1:18081',
+            Token: 'env-secret-token',
+        });
+
+        const overrideDir = await makeTempDir();
+        const overrideConfig = `module.exports = {
+            videoStudio: {
+                render: {
+                    driver: 'Remote',
+                    remote: {
+                        url: 'https://config-wins.example.com',
+                        token: 'config-wins-token',
+                    },
+                },
+            },
+        };\n`;
+        await fs.writeFile(path.join(overrideDir, 'mj.config.cjs'), overrideConfig, 'utf8');
+
+        const mergedSettings = ReadVideoRenderSettings(overrideDir);
+        expect(mergedSettings.Remote).toEqual({
+            Url: 'https://config-wins.example.com',
+            Token: 'config-wins-token',
+        });
     });
 });

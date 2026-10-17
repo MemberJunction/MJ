@@ -31,6 +31,7 @@ function createStubWorkerSettings(overrides?: Partial<VideoRenderSettings>): Vid
         Local: {
             WorkerEntry: STUB_WORKER_PATH,
         },
+        Remote: {},
         ...overrides,
     };
 }
@@ -215,6 +216,7 @@ describe('LocalWorkerRenderDriver lifecycle and security', () => {
                 Local: {
                     WorkerEntry: missingEntryPath,
                 },
+                Remote: {},
             }),
         );
 
@@ -303,6 +305,7 @@ describe.skipIf(!RUN_REAL_RENDER_TESTS)(
                         RequestMs: DEFAULT_RENDER_REQUEST_TIMEOUT_MS,
                     },
                     Local: {},
+                    Remote: {},
                 }),
         );
     },

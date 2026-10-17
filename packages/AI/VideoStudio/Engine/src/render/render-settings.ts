@@ -36,6 +36,16 @@ export interface VideoRenderLocalSettings {
 }
 
 /**
+ * Remote HTTP/HTTPS worker settings used by `RemoteRenderDriver` (`VS-RND-3`).
+ */
+export interface VideoRenderRemoteSettings {
+    /** Base `http:` or `https:` URL of the remote render worker (or `VIDEO_STUDIO_RENDER_URL`). */
+    Url?: string;
+    /** Optional bearer token for the remote render worker (or `VIDEO_STUDIO_RENDER_TOKEN`). */
+    Token?: string;
+}
+
+/**
  * Normalized PascalCase settings for `VideoRenderEngine` and its drivers (§7.2).
  */
 export interface VideoRenderSettings {
@@ -45,6 +55,8 @@ export interface VideoRenderSettings {
     Timeouts: VideoRenderTimeoutsSettings;
     /** Configuration specific to the `LocalWorker` driver. */
     Local: VideoRenderLocalSettings;
+    /** Configuration specific to the `Remote` driver (`VS-RND-3`). */
+    Remote: VideoRenderRemoteSettings;
 }
 
 /**
@@ -54,6 +66,7 @@ interface RawVideoRenderConfig {
     driver?: unknown;
     timeouts?: unknown;
     local?: unknown;
+    remote?: unknown;
 }
 
 interface RawVideoStudioConfig {
@@ -130,6 +143,27 @@ function readOptionalNonEmptyString(
     return undefined;
 }
 
+function readEnvNonEmptyString(envName: string): string | undefined {
+    const rawValue = process.env[envName];
+    if (typeof rawValue === 'string' && rawValue.trim().length > 0) {
+        return rawValue.trim();
+    }
+    return undefined;
+}
+
+function buildDefaultRemoteSettings(): VideoRenderRemoteSettings {
+    const remote: VideoRenderRemoteSettings = {};
+    const envUrl = readEnvNonEmptyString('VIDEO_STUDIO_RENDER_URL');
+    if (envUrl !== undefined) {
+        remote.Url = envUrl;
+    }
+    const envToken = readEnvNonEmptyString('VIDEO_STUDIO_RENDER_TOKEN');
+    if (envToken !== undefined) {
+        remote.Token = envToken;
+    }
+    return remote;
+}
+
 /**
  * Reads `videoStudio.render` from `mj.config.cjs` (searching upward from `searchFrom`) and returns
  * normalized PascalCase `VideoRenderSettings`.
@@ -145,6 +179,7 @@ export function ReadVideoRenderSettings(searchFrom: string = process.cwd()): Vid
             RequestMs: DEFAULT_RENDER_REQUEST_TIMEOUT_MS,
         },
         Local: {},
+        Remote: buildDefaultRemoteSettings(),
     };
 
     let rawConfig: Record<string, unknown> | undefined;
@@ -230,9 +265,32 @@ export function ReadVideoRenderSettings(searchFrom: string = process.cwd()): Vid
         }
     }
 
+    const remote: VideoRenderRemoteSettings = { ...defaults.Remote };
+    if (renderSection.remote !== undefined && renderSection.remote !== null) {
+        if (!isPlainObject(renderSection.remote)) {
+            LogWarning('videoStudio.render.remote in mj.config is not an object; using default remote settings.');
+        } else {
+            const url = readOptionalNonEmptyString(
+                renderSection.remote.url,
+                'videoStudio.render.remote.url',
+            );
+            if (url !== undefined) {
+                remote.Url = url;
+            }
+            const token = readOptionalNonEmptyString(
+                renderSection.remote.token,
+                'videoStudio.render.remote.token',
+            );
+            if (token !== undefined) {
+                remote.Token = token;
+            }
+        }
+    }
+
     return {
         Driver: driver,
         Timeouts: timeouts,
         Local: local,
+        Remote: remote,
     };
 }

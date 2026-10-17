@@ -26,6 +26,7 @@ export {
     DEFAULT_VIDEO_RENDER_DRIVER,
     ReadVideoRenderSettings,
     type VideoRenderLocalSettings,
+    type VideoRenderRemoteSettings,
     type VideoRenderSettings,
     type VideoRenderTimeoutsSettings,
 } from './render/render-settings.js';
@@ -40,6 +41,8 @@ export {
     BuildWorkerEnv,
     LocalWorkerRenderDriver,
 } from './render/local-worker-render-driver.js';
+
+export { RemoteRenderDriver } from './render/remote-render-driver.js';
 
 export {
     FAKE_DRIVER_MP4_BYTES,

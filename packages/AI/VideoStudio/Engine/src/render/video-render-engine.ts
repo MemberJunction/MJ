@@ -6,6 +6,7 @@ import {
     type IShutdownable,
 } from '@memberjunction/global';
 import { LocalWorkerRenderDriver } from './local-worker-render-driver.js';
+import { RemoteRenderDriver } from './remote-render-driver.js';
 import { ReadVideoRenderSettings } from './render-settings.js';
 import {
     VideoRenderDriverBase,
@@ -14,6 +15,7 @@ import {
 
 // Ensure side-effect registration of built-in drivers with MJGlobal.ClassFactory.
 void LocalWorkerRenderDriver;
+void RemoteRenderDriver;
 
 /**
  * Warning message logged once per process when `VideoRenderEngine` selects the `LocalWorker` driver.
