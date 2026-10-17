@@ -8,10 +8,6 @@
 
 import { UUIDsEqual } from '@memberjunction/global';
 import {
-    MatchAgentConfigurationPreset,
-    type AgentConfigurationPresetCandidate,
-} from '@memberjunction/ai-agents';
-import {
     VIDEO_DATA_FORMAT_KINDS,
     VIDEO_DATA_SHAPES,
     VIDEO_FORMATS,
@@ -77,8 +73,9 @@ export interface ProduceVideoArchetypeLookup {
     Status?: string | null;
     CompanyID?: string | null;
     DefaultFormats?: string | readonly string[] | null;
-    DefaultFormatsObject?: readonly string[] | null;
     DefaultDurationSeconds?: number | null;
+    MinDurationSeconds?: number | null;
+    MaxDurationSeconds?: number | null;
 }
 
 /**
@@ -95,9 +92,12 @@ export interface ProduceVideoBrandKitLookup {
 /**
  * Minimal preset record shape required by the mapper.
  */
-export interface ProduceVideoPresetLookup extends AgentConfigurationPresetCandidate {
+export interface ProduceVideoPresetLookup {
+    Name: string;
+    DisplayName?: string | null;
     AIConfigurationID?: string | null;
     IsDefault?: boolean | null;
+    Status?: string | null;
 }
 
 /**
@@ -108,7 +108,9 @@ export interface ProduceVideoLookups {
     findBrandKit?: (nameOrId: string) => ProduceVideoBrandKitLookup | null | undefined;
     findDefaultBrandKit?: (companyId?: string | null) => ProduceVideoBrandKitLookup | null | undefined;
     findQueryByName?: (name: string) => { ID: string; Name?: string } | string | null | undefined;
-    presets?: readonly ProduceVideoPresetLookup[] | (() => readonly ProduceVideoPresetLookup[]);
+    findPreset?: (name: string) => ProduceVideoPresetLookup | null | undefined;
+    defaultPreset?: () => ProduceVideoPresetLookup | null | undefined;
+    presetNames?: () => readonly string[];
 }
 
 export type ProduceVideoMappingErrorCode = 'INVALID_PARAMS' | 'NOT_FOUND';
@@ -292,9 +294,6 @@ function parseRawFormatList(formatsInput: ProduceVideoInput['Formats']): string[
 
 function parseArchetypeDefaultFormats(archetype: ProduceVideoArchetypeLookup | undefined): string[] | undefined {
     if (!archetype) return undefined;
-    if (Array.isArray(archetype.DefaultFormatsObject) && archetype.DefaultFormatsObject.length > 0) {
-        return archetype.DefaultFormatsObject.map((v) => String(v));
-    }
     const fromDefaultFormats = parseRawFormatList(archetype.DefaultFormats);
     return fromDefaultFormats && fromDefaultFormats.length > 0 ? fromDefaultFormats : undefined;
 }
@@ -315,6 +314,32 @@ function resolveDurationSeconds(
     if (!Number.isFinite(num) || num <= 0) {
         return fail('INVALID_PARAMS', `DurationSeconds must be a positive number; received '${String(durationInput)}'.`);
     }
+    if (archetype) {
+        const min = typeof archetype.MinDurationSeconds === 'number' && Number.isFinite(archetype.MinDurationSeconds)
+            ? archetype.MinDurationSeconds
+            : undefined;
+        const max = typeof archetype.MaxDurationSeconds === 'number' && Number.isFinite(archetype.MaxDurationSeconds)
+            ? archetype.MaxDurationSeconds
+            : undefined;
+        if (min !== undefined && max !== undefined && (num < min || num > max)) {
+            return fail(
+                'INVALID_PARAMS',
+                `DurationSeconds (${num}) is outside archetype '${archetype.Name}' allowed range of ${min}-${max} seconds.`,
+            );
+        }
+        if (min !== undefined && num < min) {
+            return fail(
+                'INVALID_PARAMS',
+                `DurationSeconds (${num}) is below archetype '${archetype.Name}' minimum of ${min} seconds.`,
+            );
+        }
+        if (max !== undefined && num > max) {
+            return fail(
+                'INVALID_PARAMS',
+                `DurationSeconds (${num}) exceeds archetype '${archetype.Name}' maximum of ${max} seconds.`,
+            );
+        }
+    }
     return { value: num };
 }
 
@@ -322,18 +347,15 @@ function resolvePowerLevelPreset(
     powerLevel: string | undefined,
     lookups: ProduceVideoLookups,
 ): ValueOrError<string | undefined> {
-    const rawPresets = typeof lookups.presets === 'function' ? lookups.presets() : (lookups.presets ?? []);
-    const activePresets = rawPresets.filter((p) => p.Status == null || p.Status === 'Active');
-
     if (!powerLevel) {
-        const defaultPreset = activePresets.find((p) => p.IsDefault);
+        const defaultPreset = lookups.defaultPreset?.() ?? undefined;
         return { value: trimNonEmpty(defaultPreset?.AIConfigurationID) };
     }
 
-    const matched = MatchAgentConfigurationPreset(activePresets, powerLevel);
+    const matched = lookups.findPreset?.(powerLevel) ?? undefined;
     if (!matched) {
-        const availableNames = activePresets
-            .map((p) => p.DisplayName?.trim() || p.Name.trim())
+        const availableNames = (lookups.presetNames?.() ?? [])
+            .map((n) => n.trim())
             .filter((n) => n.length > 0);
         const availableLabel = availableNames.length > 0 ? availableNames.join(', ') : 'none';
         return fail(

@@ -5,6 +5,12 @@ import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RENDER_WORKER_ROUTES } from '@memberjunction/video-studio-core';
 import {
+    DEFAULT_DOCKER_CPUS,
+    DEFAULT_DOCKER_MEMORY_MB,
+    DEFAULT_DOCKER_PIDS_LIMIT,
+    DEFAULT_DOCKER_RENDER_IMAGE,
+    DEFAULT_DOCKER_SHM_SIZE_MB,
+    DEFAULT_DOCKER_WORKSPACE_ROOT,
     DEFAULT_RENDER_REQUEST_TIMEOUT_MS,
     DEFAULT_RENDER_STARTUP_TIMEOUT_MS,
     DEFAULT_RENDER_TIMEOUT_MS,
@@ -20,6 +26,15 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const STUB_WORKER_PATH = path.join(__dirname, 'fixtures', 'stub-worker.mjs');
 const RUN_REAL_RENDER_TESTS = process.env.VIDEO_STUDIO_RENDER_TESTS === '1';
 
+const DEFAULT_DOCKER_SETTINGS = {
+    Image: DEFAULT_DOCKER_RENDER_IMAGE,
+    WorkspaceRoot: DEFAULT_DOCKER_WORKSPACE_ROOT,
+    Cpus: DEFAULT_DOCKER_CPUS,
+    MemoryMb: DEFAULT_DOCKER_MEMORY_MB,
+    PidsLimit: DEFAULT_DOCKER_PIDS_LIMIT,
+    ShmSizeMb: DEFAULT_DOCKER_SHM_SIZE_MB,
+};
+
 function createStubWorkerSettings(overrides?: Partial<VideoRenderSettings>): VideoRenderSettings {
     return {
         Driver: 'LocalWorker',
@@ -31,6 +46,8 @@ function createStubWorkerSettings(overrides?: Partial<VideoRenderSettings>): Vid
         Local: {
             WorkerEntry: STUB_WORKER_PATH,
         },
+        Remote: {},
+        Docker: DEFAULT_DOCKER_SETTINGS,
         ...overrides,
     };
 }
@@ -215,6 +232,8 @@ describe('LocalWorkerRenderDriver lifecycle and security', () => {
                 Local: {
                     WorkerEntry: missingEntryPath,
                 },
+                Remote: {},
+                Docker: DEFAULT_DOCKER_SETTINGS,
             }),
         );
 
@@ -303,6 +322,8 @@ describe.skipIf(!RUN_REAL_RENDER_TESTS)(
                         RequestMs: DEFAULT_RENDER_REQUEST_TIMEOUT_MS,
                     },
                     Local: {},
+                    Remote: {},
+                    Docker: DEFAULT_DOCKER_SETTINGS,
                 }),
         );
     },

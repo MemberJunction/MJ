@@ -15,10 +15,20 @@
 import { AgentRunner } from '@memberjunction/ai-agents';
 import { ChatMessageRole } from '@memberjunction/ai';
 import { AIEngine } from '@memberjunction/aiengine';
-import { LogError } from '@memberjunction/core';
+import { LogError, RunView } from '@memberjunction/core';
 import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended } from '@memberjunction/ai-core-plus';
 import type { AgentExecutionProgressCallback } from '@memberjunction/ai-core-plus';
+import { IsValidUUID } from '@memberjunction/global';
 import type { TaskAgentRunner, TaskAgentRunParams, TaskAgentRunResult } from '@memberjunction/task-graph';
+
+/** Maximum number of ancestor `ParentRunID` hops to walk when reconstructing `parentAgentHierarchy`. */
+const MAX_ANCESTOR_HOPS = 25;
+
+interface AncestorRunRow {
+    ID: string;
+    ParentRunID: string | null;
+    Agent: string | null;
+}
 
 export class TaskGraphAgentRunner implements TaskAgentRunner {
     public async RunAgentForTask(params: TaskAgentRunParams): Promise<TaskAgentRunResult> {
@@ -46,6 +56,8 @@ export class TaskGraphAgentRunner implements TaskAgentRunner {
                 configurationId = parentRun?.ConfigurationID ?? undefined;
             }
 
+            const parentAgentHierarchy = await this.buildParentAgentHierarchy(parentRun, params);
+
             const result = await new AgentRunner().RunAgent({
                 agent,
                 conversationMessages: [{ role: ChatMessageRole.user, content: this.buildPrompt(params) }],
@@ -54,6 +66,7 @@ export class TaskGraphAgentRunner implements TaskAgentRunner {
                 // rather than starting the chain over. Without it MAX_REINVOKE_DEPTH never fires.
                 continuationDepth: params.ContinuationDepth ?? 0,
                 parentRun,
+                parentAgentHierarchy,
                 configurationId,
                 // The bridge from the agent's own progress stream up to graph-level observers: the
                 // dispatcher turns these into rate-limited `NodeProgress` frames, which is how a
@@ -121,6 +134,80 @@ export class TaskGraphAgentRunner implements TaskAgentRunner {
             );
             return undefined;
         }
+    }
+
+    /**
+     * Reconstructs the root-first ancestor agent name hierarchy starting from `parentRun` and
+     * walking `ParentRunID` up to `MAX_ANCESTOR_HOPS` hops via `RunView`.
+     *
+     * Fails soft: on an invalid UUID or any `RunView` error, logs with `LogError` and returns the
+     * hierarchy collected so far so the dispatcher's depth cap remains the backstop.
+     */
+    private async buildParentAgentHierarchy(
+        parentRun: MJAIAgentRunEntityExtended | undefined,
+        params: TaskAgentRunParams,
+    ): Promise<string[] | undefined> {
+        if (!parentRun) {
+            return undefined;
+        }
+
+        const leafToRootNames: string[] = [];
+        const submittingAgentName = parentRun.Agent?.trim();
+        if (submittingAgentName) {
+            leafToRootNames.push(submittingAgentName);
+        }
+
+        let nextParentRunId: string | null | undefined = parentRun.ParentRunID;
+        let hops = 0;
+
+        while (nextParentRunId && hops < MAX_ANCESTOR_HOPS) {
+            const candidateId = nextParentRunId.trim();
+            if (!IsValidUUID(candidateId)) {
+                LogError(
+                    `[TaskGraphAgentRunner] Task ${params.TaskID}: invalid ParentRunID '${nextParentRunId}' encountered while walking ancestor runs; stopping hierarchy walk.`,
+                );
+                break;
+            }
+
+            hops++;
+            try {
+                const rv = RunView.FromMetadataProvider(params.Provider);
+                const rvResult = await rv.RunView<AncestorRunRow>(
+                    {
+                        EntityName: 'MJ: AI Agent Runs',
+                        ExtraFilter: `ID='${candidateId}'`,
+                        Fields: ['ID', 'ParentRunID', 'Agent'],
+                        ResultType: 'simple',
+                    },
+                    params.ContextUser,
+                );
+
+                if (!rvResult.Success) {
+                    LogError(
+                        `[TaskGraphAgentRunner] Task ${params.TaskID}: failed to load ancestor run ${candidateId}: ${rvResult.ErrorMessage ?? 'Unknown RunView error'}`,
+                    );
+                    break;
+                }
+
+                const row = rvResult.Results?.[0];
+                if (!row) {
+                    break;
+                }
+
+                const ancestorName = row.Agent?.trim();
+                if (ancestorName) {
+                    leafToRootNames.push(ancestorName);
+                }
+                nextParentRunId = row.ParentRunID;
+            } catch (e) {
+                LogError(
+                    `[TaskGraphAgentRunner] Task ${params.TaskID}: error loading ancestor run ${candidateId}: ${e instanceof Error ? e.message : String(e)}`,
+                );
+                break;
+            }
+        }
+
+        return leafToRootNames.length > 0 ? leafToRootNames.reverse() : undefined;
     }
 
     /**

@@ -1,3 +1,5 @@
+import * as os from 'node:os';
+import * as path from 'node:path';
 import { cosmiconfigSync } from 'cosmiconfig';
 import { LogWarning } from '@memberjunction/core';
 
@@ -12,6 +14,24 @@ export const DEFAULT_RENDER_TIMEOUT_MS = 35 * 60 * 1_000;
 
 /** Default non-render request timeout in milliseconds (10 minutes). */
 export const DEFAULT_RENDER_REQUEST_TIMEOUT_MS = 10 * 60 * 1_000;
+
+/** Default Docker image tag for `DockerRenderDriver` (`VS-RND-4`). */
+export const DEFAULT_DOCKER_RENDER_IMAGE = 'mj-video-render-worker:local';
+
+/** Default host workspace root directory for `DockerRenderDriver` bind mounts (`VS-RND-4`). */
+export const DEFAULT_DOCKER_WORKSPACE_ROOT = path.join(os.tmpdir(), 'mj-video-render');
+
+/** Default CPU core limit (`--cpus`) for `DockerRenderDriver` containers (`VS-RND-4`). */
+export const DEFAULT_DOCKER_CPUS = 2;
+
+/** Default memory limit in megabytes (`--memory <n>m`) for `DockerRenderDriver` containers (`VS-RND-4`). */
+export const DEFAULT_DOCKER_MEMORY_MB = 4096;
+
+/** Default process/thread ceiling (`--pids-limit`) for `DockerRenderDriver` containers (`VS-RND-4`). */
+export const DEFAULT_DOCKER_PIDS_LIMIT = 512;
+
+/** Default `/dev/shm` size in megabytes (`--shm-size <n>m`) for `DockerRenderDriver` containers (`VS-RND-4`). */
+export const DEFAULT_DOCKER_SHM_SIZE_MB = 1024;
 
 /**
  * Shared timeout settings across all `VideoRenderDriverBase` implementations.
@@ -36,6 +56,34 @@ export interface VideoRenderLocalSettings {
 }
 
 /**
+ * Remote HTTP/HTTPS worker settings used by `RemoteRenderDriver` (`VS-RND-3`).
+ */
+export interface VideoRenderRemoteSettings {
+    /** Base `http:` or `https:` URL of the remote render worker (or `VIDEO_STUDIO_RENDER_URL`). */
+    Url?: string;
+    /** Optional bearer token for the remote render worker (or `VIDEO_STUDIO_RENDER_TOKEN`). */
+    Token?: string;
+}
+
+/**
+ * Hardened Docker container settings used by `DockerRenderDriver` (`VS-RND-4`).
+ */
+export interface VideoRenderDockerSettings {
+    /** Docker image reference (default: `'mj-video-render-worker:local'`). */
+    Image: string;
+    /** Host workspace root directory bind-mounted into per-job containers (default: `path.join(os.tmpdir(), 'mj-video-render')`). */
+    WorkspaceRoot: string;
+    /** CPU core limit (`--cpus`, default: `2`). */
+    Cpus: number;
+    /** Container memory limit in megabytes (`--memory <n>m`, default: `4096`). */
+    MemoryMb: number;
+    /** Container PID ceiling (`--pids-limit`, default: `512`). */
+    PidsLimit: number;
+    /** Container `/dev/shm` size in megabytes (`--shm-size <n>m`, default: `1024`). */
+    ShmSizeMb: number;
+}
+
+/**
  * Normalized PascalCase settings for `VideoRenderEngine` and its drivers (§7.2).
  */
 export interface VideoRenderSettings {
@@ -45,6 +93,10 @@ export interface VideoRenderSettings {
     Timeouts: VideoRenderTimeoutsSettings;
     /** Configuration specific to the `LocalWorker` driver. */
     Local: VideoRenderLocalSettings;
+    /** Configuration specific to the `Remote` driver (`VS-RND-3`). */
+    Remote: VideoRenderRemoteSettings;
+    /** Configuration specific to the `Docker` driver (`VS-RND-4`). */
+    Docker: VideoRenderDockerSettings;
 }
 
 /**
@@ -54,6 +106,8 @@ interface RawVideoRenderConfig {
     driver?: unknown;
     timeouts?: unknown;
     local?: unknown;
+    remote?: unknown;
+    docker?: unknown;
 }
 
 interface RawVideoStudioConfig {
@@ -130,6 +184,38 @@ function readOptionalNonEmptyString(
     return undefined;
 }
 
+function readEnvNonEmptyString(envName: string): string | undefined {
+    const rawValue = process.env[envName];
+    if (typeof rawValue === 'string' && rawValue.trim().length > 0) {
+        return rawValue.trim();
+    }
+    return undefined;
+}
+
+function buildDefaultRemoteSettings(): VideoRenderRemoteSettings {
+    const remote: VideoRenderRemoteSettings = {};
+    const envUrl = readEnvNonEmptyString('VIDEO_STUDIO_RENDER_URL');
+    if (envUrl !== undefined) {
+        remote.Url = envUrl;
+    }
+    const envToken = readEnvNonEmptyString('VIDEO_STUDIO_RENDER_TOKEN');
+    if (envToken !== undefined) {
+        remote.Token = envToken;
+    }
+    return remote;
+}
+
+function buildDefaultDockerSettings(): VideoRenderDockerSettings {
+    return {
+        Image: DEFAULT_DOCKER_RENDER_IMAGE,
+        WorkspaceRoot: DEFAULT_DOCKER_WORKSPACE_ROOT,
+        Cpus: DEFAULT_DOCKER_CPUS,
+        MemoryMb: DEFAULT_DOCKER_MEMORY_MB,
+        PidsLimit: DEFAULT_DOCKER_PIDS_LIMIT,
+        ShmSizeMb: DEFAULT_DOCKER_SHM_SIZE_MB,
+    };
+}
+
 /**
  * Reads `videoStudio.render` from `mj.config.cjs` (searching upward from `searchFrom`) and returns
  * normalized PascalCase `VideoRenderSettings`.
@@ -145,6 +231,8 @@ export function ReadVideoRenderSettings(searchFrom: string = process.cwd()): Vid
             RequestMs: DEFAULT_RENDER_REQUEST_TIMEOUT_MS,
         },
         Local: {},
+        Remote: buildDefaultRemoteSettings(),
+        Docker: buildDefaultDockerSettings(),
     };
 
     let rawConfig: Record<string, unknown> | undefined;
@@ -230,9 +318,71 @@ export function ReadVideoRenderSettings(searchFrom: string = process.cwd()): Vid
         }
     }
 
+    const remote: VideoRenderRemoteSettings = { ...defaults.Remote };
+    if (renderSection.remote !== undefined && renderSection.remote !== null) {
+        if (!isPlainObject(renderSection.remote)) {
+            LogWarning('videoStudio.render.remote in mj.config is not an object; using default remote settings.');
+        } else {
+            const url = readOptionalNonEmptyString(
+                renderSection.remote.url,
+                'videoStudio.render.remote.url',
+            );
+            if (url !== undefined) {
+                remote.Url = url;
+            }
+            const token = readOptionalNonEmptyString(
+                renderSection.remote.token,
+                'videoStudio.render.remote.token',
+            );
+            if (token !== undefined) {
+                remote.Token = token;
+            }
+        }
+    }
+
+    const docker: VideoRenderDockerSettings = { ...defaults.Docker };
+    if (renderSection.docker !== undefined && renderSection.docker !== null) {
+        if (!isPlainObject(renderSection.docker)) {
+            LogWarning('videoStudio.render.docker in mj.config is not an object; using default docker settings.');
+        } else {
+            docker.Image = readNonEmptyString(
+                renderSection.docker.image,
+                'videoStudio.render.docker.image',
+                DEFAULT_DOCKER_RENDER_IMAGE,
+            );
+            docker.WorkspaceRoot = readNonEmptyString(
+                renderSection.docker.workspaceRoot,
+                'videoStudio.render.docker.workspaceRoot',
+                DEFAULT_DOCKER_WORKSPACE_ROOT,
+            );
+            docker.Cpus = readPositiveNumber(
+                renderSection.docker.cpus,
+                'videoStudio.render.docker.cpus',
+                DEFAULT_DOCKER_CPUS,
+            );
+            docker.MemoryMb = readPositiveNumber(
+                renderSection.docker.memoryMb,
+                'videoStudio.render.docker.memoryMb',
+                DEFAULT_DOCKER_MEMORY_MB,
+            );
+            docker.PidsLimit = readPositiveNumber(
+                renderSection.docker.pidsLimit,
+                'videoStudio.render.docker.pidsLimit',
+                DEFAULT_DOCKER_PIDS_LIMIT,
+            );
+            docker.ShmSizeMb = readPositiveNumber(
+                renderSection.docker.shmSizeMb,
+                'videoStudio.render.docker.shmSizeMb',
+                DEFAULT_DOCKER_SHM_SIZE_MB,
+            );
+        }
+    }
+
     return {
         Driver: driver,
         Timeouts: timeouts,
         Local: local,
+        Remote: remote,
+        Docker: docker,
     };
 }

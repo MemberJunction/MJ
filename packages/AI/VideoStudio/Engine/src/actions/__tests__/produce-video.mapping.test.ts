@@ -16,6 +16,8 @@ const KPI_ARCHETYPE: ProduceVideoArchetypeLookup = {
     CompanyID: null,
     DefaultFormats: '["16:9","9:16"]',
     DefaultDurationSeconds: 45,
+    MinDurationSeconds: 45,
+    MaxDurationSeconds: 90,
 };
 
 const COMPANY_A_ARCHETYPE: ProduceVideoArchetypeLookup = {
@@ -46,7 +48,7 @@ const COMPANY_B_BRAND_KIT: ProduceVideoBrandKitLookup = {
 const PRESETS = [
     {
         ID: 'preset-draft',
-        Name: 'Video Studio Draft',
+        Name: 'Draft',
         DisplayName: 'Draft',
         AIConfigurationID: 'cfg-draft',
         IsDefault: false,
@@ -54,7 +56,7 @@ const PRESETS = [
     },
     {
         ID: 'preset-standard',
-        Name: 'Video Studio Standard',
+        Name: 'Standard',
         DisplayName: 'Standard',
         AIConfigurationID: 'cfg-standard',
         IsDefault: true,
@@ -62,7 +64,7 @@ const PRESETS = [
     },
     {
         ID: 'preset-high',
-        Name: 'Video Studio High',
+        Name: 'High',
         DisplayName: 'High',
         AIConfigurationID: 'cfg-high',
         IsDefault: false,
@@ -86,7 +88,15 @@ function createLookups(): ProduceVideoLookups {
         findDefaultBrandKit: () => DEFAULT_BRAND_KIT,
         findQueryByName: (name) =>
             queries.find((q) => q.Name.toLowerCase() === name.trim().toLowerCase()),
-        presets: PRESETS,
+        findPreset: (name) => {
+            const target = name.trim().toLowerCase();
+            return (
+                PRESETS.find((p) => p.Name.toLowerCase() === target) ??
+                PRESETS.find((p) => p.DisplayName.toLowerCase() === target)
+            );
+        },
+        defaultPreset: () => PRESETS.find((p) => p.IsDefault),
+        presetNames: () => PRESETS.map((p) => p.Name),
     };
 }
 
@@ -357,5 +367,35 @@ describe('BuildProduceVideoRequest', () => {
                 Message: "Unknown PowerLevel 'UltraMax'. Available presets: Draft, Standard, High.",
             },
         });
+    });
+
+    it('enforces archetype MinDurationSeconds and MaxDurationSeconds range on DurationSeconds', () => {
+        const outOfRange = BuildProduceVideoRequest(
+            {
+                Topic: 'Duration out of bounds',
+                Archetype: 'KPI Briefing',
+                DurationSeconds: 600,
+            },
+            createLookups(),
+        );
+        expect(outOfRange).toEqual({
+            Error: {
+                Code: 'INVALID_PARAMS',
+                Message: expect.stringContaining('45-90'),
+            },
+        });
+
+        const inRange = BuildProduceVideoRequest(
+            {
+                Topic: 'Duration within bounds',
+                Archetype: 'KPI Briefing',
+                DurationSeconds: 60,
+            },
+            createLookups(),
+        );
+        expect('Error' in inRange).toBe(false);
+        if (!('Error' in inRange)) {
+            expect(inRange.Payload.Film?.DurationSeconds).toBe(60);
+        }
     });
 });

@@ -16,7 +16,6 @@ import type {
     AgentRunAudience,
     ExecuteAgentParams,
     ExecuteAgentResult,
-    MJAIAgentEntityExtended,
 } from '@memberjunction/ai-core-plus';
 import { AgentRunner } from '@memberjunction/ai-agents';
 import { AIEngine } from '@memberjunction/aiengine';
@@ -42,7 +41,7 @@ export class ProduceVideoAction extends BaseAction {
         try {
             await this.ensureEnginesLoaded(params);
 
-            const agent = this.findVideoStudioAgent();
+            const agent = AIEngine.Instance.GetAgentByName('Video Studio');
             if (!agent) {
                 return {
                     Success: false,
@@ -102,13 +101,6 @@ export class ProduceVideoAction extends BaseAction {
         ]);
     }
 
-    private findVideoStudioAgent(): MJAIAgentEntityExtended | undefined {
-        const match = AIEngine.Instance.Agents.find(
-            (a) => a.Name?.trim().toLowerCase() === 'video studio',
-        );
-        return match as MJAIAgentEntityExtended | undefined;
-    }
-
     private extractInput(params: RunActionParams): ProduceVideoInput {
         return {
             Topic: this.getStringParam(params, 'topic'),
@@ -132,7 +124,9 @@ export class ProduceVideoAction extends BaseAction {
             findBrandKit: (nameOrId: string) => this.lookupBrandKit(nameOrId, companyId),
             findDefaultBrandKit: (cid?: string | null) => BrandKitEngine.Instance.GetDefaultKit(cid ?? null),
             findQueryByName: (name: string) => this.lookupQueryByName(params, name),
-            presets: () => AIEngine.Instance.GetAgentConfigurationPresets(agentId, true),
+            findPreset: (name: string) => AIEngine.Instance.FindActiveAgentConfigurationPreset(agentId, name),
+            defaultPreset: () => AIEngine.Instance.GetDefaultAgentConfigurationPreset(agentId),
+            presetNames: () => AIEngine.Instance.GetAgentConfigurationPresets(agentId, true).map((p) => p.Name),
         };
     }
 

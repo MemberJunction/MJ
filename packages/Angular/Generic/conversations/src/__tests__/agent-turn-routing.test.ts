@@ -10,8 +10,12 @@ import { describe, it, expect } from 'vitest';
 import {
     ResolveAgentTurn,
     FindDisallowedTaskGraphAgents,
+    FindContinuityAgentMessage,
+    FindContinuityAgentId,
+    MessageMentionsAgent,
     type AgentTurnCandidates,
     type AgentTurnRules,
+    type ContinuityHistoryMessage,
 } from '../lib/utils/agent-turn-routing';
 import type { AgentReplyMode, AgentTurnRoute } from '../lib/models/agent-turn.model';
 
@@ -190,5 +194,68 @@ describe('FindDisallowedTaskGraphAgents', () => {
 
     it('ignores steps that do not run an agent', () => {
         expect(FindDisallowedTaskGraphAgents([{ kind: 'Action', configuration: { actionName: 'X' } }], [], resolve)).toEqual([]);
+    });
+});
+
+describe('FindContinuityAgentMessage and MessageMentionsAgent — handoff continuity and Return to Sage', () => {
+    it('routes the next unmentioned message to the handoff target after a handoff', () => {
+        const history: ContinuityHistoryMessage[] = [
+            { ID: 'u1', Role: 'User', Message: 'Have Research look into X' },
+            { ID: 'ai-sage-1', Role: 'AI', AgentID: MANAGER, ParentID: 'u1', Message: 'Transferring to Research.' },
+            { ID: 'ai-target-1', Role: 'AI', AgentID: TAGGED, ParentID: 'ai-sage-1', Message: 'Research report on X' },
+        ];
+        const continuityId = FindContinuityAgentId(history, MANAGER, { conversationManagerName: 'Sage' });
+        expect(continuityId).toBe(TAGGED);
+        expect(ResolveAgentTurn(candidates({ ContinuityAgentId: continuityId }), rules('Always'), isKnown)).toEqual({
+            AgentId: TAGGED,
+            Route: 'Continuity',
+        });
+    });
+
+    it('resets continuity to Sage after @Sage (JSON mention or plain @Sage) and stays with Sage on subsequent turns', () => {
+        const historyWithReturnToSage: ContinuityHistoryMessage[] = [
+            { ID: 'u1', Role: 'User', Message: 'Have Research look into X' },
+            { ID: 'ai-sage-1', Role: 'AI', AgentID: MANAGER, ParentID: 'u1', Message: 'Transferring to Research.' },
+            { ID: 'ai-target-1', Role: 'AI', AgentID: TAGGED, ParentID: 'ai-sage-1', Message: 'Research report on X' },
+            { ID: 'u2', Role: 'User', ParentID: 'ai-target-1', Message: `@{"type":"agent","id":"${MANAGER}","name":"Sage"} what do we do next?` },
+            { ID: 'ai-sage-2', Role: 'AI', AgentID: MANAGER, ParentID: 'u2', Message: 'Here is our next step.' },
+            { ID: 'u3', Role: 'User', ParentID: 'ai-sage-2', Message: 'Tell me more' },
+        ];
+        const continuityId = FindContinuityAgentId(historyWithReturnToSage, MANAGER, { conversationManagerName: 'Sage' });
+        expect(continuityId).toBeNull();
+        expect(ResolveAgentTurn(candidates({ ContinuityAgentId: continuityId }), rules('Always'), isKnown)).toEqual({
+            AgentId: MANAGER,
+            Route: 'ConversationManager',
+        });
+    });
+
+    it('allows a newer handoff after @Sage to take continuity again', () => {
+        const historyWithSecondHandoff: ContinuityHistoryMessage[] = [
+            { ID: 'u1', Role: 'User', Message: 'Have Research look into X' },
+            { ID: 'ai-sage-1', Role: 'AI', AgentID: MANAGER, ParentID: 'u1', Message: 'Transferring to Research.' },
+            { ID: 'ai-target-1', Role: 'AI', AgentID: TAGGED, ParentID: 'ai-sage-1', Message: 'Research report on X' },
+            { ID: 'u2', Role: 'User', ParentID: 'ai-target-1', Message: '@Sage hand this to Writer' },
+            { ID: 'ai-sage-2', Role: 'AI', AgentID: MANAGER, ParentID: 'u2', Message: 'Transferring to Writer.' },
+            { ID: 'ai-target-2', Role: 'AI', AgentID: OTHER, ParentID: 'ai-sage-2', Message: 'Drafting article' },
+        ];
+        const msg = FindContinuityAgentMessage(historyWithSecondHandoff, MANAGER, { conversationManagerName: 'Sage' });
+        expect(msg?.ID).toBe('ai-target-2');
+        expect(msg?.AgentID).toBe(OTHER);
+    });
+
+    it('stops continuity when a specialist hands back to the conversation manager', () => {
+        const historyWithHandback: ContinuityHistoryMessage[] = [
+            { ID: 'u1', Role: 'User', Message: 'Have Research look into X' },
+            { ID: 'ai-target-1', Role: 'AI', AgentID: TAGGED, ParentID: 'u1', Message: 'Handing back to Sage.' },
+            { ID: 'ai-sage-handback', Role: 'AI', AgentID: MANAGER, ParentID: 'ai-target-1', Message: 'Sage taking back.' },
+        ];
+        expect(FindContinuityAgentId(historyWithHandback, MANAGER)).toBeNull();
+    });
+
+    it('MessageMentionsAgent matches JSON agent mention tokens and plain @Name tokens, ignoring non-agent mentions', () => {
+        expect(MessageMentionsAgent(`@{"type":"agent","id":"${MANAGER}","name":"Sage"} hi`, MANAGER, 'Sage')).toBe(true);
+        expect(MessageMentionsAgent('@Sage can you help?', MANAGER, 'Sage')).toBe(true);
+        expect(MessageMentionsAgent(`@{"type":"user","id":"${MANAGER}","name":"Sage"} hi`, MANAGER, 'Sage')).toBe(false);
+        expect(MessageMentionsAgent('Just a normal follow up', MANAGER, 'Sage')).toBe(false);
     });
 });

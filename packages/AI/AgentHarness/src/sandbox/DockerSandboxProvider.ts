@@ -68,6 +68,7 @@ export class DockerSandboxProvider implements ISandboxProvider {
             '--workdir',
             CONTAINER_WORKSPACE,
             ...this.buildNetworkArgs(config.NetworkPolicy),
+            ...this.buildContainerConstraintArgs(config),
             image,
             // Keep the container alive so turns can exec into it; the harness itself is never this
             // process, it is whatever `docker exec` runs.
@@ -83,6 +84,7 @@ export class DockerSandboxProvider implements ISandboxProvider {
             // The path AS THE HARNESS SEES IT — inside the container, not on the host. Anything that
             // tries to open this with `fs` on the MJAPI host is wrong; see SandboxHandle's note.
             WorkspacePath: CONTAINER_WORKSPACE,
+            HostWorkspacePath: hostPath,
             Key: key,
             Ephemeral: key.Scope === 'run',
             Executor: new DockerExecExecutor(containerName),
@@ -126,6 +128,33 @@ export class DockerSandboxProvider implements ISandboxProvider {
             case 'open':
                 return [];
         }
+    }
+
+    /** Maps optional resource-limit and hardening flags onto `docker run` arguments before the image. */
+    private buildContainerConstraintArgs(config: SandboxConfig): string[] {
+        const flags: string[] = [];
+        if (config.Cpus !== undefined) {
+            flags.push('--cpus', String(config.Cpus));
+        }
+        if (config.MemoryMb !== undefined) {
+            flags.push('--memory', `${config.MemoryMb}m`);
+        }
+        if (config.PidsLimit !== undefined) {
+            flags.push('--pids-limit', String(config.PidsLimit));
+        }
+        if (config.ShmSizeMb !== undefined) {
+            flags.push('--shm-size', `${config.ShmSizeMb}m`);
+        }
+        if (config.ReadOnlyRoot === true) {
+            flags.push('--read-only', '--tmpfs', '/tmp:rw,size=256m');
+        }
+        if (config.User !== undefined && config.User.length > 0) {
+            flags.push('--user', config.User);
+        }
+        if (config.DropCapabilities === true) {
+            flags.push('--cap-drop', 'ALL', '--security-opt', 'no-new-privileges');
+        }
+        return flags;
     }
 
     /** Runs a docker CLI command and resolves with its trimmed stdout. */

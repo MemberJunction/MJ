@@ -38,18 +38,6 @@ vi.mock('@memberjunction/ai-agents', () => ({
         RunAgent = (...args: unknown[]) => runAgentMock(...args);
         ProcessAgentArtifacts = (...args: unknown[]) => processAgentArtifactsMock(...args);
     },
-    MatchAgentConfigurationPreset: (
-        list: ReadonlyArray<{ Name?: string; DisplayName?: string | null; Status?: string | null }>,
-        name: string | null | undefined,
-    ) => {
-        const target = name?.trim().toLowerCase();
-        if (!target) return undefined;
-        const active = list.filter((p) => p != null && (p.Status == null || p.Status === 'Active'));
-        return (
-            active.find((p) => p.Name?.trim().toLowerCase() === target) ??
-            active.find((p) => p.DisplayName?.trim().toLowerCase() === target)
-        );
-    },
 }));
 vi.mock('@memberjunction/aiengine', () => ({
     AIEngine: {
@@ -58,7 +46,22 @@ vi.mock('@memberjunction/aiengine', () => ({
             get Agents() {
                 return agents;
             },
+            GetAgentByName: vi.fn((name: string) =>
+                agents.find(
+                    (a) => String(a.Name ?? '').trim().toLowerCase() === name.trim().toLowerCase(),
+                ),
+            ),
             GetAgentConfigurationPresets: vi.fn(() => presets),
+            GetDefaultAgentConfigurationPreset: vi.fn(() =>
+                presets.find((p) => p.IsDefault === true),
+            ),
+            FindActiveAgentConfigurationPreset: vi.fn((_agentId: string, presetName: string) => {
+                const target = presetName.trim().toLowerCase();
+                return (
+                    presets.find((p) => String(p.Name ?? '').trim().toLowerCase() === target) ??
+                    presets.find((p) => String(p.DisplayName ?? '').trim().toLowerCase() === target)
+                );
+            }),
         },
     },
 }));
@@ -250,6 +253,7 @@ describe('ProduceVideoAction', () => {
                 Interaction: { Mode: 'Autonomous' },
             },
         });
+        expect(runAgentCall.cancellationToken).toBe(abortController.signal);
         expect(runAgentCall).not.toHaveProperty('TrustReservedRunData');
 
         expect(processAgentArtifactsMock).toHaveBeenCalledTimes(1);

@@ -3,6 +3,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { GetValueFromPath } from '@memberjunction/ai-core-plus';
+import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
 import { JSONValidator } from '@memberjunction/global';
 import {
     ValidateVideoGenerationSpec,
@@ -1164,4 +1165,88 @@ describe('Video Studio caller relationships (VS-INV-2)', () => {
     });
 });
 
+describe('Video Studio discoverability and handoff metadata (VS-INV-1)', () => {
+    const agents = readJson<MetadataRecord[]>('agents/.video-studio-agent.json');
+    const root = agents[0];
 
+    it('1. is directly discoverable via AIAgentPermissionHelper.IsDirectlyDiscoverable while all 7 children are not', () => {
+        expect(root.fields.ParentID).toBeUndefined();
+        expect(root.fields.InvocationMode).toBe('Any');
+        expect(root.fields.Status).toBe('Active');
+        expect(
+            AIAgentPermissionHelper.IsDirectlyDiscoverable({
+                InvocationMode: root.fields.InvocationMode as 'Any',
+                ParentID: (root.fields.ParentID as string | null) ?? null,
+            }),
+        ).toBe(true);
+
+        const children = root.relatedEntities?.['MJ: AI Agents'] ?? [];
+        expect(children).toHaveLength(7);
+        for (const child of children) {
+            expect(
+                AIAgentPermissionHelper.IsDirectlyDiscoverable({
+                    InvocationMode: child.fields.InvocationMode as string | null,
+                    ParentID: (child.fields.ParentID as string | null) ?? null,
+                }),
+                `Expected child "${String(child.fields.Name)}" to not be directly discoverable`,
+            ).toBe(false);
+        }
+    });
+
+    it('2. has a plain-text root Description within 600 chars with video in the first sentence and all routing and boundary terms', () => {
+        const description = root.fields.Description as string;
+        expect(typeof description).toBe('string');
+        expect(description.length).toBeGreaterThanOrEqual(1);
+        expect(description.length).toBeLessThanOrEqual(600);
+
+        // Plain words, no markdown formatting
+        expect(description).not.toMatch(/[*_`#[\]]/);
+
+        // First sentence starts with the required prefix and contains "video"
+        const firstSentence = description.split('.')[0] ?? '';
+        expect(
+            firstSentence.startsWith(
+                'Makes short videos: explainers, product films, social clips, announcements and data-story briefings',
+            ),
+        ).toBe(true);
+        expect(firstSentence.toLowerCase()).toContain('video');
+
+        // Required routing terms and boundary statement
+        const lower = description.toLowerCase();
+        for (const term of [
+            'video',
+            'film',
+            'explainer',
+            'animation',
+            'promo',
+            'social short',
+            'kpi',
+            'monthly briefing',
+            'make a video about',
+            'brand',
+            'narration',
+            'charts from your own data',
+            'no live-action filming, no photoreal people',
+        ]) {
+            expect(lower, `Expected Description to include "${term}"`).toContain(term);
+        }
+    });
+
+    it('3. defines three Active presets (Draft, Standard, High) with Name = DisplayName, non-null AIConfigurationID, and Standard as the sole IsDefault preset', () => {
+        const presets = root.relatedEntities?.['MJ: AI Agent Configurations'] ?? [];
+        expect(presets.map((p) => p.fields.Name)).toEqual(['Draft', 'Standard', 'High']);
+
+        for (const preset of presets) {
+            expect(preset.fields.Status).toBe('Active');
+            expect(preset.fields.DisplayName).toBe(preset.fields.Name);
+            expect(typeof preset.fields.AIConfigurationID).toBe('string');
+            expect((preset.fields.AIConfigurationID as string).startsWith('@lookup:MJ: AI Configurations.Name=Video Studio ')).toBe(true);
+        }
+
+        const activeDefaults = presets.filter(
+            (p) => p.fields.Status === 'Active' && p.fields.IsDefault === true,
+        );
+        expect(activeDefaults).toHaveLength(1);
+        expect(activeDefaults[0].fields.Name).toBe('Standard');
+    });
+});

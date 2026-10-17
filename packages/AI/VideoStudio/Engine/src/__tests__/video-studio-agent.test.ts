@@ -191,4 +191,32 @@ describe('VideoStudioAgent cycle guard (VS-INV-2)', () => {
         expect(harness.finalizedSteps).toHaveLength(1);
         expect(harness.finalizedSteps[0].success).toBe(true);
     });
+
+    it('refuses a task-graph-dispatched run whose reconstructed parentAgentHierarchy contains Video Studio (VS-INV-2b)', async () => {
+        // TaskGraphAgentRunner walks ParentRunID across sub-agent and task-graph hops and passes
+        // parentAgentHierarchy (root-first) to AgentRunner.RunAgent, which BaseAgent turns into
+        // _agentHierarchy = [...parentAgentHierarchy, agent.Name].
+        const parentAgentHierarchy = [
+            'Video Studio',
+            'Video Studio - Director',
+            'Research Agent',
+            'Report Writer',
+        ];
+        const harness = createHarness([
+            ...parentAgentHierarchy,
+            'Video Studio',
+        ]);
+
+        const result = await harness.invokeValidateWithTracking();
+
+        expect(result).not.toBeNull();
+        expect(result?.success).toBe(false);
+        expect(harness.agentRun.Status).toBe('Failed');
+        expect(harness.agentRun.ErrorMessage).toBe(
+            'Video Studio is already running higher in this call chain (Video Studio → Video Studio - Director → Research Agent → Report Writer → Video Studio). A production cannot start another production.',
+        );
+        expect(harness.finalizedSteps).toHaveLength(1);
+        expect(harness.finalizedSteps[0].success).toBe(false);
+    });
 });
+
