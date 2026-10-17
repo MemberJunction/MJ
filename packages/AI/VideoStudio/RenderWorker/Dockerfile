@@ -66,6 +66,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxrandr2 \
     libxshmfence1 \
   && rm -rf /var/lib/apt/lists/* \
+  # sleep infinity as PID 1 ignores SIGTERM (so docker stop --time 5 would wait 5 s), and the one-shot CLI SIGTERMs PID 1 on stdin EOF.
   && printf '#!/bin/sh\nif [ "$1" = "infinity" ] && [ "$$" = "1" ]; then\n  exec node -e '\''process.on("SIGTERM",()=>process.exit(0));process.on("SIGINT",()=>process.exit(0));setInterval(()=>{},1<<30);'\''\nfi\nexec /bin/sleep "$@"\n' > /usr/local/bin/sleep \
   && chmod +x /usr/local/bin/sleep
 

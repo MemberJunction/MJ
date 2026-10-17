@@ -1,11 +1,15 @@
-import { Component, Input } from '@angular/core';
+import { ChangeDetectorRef, Component, Input, OnInit, inject } from '@angular/core';
+import { LogError, RunView } from '@memberjunction/core';
+import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import type {
-  CriticRound,
-  GateRecord,
-  RubricCriterionScore,
-  VideoGenerationSpec,
-  VideoReviewRecord,
+import {
+  DescribeGeneratedAssets,
+  type CriticRound,
+  type GateRecord,
+  type GeneratedAssetDisclosureItem,
+  type RubricCriterionScore,
+  type VideoGenerationSpec,
+  type VideoReviewRecord,
 } from '@memberjunction/video-studio-core';
 
 @Component({
@@ -146,6 +150,48 @@ import type {
           <p class="vp-empty-text">No rubric scores recorded.</p>
         }
       </section>
+
+      <!-- Generated Assets Provenance -->
+      @if (GeneratedAssets.length > 0) {
+        <section class="vp-review-section vp-generated-assets-section">
+          <h3 class="vp-section-title">Generated assets</h3>
+          <div class="vp-table-wrapper">
+            <table class="vp-table vp-generated-assets-table">
+              <thead>
+                <tr>
+                  <th>Asset</th>
+                  <th>Kind</th>
+                  <th>Beats</th>
+                  <th>Seconds</th>
+                  <th>Model</th>
+                  <th>Cost</th>
+                  <th>C2PA</th>
+                  <th>Prompt</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (item of GeneratedAssets; track item.Key) {
+                  <tr class="vp-generated-asset-row">
+                    <td class="vp-cell-strong">{{ item.Key }}</td>
+                    <td>{{ item.Kind }}</td>
+                    <td>{{ FormatBeats(item) }}</td>
+                    <td class="vp-cell-mono">{{ FormatDuration(item) }}</td>
+                    <td>{{ GetModelLabel(item.ModelID) }}</td>
+                    <td class="vp-cell-mono">{{ FormatCost(item) }}</td>
+                    <td>{{ item.C2PA ? 'kept' : 'none' }}</td>
+                    <td>
+                      <details class="vp-prompt-details">
+                        <summary>Prompt</summary>
+                        <div class="vp-prompt-text">{{ item.Prompt }}</div>
+                      </details>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </section>
+      }
 
       <!-- Human Review Notes -->
       @if (Review?.HumanReviewNotes) {
@@ -301,6 +347,24 @@ import type {
         white-space: pre-wrap;
       }
 
+      .vp-prompt-details summary {
+        cursor: pointer;
+        color: var(--mj-text-secondary);
+        font-size: var(--mj-text-xs);
+        font-weight: var(--mj-font-medium);
+      }
+
+      .vp-prompt-text {
+        margin-top: 6px;
+        padding: 8px;
+        border: 1px solid var(--mj-border-subtle);
+        border-radius: var(--mj-radius-sm);
+        background: var(--mj-bg-surface-sunken);
+        color: var(--mj-text-primary);
+        font-size: var(--mj-text-xs);
+        white-space: pre-wrap;
+      }
+
       .vp-empty-text {
         margin: 0;
         font-size: var(--mj-text-sm);
@@ -309,22 +373,108 @@ import type {
     `,
   ],
 })
-export class VideoProductionReviewTabComponent extends BaseAngularComponent {
-  @Input() Spec: VideoGenerationSpec | null = null;
+export class VideoProductionReviewTabComponent extends BaseAngularComponent implements OnInit {
+  private cdr = inject(ChangeDetectorRef);
+  private _spec: VideoGenerationSpec | null = null;
+  private _initialized = false;
+  private _resolveToken = 0;
+  private _modelRows: Array<{ ID: string; Name: string }> = [];
+
+  public GeneratedAssets: GeneratedAssetDisclosureItem[] = [];
+
+  @Input()
+  set Spec(value: VideoGenerationSpec | null) {
+    this._spec = value;
+    this.GeneratedAssets = DescribeGeneratedAssets(value ?? {}).Items;
+    if (this._initialized) {
+      void this.resolveModelNames();
+    }
+  }
+  get Spec(): VideoGenerationSpec | null {
+    return this._spec;
+  }
+
+  async ngOnInit(): Promise<void> {
+    this._initialized = true;
+    this.GeneratedAssets = DescribeGeneratedAssets(this._spec ?? {}).Items;
+    await this.resolveModelNames();
+  }
 
   public get Review(): VideoReviewRecord | null {
-    return this.Spec?.Review ?? null;
+    return this._spec?.Review ?? null;
   }
 
   public get Gates(): GateRecord[] {
-    return this.Spec?.Review?.Gates ?? [];
+    return this._spec?.Review?.Gates ?? [];
   }
 
   public get Rounds(): CriticRound[] {
-    return this.Spec?.Review?.Rounds ?? [];
+    return this._spec?.Review?.Rounds ?? [];
   }
 
   public get CriteriaScores(): RubricCriterionScore[] {
-    return this.Spec?.Review?.Scores?.Criteria ?? [];
+    return this._spec?.Review?.Scores?.Criteria ?? [];
+  }
+
+  public FormatBeats(item: GeneratedAssetDisclosureItem): string {
+    return item.Beats.length > 0 ? item.Beats.map(b => b.Key).join(', ') : '—';
+  }
+
+  public FormatDuration(item: GeneratedAssetDisclosureItem): string {
+    return item.DurationSeconds !== undefined ? `${item.DurationSeconds}s` : '—';
+  }
+
+  public FormatCost(item: GeneratedAssetDisclosureItem): string {
+    return item.Cost !== undefined ? `$${item.Cost.toFixed(2)}` : '—';
+  }
+
+  public GetModelLabel(modelId: string): string {
+    if (!modelId) {
+      return '—';
+    }
+    const match = this._modelRows.find(r => UUIDsEqual(r.ID, modelId));
+    return match?.Name || modelId;
+  }
+
+  private async resolveModelNames(): Promise<void> {
+    const token = ++this._resolveToken;
+    const modelIds = Array.from(
+      new Set(
+        this.GeneratedAssets.map(item => item.ModelID?.trim()).filter(
+          (id): id is string => Boolean(id && id.length > 0),
+        ),
+      ),
+    );
+    if (modelIds.length === 0) {
+      this._modelRows = [];
+      this.cdr.markForCheck();
+      return;
+    }
+
+    const quotedIds = modelIds.map(id => `'${EscapeSQLString(id)}'`).join(', ');
+    try {
+      const rv = new RunView(this.RunViewToUse);
+      const result = await rv.RunView<{ ID: string; Name: string }>({
+        EntityName: 'MJ: AI Models',
+        ExtraFilter: `ID IN (${quotedIds})`,
+        Fields: ['ID', 'Name'],
+        ResultType: 'simple',
+      });
+      if (token !== this._resolveToken) {
+        return;
+      }
+      if (result.Success && Array.isArray(result.Results)) {
+        this._modelRows = result.Results.filter(r => Boolean(r?.ID && r?.Name));
+      } else {
+        this._modelRows = [];
+      }
+    } catch (err) {
+      LogError(err);
+      if (token !== this._resolveToken) {
+        return;
+      }
+      this._modelRows = [];
+    }
+    this.cdr.markForCheck();
   }
 }

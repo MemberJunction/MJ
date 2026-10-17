@@ -14,13 +14,24 @@ import { MJConversationEntity } from '@memberjunction/core-entities';
 import { NavigationRequest } from '@memberjunction/ng-artifacts';
 import { PendingAttachment } from '@memberjunction/ng-composer';
 
-const { mockConfig, mockLogError, mockAgentsState } = vi.hoisted(() => ({
-  mockConfig: vi.fn().mockResolvedValue(undefined),
-  mockLogError: vi.fn(),
-  mockAgentsState: {
+const { mockConfig, mockGetProviderInstance, mockLogError, mockAgentsState } = vi.hoisted(() => {
+  const configFn = vi.fn().mockResolvedValue(undefined);
+  const agentsState = {
     agents: [] as Array<{ ID: string; Name: string | null }>,
-  },
-}));
+  };
+  const providerEngine = {
+    Config: configFn,
+    get Agents() {
+      return agentsState.agents;
+    },
+  };
+  return {
+    mockConfig: configFn,
+    mockGetProviderInstance: vi.fn(() => providerEngine),
+    mockLogError: vi.fn(),
+    mockAgentsState: agentsState,
+  };
+});
 
 vi.mock('@memberjunction/core', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@memberjunction/core')>();
@@ -32,12 +43,7 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
 
 vi.mock('@memberjunction/ai-engine-base', () => ({
   AIEngineBase: {
-    Instance: {
-      Config: mockConfig,
-      get Agents() {
-        return mockAgentsState.agents;
-      },
-    },
+    GetProviderInstance: mockGetProviderInstance,
   },
 }));
 
@@ -76,6 +82,8 @@ class ConversationChatAreaStubComponent {
   @Output() PendingMessageConsumed = new EventEmitter<void>();
   @Output() PendingArtifactConsumed = new EventEmitter<void>();
   @Output() navigationRequest = new EventEmitter<NavigationRequest>();
+
+  public OnEmptyStateMessageSent = vi.fn();
 }
 
 @Component({
@@ -119,7 +127,7 @@ describe('VSCopilotPanelComponent DOM tests', () => {
     component.CurrentUser = fakeUser;
   });
 
-  it('binds resolved agent ID, ShowAgentPicker=false, ShowAgentModePicker=true, handles conversationCreated and consumed events', async () => {
+  it('binds resolved agent ID via GetProviderInstance, ShowAgentPicker=false, ShowAgentModePicker=true, handles conversationCreated and consumed events', async () => {
     component.ConversationId = null;
     component.PendingMessage = 'Create a 45s launch teaser';
     component.PendingArtifactId = 'art-456';
@@ -138,6 +146,8 @@ describe('VSCopilotPanelComponent DOM tests', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
+    expect(mockGetProviderInstance).toHaveBeenCalledTimes(1);
+    expect(mockGetProviderInstance).toHaveBeenCalledWith(fakeProvider, expect.anything());
     expect(mockConfig).toHaveBeenCalledTimes(1);
     expect(component.AgentMissing).toBe(false);
     expect(component.VideoStudioAgentId).toBe('agent-vs-001');
@@ -189,7 +199,73 @@ describe('VSCopilotPanelComponent DOM tests', () => {
     expect(chatStub.PendingArtifactVersionNumber).toBeNull();
   });
 
-  it('renders "Video Studio isn\'t installed or you can\'t run it" and logs error when agent is missing', async () => {
+  it('StartConversation resets to a new conversation, awaits OnEmptyStateMessageSent on the chat area, and returns true', async () => {
+    component.ConversationId = 'conv-existing-1';
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const chatDebugEl = fixture.debugElement.query(By.directive(ConversationChatAreaStubComponent));
+    const chatStub = chatDebugEl.componentInstance as ConversationChatAreaStubComponent;
+    let resolveSend!: () => void;
+    chatStub.OnEmptyStateMessageSent.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveSend = resolve;
+        }),
+    );
+    expect(component.ChatIsNewConversation).toBe(false);
+
+    const firstMsg =
+      'Make a Explainer video, about Q3 product launch, 30 seconds, formats 16:9, brand kit Acme Brand, data from Q3 Revenue.';
+    let settled = false;
+    const startPromise = component.StartConversation(firstMsg).then((res) => {
+      settled = true;
+      return res;
+    });
+
+    expect(component.ConversationId).toBeNull();
+    expect(component.ChatIsNewConversation).toBe(true);
+    expect(chatStub.IsNewConversation).toBe(true);
+    expect(chatStub.OnEmptyStateMessageSent).toHaveBeenCalledTimes(1);
+    expect(chatStub.OnEmptyStateMessageSent).toHaveBeenCalledWith({
+      text: firstMsg,
+      attachments: [],
+    });
+    await Promise.resolve();
+    expect(settled).toBe(false);
+
+    resolveSend();
+    const started = await startPromise;
+    expect(settled).toBe(true);
+    expect(started).toBe(true);
+  });
+
+  it('ConversationId setter flips ChatIsNewConversation both ways when updated after initial render', async () => {
+    component.ConversationId = null;
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const chatDebugEl = fixture.debugElement.query(By.directive(ConversationChatAreaStubComponent));
+    const chatStub = chatDebugEl.componentInstance as ConversationChatAreaStubComponent;
+    expect(component.ChatIsNewConversation).toBe(true);
+    expect(chatStub.IsNewConversation).toBe(true);
+
+    component.ConversationId = 'conv-after-render-42';
+    fixture.detectChanges();
+    expect(component.ChatIsNewConversation).toBe(false);
+    expect(chatStub.IsNewConversation).toBe(false);
+    expect(chatStub.ConversationId).toBe('conv-after-render-42');
+
+    component.ConversationId = null;
+    fixture.detectChanges();
+    expect(component.ChatIsNewConversation).toBe(true);
+    expect(chatStub.IsNewConversation).toBe(true);
+    expect(chatStub.ConversationId).toBeNull();
+  });
+
+  it('renders "Video Studio isn\'t installed or you can\'t run it", logs error, and returns false from StartConversation when agent is missing', async () => {
     mockAgentsState.agents = [{ ID: 'agent-other', Name: 'Sage' }];
 
     fixture.detectChanges();
@@ -207,5 +283,11 @@ describe('VSCopilotPanelComponent DOM tests', () => {
     expect(missingEl).not.toBeNull();
     expect(missingEl?.textContent).toContain("Video Studio isn't installed or you can't run it");
     expect(rootEl.querySelector('[data-testid="vs-copilot-chat-area"]')).toBeNull();
+
+    const startedWhenMissing = await component.StartConversation('Make a launch video');
+    expect(startedWhenMissing).toBe(false);
+
+    const startedWhenBlank = await component.StartConversation('   ');
+    expect(startedWhenBlank).toBe(false);
   });
 });

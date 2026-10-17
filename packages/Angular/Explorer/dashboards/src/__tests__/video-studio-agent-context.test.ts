@@ -31,6 +31,7 @@ import {
     STUDIO_VIDEO_FORMATS,
     ParseArchetypeDefaultFormats,
     ClampStudioDuration,
+    BuildSavedQuerySearchFilter,
     ComposeStudioFirstMessage,
     BuildStudioAppContext,
     BuildStudioAgentContext,
@@ -372,6 +373,17 @@ describe('ParseArchetypeDefaultFormats, ClampStudioDuration, ComposeStudioFirstM
         expect(ClampStudioDuration(5, 15, 90)).toBe(15);
         expect(ClampStudioDuration(140, 15, 90)).toBe(90);
         expect(ClampStudioDuration(Number.NaN, 15, 90)).toBe(15);
+    });
+
+    it('escapes SQL LIKE wildcards (%, _, [, \\) with ESCAPE and single quotes via EscapeSQLString in BuildSavedQuerySearchFilter', () => {
+        expect(BuildSavedQuerySearchFilter('')).toBe('');
+        expect(BuildSavedQuerySearchFilter('   ')).toBe('');
+        expect(BuildSavedQuerySearchFilter('50%_off')).toBe(
+            "Name LIKE '%50\\%\\_off%' ESCAPE '\\'",
+        );
+        expect(BuildSavedQuerySearchFilter("O'Reilly [Q1]\\KPI")).toBe(
+            "Name LIKE '%O''Reilly \\[Q1]\\\\KPI%' ESCAPE '\\'",
+        );
     });
 
     it('composes deterministic plain-text first message naming archetype, topic, duration, formats, brand kit, and queries', () => {

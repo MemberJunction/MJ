@@ -555,6 +555,317 @@ describe('VideoProductionViewerComponent & Tab Components (DOM)', () => {
     expect(text(fixture, '.vp-human-notes')).toBe('Approved by CFO for October board deck.');
   });
 
+  it('renders generated-asset disclosure chip in viewer header when generated assets exist and omits it when all assets are Uploaded', () => {
+    const specWithGen = makeSpec({
+      Assets: {
+        Approved: [
+          {
+            Key: 'hero-bg',
+            Kind: 'Image',
+            FileID: 'file-hero-bg',
+            Source: 'Generated',
+            Provenance: 'Generated',
+            Usage: 'Background image',
+            MustUse: false,
+            Generation: {
+              ModelID: 'A1B2C3D4-E5F6-4789-8012-34567890ABCD',
+              PromptRunID: 'pr-hero-1',
+              Prompt: 'Abstract geometric dark slate background',
+              ReferenceKeys: [],
+              Cost: 0.04,
+              C2PA: true,
+            },
+          },
+          {
+            Key: 'intro-clip',
+            Kind: 'Video',
+            FileID: 'file-intro-clip',
+            Source: 'Generated',
+            Provenance: 'Generated',
+            Usage: 'Intro clip',
+            MustUse: false,
+            Generation: {
+              ModelID: 'B2C3D4E5-F6A7-4890-9123-4567890ABCDE',
+              PromptRunID: 'pr-intro-2',
+              Prompt: 'Ambient data stream particles',
+              ReferenceKeys: [],
+              DurationSeconds: 5,
+              Cost: 0.35,
+              C2PA: false,
+            },
+          },
+        ],
+        Required: [],
+        Generate: [],
+        NeverInvent: ['company logo'],
+      },
+    });
+
+    const viewerFixture = renderComponentFixture(VideoProductionViewerComponent, {
+      imports: [ArtifactsModule],
+      inputs: {
+        artifactVersion: makeVersion(JSON.stringify(specWithGen)),
+      },
+    });
+    const genBadge = query(viewerFixture, '.vp-badge--generated');
+    expect(genBadge).not.toBeNull();
+    expect(genBadge?.getAttribute('role')).toBe('note');
+    expect(genBadge?.getAttribute('title')).toBe(
+      'Illustrative AI-generated imagery. See Review for provenance.',
+    );
+    expect(genBadge?.textContent?.trim()).toBe(
+      'Contains AI-generated footage (1 clip, 5 s) and 1 image',
+    );
+  });
+
+  it('omits generated-asset disclosure chip in viewer header when all assets are Uploaded', () => {
+    const uploadedOnlySpec = makeSpec({
+      Assets: {
+        Approved: [
+          {
+            Key: 'customer-photo',
+            Kind: 'Image',
+            FileID: 'file-cust-1',
+            Source: 'Uploaded',
+            Provenance: 'Supplied',
+            Usage: 'Customer photo',
+            MustUse: true,
+          },
+        ],
+        Required: [],
+        Generate: [],
+        NeverInvent: ['company logo'],
+      },
+    });
+    const viewerFixture = renderComponentFixture(VideoProductionViewerComponent, {
+      imports: [ArtifactsModule],
+      inputs: {
+        artifactVersion: makeVersion(JSON.stringify(uploadedOnlySpec)),
+      },
+    });
+    expect(query(viewerFixture, '.vp-badge--generated')).toBeNull();
+  });
+
+  it('renders per-beat AI-generated chip in Storyboard only on beats referencing generated assets', () => {
+    const specWithGen = makeSpec({
+      Assets: {
+        Approved: [
+          {
+            Key: 'hero-bg',
+            Kind: 'Image',
+            FileID: 'file-hero-bg',
+            Source: 'Generated',
+            Provenance: 'Generated',
+            Usage: 'Background image',
+            MustUse: false,
+            Generation: {
+              ModelID: 'A1B2C3D4-E5F6-4789-8012-34567890ABCD',
+              PromptRunID: 'pr-hero-1',
+              Prompt: 'Abstract geometric dark slate background',
+              ReferenceKeys: [],
+            },
+          },
+          {
+            Key: 'customer-photo',
+            Kind: 'Image',
+            FileID: 'file-cust-1',
+            Source: 'Uploaded',
+            Provenance: 'Supplied',
+            Usage: 'Customer photo',
+            MustUse: true,
+          },
+        ],
+        Required: [],
+        Generate: [],
+        NeverInvent: ['company logo'],
+      },
+      Beats: [
+        {
+          Key: 'beat-1',
+          Label: 'Headline Metric',
+          StartSeconds: 0,
+          EndSeconds: 5,
+          EntryState: 'Dark slate canvas',
+          ExitState: 'Counter settled',
+          Purpose: 'Hook viewer with Q3 growth',
+          OnScreenText: ['$4.2M', '+18% YoY'],
+          DataRefs: ['rev_q3'],
+          AssetRefs: ['hero-bg'],
+          NarrationKey: 'narr-1',
+          LayoutNotes: { '16:9': 'Left aligned', '9:16': 'Top stacked' },
+        },
+        {
+          Key: 'beat-2',
+          Label: 'Regional Breakdown',
+          StartSeconds: 5,
+          EndSeconds: 15,
+          EntryState: 'Counter shrinks',
+          ExitState: 'Two-bar comparison locked',
+          Purpose: 'Show EMEA and NA contribution',
+          OnScreenText: ['North America 62%', 'EMEA 38%'],
+          DataRefs: [],
+          AssetRefs: ['customer-photo'],
+          LayoutNotes: { '16:9': 'Two-column', '9:16': 'Stacked' },
+        },
+      ],
+    });
+
+    const storyboardFixture = renderComponentFixture(VideoProductionStoryboardTabComponent, {
+      imports: [ArtifactsModule],
+      inputs: {
+        Provider: stubProvider({
+          'FILE-CS-16-9': { Success: true, Url: 'http://localhost:4000/media/cs-16-9', MimeType: 'image/png' },
+          'FILE-CS-9-16': { Success: true, Url: 'http://localhost:4000/media/cs-9-16', MimeType: 'image/png' },
+        }),
+        Spec: specWithGen,
+      },
+    });
+    const beatRows = queryAll(storyboardFixture, '.vp-storyboard-beat-row');
+    expect(beatRows).toHaveLength(2);
+    expect(beatRows[0].querySelector('.vp-generated-chip')?.textContent?.trim()).toBe('AI-generated');
+    expect(beatRows[1].querySelector('.vp-generated-chip')).toBeNull();
+  });
+
+  it('renders Generated assets provenance table in Review with RunView model resolution and ModelID fallback', async () => {
+    const modelIdResolved = 'A1B2C3D4-E5F6-4789-8012-34567890ABCD';
+    const modelIdFallback = 'B2C3D4E5-F6A7-4890-9123-4567890ABCDE';
+    const specWithGen = makeSpec({
+      Assets: {
+        Approved: [
+          {
+            Key: 'hero-bg',
+            Kind: 'Image',
+            FileID: 'file-hero-bg',
+            Source: 'Generated',
+            Provenance: 'Generated',
+            Usage: 'Background image',
+            MustUse: false,
+            Generation: {
+              ModelID: modelIdResolved,
+              PromptRunID: 'pr-hero-1',
+              Prompt: 'Abstract geometric dark slate background',
+              ReferenceKeys: [],
+              Cost: 0.04,
+              C2PA: true,
+            },
+          },
+          {
+            Key: 'intro-clip',
+            Kind: 'Video',
+            FileID: 'file-intro-clip',
+            Source: 'Generated',
+            Provenance: 'Generated',
+            Usage: 'Intro clip',
+            MustUse: false,
+            Generation: {
+              ModelID: modelIdFallback,
+              PromptRunID: 'pr-intro-2',
+              Prompt: 'Ambient data stream particles',
+              ReferenceKeys: [],
+              DurationSeconds: 5,
+              Cost: 0.35,
+              C2PA: false,
+            },
+          },
+        ],
+        Required: [],
+        Generate: [],
+        NeverInvent: ['company logo'],
+      },
+      Beats: [
+        {
+          Key: 'beat-1',
+          Label: 'Headline Metric',
+          StartSeconds: 0,
+          EndSeconds: 5,
+          EntryState: 'Dark slate canvas',
+          ExitState: 'Counter settled',
+          Purpose: 'Hook viewer with Q3 growth',
+          OnScreenText: ['$4.2M', '+18% YoY'],
+          DataRefs: ['rev_q3'],
+          AssetRefs: ['hero-bg', 'intro-clip'],
+          NarrationKey: 'narr-1',
+          LayoutNotes: { '16:9': 'Left aligned', '9:16': 'Top stacked' },
+        },
+      ],
+    });
+
+    const runViewProvider = {
+      RunView: vi.fn(async () => ({
+        Success: true,
+        Results: [{ ID: modelIdResolved.toLowerCase(), Name: 'FLUX 1.1 Pro' }],
+      })),
+    } as unknown as IMetadataProvider;
+
+    const reviewFixture = renderComponentFixture(VideoProductionReviewTabComponent, {
+      imports: [ArtifactsModule],
+      inputs: {
+        Provider: runViewProvider,
+        Spec: specWithGen,
+      },
+    });
+    await flush();
+    reviewFixture.detectChanges();
+
+    const genTable = query(reviewFixture, '.vp-generated-assets-table');
+    expect(genTable).not.toBeNull();
+    const genRows = queryAll(reviewFixture, '.vp-generated-asset-row');
+    expect(genRows).toHaveLength(2);
+
+    // Row 0: hero-bg (resolved model name FLUX 1.1 Pro, C2PA kept, Cost $0.04, Beats beat-1, Seconds —)
+    expect(genRows[0].textContent).toContain('hero-bg');
+    expect(genRows[0].textContent).toContain('Image');
+    expect(genRows[0].textContent).toContain('beat-1');
+    expect(genRows[0].textContent).toContain('FLUX 1.1 Pro');
+    expect(genRows[0].textContent).toContain('$0.04');
+    expect(genRows[0].textContent).toContain('kept');
+    expect(genRows[0].querySelector('.vp-prompt-text')?.textContent).toBe(
+      'Abstract geometric dark slate background',
+    );
+
+    // Row 1: intro-clip (fallback to ModelID when RunView omits it, C2PA none, Seconds 5s, Cost $0.35)
+    expect(genRows[1].textContent).toContain('intro-clip');
+    expect(genRows[1].textContent).toContain('Video');
+    expect(genRows[1].textContent).toContain('5s');
+    expect(genRows[1].textContent).toContain(modelIdFallback);
+    expect(genRows[1].textContent).toContain('$0.35');
+    expect(genRows[1].textContent).toContain('none');
+    expect(genRows[1].querySelector('.vp-prompt-text')?.textContent).toBe(
+      'Ambient data stream particles',
+    );
+  });
+
+  it('omits Generated assets provenance table in Review when all assets are Uploaded', async () => {
+    const uploadedOnlySpec = makeSpec({
+      Assets: {
+        Approved: [
+          {
+            Key: 'customer-photo',
+            Kind: 'Image',
+            FileID: 'file-cust-1',
+            Source: 'Uploaded',
+            Provenance: 'Supplied',
+            Usage: 'Customer photo',
+            MustUse: true,
+          },
+        ],
+        Required: [],
+        Generate: [],
+        NeverInvent: ['company logo'],
+      },
+    });
+
+    const reviewFixture = renderComponentFixture(VideoProductionReviewTabComponent, {
+      imports: [ArtifactsModule],
+      inputs: {
+        Spec: uploadedOnlySpec,
+      },
+    });
+    await flush();
+    reviewFixture.detectChanges();
+    expect(query(reviewFixture, '.vp-generated-assets-table')).toBeNull();
+  });
+
   it('handles invalid JSON content with <mj-empty-state>', () => {
     const fixture = renderComponentFixture(VideoProductionViewerComponent, {
       imports: [ArtifactsModule],

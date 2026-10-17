@@ -1,5 +1,9 @@
 import { Component, OnInit } from '@angular/core';
-import type { VideoGenerationSpec, VideoRenderedFormatOutput } from '@memberjunction/video-studio-core';
+import {
+  DescribeGeneratedAssets,
+  type VideoGenerationSpec,
+  type VideoRenderedFormatOutput,
+} from '@memberjunction/video-studio-core';
 import { BaseArtifactPreviewComponent } from './base-artifact-preview.component';
 
 /**
@@ -12,6 +16,9 @@ import { BaseArtifactPreviewComponent } from './base-artifact-preview.component'
   standalone: false,
   template: `
     <div class="vp-preview">
+      @if (HasGeneratedAssets) {
+        <span class="vp-preview__generated-chip">AI-generated</span>
+      }
       @if (FirstVideoFileID) {
         <div class="vp-preview__player" (click)="$event.stopPropagation()">
           <mj-storage-media-player
@@ -45,10 +52,24 @@ import { BaseArtifactPreviewComponent } from './base-artifact-preview.component'
         width: 100%;
       }
       .vp-preview {
+        position: relative;
         width: 100%;
         border-radius: var(--mj-radius-sm, 6px);
         overflow: hidden;
         background: var(--mj-bg-surface-sunken);
+      }
+      .vp-preview__generated-chip {
+        position: absolute;
+        top: 6px;
+        right: 6px;
+        z-index: 2;
+        padding: 2px 6px;
+        border-radius: var(--mj-radius-sm);
+        font-size: var(--mj-text-xs);
+        font-weight: var(--mj-font-medium);
+        background: var(--mj-status-warning-bg);
+        color: var(--mj-status-warning-text);
+        border: 1px solid var(--mj-status-warning-border);
       }
       .vp-preview__player {
         width: 100%;
@@ -80,6 +101,7 @@ export class VideoProductionArtifactPreviewComponent
 {
   public Spec: VideoGenerationSpec | null = null;
   public FirstVideoFileID: string | null = null;
+  public HasGeneratedAssets = false;
 
   ngOnInit(): void {
     this.parseSpec();
@@ -89,6 +111,7 @@ export class VideoProductionArtifactPreviewComponent
   private parseSpec(): void {
     this.Spec = null;
     this.FirstVideoFileID = null;
+    this.HasGeneratedAssets = false;
 
     const raw = this.artifactVersion?.Content;
     if (!raw || typeof raw !== 'string') {
@@ -101,6 +124,7 @@ export class VideoProductionArtifactPreviewComponent
         return;
       }
       this.Spec = parsed;
+      this.HasGeneratedAssets = DescribeGeneratedAssets(parsed).SummaryLine !== null;
 
       const videos = parsed.Output?.Videos;
       if (videos && typeof videos === 'object') {
@@ -114,6 +138,7 @@ export class VideoProductionArtifactPreviewComponent
     } catch {
       this.Spec = null;
       this.FirstVideoFileID = null;
+      this.HasGeneratedAssets = false;
     }
   }
 }

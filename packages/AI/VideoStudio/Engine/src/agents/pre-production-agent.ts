@@ -11,6 +11,7 @@ import { EscapeSQLString, IndexByUUID, IsValidUUID, RegisterClass, UUIDSet } fro
 import {
     CreateMJChartKit,
     type VideoAsset,
+    type VideoAssetGenerationRequest,
     type VideoGenerationSpec,
 } from '@memberjunction/video-studio-core';
 import {
@@ -18,12 +19,14 @@ import {
     LoadDataSnapshotValues,
     type DataSnapshotIssue,
 } from '../data/data-snapshot.js';
+import { GenerateRequestedAssets } from '../generation/generate-assets.js';
 import { RunNarrationPipeline } from '../narration/narration-pipeline.js';
 import type {
     FilmDurationBounds,
     NarrationIssue,
 } from '../narration/narration-timeline.js';
 import { SanitizeStageKey } from '../render/bundle.js';
+import { ResolveVideoStudioSettings } from '../settings.js';
 
 const NEVER_INVENT_ESCALATION_NOTE =
     'Ask the caller to supply the missing data, parameter, or asset. Never fill in a placeholder or invent the value.';
@@ -229,9 +232,12 @@ async function resolveAssetExtensionsFromStorage(
     for (const asset of approvedAssets) {
         const fileId = asset.FileID?.trim();
         const avId = asset.ArtifactVersionID?.trim();
-        const avRow = avId ? avByID.Get(avId) : undefined;
+        const avRow = avId && IsValidUUID(avId) ? avByID.Get(avId) : undefined;
         const effectiveFileId = fileId || avRow?.FileID?.trim() || undefined;
-        const fileRow = effectiveFileId ? fileByID.Get(effectiveFileId) : undefined;
+        const fileRow =
+            effectiveFileId && IsValidUUID(effectiveFileId)
+                ? fileByID.Get(effectiveFileId)
+                : undefined;
 
         if (fileId && !fileRow) {
             throw new Error(
@@ -287,13 +293,41 @@ function formatPreProductionFailureMessage(
     return lines.join('\n');
 }
 
+function formatBlockedGenerationMessage(
+    requests: readonly VideoAssetGenerationRequest[],
+): string {
+    const lines: string[] = [
+        'Pre-Production paused during "Generate Assets": one or more generation requests are not Generated.',
+    ];
+    let hasGenerationFailed = false;
+    for (const req of requests) {
+        if (!req || req.Status === 'Generated') {
+            continue;
+        }
+        const status = req.Status ?? 'Pending';
+        const reason = req.BlockedReason ?? 'Skipped because another request in the pass was blocked.';
+        if (reason.startsWith('GenerationFailed:')) {
+            hasGenerationFailed = true;
+        }
+        lines.push(`- ${req.Key} [${status}]: ${reason}`);
+    }
+    if (hasGenerationFailed) {
+        lines.push(
+            'Call Pre-Production again to retry requests that failed with GenerationFailed, or ask the caller for a replacement asset.',
+        );
+    }
+    lines.push(NEVER_INVENT_ESCALATION_NOTE);
+    return lines.join('\n');
+}
+
 /**
  * Deterministic sub-agent for the `Video Studio - Pre-Production` stage (`DriverClass = 'VideoStudioPreProductionAgent'`).
  *
- * Executes three tool steps without invoking an LLM prompt loop:
+ * Executes up to four tool steps without invoking an LLM prompt loop:
  * 1. `"Data Snapshot"` — captures live data bindings via {@link CaptureDataSnapshot} (skipped when `DataBindings` is empty)
- * 2. `"Narration"` — synthesizes TTS clips, re-times beats, and builds VTT captions via {@link RunNarrationPipeline}
- * 3. `"Stage Assets"` — assigns deterministic bundle-relative `StagedPath` values to approved assets and narration lines
+ * 2. `"Generate Assets"` — screens and synthesizes `Assets.Generate` requests via {@link GenerateRequestedAssets} (skipped when `Assets.Generate` is empty)
+ * 3. `"Narration"` — synthesizes TTS clips, re-times beats, and builds VTT captions via {@link RunNarrationPipeline}
+ * 4. `"Stage Assets"` — assigns deterministic bundle-relative `StagedPath` values to approved assets and narration lines
  */
 @RegisterClass(BaseAgent, 'VideoStudioPreProductionAgent')
 export class VideoStudioPreProductionAgent extends BaseAgent {
@@ -405,6 +439,68 @@ export class VideoStudioPreProductionAgent extends BaseAgent {
                 });
             }
 
+            // Step 2: Generate Assets (skipped when spec.Assets.Generate is empty)
+            const generateRequests = Array.isArray(workingSpec.Assets?.Generate)
+                ? workingSpec.Assets.Generate
+                : [];
+            if (generateRequests.length > 0) {
+                currentStep = await startStep('Generate Assets', {
+                    RequestCount: generateRequests.length,
+                    RequestKeys: generateRequests.map((r) => r.Key),
+                });
+
+                const settings = ResolveVideoStudioSettings(params.configurationId);
+                const genResult = await GenerateRequestedAssets(workingSpec, {
+                    ContextUser: contextUser,
+                    Provider: this.ProviderToUse,
+                    StorageAccountID: storageAccountId,
+                    Settings: settings,
+                    AgentID: params.agent?.ID,
+                    AgentRunID: this.AgentRun?.ID,
+                    CompanyID: workingSpec.CompanyID ?? null,
+                    CancellationToken: params.cancellationToken,
+                    APIKeys: params.apiKeys,
+                    CredentialScope: params.CredentialScope,
+                });
+
+                workingSpec.Assets = genResult.Spec.Assets;
+                const updatedRequests = Array.isArray(workingSpec.Assets?.Generate)
+                    ? workingSpec.Assets.Generate
+                    : [];
+                const allGenerated = updatedRequests.every((r) => r && r.Status === 'Generated');
+
+                await finishStep(currentStep, true, {
+                    Requests: genResult.RequestSummaries.map((s) => ({
+                        Key: s.Key,
+                        Kind: s.Kind,
+                        Status: s.Status,
+                        BlockedReason: s.BlockedReason,
+                        ModelID: s.ModelID,
+                        ModelName: s.ModelName,
+                        DurationSeconds: s.DurationSeconds,
+                        Cost: s.Cost,
+                    })),
+                    TotalCost: genResult.TotalCost,
+                });
+                currentStep = null;
+
+                // If any request is not Generated afterwards, skip Narration and Stage Assets
+                // and return Success with the merged payload so paid assets and statuses reach the root.
+                if (!allGenerated) {
+                    const blockedMessage = formatBlockedGenerationMessage(updatedRequests);
+                    return {
+                        finalStep: {
+                            step: 'Success',
+                            terminate: true,
+                            newPayload: workingSpec as unknown as P,
+                            previousPayload: params.payload as P,
+                            message: blockedMessage,
+                        },
+                        stepCount,
+                    };
+                }
+            }
+
             // Pre-check approved asset staging extensions before Narration synthesis (refuse bad input before TTS spend)
             const approvedAssets = Array.isArray(workingSpec.Assets?.Approved)
                 ? workingSpec.Assets.Approved
@@ -416,7 +512,7 @@ export class VideoStudioPreProductionAgent extends BaseAgent {
                 this.ProviderToUse,
             );
 
-            // Step 2: Narration
+            // Step 3: Narration
             currentStep = await startStep('Narration', {
                 LineCount: workingSpec.Audio?.Narration?.Script?.length ?? 0,
                 VoiceID: workingSpec.Audio?.Narration?.VoiceID ?? null,
@@ -505,7 +601,7 @@ export class VideoStudioPreProductionAgent extends BaseAgent {
             });
             currentStep = null;
 
-            // Step 3: Stage Assets
+            // Step 4: Stage Assets
             const scriptLines = Array.isArray(workingSpec.Audio?.Narration?.Script)
                 ? workingSpec.Audio.Narration.Script
                 : [];

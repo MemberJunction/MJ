@@ -235,10 +235,11 @@ test.describe('Video Studio — Studio & Copilot Iterate (VS-UX-2)', () => {
     await expect(firstArchetype).toBeVisible({ timeout: 30_000 });
     await firstArchetype.click();
 
-    // Pick first brand kit option (index 1, after 'None')
+    // Pick first brand kit option (index 1, after 'None') via mj-dropdown
     const brandKitSelect = page.getByTestId('studio-brand-kit-select');
     await expect(brandKitSelect).toBeVisible();
-    await brandKitSelect.selectOption({ index: 1 });
+    await brandKitSelect.click();
+    await page.getByRole('option').nth(1).click();
 
     // Enter topic
     const topicInput = page.getByTestId('studio-topic-input');
@@ -248,10 +249,13 @@ test.describe('Video Studio — Studio & Copilot Iterate (VS-UX-2)', () => {
     await expect(startBtn).toBeEnabled();
     await startBtn.click();
 
-    // Verify copilot chat area receives the composed message
+    // Verify copilot chat area receives the composed message and an MJ: Video Production artifact opens in the viewer pane
     const chatArea = copilotPanel.getByTestId('vs-copilot-chat-area');
     await expect(chatArea).toBeVisible({ timeout: 30_000 });
     await expect(chatArea).toContainText(topicText, { timeout: 30_000 });
+    await expect(
+      copilotPanel.locator('mj-artifact-viewer-panel').first(),
+    ).toBeVisible({ timeout: 60_000 });
 
     // Navigate to Productions and verify production + Iterate
     await openVideoStudioTab(page, 'Productions');
@@ -273,8 +277,49 @@ test.describe('Video Studio — Studio & Copilot Iterate (VS-UX-2)', () => {
 
     const dockedCopilot = detailPane.getByTestId('production-iterate-copilot');
     await expect(dockedCopilot).toBeVisible({ timeout: 30_000 });
-    await expect(dockedCopilot.getByTestId('vs-copilot-chat-area')).toBeVisible({
+    const dockedChatArea = dockedCopilot.getByTestId('vs-copilot-chat-area');
+    await expect(dockedChatArea).toBeVisible({
       timeout: 30_000,
     });
+
+    // Send a follow-up ("make the intro faster") and see version 2 appear in the viewer
+    const chatInput = dockedChatArea.locator('textarea, input[type="text"]').first();
+    await expect(chatInput).toBeVisible({ timeout: 30_000 });
+    await chatInput.fill('make the intro faster');
+    await chatInput.press('Enter');
+    await expect(detailPane).toContainText(/v2|version 2/i, { timeout: 60_000 });
+
+    // Open the Share dialog and share with another user
+    const shareBtn = detailPane.getByTitle('Share');
+    await expect(shareBtn).toBeVisible();
+    await shareBtn.click();
+
+    const shareModal = page.locator('mj-artifact-share-modal');
+    await expect(shareModal).toBeVisible({ timeout: 30_000 });
+
+    const userPicker = shareModal.locator('mj-user-picker');
+    const userSearchInput = userPicker.locator('.user-search-input');
+    await expect(userSearchInput).toBeVisible({ timeout: 30_000 });
+    await userSearchInput.fill(process.env.PLAYWRIGHT_SHARE_USER_QUERY ?? '.com');
+    await userSearchInput.press('Enter');
+
+    const firstUserResult = userPicker.locator('.user-search-item').first();
+    await expect(firstUserResult).toBeVisible({ timeout: 30_000 });
+    await firstUserResult.click();
+
+    const addUserBtn = shareModal.getByRole('button', { name: /Add User/i });
+    await expect(addUserBtn).toBeVisible();
+    await addUserBtn.click();
+
+    await expect(
+      shareModal.locator('.permissions-list .permission-item').first(),
+    ).toBeVisible({ timeout: 30_000 });
+
+    // Toggle dark and light theme and verify the workspace renders cleanly in both
+    await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'));
+    await expect(detailPane).toBeVisible();
+    await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'light'));
+    await expect(detailPane).toBeVisible();
   });
 });
+

@@ -1,5 +1,3 @@
-import * as os from 'node:os';
-import * as path from 'node:path';
 import { cosmiconfigSync } from 'cosmiconfig';
 import { LogWarning } from '@memberjunction/core';
 
@@ -15,11 +13,11 @@ export const DEFAULT_RENDER_TIMEOUT_MS = 35 * 60 * 1_000;
 /** Default non-render request timeout in milliseconds (10 minutes). */
 export const DEFAULT_RENDER_REQUEST_TIMEOUT_MS = 10 * 60 * 1_000;
 
+/** Default hard maximum MP4 output size in bytes (512 MiB = 536,870,912 bytes). */
+export const DEFAULT_RENDER_MAX_OUTPUT_BYTES = 512 * 1024 * 1024;
+
 /** Default Docker image tag for `DockerRenderDriver` (`VS-RND-4`). */
 export const DEFAULT_DOCKER_RENDER_IMAGE = 'mj-video-render-worker:local';
-
-/** Default host workspace root directory for `DockerRenderDriver` bind mounts (`VS-RND-4`). */
-export const DEFAULT_DOCKER_WORKSPACE_ROOT = path.join(os.tmpdir(), 'mj-video-render');
 
 /** Default CPU core limit (`--cpus`) for `DockerRenderDriver` containers (`VS-RND-4`). */
 export const DEFAULT_DOCKER_CPUS = 2;
@@ -32,6 +30,17 @@ export const DEFAULT_DOCKER_PIDS_LIMIT = 512;
 
 /** Default `/dev/shm` size in megabytes (`--shm-size <n>m`) for `DockerRenderDriver` containers (`VS-RND-4`). */
 export const DEFAULT_DOCKER_SHM_SIZE_MB = 1024;
+
+/** Default inline MP4 storage cap in bytes when no MJStorage account is configured (0 = disabled by default, `VS-ART-2`). */
+export const VIDEO_STUDIO_INLINE_MAX_BYTES = 0;
+
+/**
+ * Normalized PascalCase settings for Video Studio output storage (`VS-ART-2`).
+ */
+export interface VideoStudioOutputSettings {
+    /** Maximum rendered MP4 size in bytes permitted for inline `InlineBase64` fallback (default: 0 / disabled). */
+    InlineMaxBytes: number;
+}
 
 /**
  * Shared timeout settings across all `VideoRenderDriverBase` implementations.
@@ -61,6 +70,8 @@ export interface VideoRenderLocalSettings {
 export interface VideoRenderRemoteSettings {
     /** Base `http:` or `https:` URL of the remote render worker (or `VIDEO_STUDIO_RENDER_URL`). */
     Url?: string;
+    /** Optional list of remote render worker base URLs for per-job round-robin pool routing (`videoStudio.render.remote.urls`). */
+    Urls?: readonly string[];
     /** Optional bearer token for the remote render worker (or `VIDEO_STUDIO_RENDER_TOKEN`). */
     Token?: string;
 }
@@ -71,8 +82,12 @@ export interface VideoRenderRemoteSettings {
 export interface VideoRenderDockerSettings {
     /** Docker image reference (default: `'mj-video-render-worker:local'`). */
     Image: string;
-    /** Host workspace root directory bind-mounted into per-job containers (default: `path.join(os.tmpdir(), 'mj-video-render')`). */
-    WorkspaceRoot: string;
+    /**
+     * Optional host workspace root directory bind-mounted into per-job containers.
+     * When omitted, `DockerRenderDriver` creates and reuses one per-process `0o700` directory
+     * via `fs.mkdtemp(path.join(os.tmpdir(), 'mj-video-render-'))`.
+     */
+    WorkspaceRoot?: string;
     /** CPU core limit (`--cpus`, default: `2`). */
     Cpus: number;
     /** Container memory limit in megabytes (`--memory <n>m`, default: `4096`). */
@@ -89,6 +104,8 @@ export interface VideoRenderDockerSettings {
 export interface VideoRenderSettings {
     /** Registered `VideoRenderDriverBase` key (`'LocalWorker'`, `'Remote'`, or `'Docker'`). */
     Driver: string;
+    /** Hard maximum allowed MP4 output size in bytes (default: `536_870_912` / 512 MiB). */
+    MaxOutputBytes?: number;
     /** Shared timeout thresholds in milliseconds. */
     Timeouts: VideoRenderTimeoutsSettings;
     /** Configuration specific to the `LocalWorker` driver. */
@@ -104,14 +121,20 @@ export interface VideoRenderSettings {
  */
 interface RawVideoRenderConfig {
     driver?: unknown;
+    maxOutputBytes?: unknown;
     timeouts?: unknown;
     local?: unknown;
     remote?: unknown;
     docker?: unknown;
 }
 
+interface RawVideoStudioOutputsConfig {
+    inlineMaxBytes?: unknown;
+}
+
 interface RawVideoStudioConfig {
     render?: unknown;
+    outputs?: unknown;
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -171,6 +194,7 @@ function readNonEmptyString(
 function readOptionalNonEmptyString(
     rawValue: unknown,
     fieldPath: string,
+    redactValue: boolean = false,
 ): string | undefined {
     if (rawValue === undefined || rawValue === null) {
         return undefined;
@@ -179,9 +203,38 @@ function readOptionalNonEmptyString(
         return rawValue.trim();
     }
     LogWarning(
-        `${fieldPath} '${String(rawValue)}' is not a non-empty string; ignoring setting.`,
+        redactValue
+            ? `${fieldPath} is not a non-empty string; ignoring setting.`
+            : `${fieldPath} '${String(rawValue)}' is not a non-empty string; ignoring setting.`,
     );
     return undefined;
+}
+
+function readOptionalNonEmptyStringArray(
+    rawValue: unknown,
+    fieldPath: string,
+): string[] | undefined {
+    if (rawValue === undefined || rawValue === null) {
+        return undefined;
+    }
+    if (!Array.isArray(rawValue)) {
+        LogWarning(`${fieldPath} is not an array; ignoring setting.`);
+        return undefined;
+    }
+    const items: string[] = [];
+    for (let i = 0; i < rawValue.length; i++) {
+        const entry = rawValue[i];
+        if (typeof entry === 'string' && entry.trim().length > 0) {
+            items.push(entry.trim());
+        } else {
+            LogWarning(`${fieldPath}[${i}] '${String(entry)}' is not a non-empty string; ignoring entry.`);
+        }
+    }
+    if (items.length === 0) {
+        LogWarning(`${fieldPath} contains no non-empty strings; ignoring setting.`);
+        return undefined;
+    }
+    return items;
 }
 
 function readEnvNonEmptyString(envName: string): string | undefined {
@@ -208,7 +261,6 @@ function buildDefaultRemoteSettings(): VideoRenderRemoteSettings {
 function buildDefaultDockerSettings(): VideoRenderDockerSettings {
     return {
         Image: DEFAULT_DOCKER_RENDER_IMAGE,
-        WorkspaceRoot: DEFAULT_DOCKER_WORKSPACE_ROOT,
         Cpus: DEFAULT_DOCKER_CPUS,
         MemoryMb: DEFAULT_DOCKER_MEMORY_MB,
         PidsLimit: DEFAULT_DOCKER_PIDS_LIMIT,
@@ -225,6 +277,7 @@ function buildDefaultDockerSettings(): VideoRenderDockerSettings {
 export function ReadVideoRenderSettings(searchFrom: string = process.cwd()): VideoRenderSettings {
     const defaults: VideoRenderSettings = {
         Driver: DEFAULT_VIDEO_RENDER_DRIVER,
+        MaxOutputBytes: DEFAULT_RENDER_MAX_OUTPUT_BYTES,
         Timeouts: {
             StartupMs: DEFAULT_RENDER_STARTUP_TIMEOUT_MS,
             RenderMs: DEFAULT_RENDER_TIMEOUT_MS,
@@ -271,6 +324,11 @@ export function ReadVideoRenderSettings(searchFrom: string = process.cwd()): Vid
         renderSection.driver,
         'videoStudio.render.driver',
         DEFAULT_VIDEO_RENDER_DRIVER,
+    );
+    const maxOutputBytes = readPositiveNumber(
+        renderSection.maxOutputBytes,
+        'videoStudio.render.maxOutputBytes',
+        DEFAULT_RENDER_MAX_OUTPUT_BYTES,
     );
 
     const timeouts: VideoRenderTimeoutsSettings = { ...defaults.Timeouts };
@@ -330,9 +388,20 @@ export function ReadVideoRenderSettings(searchFrom: string = process.cwd()): Vid
             if (url !== undefined) {
                 remote.Url = url;
             }
+            const urls = readOptionalNonEmptyStringArray(
+                renderSection.remote.urls,
+                'videoStudio.render.remote.urls',
+            );
+            if (urls !== undefined) {
+                remote.Urls = urls;
+                if (url === undefined) {
+                    delete remote.Url;
+                }
+            }
             const token = readOptionalNonEmptyString(
                 renderSection.remote.token,
                 'videoStudio.render.remote.token',
+                true,
             );
             if (token !== undefined) {
                 remote.Token = token;
@@ -350,11 +419,13 @@ export function ReadVideoRenderSettings(searchFrom: string = process.cwd()): Vid
                 'videoStudio.render.docker.image',
                 DEFAULT_DOCKER_RENDER_IMAGE,
             );
-            docker.WorkspaceRoot = readNonEmptyString(
+            const workspaceRoot = readOptionalNonEmptyString(
                 renderSection.docker.workspaceRoot,
                 'videoStudio.render.docker.workspaceRoot',
-                DEFAULT_DOCKER_WORKSPACE_ROOT,
             );
+            if (workspaceRoot !== undefined) {
+                docker.WorkspaceRoot = workspaceRoot;
+            }
             docker.Cpus = readPositiveNumber(
                 renderSection.docker.cpus,
                 'videoStudio.render.docker.cpus',
@@ -380,9 +451,83 @@ export function ReadVideoRenderSettings(searchFrom: string = process.cwd()): Vid
 
     return {
         Driver: driver,
+        MaxOutputBytes: maxOutputBytes,
         Timeouts: timeouts,
         Local: local,
         Remote: remote,
         Docker: docker,
     };
 }
+
+function readNonNegativeNumber(
+    rawValue: unknown,
+    fieldPath: string,
+    defaultValue: number,
+): number {
+    if (rawValue === undefined || rawValue === null) {
+        return defaultValue;
+    }
+    if (typeof rawValue === 'number' && Number.isFinite(rawValue) && rawValue >= 0) {
+        return rawValue;
+    }
+    LogWarning(
+        `${fieldPath} '${String(rawValue)}' is not a non-negative finite number; using default ${defaultValue}.`,
+    );
+    return defaultValue;
+}
+
+/**
+ * Reads `videoStudio.outputs` from `mj.config.cjs` (searching upward from `searchFrom`) and returns
+ * normalized PascalCase `VideoStudioOutputSettings` (`VS-ART-2`).
+ *
+ * Invalid values log a warning via `LogWarning` and fall back to defaults (`VIDEO_STUDIO_INLINE_MAX_BYTES`).
+ * Never throws.
+ */
+export function ReadVideoStudioOutputSettings(searchFrom: string = process.cwd()): VideoStudioOutputSettings {
+    const defaults: VideoStudioOutputSettings = {
+        InlineMaxBytes: VIDEO_STUDIO_INLINE_MAX_BYTES,
+    };
+
+    let rawConfig: Record<string, unknown> | undefined;
+    try {
+        const explorer = cosmiconfigSync('mj', { searchStrategy: 'global' });
+        const result = explorer.search(searchFrom);
+        if (result && !result.isEmpty && isPlainObject(result.config)) {
+            rawConfig = result.config;
+        }
+    } catch (error) {
+        LogWarning(
+            `videoStudio.outputs: mj.config could not be read (${error instanceof Error ? error.message : String(error)}); using defaults.`,
+        );
+        return defaults;
+    }
+
+    if (!rawConfig || rawConfig.videoStudio === undefined || rawConfig.videoStudio === null) {
+        return defaults;
+    }
+    if (!isPlainObject(rawConfig.videoStudio)) {
+        LogWarning('videoStudio in mj.config is not an object; using default output settings.');
+        return defaults;
+    }
+
+    const videoStudioSection = rawConfig.videoStudio as RawVideoStudioConfig;
+    if (videoStudioSection.outputs === undefined || videoStudioSection.outputs === null) {
+        return defaults;
+    }
+    if (!isPlainObject(videoStudioSection.outputs)) {
+        LogWarning('videoStudio.outputs in mj.config is not an object; using default output settings.');
+        return defaults;
+    }
+
+    const outputsSection = videoStudioSection.outputs as RawVideoStudioOutputsConfig;
+    const inlineMaxBytes = readNonNegativeNumber(
+        outputsSection.inlineMaxBytes,
+        'videoStudio.outputs.inlineMaxBytes',
+        VIDEO_STUDIO_INLINE_MAX_BYTES,
+    );
+
+    return {
+        InlineMaxBytes: inlineMaxBytes,
+    };
+}
+

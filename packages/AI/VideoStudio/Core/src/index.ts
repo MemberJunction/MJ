@@ -13,3 +13,5 @@ export * from './data-values.js';
 export * from './chart-kit-types.js';
 export * from './chart-kit.js';
 export * from './data-literals.js';
+export * from './generated-asset-disclosure.js';
+

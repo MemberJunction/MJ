@@ -111,9 +111,7 @@ export async function RunOneShot(
     if (options.Stdin) {
         options.Stdin.once('end', onStdinClosed);
         options.Stdin.once('close', onStdinClosed);
-        if (typeof options.Stdin.resume === 'function') {
-            options.Stdin.resume();
-        }
+        options.Stdin.resume();
     }
 
     try {

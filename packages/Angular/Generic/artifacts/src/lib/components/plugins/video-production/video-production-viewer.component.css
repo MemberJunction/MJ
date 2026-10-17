@@ -71,6 +71,12 @@
   border-color: var(--mj-status-info-border);
 }
 
+.vp-badge--generated {
+  background: var(--mj-status-warning-bg);
+  color: var(--mj-status-warning-text);
+  border-color: var(--mj-status-warning-border);
+}
+
 .vp-badge--status[data-status='Approved'] {
   background: var(--mj-status-success-bg);
   color: var(--mj-status-success-text);

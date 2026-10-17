@@ -21,71 +21,50 @@
     }
   ],
   "Scores": {
-    "OverallScore": 8,
-    "MaxScore": 9,
-    "Passed": true,
     "Criteria": [
       {
         "Criterion": "hook-lands-in-the-first-two-seconds",
-        "Score": 1,
-        "MaxScore": 1,
-        "Passed": true,
+        "Level": "Meets",
         "Notes": "Headline ARR metric is legible at 0.8s."
       },
       {
         "Criterion": "readable-at-phone-size",
-        "Score": 0.5,
-        "MaxScore": 1,
-        "Passed": true,
+        "Level": "Partial",
         "Notes": "Minor 14px subtitle overlap on beat-2 in 9:16."
       },
       {
         "Criterion": "type-and-color-stay-consistent",
-        "Score": 1,
-        "MaxScore": 1,
-        "Passed": true,
+        "Level": "Meets",
         "Notes": "MJ Sans and MJ Mono hierarchy is consistent across all three beats."
       },
       {
         "Criterion": "motion-has-weight-and-a-clear-focus",
-        "Score": 1,
-        "MaxScore": 1,
-        "Passed": true,
+        "Level": "Meets",
         "Notes": "Cubic-bezier entrances settle 1.5s before beat transitions."
       },
       {
         "Criterion": "sound-is-in-sync-with-the-picture",
-        "Score": 1,
-        "MaxScore": 1,
-        "Passed": true,
+        "Level": "Meets",
         "Notes": "Narration and music duck align with beat boundaries."
       },
       {
         "Criterion": "stays-on-brand",
-        "Score": 0.5,
-        "MaxScore": 1,
-        "Passed": true,
+        "Level": "Partial",
         "Notes": "Warm streak in hero_abstract_grid slightly drifts from cool navy palette."
       },
       {
         "Criterion": "shown-values-match-the-data-snapshot",
-        "Score": 1,
-        "MaxScore": 1,
-        "Passed": true,
+        "Level": "Meets",
         "Notes": "All rendered figures match DataSnapshot and AsOf footer is visible."
       },
       {
         "Criterion": "final-frame-works-as-a-poster",
-        "Score": 1,
-        "MaxScore": 1,
-        "Passed": true,
+        "Level": "Meets",
         "Notes": "Closing beat settles into a clean executive summary poster frame."
       },
       {
         "Criterion": "generated-assets-are-honest-and-disclosed",
-        "Score": 1,
-        "MaxScore": 1,
-        "Passed": true,
+        "Level": "Meets",
         "Notes": "Generated background is purely illustrative and provenance is recorded."
       }
     ]

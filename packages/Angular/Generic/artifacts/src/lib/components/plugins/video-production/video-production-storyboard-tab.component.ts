@@ -1,13 +1,19 @@
 import { ChangeDetectorRef, Component, Input, OnInit, inject } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MintMediaAccessUrl } from '@memberjunction/ng-media-player';
-import type { VideoBeat, VideoFormat, VideoGenerationSpec } from '@memberjunction/video-studio-core';
+import {
+  DescribeGeneratedAssets,
+  type VideoBeat,
+  type VideoFormat,
+  type VideoGenerationSpec,
+} from '@memberjunction/video-studio-core';
 
 export interface StoryboardBeatRow {
   Beat: VideoBeat;
   TimeRange: string;
   OnScreenTextJoined: string;
   NarrationText: string;
+  UsesGeneratedAsset: boolean;
 }
 
 export interface StoryboardContactSheetItem {
@@ -40,7 +46,12 @@ export interface StoryboardContactSheetItem {
                 @for (row of BeatRows; track row.Beat.Key) {
                   <tr class="vp-storyboard-beat-row">
                     <td class="vp-cell-mono">{{ row.TimeRange }}</td>
-                    <td class="vp-cell-strong">{{ row.Beat.Label }}</td>
+                    <td class="vp-cell-strong">
+                      {{ row.Beat.Label }}
+                      @if (row.UsesGeneratedAsset) {
+                        <span class="vp-generated-chip">AI-generated</span>
+                      }
+                    </td>
                     <td>{{ row.Beat.Purpose }}</td>
                     <td>{{ row.OnScreenTextJoined }}</td>
                     <td>{{ row.NarrationText }}</td>
@@ -152,6 +163,18 @@ export interface StoryboardContactSheetItem {
         color: var(--mj-text-primary);
       }
 
+      .vp-generated-chip {
+        display: inline-block;
+        margin-left: 6px;
+        padding: 2px 6px;
+        border-radius: var(--mj-radius-sm);
+        font-size: var(--mj-text-xs);
+        font-weight: var(--mj-font-medium);
+        background: var(--mj-status-warning-bg);
+        color: var(--mj-status-warning-text);
+        border: 1px solid var(--mj-status-warning-border);
+      }
+
       .vp-contact-sheets-grid {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
@@ -240,6 +263,8 @@ export class VideoProductionStoryboardTabComponent extends BaseAngularComponent 
       }
     }
 
+    const generatedKeys = new Set(DescribeGeneratedAssets(this._spec ?? {}).Items.map(i => i.Key));
+
     this.BeatRows = beats.map(beat => {
       const lookupKey = beat.NarrationKey || beat.Key;
       const narration = narrationByKey.get(lookupKey) ?? narrationByKey.get(beat.Key) ?? '—';
@@ -247,11 +272,14 @@ export class VideoProductionStoryboardTabComponent extends BaseAngularComponent 
         Array.isArray(beat.OnScreenText) && beat.OnScreenText.length > 0
           ? beat.OnScreenText.join(' · ')
           : '—';
+      const usesGeneratedAsset =
+        Array.isArray(beat.AssetRefs) && beat.AssetRefs.some(key => generatedKeys.has(key));
       return {
         Beat: beat,
         TimeRange: `${beat.StartSeconds}s – ${beat.EndSeconds}s`,
         OnScreenTextJoined: onScreen,
         NarrationText: narration,
+        UsesGeneratedAsset: usesGeneratedAsset,
       };
     });
   }

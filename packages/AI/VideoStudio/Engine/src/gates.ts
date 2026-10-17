@@ -9,10 +9,14 @@
  */
 
 import { ConversationUtility, type FormResponseContent, GetValueFromPath } from '@memberjunction/ai-core-plus';
+import { RubricEngineBase } from '@memberjunction/rubrics-base';
 import {
     ValidateVideoGenerationSpec,
     VIDEO_STUDIO_SPEC_VERSION,
     type GateRecord,
+    type RubricCriterionScore,
+    type VideoAsset,
+    type VideoAssetGenerationRequest,
     type VideoFormat,
     type VideoGateId,
     type VideoGenerationSpec,
@@ -28,6 +32,7 @@ export interface GateEvaluationContext {
     Now?: string;
     BrandKitInScope?: boolean;
     EffectiveInteractionMode?: VideoGenerationSpec['Interaction']['Mode'];
+    InitialRoundCount?: number;
 }
 
 /**
@@ -425,6 +430,107 @@ function evaluateGateG4(
     };
 }
 
+/**
+ * Rubric criterion key for generated-asset honesty and disclosure (`D20`).
+ * Open defects on this criterion never defer at repair-budget exhaustion.
+ */
+export const GENERATED_ASSET_INTEGRITY_CRITERION_KEY =
+    'generated-assets-are-honest-and-disclosed' as const;
+
+function getCurrentRunRoundCount(
+    spec: Partial<VideoGenerationSpec>,
+    initialRoundCount = 0,
+): number {
+    const rounds = Array.isArray(spec.Review?.Rounds) ? spec.Review.Rounds : [];
+    const offset = Math.max(0, Math.min(initialRoundCount, rounds.length));
+    return rounds.length - offset;
+}
+
+function findFailedGateCriteria(spec: Partial<VideoGenerationSpec>): RubricCriterionScore[] {
+    const criteria = spec.Review?.Scores?.Criteria;
+    if (!Array.isArray(criteria) || criteria.length === 0) {
+        return [];
+    }
+    const gateKeys = new Set<string>([GENERATED_ASSET_INTEGRITY_CRITERION_KEY]);
+    const rubricId = spec.Review?.Scores?.RubricID;
+    if (rubricId) {
+        const published = RubricEngineBase.Instance.GetLatestPublishedVersion(rubricId);
+        if (published && Array.isArray(published.nodes)) {
+            for (const node of published.nodes) {
+                if (node?.nodeType === 'Criterion' && node.isGate && node.key) {
+                    gateKeys.add(node.key.trim().toLowerCase());
+                }
+            }
+        }
+    }
+    return criteria.filter(
+        (c): c is RubricCriterionScore =>
+            Boolean(c) &&
+            c.Passed === false &&
+            typeof c.Criterion === 'string' &&
+            gateKeys.has(c.Criterion.trim().toLowerCase()),
+    );
+}
+
+/**
+ * Checks whether a post-render Critic round produced a terminal G5 failure — either an open
+ * `generated-assets-are-honest-and-disclosed` defect at the repair cap, or a rubric gate
+ * criterion (`IsGate = true` / `generated-assets-are-honest-and-disclosed`) scored below its
+ * gate minimum when no repairable blocking defects remain or the repair budget is reached.
+ *
+ * Returns `null` when there is no Critic round on or after `Output.RenderMetadata.RenderedAt`
+ * (so a stale pre-render Critic round never triggers a terminal failure), or when G5 is
+ * passing / still has repair rounds available.
+ */
+export function FindIntegrityOrGateCriterionFailure(
+    spec: Partial<VideoGenerationSpec>,
+    ctx: GateEvaluationContext,
+): string | null {
+    if (!hasCriticRoundOnOrAfterRender(spec)) {
+        return null;
+    }
+
+    const rounds = spec.Review?.Rounds ?? [];
+    const newestRound = rounds[rounds.length - 1];
+    const openIntegrityDefects = (newestRound?.Defects ?? []).filter(
+        (d) =>
+            d &&
+            d.Status === 'Open' &&
+            d.Criterion === GENERATED_ASSET_INTEGRITY_CRITERION_KEY,
+    );
+    const openBlockingDefects = (newestRound?.Defects ?? []).filter(
+        (d) =>
+            d &&
+            d.Status === 'Open' &&
+            (d.Severity === 'Blocker' ||
+                d.Severity === 'Major' ||
+                d.Criterion === GENERATED_ASSET_INTEGRITY_CRITERION_KEY),
+    );
+    const failedGateCriteria = findFailedGateCriteria(spec);
+    const currentRunRounds = getCurrentRunRoundCount(spec, ctx.InitialRoundCount);
+    const repairBudgetReached =
+        currentRunRounds > 0 && currentRunRounds - 1 >= ctx.Settings.MaxRepairRounds;
+
+    if (openIntegrityDefects.length > 0 && repairBudgetReached) {
+        const firstIntegrity = openIntegrityDefects[0];
+        const key = firstIntegrity?.AssetKey || firstIntegrity?.Beat || 'unknown';
+        return `Generated asset ${key} failed the integrity check: ${firstIntegrity?.Evidence ?? ''}`;
+    }
+
+    if ((openBlockingDefects.length === 0 || repairBudgetReached) && failedGateCriteria.length > 0) {
+        const failedIntegrity = failedGateCriteria.find(
+            (c) => c.Criterion.trim().toLowerCase() === GENERATED_ASSET_INTEGRITY_CRITERION_KEY,
+        );
+        if (failedIntegrity) {
+            return `Generated-asset integrity criterion failed: ${failedIntegrity.Notes || 'criterion scored below gate threshold'}`;
+        }
+        const firstFailedGate = failedGateCriteria[0];
+        return `Gate criterion "${firstFailedGate.Criterion}" failed (${firstFailedGate.Notes || `score ${firstFailedGate.Score}/${firstFailedGate.MaxScore}`}).`;
+    }
+
+    return null;
+}
+
 function evaluateGateG5(
     spec: Partial<VideoGenerationSpec>,
     ctx: GateEvaluationContext,
@@ -440,14 +546,38 @@ function evaluateGateG5(
         };
     }
 
+    const terminalFailure = FindIntegrityOrGateCriterionFailure(spec, ctx);
+    if (terminalFailure) {
+        return {
+            Gate: 'G5',
+            Status: 'Failed',
+            EvidenceRefs: [],
+            Timestamp: now,
+            Notes: terminalFailure,
+        };
+    }
+
     const rounds = spec.Review?.Rounds ?? [];
     const newestRound = rounds[rounds.length - 1];
-    const openBlockingDefects = (newestRound?.Defects ?? []).filter(
-        (d) => d && d.Status === 'Open' && (d.Severity === 'Blocker' || d.Severity === 'Major'),
+    const openIntegrityDefects = (newestRound?.Defects ?? []).filter(
+        (d) =>
+            d &&
+            d.Status === 'Open' &&
+            d.Criterion === GENERATED_ASSET_INTEGRITY_CRITERION_KEY,
     );
-    const repairBudgetReached = rounds.length - 1 >= ctx.Settings.MaxRepairRounds;
+    const openBlockingDefects = (newestRound?.Defects ?? []).filter(
+        (d) =>
+            d &&
+            d.Status === 'Open' &&
+            (d.Severity === 'Blocker' ||
+                d.Severity === 'Major' ||
+                d.Criterion === GENERATED_ASSET_INTEGRITY_CRITERION_KEY),
+    );
+    const currentRunRounds = getCurrentRunRoundCount(spec, ctx.InitialRoundCount);
+    const repairBudgetReached =
+        currentRunRounds > 0 && currentRunRounds - 1 >= ctx.Settings.MaxRepairRounds;
 
-    if (openBlockingDefects.length === 0 || repairBudgetReached) {
+    if (openBlockingDefects.length === 0 || (repairBudgetReached && openIntegrityDefects.length === 0)) {
         return {
             Gate: 'G5',
             Status: 'Passed',
@@ -455,7 +585,7 @@ function evaluateGateG5(
             Timestamp: now,
             ...(openBlockingDefects.length > 0
                 ? {
-                      Notes: `Repair budget reached (${rounds.length - 1}/${ctx.Settings.MaxRepairRounds}); ${openBlockingDefects.length} open Major/Blocker defect(s) deferred to HumanReviewNotes.`,
+                      Notes: `Repair budget reached (${currentRunRounds - 1}/${ctx.Settings.MaxRepairRounds}); ${openBlockingDefects.length} open Major/Blocker defect(s) deferred to HumanReviewNotes.`,
                   }
                 : {}),
         };
@@ -557,6 +687,11 @@ export function DeriveStatus(
         return 'Blocked';
     }
 
+    const generateRequests = Array.isArray(safeSpec.Assets?.Generate) ? safeSpec.Assets.Generate : [];
+    if (generateRequests.some((r) => r?.Status === 'Blocked')) {
+        return 'Blocked';
+    }
+
     const isStyled = Boolean(
         safeSpec.Style &&
             Array.isArray(safeSpec.Style.Palette) &&
@@ -599,11 +734,15 @@ export function DeriveStatus(
 
     const approvedAssets = Array.isArray(safeSpec.Assets?.Approved) ? safeSpec.Assets.Approved : [];
     const hasApprovedAssetIds = approvedAssets.every((a) => Boolean(a?.FileID?.trim() || a?.ArtifactVersionID?.trim()));
+    const allGeneratedRequestsDone =
+        generateRequests.length === 0 ||
+        generateRequests.every((r) => isGenerateRequestSatisfied(r, approvedAssets));
 
     const isPreProduced =
         hasDataSnapshotIfNeeded &&
         hasNarrationAudioIfNeeded &&
-        hasApprovedAssetIds;
+        hasApprovedAssetIds &&
+        allGeneratedRequestsDone;
     if (!isPreProduced) {
         return 'Approved';
     }
@@ -629,6 +768,24 @@ export function DeriveStatus(
     return 'Reviewed';
 }
 
+function isGenerateRequestSatisfied(
+    req: VideoAssetGenerationRequest | undefined | null,
+    approvedAssets: ReadonlyArray<VideoAsset>,
+): boolean {
+    if (!req) {
+        return true;
+    }
+    if (req.Status === 'Blocked' || req.Status === 'Pending') {
+        return false;
+    }
+    if (req.Status === 'Generated') {
+        return true;
+    }
+    return approvedAssets.some(
+        (a) => a?.Key === req.Key && Boolean(a?.FileID?.trim() || a?.ArtifactVersionID?.trim()),
+    );
+}
+
 function hasCompositionFiles(src: { Files?: unknown } | undefined | null): boolean {
     if (!src || src.Files === undefined || src.Files === null) {
         return false;
@@ -651,6 +808,7 @@ export function CheckStagePrerequisite(
     spec: Partial<VideoGenerationSpec>,
     gates: ReadonlyArray<GateRecord>,
     settings: VideoStudioSettings,
+    initialRoundCount = 0,
 ): string | null {
     const safeSpec = spec ?? {};
     const stage = normalizeStageName(stageName);
@@ -696,7 +854,8 @@ export function CheckStagePrerequisite(
         }
 
         const rounds = Array.isArray(safeSpec.Review?.Rounds) ? safeSpec.Review.Rounds : [];
-        if (rounds.length > 0 && rounds.length - 1 >= settings.MaxRepairRounds) {
+        const currentRunRounds = getCurrentRunRoundCount(safeSpec, initialRoundCount);
+        if (currentRunRounds > 0 && currentRunRounds - 1 >= settings.MaxRepairRounds) {
             return `G5 (Repair): maximum repair rounds (${settings.MaxRepairRounds}) reached after Critic round ${rounds.length}; deliver with HumanReviewNotes instead of repairing again`;
         }
 
@@ -709,6 +868,24 @@ export function CheckStagePrerequisite(
             'Delivered',
         ];
         if (!allowedStatuses.includes(derived)) {
+            const generateRequests = Array.isArray(safeSpec.Assets?.Generate) ? safeSpec.Assets.Generate : [];
+            const blockedRequests = generateRequests.filter((r) => r?.Status === 'Blocked');
+            if (blockedRequests.length > 0) {
+                const summary = blockedRequests
+                    .map((r) => `${r.Key} (${r.BlockedReason || 'Blocked'})`)
+                    .join('; ');
+                return `G2 (Plan): Pre-Production blocked on generated asset request(s): ${summary}`;
+            }
+            const approvedAssets = Array.isArray(safeSpec.Assets?.Approved) ? safeSpec.Assets.Approved : [];
+            const ungeneratedRequests = generateRequests.filter(
+                (r) => !isGenerateRequestSatisfied(r, approvedAssets),
+            );
+            if (ungeneratedRequests.length > 0) {
+                const summary = ungeneratedRequests
+                    .map((r) => `${r.Key} (${r.Status ?? 'Pending'})`)
+                    .join('; ');
+                return `G2 (Plan): Pre-Production must complete generated asset request(s) [${summary}] (status is "${derived}", need "PreProduced") before running Motion Engineer`;
+            }
             return `G2 (Plan): Pre-Production must complete (status is "${derived}", need "PreProduced") before running Motion Engineer`;
         }
         return null;
@@ -1002,3 +1179,52 @@ export function DescribeStageProgress(stageName: string, spec: Partial<VideoGene
             return `${stage || 'Stage'} complete`;
     }
 }
+
+/**
+ * Pure helper that resets a `'Generated'` asset back to `'Pending'` on its matching
+ * `Assets.Generate` request when `RegenerationCount < maxRegenerations`.
+ *
+ * Allowed only when:
+ * - `spec.Assets.Approved` contains an entry with `Key === assetKey` and `Provenance === 'Generated'`, and
+ * - `spec.Assets.Generate` contains a request with `Key === assetKey` whose `(RegenerationCount ?? 0) < maxRegenerations`.
+ *
+ * When allowed, removes the generated asset (and any `<assetKey>-still` companion generated asset)
+ * from `Assets.Approved`, sets the request's `Status` to `'Pending'`, clears `BlockedReason`,
+ * and increments `RegenerationCount`.
+ */
+export function RequestRegeneration(
+    spec: Partial<VideoGenerationSpec>,
+    assetKey: string,
+    maxRegenerations: number,
+): { Spec: Partial<VideoGenerationSpec>; Allowed: boolean } {
+    const cloned: Partial<VideoGenerationSpec> = JSON.parse(JSON.stringify(spec ?? {}));
+    const trimmedKey = typeof assetKey === 'string' ? assetKey.trim() : '';
+    if (!trimmedKey || typeof maxRegenerations !== 'number' || maxRegenerations <= 0) {
+        return { Spec: cloned, Allowed: false };
+    }
+
+    const approved = Array.isArray(cloned.Assets?.Approved) ? cloned.Assets.Approved : [];
+    const generate = Array.isArray(cloned.Assets?.Generate) ? cloned.Assets.Generate : [];
+
+    const approvedAsset = approved.find((a) => a?.Key === trimmedKey && a.Provenance === 'Generated');
+    const request = generate.find((r) => r?.Key === trimmedKey);
+    if (!approvedAsset || !request) {
+        return { Spec: cloned, Allowed: false };
+    }
+
+    const currentCount = typeof request.RegenerationCount === 'number' ? request.RegenerationCount : 0;
+    if (currentCount >= maxRegenerations) {
+        return { Spec: cloned, Allowed: false };
+    }
+
+    const stillKey = `${trimmedKey}-still`;
+    cloned.Assets!.Approved = approved.filter(
+        (a) => a?.Key !== trimmedKey && !(a?.Key === stillKey && a.Provenance === 'Generated'),
+    );
+    request.Status = 'Pending';
+    delete request.BlockedReason;
+    request.RegenerationCount = currentCount + 1;
+
+    return { Spec: cloned, Allowed: true };
+}
+

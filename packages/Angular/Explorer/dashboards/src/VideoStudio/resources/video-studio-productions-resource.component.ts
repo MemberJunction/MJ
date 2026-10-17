@@ -14,7 +14,7 @@ import {
   MJEnvironmentEntityExtended,
   ResourceData,
 } from '@memberjunction/core-entities';
-import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import {
   GraphQLDataProvider,
   GraphQLFileStorageClient,
@@ -26,7 +26,6 @@ import { VideoProductionStatus } from '@memberjunction/video-studio-core';
 import {
   BuildProductionsAgentContext,
   CountActiveProductionPopoverFilters,
-  EscapeSqlLiteral,
   FilterProductionCards,
   ProductionCardSnapshot,
   ProductionCardStatus,
@@ -235,7 +234,7 @@ export class VideoStudioProductionsResourceComponent
       const attrsByVersionId = new Map<string, Map<string, string>>();
       if (artifacts.length > 0) {
         const quotedIds = artifacts
-          .map((a) => `'${a.ID.replace(/'/g, "''")}'`)
+          .map((a) => `'${EscapeSQLString(a.ID)}'`)
           .join(', ');
         const latestVersionsSubquery = `SELECT v.ID FROM [__mj].[vwArtifactVersions] v INNER JOIN (SELECT ArtifactID, MAX(VersionNumber) AS MaxVer FROM [__mj].[vwArtifactVersions] WHERE ArtifactID IN (${quotedIds}) GROUP BY ArtifactID) latest ON v.ArtifactID = latest.ArtifactID AND v.VersionNumber = latest.MaxVer`;
         const [versionsResult, attributesResult, companiesResult] = await rv.RunViews([
@@ -410,18 +409,27 @@ export class VideoStudioProductionsResourceComponent
           item.ID,
           this.ProviderToUse.CurrentUser,
         );
+        if (this.SelectedProduction !== item) {
+          return;
+        }
         this.CanShareSelected = perms.canShare;
         this.CanEditSelected = perms.canEdit;
       } catch (err: unknown) {
         LogError(err instanceof Error ? err.message : String(err));
+        if (this.SelectedProduction !== item) {
+          return;
+        }
         this.CanShareSelected = false;
         this.CanEditSelected = false;
       }
     }
 
     if (item) {
-      this.SelectedProductionConversationId =
-        await this.resolveProductionConversationId(item.ID);
+      const convId = await this.resolveProductionConversationId(item.ID);
+      if (this.SelectedProduction !== item) {
+        return;
+      }
+      this.SelectedProductionConversationId = convId;
     }
 
     this.syncAgentContext();
@@ -460,7 +468,7 @@ export class VideoStudioProductionsResourceComponent
     }
     try {
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-      const escapedId = EscapeSqlLiteral(trimmedId);
+      const escapedId = EscapeSQLString(trimmedId);
       const detailArtifactResult = await rv.RunView<{
         ConversationDetailID?: string | null;
       }>({
@@ -482,7 +490,7 @@ export class VideoStudioProductionsResourceComponent
         return null;
       }
 
-      const escapedDetailId = EscapeSqlLiteral(detailId);
+      const escapedDetailId = EscapeSQLString(detailId);
       const detailResult = await rv.RunView<{ ConversationID?: string | null }>({
         EntityName: 'MJ: Conversation Details',
         ExtraFilter: `ID = '${escapedDetailId}'`,

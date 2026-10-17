@@ -85,6 +85,11 @@ interface VideoGenerationKeyframe {
     AssetKey: string;  // Key of an approved or brand-kit image asset anchoring this keyframe.
 }
 
+type VideoGenerationRequestStatus =
+    | 'Pending'  // Queued for screening and synthesis in Pre-Production (default when absent)
+    | 'Generated'  // Synthesized, stored in MJStorage, and added to Assets.Approved with Generation provenance
+    | 'Blocked';  // Refused by pre-call policy/budget/integrity screen or failed during runner execution
+
 interface VideoAssetGenerationRequest {
     Key: string;  // Target asset key that will be added to `Assets.Approved` once generated.
     Kind: 'Image' | 'Video';  // Whether to generate a still image or a video clip.
@@ -95,6 +100,9 @@ interface VideoAssetGenerationRequest {
     ReferenceKeys: string[];  // Keys of approved or brand-kit reference assets to guide style or subject.
     Keyframes?: VideoGenerationKeyframe[];  // Optional keyframe image anchors for video generation.
     WantAudio?: boolean;  // Defaults to false (clip audio muted); set true to preserve ambient generator audio.
+    Status?: VideoGenerationRequestStatus;  // Lifecycle status set by Pre-Production; absent means `'Pending'`.
+    BlockedReason?: string;  // Reason code and explanation when `Status` is `'Blocked'` (`'<Code>: <Reason>'`).
+    RegenerationCount?: number;  // Number of times this request has been reset for regeneration after a Critic defect.
 }
 
 interface VideoAssetsSpec {
@@ -365,6 +373,7 @@ interface VideoDefect {
     Evidence: string;  // What the Critic or deterministic check observed in the rendered frame.
     Fix: string;  // Specific, local adjustment instructed for the Motion Engineer.
     Status: DefectStatus;  // Resolution state of the defect ('Open', 'Fixed', or 'Deferred').
+    AssetKey?: string;  // Key in `Assets.Approved` when the defect is about one asset (for example a garbled generated clip).
 }
 
 interface CriticRound {

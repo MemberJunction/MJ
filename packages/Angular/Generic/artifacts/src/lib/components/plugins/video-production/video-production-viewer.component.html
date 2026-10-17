@@ -22,6 +22,15 @@
             }
           </span>
         }
+        @if (GeneratedSummaryLine; as genLine) {
+          <span
+            class="vp-badge vp-badge--generated"
+            role="note"
+            title="Illustrative AI-generated imagery. See Review for provenance."
+          >
+            {{ genLine }}
+          </span>
+        }
         <span class="vp-badge vp-badge--status" [attr.data-status]="Spec.Status">
           {{ Spec.Status }}
         </span>

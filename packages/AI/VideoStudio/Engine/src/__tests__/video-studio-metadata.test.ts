@@ -12,12 +12,14 @@ import {
     type MJChartKit,
     type MJVideoRuntime,
     type ReferenceAnalysis,
-    type RubricCriterionScore,
-    type RubricScoreSummary,
     type VideoCompositionSource,
     type VideoDefect,
     type VideoGenerationSpec,
 } from '@memberjunction/video-studio-core';
+import type {
+    CriticPromptCriterionScore,
+    CriticPromptOutput,
+} from '../agents/critic-agent.js';
 import { DELIVERED_SPEC_FIXTURE } from './fixtures/delivered-spec.fixture.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -815,34 +817,30 @@ describe('Video Studio metadata pin (VS-AGT-1)', () => {
         ] as const satisfies readonly DefectSeverity[];
 
         const validScoreSummaryKeys = [
-            'RubricID',
-            'OverallScore',
-            'MaxScore',
-            'Passed',
             'Criteria',
-        ] as const satisfies readonly (keyof RubricScoreSummary)[];
+        ] as const satisfies readonly (keyof NonNullable<CriticPromptOutput['Scores']>)[];
 
         const requiredScoreSummaryKeys = [
-            'OverallScore',
-            'MaxScore',
-            'Passed',
             'Criteria',
-        ] as const satisfies readonly (keyof RubricScoreSummary)[];
+        ] as const satisfies readonly (keyof NonNullable<CriticPromptOutput['Scores']>)[];
 
         const validCriterionScoreKeys = [
             'Criterion',
-            'Score',
-            'MaxScore',
-            'Passed',
+            'Level',
             'Notes',
-        ] as const satisfies readonly (keyof RubricCriterionScore)[];
+        ] as const satisfies readonly (keyof CriticPromptCriterionScore)[];
 
         const requiredCriterionScoreKeys = [
             'Criterion',
-            'Score',
-            'MaxScore',
-            'Passed',
-        ] as const satisfies readonly (keyof RubricCriterionScore)[];
+            'Level',
+        ] as const satisfies readonly (keyof CriticPromptCriterionScore)[];
+
+        const validCriterionLevels = [
+            'Meets',
+            'Partial',
+            'Miss',
+            'NotApplicable',
+        ] as const satisfies readonly NonNullable<CriticPromptCriterionScore['Level']>[];
 
         const validReferenceAnalysisKeys = [
             'SourceKey',
@@ -913,6 +911,7 @@ describe('Video Studio metadata pin (VS-AGT-1)', () => {
             for (const reqKey of requiredCriterionScoreKeys) {
                 expect(itemKeys).toContain(reqKey);
             }
+            expect(validCriterionLevels as readonly string[]).toContain(String(item.Level));
         }
 
         const refExample = readJson<Record<string, unknown>>(
@@ -968,6 +967,11 @@ describe('Video Studio metadata pin (VS-AGT-1)', () => {
             'Helvetica',
             'Path',
             'Content',
+            'Level',
+            'Meets',
+            'Partial',
+            'Miss',
+            'NotApplicable',
         ]);
 
         const templatePaths = [

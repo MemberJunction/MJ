@@ -43,11 +43,22 @@ const CONTAINER_WORKSPACE = '/workspace';
 export class DockerSandboxProvider implements ISandboxProvider {
     private readonly hostRootPath: string;
     private readonly defaultImage: string;
+    private readonly dockerRunner?: (args: string[]) => Promise<string>;
+    private readonly executorFactory?: (containerName: string, hostPath: string) => SandboxExecutor;
     private readonly containers = new Map<string, string>();
 
-    public constructor(options?: { hostRootPath?: string; defaultImage?: string }) {
+    public constructor(options?: {
+        hostRootPath?: string;
+        defaultImage?: string;
+        /** Test seam overriding the `docker` CLI command runner. */
+        dockerRunner?: (args: string[]) => Promise<string>;
+        /** Test seam overriding the per-container executor; runs commands outside the container. */
+        executorFactory?: (containerName: string, hostPath: string) => SandboxExecutor;
+    }) {
         this.hostRootPath = options?.hostRootPath ?? join(tmpdir(), 'mj-agent-harness');
         this.defaultImage = options?.defaultImage ?? 'ghcr.io/memberjunction/harness-sandbox:latest';
+        this.dockerRunner = options?.dockerRunner;
+        this.executorFactory = options?.executorFactory;
     }
 
     /** @inheritdoc */
@@ -87,25 +98,76 @@ export class DockerSandboxProvider implements ISandboxProvider {
             HostWorkspacePath: hostPath,
             Key: key,
             Ephemeral: key.Scope === 'run',
-            Executor: new DockerExecExecutor(containerName),
+            Executor: this.executorFactory
+                ? this.executorFactory(containerName, hostPath)
+                : new DockerExecExecutor(containerName),
         };
+    }
+
+    /**
+     * Checks whether the container for `handle` is still running via `docker container inspect`.
+     *
+     * Returns `false` when inspect prints `false` or fails with `No such container` / `No such object`.
+     * Any other error or unclear output returns `true` (fail-safe) so callers never delete bind-mounted
+     * host directories while a container process might still be alive.
+     */
+    public async IsContainerRunning(handle: SandboxHandle): Promise<boolean> {
+        const containerName = `mj-harness-${handle.Key.RunId}`;
+        try {
+            const output = await this.runDockerCommand([
+                'container',
+                'inspect',
+                '--format',
+                '{{.State.Running}}',
+                containerName,
+            ]);
+            const normalized = output.trim().replace(/^['"]|['"]$/g, '').trim();
+            return normalized !== 'false';
+        } catch (error) {
+            if (/no such (container|object)/i.test(describeError(error))) {
+                return false;
+            }
+            return true;
+        }
     }
 
     /** @inheritdoc */
     public async Finalize(handle: SandboxHandle, _outcome: 'success' | 'failure' | 'cancelled'): Promise<void> {
         const containerName = `mj-harness-${handle.Key.RunId}`;
+        const hostPath = join(this.hostRootPath, this.buildRelativePath(handle.Key));
+        let stopError: unknown;
         try {
             // --rm on the container means stopping it removes it, so this is both stop and cleanup.
             await this.runDockerCommand(['stop', '--time', '5', containerName]);
         } catch (e) {
-            // Never rethrow from finalize: it runs on failure and cancellation paths, where throwing
-            // would replace the real error with a cleanup error and lose the diagnosis.
-            LogError(`Failed to stop harness container ${containerName}: ${describeError(e)}`);
+            stopError = e;
+        }
+
+        if (stopError !== undefined) {
+            let killError: unknown;
+            try {
+                await this.runDockerCommand(['kill', containerName]);
+            } catch (e) {
+                killError = e;
+            }
+            const stillRunning = await this.IsContainerRunning(handle);
+            if (stillRunning) {
+                // Never rethrow from finalize: it runs on failure and cancellation paths, where throwing
+                // would replace the real error with a cleanup error and lose the diagnosis.
+                const detail =
+                    killError !== undefined
+                        ? `${describeError(stopError)}; kill failed: ${describeError(killError)}`
+                        : describeError(stopError);
+                LogError(
+                    `Failed to stop harness container ${containerName} (${detail}); leaving workspace ${hostPath} in place because container may still be running.`,
+                );
+                this.containers.delete(containerName);
+                return;
+            }
         }
         this.containers.delete(containerName);
 
         if (handle.Ephemeral) {
-            const hostPath = join(this.hostRootPath, this.buildRelativePath(handle.Key));
             try {
                 await rm(hostPath, { recursive: true, force: true });
             } catch (e) {
@@ -159,6 +221,9 @@ export class DockerSandboxProvider implements ISandboxProvider {
 
     /** Runs a docker CLI command and resolves with its trimmed stdout. */
     private runDockerCommand(args: string[]): Promise<string> {
+        if (this.dockerRunner) {
+            return this.dockerRunner(args);
+        }
         return new Promise<string>((resolve, reject) => {
             const child = spawn('docker', args);
             const out: string[] = [];

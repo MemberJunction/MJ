@@ -3,6 +3,7 @@ import { DataSnapshot, LogError } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { MediaTrack } from '@memberjunction/ng-media-player';
 import {
+  DescribeGeneratedAssets,
   FormatAsOfCardText,
   type VideoCompositionSource,
   type VideoFormat,
@@ -100,6 +101,10 @@ export class VideoProductionViewerComponent
 
   public get HasDataBadge(): boolean {
     return Boolean(this.Spec?.DataBindings && this.Spec.DataBindings.length > 0);
+  }
+
+  public get GeneratedSummaryLine(): string | null {
+    return this.Spec ? DescribeGeneratedAssets(this.Spec).SummaryLine : null;
   }
 
   public get DataAsOfText(): string {

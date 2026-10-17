@@ -2,6 +2,8 @@
 
 Video Studio turns a brief, brand kit, data sources, and asset pack into deterministic, broadcast-grade deliverables (multi-aspect MP4s, keyframes, captions, contact sheets, and a review manifest) governed by a canonical `VideoGenerationSpec`. See [plans/video-studio.md](../../../plans/video-studio.md) for the full architecture and production pipeline.
 
+**Guide:** [guides/VIDEO_STUDIO_GUIDE.md](../../../guides/VIDEO_STUDIO_GUIDE.md)
+
 ## Packages
 
 | Directory | Package Name | Runtime | Purpose |

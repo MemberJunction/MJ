@@ -27,20 +27,25 @@ export {
     DEFAULT_DOCKER_PIDS_LIMIT,
     DEFAULT_DOCKER_RENDER_IMAGE,
     DEFAULT_DOCKER_SHM_SIZE_MB,
-    DEFAULT_DOCKER_WORKSPACE_ROOT,
+    DEFAULT_RENDER_MAX_OUTPUT_BYTES,
     DEFAULT_RENDER_REQUEST_TIMEOUT_MS,
     DEFAULT_RENDER_STARTUP_TIMEOUT_MS,
     DEFAULT_RENDER_TIMEOUT_MS,
     DEFAULT_VIDEO_RENDER_DRIVER,
     ReadVideoRenderSettings,
+    ReadVideoStudioOutputSettings,
+    VIDEO_STUDIO_INLINE_MAX_BYTES,
     type VideoRenderDockerSettings,
     type VideoRenderLocalSettings,
     type VideoRenderRemoteSettings,
     type VideoRenderSettings,
     type VideoRenderTimeoutsSettings,
+    type VideoStudioOutputSettings,
 } from './render/render-settings.js';
 
 export {
+    MAX_RENDER_JSON_RESPONSE_BYTES,
+    MAX_RENDER_NDJSON_LINE_BYTES,
     RenderWorkerHttpClient,
     type RenderWorkerHttpClientOptions,
 } from './render/worker-http-client.js';
@@ -159,3 +164,31 @@ export {
     REFERENCE_ANALYSIS_PROMPT_NAME,
     VideoStudioArtDirectorAgent,
 } from './agents/art-director-agent.js';
+
+export {
+    BuildBeatsTable,
+    BuildBoundValuesTable,
+    BuildGeneratedAssetsTable,
+    BuildRepairBrief,
+    BuildRubricCriteriaText,
+    BuildTimelineTable,
+    PickSheetsForCall,
+} from './review/critic-input.js';
+
+export {
+    ComposeHumanReviewNotes,
+} from './review/human-review-notes.js';
+
+export {
+    LoadVideoStudioCriticAgent,
+    MISSING_CRITIC_RUBRIC_ERROR_MESSAGE,
+    VideoStudioCriticAgent,
+    type CriticPromptCriterionScore,
+    type CriticPromptOutput,
+} from './agents/critic-agent.js';
+
+export * from './generation/generation-policy.js';
+export * from './generation/generation-screen.js';
+export * from './generation/generate-assets.js';
+
+

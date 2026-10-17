@@ -21,6 +21,7 @@ import {
 } from '@memberjunction/core-entities';
 import { EscapeSQLString, RegisterClass, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import {
+    BuildGenerationProvenanceSummary,
     ValidateVideoGenerationSpec,
     VIDEO_INTERACTION_MODES,
     VIDEO_STUDIO_SPEC_VERSION,
@@ -37,8 +38,13 @@ import {
     DescribeStageProgress,
     DescribeStoryboardForApproval,
     EvaluateGates,
+    FindIntegrityOrGateCriterionFailure,
+    GENERATED_ASSET_INTEGRITY_CRITERION_KEY,
     ReadApprovalDecision,
+    RequestRegeneration,
 } from '../gates.js';
+import { BuildRepairBrief } from '../review/critic-input.js';
+import { ComposeHumanReviewNotes } from '../review/human-review-notes.js';
 import {
     DEFAULT_VIDEO_STUDIO_SETTINGS,
     ResolveVideoStudioSettings,
@@ -139,6 +145,8 @@ export class VideoStudioAgent extends BaseAgent {
     protected _brandKitInScope: boolean = true;
     private _callerPayloadMode: VideoInteractionMode | null = null;
     private _callerMode: VideoInteractionMode | null = null;
+    private _startedWithBrief: boolean = false;
+    private _initialRoundCount: number = 0;
 
     protected override async validateAgent(
         agent: MJAIAgentEntityExtended,
@@ -272,12 +280,57 @@ export class VideoStudioAgent extends BaseAgent {
             Settings: this._currentSettings,
             BrandKitInScope: this._brandKitInScope,
             EffectiveInteractionMode: effectiveMode,
+            InitialRoundCount: this._initialRoundCount,
         });
         cloned.Review = {
             ...(cloned.Review ?? { Rounds: [] }),
             Gates: gates,
             Rounds: Array.isArray(cloned.Review?.Rounds) ? cloned.Review.Rounds : [],
         };
+
+        if (stageSucceeded && canonicalStage === 'Video Studio - Critic') {
+            const rounds = cloned.Review.Rounds;
+            const newestRound = rounds.length > 0 ? rounds[rounds.length - 1] : undefined;
+            if (newestRound && Array.isArray(newestRound.Defects)) {
+                const handledKeys = new Set<string>();
+                for (const defect of newestRound.Defects) {
+                    const assetKey = defect?.AssetKey?.trim();
+                    if (defect && defect.Status === 'Open' && assetKey && !handledKeys.has(assetKey)) {
+                        const isGenerated = (cloned.Assets?.Approved ?? []).some(
+                            (a) => a?.Key === assetKey && a.Provenance === 'Generated',
+                        );
+                        if (isGenerated) {
+                            handledKeys.add(assetKey);
+                            const regen = RequestRegeneration(
+                                cloned,
+                                assetKey,
+                                this._currentSettings.MaxRegenerations,
+                            );
+                            if (regen.Allowed && regen.Spec.Assets) {
+                                cloned.Assets = regen.Spec.Assets;
+                            }
+                        }
+                    }
+                }
+            }
+
+            const g5 = gates.find((g) => g.Gate === 'G5');
+            if (g5?.Status === 'Passed') {
+                if (newestRound && Array.isArray(newestRound.Defects)) {
+                    for (const defect of newestRound.Defects) {
+                        if (
+                            defect &&
+                            defect.Status === 'Open' &&
+                            defect.Criterion !== GENERATED_ASSET_INTEGRITY_CRITERION_KEY
+                        ) {
+                            defect.Status = 'Deferred';
+                        }
+                    }
+                }
+                cloned.Review.HumanReviewNotes = ComposeHumanReviewNotes(cloned);
+            }
+        }
+
         cloned.Status = DeriveStatus(cloned, gates);
 
         const progressText = DescribeStageProgress(canonicalStage, cloned);
@@ -416,6 +469,7 @@ export class VideoStudioAgent extends BaseAgent {
             Settings: this._currentSettings,
             BrandKitInScope: this._brandKitInScope,
             EffectiveInteractionMode: effectiveMode,
+            InitialRoundCount: this._initialRoundCount,
         });
         spec.Review = {
             ...(spec.Review ?? { Rounds: [] }),
@@ -449,7 +503,13 @@ export class VideoStudioAgent extends BaseAgent {
             }
         }
 
-        const refusal = CheckStagePrerequisite(stageName, spec, gates, this._currentSettings);
+        const refusal = CheckStagePrerequisite(
+            stageName,
+            spec,
+            gates,
+            this._currentSettings,
+            this._initialRoundCount,
+        );
         if (refusal) {
             return {
                 ...baseResult,
@@ -552,12 +612,31 @@ export class VideoStudioAgent extends BaseAgent {
             Settings: this._currentSettings,
             BrandKitInScope: this._brandKitInScope,
             EffectiveInteractionMode: effectiveMode,
+            InitialRoundCount: this._initialRoundCount,
         });
         spec.Review = {
             ...(spec.Review ?? { Rounds: [] }),
             Gates: gates,
             Rounds: Array.isArray(spec.Review?.Rounds) ? spec.Review.Rounds : [],
         };
+
+        const terminalFailure = FindIntegrityOrGateCriterionFailure(spec, {
+            Settings: this._currentSettings,
+            BrandKitInScope: this._brandKitInScope,
+            EffectiveInteractionMode: effectiveMode,
+            InitialRoundCount: this._initialRoundCount,
+        });
+        if (terminalFailure) {
+            spec.Status = DeriveStatus(spec, gates);
+            return {
+                ...baseResult,
+                step: 'Failed',
+                terminate: true,
+                errorMessage: terminalFailure,
+                previousPayload: currentPayload,
+                newPayload: spec as unknown as P,
+            };
+        }
 
         // Gate G4 Plan checkpoint under ApproveStoryboardAndRoughCut
         const g1 = gates.find((g) => g.Gate === 'G1');
@@ -613,13 +692,32 @@ export class VideoStudioAgent extends BaseAgent {
         }
 
         spec.Status = 'Delivered';
-        spec.Review.HumanReviewNotes = this.buildHumanReviewNotes(spec);
+        spec.Review.HumanReviewNotes = ComposeHumanReviewNotes(spec);
+        const provenance = BuildGenerationProvenanceSummary(spec);
+        if (spec.Output) {
+            if (provenance !== undefined) {
+                spec.Output.GenerationProvenance = provenance;
+            } else {
+                delete spec.Output.GenerationProvenance;
+            }
+        }
+
+        const archetypeName = spec.Archetype?.Name?.trim() || 'Video Production';
+        const oneSentence = spec.Film?.OneSentence ?? '';
+        const artifactDirective: BaseAgentNextStep<P>['artifactDirective'] = this._startedWithBrief
+            ? { behavior: 'version-source' }
+            : {
+                  behavior: 'create-new',
+                  name: `${archetypeName}: ${oneSentence}`.slice(0, 120),
+                  description: spec.Film?.Purpose,
+              };
 
         return {
             ...baseResult,
             step: 'Success',
             previousPayload: currentPayload,
             newPayload: spec as unknown as P,
+            artifactDirective,
         };
     }
 
@@ -638,6 +736,7 @@ export class VideoStudioAgent extends BaseAgent {
     ): Partial<VideoGenerationSpec> {
         this.captureCallerMode(params);
         const seeded = cloneSpec((params.payload ?? {}) as Partial<VideoGenerationSpec>);
+        this._startedWithBrief = Boolean(seeded.Film?.OneSentence?.trim());
 
         seeded.SpecVersion = VIDEO_STUDIO_SPEC_VERSION;
         seeded.Status = 'Briefing';
@@ -650,6 +749,8 @@ export class VideoStudioAgent extends BaseAgent {
                 ? { HumanReviewNotes: seeded.Review.HumanReviewNotes }
                 : {}),
         };
+
+        this._initialRoundCount = seeded.Review.Rounds.length;
 
         seeded.Assets = {
             Approved: Array.isArray(seeded.Assets?.Approved) ? [...seeded.Assets.Approved] : [],
@@ -1138,6 +1239,16 @@ export class VideoStudioAgent extends BaseAgent {
             };
         }
 
+        if (normalizedStage === 'Motion Engineer') {
+            const repairBrief = BuildRepairBrief(spec);
+            if (repairBrief.length > 0) {
+                return {
+                    repairBrief,
+                };
+            }
+            return {};
+        }
+
         return {};
     }
 
@@ -1243,29 +1354,6 @@ export class VideoStudioAgent extends BaseAgent {
             `- **Latest Critic Summary:** ${latestRound?.Summary ?? 'Clean pass.'}`,
         ];
         return lines.join('\n');
-    }
-
-    private buildHumanReviewNotes(spec: Partial<VideoGenerationSpec>): string {
-        const existing = spec.Review?.HumanReviewNotes?.trim();
-        if (existing) {
-            return existing;
-        }
-        const notes: string[] = [];
-        const rounds = spec.Review?.Rounds ?? [];
-        const latestRound = rounds[rounds.length - 1];
-        const openDefects = (latestRound?.Defects ?? []).filter((d) => d && d.Status !== 'Fixed');
-        if (openDefects.length > 0) {
-            notes.push(
-                `Deferred defects (${openDefects.length}): ${openDefects
-                    .map((d) => `[${d.Severity}] ${d.Beat} @ ${d.Timestamp}s: ${d.Evidence}`)
-                    .join('; ')}`,
-            );
-        }
-        const genAssets = (spec.Assets?.Approved ?? []).filter((a) => a?.Provenance === 'Generated');
-        if (genAssets.length > 0) {
-            notes.push(`Generated assets disclosed: ${genAssets.map((a) => a.Key).join(', ')}.`);
-        }
-        return notes.length > 0 ? notes.join(' ') : 'No open items.';
     }
 }
 
