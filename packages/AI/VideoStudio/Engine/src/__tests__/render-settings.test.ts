@@ -15,6 +15,8 @@ import {
     DEFAULT_RENDER_TIMEOUT_MS,
     DEFAULT_VIDEO_RENDER_DRIVER,
     ReadVideoRenderSettings,
+    ReadVideoStudioOutputSettings,
+    VIDEO_STUDIO_INLINE_MAX_BYTES,
 } from '../index.js';
 
 const DEFAULT_DOCKER_SETTINGS = {
@@ -248,4 +250,49 @@ describe('ReadVideoRenderSettings', () => {
             Token: 'config-wins-token',
         });
     });
+
+    it('ReadVideoStudioOutputSettings: reads inlineMaxBytes from temp mj.config.cjs, defaults to 2 MB when absent, and logs a warning + uses default on invalid values', async () => {
+        const customDir = await makeTempDir();
+        await fs.writeFile(
+            path.join(customDir, 'mj.config.cjs'),
+            `module.exports = {
+                videoStudio: {
+                    outputs: {
+                        inlineMaxBytes: 5 * 1024 * 1024,
+                    },
+                },
+            };\n`,
+            'utf8',
+        );
+        expect(ReadVideoStudioOutputSettings(customDir)).toEqual({
+            InlineMaxBytes: 5 * 1024 * 1024,
+        });
+
+        const absentDir = await makeTempDir();
+        await fs.writeFile(path.join(absentDir, 'mj.config.cjs'), 'module.exports = {};\n', 'utf8');
+        expect(ReadVideoStudioOutputSettings(absentDir)).toEqual({
+            InlineMaxBytes: VIDEO_STUDIO_INLINE_MAX_BYTES,
+        });
+        expect(VIDEO_STUDIO_INLINE_MAX_BYTES).toBe(2 * 1024 * 1024);
+
+        const warnSpy = vi.spyOn(mjCore, 'LogWarning').mockImplementation(() => undefined);
+        const badDir = await makeTempDir();
+        await fs.writeFile(
+            path.join(badDir, 'mj.config.cjs'),
+            `module.exports = {
+                videoStudio: {
+                    outputs: {
+                        inlineMaxBytes: -100,
+                    },
+                },
+            };\n`,
+            'utf8',
+        );
+        expect(ReadVideoStudioOutputSettings(badDir)).toEqual({
+            InlineMaxBytes: VIDEO_STUDIO_INLINE_MAX_BYTES,
+        });
+        expect(warnSpy).toHaveBeenCalled();
+    });
 });
+
+

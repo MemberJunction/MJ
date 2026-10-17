@@ -141,6 +141,8 @@ export class VideoStudioAgent extends BaseAgent {
     protected _brandKitInScope: boolean = true;
     private _callerPayloadMode: VideoInteractionMode | null = null;
     private _callerMode: VideoInteractionMode | null = null;
+    private _startedWithBrief: boolean | null = null;
+    private _emittedFileOutputFormats: Set<string> = new Set();
 
     protected override async validateAgent(
         agent: MJAIAgentEntityExtended,
@@ -634,11 +636,52 @@ export class VideoStudioAgent extends BaseAgent {
         spec.Status = 'Delivered';
         spec.Review.HumanReviewNotes = ComposeHumanReviewNotes(spec);
 
+        const fileOutputs = Array.isArray(this.FileOutputs) ? this.FileOutputs : null;
+        for (const [fmt, video] of Object.entries(spec.Output?.Videos ?? {})) {
+            if (!video || typeof video.FileID !== 'string' || !video.FileID.trim()) {
+                continue;
+            }
+            const fileId = video.FileID.trim();
+            const fileName = `video-${fmt.replace(':', 'x')}.mp4`;
+            if (
+                this._emittedFileOutputFormats.has(fmt) ||
+                fileOutputs?.some((f) => f.fileId === fileId && f.fileName === fileName)
+            ) {
+                continue;
+            }
+            this._emittedFileOutputFormats.add(fmt);
+            fileOutputs?.push({
+                fileName,
+                mimeType: video.MimeType || 'video/mp4',
+                fileId,
+                sizeBytes: video.FileSizeBytes,
+                visibility: 'System Only',
+            });
+        }
+
+        const startedWithBrief =
+            this._startedWithBrief !== null
+                ? this._startedWithBrief
+                : Boolean(
+                      (params.payload as Partial<VideoGenerationSpec> | undefined)?.Film?.OneSentence?.trim(),
+                  );
+
+        const archetypeName = spec.Archetype?.Name?.trim() || 'Video Production';
+        const oneSentence = spec.Film?.OneSentence ?? '';
+        const artifactDirective: BaseAgentNextStep<P>['artifactDirective'] = startedWithBrief
+            ? { behavior: 'version-source' }
+            : {
+                  behavior: 'create-new',
+                  name: `${archetypeName}: ${oneSentence}`.slice(0, 120),
+                  description: spec.Film?.Purpose,
+              };
+
         return {
             ...baseResult,
             step: 'Success',
             previousPayload: currentPayload,
             newPayload: spec as unknown as P,
+            artifactDirective,
         };
     }
 
@@ -657,6 +700,8 @@ export class VideoStudioAgent extends BaseAgent {
     ): Partial<VideoGenerationSpec> {
         this.captureCallerMode(params);
         const seeded = cloneSpec((params.payload ?? {}) as Partial<VideoGenerationSpec>);
+        this._startedWithBrief = Boolean(seeded.Film?.OneSentence?.trim());
+        this._emittedFileOutputFormats.clear();
 
         seeded.SpecVersion = VIDEO_STUDIO_SPEC_VERSION;
         seeded.Status = 'Briefing';

@@ -33,11 +33,14 @@ export {
     DEFAULT_RENDER_TIMEOUT_MS,
     DEFAULT_VIDEO_RENDER_DRIVER,
     ReadVideoRenderSettings,
+    ReadVideoStudioOutputSettings,
+    VIDEO_STUDIO_INLINE_MAX_BYTES,
     type VideoRenderDockerSettings,
     type VideoRenderLocalSettings,
     type VideoRenderRemoteSettings,
     type VideoRenderSettings,
     type VideoRenderTimeoutsSettings,
+    type VideoStudioOutputSettings,
 } from './render/render-settings.js';
 
 export {

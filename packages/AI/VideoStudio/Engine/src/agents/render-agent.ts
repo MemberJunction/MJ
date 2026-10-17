@@ -19,8 +19,10 @@ import {
     BuildRenderBundle,
     CheckProductionRules,
     FrameSizeFor,
+    ResolveDeliverableFormats,
     StillPointsFor,
 } from '../render/bundle.js';
+import { ReadVideoStudioOutputSettings } from '../render/render-settings.js';
 import { VideoRenderEngine } from '../render/video-render-engine.js';
 import { ResolveVideoStudioSettings } from '../settings.js';
 import { StoreFile } from '../storage.js';
@@ -30,6 +32,10 @@ import { StoreFile } from '../storage.js';
  */
 export const NO_STORAGE_ACCOUNT_ERROR_MESSAGE =
     "No file storage account resolved for Video Studio. Set Default Storage Account on the 'Content Creation' category.";
+
+function formatMegabytesOneDecimal(bytes: number): string {
+    return (bytes / (1024 * 1024)).toFixed(1);
+}
 
 function cloneSpec<T>(value: T): T {
     if (value === undefined || value === null) {
@@ -66,7 +72,7 @@ function formatCheckFailureMessage(format: VideoFormat, issues: readonly CheckIs
  * 1. `'Validation'` step `"Check <fmt>"` — merges {@link CheckProductionRules} with `driver.Check`
  * 2. `'Tool'` step `"Stills <fmt>"` — captures representative stills via `driver.CaptureStills`
  * 3. `'Tool'` step `"Contact sheets <fmt>"` — builds tiled grids + transition strip via `driver.BuildContactSheet` and stores PNGs via {@link StoreFile}
- * 4. `'Tool'` step `"Render <fmt>"` — renders MP4 via `driver.Render`, verifies audio presence, and stores MP4 via {@link StoreFile}
+ * 4. `'Tool'` step `"Render <fmt>"` — renders MP4 via `driver.Render`, verifies audio presence, and stores MP4 via {@link StoreFile} (or inline up to `InlineMaxBytes`)
  */
 @RegisterClass(BaseAgent, 'VideoStudioRenderAgent')
 export class VideoStudioRenderAgent extends BaseAgent {
@@ -80,6 +86,7 @@ export class VideoStudioRenderAgent extends BaseAgent {
         const storageAccountId = this.ResolvedStorageAccountId ?? undefined;
         const configId = params.configurationId ?? this.AgentRun?.ConfigurationID ?? null;
         const settings = ResolveVideoStudioSettings(configId);
+        const outputSettings = ReadVideoStudioOutputSettings();
         const driver = VideoRenderEngine.Instance.Driver;
 
         let stepCount = 0;
@@ -141,14 +148,7 @@ export class VideoStudioRenderAgent extends BaseAgent {
                   })
                 : {};
 
-            const formats: VideoFormat[] =
-                Array.isArray(workingSpec.Deliverables?.Formats) &&
-                workingSpec.Deliverables.Formats.length > 0
-                    ? [...workingSpec.Deliverables.Formats]
-                    : Array.isArray(workingSpec.Film?.Formats) &&
-                        workingSpec.Film.Formats.length > 0
-                      ? [...workingSpec.Film.Formats]
-                      : ['16:9'];
+            const formats: VideoFormat[] = ResolveDeliverableFormats(workingSpec);
 
             const quality = workingSpec.Render?.Quality ?? settings.RenderQuality;
             const fps =
@@ -420,14 +420,32 @@ export class VideoStudioRenderAgent extends BaseAgent {
                     StorageAccountID: storageAccountId,
                 });
                 if (!storedVideoFileId) {
-                    await finishStep(
-                        currentStep,
-                        false,
-                        undefined,
-                        NO_STORAGE_ACCOUNT_ERROR_MESSAGE,
-                    );
+                    if (videoBytes.byteLength <= outputSettings.InlineMaxBytes) {
+                        workingSpec.Output.Videos[fmt] = {
+                            Format: fmt,
+                            InlineBase64: videoBytes.toString('base64'),
+                            MimeType: renderResult.MimeType || 'video/mp4',
+                            Width: renderResult.Width,
+                            Height: renderResult.Height,
+                            DurationSeconds: renderResult.DurationSeconds,
+                            FileSizeBytes: videoBytes.byteLength,
+                        };
+                        durationByFormat[fmt] = renderResult.DurationSeconds;
+
+                        await finishStep(currentStep, true, {
+                            Stored: 'Inline',
+                            Bytes: videoBytes.byteLength,
+                        });
+                        currentStep = null;
+                        continue;
+                    }
+
+                    const sizeMb = formatMegabytesOneDecimal(videoBytes.byteLength);
+                    const capMb = formatMegabytesOneDecimal(outputSettings.InlineMaxBytes);
+                    const oversizedMessage = `The rendered ${fmt} video is ${sizeMb} MB and could not be stored in MJStorage. Inline storage is limited to ${capMb} MB. Set Default Storage Account on the 'Content Creation' agent category or on the Video Studio agent.`;
+                    await finishStep(currentStep, false, undefined, oversizedMessage);
                     currentStep = null;
-                    return failRun(NO_STORAGE_ACCOUNT_ERROR_MESSAGE);
+                    return failRun(oversizedMessage);
                 }
 
                 workingSpec.Output.Videos[fmt] = {

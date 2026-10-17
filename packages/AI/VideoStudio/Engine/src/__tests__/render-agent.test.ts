@@ -636,5 +636,85 @@ describe('VideoStudioRenderAgent (VS-AGT-3)', () => {
         expect(stepsStr).not.toContain('InlineBase64');
         expect(stepsStr).not.toContain('"Video":');
         expect(result.finalStep.newPayload.Output?.Videos['16:9']).not.toHaveProperty('Video');
+        expect(result.finalStep.newPayload.Output?.Videos['16:9']?.FileID).toBeDefined();
+        expect(result.finalStep.newPayload.Output?.Videos['16:9']?.InlineBase64).toBeUndefined();
+    });
+
+    it('VS-ART-2: StoreFile returning undefined for a 1 MB MP4 stores InlineBase64 (no FileID) and finishes step with { Stored: "Inline", Bytes }', async () => {
+        const oneMbBytes = Buffer.alloc(1024 * 1024, 0x42);
+        const fakeDriver = new FakeRenderDriver();
+        const originalRender = fakeDriver.Render.bind(fakeDriver);
+        vi.spyOn(fakeDriver, 'Render').mockImplementation(async (req, onProgress, signal) => {
+            const res = await originalRender(req, onProgress, signal);
+            return { ...res, Video: new Uint8Array(oneMbBytes) };
+        });
+        VideoRenderEngine.Instance.UseDriver(fakeDriver);
+
+        let fileCounter = 0;
+        vi.spyOn(storageModule, 'StoreFile').mockImplementation(async (input) => {
+            if (input.FileName.endsWith('.mp4')) {
+                return undefined;
+            }
+            fileCounter += 1;
+            return `stored-${fileCounter}-${input.FileName}`;
+        });
+
+        const { finalizedSteps, execute } = createRenderAgentHarness();
+        const spec = makeDualFormatSpec();
+        spec.Film.Formats = ['16:9'];
+        spec.Deliverables.Formats = ['16:9'];
+
+        const result = await execute(spec);
+
+        expect(result.finalStep.step).toBe('Success');
+        const videoOut = result.finalStep.newPayload.Output?.Videos['16:9'];
+        expect(videoOut).toBeDefined();
+        expect(videoOut?.FileID).toBeUndefined();
+        expect(videoOut?.InlineBase64).toBe(oneMbBytes.toString('base64'));
+        expect(videoOut?.FileSizeBytes).toBe(1024 * 1024);
+
+        const renderStep = finalizedSteps.find((s) => s.stepName === 'Render 16:9');
+        expect(renderStep?.success).toBe(true);
+        expect(renderStep?.outputData).toEqual({
+            Stored: 'Inline',
+            Bytes: 1024 * 1024,
+        });
+    });
+
+    it('VS-ART-2: StoreFile returning undefined for a 3 MB MP4 fails with message naming size, cap, and storage setup hint', async () => {
+        const threeMbBytes = Buffer.alloc(3 * 1024 * 1024, 0x24);
+        const fakeDriver = new FakeRenderDriver();
+        const originalRender = fakeDriver.Render.bind(fakeDriver);
+        vi.spyOn(fakeDriver, 'Render').mockImplementation(async (req, onProgress, signal) => {
+            const res = await originalRender(req, onProgress, signal);
+            return { ...res, Video: new Uint8Array(threeMbBytes) };
+        });
+        VideoRenderEngine.Instance.UseDriver(fakeDriver);
+
+        let fileCounter = 0;
+        vi.spyOn(storageModule, 'StoreFile').mockImplementation(async (input) => {
+            if (input.FileName.endsWith('.mp4')) {
+                return undefined;
+            }
+            fileCounter += 1;
+            return `stored-${fileCounter}-${input.FileName}`;
+        });
+
+        const { finalizedSteps, execute } = createRenderAgentHarness();
+        const spec = makeDualFormatSpec();
+        spec.Film.Formats = ['16:9'];
+        spec.Deliverables.Formats = ['16:9'];
+
+        const result = await execute(spec);
+
+        expect(result.finalStep.step).toBe('Failed');
+        expect(result.finalStep.message).toBe(
+            "The rendered 16:9 video is 3.0 MB and could not be stored in MJStorage. Inline storage is limited to 2.0 MB. Set Default Storage Account on the 'Content Creation' agent category or on the Video Studio agent.",
+        );
+        const renderStep = finalizedSteps.find((s) => s.stepName === 'Render 16:9');
+        expect(renderStep?.success).toBe(false);
+        expect(renderStep?.errorMessage).toContain('3.0 MB');
+        expect(renderStep?.errorMessage).toContain('2.0 MB');
     });
 });
+

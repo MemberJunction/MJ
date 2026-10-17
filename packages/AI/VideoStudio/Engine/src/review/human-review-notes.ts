@@ -7,8 +7,7 @@ import type { VideoDefect, VideoGenerationSpec } from '@memberjunction/video-stu
  * - Deferred defects from the newest critic round (`Deferred defects (n)` with one line per defect),
  *   or `No open defects.` when none remain.
  * - Generated asset disclosure when `Assets.Approved` contains generated assets.
- *
- * Subsequent tasks (VS-ART-2 inline-storage warning, VS-GEN-7 generated-asset details) extend this function.
+ * - Inline storage warning (`Storage`) when any `Output.Videos` entry uses `InlineBase64`.
  */
 export function ComposeHumanReviewNotes(spec: Partial<VideoGenerationSpec>): string {
     const rounds = spec.Review?.Rounds ?? [];
@@ -34,5 +33,28 @@ export function ComposeHumanReviewNotes(spec: Partial<VideoGenerationSpec>): str
         sections.push(`Generated assets disclosed: ${genAssets.map((a) => a.Key).join(', ')}.`);
     }
 
+    const videos = spec.Output?.Videos ?? {};
+    const inlineEntries: string[] = [];
+    for (const [fmtKey, video] of Object.entries(videos)) {
+        if (video && typeof video.InlineBase64 === 'string' && video.InlineBase64.trim().length > 0) {
+            const fmt = video.Format || fmtKey;
+            const bytes =
+                typeof video.FileSizeBytes === 'number' && video.FileSizeBytes > 0
+                    ? video.FileSizeBytes
+                    : Buffer.byteLength(video.InlineBase64, 'base64');
+            const mb = (bytes / (1024 * 1024)).toFixed(1);
+            inlineEntries.push(`${fmt} (${mb} MB)`);
+        }
+    }
+    if (inlineEntries.length > 0) {
+        sections.push(
+            [
+                'Storage',
+                `Stored inline in the database, not in file storage: ${inlineEntries.join(', ')}. Set up file storage before sharing this production.`,
+            ].join('\n'),
+        );
+    }
+
     return sections.join('\n\n');
 }
+

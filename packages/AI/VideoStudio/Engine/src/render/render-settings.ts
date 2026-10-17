@@ -33,6 +33,17 @@ export const DEFAULT_DOCKER_PIDS_LIMIT = 512;
 /** Default `/dev/shm` size in megabytes (`--shm-size <n>m`) for `DockerRenderDriver` containers (`VS-RND-4`). */
 export const DEFAULT_DOCKER_SHM_SIZE_MB = 1024;
 
+/** Default inline MP4 storage cap in bytes when no MJStorage account is configured (2 MiB, `VS-ART-2`). */
+export const VIDEO_STUDIO_INLINE_MAX_BYTES = 2 * 1024 * 1024;
+
+/**
+ * Normalized PascalCase settings for Video Studio output storage (`VS-ART-2`).
+ */
+export interface VideoStudioOutputSettings {
+    /** Maximum rendered MP4 size in bytes permitted for inline `InlineBase64` fallback (default: 2,097,152 / 2 MiB). */
+    InlineMaxBytes: number;
+}
+
 /**
  * Shared timeout settings across all `VideoRenderDriverBase` implementations.
  */
@@ -110,8 +121,13 @@ interface RawVideoRenderConfig {
     docker?: unknown;
 }
 
+interface RawVideoStudioOutputsConfig {
+    inlineMaxBytes?: unknown;
+}
+
 interface RawVideoStudioConfig {
     render?: unknown;
+    outputs?: unknown;
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -386,3 +402,59 @@ export function ReadVideoRenderSettings(searchFrom: string = process.cwd()): Vid
         Docker: docker,
     };
 }
+
+/**
+ * Reads `videoStudio.outputs` from `mj.config.cjs` (searching upward from `searchFrom`) and returns
+ * normalized PascalCase `VideoStudioOutputSettings` (`VS-ART-2`).
+ *
+ * Invalid values log a warning via `LogWarning` and fall back to defaults (`VIDEO_STUDIO_INLINE_MAX_BYTES`).
+ * Never throws.
+ */
+export function ReadVideoStudioOutputSettings(searchFrom: string = process.cwd()): VideoStudioOutputSettings {
+    const defaults: VideoStudioOutputSettings = {
+        InlineMaxBytes: VIDEO_STUDIO_INLINE_MAX_BYTES,
+    };
+
+    let rawConfig: Record<string, unknown> | undefined;
+    try {
+        const explorer = cosmiconfigSync('mj', { searchStrategy: 'global' });
+        const result = explorer.search(searchFrom);
+        if (result && !result.isEmpty && isPlainObject(result.config)) {
+            rawConfig = result.config;
+        }
+    } catch (error) {
+        LogWarning(
+            `videoStudio.outputs: mj.config could not be read (${error instanceof Error ? error.message : String(error)}); using defaults.`,
+        );
+        return defaults;
+    }
+
+    if (!rawConfig || rawConfig.videoStudio === undefined || rawConfig.videoStudio === null) {
+        return defaults;
+    }
+    if (!isPlainObject(rawConfig.videoStudio)) {
+        LogWarning('videoStudio in mj.config is not an object; using default output settings.');
+        return defaults;
+    }
+
+    const videoStudioSection = rawConfig.videoStudio as RawVideoStudioConfig;
+    if (videoStudioSection.outputs === undefined || videoStudioSection.outputs === null) {
+        return defaults;
+    }
+    if (!isPlainObject(videoStudioSection.outputs)) {
+        LogWarning('videoStudio.outputs in mj.config is not an object; using default output settings.');
+        return defaults;
+    }
+
+    const outputsSection = videoStudioSection.outputs as RawVideoStudioOutputsConfig;
+    const inlineMaxBytes = readPositiveNumber(
+        outputsSection.inlineMaxBytes,
+        'videoStudio.outputs.inlineMaxBytes',
+        VIDEO_STUDIO_INLINE_MAX_BYTES,
+    );
+
+    return {
+        InlineMaxBytes: inlineMaxBytes,
+    };
+}
+

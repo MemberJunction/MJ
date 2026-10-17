@@ -39,6 +39,10 @@ vi.mock('@memberjunction/ai-agents', () => ({
     BaseAgent: class MockBaseAgent {
         protected AgentRun: { ErrorMessage?: string; FinalPayloadObject?: unknown } | null = {};
         protected ProviderToUse: unknown = undefined;
+        protected _fileOutputs: Array<Record<string, unknown>> = [];
+        public get FileOutputs(): Array<Record<string, unknown>> {
+            return this._fileOutputs;
+        }
         protected get AgentHierarchy(): string[] {
             return [];
         }

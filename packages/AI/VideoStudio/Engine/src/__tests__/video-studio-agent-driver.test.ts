@@ -32,6 +32,11 @@ const {
         protected _agentRun: Partial<MJAIAgentRunEntityExtended> | null = null;
         protected _hierarchy: string[] = ['Video Studio'];
         protected ProviderToUse: unknown = undefined;
+        protected _fileOutputs: Array<Record<string, unknown>> = [];
+
+        public get FileOutputs(): Array<Record<string, unknown>> {
+            return this._fileOutputs;
+        }
 
         public get AgentRun(): MJAIAgentRunEntityExtended | null {
             return this._agentRun as MJAIAgentRunEntityExtended | null;
@@ -1478,4 +1483,111 @@ describe('VideoStudioAgent driver lifecycle', () => {
         expect(acceptedSuccess.step).toBe('Success');
         expect(acceptedSuccess.newPayload?.Status).toBe('Delivered');
     });
+
+    it('(11) VS-ART-2: delivery pushes one System Only FileOutputRef per stored format (without fileData), deduplicates on repeat validateSuccessNextStep, skips inline formats, never sets promoteMediaOutputs/mediaOutputs, and sets artifactDirective (create-new <= 120 chars when started without brief, version-source when started with brief)', async () => {
+        // Case A: Started without a brief (fresh run, empty payload)
+        const freshAgent = createAgent();
+        const freshInitParams = {
+            payload: {},
+            conversationMessages: [],
+        } as unknown as ExecuteAgentParams<Partial<VideoGenerationSpec>>;
+        await freshAgent.executeAgentInternal(freshInitParams, dummyConfig);
+
+        const deliveredSpec = CreateDeliveredSpecFixture();
+        deliveredSpec.Film.Formats = ['16:9', '9:16'];
+        deliveredSpec.Deliverables.Formats = ['16:9', '9:16'];
+        deliveredSpec.Archetype = { Name: 'Product Launch Reel' };
+        deliveredSpec.Film.OneSentence =
+            'A very detailed one-sentence summary that exceeds one hundred and twenty characters when combined with the archetype prefix so truncation is verified.';
+        deliveredSpec.Film.Purpose = 'Show key product highlights to enterprise buyers.';
+        deliveredSpec.Output!.ContactSheetFileIDs = {
+            '16:9': ['66666666-6666-4666-8666-666666666661'],
+            '9:16': ['66666666-6666-4666-8666-666666666662'],
+        };
+        deliveredSpec.Output!.Videos = {
+            '16:9': {
+                Format: '16:9',
+                FileID: '77777777-7777-4777-8777-777777777771',
+                MimeType: 'video/mp4',
+                Width: 1920,
+                Height: 1080,
+                DurationSeconds: 18,
+                FileSizeBytes: 8_420_000,
+            },
+            '9:16': {
+                Format: '9:16',
+                InlineBase64: Buffer.from('inline-mp4').toString('base64'),
+                MimeType: 'video/mp4',
+                Width: 1080,
+                Height: 1920,
+                DurationSeconds: 18,
+                FileSizeBytes: 1_200_000,
+            },
+        };
+        deliveredSpec.Output!.RenderMetadata.DurationByFormat = { '16:9': 18, '9:16': 18 };
+
+        const firstDelivered = await freshAgent.validateSuccessNextStep(
+            freshInitParams,
+            { step: 'Success', terminate: true, newPayload: deliveredSpec },
+            deliveredSpec,
+            dummyRun,
+            dummyStep,
+        );
+        expect(firstDelivered.step).toBe('Success');
+        expect(firstDelivered.newPayload?.Status).toBe('Delivered');
+        expect(firstDelivered.newPayload?.Review?.HumanReviewNotes).toContain('Storage');
+        expect(firstDelivered.newPayload?.Review?.HumanReviewNotes).toContain('9:16 (1.1 MB)');
+        expect((firstDelivered as Record<string, unknown>).promoteMediaOutputs).toBeUndefined();
+        expect((firstDelivered as Record<string, unknown>).mediaOutputs).toBeUndefined();
+
+        expect(firstDelivered.artifactDirective).toBeDefined();
+        expect(firstDelivered.artifactDirective?.behavior).toBe('create-new');
+        expect(firstDelivered.artifactDirective?.name?.length).toBe(120);
+        expect(firstDelivered.artifactDirective?.name?.startsWith('Product Launch Reel: ')).toBe(true);
+        expect(firstDelivered.artifactDirective?.description).toBe(
+            'Show key product highlights to enterprise buyers.',
+        );
+
+        // Calling validateSuccessNextStep a second time must not duplicate FileOutputs
+        await freshAgent.validateSuccessNextStep(
+            freshInitParams,
+            { step: 'Success', terminate: true, newPayload: deliveredSpec },
+            deliveredSpec,
+            dummyRun,
+            dummyStep,
+        );
+
+        const fileOutputs = (freshAgent as unknown as { FileOutputs: Array<Record<string, unknown>> }).FileOutputs;
+        expect(fileOutputs).toHaveLength(1);
+        expect(fileOutputs[0]).toEqual({
+            fileName: 'video-16x9.mp4',
+            mimeType: 'video/mp4',
+            fileId: '77777777-7777-4777-8777-777777777771',
+            sizeBytes: 8_420_000,
+            visibility: 'System Only',
+        });
+        expect(fileOutputs[0]).not.toHaveProperty('fileData');
+
+        // Case B: Started with a brief (Film.OneSentence already present) -> version-source
+        const resumeAgent = createAgent();
+        const resumeSpec = CreateDeliveredSpecFixture();
+        const resumeParams = {
+            payload: resumeSpec,
+            conversationMessages: [],
+        } as unknown as ExecuteAgentParams<Partial<VideoGenerationSpec>>;
+        await resumeAgent.executeAgentInternal(resumeParams, dummyConfig);
+
+        const resumedDelivered = await resumeAgent.validateSuccessNextStep(
+            resumeParams,
+            { step: 'Success', terminate: true, newPayload: resumeSpec },
+            resumeSpec,
+            dummyRun,
+            dummyStep,
+        );
+        expect(resumedDelivered.step).toBe('Success');
+        expect(resumedDelivered.artifactDirective).toEqual({
+            behavior: 'version-source',
+        });
+    });
 });
+
