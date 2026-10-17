@@ -68,7 +68,7 @@ export abstract class BaseFileHandlerAction extends BaseAction {
     /**
      * Load file from MJ Storage (MJ: Files entity)
      */
-    private async loadFromMJStorage(fileId: string, params: RunActionParams): Promise<{
+    protected async loadFromMJStorage(fileId: string, params: RunActionParams): Promise<{
         content: string | Buffer;
         fileName?: string;
         mimeType?: string;
@@ -171,6 +171,7 @@ export abstract class BaseFileHandlerAction extends BaseAction {
      * @param params - Action parameters (for contextUser)
      * @param storageAccountName - Optional: name of the storage account to use (falls back to first active)
      * @param storagePath - Optional: custom storage path prefix (falls back to `artifacts/{date}/{uuid}/`)
+     * @param description - Optional: description stored on the MJ: Files record
      * @returns The ID of the newly created MJ: Files record
      */
     protected async saveToMJStorage(
@@ -179,7 +180,8 @@ export abstract class BaseFileHandlerAction extends BaseAction {
         mimeType: string,
         params: RunActionParams,
         storageAccountName?: string,
-        storagePath?: string
+        storagePath?: string,
+        description?: string
     ): Promise<string> {
         try {
             await FileStorageEngine.Instance.Config(false, params.ContextUser);
@@ -201,7 +203,8 @@ export abstract class BaseFileHandlerAction extends BaseAction {
                 mimeType,
                 contextUser: params.ContextUser,
                 storageAccountId,
-                pathPrefix
+                pathPrefix,
+                ...(description !== undefined ? { description } : {})
             });
 
             return result.FileID;

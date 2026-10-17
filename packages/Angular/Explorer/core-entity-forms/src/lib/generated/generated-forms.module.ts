@@ -127,6 +127,8 @@ import { MJAuditLogTypeFormComponent } from "./Entities/MJAuditLogType/mjauditlo
 import { MJAuthenticationProviderFormComponent } from "./Entities/MJAuthenticationProvider/mjauthenticationprovider.form.component";
 import { MJAuthorizationFormComponent } from "./Entities/MJAuthorization/mjauthorization.form.component";
 import { MJAuthorizationRoleFormComponent } from "./Entities/MJAuthorizationRole/mjauthorizationrole.form.component";
+import { MJBrandKitAssetFormComponent } from "./Entities/MJBrandKitAsset/mjbrandkitasset.form.component";
+import { MJBrandKitFormComponent } from "./Entities/MJBrandKit/mjbrandkit.form.component";
 import { MJClusterAnalysisClusterFormComponent } from "./Entities/MJClusterAnalysisCluster/mjclusteranalysiscluster.form.component";
 import { MJClusterAnalysisFormComponent } from "./Entities/MJClusterAnalysis/mjclusteranalysis.form.component";
 import { MJCollectionArtifactFormComponent } from "./Entities/MJCollectionArtifact/mjcollectionartifact.form.component";
@@ -427,6 +429,7 @@ import { MJVersionInstallationFormComponent } from "./Entities/MJVersionInstalla
 import { MJVersionLabelFormComponent } from "./Entities/MJVersionLabel/mjversionlabel.form.component";
 import { MJVersionLabelItemFormComponent } from "./Entities/MJVersionLabelItem/mjversionlabelitem.form.component";
 import { MJVersionLabelRestoreFormComponent } from "./Entities/MJVersionLabelRestore/mjversionlabelrestore.form.component";
+import { MJVideoArchetypeFormComponent } from "./Entities/MJVideoArchetype/mjvideoarchetype.form.component";
 import { MJViewTypeFormComponent } from "./Entities/MJViewType/mjviewtype.form.component";
 import { MJWebSearchProviderFormComponent } from "./Entities/MJWebSearchProvider/mjwebsearchprovider.form.component";
 import { MJWorkQueueDeduplicationFormComponent } from "./Entities/MJWorkQueueDeduplication/mjworkqueuededuplication.form.component";
@@ -713,7 +716,8 @@ declarations: [
     MJMagicLinkInviteRoleFormComponent,
     MJProcessRunFormComponent,
     MJTestRunFeedbackFormComponent,
-    MJUserViewCategoryFormComponent
+    MJUserViewCategoryFormComponent,
+    MJVideoArchetypeFormComponent
 ],
 imports: [
     CommonModule,
@@ -737,6 +741,7 @@ declarations: [
     MJActionAuthorizationFormComponent,
     MJArchiveConfigurationEntityFormComponent,
     MJAuditLogFormComponent,
+    MJBrandKitFormComponent,
     MJCompanyFormComponent,
     MJContentItemChunkFormComponent,
     MJDatasetItemFormComponent,
@@ -1297,6 +1302,7 @@ declarations: [
     MJAIAgentSessionBridgeParticipantFormComponent,
     MJAIModelActionFormComponent,
     MJAIRemoteBrowserProviderFormComponent,
+    MJBrandKitAssetFormComponent,
     MJCommunicationProviderFormComponent,
     MJContentSourceParamFormComponent,
     MJEmployeeSkillFormComponent,

@@ -35,6 +35,8 @@ vi.mock('@memberjunction/ai-agents', () => ({
         }
     },
     ArtifactToolManager: class {},
+    CanAgentOwnSubAgentConsults: vi.fn(() => false),
+    LoadOpenSubAgentConsults: vi.fn(async () => []),
 }));
 
 vi.mock('../realtimeWidget/widgetGuestElevation.js', () => ({

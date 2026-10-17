@@ -16,8 +16,13 @@
     "test:types": "tsc --noEmit -p tsconfig.spec.json"
   },
   "dependencies": {
+    "@memberjunction/ai": "6.2.0-edge.4",
+    "@memberjunction/ai-engine-base": "6.2.0-edge.4",
+    "@memberjunction/ai-prompts": "6.2.0-edge.4",
     "@memberjunction/core": "6.2.0-edge.4",
+    "@memberjunction/core-entities": "6.2.0-edge.4",
     "@memberjunction/global": "6.2.0-edge.4",
+    "@memberjunction/storage": "6.2.0-edge.4",
     "@memberjunction/video-studio-core": "6.2.0-edge.4",
     "cosmiconfig": "9.0.0"
   },

@@ -32,11 +32,9 @@ export class TaskGraphAgentRunner implements TaskAgentRunner {
             let configurationId: string | undefined;
             const requestedPreset = params.ConfigurationPresetName?.trim();
             if (requestedPreset) {
-                const target = requestedPreset.toLowerCase();
-                const presets = AIEngine.Instance.GetAgentConfigurationPresets(agent.ID, true);
-                const matched = presets.find((p) => p.Name?.trim().toLowerCase() === target)
-                    ?? presets.find((p) => p.DisplayName?.trim().toLowerCase() === target);
+                const matched = AIEngine.Instance.FindActiveAgentConfigurationPreset(agent.ID, requestedPreset);
                 if (!matched) {
+                    const presets = AIEngine.Instance.GetAgentConfigurationPresets(agent.ID, true);
                     const available = presets.map((p) => p.Name).join(', ') || 'none';
                     return {
                         Success: false,

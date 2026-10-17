@@ -130,3 +130,6 @@ export * from './checks/materialized-entity-read.checks';
 export * from './checks/form-contributions.checks';
 export * from './checks/cache-architecture.checks';
 export * from './checks/agent-consult.checks';
+export * from './checks/video-data-snapshot.checks';
+export * from './checks/video-generation-cost.checks';
+

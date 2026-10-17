@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT136 - Video Generation Cost",
+    "Description": "Deterministic server-transport integration checks (VGC1–VGC2) for AIVideoRunner.RunGenerateVideo against Default Generative Video and FLUX 3 Video (VS-GEN-4): VGC1 proves a run reporting Seconds usage with no driver cost is priced on save by MJAIPromptRunEntityServer from the active Per Second model cost row and flushed before RunGenerateVideo returns; VGC2 proves a driver-reported cost (1.23 USD) is preserved on the saved prompt run row without recomputation and returned on the result.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "VGC1 prices 6 seconds of video output from the active Per Second cost row immediately on save; VGC2 preserves driver-reported 1.23 USD cost on both the prompt run row and the runner result."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "video-generation-cost"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "2A24EE9C-3E08-4917-B500-0156393EE3FF"
+  }
+}

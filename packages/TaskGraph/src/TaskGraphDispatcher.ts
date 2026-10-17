@@ -3842,15 +3842,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         onProgress?: TaskRunProgressCallback,
     ): Promise<TaskBodyOutcome> {
         const context = await this.graphContext(provider, task);
-        let parsedConfig: TaskStepConfiguration | null = (task.ConfigurationObject as TaskStepConfiguration | null) ?? null;
-        if (!parsedConfig && task.Configuration) {
-            try {
-                parsedConfig = JSON.parse(task.Configuration) as TaskStepConfiguration;
-            } catch {
-                parsedConfig = null;
-            }
-        }
-        const presetName = parsedConfig?.agent?.presetName?.trim() || undefined;
+        const presetName = (task.ConfigurationObject as TaskStepConfiguration | null)?.agent?.presetName?.trim() || undefined;
         return this.agentRunner.RunAgentForTask({
             TaskID: task.ID,
             AgentID: task.AgentID!,

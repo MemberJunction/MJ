@@ -189,4 +189,26 @@ describe('Loop Agent Type system prompt — rendered snapshot', () => {
         expect(relatedRendered).not.toContain('# Role: Sub-Agent');
         expect(relatedRendered).toContain('When you need input, your Chat goes to your parent agent, which may answer you. It is not shown to a user.');
     });
+
+    it('renders the Handoff union member, field, and section when enableHandoff and includeResponseTypeDefinition.handoff are true', () => {
+        const def = renderSystemPrompt({ ...DEFAULT_LOOP_AGENT_PROMPT_PARAMS });
+        expect(def).not.toContain("| 'Handoff'");
+        expect(def).not.toContain('handoff?: { agentName: string; brief: string; reason: string }');
+        expect(def).not.toContain("## Transferring the conversation (nextStep.type = 'Handoff')");
+
+        const withHandoff = renderSystemPrompt({
+            ...DEFAULT_LOOP_AGENT_PROMPT_PARAMS,
+            enableHandoff: true,
+            includeResponseTypeDefinition: {
+                ...DEFAULT_LOOP_AGENT_PROMPT_PARAMS.includeResponseTypeDefinition,
+                handoff: true,
+            },
+        });
+        expect(withHandoff).toContain("| 'Handoff'");
+        expect(withHandoff).toContain("/** Transfer the conversation to another agent (when type='Handoff') — see Transferring the conversation below. Ends your turn. */");
+        expect(withHandoff).toContain('handoff?: { agentName: string; brief: string; reason: string };');
+        expect(withHandoff).toContain("## Transferring the conversation (nextStep.type = 'Handoff')");
+        expect(withHandoff).toContain("- Use `'Handoff'` when another agent should own the request, and use `'Sub-Agent'` when you need a result back.");
+    });
 });
+
