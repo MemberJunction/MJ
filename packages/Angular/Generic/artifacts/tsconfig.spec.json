@@ -23,7 +23,15 @@
     "src/lib/components/plugins/media-artifact-driver-class.dom.test.ts",
     "src/lib/services/artifact-icon.service.ts",
     "src/lib/services/artifact-preview-resolver.service.ts",
-    "src/lib/__tests__/interactive-form-apply.service.test.ts"
+    "src/lib/__tests__/interactive-form-apply.service.test.ts",
+    "src/lib/components/plugins/video-production/video-production-markdown.ts",
+    "src/lib/components/plugins/video-production/video-production-storyboard-tab.component.ts",
+    "src/lib/components/plugins/video-production/video-production-review-tab.component.ts",
+    "src/lib/components/plugins/video-production/video-production-viewer.component.ts",
+    "src/lib/components/plugins/video-production/video-production-viewer.component.dom.test.ts",
+    "src/lib/components/previews/video-production-artifact-preview.component.ts",
+    "src/lib/components/previews/video-production-artifact-preview.component.dom.test.ts",
+    "src/__tests__/video-production-viewer.test.ts"
   ],
   "exclude": [
     "node_modules",

@@ -1,0 +1,263 @@
+<section class="mj-bka-root" aria-label="Brand Kit Assets Editor">
+  @if (!BrandKit || !BrandKit.ID) {
+    <div class="mj-bka-empty" role="status">
+      <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
+      <span>Save the Brand Kit first to attach and manage Brand Kit Assets.</span>
+    </div>
+  } @else {
+    @if (LoadError) {
+      <div class="mj-bka-banner mj-bka-banner--error" role="alert" data-testid="bka-load-error">
+        <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>
+        <span>{{ LoadError }}</span>
+      </div>
+    }
+
+    @if (SaveError) {
+      <div class="mj-bka-banner mj-bka-banner--error" role="alert" data-testid="bka-save-error">
+        <i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i>
+        <span>{{ SaveError }}</span>
+      </div>
+    }
+
+    @if (!Readonly) {
+      <div class="mj-bka-upload-card" data-testid="bka-upload-card">
+        <div class="mj-bka-upload-header">
+          <h4 class="mj-bka-upload-title">
+            <i class="fa-solid fa-cloud-arrow-up" aria-hidden="true"></i>
+            Add Brand Kit Asset
+          </h4>
+        </div>
+        <div class="mj-bka-upload-fields">
+          <label class="mj-bka-field">
+            <span class="mj-bka-field-label">Asset Type</span>
+            <select
+              class="mj-bka-select"
+              [(ngModel)]="NewAssetType"
+              data-testid="bka-new-asset-type">
+              @for (item of AssetTypeCatalog; track item.Type) {
+                <option [value]="item.Type">{{ item.Label }}</option>
+              }
+            </select>
+          </label>
+
+          <label class="mj-bka-field">
+            <span class="mj-bka-field-label">Display Name (optional)</span>
+            <input
+              type="text"
+              class="mj-bka-input"
+              [(ngModel)]="NewAssetName"
+              placeholder="Defaults to uploaded file name"
+              data-testid="bka-new-asset-name" />
+          </label>
+
+          <label class="mj-bka-field">
+            <span class="mj-bka-field-label">Usage Guidance</span>
+            <input
+              type="text"
+              class="mj-bka-input"
+              [(ngModel)]="NewAssetUsage"
+              placeholder="e.g., Primary dark background logo"
+              data-testid="bka-new-asset-usage" />
+          </label>
+
+          <div class="mj-bka-upload-toggles">
+            <label class="mj-bka-checkbox">
+              <input type="checkbox" [(ngModel)]="NewAssetIsPrimary" data-testid="bka-new-asset-primary" />
+              <span>Primary for type</span>
+            </label>
+
+            @if (IsVisualGenerationReferenceEligible(NewAssetType)) {
+              <label class="mj-bka-checkbox">
+                <input
+                  type="checkbox"
+                  [(ngModel)]="NewAssetIsGenerationReference"
+                  data-testid="bka-new-asset-gen-ref" />
+                <span>AI generation reference</span>
+              </label>
+            }
+          </div>
+        </div>
+
+        <div class="mj-bka-upload-dropzone">
+          <mj-files-file-upload
+            [Provider]="Provider"
+            [Disabled]="Loading"
+            (FileUpload)="OnFileUploaded($event)">
+          </mj-files-file-upload>
+        </div>
+      </div>
+    }
+
+    @if (Loading) {
+      <div class="mj-bka-loading" role="status">
+        <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
+        <span>Loading Brand Kit assets…</span>
+      </div>
+    } @else if (Groups.length === 0) {
+      <div class="mj-bka-empty" data-testid="bka-no-assets">
+        <i class="fa-solid fa-box-open" aria-hidden="true"></i>
+        <span>No assets attached to this Brand Kit yet.</span>
+      </div>
+    } @else {
+      <div class="mj-bka-groups">
+        @for (group of Groups; track group.AssetType) {
+          <section
+            class="mj-bka-group"
+            [attr.data-asset-type]="group.AssetType"
+            data-testid="bka-asset-group">
+            <header class="mj-bka-group-header">
+              <i [class]="group.Icon" aria-hidden="true"></i>
+              <h4 class="mj-bka-group-title">{{ group.Label }}</h4>
+              <span class="mj-bka-group-count">{{ group.Assets.length }}</span>
+            </header>
+
+            <div class="mj-bka-asset-grid">
+              @for (asset of group.Assets; track asset.ID) {
+                <article
+                  class="mj-bka-asset-card"
+                  [attr.data-asset-id]="asset.ID"
+                  data-testid="bka-asset-card">
+                  <div class="mj-bka-preview">
+                    @if (IsImagePreviewType(asset.AssetType)) {
+                      @if (GetThumbnailUrl(asset); as thumbUrl) {
+                        <img
+                          class="mj-bka-thumbnail"
+                          [src]="thumbUrl"
+                          [alt]="asset.Name"
+                          data-testid="bka-asset-thumbnail" />
+                      } @else {
+                        <div class="mj-bka-preview-placeholder">
+                          <i class="fa-solid fa-image" aria-hidden="true"></i>
+                          <span>{{ asset.Name }}</span>
+                        </div>
+                      }
+                    } @else if (IsAudioPreviewType(asset.AssetType)) {
+                      <mj-storage-media-player
+                        [Provider]="Provider"
+                        [FileID]="asset.FileID"
+                        [ShowWaveform]="true"
+                        [ShowTranscriptToggle]="false">
+                      </mj-storage-media-player>
+                    } @else if (IsVideoPreviewType(asset.AssetType)) {
+                      <mj-storage-media-player
+                        [Provider]="Provider"
+                        [FileID]="asset.FileID"
+                        [ShowTranscriptToggle]="false">
+                      </mj-storage-media-player>
+                    } @else if (IsFontPreviewType(asset.AssetType)) {
+                      <div class="mj-bka-font-preview" data-testid="bka-font-preview">
+                        <span class="mj-bka-font-sample">Aa Bb Cc 123</span>
+                        <span class="mj-bka-font-name">{{ asset.Name }}</span>
+                      </div>
+                    } @else {
+                      <div class="mj-bka-preview-placeholder">
+                        <i class="fa-solid fa-file" aria-hidden="true"></i>
+                        <span>{{ asset.Name }}</span>
+                      </div>
+                    }
+                  </div>
+
+                  <div class="mj-bka-asset-body">
+                    <div class="mj-bka-asset-title-row">
+                      <input
+                        type="text"
+                        class="mj-bka-input mj-bka-input--title"
+                        [(ngModel)]="asset.Name"
+                        [disabled]="Readonly"
+                        aria-label="Asset Name"
+                        data-testid="bka-asset-name" />
+                      <span class="mj-bka-type-badge">{{ asset.AssetType }}</span>
+                    </div>
+
+                    <label class="mj-bka-field">
+                      <span class="mj-bka-field-label">Usage</span>
+                      <input
+                        type="text"
+                        class="mj-bka-input"
+                        [(ngModel)]="asset.Usage"
+                        [disabled]="Readonly"
+                        placeholder="When to use this asset"
+                        data-testid="bka-asset-usage" />
+                    </label>
+
+                    <div class="mj-bka-row-split">
+                      <label class="mj-bka-field">
+                        <span class="mj-bka-field-label">Sequence</span>
+                        <input
+                          type="number"
+                          class="mj-bka-input"
+                          [(ngModel)]="asset.Sequence"
+                          [disabled]="Readonly"
+                          data-testid="bka-asset-sequence" />
+                      </label>
+
+                      <label class="mj-bka-field">
+                        <span class="mj-bka-field-label">License Notes</span>
+                        <input
+                          type="text"
+                          class="mj-bka-input"
+                          [(ngModel)]="asset.LicenseNotes"
+                          [disabled]="Readonly"
+                          placeholder="Attribution or restrictions"
+                          data-testid="bka-asset-license" />
+                      </label>
+                    </div>
+
+                    <div class="mj-bka-toggles">
+                      <label class="mj-bka-checkbox">
+                        <input
+                          type="checkbox"
+                          [(ngModel)]="asset.IsPrimary"
+                          [disabled]="Readonly"
+                          data-testid="bka-asset-is-primary" />
+                        <span>Primary for {{ asset.AssetType }}</span>
+                      </label>
+
+                      @if (IsVisualGenerationReferenceEligible(asset.AssetType)) {
+                        <label class="mj-bka-checkbox" data-testid="bka-asset-gen-ref-label">
+                          <input
+                            type="checkbox"
+                            [(ngModel)]="asset.IsGenerationReference"
+                            [disabled]="Readonly"
+                            data-testid="bka-asset-is-gen-ref" />
+                          <span>Use as AI generation reference</span>
+                        </label>
+                      }
+                    </div>
+
+                    @if (!Readonly) {
+                      <div class="mj-bka-actions">
+                        <button
+                          type="button"
+                          mjButton
+                          Variant="danger"
+                          Size="sm"
+                          [disabled]="IsDeletingAsset(asset) || IsSavingAsset(asset)"
+                          (click)="DeleteAsset(asset)"
+                          data-testid="bka-asset-delete-btn">
+                          <i class="fa-solid fa-trash" aria-hidden="true"></i>
+                          <span>{{ IsDeletingAsset(asset) ? 'Deleting…' : 'Delete' }}</span>
+                        </button>
+                        <button
+                          type="button"
+                          mjButton
+                          Variant="primary"
+                          Size="sm"
+                          [disabled]="IsSavingAsset(asset) || IsDeletingAsset(asset)"
+                          (click)="SaveAsset(asset)"
+                          data-testid="bka-asset-save-btn">
+                          <i class="fa-solid fa-floppy-disk" aria-hidden="true"></i>
+                          <span>{{ IsSavingAsset(asset) ? 'Saving…' : 'Save Asset' }}</span>
+                        </button>
+                      </div>
+                    }
+                  </div>
+                </article>
+              }
+            </div>
+          </section>
+        }
+      </div>
+    }
+  }
+</section>

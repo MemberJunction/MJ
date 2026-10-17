@@ -431,6 +431,16 @@ export interface VideoDataFormat {
 }
 
 /**
+ * Column header and optional cell display format for a `'Table'` data binding (§10.1).
+ */
+export interface VideoTableColumn {
+    /** Column header text matching the selected table field or display column. */
+    Header: string;
+    /** Optional display formatting rules for numeric or date cells in this column. */
+    Format?: VideoDataFormat;
+}
+
+/**
  * Named binding connecting an on-screen number or chart to an authoritative data source (§10.1).
  */
 export interface VideoDataBinding {
@@ -442,6 +452,8 @@ export interface VideoDataBinding {
     Shape: VideoDataShape;
     /** Optional display formatting rules for numbers, currencies, percentages, or dates. */
     Format?: VideoDataFormat;
+    /** Optional ordered per-column headers and display formats when `Shape` is `'Table'`. */
+    Columns?: VideoTableColumn[];
     /** Human-readable metric label for charts, callouts, and data tabs. */
     Label?: string;
 }

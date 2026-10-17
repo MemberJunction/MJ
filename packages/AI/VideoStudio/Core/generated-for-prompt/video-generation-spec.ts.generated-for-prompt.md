@@ -215,11 +215,17 @@ interface VideoDataFormat {
     Decimals?: number;  // Number of fractional digits to display.
 }
 
+interface VideoTableColumn {
+    Header: string;  // Column header text matching the selected table field or display column.
+    Format?: VideoDataFormat;  // Optional display formatting rules for numeric or date cells in this column.
+}
+
 interface VideoDataBinding {
     Key: string;  // Unique binding key (e.g., 'kpi.revenue.mtd') referenced by `Beat.DataRefs` and compositions.
     Source: VideoDataSource;  // Authoritative query, view, artifact, or inline source definition.
     Shape: VideoDataShape;  // Structural shape of the resolved dataset.
     Format?: VideoDataFormat;  // Optional display formatting rules for numbers, currencies, percentages, or dates.
+    Columns?: VideoTableColumn[];  // Optional ordered per-column headers and display formats when `Shape` is `'Table'`.
     Label?: string;  // Human-readable metric label for charts, callouts, and data tabs.
 }
 

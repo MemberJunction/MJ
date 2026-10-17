@@ -23,10 +23,7 @@ interface ChartKitPoint {
     Value: number;  // Numeric metric value for this datum.
 }
 
-interface ChartKitColumn {
-    Header: string;  // Column header text displayed in the table header row.
-    Format?: VideoDataFormat;  // Optional display formatting rules applied to numeric cells in this column.
-}
+type ChartKitColumn = VideoTableColumn;
 
 interface KpiTileProps {
     Frame: ChartKitFrame;  // Viewport geometry, animation window, and brand tokens.

@@ -28,7 +28,16 @@ const hoisted = vi.hoisted(() => ({
     loadOpenSubAgentConsults: vi.fn<
         (provider: unknown, runId: string, contextUser: unknown) => Promise<unknown[]>
     >(),
+    logError: vi.fn(),
 }));
+
+vi.mock('@memberjunction/core', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/core')>();
+    return {
+        ...actual,
+        LogError: (...args: unknown[]) => hoisted.logError(...args),
+    };
+});
 
 vi.mock('@memberjunction/ai-agents', () => ({
     AgentRunner: class {},
@@ -77,6 +86,7 @@ describe('RunAIAgentResolver.findChainablePredecessor (VS-CON-8)', () => {
         } as unknown as RunView);
         hoisted.canAgentOwnSubAgentConsults.mockReset();
         hoisted.loadOpenSubAgentConsults.mockReset();
+        hoisted.logError.mockReset();
     });
 
     afterEach(() => {
@@ -208,7 +218,7 @@ describe('RunAIAgentResolver.findChainablePredecessor (VS-CON-8)', () => {
         expect(hoisted.loadOpenSubAgentConsults).not.toHaveBeenCalled();
     });
 
-    it('passes branchId and loaded branches into BuildStoppedPredecessorFilter (branch-path isolation)', async () => {
+    it('passes branchId and loaded branches into BuildStoppedPredecessorFilter (branch-path isolation), and skips LoadBranchesFresh when branchId is null (trunk)', async () => {
         const fakeBranches = [{ ID: 'branch-B', ParentBranchID: null }];
         const loadBranchesSpy = vi
             .spyOn(ConversationEngine, 'LoadBranchesFresh')
@@ -218,7 +228,21 @@ describe('RunAIAgentResolver.findChainablePredecessor (VS-CON-8)', () => {
             .mockReturnValue("ConversationID = 'conv' AND BranchFilter = 1");
         runViewMock.mockResolvedValue({ Success: true, Results: [] });
 
-        const result = await resolver.findChainablePredecessor(
+        // 1. Trunk (branchId === null): skips LoadBranchesFresh and passes null + []
+        const trunkResult = await resolver.findChainablePredecessor(
+            CONV_ID,
+            AGENT_ID,
+            null,
+            USER,
+            PROVIDER
+        );
+        expect(trunkResult).toBeNull();
+        expect(loadBranchesSpy).not.toHaveBeenCalled();
+        expect(filterSpy).toHaveBeenCalledWith(CONV_ID, AGENT_ID, null, []);
+
+        // 2. Branch (branchId === 'branch-B'): calls LoadBranchesFresh and passes 'branch-B' + fakeBranches
+        filterSpy.mockClear();
+        const branchResult = await resolver.findChainablePredecessor(
             CONV_ID,
             AGENT_ID,
             'branch-B',
@@ -226,7 +250,7 @@ describe('RunAIAgentResolver.findChainablePredecessor (VS-CON-8)', () => {
             PROVIDER
         );
 
-        expect(result).toBeNull();
+        expect(branchResult).toBeNull();
         expect(loadBranchesSpy).toHaveBeenCalledWith(CONV_ID, USER, PROVIDER);
         expect(filterSpy).toHaveBeenCalledWith(CONV_ID, AGENT_ID, 'branch-B', fakeBranches);
         expect(runViewMock).toHaveBeenCalledWith(
@@ -242,6 +266,7 @@ describe('RunAIAgentResolver.findChainablePredecessor (VS-CON-8)', () => {
         runViewMock.mockRejectedValueOnce(new Error('DB connection lost'));
         const res1 = await resolver.findChainablePredecessor(CONV_ID, AGENT_ID, null, USER, PROVIDER);
         expect(res1).toBeNull();
+        expect(hoisted.logError).toHaveBeenCalledTimes(1);
 
         // 2. LoadOpenSubAgentConsults throws
         runViewMock.mockResolvedValueOnce({
@@ -259,5 +284,6 @@ describe('RunAIAgentResolver.findChainablePredecessor (VS-CON-8)', () => {
         hoisted.loadOpenSubAgentConsults.mockRejectedValueOnce(new Error('Step query timed out'));
         const res2 = await resolver.findChainablePredecessor(CONV_ID, AGENT_ID, null, USER, PROVIDER);
         expect(res2).toBeNull();
+        expect(hoisted.logError).toHaveBeenCalledTimes(2);
     });
 });

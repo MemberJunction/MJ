@@ -1,0 +1,86 @@
+{
+  "taskComplete": true,
+  "message": "Defined the Film brief, selected the KPI Briefing archetype, inventoried required brand assets and NeverInvent constraints, and bound Q3 revenue metrics.",
+  "payloadChangeRequest": {
+    "replaceElements": {
+      "Film": {
+        "OneSentence": "Q3 annual recurring revenue reached {arr_total} with {ndr_pct} net dollar retention.",
+        "Audience": "Executive leadership and board members",
+        "Purpose": "Summarize Q3 financial performance with grounded metrics",
+        "DurationSeconds": 18,
+        "Formats": ["16:9", "9:16"],
+        "Language": "en-US"
+      },
+      "Archetype": {
+        "Name": "KPI Briefing"
+      },
+      "Assets": {
+        "Approved": [
+          {
+            "Key": "company_logo",
+            "Kind": "Logo",
+            "FileID": "8B4E1A22-5C10-4E91-9A3B-1D2C3E4F5A6B",
+            "Source": "Brand kit primary wordmark",
+            "Provenance": "BrandKit",
+            "Usage": "Primary brand header mark",
+            "MustUse": true
+          }
+        ],
+        "Required": [
+          {
+            "Key": "company_logo",
+            "Kind": "Logo",
+            "Description": "Primary company wordmark from the brand kit",
+            "MustUse": true,
+            "AllowGenerated": false,
+            "SatisfiedByAssetKey": "company_logo"
+          }
+        ],
+        "NeverInvent": [
+          "Customer logos not provided in the brief",
+          "Unaudited financial projections",
+          "Portraits of real employees or customers"
+        ],
+        "Generate": [
+          {
+            "Key": "hero_abstract_grid",
+            "Kind": "Image",
+            "Prompt": "Subtle dark navy geometric data grid background with soft cyan light trails, abstract minimalist corporate style, no text, no people",
+            "Purpose": "Atmospheric abstract backdrop for the opening ARR headline beat",
+            "Format": "16:9",
+            "ReferenceKeys": ["company_logo"]
+          }
+        ]
+      },
+      "DataBindings": [
+        {
+          "Key": "arr_total",
+          "Source": {
+            "Kind": "Inline"
+          },
+          "Shape": "Scalar",
+          "Format": {
+            "Kind": "Currency",
+            "Currency": "USD",
+            "Decimals": 1
+          },
+          "Label": "Annual Recurring Revenue"
+        },
+        {
+          "Key": "ndr_pct",
+          "Source": {
+            "Kind": "Inline"
+          },
+          "Shape": "Scalar",
+          "Format": {
+            "Kind": "Percent",
+            "Decimals": 1
+          },
+          "Label": "Net Dollar Retention"
+        }
+      ]
+    }
+  },
+  "reasoning": "All factual figures are bound via DataBindings, the required logo is satisfied by Assets.Approved, and only an illustrative background is requested in Assets.Generate.",
+  "confidence": 0.94
+}

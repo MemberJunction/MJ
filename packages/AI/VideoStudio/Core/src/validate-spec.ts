@@ -1113,6 +1113,16 @@ function validateDataSection(
         if (binding.Format !== undefined && !isMemberOf(binding.Format.Kind, VIDEO_DATA_FORMAT_KINDS)) {
             pushEnumError(errors, `DataBindings[${idx}].Format.Kind`, binding.Format.Kind, VIDEO_DATA_FORMAT_KINDS);
         }
+        asArray<NonNullable<typeof binding.Columns>[number]>(binding.Columns).forEach((col, colIdx) => {
+            if (col?.Format !== undefined && !isMemberOf(col.Format.Kind, VIDEO_DATA_FORMAT_KINDS)) {
+                pushEnumError(
+                    errors,
+                    `DataBindings[${idx}].Columns[${colIdx}].Format.Kind`,
+                    col.Format.Kind,
+                    VIDEO_DATA_FORMAT_KINDS,
+                );
+            }
+        });
     });
 
     if (

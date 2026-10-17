@@ -59,6 +59,9 @@ Optional browser/telemetry overrides read by the backend:
 | `MJ_SAFE_AREA` | `SafeArea` | `Error` | DOM Rules | Rendered text bounding box extends outside the format's safe-area insets (`SAFE_AREA_INSETS`). |
 | `MJ_MIN_TEXT_SIZE` | `MinTextSize` | `Error` | DOM Rules | Rendered text `FontSizePx` is below `MIN_TEXT_SIZE_SHORT_EDGE_RATIO * Math.min(Width, Height)` (`27px` at `1080p`). |
 | `MJ_UNBOUND_LITERAL_RENDERED` | `DataLiteral` | `Error` | DOM Rules | Rendered text outside `[data-mj-bound]` contains a numeric literal token not in `AllowedDataLiterals`. |
+| `MJ_BOUND_KEY_UNKNOWN` | `DataLiteral` | `Error` | DOM Rules | Rendered text inside `[data-mj-bound="<key>"]` has an empty `data-mj-bound` attribute or references a key not in `BoundDataLiterals`. |
+| `MJ_BOUND_VALUE_MISMATCH` | `DataLiteral` | `Error` | DOM Rules | At a settle timestamp (`SettleTimestampsSeconds`), rendered text inside `[data-mj-bound="<key>"]` contains a numeric literal token not in `BoundDataLiterals[key]`. Intermediate animated count-up frames at non-settle timestamps are not flagged. |
+| `MJ_ASOF_CARD_MISSING` | `Provenance` | `Error` | DOM Rules | A required provenance / as-of card substring (`RequiredFinalFrameText`, e.g., `Data as of YYYY-MM-DD`) is not present in any visible text element on the final frame. |
 | `MJ_UNBUNDLED_FONT` | `Lint` | `Warning` | DOM Rules | Rendered text's primary computed `font-family` is neither a loaded `@font-face` in `document.fonts` nor one of the worker's bundled default fonts (`MJ Sans`, `MJ Mono`). |
 | `MJ_CHECK_CLI_UNREADABLE` | `Lint` | `Warning` | CLI Audit | `hyperframes check --json` stdout was empty, malformed JSON, or missing audit sections. |
 | `MJ_CHECK_CLI_FAILED` | `Lint` | `Warning` | CLI Audit | `hyperframes check` subprocess crashed, timed out, or failed to spawn. |

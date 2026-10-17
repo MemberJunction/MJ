@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT150 - Video Studio Handoff",
+    "Description": "Deterministic top-level peer-to-peer handoff to the shipped Video Studio agent with a scripted TestLLM stand-in (no live model call): VSH1 verifies Video Studio is directly discoverable and runs IT: Handoff Source + FollowHandoffs into Video Studio, asserting the source Handoff step (TargetID, HandoffToAgentID, TargetConversationDetailID), the root Video Studio run (ParentRunID IS NULL, same ConversationID), and the target ConversationDetail row; VSH2 verifies Video Studio preset resolution (default resolves to Video Studio Standard; mj.agentMode.<video studio id lowercased>=High resolves to Video Studio High); VSH3 verifies conversation continuity data where the newest non-source Role=AI row is Video Studio's reply row.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "All three checks (VSH1-VSH3) pass: Video Studio is directly discoverable, FollowHandoffs transfers from IT: Handoff Source to Video Studio as a root run linked to the source Handoff step and detail row, preset resolution selects Video Studio Standard by default and Video Studio High when saved in MJ: User Settings, and conversation continuity returns Video Studio's reply row."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "video-studio-handoff"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "475709FF-0394-4F02-8A18-8C426E277D06"
+  }
+}

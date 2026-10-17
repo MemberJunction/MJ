@@ -9,6 +9,8 @@ export * from './narration/captions.js';
 export * from './narration/narration-pipeline.js';
 export * from './data/data-snapshot.js';
 export * from './validate-spec-async.js';
+export * from './settings.js';
+export * from './gates.js';
 
 export {
     CreateAbortError,
@@ -70,4 +72,32 @@ export {
     ResetLocalWorkerWarningState,
     VideoRenderEngine,
 } from './render/video-render-engine.js';
+
+export {
+    LoadVideoStudioAgent,
+    VIDEO_STUDIO_STAGES,
+    VideoStudioAgent,
+    type VideoStudioStageName,
+} from './agents/video-studio-agent.js';
+
+export {
+    BuildProduceVideoRequest,
+    type ProduceVideoArchetypeLookup,
+    type ProduceVideoBrandKitLookup,
+    type ProduceVideoDataRefInput,
+    type ProduceVideoInput,
+    type ProduceVideoLookups,
+    type ProduceVideoMappingError,
+    type ProduceVideoMappingErrorCode,
+    type ProduceVideoPresetLookup,
+    type ProduceVideoRequestError,
+    type ProduceVideoRequestResult,
+    type ProduceVideoRequestSuccess,
+} from './actions/produce-video.mapping.js';
+
+export {
+    LoadProduceVideoAction,
+    PRODUCE_VIDEO_DRIVER_CLASS,
+    ProduceVideoAction,
+} from './actions/produce-video.action.js';
 

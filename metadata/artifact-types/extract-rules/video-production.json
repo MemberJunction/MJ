@@ -43,5 +43,29 @@
     "type": "string",
     "standardProperty": "displayMarkdown",
     "extractor": "@file:video-production/displayMarkdown.js"
+  },
+  {
+    "name": "posterFileID",
+    "description": "Extracts the MJ: Files ID for the rendered poster frame from Output.PosterFileID",
+    "type": "string",
+    "extractor": "@file:video-production/posterFileID.js"
+  },
+  {
+    "name": "status",
+    "description": "Extracts the lifecycle status of the video production from Status",
+    "type": "string",
+    "extractor": "@file:video-production/status.js"
+  },
+  {
+    "name": "brandKitID",
+    "description": "Extracts the MJ: Brand Kits ID referenced by the video production from BrandKitID",
+    "type": "string",
+    "extractor": "@file:video-production/brandKitID.js"
+  },
+  {
+    "name": "companyID",
+    "description": "Extracts the Company ID associated with the video production from CompanyID",
+    "type": "string",
+    "extractor": "@file:video-production/companyID.js"
   }
 ]

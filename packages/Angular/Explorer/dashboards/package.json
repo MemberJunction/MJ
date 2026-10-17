@@ -73,6 +73,10 @@
       "types": "./dist/predictive-studio-dashboards.module.d.ts",
       "default": "./dist/predictive-studio-dashboards.module.js"
     },
+    "./video-studio-dashboards.module": {
+      "types": "./dist/video-studio-dashboards.module.d.ts",
+      "default": "./dist/video-studio-dashboards.module.js"
+    },
     "./integration.module": {
       "types": "./dist/Integration/integration.module.d.ts",
       "default": "./dist/Integration/integration.module.js"
@@ -146,6 +150,7 @@
     "@memberjunction/ng-base-application": "6.2.0-edge.4",
     "@memberjunction/ng-base-forms": "6.2.0-edge.4",
     "@memberjunction/ng-base-types": "6.2.0-edge.4",
+    "@memberjunction/ng-brand-kits": "6.2.0-edge.4",
     "@memberjunction/ng-clustering": "6.2.0-edge.4",
     "@memberjunction/ng-code-editor": "6.2.0-edge.4",
     "@memberjunction/ng-composer": "6.2.0-edge.4",
@@ -185,6 +190,7 @@
     "@memberjunction/templates-base-types": "6.2.0-edge.4",
     "@memberjunction/testing-engine-base": "6.2.0-edge.4",
     "@memberjunction/theme-engine": "6.2.0-edge.4",
+    "@memberjunction/video-studio-core": "6.2.0-edge.4",
     "@memberjunction/work-queue-base": "6.2.0-edge.4",
     "@memberjunction/work-queue-core": "6.2.0-edge.4",
     "ag-grid-angular": "^35.0.1",

@@ -15,7 +15,7 @@ import { NgTreesModule } from '@memberjunction/ng-trees';
 // component-artifact viewer branch (componentRole === 'form').
 import { BaseFormsModule } from '@memberjunction/ng-base-forms';
 // Generic media player — embedded by the audio/video artifact viewer plugins (standalone component).
-import { MJMediaPlayerComponent } from '@memberjunction/ng-media-player';
+import { MJMediaPlayerComponent, MJStorageMediaPlayerComponent } from '@memberjunction/ng-media-player';
 import { MJEmptyStateComponent, MJAlertComponent, MJButtonDirective } from '@memberjunction/ng-ui-components';
 
 // Import plugin components (note: base component is abstract and NOT declared)
@@ -41,11 +41,15 @@ import { XlsxPreviewComponent } from './components/previews/xlsx-preview.compone
 import { ImageArtifactViewerComponent } from './components/plugins/image-artifact-viewer.component';
 import { VideoArtifactViewerComponent } from './components/plugins/video-artifact-viewer.component';
 import { AudioArtifactViewerComponent } from './components/plugins/audio-artifact-viewer.component';
+import { VideoProductionViewerComponent } from './components/plugins/video-production/video-production-viewer.component';
+import { VideoProductionStoryboardTabComponent } from './components/plugins/video-production/video-production-storyboard-tab.component';
+import { VideoProductionReviewTabComponent } from './components/plugins/video-production/video-production-review-tab.component';
 
 // Inline preview components (lightweight, rendered inside conversation message cards)
 import { ImageArtifactPreviewComponent } from './components/previews/image-artifact-preview.component';
 import { VideoArtifactPreviewComponent } from './components/previews/video-artifact-preview.component';
 import { AudioArtifactPreviewComponent } from './components/previews/audio-artifact-preview.component';
+import { VideoProductionArtifactPreviewComponent } from './components/previews/video-production-artifact-preview.component';
 import { MJGlobal } from '@memberjunction/global';
 import { BaseArtifactViewerPluginComponent } from './components/base-artifact-viewer.component';
 import { IArtifactViewerPluginPreviewStatics } from './interfaces/artifact-viewer-plugin.interface';
@@ -83,9 +87,12 @@ import { ArtifactMessageCardComponent } from './components/artifact-message-card
     DataArtifactViewerComponent,
     MLExperimentResultsViewerComponent,
     SaveQueryPanelComponent,
+    VideoProductionViewerComponent,
 
     // Custom tab components (used by plugins via dynamic component tabs)
     DataRequirementsViewerComponent,
+    VideoProductionStoryboardTabComponent,
+    VideoProductionReviewTabComponent,
 
     // File viewer toolbar and plugins
     FileArtifactToolbarComponent,
@@ -102,6 +109,7 @@ import { ArtifactMessageCardComponent } from './components/artifact-message-card
     ImageArtifactPreviewComponent,
     VideoArtifactPreviewComponent,
     AudioArtifactPreviewComponent,
+    VideoProductionArtifactPreviewComponent,
   ],
   imports: [
     CommonModule,
@@ -116,6 +124,7 @@ import { ArtifactMessageCardComponent } from './components/artifact-message-card
     BaseFormsModule,
     ComponentFeedbackPanelComponent,
     MJMediaPlayerComponent,
+    MJStorageMediaPlayerComponent,
     AgGridModule,
     MJEmptyStateComponent,
     MJAlertComponent,
@@ -139,6 +148,9 @@ import { ArtifactMessageCardComponent } from './components/artifact-message-card
     ComponentArtifactViewerComponent,
     DataArtifactViewerComponent,
     MLExperimentResultsViewerComponent,
+    VideoProductionViewerComponent,
+    VideoProductionStoryboardTabComponent,
+    VideoProductionReviewTabComponent,
 
     // File viewer toolbar and plugins
     FileArtifactToolbarComponent,
@@ -155,6 +167,7 @@ import { ArtifactMessageCardComponent } from './components/artifact-message-card
     ImageArtifactPreviewComponent,
     VideoArtifactPreviewComponent,
     AudioArtifactPreviewComponent,
+    VideoProductionArtifactPreviewComponent,
   ],
   providers: [
     // Plugins are registered via @RegisterClass decorator on component classes, no providers needed
@@ -179,11 +192,15 @@ export class ArtifactsModule {
       ImageArtifactViewerComponent,
       VideoArtifactViewerComponent,
       AudioArtifactViewerComponent,
+      VideoProductionViewerComponent,
+      VideoProductionStoryboardTabComponent,
+      VideoProductionReviewTabComponent,
       // Preview components are referenced via plugins' previewComponentType — list them here too
       // so the bundler can't tree-shake the dynamically-rendered preview classes.
       ImageArtifactPreviewComponent,
       VideoArtifactPreviewComponent,
       AudioArtifactPreviewComponent,
+      VideoProductionArtifactPreviewComponent,
     ];
 
     // Registration-time guard: every registered artifact-viewer plugin must expose at least one of

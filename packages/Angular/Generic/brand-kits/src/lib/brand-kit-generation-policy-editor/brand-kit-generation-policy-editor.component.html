@@ -1,0 +1,154 @@
+<section class="mj-bkgp-root" aria-label="Brand Kit Generation Policy Editor">
+  @if (!BrandKit) {
+    <div class="mj-bkgp-empty" role="status">
+      <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
+      <span>Select or create a Brand Kit to configure its AI generation policy.</span>
+    </div>
+  } @else {
+    @if (SaveError) {
+      <div class="mj-bkgp-banner mj-bkgp-banner--error" role="alert" data-testid="bkgp-save-error">
+        <i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i>
+        <span>{{ SaveError }}</span>
+      </div>
+    }
+
+    <div class="mj-bkgp-toggles-grid">
+      <label class="mj-bkgp-toggle-card">
+        <input
+          type="checkbox"
+          [(ngModel)]="AllowGeneratedImages"
+          (ngModelChange)="OnFieldChange()"
+          [disabled]="Readonly"
+          data-testid="bkgp-allow-images" />
+        <div class="mj-bkgp-toggle-text">
+          <span class="mj-bkgp-toggle-title">Allow Generated Images</span>
+          <span class="mj-bkgp-toggle-desc">Permit AI image generation (plates, illustrations, backgrounds) using this Brand Kit.</span>
+        </div>
+      </label>
+
+      <label class="mj-bkgp-toggle-card">
+        <input
+          type="checkbox"
+          [(ngModel)]="AllowGeneratedVideo"
+          (ngModelChange)="OnFieldChange()"
+          [disabled]="Readonly"
+          data-testid="bkgp-allow-video" />
+        <div class="mj-bkgp-toggle-text">
+          <span class="mj-bkgp-toggle-title">Allow Generated Video</span>
+          <span class="mj-bkgp-toggle-desc">Permit AI video clip generation (ambient motion, B-roll plates) using this Brand Kit.</span>
+        </div>
+      </label>
+
+      <label class="mj-bkgp-toggle-card">
+        <input
+          type="checkbox"
+          [(ngModel)]="AllowSyntheticPeople"
+          (ngModelChange)="OnFieldChange()"
+          [disabled]="Readonly"
+          data-testid="bkgp-allow-synthetic-people" />
+        <div class="mj-bkgp-toggle-text">
+          <span class="mj-bkgp-toggle-title">Allow Synthetic People</span>
+          <span class="mj-bkgp-toggle-desc">Permit AI-generated human figures in conceptual or atmospheric scenes.</span>
+        </div>
+      </label>
+    </div>
+
+    @if (AllowSyntheticPeople) {
+      <div
+        class="mj-bkgp-banner mj-bkgp-banner--warning"
+        role="note"
+        data-testid="bkgp-synthetic-people-warning">
+        <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>
+        <span>{{ SyntheticPeopleWarning }}</span>
+      </div>
+    }
+
+    <div class="mj-bkgp-fields">
+      <div class="mj-bkgp-field">
+        <label class="mj-bkgp-label" for="bkgp-style-prompt">Style Prompt Fragment</label>
+        <textarea
+          id="bkgp-style-prompt"
+          class="mj-bkgp-textarea"
+          rows="3"
+          [(ngModel)]="StylePrompt"
+          (ngModelChange)="OnFieldChange()"
+          [disabled]="Readonly"
+          placeholder="Brand style instructions prepended to every image/video generation prompt..."
+          data-testid="bkgp-style-prompt"></textarea>
+      </div>
+
+      <div class="mj-bkgp-field">
+        <span class="mj-bkgp-label">Avoid Subjects</span>
+        <div class="mj-bkgp-chips" data-testid="bkgp-avoid-subjects-chips">
+          @for (subject of AvoidSubjects; track subject) {
+            <span class="mj-bkgp-chip" data-testid="bkgp-avoid-chip">
+              <span>{{ subject }}</span>
+              @if (!Readonly) {
+                <button
+                  type="button"
+                  class="mj-bkgp-chip-remove"
+                  [attr.aria-label]="'Remove ' + subject"
+                  (click)="RemoveAvoidSubject(subject)"
+                  data-testid="bkgp-avoid-chip-remove">
+                  <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                </button>
+              }
+            </span>
+          }
+        </div>
+        @if (!Readonly) {
+          <div class="mj-bkgp-chip-input-row">
+            <input
+              type="text"
+              class="mj-bkgp-input"
+              [(ngModel)]="NewSubjectInput"
+              (keydown)="OnSubjectKeydown($event)"
+              placeholder="Add a prohibited subject (e.g., competitor logos) and press Enter"
+              data-testid="bkgp-new-subject-input" />
+            <button
+              type="button"
+              mjButton
+              Variant="secondary"
+              Size="sm"
+              (click)="AddAvoidSubject()"
+              data-testid="bkgp-add-subject-btn">
+              <i class="fa-solid fa-plus" aria-hidden="true"></i>
+              <span>Add</span>
+            </button>
+          </div>
+        }
+      </div>
+
+      <div class="mj-bkgp-field mj-bkgp-field--narrow">
+        <label class="mj-bkgp-label" for="bkgp-max-cost">Max Generation Cost Per Run (USD)</label>
+        <input
+          id="bkgp-max-cost"
+          type="number"
+          min="0"
+          step="0.5"
+          class="mj-bkgp-input"
+          [(ngModel)]="MaxGenerationCostPerRun"
+          (ngModelChange)="OnFieldChange()"
+          [disabled]="Readonly"
+          placeholder="No cap"
+          data-testid="bkgp-max-cost" />
+      </div>
+    </div>
+
+    @if (!Readonly && ShowSaveButton) {
+      <div class="mj-bkgp-actions">
+        <button
+          type="button"
+          mjButton
+          Variant="primary"
+          Size="sm"
+          [disabled]="Saving"
+          (click)="SavePolicy()"
+          data-testid="bkgp-save-btn">
+          <i class="fa-solid fa-floppy-disk" aria-hidden="true"></i>
+          <span>{{ Saving ? 'Saving…' : 'Save Generation Policy' }}</span>
+        </button>
+      </div>
+    }
+  }
+</section>

@@ -1,9 +1,17 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import type { RenderProjectBundle } from '@memberjunction/video-studio-core';
+import {
+    BuildDataCheckInputs,
+    BuildRenderDataSnapshot,
+    type RenderProjectBundle,
+    type VideoGenerationSpec,
+} from '@memberjunction/video-studio-core';
 import {
     FakeRenderBackend,
+    MJ_ASOF_CARD_MISSING_CODE,
+    MJ_BOUND_KEY_UNKNOWN_CODE,
+    MJ_BOUND_VALUE_MISMATCH_CODE,
     MJ_CHECK_CLI_FAILED_CODE,
     MJ_MEASURE_TEXT_FAILED_CODE,
     MJ_MIN_TEXT_SIZE_CODE,
@@ -278,7 +286,7 @@ describe('RunCheckJob', () => {
         expect(result.Issues.every((i) => i.Severity === 'Warning')).toBe(true);
     });
 
-    it('rejects invalid SampleTimestampsSeconds and AllowedDataLiterals with InvalidRequest before staging', async () => {
+    it('rejects invalid SampleTimestampsSeconds, SettleTimestampsSeconds, AllowedDataLiterals, BoundDataLiterals, and RequiredFinalFrameText with InvalidRequest before staging', async () => {
         const backend = new FakeRenderBackend();
         const bundle = makeCleanBundle();
 
@@ -300,7 +308,31 @@ describe('RunCheckJob', () => {
                 Bundle: bundle,
                 Width: 1920,
                 Height: 1080,
+                SettleTimestampsSeconds: [-0.5],
+            },
+            {
+                Bundle: bundle,
+                Width: 1920,
+                Height: 1080,
                 AllowedDataLiterals: '$1M' as unknown as string[],
+            },
+            {
+                Bundle: bundle,
+                Width: 1920,
+                Height: 1080,
+                BoundDataLiterals: ['bad'] as unknown as Record<string, string[]>,
+            },
+            {
+                Bundle: bundle,
+                Width: 1920,
+                Height: 1080,
+                BoundDataLiterals: { TotalARR: [123 as unknown as string] },
+            },
+            {
+                Bundle: bundle,
+                Width: 1920,
+                Height: 1080,
+                RequiredFinalFrameText: [42 as unknown as string],
             },
         ];
 
@@ -312,6 +344,216 @@ describe('RunCheckJob', () => {
         expect(backend.LintCallCount).toBe(0);
         expect(backend.RunCheckCliCallCount).toBe(0);
         expect(backend.MeasureTextCallCount).toBe(0);
+    });
+
+    it('unions SampleTimestampsSeconds, SettleTimestampsSeconds, and final-frame timestamp, and evaluates BoundDataLiterals + RequiredFinalFrameText via BuildDataCheckInputs', async () => {
+        const spec: Pick<
+            VideoGenerationSpec,
+            'DataBindings' | 'DataSnapshot' | 'Beats' | 'Render'
+        > = {
+            Render: {
+                Renderer: 'HyperFrames',
+                RendererVersion: '0.16.21',
+                Fps: 30,
+                Seed: 42,
+                Quality: 'standard',
+            },
+            DataBindings: [
+                {
+                    Key: 'TotalARR',
+                    Source: { Kind: 'Inline' },
+                    Shape: 'Scalar',
+                    Format: { Kind: 'Currency', Currency: 'USD', Decimals: 1 },
+                },
+            ],
+            DataSnapshot: {
+                AsOf: '2026-10-16T00:00:00.000Z',
+                Sources: ['Inline:TotalARR'],
+                Inline: { TotalARR: 14_200_000 },
+            },
+            Beats: [
+                {
+                    Key: 'b1',
+                    Label: 'Reveal',
+                    StartSeconds: 0,
+                    EndSeconds: 2,
+                    EntryState: 'Blank',
+                    ExitState: 'Settled KPI + AsOf footer',
+                    Purpose: 'Count up ARR to $14.2M with Data as of 2026-10-16 footer',
+                    OnScreenText: ['Total ARR {TotalARR}'],
+                    DataRefs: ['TotalARR'],
+                    AssetRefs: [],
+                    LayoutNotes: { '16:9': 'Centered KPI' },
+                },
+            ],
+        };
+        const values = { TotalARR: 14_200_000 };
+        const checkInputs = BuildDataCheckInputs(spec, values);
+        const dataSnapshot = BuildRenderDataSnapshot(values, '2026-10-16T00:00:00.000Z');
+
+        const bundleWithDuration = makeCleanBundle({
+            Files: [
+                {
+                    Path: 'index.html',
+                    Content:
+                        '<!doctype html><html><body><div id="root" data-composition-id="kpi" data-duration="3" data-fps="30">' +
+                        '<div id="kpi" data-mj-bound="TotalARR"></div><footer id="asof"></footer>' +
+                        '</div></body></html>',
+                },
+            ],
+            DataSnapshot: dataSnapshot,
+        });
+
+        // Settle timestamp for beat ending at 2s @ 30fps is 2 - 1/30, while final frame for 3s @ 30fps is 2.966667
+        const settleTs = checkInputs.SettleTimestampsSeconds[0]!;
+        const finalFrameTs = 2.966667;
+        const passingBackend = new FakeRenderBackend({
+            MeasuredTexts: [
+                // Mid-beat t = 1.0s (count-up intermediate value $7.1M is NOT flagged because 1.0 != settleTs)
+                [
+                    {
+                        Text: '$7.1M',
+                        Left: 200,
+                        Top: 200,
+                        Width: 300,
+                        Height: 60,
+                        FontSizePx: 48,
+                        FontFamily: 'Inter',
+                        FontIsBundled: true,
+                        IsBound: true,
+                        BoundKey: 'TotalARR',
+                        Selector: '#kpi',
+                        TimestampSeconds: 1.0,
+                    },
+                ],
+                // Settle frame t = 2 - 1/30
+                [
+                    {
+                        Text: '$14.2M',
+                        Left: 200,
+                        Top: 200,
+                        Width: 300,
+                        Height: 60,
+                        FontSizePx: 48,
+                        FontFamily: 'Inter',
+                        FontIsBundled: true,
+                        IsBound: true,
+                        BoundKey: 'TotalARR',
+                        Selector: '#kpi',
+                        TimestampSeconds: settleTs,
+                    },
+                ],
+                // Final frame t = 2.966667s
+                [
+                    {
+                        Text: '$14.2M',
+                        Left: 200,
+                        Top: 200,
+                        Width: 300,
+                        Height: 60,
+                        FontSizePx: 48,
+                        FontFamily: 'Inter',
+                        FontIsBundled: true,
+                        IsBound: true,
+                        BoundKey: 'TotalARR',
+                        Selector: '#kpi',
+                        TimestampSeconds: finalFrameTs,
+                    },
+                    {
+                        Text: 'Data as of 2026-10-16',
+                        Left: 200,
+                        Top: 900,
+                        Width: 400,
+                        Height: 40,
+                        FontSizePx: 28,
+                        FontFamily: 'Inter',
+                        FontIsBundled: true,
+                        IsBound: false,
+                        Selector: '#asof',
+                        TimestampSeconds: finalFrameTs,
+                    },
+                ],
+            ],
+        });
+
+        const passResult = await RunCheckJob(
+            {
+                Bundle: bundleWithDuration,
+                Width: 1920,
+                Height: 1080,
+                SampleTimestampsSeconds: [1.0],
+                AllowedDataLiterals: checkInputs.AllowedDataLiterals,
+                BoundDataLiterals: checkInputs.BoundDataLiterals,
+                SettleTimestampsSeconds: checkInputs.SettleTimestampsSeconds,
+                RequiredFinalFrameText: checkInputs.RequiredFinalFrameText,
+            },
+            passingBackend,
+        );
+
+        expect(passingBackend.LastMeasuredTimestamps).toEqual([1.0, 2 - 1 / 30, 2.966667]);
+        expect(passResult.Passed).toBe(true);
+        expect(passResult.Issues).toEqual([]);
+
+        // Failing run: unknown key, wrong settled value, and missing as-of card on final frame
+        const failingBackend = new FakeRenderBackend({
+            MeasuredTexts: [
+                [
+                    {
+                        Text: '$7.1M',
+                        Left: 200,
+                        Top: 200,
+                        Width: 300,
+                        Height: 60,
+                        FontSizePx: 48,
+                        FontFamily: 'Inter',
+                        FontIsBundled: true,
+                        IsBound: true,
+                        BoundKey: 'UnknownKey',
+                        Selector: '#bad-bound',
+                        TimestampSeconds: 1.0,
+                    },
+                ],
+                [
+                    {
+                        Text: '$99.9M',
+                        Left: 200,
+                        Top: 200,
+                        Width: 300,
+                        Height: 60,
+                        FontSizePx: 48,
+                        FontFamily: 'Inter',
+                        FontIsBundled: true,
+                        IsBound: true,
+                        BoundKey: 'TotalARR',
+                        Selector: '#kpi',
+                        TimestampSeconds: settleTs,
+                    },
+                ],
+                [],
+            ],
+        });
+
+        const failResult = await RunCheckJob(
+            {
+                Bundle: bundleWithDuration,
+                Width: 1920,
+                Height: 1080,
+                SampleTimestampsSeconds: [1.0],
+                AllowedDataLiterals: checkInputs.AllowedDataLiterals,
+                BoundDataLiterals: checkInputs.BoundDataLiterals,
+                SettleTimestampsSeconds: checkInputs.SettleTimestampsSeconds,
+                RequiredFinalFrameText: checkInputs.RequiredFinalFrameText,
+            },
+            failingBackend,
+        );
+
+        expect(failResult.Passed).toBe(false);
+        expect(failResult.BlockRender).toBe(true);
+        expect(failResult.Issues.map((i) => i.Code)).toEqual([
+            MJ_BOUND_KEY_UNKNOWN_CODE,
+            MJ_BOUND_VALUE_MISMATCH_CODE,
+            MJ_ASOF_CARD_MISSING_CODE,
+        ]);
     });
 
     it('parses data-fps from the composition root, passes it to StageRenderBundle and FakeRenderBackend.MeasureText, and range-checks invalid data-fps', async () => {
@@ -368,3 +610,4 @@ describe('RunCheckJob', () => {
         }
     });
 });
+

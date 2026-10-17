@@ -1,0 +1,15 @@
+<mj-collapsible-panel
+  SectionKey="brandKitAssets"
+  [Order]="DisplayOrder"
+  SectionName="Brand Kit Assets"
+  Icon="fa-solid fa-photo-film"
+  [Form]="FormComponent"
+  [FormContext]="FormContext">
+  <div class="mj-bkap-container">
+    <mj-brand-kit-assets-editor
+      [BrandKit]="Record"
+      [Provider]="HostProvider"
+      [Readonly]="!EditMode">
+    </mj-brand-kit-assets-editor>
+  </div>
+</mj-collapsible-panel>

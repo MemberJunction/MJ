@@ -28,6 +28,7 @@ import {
     type RenderBackend,
 } from './backend.js';
 import {
+    ResolveCompositionDuration,
     ResolveCompositionFps,
     StageRenderBundle,
     ValidateCompositionGeometryMatch,
@@ -63,7 +64,7 @@ export interface RunJobCommonOptions {
 }
 
 /**
- * Executes a `/check` job (VS-RND-5 Step 8):
+ * Executes a `/check` job (VS-RND-5 Step 8, extended in VS-DAT-3):
  * 1. Validate request & geometry (including composition root attribute match and `data-fps` range)
  * 2. Stage bundle (with preamble injected on a single line so line numbers stay unchanged and
  *    `@hyperframes/lint` sees `window.__timelines` for `OnFrame`-only compositions)
@@ -71,8 +72,9 @@ export interface RunJobCommonOptions {
  *    without invoking Chromium
  * 4. Run static authored-file checks (`RunStaticChecks`)
  * 5. Run `hyperframes check --json` via `backend.RunCheckCli`
- * 6. Measure rendered text at `SampleTimestampsSeconds ?? [0]` via `backend.MeasureText` and
- *    evaluate DOM rules (`EvaluateDomRules`)
+ * 6. Measure rendered text across the union of `SampleTimestampsSeconds ?? [0]`,
+ *    `SettleTimestampsSeconds ?? []`, and (when `RequiredFinalFrameText` is non-empty) the final
+ *    frame via `backend.MeasureText` and evaluate DOM rules (`EvaluateDomRules`)
  * 7. Merge, dedupe on `Code + Selector + File + Line` keeping earliest `TimestampSeconds`, and sort.
  */
 export async function RunCheckJob(
@@ -84,29 +86,8 @@ export async function RunCheckJob(
     if (!req || typeof req !== 'object' || !req.Bundle) {
         throw new RenderWorkerError('InvalidRequest', 'CheckRequest.Bundle is required.');
     }
-    if (req.SampleTimestampsSeconds !== undefined) {
-        if (!Array.isArray(req.SampleTimestampsSeconds)) {
-            throw new RenderWorkerError(
-                'InvalidRequest',
-                'CheckRequest.SampleTimestampsSeconds must be an array of finite non-negative numbers.',
-            );
-        }
-        if (req.SampleTimestampsSeconds.length > MAX_STILL_POINTS) {
-            throw new RenderWorkerError(
-                'InvalidRequest',
-                `CheckRequest.SampleTimestampsSeconds count (${req.SampleTimestampsSeconds.length}) exceeds maximum allowed (${MAX_STILL_POINTS}).`,
-            );
-        }
-        for (let i = 0; i < req.SampleTimestampsSeconds.length; i++) {
-            const ts = req.SampleTimestampsSeconds[i];
-            if (typeof ts !== 'number' || !Number.isFinite(ts) || ts < 0) {
-                throw new RenderWorkerError(
-                    'InvalidRequest',
-                    `CheckRequest.SampleTimestampsSeconds[${i}] must be a finite number >= 0.`,
-                );
-            }
-        }
-    }
+    validateTimestampArray(req.SampleTimestampsSeconds, 'CheckRequest.SampleTimestampsSeconds');
+    validateTimestampArray(req.SettleTimestampsSeconds, 'CheckRequest.SettleTimestampsSeconds');
     if (req.AllowedDataLiterals !== undefined) {
         if (
             !Array.isArray(req.AllowedDataLiterals) ||
@@ -115,6 +96,37 @@ export async function RunCheckJob(
             throw new RenderWorkerError(
                 'InvalidRequest',
                 'CheckRequest.AllowedDataLiterals must be an array of strings.',
+            );
+        }
+    }
+    if (req.BoundDataLiterals !== undefined) {
+        if (
+            typeof req.BoundDataLiterals !== 'object' ||
+            req.BoundDataLiterals === null ||
+            Array.isArray(req.BoundDataLiterals)
+        ) {
+            throw new RenderWorkerError(
+                'InvalidRequest',
+                'CheckRequest.BoundDataLiterals must be an object mapping bound keys to string arrays.',
+            );
+        }
+        for (const [key, values] of Object.entries(req.BoundDataLiterals)) {
+            if (!Array.isArray(values) || values.some((lit) => typeof lit !== 'string')) {
+                throw new RenderWorkerError(
+                    'InvalidRequest',
+                    `CheckRequest.BoundDataLiterals["${key}"] must be an array of strings.`,
+                );
+            }
+        }
+    }
+    if (req.RequiredFinalFrameText !== undefined) {
+        if (
+            !Array.isArray(req.RequiredFinalFrameText) ||
+            req.RequiredFinalFrameText.some((item) => typeof item !== 'string')
+        ) {
+            throw new RenderWorkerError(
+                'InvalidRequest',
+                'CheckRequest.RequiredFinalFrameText must be an array of strings.',
             );
         }
     }
@@ -128,6 +140,16 @@ export async function RunCheckJob(
         Height: req.Height,
     });
     const resolvedFps = ResolveCompositionFps(req.Bundle, 30);
+    const hasRequiredFinalFrameText = (req.RequiredFinalFrameText ?? []).some(
+        (item) => item.trim().length > 0,
+    );
+    const resolvedDuration = hasRequiredFinalFrameText
+        ? ResolveCompositionDuration(req.Bundle, 5)
+        : undefined;
+    const finalFrameTs =
+        resolvedDuration !== undefined
+            ? Math.max(0, Number((resolvedDuration - 1 / resolvedFps).toFixed(6)))
+            : undefined;
 
     const staged = await StageRenderBundle(req.Bundle, {
         TempRoot: options?.TempRoot,
@@ -152,11 +174,23 @@ export async function RunCheckJob(
         };
 
         const cliIssues = await runCheckCliSafely(backend, checkJob, signal);
-        const sampleTimestamps =
+        const baseSamples =
             Array.isArray(req.SampleTimestampsSeconds) && req.SampleTimestampsSeconds.length > 0
                 ? req.SampleTimestampsSeconds
                 : [0];
-        const domIssues = await runDomChecksSafely(req, backend, checkJob, sampleTimestamps, signal);
+        const sampleTimestamps = dedupeMeasureTimestamps([
+            ...baseSamples,
+            ...(req.SettleTimestampsSeconds ?? []),
+            ...(finalFrameTs !== undefined ? [finalFrameTs] : []),
+        ]);
+        const domIssues = await runDomChecksSafely(
+            req,
+            backend,
+            checkJob,
+            sampleTimestamps,
+            finalFrameTs,
+            signal,
+        );
 
         const merged = SortCheckIssues(
             DedupeCheckIssues([...lintResult.Issues, ...staticIssues, ...cliIssues, ...domIssues]),
@@ -170,6 +204,43 @@ export async function RunCheckJob(
     } finally {
         await staged.Cleanup();
     }
+}
+
+function validateTimestampArray(timestamps: unknown, fieldName: string): void {
+    if (timestamps === undefined) {
+        return;
+    }
+    if (!Array.isArray(timestamps)) {
+        throw new RenderWorkerError(
+            'InvalidRequest',
+            `${fieldName} must be an array of finite non-negative numbers.`,
+        );
+    }
+    if (timestamps.length > MAX_STILL_POINTS) {
+        throw new RenderWorkerError(
+            'InvalidRequest',
+            `${fieldName} count (${timestamps.length}) exceeds maximum allowed (${MAX_STILL_POINTS}).`,
+        );
+    }
+    for (let i = 0; i < timestamps.length; i++) {
+        const ts = timestamps[i];
+        if (typeof ts !== 'number' || !Number.isFinite(ts) || ts < 0) {
+            throw new RenderWorkerError(
+                'InvalidRequest',
+                `${fieldName}[${i}] must be a finite number >= 0.`,
+            );
+        }
+    }
+}
+
+function dedupeMeasureTimestamps(timestamps: readonly number[]): number[] {
+    const out: number[] = [];
+    for (const ts of timestamps) {
+        if (!out.some((existing) => Math.abs(existing - ts) <= 1e-6)) {
+            out.push(ts);
+        }
+    }
+    return out;
 }
 
 /**
@@ -226,6 +297,7 @@ async function runDomChecksSafely(
     backend: RenderBackend,
     job: BackendCheckJob,
     sampleTimestamps: readonly number[],
+    finalFrameTimestampSeconds: number | undefined,
     signal?: AbortSignal,
 ): Promise<CheckIssue[]> {
     try {
@@ -236,6 +308,10 @@ async function runDomChecksSafely(
             Width: req.Width,
             Height: req.Height,
             AllowedDataLiterals: req.AllowedDataLiterals,
+            BoundDataLiterals: req.BoundDataLiterals,
+            SettleTimestampsSeconds: req.SettleTimestampsSeconds,
+            RequiredFinalFrameText: req.RequiredFinalFrameText,
+            FinalFrameTimestampSeconds: finalFrameTimestampSeconds,
         });
     } catch (error) {
         if (signal?.aborted) {

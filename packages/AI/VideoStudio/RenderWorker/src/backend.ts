@@ -151,6 +151,8 @@ export interface MeasuredText {
     FontIsBundled: boolean;
     /** True when the element or an ancestor carries `data-mj-bound`. */
     IsBound: boolean;
+    /** The `data-mj-bound` attribute value from the element or its nearest bound ancestor, when `IsBound` is true. */
+    BoundKey?: string;
     /** Short CSS selector path identifying the element. */
     Selector: string;
     /** Sample timestamp in seconds at which the measurement was taken. */
