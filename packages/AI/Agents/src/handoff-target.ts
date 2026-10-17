@@ -1,7 +1,7 @@
 import { LogError, UserInfo } from '@memberjunction/core';
 import { MAX_HANDOFF_HOPS, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
-import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
+import { NormalizeUUID, UUIDsEqual, UUIDSet } from '@memberjunction/global';
 import {
     DecisionDiscoveryAgent,
     DecisionDiscoveryCatalog,
@@ -89,7 +89,10 @@ export const MAX_HANDOFF_CANDIDATES = 20;
  *
  * When multiple Active agents share the requested name, matches are ordered by `NormalizeUUID(ID)`
  * and checked in order, resolving to the first match that passes all checks and refusing with the
- * first match's failure reason only when none passes.
+ * first viewable match's failure reason only when none passes.
+ *
+ * At most one handoff per user turn per source is enforced naturally because a successful Handoff
+ * ends the source agent's run.
  */
 export async function ResolveHandoffTarget<T extends DecisionDiscoveryAgent = MJAIAgentEntityExtended>(
     input: ResolveHandoffTargetInput<T>
@@ -108,6 +111,7 @@ export async function ResolveHandoffTarget<T extends DecisionDiscoveryAgent = MJ
         return buildRefusal('NotFound', fallbackLabel, input);
     }
 
+    const handoffChainSet = new UUIDSet(input.HandoffChain);
     let firstViewableFailure: { reason: HandoffRefusalReason; label: string } | undefined;
 
     for (const target of matches) {
@@ -142,7 +146,7 @@ export async function ResolveHandoffTarget<T extends DecisionDiscoveryAgent = MJ
             continue;
         }
 
-        const inChain = input.HandoffChain.some(chainId => UUIDsEqual(chainId, target.ID));
+        const inChain = handoffChainSet.Has(target.ID);
         if (inChain) {
             firstViewableFailure ??= { reason: 'AlreadyInThisTurn', label: targetLabel };
             continue;

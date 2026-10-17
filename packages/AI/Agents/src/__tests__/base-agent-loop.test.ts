@@ -2949,6 +2949,34 @@ describe('BaseAgent.Execute — single-node task-graph fold vs unfold (VS-SAGE-4
         expect(statusLogs.some((m) => m.includes('target is not a sub-agent of Sage; submitting durably'))).toBe(true);
     });
 
+    it('falls through to "not found or not active" Retry when a single-node graph names an unknown agent', async () => {
+        harness.agent = makeAgentRow({
+            Name: 'Sage',
+            AgentTypePromptParams: JSON.stringify({ enableTaskGraphs: true }),
+        });
+        const baseEngine = harness.engineInstance;
+        vi.spyOn(harness, 'engineInstance', 'get').mockReturnValue({
+            ...baseEngine,
+            Agents: [harness.agent],
+            AgentRelationships: [],
+            GetSubAgents: () => [],
+        });
+
+        const { agent, runner } = makeAgent([
+            () => llmEnvelope(singleNodeTasksEnvelope('NonExistent Specialist')),
+            () => llmEnvelope(successEnvelope('Recovered after retry')),
+        ]);
+
+        const result = await agent.Execute(makeParams());
+
+        expect(result.success).toBe(true);
+        expect(submitSpy).not.toHaveBeenCalled();
+        expect(runner.Calls).toHaveLength(2);
+        expect((agent as unknown as { _generalValidationRetryCount: number })._generalValidationRetryCount).toBe(1);
+        const secondCallText = JSON.stringify(runner.Calls[1].conversationMessages);
+        expect(secondCallText).toContain("Sub-agent 'NonExistent Specialist' not found or not active");
+    });
+
     it('keeps a single-node graph folded in-run when targeting a ParentID child, relationship target, or skill-granted sub-agent', async () => {
         // 1) ParentID child
         harness.agent = makeAgentRow({

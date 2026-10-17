@@ -1349,7 +1349,8 @@ export class TaskGraphService {
     /**
      * Maps every referenced agent name to its ID, resolving only `Status = 'Active'` agents that
      * `context.ContextUser` has permission to run (`AIAgentPermissionHelper.FilterRunnableAgents`).
-     * Reports all refused names at once, split into "unknown or inactive" and "not runnable by you".
+     * Reports all refused names at once, split into "unknown or inactive" (including agents the user
+     * cannot `'view'`) and "not runnable by you" (agents the user can `'view'` but cannot `'run'`).
      */
     private async resolveAgents(
         spec: TaskGraphSpec,
@@ -1365,7 +1366,7 @@ export class TaskGraphService {
         const result = await RunView.FromMetadataProvider(context.Provider).RunView<{
             ID: string;
             Name: string;
-            Status?: MJAIAgentEntity['Status'];
+            Status: MJAIAgentEntity['Status'];
         }>(
             {
                 EntityName: 'MJ: AI Agents',
@@ -1376,22 +1377,40 @@ export class TaskGraphService {
             context.ContextUser,
         );
 
-        const activeRows = (result.Results ?? [])
-            .filter((r) => (r.Status ?? 'Active') === 'Active')
-            .map((r) => ({
-                ID: r.ID,
-                Name: r.Name,
-                Status: (r.Status ?? 'Active') as MJAIAgentEntity['Status'],
-            }));
+        const activeRows = result.Results ?? [];
         const activeByName = new Map(activeRows.map((r) => [r.Name, r]));
-        const unknownOrInactive = names.filter((n) => !activeByName.has(n));
 
         const runnableRows =
             activeRows.length > 0
                 ? await AIAgentPermissionHelper.FilterRunnableAgents(activeRows, context.ContextUser)
                 : [];
         const runnableByName = new Map(runnableRows.map((r) => [r.Name, r.ID]));
-        const notRunnable = names.filter((n) => activeByName.has(n) && !runnableByName.has(n));
+
+        const unknownOrInactive: string[] = [];
+        const notRunnable: string[] = [];
+        for (const name of names) {
+            if (runnableByName.has(name)) {
+                continue;
+            }
+            const row = activeByName.get(name);
+            if (!row) {
+                unknownOrInactive.push(name);
+                continue;
+            }
+            let canView = false;
+            try {
+                canView = await AIAgentPermissionHelper.HasPermission(row.ID, context.ContextUser, 'view');
+            } catch (error) {
+                LogError(
+                    `TaskGraphService.resolveAgents: view permission check failed for agent '${row.ID}': ${error instanceof Error ? error.message : String(error)}`,
+                );
+            }
+            if (!canView) {
+                unknownOrInactive.push(name);
+            } else {
+                notRunnable.push(name);
+            }
+        }
 
         if (unknownOrInactive.length > 0 || notRunnable.length > 0) {
             const parts: string[] = [];

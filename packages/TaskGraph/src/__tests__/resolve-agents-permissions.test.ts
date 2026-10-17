@@ -13,6 +13,7 @@ import type { MJTaskEntity } from '@memberjunction/core-entities';
 
 const mockRunView = vi.fn();
 const mockFilterRunnableAgents = vi.fn();
+const mockHasPermission = vi.fn();
 
 vi.mock('@memberjunction/core', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/core')>();
@@ -31,6 +32,7 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
 vi.mock('@memberjunction/ai-engine-base', () => ({
     AIAgentPermissionHelper: {
         FilterRunnableAgents: (...args: unknown[]) => mockFilterRunnableAgents(...args),
+        HasPermission: (...args: unknown[]) => mockHasPermission(...args),
     },
 }));
 
@@ -103,6 +105,7 @@ function createHarness() {
 describe('VS-SAGE-4: TaskGraphService.resolveAgents status + permission enforcement', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        mockHasPermission.mockResolvedValue(true);
     });
 
     it('refuses an inactive agent ("unknown or inactive") and writes nothing', async () => {
@@ -111,10 +114,10 @@ describe('VS-SAGE-4: TaskGraphService.resolveAgents status + permission enforcem
         mockRunView.mockImplementation(async (params: { EntityName: string; ExtraFilter?: string }) => {
             if (params.EntityName === 'MJ: AI Agents') {
                 expect(params.ExtraFilter).toContain("Status = 'Active'");
-                // Simulate DB returning nothing (or an accidentally returned non-Active row)
+                // SQL filters out non-Active rows via `Status = 'Active'`
                 return {
                     Success: true,
-                    Results: [{ ID: 'agent-disabled-1', Name: 'Disabled Agent', Status: 'Disabled' }],
+                    Results: [],
                 };
             }
             return { Success: true, Results: [] };
@@ -187,6 +190,65 @@ describe('VS-SAGE-4: TaskGraphService.resolveAgents status + permission enforcem
             [{ ID: 'agent-restricted-1', Name: 'Restricted Agent', Status: 'Active' }],
             contextUser,
         );
+        expect(mockHasPermission).toHaveBeenCalledWith('agent-restricted-1', contextUser, 'view');
+        expect(getEntityObject).not.toHaveBeenCalled();
+        expect(savedRecords).toHaveLength(0);
+    });
+
+    it('refuses an active agent the user cannot view under "unknown or inactive" so its existence is not leaked', async () => {
+        const { service, context, getEntityObject, savedRecords, contextUser } = createHarness();
+
+        mockRunView.mockImplementation(async (params: { EntityName: string }) => {
+            if (params.EntityName === 'MJ: AI Agents') {
+                return {
+                    Success: true,
+                    Results: [
+                        { ID: 'agent-secret-1', Name: 'Secret Agent', Status: 'Active' },
+                        { ID: 'agent-view-only-1', Name: 'View Only Agent', Status: 'Active' },
+                    ],
+                };
+            }
+            return { Success: true, Results: [] };
+        });
+        mockFilterRunnableAgents.mockResolvedValue([]);
+        mockHasPermission.mockImplementation(async (agentId: string, _user: UserInfo, perm: string) => {
+            if (perm === 'view') {
+                return agentId === 'agent-view-only-1';
+            }
+            return false;
+        });
+
+        const spec: TaskGraphSpec = {
+            workflowName: 'View Permission Refusal Workflow',
+            reasoning: 'Test unviewable agent does not leak existence',
+            tasks: [
+                {
+                    tempId: 'step_1',
+                    name: 'Secret step',
+                    description: 'References unviewable active agent',
+                    kind: 'Agent',
+                    configuration: { agentName: 'Secret Agent', message: 'Step 1' },
+                    dependsOn: [],
+                },
+                {
+                    tempId: 'step_2',
+                    name: 'View-only step',
+                    description: 'References viewable but non-runnable agent',
+                    kind: 'Agent',
+                    configuration: { agentName: 'View Only Agent', message: 'Step 2' },
+                    dependsOn: ['step_1'],
+                },
+            ],
+        };
+
+        const result = await service.Submit(spec, context);
+
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toContain(
+            'Task graph "View Permission Refusal Workflow" references 1 unknown or inactive agent(s): Secret Agent; 1 agent(s) not runnable by you: View Only Agent.',
+        );
+        expect(mockHasPermission).toHaveBeenCalledWith('agent-secret-1', contextUser, 'view');
+        expect(mockHasPermission).toHaveBeenCalledWith('agent-view-only-1', contextUser, 'view');
         expect(getEntityObject).not.toHaveBeenCalled();
         expect(savedRecords).toHaveLength(0);
     });

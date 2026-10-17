@@ -6171,22 +6171,34 @@ export class BaseAgent {
             case 'Sub-Agent':
                 if (
                     nextStep.taskGraph?.folded &&
-                    (!nextStep.subAgent?.name || !this.resolveSubAgentByName(params, nextStep.subAgent.name))
+                    nextStep.subAgent?.name &&
+                    !this.resolveSubAgentByName(params, nextStep.subAgent.name)
                 ) {
-                    this.logStatus(
-                        `target is not a sub-agent of ${params.agent.Name}; submitting durably`,
-                        false,
-                        params
-                    );
-                    return {
-                        ...nextStep,
-                        step: 'Tasks' as typeof nextStep.step,
-                        subAgent: undefined,
-                        taskGraph: {
-                            spec: nextStep.taskGraph.spec,
-                            folded: false,
-                        },
-                    };
+                    const targetName = nextStep.subAgent.name.trim().toLowerCase();
+                    const activeAgentExists =
+                        targetName.length > 0 &&
+                        (AIEngine.Instance.Agents ?? []).some(
+                            (a) =>
+                                a.Status === 'Active' &&
+                                (a.Name ?? '').trim().toLowerCase() === targetName &&
+                                !UUIDsEqual(a.ID, params.agent.ID),
+                        );
+                    if (activeAgentExists) {
+                        this.logStatus(
+                            `target is not a sub-agent of ${params.agent.Name}; submitting durably`,
+                            false,
+                            params
+                        );
+                        return {
+                            ...nextStep,
+                            step: 'Tasks' as typeof nextStep.step,
+                            subAgent: undefined,
+                            taskGraph: {
+                                spec: nextStep.taskGraph.spec,
+                                folded: false,
+                            },
+                        };
+                    }
                 }
                 return this.validateSubAgentNextStep<P>(params, nextStep, currentPayload, agentRun, currentStep);
             case 'Actions':
