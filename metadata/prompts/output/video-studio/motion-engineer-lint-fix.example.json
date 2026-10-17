@@ -1,0 +1,9 @@
+{
+  "Files": [
+    {
+      "Path": "scene.js",
+      "Content": "const counterEl = document.getElementById('counter');\nwindow.MJVideo.BindText('#as-of', '__asOf', (v) => 'Data as of ' + String(v));\nwindow.MJVideo.OnFrame((t) => {\n  window.MJChartKit.Counter(counterEl, { Value: Number(window.MJVideo.Data['arr_total']), BindingKey: 'arr_total', Format: 'currency', Unit: 'USD', Precision: 1, StartSeconds: 0, DurationSeconds: 3.5 }, t);\n});"
+    }
+  ],
+  "Notes": "Replaced non-deterministic requestAnimationFrame loop with window.MJVideo.OnFrame callback to satisfy MJ_NONDETERMINISTIC_API."
+}

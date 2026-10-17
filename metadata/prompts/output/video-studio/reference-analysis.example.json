@@ -1,0 +1,14 @@
+{
+  "SourceKey": "ref-annual-report-deck",
+  "Kind": "image",
+  "Summary": "High-contrast dark editorial layout pairing oversized geometric sans-serif headlines with monospace tabular callouts and restrained cyan accent rules.",
+  "Palette": "Deep slate-navy background (#0B1020) with crisp off-white typography (#F8FAFC) and single-hue electric cyan (#38BDF8) data highlights.",
+  "Typography": "Heavy geometric sans-serif display headings paired with medium monospace numerals for KPI figures and generous line height.",
+  "Motion": "Calm, high-damping cubic-bezier entrances with staggered vertical reveals and ample hold time on settled charts.",
+  "Layout": "Asymmetric 12-column grid with wide outer safe margins (8%+) and thin 1px hairlines separating metric cards.",
+  "DoNotCopy": [
+    "The reference deck's proprietary company logo and wordmark in the top-right corner",
+    "Verbatim customer quote text and named enterprise logos on slide 2",
+    "The specific isometric server-rack illustration on the cover frame"
+  ]
+}

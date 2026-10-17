@@ -1,0 +1,37 @@
+{
+  "Defects": [
+    {
+      "TimestampSeconds": 6.2,
+      "BeatID": "beat-2",
+      "Criterion": "Visual Hierarchy & Legibility",
+      "Severity": "Warning",
+      "Evidence": "In the 9:16 frame at 6.2s, the subtitle under the progress ring overlaps the top edge of the KPI callout box by 14px.",
+      "LocalFix": "Increase gap on .beat-2-stack in 9:16 index.html from 12px to 32px and reduce ring diameter from 360px to 310px."
+    },
+    {
+      "TimestampSeconds": 1.5,
+      "BeatID": "beat-1",
+      "Criterion": "Brand Fidelity",
+      "Severity": "Warning",
+      "Evidence": "Generated background plate hero_abstract_grid contains faint warm orange streaks that clash with the cool navy/cyan brand palette.",
+      "LocalFix": "Regenerate hero_abstract_grid with strict dark navy (#0B1020) and cyan (#38BDF8) palette constraint.",
+      "AssetKey": "hero_abstract_grid"
+    }
+  ],
+  "Scores": {
+    "Overall": 86,
+    "ByCriterion": {
+      "Visual Hierarchy & Legibility": 80,
+      "Pacing & Rhythm": 88,
+      "Data Accuracy": 95,
+      "Chart Choice & Honesty": 90,
+      "Brand Fidelity": 82,
+      "Narrative Arc": 88,
+      "Audio-Visual Sync": 86,
+      "Technical Cleanliness": 92
+    },
+    "Passed": true,
+    "FailedFloorCriteria": []
+  },
+  "Summary": "All bound figures match DataSnapshot and settle cleanly before beat transitions; minor vertical spacing adjustment in beat-2 and optional background plate color tightening noted."
+}

@@ -1,0 +1,77 @@
+{
+  "taskComplete": true,
+  "message": "Defined the Film brief, selected the data-story archetype, inventoried required brand assets and NeverInvent constraints, and bound Q3 revenue metrics.",
+  "payloadChangeRequest": {
+    "newElements": {
+      "Film": {
+        "Title": "Q3 Revenue Momentum",
+        "Subject": "Quarterly revenue growth and enterprise retention highlights",
+        "Audience": "Executive leadership and board members",
+        "Purpose": "Summarize Q3 financial performance with grounded metrics",
+        "Tone": "Authoritative, crisp, and data-driven",
+        "DurationSeconds": 18,
+        "Fps": 30,
+        "Formats": ["16:9", "9:16"],
+        "KeyMessages": [
+          "Annual recurring revenue reached {arr_total}",
+          "Net dollar retention climbed to {ndr_pct}"
+        ]
+      },
+      "Archetype": {
+        "ArchetypeID": "data-story",
+        "Overrides": []
+      },
+      "Assets": {
+        "Required": [
+          {
+            "Key": "company_logo",
+            "Kind": "logo",
+            "Description": "Primary company wordmark from the brand kit",
+            "ResolvedFileID": "8B4E1A22-5C10-4E91-9A3B-1D2C3E4F5A6B",
+            "MustUse": true,
+            "AllowGenerated": false
+          }
+        ],
+        "NeverInvent": [
+          "Customer logos not provided in the brief",
+          "Unaudited financial projections",
+          "Portraits of real employees or customers"
+        ],
+        "Generate": [
+          {
+            "Key": "hero_abstract_grid",
+            "Kind": "image",
+            "Prompt": "Subtle dark navy geometric data grid background with soft cyan light trails, abstract minimalist corporate style, no text, no people",
+            "AspectRatio": "16:9",
+            "UsedInBeats": ["beat-1"]
+          }
+        ]
+      },
+      "DataBindings": [
+        {
+          "Key": "arr_total",
+          "Source": {
+            "Kind": "literal",
+            "Value": 48200000
+          },
+          "Format": "currency",
+          "Unit": "USD",
+          "Precision": 1,
+          "Label": "Annual Recurring Revenue"
+        },
+        {
+          "Key": "ndr_pct",
+          "Source": {
+            "Kind": "literal",
+            "Value": 118.4
+          },
+          "Format": "percent",
+          "Precision": 1,
+          "Label": "Net Dollar Retention"
+        }
+      ]
+    }
+  },
+  "reasoning": "All factual figures are bound via DataBindings, the required logo is resolved, and only an abstract illustrative background is requested in Assets.Generate.",
+  "confidence": 0.94
+}
