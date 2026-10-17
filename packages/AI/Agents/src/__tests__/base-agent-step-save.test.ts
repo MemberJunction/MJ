@@ -384,4 +384,74 @@ describe('BaseAgent.finalizeAgentRun — pending-save drain + run status', () =>
     // Steps is empty → the cached [] is the negative-cache entry that spares the next turn its DB lookups.
     expect(PriorTurnToolResultCache.Instance.Get(conversationId, agentId, null)).toEqual([]);
   });
+
+  it('createFailureResult flushes both _stepSaveQueue and _promptRunner before saving the failed run row', async () => {
+    const order: string[] = [];
+    const { agent, run } = makeFinalizeAgent({ failures: 1, rejections: 0 });
+    const a = agent as unknown as Record<string, unknown>;
+    a._stepSaveQueue = {
+      Flush: vi.fn(async () => {
+        order.push('stepQueue:flush');
+        return { failures: 1, rejections: 0 };
+      }),
+    };
+    a._promptRunner = {
+      FlushPendingSaves: vi.fn(async () => {
+        order.push('promptRunner:flush');
+      }),
+    };
+    run.Save = vi.fn(async () => {
+      order.push('agentRun:save');
+      run.saved = true;
+      return true;
+    });
+
+    const result = await (
+      agent as unknown as { createFailureResult(msg: string, u?: unknown): Promise<{ success: boolean }> }
+    ).createFailureResult('model execution failed', { ID: 'u1' });
+
+    expect(result.success).toBe(false);
+    expect(run.Status).toBe('Failed');
+    expect(run.saved).toBe(true);
+    expect(run.ErrorMessage).toContain('model execution failed');
+    expect(run.ErrorMessage).toMatch(/1 step record save\(s\) failed/);
+    expect(order.indexOf('stepQueue:flush')).toBeGreaterThanOrEqual(0);
+    expect(order.indexOf('promptRunner:flush')).toBeGreaterThanOrEqual(0);
+    expect(order.indexOf('agentRun:save')).toBe(2);
+  });
+
+  it('createCancelledResult flushes both _stepSaveQueue and _promptRunner before saving the cancelled run row', async () => {
+    const order: string[] = [];
+    const { agent, run } = makeFinalizeAgent({ failures: 0, rejections: 0 });
+    const a = agent as unknown as Record<string, unknown>;
+    a._stepSaveQueue = {
+      Flush: vi.fn(async () => {
+        order.push('stepQueue:flush');
+        return { failures: 0, rejections: 0 };
+      }),
+    };
+    a._promptRunner = {
+      FlushPendingSaves: vi.fn(async () => {
+        order.push('promptRunner:flush');
+      }),
+    };
+    run.Save = vi.fn(async () => {
+      order.push('agentRun:save');
+      run.saved = true;
+      return true;
+    });
+
+    const result = await (
+      agent as unknown as { createCancelledResult(msg: string, u?: unknown): Promise<{ success: boolean }> }
+    ).createCancelledResult('User requested stop', { ID: 'u1' });
+
+    expect(result.success).toBe(false);
+    expect(run.Status).toBe('Cancelled');
+    expect(run.saved).toBe(true);
+    expect(run.ErrorMessage).toBe('User requested stop');
+    expect(order.indexOf('stepQueue:flush')).toBeGreaterThanOrEqual(0);
+    expect(order.indexOf('promptRunner:flush')).toBeGreaterThanOrEqual(0);
+    expect(order.indexOf('agentRun:save')).toBe(2);
+  });
 });
+
