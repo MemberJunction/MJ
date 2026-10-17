@@ -56,7 +56,7 @@ const PRESET_INACTIVE = makePreset({
     DisplayName: 'Deprecated Mode',
     AIConfigurationID: '44444444-AAAA-0000-0000-000000000004',
     IsDefault: false,
-    Status: 'Inactive',
+    Status: 'Revoked',
 });
 
 const CONTEXT_USER = { ID: USER_ID, Name: 'Test User' } as unknown as UserInfo;
@@ -296,7 +296,7 @@ describe('agent-preset-resolution', () => {
                 ID: '55555555-0000-0000-0000-000000000005',
                 Name: 'InactiveDefault',
                 IsDefault: true,
-                Status: 'Inactive',
+                Status: 'Revoked',
             });
             setupEnvironment({
                 presets: [inactiveDefault],
