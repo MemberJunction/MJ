@@ -123,3 +123,18 @@ export {
     VideoStudioRenderAgent,
 } from './agents/render-agent.js';
 
+export {
+    VideoStudioAgentBase,
+    type StudioPromptRunOutcome,
+} from './agents/video-studio-agent-base.js';
+
+export {
+    FormatLintIssue,
+    LoadVideoStudioMotionEngineerAgent,
+    MAX_LINT_ATTEMPTS,
+    MOTION_ENGINEER_LINT_FIX_PROMPT_NAME,
+    VideoStudioMotionEngineerAgent,
+    type MotionEngineerLintFixOutput,
+} from './agents/motion-engineer-agent.js';
+
+

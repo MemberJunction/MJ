@@ -54,6 +54,11 @@ interface SimpleArtifactVersionAttributeRow {
   Value: string | null;
 }
 
+interface SimpleCompanyRow {
+  ID: string;
+  Name: string;
+}
+
 const VALID_PRODUCTION_STATUSES: ReadonlySet<VideoProductionStatus> = new Set<VideoProductionStatus>([
   'Briefing',
   'Styled',
@@ -118,6 +123,7 @@ export class VideoStudioProductionsResourceComponent
 
   private artifactsById = new Map<string, MJArtifactEntity>();
   private brandKitsById = new Map<string, MJBrandKitEntity>();
+  private companiesById = new Map<string, string>();
 
   private readonly cdr = inject(ChangeDetectorRef);
   private readonly artifactPermissionService = inject(ArtifactPermissionService);
@@ -184,8 +190,12 @@ export class VideoStudioProductionsResourceComponent
       ) as BrandKitEngine;
       await brandKitEngine.Config(forceRefresh, undefined, this.ProviderToUse);
       this.brandKitsById.clear();
+      this.companiesById.clear();
       for (const kit of brandKitEngine.BrandKits) {
         this.brandKitsById.set(kit.ID, kit);
+        if (kit.CompanyID && kit.Company) {
+          this.companiesById.set(kit.CompanyID, kit.Company);
+        }
       }
 
       this.artifactPermissionService.Provider = this.ProviderToUse;
@@ -228,7 +238,7 @@ export class VideoStudioProductionsResourceComponent
           .map((a) => `'${a.ID.replace(/'/g, "''")}'`)
           .join(', ');
         const latestVersionsSubquery = `SELECT v.ID FROM [__mj].[vwArtifactVersions] v INNER JOIN (SELECT ArtifactID, MAX(VersionNumber) AS MaxVer FROM [__mj].[vwArtifactVersions] WHERE ArtifactID IN (${quotedIds}) GROUP BY ArtifactID) latest ON v.ArtifactID = latest.ArtifactID AND v.VersionNumber = latest.MaxVer`;
-        const [versionsResult, attributesResult] = await rv.RunViews([
+        const [versionsResult, attributesResult, companiesResult] = await rv.RunViews([
           {
             EntityName: 'MJ: Artifact Versions',
             ExtraFilter: `ID IN (${latestVersionsSubquery})`,
@@ -241,9 +251,31 @@ export class VideoStudioProductionsResourceComponent
             Fields: ['ArtifactVersionID', 'Name', 'Value'],
             ResultType: 'simple',
           },
+          {
+            EntityName: 'MJ: Companies',
+            Fields: ['ID', 'Name'],
+            ResultType: 'simple',
+          },
         ]);
 
-        if (versionsResult?.Success && Array.isArray(versionsResult.Results)) {
+        if (
+          !versionsResult?.Success ||
+          !attributesResult?.Success ||
+          (companiesResult && !companiesResult.Success)
+        ) {
+          const errMessage =
+            (!versionsResult?.Success ? versionsResult?.ErrorMessage : undefined) ||
+            (!attributesResult?.Success ? attributesResult?.ErrorMessage : undefined) ||
+            (companiesResult && !companiesResult.Success ? companiesResult.ErrorMessage : undefined) ||
+            'Failed to load version or attribute details.';
+          LogError(errMessage);
+          this.LoadError = `Couldn't load production details: ${errMessage}`;
+          this.AllProductions = [];
+          this.FilteredProductions = [];
+          return;
+        }
+
+        if (Array.isArray(versionsResult.Results)) {
           for (const row of versionsResult.Results as SimpleArtifactVersionRow[]) {
             if (row?.ID && row?.ArtifactID) {
               versionByArtifactId.set(row.ArtifactID.toLowerCase(), row);
@@ -251,7 +283,7 @@ export class VideoStudioProductionsResourceComponent
           }
         }
 
-        if (attributesResult?.Success && Array.isArray(attributesResult.Results)) {
+        if (Array.isArray(attributesResult.Results)) {
           for (const row of attributesResult.Results as SimpleArtifactVersionAttributeRow[]) {
             if (!row?.ArtifactVersionID || !row.Name || row.Value == null) {
               continue;
@@ -263,6 +295,14 @@ export class VideoStudioProductionsResourceComponent
               attrsByVersionId.set(vKey, attrMap);
             }
             attrMap.set(row.Name, String(row.Value));
+          }
+        }
+
+        if (companiesResult && Array.isArray(companiesResult.Results)) {
+          for (const row of companiesResult.Results as SimpleCompanyRow[]) {
+            if (row?.ID && row?.Name) {
+              this.companiesById.set(row.ID, row.Name);
+            }
           }
         }
       }
@@ -731,6 +771,8 @@ export class VideoStudioProductionsResourceComponent
         this.cleanAttributeValue(attrMap.get('name'));
 
       const brandKit = this.findBrandKit(brandKitId);
+      const resolvedCompanyId = companyId ?? brandKit?.CompanyID ?? null;
+      const resolvedCompanyName = this.findCompanyName(resolvedCompanyId);
       const rawUpdated = artifact.__mj_UpdatedAt ?? artifact.__mj_CreatedAt;
       const updatedDate =
         rawUpdated instanceof Date && !Number.isNaN(rawUpdated.getTime())
@@ -751,8 +793,8 @@ export class VideoStudioProductionsResourceComponent
         Archetype: archetype,
         BrandKitID: brandKit?.ID ?? brandKitId,
         BrandKitName: brandKit?.Name ?? null,
-        CompanyID: companyId ?? brandKit?.CompanyID ?? null,
-        CompanyName: brandKit?.Company ?? null,
+        CompanyID: resolvedCompanyId,
+        CompanyName: resolvedCompanyName,
         DurationSeconds: Number.isFinite(durationParsed) ? durationParsed : null,
         AspectRatio: format,
         SceneCount: null,
@@ -790,6 +832,22 @@ export class VideoStudioProductionsResourceComponent
     for (const kit of this.brandKitsById.values()) {
       if (UUIDsEqual(kit.ID, brandKitId)) {
         return kit;
+      }
+    }
+    return null;
+  }
+
+  private findCompanyName(companyId: string | null): string | null {
+    if (!companyId) {
+      return null;
+    }
+    const direct = this.companiesById.get(companyId);
+    if (direct) {
+      return direct;
+    }
+    for (const [id, name] of this.companiesById.entries()) {
+      if (UUIDsEqual(id, companyId)) {
+        return name;
       }
     }
     return null;
@@ -833,7 +891,10 @@ export class VideoStudioProductionsResourceComponent
     for (const kit of this.brandKitsById.values()) {
       brandKitOptions.set(kit.ID, kit.Name);
       if (kit.CompanyID) {
-        companyOptions.set(kit.CompanyID, kit.Company || kit.CompanyID);
+        companyOptions.set(
+          kit.CompanyID,
+          this.findCompanyName(kit.CompanyID) || kit.Company || kit.CompanyID,
+        );
       }
     }
 
@@ -848,7 +909,10 @@ export class VideoStudioProductionsResourceComponent
         brandKitOptions.set(item.BrandKitID, item.BrandKitName || item.BrandKitID);
       }
       if (item.CompanyID) {
-        companyOptions.set(item.CompanyID, item.CompanyName || item.CompanyID);
+        companyOptions.set(
+          item.CompanyID,
+          this.findCompanyName(item.CompanyID) || item.CompanyName || item.CompanyID,
+        );
       }
     }
 
@@ -927,16 +991,19 @@ export class VideoStudioProductionsResourceComponent
     );
 
     const activeBrandKit = this.findBrandKit(this.BrandKitFilter || null);
-    const activeCompany = this.AllProductions.find(
-      (p) => p.CompanyID && UUIDsEqual(p.CompanyID, this.CompanyFilter),
-    );
+    const activeCompanyName =
+      this.findCompanyName(this.CompanyFilter || null) ??
+      this.AllProductions.find(
+        (p) => p.CompanyID && UUIDsEqual(p.CompanyID, this.CompanyFilter),
+      )?.CompanyName ??
+      null;
 
     const context = BuildProductionsAgentContext({
       TotalCount: this.AllProductions.length,
       FilteredCards: this.FilteredProductions,
       Filters: this.currentFilterState(),
       BrandKitFilterName: activeBrandKit?.Name ?? null,
-      CompanyFilterName: activeCompany?.CompanyName ?? null,
+      CompanyFilterName: activeCompanyName,
       SelectedProduction: this.SelectedProduction,
       AvailableArchetypes: availableArchetypes,
       AvailableBrandKitNames: availableBrandKitNames,

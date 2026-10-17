@@ -129,6 +129,13 @@ describe('VideoStudioProductionsResourceComponent DOM', () => {
           { ArtifactVersionID: 'ver-1', Name: 'durationSeconds', Value: '75' },
         ],
       },
+      {
+        Success: true,
+        Results: [
+          { ID: 'comp-1', Name: 'Acme Corp' },
+          { ID: 'comp-2', Name: 'Beta Inc' },
+        ],
+      },
     ]);
 
     vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
@@ -234,6 +241,170 @@ describe('VideoStudioProductionsResourceComponent DOM', () => {
     await flushAsync();
     fixture.detectChanges();
     expect(instance.SelectedProduction?.ID).toBe('prod-2');
+
+    fixture.destroy();
+    vi.restoreAllMocks();
+  });
+
+  it('resolves a production CompanyName from its own companyID via MJ: Companies rather than its brand kit company', async () => {
+    const navStub = createNavigationServiceStub();
+    const customProvider = createGraphQLProviderStub('user-1');
+    const permStub = {
+      Provider: null,
+      GetReadableArtifactsFilter: vi.fn().mockResolvedValue("UserID = 'user-1'"),
+      GetUserPermissions: vi.fn().mockResolvedValue({
+        canRead: true,
+        canEdit: true,
+        canShare: true,
+      }),
+    };
+
+    const fakeBrandKitEngine = {
+      Config: vi.fn().mockResolvedValue(undefined),
+      BrandKits: [
+        {
+          ID: 'kit-1',
+          Name: 'Shared Corporate Kit',
+          CompanyID: 'comp-1',
+          Company: 'Acme Corp',
+        } as unknown as MJBrandKitEntity,
+      ],
+    } as unknown as BrandKitEngine;
+    vi.spyOn(BrandKitEngine, 'GetProviderInstance').mockReturnValue(fakeBrandKitEngine);
+
+    const runViewSpy = vi.fn().mockResolvedValue({
+      Success: true,
+      Results: [
+        {
+          ID: 'prod-cross-company',
+          Name: 'Beta Subsidiary Overview',
+          Description: 'Subsidiary launch clip',
+          __mj_UpdatedAt: new Date('2026-04-14T12:00:00Z'),
+        },
+      ],
+    });
+
+    const runViewsSpy = vi.fn().mockResolvedValue([
+      {
+        Success: true,
+        Results: [{ ID: 'ver-cross', ArtifactID: 'prod-cross-company', VersionNumber: 1 }],
+      },
+      {
+        Success: true,
+        Results: [
+          { ArtifactVersionID: 'ver-cross', Name: 'status', Value: 'Delivered' },
+          { ArtifactVersionID: 'ver-cross', Name: 'brandKitID', Value: 'kit-1' },
+          { ArtifactVersionID: 'ver-cross', Name: 'companyID', Value: 'comp-2' },
+        ],
+      },
+      {
+        Success: true,
+        Results: [
+          { ID: 'comp-1', Name: 'Acme Corp' },
+          { ID: 'comp-2', Name: 'Beta Inc' },
+        ],
+      },
+    ]);
+
+    vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
+      RunView: runViewSpy,
+      RunViews: runViewsSpy,
+    } as unknown as RunView);
+
+    const fixture = renderComponentFixture(VideoStudioProductionsResourceComponent, {
+      inputs: { Provider: customProvider },
+      providers: [
+        { provide: NavigationService, useValue: navStub },
+        { provide: ArtifactPermissionService, useValue: permStub },
+      ],
+    });
+
+    await flushAsync();
+    fixture.detectChanges();
+
+    const instance = fixture.componentInstance;
+    expect(instance.AllProductions).toHaveLength(1);
+    const prod = instance.AllProductions[0];
+    expect(prod.CompanyID).toBe('comp-2');
+    expect(prod.CompanyName).toBe('Beta Inc');
+
+    const companyField = instance.FilterFields.find((f) => f.key === 'companyId');
+    const comp2Option = companyField?.options?.find((o) => o.value === 'comp-2');
+    expect(comp2Option?.text).toBe('Beta Inc');
+
+    instance.OnSearchChange('Acme');
+    fixture.detectChanges();
+    expect(instance.FilteredProductions).toEqual([]);
+
+    fixture.destroy();
+    vi.restoreAllMocks();
+  });
+
+  it('surfaces LoadError in productions-error when the attributes RunViews query returns Success: false', async () => {
+    const navStub = createNavigationServiceStub();
+    const customProvider = createGraphQLProviderStub('user-1');
+    const permStub = {
+      Provider: null,
+      GetReadableArtifactsFilter: vi.fn().mockResolvedValue("UserID = 'user-1'"),
+      GetUserPermissions: vi.fn(),
+    };
+
+    const fakeBrandKitEngine = {
+      Config: vi.fn().mockResolvedValue(undefined),
+      BrandKits: [],
+    } as unknown as BrandKitEngine;
+    vi.spyOn(BrandKitEngine, 'GetProviderInstance').mockReturnValue(fakeBrandKitEngine);
+
+    const runViewSpy = vi.fn().mockResolvedValue({
+      Success: true,
+      Results: [
+        {
+          ID: 'prod-1',
+          Name: 'Q3 Revenue Recap',
+          Description: 'Summary',
+          __mj_UpdatedAt: new Date('2026-04-14T12:00:00Z'),
+        },
+      ],
+    });
+
+    const runViewsSpy = vi.fn().mockResolvedValue([
+      {
+        Success: true,
+        Results: [{ ID: 'ver-1', ArtifactID: 'prod-1', VersionNumber: 1 }],
+      },
+      {
+        Success: false,
+        ErrorMessage: 'Attribute query timed out',
+        Results: [],
+      },
+      {
+        Success: true,
+        Results: [],
+      },
+    ]);
+
+    vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
+      RunView: runViewSpy,
+      RunViews: runViewsSpy,
+    } as unknown as RunView);
+
+    const fixture = renderComponentFixture(VideoStudioProductionsResourceComponent, {
+      inputs: { Provider: customProvider },
+      providers: [
+        { provide: NavigationService, useValue: navStub },
+        { provide: ArtifactPermissionService, useValue: permStub },
+      ],
+    });
+
+    await flushAsync();
+    fixture.detectChanges();
+
+    const instance = fixture.componentInstance;
+    expect(instance.AllProductions).toEqual([]);
+    expect(instance.LoadError).toContain("Couldn't load production details: Attribute query timed out");
+    const errorEl = query(fixture, '[data-testid="productions-error"]');
+    expect(errorEl).not.toBeNull();
+    expect(errorEl?.textContent).toContain("Couldn't load production details: Attribute query timed out");
 
     fixture.destroy();
     vi.restoreAllMocks();

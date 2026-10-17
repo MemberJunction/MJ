@@ -8,17 +8,19 @@
  *   • Productions tab (`VideoStudioProductionsResource`) — renders page header,
  *     search + filter popover controls, and either the productions grid or
  *     empty state without runtime errors.
- *   • Brand Kits tab (`VideoStudioBrandKitsResource`) — renders seeded brand
- *     kit cards (e.g. MJ Default Brand Kit), palette swatch strip, logo
- *     thumbnail, company/default badge, asset count, and opens the
- *     `MJ: Brand Kits` entity form with BOTH custom `BrandKitAssetsPanel` and
- *     `BrandKitGenerationPolicyPanel` editors visible + interactive generation
- *     policy pill toggling.
- *   • Archetypes tab (`VideoStudioArchetypesResource`) — renders seeded
- *     archetypes grouped by category, proportional beat-timeline blocks, opens
- *     the inline slide-out preview with Beat Template, Pacing, Guidance, and
- *     shipped read-only banner + "Clone to Company" button, and exercises the
- *     Clone `<mj-dialog>` modal.
+ *   • Brand Kits tab (`VideoStudioBrandKitsResource`) — creates a new brand kit
+ *     via `new-brand-kit-button`, saves the form, uploads a Logo via
+ *     `mj-files-file-upload` and verifies `bka-asset-thumbnail`, uploads an
+ *     Image and flags `bka-asset-is-gen-ref` + saves via `bka-asset-save-btn`,
+ *     toggles `bkgp-allow-images` (and verifies `bkgp-allow-synthetic-people`
+ *     defaults off and shows `bkgp-synthetic-people-warning` when checked) and
+ *     saves the form, then deletes the created kit from its card
+ *     (`[data-testid^="brand-kit-delete-"]`).
+ *   • Archetypes tab (`VideoStudioArchetypesResource`) — opens a shipped
+ *     archetype card, verifies `archetype-shipped-readonly-banner`, clicks
+ *     `archetype-clone-button`, picks a company in
+ *     `archetype-clone-company-select`, clicks `archetype-clone-confirm`, and
+ *     expects the new company-owned archetype's entity form.
  *
  * NOTE: VS-UX-2 extends this spec with the second half (conversational
  * Video Producer / Sage storyboard creation + Productions gallery playback).
