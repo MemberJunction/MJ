@@ -739,7 +739,7 @@ export abstract class BaseMessagingAdapter {
             const updateInterval = this.settings.StreamingUpdateIntervalMs ?? 1000;
 
             const outcomes = await runner.FollowHandoffs({
-                params: agentResult.params,
+                params: { ...agentResult.params, conversationMessages },
                 sourceResult: result,
                 conversationId: conversationId ?? '',
                 sourceConversationDetailId: agentResult.agentResponseDetailId ?? '',
@@ -948,7 +948,7 @@ export abstract class BaseMessagingAdapter {
 
         const params: ExecuteAgentParams = {
             agent,
-            conversationMessages,
+            conversationMessages: [...conversationMessages],
             contextUser,
             payload: {}, // Provide empty starting payload so loop agents can apply payloadChangeRequests
             handoffChain: this.settings.DisableDelegation ? undefined : [],
@@ -1189,7 +1189,7 @@ export abstract class BaseMessagingAdapter {
         conversationId?: string,
         handoffChain?: string[]
     ): Promise<void> {
-        const currentChain = handoffChain ?? (sourceAgent.ID ? [sourceAgent.ID] : []);
+        const currentChain = handoffChain ?? [];
 
         // Prevent infinite delegation loops
         if (hopCount >= MAX_HANDOFF_HOPS) {
@@ -1249,7 +1249,7 @@ export abstract class BaseMessagingAdapter {
             // Check if the target agent also delegates
             const nextDelegation = this.detectDelegation(targetAgentResult.result);
             if (nextDelegation) {
-                const nextChain = targetAgent.ID ? [...currentChain, targetAgent.ID] : currentChain;
+                const nextChain = sourceAgent.ID ? [...currentChain, sourceAgent.ID] : currentChain;
                 await this.handleDelegation(
                     message, targetAgent, targetAgentResult.result, nextDelegation,
                     contextUser, updatedMessages, null, hopCount + 1,

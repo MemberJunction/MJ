@@ -1868,8 +1868,7 @@
 }
 
 /* Handoff source message: recede text to secondary once transferred */
-.message-item.handoff-source-transferred .message-text,
-.message-item.msg--handed .message-text {
+.message-item.handoff-source-transferred .message-text {
   color: var(--mj-text-secondary);
 }
 

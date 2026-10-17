@@ -284,9 +284,9 @@ describe('BuildHandoffsByDetailId & DeriveHandoffStatus', () => {
 });
 
 describe('AgentAccentVar & MapHandoffFailureCopy', () => {
-  it('picks a deterministic accent token in --mj-color-<family>-500 and falls back to --mj-brand-primary', () => {
+  it('picks a deterministic accent token in --mj-agent-accent-<family> and falls back to --mj-brand-primary', () => {
     const accent = AgentAccentVar('11111111-1111-4111-8111-111111111111');
-    expect(accent).toMatch(/^var\(--mj-color-(brand|accent|indigo|violet|tertiary|info)-500\)$/);
+    expect(accent).toMatch(/^var\(--mj-agent-accent-(brand|accent|indigo|violet|tertiary|info)\)$/);
     expect(AgentAccentVar('11111111-1111-4111-8111-111111111111')).toBe(accent);
     expect(AgentAccentVar(null)).toBe('var(--mj-brand-primary)');
   });
@@ -388,6 +388,48 @@ describe('MessageItemComponent handoff integration & prefers-reduced-motion CSS'
     expect(instance.buildMessageClasses()).toContain('handoff-source-transferred');
   });
 
+  it('does not add handoff-source-transferred or msg--handed when Handoff is Failed, and CSS dims only handoff-source-transferred', () => {
+    const proto = MessageItemComponent.prototype as unknown as {
+      Handoff: MessageHandoffInfo | null;
+      HandedOffFrom: unknown;
+      IsSourceTransferred: boolean;
+      message: { Message: string; Role: string; Status: string; IsPinned?: boolean };
+      IsAIMessage: boolean;
+      IsUserMessage: boolean;
+      IsInProgressAIMessage: boolean;
+      IsEditing: boolean;
+      PendingReplace: boolean;
+      ForkRail: null;
+      buildMessageClasses: () => string;
+    };
+
+    const instance = Object.create(proto) as typeof proto;
+    instance.Handoff = { ...sampleHandoff, Status: 'Failed', FailureReason: 'NotDiscoverable' };
+    instance.HandedOffFrom = null;
+    instance.message = {
+      Message: 'Sage fallback answer after refusal.',
+      Role: 'AI',
+      Status: 'Complete',
+    };
+    Object.defineProperty(instance, 'IsAIMessage', { get: () => true });
+    Object.defineProperty(instance, 'IsUserMessage', { get: () => false });
+    Object.defineProperty(instance, 'IsInProgressAIMessage', { get: () => false });
+    instance.IsEditing = false;
+    instance.PendingReplace = false;
+    instance.ForkRail = null;
+
+    expect(instance.IsSourceTransferred).toBe(false);
+    const classes = instance.buildMessageClasses().split(/\s+/);
+    expect(classes).toContain('handoff-source');
+    expect(classes).not.toContain('handoff-source-transferred');
+    expect(classes).not.toContain('msg--handed');
+
+    const cssPath = resolve(__dirname, '../lib/components/message/message-item.component.css');
+    const css = readFileSync(cssPath, 'utf8');
+    expect(css).toContain('.message-item.handoff-source-transferred .message-text');
+    expect(css).not.toContain('.message-item.msg--handed .message-text');
+  });
+
   it('marks target message with target-block/handoff-target classes, TargetAccentVar, and IsHandedOffTargetJoining while In-Progress', () => {
     const proto = MessageItemComponent.prototype as unknown as {
       Handoff: MessageHandoffInfo | null;
@@ -440,7 +482,11 @@ describe('MessageItemComponent handoff integration & prefers-reduced-motion CSS'
   it('agent-handoff-card.component.css includes @media (prefers-reduced-motion: reduce) stopping spark animation', () => {
     const cssPath = resolve(__dirname, '../lib/components/message/agent-handoff-card.component.css');
     const css = readFileSync(cssPath, 'utf8');
-    expect(css).toContain('@media (prefers-reduced-motion: reduce)');
-    expect(css).toContain('animation: none');
+    const mediaIndex = css.indexOf('@media (prefers-reduced-motion: reduce)');
+    expect(mediaIndex).toBeGreaterThanOrEqual(0);
+    const mediaBlock = css.slice(mediaIndex);
+    const sparkRuleMatch = mediaBlock.match(/\.handoff--transferring\s+\.track\s+\.spark\s*\{([^}]*)\}/);
+    expect(sparkRuleMatch).not.toBeNull();
+    expect(sparkRuleMatch?.[1]).toContain('animation: none');
   });
 });

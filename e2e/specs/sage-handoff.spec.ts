@@ -59,14 +59,17 @@ test.describe.serial('Sage peer-to-peer handoff (live smoke)', () => {
         const handoffCard = page.locator('mj-agent-handoff-card .handoff').first();
         await expect(handoffCard).toBeVisible({ timeout: 90_000 });
         await expect(handoffCard).toContainText(/Transferring to Research Agent|Transferred to Research Agent/i);
-        await expect(page.locator('mj-agent-handoff-card .handoff--done').first()).toBeVisible({ timeout: 120_000 });
+        await expect(page.locator('mj-agent-handoff-card .handoff--transferred').first()).toBeVisible({ timeout: 120_000 });
 
         // 3. Target reply row is attributed to Research Agent with "via Sage" and ownership chrome
         const targetRow = page.locator('.message-item.handoff-target').first();
         await expect(targetRow).toBeVisible({ timeout: 60_000 });
+        await expect(targetRow.locator('.message-sender')).toContainText(/Research Agent/i);
         await expect(targetRow.locator('.via')).toContainText(/via\s+Sage/i);
         await expect(page.locator('.with-chip')).toContainText(/Research Agent/i);
         await expect(page.locator('.composer-route')).toContainText(/Replying to\s+Research Agent/i);
+
+        const aiMessagesBeforeFollowUp = await page.locator('.message-item.ai-message').count();
 
         // 4. Unmentioned follow-up stays with Research Agent
         const activeComposer = visibleComposer(page);
@@ -74,12 +77,24 @@ test.describe.serial('Sage peer-to-peer handoff (live smoke)', () => {
         await page.keyboard.type('Now condense that into a single sentence.');
         await page.keyboard.press('Enter');
 
-        await expect(page.locator('.composer-route')).toContainText(/Replying to\s+Research Agent/i, { timeout: 90_000 });
+        await expect(page.locator('.message-item.ai-message')).toHaveCount(aiMessagesBeforeFollowUp + 1, { timeout: 90_000 });
+        const followUpReply = page.locator('.message-item.ai-message').last();
+        await expect(followUpReply.locator('.message-sender')).toContainText(/Research Agent/i, { timeout: 90_000 });
+        await expect(followUpReply.locator('.time-pill.complete')).toBeVisible({ timeout: 90_000 });
+        await expect(page.locator('.composer-route')).toContainText(/Replying to\s+Research Agent/i);
 
-        // 5. Return to Sage inserts @Sage mention pill into composer
+        // 5. Return to Sage inserts @Sage mention pill into composer and routes the next turn back to Sage
         const returnBtn = page.locator('.composer-route button.linkish', { hasText: /Return to Sage/i });
         await expect(returnBtn).toBeVisible();
         await returnBtn.click();
         await expect(activeComposer.locator('.mention-chip[data-mention-name="Sage"]')).toBeVisible({ timeout: 15_000 });
+
+        const aiMessagesBeforeReturn = await page.locator('.message-item.ai-message').count();
+        await page.keyboard.type('Thanks! Give me a one-line sign-off.');
+        await page.keyboard.press('Enter');
+
+        await expect(page.locator('.message-item.ai-message')).toHaveCount(aiMessagesBeforeReturn + 1, { timeout: 90_000 });
+        const sageReply = page.locator('.message-item.ai-message').last();
+        await expect(sageReply.locator('.message-sender')).toContainText(/Sage/i, { timeout: 90_000 });
     });
 });

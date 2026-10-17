@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, Input } from '@angular/core';
 import { NormalizeUUID } from '@memberjunction/global';
 
 /**
- * Six primitive color families in `_tokens.scss` used for deterministic agent accents.
+ * Six semantic agent accent families in `_tokens.scss` used for deterministic agent accents.
  */
 export const AGENT_ACCENT_FAMILIES = [
   'brand',
@@ -16,8 +16,8 @@ export const AGENT_ACCENT_FAMILIES = [
 export type AgentAccentFamily = (typeof AGENT_ACCENT_FAMILIES)[number];
 
 /**
- * Deterministically maps a non-empty `agentId` to one of the six primitive color families in
- * `_tokens.scss`, returning `var(--mj-color-<family>-500)`. With no ID, returns
+ * Deterministically maps a non-empty `agentId` to one of the six semantic agent accent tokens in
+ * `_tokens.scss`, returning `var(--mj-agent-accent-<family>)`. With no ID, returns
  * `var(--mj-brand-primary)`.
  */
 export function AgentAccentVar(agentId?: string | null): string {
@@ -32,7 +32,7 @@ export function AgentAccentVar(agentId?: string | null): string {
   }
   const index = (hash >>> 0) % AGENT_ACCENT_FAMILIES.length;
   const family = AGENT_ACCENT_FAMILIES[index];
-  return `var(--mj-color-${family}-500)`;
+  return `var(--mj-agent-accent-${family})`;
 }
 
 /**

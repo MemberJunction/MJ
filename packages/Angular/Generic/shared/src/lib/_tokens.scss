@@ -104,6 +104,7 @@
 
   --mj-color-info-50: #eff6ff;
   --mj-color-info-100: #dbeafe;
+  --mj-color-info-400: #60a5fa;
   --mj-color-info-500: #3b82f6;
   --mj-color-info-600: #2563eb;
   --mj-color-info-700: #1d4ed8;
@@ -121,6 +122,7 @@
   /* Indigo Colors (updated actions, indicators) */
   --mj-color-indigo-50: #eef2ff;
   --mj-color-indigo-100: #e0e7ff;
+  --mj-color-indigo-400: #818cf8;
   --mj-color-indigo-500: #6366f1;
   --mj-color-indigo-600: #4f46e5;
 
@@ -178,6 +180,17 @@
   --mj-brand-tertiary-active: var(--mj-color-tertiary-700);
   --mj-brand-tertiary-subtle: var(--mj-color-tertiary-50);
   --mj-brand-on-tertiary: var(--mj-color-neutral-0);
+
+  /* Agent Categorical Accents (semantic)
+     Six theme-aware accent hues for multi-agent conversation attribution
+     (handoff cards, "via" rails, owner chips). Dark mode shifts each hue to a
+     lighter primitive step for contrast on dark surfaces. */
+  --mj-agent-accent-brand: var(--mj-color-brand-500);
+  --mj-agent-accent-accent: var(--mj-color-accent-500);
+  --mj-agent-accent-indigo: var(--mj-color-indigo-500);
+  --mj-agent-accent-violet: var(--mj-color-violet-500);
+  --mj-agent-accent-tertiary: var(--mj-color-tertiary-500);
+  --mj-agent-accent-info: var(--mj-color-info-500);
 
   /* Status Colors (semantic) */
   --mj-status-success: var(--mj-color-success-500);
@@ -525,6 +538,14 @@
   --mj-brand-tertiary-hover: var(--mj-color-tertiary-300);
   --mj-brand-tertiary-active: var(--mj-color-tertiary-200);
   --mj-brand-tertiary-subtle: color-mix(in srgb, var(--mj-color-tertiary-500) 15%, transparent);
+
+  /* Agent Categorical Accents (adjusted for dark surfaces) */
+  --mj-agent-accent-brand: var(--mj-color-brand-400);
+  --mj-agent-accent-accent: var(--mj-color-accent-300);
+  --mj-agent-accent-indigo: var(--mj-color-indigo-400);
+  --mj-agent-accent-violet: var(--mj-color-violet-400);
+  --mj-agent-accent-tertiary: var(--mj-color-tertiary-400);
+  --mj-agent-accent-info: var(--mj-color-info-400);
 
   /* Highlight (adjusted for dark) */
   --mj-highlight: var(--mj-color-accent-300);

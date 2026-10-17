@@ -2224,15 +2224,6 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    */
   public HandoffsByDetailId = new Map<string, MessageHandoffInfo>();
 
-  /** @deprecated Use {@link HandoffsByDetailId}. */
-  public get handoffsByDetailId() {
-    return this.HandoffsByDetailId;
-  }
-  /** @deprecated Use {@link HandoffsByDetailId}. */
-  public set handoffsByDetailId(value) {
-    this.HandoffsByDetailId = value;
-  }
-
   private handoffStepsByRunId = new Map<string, HandoffRunStepRow>();
 
   /**
@@ -3642,7 +3633,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.ShowForksPopover = false;
     this.IsRenamingTitle = false;
     this.HandoffsByDetailId = new Map();
-    this.handoffStepsByRunId?.clear();
+    this.handoffStepsByRunId.clear();
     if (this.forkSummaryRefreshTimer) {
       clearTimeout(this.forkSummaryRefreshTimer);
       this.forkSummaryRefreshTimer = null;
@@ -4150,7 +4141,6 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       this.ArtifactsByDetailId.clear();
       this.SystemArtifactsByDetailId.clear();
       this.RatingsByDetailId.clear();
-      this.handoffStepsByRunId ??= new Map();
       this.handoffStepsByRunId.clear();
 
       // Copy agent runs from engine (cast to extended type for UI compatibility)
@@ -4226,7 +4216,6 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     conversationId?: string | null,
     loadToken?: number,
   ): Promise<void> {
-    this.handoffStepsByRunId ??= new Map();
     if (runIds.length > 0) {
       const steps = await LoadHandoffStepsForRuns(
         this.ProviderToUse,
@@ -4234,7 +4223,6 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       );
       if (
         conversationId != null &&
-        typeof this.isCurrentConversationContext === 'function' &&
         !this.isCurrentConversationContext(conversationId, loadToken)
       ) {
         return;

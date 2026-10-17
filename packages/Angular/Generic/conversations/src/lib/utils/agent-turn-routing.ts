@@ -7,6 +7,7 @@
  */
 
 import { IsAgentAllowed } from '@memberjunction/ai-core-plus';
+import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import type { AgentReplyMode, AgentTurnRoute, AgentTurnTarget } from '../models/agent-turn.model';
 
 /** The agent each route would use for one message, before the host's rules are applied. */
@@ -151,7 +152,7 @@ export function MessageMentionsAgent(
     if (!messageText) {
         return false;
     }
-    const normalizedId = (agentId ?? '').trim().toLowerCase();
+    const normalizedId = NormalizeUUID(agentId ?? '');
     const normalizedName = (agentName ?? '').trim().toLowerCase();
 
     const tokenRegex = /@\{([^}]+)\}/g;
@@ -162,7 +163,7 @@ export function MessageMentionsAgent(
             if (parsed.type && parsed.type !== 'agent') {
                 continue;
             }
-            if (normalizedId && typeof parsed.id === 'string' && parsed.id.trim().toLowerCase() === normalizedId) {
+            if (normalizedId && typeof parsed.id === 'string' && UUIDsEqual(parsed.id, normalizedId)) {
                 return true;
             }
             if (normalizedName && typeof parsed.name === 'string' && parsed.name.trim().toLowerCase() === normalizedName) {
@@ -203,12 +204,12 @@ export function FindContinuityAgentMessage<T extends ContinuityHistoryMessage>(
         userMentionsManager?: (msg: T) => boolean;
     }
 ): T | null {
-    const normalizedManagerId = (conversationManagerAgentId ?? '').trim().toLowerCase();
+    const normalizedManagerId = NormalizeUUID(conversationManagerAgentId ?? '');
     const managerName = options?.conversationManagerName ?? 'Sage';
     const byId = new Map<string, T>();
     for (const m of messages) {
         if (m.ID) {
-            byId.set(m.ID.trim().toLowerCase(), m);
+            byId.set(NormalizeUUID(m.ID), m);
         }
     }
 
@@ -218,13 +219,12 @@ export function FindContinuityAgentMessage<T extends ContinuityHistoryMessage>(
             continue;
         }
         if (msg.Role === 'AI' && msg.AgentID) {
-            const msgAgentId = msg.AgentID.trim().toLowerCase();
-            const isManager = normalizedManagerId.length > 0 && msgAgentId === normalizedManagerId;
+            const isManager = normalizedManagerId.length > 0 && UUIDsEqual(msg.AgentID, normalizedManagerId);
             if (!isManager) {
                 return msg;
             }
             // Conversation manager AI row: check if it is a handback from another AI row
-            const parent = msg.ParentID ? byId.get(msg.ParentID.trim().toLowerCase()) : undefined;
+            const parent = msg.ParentID ? byId.get(NormalizeUUID(msg.ParentID)) : undefined;
             if (parent && parent.Role === 'AI') {
                 return null;
             }
@@ -233,7 +233,7 @@ export function FindContinuityAgentMessage<T extends ContinuityHistoryMessage>(
                 prev &&
                 prev.Role === 'AI' &&
                 prev.AgentID &&
-                prev.AgentID.trim().toLowerCase() !== normalizedManagerId
+                !UUIDsEqual(prev.AgentID, normalizedManagerId)
             ) {
                 return null;
             }

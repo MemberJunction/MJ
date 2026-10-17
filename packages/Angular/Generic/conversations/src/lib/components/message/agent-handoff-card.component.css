@@ -4,7 +4,7 @@
 
 .handoff {
   --mj-handoff-source: var(--mj-brand-primary);
-  --mj-handoff-target: var(--mj-color-accent-500);
+  --mj-handoff-target: var(--mj-agent-accent-accent);
   position: relative;
   margin: var(--mj-space-2) 0 var(--mj-space-1) 0;
   padding: 14px 16px 12px;

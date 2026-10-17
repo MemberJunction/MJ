@@ -211,25 +211,9 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
   /** Outgoing agent handoff card metadata attached to this source AI message. */
   @Input() public Handoff: MessageHandoffInfo | null = null;
-  /** @deprecated Use {@link Handoff}. */
-  @Input() public set handoff(value: MessageHandoffInfo | null) {
-    this.Handoff = value;
-  }
-  /** @deprecated Use {@link Handoff}. */
-  public get handoff(): MessageHandoffInfo | null {
-    return this.Handoff;
-  }
 
   /** Incoming agent handoff provenance attached to this target AI message. */
   @Input() public HandedOffFrom: MessageHandedOffFromInfo | null = null;
-  /** @deprecated Use {@link HandedOffFrom}. */
-  @Input() public set handedOffFrom(value: MessageHandedOffFromInfo | null) {
-    this.HandedOffFrom = value;
-  }
-  /** @deprecated Use {@link HandedOffFrom}. */
-  public get handedOffFrom(): MessageHandedOffFromInfo | null {
-    return this.HandedOffFrom;
-  }
 
   /** CSS custom property reference for the target agent's accent color on a handed-off target message. */
   public get TargetAccentVar(): string {
@@ -2149,9 +2133,9 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       classes.push('fork-rail-own');
     }
     if (this.Handoff) {
-      classes.push('msg--handed', 'handoff-source');
+      classes.push('handoff-source');
       if (this.Handoff.Status !== 'Failed') {
-        classes.push('handoff-source-transferred');
+        classes.push('msg--handed', 'handoff-source-transferred');
       }
     }
     if (this.HandedOffFrom) {

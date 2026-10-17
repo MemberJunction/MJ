@@ -1303,7 +1303,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
       return false;
     }
     const name = manager.Name || 'Sage';
-    if (this.InputBox && typeof this.InputBox.InsertMention === 'function') {
+    if (this.InputBox) {
       const inserted = this.InputBox.InsertMention(
         {
           id: manager.ID,
@@ -3505,6 +3505,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
       AgentID: agentId,
       BranchID: branchId,
       ContextUser: this.CurrentUser,
+      Provider: this.ProviderToUse,
     });
     if (resolved?.Preset?.ID && resolved.Source !== 'Default') {
       return resolved.Preset.ID;
@@ -3526,19 +3527,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     if (!candidateId) {
       return undefined;
     }
-    const engine = AIEngineBase.Instance as unknown as {
-      GetAgentConfigurationPresets?: (id: string, onlyActive?: boolean) => Array<{
-        ID: string;
-        AgentID?: string | null;
-      }>;
-      AgentConfigurations?: Array<{
-        ID: string;
-        AgentID?: string | null;
-      }>;
-    };
-    const allForAgent = typeof engine.GetAgentConfigurationPresets === 'function'
-      ? engine.GetAgentConfigurationPresets(agentId, false)
-      : (engine.AgentConfigurations ?? []).filter(c => UUIDsEqual(c.AgentID, agentId));
+    const allForAgent = AIEngineBase.Instance.GetAgentConfigurationPresets(agentId, false);
     const matched = (allForAgent ?? []).find(
       p => UUIDsEqual(p.ID, candidateId) && (!p.AgentID || UUIDsEqual(p.AgentID, agentId))
     );

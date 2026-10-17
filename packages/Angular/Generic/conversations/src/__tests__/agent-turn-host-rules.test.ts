@@ -360,8 +360,8 @@ describe('MessageInputComponent — host rules for an agent turn', () => {
         });
 
         it('ReturnToSage() inserts the conversation manager mention chip into InputBox', () => {
-            const insertMention = vi.fn();
-            h.set({ InputBox: { InsertMention: insertMention } });
+            const insertMention = vi.fn(() => true);
+            h.set({ InputBox: { InsertMention: insertMention }, MessageText: '' });
 
             h.component.ReturnToSage();
 
@@ -374,6 +374,7 @@ describe('MessageInputComponent — host rules for an agent turn', () => {
                 }),
                 true,
             );
+            expect(h.component.MessageText).toBe('');
         });
 
         it('uses the continued agent preset from ResolveConversationAgentPreset and ignores a header preset owned by Sage', async () => {

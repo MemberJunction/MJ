@@ -1,4 +1,4 @@
-import { IMetadataProvider, RunView } from '@memberjunction/core';
+import { IMetadataProvider, LogError, RunView } from '@memberjunction/core';
 import {
   MJConversationDetailEntity,
   MJAIAgentConfigurationEntity,
@@ -71,7 +71,7 @@ export const HANDOFF_STEP_FIELDS: string[] = [
  * in a single `RunView` query (`ResultType: 'simple'`, explicit `Fields`).
  */
 export async function LoadHandoffStepsForRuns(
-  provider: IMetadataProvider | null | undefined,
+  provider: IMetadataProvider,
   runIds: readonly string[]
 ): Promise<HandoffRunStepRow[]> {
   const uniqueIds = Array.from(
@@ -81,7 +81,7 @@ export async function LoadHandoffStepsForRuns(
     return [];
   }
   try {
-    const rv = RunView.FromMetadataProvider(provider!);
+    const rv = RunView.FromMetadataProvider(provider);
     const quotedIds = uniqueIds.map(id => `'${id.replace(/'/g, "''")}'`).join(',');
     const result = await rv.RunView<HandoffRunStepRow>({
       EntityName: 'MJ: AI Agent Run Steps',
@@ -91,10 +91,12 @@ export async function LoadHandoffStepsForRuns(
       ResultType: 'simple',
     });
     if (!result?.Success || !result.Results) {
+      LogError(`LoadHandoffStepsForRuns failed: ${result?.ErrorMessage ?? 'Unknown RunView error'}`);
       return [];
     }
     return result.Results;
-  } catch {
+  } catch (error) {
+    LogError('LoadHandoffStepsForRuns threw an error:', undefined, error);
     return [];
   }
 }

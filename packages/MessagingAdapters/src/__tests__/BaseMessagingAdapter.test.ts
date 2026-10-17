@@ -1331,16 +1331,19 @@ describe('BaseMessagingAdapter', () => {
             expect(callCount).toBe(2);
         });
 
-        it('should cap delegation at MAX_DELEGATION_HOPS', async () => {
-            const { AgentRunner } = await import('@memberjunction/ai-agents');
+        it('should cap delegation at MAX_HANDOFF_HOPS', async () => {
+            const { AgentRunner, ResolveHandoffTarget } = await import('@memberjunction/ai-agents');
+            vi.mocked(ResolveHandoffTarget).mockClear();
+
+            const targetsByCall = ['Sage', 'Research Bot', 'Marketing Agent', 'Codesmith'];
             let callCount = 0;
             vi.mocked(AgentRunner).mockImplementation(() => ({
                 RunAgentInConversation: vi.fn().mockImplementation(() => {
+                    const nextTarget = targetsByCall[callCount] ?? 'Codesmith';
                     callCount++;
-                    // Every agent delegates to Marketing Agent (infinite loop)
                     return Promise.resolve(wrapInConversationResult({
                         success: true,
-                        payload: { invokeAgent: 'Marketing Agent' },
+                        payload: { invokeAgent: nextTarget },
                         agentRun: { Message: `Delegation hop ${callCount}`, Steps: [] }
                     }));
                 })
@@ -1349,9 +1352,14 @@ describe('BaseMessagingAdapter', () => {
             const msg = createMessage({ IsDirectMessage: true });
             await adapter.HandleMessage(msg);
 
-            // Should stop after MAX_DELEGATION_HOPS (3) + 1 initial run = 4 total
-            // But each delegation sends a note, so there should be messages
-            expect(callCount).toBeLessThanOrEqual(5);
+            // Initial run (Default Agent) + MAX_HANDOFF_HOPS (3) target runs = 4 runs total
+            expect(callCount).toBe(4);
+            expect(ResolveHandoffTarget).toHaveBeenCalledTimes(3);
+            expect(vi.mocked(ResolveHandoffTarget).mock.calls.map(c => c[0].HandoffChain)).toEqual([
+                [],
+                ['agent-guid-123'],
+                ['agent-guid-123', 'sage-id'],
+            ]);
         });
 
         it('should resolve fallback delegation targets via ResolveHandoffTarget and refuse sub-agents or action-only agents', async () => {
@@ -1387,7 +1395,7 @@ describe('BaseMessagingAdapter', () => {
                 expect.objectContaining({
                     AgentName: 'Codesmith',
                     SourceAgentID: 'agent-guid-123',
-                    HandoffChain: ['agent-guid-123'],
+                    HandoffChain: [],
                 })
             );
             // Target run must not execute when ResolveHandoffTarget refuses
@@ -1478,6 +1486,51 @@ describe('BaseMessagingAdapter', () => {
             ];
             expect(allTexts.some(t => t.includes('Default Agent transferred you to **Marketing Agent** (Quick Draft)'))).toBe(true);
             expect(allTexts.some(t => t.includes('Final marketing copy delivered.'))).toBe(true);
+        });
+
+        it('should not leak source internal working turns into FollowHandoffs conversationMessages', async () => {
+            const { AgentRunner } = await import('@memberjunction/ai-agents');
+            let followHandoffsMessages: Array<{ role: string; content: string }> | undefined;
+            const followHandoffsMock = vi.fn().mockImplementation(async (input: {
+                params: { conversationMessages?: Array<{ role: string; content: string }> };
+            }) => {
+                followHandoffsMessages = input.params.conversationMessages;
+                return [];
+            });
+
+            vi.mocked(AgentRunner).mockImplementation(() => ({
+                RunAgentInConversation: vi.fn().mockImplementation((params: {
+                    conversationMessages: Array<{ role: string; content: string }>;
+                }) => {
+                    // Simulate BaseAgent mutating params.conversationMessages in-place with internal retry/working turns
+                    params.conversationMessages.push({
+                        role: 'user',
+                        content: 'Retrying due to: refused target',
+                    });
+                    return Promise.resolve(wrapInConversationResult({
+                        success: true,
+                        handoff: {
+                            targetAgentId: 'marketing-id',
+                            targetAgentName: 'Marketing Agent',
+                            handoffChain: ['agent-guid-123'],
+                        },
+                        agentRun: {
+                            Message: 'Bringing in Marketing Agent.',
+                            FinalStep: 'Handoff',
+                            Steps: [],
+                        },
+                    }));
+                }),
+                FollowHandoffs: followHandoffsMock,
+            }) as ReturnType<typeof vi.fn>);
+
+            const msg = createMessage({ IsDirectMessage: true, Text: 'Hello agent' });
+            await adapter.HandleMessage(msg);
+
+            expect(followHandoffsMock).toHaveBeenCalledTimes(1);
+            expect(followHandoffsMessages).toEqual([
+                { role: 'user', content: 'Hello agent' },
+            ]);
         });
 
         it('should omit handoffChain and skip FollowHandoffs when DisableDelegation is true', async () => {

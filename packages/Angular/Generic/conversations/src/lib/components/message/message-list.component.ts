@@ -473,14 +473,6 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   public get HandoffMap(): ReadonlyMap<string, MessageHandoffInfo> {
     return this._handoffMap;
   }
-  /** @deprecated Use {@link HandoffMap}. */
-  @Input() public set handoffMap(value: ReadonlyMap<string, MessageHandoffInfo> | null) {
-    this.HandoffMap = value;
-  }
-  /** @deprecated Use {@link HandoffMap}. */
-  public get handoffMap(): ReadonlyMap<string, MessageHandoffInfo> {
-    return this.HandoffMap;
-  }
   private _handoffMap: ReadonlyMap<string, MessageHandoffInfo> = new Map();
 
   @Input() public RatingsMap: Map<string, RatingJSON[]> = new Map();

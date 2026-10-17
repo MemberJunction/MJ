@@ -70,6 +70,11 @@ describe('AgentHandoffCardComponent (DOM)', () => {
     const title = Text(fixture, '.handoff-title strong');
     expect(title).toBe('Transferred to Research Agent');
 
+    const pills = QueryAll(fixture, '.handoff-meta .pill').map(el => el.textContent?.trim());
+    expect(pills).toContain('Power level · Balanced');
+    expect(pills).toContain('Brief handed over');
+    expect(pills).toContain('Next messages go to Research Agent');
+
     const detailsEl = Query(fixture, 'details.handoff-details') as HTMLDetailsElement | null;
     expect(detailsEl).not.toBeNull();
     expect(detailsEl?.open).toBe(false);
