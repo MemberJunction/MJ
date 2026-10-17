@@ -187,6 +187,18 @@ describe('SimpleVectorServiceProvider', () => {
             expect(result.data.matches[0].metadata.RecordID).toBe('parent-record-A');
         });
 
+        it('loads the whole index, not the entity\'s first page of rows', async () => {
+            // Without IgnoreMaxRows the load stops at Entity Record Documents' UserViewMaxRows
+            // (1,000), and every vector past it is invisible to search and duplicate detection.
+            runViewMock.mockResolvedValueOnce({ Success: true, Results: [] });
+
+            await new SimpleVectorServiceProvider().QueryIndex(
+                { id: 'doc-1', vector: [0.1, 0.2, 0.3], topK: 5 } as never
+            );
+
+            expect(runViewCall(0).Params.IgnoreMaxRows).toBe(true);
+        });
+
         it('rejects calls without an EntityDocumentID', async () => {
             const provider = new SimpleVectorServiceProvider();
             const result = await provider.QueryIndex({ id: '', vector: [1, 0, 0], topK: 5 } as never);

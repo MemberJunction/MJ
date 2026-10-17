@@ -305,6 +305,10 @@ export class DuplicateRecordDetector extends VectorBase {
         if (!entityInfo) {
             response.ErrorMessage = `Entity not found for ID ${entityDocument.EntityID}`;
             response.Status = 'Error';
+            duplicateRun.ProcessingStatus = 'Failed';
+            duplicateRun.ProcessingErrorMessage = response.ErrorMessage;
+            duplicateRun.EndedAt = new Date();
+            await this.SaveEntity(duplicateRun);
             return response;
         }
 
@@ -312,6 +316,10 @@ export class DuplicateRecordDetector extends VectorBase {
         if (recordIDs.length === 0) {
             response.ErrorMessage = 'No records found to check for duplicates';
             response.Status = 'Error';
+            duplicateRun.ProcessingStatus = 'Failed';
+            duplicateRun.ProcessingErrorMessage = response.ErrorMessage;
+            duplicateRun.EndedAt = new Date();
+            await this.SaveEntity(duplicateRun);
             return response;
         }
 
@@ -897,11 +905,12 @@ export class DuplicateRecordDetector extends VectorBase {
         const allQueryResults: RecordQueryResult[] = [];
         const subBatches = chunkArray(records, VECTOR_QUERY_BATCH_SIZE);
 
+        let subBatchOffset = 0;
         for (let i = 0; i < subBatches.length; i++) {
             const subRecords = subBatches[i];
 
             // Embed this sub-batch
-            this.reportProgress(options, 'Embedding', totalRecords, processedSoFar, matchesSoFar, startTime);
+            this.reportProgress(options, 'Embedding', totalRecords, processedSoFar + subBatchOffset, matchesSoFar, startTime);
             const subTemplateTexts = await this.GenerateTemplateTexts(templateParser, entityDocument, subRecords, contextUser);
             const subEmbedResult = await this.EmbeddingRunner.RunEmbedding({
                 Texts: subTemplateTexts,
@@ -915,11 +924,12 @@ export class DuplicateRecordDetector extends VectorBase {
             }
 
             // Query vector DB for each record in the sub-batch with concurrency control
-            this.reportProgress(options, 'Querying', totalRecords, processedSoFar, matchesSoFar, startTime);
+            this.reportProgress(options, 'Querying', totalRecords, processedSoFar + subBatchOffset, matchesSoFar, startTime);
             const subQueryResults = await this.QueryDuplicatesForRecords(
                 subRecords, subEmbedResult.Vectors, subTemplateTexts, entityDocument, queryTopK, options, concurrency
             );
             allQueryResults.push(...subQueryResults);
+            subBatchOffset += subRecords.length;
         }
 
         // 6d.5: Drop matches that point to records which no longer exist in the source
@@ -930,9 +940,10 @@ export class DuplicateRecordDetector extends VectorBase {
         this.TrimToTopK(allQueryResults, topK);
 
         // 6e: Persist match results and update run details
-        this.reportProgress(options, 'Matching', totalRecords, processedSoFar + records.length, matchesSoFar, startTime);
+        this.reportProgress(options, 'Matching', totalRecords, processedSoFar, matchesSoFar, startTime);
         const results = await this.PersistMatchResults(
-            allQueryResults, duplicateRunDetails, entityInfo, entityDocument, options, startTime, contextUser
+            allQueryResults, duplicateRunDetails, entityInfo, entityDocument, options, startTime, contextUser,
+            totalRecords, processedSoFar, matchesSoFar
         );
 
         const batchMatches = results.reduce((sum, r) => sum + r.Duplicates.length, 0);
@@ -1609,56 +1620,63 @@ export class DuplicateRecordDetector extends VectorBase {
      */
     protected buildSourceMetadataMap(records: BaseEntity[], entityInfo: EntityInfo): Map<string, string> {
         const metadataMap = new Map<string, string>();
-
-        // Combine all IsNameField fields in Sequence order for the display name
-        const nameFields = this.DisplayNameFields(entityInfo);
-
-        // Use DefaultInView fields for display, plus IsNameField fields
-        const internalNames = new Set(['ID', '__mj_CreatedAt', '__mj_UpdatedAt']);
-        const displayFields = entityInfo.Fields
-            .filter(f => f.DefaultInView && !f.IsPrimaryKey && !internalNames.has(f.Name))
-            .sort((a, b) => (a.Sequence ?? 9999) - (b.Sequence ?? 9999));
-
         for (const record of records) {
             // Keyed by the same compact segment the batch ids use, so CreateRunDetailRecords can
             // look the metadata up by record id for single-column and composite keys alike.
             const id = record.PrimaryKey.ToCompactURLSegment();
-            const meta: Record<string, string> = {
-                Entity: entityInfo.Name,
-            };
-            if (entityInfo.Icon) {
-                meta['EntityIcon'] = entityInfo.Icon;
-            }
-
-            // Store combined name from all IsNameField fields
-            const nameParts = nameFields
-                .map(f => record.Get(f.Name))
-                .filter(v => v != null && String(v).trim() !== '')
-                .map(v => String(v));
-            if (nameParts.length > 0) {
-                meta['Name'] = nameParts.join(' ');
-            }
-
-            // Store all IsNameField values individually for downstream resolution
-            for (const nf of nameFields) {
-                const val = record.Get(nf.Name);
-                if (val != null) meta[nf.Name] = String(val);
-            }
-
-            // Store DefaultInView fields for rich display
-            for (const field of displayFields) {
-                if (!meta[field.Name]) { // Don't overwrite name fields
-                    const val = record.Get(field.Name);
-                    if (val != null) {
-                        const str = String(val);
-                        meta[field.Name] = str.length > 200 ? str.substring(0, 197) + '...' : str;
-                    }
-                }
-            }
-
-            metadataMap.set(id, JSON.stringify(meta));
+            metadataMap.set(id, JSON.stringify(this.BuildRecordMetadata(fieldName => record.Get(fieldName), entityInfo)));
         }
         return metadataMap;
+    }
+
+    /**
+     * The record metadata a run stores for display: the entity name and icon, the combined
+     * display name (every `IsNameField` value in Sequence order) as `Name`, each name field on its
+     * own, and the entity's `DefaultInView` fields (long values truncated to 200 characters).
+     *
+     * @param getValue reads one field's value off the record, whatever form the record is in
+     */
+    protected BuildRecordMetadata(getValue: (fieldName: string) => unknown, entityInfo: EntityInfo): Record<string, string> {
+        const nameFields = this.DisplayNameFields(entityInfo);
+        const meta: Record<string, string> = {
+            Entity: entityInfo.Name,
+        };
+        if (entityInfo.Icon) {
+            meta['EntityIcon'] = entityInfo.Icon;
+        }
+
+        const nameParts = nameFields
+            .map(f => getValue(f.Name))
+            .filter(v => v != null && String(v).trim() !== '')
+            .map(v => String(v));
+        if (nameParts.length > 0) {
+            meta['Name'] = nameParts.join(' ');
+        }
+
+        // Each name field on its own, for downstream resolution
+        for (const nf of nameFields) {
+            const val = getValue(nf.Name);
+            if (val != null) meta[nf.Name] = String(val);
+        }
+
+        for (const field of this.RecordMetadataDisplayFields(entityInfo)) {
+            if (!meta[field.Name]) { // Don't overwrite name fields
+                const val = getValue(field.Name);
+                if (val != null) {
+                    const str = String(val);
+                    meta[field.Name] = str.length > 200 ? str.substring(0, 197) + '...' : str;
+                }
+            }
+        }
+        return meta;
+    }
+
+    /** The `DefaultInView` fields record metadata carries besides the name fields, in Sequence order. */
+    protected RecordMetadataDisplayFields(entityInfo: EntityInfo): EntityFieldInfo[] {
+        const internalNames = new Set(['ID', '__mj_CreatedAt', '__mj_UpdatedAt']);
+        return entityInfo.Fields
+            .filter(f => f.DefaultInView && !f.IsPrimaryKey && !internalNames.has(f.Name))
+            .sort((a, b) => (a.Sequence ?? 9999) - (b.Sequence ?? 9999));
     }
 
     protected FilterSelfMatches(duplicates: PotentialDuplicate[], sourceKey: CompositeKey): PotentialDuplicate[] {
@@ -1707,7 +1725,8 @@ export class DuplicateRecordDetector extends VectorBase {
             return;
         }
 
-        const existing = await this.LoadExistingRecordIDs(entityInfo, entityInfo.FirstPrimaryKey.Name, [...matchIds], recordFilter); // first-pk-ok: LoadExistingRecordIDs reads pkField only when PrimaryKeys.length === 1; composite keys are rebuilt from the segment
+        const matchRows = new Map<string, Record<string, unknown>>();
+        const existing = await this.LoadExistingRecordIDs(entityInfo, entityInfo.FirstPrimaryKey.Name, [...matchIds], recordFilter, matchRows); // first-pk-ok: LoadExistingRecordIDs reads pkField only when PrimaryKeys.length === 1; composite keys are rebuilt from the segment
 
         // Drop ghost (non-existent) matches in place.
         for (const qr of queryResults) {
@@ -1715,12 +1734,39 @@ export class DuplicateRecordDetector extends VectorBase {
             qr.Duplicates.Duplicates = qr.Duplicates.Duplicates.filter(
                 (d) => existing.has(NormalizeUUID(d.ToCompactURLSegment()))
             );
+            this.FillMissingMatchMetadata(qr.Duplicates.Duplicates, matchRows, entityInfo);
             const removed = before - qr.Duplicates.Duplicates.length;
             if (removed > 0) {
                 const reason = recordFilter
                     ? 'records no longer exist or fail the entity document\'s record filter'
                     : 'records no longer exist — likely orphaned vectors';
                 LogStatus(`Duplicate detection: dropped ${removed} match(es) for source ${qr.SourceKey.ToString()} (${reason})`);
+            }
+        }
+    }
+
+    /**
+     * Gives each match that has no display name the same record metadata a run detail carries.
+     * What a vector store returns as match metadata depends on the store: the in-memory store
+     * returns only the record id, so without this every such match would show as a bare id. A
+     * match whose vector metadata already names the record keeps it; the record's metadata is
+     * laid over whatever else it had.
+     *
+     * @param matchRows the existing matches' rows, keyed by normalized compact record id (see
+     * {@link LoadExistingRecordIDs})
+     */
+    protected FillMissingMatchMetadata(
+        duplicates: PotentialDuplicate[],
+        matchRows: Map<string, Record<string, unknown>>,
+        entityInfo: EntityInfo
+    ): void {
+        for (const dupe of duplicates) {
+            if (dupe.VectorMetadata?.['Name']) {
+                continue;
+            }
+            const row = matchRows.get(NormalizeUUID(dupe.ToCompactURLSegment()));
+            if (row) {
+                dupe.VectorMetadata = { ...dupe.VectorMetadata, ...this.BuildRecordMetadata(fieldName => row[fieldName], entityInfo) };
             }
         }
     }
@@ -1735,13 +1781,29 @@ export class DuplicateRecordDetector extends VectorBase {
      * key; a composite key's columns come from `entityInfo.PrimaryKeys`.
      * @param recordFilter the entity document's record filter, if any: only records that also pass
      * it count as existing
+     * @param rowsOut when given, the query also reads the fields record metadata carries (see
+     * {@link BuildRecordMetadata}), and each existing record's row lands here under the same
+     * normalized key the returned set uses
      * @throws when a record filter is set and can't be applied — failing open would let the records
      * it excludes through
      */
-    protected async LoadExistingRecordIDs(entityInfo: EntityInfo, pkField: string, ids: string[], recordFilter?: string | null): Promise<Set<string>> {
+    protected async LoadExistingRecordIDs(
+        entityInfo: EntityInfo,
+        pkField: string,
+        ids: string[],
+        recordFilter?: string | null,
+        rowsOut?: Map<string, Record<string, unknown>>
+    ): Promise<Set<string>> {
         const existing = new Set<string>();
         const singleColumn = entityInfo.PrimaryKeys.length === 1;
         const keyFields = entityInfo.PrimaryKeys.map(pk => pk.Name);
+        const fields = rowsOut
+            ? [...new Set([
+                ...keyFields,
+                ...this.DisplayNameFields(entityInfo).map(f => f.Name),
+                ...this.RecordMetadataDisplayFields(entityInfo).map(f => f.Name),
+            ])]
+            : keyFields;
         for (const chunk of chunkArray(ids, DEFAULT_BATCH_SIZE)) {
             const keyFilter = singleColumn
                 ? `${pkField} IN (${chunk.map((id) => `'${String(id).replace(/'/g, "''")}'`).join(',')})`
@@ -1749,14 +1811,16 @@ export class DuplicateRecordDetector extends VectorBase {
             const rv = await this.RunView.RunView<Record<string, unknown>>({
                 EntityName: entityInfo.Name,
                 ExtraFilter: CombineExtraFilters(keyFilter, recordFilter),
-                Fields: keyFields,
+                Fields: fields,
                 ResultType: 'simple',
                 IgnoreMaxRows: true, // bounded by the key filter; an entity's UserViewMaxRows can be smaller than a chunk
             }, this.CurrentUser);
 
             if (rv.Success) {
                 for (const r of rv.Results) {
-                    existing.add(NormalizeUUID(CompositeKey.FromEntityRecord(entityInfo, r).ToCompactURLSegment()));
+                    const key = NormalizeUUID(CompositeKey.FromEntityRecord(entityInfo, r).ToCompactURLSegment());
+                    existing.add(key);
+                    rowsOut?.set(key, r);
                 }
             } else if (recordFilter) {
                 throw new Error(`Failed to apply the entity document's record filter (${recordFilter}) to ${entityInfo.Name}: ${rv.ErrorMessage}`);
@@ -1861,7 +1925,10 @@ export class DuplicateRecordDetector extends VectorBase {
         entityDocument: MJEntityDocumentEntity,
         options: DuplicateDetectionOptions,
         startTime: number,
-        contextUser?: UserInfo
+        contextUser?: UserInfo,
+        totalRecords?: number,
+        processedSoFar: number = 0,
+        matchesSoFar: number = 0
     ): Promise<PotentialDuplicateResult[]> {
         const results: PotentialDuplicateResult[] = [];
         let matchesFound = 0;
@@ -1881,7 +1948,10 @@ export class DuplicateRecordDetector extends VectorBase {
 
             await this.persistDetailMatches(qr, duplicateRunDetails, reasoning?.Output);
 
-            this.reportProgress(options, 'Matching', queryResults.length, results.length, matchesFound, startTime);
+            const effectiveTotal = totalRecords ?? queryResults.length;
+            const effectiveProcessed = totalRecords != null ? processedSoFar + results.length : results.length;
+            const effectiveMatches = matchesSoFar + matchesFound;
+            this.reportProgress(options, 'Matching', effectiveTotal, effectiveProcessed, effectiveMatches, startTime, qr.SourceKey.Values());
         }
 
         return results;

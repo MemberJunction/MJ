@@ -1,9 +1,30 @@
 import { BaseEntity, DuplicateDetectionOptions, DuplicateDetectionProgress, EntitySaveOptions, IMetadataProvider, LogError, LogStatus, PotentialDuplicateRequest, RunView } from "@memberjunction/core";
-import { RegisterClass, GetGlobalObjectStore } from "@memberjunction/global";
+import { RegisterClass, GetGlobalObjectStore, EscapeSQLString } from "@memberjunction/global";
 import { MJDuplicateRunEntity, MJEntityDocumentEntity } from "@memberjunction/core-entities";
 import { DuplicateRecordDetector } from "@memberjunction/ai-vector-dupe";
 
 const PIPELINE_PROGRESS_TOPIC = 'PIPELINE_PROGRESS';
+
+/** Entity Document Type name of documents built for duplicate detection. */
+const RECORD_DUPLICATE_DOCUMENT_TYPE = 'Record Duplicate';
+
+/**
+ * Chooses the entity document a duplicate run uses, from the entity's active documents ordered
+ * newest-updated first. A 'Record Duplicate' document wins over any other type: an entity can
+ * also have a Search document (MJ ships one for several core entities), whose template and
+ * vectors are built for search, not for matching records. Without a 'Record Duplicate'
+ * document, the newest active document is used, as before.
+ *
+ * The run itself does not record which document it was started for, so when an entity has more
+ * than one 'Record Duplicate' document the newest-updated one is used.
+ *
+ * @param activeDocuments the entity's active documents, newest `__mj_UpdatedAt` first
+ * @returns the document to use, or null when there is none
+ */
+export function PickDuplicateDetectionDocument<T extends Pick<MJEntityDocumentEntity, 'Type'>>(activeDocuments: T[]): T | null {
+    const recordDuplicate = activeDocuments.find(d => d.Type === RECORD_DUPLICATE_DOCUMENT_TYPE);
+    return recordDuplicate ?? activeDocuments[0] ?? null;
+}
 
 /**
  * Key under which we stash the "detection in flight" set in the MJ global object
@@ -38,10 +59,10 @@ function detectionInFlightSet(): Set<string> {
 const PHASE_TO_STAGE: Record<DuplicateDetectionProgress['Phase'], string> = {
     'Loading': 'extract',
     'Vectorizing': 'vectorize',
-    'Embedding': 'autotag',
+    'Embedding': 'extract',
     'Querying': 'extract',
     'Matching': 'autotag',
-    'Merging': 'complete'
+    'Merging': 'autotag'
 };
 
 @RegisterClass(BaseEntity, 'MJ: Duplicate Runs')
@@ -71,7 +92,7 @@ export class MJDuplicateRunEntityServer extends MJDuplicateRunEntity {
 
     /**
      * Run duplicate detection asynchronously. On failure, updates the run's
-     * ProcessingStatus to 'Error' so the UI can surface the problem.
+     * ProcessingStatus to 'Failed' with ProcessingErrorMessage so the UI can surface the problem.
      */
     private async runDetectionAsync(): Promise<void> {
         const startTime = Date.now();
@@ -85,27 +106,28 @@ export class MJDuplicateRunEntityServer extends MJDuplicateRunEntity {
             request.EntityID = this.EntityID;
             request.ListID = this.SourceListID || undefined; // Optional — if not set, scans all entity records
 
-            // Find the first active entity document for this entity to get template/thresholds
+            // The entity document supplies the template, vectors and thresholds for this run.
             const rv = new RunView(this.RunViewProviderToUse);
             const edResult = await rv.RunView<MJEntityDocumentEntity>({
                 EntityName: 'MJ: Entity Documents',
-                ExtraFilter: `EntityID='${this.EntityID}' AND Status='Active'`,
-                MaxRows: 1,
+                ExtraFilter: `EntityID='${EscapeSQLString(this.EntityID)}' AND Status='Active'`,
+                OrderBy: '__mj_UpdatedAt DESC',
                 ResultType: 'entity_object'
             }, this.ContextCurrentUser);
-            if (edResult.Success && edResult.Results.length > 0) {
-                request.EntityDocumentID = edResult.Results[0].ID;
+            const entityDocument = edResult.Success ? PickDuplicateDetectionDocument(edResult.Results) : null;
+            if (entityDocument) {
+                request.EntityDocumentID = entityDocument.ID;
             }
 
             // Build detection options with threshold normalization.
-            // Entity document defaults are 1.0 (100%) which means nothing ever matches.
-            // Normalize to sensible fallbacks when the stored value is effectively unconfigured.
+            // A threshold left at 1.0 (100%) matches nothing, so treat it as unconfigured and use
+            // the fallback instead.
             const potentialThreshold = this.normalizeThreshold(
-                edResult.Success && edResult.Results.length > 0 ? edResult.Results[0].PotentialMatchThreshold : 1.0,
+                entityDocument ? entityDocument.PotentialMatchThreshold : 1.0,
                 0.70 // fallback: 70% for potential matches
             );
             const absoluteThreshold = this.normalizeThreshold(
-                edResult.Success && edResult.Results.length > 0 ? edResult.Results[0].AbsoluteMatchThreshold : 1.0,
+                entityDocument ? entityDocument.AbsoluteMatchThreshold : 1.0,
                 0.95 // fallback: 95% for absolute matches
             );
 
@@ -120,22 +142,28 @@ export class MJDuplicateRunEntityServer extends MJDuplicateRunEntity {
             request.Options = detectionOptions;
 
             // Publish initial progress
-            this.publishPipelineNotification('autotag', 0, 0, 0, startTime, 'Starting duplicate detection...');
+            this.publishPipelineNotification('extract', 0, 0, 0, startTime, 'Starting duplicate detection...');
 
-            await detector.GetDuplicateRecords(request, this.ContextCurrentUser);
+            const response = await detector.GetDuplicateRecords(request, this.ContextCurrentUser);
+            if (response.Status === 'Error') {
+                throw new Error(response.ErrorMessage || 'Duplicate detection failed');
+            }
             LogStatus(`Duplicate detection completed for run ${this.ID}`);
 
             // Publish completion
             this.publishPipelineNotification('complete', 100, 100, 100, startTime);
         } catch (error) {
-            LogError(`Duplicate detection error for run ${this.ID}`, undefined, error);
+            const errorMsg = error instanceof Error ? error.message : String(error);
+            LogError(`Duplicate detection error for run ${this.ID}: ${errorMsg}`, undefined, error);
 
             // Publish error
-            this.publishPipelineNotification('error', 0, 0, 0, startTime, String(error));
+            this.publishPipelineNotification('error', 0, 0, 0, startTime, errorMsg);
 
             // Update the run record to reflect the error
             try {
+                await this.Load(this.ID);
                 this.ProcessingStatus = 'Failed';
+                this.ProcessingErrorMessage = errorMsg;
                 this.EndedAt = new Date();
                 await super.Save();
             } catch (updateError) {
