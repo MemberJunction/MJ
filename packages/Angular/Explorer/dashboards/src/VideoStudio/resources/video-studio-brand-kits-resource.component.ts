@@ -56,6 +56,7 @@ export class VideoStudioBrandKitsResourceComponent
 {
   public IsLoading = false;
   public LoadError: string | null = null;
+  public DeleteError: string | null = null;
   public DeletingKitId: string | null = null;
 
   public AllBrandKits: BrandKitCardSnapshot[] = [];
@@ -121,6 +122,7 @@ export class VideoStudioBrandKitsResourceComponent
   public async LoadBrandKits(forceRefresh = false): Promise<void> {
     this.IsLoading = true;
     this.LoadError = null;
+    this.DeleteError = null;
     this.cdr.markForCheck();
 
     try {
@@ -204,13 +206,13 @@ export class VideoStudioBrandKitsResourceComponent
     }
 
     this.DeletingKitId = card.ID;
-    this.LoadError = null;
+    this.DeleteError = null;
     this.cdr.markForCheck();
 
     try {
       const result = await DeleteBrandKitWithAssets(kit, this.ProviderToUse);
       if (!result.Success) {
-        this.LoadError = result.ErrorMessage || 'Failed to delete brand kit.';
+        this.DeleteError = result.ErrorMessage || 'Failed to delete brand kit.';
         return;
       }
       await this.LoadBrandKits(true);

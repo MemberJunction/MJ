@@ -151,19 +151,29 @@ describe('FilterProductionCards & BuildProductionsAgentContext', () => {
     });
 
     it('includes a card updated late in the local day of ToDate and excludes next local day', () => {
-        const lateLocalCard = makeProductionCard({
-            ID: 'prod-late-local',
-            UpdatedAt: new Date(2026, 7, 31, 23, 30, 0),
-        });
-        const nextLocalMorningCard = makeProductionCard({
-            ID: 'prod-next-day',
-            UpdatedAt: new Date(2026, 8, 1, 0, 5, 0),
-        });
-        const matched = FilterProductionCards(
-            [lateLocalCard, nextLocalMorningCard],
-            makeProductionFilters({ FromDate: '2026-08-31', ToDate: '2026-08-31' }),
-        );
-        expect(matched.map((c) => c.ID)).toEqual(['prod-late-local']);
+        const prevTz = process.env.TZ;
+        process.env.TZ = 'America/Chicago';
+        try {
+            const lateLocalCard = makeProductionCard({
+                ID: 'prod-late-local',
+                UpdatedAt: new Date(2026, 7, 31, 23, 30, 0),
+            });
+            const nextLocalMorningCard = makeProductionCard({
+                ID: 'prod-next-day',
+                UpdatedAt: new Date(2026, 8, 1, 0, 5, 0),
+            });
+            const matched = FilterProductionCards(
+                [lateLocalCard, nextLocalMorningCard],
+                makeProductionFilters({ FromDate: '2026-08-31', ToDate: '2026-08-31' }),
+            );
+            expect(matched.map((c) => c.ID)).toEqual(['prod-late-local']);
+        } finally {
+            if (prevTz === undefined) {
+                delete process.env.TZ;
+            } else {
+                process.env.TZ = prevTz;
+            }
+        }
     });
 
     it('counts active popover filters accurately', () => {

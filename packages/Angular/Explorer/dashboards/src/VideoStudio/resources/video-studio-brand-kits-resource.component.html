@@ -102,6 +102,12 @@
         }
       </div>
     } @else {
+      @if (DeleteError) {
+        <div class="vs-delete-error-banner" role="alert" data-testid="brand-kits-delete-error">
+          <i class="fa-solid fa-circle-exclamation"></i>
+          <span>{{ DeleteError }}</span>
+        </div>
+      }
       <div class="vs-brand-kits-grid" data-testid="brand-kits-grid">
         @for (kit of FilteredBrandKits; track kit.ID) {
           <article
@@ -110,7 +116,7 @@
             tabindex="0"
             role="button"
             (click)="OpenBrandKit(kit)"
-            (keydown.enter)="OpenBrandKit(kit)"
+            (keydown.enter)="$event.target === $event.currentTarget && OpenBrandKit(kit)"
           >
             <div class="vs-palette-strip" data-testid="brand-kit-palette-strip">
               @if (kit.Swatches.length > 0) {
@@ -190,6 +196,7 @@
                   [attr.data-testid]="'brand-kit-delete-' + kit.ID"
                   [disabled]="DeletingKitId === kit.ID"
                   (click)="DeleteBrandKit(kit, $event)"
+                  (keydown.enter)="$event.stopPropagation()"
                 >
                   <i class="fa-regular fa-trash-can"></i>
                   <span>Delete</span>

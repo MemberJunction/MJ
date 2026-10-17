@@ -209,9 +209,14 @@ describe('VideoStudioBrandKitsResourceComponent DOM', () => {
       }),
     );
 
-    // Click Delete button on default kit card — deletes child assets first, then kit
+    // Pressing Enter on the Delete button does NOT bubble to the card and call OpenEntityRecord
     const deleteBtn = query(fixture, '[data-testid="brand-kit-delete-kit-default"]') as HTMLElement | null;
     expect(deleteBtn).not.toBeNull();
+    deleteBtn!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    fixture.detectChanges();
+    expect(navStub.OpenEntityRecord).not.toHaveBeenCalled();
+
+    // Click Delete button on default kit card — deletes child assets first, then kit
     deleteBtn!.click();
     await flushAsync();
     fixture.detectChanges();
@@ -243,6 +248,88 @@ describe('VideoStudioBrandKitsResourceComponent DOM', () => {
     fixture.detectChanges();
     expect(instance.FilteredBrandKits).toHaveLength(0);
     expect(query(fixture, '[data-testid="brand-kits-empty"]')).not.toBeNull();
+
+    fixture.destroy();
+    vi.restoreAllMocks();
+  });
+
+  it('shows a delete error banner and keeps cards rendered when DeleteBrandKitWithAssets fails', async () => {
+    const navStub = createNavigationServiceStub();
+    const confirmStub = {
+      ConfirmDelete: vi.fn().mockResolvedValue(true),
+    };
+    const customProvider = Object.create(GraphQLDataProvider.prototype) as IMetadataProvider;
+
+    const kits: MJBrandKitEntity[] = [
+      {
+        ID: 'kit-default',
+        Name: 'MJ Default Brand Kit',
+        Description: 'Default workspace styling',
+        CompanyID: null,
+        Company: null,
+        IsDefault: true,
+        Status: 'Active',
+        StyleObject: { Palette: [], Typography: [] },
+        Delete: vi.fn().mockResolvedValue(true),
+        LatestResult: null,
+      } as unknown as MJBrandKitEntity,
+    ];
+
+    const engineStub = {
+      Config: vi.fn().mockResolvedValue(undefined),
+      BrandKits: kits,
+      GetAssets: vi.fn().mockReturnValue([]),
+    } as unknown as BrandKitEngine;
+
+    vi.spyOn(BrandKitEngine, 'GetProviderInstance').mockReturnValue(engineStub);
+
+    Object.defineProperties(customProvider, {
+      CurrentUser: { value: { ID: 'user-1' }, configurable: true, writable: true },
+      RunView: {
+        value: vi.fn(async () => ({
+          Success: true,
+          Results: [
+            {
+              ID: 'a-locked',
+              AssetType: 'Logo',
+              Delete: vi.fn().mockResolvedValue(false),
+              LatestResult: { CompleteMessage: 'Asset in use by production' },
+            },
+          ],
+          RowCount: 1,
+          TotalRowCount: 1,
+          ExecutionTime: 1,
+          ErrorMessage: '',
+        })),
+        configurable: true,
+        writable: true,
+      },
+    });
+
+    const fixture = renderComponentFixture(VideoStudioBrandKitsResourceComponent, {
+      inputs: { Provider: customProvider },
+      providers: [
+        { provide: NavigationService, useValue: navStub },
+        { provide: MJConfirmService, useValue: confirmStub },
+      ],
+    });
+
+    await flushAsync();
+    fixture.detectChanges();
+
+    const deleteBtn = query(fixture, '[data-testid="brand-kit-delete-kit-default"]') as HTMLElement | null;
+    expect(deleteBtn).not.toBeNull();
+    deleteBtn!.click();
+    await flushAsync();
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.LoadError).toBeNull();
+    expect(fixture.componentInstance.DeleteError).toContain('Asset in use by production');
+    const errorBanner = query(fixture, '[data-testid="brand-kits-delete-error"]');
+    expect(errorBanner).not.toBeNull();
+    expect(errorBanner?.textContent).toContain('Asset in use by production');
+    expect(queryAll(fixture, '[data-testid^="brand-kit-card-"]')).toHaveLength(1);
+    expect(query(fixture, '[data-testid="brand-kits-error"]')).toBeNull();
 
     fixture.destroy();
     vi.restoreAllMocks();

@@ -38,6 +38,19 @@
   color: var(--mj-text-secondary);
 }
 
+.vs-delete-error-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+  padding: 10px 14px;
+  background: var(--mj-status-error-bg);
+  color: var(--mj-status-error-text);
+  border: 1px solid var(--mj-status-error-border);
+  border-radius: var(--mj-radius-md, 8px);
+  font-size: var(--mj-text-sm, 13px);
+}
+
 .vs-brand-kits-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
