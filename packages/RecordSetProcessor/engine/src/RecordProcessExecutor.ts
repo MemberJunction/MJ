@@ -30,7 +30,7 @@ import { InferProcessor } from './processors/InferProcessor';
 import { FieldRulesProcessor } from './processors/FieldRulesProcessor';
 import { WriteBackProcessor } from './processors/WriteBackProcessor';
 import { ChildRecordMapping, FieldLookupConfig, OutputMappingConfig, RunProvenance, TagOutputMapping } from './writeBack';
-import { type DataFeatureSpec } from '@memberjunction/feature-pipelines';
+import { OutputTargets, type DataFeatureSpec } from '@memberjunction/feature-pipelines';
 
 /** Options for executing a Record Process. */
 export interface RunRecordProcessOptions {
@@ -256,18 +256,20 @@ export class RecordProcessExecutor {
             }
         }
 
-        if (
-            outputMapping &&
-            (outputMapping.fields ||
+        const hasMappedWrites = !!outputMapping &&
+            !!(outputMapping.fields ||
                 outputMapping.childRecord ||
                 (outputMapping.childRecords && outputMapping.childRecords.length > 0) ||
-                (outputMapping.tags && outputMapping.tags.length > 0))
-        ) {
+                (outputMapping.tags && outputMapping.tags.length > 0));
+        // An output with no write target stores a Feature Value only; the wrapper still carries its dry-run preview and Outcome
+        const hasTargetlessOutputs = spec?.Outputs?.some((o) => !OutputTargets.HasWriteTarget(o)) === true;
+        if (hasMappedWrites || hasTargetlessOutputs) {
             const run: RunProvenance = {
                 RecordProcessID: rp.ID,
                 PromptID: rp.PromptID ?? undefined,
             };
-            return new WriteBackProcessor(base, outputMapping, dryRun, run);
+            const mapping: OutputMappingConfig = outputMapping ?? {};
+            return new WriteBackProcessor(base, mapping, dryRun, run);
         }
         return base;
     }
