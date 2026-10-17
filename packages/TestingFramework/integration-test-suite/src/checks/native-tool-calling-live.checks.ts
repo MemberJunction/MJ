@@ -32,7 +32,7 @@
  * Self-cleaning: the lifecycle creates the agents, prompts and fixture Action; Teardown purges
  * every run (with the execution logs its Actions steps link to) and deletes the fixtures.
  */
-import { RegisterClass, MJGlobal, UUIDsEqual } from '@memberjunction/global';
+import { IndexByUUID, RegisterClass, MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { RunView } from '@memberjunction/core';
 import { BaseLLM } from '@memberjunction/ai';
 import { BaseAction } from '@memberjunction/actions';
@@ -138,9 +138,12 @@ function resolveTarget(spec: string): NativeTarget | null {
     // Some databases carry duplicate model rows; prefer the one whose catalog states native capability.
     const models = engine.Models.filter((m) => m.Name === name && m.IsActive)
         .sort((a, b) => Number(supportsNative(b.ID)) - Number(supportsNative(a.ID)));
+    const rowsByModel = IndexByUUID(
+        engine.ModelVendors.filter((mv) => mv.DriverClass === driver && mv.Status === 'Active' && engine.IsInferenceProvider(mv)),
+        (mv) => mv.ModelID
+    );
     for (const model of models) {
-        const row = engine.ModelVendors.find((mv) => UUIDsEqual(mv.ModelID, model.ID) && mv.DriverClass === driver
-            && mv.Status === 'Active' && engine.IsInferenceProvider(mv));
+        const row = rowsByModel.Get(model.ID);
         if (row && MJGlobal.Instance.ClassFactory.GetRegistration(BaseLLM, driver)) {
             return { Model: model, ModelVendor: row, Driver: driver };
         }
@@ -167,10 +170,11 @@ function callableNativeTargets(prompt: MJAIPromptEntityExtended): NativeTarget[]
 function capabilityGateCandidates(): NativeTarget[] {
     const preferred = resolveTarget(DEFAULT_CAPABILITY_GATE_TARGET);
     const engine = AIEngine.Instance;
+    const modelsByID = IndexByUUID(engine.Models);
     const others = engine.ModelVendors
         .filter((mv) => mv.Status === 'Active' && engine.IsInferenceProvider(mv) && !!mv.DriverClass
             && !!MJGlobal.Instance.ClassFactory.GetRegistration(BaseLLM, mv.DriverClass))
-        .map((mv) => ({ ModelVendor: mv, Model: engine.Models.find((m) => UUIDsEqual(m.ID, mv.ModelID)) }))
+        .map((mv) => ({ ModelVendor: mv, Model: modelsByID.Get(mv.ModelID) }))
         .filter((r): r is { ModelVendor: MJAIModelVendorEntity; Model: MJAIModelEntityExtended } =>
             !!r.Model && r.Model.IsActive && r.Model.AIModelType?.trim().toLowerCase() === 'llm')
         .filter((r) => supportsNative(r.Model.ID) && !supportsNative(r.Model.ID, r.ModelVendor.ID))
