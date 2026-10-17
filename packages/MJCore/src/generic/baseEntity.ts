@@ -5286,7 +5286,7 @@ export abstract class BaseEntity<T = unknown> {
                         const data = await this.ProviderToUse.Save(this, this.ActiveUser, _options)
                         if (!this.TransactionGroup) {
                             // no transaction group, so we have our results here
-                            const result = this.finalizeSave(data, saveSubType);
+                            const result = this.finalizeSave(data, saveSubType, _options);
 
                             // Settle the scope this entity opened, if any (only the initiator holds
                             // one). The provider can fail by RETURNING falsy data rather than
@@ -5309,7 +5309,7 @@ export abstract class BaseEntity<T = unknown> {
                             this.TransactionGroup.TransactionNotifications$.subscribe(({ success, results, error }) => {
                                 const transItem = success && results ? results.find(r => r.Transaction.BaseEntity === this) : undefined;
                                 if (transItem) {
-                                    this.finalizeSave(transItem.Result, saveSubType); // we get the resulting data from the transaction result, not data above as that will be blank when in a TG
+                                    this.finalizeSave(transItem.Result, saveSubType, _options); // we get the resulting data from the transaction result, not data above as that will be blank when in a TG
                                 }
                                 else {
                                     // The transaction group failed / rolled back, OR (should never happen) reported success
@@ -5424,10 +5424,23 @@ export abstract class BaseEntity<T = unknown> {
     }
 
 
-    private finalizeSave(data: any, saveSubType: BaseEntityEvent["saveSubType"]): boolean {
+    private finalizeSave(
+        data: BaseEntity | Record<string, unknown> | null | undefined,
+        saveSubType: BaseEntityEvent["saveSubType"],
+        options?: EntitySaveOptions,
+    ): boolean {
         if (data) {
+            const effectiveReturnMode = options?.SaveReturnMode ?? this.EntityInfo.SaveReturnMode;
+            const hasGetAll = (val: BaseEntity | Record<string, unknown>): val is BaseEntity =>
+                val instanceof BaseEntity || typeof (val as { GetAll?: () => Record<string, unknown> }).GetAll === 'function';
+            const rawFieldData: Record<string, unknown> = hasGetAll(data) ? data.GetAll() : data;
+            // In 'datestamps_only' mode, the database only returned PK + __mj_CreatedAt / __mj_UpdatedAt.
+            // Merge those returned values onto the current in-memory values BEFORE init() wipes Fields,
+            // so caller-set fields remain loaded and intact without a post-save BaseView SELECT.
+            const fieldData: Record<string, unknown> = (effectiveReturnMode === 'datestamps_only' && typeof rawFieldData === 'object' && !Array.isArray(rawFieldData))
+                ? { ...(this.GetAll() as Record<string, unknown>), ...rawFieldData }
+                : rawFieldData;
             this.init(); // wipe out the current data to flush out the DIRTY flags, load the ID as part of this too
-            const fieldData = (data instanceof BaseEntity || (data && typeof data.GetAll === 'function')) ? data.GetAll() : data;
             // IS-A GetAll() merges the parent, including parent virtuals this entity
             // does not own (e.g. OrderHeader on Event Order Line). Keep only columns
             // this entity defines, and ignore anything leftover.
