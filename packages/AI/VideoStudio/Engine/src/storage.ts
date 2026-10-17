@@ -127,13 +127,6 @@ export async function ReadStoredFileWithType(
         typeof file.ContentType === 'string' && file.ContentType.trim().length > 0
             ? file.ContentType.trim()
             : undefined;
-    if (contentType) {
-        Object.defineProperty(bytes, 'ContentType', {
-            value: contentType,
-            enumerable: false,
-            configurable: true,
-        });
-    }
     return {
         Bytes: bytes,
         ...(contentType ? { ContentType: contentType } : {}),

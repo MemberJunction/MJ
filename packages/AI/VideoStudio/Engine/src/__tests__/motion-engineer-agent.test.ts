@@ -883,9 +883,9 @@ describe('VideoStudioMotionEngineerAgent (VS-AGT-4)', () => {
 
     it('Fix 2: spec with approved asset StagedPath and MissingAsset issue sends prompt data whose assets contains the staged path', async () => {
         const agent = new VideoStudioMotionEngineerAgent() as unknown as TestableMotionEngineerAgent;
-        vi.spyOn(storageModule, 'ReadStoredFile').mockResolvedValue(
-            Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"></svg>', 'utf8'),
-        );
+        vi.spyOn(storageModule, 'ReadStoredFileWithType').mockResolvedValue({
+            Bytes: Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"></svg>', 'utf8'),
+        });
 
         let checkCall = 0;
         vi.spyOn(driver, 'Check').mockImplementation(async (): Promise<CheckResult> => {

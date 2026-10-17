@@ -337,6 +337,11 @@ describe('VideoStudioRenderAgent (VS-AGT-3)', () => {
         vi.spyOn(storageModule, 'ReadStoredFile').mockImplementation(async (fileId: string) =>
             Buffer.from(`stored:${fileId}`, 'utf8'),
         );
+        vi.spyOn(storageModule, 'ReadStoredFileWithType').mockImplementation(
+            async (fileId: string) => ({
+                Bytes: Buffer.from(`stored:${fileId}`, 'utf8'),
+            }),
+        );
         let fileCounter = 0;
         vi.spyOn(storageModule, 'StoreFile').mockImplementation(async (input) => {
             fileCounter += 1;

@@ -89,10 +89,10 @@ export function PickReferences(spec: Partial<VideoGenerationSpec>): VideoAsset[]
 /**
  * Builds multimodal `ChatMessageContentBlock[]` and the matching
  * {@link ReferenceMediaKind} label for a single reference asset:
- * - `Image` / `Screenshot` -> single `image_url` data URL block (`referenceKind: 'Image'`).
- * - `Video` when `videoCapable === true` and `bytes.byteLength <= MAX_INLINE_REFERENCE_VIDEO_BYTES` ->
- *   single `video_url` data URL block (`referenceKind: 'Video (native)'`).
- * - Any other `Video` -> calls `extractKeyframes` (`MaxFrames: 16`, `BuildContactSheet: true`)
+ * - `Image` / `Screenshot` -> requires an `image/*` MIME type and returns a single `image_url` data URL block (`referenceKind: 'Image'`).
+ * - `Video` -> requires a `video/*` MIME type. When `videoCapable === true`, the MIME type is `video/mp4` or `video/webm`,
+ *   and `bytes.byteLength <= MAX_INLINE_REFERENCE_VIDEO_BYTES`, returns a single `video_url` data URL block (`referenceKind: 'Video (native)'`).
+ * - Any other `video/*` -> calls `extractKeyframes` (`MaxFrames: 16`, `BuildContactSheet: true`)
  *   and returns up to 4 contact-sheet `image_url` blocks (or the first 4 individual frame
  *   `image_url` blocks when no contact sheets are returned) with `referenceKind: 'Video (keyframes)'`.
  */
@@ -120,14 +120,21 @@ export async function BuildReferenceBlocks(
     }
 
     const base64 = bytes.toString('base64');
-    if (videoCapable && bytes.byteLength <= MAX_INLINE_REFERENCE_VIDEO_BYTES) {
+    const lowerMimeType = mimeType.toLowerCase();
+    const isNativeVideoMime = lowerMimeType === 'video/mp4' || lowerMimeType === 'video/webm';
+    if (
+        videoCapable &&
+        isNativeVideoMime &&
+        bytes.byteLength <= MAX_INLINE_REFERENCE_VIDEO_BYTES
+    ) {
+        const canonicalVideoMime = lowerMimeType as 'video/mp4' | 'video/webm';
         return {
             referenceKind: 'Video (native)',
             blocks: [
                 {
                     type: 'video_url',
-                    content: `data:${mimeType};base64,${base64}`,
-                    mimeType,
+                    content: `data:${canonicalVideoMime};base64,${base64}`,
+                    mimeType: canonicalVideoMime,
                 },
             ],
         };
@@ -135,7 +142,7 @@ export async function BuildReferenceBlocks(
 
     const extracted = await extractKeyframes({
         VideoBase64: base64,
-        MimeType: normalizeVideoMimeType(mimeType),
+        MimeType: normalizeVideoMimeType(lowerMimeType),
         MaxFrames: 16,
         BuildContactSheet: true,
     });
@@ -180,12 +187,19 @@ function isReferenceMediaAssetKind(kind: VideoAsset['Kind']): boolean {
 }
 
 function resolveAssetMimeType(asset: VideoAsset, mimeTypeOverride?: string): string {
-    const trimmedOverride = mimeTypeOverride?.trim();
-    if (trimmedOverride && trimmedOverride !== 'application/octet-stream') {
-        return trimmedOverride;
+    const trimmed = mimeTypeOverride?.trim() ?? '';
+    const lower = trimmed.toLowerCase();
+    if (asset.Kind === 'Image' || asset.Kind === 'Screenshot') {
+        if (lower.startsWith('image/') && lower.length > 'image/'.length) {
+            return lower;
+        }
+        throw new Error(`Asset "${asset.Key}" has no usable MIME type ("${trimmed || 'none'}")`);
     }
 
-    return asset.Kind === 'Video' ? 'video/mp4' : 'image/png';
+    if (lower.startsWith('video/') && lower.length > 'video/'.length) {
+        return lower;
+    }
+    throw new Error(`Asset "${asset.Key}" has no usable MIME type ("${trimmed || 'none'}")`);
 }
 
 function normalizeVideoMimeType(mimeType: string): 'video/mp4' | 'video/webm' {

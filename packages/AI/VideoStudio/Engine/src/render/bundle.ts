@@ -190,28 +190,9 @@ export async function ReadAssetBytes(
     contextUser: UserInfo,
     provider?: IMetadataProvider,
 ): Promise<{ Bytes: Buffer; MimeType?: string }> {
-    const readFileWithOptionalType = async (
-        targetFileId: string,
-    ): Promise<{ Bytes: Buffer; ContentType?: string }> => {
-        const readStoredMock = (ReadStoredFile as { getMockImplementation?: () => unknown })
-            .getMockImplementation?.();
-        const readWithTypeMock = (
-            ReadStoredFileWithType as { getMockImplementation?: () => unknown }
-        ).getMockImplementation?.();
-        if (typeof readStoredMock === 'function' && typeof readWithTypeMock !== 'function') {
-            const bytes = await ReadStoredFile(targetFileId, contextUser, provider);
-            const contentType = (bytes as { ContentType?: string })?.ContentType?.trim();
-            return {
-                Bytes: bytes,
-                ...(contentType ? { ContentType: contentType } : {}),
-            };
-        }
-        return ReadStoredFileWithType(targetFileId, contextUser, provider);
-    };
-
     const fileId = asset.FileID?.trim();
     if (fileId) {
-        const stored = await readFileWithOptionalType(fileId);
+        const stored = await ReadStoredFileWithType(fileId, contextUser, provider);
         const mimeType = stored.ContentType?.trim();
         return {
             Bytes: stored.Bytes,
@@ -244,7 +225,7 @@ export async function ReadAssetBytes(
                 `Asset "${asset.Key}" references ArtifactVersion "${artifactVersionId}" which is not backed by a FileID.`,
             );
         }
-        const stored = await readFileWithOptionalType(rowFileId);
+        const stored = await ReadStoredFileWithType(rowFileId, contextUser, provider);
         const mimeType = row.MimeType?.trim() || stored.ContentType?.trim();
         return {
             Bytes: stored.Bytes,

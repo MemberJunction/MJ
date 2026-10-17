@@ -114,7 +114,7 @@ import {
     MAX_ROWS_PER_BINDING,
     SNAPSHOT_INLINE_MAX_BYTES,
 } from '../data/data-snapshot.js';
-import { ReadStoredFile } from '../storage.js';
+import { ReadStoredFile, ReadStoredFileWithType } from '../storage.js';
 
 const QUERY_ID_1 = '11111111-1111-4111-8111-111111111111';
 const QUERY_ID_2 = '22222222-2222-4222-8222-222222222222';
@@ -837,7 +837,15 @@ describe('VS-DAT-1: CaptureDataSnapshot & LoadDataSnapshotValues', () => {
         const storedBuffer = Buffer.from(JSON.stringify(captureInline.Values), 'utf8');
         mockRunView.mockResolvedValueOnce({
             Success: true,
-            Results: [{ ID: FILE_ID_1, ProviderID: 'prov-1', ProviderKey: 'snapshots/data-snapshot.json', Name: 'data-snapshot.json' }],
+            Results: [
+                {
+                    ID: FILE_ID_1,
+                    ProviderID: 'prov-1',
+                    ProviderKey: 'snapshots/data-snapshot.json',
+                    Name: 'data-snapshot.json',
+                    ContentType: 'application/json',
+                },
+            ],
         });
         mockStorageState.ResolveFileObject.mockResolvedValueOnce({
             Account: { ID: 'acc-1' },
@@ -870,6 +878,31 @@ describe('VS-DAT-1: CaptureDataSnapshot & LoadDataSnapshotValues', () => {
             'Read',
             undefined,
         );
+
+        // ReadStoredFileWithType returns both Bytes and ContentType from MJ: Files
+        mockRunView.mockResolvedValueOnce({
+            Success: true,
+            Results: [
+                {
+                    ID: FILE_ID_1,
+                    ProviderID: 'prov-1',
+                    ProviderKey: 'snapshots/data-snapshot.json',
+                    Name: 'data-snapshot.json',
+                    ContentType: 'application/json',
+                },
+            ],
+        });
+        mockStorageState.ResolveFileObject.mockResolvedValueOnce({
+            Account: { ID: 'acc-1' },
+            Driver: { GetObject: mockDriverGetObject },
+            ObjectKey: 'snapshots/data-snapshot.json',
+        });
+        mockDriverGetObject.mockResolvedValueOnce(storedBuffer);
+        const storedWithType = await ReadStoredFileWithType(FILE_ID_1, contextUser);
+        expect(storedWithType).toEqual({
+            Bytes: storedBuffer,
+            ContentType: 'application/json',
+        });
 
         // ReadStoredFile throws on invalid UUID or missing row
         await expect(ReadStoredFile('bad-id', contextUser)).rejects.toThrow(/Invalid file ID/);

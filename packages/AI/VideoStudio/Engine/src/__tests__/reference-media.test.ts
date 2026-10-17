@@ -263,4 +263,61 @@ describe('BuildReferenceBlocks', () => {
             'data:image/jpeg;base64,f3',
         ]);
     });
+
+    it('throws naming asset.Key when MIME type is missing or non-image/video, and routes video/quicktime to keyframes even when videoCapable is true', async () => {
+        const extractKeyframes = vi.fn().mockResolvedValue({
+            DurationSeconds: 8,
+            Frames: [],
+            Sheets: [
+                {
+                    Index: 0,
+                    Kind: 'Grid' as const,
+                    MimeType: 'image/png' as const,
+                    Width: 1920,
+                    Height: 1080,
+                    StillKeys: ['frame-0'],
+                    ImageBase64: 'mov-sheet-0',
+                },
+            ],
+        } satisfies KeyframeResult);
+
+        const imageAsset = makeAsset({ Key: 'attachment:no-mime', Kind: 'Image' });
+        await expect(
+            BuildReferenceBlocks(imageAsset, Buffer.from('img'), true, extractKeyframes, undefined),
+        ).rejects.toThrow('Asset "attachment:no-mime" has no usable MIME type ("none")');
+
+        await expect(
+            BuildReferenceBlocks(
+                imageAsset,
+                Buffer.from('img'),
+                true,
+                extractKeyframes,
+                'application/octet-stream',
+            ),
+        ).rejects.toThrow(
+            'Asset "attachment:no-mime" has no usable MIME type ("application/octet-stream")',
+        );
+
+        expect(extractKeyframes).not.toHaveBeenCalled();
+
+        const movAsset = makeAsset({ Key: 'attachment:iphone.mov', Kind: 'Video' });
+        const movBytes = Buffer.from('quicktime-bytes');
+        const movResult = await BuildReferenceBlocks(
+            movAsset,
+            movBytes,
+            true,
+            extractKeyframes,
+            'video/quicktime',
+        );
+
+        expect(extractKeyframes).toHaveBeenCalledTimes(1);
+        expect(movResult.referenceKind).toBe('Video (keyframes)');
+        expect(movResult.blocks).toEqual([
+            {
+                type: 'image_url',
+                content: 'data:image/png;base64,mov-sheet-0',
+                mimeType: 'image/png',
+            },
+        ]);
+    });
 });
