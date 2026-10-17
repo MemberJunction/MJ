@@ -55,9 +55,6 @@ import { BaseArtifactPreviewComponent } from './base-artifact-preview.component'
         max-height: 140px;
         overflow: hidden;
       }
-      .vp-preview__player ::ng-deep .mj-media-player__video-cell video {
-        max-height: 110px;
-      }
       .vp-preview__status,
       .vp-preview__empty {
         display: flex;

@@ -316,6 +316,8 @@ describe('VideoProductionViewerComponent & Tab Components (DOM)', () => {
 
     const formatBtns = queryAll(fixture, '.vp-format-switcher button');
     expect(formatBtns).toHaveLength(2);
+    expect(formatBtns[0].getAttribute('aria-pressed')).toBe('true');
+    expect(formatBtns[1].getAttribute('aria-pressed')).toBe('false');
 
     let storagePlayerDe = fixture.debugElement.query(By.directive(MJStorageMediaPlayerComponent));
     expect(storagePlayerDe).not.toBeNull();
@@ -327,6 +329,9 @@ describe('VideoProductionViewerComponent & Tab Components (DOM)', () => {
     (formatBtns[1] as HTMLElement).click();
     fixture.detectChanges();
     await flush();
+
+    expect(formatBtns[0].getAttribute('aria-pressed')).toBe('false');
+    expect(formatBtns[1].getAttribute('aria-pressed')).toBe('true');
 
     storagePlayerDe = fixture.debugElement.query(By.directive(MJStorageMediaPlayerComponent));
     storagePlayer = storagePlayerDe.componentInstance as MJStorageMediaPlayerComponent;
@@ -464,6 +469,31 @@ describe('VideoProductionViewerComponent & Tab Components (DOM)', () => {
     expect(images).toHaveLength(2);
     expect(images[0].getAttribute('src')).toBe('http://localhost:4000/media/cs-16-9');
     expect(images[1].getAttribute('src')).toBe('http://localhost:4000/media/cs-9-16');
+  });
+
+  it('shows "Contact sheet unavailable." when a contact sheet fails to mint while rendering the remaining contact sheet image', async () => {
+    const provider = stubProvider({
+      'FILE-CS-16-9': { Success: false, ErrorMessage: 'Permission denied' },
+      'FILE-CS-9-16': { Success: true, Url: 'http://localhost:4000/media/cs-9-16', MimeType: 'image/png' },
+    });
+    const spec = makeSpec();
+    const fixture = renderComponentFixture(VideoProductionStoryboardTabComponent, {
+      imports: [ArtifactsModule],
+      inputs: {
+        Provider: provider,
+        Spec: spec,
+      },
+    });
+    await flush();
+    fixture.detectChanges();
+
+    const placeholders = queryAll(fixture, '.vp-contact-sheet-placeholder');
+    expect(placeholders).toHaveLength(1);
+    expect(placeholders[0].textContent?.trim()).toBe('Contact sheet unavailable.');
+
+    const images = queryAll(fixture, '.vp-contact-sheet-img');
+    expect(images).toHaveLength(1);
+    expect(images[0].getAttribute('src')).toBe('http://localhost:4000/media/cs-9-16');
   });
 
   it('renders VideoProductionReviewTabComponent with gates, a critic round with defects, rubric scores, and HumanReviewNotes', () => {

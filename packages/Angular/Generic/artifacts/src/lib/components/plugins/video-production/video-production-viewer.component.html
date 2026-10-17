@@ -33,10 +33,12 @@
       <div class="vp-format-switcher" role="group" aria-label="Video format switcher">
         @for (fmt of AvailableFormats; track fmt) {
           <button
+            #formatBtn
             type="button"
             mjButton
             size="sm"
             [variant]="SelectedFormat === fmt ? 'primary' : 'outline'"
+            [attr.aria-pressed]="SelectedFormat === fmt"
             [attr.data-format]="fmt"
             (click)="SelectFormat(fmt)"
           >

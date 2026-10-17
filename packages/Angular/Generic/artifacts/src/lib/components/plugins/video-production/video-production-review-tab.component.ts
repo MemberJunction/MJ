@@ -211,7 +211,7 @@ import type {
       }
 
       .vp-cell-mono {
-        font-family: var(--mj-font-mono);
+        font-family: var(--mj-font-family-mono);
         white-space: nowrap;
         color: var(--mj-text-secondary);
       }

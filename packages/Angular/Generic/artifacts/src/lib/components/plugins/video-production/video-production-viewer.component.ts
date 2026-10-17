@@ -1,4 +1,4 @@
-import { Component, OnInit, Type } from '@angular/core';
+import { AfterViewChecked, Component, ElementRef, OnInit, QueryList, Type, ViewChildren } from '@angular/core';
 import { DataSnapshot } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { MediaTrack } from '@memberjunction/ng-media-player';
@@ -35,7 +35,7 @@ import { VideoProductionStoryboardTabComponent } from './video-production-storyb
 @RegisterClass(BaseArtifactViewerPluginComponent, 'VideoProductionViewerPlugin')
 export class VideoProductionViewerComponent
   extends BaseArtifactViewerPluginComponent
-  implements OnInit
+  implements OnInit, AfterViewChecked
 {
   public static readonly PreviewComponentType: Type<IArtifactPreviewComponent> =
     VideoProductionArtifactPreviewComponent;
@@ -49,12 +49,27 @@ export class VideoProductionViewerComponent
   public SelectedFormat: VideoFormat = '16:9';
   public InlineTracks: MediaTrack[] = [];
 
+  @ViewChildren('formatBtn')
+  private formatButtonRefs?: QueryList<ElementRef<HTMLButtonElement>>;
+
   public override get hasDisplayContent(): boolean {
     return true;
   }
 
   ngOnInit(): void {
     this.parseSpec();
+  }
+
+  ngAfterViewChecked(): void {
+    // MJButtonDirective's @HostBinding('attr.aria-pressed') returns null when Toggleable is false,
+    // which runs after template attribute bindings and removes [attr.aria-pressed]. Re-apply it here.
+    this.formatButtonRefs?.forEach((ref) => {
+      const el = ref.nativeElement;
+      const fmt = el.getAttribute('data-format');
+      if (fmt) {
+        el.setAttribute('aria-pressed', String(this.SelectedFormat === fmt));
+      }
+    });
   }
 
   public get Title(): string {

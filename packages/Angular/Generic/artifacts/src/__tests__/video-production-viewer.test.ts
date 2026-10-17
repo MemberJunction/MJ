@@ -1,4 +1,6 @@
 import '@angular/compiler';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, it, expect } from 'vitest';
 import { MJGlobal } from '@memberjunction/global';
 import type { VideoGenerationSpec } from '@memberjunction/video-studio-core';
@@ -278,10 +280,22 @@ describe('VideoProductionViewer markdown helpers & static registration contract'
     );
   });
 
-  it('resolves VideoProductionViewerPlugin registration on BaseArtifactViewerPluginComponent', () => {
+  it('resolves VideoProductionViewerPlugin registration on BaseArtifactViewerPluginComponent from .video-production-artifact-type.json DriverClass', () => {
+    const metadataPath = join(
+      __dirname,
+      '../../../../../../metadata/artifact-types/.video-production-artifact-type.json',
+    );
+    const records = JSON.parse(readFileSync(metadataPath, 'utf8')) as Array<{
+      fields: { Name: string; DriverClass: string };
+    }>;
+    expect(records).toHaveLength(1);
+    const { fields } = records[0];
+    expect(fields.Name).toBe('Video Production');
+    expect(fields.DriverClass).toBe('VideoProductionViewerPlugin');
+
     const reg = MJGlobal.Instance.ClassFactory.GetRegistration(
       BaseArtifactViewerPluginComponent,
-      'VideoProductionViewerPlugin',
+      fields.DriverClass,
     );
     expect(reg).toBeDefined();
     expect(reg?.SubClass).toBe(VideoProductionViewerComponent);

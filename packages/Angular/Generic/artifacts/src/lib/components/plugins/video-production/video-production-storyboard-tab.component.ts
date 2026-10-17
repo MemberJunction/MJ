@@ -14,6 +14,7 @@ export interface StoryboardContactSheetItem {
   Format: VideoFormat;
   FileID: string;
   Url: string | null;
+  Failed: boolean;
 }
 
 @Component({
@@ -72,8 +73,12 @@ export interface StoryboardContactSheetItem {
                     [src]="sheet.Url"
                     [alt]="'Contact sheet (' + sheet.Format + ')'"
                   />
+                } @else if (sheet.Failed) {
+                  <div class="vp-contact-sheet-placeholder">Contact sheet unavailable.</div>
                 } @else {
-                  <div class="vp-contact-sheet-placeholder">Loading contact sheet…</div>
+                  <div class="vp-contact-sheet-placeholder">
+                    <mj-loading size="small"></mj-loading>
+                  </div>
                 }
               </div>
             }
@@ -137,7 +142,7 @@ export interface StoryboardContactSheetItem {
       }
 
       .vp-cell-mono {
-        font-family: var(--mj-font-mono);
+        font-family: var(--mj-font-family-mono);
         white-space: nowrap;
         color: var(--mj-text-secondary);
       }
@@ -266,11 +271,11 @@ export class VideoProductionStoryboardTabComponent extends BaseAngularComponent 
       if (Array.isArray(rawValue)) {
         for (const fileId of rawValue) {
           if (typeof fileId === 'string' && fileId.length > 0) {
-            items.push({ Format: format, FileID: fileId, Url: null });
+            items.push({ Format: format, FileID: fileId, Url: null, Failed: false });
           }
         }
       } else if (typeof rawValue === 'string' && (rawValue as string).length > 0) {
-        items.push({ Format: format, FileID: rawValue as string, Url: null });
+        items.push({ Format: format, FileID: rawValue as string, Url: null, Failed: false });
       }
     }
 
@@ -290,10 +295,14 @@ export class VideoProductionStoryboardTabComponent extends BaseAngularComponent 
       return;
     }
 
-    this.ContactSheets = items.map((item, idx) => ({
-      ...item,
-      Url: results[idx]?.Success && results[idx]?.Url ? results[idx]!.Url! : null,
-    }));
+    this.ContactSheets = items.map((item, idx) => {
+      const ok = Boolean(results[idx]?.Success && results[idx]?.Url);
+      return {
+        ...item,
+        Url: ok ? results[idx]!.Url! : null,
+        Failed: !ok,
+      };
+    });
     this.cdr.markForCheck();
   }
 }

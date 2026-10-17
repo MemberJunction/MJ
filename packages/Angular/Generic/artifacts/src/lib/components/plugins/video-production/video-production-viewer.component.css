@@ -84,7 +84,7 @@
 }
 
 .vp-badge--duration {
-  font-family: var(--mj-font-mono);
+  font-family: var(--mj-font-family-mono);
 }
 
 .vp-format-switcher {
