@@ -187,6 +187,77 @@ describe('lint-gate static and HyperFrames lint checks', () => {
         }
     });
 
+    it.each([
+        ['query string on gsap/dist traversal', 'gsap/dist/../../evil-pkg@1.0.0/x.js?v=1'],
+        ['backslash on gsap/dist traversal', 'gsap/dist/..\\..\\evil-pkg@1.0.0\\x.js'],
+        ['leading slash on gsap/dist traversal', '/gsap/dist/../../evil-pkg@1.0.0/x.js'],
+        ['HTML entity-encoded dots on gsap/dist traversal', 'gsap/dist/&#46;&#46;/&#46;&#46;/evil-pkg@1.0.0/x.js'],
+    ])(
+        'blocks script src (%s) even when resolved target exists in bundle.Files (producer CDN rewrite bypass)',
+        async (_label, rawSrc) => {
+            const bundle = makeBundleWithEntryContent(
+                `<!doctype html><html><body><script src="${rawSrc}"></script></body></html>`,
+                [{ Path: 'evil-pkg@1.0.0/x.js', Content: 'export const ok = 1;' }],
+            );
+            const staged = await StageRenderBundle(bundle, { InjectPreamble: false });
+            try {
+                const res = await RunLintGate(bundle, staged.RootDir, new FakeRenderBackend());
+                expect(res.BlockRender).toBe(true);
+                expect(res.Passed).toBe(false);
+                expect(res.Issues.some((i) => i.Code === MJ_NON_BUNDLE_URL_CODE && i.File === 'index.html')).toBe(true);
+            } finally {
+                await staged.Cleanup();
+            }
+        },
+    );
+
+    it('blocks <script title="a>b" src="p.bin"> with quoted > in attribute and scans .css bundle.Files loaded as scripts', async () => {
+        const payloadBase64 = Buffer.from('window.location = "https://evil.test";', 'utf8').toString('base64');
+        const quotedGtBundle: RenderProjectBundle = {
+            Format: '16:9',
+            EntryFile: 'index.html',
+            Files: [
+                {
+                    Path: 'index.html',
+                    Content: '<!doctype html><html><body><script title="a>b" src="p.bin"></script></body></html>',
+                },
+            ],
+            Assets: [
+                {
+                    Key: 'p',
+                    RelativePath: 'p.bin',
+                    MimeType: 'application/octet-stream',
+                    DataBase64: payloadBase64,
+                },
+            ],
+            DataSnapshot: {},
+            Seed: 1,
+        };
+        const stagedGt = await StageRenderBundle(quotedGtBundle, { InjectPreamble: false });
+        try {
+            const res = await RunLintGate(quotedGtBundle, stagedGt.RootDir, new FakeRenderBackend());
+            expect(res.BlockRender).toBe(true);
+            expect(res.Passed).toBe(false);
+            expect(res.Issues.some((i) => i.Code === MJ_NON_BUNDLE_URL_CODE && i.File === 'index.html')).toBe(true);
+        } finally {
+            await stagedGt.Cleanup();
+        }
+
+        const cssAsScriptBundle = makeBundleWithEntryContent(
+            '<!doctype html><html><body><script src="s.css"></script></body></html>',
+            [{ Path: 's.css', Content: 'location = "//evil.example/css-as-script";' }],
+        );
+        const stagedCss = await StageRenderBundle(cssAsScriptBundle, { InjectPreamble: false });
+        try {
+            const res = await RunLintGate(cssAsScriptBundle, stagedCss.RootDir, new FakeRenderBackend());
+            expect(res.BlockRender).toBe(true);
+            expect(res.Passed).toBe(false);
+            expect(res.Issues.some((i) => i.Code === MJ_NETWORK_API_CODE && i.File === 's.css')).toBe(true);
+        } finally {
+            await stagedCss.Cleanup();
+        }
+    });
+
     it('scans non-standard script extensions such as .cjs for MJ_NETWORK_API and MJ_NON_BUNDLE_URL', async () => {
         const bundle = makeBundleWithEntryContent('<!doctype html><html><body></body></html>', [
             { Path: 'helper.cjs', Content: 'fetch("https://evil.test");' },

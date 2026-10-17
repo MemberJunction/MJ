@@ -171,7 +171,7 @@ export function CreateRenderWorkerServer(options: RenderWorkerServerOptions): Re
         const timer = setTimeout(() => {
             videoStore.delete(videoId);
         }, videoTtlMs);
-        timer.unref?.();
+        timer.unref();
         videoStore.set(videoId, { Bytes: bytes, Timer: timer });
         return videoId;
     };
@@ -334,7 +334,7 @@ export function CreateRenderWorkerServer(options: RenderWorkerServerOptions): Re
             timedOut = true;
             controller.abort();
         }, preLintTimeoutMs);
-        timeoutTimer.unref?.();
+        timeoutTimer.unref();
 
         const onDisconnect = (): void => {
             if (!res.writableEnded) {
@@ -384,7 +384,7 @@ export function CreateRenderWorkerServer(options: RenderWorkerServerOptions): Re
                 timedOut = true;
                 controller.abort();
             }, effectiveTimeout);
-            timeoutTimer.unref?.();
+            timeoutTimer.unref();
 
             res.writeHead(200, {
                 'Content-Type': 'application/x-ndjson; charset=utf-8',
@@ -401,7 +401,7 @@ export function CreateRenderWorkerServer(options: RenderWorkerServerOptions): Re
             heartbeatTimer = setInterval(() => {
                 writeEvent({ Type: 'Heartbeat' });
             }, heartbeatMs);
-            heartbeatTimer.unref?.();
+            heartbeatTimer.unref();
 
             try {
                 const renderResult = await RunRenderJob(
@@ -494,7 +494,7 @@ export function CreateRenderWorkerServer(options: RenderWorkerServerOptions): Re
             timedOut = true;
             controller.abort();
         }, effectiveTimeout);
-        timeoutTimer.unref?.();
+        timeoutTimer.unref();
 
         const onDisconnect = (): void => {
             if (!res.writableEnded) {
@@ -567,8 +567,8 @@ export function CreateRenderWorkerServer(options: RenderWorkerServerOptions): Re
             if (!httpServer.listening) {
                 return;
             }
-            httpServer.closeIdleConnections?.();
-            httpServer.closeAllConnections?.();
+            httpServer.closeIdleConnections();
+            httpServer.closeAllConnections();
             await new Promise<void>((resolve) => {
                 httpServer.close(() => resolve());
             });

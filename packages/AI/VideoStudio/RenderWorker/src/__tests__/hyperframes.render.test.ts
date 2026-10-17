@@ -274,35 +274,52 @@ describe.skipIf(process.env.VIDEO_STUDIO_RENDER_TESTS !== '1')(
             180_000,
         );
 
+        function installLoopbackOnlySocketGuard(): {
+            NonLoopbackTargets: string[];
+            Restore: () => void;
+        } {
+            const nonLoopbackTargets: string[] = [];
+            const origConnect = net.Socket.prototype.connect;
+            const connectSpy = vi
+                .spyOn(net.Socket.prototype, 'connect')
+                .mockImplementation(function (this: net.Socket, ...args: unknown[]) {
+                    const rawFirst = Array.isArray(args[0]) ? (args[0] as unknown[])[0] : args[0];
+                    let host: string | undefined;
+                    if (typeof rawFirst === 'object' && rawFirst !== null) {
+                        if ('host' in rawFirst && typeof (rawFirst as { host?: unknown }).host === 'string') {
+                            host = (rawFirst as { host: string }).host;
+                        } else if (
+                            'hostname' in rawFirst &&
+                            typeof (rawFirst as { hostname?: unknown }).hostname === 'string'
+                        ) {
+                            host = (rawFirst as { hostname: string }).hostname;
+                        }
+                    } else if (typeof rawFirst === 'number' && typeof args[1] === 'string') {
+                        host = args[1];
+                    }
+                    if (
+                        host &&
+                        host !== '127.0.0.1' &&
+                        host !== 'localhost' &&
+                        host !== '::1' &&
+                        !host.startsWith('127.')
+                    ) {
+                        nonLoopbackTargets.push(host);
+                        this.destroy(new Error(`Blocked non-loopback socket connect to ${host}`));
+                        return this;
+                    }
+                    return (origConnect as (...a: unknown[]) => net.Socket).apply(this, args);
+                });
+            return {
+                NonLoopbackTargets: nonLoopbackTargets,
+                Restore: () => connectSpy.mockRestore(),
+            };
+        }
+
         it(
             'makes zero non-loopback socket connections during RunRenderJob, RunStillsJob, and RunContactSheetJob on an MJ Sans + MJVideo.OnFrame-only composition with deterministic MJVideo.Random()',
             async () => {
-                const nonLoopbackTargets: string[] = [];
-                const origConnect = net.Socket.prototype.connect;
-                const connectSpy = vi
-                    .spyOn(net.Socket.prototype, 'connect')
-                    .mockImplementation(function (this: net.Socket, ...args: unknown[]) {
-                        const first = args[0];
-                        let host: string | undefined;
-                        if (typeof first === 'object' && first !== null && 'host' in first) {
-                            const h = (first as { host?: unknown }).host;
-                            if (typeof h === 'string') {
-                                host = h;
-                            }
-                        } else if (typeof first === 'number' && typeof args[1] === 'string') {
-                            host = args[1];
-                        }
-                        if (
-                            host &&
-                            host !== '127.0.0.1' &&
-                            host !== 'localhost' &&
-                            host !== '::1' &&
-                            !host.startsWith('127.')
-                        ) {
-                            nonLoopbackTargets.push(host);
-                        }
-                        return (origConnect as (...a: unknown[]) => net.Socket).apply(this, args);
-                    });
+                const guard = installLoopbackOnlySocketGuard();
 
                 // Pure MJVideo.OnFrame-only fixture (no authored __hf or __timelines) using bundled 'MJ Sans' and MJVideo.Random()
                 const onFrameOnlyHtml = [
@@ -398,9 +415,9 @@ describe.skipIf(process.env.VIDEO_STUDIO_RENDER_TESTS !== '1')(
                         backend,
                     );
                     expect(sheetRes.Sheets).toHaveLength(1);
-                    expect(nonLoopbackTargets).toEqual([]);
+                    expect(guard.NonLoopbackTargets).toEqual([]);
                 } finally {
-                    connectSpy.mockRestore();
+                    guard.Restore();
                 }
             },
             120_000,
@@ -459,6 +476,7 @@ describe.skipIf(process.env.VIDEO_STUDIO_RENDER_TESTS !== '1')(
         it(
             'CSP forced: lint gate bypassed through RunRenderJob seam (no request interception) makes zero loopback requests, while negative control without CSP <meta> hits loopback server',
             async () => {
+                const guard = installLoopbackOnlySocketGuard();
                 const hits: string[] = [];
                 const loopbackServer = http.createServer((req, res) => {
                     hits.push(req.url ?? '/');
@@ -472,7 +490,7 @@ describe.skipIf(process.env.VIDEO_STUDIO_RENDER_TESTS !== '1')(
                 const html = [
                     '<!doctype html>',
                     '<html><head><meta charset="utf-8" />',
-                    `<style>body { width: 320px; height: 180px; font-family: 'MJ Sans'; background-image: url("http://127.0.0.1:${port}/css-bg.png"); }</style>`,
+                    `<style>body { width: 320px; height: 180px; background-image: url("http://127.0.0.1:${port}/css-bg.png"); }</style>`,
                     '</head><body>',
                     '<div id="root" data-composition-id="csp-comp" data-duration="0.4" data-fps="10" data-width="320" data-height="180" data-no-timeline>CSP</div>',
                     '<script>',
@@ -533,7 +551,9 @@ describe.skipIf(process.env.VIDEO_STUDIO_RENDER_TESTS !== '1')(
                     } finally {
                         await unstagedPreamble.Cleanup();
                     }
+                    expect(guard.NonLoopbackTargets).toEqual([]);
                 } finally {
+                    guard.Restore();
                     await new Promise<void>((resolve) => loopbackServer.close(() => resolve()));
                 }
             },

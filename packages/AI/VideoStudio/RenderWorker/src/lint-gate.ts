@@ -99,6 +99,7 @@ export function ScanAuthoredFilesForLintIssues(bundle: RenderProjectBundle): Che
             issues.push(...scanHtmlFile(file, authoredFilePaths));
         } else if (lower.endsWith('.css')) {
             issues.push(...scanCssBlock(file.Content, file.Path, 1));
+            issues.push(...scanJsBlock(file.Content, file.Path, 1, authoredFilePaths));
         } else {
             issues.push(...scanJsBlock(file.Content, file.Path, 1, authoredFilePaths));
         }
@@ -146,7 +147,10 @@ export function SortCheckIssues(issues: readonly CheckIssue[]): CheckIssue[] {
     });
 }
 
+const HTML_SCRIPT_OPEN_TAG_REGEX = /<script\b((?:[^>"']|"[^"]*"|'[^']*')*)>/gi;
+const HTML_SCRIPT_BLOCK_REGEX = /<script\b((?:[^>"']|"[^"]*"|'[^']*')*)>([\s\S]*?)<\/script>/gi;
 const HTML_SCRIPT_TAG_ATTR_REGEX = /\b(src|href|xlink:href)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>"']+))/gi;
+const SCRIPT_OR_IMPORT_RAW_ALLOWLIST_REGEX = /^[A-Za-z0-9._@/-]+$/;
 
 function scanHtmlFile(file: RenderCompositionFile, authoredFilePaths: ReadonlySet<string>): CheckIssue[] {
     const issues: CheckIssue[] = [];
@@ -169,15 +173,16 @@ function scanHtmlFile(file: RenderCompositionFile, authoredFilePaths: ReadonlySe
         }
     }
 
-    for (const scriptTagMatch of html.matchAll(/<script\b([^>]*)>/gi)) {
+    for (const scriptTagMatch of html.matchAll(HTML_SCRIPT_OPEN_TAG_REGEX)) {
         const attrs = scriptTagMatch[1] ?? '';
         const tagLine = computeLineNumber(html, scriptTagMatch.index ?? 0);
         for (const attrMatch of attrs.matchAll(HTML_SCRIPT_TAG_ATTR_REGEX)) {
             const attrName = attrMatch[1] ?? 'src';
-            const rawUrl = decodeHtmlEntities((attrMatch[2] ?? attrMatch[3] ?? attrMatch[4] ?? '').trim());
-            if (!checkUrlReference(rawUrl, file.Path, tagLine, `HTML attribute "${attrName}"`)) {
+            const rawAttr = (attrMatch[2] ?? attrMatch[3] ?? attrMatch[4] ?? '').trim();
+            const decodedUrl = decodeHtmlEntities(rawAttr);
+            if (!checkUrlReference(decodedUrl, file.Path, tagLine, `HTML attribute "${attrName}"`)) {
                 const targetIssue = checkScriptOrImportTarget(
-                    rawUrl,
+                    rawAttr,
                     file.Path,
                     tagLine,
                     `HTML <script ${attrName}>`,
@@ -220,8 +225,8 @@ function scanHtmlFile(file: RenderCompositionFile, authoredFilePaths: ReadonlySe
         issues.push(...scanCssBlock(block, file.Path, line));
     }
 
-    for (const match of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)) {
-        const block = match[1] ?? '';
+    for (const match of html.matchAll(HTML_SCRIPT_BLOCK_REGEX)) {
+        const block = match[2] ?? '';
         const line = computeLineNumber(html, match.index ?? 0);
         issues.push(...scanJsBlock(block, file.Path, line, authoredFilePaths));
     }
@@ -327,6 +332,16 @@ function checkScriptOrImportTarget(
         return urlIssue;
     }
     const trimmed = rawUrl.trim();
+    if (!SCRIPT_OR_IMPORT_RAW_ALLOWLIST_REGEX.test(trimmed) || trimmed.startsWith('/')) {
+        return {
+            Code: MJ_NON_BUNDLE_URL_CODE,
+            Category: 'RemoteUrl',
+            Severity: 'Error',
+            Message: `Script or module reference "${trimmed}" in ${contextLabel} must match ^[A-Za-z0-9._@/-]+$ with no leading "/" and resolve to an entry in bundle.Files.`,
+            File: filePath,
+            Line: line,
+        };
+    }
     const resolved = resolveBundleRelativePath(filePath, trimmed);
     if (!resolved || !authoredFilePaths.has(resolved)) {
         return {
