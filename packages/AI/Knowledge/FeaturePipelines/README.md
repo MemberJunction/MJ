@@ -124,6 +124,8 @@ An output may omit `Target`. Use this when the answer is a feature to keep and r
 summary) rather than a value to write onto the record. `OutputTargets.HasWriteTarget(output)` is the single check for
 "does this output write anywhere".
 
+In the pipeline builder, choose the target mode `Feature value only (no write-back)` to configure such an output.
+
 - **Stored:** every output, with or without a target, is recorded in `MJ: Feature Values` on the record's key
   (value, `Source='Pipeline'`, confidence, reasoning, pipeline version). A target-less output is stored there and nowhere else:
   nothing is written to the entity, and the Human-value guard does not apply. A pipeline whose outputs are all
@@ -138,8 +140,8 @@ summary) rather than a value to write onto the record. `OutputTargets.HasWriteTa
   `Proposed`) for each target-less output whose proposed value differs from the record's latest stored Pipeline or
   Human value, or that has none; a withheld output is omitted. The dialog shows each as a `<Feature> (feature value)` row.
 - **Coercion:** when an answer arrives as a string, `FeatureValueCacheService.ToTypedValue(value, constraintType)`
-  stores it by the output's constraint: `numeric` / `money` with a finite numeric string in `ValueNumeric`,
-  `boolean` with `'true'` / `'false'` (any case) in `ValueBoolean`, `date` with a string `Date.parse` accepts in
+  stores it by the output's constraint: `numeric` / `money` with a trimmed decimal/exponent numeric string (no hex) in `ValueNumeric`,
+  `boolean` with `'true'` / `'false'` (any case) in `ValueBoolean`, `date` with an ISO date string (`YYYY-MM-DD…`) that `Date.parse` accepts in
   `ValueDate`. Anything else is stored by its JavaScript type. This applies to outputs with a target too.
 
 ## Dedup Cache scope
