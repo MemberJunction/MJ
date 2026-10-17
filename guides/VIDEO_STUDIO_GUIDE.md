@@ -48,7 +48,7 @@ module.exports = {
       // 'LocalWorker' (default) | 'Remote' | 'Docker'
       driver: 'LocalWorker',
 
-      // Maximum bytes accepted for a rendered MP4 (shared by Remote and Docker; default: 536870912 = 512 MiB)
+      // Maximum bytes accepted for a rendered MP4 (shared by LocalWorker, Remote, and Docker; default: 536870912 = 512 MiB)
       maxOutputBytes: 536870912,
 
       // Operation timeouts in milliseconds
@@ -91,20 +91,20 @@ module.exports = {
 };
 ```
 
-| Setting key | Type | Default | Source constant (`render-settings.ts`) |
+| Setting key | Type | Default | Source constant / reader (`render-settings.ts`) |
 |---|---|---|---|
 | `videoStudio.render.driver` | `'LocalWorker' \| 'Remote' \| 'Docker'` | `'LocalWorker'` | `DEFAULT_VIDEO_RENDER_DRIVER` |
 | `videoStudio.render.maxOutputBytes` | `number` | `536870912` (`512 MiB`) | `DEFAULT_RENDER_MAX_OUTPUT_BYTES` |
 | `videoStudio.render.timeouts.startupMs` | `number` | `60000` (`60 s`) | `DEFAULT_RENDER_STARTUP_TIMEOUT_MS` |
 | `videoStudio.render.timeouts.renderMs` | `number` | `2100000` (`35 min`) | `DEFAULT_RENDER_TIMEOUT_MS` |
 | `videoStudio.render.timeouts.requestMs` | `number` | `600000` (`10 min`) | `DEFAULT_RENDER_REQUEST_TIMEOUT_MS` |
-| `videoStudio.render.local.workerEntry` | `string \| undefined` | `undefined` (auto-resolved) | `ResolveWorkerEntryPath` (`local-worker-render-driver.ts`) |
-| `videoStudio.render.local.maxOldSpaceMb` | `number \| undefined` | `undefined` | `BuildWorkerNodeArgs` (`local-worker-render-driver.ts`) |
+| `videoStudio.render.local.workerEntry` | `string \| undefined` | `undefined` (auto-resolved) | `LocalWorkerRenderDriver.resolveWorkerEntryPath` (`local-worker-render-driver.ts`) |
+| `videoStudio.render.local.maxOldSpaceMb` | `number \| undefined` | `undefined` | `LocalWorkerRenderDriver.spawnAndWaitForReady` (`local-worker-render-driver.ts`) |
 | `videoStudio.render.remote.url` | `string \| undefined` | `process.env.VIDEO_STUDIO_RENDER_URL` | `ReadVideoRenderSettings` |
-| `videoStudio.render.remote.urls` | `string[] \| undefined` | `undefined` (`urls` wins over `url`) | `ResolveRemoteWorkerUrls` |
+| `videoStudio.render.remote.urls` | `string[] \| undefined` | `undefined` (`urls` wins over `url`) | `ReadVideoRenderSettings` / `RemoteRenderDriver` (`remote-render-driver.ts`) |
 | `videoStudio.render.remote.token` | `string \| undefined` | `process.env.VIDEO_STUDIO_RENDER_TOKEN` | `ReadVideoRenderSettings` |
 | `videoStudio.render.docker.image` | `string` | `'mj-video-render-worker:local'` | `DEFAULT_DOCKER_RENDER_IMAGE` |
-| `videoStudio.render.docker.workspaceRoot` | `string \| undefined` | `undefined` (process-wide `0o700` temp dir) | `ResolveWorkspaceRoot` (`docker-render-driver.ts`) |
+| `videoStudio.render.docker.workspaceRoot` | `string \| undefined` | `undefined` (process-wide `0o700` temp dir) | `getOrCreateProcessWorkspaceRoot` (`docker-render-driver.ts`) |
 | `videoStudio.render.docker.cpus` | `number` | `2` | `DEFAULT_DOCKER_CPUS` |
 | `videoStudio.render.docker.memoryMb` | `number` | `4096` | `DEFAULT_DOCKER_MEMORY_MB` |
 | `videoStudio.render.docker.pidsLimit` | `number` | `512` | `DEFAULT_DOCKER_PIDS_LIMIT` |
@@ -126,7 +126,7 @@ Build the local worker image from the repository root (`DOCKER_RENDER_IMAGE_BUIL
 docker build -f packages/AI/VideoStudio/RenderWorker/Dockerfile -t mj-video-render-worker:local .
 ```
 
-For each operation (`'render' | 'stills' | 'contact-sheet' | 'check' | 'keyframes'`), `DockerRenderDriver` calls `DockerSandboxProvider.Provision` ([`packages/AI/AgentHarness/src/sandbox/DockerSandboxProvider.ts`](../packages/AI/AgentHarness/src/sandbox/DockerSandboxProvider.ts)), which starts a detached container:
+For each operation (`'render' | 'stills' | 'contact-sheet' | 'check' | 'keyframes' | 'health'` in `ONE_SHOT_OPERATIONS`), `DockerRenderDriver` calls `DockerSandboxProvider.Provision` ([`packages/AI/AgentHarness/src/sandbox/DockerSandboxProvider.ts`](../packages/AI/AgentHarness/src/sandbox/DockerSandboxProvider.ts)), which starts a detached container:
 
 ```text
 docker run --detach --rm --name mj-harness-<RunId> \
@@ -138,7 +138,7 @@ docker run --detach --rm --name mj-harness-<RunId> \
   mj-video-render-worker:local sleep infinity
 ```
 
-It then writes `request.json` into `<hostPath>`, creates `<hostPath>/out`, `<hostPath>/tmp`, and `<hostPath>/home`, and runs the one-shot CLI inside the container via `DockerExecExecutor.Run`:
+It then writes `<hostPath>/request.json`, creates `<hostPath>/out`, `<hostPath>/tmp`, and `<hostPath>/home`, and runs the one-shot CLI inside the container via `DockerExecExecutor.Run`:
 
 ```text
 docker exec --interactive \
@@ -154,33 +154,33 @@ Operators must account for three host rules enforced by `DockerRenderDriver`:
    - **Linux (`process.platform === 'linux'`):** `resolveLinuxDockerUser()` passes `--user ${process.getuid()}:${process.getgid()}` and `chmod 0o700` on `hostRoot`, so files written inside `/workspace/out` are owned by the host MJAPI process user rather than `node` (UID `1000` in `RenderWorker/Dockerfile`).
    - **macOS (`process.platform === 'darwin'`):** `--user` is omitted so the container runs as `USER node` while Docker Desktop's file sharing translates ownership back to the host user.
 2. **Workspace root and sibling-container volume mounts (`videoStudio.render.docker.workspaceRoot`):**
-   - When `workspaceRoot` is omitted, `ResolveWorkspaceRoot` creates and reuses one process-wide `0o700` directory via `fs.mkdtemp(path.join(os.tmpdir(), 'mj-video-render-'))`, under which `DockerSandboxProvider` creates per-operation `mj-video-render-<RunId>` folders.
+   - When `workspaceRoot` is omitted, `getOrCreateProcessWorkspaceRoot` creates and reuses one process-wide `0o700` directory via `fs.mkdtemp(path.join(os.tmpdir(), 'mj-video-render-'))`, under which `DockerSandboxProvider` creates per-operation `<workspaceRoot>/run/<RunId>` folders.
    - When MJAPI itself runs inside a Docker container and talks to the host's Docker daemon socket (sibling containers), `--volume <hostPath>:/workspace` is resolved by the **host daemon**, not inside the MJAPI container's overlay filesystem. Mount a shared host directory or named volume at the **exact same absolute path** on both the host and the MJAPI container and set `videoStudio.render.docker.workspaceRoot` to that path.
 3. **Safe output move, `O_NOFOLLOW` reads, and `Finalize` teardown:**
-   - Before reading any container output, `moveAndVerifySafeOutDir` creates a `0o700` `<hostRoot>.out` directory (`safeOutRoot`), renames `/workspace/out` to `<hostRoot>.out/out` (`safeOutDir`), and verifies via `fs.lstat` that it is a real directory (`!stat.isSymbolicLink() && stat.isDirectory()`).
-   - Every output file (`response.json`, `events.ndjson`, `error.json`, `video.mp4`) is read via `readRegularFileNoFollow`, which checks `lstat` (`isFile()`, `!isSymbolicLink()`, `size <= maxBytes`) and opens the descriptor with `O_RDONLY | O_NOFOLLOW | O_NONBLOCK`.
+   - Before reading any container output, `moveAndVerifySafeOutDir` creates a `0o700` `<hostRoot>.out` directory (`safeOutRoot`), renames `/workspace/out` to `<hostRoot>.out/out` (`safeOutDir`), and verifies via `fs.lstat` that it is a real directory (`!outStat.isSymbolicLink() && outStat.isDirectory()`).
+   - Every output file (`<out>/result.json`, `<out>/video.mp4`, `<out>/error.json`) is read via `readRegularFileNoFollow`, which opens the descriptor with `NOFOLLOW_OPEN_FLAGS` (`O_RDONLY | O_NOFOLLOW | O_NONBLOCK`) and checks `handle.stat()` (`isFile()`, `size <= maxBytes`, and `expectedBytes` for `<out>/video.mp4`).
    - On timeout or caller `AbortSignal`, the driver kills the `docker exec` child process (`proc.Kill()`). In `finally`, `provider.Finalize(handle, outcome)` runs `docker stop --time 5 mj-harness-<RunId>` (falling back to `docker kill mj-harness-<RunId>`) and removes `hostRoot`. The driver removes `<hostRoot>.out` **only** when `provider.IsContainerRunning(handle)` (`docker container inspect --format '{{.State.Running}}' mj-harness-<RunId>`) returns `false`, preventing cleanup races against a still-running container.
 
 ### `RemoteRenderDriver` transport security, routes, and size caps
 
 `RemoteRenderDriver` (`packages/AI/VideoStudio/Engine/src/render/remote-render-driver.ts`) and `RenderWorkerHttpClient` (`packages/AI/VideoStudio/Engine/src/render/worker-http-client.ts`) communicate over the routes defined in `RENDER_WORKER_ROUTES` ([`packages/AI/VideoStudio/Core/src/render-contract.ts`](../packages/AI/VideoStudio/Core/src/render-contract.ts)):
 
-- `GET /health` — Readiness probe returning `{ Status: 'ok', Version }`.
-- `POST /render` — Streams `application/x-ndjson` (`progress` lines followed by a terminal `complete` or `error` line).
-- `GET /videos/<videoId>` (`RENDER_WORKER_ROUTES.VideoPath(videoId)`) — Streams the rendered `video/mp4` binary once, then deletes it on the worker (or expires it after 5 minutes).
+- `GET /health` (`RENDER_WORKER_ROUTES.Health`) — Readiness probe returning `RenderHealth` (`{ Healthy, NodeVersion, HyperFramesVersion, ChromiumVersion?, FfmpegVersion?, Errors }`).
+- `POST /render` (`RENDER_WORKER_ROUTES.Render`) — Streams `application/x-ndjson` (`RenderStreamEvent` lines: `Progress` and `Heartbeat`, followed by a terminal `Result` or `Error`).
+- `GET /videos/<videoId>` (`RENDER_WORKER_ROUTES.Video` = `'/videos'`) — Streams the rendered `video/mp4` binary once, then deletes it on the worker (or expires it after 10 minutes via `DEFAULT_VIDEO_TTL_MS`).
 - `POST /stills`, `POST /contact-sheet`, `POST /check`, `POST /keyframes` — JSON request/response endpoints.
 
 **Transport and authentication rules:**
-- **Client side (`RemoteRenderDriver`):** Accepts `http://` and `https://` URLs. When a worker URL uses plain `http://` to a non-loopback host, `warnIfInsecureRemoteUrl` logs a one-time warning per distinct worker URL via `LogWarning`; TLS is not enforced by the client. `token` is optional on the client and, when set, is sent as `Authorization: Bearer <token>`.
+- **Client side (`RemoteRenderDriver`):** Accepts `http://` and `https://` URLs. When a worker URL uses plain `http://` to a non-loopback host, the `RemoteRenderDriver` constructor logs a one-time warning per distinct worker URL via `LogWarning`; TLS is not enforced by the client. `token` is optional on the client and, when set, is sent as `Authorization: Bearer <token>`.
 - **Server side (`CreateRenderWorkerServer` in `packages/AI/VideoStudio/RenderWorker/src/server.ts`):** Refuses at startup to bind a non-loopback `VIDEO_STUDIO_RENDER_HOST` (such as `0.0.0.0` in Docker) unless `VIDEO_STUDIO_RENDER_TOKEN` is set to a non-empty secret, and requires `Authorization: Bearer <token>` (compared with `crypto.timingSafeEqual`) on every route whenever `VIDEO_STUDIO_RENDER_TOKEN` is set.
 
 **Output size caps (enforced by both `RenderWorkerHttpClient` and `DockerRenderDriver`; response `Content-Length` is never trusted):**
 
 | Stream / file | Cap | Source |
 |---|---|---|
-| `/health`, `/check`, and error JSON bodies (`error.json`), plus each `/render` NDJSON line (`events.ndjson`) | `1 MiB` (`1,048,576` bytes) | `MAX_RENDER_JSON_RESPONSE_BYTES` and `MAX_RENDER_NDJSON_LINE_BYTES` (`worker-http-client.ts`) |
-| Rendered MP4 (`GET /videos/<videoId>` and `video.mp4`) | `videoStudio.render.maxOutputBytes` (default `536,870,912` bytes / `512 MiB`) + exact match against `completeEvent.Result.VideoSizeBytes` | `DEFAULT_RENDER_MAX_OUTPUT_BYTES` (`render-settings.ts`) |
-| Base64 image-carrying JSON responses (`/stills`, `/contact-sheet`, `/keyframes`, and `response.json` in Docker) | `Math.min(maxOutputBytes, buffer.constants.MAX_STRING_LENGTH)` | `RenderWorkerHttpClient.postJson` (`worker-http-client.ts`) and `DockerRenderDriver.runOneShotOperation` (`docker-render-driver.ts`) |
+| `/health`, `/check`, and error JSON bodies (`<out>/error.json` in Docker), plus each HTTP `/render` NDJSON line (Docker reads `Progress` lines from `docker exec` stdout) | `1 MiB` (`1,048,576` bytes) | `MAX_RENDER_JSON_RESPONSE_BYTES` and HTTP-only `MAX_RENDER_NDJSON_LINE_BYTES` (`worker-http-client.ts`) |
+| Rendered MP4 (`GET /videos/<videoId>` and `<out>/video.mp4`) | `videoStudio.render.maxOutputBytes` (default `536,870,912` bytes / `512 MiB`) + exact match against `VideoSizeBytes` on the `Result` event's `RenderResultMetadata` (`<out>/result.json` in Docker) | `DEFAULT_RENDER_MAX_OUTPUT_BYTES` (`render-settings.ts`) |
+| Base64 image-carrying JSON responses (`/stills`, `/contact-sheet`, `/keyframes`, and `<out>/result.json` for image ops in Docker) | `Math.min(maxOutputBytes, buffer.constants.MAX_STRING_LENGTH)` | `RenderWorkerHttpClient.httpPostJson` (`worker-http-client.ts`) and `DockerRenderDriver.executeContainerOperation` (`docker-render-driver.ts`) |
 
 ### Security boundary and isolated worker defenses
 
@@ -190,27 +190,27 @@ Operators must account for three host rules enforced by `DockerRenderDriver`:
 
 For the full defense-in-depth walkthrough, see [`packages/AI/VideoStudio/RenderWorker/README.md`](../packages/AI/VideoStudio/RenderWorker/README.md#security-model--defense-in-depth). Key worker facts:
 
-- **Parent environment scrubbing (`BuildWorkerEnv` in `local-worker-render-driver.ts`):** Copies only the 12-key `ALLOWED_WORKER_PARENT_ENV_KEYS` allowlist (`PATH`, `HOME`, `TMPDIR`, `TMP`, `TEMP`, `LANG`, `LC_ALL`, `SystemRoot`, `CHROME_PATH`, `PUPPETEER_EXECUTABLE_PATH`, `PUPPETEER_CACHE_DIR`, `HYPERFRAMES_BROWSER_PATH`) plus `VIDEO_STUDIO_RENDER_HOST=127.0.0.1`, `VIDEO_STUDIO_RENDER_PORT=0`, and `VIDEO_STUDIO_RENDER_TOKEN=<token>`. Because `VIDEO_STUDIO_RENDER_ALLOW_ROOT` is not in the allowlist, `LocalWorkerRenderDriver` cannot spawn a worker when the parent process runs as `uid === 0` (`AssertNotRunningAsRoot` in `RenderWorker/src/root-guard.ts` refuses `uid === 0` unless `VIDEO_STUDIO_RENDER_ALLOW_ROOT=1` is present in the worker environment).
-- **Bundle staging (`StageCompositionBundle` in `RenderWorker/src/bundle.ts`):** Stages files into a `0o700` directory created with `fs.mkdtemp(path.join(parent, 'mj-video-bundle-'))`. `ValidateBundleRelativePath` rejects empty paths, null bytes, backslashes, leading `/`, Windows drive prefixes, and `.` / `..` segments before writing files with `O_CREAT | O_EXCL | O_WRONLY | O_NOFOLLOW`.
+- **Parent environment scrubbing (`BuildWorkerEnv` in `local-worker-render-driver.ts`):** Copies only the 12-key `ALLOWED_WORKER_PARENT_ENV_KEYS` allowlist (`PATH`, `HOME`, `TMPDIR`, `TMP`, `TEMP`, `LANG`, `LC_ALL`, `SystemRoot`, `CHROME_PATH`, `PUPPETEER_EXECUTABLE_PATH`, `PUPPETEER_CACHE_DIR`, `HYPERFRAMES_BROWSER_PATH`) plus `VIDEO_STUDIO_RENDER_HOST=127.0.0.1`, `VIDEO_STUDIO_RENDER_PORT=0`, and `VIDEO_STUDIO_RENDER_TOKEN=<token>`. Because `VIDEO_STUDIO_RENDER_ALLOW_ROOT` is not in the allowlist, `LocalWorkerRenderDriver` cannot spawn a worker when the parent process runs as `uid === 0` (`AssertNonRootUser` in `RenderWorker/src/main.ts` refuses `uid === 0` unless `VIDEO_STUDIO_RENDER_ALLOW_ROOT=1` is present in the worker environment).
+- **Bundle staging (`StageRenderBundle` in `RenderWorker/src/bundle.ts`):** Stages files into a directory created with `fs.mkdtemp(path.join(parentDir, 'mj-video-bundle-'))`. `ValidateBundleRelativePath` rejects empty paths, null bytes, backslashes, leading `/`, Windows drive prefixes, and `.` / `..` segments before writing files inside the staged root directory with `fs.writeFile`.
 - **Static URL scheme gate (`MJ_NON_BUNDLE_URL` in `RenderWorker/src/lint-gate.ts`):** Rejects every URL scheme in HTML attributes and CSS `url(...)` except `data:` and `blob:`.
 - **Injected preamble and CSP (`InjectPreambleIntoHtml` in `RenderWorker/src/preamble.ts`):** Injects `<meta http-equiv="Content-Security-Policy" content="...">` immediately after `<!doctype ...>` (or at byte 0) with `COMPOSITION_CSP`:
   ```text
   default-src 'self' data: blob:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'none'; frame-src 'none'; worker-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'
   ```
 - **HyperFrames CLI flags (`RenderWorker/src/hyperframes-backend.ts`):** Invokes `hyperframes check --json --no-proxy --no-browser-gpu <bundleDir>`.
-- **Runtime and container image (`RenderWorker/package.json` and `RenderWorker/Dockerfile`):** Requires Node `>=22.0.0`; the Dockerfile sets `DO_NOT_TRACK=1`, `HYPERFRAMES_NO_TELEMETRY=1`, `VIDEO_STUDIO_RENDER_HOST=0.0.0.0`, `VIDEO_STUDIO_RENDER_PORT=8080`, runs as `USER node` (UID `1000`), `EXPOSE 8080`, and uses `CMD ["node", "/app/dist/main.js"]`.
+- **Runtime and container image (`RenderWorker/package.json` and `RenderWorker/Dockerfile`):** Requires Node `>=22` (`engines.node` in `RenderWorker/package.json`); the Dockerfile sets `DO_NOT_TRACK=1`, `HYPERFRAMES_NO_TELEMETRY=1`, `VIDEO_STUDIO_RENDER_HOST=0.0.0.0`, `VIDEO_STUDIO_RENDER_PORT=8080`, runs as `USER node` (UID `1000`), `EXPOSE 8080`, and uses `CMD ["node", "/app/dist/main.js"]`.
 
 ---
 
 ## 7. File storage setup
 
-*Part 2 placeholder — `Content Creation` category `DefaultStorageAccountID` setup and `StoreFile` / `ReadFile` behavior will be added in Part 2.*
+*Part 2 placeholder — `Content Creation` category `DefaultStorageAccountID` setup and `StoreFile` / `ReadStoredFile` behavior will be added in Part 2.*
 
 ---
 
 ## 8. Data stories
 
-*Part 2 placeholder — `DataBindings`, `CaptureDataSnapshot`, `MJChartKit`, and `VerifyDataBindingDom` will be added in Part 2.*
+*Part 2 placeholder — `DataBindings`, `CaptureDataSnapshot`, and `MJChartKit` will be added in Part 2.*
 
 ---
 
@@ -223,11 +223,11 @@ Organization brand identity and generative AI guardrails are stored in `MJ: Bran
 Both metadata cache engines live in `@memberjunction/core-entities`:
 
 - **`BrandKitEngine`** ([`packages/MJCoreEntities/src/engines/BrandKitEngine.ts`](../packages/MJCoreEntities/src/engines/BrandKitEngine.ts)) — Caches `MJ: Brand Kits` and `MJ: Brand Kit Assets`.
-  - `GetKitsForCompany(companyId: string | null)`: Returns `Active` kits matching `companyId` plus org-wide (`CompanyID == null`) `Active` kits, ordered with company-specific kits before org-wide kits, `IsDefault` kits first within each tier, then by `Name`.
+  - `GetKitsForCompany(companyId: string | null)`: Returns `Active` kits matching `companyId` plus org-wide (`CompanyID == null`) `Active` kits, ordered with company-specific kits before org-wide kits, then alphabetically by `Name`.
   - `GetDefaultKit(companyId: string | null)`: Returns the `Active` default kit (`IsDefault === true`) for `companyId`, falling back to the org-wide (`CompanyID == null`) `Active` default kit, or `null` when none exists.
-  - `GetAssets(brandKitId: string, assetType?: BrandKitAssetType)`: Returns cached `MJBrandKitAssetEntity` rows for `brandKitId` (optionally filtered by `AssetType`).
-  - `GetGenerationReferenceAssets(brandKitId: string)`: Returns cached assets for `brandKitId` where `IsGenerationReference === true`.
-  - `GetEffectiveGenerationPolicy(kit: MJBrandKitEntity | null)`: Parses `kit.GenerationPolicy` into a `BrandGenerationPolicy` object (`{ AllowGeneratedImages, AllowGeneratedVideo, AllowSyntheticPeople, StylePrompt?, AvoidSubjects, MaxGenerationCostPerRun? }`).
+  - `GetAssets(brandKitId: string)`: Returns cached `MJBrandKitAssetEntity` rows for `brandKitId`, ordered by `Sequence` ascending, then `Name`.
+  - `GetGenerationReferenceAssets(brandKitId: string)`: Returns cached assets for `brandKitId` where `IsGenerationReference === true`, ordered by `Sequence` ascending, then `Name`.
+  - `GetEffectiveGenerationPolicy(kit: MJBrandKitEntity | null)`: Parses `kit.GenerationPolicyObject` into an `EffectiveBrandGenerationPolicy` object (`{ AllowGeneratedImages, AllowGeneratedVideo, AllowSyntheticPeople, AvoidSubjects, StylePrompt?, MaxGenerationCostPerRun? }`).
 - **`VideoStudioEngine`** ([`packages/MJCoreEntities/src/engines/VideoStudioEngine.ts`](../packages/MJCoreEntities/src/engines/VideoStudioEngine.ts)) — Caches `MJ: Video Archetypes` (`GetArchetypesForCompany(companyId)`, `GetArchetypeByName(name, companyId)`) and ensures `BrandKitEngine.Instance` is configured alongside it.
 
 ### Default-uniqueness and asset reference invariants
@@ -235,7 +235,7 @@ Both metadata cache engines live in `@memberjunction/core-entities`:
 1. **One default kit per `CompanyID` scope (`MJBrandKitEntityServer.ValidateAsync` in [`packages/MJCoreEntitiesServer/src/custom/MJBrandKitEntityServer.server.ts`](../packages/MJCoreEntitiesServer/src/custom/MJBrandKitEntityServer.server.ts)):**
    - When `IsDefault` is `true`, `ValidateAsync` runs a `RunView` over `MJ: Brand Kits` in the same `CompanyID` scope (`CompanyID = '<id>'` when set, or `CompanyID IS NULL` for org-wide kits, regardless of `Status`, excluding the current `ID` on update) and adds a validation error on `IsDefault` if another default kit already exists in that scope.
 2. **Visual-only generation references (`CK_BrandKitAsset_GenerationReference` in `V202610161600__v6.2.x__Brand_Kits_And_Video_Archetypes.sql`):**
-   - `BrandKitAsset` enforces `IsGenerationReference = 0 OR AssetType IN (N'Image', N'Screenshot', N'Logo', N'LogoMark', N'Video')` so non-visual assets (`Font`, `Audio`, `Music`, `SoundEffect`) cannot be flagged as visual generation references.
+   - `BrandKitAsset` enforces `IsGenerationReference = 0 OR AssetType IN (N'Image', N'Screenshot', N'Logo', N'LogoMark', N'Video')` so non-visual assets (`Font`, `Music`, `SoundEffect`, `Other`) cannot be flagged as visual generation references.
 
 ### `GenerationPolicy` defaults and fail-closed parsing
 
@@ -279,9 +279,9 @@ MemberJunction ships one sample brand kit in [`metadata/brand-kits/.brand-kits.j
 
 ### Angular Brand Kit form panels
 
-The `MJ: Brand Kits` entity form is extended with two `after-fields` form panels in `packages/Angular/Explorer/core-entity-forms/src/lib/panels/brand-kits/` that wrap the reusable editors from `@memberjunction/ng-brand-kits` (`packages/Angular/Generic/brand-kits`):
+The `MJ: Brand Kits` entity form is extended with two `after-fields` form panels registered via `@RegisterClassEx(BaseFormPanel, { key, metadata: { entity: 'MJ: Brand Kits', slot: 'after-fields', sortKey } })` in `packages/Angular/Explorer/core-entity-forms/src/lib/panels/brand-kits/` that wrap the reusable editors from `@memberjunction/ng-brand-kits` (`packages/Angular/Generic/brand-kits`):
 
-| Panel component | `@RegisterFormPanel` key | `sortKey` | Wrapped editor selector |
+| Panel component | `RegisterClassEx` `key` | `sortKey` | Wrapped editor selector |
 |---|---|---|---|
 | `BrandKitAssetsPanelComponent` ([`brand-kit-assets.panel.ts`](../packages/Angular/Explorer/core-entity-forms/src/lib/panels/brand-kits/brand-kit-assets.panel.ts)) | `'MJBrandKitAssetsPanel'` | `20` | `<mj-brand-kit-assets-editor>` |
 | `BrandKitGenerationPolicyPanelComponent` ([`brand-kit-generation-policy.panel.ts`](../packages/Angular/Explorer/core-entity-forms/src/lib/panels/brand-kits/brand-kit-generation-policy.panel.ts)) | `'MJBrandKitGenerationPolicyPanel'` | `30` | `<mj-brand-kit-generation-policy-editor>` |
@@ -312,7 +312,7 @@ When a user asks Sage in chat to make a video, product film, social clip, or ani
 
 1. **Semantic discovery (`AI Agents Search` + `IsDirectlyDiscoverable`):**
    - The `AI Agents Search` EntityDocument (`ID: DA9AD383-A4DC-4C0C-93A8-EAC99C75054B` in [`metadata/entity-documents/.entity-documents.json`](../metadata/entity-documents/.entity-documents.json)) is `Status: 'Active'`, indexing `MJ: AI Agents` for `FindCandidateAgentsAction` ([`packages/Actions/CoreActions/src/custom/ai/find-candidate-agents.action.ts`](../packages/Actions/CoreActions/src/custom/ai/find-candidate-agents.action.ts)) and `FindBestAgentAction` ([`packages/Actions/CoreActions/src/custom/ai/find-best-agent.action.ts`](../packages/Actions/CoreActions/src/custom/ai/find-best-agent.action.ts)).
-   - Both actions and `ResolveHandoffTarget` ([`packages/AI/Agents/src/handoff-target.ts`](../packages/AI/Agents/src/handoff-target.ts)) filter candidates with `AIAgentPermissionHelper.IsDirectlyDiscoverable(agent)` ([`packages/AI/BaseAIEngine/src/AIAgentPermissionHelper.ts`](../packages/AI/BaseAIEngine/src/AIAgentPermissionHelper.ts)), which requires `agent.InvocationMode !== 'Sub-Agent' && !agent.ParentID`. Only the root `Video Studio` agent passes; all seven stage children are hidden from direct discovery and refused with `NotDiscoverable` if targeted.
+   - `FindCandidateAgentsAction` overrides `applyInvocationFilter` with `AIAgentPermissionHelper.IsDirectlyDiscoverable(agent)` ([`packages/AI/BaseAIEngine/src/AIAgentPermissionHelper.ts`](../packages/AI/BaseAIEngine/src/AIAgentPermissionHelper.ts), which requires `agent.InvocationMode !== 'Sub-Agent' && !agent.ParentID`), while `FindBestAgentAction` inherits the base `BaseFindAgentsAction` filter (`agent.InvocationMode !== 'Sub-Agent'`) and `ResolveHandoffTarget` ([`packages/AI/Agents/src/handoff-target.ts`](../packages/AI/Agents/src/handoff-target.ts)) enforces `AIAgentPermissionHelper.IsDirectlyDiscoverable(agent)`. Only the root `Video Studio` agent passes; all seven stage children are hidden from direct discovery and refused with `NotDiscoverable` if targeted.
 2. **Top-level transfer (`AgentRunner.FollowHandoffs`):**
    - Sage (`metadata/prompts/templates/sage/sage.template.md`) emits `nextStep.type = 'Handoff'` with `handoff: { agentName: "Video Studio", brief, reason }` and `taskComplete: false`.
    - `AgentRunner.FollowHandoffs` ([`packages/AI/Agents/src/AgentRunner.ts`](../packages/AI/Agents/src/AgentRunner.ts)) records a completed `Handoff` step on the source run (`TargetID`, `HandoffToAgentID`, `TargetConversationDetailID`), creates a new `MJ: Conversation Details` row for `Video Studio` (`ParentID` = source detail row, `Role = 'AI'`), and executes `Video Studio` as a root run (`ParentRunID IS NULL`) on the same `ConversationID`. Subsequent user turns in that conversation route directly to `Video Studio`.
@@ -343,20 +343,20 @@ When `Query Builder` calls `Video Studio`, `SubAgentInputMapping` populates `Dat
 
 ### 4. The `Produce Video` action (`ProduceVideoAction`) and MCP tools
 
-Workflows (`Flow` agents), task graphs, MCP clients, and server code can invoke `Video Studio` through the **`Produce Video`** action (`@RegisterClass(BaseAction, 'Produce Video')`, `PRODUCE_VIDEO_DRIVER_CLASS = 'Produce Video'` in [`packages/AI/VideoStudio/Engine/src/actions/produce-video.action.ts`](../packages/AI/VideoStudio/Engine/src/actions/produce-video.action.ts) and [`packages/AI/VideoStudio/Engine/src/actions/produce-video.mapping.ts`](../packages/AI/VideoStudio/Engine/src/actions/produce-video.mapping.ts), seeded in [`metadata/actions/video-studio/.video-studio-actions.json`](../metadata/actions/video-studio/.video-studio-actions.json)). When exposed through `@memberjunction/ai-mcp-server` ([`packages/AI/MCPServer/src/Server.ts`](../packages/AI/MCPServer/src/Server.ts)), MCP tool names are configuration-driven: `Execute_Produce_Video_Action` for the action (`Server.ts:1769`) and `Execute_Video_Studio_Agent` or `Run_Agent` for direct agent execution (`Server.ts:1859`, `:2777`).
+Workflows (`Flow` agents), task graphs, MCP clients, and server code can invoke `Video Studio` through the **`Produce Video`** action (`@RegisterClass(BaseAction, 'Produce Video')`, `PRODUCE_VIDEO_DRIVER_CLASS = 'Produce Video'` in [`packages/AI/VideoStudio/Engine/src/actions/produce-video.action.ts`](../packages/AI/VideoStudio/Engine/src/actions/produce-video.action.ts) and [`packages/AI/VideoStudio/Engine/src/actions/produce-video.mapping.ts`](../packages/AI/VideoStudio/Engine/src/actions/produce-video.mapping.ts), seeded in [`metadata/actions/video-studio/.video-studio-actions.json`](../metadata/actions/video-studio/.video-studio-actions.json)). When exposed through `@memberjunction/ai-mcp-server` ([`packages/AI/MCPServer/src/Server.ts`](../packages/AI/MCPServer/src/Server.ts)), MCP tool names are built dynamically at runtime: `Execute_Produce_Video_Action` for the action (`Server.ts:1769`) and `Execute_Video_Studio_Agent` or `Run_Agent` for direct agent execution (`Server.ts:1859`, `:2777`).
 
 #### Input parameters (`ProduceVideoInput`)
 
 | Parameter | Required | Type | Behavior (`BuildProduceVideoRequest` in `produce-video.mapping.ts`) |
 |---|---|---|---|
-| `Topic` | Yes | `string` | Non-empty topic/brief string; used as the initial user message and seeds `Film.Topic` and `Film.WorkingTitle`. Always sets `Interaction.Mode: 'Autonomous'` on the seeded spec. |
-| `Archetype` | No | `string` | Archetype `Name` or `ID` (UUID), resolved via `VideoStudioEngine.Instance` in `CompanyID` scope. When omitted, `Archetype` is left unset on the seeded spec; unknown or out-of-scope values fail with `NOT_FOUND`. |
-| `BrandKit` | No | `string` | Brand kit `Name` or `ID` (UUID), resolved via `BrandKitEngine.Instance.GetKitsForCompany` / `BrandKits` in `CompanyID` scope. When omitted, defaults to `BrandKitEngine.Instance.GetDefaultKit(companyId ?? null)`; unknown or out-of-scope values fail with `NOT_FOUND`. |
+| `Topic` | Yes | `string` | Non-empty topic/brief string; trimmed and passed as the initial user `Message` (`produce-video.mapping.ts:177`). `assemblePartialSpec` always seeds `Interaction: { Mode: 'Autonomous' }` on the initial payload. |
+| `Archetype` | No | `string` | Archetype `Name` or `ID` (UUID), resolved via `VideoStudioEngine.Instance` in `CompanyID` scope. When omitted, `Archetype` is left unset on the seeded spec; missing or inactive archetypes fail with `NOT_FOUND`, and an archetype scoped to a different `CompanyID` fails with `INVALID_PARAMS`. |
+| `BrandKit` | No | `string` | Brand kit `Name` or `ID` (UUID), resolved via `BrandKitEngine.Instance.GetKitsForCompany` / `BrandKits` in `CompanyID` scope. When omitted, defaults to `BrandKitEngine.Instance.GetDefaultKit(companyId ?? null)`; missing or inactive kits fail with `NOT_FOUND`, and a kit scoped to a different `CompanyID` fails with `INVALID_PARAMS`. |
 | `Formats` | No | `VideoFormat[] \| string` | Array, JSON array string, or comma-separated list of `'16:9' \| '9:16' \| '1:1'`. Defaults to the resolved archetype's `DefaultFormats`, or `['16:9']` when no archetype is specified. |
 | `DurationSeconds` | No | `number` | Positive duration in seconds. When an archetype is set, must fall within `MinDurationSeconds`..`MaxDurationSeconds`; when omitted, defaults to `archetype.DefaultDurationSeconds` if positive, else `undefined`. |
-| `CompanyID` | No | `string` | UUID validated via `IsValidUUID`. Scopes archetype and brand kit resolution and is forwarded as `companyId` on `AgentRunner.RunAgent` and `CompanyID` on `VideoGenerationSpec`. |
+| `CompanyID` | No | `string` | Optional company identifier string (trimmed via `trimNonEmpty`). Scopes archetype and brand kit resolution and is forwarded as `companyId` on `AgentRunner.RunAgent` and `CompanyID` on `VideoGenerationSpec`. |
 | `PowerLevel` | No | `'Draft' \| 'Standard' \| 'High'` | Preset name resolved via `AIEngine.Instance.FindActiveAgentConfigurationPreset` (or `GetDefaultAgentConfigurationPreset` when omitted) to pass `configurationId` (`AIConfigurationID`) to `RunAgent`. |
-| `DataRefs` | No | `ProduceVideoDataRefInput[] \| string` | Array or JSON array string of `{ Key, Kind: 'Query' \| 'View' \| 'Artifact', QueryID?, QueryName?, Parameters?, EntityName?, ExtraFilter?, Fields?, ArtifactVersionID?, Shape: 'SingleValue' \| 'Comparison' \| 'Series' \| 'Table', Format?: { Kind, Currency?, Decimals?, Prefix?, Suffix? }, Label? }` (`Key` and `Shape` required). Seeded into `DataBindings`; `'Inline'` and duplicate `Key` values fail with `INVALID_PARAMS`. |
+| `DataRefs` | No | `ProduceVideoDataRefInput[] \| string` | Array or JSON array string of `{ Key, Kind: 'Query' \| 'View' \| 'Artifact', QueryID?, QueryName?, Parameters?, EntityName?, ExtraFilter?, Fields?, ArtifactVersionID?, Shape: 'Scalar' \| 'Series' \| 'Table' \| 'Delta', Format?: { Kind, Currency?, Decimals?, Prefix?, Suffix? }, Label? }` (`Key` and `Shape` required). Seeded into `DataBindings`; `Kind: 'Inline'` fails with `INVALID_PARAMS`, and an unknown `QueryName` fails with `NOT_FOUND`. |
 
 #### Result codes and output parameters
 
@@ -364,16 +364,16 @@ Workflows (`Flow` agents), task graphs, MCP clients, and server code can invoke 
 |---|---|---|---|
 | `SUCCESS` | `true` | `runResult.success === true`. Calls `runner.ProcessAgentArtifacts` before returning. | `AgentRunID`, `ArtifactID`, `ArtifactVersionID`, `Status` (`spec?.Status`), `VideoFileIDs` (`Record<string, string>` from `spec?.Output?.Videos`), `PosterFileID` (`spec?.Output?.PosterFileID`), `HumanReviewNotes` (`spec?.Review?.HumanReviewNotes`) |
 | `NEEDS_INPUT` | `false` | `runResult.agentRun?.FinalStep === 'Chat'` | `AgentRunID` |
-| `RUN_FAILED` | `false` | `!runResult.success` (and `FinalStep !== 'Chat'`) | `AgentRunID`, plus `Status` and `HumanReviewNotes` when present on `finalPayload` |
-| `INVALID_PARAMS` | `false` | Parameter validation failure in `BuildProduceVideoRequest` | *(none)* |
-| `NOT_FOUND` | `false` | `'Video Studio'` agent missing, or `Archetype` / `BrandKit` not found in `CompanyID` scope | *(none)* |
+| `RUN_FAILED` | `false` | `!runResult.success` (and `FinalStep !== 'Chat'`) | `AgentRunID` |
+| `INVALID_PARAMS` | `false` | Parameter validation failure in `BuildProduceVideoRequest` (including out-of-scope `Archetype` or `BrandKit`) | *(none)* |
+| `NOT_FOUND` | `false` | `'Video Studio'` agent missing, `Archetype` or `BrandKit` missing or inactive, or `QueryName` in `DataRefs` not found | *(none)* |
 | `UNEXPECTED_ERROR` | `false` | Unhandled exception during execution | *(none)* |
 
 ### 5. Scheduled recurring productions (`AgentScheduledJobDriver`)
 
 `AgentScheduledJobDriver` ([`packages/Scheduling/engine/src/drivers/AgentScheduledJobDriver.ts`](../packages/Scheduling/engine/src/drivers/AgentScheduledJobDriver.ts)) validates `ConfigurationID`, `CompanyID`, `ConversationID`, and `OverrideModelID` in `AgentJobConfiguration` ([`packages/Scheduling/base-types/src/types.ts`](../packages/Scheduling/base-types/src/types.ts)) with `IsValidUUID` and forwards them to `AgentRunner.RunAgent` as `configurationId`, `companyId`, `conversationId`, and `override: { modelId }`.
 
-Example `ScheduledJob.Configuration` JSON for a recurring Monthly KPI Briefing (using the `Video Studio` `AgentID` and `Video Studio Standard` `ConfigurationID`, adapted from `VS-INV-4`):
+Example `ScheduledJob.Configuration` JSON for a recurring Monthly KPI Briefing (using the `Video Studio` `AgentID` and `Video Studio Standard` `ConfigurationID`):
 
 ```json
 {
@@ -383,9 +383,10 @@ Example `ScheduledJob.Configuration` JSON for a recurring Monthly KPI Briefing (
   "ConversationID": "11111111-1111-4111-8111-111111111111",
   "InitialMessage": "Produce the monthly KPI briefing video for the most recently closed month using our brand kit.",
   "StartingPayload": {
-    "InteractionMode": "Autonomous",
+    "Interaction": {
+      "Mode": "Autonomous"
+    },
     "Film": {
-      "Topic": "Monthly KPI Briefing",
       "DurationSeconds": 60,
       "Formats": ["16:9"]
     }
