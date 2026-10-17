@@ -200,6 +200,10 @@ export const RunQueryRenderingClientChecks: NamedCheck[] = [
                 return;
             }
             const result = await runTestQuerySQL(wire, 'SELECT CURRENT_USER AS UserName, SUSER_SNAME() AS LoginName', 1);
+            if (!result.Success && /Read-only data source is not available/i.test(result.ErrorMessage ?? '')) {
+                console.warn('  ⚠ runquery-rendering-client.RRC5 SKIPPED — the server has no read-only connection configured, which TestQuerySQL requires.');
+                return;
+            }
             Assert(result.Success, `TestQuerySQL failed: ${result.ErrorMessage}`);
             const row = ProjectRows(JSON.parse(result.Results ?? '[]') as Record<string, unknown>[], ['UserName', 'LoginName'])[0];
             const user = String(row?.UserName ?? '');
