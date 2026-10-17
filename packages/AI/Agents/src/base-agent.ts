@@ -13027,15 +13027,31 @@ The context is now within limits. Please retry your request with the recovered c
 
         // Fire-and-forget the 'started' INSERT — the agent flow never blocks on a step save. The queue
         // tracks the INSERT so every later UPDATE (queueStepSave) chains AFTER it commits.
-        // When the step has a parent, chain the INSERT AFTER the parent's INSERT to satisfy the
-        // self-referencing FK_AIAgentRunStep_ParentID constraint — without this, a child INSERT that
-        // races the parent INSERT hits an FK violation (especially under large-payload parent INSERTs).
-        // FK_AIAgentRunStep_PayloadAtStartSourceStepID needs no chaining: the payload source is always a
-        // step whose INSERT has already landed (see findPayloadAtStartSource).
+        // - When the step has a parent, chain the INSERT AFTER the parent's INSERT to satisfy the
+        //   self-referencing FK_AIAgentRunStep_ParentID constraint.
+        // - When the step points PayloadAtStartSourceStepID at a predecessor whose INSERT is still in
+        //   flight (!payloadAtStartSource.IsSaved), ALSO chain the INSERT after payloadAtStartSource to
+        //   satisfy FK_AIAgentRunStep_PayloadAtStartSourceStepID, with a beforeInsert guard that falls
+        //   back to inline PayloadAtStart if the source step's INSERT failed. When payloadAtStartSource
+        //   is already saved (IsSaved === true), do NOT chain behind it so this step's INSERT never waits
+        //   behind a subsequent UPDATE on payloadAtStartSource.
         const parentStepEntity = params.parentId && this._agentRun?.Steps
             ? this._agentRun.Steps.find(s => UUIDsEqual(s.ID, params.parentId))
             : undefined;
-        this._stepSaveQueue.Insert(stepEntity, parentStepEntity);
+        if (payloadAtStartSource && !payloadAtStartSource.IsSaved) {
+            this._stepSaveQueue.Insert(
+                stepEntity,
+                [parentStepEntity, payloadAtStartSource],
+                (s) => {
+                    if (!payloadAtStartSource.IsSaved) {
+                        s.PayloadAtStart = payloadAtStart;
+                        s.PayloadAtStartSourceStepID = null;
+                    }
+                }
+            );
+        } else {
+            this._stepSaveQueue.Insert(stepEntity, parentStepEntity);
+        }
 
         // Add the step to the agent run's Steps array
         if (this._agentRun) {
@@ -13051,15 +13067,17 @@ The context is now within limits. Please retry your request with the recovered c
      * is added to the run's `Steps`.
      *
      * The candidate is the latest step in the run that is not `Running` and has a `PayloadAtEnd`. Only that
-     * step is compared, with `===` on its in-memory `PayloadAtEnd`, and it is used only when its INSERT has
-     * landed (`IsSaved`). Otherwise the start payload is stored; no older step is compared.
+     * step is compared, with `===` on its in-memory `PayloadAtEnd`. Otherwise the start payload is stored;
+     * no older step is compared.
      * - Running steps are skipped because their end can still change: parallel sub-agent siblings write
      *   their own result as `PayloadAtEnd` when they finish, and a ForEach step writes its end after all
      *   of its child steps.
      * - Finished steps with no end (tool, compaction and finish-check steps) are skipped because they never
      *   get one, and would hide the step that produced the payload.
-     * - An unsaved candidate is not used because the new step's INSERT does not wait for it. If the
-     *   candidate's INSERT were still in flight, or failed, the pointer's foreign key would reject the new row.
+     * - If the matching candidate's INSERT is still in flight (`!step.IsSaved`), {@link createStepEntity}
+     *   chains the new step's INSERT after `step` on {@link _stepSaveQueue} (and falls back to storing inline
+     *   `PayloadAtStart` if the candidate's INSERT fails) so `FK_AIAgentRunStep_PayloadAtStartSourceStepID`
+     *   is always satisfied without sacrificing deduplication on fast back-to-back turns.
      *
      * Rule: a step's `PayloadAtEnd` must not change after a later step points at it, because readers take
      * the pointing step's start payload from it. The comparison uses the in-memory end, so the saved end
@@ -13077,7 +13095,7 @@ The context is now within limits. Please retry your request with the recovered c
         for (let i = steps.length - 1; i >= 0; i--) {
             const step = steps[i];
             if (step.Status !== 'Running' && step.PayloadAtEnd != null) {
-                return step.IsSaved && step.PayloadAtEnd === serializedStart ? step : undefined;
+                return step.PayloadAtEnd === serializedStart ? step : undefined;
             }
         }
         return undefined;
@@ -18453,16 +18471,42 @@ The context is now within limits. Please retry your request with the recovered c
     }
  
     /**
-     * Creates a failure result with proper tracking.
+     * Flushes any in-flight `MJAIPromptRunEntityExtended` saves queued on {@link _promptRunner}.
+     * Tolerates lightweight test doubles on `_promptRunner` that may only implement
+     * `WaitForPendingPromptRunSaves` or neither method.
+     *
+     * @private
+     */
+    private async flushPromptRunnerSaves(): Promise<void> {
+        const runner = this._promptRunner as {
+            FlushPendingSaves?: () => Promise<void>;
+            WaitForPendingPromptRunSaves?: () => Promise<void>;
+        } | undefined;
+        if (typeof runner?.FlushPendingSaves === 'function') {
+            await runner.FlushPendingSaves();
+        } else if (typeof runner?.WaitForPendingPromptRunSaves === 'function') {
+            await runner.WaitForPendingPromptRunSaves();
+        }
+    }
+
+    /**
+     * Creates a failure result with proper tracking, draining all queued step and prompt-run saves
+     * before persisting the failed run row so no orphan step or prompt-run writes remain in flight.
      *
      * @private
      */
     private async createFailureResult(errorMessage: string, contextUser?: UserInfo): Promise<ExecuteAgentResult> {
+        const [{ failures }] = await Promise.all([
+            this._stepSaveQueue.Flush(),
+            this.flushPromptRunnerSaves(),
+        ]);
         if (this._agentRun) {
             this._agentRun.Status = 'Failed';
             this._agentRun.CompletedAt = new Date();
             this._agentRun.Success = false;
-            this._agentRun.ErrorMessage = errorMessage;
+            this._agentRun.ErrorMessage = failures > 0
+                ? `${errorMessage}\n${failures} step record save(s) failed during this run; see logs for details.`
+                : errorMessage;
             
             // Calculate total tokens even for failed runs
             this.applyTokenStatsToRun(this._agentRun, this.calculateTokenStats());
@@ -18477,18 +18521,25 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
-     * Creates a cancelled result.
+     * Creates a cancelled result, draining all queued step and prompt-run saves before persisting
+     * the cancelled run row so no orphan step or prompt-run writes remain in flight.
      *
      * @private
      * @param {string} message - The cancellation message
      * @returns {Promise<ExecuteAgentResult>} The cancelled result
      */
     private async createCancelledResult(message: string, contextUser?: UserInfo): Promise<ExecuteAgentResult> {
+        const [{ failures }] = await Promise.all([
+            this._stepSaveQueue.Flush(),
+            this.flushPromptRunnerSaves(),
+        ]);
         if (this._agentRun) {
             this._agentRun.Status = 'Cancelled';
             this._agentRun.CompletedAt = new Date();
             this._agentRun.Success = false;
-            this._agentRun.ErrorMessage = message;
+            this._agentRun.ErrorMessage = failures > 0
+                ? `${message}\n${failures} step record save(s) failed during this run; see logs for details.`
+                : message;
             // Save() writes every column, so an in-memory null here would overwrite the reason the
             // Stop button wrote on the row. Record the reason the abort signal carried instead. The
             // signal is consulted first because most call sites pass a fixed message naming WHERE
@@ -18557,10 +18608,13 @@ The context is now within limits. Please retry your request with the recovered c
      * @private
      */
     private async finalizeAgentRun<P>(finalStep: BaseAgentNextStep, payload?: P, contextUser?: UserInfo): Promise<ExecuteAgentResult<P>> {
-        // Flush every pending step save (success OR failure) via the shared queue, which allSettles so a
-        // single failure doesn't shadow the rest and drains itself so a reused instance doesn't leak
-        // settled promises. Surface the failure count on the run for visibility.
-        const { failures } = await this._stepSaveQueue.Flush();
+        // Flush every pending step save AND prompt-run save (success OR failure) via their shared queues,
+        // which allSettle so a single failure doesn't shadow the rest and drain themselves so a reused
+        // instance doesn't leak settled promises. Surface the step failure count on the run for visibility.
+        const [{ failures }] = await Promise.all([
+            this._stepSaveQueue.Flush(),
+            this.flushPromptRunnerSaves(),
+        ]);
         if (failures > 0 && this._agentRun) {
             const note = `${failures} step record save(s) failed during this run; see logs for details.`;
             this._agentRun.ErrorMessage = this._agentRun.ErrorMessage
@@ -19210,8 +19264,12 @@ The context is now within limits. Please retry your request with the recovered c
                 stepEntity.PromptRun = outcome.PromptRun;
             }
             if (phase === 'post-turn') {
-                // finalizeAgentRun's flush has already run — drain this step's INSERT now.
-                await this._stepSaveQueue.Flush();
+                // finalizeAgentRun's flush has already run — drain this step's INSERT and the summary
+                // prompt run's save now.
+                await Promise.all([
+                    this._stepSaveQueue.Flush(),
+                    this.flushPromptRunnerSaves(),
+                ]);
                 await this.topUpRunTokenTotalsAfterPostTurnCompaction(outcome, params.contextUser);
             }
         } catch (error) {

@@ -573,7 +573,7 @@ describe('BaseAgent.createStepEntity — which earlier step is compared', () => 
         expect(step.PayloadAtStartSourceStepID).toBeNull();
     });
 
-    it('stores the start when the matching step has not been saved yet, and does not look further back', async () => {
+    it('points at the latest finished step even when its INSERT is still in flight, chaining the new step INSERT after it', async () => {
         const h = new Harness();
         await h.CreateFinished({ payloadAtEnd: { n: 1 } }); // older, saved, same end
         h.InsertDelayMs = 20;
@@ -584,9 +584,35 @@ describe('BaseAgent.createStepEntity — which earlier step is compared', () => 
         const step = await h.Create({ payloadAtStart: { n: 1 } });
 
         expect(unsaved.IsSaved).toBe(false);
-        expect(step.PayloadAtStart).toBe(JSON.stringify({ n: 1 }));
-        expect(step.PayloadAtStartSourceStepID).toBeNull();
+        expect(step.PayloadAtStart).toBeNull();
+        expect(step.PayloadAtStartSourceStepID).toBe(unsaved.ID);
         await h.Flush();
+
+        expect(unsaved.IsSaved).toBe(true);
+        expect(h.SaveIndex(step, 1, 'start')).toBeGreaterThan(h.SaveIndex(unsaved, 1, 'end'));
+        expect(h.SavedStart(step)).toBe(JSON.stringify({ n: 1 }));
+    });
+
+    it('falls back to storing inline PayloadAtStart when the in-flight source step INSERT fails', async () => {
+        const h = new Harness();
+        h.InsertDelayMs = 20;
+        const failingSource = await h.Create({ payloadAtEnd: { n: 1 } });
+        // Simulate a failed DB INSERT on failingSource so IsSaved stays false when its queue tail settles:
+        failingSource.Save = async () => {
+            await wait(20);
+            return false;
+        };
+        await h.Internals.finalizeStepEntity(failingSource, true);
+        h.InsertDelayMs = 0;
+
+        const step = await h.Create({ payloadAtStart: { n: 1 } });
+        expect(step.PayloadAtStartSourceStepID).toBe(failingSource.ID);
+
+        await h.Flush();
+
+        expect(failingSource.IsSaved).toBe(false);
+        expect(step.SavedRow?.PayloadAtStart).toBe(JSON.stringify({ n: 1 }));
+        expect(step.SavedRow?.PayloadAtStartSourceStepID).toBeNull();
     });
 });
 
