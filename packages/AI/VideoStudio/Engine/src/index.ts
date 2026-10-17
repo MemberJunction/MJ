@@ -61,3 +61,23 @@ export {
     type VideoStudioStageName,
 } from './agents/video-studio-agent.js';
 
+export {
+    BuildProduceVideoRequest,
+    type ProduceVideoArchetypeLookup,
+    type ProduceVideoBrandKitLookup,
+    type ProduceVideoDataRefInput,
+    type ProduceVideoInput,
+    type ProduceVideoLookups,
+    type ProduceVideoMappingError,
+    type ProduceVideoMappingErrorCode,
+    type ProduceVideoRequestError,
+    type ProduceVideoRequestResult,
+    type ProduceVideoRequestSuccess,
+} from './actions/produce-video.mapping.js';
+
+export {
+    LoadProduceVideoAction,
+    PRODUCE_VIDEO_DRIVER_CLASS,
+    ProduceVideoAction,
+} from './actions/produce-video.action.js';
+

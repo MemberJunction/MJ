@@ -3460,6 +3460,12 @@ importers:
 
   packages/AI/VideoStudio/Engine:
     dependencies:
+      '@memberjunction/actions':
+        specifier: 6.2.0-edge.4
+        version: link:../../../Actions/Engine
+      '@memberjunction/actions-base':
+        specifier: 6.2.0-edge.4
+        version: link:../../../Actions/Base
       '@memberjunction/ai':
         specifier: 6.2.0-edge.4
         version: link:../../Core
@@ -3475,6 +3481,9 @@ importers:
       '@memberjunction/ai-prompts':
         specifier: 6.2.0-edge.4
         version: link:../../Prompts
+      '@memberjunction/aiengine':
+        specifier: 6.2.0-edge.4
+        version: link:../../Engine
       '@memberjunction/core':
         specifier: 6.2.0-edge.4
         version: link:../../../MJCore
@@ -15473,6 +15482,9 @@ importers:
       '@memberjunction/testing-integration':
         specifier: 6.2.0-edge.4
         version: link:../TestingFramework/testing-integration
+      '@memberjunction/video-studio':
+        specifier: 6.2.0-edge.4
+        version: link:../AI/VideoStudio/Engine
       '@memberjunction/web-search-engine':
         specifier: 6.2.0-edge.4
         version: link:../WebSearchEngine
@@ -15756,6 +15768,9 @@ importers:
       '@memberjunction/testing-engine':
         specifier: 6.2.0-edge.4
         version: link:../TestingFramework/Engine
+      '@memberjunction/video-studio':
+        specifier: 6.2.0-edge.4
+        version: link:../AI/VideoStudio/Engine
       '@memberjunction/work-queue-engine':
         specifier: 6.2.0-edge.4
         version: link:../WorkQueue/engine
