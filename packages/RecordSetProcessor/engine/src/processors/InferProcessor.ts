@@ -1,7 +1,8 @@
 /**
  * @fileoverview Infer processor — for each record, runs an AI Prompt over the record's data and
  * returns the structured result as the record's `ResultPayload`. Write-back is NOT done here: the
- * `WriteBackProcessor` wrapper (added by `RecordProcessExecutor` when an OutputMapping is set)
+ * `WriteBackProcessor` wrapper (added by `RecordProcessExecutor` when an OutputMapping is set, or when any
+ * output of the spec has no write target, so its Feature Values commit, preview and report an outcome there)
  * applies the Record Process's OutputMapping uniformly across Action / Agent / Infer work types.
  *
  * Supports DataFeatureSpec context (EntityDocumentID template rendering with __Parent context,
@@ -61,6 +62,7 @@ import {
     type BelowConfidenceOutput,
     PromptTemplateContent,
     type PromptTemplateContentRow,
+    type ValueConstraint,
 } from '@memberjunction/feature-pipelines';
 import { TemplateEngineServer } from '@memberjunction/templates';
 import { EntityDocumentCache, EntityDocumentTemplateParser } from '@memberjunction/entity-documents';
@@ -1395,7 +1397,8 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
         const entityID = params.Context.entityID;
         const provider = params.Context.provider;
         const targetless = (this.spec?.Outputs || []).filter((o) => !OutputTargets.HasWriteTarget(o));
-        if (!recordProcessID || !entityID || !provider || targetless.length === 0) {
+        // a pipeline that writes no history stores nothing, so it previews nothing (as UpsertFeatureValues writes nothing)
+        if (!this.WritesHistory || !recordProcessID || !entityID || !provider || targetless.length === 0) {
             return;
         }
         const withheld = new Set(InferProcessor.WithheldOutputsOf(params.Payload).map((w) => w.OutputName));
@@ -1424,6 +1427,24 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
             this.featureValuePreviews.set(params.Record.RecordID, previews);
         } else {
             this.featureValuePreviews.delete(params.Record.RecordID);
+        }
+    }
+
+    /**
+     * The TSType a constraint implies for an output with no write target (no column to take one from): `'number'` for
+     * numeric and money, `'boolean'` for boolean, `'Date'` for date; undefined for the others.
+     */
+    public static ConstraintTSType(constraintType: ValueConstraint['Type']): string | undefined {
+        switch (constraintType) {
+            case 'numeric':
+            case 'money':
+                return 'number';
+            case 'boolean':
+                return 'boolean';
+            case 'date':
+                return 'Date';
+            default:
+                return undefined;
         }
     }
 
@@ -1459,7 +1480,8 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
                 reasoning: params.Reasoning,
                 // `??` because 0 is a valid confidence
                 confidence: params.OutputConfidence?.[output.Name] ?? params.Confidence,
-                constraintType: output.Constraint?.Type,
+                // typed storage by constraint applies to outputs with no write target only: a written output keeps its storage
+                constraintType: OutputTargets.HasWriteTarget(output) ? undefined : output.Constraint?.Type,
             });
         }
 
@@ -1687,18 +1709,20 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
             const sources = { $: rawResult };
             const rawVal = resolveMappingRef(output.Ref, sources);
 
-            // an output with no write target has no target field to take a type from
+            // A field target lends its column's TSType; an output with no write target takes the type its constraint
+            // implies, so a quoted '0.75' or 'true' coerces as it would for a typed column
             const target = OutputTargets.HasWriteTarget(output) ? output.Target : undefined;
             const field = target?.Mode === 'field'
                 ? ctx.provider?.EntityByID(record.EntityID)?.Fields?.find(
                     (f) => f.Name.toLowerCase() === target.EntityFieldName.toLowerCase()
                 )
                 : undefined;
+            const valueTSType = target ? field?.TSType : InferProcessor.ConstraintTSType(output.Constraint.Type);
 
             // The resolved constraint carries the field's value list for an enum with FromFieldMetadata and a
             // lookup's allowed rows; an array output with an ItemRef is checked item by item
             const validation = ValidateOutputItems(rawVal, output.Constraint, {
-                targetFieldTSType: field?.TSType,
+                targetFieldTSType: valueTSType,
                 resolved: (await this.ResolveConstraints(ctx)).get(output.Name) || undefined,
             });
 

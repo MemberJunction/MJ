@@ -2,13 +2,14 @@ import { describe, it, expect, vi } from 'vitest';
 import { CompositeKey, EntityInfo, type EntityTransactionScope, IMetadataProvider, type IRunViewProvider, UserInfo } from '@memberjunction/core';
 import { DatabaseProviderStub } from '@memberjunction/unit-testing';
 import type { MJRecordProcessEntity } from '@memberjunction/core-entities';
-import { ArraySource, type IRecordProcessor, type ProcessRunResult, type RecordProcessorContext, type RecordRef, type RecordResult } from '@memberjunction/record-set-processor-base';
+import { ArraySource, type IRecordProcessor, type ProcessRunResult, type RecordProcessorContext, type RecordRef, type RecordResult, type WriteBackRunPayload } from '@memberjunction/record-set-processor-base';
 import {
     DataFeatureSpec, FeatureValueCacheService, FeatureValueSaveError, type FeaturePipelinePinData, type FeatureValueRecordRef, type FeatureValueSource,
     type LatestFeatureValueParams, type RecordFeatureValuesOutcome, type RecordFeatureValuesParams, type RecordHumanValueParams, type TypedFeatureValue,
 } from '@memberjunction/feature-pipelines';
 import { ApplyOutputMapping, OutputMappingWriter, type HumanValueGuard, type HumanValueGuardSource, type HumanValueQuestion } from '../writeBack';
 import { InferProcessor } from '../processors/InferProcessor';
+import { FeaturePipelineHumanValueGuard } from '../processors/FeaturePipelineHumanValueGuard';
 import { WriteBackProcessor } from '../processors/WriteBackProcessor';
 import { RecordSetProcessor } from '../RecordSetProcessor';
 import { NoOpTracker } from '../trackers/NoOpTracker';
@@ -313,6 +314,58 @@ describe('WriteBackProcessor human values', () => {
         const out = await new WriteBackProcessor(new GuardedProcessor(), mapping).ProcessBatch([record], contextOf(provider));
         expect(saves).toHaveLength(0);
         expect(out.get('person-1')?.HumanValuesPreserved).toBe(1);
+    });
+});
+
+/** A spec whose FIRST output has no write target, followed by a field output: the guard must skip the target-less one. */
+const MIXED_SPEC: DataFeatureSpec = {
+    ...SPEC,
+    Outputs: [{ Name: 'Years', Ref: '$.Years' }, SPEC.Outputs[0]],
+};
+
+/** An Infer pipeline over {@link MIXED_SPEC} that answers without a prompt and stores no Feature Values of its own. */
+class MixedInfer extends InferProcessor {
+    constructor() { super('prompt-1', undefined, MIXED_SPEC, null); }
+    public override async ProcessRecord(): Promise<RecordResult> {
+        return { Status: 'Succeeded', ResultPayload: { Years: 7, SeniorityLevel: 'manager-id' } };
+    }
+}
+
+describe('a spec mixing a target-less output with a field output, through WriteBackProcessor', () => {
+    const mapping = { fields: { SeniorityLevelID: '$.SeniorityLevel' } };
+    const contextOf = (provider: IMetadataProvider, DryRun?: boolean): RecordProcessorContext =>
+        ({ contextUser: USER, provider, recordProcessID: 'rp-1', entityID: 'ENT-P', processRunID: 'run-9', DryRun });
+    function stubValues() {
+        vi.spyOn(FeatureValueCacheService.Instance, 'GetLatestValue').mockImplementation(async (p: LatestFeatureValueParams) => (p.Source === 'Human' ? null : fv('director-id')));
+        return vi.spyOn(FeatureValueCacheService.Instance, 'RecordHumanValue').mockResolvedValue();
+    }
+
+    it('a real run keeps the person\'s value of the field output and records it as Human, without throwing on the target-less output', async () => {
+        const recorded = stubValues();
+        const { provider, saves } = parentProvider({ SeniorityLevelID: 'board-id' });
+        const out = await new WriteBackProcessor(new MixedInfer(), mapping).ProcessRecord(record, contextOf(provider));
+        expect(out.ErrorMessage).toBeUndefined();
+        expect(out.Status).toBe('Succeeded');
+        expect(saves).toHaveLength(0);
+        expect(out.HumanValuesPreserved).toBe(1);
+        expect(recorded.mock.calls[0][0]).toMatchObject({ FeatureName: 'SeniorityLevel', Value: 'board-id' });
+    });
+
+    it('a dry run previews no change to the person\'s value of the field output and records nothing', async () => {
+        const recorded = stubValues();
+        const { provider, saves } = parentProvider({ SeniorityLevelID: 'board-id' });
+        const out = await new WriteBackProcessor(new MixedInfer(), mapping, true).ProcessRecord(record, contextOf(provider, true));
+        expect(out.ErrorMessage).toBeUndefined();
+        expect(out).toMatchObject({ Status: 'Succeeded', DryRun: true });
+        expect(saves).toHaveLength(0);
+        expect((out.ResultPayload as WriteBackRunPayload).writeBack?.previewFields).toEqual({});
+        expect(FeatureValueCacheService.Instance.GetLatestValue).toHaveBeenCalledWith(expect.objectContaining({ FeatureName: 'SeniorityLevel', Source: 'Human' }));
+        expect(recorded).not.toHaveBeenCalled();
+    });
+
+    it('OutputWritingField skips an output with no write target', () => {
+        expect(FeaturePipelineHumanValueGuard.OutputWritingField(MIXED_SPEC.Outputs, 'seniorityLevelID')?.Name).toBe('SeniorityLevel');
+        expect(FeaturePipelineHumanValueGuard.OutputWritingField(MIXED_SPEC.Outputs, 'Years')).toBeUndefined();
     });
 });
 

@@ -6,7 +6,7 @@
 import type { IMetadataProvider } from '@memberjunction/core';
 import type { RecordProcessorContext, RecordRef } from '@memberjunction/record-set-processor-base';
 import {
-    FeatureValueCacheService, type DataFeatureOutput, type DataFeatureSpec, type FeatureValueRecordRef, type FeatureValueSource, type TypedFeatureValue,
+    FeatureValueCacheService, OutputTargets, type DataFeatureOutput, type DataFeatureSpec, type FeatureValueRecordRef, type FeatureValueSource, type TypedFeatureValue,
 } from '@memberjunction/feature-pipelines';
 import type { HumanValueGuard, HumanValueQuestion } from '../writeBack';
 
@@ -74,10 +74,10 @@ export class FeaturePipelineHumanValueGuard implements HumanValueGuard {
         return FeaturePipelineHumanValueGuard.OutputWritingField(this.Options.Spec.Outputs, fieldName);
     }
 
-    /** The output that writes a field of the processed record (field targets, names compared case-insensitively). */
+    /** The output that writes a field of the processed record (field targets, names compared case-insensitively); outputs without a write target never match. */
     public static OutputWritingField(outputs: DataFeatureOutput[], fieldName: string): DataFeatureOutput | undefined {
         const wanted = fieldName.toLowerCase();
-        return outputs.find((o) => o.Target.Mode === 'field' && o.Target.EntityFieldName.toLowerCase() === wanted);
+        return outputs.find((o) => OutputTargets.HasWriteTarget(o) && o.Target.Mode === 'field' && o.Target.EntityFieldName.toLowerCase() === wanted);
     }
 
     /** The record and feature an output's Feature Values are kept under, read and written on `provider`. */

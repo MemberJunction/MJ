@@ -130,6 +130,99 @@ describe('a pipeline whose output has no write target', () => {
     });
 });
 
+/** The typed value `RecordFeatureValues` stores for each captured output item (it calls `ToTypedValue` the same way). */
+function storedTyped(history: ReturnType<typeof recordHistory>, call = 0): Record<string, TypedFeatureValue> {
+    return Object.fromEntries(history.mock.calls[call][0].outputs.map((o) => [o.featureName, FeatureValueCacheService.ToTypedValue(o.value, o.constraintType)]));
+}
+function recordHistory() {
+    return vi.spyOn(FeatureValueCacheService.Instance, 'RecordFeatureValues').mockResolvedValue({ Upserted: 1, Unchanged: 0, Previous: {} });
+}
+
+describe('string answers to typed constraints on outputs without a write target', () => {
+    const typed: DataFeatureSpec = {
+        ...spec, Name: 'Typed',
+        Outputs: [
+            { Name: 'Score', Ref: '$.Score', Constraint: { Type: 'numeric', Min: 0, Max: 1, OnViolation: 'fail' } },
+            { Name: 'Flag', Ref: '$.Flag', Constraint: { Type: 'boolean', OnViolation: 'fail' } },
+            { Name: 'Bad', Ref: '$.Bad', Constraint: { Type: 'numeric', OnViolation: 'null' } },
+        ],
+    };
+
+    it('coerces \'0.75\' to a number and \'true\' to a boolean, and nulls an unparseable number under OnViolation null', async () => {
+        modelAnswer = { Score: '0.75', Flag: 'true', Bad: 'abc' };
+        const history = recordHistory();
+        const result = await new InferProcessor('PROMPT-1', undefined, typed, null).ProcessRecord(record, context);
+        expect(result.ErrorMessage).toBeUndefined();
+        expect(result.Status).toBe('Succeeded');
+        const stored = storedTyped(history);
+        expect(stored.Score).toEqual({ ...EMPTY, ValueNumeric: 0.75 });
+        expect(stored.Flag).toEqual({ ...EMPTY, ValueBoolean: true });
+        expect(stored.Bad).toEqual(EMPTY);
+    });
+
+    it('a rejected string names no target column', async () => {
+        const strict: DataFeatureSpec = { ...typed, Outputs: [{ Name: 'Score', Ref: '$.Score', Constraint: { Type: 'numeric', OnViolation: 'fail' } }] };
+        modelAnswer = { Score: 'abc' };
+        const result = await new InferProcessor('PROMPT-1', undefined, strict, null).ProcessRecord(record, context);
+        expect(result.Status).toBe('Failed');
+        expect(result.ErrorMessage).toContain("Constraint violation for 'Score'");
+        expect(result.ErrorMessage).not.toMatch(/target column/i);
+    });
+});
+
+describe('coercion by constraint applies to outputs without a write target only', () => {
+    const PEOPLE_DATED = new EntityInfo({ ID: 'ENT-P', Name: 'People', Fields: [{ Name: 'Bio', TSType: 'string' }, { Name: 'Notes', TSType: 'string' }] });
+    const datedContext: RecordProcessorContext = { ...context, provider: new EntitiesOnlyProvider([PEOPLE_DATED]) };
+    const dated: DataFeatureSpec = {
+        ...spec, Name: 'Dated',
+        Outputs: [
+            { Name: 'SeenOn', Ref: '$.SeenOn', Constraint: { Type: 'date', OnViolation: 'fail' }, Target: { Mode: 'field', EntityFieldName: 'Notes' } },
+            { Name: 'FirstSeen', Ref: '$.FirstSeen', Constraint: { Type: 'date', OnViolation: 'fail' } },
+        ],
+    };
+
+    it('a field-target date output keeps its text storage; a target-less one stores ValueDate', async () => {
+        modelAnswer = { SeenOn: '2026-01-02', FirstSeen: '2026-01-02' };
+        const history = recordHistory();
+        const result = await new InferProcessor('PROMPT-1', undefined, dated, null).ProcessRecord(record, datedContext);
+        expect(result.ErrorMessage).toBeUndefined();
+        const items = history.mock.calls[0][0].outputs;
+        expect(items.find((o) => o.featureName === 'SeenOn')?.constraintType).toBeUndefined();
+        expect(items.find((o) => o.featureName === 'FirstSeen')?.constraintType).toBe('date');
+        const stored = storedTyped(history);
+        expect(stored.SeenOn).toEqual({ ...EMPTY, ValueText: '2026-01-02' });
+        expect(stored.FirstSeen.ValueDate).toBeInstanceOf(Date);
+        expect(stored.FirstSeen.ValueText).toBeNull();
+    });
+});
+
+describe('a pipeline that writes no history', () => {
+    it('previews nothing on a dry run and reads no stored value', async () => {
+        const read = storedValues({});
+        const p = new InferProcessor('PROMPT-1', undefined, spec, null);
+        p.WritesHistory = false;
+        await p.ProcessRecord(record, { ...context, DryRun: true });
+        expect(p.PreviewFeatureValues('p-1')).toEqual([]);
+        expect(read).not.toHaveBeenCalled();
+    });
+});
+
+describe('a target-less real run through InferProcessor and WriteBackProcessor', () => {
+    it('writes the deferred Feature Values in the write-back unit: Upserted, then Unchanged', async () => {
+        const history = vi.spyOn(FeatureValueCacheService.Instance, 'RecordFeatureValues')
+            .mockResolvedValueOnce({ Upserted: 1, Unchanged: 0, Previous: {} })
+            .mockResolvedValueOnce({ Upserted: 0, Unchanged: 1, Previous: { Years: { ...EMPTY, ValueNumeric: 7 } } });
+        const writeBack = new WriteBackProcessor(new InferProcessor('PROMPT-1', undefined, spec, null), { fields: {} }, false);
+        const first = await writeBack.ProcessRecord(record, context);
+        expect(first.ErrorMessage).toBeUndefined();
+        expect(first.Outcome).toBe('Upserted');
+        const second = await writeBack.ProcessRecord(record, { ...context, processRunID: 'run-2' });
+        expect(second.Outcome).toBe('Unchanged');
+        expect(history).toHaveBeenCalledTimes(2);
+        expect(history.mock.calls[0][0].outputs).toEqual([expect.objectContaining({ featureName: 'Years', value: 7 })]);
+    });
+});
+
 describe('WriteBackProcessor over a target-less pipeline', () => {
     const inner = {
         ProcessRecord: async (): Promise<RecordResult> => ({ Status: 'Succeeded', ResultPayload: { Years: 7 } }),
