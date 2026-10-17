@@ -112,7 +112,10 @@ function normalizeStageKey(stageName: string): string {
 export class VideoStudioAgent extends BaseAgent {
     protected _currentSettings: VideoStudioSettings = { ...DEFAULT_VIDEO_STUDIO_SETTINGS };
     protected _brandKitInScope: boolean = true;
-    protected _modeExplicitlySet: boolean = false;
+    private _callerPayloadInteraction: VideoGenerationSpec['Interaction'] | undefined = undefined;
+    private _callerMode: VideoInteractionMode | null = null;
+    private _turnCapturedParams: ExecuteAgentParams | null = null;
+    private _turnSeededParams: ExecuteAgentParams | null = null;
 
     protected override async validateAgent(
         agent: MJAIAgentEntityExtended,
@@ -179,6 +182,8 @@ export class VideoStudioAgent extends BaseAgent {
             ...params,
             payload: seeded as unknown as P,
         };
+        this._turnCapturedParams = params;
+        this._turnSeededParams = nextParams;
 
         return super.executeAgentInternal(nextParams, config);
     }
@@ -226,21 +231,21 @@ export class VideoStudioAgent extends BaseAgent {
         payload: Partial<VideoGenerationSpec>,
         stageSucceeded: boolean = true,
     ): Partial<VideoGenerationSpec> {
+        this.ensureCallerModeCaptured(params);
         const cloned = cloneSpec(payload ?? {});
 
         this.syncDeliverableFormats(cloned);
-        this.applyArchetypeDefaultModeIfUnset(cloned);
+        this.restoreCallerInteraction(cloned);
 
         if (stageSucceeded) {
             ClearStaleEvidence(stageName, cloned);
-            if (normalizeStageKey(stageName) === 'Pre-Production') {
-                cloned.Status = 'PreProduced';
-            }
         }
 
+        const effectiveMode = this.resolveEffectiveInteractionMode(cloned);
         const gates = EvaluateGates(cloned, {
             Settings: this._currentSettings,
             BrandKitInScope: this._brandKitInScope,
+            EffectiveInteractionMode: effectiveMode,
         });
         cloned.Review = {
             ...(cloned.Review ?? { Rounds: [] }),
@@ -296,7 +301,25 @@ export class VideoStudioAgent extends BaseAgent {
                 errorMessage: msg,
             };
         }
-        return super.validateNextStep(params, nextStep, currentPayload, agentRun, currentStep);
+        const isClientToolsStep = nextStep.step === ('ClientTools' as typeof nextStep.step);
+        const normalizedStep =
+            isClientToolsStep && (nextStep.terminate === true || nextStep.terminateAfterExecution === true)
+                ? { ...nextStep, terminate: false, terminateAfterExecution: false }
+                : nextStep;
+        const result = await super.validateNextStep(
+            params,
+            normalizedStep,
+            currentPayload,
+            agentRun,
+            currentStep,
+        );
+        if (
+            result.step === ('ClientTools' as typeof result.step) &&
+            (result.terminate === true || result.terminateAfterExecution === true)
+        ) {
+            return { ...result, terminate: false, terminateAfterExecution: false };
+        }
+        return result;
     }
 
     protected override async validateSubAgentNextStep<P>(
@@ -340,7 +363,16 @@ export class VideoStudioAgent extends BaseAgent {
             return baseResult;
         }
 
-        if (stageRequests.some((req) => req?.terminateAfter === true)) {
+        const hasStepFinishIf =
+            (baseResult.finishIf !== undefined && baseResult.finishIf !== null) ||
+            (nextStep.finishIf !== undefined && nextStep.finishIf !== null);
+        if (
+            hasStepFinishIf ||
+            stageRequests.some((req) => {
+                const reqFinishIf = (req as { finishIf?: unknown } | undefined)?.finishIf;
+                return req?.terminateAfter === true || (reqFinishIf !== undefined && reqFinishIf !== null);
+            })
+        ) {
             const msg = 'Stages never end the run; finish with Success';
             return {
                 ...baseResult,
@@ -355,13 +387,16 @@ export class VideoStudioAgent extends BaseAgent {
         const stageName = stageReq.name;
         const normalizedStage = normalizeStageKey(stageName);
 
+        this.ensureCallerModeCaptured(params);
         const spec = cloneSpec((currentPayload ?? params.payload ?? {}) as Partial<VideoGenerationSpec>);
         this.syncDeliverableFormats(spec);
-        this.applyArchetypeDefaultModeIfUnset(spec);
+        this.restoreCallerInteraction(spec);
 
+        const effectiveMode = this.resolveEffectiveInteractionMode(spec);
         const gates = EvaluateGates(spec, {
             Settings: this._currentSettings,
             BrandKitInScope: this._brandKitInScope,
+            EffectiveInteractionMode: effectiveMode,
         });
         spec.Review = {
             ...(spec.Review ?? { Rounds: [] }),
@@ -408,7 +443,11 @@ export class VideoStudioAgent extends BaseAgent {
 
         // Pre-Render async/structural spec validation (VS-SPEC-2b)
         if (normalizedStage === 'Render') {
-            const candidateForRender = this.buildNormalizedSpecForValidation(spec, 'Composed');
+            const candidateForRender = this.buildNormalizedSpecForValidation(
+                spec,
+                'Composed',
+                effectiveMode,
+            );
             const validationResult = params.contextUser
                 ? await ValidateVideoGenerationSpecAsync(
                       candidateForRender,
@@ -483,15 +522,18 @@ export class VideoStudioAgent extends BaseAgent {
             return baseResult;
         }
 
+        this.ensureCallerModeCaptured(params);
         const spec = cloneSpec(
             (baseResult.newPayload ?? currentPayload ?? params.payload ?? {}) as Partial<VideoGenerationSpec>,
         );
         this.syncDeliverableFormats(spec);
-        this.applyArchetypeDefaultModeIfUnset(spec);
+        this.restoreCallerInteraction(spec);
 
+        const effectiveMode = this.resolveEffectiveInteractionMode(spec);
         const gates = EvaluateGates(spec, {
             Settings: this._currentSettings,
             BrandKitInScope: this._brandKitInScope,
+            EffectiveInteractionMode: effectiveMode,
         });
         spec.Review = {
             ...(spec.Review ?? { Rounds: [] }),
@@ -552,12 +594,6 @@ export class VideoStudioAgent extends BaseAgent {
             };
         }
 
-        if (!spec.Interaction) {
-            spec.Interaction = {
-                Mode: 'Autonomous',
-                MaxRepairRounds: this._currentSettings.MaxRepairRounds,
-            };
-        }
         spec.Status = 'Delivered';
         spec.Review.HumanReviewNotes = this.buildHumanReviewNotes(spec);
 
@@ -582,6 +618,7 @@ export class VideoStudioAgent extends BaseAgent {
         params: ExecuteAgentParams,
         settings: VideoStudioSettings,
     ): Partial<VideoGenerationSpec> {
+        this.captureCallerMode(params);
         const seeded = cloneSpec((params.payload ?? {}) as Partial<VideoGenerationSpec>);
 
         seeded.SpecVersion = VIDEO_STUDIO_SPEC_VERSION;
@@ -622,44 +659,10 @@ export class VideoStudioAgent extends BaseAgent {
         // Brand Kit seeding
         this.seedBrandKit(seeded, companyId);
 
-        // Interaction mode & repair budget seeding
-        const callerMode = seeded.Interaction?.Mode;
-        const isBelowRoot =
-            Boolean(params.parentRun) ||
-            (Array.isArray(this.AgentHierarchy) && this.AgentHierarchy.length > 1);
-
-        if (isValidInteractionMode(callerMode)) {
-            this._modeExplicitlySet = true;
-            seeded.Interaction = {
-                Mode: callerMode,
-                MaxRepairRounds: settings.MaxRepairRounds,
-            };
-        } else if (params.planMode === true) {
-            this._modeExplicitlySet = true;
-            seeded.Interaction = {
-                Mode: 'ApproveStoryboard',
-                MaxRepairRounds: settings.MaxRepairRounds,
-            };
-        } else if (isBelowRoot) {
-            this._modeExplicitlySet = true;
-            seeded.Interaction = {
-                Mode: 'Autonomous',
-                MaxRepairRounds: settings.MaxRepairRounds,
-            };
-        } else {
-            this._modeExplicitlySet = false;
-            const archetypeDefault = this.lookupArchetypeDefaultMode(
-                seeded.Archetype?.Name,
-                companyId,
-            );
-            if (archetypeDefault) {
-                seeded.Interaction = {
-                    Mode: archetypeDefault,
-                    MaxRepairRounds: settings.MaxRepairRounds,
-                };
-            } else {
-                delete seeded.Interaction;
-            }
+        // Interaction mode: the driver never writes Interaction.Mode; preserve only caller-supplied Interaction
+        this.restoreCallerInteraction(seeded);
+        if (!this._callerMode) {
+            this.lookupArchetypeDefaultMode(seeded.Archetype?.Name, companyId);
         }
 
         this.syncDeliverableFormats(seeded);
@@ -792,6 +795,56 @@ export class VideoStudioAgent extends BaseAgent {
         }
     }
 
+    private captureCallerMode(params: ExecuteAgentParams): void {
+        const callerInteraction = (params?.payload as Partial<VideoGenerationSpec> | undefined)
+            ?.Interaction;
+        const rawCallerMode = callerInteraction?.Mode;
+        const isBelowRoot =
+            Boolean(params?.parentRun) ||
+            (Array.isArray(this.AgentHierarchy) && this.AgentHierarchy.length > 1);
+
+        if (isValidInteractionMode(rawCallerMode)) {
+            this._callerPayloadInteraction = cloneSpec(callerInteraction);
+            this._callerMode = rawCallerMode;
+        } else if (params?.planMode === true) {
+            this._callerPayloadInteraction = undefined;
+            this._callerMode = 'ApproveStoryboard';
+        } else if (isBelowRoot) {
+            this._callerPayloadInteraction = undefined;
+            this._callerMode = 'Autonomous';
+        } else {
+            this._callerPayloadInteraction = undefined;
+            this._callerMode = null;
+        }
+        this._turnCapturedParams = params;
+    }
+
+    private ensureCallerModeCaptured(params: ExecuteAgentParams): void {
+        if (params !== this._turnCapturedParams && params !== this._turnSeededParams) {
+            this.captureCallerMode(params);
+        }
+    }
+
+    private restoreCallerInteraction(spec: Partial<VideoGenerationSpec>): void {
+        if (this._callerPayloadInteraction) {
+            spec.Interaction = cloneSpec(this._callerPayloadInteraction);
+        } else {
+            delete spec.Interaction;
+        }
+    }
+
+    private resolveEffectiveInteractionMode(
+        spec: Partial<VideoGenerationSpec>,
+    ): VideoInteractionMode {
+        if (this._callerMode) {
+            return this._callerMode;
+        }
+        return (
+            this.lookupArchetypeDefaultMode(spec.Archetype?.Name, spec.CompanyID ?? null) ??
+            'Autonomous'
+        );
+    }
+
     private lookupArchetypeDefaultMode(
         archetypeName: string | undefined | null,
         companyId: string | null,
@@ -799,35 +852,15 @@ export class VideoStudioAgent extends BaseAgent {
         if (!archetypeName?.trim()) {
             return null;
         }
-        try {
-            const archetype = VideoStudioEngine.Instance.GetArchetypeByName(
-                archetypeName.trim(),
-                companyId,
-            );
-            const mode = archetype?.DefaultInteractionMode;
-            if (isValidInteractionMode(mode)) {
-                return mode;
-            }
-        } catch {
-            // Engine not initialized
+        const archetype = VideoStudioEngine.Instance.GetArchetypeByName(
+            archetypeName.trim(),
+            companyId,
+        );
+        const mode = archetype?.DefaultInteractionMode;
+        if (isValidInteractionMode(mode)) {
+            return mode;
         }
         return null;
-    }
-
-    private applyArchetypeDefaultModeIfUnset(spec: Partial<VideoGenerationSpec>): void {
-        if (this._modeExplicitlySet || isValidInteractionMode(spec.Interaction?.Mode)) {
-            return;
-        }
-        const archetypeMode = this.lookupArchetypeDefaultMode(
-            spec.Archetype?.Name,
-            spec.CompanyID ?? null,
-        );
-        if (archetypeMode) {
-            spec.Interaction = {
-                Mode: archetypeMode,
-                MaxRepairRounds: this._currentSettings.MaxRepairRounds,
-            };
-        }
     }
 
     private applyApprovalResume(
@@ -901,12 +934,13 @@ export class VideoStudioAgent extends BaseAgent {
     private buildNormalizedSpecForValidation(
         spec: Partial<VideoGenerationSpec>,
         stage: VideoGenerationSpec['Status'],
+        effectiveMode: VideoInteractionMode = 'Autonomous',
     ): VideoGenerationSpec {
         const cloned = cloneSpec(spec) as VideoGenerationSpec;
         cloned.Status = stage;
         if (!cloned.Interaction) {
             cloned.Interaction = {
-                Mode: 'Autonomous',
+                Mode: effectiveMode,
                 MaxRepairRounds: this._currentSettings.MaxRepairRounds,
             };
         }
@@ -944,102 +978,93 @@ export class VideoStudioAgent extends BaseAgent {
     }
 
     private formatArchetypeCatalog(companyId: string | null): string {
-        try {
-            const archetypes: MJVideoArchetypeEntity[] =
-                VideoStudioEngine.Instance.GetArchetypesForCompany(companyId) ?? [];
-            if (archetypes.length === 0) {
-                return 'No active video archetypes found in catalog.';
-            }
-            return archetypes
-                .map((a) => {
-                    const pacing = a.PacingObject as
-                        | { TargetDurationRangeSeconds?: [number, number] }
-                        | null
-                        | undefined;
-                    const range = Array.isArray(pacing?.TargetDurationRangeSeconds)
-                        ? `${pacing!.TargetDurationRangeSeconds[0]}s–${pacing!.TargetDurationRangeSeconds[1]}s`
-                        : 'flexible duration';
-                    return `- **${a.Name}** (${a.Category ?? 'General'}, ${range}): ${a.Description ?? ''}`;
-                })
-                .join('\n');
-        } catch {
+        const archetypes: MJVideoArchetypeEntity[] =
+            VideoStudioEngine.Instance.GetArchetypesForCompany(companyId) ?? [];
+        if (archetypes.length === 0) {
             return 'No active video archetypes found in catalog.';
         }
+        return archetypes
+            .map((a) => {
+                const min = a.MinDurationSeconds;
+                const max = a.MaxDurationSeconds;
+                const range =
+                    typeof min === 'number' && typeof max === 'number'
+                        ? `${min}s–${max}s`
+                        : typeof min === 'number'
+                          ? `${min}s+`
+                          : typeof max === 'number'
+                            ? `up to ${max}s`
+                            : 'flexible duration';
+                return `- **${a.Name}** (${a.Category ?? 'General'}, ${range}): ${a.Description ?? ''}`;
+            })
+            .join('\n');
     }
 
     private formatBrandKitStyle(brandKitId: string | null, companyId: string | null): string {
-        try {
-            const engine = BrandKitEngine.Instance;
-            let kit: MJBrandKitEntity | null = null;
-            if (brandKitId) {
-                kit = (engine.BrandKits ?? []).find((k) => UUIDsEqual(k.ID, brandKitId)) ?? null;
-            }
-            if (!kit) {
-                kit = engine.GetDefaultKit(companyId) ?? null;
-            }
-            if (!kit) {
-                return 'No Brand Kit configured for this production.';
-            }
-            const sections: string[] = [`### Brand Kit: ${kit.Name}`];
-            if (kit.StyleObject) {
-                sections.push('#### Style', '```json', JSON.stringify(kit.StyleObject, null, 2), '```');
-            }
-            if (kit.VoiceObject) {
-                sections.push('#### Voice', '```json', JSON.stringify(kit.VoiceObject, null, 2), '```');
-            }
-            if (kit.GenerationPolicyObject) {
-                sections.push(
-                    '#### GenerationPolicy',
-                    '```json',
-                    JSON.stringify(kit.GenerationPolicyObject, null, 2),
-                    '```',
-                );
-            }
-            return sections.join('\n');
-        } catch {
+        const engine = BrandKitEngine.Instance;
+        let kit: MJBrandKitEntity | null = null;
+        if (brandKitId) {
+            kit = (engine.BrandKits ?? []).find((k) => UUIDsEqual(k.ID, brandKitId)) ?? null;
+        }
+        if (!kit) {
+            kit = engine.GetDefaultKit(companyId) ?? null;
+        }
+        if (!kit) {
             return 'No Brand Kit configured for this production.';
         }
+        const sections: string[] = [`### Brand Kit: ${kit.Name}`];
+        if (kit.StyleObject) {
+            sections.push('#### Style', '```json', JSON.stringify(kit.StyleObject, null, 2), '```');
+        }
+        if (kit.VoiceObject) {
+            sections.push('#### Voice', '```json', JSON.stringify(kit.VoiceObject, null, 2), '```');
+        }
+        if (kit.GenerationPolicyObject) {
+            sections.push(
+                '#### GenerationPolicy',
+                '```json',
+                JSON.stringify(kit.GenerationPolicyObject, null, 2),
+                '```',
+            );
+        }
+        return sections.join('\n');
     }
 
     private formatArchetypeGuidance(
         archetypeName: string | null,
         companyId: string | null,
     ): string {
-        try {
-            if (!archetypeName?.trim()) {
-                return 'No archetype selected.';
-            }
-            const archetype = VideoStudioEngine.Instance.GetArchetypeByName(
-                archetypeName.trim(),
-                companyId,
-            );
-            if (!archetype) {
-                return `Archetype "${archetypeName}" not found in catalog.`;
-            }
-            const sections: string[] = [`### Archetype: ${archetype.Name}`];
-            if (archetype.BeatTemplateObject) {
-                sections.push(
-                    '#### BeatTemplate',
-                    '```json',
-                    JSON.stringify(archetype.BeatTemplateObject, null, 2),
-                    '```',
-                );
-            }
-            if (archetype.PacingObject) {
-                sections.push(
-                    '#### Pacing',
-                    '```json',
-                    JSON.stringify(archetype.PacingObject, null, 2),
-                    '```',
-                );
-            }
-            if (archetype.Guidance) {
-                sections.push('#### Guidance', archetype.Guidance);
-            }
-            return sections.join('\n');
-        } catch {
-            return 'No archetype guidance available.';
+        if (!archetypeName?.trim()) {
+            return 'No archetype selected.';
         }
+        const archetype = VideoStudioEngine.Instance.GetArchetypeByName(
+            archetypeName.trim(),
+            companyId,
+        );
+        if (!archetype) {
+            return `Archetype "${archetypeName}" not found in catalog.`;
+        }
+        const sections: string[] = [`### Archetype: ${archetype.Name}`];
+        if (archetype.BeatTemplateObject) {
+            sections.push(
+                '#### BeatTemplate',
+                '```json',
+                JSON.stringify(archetype.BeatTemplateObject, null, 2),
+                '```',
+            );
+        }
+        if (archetype.PacingObject) {
+            sections.push(
+                '#### Pacing',
+                '```json',
+                JSON.stringify(archetype.PacingObject, null, 2),
+                '```',
+            );
+        }
+        if (archetype.Guidance) {
+            sections.push('#### Guidance', archetype.Guidance);
+        }
+        return sections.join('\n');
     }
 
     private describeRoughCutForApproval(spec: Partial<VideoGenerationSpec>): string {

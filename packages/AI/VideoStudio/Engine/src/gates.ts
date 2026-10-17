@@ -27,6 +27,7 @@ export interface GateEvaluationContext {
     Settings: VideoStudioSettings;
     Now?: string;
     BrandKitInScope?: boolean;
+    EffectiveInteractionMode?: VideoGenerationSpec['Interaction']['Mode'];
 }
 
 /**
@@ -89,6 +90,8 @@ function evaluateGateG1(
         blockedReasons.push('BrandKitID is not in scope for the production CompanyID');
     }
 
+    const effectiveMode = ctx.EffectiveInteractionMode ?? spec.Interaction?.Mode ?? 'Autonomous';
+
     // Run pure validator at Briefing to check MustUse requirements
     const specForBriefing: VideoGenerationSpec = {
         SpecVersion: VIDEO_STUDIO_SPEC_VERSION,
@@ -128,7 +131,7 @@ function evaluateGateG1(
             Quality: spec.Render?.Quality ?? ctx.Settings.RenderQuality,
         },
         Interaction: {
-            Mode: spec.Interaction?.Mode ?? 'Autonomous',
+            Mode: effectiveMode,
             MaxRepairRounds: spec.Interaction?.MaxRepairRounds ?? ctx.Settings.MaxRepairRounds,
         },
         Deliverables: {
@@ -253,11 +256,11 @@ function evaluateGateG2(
                 }
               : spec.Deliverables;
 
-    const normalizedInteraction =
-        spec.Interaction ?? {
-            Mode: 'Autonomous' as const,
-            MaxRepairRounds: ctx.Settings.MaxRepairRounds,
-        };
+    const effectiveMode = ctx.EffectiveInteractionMode ?? spec.Interaction?.Mode ?? 'Autonomous';
+    const normalizedInteraction = {
+        Mode: effectiveMode,
+        MaxRepairRounds: spec.Interaction?.MaxRepairRounds ?? ctx.Settings.MaxRepairRounds,
+    };
 
     const candidateSpec = {
         ...spec,
@@ -270,25 +273,18 @@ function evaluateGateG2(
     const storyboardValidation = ValidateVideoGenerationSpec(candidateSpec, 'Storyboarded', {
         MaxGeneratedVideoSeconds: ctx.Settings.MaxGeneratedVideoSeconds,
     });
-    const isSilentFilm =
-        !spec.Audio?.Narration?.Script?.length &&
-        !(Array.isArray(spec.Beats) && spec.Beats.some((b) => Boolean(b?.NarrationKey)));
-    const g2Errors = isSilentFilm
-        ? storyboardValidation.Errors.filter((e) => e.Code !== 'MissingNarrationScript')
-        : storyboardValidation.Errors;
 
-    if (g2Errors.length > 0) {
+    if (storyboardValidation.Errors.length > 0) {
         return {
             Gate: 'G2',
             Status: 'Failed',
             EvidenceRefs: [],
             Timestamp: now,
-            Notes: g2Errors.map((e) => `${e.Code} (${e.Path}): ${e.Message}`).join('; '),
+            Notes: storyboardValidation.Errors.map((e) => `${e.Code} (${e.Path}): ${e.Message}`).join('; '),
         };
     }
 
-    const mode = spec.Interaction?.Mode ?? 'Autonomous';
-    const isApproved = mode === 'Autonomous' || existingG2?.Notes === 'Approved';
+    const isApproved = effectiveMode === 'Autonomous' || existingG2?.Notes === 'Approved';
     if (isApproved) {
         return {
             Gate: 'G2',
@@ -365,6 +361,7 @@ function hasCriticRoundOnOrAfterRender(spec: Partial<VideoGenerationSpec>): bool
 
 function evaluateGateG4(
     spec: Partial<VideoGenerationSpec>,
+    ctx: GateEvaluationContext,
     existingG4: GateRecord | undefined,
     now: string,
 ): GateRecord {
@@ -389,7 +386,8 @@ function evaluateGateG4(
         };
     }
 
-    if (spec.Interaction?.Mode === 'ApproveStoryboardAndRoughCut' && existingG4?.Notes !== 'Approved') {
+    const effectiveMode = ctx.EffectiveInteractionMode ?? spec.Interaction?.Mode ?? 'Autonomous';
+    if (effectiveMode === 'ApproveStoryboardAndRoughCut' && existingG4?.Notes !== 'Approved') {
         return {
             Gate: 'G4',
             Status: 'Pending',
@@ -518,7 +516,7 @@ export function EvaluateGates(
     const g1 = evaluateGateG1(safeSpec, ctx, now);
     const g2 = evaluateGateG2(safeSpec, ctx, existingG2, now);
     const g3 = evaluateGateG3(safeSpec, existingG3, now);
-    const g4 = evaluateGateG4(safeSpec, existingG4, now);
+    const g4 = evaluateGateG4(safeSpec, ctx, existingG4, now);
     const g5 = evaluateGateG5(safeSpec, ctx, now);
     const g6 = evaluateGateG6(safeSpec, now);
 
@@ -580,24 +578,15 @@ export function DeriveStatus(
         ? safeSpec.Audio.Narration.Script
         : [];
     const hasNarrationAudioIfNeeded =
-        scriptLines.length === 0 || scriptLines.every((l) => Boolean(l?.AudioFileID?.trim()));
+        scriptLines.length > 0 && scriptLines.every((l) => Boolean(l?.AudioFileID?.trim()));
 
     const approvedAssets = Array.isArray(safeSpec.Assets?.Approved) ? safeSpec.Assets.Approved : [];
     const hasApprovedAssetIds = approvedAssets.every((a) => Boolean(a?.FileID?.trim() || a?.ArtifactVersionID?.trim()));
 
-    const hasPreProdEvidenceWhenVacuous =
-        scriptLines.length > 0 ||
-        bindings.length > 0 ||
-        Boolean(safeSpec.DataSnapshot) ||
-        approvedAssets.some((a) => Boolean(a?.StagedPath || a?.Generation)) ||
-        Boolean(safeSpec.Output?.Source) ||
-        ['PreProduced', 'Composed', 'RoughCut', 'Reviewed', 'Delivered'].includes(safeSpec.Status as string);
-
     const isPreProduced =
         hasDataSnapshotIfNeeded &&
         hasNarrationAudioIfNeeded &&
-        hasApprovedAssetIds &&
-        hasPreProdEvidenceWhenVacuous;
+        hasApprovedAssetIds;
     if (!isPreProduced) {
         return 'Approved';
     }
@@ -786,19 +775,29 @@ export function ClearStaleEvidence<T extends Partial<VideoGenerationSpec>>(
 /**
  * Parses a human approval/rejection reply for `G2` or `G4`.
  *
- * 1. Inspects `@form:` / `@{"_mode":"form",...}` tokens via `ConversationUtility.ParseSpecialContent(text)`
- *    for a `decision` field (`'approve'` or `'reject'`).
- * 2. When no form token has a `decision`, checks if the first line is `'Approved.'` or `'Rejected.'`.
- * 3. Otherwise strips an optional leading `'Approved.'` prefix, returns `null` on empty text,
- *    `'Approve'` when the trimmed remainder starts with `'approve'` (case-insensitive), and
- *    `'Reject'` otherwise.
+ * 1. Checks if the trimmed first line is `'Approved.'` or `'Rejected.'` (matching `VS-UX-2`'s
+ *    `submitPlanReview` leading prefix).
+ * 2. When the first line does not decide, inspects `@form:` / `@{"_mode":"form",...}` tokens via
+ *    `ConversationUtility.ParseSpecialContent(text)` for a `decision` field (`'approve'` or `'reject'`).
+ * 3. Otherwise strips special-content tokens and an optional leading `'Approved.'` prefix, returns
+ *    `null` on empty text, `'Approve'` when the trimmed remainder starts with `'approve'`
+ *    (case-insensitive), and `'Reject'` otherwise.
  */
 export function ReadApprovalDecision(text: string | null | undefined): 'Approve' | 'Reject' | null {
     if (typeof text !== 'string') {
         return null;
     }
 
-    // 1. Check @{ "_mode": "form", ... } tokens via ConversationUtility
+    // 1. Check the trimmed first line first so VS-UX-2's leading 'Approved.' / 'Rejected.' line wins
+    const leadingFirstLine = text.trimStart().split(/\r?\n/)[0]?.trim() ?? '';
+    if (/^rejected\.$/i.test(leadingFirstLine)) {
+        return 'Reject';
+    }
+    if (/^approved\.$/i.test(leadingFirstLine)) {
+        return 'Approve';
+    }
+
+    // 2. Check @{ "_mode": "form", ... } tokens via ConversationUtility
     const tokens = ConversationUtility.ParseSpecialContent(text);
     for (const token of tokens) {
         if (token.mode === 'form' && token.content) {
@@ -850,7 +849,7 @@ export function ReadApprovalDecision(text: string | null | undefined): 'Approve'
         }
     }
 
-    // 2. Strip special content tokens
+    // 3. Strip special content tokens
     let remaining = text;
     for (let i = tokens.length - 1; i >= 0; i--) {
         const t = tokens[i];

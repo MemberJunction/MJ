@@ -149,11 +149,21 @@ describe('VideoStudio gates', () => {
             expect(approved.Notes).toBe('Approved');
         });
 
-        it('fails when ValidateVideoGenerationSpec at Storyboarded fails', () => {
+        it('fails when ValidateVideoGenerationSpec at Storyboarded fails (including a narration-less storyboard with MissingNarrationScript)', () => {
             const spec = CreateDeliveredSpecFixture();
             spec.Beats[0].StartSeconds = 3; // breaks contiguous 0-start beats invariant
             const g2 = getGate(EvaluateGates(spec, standardCtx), 'G2');
             expect(g2.Status).toBe('Failed');
+
+            const silentSpec = CreateDeliveredSpecFixture();
+            silentSpec.Audio = { Cues: [], Captions: 'None' };
+            silentSpec.Deliverables.Captions = false;
+            for (const beat of silentSpec.Beats) {
+                delete beat.NarrationKey;
+            }
+            const g2Silent = getGate(EvaluateGates(silentSpec, standardCtx), 'G2');
+            expect(g2Silent.Status).toBe('Failed');
+            expect(g2Silent.Notes).toContain('MissingNarrationScript');
         });
     });
 
@@ -318,7 +328,7 @@ describe('VideoStudio gates', () => {
             const blockedGates = EvaluateGates(blockedSpec, { ...standardCtx, BrandKitInScope: false });
             expect(DeriveStatus(blockedSpec, blockedGates)).toBe('Blocked');
 
-            const fullSpec = CreateDeliveredSpecFixture();
+        const fullSpec = CreateDeliveredSpecFixture();
             const fullGates = EvaluateGates(fullSpec, standardCtx);
             expect(DeriveStatus(fullSpec, fullGates)).toBe('Reviewed');
         });
@@ -359,10 +369,20 @@ describe('VideoStudio gates', () => {
     });
 
     describe('ReadApprovalDecision', () => {
-        it('parses structured form tokens and explicit prefix approval tokens conservatively', () => {
+        it('parses structured form tokens and explicit prefix approval tokens conservatively, with leading Approved./Rejected. line taking precedence', () => {
             expect(
                 ReadApprovalDecision(
                     'Approved.\n\n@{"_mode":"form","action":"form","fields":[{"name":"decision","value":"approve"}]}',
+                ),
+            ).toBe('Approve');
+            expect(
+                ReadApprovalDecision(
+                    'Rejected.\n\n@{"_mode":"form","action":"form","fields":[{"name":"decision","value":"approve"}]}',
+                ),
+            ).toBe('Reject');
+            expect(
+                ReadApprovalDecision(
+                    'Approved.\n\n@{"_mode":"form","action":"form","fields":[{"name":"decision","value":"reject"}]}',
                 ),
             ).toBe('Approve');
             expect(
