@@ -30,13 +30,12 @@ Sub-directory `CLAUDE.md` files extend this root guide with topic-specific rules
 
 ## 🚨 CRITICAL RULES - VIOLATIONS ARE UNACCEPTABLE 🚨
 
-### 1. NO COMMITS WITHOUT EXPLICIT APPROVAL
+### 1. SAFE COMMITS & PR WORKFLOW
 
-- **NEVER run `git commit` without the user explicitly asking you to**
-- **Each commit requires ONE-TIME explicit approval** - don't assume ongoing permission
-- **NEVER ask to commit** - wait for the user to request it
-- **ONLY commit what is staged** - never modify or add to staged changes
-- **NEVER commit work-in-progress** that isn't staged by the user
+- **PR & branch tasks**: When asked to create, fix, or update a PR/branch, commit and push your changes to that branch
+- **Shared checkouts**: When not asked for a PR or commit, ask before running `git commit`
+- **Stage explicitly**: Use `git add <file>` for your task's files — **NEVER `git add -A`/`.`** or commit unrelated WIP
+- **NEVER commit or push directly to `next` or `main`**
 
 ### 2. NO `any` TYPES - EVER
 

@@ -32,7 +32,7 @@ import { PanelConfig } from '../models/dashboard-types';
               [Message]="ErrorMessage"
               Size="compact">
               @if (rawUrl) {
-                <a actions [href]="rawUrl" target="_blank" class="open-link">
+                <a actions [href]="rawUrl" target="_blank" rel="noopener noreferrer" class="open-link">
                   <i class="fa-solid fa-up-right-from-square"></i>
                   Open in new window
                 </a>
@@ -133,7 +133,7 @@ import { PanelConfig } from '../models/dashboard-types';
           @if (!IsLoading && !ErrorMessage && SafeUrl && showFallbackLink) {
             <div class="iframe-fallback">
               <span>If the content doesn't load:</span>
-              <a [href]="rawUrl" target="_blank">
+              <a [href]="rawUrl" target="_blank" rel="noopener noreferrer">
                 <i class="fa-solid fa-external-link-alt"></i>
                 Open in new window
               </a>
@@ -297,6 +297,14 @@ export class WebURLPartComponent extends BaseDashboardPart implements AfterViewI
         }
     }
 
+    protected override cleanup(): void {
+        if (this.loadCheckTimeout) {
+            clearTimeout(this.loadCheckTimeout);
+            this.loadCheckTimeout = null;
+        }
+        super.cleanup();
+    }
+
     public async loadContent(): Promise<void> {
         const config = this.getConfig<PanelConfig>();
         const url = config?.['url'] as string | undefined;
@@ -310,6 +318,7 @@ export class WebURLPartComponent extends BaseDashboardPart implements AfterViewI
         // Reset state
         this.iframeLoaded = false;
         this.ShowFallbackLink = false;
+        this.ErrorMessage = null;
 
         if (!url) {
             this.SafeUrl = null;

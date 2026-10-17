@@ -288,6 +288,7 @@ export class ParallelExecuteAction extends BaseAction {
         const engine = ActionEngineServer.Instance;
         const startTime = Date.now();
 
+        let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
         return new Promise<ActionResultSimple>((resolve) => {
             let resolved = false;
             const results: any[] = [];
@@ -431,7 +432,7 @@ export class ParallelExecuteAction extends BaseAction {
 
             // Handle timeout
             if (timeout > 0) {
-                setTimeout(() => {
+                timeoutHandle = setTimeout(() => {
                     if (!resolved) {
                         resolved = true;
                         resolve({
@@ -442,7 +443,7 @@ export class ParallelExecuteAction extends BaseAction {
                     }
                 }, timeout);
             }
-        });
+        }).finally(() => clearTimeout(timeoutHandle));
     }
 
     /**
