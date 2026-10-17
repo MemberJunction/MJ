@@ -380,7 +380,8 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
 
     /**
      * Writes one output on its key: unchanged, updated in place, or inserted. An unchanged row is saved only when
-     * another key holds the feature's latest value (`supersededByAnotherKey`), to make it the latest again.
+     * another key holds the feature's latest value (`supersededByAnotherKey`), to make it the latest again. An insert
+     * that fails on the key's unique index because a concurrent run stored the same typed value first is Unchanged.
      * @throws FeatureValueSaveError when the save fails.
      */
     protected async WriteOne(
@@ -402,10 +403,36 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
             this.AssignKeyColumns(fv, params, out, keyHash);
         }
         this.AssignValueColumns(fv, params, out, typed);
-        if (!(await fv.Save())) {
-            throw new FeatureValueSaveError(out.featureName, params.recordID, fv.LatestResult?.CompleteMessage || 'unknown error');
+        const failure = await this.SaveFailure(fv);
+        if (failure === null) {
+            return unchanged ? 'Unchanged' : 'Upserted';
         }
-        return unchanged ? 'Unchanged' : 'Upserted';
+        if (!row && failure.includes(FeatureValueCacheService.ValueKeyIndexName)
+            && (await this.ConcurrentInsertHolds(params, provider, keyHash, typed))) {
+            return 'Unchanged';
+        }
+        throw new FeatureValueSaveError(out.featureName, params.recordID, failure);
+    }
+
+    /** The unique index on (RecordProcessID, ValueKeyHash): a second insert of a key fails on it. */
+    protected static readonly ValueKeyIndexName = 'UQ_FeatureValue_ValueKey';
+
+    /** Saves a row; null when it saved, else the provider's message (a rejected save included). */
+    protected async SaveFailure(fv: MJFeatureValueEntity): Promise<string | null> {
+        try {
+            return (await fv.Save()) ? null : fv.LatestResult?.CompleteMessage || 'unknown error';
+        } catch (e) {
+            return e instanceof Error ? e.message : String(e);
+        }
+    }
+
+    /**
+     * Whether a row another run inserted on the key between this write's read and its insert (two runs over the same
+     * scope) already holds this typed value, so the write is satisfied. Read fresh.
+     */
+    protected async ConcurrentInsertHolds(params: RecordFeatureValuesParams, provider: IMetadataProvider, keyHash: string, typed: TypedFeatureValue): Promise<boolean> {
+        const stored = (await this.LoadByKeyHashes(params, provider, [keyHash])).get(keyHash);
+        return !!stored && FeatureValueCacheService.SameTypedValue(stored, typed);
     }
 
     /** Whether `row` already holds this output: the same typed value, reasoning and confidence. */

@@ -402,6 +402,47 @@ describe('FeatureValueCacheService', () => {
             await expect(failure).rejects.toBeInstanceOf(FeatureValueSaveError);
             await expect(failure).rejects.toMatchObject({ FeatureName: 'SeniorityLevel', RecordID: 'rec-1', ProviderMessage: 'FK_FeatureValue_Entity' });
         });
+
+        // a concurrent run over the same scope inserted the key between this run's read and its insert
+        describe('an insert that loses the race on the Feature Value key', () => {
+            const duplicate = "Cannot insert duplicate key row in object '__mj.FeatureValue' with unique index 'UQ_FeatureValue_ValueKey'. The duplicate key value is (rp-1, abc).";
+            const stored = (valueText: string) => ({ FeatureName: 'SeniorityLevel', ValueText: valueText, ValueNumeric: null, ValueBoolean: null,
+                ValueDate: null, ValueJSON: null, Reasoning: 'another run', Confidence: 0.5 });
+
+            it.each([
+                ['returns false', () => vi.fn().mockResolvedValue(false)],
+                ['rejects', () => vi.fn().mockRejectedValue(new Error(duplicate))],
+            ])('counts it Unchanged when the save %s and the row already holds the same typed value', async (_how, makeSave) => {
+                const keyHash = await FeatureValueKey.ComputeHash(keyInput);
+                MockRunView.queue = [[], [], [{ ...stored('Director'), ValueKeyHash: keyHash }]];
+                const save = makeSave();
+                const provider = stubProvider(vi.fn().mockResolvedValue({ NewRecord: vi.fn(), Save: save, LatestResult: { CompleteMessage: duplicate } }));
+                const outcome = await FeatureValueCacheService.Instance.RecordFeatureValues(params(provider));
+                expect(outcome).toEqual({ Upserted: 0, Unchanged: 1, Previous: { SeniorityLevel: null } });
+                expect(save).toHaveBeenCalledTimes(1);
+                const reread = MockRunView.calls[2];
+                expect(reread.ExtraFilter).toBe(`RecordProcessID = 'rp-1' AND ValueKeyHash IN ('${keyHash}')`);
+                expect(reread.BypassCache).toBe(true);
+            });
+
+            it('throws the save error when the row another run stored holds a different value', async () => {
+                const keyHash = await FeatureValueKey.ComputeHash(keyInput);
+                MockRunView.queue = [[], [], [{ ...stored('Manager'), ValueKeyHash: keyHash }]];
+                const provider = stubProvider(vi.fn().mockResolvedValue({ NewRecord: vi.fn(), Save: vi.fn().mockResolvedValue(false),
+                    LatestResult: { CompleteMessage: duplicate } }));
+                const failure = FeatureValueCacheService.Instance.RecordFeatureValues(params(provider));
+                await expect(failure).rejects.toBeInstanceOf(FeatureValueSaveError);
+                await expect(failure).rejects.toMatchObject({ ProviderMessage: duplicate });
+            });
+
+            it('throws a rejected save that is not a duplicate key without re-reading', async () => {
+                MockRunView.queue = [[], []];
+                const provider = stubProvider(vi.fn().mockResolvedValue({ NewRecord: vi.fn(), Save: vi.fn().mockRejectedValue(new Error('deadlock victim')) }));
+                const failure = FeatureValueCacheService.Instance.RecordFeatureValues(params(provider));
+                await expect(failure).rejects.toMatchObject({ ProviderMessage: 'deadlock victim' });
+                expect(MockRunView.calls).toHaveLength(2);
+            });
+        });
     });
 
     describe('Store', () => {
