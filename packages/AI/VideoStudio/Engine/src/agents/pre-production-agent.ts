@@ -5,13 +5,12 @@ import type {
     ExecuteAgentParams,
     MJAIAgentRunStepEntityExtended,
 } from '@memberjunction/ai-core-plus';
-import type { UserInfo } from '@memberjunction/core';
+import { RunView, type IMetadataProvider, type IRunViewProvider, type UserInfo } from '@memberjunction/core';
 import { VideoStudioEngine } from '@memberjunction/core-entities';
-import { RegisterClass } from '@memberjunction/global';
+import { EscapeSQLString, IsValidUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import {
     CreateMJChartKit,
     type VideoAsset,
-    type VideoAssetKind,
     type VideoGenerationSpec,
 } from '@memberjunction/video-studio-core';
 import {
@@ -29,6 +28,64 @@ import { SanitizeStageKey } from '../render/bundle.js';
 const NEVER_INVENT_ESCALATION_NOTE =
     'Ask the caller to supply the missing data, parameter, or asset. Never fill in a placeholder or invent the value.';
 
+const MIME_TO_EXTENSION: Readonly<Record<string, string>> = {
+    'image/svg+xml': 'svg',
+    'image/png': 'png',
+    'image/jpeg': 'jpg',
+    'image/jpg': 'jpg',
+    'image/webp': 'webp',
+    'image/gif': 'gif',
+    'video/mp4': 'mp4',
+    'video/webm': 'webm',
+    'audio/mpeg': 'mp3',
+    'audio/mp3': 'mp3',
+    'audio/wav': 'wav',
+    'audio/x-wav': 'wav',
+    'audio/wave': 'wav',
+    'audio/ogg': 'ogg',
+    'font/woff2': 'woff2',
+    'application/font-woff2': 'woff2',
+    'font/woff': 'woff',
+    'application/font-woff': 'woff',
+    'font/ttf': 'ttf',
+    'application/x-font-ttf': 'ttf',
+    'application/font-sfnt': 'ttf',
+    'font/otf': 'otf',
+    'application/x-font-opentype': 'otf',
+    'application/json': 'json',
+};
+
+const KNOWN_FILE_EXTENSIONS = new Set<string>([
+    'svg',
+    'png',
+    'jpg',
+    'webp',
+    'gif',
+    'mp4',
+    'webm',
+    'mp3',
+    'wav',
+    'ogg',
+    'woff2',
+    'woff',
+    'ttf',
+    'otf',
+    'json',
+]);
+
+interface StoredFileMetadataRow {
+    ID: string;
+    ContentType?: string | null;
+    Name?: string | null;
+}
+
+interface StoredArtifactVersionMetadataRow {
+    ID: string;
+    FileID?: string | null;
+    MimeType?: string | null;
+    Name?: string | null;
+}
+
 function cloneSpec<T>(value: T): T {
     if (value === undefined || value === null) {
         return {} as T;
@@ -36,66 +93,182 @@ function cloneSpec<T>(value: T): T {
     return JSON.parse(JSON.stringify(value)) as T;
 }
 
-function inferAssetExtension(asset: VideoAsset): string {
-    const rawAsset = asset as VideoAsset & { MimeType?: string };
-    const mime = (rawAsset.MimeType ?? '').trim().toLowerCase();
-    if (mime) {
-        if (mime === 'image/png') return 'png';
-        if (mime === 'image/jpeg' || mime === 'image/jpg') return 'jpg';
-        if (mime === 'image/svg+xml') return 'svg';
-        if (mime === 'image/webp') return 'webp';
-        if (mime === 'image/gif') return 'gif';
-        if (mime === 'video/mp4') return 'mp4';
-        if (mime === 'video/webm') return 'webm';
-        if (mime === 'audio/mpeg' || mime === 'audio/mp3') return 'mp3';
-        if (mime === 'audio/wav' || mime === 'audio/x-wav') return 'wav';
-        if (mime === 'audio/ogg') return 'ogg';
-        if (mime === 'font/woff2' || mime === 'application/font-woff2') return 'woff2';
-        if (mime === 'font/woff' || mime === 'application/font-woff') return 'woff';
-        if (mime === 'font/ttf' || mime === 'application/x-font-ttf') return 'ttf';
-        if (mime === 'font/otf' || mime === 'application/x-font-opentype') return 'otf';
-        if (mime === 'application/json') return 'json';
+function mapMimeToExtension(rawMime: string | null | undefined): string | undefined {
+    const normalized = (rawMime ?? '').trim().toLowerCase().split(';')[0].trim();
+    if (!normalized) {
+        return undefined;
+    }
+    return MIME_TO_EXTENSION[normalized];
+}
+
+function extractExtensionFromFileName(rawName: string | null | undefined): string | undefined {
+    const trimmed = (rawName ?? '').trim();
+    const match = trimmed.match(/\.([a-zA-Z0-9]{2,5})(?:[?#]|$)/);
+    if (!match) {
+        return undefined;
+    }
+    const lower = match[1].toLowerCase();
+    const normalized = lower === 'jpeg' ? 'jpg' : lower;
+    return KNOWN_FILE_EXTENSIONS.has(normalized) ? normalized : undefined;
+}
+
+function extractAssetIdHexPrefix(asset: VideoAsset): string {
+    const rawId = (asset.FileID?.trim() || asset.ArtifactVersionID?.trim() || '');
+    return rawId.replace(/[^a-fA-F0-9]/g, '').toLowerCase().slice(0, 8);
+}
+
+function allocateUniqueStagedPath(
+    folder: 'assets' | 'audio',
+    stem: string,
+    ext: string,
+    usedPaths: Set<string>,
+): string {
+    const basePath = `${folder}/${stem}.${ext}`;
+    if (!usedPaths.has(basePath)) {
+        usedPaths.add(basePath);
+        return basePath;
+    }
+    let suffix = 2;
+    while (usedPaths.has(`${folder}/${stem}-${suffix}.${ext}`)) {
+        suffix += 1;
+    }
+    const uniquePath = `${folder}/${stem}-${suffix}.${ext}`;
+    usedPaths.add(uniquePath);
+    return uniquePath;
+}
+
+async function resolveAssetExtensionsFromStorage(
+    approvedAssets: readonly VideoAsset[],
+    contextUser: UserInfo,
+    provider?: IMetadataProvider,
+): Promise<Map<VideoAsset, string>> {
+    const result = new Map<VideoAsset, string>();
+    if (approvedAssets.length === 0) {
+        return result;
     }
 
-    const sourceMatch = (asset.Source ?? '').trim().match(/\.([a-zA-Z0-9]{2,5})(?:[?#]|$)/);
-    if (sourceMatch) {
-        const ext = sourceMatch[1].toLowerCase();
-        if (
-            [
-                'png',
-                'jpg',
-                'jpeg',
-                'svg',
-                'webp',
-                'gif',
-                'mp4',
-                'webm',
-                'mp3',
-                'wav',
-                'ogg',
-                'woff2',
-                'woff',
-                'ttf',
-                'otf',
-                'json',
-            ].includes(ext)
-        ) {
-            return ext === 'jpeg' ? 'jpg' : ext;
+    const rv = new RunView(provider as unknown as IRunViewProvider);
+    const avIds: string[] = [];
+    const fileIds: string[] = [];
+
+    for (const asset of approvedAssets) {
+        const fileId = asset.FileID?.trim();
+        const avId = asset.ArtifactVersionID?.trim();
+        if (!fileId && !avId) {
+            throw new Error(
+                `Cannot stage asset "${asset.Key}": asset has neither FileID nor ArtifactVersionID.`,
+            );
+        }
+        if (fileId) {
+            if (!IsValidUUID(fileId)) {
+                throw new Error(
+                    `Cannot stage asset "${asset.Key}": FileID "${fileId}" is not a valid UUID.`,
+                );
+            }
+            if (!fileIds.some((id) => UUIDsEqual(id, fileId))) {
+                fileIds.push(fileId);
+            }
+        }
+        if (avId) {
+            if (!IsValidUUID(avId)) {
+                throw new Error(
+                    `Cannot stage asset "${asset.Key}": ArtifactVersionID "${avId}" is not a valid UUID.`,
+                );
+            }
+            if (!avIds.some((id) => UUIDsEqual(id, avId))) {
+                avIds.push(avId);
+            }
         }
     }
 
-    const kindMap: Record<VideoAssetKind, string> = {
-        Logo: 'png',
-        LogoMark: 'png',
-        Image: 'png',
-        Screenshot: 'png',
-        Video: 'mp4',
-        Music: 'mp3',
-        SoundEffect: 'mp3',
-        Font: 'woff2',
-        Other: 'bin',
-    };
-    return kindMap[asset.Kind] ?? 'bin';
+    let avRows: StoredArtifactVersionMetadataRow[] = [];
+    if (avIds.length > 0) {
+        const avFilter = avIds.map((id) => `'${EscapeSQLString(id)}'`).join(', ');
+        const avView = await rv.RunView<StoredArtifactVersionMetadataRow>(
+            {
+                EntityName: 'MJ: Artifact Versions',
+                ExtraFilter: `ID IN (${avFilter})`,
+                Fields: ['ID', 'FileID', 'MimeType', 'Name'],
+                ResultType: 'simple',
+            },
+            contextUser,
+        );
+        if (!avView.Success) {
+            throw new Error(
+                `Failed to load MJ: Artifact Versions for asset staging: ${avView.ErrorMessage ?? 'RunView failed'}`,
+            );
+        }
+        avRows = avView.Results ?? [];
+        for (const row of avRows) {
+            const linkedFileId = row.FileID?.trim();
+            if (
+                linkedFileId &&
+                IsValidUUID(linkedFileId) &&
+                !fileIds.some((id) => UUIDsEqual(id, linkedFileId))
+            ) {
+                fileIds.push(linkedFileId);
+            }
+        }
+    }
+
+    let fileRows: StoredFileMetadataRow[] = [];
+    if (fileIds.length > 0) {
+        const fileFilter = fileIds.map((id) => `'${EscapeSQLString(id)}'`).join(', ');
+        const fileView = await rv.RunView<StoredFileMetadataRow>(
+            {
+                EntityName: 'MJ: Files',
+                ExtraFilter: `ID IN (${fileFilter})`,
+                Fields: ['ID', 'ContentType', 'Name'],
+                ResultType: 'simple',
+            },
+            contextUser,
+        );
+        if (!fileView.Success) {
+            throw new Error(
+                `Failed to load MJ: Files for asset staging: ${fileView.ErrorMessage ?? 'RunView failed'}`,
+            );
+        }
+        fileRows = fileView.Results ?? [];
+    }
+
+    for (const asset of approvedAssets) {
+        const fileId = asset.FileID?.trim();
+        const avId = asset.ArtifactVersionID?.trim();
+        const avRow = avId ? avRows.find((r) => UUIDsEqual(r.ID, avId)) : undefined;
+        const effectiveFileId = fileId || avRow?.FileID?.trim() || undefined;
+        const fileRow = effectiveFileId
+            ? fileRows.find((r) => UUIDsEqual(r.ID, effectiveFileId))
+            : undefined;
+
+        if (fileId && !fileRow) {
+            throw new Error(
+                `Cannot stage asset "${asset.Key}": MJ: Files record "${fileId}" was not found.`,
+            );
+        }
+        if (!fileId && avId && !avRow) {
+            throw new Error(
+                `Cannot stage asset "${asset.Key}": MJ: Artifact Versions record "${avId}" was not found.`,
+            );
+        }
+
+        const ext =
+            mapMimeToExtension(fileRow?.ContentType) ??
+            mapMimeToExtension(avRow?.MimeType) ??
+            extractExtensionFromFileName(fileRow?.Name) ??
+            extractExtensionFromFileName(avRow?.Name);
+
+        if (!ext) {
+            const reportedMime = (fileRow?.ContentType ?? avRow?.MimeType ?? '').trim() || 'none';
+            const reportedName = (fileRow?.Name ?? avRow?.Name ?? '').trim() || 'none';
+            throw new Error(
+                `Cannot stage asset "${asset.Key}": stored file has unrecognized ContentType "${reportedMime}" and file Name "${reportedName}" has no supported extension.`,
+            );
+        }
+
+        result.set(asset, ext);
+    }
+
+    return result;
 }
 
 function formatPreProductionFailureMessage(
@@ -158,11 +331,7 @@ export class VideoStudioPreProductionAgent extends BaseAgent {
                 inputData,
                 contextUser,
             };
-            try {
-                return await this.createStepEntity(stepParams);
-            } catch {
-                return null;
-            }
+            return await this.createStepEntity(stepParams);
         };
 
         const finishStep = async (
@@ -174,11 +343,7 @@ export class VideoStudioPreProductionAgent extends BaseAgent {
             if (!step) {
                 return;
             }
-            try {
-                await this.finalizeStepEntity(step, success, errorMessage, outputData);
-            } catch {
-                // Ignore step persistence errors when running in unit tests without a backing DB
-            }
+            await this.finalizeStepEntity(step, success, errorMessage, outputData);
         };
 
         const failRun = (message: string): { finalStep: BaseAgentNextStep<P>; stepCount: number } => ({
@@ -277,7 +442,7 @@ export class VideoStudioPreProductionAgent extends BaseAgent {
                 }
             }
 
-            const filmBounds = this.resolveFilmBounds(workingSpec);
+            const filmBounds = await this.resolveFilmBounds(workingSpec, contextUser);
             const narrationResult = await RunNarrationPipeline(workingSpec, {
                 ContextUser: contextUser,
                 Provider: this.ProviderToUse,
@@ -349,15 +514,24 @@ export class VideoStudioPreProductionAgent extends BaseAgent {
                 NarrationLineCount: scriptLines.length,
             });
 
+            const resolvedExtensions = await resolveAssetExtensionsFromStorage(
+                approvedAssets,
+                contextUser,
+                this.ProviderToUse,
+            );
+            const usedAssetPaths = new Set<string>();
             for (const asset of approvedAssets) {
                 const sanitized = SanitizeStageKey(asset.Key);
-                const ext = inferAssetExtension(asset);
-                asset.StagedPath = `assets/${sanitized}.${ext}`;
+                const idPrefix = extractAssetIdHexPrefix(asset);
+                const stem = idPrefix ? `${sanitized}-${idPrefix}` : sanitized;
+                const ext = resolvedExtensions.get(asset)!;
+                asset.StagedPath = allocateUniqueStagedPath('assets', stem, ext, usedAssetPaths);
             }
 
+            const usedAudioPaths = new Set<string>();
             for (const line of scriptLines) {
                 const sanitized = SanitizeStageKey(line.Key);
-                line.StagedPath = `audio/${sanitized}.mp3`;
+                line.StagedPath = allocateUniqueStagedPath('audio', sanitized, 'mp3', usedAudioPaths);
             }
 
             await finishStep(currentStep, true, {
@@ -390,29 +564,29 @@ export class VideoStudioPreProductionAgent extends BaseAgent {
         }
     }
 
-    private resolveFilmBounds(spec: VideoGenerationSpec): FilmDurationBounds | undefined {
+    private async resolveFilmBounds(
+        spec: VideoGenerationSpec,
+        contextUser: UserInfo,
+    ): Promise<FilmDurationBounds | undefined> {
         const archetypeName = spec.Archetype?.Name?.trim();
         if (!archetypeName) {
             return undefined;
         }
-        try {
-            const archetype = VideoStudioEngine.Instance.GetArchetypeByName(
-                archetypeName,
-                spec.CompanyID ?? null,
-            );
-            if (!archetype) {
-                return undefined;
-            }
-            const min = archetype.MinDurationSeconds;
-            const max = archetype.MaxDurationSeconds;
-            if (typeof min === 'number' && typeof max === 'number' && max > 0) {
-                return {
-                    MinSeconds: min,
-                    MaxSeconds: max,
-                };
-            }
-        } catch {
-            // VideoStudioEngine may not be configured in isolated unit tests
+        await VideoStudioEngine.Instance.Config(false, contextUser, this.ProviderToUse);
+        const archetype = VideoStudioEngine.Instance.GetArchetypeByName(
+            archetypeName,
+            spec.CompanyID ?? null,
+        );
+        if (!archetype) {
+            return undefined;
+        }
+        const min = archetype.MinDurationSeconds;
+        const max = archetype.MaxDurationSeconds;
+        if (typeof min === 'number' && typeof max === 'number' && max > 0) {
+            return {
+                MinSeconds: min,
+                MaxSeconds: max,
+            };
         }
         return undefined;
     }

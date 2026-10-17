@@ -11,7 +11,7 @@ import type { UserInfo } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
 import type { VideoGenerationSpec } from '@memberjunction/video-studio-core';
 import * as storageModule from '../storage.js';
-import { FakeRenderDriver } from '../render/fake-render-driver.js';
+import { FAKE_DRIVER_MP4_BYTES, FakeRenderDriver } from '../render/fake-render-driver.js';
 import { VideoRenderEngine } from '../render/video-render-engine.js';
 import {
     LoadVideoStudioRenderAgent,
@@ -46,7 +46,12 @@ interface RenderAgentTestResult {
 function createRenderAgentHarness(): {
     agent: VideoStudioRenderAgent;
     createdSteps: Array<{ stepType: string; stepName: string }>;
-    finalizedSteps: Array<{ stepName?: string; success: boolean; errorMessage?: string }>;
+    finalizedSteps: Array<{
+        stepName?: string;
+        success: boolean;
+        errorMessage?: string;
+        outputData?: Record<string, unknown>;
+    }>;
     progressUpdates: Array<{ step: string; message: string }>;
     execute: (
         spec: VideoGenerationSpec,
@@ -58,7 +63,12 @@ function createRenderAgentHarness(): {
     // clear that base-class field init so tests verify VideoStudioRenderAgent never constructs or invokes AIPromptRunner.
     vi.mocked(AIPromptRunner).mockClear();
     const createdSteps: Array<{ stepType: string; stepName: string }> = [];
-    const finalizedSteps: Array<{ stepName?: string; success: boolean; errorMessage?: string }> = [];
+    const finalizedSteps: Array<{
+        stepName?: string;
+        success: boolean;
+        errorMessage?: string;
+        outputData?: Record<string, unknown>;
+    }> = [];
     const progressUpdates: Array<{ step: string; message: string }> = [];
 
     const internal = agent as unknown as {
@@ -71,6 +81,7 @@ function createRenderAgentHarness(): {
             step: MJAIAgentRunStepEntityExtended,
             success: boolean,
             errorMessage?: string,
+            outputData?: Record<string, unknown>,
         ) => Promise<void>;
         executeAgentInternal: (
             params: ExecuteAgentParams<VideoGenerationSpec>,
@@ -101,11 +112,12 @@ function createRenderAgentHarness(): {
         } as unknown as MJAIAgentRunStepEntityExtended;
     });
 
-    internal.finalizeStepEntity = vi.fn(async (step, success, errorMessage) => {
+    internal.finalizeStepEntity = vi.fn(async (step, success, errorMessage, outputData) => {
         finalizedSteps.push({
             stepName: step?.StepName,
             success,
             errorMessage,
+            outputData,
         });
     });
 
@@ -390,6 +402,23 @@ describe('VideoStudioRenderAgent (VS-AGT-3)', () => {
         expect(updated.Output?.ContactSheetFileIDs?.['16:9']?.length).toBe(2); // 1 Grid + 1 TransitionStrip
         expect(updated.Output?.ContactSheetFileIDs?.['9:16']?.length).toBe(2);
 
+        const storeFileCalls = vi.mocked(storageModule.StoreFile).mock.calls.map((c) => c[0]);
+        for (const fmt of ['16:9', '9:16'] as const) {
+            const sheetDescriptions = storeFileCalls
+                .map((input) => input.Description ?? '')
+                .filter((desc) => desc.includes(`(${fmt}, `) && desc.startsWith('Contact sheet'));
+            expect(sheetDescriptions.length).toBe(2);
+            const lastGridIdx = sheetDescriptions.reduce(
+                (acc, desc, idx) => (desc.includes(`${fmt}, Grid`) ? idx : acc),
+                -1,
+            );
+            const firstTransitionIdx = sheetDescriptions.findIndex((desc) =>
+                desc.includes(`${fmt}, TransitionStrip`),
+            );
+            expect(lastGridIdx).toBeGreaterThanOrEqual(0);
+            expect(firstTransitionIdx).toBeGreaterThan(lastGridIdx);
+        }
+
         expect(updated.Output?.RenderMetadata).toMatchObject({
             Renderer: 'HyperFrames',
             RendererVersion: '0.8.134',
@@ -410,6 +439,37 @@ describe('VideoStudioRenderAgent (VS-AGT-3)', () => {
             'check:9:16:passed',
         ]);
         expect(AIPromptRunner).not.toHaveBeenCalled();
+    });
+
+    it('computes render duration from the last beat EndSeconds when no narration exists (ignoring stale Film.DurationSeconds) and fails with "No beats to render" when Beats is empty', async () => {
+        const fakeDriver = new FakeRenderDriver();
+        const renderSpy = vi.spyOn(fakeDriver, 'Render');
+        VideoRenderEngine.Instance.UseDriver(fakeDriver);
+
+        const { execute } = createRenderAgentHarness();
+        const spec = makeDualFormatSpec();
+        spec.Film.DurationSeconds = 60;
+        spec.Film.Formats = ['16:9'];
+        spec.Deliverables.Formats = ['16:9'];
+        if (spec.Audio.Narration) {
+            spec.Audio.Narration.Script = [];
+        }
+        delete spec.Audio.Music;
+
+        const result = await execute(spec);
+
+        expect(result.finalStep.step).toBe('Success');
+        expect(renderSpy).toHaveBeenCalledTimes(1);
+        expect(renderSpy.mock.calls[0][0].DurationSeconds).toBe(6);
+        expect(result.finalStep.newPayload.Output?.Videos['16:9']?.DurationSeconds).toBe(6);
+
+        const emptyBeatsSpec = makeDualFormatSpec();
+        emptyBeatsSpec.Beats = [];
+        const emptyResult = await execute(emptyBeatsSpec);
+
+        expect(emptyResult.finalStep.step).toBe('Failed');
+        expect(emptyResult.finalStep.message).toBe('No beats to render');
+        expect(emptyResult.finalStep.newPayload).toBe(emptyBeatsSpec);
     });
 
     it('Check returning an Error issue fails on the "Check <fmt>" step before Render is called with [Category] Code: Message @ File:Line', async () => {
@@ -531,13 +591,8 @@ describe('VideoStudioRenderAgent (VS-AGT-3)', () => {
         const fakeDriver = new FakeRenderDriver();
         VideoRenderEngine.Instance.UseDriver(fakeDriver);
 
-        const { agent } = createRenderAgentHarness();
-        const stepOutputs: string[] = [];
+        const { agent, finalizedSteps } = createRenderAgentHarness();
         const internal = agent as unknown as {
-            createStepEntity: (opts: {
-                stepType: string;
-                stepName: string;
-            }) => Promise<MJAIAgentRunStepEntityExtended>;
             executeAgentInternal: (
                 params: ExecuteAgentParams<VideoGenerationSpec>,
                 config: AgentConfiguration,
@@ -548,19 +603,6 @@ describe('VideoStudioRenderAgent (VS-AGT-3)', () => {
                 };
             }>;
         };
-        const origCreate = internal.createStepEntity;
-        internal.createStepEntity = vi.fn(async (opts) => {
-            const step = await origCreate(opts);
-            Object.defineProperty(step, 'OutputData', {
-                set(v: string) {
-                    stepOutputs.push(v);
-                },
-                get() {
-                    return stepOutputs[stepOutputs.length - 1] ?? '';
-                },
-            });
-            return step;
-        });
 
         const spec = makeDualFormatSpec();
         const result = await internal.executeAgentInternal(
@@ -577,10 +619,15 @@ describe('VideoStudioRenderAgent (VS-AGT-3)', () => {
         );
 
         expect(result.finalStep.step).toBe('Success');
+        expect(finalizedSteps.some((s) => s.outputData !== undefined)).toBe(true);
+
+        const mp4Base64 = Buffer.from(FAKE_DRIVER_MP4_BYTES).toString('base64');
         const payloadStr = JSON.stringify(result.finalStep.newPayload);
-        expect(payloadStr).not.toContain('ftypisom');
-        for (const out of stepOutputs) {
-            expect(out).not.toContain('ftypisom');
-        }
+        const stepsStr = JSON.stringify(finalizedSteps);
+        expect(payloadStr).not.toContain(mp4Base64);
+        expect(payloadStr).not.toContain('InlineBase64');
+        expect(stepsStr).not.toContain(mp4Base64);
+        expect(stepsStr).not.toContain('InlineBase64');
+        expect(result.finalStep.newPayload.Output?.Videos['16:9']).not.toHaveProperty('Video');
     });
 });

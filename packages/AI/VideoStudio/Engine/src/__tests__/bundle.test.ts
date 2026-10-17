@@ -403,6 +403,37 @@ describe('bundle.ts (VS-AGT-3)', () => {
             .mockResolvedValue({ revenue: 12500000 });
 
         const spec = makeMinimalSpec();
+        spec.Assets.Approved.push(
+            {
+                Key: 'hero-photo',
+                Kind: 'Image',
+                FileID: 'file-photo-1',
+                Source: 'BrandKit',
+                Provenance: 'BrandKit',
+                Usage: 'Hero background',
+                MustUse: false,
+                StagedPath: 'assets/hero-photo.png',
+            },
+            {
+                Key: 'mono-font',
+                Kind: 'Font',
+                FileID: 'file-font-2',
+                Source: 'BrandKit',
+                Provenance: 'BrandKit',
+                Usage: 'Code & numbers font',
+                MustUse: false,
+                StagedPath: 'assets/mono-font.woff2',
+            },
+            {
+                Key: 'unstaged-draft-image',
+                Kind: 'Image',
+                FileID: 'file-unstaged-1',
+                Source: 'BrandKit',
+                Provenance: 'BrandKit',
+                Usage: 'Unstaged draft',
+                MustUse: false,
+            },
+        );
         const frozenBefore = JSON.stringify(spec);
 
         const bundle = await BuildRenderBundle(spec, '16:9', { ContextUser: mockUser });
@@ -424,10 +455,17 @@ describe('bundle.ts (VS-AGT-3)', () => {
         expect(filePaths).toContain('mj/fonts.css');
 
         const fontsFile = bundle.Files.find((f) => f.Path === 'mj/fonts.css');
-        expect(fontsFile?.Content).toContain('@font-face');
+        const fontFaceMatches = fontsFile?.Content.match(/@font-face\s*\{/g) ?? [];
+        expect(fontFaceMatches).toHaveLength(2);
         expect(fontsFile?.Content).toContain("font-family: 'Brand Sans'");
         expect(fontsFile?.Content).toContain('assets/brand-font.woff2');
+        expect(fontsFile?.Content).toContain("font-family: 'mono-font'");
+        expect(fontsFile?.Content).toContain('assets/mono-font.woff2');
+        expect(fontsFile?.Content).not.toContain('brand-logo');
+        expect(fontsFile?.Content).not.toContain('hero-photo');
+        expect(fontsFile?.Content).not.toContain('unstaged-draft-image');
 
+        expect(bundle.Assets.map((a) => a.Key)).not.toContain('unstaged-draft-image');
         expect(bundle.Assets).toEqual([
             {
                 Key: 'brand-logo',
@@ -440,6 +478,18 @@ describe('bundle.ts (VS-AGT-3)', () => {
                 RelativePath: 'assets/brand-font.woff2',
                 MimeType: 'font/woff2',
                 DataBase64: Buffer.from('content:file-font-1', 'utf8').toString('base64'),
+            },
+            {
+                Key: 'hero-photo',
+                RelativePath: 'assets/hero-photo.png',
+                MimeType: 'image/png',
+                DataBase64: Buffer.from('content:file-photo-1', 'utf8').toString('base64'),
+            },
+            {
+                Key: 'mono-font',
+                RelativePath: 'assets/mono-font.woff2',
+                MimeType: 'font/woff2',
+                DataBase64: Buffer.from('content:file-font-2', 'utf8').toString('base64'),
             },
             {
                 Key: 'line-1',

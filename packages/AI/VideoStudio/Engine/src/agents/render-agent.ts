@@ -99,11 +99,7 @@ export class VideoStudioRenderAgent extends BaseAgent {
                 inputData,
                 contextUser,
             };
-            try {
-                return await this.createStepEntity(stepParams);
-            } catch {
-                return null;
-            }
+            return await this.createStepEntity(stepParams);
         };
 
         const finishStep = async (
@@ -115,11 +111,7 @@ export class VideoStudioRenderAgent extends BaseAgent {
             if (!step) {
                 return;
             }
-            try {
-                await this.finalizeStepEntity(step, success, errorMessage, outputData);
-            } catch {
-                // Ignore step persistence errors in unit tests without a backing DB
-            }
+            await this.finalizeStepEntity(step, success, errorMessage, outputData);
         };
 
         const failRun = (message: string): { finalStep: BaseAgentNextStep<P>; stepCount: number } => ({
@@ -134,6 +126,14 @@ export class VideoStudioRenderAgent extends BaseAgent {
         });
 
         try {
+            const beats = Array.isArray(workingSpec.Beats) ? workingSpec.Beats : [];
+            const lastBeatEndSeconds =
+                beats.length > 0 ? beats[beats.length - 1].EndSeconds : undefined;
+            if (typeof lastBeatEndSeconds !== 'number' || !(lastBeatEndSeconds > 0)) {
+                return failRun('No beats to render');
+            }
+            const durationSeconds = lastBeatEndSeconds;
+
             const values = workingSpec.DataSnapshot
                 ? await LoadDataSnapshotValues(workingSpec.DataSnapshot, {
                       ContextUser: contextUser,
@@ -155,11 +155,6 @@ export class VideoStudioRenderAgent extends BaseAgent {
                 typeof workingSpec.Render?.Fps === 'number' && workingSpec.Render.Fps > 0
                     ? workingSpec.Render.Fps
                     : settings.Fps;
-            const durationSeconds =
-                typeof workingSpec.Film?.DurationSeconds === 'number' &&
-                workingSpec.Film.DurationSeconds > 0
-                    ? workingSpec.Film.DurationSeconds
-                    : 1;
 
             const contactSheetFileIDs: Partial<Record<VideoFormat, string[]>> = {
                 ...(workingSpec.Output?.ContactSheetFileIDs ?? {}),

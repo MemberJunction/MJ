@@ -217,12 +217,13 @@ export async function ReadAssetBytes(
 }
 
 /**
- * Sanitizes an asset or narration line key into a safe filename stem.
+ * Sanitizes an asset or narration line key into a lowercase safe filename stem (`[a-z0-9-_]`).
  */
 export function SanitizeStageKey(key: string): string {
     const cleaned = (key ?? '')
         .trim()
-        .replace(/[^a-zA-Z0-9_-]+/g, '-')
+        .toLowerCase()
+        .replace(/[^a-z0-9_-]+/g, '-')
         .replace(/^-+|-+$/g, '');
     return cleaned || 'item';
 }

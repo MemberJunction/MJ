@@ -7,7 +7,7 @@ import type {
     MJAIAgentRunStepEntityExtended,
 } from '@memberjunction/ai-core-plus';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
-import type { UserInfo } from '@memberjunction/core';
+import { RunView, type UserInfo } from '@memberjunction/core';
 import { VideoStudioEngine } from '@memberjunction/core-entities';
 import { MJGlobal } from '@memberjunction/global';
 import type { VideoGenerationSpec } from '@memberjunction/video-studio-core';
@@ -167,7 +167,7 @@ function makeBaseSpec(): VideoGenerationSpec {
                 {
                     Key: 'Brand Logo',
                     Kind: 'Logo',
-                    FileID: 'file-logo-1',
+                    FileID: '11111111-1111-4111-8111-111111111101',
                     Source: 'BrandKit',
                     Provenance: 'BrandKit',
                     Usage: 'Watermark',
@@ -176,7 +176,7 @@ function makeBaseSpec(): VideoGenerationSpec {
                 {
                     Key: 'Heading Font',
                     Kind: 'Font',
-                    FileID: 'file-font-1',
+                    FileID: '22222222-2222-4222-8222-222222222202',
                     Source: 'BrandKit',
                     Provenance: 'BrandKit',
                     Usage: 'Headings',
@@ -297,6 +297,31 @@ function makeBaseSpec(): VideoGenerationSpec {
 describe('VideoStudioPreProductionAgent (VS-AGT-3)', () => {
     beforeEach(() => {
         vi.restoreAllMocks();
+        vi.spyOn(VideoStudioEngine.Instance, 'Config').mockResolvedValue(undefined);
+        vi.spyOn(VideoStudioEngine.Instance, 'GetArchetypeByName').mockReturnValue(undefined);
+        vi.spyOn(RunView.prototype, 'RunView').mockImplementation(async (params) => {
+            if (params.EntityName === 'MJ: Files') {
+                return {
+                    Success: true,
+                    Results: [
+                        {
+                            ID: '11111111-1111-4111-8111-111111111101',
+                            ContentType: 'image/png',
+                            Name: 'brand-logo.png',
+                        },
+                        {
+                            ID: '22222222-2222-4222-8222-222222222202',
+                            ContentType: 'font/woff2',
+                            Name: 'heading.woff2',
+                        },
+                    ],
+                } as never;
+            }
+            return {
+                Success: true,
+                Results: [],
+            } as never;
+        });
     });
 
     it('registers VideoStudioPreProductionAgent on BaseAgent with MJGlobal', () => {
@@ -309,6 +334,9 @@ describe('VideoStudioPreProductionAgent (VS-AGT-3)', () => {
     });
 
     it('happy path: Inline + View bindings + 2-beat narration writes DataSnapshot, re-timed Beats, Film.DurationSeconds, Output.CaptionsFileID, and StagedPath on every asset and narration line (stepCount === 3)', async () => {
+        const configSpy = vi
+            .spyOn(VideoStudioEngine.Instance, 'Config')
+            .mockResolvedValue(undefined);
         vi.spyOn(VideoStudioEngine.Instance, 'GetArchetypeByName').mockReturnValue({
             MinDurationSeconds: 30,
             MaxDurationSeconds: 180,
@@ -397,6 +425,7 @@ describe('VideoStudioPreProductionAgent (VS-AGT-3)', () => {
         ]);
         expect(finalizedSteps.every((s) => s.success)).toBe(true);
 
+        expect(configSpy).toHaveBeenCalledWith(false, mockUser, undefined);
         expect(captureSpy).toHaveBeenCalledTimes(1);
         expect(narrationSpy).toHaveBeenCalledTimes(1);
         expect(narrationSpy.mock.calls[0][1].BindingText).toEqual({
@@ -413,10 +442,10 @@ describe('VideoStudioPreProductionAgent (VS-AGT-3)', () => {
         expect(updated.Beats[1].EndSeconds).toBe(8.6);
         expect(updated.Film.DurationSeconds).toBe(8.6);
         expect(updated.Output?.CaptionsFileID).toBe('vtt-file-1');
-        expect(updated.Assets.Approved[0].StagedPath).toBe('assets/Brand-Logo.png');
-        expect(updated.Assets.Approved[1].StagedPath).toBe('assets/Heading-Font.woff2');
-        expect(updated.Audio.Narration?.Script[0].StagedPath).toBe('audio/Line-1.mp3');
-        expect(updated.Audio.Narration?.Script[1].StagedPath).toBe('audio/Line-2.mp3');
+        expect(updated.Assets.Approved[0].StagedPath).toBe('assets/brand-logo-11111111.png');
+        expect(updated.Assets.Approved[1].StagedPath).toBe('assets/heading-font-22222222.woff2');
+        expect(updated.Audio.Narration?.Script[0].StagedPath).toBe('audio/line-1.mp3');
+        expect(updated.Audio.Narration?.Script[1].StagedPath).toBe('audio/line-2.mp3');
         expect(AIPromptRunner).not.toHaveBeenCalled();
     });
 
@@ -542,5 +571,156 @@ describe('VideoStudioPreProductionAgent (VS-AGT-3)', () => {
         expect(finalizedSteps).toHaveLength(1);
         expect(finalizedSteps[0].success).toBe(false);
         expect(finalizedSteps[0].errorMessage).toContain('Database connection lost during snapshot');
+    });
+
+    it('resolves asset extensions from stored ContentType/MimeType and file Name fallback, and deduplicates colliding sanitized keys with 8-hex-digit ID prefix and numeric suffixes', async () => {
+        vi.spyOn(narrationPipelineModule, 'RunNarrationPipeline').mockImplementation(
+            async (inputSpec) => ({
+                Spec: inputSpec,
+                Clips: [],
+                CaptionsVtt: 'WEBVTT\n\n',
+                CaptionsFileID: 'vtt-file-empty',
+                Issues: [],
+            }),
+        );
+
+        vi.spyOn(RunView.prototype, 'RunView').mockImplementation(async (params) => {
+            if (params.EntityName === 'MJ: Files') {
+                return {
+                    Success: true,
+                    Results: [
+                        {
+                            ID: 'a1111111-1111-4111-8111-111111111101',
+                            ContentType: 'image/svg+xml',
+                            Name: 'logo-upper.svg',
+                        },
+                        {
+                            ID: 'b2222222-2222-4222-8222-222222222202',
+                            ContentType: 'application/octet-stream',
+                            Name: 'wordmark.svg',
+                        },
+                        {
+                            ID: 'c3333333-3333-4333-8333-333333333303',
+                            ContentType: 'image/png',
+                            Name: 'cyrillic.png',
+                        },
+                    ],
+                } as never;
+            }
+            if (params.EntityName === 'MJ: Artifact Versions') {
+                return {
+                    Success: true,
+                    Results: [
+                        {
+                            ID: 'd4444444-4444-4444-8444-444444444404',
+                            FileID: null,
+                            MimeType: 'image/webp',
+                            Name: 'artifact-hero.webp',
+                        },
+                    ],
+                } as never;
+            }
+            return { Success: true, Results: [] } as never;
+        });
+
+        const { execute } = createAgentWithStepTracking();
+        const spec = makeBaseSpec();
+        spec.DataBindings = [];
+        spec.Assets.Approved = [
+            {
+                Key: 'Logo.svg',
+                Kind: 'Logo',
+                FileID: 'a1111111-1111-4111-8111-111111111101',
+                Source: 'BrandKit',
+                Provenance: 'BrandKit',
+                Usage: 'Primary logo',
+                MustUse: true,
+            },
+            {
+                Key: 'logo.svg',
+                Kind: 'Logo',
+                FileID: 'b2222222-2222-4222-8222-222222222202',
+                Source: 'BrandKit',
+                Provenance: 'BrandKit',
+                Usage: 'Secondary wordmark (filename extension fallback)',
+                MustUse: false,
+            },
+            {
+                Key: 'brand:Логотип',
+                Kind: 'Logo',
+                FileID: 'c3333333-3333-4333-8333-333333333303',
+                Source: 'BrandKit',
+                Provenance: 'BrandKit',
+                Usage: 'Primary Cyrillic logo',
+                MustUse: false,
+            },
+            {
+                Key: 'brand:Логотип белый',
+                Kind: 'Logo',
+                FileID: 'c3333333-3333-4333-8333-333333333303',
+                Source: 'BrandKit',
+                Provenance: 'BrandKit',
+                Usage: 'White Cyrillic logo sharing FileID',
+                MustUse: false,
+            },
+            {
+                Key: 'Hero Cutout',
+                Kind: 'Image',
+                ArtifactVersionID: 'd4444444-4444-4444-8444-444444444404',
+                Source: 'AI',
+                Provenance: 'Generated',
+                Usage: 'Hero background',
+                MustUse: false,
+            },
+        ];
+
+        const result = await execute(spec);
+
+        expect(result.finalStep.step).toBe('Success');
+        const approved = result.finalStep.newPayload.Assets.Approved;
+        expect(approved[0].StagedPath).toBe('assets/logo-svg-a1111111.svg');
+        expect(approved[1].StagedPath).toBe('assets/logo-svg-b2222222.svg');
+        expect(approved[2].StagedPath).toBe('assets/brand-c3333333.png');
+        expect(approved[3].StagedPath).toBe('assets/brand-c3333333-2.png');
+        expect(approved[4].StagedPath).toBe('assets/hero-cutout-d4444444.webp');
+    });
+
+    it('refuses to stage an asset when neither stored ContentType/MimeType nor stored file Name yields a known extension', async () => {
+        vi.spyOn(narrationPipelineModule, 'RunNarrationPipeline').mockImplementation(
+            async (inputSpec) => ({
+                Spec: inputSpec,
+                Clips: [],
+                CaptionsVtt: 'WEBVTT\n\n',
+                CaptionsFileID: 'vtt-file-empty',
+                Issues: [],
+            }),
+        );
+
+        vi.spyOn(RunView.prototype, 'RunView').mockImplementation(async (params) => {
+            if (params.EntityName === 'MJ: Files') {
+                return {
+                    Success: true,
+                    Results: [
+                        {
+                            ID: '11111111-1111-4111-8111-111111111101',
+                            ContentType: 'application/octet-stream',
+                            Name: 'brand-logo-without-ext',
+                        },
+                    ],
+                } as never;
+            }
+            return { Success: true, Results: [] } as never;
+        });
+
+        const { execute } = createAgentWithStepTracking();
+        const spec = makeBaseSpec();
+        spec.DataBindings = [];
+        spec.Assets.Approved = [spec.Assets.Approved[0]];
+
+        const result = await execute(spec);
+
+        expect(result.finalStep.step).toBe('Failed');
+        expect(result.finalStep.message).toContain('Brand Logo');
+        expect(result.finalStep.message).toContain('has no supported extension');
     });
 });

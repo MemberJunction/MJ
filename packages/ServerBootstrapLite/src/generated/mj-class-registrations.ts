@@ -1391,11 +1391,13 @@ import {
     RubricCalibrationTestDriver,
 } from '@memberjunction/testing-engine';
 
-// @memberjunction/video-studio (3 classes)
+// @memberjunction/video-studio (5 classes)
 import {
     LocalWorkerRenderDriver,
     ProduceVideoAction,
     VideoStudioAgent,
+    VideoStudioPreProductionAgent,
+    VideoStudioRenderAgent,
 } from '@memberjunction/video-studio';
 
 // @memberjunction/work-queue-engine (14 classes)
@@ -2517,6 +2519,8 @@ const CLASS_REGISTRATIONS_5: any[] = [
     LocalWorkerRenderDriver,
     ProduceVideoAction,
     VideoStudioAgent,
+    VideoStudioPreProductionAgent,
+    VideoStudioRenderAgent,
     DatabaseTransportDriverFactory,
     MJWorkQueueDeduplicationEntityServer,
     MJWorkQueueDeliveryEntityServer,
@@ -2548,7 +2552,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1082;
+export const CLASS_REGISTRATIONS_COUNT = 1084;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
