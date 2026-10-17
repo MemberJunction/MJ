@@ -575,7 +575,7 @@ describe('BaseAgent.createStepEntity — which earlier step is compared', () => 
 
     it('points at the latest finished step even when its INSERT is still in flight, chaining the new step INSERT after it', async () => {
         const h = new Harness();
-        await h.CreateFinished({ payloadAtEnd: { n: 1 } }); // older, saved, same end
+        await h.CreateFinished({ payloadAtEnd: { n: 0 } }); // older, saved, earlier payload
         h.InsertDelayMs = 20;
         const unsaved = await h.Create({ payloadAtEnd: { n: 1 } });
         await h.Internals.finalizeStepEntity(unsaved, true); // finished, but its INSERT is still in flight
