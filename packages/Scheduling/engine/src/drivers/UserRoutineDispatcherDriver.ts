@@ -688,6 +688,7 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
             payload,
             requestedSkillIDs: this.parseRequestedSkillIDs(routine),
             contextUser,
+            compactAfterRun: routine.RoutineType === 'AgentWake' ? true : undefined,
             // Keep the dispatcher job's lease alive while a long agent run makes progress.
             onProgress: () => { void heartbeat?.(); },
         };

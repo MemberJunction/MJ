@@ -243,7 +243,7 @@ import {
     WorkOSProvider,
 } from '@memberjunction/auth-providers';
 
-// @memberjunction/core-entities (452 classes)
+// @memberjunction/core-entities (453 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -292,6 +292,7 @@ import {
     MJAIAgentStepEntity,
     MJAIAgentStepPathEntity,
     MJAIAgentTypeEntity,
+    MJAIAgentUserPolicyEntity,
     MJAIArchitectureEntity,
     MJAIBridgeAgentIdentityEntity,
     MJAIBridgeProviderChannelEntity,
@@ -1484,7 +1485,7 @@ import {
     WebSearchQueryServerOperation,
 } from '@memberjunction/web-search-engine';
 
-// @memberjunction/core-actions (156 classes)
+// @memberjunction/core-actions (160 classes)
 import {
     APIRateLimiterAction,
     ActionSmithAgent,
@@ -1502,11 +1503,13 @@ import {
     CalculateExpressionAction,
     CensusDataLookupAction,
     CheckUserPermissionAction,
+    ChiefOfStaffInterAgentRequestAction,
     CloneRecordAction,
     CloneRecordsAction,
     ColorConverterAction,
     ComposeListsAction,
     ConditionalAction,
+    ConfigureAgentUserPolicyAction,
     CopyObjectAction,
     CreateDirectoryAction,
     CreateDocumentAction,
@@ -1595,6 +1598,7 @@ import {
     PasswordStrengthAction,
     PerplexitySearchAction,
     PostalCodeLookupAction,
+    PrepareChiefOfStaffOutboundCallAction,
     PreviewDocumentAction,
     QRCodeAction,
     ReadRSSFeedAction,
@@ -1610,6 +1614,7 @@ import {
     RunDecisionAction,
     RunRecordProcessAction,
     RunStoredQueryAction,
+    ScheduleNextAgentWakeAction,
     ScheduledGeocodingAction,
     ScopedSearchAction,
     SearchAction,
@@ -1812,6 +1817,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJAIAgentStepEntity,
     MJAIAgentStepPathEntity,
     MJAIAgentTypeEntity,
+    MJAIAgentUserPolicyEntity,
     MJAIArchitectureEntity,
     MJAIBridgeAgentIdentityEntity,
     MJAIBridgeProviderChannelEntity,
@@ -1892,11 +1898,11 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJClusterAnalysisClusterEntity,
     MJClusterAnalysisEntity,
     MJCollectionArtifactEntity,
-    MJCollectionEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJCollectionEntity,
     MJCollectionPermissionEntity,
     MJCollectionPermissionEntityExtended,
     MJCommunicationBaseMessageTypeEntity,
@@ -2096,11 +2102,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJQueryPermissionEntity,
     MJQuerySQLEntity,
     MJQueueEntity,
-    MJQueueTaskEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJQueueTaskEntity,
     MJQueueTypeEntity,
     MJRSUPendingWorkEntity,
     MJRecommendationEntity,
@@ -2300,11 +2306,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     ExportSurveyMonkeyCSVAction,
     ExportTypeformCSVAction,
     GetGoogleFormAction,
-    GetGoogleFormsStatisticsAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    GetGoogleFormsStatisticsAction,
     GetJotFormAction,
     GetJotFormStatisticsAction,
     GetJotFormSubmissionsAction,
@@ -2504,11 +2510,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     FullTextSearchProvider,
     NoopReRanker,
     OpenAIReRanker,
-    OpenSearchSearchProvider,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    OpenSearchSearchProvider,
     SearchScopePermissionResolver,
     StorageSearchProvider,
     TagSearchProvider,
@@ -2708,11 +2714,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     ActivateInteractiveFormVersionAction,
     AddDocumentContentAction,
     AddRecordsToListAction,
-    AddViewResultsToListAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    AddViewResultsToListAction,
     AggregateDataAction,
     AssignUserRolesAction,
     BraveSearchAction,
@@ -2722,11 +2728,13 @@ const CLASS_REGISTRATIONS_5: any[] = [
     CalculateExpressionAction,
     CensusDataLookupAction,
     CheckUserPermissionAction,
+    ChiefOfStaffInterAgentRequestAction,
     CloneRecordAction,
     CloneRecordsAction,
     ColorConverterAction,
     ComposeListsAction,
     ConditionalAction,
+    ConfigureAgentUserPolicyAction,
     CopyObjectAction,
     CreateDirectoryAction,
     CreateDocumentAction,
@@ -2815,6 +2823,7 @@ const CLASS_REGISTRATIONS_5: any[] = [
     PasswordStrengthAction,
     PerplexitySearchAction,
     PostalCodeLookupAction,
+    PrepareChiefOfStaffOutboundCallAction,
     PreviewDocumentAction,
     QRCodeAction,
     ReadRSSFeedAction,
@@ -2830,6 +2839,7 @@ const CLASS_REGISTRATIONS_5: any[] = [
     RunDecisionAction,
     RunRecordProcessAction,
     RunStoredQueryAction,
+    ScheduleNextAgentWakeAction,
     ScheduledGeocodingAction,
     ScopedSearchAction,
     SearchAction,
@@ -2898,7 +2908,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1169;
+export const CLASS_REGISTRATIONS_COUNT = 1174;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

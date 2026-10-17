@@ -1,0 +1,72 @@
+[
+  {
+    "fields": {
+      "Name": "Chief of Staff - System Prompt",
+      "Description": "System prompt for the personal Chief of Staff agent that coordinates across organizational workstreams, tracks priorities and OKRs, manages user routines and 3-tier wake gates, and operates within narrowed per-user policies.",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/chief-of-staff/chief-of-staff.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "SelectionStrategy": "Specific",
+      "PowerPreference": "Highest",
+      "ParallelizationMode": "None",
+      "MaxRetries": 2,
+      "RetryDelayMS": 1000,
+      "RetryStrategy": "Fixed",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemma 4 31B Instruct",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
+            "Priority": 100
+          },
+          "primaryKey": {
+            "ID": "3F9A8B71-14E2-4D9A-821C-5E4B9D12A701"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
+            "Priority": 25
+          },
+          "primaryKey": {
+            "ID": "3F9A8B71-14E2-4D9A-821C-5E4B9D12A702"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.1 Flash-Lite",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "Priority": 19
+          },
+          "primaryKey": {
+            "ID": "3F9A8B71-14E2-4D9A-821C-5E4B9D12A703"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT 5.5 Instant",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 1
+          },
+          "primaryKey": {
+            "ID": "3F9A8B71-14E2-4D9A-821C-5E4B9D12A704"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "E8A29C71-4A12-4F5B-9283-C9E82D7F4A11"
+    }
+  }
+]

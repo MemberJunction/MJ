@@ -97,7 +97,7 @@ export interface EntityAccessEvaluationResult {
  */
 export interface EvaluateActionExecutionInput {
     actionName: string;
-    params: Record<string, string | number | boolean | object | null | undefined>;
+    params?: Record<string, string | number | boolean | object | null | undefined>;
     contextUser: UserInfo;
     policy: MJAIAgentUserPolicyEntity | null;
     /** Optional flag indicating the action communicates with external (non-org) recipients. */
@@ -539,6 +539,7 @@ export class AgentUserPolicyEngine extends BaseSingleton<AgentUserPolicyEngine> 
         }
 
         const rules = this.resolveActionRules(policy);
+        const params = input.params ?? {};
         let verdict: AgentPolicyVerdict = 'Allow';
         let reason = 'Permitted by user policy.';
         let matchedRulePattern: string | null = null;
@@ -547,8 +548,8 @@ export class AgentUserPolicyEngine extends BaseSingleton<AgentUserPolicyEngine> 
         // High-level approval switches on MJAIAgentUserPolicyEntity
         const isExternal =
             input.isExternalCommunication === true ||
-            input.params['IsExternal'] === true ||
-            input.params['isExternal'] === true;
+            params['IsExternal'] === true ||
+            params['isExternal'] === true;
         if (isExternal && policy.RequireApprovalForExternalComms) {
             verdict = 'RequireApproval';
             reason = `Action '${input.actionName}' targets external recipients and RequireApprovalForExternalComms is enabled.`;
@@ -556,10 +557,10 @@ export class AgentUserPolicyEngine extends BaseSingleton<AgentUserPolicyEngine> 
 
         const rawAmount =
             input.financialAmount ??
-            (typeof input.params['Amount'] === 'number'
-                ? input.params['Amount']
-                : typeof input.params['amount'] === 'number'
-                  ? input.params['amount']
+            (typeof params['Amount'] === 'number'
+                ? params['Amount']
+                : typeof params['amount'] === 'number'
+                  ? params['amount']
                   : null);
         if (rawAmount != null) {
             if (policy.RequireApprovalForFinancials) {
@@ -591,7 +592,7 @@ export class AgentUserPolicyEngine extends BaseSingleton<AgentUserPolicyEngine> 
 
             if (rule.conditionExpression && rule.conditionExpression.trim().length > 0) {
                 const condResult = this.expressionEvaluator.evaluate(rule.conditionExpression, {
-                    params: input.params,
+                    params,
                     user: {
                         ID: input.contextUser.ID,
                         Email: input.contextUser.Email,

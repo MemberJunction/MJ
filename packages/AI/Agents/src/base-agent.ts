@@ -10519,16 +10519,9 @@ The context is now within limits. Please retry your request with the recovered c
             // The client tools and the app context (per-run, from extraData) — neither under an audience (callerContextSections).
             const { clientToolDetails, appContext } = this.callerContextSections(agent, extraData, withholding?.CallerContext === true);
 
-            let cachedUserPolicy = _contextUser?.ID
+            const cachedUserPolicy = _contextUser?.ID
                 ? AgentUserPolicyEngine.Instance.GetCachedPolicy(agent.ID, _contextUser.ID)
                 : null;
-            if (!cachedUserPolicy && _contextUser?.ID) {
-                try {
-                    cachedUserPolicy = await AgentUserPolicyEngine.Instance.GetPolicyForUser(agent.ID, _contextUser);
-                } catch {
-                    cachedUserPolicy = null;
-                }
-            }
 
             const contextData: AgentContextData = {
                 agentName: cachedUserPolicy?.DisplayNameOverride?.trim() || agent.Name,
@@ -11872,11 +11865,11 @@ The context is now within limits. Please retry your request with the recovered c
                 }
             }
         }
-        const evaluation = AgentUserPolicyEngine.Instance.EvaluateActionExecution(policy, {
-            actionId: actionEntity.ID,
+        const evaluation = AgentUserPolicyEngine.Instance.EvaluateActionExecution({
             actionName: actionEntity.Name || action.name,
-            actionCategoryName: actionEntity.Category || undefined,
             params: actionParamsRecord,
+            contextUser,
+            policy,
         });
         if (evaluation.verdict === 'Allow') {
             return null;
@@ -11892,6 +11885,12 @@ The context is now within limits. Please retry your request with the recovered c
             ResultCode: resultCode,
             Message: evaluation.reason,
             Params: [],
+            RunParams: {
+                Action: actionEntity,
+                Params: this.toEngineActionParams(action),
+                ContextUser: contextUser,
+                Filters: [],
+            },
         };
     }
 
