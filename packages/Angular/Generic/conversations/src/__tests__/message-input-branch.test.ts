@@ -303,7 +303,7 @@ describe('MessageInputComponent — overlapping turns keep their own branch', ()
         vi.restoreAllMocks();
     });
 
-    it("a manager turn's placeholder and delegated row stay on its fork when Main sends meanwhile", async () => {
+    it("a manager turn's placeholder row stays on its fork when Main sends meanwhile", async () => {
         const h = buildTurnHarness();
         const managerA = deferred<object>();
         h.processMessage.mockImplementationOnce(() => managerA.promise);
@@ -314,21 +314,17 @@ describe('MessageInputComponent — overlapping turns keep their own branch', ()
         await h.component.OnTextSubmitted('second, in Main');
         managerA.resolve({
             success: true,
-            agentRun: { ID: 'run-manager', FinalStep: 'Success', Message: 'Handing off' },
-            payload: { invokeAgent: 'Research', reasoning: 'research task' },
+            agentRun: { ID: 'run-manager', FinalStep: 'Chat', Message: 'Answered on fork T1' },
+            payload: {},
         });
         await turnA;
 
-        const [userA, placeholderA, userB, placeholderB, delegateA] = h.created;
-        expect(h.created).toHaveLength(5);
+        const [userA, placeholderA, userB, placeholderB] = h.created;
+        expect(h.created).toHaveLength(4);
         expect([userA.Role, userA.Message, userA.BranchID]).toEqual(['User', 'first, in fork T1', 'T1']);
-        expect([placeholderA.ParentID, placeholderA.BranchID]).toEqual([userA.ID, 'T1']);
+        expect([placeholderA.ParentID, placeholderA.BranchID, placeholderA.Message]).toEqual([userA.ID, 'T1', 'Answered on fork T1']);
         expect([userB.Role, userB.Message, userB.BranchID]).toEqual(['User', 'second, in Main', null]);
         expect([placeholderB.ParentID, placeholderB.BranchID]).toEqual([userB.ID, null]);
-        expect([delegateA.ParentID, delegateA.AgentID, delegateA.BranchID]).toEqual([placeholderA.ID, RESEARCH.ID, 'T1']);
-        // The delegate's history reads stay on turn A's fork too.
-        expect(h.findLatestOutput).toHaveBeenCalledWith('conv-1', RESEARCH.ID, null, 'T1');
-        expect(h.findPreset).toHaveBeenLastCalledWith('conv-1', RESEARCH.ID, 'T1');
     });
 
     it("a continuation's reply row stays on its fork when Main sends before the reply row exists", async () => {

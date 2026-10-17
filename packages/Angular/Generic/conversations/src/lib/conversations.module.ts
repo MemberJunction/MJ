@@ -29,6 +29,7 @@ import { LoadComposerPlugins } from './composer-plugins/load-composer-plugins';
 
 // Components
 import { MessageItemComponent } from './components/message/message-item.component';
+import { AgentHandoffCardComponent } from './components/message/agent-handoff-card.component';
 import { MessageListComponent } from './components/message/message-list.component';
 import { MessageInputComponent } from './components/message/message-input.component';
 import { DynamicFormsModule } from '@memberjunction/ng-forms';
@@ -235,7 +236,8 @@ const COMPONENTS = [
     RemoteBrowserSurfaceComponent,
     RealtimeMediaSurfaceComponent,
     RealtimeInteractiveComponentSurfaceComponent,
-    RealtimeEvidencePlaybackComponent
+    RealtimeEvidencePlaybackComponent,
+    AgentHandoffCardComponent
   ],
   exports: [
     ...COMPONENTS,
@@ -259,7 +261,8 @@ const COMPONENTS = [
     RealtimeWhiteboardHostComponent,
     RemoteBrowserSurfaceComponent,
     RealtimeMediaSurfaceComponent,
-    RealtimeEvidencePlaybackComponent
+    RealtimeEvidencePlaybackComponent,
+    AgentHandoffCardComponent
   ]
 })
 export class ConversationsModule {}
