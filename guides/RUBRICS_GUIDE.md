@@ -1121,10 +1121,10 @@ anchors are what the interviewer reads while choosing a level, and what the AI j
 
 ### Shipped agent rubrics
 
-Eight rubrics ship as Published 1.0.0 on Meets / Partial / Miss, with pass threshold 0.7 and a gate minimum of
+Nine rubrics ship as Published 1.0.0 on Meets / Partial / Miss, with pass threshold 0.7 (0.72 for **Video Production Quality**) and a gate minimum of
 0.6, so Partial fails the gate: **Research answer, Query answer, Generated code, Schema proposal, Catalog
-contract, Picture from the data, Duplicate decision, and Assistant reply.** They are the Evaluation rubrics for
-the core agents ([Rubrics on agents](#4-rubrics-on-agents)); *Assistant reply* is Sage's. The **Core agent
+contract, Picture from the data, Duplicate decision, Assistant reply, and Video Production Quality** (whose two hard gates are `shown-values-match-the-data-snapshot` and `generated-assets-are-honest-and-disclosed`, both at `0.6`). They are the Evaluation rubrics for
+the core agents ([Rubrics on agents](#4-rubrics-on-agents)); *Assistant reply* is Sage's, and *Video Production Quality* is evaluated by `Video Studio - Critic` ([Video Studio Guide](VIDEO_STUDIO_GUIDE.md)). The **Core agent
 rubrics** test suite runs one test per orchestrator against them, Sage included.
 
 Each agent's link names its own judge prompt, so the eight agents that share *Research answer* are still judged
