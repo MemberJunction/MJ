@@ -1,0 +1,94 @@
+{
+  "Defects": [
+    {
+      "Timestamp": 6.2,
+      "Beat": "beat-2",
+      "Criterion": "readable-at-phone-size",
+      "Severity": "Major",
+      "Evidence": "In the 9:16 frame at 6.2s, the subtitle under the KPI tile overlaps the top edge of the callout box by 14px.",
+      "Fix": "Increase gap on .beat-2-stack in 9:16 index.html from 12px to 32px.",
+      "Status": "Open"
+    },
+    {
+      "Timestamp": 1.5,
+      "Beat": "beat-1",
+      "Criterion": "stays-on-brand",
+      "Severity": "Minor",
+      "Evidence": "Generated background plate hero_abstract_grid contains faint warm orange streaks that clash with the cool navy/cyan brand palette.",
+      "Fix": "Regenerate hero_abstract_grid with strict dark navy (#0B1020) and cyan (#38BDF8) palette constraint.",
+      "Status": "Open",
+      "AssetKey": "hero_abstract_grid"
+    }
+  ],
+  "Scores": {
+    "OverallScore": 8,
+    "MaxScore": 9,
+    "Passed": true,
+    "Criteria": [
+      {
+        "Criterion": "hook-lands-in-the-first-two-seconds",
+        "Score": 1,
+        "MaxScore": 1,
+        "Passed": true,
+        "Notes": "Headline ARR metric is legible at 0.8s."
+      },
+      {
+        "Criterion": "readable-at-phone-size",
+        "Score": 0.5,
+        "MaxScore": 1,
+        "Passed": true,
+        "Notes": "Minor 14px subtitle overlap on beat-2 in 9:16."
+      },
+      {
+        "Criterion": "type-and-color-stay-consistent",
+        "Score": 1,
+        "MaxScore": 1,
+        "Passed": true,
+        "Notes": "MJ Sans and MJ Mono hierarchy is consistent across all three beats."
+      },
+      {
+        "Criterion": "motion-has-weight-and-a-clear-focus",
+        "Score": 1,
+        "MaxScore": 1,
+        "Passed": true,
+        "Notes": "Cubic-bezier entrances settle 1.5s before beat transitions."
+      },
+      {
+        "Criterion": "sound-is-in-sync-with-the-picture",
+        "Score": 1,
+        "MaxScore": 1,
+        "Passed": true,
+        "Notes": "Narration and music duck align with beat boundaries."
+      },
+      {
+        "Criterion": "stays-on-brand",
+        "Score": 0.5,
+        "MaxScore": 1,
+        "Passed": true,
+        "Notes": "Warm streak in hero_abstract_grid slightly drifts from cool navy palette."
+      },
+      {
+        "Criterion": "shown-values-match-the-data-snapshot",
+        "Score": 1,
+        "MaxScore": 1,
+        "Passed": true,
+        "Notes": "All rendered figures match DataSnapshot and AsOf footer is visible."
+      },
+      {
+        "Criterion": "final-frame-works-as-a-poster",
+        "Score": 1,
+        "MaxScore": 1,
+        "Passed": true,
+        "Notes": "Closing beat settles into a clean executive summary poster frame."
+      },
+      {
+        "Criterion": "generated-assets-are-honest-and-disclosed",
+        "Score": 1,
+        "MaxScore": 1,
+        "Passed": true,
+        "Notes": "Generated background is purely illustrative and provenance is recorded."
+      }
+    ]
+  },
+  "Summary": "All bound figures match DataSnapshot and settle cleanly before beat transitions; minor vertical spacing adjustment in beat-2 and background plate palette tightening noted."
+}

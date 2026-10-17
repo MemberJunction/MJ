@@ -110,8 +110,8 @@ afterEach(() => {
 describe('RunAIAgentFromConversationDetail — agentHistoryFrom', () => {
     let resolver: RunAIAgentResolver;
     let seams: ResolverSeams;
-    /** The floor's position in executeAIAgent / executeAgentInBackground: third from last, before TrustReservedRunData and the branch. */
-    const FLOOR_ARG = -3;
+    /** The floor's position in executeAIAgent / executeAgentInBackground: fourth from last, before TrustReservedRunData, the branch, and followHandoffs. */
+    const FLOOR_ARG = -4;
 
     beforeEach(() => {
         ({ resolver, seams } = makeResolver());

@@ -1467,6 +1467,17 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT125 - Agent Handoff",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "30B0A35E-4A91-4897-9C29-B3B53BFA5EC8"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT103 - RunQuery Rendering over GraphQL",
             "Sequence": 72,
             "Status": "Active"

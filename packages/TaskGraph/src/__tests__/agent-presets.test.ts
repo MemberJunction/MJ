@@ -32,6 +32,13 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
     };
 });
 
+vi.mock('@memberjunction/ai-engine-base', () => ({
+    AIAgentPermissionHelper: {
+        FilterRunnableAgents: vi.fn(async <T>(agents: T[]) => agents),
+        HasPermission: vi.fn(async () => true),
+    },
+}));
+
 vi.mock('@memberjunction/aiengine', () => ({
     AIEngine: {
         get Instance() {
@@ -113,8 +120,8 @@ describe('VS-CON-7: TaskGraph Agent node presets', () => {
             mockRunView.mockResolvedValue({
                 Success: true,
                 Results: [
-                    { ID: 'agent-1', Name: 'Storyboard Artist' },
-                    { ID: 'agent-2', Name: 'Script Writer' },
+                    { ID: 'agent-1', Name: 'Storyboard Artist', Status: 'Active' },
+                    { ID: 'agent-2', Name: 'Script Writer', Status: 'Active' },
                 ],
             });
             mockGetAgentConfigurationPresets.mockImplementation((agentId: string) => {

@@ -1,0 +1,457 @@
+[
+  {
+    "fields": {
+      "Name": "Video Studio",
+      "Description": "Produces multi-format videos, topic explainers, product launches, KPI briefings, and data stories from grounded MemberJunction queries, brand kits, and reference assets. Supports Draft, Standard, and High power levels with deterministic HyperFrames rendering, generative B-roll and stills, and multimodal Critic repair loops.",
+      "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Content Creation",
+      "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+      "Status": "Active",
+      "ModelSelectionMode": "Agent",
+      "DriverClass": "VideoStudioAgent",
+      "InvocationMode": "Any",
+      "ExposeAsAction": true,
+      "SupportsPlanMode": true,
+      "ChatHandlingOption": "Consult",
+      "DefaultArtifactTypeID": "@lookup:MJ: Artifact Types.Name=Video Production",
+      "ArtifactCreationMode": "Always",
+      "IconClass": "fa-solid fa-clapperboard",
+      "PayloadSelfWritePaths": []
+    },
+    "relatedEntities": {
+      "MJ: AI Agent Prompts": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "PromptID": "@lookup:MJ: AI Prompts.Name=Video Studio - Orchestrator",
+            "ExecutionOrder": 0,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "19FB4E37-CC70-4D4B-9668-5ED968E43845"
+          }
+        }
+      ],
+      "MJ: AI Agent Configurations": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "Name": "Draft",
+            "DisplayName": "Draft",
+            "Description": "Fast draft preset powered by Gemini 3.8 Flash (low effort) with 0 repair rounds, 24 fps draft render of the first format, and up to 20s of generated footage.",
+            "AIConfigurationID": "@lookup:MJ: AI Configurations.Name=Video Studio Draft",
+            "IsDefault": false,
+            "Priority": 1,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "79257776-F45E-44B1-9E50-4F1E399E7B48"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "Name": "Standard",
+            "DisplayName": "Standard",
+            "Description": "Balanced default preset powered by Gemini 3.8 Flash with up to 2 Critic repair rounds, 30 fps standard render across all formats, and up to 40s of generated footage.",
+            "AIConfigurationID": "@lookup:MJ: AI Configurations.Name=Video Studio Standard",
+            "IsDefault": true,
+            "Priority": 2,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "CB675CDA-0C50-43B8-A709-2782C597EF36"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "Name": "High",
+            "DisplayName": "High",
+            "Description": "High-power production preset powered by Claude Opus 5.5 with up to 3 Critic repair rounds, 30 fps high-quality render across all formats, and up to 60s of generated footage.",
+            "AIConfigurationID": "@lookup:MJ: AI Configurations.Name=Video Studio High",
+            "IsDefault": false,
+            "Priority": 3,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "2EA8CBC6-17AA-4819-849B-97E8793D4AEB"
+          }
+        }
+      ],
+      "MJ: AI Agent Rubrics": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "RubricID": "@lookup:MJ: Rubrics.Name=Video Production Quality",
+            "Purpose": "Evaluation",
+            "IsDefault": true,
+            "Status": "Active",
+            "EvaluatorConfig": {
+              "EvaluatorType": "AIPrompt",
+              "PromptName": "Rubric Judge - Video Studio"
+            }
+          },
+          "primaryKey": {
+            "ID": "4D9D4EAD-840C-4FD1-9CF0-FE841685AA0C"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "RubricID": "@lookup:MJ: Rubrics.Name=Video Production Quality",
+            "Purpose": "SelfCheck",
+            "IsDefault": true,
+            "Status": "Disabled",
+            "MaxSelfCheckAttempts": 1,
+            "EvaluatorConfig": {
+              "EvaluatorType": "AIPrompt",
+              "PromptName": "Rubric Judge - Video Studio"
+            }
+          },
+          "primaryKey": {
+            "ID": "5D2B4B1D-5BB7-4C63-AC0F-336D0B6BB738"
+          }
+        }
+      ],
+      "MJ: AI Agents": [
+        {
+          "fields": {
+            "ParentID": "@parent:ID",
+            "Name": "Video Studio - Director",
+            "Description": "Stage 1 sub-agent of Video Studio. Defines the Film brief, selects the Archetype, inventories Assets.Required, Assets.NeverInvent, and illustrative Assets.Generate, and establishes grounded DataBindings.",
+            "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Content Creation",
+            "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+            "Status": "Active",
+            "ModelSelectionMode": "Agent",
+            "ExecutionOrder": 1,
+            "ExposeAsAction": false,
+            "InvocationMode": "Sub-Agent",
+            "IconClass": "fa-solid fa-bullhorn",
+            "PayloadDownstreamPaths": [
+              "*"
+            ],
+            "PayloadUpstreamPaths": [
+              "Film",
+              "Film.*",
+              "Archetype",
+              "Archetype.*",
+              "Assets.Required",
+              "Assets.Required.*",
+              "Assets.NeverInvent",
+              "Assets.NeverInvent.*",
+              "Assets.Generate",
+              "Assets.Generate.*",
+              "DataBindings",
+              "DataBindings.*"
+            ]
+          },
+          "relatedEntities": {
+            "MJ: AI Agent Prompts": [
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "PromptID": "@lookup:MJ: AI Prompts.Name=Video Studio - Director",
+                  "ExecutionOrder": 0,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "831DF31F-7EF7-4DDD-8221-8214AE1B72C8"
+                }
+              }
+            ],
+            "MJ: AI Agent Relationships": [
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "SubAgentID": "@lookup:MJ: AI Agents.Name=Research Agent",
+                  "Status": "Active",
+                  "SubAgentOutputMapping": {
+                    "*": "research"
+                  },
+                  "SubAgentContextPaths": [
+                    "Film",
+                    "Film.*"
+                  ]
+                },
+                "primaryKey": {
+                  "ID": "94372D14-0F2C-40DD-A81F-EFDE419D8C92"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "SubAgentID": "@lookup:MJ: AI Agents.Name=Query Builder",
+                  "Status": "Active",
+                  "SubAgentOutputMapping": {
+                    "*": "dataSources"
+                  },
+                  "SubAgentContextPaths": [
+                    "Film",
+                    "Film.*",
+                    "DataBindings",
+                    "DataBindings.*"
+                  ]
+                },
+                "primaryKey": {
+                  "ID": "E1BE2A2B-31B4-4566-A5C3-E9C775EB953D"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "E059E029-FFEB-4985-A191-D8F9142F99B2"
+          }
+        },
+        {
+          "fields": {
+            "ParentID": "@parent:ID",
+            "Name": "Video Studio - Art Director",
+            "Description": "Stage 2 sub-agent of Video Studio. Analyzes visual style references via its custom driver and translates brand kit defaults and reference findings into concrete Style tokens, Avoid rules, and illustrative Assets.Generate.",
+            "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Content Creation",
+            "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+            "Status": "Active",
+            "ModelSelectionMode": "Agent",
+            "DriverClass": "VideoStudioArtDirectorAgent",
+            "ExecutionOrder": 2,
+            "ExposeAsAction": false,
+            "InvocationMode": "Sub-Agent",
+            "IconClass": "fa-solid fa-palette",
+            "PayloadDownstreamPaths": [
+              "Film",
+              "Film.*",
+              "Assets",
+              "Assets.*",
+              "Archetype",
+              "Archetype.*",
+              "Style",
+              "Style.*",
+              "BrandKitID",
+              "BrandKitID.*",
+              "CompanyID",
+              "CompanyID.*"
+            ],
+            "PayloadUpstreamPaths": [
+              "Style",
+              "Style.*",
+              "Assets.Generate",
+              "Assets.Generate.*"
+            ]
+          },
+          "relatedEntities": {
+            "MJ: AI Agent Prompts": [
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "PromptID": "@lookup:MJ: AI Prompts.Name=Video Studio - Art Director",
+                  "ExecutionOrder": 0,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "33E0B539-18BE-4062-9D8C-ABAE4533B73B"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "24C1C97D-6D00-466F-972B-412A0A8B4D59"
+          }
+        },
+        {
+          "fields": {
+            "ParentID": "@parent:ID",
+            "Name": "Video Studio - Storyboard",
+            "Description": "Stage 3 sub-agent of Video Studio. Designs contiguous Beats with {BindingKey} placeholders and per-format LayoutNotes, StateList, Audio.Narration.Script, and Audio.Cues.",
+            "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Content Creation",
+            "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+            "Status": "Active",
+            "ModelSelectionMode": "Agent",
+            "ExecutionOrder": 3,
+            "ExposeAsAction": false,
+            "InvocationMode": "Sub-Agent",
+            "IconClass": "fa-solid fa-table-cells-large",
+            "PayloadDownstreamPaths": [
+              "Film",
+              "Film.*",
+              "Style",
+              "Style.*",
+              "DataBindings",
+              "DataBindings.*",
+              "Assets",
+              "Assets.*",
+              "Archetype",
+              "Archetype.*",
+              "Deliverables",
+              "Deliverables.*",
+              "Beats",
+              "Beats.*",
+              "StateList",
+              "StateList.*",
+              "Audio",
+              "Audio.*"
+            ],
+            "PayloadUpstreamPaths": [
+              "Beats",
+              "Beats.*",
+              "StateList",
+              "StateList.*",
+              "Audio",
+              "Audio.*"
+            ]
+          },
+          "relatedEntities": {
+            "MJ: AI Agent Prompts": [
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "PromptID": "@lookup:MJ: AI Prompts.Name=Video Studio - Storyboard",
+                  "ExecutionOrder": 0,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "5CCECB6B-AAC6-4266-B21C-CF5B77FA48C8"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "50404E11-B1A2-4924-BED6-BBC04724449D"
+          }
+        },
+        {
+          "fields": {
+            "ParentID": "@parent:ID",
+            "Name": "Video Studio - Pre-Production",
+            "Description": "Stage 4 code sub-agent of Video Studio. Resolves DataBindings into DataSnapshot, synthesizes narration/music/SFX, generates captions (Output.CaptionsFileID), and executes Assets.Generate into Assets.Generated.",
+            "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Content Creation",
+            "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+            "Status": "Active",
+            "ModelSelectionMode": "Agent",
+            "DriverClass": "VideoStudioPreProductionAgent",
+            "ExecutionOrder": 4,
+            "ExposeAsAction": false,
+            "InvocationMode": "Sub-Agent",
+            "IconClass": "fa-solid fa-gears",
+            "PayloadDownstreamPaths": [
+              "*"
+            ],
+            "PayloadUpstreamPaths": [
+              "DataSnapshot",
+              "DataSnapshot.*",
+              "Audio",
+              "Audio.*",
+              "Beats",
+              "Beats.*",
+              "Assets",
+              "Assets.*",
+              "Film.DurationSeconds",
+              "Output.CaptionsFileID"
+            ]
+          },
+          "primaryKey": {
+            "ID": "A6903EBE-25E5-4700-9240-7BFEB0F1D058"
+          }
+        },
+        {
+          "fields": {
+            "ParentID": "@parent:ID",
+            "Name": "Video Studio - Motion Engineer",
+            "Description": "Stage 5 sub-agent of Video Studio. Authors deterministic HyperFrames HTML/CSS/JS compositions per format in Output.Source and runs an automated lint-fix loop in its driver.",
+            "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Content Creation",
+            "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+            "Status": "Active",
+            "ModelSelectionMode": "Agent",
+            "DriverClass": "VideoStudioMotionEngineerAgent",
+            "ExecutionOrder": 5,
+            "ExposeAsAction": false,
+            "InvocationMode": "Sub-Agent",
+            "IconClass": "fa-solid fa-code",
+            "PayloadDownstreamPaths": [
+              "*"
+            ],
+            "PayloadUpstreamPaths": [
+              "Output.Source",
+              "Output.Source.*"
+            ]
+          },
+          "relatedEntities": {
+            "MJ: AI Agent Prompts": [
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "PromptID": "@lookup:MJ: AI Prompts.Name=Video Studio - Motion Engineer",
+                  "ExecutionOrder": 0,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "40F2E928-2C8E-4F1D-A445-AFB423713777"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "2A996CC8-F84F-41A8-A2F5-78EC7788A15A"
+          }
+        },
+        {
+          "fields": {
+            "ParentID": "@parent:ID",
+            "Name": "Video Studio - Render",
+            "Description": "Stage 6 code sub-agent of Video Studio. Stages compositions and assets, runs HyperFrames renders and deterministic G3 checks via VideoRenderEngine, and writes Output and Review.Gates.",
+            "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Content Creation",
+            "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+            "Status": "Active",
+            "ModelSelectionMode": "Agent",
+            "DriverClass": "VideoStudioRenderAgent",
+            "ExecutionOrder": 6,
+            "ExposeAsAction": false,
+            "InvocationMode": "Sub-Agent",
+            "IconClass": "fa-solid fa-film",
+            "PayloadDownstreamPaths": [
+              "*"
+            ],
+            "PayloadUpstreamPaths": [
+              "Output",
+              "Output.*",
+              "Review.Gates",
+              "Review.Gates.*"
+            ]
+          },
+          "primaryKey": {
+            "ID": "F07DA96A-5F46-4B9A-A995-FE2E9E74C3EE"
+          }
+        },
+        {
+          "fields": {
+            "ParentID": "@parent:ID",
+            "Name": "Video Studio - Critic",
+            "Description": "Stage 7 sub-agent of Video Studio. Runs multimodal visual inspection of rendered contact sheets and beat frames against the storyboard, bound values, and rubric criteria, writing Review.Rounds and Review.Scores.",
+            "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Content Creation",
+            "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+            "Status": "Active",
+            "ModelSelectionMode": "Agent",
+            "DriverClass": "VideoStudioCriticAgent",
+            "ExecutionOrder": 7,
+            "ExposeAsAction": false,
+            "InvocationMode": "Sub-Agent",
+            "IconClass": "fa-solid fa-magnifying-glass-eye",
+            "PayloadDownstreamPaths": [
+              "*"
+            ],
+            "PayloadUpstreamPaths": [
+              "Review.Rounds",
+              "Review.Rounds.*",
+              "Review.Scores",
+              "Review.Scores.*"
+            ]
+          },
+          "primaryKey": {
+            "ID": "70D0F8BE-1AC3-4800-9786-B2809CC22884"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "00151C2D-3284-4F43-973E-947A7222DC24"
+    }
+  }
+]

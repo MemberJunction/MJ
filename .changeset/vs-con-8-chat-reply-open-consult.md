@@ -3,4 +3,4 @@
 "@memberjunction/server": patch
 ---
 
-Export `CanAgentOwnSubAgentConsults` and `LoadOpenSubAgentConsults` from `@memberjunction/ai-agents` and update `RunAIAgentResolver.RunAIAgentFromConversationDetail` to chain chat-thread replies to a predecessor run paused on `FinalStep === 'Chat'` with open sub-agent consultations.
+A reply typed in the conversation thread now resumes a sub-agent consult that was escalated to the user, the same way a response from the requests dashboard does.

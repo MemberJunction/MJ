@@ -192,22 +192,45 @@ function emitPropertyType(typeNode, sourceFile, indent) {
 }
 
 /**
+ * Emit a single property or method signature member at the given indentation.
+ */
+function emitMember(member, sourceFile, memberIndent) {
+    if (ts.isPropertySignature(member)) {
+        const name = member.name.getText(sourceFile);
+        const opt = member.questionToken ? '?' : '';
+        const typeText = member.type
+            ? emitPropertyType(member.type, sourceFile, memberIndent)
+            : 'unknown';
+        const brief = getBriefDoc(member, sourceFile);
+        const comment = brief ? `  // ${brief}` : '';
+        return `${memberIndent}${name}${opt}: ${typeText};${comment}\n`;
+    }
+    if (ts.isMethodSignature(member)) {
+        const name = member.name.getText(sourceFile);
+        const opt = member.questionToken ? '?' : '';
+        const typeParams =
+            member.typeParameters && member.typeParameters.length > 0
+                ? '<' + member.typeParameters.map(tp => tp.getText(sourceFile)).join(', ') + '>'
+                : '';
+        const params = member.parameters.map(p => p.getText(sourceFile)).join(', ');
+        const retType = member.type
+            ? emitPropertyType(member.type, sourceFile, memberIndent)
+            : 'void';
+        const brief = getBriefDoc(member, sourceFile);
+        const comment = brief ? `  // ${brief}` : '';
+        return `${memberIndent}${name}${opt}${typeParams}(${params}): ${retType};${comment}\n`;
+    }
+    return '';
+}
+
+/**
  * Emit a TypeLiteral (anonymous object type) with brief inline comments.
  */
 function emitTypeLiteral(node, sourceFile, indent) {
     let result = '{\n';
+    const innerIndent = indent + '    ';
     for (const member of node.members) {
-        if (ts.isPropertySignature(member)) {
-            const name = member.name.getText(sourceFile);
-            const opt = member.questionToken ? '?' : '';
-            const innerIndent = indent + '    ';
-            const typeText = member.type
-                ? emitPropertyType(member.type, sourceFile, innerIndent)
-                : 'unknown';
-            const brief = getBriefDoc(member, sourceFile);
-            const comment = brief ? `  // ${brief}` : '';
-            result += `${innerIndent}${name}${opt}: ${typeText};${comment}\n`;
-        }
+        result += emitMember(member, sourceFile, innerIndent);
     }
     result += `${indent}}`;
     return result;
@@ -258,16 +281,7 @@ function emitInterface(node, sourceFile) {
     result += ' {\n';
 
     for (const member of node.members) {
-        if (ts.isPropertySignature(member)) {
-            const propName = member.name.getText(sourceFile);
-            const opt = member.questionToken ? '?' : '';
-            const typeText = member.type
-                ? emitPropertyType(member.type, sourceFile, '    ')
-                : 'unknown';
-            const brief = getBriefDoc(member, sourceFile);
-            const comment = brief ? `  // ${brief}` : '';
-            result += `    ${propName}${opt}: ${typeText};${comment}\n`;
-        }
+        result += emitMember(member, sourceFile, '    ');
     }
 
     result += '}';

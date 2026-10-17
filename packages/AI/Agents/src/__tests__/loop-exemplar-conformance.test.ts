@@ -28,8 +28,10 @@ import { describe, expect, it } from 'vitest';
 import { readdirSync, readFileSync, statSync } from 'fs';
 import { dirname, join, relative } from 'path';
 import { fileURLToPath } from 'url';
+import nunjucks from 'nunjucks';
 import { LOOP_NEXT_STEP_TYPES } from '../agent-types/loop-agent-response-type';
 import { ASK_USER_TOOL, COMPLETE_TASK_TOOL, PAYLOAD_CHANGE_TOOL, SUB_AGENT_TOOL_PREFIX } from '../native-tools/control-tools';
+import { type AgentHandoffRequest, FormatValidationErrors, ValidateTaskGraphSpec } from '@memberjunction/ai-core-plus';
 
 const __dirname_ = dirname(fileURLToPath(import.meta.url));
 // src/__tests__/ → repo root is 5 levels up (Agents → AI → packages → root).
@@ -49,6 +51,7 @@ const NEXT_STEP_FIELDS = new Set([
 ]);
 const ACTION_FIELDS = new Set(['name', 'params']);
 const SUB_AGENT_FIELDS = new Set(['name', 'message', 'templateParameters', 'terminateAfter']);
+const HANDOFF_FIELDS = new Set<keyof AgentHandoffRequest>(['agentName', 'brief', 'reason']);
 const PAYLOAD_CHANGE_FIELDS = new Set(['newElements', 'updateElements', 'removeElements', 'replaceElements', 'reasoning']);
 
 const VALID_STEP_TYPES = new Set<string>(LOOP_NEXT_STEP_TYPES);
@@ -197,16 +200,39 @@ function conformanceProblems(response: Record<string, unknown>, allowDescription
             }
         }
     }
+    const handoff = asRecord(nextStep.handoff);
+    for (const key of Object.keys(handoff ?? {})) {
+        if (!HANDOFF_FIELDS.has(key as keyof AgentHandoffRequest)) {
+            problems.push(`nextStep.handoff.${key} is not a handoff field — expected ${[...HANDOFF_FIELDS].join('/')}`);
+        }
+    }
     return problems;
 }
 
 const templateExemplars = walk(TEMPLATES_DIR, '.md').flatMap(exemplarsInMarkdown);
 const outputExemplars = walk(OUTPUT_DIR, '.json').flatMap(exemplarsInOutputFile);
 
+const allParsedExemplars: Array<{ location: string; value: Record<string, unknown> }> = [
+    ...templateExemplars.flatMap((e) => {
+        try {
+            const parsed = asRecord(JSON.parse(e.json));
+            return parsed ? [{ location: e.location, value: parsed }] : [];
+        } catch {
+            return [];
+        }
+    }),
+    ...outputExemplars.map((e) => ({ location: e.location, value: e.value })),
+];
+
+const tasksExemplars = allParsedExemplars.filter((e) => asRecord(e.value.nextStep)?.type === 'Tasks');
+const handoffExemplars = allParsedExemplars.filter((e) => asRecord(e.value.nextStep)?.type === 'Handoff');
+
 describe('shipped LoopAgentResponse exemplars', () => {
     it('finds exemplars to check — a silent zero would make every assertion below vacuous', () => {
         expect(templateExemplars.length).toBeGreaterThan(50);
         expect(outputExemplars.length).toBeGreaterThan(20);
+        expect(tasksExemplars.length).toBeGreaterThanOrEqual(1);
+        expect(handoffExemplars.length).toBeGreaterThanOrEqual(1);
     });
 
     it.each(templateExemplars.map((e) => [e.location, e] as const))('%s is valid JSON', (_location, exemplar) => {
@@ -222,6 +248,31 @@ describe('shipped LoopAgentResponse exemplars', () => {
 
     it.each(outputExemplars.map((e) => [e.location, e] as const))('%s matches LoopAgentResponse', (_location, exemplar) => {
         expect(conformanceProblems(exemplar.value, exemplar.wrapped)).toEqual([]);
+    });
+
+    it.each(tasksExemplars.map((e) => [e.location, e] as const))('%s Tasks exemplar passes ValidateTaskGraphSpec', (location, exemplar) => {
+        const nextStep = asRecord(exemplar.value.nextStep);
+        const spec = nextStep?.tasks;
+        const result = ValidateTaskGraphSpec(spec);
+        const formatted = result.Valid ? '' : `${location}:\n${FormatValidationErrors(result.Errors)}`;
+        expect(formatted).toBe('');
+    });
+
+    it.each(handoffExemplars.map((e) => [e.location, e] as const))('%s Handoff exemplar has non-empty agentName and brief', (location, exemplar) => {
+        const nextStep = asRecord(exemplar.value.nextStep);
+        const handoff = asRecord(nextStep?.handoff);
+        const problems: string[] = [];
+        if (!handoff) {
+            problems.push(`${location}: nextStep.handoff is missing or not an object`);
+        } else {
+            if (typeof handoff.agentName !== 'string' || handoff.agentName.trim().length === 0) {
+                problems.push(`${location}: nextStep.handoff.agentName must be a non-empty string`);
+            }
+            if (typeof handoff.brief !== 'string' || handoff.brief.trim().length === 0) {
+                problems.push(`${location}: nextStep.handoff.brief must be a non-empty string`);
+            }
+        }
+        expect(problems).toEqual([]);
     });
 });
 
@@ -263,3 +314,39 @@ describe('Loop system prompt — implicit-mode section matches the code', () => 
         expect(template).toContain("{% if _NATIVE_CONTROL_FLOW != 'implicit' %}'Sub-Agent' | 'Chat' | {% endif %}");
     });
 });
+
+describe('Sage prompt template — Handoff teaching gated on includeResponseTypeDefinition.handoff', () => {
+    const sageTemplate = readFileSync(join(TEMPLATES_DIR, 'sage/sage.template.md'), 'utf8');
+    const env = new nunjucks.Environment(null, { autoescape: false, throwOnUndefined: false, trimBlocks: false, lstripBlocks: false });
+
+    it('renders Handoff teaching when includeResponseTypeDefinition.handoff is true', () => {
+        const rendered = env.renderString(sageTemplate, {
+            __agentTypePromptParams: {
+                includeResponseTypeDefinition: { handoff: true },
+            },
+        });
+        expect(rendered).toContain("#### Handoff (Default for Single-Agent Specialized Work)");
+        expect(rendered).toContain('"type": "Handoff"');
+        expect(rendered).toContain("Your own sub-agents (Workflow Planner, Form Builder) are called with `nextStep.type = 'Sub-Agent'`, never `Handoff`.");
+        expect(rendered).toContain("call the **Workflow Planner** sub-agent (`Sub-Agent`)");
+        expect(rendered).toContain("**call the Form Builder sub-agent (`Sub-Agent`)**");
+    });
+
+    it('renders no Handoff text and keeps the Tasks path when includeResponseTypeDefinition.handoff is false or withheld', () => {
+        for (const data of [
+            { __agentTypePromptParams: { includeResponseTypeDefinition: { handoff: false } } },
+            {},
+        ]) {
+            const rendered = env.renderString(sageTemplate, data);
+            expect(rendered).not.toMatch(/handoff/i);
+            expect(rendered).not.toMatch(/hand off/i);
+            expect(rendered).not.toMatch(/handing off/i);
+            expect(rendered).toContain("#### Delegating with `Tasks` (v2 Shape Only)");
+            expect(rendered).toContain('"type": "Tasks"');
+            expect(rendered).toContain("Your own sub-agents (Workflow Planner, Form Builder) are called with `nextStep.type = 'Sub-Agent'`, never `Tasks`.");
+            expect(rendered).toContain("call the **Workflow Planner** sub-agent (`Sub-Agent`)");
+            expect(rendered).toContain("**call the Form Builder sub-agent (`Sub-Agent`)**");
+        }
+    });
+});
+

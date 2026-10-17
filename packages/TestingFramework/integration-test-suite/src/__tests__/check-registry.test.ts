@@ -78,6 +78,7 @@ import { SearchOriginGateChecks } from '../checks/search-origin-gate.checks';
 import { SearchProviderTrustChecks } from '../checks/search-provider-trust.checks';
 import { SearchScopeBoundChecks } from '../checks/search-scope-bound.checks';
 import { AgentConsultChecks } from '../checks/agent-consult.checks';
+import { AgentHandoffChecks } from '../checks/agent-handoff.checks';
 import { VideoDataSnapshotChecks } from '../checks/video-data-snapshot.checks';
 import { VideoGenerationCostChecks } from '../checks/video-generation-cost.checks';
 
@@ -210,6 +211,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['search-provider-trust', SearchProviderTrustChecks, 2], // SPT1 external-index hits verified, SPT2 unresolvable scope refused (IT118)
         ['search-scope-bound', SearchScopeBoundChecks, 3], // SSB1-SSB3 a scoped search is bounded by its scope's rows (IT123)
         ['agent-consult', AgentConsultChecks, 1], // AC1 deterministic sub-agent consult, escalation, request resume, open-consult reload, and resumeRunId chain (IT124)
+        ['agent-handoff', AgentHandoffChecks, 6], // AH1-AH6 top-level peer-to-peer handoff, FollowHandoffs, preset precedence, continuity, refusals, and non-handoff host guard (IT125)
         ['video-data-snapshot', VideoDataSnapshotChecks, 3], // VDS1-VDS3 CaptureDataSnapshot + LoadDataSnapshotValues RLS and permission enforcement per contextUser (IT135)
         ['video-generation-cost', VideoGenerationCostChecks, 2], // VGC1-VGC2 AIVideoRunner.RunGenerateVideo server-calculated Per Second cost and driver-reported cost preservation (IT136)
     ];
@@ -265,6 +267,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'agent-compaction-e2e': 3,
         'agent-consult': 1,
         'agent-decisions-switch': 9,
+        'agent-handoff': 6,
         'agent-prompt-cancellation': 2,
         'agent-external-harness': 7,
         'agent-loop-live': 7,
@@ -407,7 +410,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(125);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(126);
     });
 });
 

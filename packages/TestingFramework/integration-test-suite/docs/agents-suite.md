@@ -40,14 +40,15 @@ Two techniques recur: **fabricate-then-observe** (hand-create prior persisted st
 | IT62 | `agent-rag-search` | RS1–RS7 | RAG + search for agents: deterministic scoped `SearchEngine` fan-out/fusion, scope exclusion, cross-user no-leak, and the min-term guard (RS1–3/7, LLM-free), plus live scoped-search action and pre-execution RAG injection (RS4/RS6). |
 | IT63 | `agent-wire-callback` | WC1–WC2 | The over-the-wire fire-and-forget path: `RunAIAgent` resolves via the WebSocket completion callback with a settled run (WC1), and `onProgress` delivers ≥1 streaming event (WC2). The rest of the family runs in-process; this pins the browser/headless-WS follow-up path. |
 | IT124 | `agent-consult` | AC1 | Deterministic sub-agent consult, escalation, `MJ: AI Agent Requests` creation, entity-driven `resumeAgent`, open-consult reload (`loadOpenConsults`), and `resumeRunId` child continuation with scripted `BaseAgent` subclasses (`ITConsultParentAgent` / `ITConsultChildAgent`, zero live LLM calls; joined to **Integration Tests — Deterministic**). |
+| IT125 | `agent-handoff` | AH1–AH6 | Deterministic top-level peer-to-peer handoff with a scripted `TestLLM` stand-in (zero live LLM calls; joined to **Integration Tests — Deterministic**): shipped metadata (Sage `enableHandoff`, Loop `PromptParamsSchema` defaults, Research Agent discoverability + default preset), `FollowHandoffs` top-level transfer and `Handoff` step linkage (`TargetID`, `HandoffToAgentID`, `TargetConversationDetailID`), preset precedence (`@-mention configId` > `mj.agentMode.<id>` > agent default), conversation continuity query, `NotDiscoverable` and `AlreadyInThisTurn` refusals retrying inside the caller's loop, and non-handoff host prompt omission + response rejection. |
 
-**Totals: 12 bundles, 63 checks** (49 live-model + 14 deterministic/fabricated-leaning legs).
+**Totals: 13 bundles, 69 checks** (49 live-model + 20 deterministic/fabricated-leaning legs).
 
 ## The test-agent roster
 
 Seeded in `metadata-optional/integration-test/ai-agents/` (all `IT:`-prefixed, `Type=Loop`, `Status=Active`, category `IT: Integration Test`), each with an imperative single-action prompt (`metadata-optional/integration-test/ai-prompts/templates/it-*.template.md`) and multi-vendor model bindings:
 
-`IT: Echo Agent` · `IT: Tool Loop Agent` · `IT: Failover Agent` · `IT: Payload Parent` · `IT: Payload Child` · `IT: Payload Scoped Child` · `IT: Self-Write Restricted` · `IT: Skill Probe Agent` · `IT: Plan Agent` · `IT: Always-Plan Agent` · `IT: Compaction Agent` · `IT: Memory Writer` · `IT: Search Agent` · `IT: Artifact Reader` · `IT: Consult Parent` · `IT: Consult Child`.
+`IT: Echo Agent` · `IT: Tool Loop Agent` · `IT: Failover Agent` · `IT: Payload Parent` · `IT: Payload Child` · `IT: Payload Scoped Child` · `IT: Self-Write Restricted` · `IT: Skill Probe Agent` · `IT: Plan Agent` · `IT: Always-Plan Agent` · `IT: Compaction Agent` · `IT: Memory Writer` · `IT: Search Agent` · `IT: Artifact Reader` · `IT: Consult Parent` · `IT: Consult Child` · `IT: Handoff Source` · `IT: Handoff Target` · `IT: Handoff Sub-Agent Only`.
 
 Artifact test assets (with an expected-value `MANIFEST.json`) live in `metadata-optional/integration-test/assets/`: `sample.{json,csv,xml,md,pdf,png,bin}`.
 

@@ -10,7 +10,7 @@
 import { AgentResponseForm, FormQuestion } from '@memberjunction/ai-core-plus';
 import { IMetadataProvider, RunView, UserInfo } from '@memberjunction/core';
 import { AIEngine } from '@memberjunction/aiengine';
-import { UUIDSet, UUIDsEqual } from '@memberjunction/global';
+import { IsValidUUID, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 
 /**
  * Default maximum consultation rounds per `(parent run, sub-agent entity ID)` pair
@@ -157,20 +157,13 @@ export function CanAgentOwnSubAgentConsults(
     }
 
     if (typeof agentOrId === 'string') {
-        const agents = AIEngine.Instance?.Agents;
-        if (Array.isArray(agents)) {
-            const found = agents.find(a => UUIDsEqual(a.ID, agentId));
-            if (found?.ChatHandlingOption === 'Consult') {
-                return true;
-            }
+        const found = AIEngine.Instance.Agents.find(a => UUIDsEqual(a.ID, agentId));
+        if (found?.ChatHandlingOption === 'Consult') {
+            return true;
         }
     }
 
-    const relationships = AIEngine.Instance?.AgentRelationships;
-    if (!Array.isArray(relationships)) {
-        return false;
-    }
-    return relationships.some(
+    return AIEngine.Instance.AgentRelationships.some(
         ar =>
             ar.Status === 'Active' &&
             ar.ChatHandlingOption === 'Consult' &&
@@ -189,6 +182,7 @@ export async function LoadOpenSubAgentConsults(
     runId: string,
     contextUser: UserInfo
 ): Promise<SubAgentConsultRecord[]> {
+    if (!IsValidUUID(runId)) return [];
     const rv = RunView.FromMetadataProvider(provider);
     const stepsResult = await rv.RunView<{
         StepNumber: number;
