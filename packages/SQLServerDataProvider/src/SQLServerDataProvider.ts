@@ -1241,6 +1241,27 @@ export class SQLServerDataProvider
     return sRet;
   }
 
+  /**
+   * Builds the column declarations for `@ResultTable` when `entityInfo.SaveReturnMode === 'datestamps_only'`.
+   *
+   * Matches the exact column order emitted by CodeGen's `buildCRUDReturnSelect` via
+   * {@link EntityInfo.DatestampReturnFields} (primary key(s), followed by `__mj_CreatedAt` and `__mj_UpdatedAt`),
+   * ensuring positional `INSERT INTO @ResultTable EXEC spCreate/spUpdate` alignment.
+   */
+  private getDatestampEntityColumnsSQL(entityInfo: EntityInfo): string {
+    return entityInfo.DatestampReturnFields
+      .map((f) => `[${f.Name}] ${f.SQLFullType} ${f.AllowsNull || f.IsVirtual ? 'NULL' : 'NOT NULL'}`)
+      .join(',\n');
+  }
+
+  /**
+   * Returns the comma-separated bracketed column list for {@link EntityInfo.DatestampReturnFields},
+   * used when selecting only primary key(s) and datestamp columns from `@ResultTable`.
+   */
+  private getDatestampSelectColumnsSQL(entityInfo: EntityInfo): string {
+    return entityInfo.DatestampReturnFields.map((f) => `[${f.Name}]`).join(', ');
+  }
+
   /** Entities already warned about base-after-virtual field-order skew — so we warn once, not every save. */
   private static _fieldOrderWarnedEntities: Set<string> = new Set<string>();
 
@@ -1533,6 +1554,7 @@ export class SQLServerDataProvider
     binding: SaveCallBinding,
     entity: BaseEntity,
     spName: string,
+    _options?: EntitySaveOptions,
   ): SaveSQLFragment {
     if (binding.kind !== 'mssql-declare-exec') {
       throw new Error(`SQLServerDataProvider.WrapSaveCallForResult: unexpected binding kind '${binding.kind}'`);
@@ -1545,12 +1567,18 @@ export class SQLServerDataProvider
    * Wraps the save SQL with SQL Server's @ResultTable + inline
    * `spCreateRecordChange_Internal` EXEC pattern. The CONCAT-built `@ID`
    * inline supports composite-key entities.
+   *
+   * When `entity.EntityInfo.SaveReturnMode === 'datestamps_only'`, `@ResultTable` is declared
+   * with only the PK + datestamp columns emitted by the stored procedure. When the effective
+   * return mode (`options?.SaveReturnMode ?? entity.EntityInfo.SaveReturnMode`) is
+   * `'datestamps_only'`, the final `SELECT` from `@ResultTable` returns only those columns.
    */
   protected override WrapSaveCallWithRecordChange(
     _saveSQL: SaveSQLFragment,
     binding: SaveCallBinding,
     payload: RecordChangePayload,
     entity: BaseEntity,
+    options?: EntitySaveOptions,
   ): SaveSQLFragment {
     if (binding.kind !== 'mssql-declare-exec') {
       throw new Error(`SQLServerDataProvider.WrapSaveCallWithRecordChange: unexpected binding kind '${binding.kind}'`);
@@ -1584,11 +1612,20 @@ export class SQLServerDataProvider
                                                                                         @Comments=null${lineageClause}`;
 
     const execSQL = `EXEC [${entity.EntityInfo.SchemaName}].${spName} ${binding.callArgsSQL}`;
+    const spReturnsDatestampsOnly = entity.EntityInfo.SaveReturnMode === 'datestamps_only';
+    const effectiveReturnMode = options?.SaveReturnMode ?? entity.EntityInfo.SaveReturnMode;
+    const resultTableColumnsSQL = spReturnsDatestampsOnly
+      ? this.getDatestampEntityColumnsSQL(entity.EntityInfo)
+      : this.getAllEntityColumnsSQL(entity.EntityInfo);
+    const finalSelectSQL = effectiveReturnMode === 'datestamps_only'
+      ? `SELECT ${this.getDatestampSelectColumnsSQL(entity.EntityInfo)} FROM @ResultTable;`
+      : 'SELECT * FROM @ResultTable;';
+
     const sql = `
                     ${binding.preambleSQL}
 
                     DECLARE @ResultTable TABLE (
-                        ${this.getAllEntityColumnsSQL(entity.EntityInfo)}
+                        ${resultTableColumnsSQL}
                     );
 
                     ${binding.setSQL}
@@ -1610,7 +1647,7 @@ export class SQLServerDataProvider
                         ${recordChangeEXEC};
                     END;
 
-                    SELECT * FROM @ResultTable;`;
+                    ${finalSelectSQL}`;
     return { sql };
   }
 

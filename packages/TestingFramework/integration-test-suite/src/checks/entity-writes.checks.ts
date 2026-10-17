@@ -577,6 +577,60 @@ export const EntityWritesChecks: NamedCheck[] = [
 
             console.log('      → emoji, CJK and Greek survive in ChangesJSON, FullRecordJSON and ChangesDescription');
         }
+    },
+    {
+        Id: 'entity-writes.EW11',
+        Name: 'EW11: SaveReturnMode datestamps_only preserves in-memory fields while refreshing PK + __mj_CreatedAt / __mj_UpdatedAt for concurrency checking',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const f = fx(ctx);
+            const cat = await ctx.Provider.GetEntityObject<MJActionCategoryEntity>(CATEGORY_ENTITY, ctx.User);
+            cat.NewRecord();
+            const expectedName = `${f.Prefix}-datestamps-only ${FIXTURE_TAG}`;
+            const initialDesc = 'EW11 initial description';
+            cat.Name = expectedName;
+            cat.Description = initialDesc;
+            cat.Status = 'Active';
+
+            const saveOpts = new EntitySaveOptions();
+            saveOpts.SaveReturnMode = 'datestamps_only';
+
+            const created = await cat.Save(saveOpts);
+            if (cat.ID) {
+                f.CategoryIds.push(cat.ID);
+            }
+            Assert(created, `EW11 create with SaveReturnMode='datestamps_only' failed: ${cat.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+            Assert(!!cat.ID && cat.ID.length > 0, 'EW11: PK ID must be populated after datestamps_only create');
+            AssertEqual(cat.Name, expectedName, 'EW11: in-memory Name must not be clobbered by narrow datestamps_only return');
+            AssertEqual(cat.Description, initialDesc, 'EW11: in-memory Description must not be clobbered by narrow datestamps_only return');
+            AssertEqual(cat.Status, 'Active', 'EW11: in-memory Status must not be clobbered by narrow datestamps_only return');
+            Assert(cat.__mj_CreatedAt instanceof Date, 'EW11: __mj_CreatedAt must be populated as a Date after datestamps_only create');
+            Assert(cat.__mj_UpdatedAt instanceof Date, 'EW11: __mj_UpdatedAt must be populated as a Date after datestamps_only create');
+            Assert(!cat.Dirty, 'EW11: entity must not be Dirty after datestamps_only create');
+
+            const createdUpdatedAtMs = cat.__mj_UpdatedAt.getTime();
+
+            // Subsequent update on the same entity instance: verifies that __mj_UpdatedAt was accurately
+            // captured from the database on Create so checkRecordSavingInconsistency passes on Update.
+            const updatedDesc = 'EW11 updated description';
+            cat.Description = updatedDesc;
+            const updated = await cat.Save(saveOpts);
+            Assert(updated, `EW11 update with SaveReturnMode='datestamps_only' failed: ${cat.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+            AssertEqual(cat.Name, expectedName, 'EW11: in-memory Name preserved across datestamps_only update');
+            AssertEqual(cat.Description, updatedDesc, 'EW11: in-memory Description reflects updated value after datestamps_only update');
+            Assert(cat.__mj_UpdatedAt instanceof Date && cat.__mj_UpdatedAt.getTime() >= createdUpdatedAtMs,
+                'EW11: __mj_UpdatedAt must be refreshed (>= create timestamp) after datestamps_only update');
+            Assert(!cat.Dirty, 'EW11: entity must not be Dirty after datestamps_only update');
+
+            // Verify persisted database state via fresh Load()
+            const reloaded = await ctx.Provider.GetEntityObject<MJActionCategoryEntity>(CATEGORY_ENTITY, ctx.User);
+            Assert(await reloaded.Load(cat.ID), 'EW11 reload failed');
+            AssertEqual(reloaded.Name, expectedName, 'EW11 reloaded Name');
+            AssertEqual(reloaded.Description, updatedDesc, 'EW11 reloaded Description');
+            AssertEqual(reloaded.Status, 'Active', 'EW11 reloaded Status');
+
+            console.log('      → SaveReturnMode datestamps_only preserved in-memory fields and refreshed __mj_CreatedAt/__mj_UpdatedAt on Create + Update');
+        }
     }
 ];
 

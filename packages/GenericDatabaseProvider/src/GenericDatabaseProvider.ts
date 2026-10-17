@@ -1365,6 +1365,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         binding: SaveCallBinding,
         entity: BaseEntity,
         spName: string,
+        options?: EntitySaveOptions,
     ): SaveSQLFragment;
 
     /**
@@ -1381,6 +1382,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         binding: SaveCallBinding,
         payload: RecordChangePayload,
         entity: BaseEntity,
+        options?: EntitySaveOptions,
     ): SaveSQLFragment;
 
     /**
@@ -1495,7 +1497,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         //    shape; we also keep it as simpleSQL so consumers (e.g.
         //    DatabaseProviderBase's `simpleSQLFallback` flow) have a
         //    record-change-free form to fall back to.
-        const baseSaveSQL = this.WrapSaveCallForResult(binding, entity, spName);
+        const baseSaveSQL = this.WrapSaveCallForResult(binding, entity, spName, options);
         let saveSQL = baseSaveSQL;
         // A CREATE's logged form is guarded on the primary key so a migration replay of
         // the recording converges on a database that already holds the row (#4503). An
@@ -1542,7 +1544,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 entity.CloneContext,
             );
             if (payload) {
-                saveSQL = this.WrapSaveCallWithRecordChange(saveSQL, binding, payload, entity);
+                saveSQL = this.WrapSaveCallWithRecordChange(saveSQL, binding, payload, entity, options);
             }
         }
 
