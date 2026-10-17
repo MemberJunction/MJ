@@ -285,6 +285,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     }
 
     /**
+     * Fast O(1) check for whether any SQL logging sessions are currently active.
+     */
+    protected get HasActiveSqlLoggingSessions(): boolean {
+        return this._sqlLoggingSessions.size > 0;
+    }
+
+    /**
      * Creates a new SQL logging session that will capture all SQL operations to a file.
      * Returns a disposable session object that must be disposed to stop logging.
      *
@@ -541,6 +548,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         user: UserInfo,
         originatingEntityActionIDs?: string[],
     ): Promise<ActionResult[]> {
+        const engine = EntityActionEngineServer.Instance;
+        if (engine.Loaded && engine.GetActionsByEntityName(entity.EntityInfo.Name, 'Active').length === 0) {
+            return [];
+        }
         // FIRST STATEMENT, and deliberately before the first `await`. After-hooks are dispatched
         // fire-and-forget, and the moment this method yields, the save completes and `finalizeSave()`
         // reloads the entity — resetting every field's OldValue to its new value. A change context
@@ -552,8 +563,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         // rolled-back save never fires it (see RunAfterCommit).
         const postCommitToken = this.CapturePostCommitToken();
         try {
-            const engine = EntityActionEngineServer.Instance;
-            await engine.Config(false, user);
+            if (!engine.Loaded) {
+                await engine.Config(false, user);
+            }
             const newRecord = entityChange.IsCreate;
             const baseTypeType = baseType === 'save' ? (newRecord ? 'Create' : 'Update') : 'Delete';
             const invocationType = baseType === 'validate' ? 'Validate' : before ? 'Before' + baseTypeType : 'After' + baseTypeType;
@@ -632,11 +644,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         try {
             if (baseType === 'delete') return; // delete not yet supported for AI actions
 
-            await AIEngine.Instance.Config(false, user);
+            const ai = AIEngine.Instance;
+            if (!ai.Loaded) {
+                await ai.Config(false, user);
+            }
 
             const actions = this.GetEntityAIActions(entity.EntityInfo, before);
             if (actions && actions.length > 0) {
-                const ai = AIEngine.Instance;
                 for (let i = 0; i < actions.length; i++) {
                     const a = actions[i];
                     if ((a.TriggerEvent === 'before save' && before) || (a.TriggerEvent === 'after save' && !before)) {
@@ -1416,10 +1430,15 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     }
 
     /** The entries of a save's parameter map whose fields this save actually changed. */
-    private changedFieldValues(entity: BaseEntity, fieldValues: Map<EntityFieldInfo, unknown>): Map<EntityFieldInfo, unknown> {
+    private changedFieldValues(
+        entity: BaseEntity,
+        fieldValues: Map<EntityFieldInfo, unknown>,
+        dirtyFields?: ReadonlySet<EntityFieldInfo>,
+    ): Map<EntityFieldInfo, unknown> {
         const changed = new Map<EntityFieldInfo, unknown>();
         for (const [f, value] of fieldValues) {
-            if (entity.GetFieldByName(f.Name)?.Dirty) changed.set(f, value);
+            const isDirty = dirtyFields ? dirtyFields.has(f) : !!entity.GetFieldByName(f.Name)?.Dirty;
+            if (isDirty) changed.set(f, value);
         }
         return changed;
     }
@@ -1445,6 +1464,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
 
         // 1. Iterate fields, apply IsSPParameter + PK rules, coerce values.
         const fieldValueMap = new Map<EntityFieldInfo, unknown>();
+        const dirtyFields = isUpdate ? new Set<EntityFieldInfo>() : undefined;
         for (const f of entity.EntityInfo.Fields) {
             if (!f.IsSPParameter(isUpdate)) continue;
 
@@ -1483,6 +1503,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             const coerced = this.CoerceSaveFieldValue(f, rawValue, isUpdate);
             if (coerced.kind === 'skip') continue;
             fieldValueMap.set(f, coerced.value);
+            if (dirtyFields && theField?.Dirty) {
+                dirtyFields.add(f);
+            }
         }
 
         // 2. Encrypt — between coercion and rendering, mutates the map in place.
@@ -1503,12 +1526,20 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         // resets the target's other columns. A forced save (IgnoreDirtyState, e.g. MetadataSync's
         // `alwaysPush`) asked to re-impose the whole row, so it keeps the full-row form. Dialects
         // without a replay form log the plain save SQL.
-        const replaySQL = isNew
-            ? this.RenderReplaySaveSQL(binding, entity, fieldValueMap)
-            : options?.IgnoreDirtyState
-              ? undefined
-              : this.RenderReplayUpdateSQL(binding, entity, this.changedFieldValues(entity, fieldValueMap));
-        const simpleSQL = replaySQL ?? baseSaveSQL.sql;
+        // Computed lazily and memoized so saves with SQL logging off skip replay/literal rendering.
+        let cachedSimpleSQL: string | undefined;
+        const computeSimpleSQL = (): string => {
+            if (cachedSimpleSQL === undefined) {
+                const replaySQL = isNew
+                    ? this.RenderReplaySaveSQL(binding, entity, fieldValueMap)
+                    : options?.IgnoreDirtyState
+                      ? undefined
+                      : this.RenderReplayUpdateSQL(binding, entity, this.changedFieldValues(entity, fieldValueMap, dirtyFields));
+                // A statement that runs with parameters is logged in its literal form, which replays alone.
+                cachedSimpleSQL = replaySQL ?? baseSaveSQL.literalSQL ?? baseSaveSQL.sql;
+            }
+            return cachedSimpleSQL;
+        };
 
         // 5. Optionally wrap with record-change emission.
         let overlappingChangeData: { changesJSON: string; changesDescription: string } | undefined;
@@ -1517,18 +1548,6 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         if (this.ShouldTrackRecordChanges(entity.EntityInfo) && options?.SkipRecordChanges !== true) {
             const newData = entity.GetAll(false);
             const oldData = isUpdate ? entity.GetAll(true) : null;
-
-            // ISA propagation hook: capture the diff for SS subtype propagation.
-            // Returned via `extraData` so the SS subclass can consume it without re-diffing.
-            if (isUpdate && oldData) {
-                const diffChanges = this.DiffObjects(oldData, newData, entity.EntityInfo, "'");
-                if (diffChanges && Object.keys(diffChanges).length > 0) {
-                    overlappingChangeData = {
-                        changesJSON: JSON.stringify(diffChanges),
-                        changesDescription: this.CreateUserDescriptionOfChanges(diffChanges),
-                    };
-                }
-            }
 
             const payload = this.BuildRecordChangePayload(
                 newData,
@@ -1542,15 +1561,34 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 entity.CloneContext,
             );
             if (payload) {
+                // ISA propagation hook: reuse the diff already computed by BuildRecordChangePayload
+                // for SS subtype propagation without running DiffObjects + JSON.stringify twice.
+                if (isUpdate && oldData && payload.changesJSON) {
+                    overlappingChangeData = {
+                        changesJSON: payload.changesJSON,
+                        changesDescription: payload.changesDescription,
+                    };
+                }
                 saveSQL = this.WrapSaveCallWithRecordChange(saveSQL, binding, payload, entity);
             }
         }
 
         const result: SaveSQLResult = {
             fullSQL: saveSQL.sql,
-            simpleSQL,
+            get simpleSQL(): string {
+                return computeSimpleSQL();
+            },
             parameters: saveSQL.parameters ?? null,
         };
+        if ('literalSQL' in saveSQL) {
+            Object.defineProperty(result, 'literalSQL', {
+                enumerable: true,
+                configurable: true,
+                get(): string | undefined {
+                    return saveSQL.literalSQL;
+                },
+            });
+        }
         if (overlappingChangeData) {
             (result as unknown as { extraData: Record<string, unknown> }).extraData = { overlappingChangeData };
         }
