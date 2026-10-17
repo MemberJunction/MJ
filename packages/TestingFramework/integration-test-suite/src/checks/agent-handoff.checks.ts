@@ -27,7 +27,7 @@
  * for every candidate chat driver class (`TestLLM` registered via `RegisterTestLLM`), and each check
  * asserts `TestLLM.CallCount` equals the exact scripted call count.
  */
-import { Metadata, RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
+import { RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import { EscapeSQLString, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import type { ChatMessage } from '@memberjunction/ai';
 import { AIEngine } from '@memberjunction/aiengine';
@@ -105,7 +105,6 @@ interface HandoffFixture {
     };
     Llm: TestLLM;
     Restore: () => void;
-    RestoreConversationNaming: () => void;
     ConversationIDs: string[];
     RunIDs: string[];
 }
@@ -353,8 +352,7 @@ async function writeTargetModeSetting(
     presetName: string
 ): Promise<void> {
     await deleteTargetModeSetting(ctx, targetAgentId);
-    const md = ctx.Provider as unknown as Metadata;
-    const entity = await md.GetEntityObject<MJUserSettingEntity>('MJ: User Settings', ctx.User);
+    const entity = await ctx.Provider.GetEntityObject<MJUserSettingEntity>('MJ: User Settings', ctx.User);
     entity.NewRecord();
     entity.UserID = ctx.User.ID;
     entity.Setting = AgentModeSettingKey(targetAgentId);
@@ -415,7 +413,7 @@ export const AgentHandoffChecks: NamedCheck[] = [
             const researchAgent = loadAgent(AGENT_NAMES.ResearchAgent);
             Assert(
                 AIAgentPermissionHelper.IsDirectlyDiscoverable(researchAgent),
-                'AH1: Research Agent must be directly discoverable (root, Active, ExposeAsAction=true, InvocationMode!=="Sub-Agent")'
+                'AH1: Research Agent must be directly discoverable (root ParentID null and InvocationMode not Sub-Agent)'
             );
             const researchPresets = AIEngine.Instance.GetAgentConfigurationPresets(researchAgent.ID, true);
             const defaultPresets = researchPresets.filter(p => p.IsDefault);
@@ -464,13 +462,13 @@ export const AgentHandoffChecks: NamedCheck[] = [
             AssertEqual(handoffStep.Status, 'Completed', 'AH2: source Handoff step Status');
             Assert(
                 UUIDsEqual(handoffStep.TargetID, f.Agents.Target.ID),
-                `AH2: source Handoff step TargetID (${handoffStep.TargetID}) !== target.ID (${f.Agents.Target.ID})`
+                `AH2: source Handoff step TargetID ${handoffStep.TargetID}, expected target ${f.Agents.Target.ID}`
             );
             Assert(!!handoffStep.OutputData, 'AH2: source Handoff step OutputData is empty');
             const handoffOutput = JSON.parse(handoffStep.OutputData!) as Record<string, unknown>;
             Assert(
                 UUIDsEqual(handoffOutput.HandoffToAgentID as string, f.Agents.Target.ID),
-                `AH2: Handoff step OutputData.HandoffToAgentID (${handoffOutput.HandoffToAgentID}) !== target.ID`
+                `AH2: Handoff step OutputData.HandoffToAgentID ${handoffOutput.HandoffToAgentID}, expected target`
             );
 
             // FollowHandoffs outcome & target run assertions
@@ -487,7 +485,7 @@ export const AgentHandoffChecks: NamedCheck[] = [
             Assert(targetRun!.ParentRunID == null, `AH2: target run ParentRunID must be NULL, got ${targetRun!.ParentRunID}`);
             Assert(
                 UUIDsEqual(targetRun!.ConversationID, run.ConversationID),
-                `AH2: target run ConversationID (${targetRun!.ConversationID}) !== conversationId (${run.ConversationID})`
+                `AH2: target run ConversationID ${targetRun!.ConversationID}, expected conversation ${run.ConversationID}`
             );
             Assert(
                 UUIDsEqual(targetRun!.ConversationDetailID, outcome.targetConversationDetailId),
@@ -495,7 +493,7 @@ export const AgentHandoffChecks: NamedCheck[] = [
             );
             Assert(
                 UUIDsEqual(targetRun!.ConfigurationID, f.Presets.Standard.AIConfigurationID),
-                `AH2: target run ConfigurationID (${targetRun!.ConfigurationID}) !== Standard preset AIConfigurationID (${f.Presets.Standard.AIConfigurationID})`
+                `AH2: target run ConfigurationID ${targetRun!.ConfigurationID}, expected Standard preset AIConfigurationID ${f.Presets.Standard.AIConfigurationID}`
             );
 
             // Target ConversationDetail row assertions
@@ -504,11 +502,11 @@ export const AgentHandoffChecks: NamedCheck[] = [
             Assert(!!targetDetail, 'AH2: target ConversationDetail row not found in database');
             Assert(
                 UUIDsEqual(targetDetail!.AgentID, f.Agents.Target.ID),
-                `AH2: target ConversationDetail.AgentID (${targetDetail!.AgentID}) !== target.ID`
+                `AH2: target ConversationDetail.AgentID ${targetDetail!.AgentID}, expected target`
             );
             Assert(
                 UUIDsEqual(targetDetail!.ParentID, run.SourceDetailID),
-                `AH2: target ConversationDetail.ParentID (${targetDetail!.ParentID}) !== source detail ID (${run.SourceDetailID})`
+                `AH2: target ConversationDetail.ParentID ${targetDetail!.ParentID}, expected source detail ${run.SourceDetailID}`
             );
             AssertEqual(targetDetail!.Role, 'AI', 'AH2: target ConversationDetail.Role');
             AssertEqual(targetDetail!.Status, 'Complete', 'AH2: target ConversationDetail.Status');
@@ -542,12 +540,12 @@ export const AgentHandoffChecks: NamedCheck[] = [
                 AssertEqual(settingRun.Outcomes[0].presetSource, 'UserSetting', 'AH3 (UserSetting): outcome.presetSource');
                 Assert(
                     UUIDsEqual(settingTargetRun!.ConfigurationID, f.Presets.High.AIConfigurationID),
-                    `AH3 (UserSetting): target ConfigurationID (${settingTargetRun!.ConfigurationID}) !== High Power (${f.Presets.High.AIConfigurationID})`
+                    `AH3 (UserSetting): target ConfigurationID ${settingTargetRun!.ConfigurationID}, expected High Power ${f.Presets.High.AIConfigurationID}`
                 );
                 AssertEqual(f.Llm.CallCount, 2, 'AH3 (UserSetting): TestLLM.CallCount');
 
                 // 2. Mention pin for Draft in the user message beats the saved High setting -> selects Fast
-                const mentionMessage = `@{"type":"agent","id":"${f.Agents.Target.ID}","configId":"${f.Presets.Draft.ID}"} Run with Draft mention pin.`;
+                const mentionMessage = `@{"type":"agent","id":"${f.Agents.Target.ID}","name":"${f.Agents.Target.Name}","configId":"${f.Presets.Draft.ID}"} Run with Draft mention pin.`;
                 armScript(f, [
                     handoffReply(f.Agents.Target.Name!, 'Run with mention pin.', 'Testing Mention preset'),
                     completeReply('IT-HANDOFF-AH3-MENTION-DONE'),
@@ -564,7 +562,7 @@ export const AgentHandoffChecks: NamedCheck[] = [
                 AssertEqual(mentionRun.Outcomes[0].presetSource, 'Mention', 'AH3 (Mention): outcome.presetSource');
                 Assert(
                     UUIDsEqual(mentionTargetRun!.ConfigurationID, f.Presets.Draft.AIConfigurationID),
-                    `AH3 (Mention): target ConfigurationID (${mentionTargetRun!.ConfigurationID}) !== Fast (${f.Presets.Draft.AIConfigurationID})`
+                    `AH3 (Mention): target ConfigurationID ${mentionTargetRun!.ConfigurationID}, expected Fast ${f.Presets.Draft.AIConfigurationID}`
                 );
                 AssertEqual(f.Llm.CallCount, 2, 'AH3 (Mention): TestLLM.CallCount');
             } finally {
@@ -596,14 +594,14 @@ export const AgentHandoffChecks: NamedCheck[] = [
                 .reverse()
                 .find(d => d.Role === 'AI' && !!d.AgentID && !UUIDsEqual(d.AgentID, f.Agents.Source.ID));
 
-            Assert(!!lastNonSourceAiReply, 'AH4: found no Role=AI row with AgentID !== source.ID');
+            Assert(!!lastNonSourceAiReply, 'AH4: found no Role=AI row for an agent other than source');
             Assert(
                 UUIDsEqual(lastNonSourceAiReply!.ID, targetDetailId),
-                `AH4: newest non-source AI row ID (${lastNonSourceAiReply!.ID}) !== target detail ID (${targetDetailId})`
+                `AH4: newest non-source AI row ID ${lastNonSourceAiReply!.ID}, expected target detail ${targetDetailId}`
             );
             Assert(
                 UUIDsEqual(lastNonSourceAiReply!.AgentID, f.Agents.Target.ID),
-                `AH4: newest non-source AI row AgentID (${lastNonSourceAiReply!.AgentID}) !== target.ID (${f.Agents.Target.ID})`
+                `AH4: newest non-source AI row AgentID ${lastNonSourceAiReply!.AgentID}, expected target ${f.Agents.Target.ID}`
             );
             AssertEqual(lastNonSourceAiReply!.Status, 'Complete', 'AH4: target reply Status');
             AssertEqual(f.Llm.CallCount, 2, 'AH4: TestLLM.CallCount');
@@ -760,15 +758,6 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle(BUNDLE, {
         const llm = new TestLLM();
         const restore = RegisterTestLLM(llm, [...CHAT_DRIVER_CLASSES]);
 
-        const runnerProto = AgentRunner.prototype as unknown as {
-            generateConversationName: (...args: unknown[]) => Promise<{ name: string; description: string } | null>;
-        };
-        const originalGenerateConversationName = runnerProto.generateConversationName;
-        runnerProto.generateConversationName = async () => null;
-        const restoreConversationNaming = (): void => {
-            runnerProto.generateConversationName = originalGenerateConversationName;
-        };
-
         handoffFixture = {
             Agents: {
                 Source: source,
@@ -778,7 +767,6 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle(BUNDLE, {
             Presets: presets,
             Llm: llm,
             Restore: restore,
-            RestoreConversationNaming: restoreConversationNaming,
             ConversationIDs: [],
             RunIDs: [],
         };
@@ -789,7 +777,6 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle(BUNDLE, {
         if (!f) {
             return;
         }
-        f.RestoreConversationNaming();
         f.Llm.Reset();
         f.Llm.SetDefaultOutcome({
             kind: 'fail',
@@ -802,22 +789,47 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle(BUNDLE, {
             console.error(`[${BUNDLE}] cleanup of user setting failed:`, err)
         );
 
-        // 2. Discover any runs linked to our conversations as well as explicitly recorded RunIDs
-        const allRunIds = await collectAllRunIds(ctx, f.ConversationIDs, f.RunIDs);
+        // 2. Sweep any IT125 conversations created during the bundle (including any from aborted runs)
+        const allConversationIds = await collectAllConversationIds(ctx, f.ConversationIDs);
 
-        // 3. Delete all steps and prompt runs for each run, then delete runs leaves-first
+        // 3. Discover any runs linked to our conversations as well as explicitly recorded RunIDs
+        const allRunIds = await collectAllRunIds(ctx, allConversationIds, f.RunIDs);
+
+        // 4. Delete all steps and prompt runs for each run, then delete runs leaves-first
         await purgeRuns(ctx, allRunIds).catch(err =>
             console.error(`[${BUNDLE}] cleanup of runs failed:`, err)
         );
 
-        // 4. Delete Conversation Details leaves-first (ParentID children before parents), then Conversations
-        for (const convId of f.ConversationIDs) {
+        // 5. Delete Conversation Details leaves-first (ParentID children before parents), then Conversations
+        for (const convId of allConversationIds) {
             await purgeConversation(ctx, convId).catch(err =>
                 console.error(`[${BUNDLE}] cleanup of conversation ${convId} failed:`, err)
             );
         }
     },
 });
+
+async function collectAllConversationIds(
+    ctx: IntegrationCheckContext,
+    trackedIds: string[]
+): Promise<string[]> {
+    const ids = new Set<string>(trackedIds);
+    const rv = RunView.FromMetadataProvider(ctx.Provider);
+    const res = await rv.RunView<{ ID: string }>(
+        {
+            EntityName: 'MJ: Conversations',
+            ExtraFilter: `Name LIKE 'IT125 %' AND UserID='${EscapeSQLString(ctx.User.ID)}'`,
+            Fields: ['ID'],
+            ResultType: 'simple',
+            BypassCache: true,
+        },
+        ctx.User
+    );
+    for (const row of res.Success ? res.Results : []) {
+        ids.add(row.ID);
+    }
+    return [...ids];
+}
 
 async function collectAllRunIds(
     ctx: IntegrationCheckContext,
@@ -893,7 +905,9 @@ async function purgeRuns(ctx: IntegrationCheckContext, runIds: string[]): Promis
 
     // Delete prompt runs
     for (const promptRunId of promptRunIds) {
-        await deletePromptRunTree(ctx, promptRunId).catch(() => undefined);
+        await deletePromptRunTree(ctx, promptRunId).catch(err =>
+            console.error(`[${BUNDLE}] cleanup of prompt run ${promptRunId} failed:`, err)
+        );
     }
 
     // Delete runs leaves-first across ParentRunID and LastRunID

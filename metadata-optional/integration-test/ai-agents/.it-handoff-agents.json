@@ -41,7 +41,7 @@
     "fields": {
       "Name": "IT: Handoff Target",
       "CategoryID": "@lookup:MJ: AI Agent Categories.Name=IT: Integration Test",
-      "Description": "Root Loop agent with Draft (Fast), Standard (Standard, IsDefault), and High (High Power) configuration presets. Target fixture for IT125 integration checks. (mj-integration-test — safe to delete)",
+      "Description": "Root Loop agent with peer transfer enabled in prompt params and Draft (Fast), Standard (Standard, IsDefault), and High (High Power) configuration presets. Target fixture for IT125 integration checks. (mj-integration-test — safe to delete)",
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
       "Status": "Active",
       "ExposeAsAction": true,
@@ -51,7 +51,10 @@
       "IconClass": "fa-solid fa-vial",
       "InjectNotes": false,
       "InjectExamples": false,
-      "MaxIterationsPerRun": 6
+      "MaxIterationsPerRun": 6,
+      "AgentTypePromptParams": {
+        "enableHandoff": true
+      }
     },
     "relatedEntities": {
       "MJ: AI Agent Prompts": [

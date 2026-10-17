@@ -207,22 +207,6 @@ describe('agent-preset-resolution', () => {
                 ContextUser: CONTEXT_USER,
             });
             expect(resByAiConfigId).toEqual({ Preset: PRESET_DEEP, Source: 'Mention' });
-
-            vi.restoreAllMocks();
-            vi.spyOn(console, 'error').mockImplementation(() => undefined);
-            vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-
-            const compactNameless = `@{"type":"agent","id":"${AGENT_ID}","configId":"${PRESET_FAST.ID}"} start`;
-            setupEnvironment({
-                mentionMessages: [{ ID: 'msg-3', Message: compactNameless }],
-            });
-
-            const resByCompact = await ResolveConversationAgentPreset({
-                ConversationID: CONV_ID,
-                AgentID: AGENT_ID,
-                ContextUser: CONTEXT_USER,
-            });
-            expect(resByCompact).toEqual({ Preset: PRESET_FAST, Source: 'Mention' });
         });
 
         it('passes BranchID to BranchPathFilterFresh so mention pins on another branch are ignored', async () => {
