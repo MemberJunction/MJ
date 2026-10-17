@@ -131,6 +131,7 @@ export * from './custom/ai/find-best-action.action';
 export * from './custom/ai/find-best-agent.action';
 export * from './custom/ai/load-agent-spec.action';
 export * from './custom/ai/generate-image.action';
+export * from './custom/ai/generate-video.action';
 export * from './custom/ai/run-cluster-analysis.action';
 export * from './custom/ai/actionsmith-agent';
 
