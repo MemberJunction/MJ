@@ -2403,7 +2403,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             let pkeyOuterParamString: string = '';
 
             for (let i = 0; i < primaryKey.KeyValuePairs.length; i++) {
-                const field: EntityFieldInfo = entity.Fields.find(f => f.Name.trim().toLowerCase() === primaryKey.KeyValuePairs[i].FieldName.trim().toLowerCase()).EntityFieldInfo;
+                const field: EntityFieldInfo = entity.EntityInfo.FieldByName(primaryKey.KeyValuePairs[i].FieldName);
                 const val = primaryKey.GetValueByIndex(i);
                 const pkeyGraphQLType: string = field.GraphQLType;
 
@@ -2444,9 +2444,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             const deniedReadFields = this.getDeniedReadFieldNamesForCurrentUser(entity.EntityInfo);
                 const query = gql`query Single${graphQLTypeName}${rel.length > 0 ? 'Full' : ''} (${pkeyOuterParamString}) {
                 ${graphQLTypeName}(${pkeyInnerParamString}) {
-                                    ${entity.Fields.filter((f) => !deniedReadFields.has(f.Name.trim().toLowerCase())) /* binary fields included: a single-record Load hydrates every readable field, binary values arriving as base64 */
+                                    ${entity.EntityInfo.Fields.filter((f) => !deniedReadFields.has(f.Name.trim().toLowerCase())) /* binary fields included: a single-record Load hydrates every readable field, binary values arriving as base64 */
                                       .map((f) => {
-                                        if (f.EntityFieldInfo.Name.trim().toLowerCase().startsWith('__mj_')) {
+                                        if (f.Name.trim().toLowerCase().startsWith('__mj_')) {
                                           // fields that start with __mj_ need to be converted to _mj__ for the GraphQL query
                                           return f.CodeName.replace('__mj_', '_mj__');
                                         } else {
@@ -2537,7 +2537,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             let pkeyOuterParamString: string = '';
             let returnValues: string = '';
             for (let kv of entity.PrimaryKey.KeyValuePairs) {
-                const pk = entity.Fields.find(f => f.Name.trim().toLowerCase() === kv.FieldName.trim().toLowerCase()); // get the field for the primary key field
+                const pk = entity.GetFieldByName(kv.FieldName); // get the field for the primary key field
                 vars[pk.CodeName] = pk.Value;
                 mutationInputTypes.push({varName: pk.CodeName, inputType: pk.EntityFieldInfo.GraphQLType + '!'}); // only used when doing a transaction group, but it is easier to do in this main loop
                 // GraphQL forbids '__'-prefixed arg/field names; sanitize a '__mj_'-prefixed PK to '_mj__' to match
