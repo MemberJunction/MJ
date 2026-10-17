@@ -685,16 +685,16 @@ describe('VideoStudioPreProductionAgent (VS-AGT-3)', () => {
         expect(approved[4].StagedPath).toBe('assets/hero-cutout-d4444444.webp');
     });
 
-    it('refuses to stage an asset when neither stored ContentType/MimeType nor stored file Name yields a known extension', async () => {
-        vi.spyOn(narrationPipelineModule, 'RunNarrationPipeline').mockImplementation(
-            async (inputSpec) => ({
+    it('refuses to stage an asset when neither stored ContentType/MimeType nor stored file Name yields a known extension, before calling RunNarrationPipeline', async () => {
+        const narrationSpy = vi
+            .spyOn(narrationPipelineModule, 'RunNarrationPipeline')
+            .mockImplementation(async (inputSpec) => ({
                 Spec: inputSpec,
                 Clips: [],
                 CaptionsVtt: 'WEBVTT\n\n',
                 CaptionsFileID: 'vtt-file-empty',
                 Issues: [],
-            }),
-        );
+            }));
 
         vi.spyOn(RunView.prototype, 'RunView').mockImplementation(async (params) => {
             if (params.EntityName === 'MJ: Files') {
@@ -722,5 +722,6 @@ describe('VideoStudioPreProductionAgent (VS-AGT-3)', () => {
         expect(result.finalStep.step).toBe('Failed');
         expect(result.finalStep.message).toContain('Brand Logo');
         expect(result.finalStep.message).toContain('has no supported extension');
+        expect(narrationSpy).not.toHaveBeenCalled();
     });
 });

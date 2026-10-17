@@ -626,8 +626,10 @@ describe('VideoStudioRenderAgent (VS-AGT-3)', () => {
         const stepsStr = JSON.stringify(finalizedSteps);
         expect(payloadStr).not.toContain(mp4Base64);
         expect(payloadStr).not.toContain('InlineBase64');
+        expect(payloadStr).not.toContain('"Video":');
         expect(stepsStr).not.toContain(mp4Base64);
         expect(stepsStr).not.toContain('InlineBase64');
+        expect(stepsStr).not.toContain('"Video":');
         expect(result.finalStep.newPayload.Output?.Videos['16:9']).not.toHaveProperty('Video');
     });
 });

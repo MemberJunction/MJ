@@ -7,7 +7,7 @@ import type {
 } from '@memberjunction/ai-core-plus';
 import { RunView, type IMetadataProvider, type IRunViewProvider, type UserInfo } from '@memberjunction/core';
 import { VideoStudioEngine } from '@memberjunction/core-entities';
-import { EscapeSQLString, IsValidUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, IndexByUUID, IsValidUUID, RegisterClass, UUIDSet } from '@memberjunction/global';
 import {
     CreateMJChartKit,
     type VideoAsset,
@@ -148,8 +148,8 @@ async function resolveAssetExtensionsFromStorage(
     }
 
     const rv = new RunView(provider as unknown as IRunViewProvider);
-    const avIds: string[] = [];
-    const fileIds: string[] = [];
+    const avIds = new UUIDSet();
+    const fileIds = new UUIDSet();
 
     for (const asset of approvedAssets) {
         const fileId = asset.FileID?.trim();
@@ -165,9 +165,7 @@ async function resolveAssetExtensionsFromStorage(
                     `Cannot stage asset "${asset.Key}": FileID "${fileId}" is not a valid UUID.`,
                 );
             }
-            if (!fileIds.some((id) => UUIDsEqual(id, fileId))) {
-                fileIds.push(fileId);
-            }
+            fileIds.Add(fileId);
         }
         if (avId) {
             if (!IsValidUUID(avId)) {
@@ -175,15 +173,13 @@ async function resolveAssetExtensionsFromStorage(
                     `Cannot stage asset "${asset.Key}": ArtifactVersionID "${avId}" is not a valid UUID.`,
                 );
             }
-            if (!avIds.some((id) => UUIDsEqual(id, avId))) {
-                avIds.push(avId);
-            }
+            avIds.Add(avId);
         }
     }
 
     let avRows: StoredArtifactVersionMetadataRow[] = [];
-    if (avIds.length > 0) {
-        const avFilter = avIds.map((id) => `'${EscapeSQLString(id)}'`).join(', ');
+    if (avIds.Size > 0) {
+        const avFilter = [...avIds].map((id) => `'${EscapeSQLString(id)}'`).join(', ');
         const avView = await rv.RunView<StoredArtifactVersionMetadataRow>(
             {
                 EntityName: 'MJ: Artifact Versions',
@@ -201,19 +197,15 @@ async function resolveAssetExtensionsFromStorage(
         avRows = avView.Results ?? [];
         for (const row of avRows) {
             const linkedFileId = row.FileID?.trim();
-            if (
-                linkedFileId &&
-                IsValidUUID(linkedFileId) &&
-                !fileIds.some((id) => UUIDsEqual(id, linkedFileId))
-            ) {
-                fileIds.push(linkedFileId);
+            if (linkedFileId && IsValidUUID(linkedFileId)) {
+                fileIds.Add(linkedFileId);
             }
         }
     }
 
     let fileRows: StoredFileMetadataRow[] = [];
-    if (fileIds.length > 0) {
-        const fileFilter = fileIds.map((id) => `'${EscapeSQLString(id)}'`).join(', ');
+    if (fileIds.Size > 0) {
+        const fileFilter = [...fileIds].map((id) => `'${EscapeSQLString(id)}'`).join(', ');
         const fileView = await rv.RunView<StoredFileMetadataRow>(
             {
                 EntityName: 'MJ: Files',
@@ -231,14 +223,15 @@ async function resolveAssetExtensionsFromStorage(
         fileRows = fileView.Results ?? [];
     }
 
+    const avByID = IndexByUUID(avRows);
+    const fileByID = IndexByUUID(fileRows);
+
     for (const asset of approvedAssets) {
         const fileId = asset.FileID?.trim();
         const avId = asset.ArtifactVersionID?.trim();
-        const avRow = avId ? avRows.find((r) => UUIDsEqual(r.ID, avId)) : undefined;
+        const avRow = avId ? avByID.Get(avId) : undefined;
         const effectiveFileId = fileId || avRow?.FileID?.trim() || undefined;
-        const fileRow = effectiveFileId
-            ? fileRows.find((r) => UUIDsEqual(r.ID, effectiveFileId))
-            : undefined;
+        const fileRow = effectiveFileId ? fileByID.Get(effectiveFileId) : undefined;
 
         if (fileId && !fileRow) {
             throw new Error(
@@ -412,6 +405,17 @@ export class VideoStudioPreProductionAgent extends BaseAgent {
                 });
             }
 
+            // Pre-check approved asset staging extensions before Narration synthesis (refuse bad input before TTS spend)
+            const approvedAssets = Array.isArray(workingSpec.Assets?.Approved)
+                ? workingSpec.Assets.Approved
+                : [];
+            currentStepLabel = 'Stage Assets';
+            const resolvedExtensions = await resolveAssetExtensionsFromStorage(
+                approvedAssets,
+                contextUser,
+                this.ProviderToUse,
+            );
+
             // Step 2: Narration
             currentStep = await startStep('Narration', {
                 LineCount: workingSpec.Audio?.Narration?.Script?.length ?? 0,
@@ -502,9 +506,6 @@ export class VideoStudioPreProductionAgent extends BaseAgent {
             currentStep = null;
 
             // Step 3: Stage Assets
-            const approvedAssets = Array.isArray(workingSpec.Assets?.Approved)
-                ? workingSpec.Assets.Approved
-                : [];
             const scriptLines = Array.isArray(workingSpec.Audio?.Narration?.Script)
                 ? workingSpec.Audio.Narration.Script
                 : [];
@@ -514,11 +515,6 @@ export class VideoStudioPreProductionAgent extends BaseAgent {
                 NarrationLineCount: scriptLines.length,
             });
 
-            const resolvedExtensions = await resolveAssetExtensionsFromStorage(
-                approvedAssets,
-                contextUser,
-                this.ProviderToUse,
-            );
             const usedAssetPaths = new Set<string>();
             for (const asset of approvedAssets) {
                 const sanitized = SanitizeStageKey(asset.Key);
