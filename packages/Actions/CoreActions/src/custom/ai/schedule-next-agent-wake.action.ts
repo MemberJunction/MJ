@@ -93,7 +93,7 @@ export class ScheduleNextAgentWakeAction extends BaseAction {
                 workstreamKey,
                 params
             );
-            const md = new Metadata();
+            const md = params.Provider ?? new Metadata();
             const routine =
                 existingRoutine ??
                 (await md.GetEntityObject<MJUserRoutineEntity>('MJ: User Routines', contextUser));

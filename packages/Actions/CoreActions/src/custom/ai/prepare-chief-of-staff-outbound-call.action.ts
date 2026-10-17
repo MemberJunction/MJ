@@ -139,7 +139,7 @@ export class PrepareChiefOfStaffOutboundCallAction extends BaseAction {
             this.setOutputParam(params, 'DisclosureStatement', mandatoryUpfrontDisclosure);
 
             if (needsApproval) {
-                const md = new Metadata();
+                const md = params.Provider ?? new Metadata();
                 const approvalReq = await md.GetEntityObject<MJAIAgentRequestEntity>(
                     'MJ: AI Agent Requests',
                     contextUser

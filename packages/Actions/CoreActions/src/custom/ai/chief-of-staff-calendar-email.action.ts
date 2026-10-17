@@ -1,7 +1,7 @@
 import { ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { BaseAction } from '@memberjunction/actions';
 import { RegisterClass, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
-import { LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { IMetadataProvider, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import {
     MJAIAgentRequestEntity,
     MJAIAgentUserPolicyEntity,
@@ -363,10 +363,11 @@ export abstract class BaseUserScopedCommunicationAction extends BaseAction {
         contextUser: UserInfo,
         agentId: string | null,
         summary: string,
-        payloadDetails: Record<string, unknown>
+        payloadDetails: Record<string, unknown>,
+        provider?: IMetadataProvider
     ): Promise<string | null> {
         try {
-            const md = new Metadata();
+            const md = provider ?? new Metadata();
             const req = await md.GetEntityObject<MJAIAgentRequestEntity>('MJ: AI Agent Requests', contextUser);
             req.RequestForUserID = contextUser.ID;
             if (agentId) {

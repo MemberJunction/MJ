@@ -140,7 +140,7 @@ export class ChiefOfStaffInterAgentRequestAction extends BaseAction {
                 ...(dueByISO ? { dueByISO } : {}),
             };
 
-            const md = new Metadata();
+            const md = params.Provider ?? new Metadata();
             const requestEntity = await md.GetEntityObject<MJAIAgentRequestEntity>(
                 'MJ: AI Agent Requests',
                 contextUser

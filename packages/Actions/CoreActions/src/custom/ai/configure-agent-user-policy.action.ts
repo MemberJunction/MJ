@@ -65,7 +65,7 @@ export class ConfigureAgentUserPolicyAction extends BaseAction {
                 contextUser,
                 true
             );
-            const md = new Metadata();
+            const md = params.Provider ?? new Metadata();
             const policy =
                 existing ??
                 (await md.GetEntityObject<MJAIAgentUserPolicyEntity>('MJ: AI Agent User Policies', contextUser));

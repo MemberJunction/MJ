@@ -5849,9 +5849,6 @@ REVOKE EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIAgent] FROM [cdp_Develope
 REVOKE EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIAgent] FROM [cdp_Integration]
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIAgent] TO [cdp_Developer], [cdp_Integration];
 
-/* SQL text to delete unneeded entity fields (3 scoped entities) */
-EXEC [${flyway:defaultSchema}].[spDeleteUnneededEntityFields] @ExcludedSchemaNames='sys,staging', @EntityIDs='62925804-D598-45A7-A338-B2604AE96F11,D6CA6018-D288-4F79-B6A9-168C75C3363B,7EFB8744-CF96-4C61-8A78-92FAC4FE1B77', @IncludedSchemaNames='${flyway:defaultSchema}';
-
 /* SQL text to insert 4 new entity field(s) */
 
       IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '9048575e-0594-4e71-b338-c4fbd1163a99' OR (EntityID = '7EFB8744-CF96-4C61-8A78-92FAC4FE1B77' AND Name = 'User')) BEGIN

@@ -13,7 +13,7 @@
  * @module @memberjunction/ai-core-plus
  */
 
-import { LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { IMetadataProvider, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import {
     MJAIAgentUserPolicyEntity,
     MJAIAgentUserPolicyEntity_IAgentUserActionPolicyRule,
@@ -68,6 +68,8 @@ export interface EvaluateEntityAccessInput {
     mutatedFields?: string[];
     /** Optional explicit permission ceiling override for unit testing without global Metadata. */
     userPermissionCeiling?: UserEntityPermissionCeiling;
+    /** Optional metadata provider (falls back to global Metadata when omitted). */
+    provider?: IMetadataProvider;
     /** Evaluation timestamp (defaults to `new Date()`). */
     now?: Date;
 }
@@ -229,7 +231,9 @@ export class AgentUserPolicyEngine extends BaseSingleton<AgentUserPolicyEngine> 
      */
     public EvaluateEntityAccess(input: EvaluateEntityAccessInput): EntityAccessEvaluationResult {
         const now = input.now ?? new Date();
-        const ceiling = input.userPermissionCeiling ?? this.resolveUserEntityPermissionCeiling(input.entityName, input.contextUser);
+        const ceiling =
+            input.userPermissionCeiling ??
+            this.resolveUserEntityPermissionCeiling(input.entityName, input.contextUser, input.provider);
 
         // 1. Enforce hard user permission ceiling first
         if (!this.isAllowedByUserCeiling(input.operation, ceiling)) {
@@ -790,9 +794,13 @@ export class AgentUserPolicyEngine extends BaseSingleton<AgentUserPolicyEngine> 
     // Internal Helpers
     // ========================================================================
 
-    private resolveUserEntityPermissionCeiling(entityName: string, user: UserInfo): UserEntityPermissionCeiling {
+    private resolveUserEntityPermissionCeiling(
+        entityName: string,
+        user: UserInfo,
+        provider?: IMetadataProvider
+    ): UserEntityPermissionCeiling {
         try {
-            const md = new Metadata();
+            const md = provider ?? new Metadata();
             const entity = md.EntityByName(entityName);
             if (!entity) {
                 return { canRead: true, canCreate: true, canUpdate: true, canDelete: true };
