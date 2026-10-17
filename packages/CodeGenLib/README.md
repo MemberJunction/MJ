@@ -977,6 +977,13 @@ The `CodeGenDatabaseProvider` is the abstract base class that encapsulates **all
 
 Providers are registered via `@RegisterClass(CodeGenDatabaseProvider, 'ProviderName')` and selected at runtime based on the configured database platform.
 
+#### CRUD Routine Return Modes (`SaveReturnMode: 'full' | 'datestamps_only'`)
+
+Both `SQLServerCodeGenProvider` and `PostgreSQLCodeGenProvider` inspect `entity.SaveReturnMode` (configured via `{"SaveReturnMode": "datestamps_only"}` in `Entity.Configuration`, defaulting to `'full'`) when generating `spCreate*` and `spUpdate*`:
+
+- **`'full'` (default)**: The generated routine finishes with `SELECT * FROM [schema].[BaseView] WHERE [PK] = @ID` (PostgreSQL: `RETURNS SETOF schema."BaseView"`), returning all base-table and joined virtual columns.
+- **`'datestamps_only'`**: For high-write tables whose UUIDs are pre-populated and whose `BaseView` has expensive joins or large `NVARCHAR(MAX)` columns, the generated routine queries only the primary key(s) and `[__mj_CreatedAt]` / `[__mj_UpdatedAt]` directly from `BaseTable` (PostgreSQL: `RETURNS TABLE(...)` with `#variable_conflict use_column`), bypassing `BaseView` while still returning the database-generated timestamps required by `DatabaseProviderBase` concurrency checking.
+
 #### Adding a New Database Backend
 
 To add support for a new database (e.g., MySQL, Oracle):

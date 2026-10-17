@@ -59,6 +59,10 @@ export function ReadServerTemplateDataCaptureDefault(searchFrom: string = proces
 
 /** UTF-8 byte length of a value's JSON form; -1 when it cannot be serialized. */
 function jsonByteLength(value: unknown): number {
+    if (value === undefined) return 0;
+    if (value === null) return 4;
+    if (typeof value === 'boolean') return value ? 4 : 5;
+    if (typeof value === 'number') return Number.isFinite(value) ? String(value).length : 4;
     try {
         const json = JSON.stringify(value);
         return json === undefined ? 0 : Buffer.byteLength(json, 'utf8');
@@ -83,16 +87,36 @@ export function BuildTemplateDataObjectShape(input: unknown): TemplateDataObject
     if (!isKeyedObject(input)) {
         return { keyCount: 0, totalBytes: jsonByteLength(input), keys: {}, keysElided: false };
     }
-    const sizes = Object.entries(input).map(([key, value]): [string, number] => [key, jsonByteLength(value)]);
-    const elided = sizes.length > MAX_TEMPLATE_DATA_SHAPE_KEYS;
-    const listed = elided ? [...sizes].sort((a, b) => b[1] - a[1]).slice(0, MAX_TEMPLATE_DATA_SHAPE_KEYS) : sizes;
-    const shape: TemplateDataObjectShape = {
-        keyCount: sizes.length,
-        totalBytes: sizes.reduce((sum, [, size]) => sum + Math.max(size, 0), 0),
-        keys: Object.fromEntries(listed),
-    };
-    if (elided) shape.keysElided = true;
-    return shape;
+    const keys = Object.keys(input);
+    const keyCount = keys.length;
+    if (keyCount === 0) {
+        return { keyCount: 0, totalBytes: 0, keys: {} };
+    }
+    const elided = keyCount > MAX_TEMPLATE_DATA_SHAPE_KEYS;
+    let totalBytes = 0;
+    if (!elided) {
+        const shapeKeys: Record<string, number> = {};
+        for (let i = 0; i < keyCount; i++) {
+            const k = keys[i];
+            const size = jsonByteLength(input[k]);
+            shapeKeys[k] = size;
+            if (size > 0) totalBytes += size;
+        }
+        return { keyCount, totalBytes, keys: shapeKeys };
+    }
+    const sizes: [string, number][] = new Array(keyCount);
+    for (let i = 0; i < keyCount; i++) {
+        const k = keys[i];
+        const size = jsonByteLength(input[k]);
+        sizes[i] = [k, size];
+        if (size > 0) totalBytes += size;
+    }
+    sizes.sort((a, b) => b[1] - a[1]);
+    const shapeKeys: Record<string, number> = {};
+    for (let i = 0; i < MAX_TEMPLATE_DATA_SHAPE_KEYS; i++) {
+        shapeKeys[sizes[i][0]] = sizes[i][1];
+    }
+    return { keyCount, totalBytes, keys: shapeKeys, keysElided: true };
 }
 
 /** A copy of a key/value input without the agent payload key. Any other input, or one without the key, is returned as is. */
