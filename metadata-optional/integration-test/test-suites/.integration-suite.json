@@ -1231,6 +1231,17 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT126 - Feature Value Only Outputs",
+            "Sequence": 50,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "E4D70105-00D2-4F2B-BECA-47FB2A82A390"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT112 - Realtime Session Identity Verification",
             "Sequence": 50,
             "Status": "Active"

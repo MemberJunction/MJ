@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT126 - Feature Value Only Outputs",
+    "Description": "Deterministic server-side bundle 'feature-value-only', sequence 50, ahead of the client-transport tests. Runs a Feature Pipeline whose three outputs have no write target through the executor over three real MJ: Entities rows, on a stub driver that answers from a table (native-typed answers), so no model is called and nothing is written to MJ: Entities. FV1 the spec validates and the two target-less constraint errors carry their exact messages; FV2 a dry run stores no Feature Value and previews 3 values per record (2 for the low-confidence record); FV3 a real run upserts every record into ValueText / ValueNumeric / ValueBoolean; FV4 an identical rerun leaves every record Unchanged; FV5 a Score below its confidence floor is withheld. Requires RUN_MUTATION_TESTS: the scratch pipeline (names start with it126-) is deleted at setup and teardown.",
+    "Status": "Active",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Five checks pass: the spec validates and refuses the two target-less constraint shapes, a dry run previews without storing, a real run stores typed values, a rerun is unchanged, and a low-confidence Score is withheld."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "feature-value-only"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "ED6C5D0B-202C-4F80-A368-BB3F3EFCBE4E"
+  }
+}
