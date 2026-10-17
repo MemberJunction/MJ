@@ -513,6 +513,7 @@ describe('VideoStudio gates', () => {
                     Kind: 'Image',
                     Purpose: 'Backdrop illustration',
                     Prompt: 'Photorealistic CEO avatar talking',
+                    ReferenceKeys: [],
                     Status: 'Blocked',
                     BlockedReason: 'ScreenRule:SyntheticPerson:ceo',
                 },
@@ -543,6 +544,7 @@ describe('VideoStudio gates', () => {
                     Kind: 'Image',
                     Purpose: 'Abstract backdrop',
                     Prompt: 'Abstract geometric ribbon',
+                    ReferenceKeys: [],
                     Status: 'Generated',
                 },
             ];
@@ -605,6 +607,7 @@ describe('VideoStudio gates', () => {
                     Kind: 'Image',
                     Purpose: 'Abstract backdrop',
                     Prompt: 'Abstract geometric ribbon',
+                    ReferenceKeys: [],
                     Status: 'Generated',
                 },
             ];

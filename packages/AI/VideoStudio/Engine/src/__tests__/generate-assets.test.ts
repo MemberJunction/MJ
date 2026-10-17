@@ -72,11 +72,9 @@ function makeFixtureSpec(): VideoGenerationSpec {
             MotionRules: [
                 {
                     ObjectClass: 'Headline',
-                    Entrance: 'fade-up',
-                    Hold: 'steady',
-                    Exit: 'fade-out',
                     DurationMs: 400,
                     Easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
+                    Notes: 'Upward fade-in',
                 },
             ],
             Keep: ['High contrast'],
@@ -250,10 +248,12 @@ function createFakeRunners(options?: {
                 return {
                     Success: false,
                     ErrorMessage: 'Vendor image service 503',
+                    ExecutionTimeMS: 0,
                 };
             }
             return {
                 Success: true,
+                ExecutionTimeMS: 0,
                 PromptRunID: `prompt-run-img-${imageCalls.length}`,
                 ModelID: 'model-imagen-4',
                 ModelName: 'Imagen 4',
@@ -281,10 +281,12 @@ function createFakeRunners(options?: {
                 return {
                     Success: false,
                     ErrorMessage: 'Vendor video service timed out',
+                    ExecutionTimeMS: 0,
                 };
             }
             return {
                 Success: true,
+                ExecutionTimeMS: 0,
                 PromptRunID: `prompt-run-vid-${videoCalls.length}`,
                 ModelID: 'model-veo-3-1',
                 ModelName: 'Veo 3.1',
@@ -1001,7 +1003,7 @@ describe('GenerateRequestedAssets (VS-GEN-6)', () => {
         const spec = makeFixtureSpec();
         spec.Assets.Generate![0].WantAudio = true;
         const apiKeys: AIAPIKey[] = [{ driverClass: 'GoogleVideoGenerator', apiKey: 'test-key-123' }];
-        const credentialScope: AICredentialScope = { CompanyID: 'comp-1' } as AICredentialScope;
+        const credentialScope: AICredentialScope = { CompanyID: 'comp-1' } as unknown as AICredentialScope;
 
         const { imageCalls, videoCalls, imageRunner, videoRunner } = createFakeRunners();
         const ctx: GenerateRequestedAssetsContext = {
