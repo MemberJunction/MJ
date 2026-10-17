@@ -166,7 +166,7 @@ Provisioning `MJ_Clean_Wave2_E2E` with all **21 M5 repositories** (`901` entitie
 
 | Repository | Branch | PR | Scope |
 |---|---|---|---|
-| `MemberJunction/MJ` | `an-dev-80` | *(This PR)* | 25 core `datestamps_only` entities, `DatabaseProviderBase` pre-`ExecuteSQL` snapshot fix + unit test, `LocalCacheManager` 30K-row sampling fix + unit test, `IT128` (`PB1`–`PB13`) persistent `benchmark-logs/`, E2E integration fixes, and this unified Wave 1 & 2 report |
+| `MemberJunction/MJ` | `an-dev-80` | [#5846](https://github.com/MemberJunction/MJ/pull/5846) | 25 core `datestamps_only` entities, `DatabaseProviderBase` pre-`ExecuteSQL` snapshot fix + unit test, `LocalCacheManager` 30K-row sampling fix + unit test, `IT128` (`PB1`–`PB13`) persistent `benchmark-logs/`, E2E integration fixes, and this unified Wave 1 & 2 report |
 | `MemberJunction/bizapps-common` | `an-dev-14` | [#350](https://github.com/MemberJunction/bizapps-common/pull/350) | `SaveReturnMode: 'datestamps_only'` on `ActivitySyncRuns` & `ActivitySyncRunDetails` + `activities.A6` benchmark log |
 | `MemberJunction/bizapps-orders` | `an-dev-22` | [#896](https://github.com/MemberJunction/bizapps-orders/pull/896) | `SaveReturnMode: 'datestamps_only'` on `OutboundEvents`, `OutboundDeliveries`, `PaymentWebhookDeliveries`, & `SubscriptionEvents` + `outbound-events.OB13` benchmark log |
 | `MemberJunction/bizapps-tasks` | `an-dev-11` | [#133](https://github.com/MemberJunction/bizapps-tasks/pull/133) | `SaveReturnMode: 'datestamps_only'` on `TaskActivities` & `TaskNotificationLogs` + `task-action-hooks.AH4` benchmark log |
