@@ -47,9 +47,9 @@ describe('OutputConstraintResolver.Resolve', () => {
 });
 
 describe('OutputConstraintResolver for an output without a write target', () => {
-    const years: DataFeatureOutput = { Name: 'Kind', Ref: '$.Kind', Constraint: { Type: 'enum', Values: ['A', 'B'], OnViolation: 'fail' } };
+    const kind: DataFeatureOutput = { Name: 'Kind', Ref: '$.Kind', Constraint: { Type: 'enum', Values: ['A', 'B'], OnViolation: 'fail' } };
     it('resolves from the spec alone, keeping the listed enum values', () => {
-        const map = OutputConstraintResolver.ResolveFromFields([years], people);
+        const map = OutputConstraintResolver.ResolveFromFields([kind], people);
         expect(map.get('Kind')?.AllowedValues).toEqual(['A', 'B']);
     });
 });

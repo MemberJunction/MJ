@@ -57,6 +57,6 @@ export type OutputTarget =
 export class OutputTargets {
   /** True when the output writes somewhere (a field, child rows or tags); false for a feature-value-only output. */
   public static HasWriteTarget<T extends { Target?: OutputTarget }>(output: T): output is T & { Target: OutputTarget } {
-    return output.Target !== undefined && output.Target !== null;
+    return output.Target !== undefined;
   }
 }

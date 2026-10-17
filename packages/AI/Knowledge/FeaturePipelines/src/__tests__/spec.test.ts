@@ -986,10 +986,13 @@ describe('outputs without a write target', () => {
     expect(issues.filter((i) => i.Severity === 'error')).toEqual([]);
   });
   it('still validates Target.Mode when a target is present', () => {
-    interface BogusTarget { Mode: string }
-    const bogus: BogusTarget = { Mode: 'bogus' };
-    const output = { Name: 'X', Ref: '$.X', Target: bogus };
-    const issues = ValidateSpec(parsedSpec(specOf({ ...base, Outputs: [output as unknown as DataFeatureSpec['Outputs'][number]] })));
+    const issues = ValidateSpec(parsedSpec({ ...specOf({ ...base, Outputs: [] }), Outputs: [{ Name: 'X', Ref: '$.X', Target: { Mode: 'bogus' } }] }));
     expect(issues.map((i) => i.Message).join('\n')).toMatch(/invalid or missing target Mode 'bogus'/);
+  });
+  it('still runs the other per-output checks: numeric Min above Max', () => {
+    expect(messages([{ Name: 'N', Ref: '$.N', Constraint: { Type: 'numeric', Min: 10, Max: 1, OnViolation: 'null' } }]).join('\n')).toMatch(/Min/);
+  });
+  it('still runs the other per-output checks: enum with no Values', () => {
+    expect(messages([{ Name: 'E', Ref: '$.E', Constraint: { Type: 'enum', OnViolation: 'fail' } }]).join('\n')).toMatch(/enum/i);
   });
 });

@@ -615,6 +615,11 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
         };
     }
 
+    /** A plain decimal number: no hex, Infinity or NaN. */
+    private static readonly PlainNumber = /^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/;
+    /** A string that starts as an ISO calendar date. */
+    private static readonly IsoDatePrefix = /^\d{4}-\d{2}-\d{2}/;
+
     /** The typed value a string answer coerces to under its constraint type; undefined when no coercion applies. */
     protected static CoerceByConstraint(val: FeatureValueOutputItem['value'], constraintType?: ValueConstraint['Type']): TypedFeatureValue | undefined {
         if (typeof val !== 'string' || !constraintType) {
@@ -622,13 +627,13 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
         }
         const text = val.trim();
         const empty: TypedFeatureValue = { ValueText: null, ValueNumeric: null, ValueBoolean: null, ValueDate: null, ValueJSON: null };
-        if ((constraintType === 'numeric' || constraintType === 'money') && text !== '' && Number.isFinite(Number(text))) {
+        if ((constraintType === 'numeric' || constraintType === 'money') && FeatureValueCacheService.PlainNumber.test(text)) {
             return { ...empty, ValueNumeric: Number(text) };
         }
         if (constraintType === 'boolean' && /^(true|false)$/i.test(text)) {
             return { ...empty, ValueBoolean: text.toLowerCase() === 'true' };
         }
-        if (constraintType === 'date' && !Number.isNaN(Date.parse(text))) {
+        if (constraintType === 'date' && FeatureValueCacheService.IsoDatePrefix.test(text) && !Number.isNaN(Date.parse(text))) {
             return { ...empty, ValueDate: new Date(text) };
         }
         return undefined;

@@ -313,115 +313,115 @@ export function ValidateSpec(
             Severity: 'error',
           });
         }
-        continue;
       }
 
-      interface TargetWithMode {
-        Mode?: string;
-      }
-      const targetWithMode: TargetWithMode = out.Target;
-      const validModes: ReadonlyArray<string> = ['field', 'child', 'tags'];
-      if (!targetWithMode.Mode || !validModes.includes(targetWithMode.Mode)) {
-        issues.push({
-          Path: `${basePath}.Target.Mode`,
-          Message: `Output '${out.Name || i}' has an invalid or missing target Mode '${targetWithMode.Mode ?? ''}'. Expected one of: ${validModes.join(', ')}.`,
-          FixRecommendation: 'Configure Target.Mode as "field", "child", or "tags".',
-          Severity: 'error',
-        });
-        continue;
-      }
-
-      if (out.Target.Mode === 'field') {
-        const targetField = out.Target.EntityFieldName;
-        if (!targetField || targetField.trim().length === 0) {
+      if (OutputTargets.HasWriteTarget(out)) {
+        interface TargetWithMode {
+          Mode?: string;
+        }
+        const targetWithMode: TargetWithMode = out.Target;
+        const validModes: ReadonlyArray<string> = ['field', 'child', 'tags'];
+        if (!targetWithMode.Mode || !validModes.includes(targetWithMode.Mode)) {
           issues.push({
-            Path: `${basePath}.Target.EntityFieldName`,
-            Message: `Field target for output '${out.Name}' must specify EntityFieldName.`,
-            FixRecommendation: 'Specify the name of the column on the entity to write to.',
+            Path: `${basePath}.Target.Mode`,
+            Message: `Output '${out.Name || i}' has an invalid or missing target Mode '${targetWithMode.Mode ?? ''}'. Expected one of: ${validModes.join(', ')}.`,
+            FixRecommendation: 'Configure Target.Mode as "field", "child", or "tags".',
             Severity: 'error',
           });
-        } else if (entityInfo || fieldResolver) {
-          const field = resolveField(targetField);
-          if (!field) {
+        }
+
+        if (out.Target.Mode === 'field') {
+          const targetField = out.Target.EntityFieldName;
+          if (!targetField || targetField.trim().length === 0) {
             issues.push({
-              Field: targetField,
               Path: `${basePath}.Target.EntityFieldName`,
-              Message: `Target field '${targetField}' does not exist on entity '${entityInfo?.Name ?? 'unknown'}'.`,
-              FixRecommendation: `Target an existing column on the entity or create a migration to add it.`,
+              Message: `Field target for output '${out.Name}' must specify EntityFieldName.`,
+              FixRecommendation: 'Specify the name of the column on the entity to write to.',
               Severity: 'error',
             });
-          } else {
-            // Check virtual column
-            if (field.IsVirtual) {
+          } else if (entityInfo || fieldResolver) {
+            const field = resolveField(targetField);
+            if (!field) {
               issues.push({
                 Field: targetField,
                 Path: `${basePath}.Target.EntityFieldName`,
-                Message: `Target field '${targetField}' is a virtual/view column and cannot be written to.`,
-                FixRecommendation: `Target a base-table column on this entity or write to a child entity instead.`,
+                Message: `Target field '${targetField}' does not exist on entity '${entityInfo?.Name ?? 'unknown'}'.`,
+                FixRecommendation: `Target an existing column on the entity or create a migration to add it.`,
                 Severity: 'error',
               });
-            }
-
-            // Check FK resolution
-            const isFK = Boolean(field.RelatedEntity || field.RelatedEntityID);
-            if (isFK && out.Target.LookupMatchField === '') {
-              issues.push({
-                Field: targetField,
-                Path: `${basePath}.Target.LookupMatchField`,
-                Message: `Foreign key field '${targetField}' has an empty LookupMatchField.`,
-                FixRecommendation: `Specify the column on the related entity to match against (default is 'Name').`,
-                Severity: 'error',
-              });
-            }
-
-            // Check type compatibility
-            if (out.Constraint && field.TSType) {
-              const typeIssue = checkTypeCompatibility(out.Constraint, field.TSType, targetField);
-              if (typeIssue) {
+            } else {
+              // Check virtual column
+              if (field.IsVirtual) {
                 issues.push({
                   Field: targetField,
-                  Path: `${basePath}.Constraint`,
-                  Message: typeIssue.message,
-                  FixRecommendation: typeIssue.fix,
+                  Path: `${basePath}.Target.EntityFieldName`,
+                  Message: `Target field '${targetField}' is a virtual/view column and cannot be written to.`,
+                  FixRecommendation: `Target a base-table column on this entity or write to a child entity instead.`,
                   Severity: 'error',
                 });
               }
+
+              // Check FK resolution
+              const isFK = Boolean(field.RelatedEntity || field.RelatedEntityID);
+              if (isFK && out.Target.LookupMatchField === '') {
+                issues.push({
+                  Field: targetField,
+                  Path: `${basePath}.Target.LookupMatchField`,
+                  Message: `Foreign key field '${targetField}' has an empty LookupMatchField.`,
+                  FixRecommendation: `Specify the column on the related entity to match against (default is 'Name').`,
+                  Severity: 'error',
+                });
+              }
+
+              // Check type compatibility
+              if (out.Constraint && field.TSType) {
+                const typeIssue = checkTypeCompatibility(out.Constraint, field.TSType, targetField);
+                if (typeIssue) {
+                  issues.push({
+                    Field: targetField,
+                    Path: `${basePath}.Constraint`,
+                    Message: typeIssue.message,
+                    FixRecommendation: typeIssue.fix,
+                    Severity: 'error',
+                  });
+                }
+              }
             }
           }
-        }
-      } else if (out.Target.Mode === 'child') {
-        if (!out.Target.EntityName || out.Target.EntityName.trim().length === 0) {
-          issues.push({
-            Path: `${basePath}.Target.EntityName`,
-            Message: `Child target for output '${out.Name}' must specify EntityName.`,
-            FixRecommendation: 'Specify the child entity to insert rows into.',
-            Severity: 'error',
-          });
-        }
-        if (!out.Target.ParentField || out.Target.ParentField.trim().length === 0) {
-          issues.push({
-            Path: `${basePath}.Target.ParentField`,
-            Message: `Child target for output '${out.Name}' must specify ParentField.`,
-            FixRecommendation: 'Specify the foreign key field on the child entity linking back to the parent record.',
-            Severity: 'error',
-          });
-        }
-        if (!out.Target.Map || Object.keys(out.Target.Map).length === 0) {
-          issues.push({
-            Path: `${basePath}.Target.Map`,
-            Message: `Child target for output '${out.Name}' must specify at least one field mapping in Map.`,
-            FixRecommendation: 'Map at least one field from the result to the child record.',
-            Severity: 'error',
-          });
-        }
-      } else if (out.Target.Mode === 'tags') {
-        if (!out.Target.RootTagID || out.Target.RootTagID.trim().length === 0) {
-          issues.push({
-            Path: `${basePath}.Target.RootTagID`,
-            Message: `Tag target for output '${out.Name}' requires a RootTagID.`,
-            FixRecommendation: 'Specify the root tag UUID to constrain tag creation/matching to a valid taxonomy subtree.',
-            Severity: 'error',
-          });
+        } else if (out.Target.Mode === 'child') {
+          if (!out.Target.EntityName || out.Target.EntityName.trim().length === 0) {
+            issues.push({
+              Path: `${basePath}.Target.EntityName`,
+              Message: `Child target for output '${out.Name}' must specify EntityName.`,
+              FixRecommendation: 'Specify the child entity to insert rows into.',
+              Severity: 'error',
+            });
+          }
+          if (!out.Target.ParentField || out.Target.ParentField.trim().length === 0) {
+            issues.push({
+              Path: `${basePath}.Target.ParentField`,
+              Message: `Child target for output '${out.Name}' must specify ParentField.`,
+              FixRecommendation: 'Specify the foreign key field on the child entity linking back to the parent record.',
+              Severity: 'error',
+            });
+          }
+          if (!out.Target.Map || Object.keys(out.Target.Map).length === 0) {
+            issues.push({
+              Path: `${basePath}.Target.Map`,
+              Message: `Child target for output '${out.Name}' must specify at least one field mapping in Map.`,
+              FixRecommendation: 'Map at least one field from the result to the child record.',
+              Severity: 'error',
+            });
+          }
+        } else if (out.Target.Mode === 'tags') {
+          if (!out.Target.RootTagID || out.Target.RootTagID.trim().length === 0) {
+            issues.push({
+              Path: `${basePath}.Target.RootTagID`,
+              Message: `Tag target for output '${out.Name}' requires a RootTagID.`,
+              FixRecommendation: 'Specify the root tag UUID to constrain tag creation/matching to a valid taxonomy subtree.',
+              Severity: 'error',
+            });
+          }
         }
       }
 

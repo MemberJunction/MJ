@@ -501,23 +501,31 @@ describe('FeatureValueCacheService', () => {
             await expect(FeatureValueCacheService.Instance.RetireHumanValue(humanRef)).rejects.toThrow(/failed retiring the Human 'SeniorityLevel' value of record 'person-1': FK violation/);
         });
     });
-});
 
-describe('FeatureValueCacheService.ToTypedValue with a constraint type', () => {
-    it('coerces a numeric string under a numeric constraint', () => {
-        expect(FeatureValueCacheService.ToTypedValue('0.75', 'numeric')).toMatchObject({ ValueNumeric: 0.75, ValueText: null });
-    });
-    it('coerces a boolean string under a boolean constraint', () => {
-        expect(FeatureValueCacheService.ToTypedValue('TRUE', 'boolean')).toMatchObject({ ValueBoolean: true, ValueText: null });
-    });
-    it('coerces a date string under a date constraint', () => {
-        expect(FeatureValueCacheService.ToTypedValue('2026-10-16', 'date').ValueDate).toBeInstanceOf(Date);
-    });
-    it('stores a string that does not parse as typed', () => {
-        expect(FeatureValueCacheService.ToTypedValue('abc', 'numeric')).toMatchObject({ ValueText: 'abc', ValueNumeric: null });
-        expect(FeatureValueCacheService.ToTypedValue('', 'numeric')).toMatchObject({ ValueText: '', ValueNumeric: null });
-    });
-    it('keeps the JavaScript-type mapping with no constraint', () => {
-        expect(FeatureValueCacheService.ToTypedValue('0.75')).toMatchObject({ ValueText: '0.75', ValueNumeric: null });
+    describe('ToTypedValue with a constraint type', () => {
+        const T = FeatureValueCacheService.ToTypedValue;
+        it('coerces numeric strings, trimmed, including exponents and money', () => {
+            expect(T('0.75', 'numeric')).toMatchObject({ ValueNumeric: 0.75, ValueText: null });
+            expect(T('  12 ', 'numeric')).toMatchObject({ ValueNumeric: 12 });
+            expect(T('1e3', 'numeric')).toMatchObject({ ValueNumeric: 1000 });
+            expect(T('19.99', 'money')).toMatchObject({ ValueNumeric: 19.99 });
+        });
+        it('keeps non-decimal numeric strings as text', () => {
+            for (const v of ['Infinity', 'NaN', '0x10', 'abc', '']) {
+                expect(T(v, 'numeric')).toMatchObject({ ValueText: v, ValueNumeric: null });
+            }
+        });
+        it('coerces boolean strings', () => {
+            expect(T('TRUE', 'boolean')).toMatchObject({ ValueBoolean: true, ValueText: null });
+            expect(T('false', 'boolean')).toMatchObject({ ValueBoolean: false, ValueText: null });
+        });
+        it('coerces ISO date strings and keeps other strings as text', () => {
+            expect(T('2026-10-16', 'date').ValueDate).toBeInstanceOf(Date);
+            expect(T('12', 'date')).toMatchObject({ ValueText: '12', ValueDate: null });
+            expect(T('2026-13-45', 'date')).toMatchObject({ ValueText: '2026-13-45', ValueDate: null });
+        });
+        it('keeps the JavaScript-type mapping with no constraint', () => {
+            expect(T('0.75')).toMatchObject({ ValueText: '0.75', ValueNumeric: null });
+        });
     });
 });
