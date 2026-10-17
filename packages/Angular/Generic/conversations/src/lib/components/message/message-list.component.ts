@@ -46,6 +46,11 @@ import {
     type DateJumpOutcome
 } from '../../utils/date-jump';
 import { EMPTY_FORK_CHIPS, type ForkChipOpenRequest, type ForkViewLayout, type LatestTurn, type MessageForkChip } from '../../utils/conversation-forks';
+import type { MessageHandoffInfo } from './agent-handoff-card.component';
+import {
+  LookupHandoffByDetailId,
+  ResolveHandedOffFromForMessage,
+} from '../../utils/agent-handoff-map';
 
 /** Context handed to the `messageRenderer` slot template per message. */
 interface MessageRendererContext {
@@ -458,6 +463,26 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   public get agentRunMap(): Map<string, MJAIAgentRunEntityExtended> {
     return this.AgentRunMap;
   }
+
+  /** Map of source ConversationDetail.ID -> MessageHandoffInfo for rendering handoff cards and target provenance. */
+  @Input()
+  public set HandoffMap(value: ReadonlyMap<string, MessageHandoffInfo> | null) {
+    this._handoffMap = value ?? new Map<string, MessageHandoffInfo>();
+    this.applyHandoffs();
+  }
+  public get HandoffMap(): ReadonlyMap<string, MessageHandoffInfo> {
+    return this._handoffMap;
+  }
+  /** @deprecated Use {@link HandoffMap}. */
+  @Input() public set handoffMap(value: ReadonlyMap<string, MessageHandoffInfo> | null) {
+    this.HandoffMap = value;
+  }
+  /** @deprecated Use {@link HandoffMap}. */
+  public get handoffMap(): ReadonlyMap<string, MessageHandoffInfo> {
+    return this.HandoffMap;
+  }
+  private _handoffMap: ReadonlyMap<string, MessageHandoffInfo> = new Map();
+
   @Input() public RatingsMap: Map<string, RatingJSON[]> = new Map();
 
   /** @deprecated Use {@link RatingsMap}. */
@@ -2061,6 +2086,8 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     instance.agentRun = this.AgentRunMap.get(message.ID) || null;
     instance.ratings = this.RatingsMap.get(message.ID);
     instance.attachments = this.AttachmentsMap.get(message.ID) || [];
+    instance.Handoff = LookupHandoffByDetailId(this._handoffMap, message.ID);
+    instance.HandedOffFrom = ResolveHandedOffFromForMessage(message, this._handoffMap);
     instance.ForkChips = this.chipsFor(message.ID);
     instance.ForkRail = this.railFor(message.ID);
     instance.ForkMarkerText = this.markerFor(message.ID);
@@ -2075,6 +2102,29 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     // Status change requires explicit markForCheck on the OnPush dynamic child.
     if (previousMessage && previousMessage.Status !== message.Status) {
       ref.changeDetectorRef.markForCheck();
+    }
+  }
+
+  /** Pushes updated handoff cards and target provenance onto already-rendered message items. */
+  private applyHandoffs(): void {
+    for (const entry of this._renderedMessages.values()) {
+      if (entry.kind !== 'component') {
+        continue;
+      }
+      const instance = entry.ref.instance;
+      const msg = instance.message;
+      if (!msg?.ID) {
+        continue;
+      }
+      const nextHandoff = LookupHandoffByDetailId(this._handoffMap, msg.ID);
+      const nextHandedOffFrom = ResolveHandedOffFromForMessage(msg, this._handoffMap);
+      if (instance.Handoff !== nextHandoff || instance.HandedOffFrom !== nextHandedOffFrom) {
+        instance.Handoff = nextHandoff;
+        instance.HandedOffFrom = nextHandedOffFrom;
+        if (!this.isViewDestroyed(entry.ref.changeDetectorRef)) {
+          entry.ref.changeDetectorRef.detectChanges();
+        }
+      }
     }
   }
 
@@ -2152,6 +2202,8 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     instance.agentRun = this.AgentRunMap.get(message.ID) || null;
     instance.ratings = this.RatingsMap.get(message.ID);
     instance.attachments = this.AttachmentsMap.get(message.ID) || [];
+    instance.Handoff = LookupHandoffByDetailId(this._handoffMap, message.ID);
+    instance.HandedOffFrom = ResolveHandedOffFromForMessage(message, this._handoffMap);
     instance.ForkChips = this.chipsFor(message.ID);
     instance.ForkRail = this.railFor(message.ID);
     instance.ForkMarkerText = this.markerFor(message.ID);

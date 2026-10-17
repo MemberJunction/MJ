@@ -1,0 +1,300 @@
+:host {
+  display: block;
+}
+
+.handoff {
+  --mj-handoff-source: var(--mj-brand-primary);
+  --mj-handoff-target: var(--mj-color-accent-500);
+  position: relative;
+  margin: var(--mj-space-2) 0 var(--mj-space-1) 0;
+  padding: 14px 16px 12px;
+  border-radius: var(--mj-radius-lg);
+  background:
+    linear-gradient(var(--mj-bg-surface), var(--mj-bg-surface)) padding-box,
+    linear-gradient(100deg, var(--mj-handoff-source), var(--mj-handoff-target)) border-box;
+  border: 1.5px solid transparent;
+  box-shadow: var(--mj-shadow-md);
+  display: grid;
+  gap: 10px;
+}
+
+.handoff::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(
+    100deg,
+    color-mix(in srgb, var(--mj-handoff-source) 7%, transparent),
+    color-mix(in srgb, var(--mj-handoff-target) 9%, transparent)
+  );
+}
+
+.handoff--failed {
+  background:
+    linear-gradient(var(--mj-bg-surface), var(--mj-bg-surface)) padding-box,
+    linear-gradient(var(--mj-status-error), var(--mj-status-error)) border-box;
+}
+
+.handoff--failed::before {
+  background: color-mix(in srgb, var(--mj-status-error) 6%, transparent);
+}
+
+.baton {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.baton .end {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.baton .end .avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: var(--mj-radius-full);
+  display: grid;
+  place-items: center;
+  font-size: var(--mj-text-xs);
+  font-weight: var(--mj-font-semibold);
+  color: var(--mj-text-inverse);
+  background: var(--mj-handoff-source);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.baton .end--to .avatar {
+  background: var(--mj-handoff-target);
+}
+
+.handoff--transferring .baton .end--to .avatar {
+  animation: mj-handoff-arrive 1.25s ease-out infinite;
+}
+
+.handoff--failed .baton .end--to .avatar {
+  filter: grayscale(1);
+  opacity: 0.55;
+  animation: none;
+}
+
+.end-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: var(--mj-radius-full);
+}
+
+.end-initial {
+  line-height: 1;
+}
+
+.baton .end .name {
+  font-size: 13px;
+  font-weight: var(--mj-font-semibold);
+  color: var(--mj-text-primary);
+  white-space: nowrap;
+}
+
+.track {
+  position: relative;
+  height: 2px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--mj-handoff-source), var(--mj-handoff-target));
+  opacity: 0.55;
+  min-width: 40px;
+}
+
+.handoff--failed .track {
+  background: var(--mj-border-default);
+  opacity: 1;
+}
+
+.track .spark {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 10px;
+  height: 10px;
+  margin-top: -5px;
+  margin-left: -5px;
+  border-radius: var(--mj-radius-full);
+  background: var(--mj-handoff-target);
+  box-shadow:
+    0 0 0 4px color-mix(in srgb, var(--mj-handoff-target) 22%, transparent),
+    0 0 18px 2px color-mix(in srgb, var(--mj-handoff-target) 55%, transparent);
+  opacity: 0;
+}
+
+.handoff--transferring .track .spark {
+  animation: mj-handoff-travel 1.25s cubic-bezier(0.6, 0, 0.25, 1) infinite;
+}
+
+.track .arrow {
+  position: absolute;
+  right: -2px;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  margin-top: -4px;
+  border-top: 2px solid var(--mj-handoff-target);
+  border-right: 2px solid var(--mj-handoff-target);
+  transform: rotate(45deg);
+}
+
+.handoff--failed .track .arrow {
+  border-color: var(--mj-status-error);
+}
+
+@keyframes mj-handoff-travel {
+  0% {
+    left: 0;
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    left: 100%;
+    opacity: 0;
+  }
+}
+
+@keyframes mj-handoff-arrive {
+  0%,
+  70% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--mj-handoff-target) 50%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 10px color-mix(in srgb, var(--mj-handoff-target) 0%, transparent);
+  }
+}
+
+.handoff-title {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 10px;
+}
+
+.handoff-title strong {
+  font-size: 14.5px;
+  font-weight: var(--mj-font-semibold);
+  color: var(--mj-text-primary);
+}
+
+.handoff-title .err {
+  color: var(--mj-status-error);
+  font-weight: var(--mj-font-semibold);
+}
+
+.handoff-title .sub {
+  font-size: 12.5px;
+  color: var(--mj-text-secondary);
+}
+
+.handoff-meta {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  font-weight: var(--mj-font-medium);
+  padding: 2px 8px;
+  border-radius: var(--mj-radius-full);
+  border: 1px solid var(--mj-border-default);
+  color: var(--mj-text-secondary);
+  background: var(--mj-bg-surface-card);
+  font-variant-numeric: tabular-nums;
+}
+
+.pill--target {
+  border-color: color-mix(in srgb, var(--mj-handoff-target) 35%, var(--mj-border-default));
+  color: var(--mj-handoff-target);
+  background: color-mix(in srgb, var(--mj-handoff-target) 8%, var(--mj-bg-surface));
+}
+
+.hop-chain {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.handoff details {
+  position: relative;
+  font-size: 13px;
+}
+
+.handoff summary {
+  cursor: pointer;
+  color: var(--mj-text-secondary);
+  font-weight: var(--mj-font-medium);
+  list-style: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  user-select: none;
+}
+
+.handoff summary::-webkit-details-marker {
+  display: none;
+}
+
+.handoff summary::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform 0.2s ease;
+}
+
+.handoff details[open] summary::before {
+  transform: rotate(45deg);
+}
+
+.handoff summary:focus-visible {
+  outline: var(--mj-ring-width) solid var(--mj-focus-ring-color);
+  outline-offset: var(--mj-ring-offset);
+  border-radius: var(--mj-radius-sm);
+}
+
+.brief {
+  margin-top: 8px;
+  padding: 10px 12px;
+  border-radius: var(--mj-radius-md);
+  background: var(--mj-bg-surface-sunken);
+  color: var(--mj-text-secondary);
+  white-space: pre-wrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .handoff--transferring .track .spark {
+    animation: none;
+    opacity: 1;
+    left: 60%;
+  }
+
+  .handoff--transferring .baton .end--to .avatar,
+  .handoff summary::before {
+    animation: none;
+    transition: none;
+  }
+}

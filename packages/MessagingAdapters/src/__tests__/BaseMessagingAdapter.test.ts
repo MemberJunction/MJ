@@ -73,7 +73,7 @@ function wrapInConversationResult(agentResult: Record<string, unknown>) {
 }
 
 vi.mock('@memberjunction/ai-agents', () => ({
-    AgentRunner: vi.fn().mockImplementation(() => ({
+    AgentRunner: vi.fn(() => ({
         RunAgentInConversation: vi.fn().mockResolvedValue(
             wrapInConversationResult({
                 success: true,
@@ -85,8 +85,36 @@ vi.mock('@memberjunction/ai-agents', () => ({
                     }]
                 }
             })
-        )
-    }))
+        ),
+        FollowHandoffs: vi.fn().mockResolvedValue([]),
+    })),
+    ResolveHandoffTarget: vi.fn(async (input: {
+        AgentName: string;
+        SourceAgentID: string;
+        HandoffChain: ReadonlyArray<string>;
+        Agents: ReadonlyArray<{ ID: string; Name?: string | null; Status?: string | null; ParentID?: string | null; ExposeAsAction?: boolean | null }>;
+    }) => {
+        const requested = (input.AgentName ?? '').trim().toLowerCase();
+        const target = input.Agents.find(
+            a => a.Name != null && a.Name.trim().toLowerCase() === requested && (a.Status == null || a.Status === 'Active')
+        );
+        if (!target) {
+            return { Refusal: { Reason: 'NotFound', Message: `Agent '${input.AgentName}' not found or not active.` }, Candidates: [] };
+        }
+        if (target.ID === input.SourceAgentID) {
+            return { Refusal: { Reason: 'Self', Message: `You cannot hand off the conversation to yourself (${target.Name}).` }, Candidates: [] };
+        }
+        if (target.ParentID || target.ExposeAsAction) {
+            return { Refusal: { Reason: 'NotDiscoverable', Message: `${target.Name} can't be reached directly via Handoff.` }, Candidates: [] };
+        }
+        if (input.HandoffChain.includes(target.ID)) {
+            return { Refusal: { Reason: 'AlreadyInThisTurn', Message: `${target.Name} has already participated in this turn.` }, Candidates: [] };
+        }
+        if (input.HandoffChain.length + 1 > 3) {
+            return { Refusal: { Reason: 'HopLimit', Message: `Maximum handoff depth (3 hops) reached.` }, Candidates: [] };
+        }
+        return { Target: target, Candidates: [] };
+    }),
 }));
 
 // ─── Concrete test adapter ──────────────────────────────────────────────────
@@ -1324,6 +1352,173 @@ describe('BaseMessagingAdapter', () => {
             // Should stop after MAX_DELEGATION_HOPS (3) + 1 initial run = 4 total
             // But each delegation sends a note, so there should be messages
             expect(callCount).toBeLessThanOrEqual(5);
+        });
+
+        it('should resolve fallback delegation targets via ResolveHandoffTarget and refuse sub-agents or action-only agents', async () => {
+            const { AgentRunner, ResolveHandoffTarget } = await import('@memberjunction/ai-agents');
+            vi.mocked(ResolveHandoffTarget).mockClear();
+
+            // First call: Sage delegates via payload.invokeAgent to Codesmith, which ResolveHandoffTarget refuses as NotDiscoverable
+            vi.mocked(ResolveHandoffTarget).mockResolvedValueOnce({
+                Refusal: {
+                    Reason: 'NotDiscoverable',
+                    Message: "Codesmith can't be reached directly via Handoff.",
+                },
+                Candidates: [],
+            });
+
+            let runCalls = 0;
+            vi.mocked(AgentRunner).mockImplementation(() => ({
+                RunAgentInConversation: vi.fn().mockImplementation(() => {
+                    runCalls++;
+                    return Promise.resolve(wrapInConversationResult({
+                        success: true,
+                        payload: { invokeAgent: 'Codesmith' },
+                        agentRun: { Message: 'Attempting to delegate to Codesmith.', Steps: [] },
+                    }));
+                }),
+            }) as ReturnType<typeof vi.fn>);
+
+            const msg = createMessage({ IsDirectMessage: true });
+            await adapter.HandleMessage(msg);
+
+            expect(ResolveHandoffTarget).toHaveBeenCalledTimes(1);
+            expect(ResolveHandoffTarget).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    AgentName: 'Codesmith',
+                    SourceAgentID: 'agent-guid-123',
+                    HandoffChain: ['agent-guid-123'],
+                })
+            );
+            // Target run must not execute when ResolveHandoffTarget refuses
+            expect(runCalls).toBe(1);
+            const allMessages = [
+                ...adapter.FinalMessages,
+                ...adapter.FinalUpdates.map(u => u.response),
+            ];
+            expect(allMessages.some(m => m.PlainText.includes('Attempting to delegate to Codesmith.'))).toBe(true);
+        });
+
+        it('should follow first-class result.handoff via AgentRunner.FollowHandoffs with OnHopStart and OnHopEnd hooks', async () => {
+            const { AgentRunner } = await import('@memberjunction/ai-agents');
+            let capturedParams: Record<string, unknown> | undefined;
+            const followHandoffsMock = vi.fn().mockImplementation(async (input: {
+                hooks?: {
+                    OnHopStart?: (hopInfo: Record<string, unknown>, source: Record<string, unknown>) => Promise<{
+                        onProgress?: (p: { message: string }) => void;
+                        onStreaming?: (c: { content: string }) => void;
+                    } | void>;
+                    OnHopEnd?: (hopInfo: Record<string, unknown>, outcome: Record<string, unknown>) => Promise<void>;
+                };
+                sourceResult: ExecuteAgentResult;
+                sourceConversationDetailId: string;
+            }) => {
+                const targetAgent = { ID: 'marketing-id', Name: 'Marketing Agent' } as unknown as MJAIAgentEntityExtended;
+                const hopInfo = {
+                    hopIndex: 0,
+                    sourceAgent: { ID: 'agent-guid-123', Name: 'Default Agent' },
+                    sourceConversationDetailId: input.sourceConversationDetailId,
+                    targetAgent,
+                    targetConversationDetailId: 'target-detail-1',
+                    preset: { ID: 'preset-1', Name: 'Quick', DisplayName: 'Quick Draft' },
+                    presetSource: 'AgentDefault',
+                    handoff: input.sourceResult.handoff,
+                };
+                const callbacks = await input.hooks?.OnHopStart?.(hopInfo, {
+                    agentResult: input.sourceResult,
+                    conversationDetailId: input.sourceConversationDetailId,
+                });
+                callbacks?.onStreaming?.({ content: 'Streaming draft...' });
+
+                const outcome = {
+                    hopIndex: 0,
+                    targetAgent,
+                    targetConversationDetailId: 'target-detail-1',
+                    preset: hopInfo.preset,
+                    presetSource: 'AgentDefault',
+                    agentResult: {
+                        success: true,
+                        agentRun: { Message: 'Final marketing copy delivered.', Steps: [] },
+                    } as unknown as ExecuteAgentResult,
+                };
+                await input.hooks?.OnHopEnd?.(hopInfo, outcome);
+                return [outcome];
+            });
+
+            vi.mocked(AgentRunner).mockImplementation(() => ({
+                RunAgentInConversation: vi.fn().mockImplementation((params: Record<string, unknown>) => {
+                    capturedParams = params;
+                    return Promise.resolve(wrapInConversationResult({
+                        success: true,
+                        handoff: {
+                            targetAgentId: 'marketing-id',
+                            targetAgentName: 'Marketing Agent',
+                            reason: 'User asked for marketing copy',
+                            handoffChain: ['agent-guid-123'],
+                            runStepId: 'step-handoff-1',
+                        },
+                        agentRun: {
+                            Message: 'Bringing in Marketing Agent.',
+                            FinalStep: 'Handoff',
+                            Steps: [],
+                        },
+                    }));
+                }),
+                FollowHandoffs: followHandoffsMock,
+            }) as ReturnType<typeof vi.fn>);
+
+            const msg = createMessage({ IsDirectMessage: true });
+            await adapter.HandleMessage(msg);
+
+            expect(capturedParams?.handoffChain).toEqual([]);
+            expect(followHandoffsMock).toHaveBeenCalledTimes(1);
+            const allTexts = [
+                ...adapter.FinalMessages.map(m => m.PlainText),
+                ...adapter.FinalUpdates.map(u => u.response.PlainText),
+            ];
+            expect(allTexts.some(t => t.includes('Default Agent transferred you to **Marketing Agent** (Quick Draft)'))).toBe(true);
+            expect(allTexts.some(t => t.includes('Final marketing copy delivered.'))).toBe(true);
+        });
+
+        it('should omit handoffChain and skip FollowHandoffs when DisableDelegation is true', async () => {
+            const { AgentRunner } = await import('@memberjunction/ai-agents');
+            const pinnedAdapter = new TestAdapter({
+                ...defaultSettings,
+                DisableDelegation: true,
+            });
+            await pinnedAdapter.Initialize();
+
+            let capturedParams: Record<string, unknown> | undefined;
+            const followHandoffsMock = vi.fn().mockResolvedValue([]);
+            vi.mocked(AgentRunner).mockImplementation(() => ({
+                RunAgentInConversation: vi.fn().mockImplementation((params: Record<string, unknown>) => {
+                    capturedParams = params;
+                    return Promise.resolve(wrapInConversationResult({
+                        success: true,
+                        handoff: {
+                            targetAgentId: 'marketing-id',
+                            targetAgentName: 'Marketing Agent',
+                            handoffChain: ['agent-guid-123'],
+                        },
+                        agentRun: {
+                            Message: 'Pinned agent direct response.',
+                            Steps: [],
+                        },
+                    }));
+                }),
+                FollowHandoffs: followHandoffsMock,
+            }) as ReturnType<typeof vi.fn>);
+
+            const msg = createMessage({ IsDirectMessage: true });
+            await pinnedAdapter.HandleMessage(msg);
+
+            expect(capturedParams?.handoffChain).toBeUndefined();
+            expect(followHandoffsMock).not.toHaveBeenCalled();
+            const allTexts = [
+                ...pinnedAdapter.FinalMessages.map(m => m.PlainText),
+                ...pinnedAdapter.FinalUpdates.map(u => u.response.PlainText),
+            ];
+            expect(allTexts.some(t => t.includes('Pinned agent direct response.'))).toBe(true);
         });
     });
 });

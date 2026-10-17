@@ -15,7 +15,6 @@ import '@angular/compiler'; // JIT support — the component import evaluates An
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { EventEmitter } from '@angular/core';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
-import { TaskGraphSubmitOperation } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 import { MessageInputComponent } from '../lib/components/message/message-input.component';
@@ -320,59 +319,102 @@ describe('MessageInputComponent — host rules for an agent turn', () => {
 
             expect(h.processMessage.mock.calls[0][8]).toEqual([MANAGER.ID, RESEARCH.ID]);
         });
+    });
 
-        it("refuses the manager's delegation to a disallowed agent before any row is written for it", async () => {
-            h.set({ AllowedAgentIDs: [MANAGER.ID, RESEARCH.ID] });
-            h.processMessage.mockResolvedValueOnce({
-                success: true,
-                agentRun: { ID: 'run-manager', FinalStep: 'Success', Message: 'Handing off' },
-                payload: { invokeAgent: 'Writer', reasoning: 'writing task' },
-            });
+    describe('Continuity, Return to Sage, and follow-up preset resolution', () => {
+        it('after a handoff, routes the next unmentioned message to the target; after @Sage it goes to Sage and stays there until a newer handoff', async () => {
+            const t1 = new Date('2026-09-01T10:00:00.000Z');
+            const t2 = new Date('2026-09-01T10:01:00.000Z');
+            const t3 = new Date('2026-09-01T10:02:00.000Z');
+            const t4 = new Date('2026-09-01T10:03:00.000Z');
+            const t5 = new Date('2026-09-01T10:04:00.000Z');
 
-            await h.route(userMessage());
+            const sageHandoff = aiReply(MANAGER.ID, t1);
+            const researchReply = aiReply(RESEARCH.ID, t2);
+            researchReply.ParentID = sageHandoff.ID;
 
-            expect(h.created).toHaveLength(1); // the manager's own reply row only
-            expect(h.invokeSubAgent).not.toHaveBeenCalled();
-            expect(notify).toHaveBeenCalledOnce();
-            expect(notify.mock.calls[0][0]).toContain('Writer');
+            // 1. After a handoff, an unmentioned message continues with the handoff target (Research)
+            h.set({ ConversationHistory: [sageHandoff, researchReply] });
+            await h.route(userMessage('follow up for research'));
+            expect(h.before.at(-1)).toMatchObject({ Route: 'Continuity', AgentId: RESEARCH.ID });
+            expect(h.invokeSubAgent.mock.calls.at(-1)?.[0]).toBe('Research');
+
+            // 2. User returns to Sage via @Sage mention (or ReturnToSage()) and Sage replies
+            const returnUserMsg = new FakeDetail('user-return-sage', 'User', t3);
+            returnUserMsg.ParentID = researchReply.ID;
+            returnUserMsg.Message = `@{"type":"agent","id":"${MANAGER.ID}","name":"Sage"} take it back`;
+            const sageReplyAfterReturn = aiReply(MANAGER.ID, t4);
+            sageReplyAfterReturn.ID = 'reply-sage-after';
+            sageReplyAfterReturn.ParentID = returnUserMsg.ID;
+
+            h.set({ ConversationHistory: [sageHandoff, researchReply, returnUserMsg, sageReplyAfterReturn] });
+            await h.route(userMessage('next unmentioned turn stays with Sage'));
+            expect(h.before.at(-1)).toMatchObject({ Route: 'ConversationManager', AgentId: MANAGER.ID });
+
+            // 3. A newer handoff after @Sage takes continuity again
+            const writerHandoffTarget = aiReply(WRITER.ID, t5);
+            writerHandoffTarget.ParentID = sageReplyAfterReturn.ID;
+            h.set({ ConversationHistory: [sageHandoff, researchReply, returnUserMsg, sageReplyAfterReturn, writerHandoffTarget] });
+            await h.route(userMessage('follow up for writer'));
+            expect(h.before.at(-1)).toMatchObject({ Route: 'Continuity', AgentId: WRITER.ID });
         });
 
-        it("lets the manager's delegation to an allowed agent run", async () => {
-            h.set({ AllowedAgentIDs: [MANAGER.ID, RESEARCH.ID] });
-            h.processMessage.mockResolvedValueOnce({
-                success: true,
-                agentRun: { ID: 'run-manager', FinalStep: 'Success', Message: 'Handing off' },
-                payload: { invokeAgent: 'Research', reasoning: 'research task' },
-            });
+        it('ReturnToSage() inserts the conversation manager mention chip into InputBox', () => {
+            const insertMention = vi.fn();
+            h.set({ InputBox: { InsertMention: insertMention } });
 
-            await h.route(userMessage());
+            h.component.ReturnToSage();
 
-            expect(h.invokeSubAgent).toHaveBeenCalledOnce();
-            expect(h.invokeSubAgent.mock.calls[0][0]).toBe('Research');
+            expect(insertMention).toHaveBeenCalledOnce();
+            expect(insertMention).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    id: MANAGER.ID,
+                    name: 'Sage',
+                    type: 'agent',
+                }),
+                true,
+            );
         });
 
-        it('does not submit a workflow with an agent step the chat does not allow', async () => {
-            const submit = vi.spyOn(TaskGraphSubmitOperation.prototype, 'Execute');
-            h.set({ AllowedAgentIDs: [MANAGER.ID, RESEARCH.ID] });
-            h.processMessage.mockResolvedValueOnce({
-                success: true,
-                agentRun: { ID: 'run-manager', FinalStep: 'Success', Message: 'Planning' },
-                payload: {
-                    taskGraph: {
-                        workflowName: 'Report',
-                        tasks: [
-                            { tempId: 't1', name: 'Find', description: '', kind: 'Agent', configuration: { agentName: 'Research' }, dependsOn: [] },
-                            { tempId: 't2', name: 'Write', description: '', kind: 'Agent', configuration: { agentName: 'Writer' }, dependsOn: ['t1'] },
-                        ],
-                    },
-                },
+        it('uses the continued agent preset from ResolveConversationAgentPreset and ignores a header preset owned by Sage', async () => {
+            const sagePreset = { ID: 'preset-sage', AgentID: MANAGER.ID, AIConfigurationID: 'cfg-sage', Status: 'Active', IsDefault: true };
+            const researchPreset = { ID: 'preset-research', AgentID: RESEARCH.ID, AIConfigurationID: 'cfg-research', Status: 'Active', IsDefault: true };
+            vi.spyOn(AIEngineBase.Instance, 'AgentConfigurations', 'get').mockReturnValue([sagePreset, researchPreset] as never);
+            const defaultSpy = vi.spyOn(AIEngineBase.Instance, 'GetDefaultAgentConfigurationPreset').mockImplementation(
+                (agentId: string) => (agentId === RESEARCH.ID ? researchPreset : sagePreset) as never
+            );
+            vi.spyOn(AIEngineBase.Instance, 'GetAgentConfigurationPresets').mockImplementation(
+                (agentId: string) => (agentId === RESEARCH.ID ? [researchPreset] : [sagePreset]) as never
+            );
+
+            // Header mode picker holds Sage's preset, while continuity routes to Research
+            h.set({
+                AgentConfigurationPresetId: 'preset-sage',
+                ConversationHistory: [aiReply(RESEARCH.ID)],
             });
 
-            await h.route(userMessage());
+            await h.route(userMessage('continue with research'));
 
-            expect(submit).not.toHaveBeenCalled();
-            expect(h.created).toHaveLength(1); // no workflow row
-            expect(notify.mock.calls[0][0]).toContain('Writer');
+            expect(defaultSpy).toHaveBeenCalledWith(RESEARCH.ID);
+            // arg index 10 of invokeSubAgent is agentConfigurationPresetId — must be Research's preset ID, NOT Sage's
+            expect(h.invokeSubAgent.mock.calls[0][10]).toBe('preset-research');
+        });
+
+        it('uses the header picker preset on continuation when it belongs to the continued agent', async () => {
+            const researchFast = { ID: 'preset-research-fast', AgentID: RESEARCH.ID, AIConfigurationID: 'cfg-fast', Status: 'Active', IsDefault: false };
+            const researchDefault = { ID: 'preset-research-default', AgentID: RESEARCH.ID, AIConfigurationID: 'cfg-default', Status: 'Active', IsDefault: true };
+            vi.spyOn(AIEngineBase.Instance, 'AgentConfigurations', 'get').mockReturnValue([researchFast, researchDefault] as never);
+            vi.spyOn(AIEngineBase.Instance, 'GetDefaultAgentConfigurationPreset').mockReturnValue(researchDefault as never);
+            vi.spyOn(AIEngineBase.Instance, 'GetAgentConfigurationPresets').mockReturnValue([researchFast, researchDefault] as never);
+
+            h.set({
+                AgentConfigurationPresetId: 'preset-research-fast',
+                ConversationHistory: [aiReply(RESEARCH.ID)],
+            });
+
+            await h.route(userMessage('continue with research'));
+
+            expect(h.invokeSubAgent.mock.calls[0][10]).toBe('preset-research-fast');
         });
     });
 

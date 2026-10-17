@@ -1866,3 +1866,121 @@
     margin-left: 0;
   }
 }
+
+/* Handoff source message: recede text to secondary once transferred */
+.message-item.handoff-source-transferred .message-text,
+.message-item.msg--handed .message-text {
+  color: var(--mj-text-secondary);
+}
+
+/* Handed-off target message: vertical gradient rail in the target agent's accent */
+.message-item.target-block {
+  position: relative;
+  padding-left: var(--mj-space-6);
+}
+.message-item.target-block::before {
+  content: '';
+  position: absolute;
+  left: 16px;
+  top: 8px;
+  bottom: 8px;
+  width: 2px;
+  border-radius: 2px;
+  background: linear-gradient(
+    180deg,
+    var(--mj-handoff-target, var(--mj-brand-primary)) 0%,
+    color-mix(in srgb, var(--mj-handoff-target, var(--mj-brand-primary)) 22%, transparent) 100%
+  );
+}
+
+/* "via <source agent>" provenance pill in the target message header */
+.message-header .via {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--mj-text-muted);
+  padding: 2px 7px;
+  border-radius: var(--mj-radius-full);
+  background: var(--mj-bg-surface-sunken);
+  border: 1px solid var(--mj-border-subtle);
+}
+.message-header .via .mini {
+  width: 14px;
+  height: 14px;
+  border-radius: var(--mj-radius-full);
+  background: var(--mj-handoff-source, var(--mj-brand-primary));
+  color: var(--mj-text-inverse);
+  font-size: 8.5px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.message-header .via .mini img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Preset pill in the target message header */
+.message-header .pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: var(--mj-radius-full);
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--mj-bg-surface-sunken);
+  border: 1px solid var(--mj-border-subtle);
+  color: var(--mj-text-secondary);
+}
+.message-header .pill--target {
+  background: color-mix(in srgb, var(--mj-handoff-target, var(--mj-brand-primary)) 12%, var(--mj-bg-surface));
+  border-color: color-mix(in srgb, var(--mj-handoff-target, var(--mj-brand-primary)) 28%, var(--mj-border-default));
+  color: var(--mj-handoff-target, var(--mj-brand-primary));
+}
+
+/* "Joining the conversation..." pre-stream target state */
+.message-body .joining {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--mj-text-secondary);
+}
+.message-body .joining-skeletons {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+.message-body .skeleton {
+  height: 10px;
+  border-radius: 5px;
+  background: linear-gradient(
+    90deg,
+    var(--mj-bg-surface-sunken) 0%,
+    var(--mj-border-subtle) 50%,
+    var(--mj-bg-surface-sunken) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.6s linear infinite;
+}
+.message-body .skeleton--wide {
+  width: 72%;
+}
+.message-body .skeleton--narrow {
+  width: 48%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .message-body .skeleton {
+    animation: none;
+  }
+}
+

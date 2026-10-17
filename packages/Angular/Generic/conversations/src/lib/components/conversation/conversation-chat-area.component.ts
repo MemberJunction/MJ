@@ -102,6 +102,13 @@ import {
 } from '../../utils/conversation-forks';
 import { DecideArtifactPanelAction, SnapshotArtifactVersions, ArtifactPanelAction, ArtifactPanelBaseline, ArtifactVersionRef } from '../../utils/artifact-panel-action';
 import { NormalizeUUID, UUIDsEqual, UUIDSet, IndexByUUID } from '@memberjunction/global';
+import { AgentAccentVar, type MessageHandoffInfo } from '../message/agent-handoff-card.component';
+import {
+  BuildHandoffsByDetailId,
+  LoadHandoffStepsForRuns,
+  type HandoffRunStepRow,
+} from '../../utils/agent-handoff-map';
+import { FindContinuityAgentMessage } from '../../utils/agent-turn-routing';
 
 // PR 2c — Widget extension surface
 import { ChatSlotDirective, type MJChatSlotName } from '../../directives/chat-slot.directive';
@@ -1052,6 +1059,92 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         ?? this.DefaultAgentId
         ?? this.conversationManagerAgent?.ID
         ?? null;
+  }
+
+  /**
+   * Current conversation owner agent for the header `.with-chip` and composer
+   * placeholder: continuity (last non-Sage reply not preceded by a newer
+   * `@Sage` user message) -> pinned/default agent -> conversation manager.
+   */
+  public get CurrentOwnerAgent(): { ID: string; Name: string; IsConversationManager: boolean } | null {
+    const managerId = this.conversationManagerAgent?.ID ?? null;
+    const rows = this.DisplayMessages?.length ? this.DisplayMessages : this.messages ?? [];
+    const continuity = FindContinuityAgentMessage(
+      rows,
+      managerId,
+      {
+        conversationManagerName: this.conversationManagerAgent?.Name ?? 'Sage',
+        isWithinFloor: msg => !this.AgentHistoryFrom || msg.__mj_CreatedAt >= this.AgentHistoryFrom,
+      },
+    );
+    let targetId: string | null = null;
+    if (continuity?.AgentID && this.isOwnerAgentAllowed(continuity.AgentID)) {
+      targetId = continuity.AgentID;
+    } else {
+      const fallbackId =
+        this.Conversation?.DefaultAgentID
+        ?? this.DefaultAgentId
+        ?? managerId;
+      if (fallbackId && this.isOwnerAgentAllowed(fallbackId)) {
+        targetId = fallbackId;
+      }
+    }
+    if (!targetId) {
+      return null;
+    }
+    const meta = this.resolveHandoffAgentMeta(targetId);
+    const isManager = managerId ? UUIDsEqual(targetId, managerId) : false;
+    return {
+      ID: targetId,
+      Name: meta?.Name || (isManager ? (this.conversationManagerAgent?.Name || 'Sage') : 'Agent'),
+      IsConversationManager: isManager,
+    };
+  }
+
+  public get CurrentOwnerAgentName(): string {
+    return this.CurrentOwnerAgent?.Name || this.conversationManagerAgent?.Name || 'Sage';
+  }
+
+  public get CurrentOwnerAccentVar(): string {
+    return AgentAccentVar(this.CurrentOwnerAgent?.ID);
+  }
+
+  private isOwnerAgentAllowed(agentId: string | null | undefined): boolean {
+    if (!agentId) {
+      return false;
+    }
+    if (this.AllowedAgentIDs == null) {
+      return true;
+    }
+    return this.AllowedAgentIDs.some(allowed => UUIDsEqual(allowed, agentId));
+  }
+
+  private resolveHandoffAgentMeta(agentId: string): {
+    Name?: string | null;
+    LogoURL?: string | null;
+    IconClass?: string | null;
+  } | null {
+    if (this.conversationManagerAgent && UUIDsEqual(this.conversationManagerAgent.ID, agentId)) {
+      return {
+        Name: this.conversationManagerAgent.Name,
+        LogoURL: this.conversationManagerAgent.LogoURL,
+        IconClass: this.conversationManagerAgent.IconClass,
+      };
+    }
+    const agents = AIEngineBase.Instance?.Agents;
+    const found = agents?.find(a => UUIDsEqual(a.ID, agentId));
+    if (found) {
+      return {
+        Name: found.Name,
+        LogoURL: found.LogoURL,
+        IconClass: found.IconClass,
+      };
+    }
+    const msg = this.messages?.find(m => UUIDsEqual(m.AgentID, agentId) && m.Agent);
+    if (msg) {
+      return { Name: msg.Agent };
+    }
+    return null;
   }
 
   /**
@@ -2124,6 +2217,23 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   public set agentRunsByDetailId(value) {
     this.AgentRunsByDetailId = value;
   }
+
+  /**
+   * Handoff metadata by source conversation detail ID, built from the source
+   * run's `Handoff` step (`MJ: AI Agent Run Steps`) and subsequent target reply.
+   */
+  public HandoffsByDetailId = new Map<string, MessageHandoffInfo>();
+
+  /** @deprecated Use {@link HandoffsByDetailId}. */
+  public get handoffsByDetailId() {
+    return this.HandoffsByDetailId;
+  }
+  /** @deprecated Use {@link HandoffsByDetailId}. */
+  public set handoffsByDetailId(value) {
+    this.HandoffsByDetailId = value;
+  }
+
+  private handoffStepsByRunId = new Map<string, HandoffRunStepRow>();
 
   /**
    * Ratings by conversation detail ID (parsed from RatingsJSON)
@@ -3531,6 +3641,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.ForkSummaries = [];
     this.ShowForksPopover = false;
     this.IsRenamingTitle = false;
+    this.HandoffsByDetailId = new Map();
+    this.handoffStepsByRunId?.clear();
     if (this.forkSummaryRefreshTimer) {
       clearTimeout(this.forkSummaryRefreshTimer);
       this.forkSummaryRefreshTimer = null;
@@ -3975,6 +4087,18 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       this.RealtimeSessionMetaMap = new Map([...this.RealtimeSessionMetaMap, ...sessionMeta]);
     }
 
+    const newRunIds = newIds
+      .map(id => this.AgentRunsByDetailId.get(id)?.ID)
+      .filter((id): id is string => !!id);
+    if (newRunIds.length > 0) {
+      await this.loadHandoffStepsForRunIds(newRunIds, conversationId);
+      if (!this.isActiveConversation(conversationId)) {
+        return;
+      }
+    } else {
+      this.rebuildHandoffsMap();
+    }
+
     // A page of OLDER artifacts just entered the map. Any artifact-panel baseline taken before
     // this point can no longer be diffed against the map for creations — these arrived from
     // history, not from a run. See snapshotArtifactPanelBaseline.
@@ -4026,6 +4150,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       this.ArtifactsByDetailId.clear();
       this.SystemArtifactsByDetailId.clear();
       this.RatingsByDetailId.clear();
+      this.handoffStepsByRunId ??= new Map();
+      this.handoffStepsByRunId.clear();
 
       // Copy agent runs from engine (cast to extended type for UI compatibility)
       for (const [detailId, agentRun] of cacheEntry.AgentRunsByDetailId) {
@@ -4062,6 +4188,14 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         return;
       }
 
+      const runIds = Array.from(this.AgentRunsByDetailId.values())
+        .map(r => r?.ID)
+        .filter((id): id is string => !!id);
+      await this.loadHandoffStepsForRunIds(runIds, conversationId, loadToken);
+      if (!this.isCurrentConversationContext(conversationId, loadToken)) {
+        return;
+      }
+
       // Create new Map references to trigger Angular change detection
       this.AgentRunsByDetailId = new Map(this.AgentRunsByDetailId);
       this.ArtifactsByDetailId = new Map(this.ArtifactsByDetailId);
@@ -4085,6 +4219,56 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       console.error('Failed to process peripheral data:', error);
       this.lastLoadedConversationId = null;
     }
+  }
+
+  private async loadHandoffStepsForRunIds(
+    runIds: readonly string[],
+    conversationId?: string | null,
+    loadToken?: number,
+  ): Promise<void> {
+    this.handoffStepsByRunId ??= new Map();
+    if (runIds.length > 0) {
+      const steps = await LoadHandoffStepsForRuns(
+        this.ProviderToUse,
+        runIds,
+      );
+      if (
+        conversationId != null &&
+        typeof this.isCurrentConversationContext === 'function' &&
+        !this.isCurrentConversationContext(conversationId, loadToken)
+      ) {
+        return;
+      }
+      for (const step of steps) {
+        if (step && step.ID && step.AgentRunID && (!step.StepType || step.StepType === 'Handoff')) {
+          this.handoffStepsByRunId.set(step.ID, step);
+        }
+      }
+    }
+    this.rebuildHandoffsMap();
+  }
+
+  private rebuildHandoffsMap(): void {
+    const stepsMap = this.handoffStepsByRunId;
+    if (!stepsMap || stepsMap.size === 0 || !this.AgentRunsByDetailId || this.AgentRunsByDetailId.size === 0) {
+      if (!this.HandoffsByDetailId || this.HandoffsByDetailId.size > 0) {
+        this.HandoffsByDetailId = new Map();
+      }
+      return;
+    }
+    const engineAgents = AIEngineBase.Instance?.Agents ?? [];
+    const agents =
+      this.conversationManagerAgent &&
+      !engineAgents.some(a => UUIDsEqual(a.ID, this.conversationManagerAgent?.ID))
+        ? [this.conversationManagerAgent, ...engineAgents]
+        : engineAgents;
+    this.HandoffsByDetailId = BuildHandoffsByDetailId({
+      Messages: this.messages ?? [],
+      AgentRunsByDetailId: this.AgentRunsByDetailId,
+      HandoffSteps: Array.from(stepsMap.values()),
+      Agents: agents,
+      Presets: AIEngineBase.Instance?.AgentConfigurations ?? [],
+    });
   }
 
   /**
@@ -4291,6 +4475,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
     // Where the viewport goes: a fresh send follows — an in-place update of a message that
     // is already on screen must not re-run the send path's scroll.
+    this.rebuildHandoffsMap();
     this.followTranscript(existingIndex >= 0 ? 'update' : 'new', message);
 
     // Force change detection — zone.js 0.15 no longer patches graphql-ws WebSocket callbacks,
@@ -4435,9 +4620,16 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         }
       }
 
+      await this.loadHandoffStepsForRunIds([existingAgentRun.ID], event.conversationId);
+      if (!this.isActiveConversation(event.conversationId)) {
+        return;
+      }
+
       // Trigger re-render to show updated status
       this.messages = [...this.messages];
       this.cdr.detectChanges();
+    } else {
+      this.rebuildHandoffsMap();
     }
 
     // Reload attachments for this message to pick up newly created media attachments
@@ -4476,6 +4668,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       if (event.conversationId) {
         ConversationEngine.Instance.SetAgentRunForDetail(event.conversationId, event.conversationDetailId, event.agentRun);
       }
+      this.rebuildHandoffsMap();
     }
     else {
       // no agent run, should have agentRunId
@@ -4536,7 +4729,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       const existingMessageIds = new Set(this.messages.map(m => m.ID));
 
       // Merge the refreshed window with existing client-side messages.
-      // Preserves messages added client-side (e.g., by handleSubAgentInvocation)
+      // Preserves messages added client-side (e.g., server-followed handoff rows)
       // that haven't been picked up by entity events yet due to timing.
       const merged = new Map<string, MJConversationDetailEntity>();
 
@@ -4558,15 +4751,20 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       const newMessages = engineDetails.filter(m => !existingMessageIds.has(m.ID));
 
       // Check engine cache for agent runs on new messages
+      const discoveredRunIds: string[] = [];
       for (const message of newMessages) {
         if (message.AgentID && message.ID) {
           const agentRun = this.engine.GetAgentRunForDetail(conversationId, message.ID);
           if (agentRun) {
             this.AgentRunsByDetailId.set(message.ID, agentRun as MJAIAgentRunEntityExtended);
+            if (agentRun.ID) {
+              discoveredRunIds.push(agentRun.ID);
+            }
             LogStatusEx({message: `✅ Found cached agent run for new delegated message ${message.ID}`, verboseOnly: true});
           }
         }
       }
+      await this.loadHandoffStepsForRunIds(discoveredRunIds, conversationId);
 
       LogStatusEx({message: `✅ Refreshed ${engineDetails.length} messages from engine cache (${newMessages.length} new)`, verboseOnly: true});
     } catch (error) {
@@ -5652,6 +5850,10 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       if (stoppedAgent !== undefined) {
         return `Continue, or tell ${stoppedAgent ?? 'the agent'} what to do differently`;
       }
+      const owner = this.CurrentOwnerAgent;
+      if (owner && !owner.IsConversationManager) {
+        return `Ask ${owner.Name} for changes, like "make the opening faster"`;
+      }
     }
     return MAIN_COMPOSER_PLACEHOLDER;
   }
@@ -5961,6 +6163,10 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         if (!isCurrent()) {
           return;
         }
+        await this.loadHandoffStepsForRunIds([agentRun.ID], expectedConversationId, loadToken);
+        if (!isCurrent()) {
+          return;
+        }
       }
 
       // Reload artifacts for this completed message
@@ -6006,6 +6212,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       this.windowStore.ApplyLocalDetail(message);
 
       // Force re-render with updated agent run and artifacts
+      this.rebuildHandoffsMap();
       this.messages = [...this.messages];
       this.cdr.detectChanges();
 
@@ -6112,6 +6319,11 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
           // Also update ConversationEngine's cache for other consumers
           if (conversationId) {
             ConversationEngine.Instance.SetAgentRunForDetail(conversationId, conversationDetailId, agentRun);
+          }
+
+          await this.loadHandoffStepsForRunIds([agentRunId], conversationId);
+          if (!this.isActiveConversation(conversationId)) {
+            return agentRun;
           }
 
           // Force message list to re-render with updated agent run
@@ -8726,6 +8938,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     // Tracked per pass rather than by consulting the map, which usually already holds a run from
     // an earlier pass and is cleared only on conversation load.
     const seenDetailIds = new Set<string>();
+    const refreshedRunIds: string[] = [];
     for (const run of result.Results || []) {
       const detailId = run.ConversationDetailID;
       if (!detailId || seenDetailIds.has(detailId)) {
@@ -8733,9 +8946,13 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       }
       seenDetailIds.add(detailId);
       this.AgentRunsByDetailId.set(detailId, run);
+      if (run.ID) {
+        refreshedRunIds.push(run.ID);
+      }
     }
     // New map reference so OnPush children re-read it.
     this.AgentRunsByDetailId = new Map(this.AgentRunsByDetailId);
+    await this.loadHandoffStepsForRunIds(refreshedRunIds, conversationId, loadToken);
   }
 
   /**
