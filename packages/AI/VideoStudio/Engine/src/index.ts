@@ -70,6 +70,7 @@ export {
     type ProduceVideoLookups,
     type ProduceVideoMappingError,
     type ProduceVideoMappingErrorCode,
+    type ProduceVideoPresetLookup,
     type ProduceVideoRequestError,
     type ProduceVideoRequestResult,
     type ProduceVideoRequestSuccess,
