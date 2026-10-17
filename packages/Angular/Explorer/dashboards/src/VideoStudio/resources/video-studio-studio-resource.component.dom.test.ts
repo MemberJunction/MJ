@@ -2,6 +2,7 @@ import { FormsModule } from '@angular/forms';
 import { By } from '@angular/platform-browser';
 import { EMPTY } from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { IMetadataProvider, RunView } from '@memberjunction/core';
 import {
   BrandKitEngine,
@@ -11,10 +12,20 @@ import {
 } from '@memberjunction/core-entities';
 import { NavigationService } from '@memberjunction/ng-shared';
 import { query, queryAll, renderComponentFixture } from '@memberjunction/ng-test-utils';
+import {
+  MJAlertComponent,
+  MJDropdownComponent,
+  MJNumericInputComponent,
+} from '@memberjunction/ng-ui-components';
 import { VSCopilotPanelComponent } from '../components/vs-copilot-panel.component';
 import { VideoStudioStudioResourceComponent } from './video-studio-studio-resource.component';
 
-const STUDIO_TEST_IMPORTS = [FormsModule];
+const STUDIO_TEST_IMPORTS = [
+  FormsModule,
+  MJAlertComponent,
+  MJDropdownComponent,
+  MJNumericInputComponent,
+];
 
 function createNavigationServiceStub(): {
   QueryParamChanged$: typeof EMPTY;
@@ -40,6 +51,11 @@ function setupStudioMocks() {
   const customProvider = {
     CurrentUser: { ID: 'user-studio-1', Name: 'Studio Producer' },
   } as unknown as IMetadataProvider;
+
+  const aiEngineStub = {
+    Config: vi.fn().mockResolvedValue(undefined),
+    Agents: [],
+  } as unknown as AIEngineBase;
 
   const vsEngineStub = {
     Config: vi.fn().mockResolvedValue(undefined),
@@ -111,13 +127,14 @@ function setupStudioMocks() {
     ],
   });
 
+  vi.spyOn(AIEngineBase, 'GetProviderInstance').mockReturnValue(aiEngineStub);
   vi.spyOn(VideoStudioEngine, 'GetProviderInstance').mockReturnValue(vsEngineStub);
   vi.spyOn(BrandKitEngine, 'GetProviderInstance').mockReturnValue(bkEngineStub);
   vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
     RunView: runViewFn,
   } as unknown as RunView);
 
-  return { navStub, customProvider, runViewFn };
+  return { navStub, customProvider, runViewFn, aiEngineStub };
 }
 
 describe('VideoStudioStudioResourceComponent DOM', () => {
@@ -156,7 +173,59 @@ describe('VideoStudioStudioResourceComponent DOM', () => {
     vi.restoreAllMocks();
   });
 
-  it('disables Start production until topic and archetype are set, then binds AppContext and PendingMessage and calls StartConversation on vs-copilot-panel', async () => {
+  it('wires brand-kit mj-dropdown ValueChange and duration mj-numeric-input ngModelChange through the template', async () => {
+    const { navStub, customProvider } = setupStudioMocks();
+
+    const fixture = renderComponentFixture(VideoStudioStudioResourceComponent, {
+      inputs: { Provider: customProvider },
+      imports: STUDIO_TEST_IMPORTS,
+      providers: [{ provide: NavigationService, useValue: navStub }],
+    });
+
+    await flushAsync();
+    fixture.detectChanges();
+
+    const instance = fixture.componentInstance;
+
+    // Select first archetype ("Product Launch Teaser": min 15s, max 90s)
+    const firstCard = query(fixture, '[data-testid="studio-archetype-card-arch-launch"]');
+    expect(firstCard).not.toBeNull();
+    firstCard!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    fixture.detectChanges();
+    expect(instance.MinDurationSeconds).toBe(15);
+    expect(instance.MaxDurationSeconds).toBe(90);
+
+    // Emit ValueChange from the brand-kit mj-dropdown ('kit-acme' then null for 'None')
+    const brandKitDebug = fixture.debugElement.query(
+      By.css('[data-testid="studio-brand-kit-select"]'),
+    );
+    expect(brandKitDebug).not.toBeNull();
+    brandKitDebug.triggerEventHandler('ValueChange', 'kit-acme');
+    fixture.detectChanges();
+    expect(instance.SelectedBrandKit?.ID).toBe('kit-acme');
+
+    brandKitDebug.triggerEventHandler('ValueChange', null);
+    fixture.detectChanges();
+    expect(instance.SelectedBrandKit).toBeNull();
+
+    // Trigger ngModelChange on duration mj-numeric-input with out-of-range values
+    const durationDebug = fixture.debugElement.query(
+      By.css('[data-testid="studio-duration-input"]'),
+    );
+    expect(durationDebug).not.toBeNull();
+    durationDebug.triggerEventHandler('ngModelChange', 500);
+    fixture.detectChanges();
+    expect(instance.DurationSeconds).toBe(90);
+
+    durationDebug.triggerEventHandler('ngModelChange', 3);
+    fixture.detectChanges();
+    expect(instance.DurationSeconds).toBe(15);
+
+    fixture.destroy();
+    vi.restoreAllMocks();
+  });
+
+  it('disables Start production until topic and archetype are set, guards against double-click while StartConversation is pending, and surfaces StartError when copilot is not ready', async () => {
     const { navStub, customProvider } = setupStudioMocks();
 
     const fixture = renderComponentFixture(VideoStudioStudioResourceComponent, {
@@ -192,10 +261,38 @@ describe('VideoStudioStudioResourceComponent DOM', () => {
     const copilotDebug = fixture.debugElement.query(By.directive(VSCopilotPanelComponent));
     expect(copilotDebug).not.toBeNull();
     const copilotInstance = copilotDebug.componentInstance as VSCopilotPanelComponent;
-    const startConvSpy = vi.spyOn(copilotInstance, 'StartConversation');
 
+    // Wire a pending OnEmptyStateMessageSent promise via StartConversation to verify double-click guard
+    let resolveEmptyStateSend!: () => void;
+    const onEmptyStateMessageSentSpy = vi.fn().mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveEmptyStateSend = resolve;
+        }),
+    );
+    const startConvSpy = vi
+      .spyOn(copilotInstance, 'StartConversation')
+      .mockImplementation(async (msg: string) => {
+        copilotInstance.ConversationId = null;
+        await onEmptyStateMessageSentSpy({ text: msg, attachments: [] });
+        return true;
+      });
+
+    // First click starts production and leaves StartConversation pending
     startBtn!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     fixture.detectChanges();
+
+    expect(instance.IsStarting).toBe(true);
+    expect(instance.CanStartProduction).toBe(false);
+    expect(startBtn!.hasAttribute('disabled')).toBe(true);
+
+    // Second click while StartConversation is still pending must not fire StartConversation or OnEmptyStateMessageSent again
+    startBtn!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    void instance.StartProduction();
+    fixture.detectChanges();
+
+    expect(startConvSpy).toHaveBeenCalledTimes(1);
+    expect(onEmptyStateMessageSentSpy).toHaveBeenCalledTimes(1);
 
     const expectedMessage =
       'Make a Product Launch Teaser video, about Announce MJ 3.0 Video Studio release, 45 seconds, formats 16:9, 9:16, brand kit MJ Corporate Brand, data from Monthly Active Users KPI.';
@@ -216,8 +313,29 @@ describe('VideoStudioStudioResourceComponent DOM', () => {
     expect(copilotInstance.ConversationId).toBeNull();
     expect(copilotInstance.PendingMessage).toBe(expectedMessage);
     expect(copilotInstance.AppContext).toEqual(expectedAppContext);
-    expect(startConvSpy).toHaveBeenCalledTimes(1);
     expect(startConvSpy).toHaveBeenCalledWith(expectedMessage);
+
+    // Resolve the pending promise and verify button re-enables with no StartError
+    resolveEmptyStateSend();
+    await flushAsync();
+    fixture.detectChanges();
+
+    expect(instance.IsStarting).toBe(false);
+    expect(instance.CanStartProduction).toBe(true);
+    expect(startBtn!.hasAttribute('disabled')).toBe(false);
+    expect(instance.StartError).toBeNull();
+    expect(query(fixture, '[data-testid="studio-start-error"]')).toBeNull();
+
+    // Restore real StartConversation (where agent is missing / chatArea is not mounted -> returns false) and verify StartError
+    startConvSpy.mockRestore();
+    startBtn!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await flushAsync();
+    fixture.detectChanges();
+
+    expect(instance.StartError).toBe("The copilot isn't ready yet.");
+    const startErrorAlert = query(fixture, '[data-testid="studio-start-error"]');
+    expect(startErrorAlert).not.toBeNull();
+    expect(startErrorAlert!.textContent).toContain("The copilot isn't ready yet.");
 
     fixture.destroy();
     vi.restoreAllMocks();

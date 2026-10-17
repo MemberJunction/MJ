@@ -254,7 +254,7 @@ test.describe('Video Studio — Studio & Copilot Iterate (VS-UX-2)', () => {
     await expect(chatArea).toBeVisible({ timeout: 30_000 });
     await expect(chatArea).toContainText(topicText, { timeout: 30_000 });
     await expect(
-      copilotPanel.locator('mj-artifact-viewer-panel, [data-testid*="artifact"]').first(),
+      copilotPanel.locator('mj-artifact-viewer-panel').first(),
     ).toBeVisible({ timeout: 60_000 });
 
     // Navigate to Productions and verify production + Iterate
@@ -290,15 +290,30 @@ test.describe('Video Studio — Studio & Copilot Iterate (VS-UX-2)', () => {
     await expect(detailPane).toContainText(/v2|version 2/i, { timeout: 60_000 });
 
     // Open the Share dialog and share with another user
-    const shareBtn = detailPane.getByTestId('production-share-button');
+    const shareBtn = detailPane.getByTitle('Share');
     await expect(shareBtn).toBeVisible();
     await shareBtn.click();
-    const shareModal = page.getByTestId('production-share-modal');
+
+    const shareModal = page.locator('mj-artifact-share-modal');
     await expect(shareModal).toBeVisible({ timeout: 30_000 });
-    const shareOption = shareModal.locator('button, [role="option"], input[type="checkbox"]').first();
-    if (await shareOption.isVisible()) {
-      await shareOption.click();
-    }
+
+    const userPicker = shareModal.locator('mj-user-picker');
+    const userSearchInput = userPicker.locator('.user-search-input');
+    await expect(userSearchInput).toBeVisible({ timeout: 30_000 });
+    await userSearchInput.fill(process.env.PLAYWRIGHT_SHARE_USER_QUERY ?? '.com');
+    await userSearchInput.press('Enter');
+
+    const firstUserResult = userPicker.locator('.user-search-item').first();
+    await expect(firstUserResult).toBeVisible({ timeout: 30_000 });
+    await firstUserResult.click();
+
+    const addUserBtn = shareModal.getByRole('button', { name: /Add User/i });
+    await expect(addUserBtn).toBeVisible();
+    await addUserBtn.click();
+
+    await expect(
+      shareModal.locator('.permissions-list .permission-item').first(),
+    ).toBeVisible({ timeout: 30_000 });
 
     // Toggle dark and light theme and verify the workspace renders cleanly in both
     await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'));

@@ -200,6 +200,11 @@
         </div>
 
         <!-- Start Production Action -->
+        @if (StartError) {
+          <mj-alert Variant="warning" data-testid="studio-start-error">
+            {{ StartError }}
+          </mj-alert>
+        }
         <div class="vs-studio-actions">
           <button
             mjButton

@@ -72,6 +72,8 @@ export class VideoStudioStudioResourceComponent
 {
   public IsLoading = false;
   public LoadError: string | null = null;
+  public IsStarting = false;
+  public StartError: string | null = null;
 
   public AllArchetypes: ArchetypeCardSnapshot[] = [];
   public AllBrandKits: BrandKitCardSnapshot[] = [];
@@ -154,6 +156,7 @@ export class VideoStudioStudioResourceComponent
 
   public get CanStartProduction(): boolean {
     return (
+      !this.IsStarting &&
       this.Topic.trim().length > 0 &&
       this.SelectedArchetype !== null &&
       this.SelectedFormats.length > 0
@@ -388,32 +391,45 @@ export class VideoStudioStudioResourceComponent
    * a fresh conversation, updates PendingMessage + AppContext on the copilot, and
    * dispatches the message through the copilot panel into `mj-conversation-chat-area`.
    */
-  public StartProduction(): void {
+  public async StartProduction(): Promise<void> {
     if (!this.CanStartProduction || !this.SelectedArchetype) {
       return;
     }
 
-    const message = ComposeStudioFirstMessage({
-      ArchetypeName: this.SelectedArchetype.Name,
-      Topic: this.Topic,
-      DurationSeconds: this.DurationSeconds,
-      Formats: this.SelectedFormats,
-      BrandKitName: this.SelectedBrandKit?.Name ?? null,
-      QueryNames: this.SelectedQueries.map((q) => q.Name),
-    });
+    this.IsStarting = true;
+    this.StartError = null;
+    this.cdr.markForCheck();
 
-    this.ActiveConversationId = null;
-    this.StudioAppContext = BuildStudioAppContext({
-      ArchetypeID: this.SelectedArchetype.ID,
-      BrandKitID: this.SelectedBrandKit?.ID ?? null,
-      Formats: this.SelectedFormats,
-      DurationSeconds: this.DurationSeconds,
-      QueryIDs: this.SelectedQueries.map((q) => q.ID),
-    });
-    this.PendingMessage = message;
-    this.syncAppAndAgentContext();
-    this.cdr.detectChanges();
-    this.copilotPanel?.StartConversation(message);
+    try {
+      const message = ComposeStudioFirstMessage({
+        ArchetypeName: this.SelectedArchetype.Name,
+        Topic: this.Topic,
+        DurationSeconds: this.DurationSeconds,
+        Formats: this.SelectedFormats,
+        BrandKitName: this.SelectedBrandKit?.Name ?? null,
+        QueryNames: this.SelectedQueries.map((q) => q.Name),
+      });
+
+      this.ActiveConversationId = null;
+      this.StudioAppContext = BuildStudioAppContext({
+        ArchetypeID: this.SelectedArchetype.ID,
+        BrandKitID: this.SelectedBrandKit?.ID ?? null,
+        Formats: this.SelectedFormats,
+        DurationSeconds: this.DurationSeconds,
+        QueryIDs: this.SelectedQueries.map((q) => q.ID),
+      });
+      this.PendingMessage = message;
+      this.syncAppAndAgentContext();
+      this.cdr.detectChanges();
+
+      const started = (await this.copilotPanel?.StartConversation(message)) ?? false;
+      if (!started) {
+        this.StartError = "The copilot isn't ready yet.";
+      }
+    } finally {
+      this.IsStarting = false;
+      this.cdr.markForCheck();
+    }
   }
 
   public OnCopilotConversationCreated(event: VSCopilotConversationCreatedEvent): void {

@@ -104,15 +104,26 @@ export class VSCopilotPanelComponent
   /**
    * Starts a brand-new conversation in the underlying `<mj-conversation-chat-area>`
    * by resetting into new-conversation mode and invoking `OnEmptyStateMessageSent`.
+   * Returns `false` when the message is empty or the copilot chat area / agent is not ready.
    */
-  public StartConversation(message: string): void {
+  public async StartConversation(message: string): Promise<boolean> {
     const trimmed = (message ?? '').trim();
-    if (!trimmed) {
-      return;
+    if (
+      !trimmed ||
+      this.IsResolvingAgent ||
+      this.AgentMissing ||
+      !this.VideoStudioAgentId ||
+      !this.chatArea
+    ) {
+      return false;
     }
     this.ConversationId = null;
     this.cdr.detectChanges();
-    void this.chatArea?.OnEmptyStateMessageSent({ text: trimmed, attachments: [] });
+    if (!this.chatArea) {
+      return false;
+    }
+    await this.chatArea.OnEmptyStateMessageSent({ text: trimmed, attachments: [] });
+    return true;
   }
 
   /**
