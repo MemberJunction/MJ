@@ -16,7 +16,7 @@ import { BuildActionToolSet, FilterDeclarableActions, SanitizeToolName } from '.
 import { BuildNativeToolSet, COMPLETE_TASK_TOOL, SUB_AGENT_TOOL_PREFIX, type NativeToolBinding } from './native-tools/control-tools';
 import { BuildAssistantToolCallTurn, BuildToolResultTurn, CompactToolResultContent, type NativeToolResult } from './native-tools/tool-result-turns';
 import { LooksLikeLoopEnvelope } from './native-tools/dual-channel';
-import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptEntityExtended, MJAIAgentEntityExtended, MJAIModelEntityExtended, MJAIPromptRunEntityExtended, ResolvePromptRunUserID } from "@memberjunction/ai-core-plus";
+import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptEntityExtended, MJAIAgentEntityExtended, MJAIModelEntityExtended, MJAIPromptRunEntityExtended, ResolvePromptRunUserID, ResolvePayloadAtEnd } from "@memberjunction/ai-core-plus";
 import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled, IMetadataProvider, DatabaseProviderBase, ToPlainJSON } from '@memberjunction/core';
 import { AgentRunWatchdog } from './agent-run-watchdog';
 import { AIPromptRunner, GetToolCallingDecision, AIDecisionRunResult } from '@memberjunction/ai-prompts';
@@ -25,7 +25,7 @@ import { BaseAgentType } from './agent-types/base-agent-type';
 import { ProviderRubricEngine } from '@memberjunction/rubrics';
 import { ExecuteSelfCheck, PickSelfCheckLink, type SelfCheckLink, type SelfCheckLinkRow } from './self-check';
 import { LoopAgentTypePromptParams } from './agent-types/loop-agent-prompt-params';
-import { CopyScalarsAndArrays, JSONValidator, MJGlobal, NormalizeUUID, SafeExpressionEvaluator, UUIDsEqual, EscapeSQLString, IsPlainObject, CleanAndParseJSON, IsValidUUID } from '@memberjunction/global';
+import { CopyScalarsAndArrays, JSONValidator, MJGlobal, NormalizeUUID, SafeExpressionEvaluator, UUIDsEqual, EscapeSQLString, IsPlainObject, CleanAndParseJSON, IsValidUUID, IndexByUUID } from '@memberjunction/global';
 // token optimization via @memberjunction/context-crush (SmartCrusher/CacheAligner-inspired)
 import { CrushJSON, DescribeCrush, PartitionStablePrefix, type JsonValue } from '@memberjunction/context-crush';
 // AST-aware code reduction (CodeCompressor-inspired) — opt-in per agent type
@@ -1803,6 +1803,12 @@ export class BaseAgent {
      * prompt execution occurred after them.
      */
     private _promptTurnCount: number = 0;
+
+    /**
+     * Tracks non-volatile ChatMessage instances already recorded in an earlier Prompt step's InputData
+     * during the current run so subsequent Prompt steps record only the per-turn message delta.
+     */
+    private _recordedPromptMessages: WeakSet<ChatMessage> | null = null;
 
     /**
      * Per-run config for structurally compressing inline action-result payloads.
@@ -5876,12 +5882,12 @@ export class BaseAgent {
      * fragment belongs on this request:
      *
      * - `'trailing'` — the template carries the `<mj-runtime-state>` pointer, so the model is told where
-     *   the state lives. The Loop agent system prompt.
+     *   the state lives. The Loop and Flow agent system prompts.
      * - `'embedded'` — the template still renders the state blocks itself (an environment whose
-     *   TemplateContent has not synced the new Loop template, or the Flow template, which embeds the
+     *   TemplateContent has not synced the new system template, or a custom template that embeds the
      *   payload). Emitting the fragment would deliver the same state twice.
      * - `'unsupported'` — the template has neither. The Harness system prompt, or a custom prompt run
-     *   without the Loop system prompt. The model would receive an unexplained block.
+     *   without a system prompt carrying the pointer. The model would receive an unexplained block.
      * - `'unknown'` — no template text to inspect (no TemplateID, or the lookup failed). The caller
      *   fails OPEN here: a Loop agent losing its payload from the model's view is far worse than a
      *   non-Loop agent receiving an unexplained fragment, and in practice every agent type's system
@@ -8307,11 +8313,31 @@ The context is now within limits. Please retry your request with the recovered c
         if (prompts.length === 0) {
             return null;
         }
+        const firstStack = BaseAgent.readPromptStepStack(prompts[0]);
+        if (!firstStack?.length) {
+            return null;
+        }
         const lastPrompt = prompts[prompts.length - 1];
-        const loopTurns = BaseAgent.ExtractStoppedRunLoopTurns(
-            BaseAgent.readPromptStepStack(prompts[0]),
-            BaseAgent.readPromptStepStack(lastPrompt)
-        );
+        let loopTurns: AgentChatMessage[] | null;
+        if (prompts.length > 1 && BaseAgent.isPromptStepDelta(lastPrompt)) {
+            loopTurns = [];
+            for (let i = 1; i < prompts.length; i++) {
+                const delta = BaseAgent.readPromptStepStack(prompts[i]);
+                if (!delta) {
+                    return null;
+                }
+                for (const m of delta) {
+                    if (m.metadata?.volatileState !== true) {
+                        loopTurns.push(m);
+                    }
+                }
+            }
+        } else {
+            loopTurns = BaseAgent.ExtractStoppedRunLoopTurns(
+                firstStack,
+                BaseAgent.readPromptStepStack(lastPrompt)
+            );
+        }
         if (!loopTurns) {
             return null;
         }
@@ -8462,6 +8488,16 @@ The context is now within limits. Please retry your request with the recovered c
             return Array.isArray(input.conversationMessages) ? input.conversationMessages : null;
         } catch {
             return null;
+        }
+    }
+
+    /** True when a prompt step recorded only the per-turn message delta instead of the full history stack. @private */
+    private static isPromptStepDelta(step: StoppedRunStackStepRecord): boolean {
+        try {
+            const input: { conversationMessagesDelta?: boolean } = step.InputData ? JSON.parse(step.InputData) : {};
+            return input.conversationMessagesDelta === true;
+        } catch {
+            return false;
         }
     }
 
@@ -12633,6 +12669,7 @@ The context is now within limits. Please retry your request with the recovered c
         
         // Reset prompt turn counter for this execution
         this._promptTurnCount = 0;
+        this._recordedPromptMessages = null;
         this._heldDecisions = undefined;
 
         // Resolve action-result compression config for this run (default on; opt out via
@@ -12975,9 +13012,11 @@ The context is now within limits. Please retry your request with the recovered c
         if (params.targetId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(params.targetId)) {
             console.warn(`Invalid target ID format: ${params.targetId}`);
         }
-        // A start payload that repeats an earlier step's end is stored as a pointer to that step.
+        // A start or end payload that repeats an earlier step's end is stored as a pointer to that step.
         const payloadAtStart = this.serializePayloadAtStart(params.payloadAtStart);
         const payloadAtStartSource = this.findPayloadAtStartSource(payloadAtStart);
+        const payloadAtEnd = this.serializePayloadAtEnd(params.payloadAtEnd);
+        const payloadAtEndSource = this.findPayloadAtEndSource(payloadAtEnd);
         // Populate the started fields via the shared single-source-of-truth helper. Instance-specific
         // concerns (hierarchy breadcrumb, InputData context, payload serialization) are computed here.
         initAgentRunStep(stepEntity, {
@@ -12990,7 +13029,8 @@ The context is now within limits. Please retry your request with the recovered c
             ParentID: params.parentId,  // Link to parent step (e.g., loop step)
             PayloadAtStart: payloadAtStartSource ? null : payloadAtStart,
             PayloadAtStartSourceStepID: payloadAtStartSource?.ID ?? null,
-            PayloadAtEnd: this.serializePayloadAtEnd(params.payloadAtEnd),
+            PayloadAtEnd: payloadAtEndSource ? null : payloadAtEnd,
+            PayloadAtEndSourceStepID: payloadAtEndSource?.ID ?? null,
             InputData: params.inputData
                 ? JSON.stringify({
                       ...params.inputData,
@@ -13066,9 +13106,10 @@ The context is now within limits. Please retry your request with the recovered c
      * pointer to it (`PayloadAtStartSourceStepID`) instead of a second copy. Call it before the new step
      * is added to the run's `Steps`.
      *
-     * The candidate is the latest step in the run that is not `Running` and has a `PayloadAtEnd`. Only that
-     * step is compared, with `===` on its in-memory `PayloadAtEnd`. Otherwise the start payload is stored;
-     * no older step is compared.
+     * The candidate is the latest step in the run that is not `Running` and has a `PayloadAtEnd` (or
+     * `PayloadAtEndSourceStepID`). Only that step is compared. If that step itself points to an earlier
+     * step via `PayloadAtEndSourceStepID`, the pointer resolves in one hop to the step that actually
+     * holds the stored `PayloadAtEnd`.
      * - Running steps are skipped because their end can still change: parallel sub-agent siblings write
      *   their own result as `PayloadAtEnd` when they finish, and a ForEach step writes its end after all
      *   of its child steps.
@@ -13088,28 +13129,80 @@ The context is now within limits. Please retry your request with the recovered c
      * @returns The step to point at, or undefined when the start payload must be stored.
      */
     private findPayloadAtStartSource(serializedStart: string | null): MJAIAgentRunStepEntityExtended | undefined {
-        if (serializedStart == null) {
+        return this.findPayloadEndSourceBefore(serializedStart);
+    }
+
+    /**
+     * Finds the earlier step whose stored `PayloadAtEnd` this step's end payload repeats, so the step
+     * stores a one-hop pointer (`PayloadAtEndSourceStepID`) instead of a second copy.
+     */
+    private findPayloadAtEndSource(
+        serializedEnd: string | null,
+        beforeStep?: MJAIAgentRunStepEntityExtended
+    ): MJAIAgentRunStepEntityExtended | undefined {
+        return this.findPayloadEndSourceBefore(serializedEnd, beforeStep);
+    }
+
+    private findPayloadEndSourceBefore(
+        serializedPayload: string | null,
+        beforeStep?: MJAIAgentRunStepEntityExtended
+    ): MJAIAgentRunStepEntityExtended | undefined {
+        if (serializedPayload == null) {
             return undefined;
         }
         const steps = this._agentRun?.Steps ?? [];
-        for (let i = steps.length - 1; i >= 0; i--) {
+        let startIdx = steps.length - 1;
+        if (beforeStep) {
+            const foundIdx = steps.indexOf(beforeStep);
+            if (foundIdx >= 0) {
+                startIdx = foundIdx - 1;
+            }
+        }
+        // When beforeStep is provided (findPayloadAtEndSource during finalizeStepEntity), the
+        // source step must already be IsSaved because finalizeStepEntity queues an UPDATE rather
+        // than an INSERT with prerequisite chaining. When beforeStep is omitted (findPayloadAtStartSource
+        // during createStepEntity), an in-flight source step is allowed because createStepEntity chains
+        // the new step's INSERT after the source step on _stepSaveQueue.
+        const requireSavedSource = beforeStep != null;
+        for (let i = startIdx; i >= 0; i--) {
             const step = steps[i];
-            if (step.Status !== 'Running' && step.PayloadAtEnd != null) {
-                return step.PayloadAtEnd === serializedStart ? step : undefined;
+            if (step.Status !== 'Running' && (step.PayloadAtEnd != null || step.PayloadAtEndSourceStepID != null)) {
+                if (requireSavedSource && !step.IsSaved) {
+                    return undefined;
+                }
+                const source = step.PayloadAtEndSourceStepID
+                    ? steps.find(s => UUIDsEqual(s.ID, step.PayloadAtEndSourceStepID))
+                    : step;
+                if (!source) {
+                    return undefined;
+                }
+                if (requireSavedSource && !source.IsSaved) {
+                    return undefined;
+                }
+                return source.PayloadAtEnd === serializedPayload ? source : undefined;
             }
         }
         return undefined;
     }
 
     /**
-     * Finalizes a step entity with completion status.
-     * 
-     * @private
-     * @param {MJAIAgentRunStepEntityExtended} stepEntity - The step entity to finalize
-     * @param {boolean} success - Whether the step was successful
-     * @param {string} [errorMessage] - Optional error message
-     * @param {any} [outputData] - Optional output data to capture for this step
+     * Resolves a step's end payload from its own `PayloadAtEnd` or the step referenced by
+     * `PayloadAtEndSourceStepID`.
      */
+    private resolveStepPayloadAtEnd(step: MJAIAgentRunStepEntityExtended | undefined): string | null {
+        if (!step) {
+            return null;
+        }
+        if (step.PayloadAtEnd != null) {
+            return step.PayloadAtEnd;
+        }
+        if (step.PayloadAtEndSourceStepID) {
+            const source = this._agentRun?.Steps?.find(s => UUIDsEqual(s.ID, step.PayloadAtEndSourceStepID));
+            return source?.PayloadAtEnd ?? null;
+        }
+        return null;
+    }
+
     /**
      * Builds a summary of payload change results for storage
      * @param changeResult The result from PayloadManager operations
@@ -13155,6 +13248,47 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
+     * Captures the conversation messages for a `Prompt` step's `InputData` without
+     * persisting volatile `<mj-runtime-state>` envelopes or repeating messages already
+     * recorded in an earlier `Prompt` step of the current run.
+     *
+     * - First `Prompt` step of the run: stores all non-volatile initial messages.
+     * - Subsequent `Prompt` steps of the run: stores only the newly appended non-volatile
+     *   messages since the previous `Prompt` step, tagged with `conversationMessagesDelta: true`.
+     */
+    private capturePromptStepMessages(
+        messages: ChatMessage[] | undefined
+    ): { conversationMessages: ChatMessage[]; conversationMessagesDelta?: true } {
+        if (!messages || messages.length === 0) {
+            if (this._recordedPromptMessages === null) {
+                this._recordedPromptMessages = new WeakSet<ChatMessage>();
+                return { conversationMessages: [] };
+            }
+            return { conversationMessages: [], conversationMessagesDelta: true };
+        }
+
+        const nonVolatile = messages.filter(m => (m as AgentChatMessage)?.metadata?.volatileState !== true);
+
+        if (this._recordedPromptMessages === null) {
+            this._recordedPromptMessages = new WeakSet<ChatMessage>();
+            for (let i = 0; i < nonVolatile.length; i++) {
+                this._recordedPromptMessages.add(nonVolatile[i]);
+            }
+            return { conversationMessages: nonVolatile };
+        }
+
+        const delta: ChatMessage[] = [];
+        for (let i = 0; i < nonVolatile.length; i++) {
+            const msg = nonVolatile[i];
+            if (!this._recordedPromptMessages.has(msg)) {
+                this._recordedPromptMessages.add(msg);
+                delta.push(msg);
+            }
+        }
+        return { conversationMessages: delta, conversationMessagesDelta: true };
+    }
+
+    /**
      * Finalizes a step entity with completion status. Pairs with `createStepEntity`
      * — drivers that create custom steps should also finalize them through this
      * method so `Status`/`CompletedAt`/`Success`/`ErrorMessage`/`OutputData` are
@@ -13180,9 +13314,20 @@ The context is now within limits. Please retry your request with the recovered c
                 // reload could leave it null on a fast step.
                 targetLogID: stepEntity.TargetLogID ?? undefined
             };
+            // Deduplicate PayloadAtEnd against the latest earlier finished, saved step when unchanged.
+            if (stepEntity.PayloadAtEnd != null) {
+                const endSource = this.findPayloadAtEndSource(stepEntity.PayloadAtEnd, stepEntity);
+                if (endSource) {
+                    stepEntity.PayloadAtEnd = null;
+                    stepEntity.PayloadAtEndSourceStepID = endSource.ID;
+                } else {
+                    stepEntity.PayloadAtEndSourceStepID = null;
+                }
+            }
             // Capture the end the step finished with for the same reason: a later step may point at this
             // step after comparing this end, so the saved row must end with it.
             const payloadAtEnd = stepEntity.PayloadAtEnd;
+            const payloadAtEndSourceStepID = stepEntity.PayloadAtEndSourceStepID ?? null;
 
             // Apply to the in-memory entity NOW so the run's Steps array / UI see the terminal state
             // immediately. This in-memory copy can be reverted by the INSERT's post-save reload if the step
@@ -13196,6 +13341,7 @@ The context is now within limits. Please retry your request with the recovered c
             this.queueStepSave(stepEntity, (s) => {
                 finalizeAgentRunStep(s, finalizeOpts);
                 s.PayloadAtEnd = payloadAtEnd;
+                s.PayloadAtEndSourceStepID = payloadAtEndSourceStepID;
             });
         }
         catch (e) {
@@ -13668,7 +13814,7 @@ The context is now within limits. Please retry your request with the recovered c
                 reason: previousDecision.retryReason,
                 instructions: previousDecision.retryInstructions
             } : undefined,
-            conversationMessages: params.conversationMessages,
+            ...this.capturePromptStepMessages(params.conversationMessages),
             ...(scratchpadSnapshotBeforeStep && { scratchpad: scratchpadSnapshotBeforeStep }),
         };
         
@@ -14068,11 +14214,13 @@ The context is now within limits. Please retry your request with the recovered c
             // in this case, we have a failed prompt execution. In this situation, let's make sure our payload at end isn't adjusted as
             // that affects downstream things in the agent run
             // Preserve payload on error
-            const payload = stepEntity.PayloadAtEnd
-                ? JSON.parse(stepEntity.PayloadAtEnd)
+            const existingEnd = this.resolveStepPayloadAtEnd(stepEntity);
+            const payload = existingEnd
+                ? JSON.parse(existingEnd)
                 : (previousDecision?.newPayload || params.payload);
 
             stepEntity.PayloadAtEnd = this.serializePayloadAtEnd(payload);
+            stepEntity.PayloadAtEndSourceStepID = null;
 
             // we had an error, don't throw the exception as that will kill our overall execution/run
             // instead return a helpful message in our return value that the parent loop can review and adjust
@@ -14284,7 +14432,6 @@ The context is now within limits. Please retry your request with the recovered c
             subAgentName: subAgentRequest.name,
             message: subAgentRequest.message,
             terminateAfter: subAgentRequest.terminateAfter,
-            conversationMessages: params.conversationMessages,
             parentAgentHierarchy: this._agentHierarchy
         };
         
@@ -14591,11 +14738,13 @@ The context is now within limits. Please retry your request with the recovered c
             };            
         } catch (error) {
             // Preserve payload on error
-            const payload = stepEntity.PayloadAtEnd
-                ? JSON.parse(stepEntity.PayloadAtEnd)
+            const existingEnd = this.resolveStepPayloadAtEnd(stepEntity);
+            const payload = existingEnd
+                ? JSON.parse(existingEnd)
                 : (previousDecision?.newPayload || params.payload);
 
             stepEntity.PayloadAtEnd = this.serializePayloadAtEnd(payload);
+            stepEntity.PayloadAtEndSourceStepID = null;
             await this.finalizeStepEntity(stepEntity, false, error.message);
 
             // we had an error, don't throw the exception as that will kill our overall execution/run
@@ -15058,7 +15207,6 @@ The context is now within limits. Please retry your request with the recovered c
                 subAgentName: request.name,
                 message: request.message,
                 terminateAfter: request.terminateAfter,
-                conversationMessages: params.conversationMessages,
                 parentAgentHierarchy: this._agentHierarchy,
                 relationshipType: relationship ? 'related' : 'child'
             },
@@ -15308,7 +15456,6 @@ The context is now within limits. Please retry your request with the recovered c
             subAgentName: subAgentRequest.name,
             message: subAgentRequest.message,
             terminateAfter: subAgentRequest.terminateAfter,
-            conversationMessages: params.conversationMessages,
             parentAgentHierarchy: this._agentHierarchy,
             relationshipType: 'related'
         };
@@ -15550,11 +15697,13 @@ The context is now within limits. Please retry your request with the recovered c
             };
         } catch (error) {
             // Preserve payload on error
-            const payload = stepEntity.PayloadAtEnd
-                ? JSON.parse(stepEntity.PayloadAtEnd)
+            const existingEnd = this.resolveStepPayloadAtEnd(stepEntity);
+            const payload = existingEnd
+                ? JSON.parse(existingEnd)
                 : (previousDecision?.newPayload || params.payload);
 
             stepEntity.PayloadAtEnd = this.serializePayloadAtEnd(payload);
+            stepEntity.PayloadAtEndSourceStepID = null;
             await this.finalizeStepEntity(stepEntity, false, error.message);
 
             return {
@@ -16168,10 +16317,17 @@ The context is now within limits. Please retry your request with the recovered c
                     
                     finalPayload = changeResult.result;
                     if (lastStep) {
-                        const payloadAtEnd = this.serializePayloadAtEnd(finalPayload);
+                        const serializedEnd = this.serializePayloadAtEnd(finalPayload);
+                        const endSource = this.findPayloadAtEndSource(serializedEnd, lastStep);
+                        const payloadAtEnd = endSource ? null : serializedEnd;
+                        const payloadAtEndSourceStepId = endSource ? endSource.ID : null;
                         lastStep.PayloadAtEnd = payloadAtEnd;
+                        lastStep.PayloadAtEndSourceStepID = payloadAtEndSourceStepId;
                         // Queued behind the step's earlier saves, so the saved row ends with this end.
-                        this.queueStepSave(lastStep, (s) => { s.PayloadAtEnd = payloadAtEnd; });
+                        this.queueStepSave(lastStep, (s) => {
+                            s.PayloadAtEnd = payloadAtEnd;
+                            s.PayloadAtEndSourceStepID = payloadAtEndSourceStepId;
+                        });
                     }
                     
                     if (changeResult.warnings.length > 0 && (params.verbose === true || IsVerboseLoggingEnabled())) {
@@ -18593,13 +18749,49 @@ The context is now within limits. Please retry your request with the recovered c
      * string, or null when no step has. Steps are examined from the highest `StepNumber` down
      * (array order is spawn order, which a sub-step can interleave).
      */
-    public static LastStepPayload(steps: ReadonlyArray<{ StepNumber: number; PayloadAtEnd: string | null }> | null | undefined): string | null {
+    public static LastStepPayload(
+        steps: ReadonlyArray<{
+            ID?: string;
+            StepNumber: number;
+            PayloadAtStart?: string | null;
+            PayloadAtEnd: string | null;
+            PayloadAtStartSourceStepID?: string | null;
+            PayloadAtEndSourceStepID?: string | null;
+        }> | null | undefined
+    ): string | null {
         if (!steps || steps.length === 0) {
             return null;
         }
         const ordered = [...steps].sort((a, b) => (b.StepNumber ?? 0) - (a.StepNumber ?? 0));
-        const withPayload = ordered.find(s => typeof s.PayloadAtEnd === 'string' && s.PayloadAtEnd.length > 0);
-        return withPayload?.PayloadAtEnd ?? null;
+        for (const s of ordered) {
+            if (typeof s.PayloadAtEnd === 'string' && s.PayloadAtEnd.length > 0) {
+                return s.PayloadAtEnd;
+            }
+            if (s.PayloadAtEndSourceStepID && s.ID) {
+                const stepsWithIds = steps.filter((item): item is {
+                    ID: string;
+                    StepNumber: number;
+                    PayloadAtStart: string | null;
+                    PayloadAtEnd: string | null;
+                    PayloadAtStartSourceStepID: string | null;
+                    PayloadAtEndSourceStepID: string | null;
+                } => typeof item.ID === 'string' && item.ID.length > 0);
+                const resolved = ResolvePayloadAtEnd(
+                    s as {
+                        ID: string;
+                        PayloadAtStart: string | null;
+                        PayloadAtEnd: string | null;
+                        PayloadAtStartSourceStepID: string | null;
+                        PayloadAtEndSourceStepID: string | null;
+                    },
+                    IndexByUUID(stepsWithIds)
+                );
+                if (typeof resolved === 'string' && resolved.length > 0) {
+                    return resolved;
+                }
+            }
+        }
+        return null;
     }
 
     /**

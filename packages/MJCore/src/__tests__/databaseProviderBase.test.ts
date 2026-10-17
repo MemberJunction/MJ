@@ -584,4 +584,110 @@ describe('DatabaseProviderBase', () => {
             expect(result.validationErrors).toHaveLength(1);
         });
     });
+
+    describe("SaveReturnMode ('datestamps_only' vs 'full')", () => {
+        const mockUser = new UserInfo(null, { ID: 'u-1', Name: 'Test' });
+
+        it('merges returned PK and datestamps onto entity.GetAll() when SaveReturnMode is datestamps_only', async () => {
+            const createdAt = new Date('2026-04-17T00:00:00.000Z');
+            const updatedAt = new Date('2026-04-17T00:01:00.000Z');
+            vi.spyOn(sqlServer, 'ExecuteSQL').mockResolvedValue([
+                { ID: 'db-generated-id', __mj_CreatedAt: createdAt, __mj_UpdatedAt: updatedAt } as never,
+            ]);
+
+            const entityInfo = new EntityInfo({
+                ID: 'e-step',
+                Name: 'MJ: AI Agent Run Steps',
+                SchemaName: '__mj',
+                BaseTable: 'AIAgentRunStep',
+                BaseView: 'vwAIAgentRunSteps',
+                AllowCreateAPI: true,
+                AllowUpdateAPI: true,
+                TrackRecordChanges: false,
+                Configuration: JSON.stringify({ SaveReturnMode: 'datestamps_only' }),
+                EntityFields: [
+                    { ID: 'f1', EntityID: 'e-step', Name: 'ID', CodeName: 'ID', Type: 'uniqueidentifier', IsPrimaryKey: true, IsVirtual: false },
+                    { ID: 'f2', EntityID: 'e-step', Name: 'InputData', CodeName: 'InputData', Type: 'nvarchar', IsPrimaryKey: false, IsVirtual: false },
+                    { ID: 'f3', EntityID: 'e-step', Name: 'Status', CodeName: 'Status', Type: 'nvarchar', IsPrimaryKey: false, IsVirtual: false },
+                    { ID: 'f4', EntityID: 'e-step', Name: '__mj_CreatedAt', CodeName: '__mj_CreatedAt', Type: 'datetimeoffset', IsPrimaryKey: false, IsVirtual: false },
+                    { ID: 'f5', EntityID: 'e-step', Name: '__mj_UpdatedAt', CodeName: '__mj_UpdatedAt', Type: 'datetimeoffset', IsPrimaryKey: false, IsVirtual: false },
+                ],
+            });
+
+            const mockEntity = {
+                EntityInfo: entityInfo,
+                IsSaved: false,
+                Dirty: true,
+                Fields: [],
+                ResultHistory: [],
+                RegisterResultHistoryEntry: vi.fn(),
+                PrimaryKeys: [{ Name: 'ID', Value: 'caller-id' }],
+                TransactionGroup: null,
+                RegisterTransactionPreprocessing: vi.fn(),
+                GetAll: () => ({ ID: 'caller-id', InputData: '{"large":"payload"}', Status: 'Running' }),
+                Get: () => 'caller-id',
+                RaiseReadyForTransaction: vi.fn(),
+            } as unknown as BaseEntity;
+
+            const savedRow = await sqlServer.Save(mockEntity, mockUser, new EntitySaveOptions());
+            expect(savedRow).toEqual({
+                ID: 'db-generated-id',
+                InputData: '{"large":"payload"}',
+                Status: 'Running',
+                __mj_CreatedAt: createdAt,
+                __mj_UpdatedAt: updatedAt,
+            });
+        });
+
+        it('supports per-save EntitySaveOptions.SaveReturnMode override on a default (full) entity', async () => {
+            const createdAt = new Date('2026-04-17T02:00:00.000Z');
+            const updatedAt = new Date('2026-04-17T02:05:00.000Z');
+            vi.spyOn(sqlServer, 'ExecuteSQL').mockResolvedValue([
+                { ID: 'row-123', __mj_CreatedAt: createdAt, __mj_UpdatedAt: updatedAt } as never,
+            ]);
+
+            const entityInfo = new EntityInfo({
+                ID: 'e-full',
+                Name: 'Regular Entity',
+                SchemaName: '__mj',
+                BaseTable: 'RegularEntity',
+                BaseView: 'vwRegularEntities',
+                AllowCreateAPI: true,
+                AllowUpdateAPI: true,
+                TrackRecordChanges: false,
+                EntityFields: [
+                    { ID: 'f1', EntityID: 'e-full', Name: 'ID', CodeName: 'ID', Type: 'uniqueidentifier', IsPrimaryKey: true, IsVirtual: false },
+                    { ID: 'f2', EntityID: 'e-full', Name: 'Title', CodeName: 'Title', Type: 'nvarchar', IsPrimaryKey: false, IsVirtual: false },
+                    { ID: 'f3', EntityID: 'e-full', Name: '__mj_CreatedAt', CodeName: '__mj_CreatedAt', Type: 'datetimeoffset', IsPrimaryKey: false, IsVirtual: false },
+                    { ID: 'f4', EntityID: 'e-full', Name: '__mj_UpdatedAt', CodeName: '__mj_UpdatedAt', Type: 'datetimeoffset', IsPrimaryKey: false, IsVirtual: false },
+                ],
+            });
+
+            const mockEntity = {
+                EntityInfo: entityInfo,
+                IsSaved: true,
+                Dirty: true,
+                Fields: [],
+                ResultHistory: [],
+                RegisterResultHistoryEntry: vi.fn(),
+                PrimaryKeys: [{ Name: 'ID', Value: 'row-123' }],
+                TransactionGroup: null,
+                RegisterTransactionPreprocessing: vi.fn(),
+                GetAll: () => ({ ID: 'row-123', Title: 'Updated In Memory' }),
+                Get: () => 'row-123',
+                RaiseReadyForTransaction: vi.fn(),
+            } as unknown as BaseEntity;
+
+            const opts = new EntitySaveOptions();
+            opts.SaveReturnMode = 'datestamps_only';
+            const savedRow = await sqlServer.Save(mockEntity, mockUser, opts);
+            expect(savedRow).toEqual({
+                ID: 'row-123',
+                Title: 'Updated In Memory',
+                __mj_CreatedAt: createdAt,
+                __mj_UpdatedAt: updatedAt,
+            });
+        });
+    });
 });
+

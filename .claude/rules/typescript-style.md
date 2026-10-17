@@ -146,7 +146,7 @@ const entity = await md.GetEntityObject<AIModelEntity>('AI Models');
       }
   }
   ```
-- **Known weak singletons** that need migration: ~26 classes across the codebase including `GraphQLDataProvider`, `UserCache`, `StartupManager`, `RunQuerySQLFilterManager`, `QueueManager`, `SQLExpressionValidator`, `WarningManager`, `AuthProviderFactory`, `MCPClientManager`, `AgentDataPreloader`, and Angular/React services. See GitHub issue tracking this migration.
+- **When a class cannot extend `BaseSingleton<T>`** (e.g. `GraphQLDataProvider extends ProviderBase`, Angular `@Injectable()` services with DI constructor args, or classes whose constructor takes required arguments): back `Instance` with `GetGlobalObjectStore()` from `@memberjunction/global` under `private static readonly _globalStoreKey = '___SINGLETON__ClassName'` instead of a `private static _instance` field.
 
 ## 🚨 NO DYNAMIC `import()` UNLESS NARROWLY JUSTIFIED
 
