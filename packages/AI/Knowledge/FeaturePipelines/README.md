@@ -118,6 +118,30 @@ same value, reasoning and confidence is left untouched (`Unchanged`), a changed 
 inserted (`Upserted`). The previous values of an updated row are in Record Changes. The outcome's `Previous` holds each
 feature's latest `Source='Pipeline'` value before the call, on any key. Every key part is a required parameter.
 
+## Outputs without a write target
+
+An output may omit `Target`. Use this when the answer is a feature to keep and read later (a score, a label, a
+summary) rather than a value to write onto the record. `OutputTargets.HasWriteTarget(output)` is the single check for
+"does this output write anywhere".
+
+- **Stored:** every output, with or without a target, is recorded in `MJ: Feature Values` on the record's key
+  (value, `Source='Pipeline'`, confidence, reasoning, pipeline version). A target-less output is stored there and nowhere else:
+  nothing is written to the entity, and the Human-value guard does not apply. A pipeline whose outputs are all
+  target-less still reports `Upserted` or `Unchanged` per record from those Feature Values.
+- **Visible:** the Feature Values panel on every record form (latest value per pipeline and feature, with Source,
+  Confidence, version, Computed, Reasoning and history), and the Bulk Operations dry-run dialog.
+- **Validator rules:** `ValidateSpec` accepts an output without `Target` but reports an error for the two constraints
+  that need a field to resolve:
+  - an `enum` constraint with `FromFieldMetadata: true` and no field target: list `Constraint.Values` or give the output a field target;
+  - a `lookup` constraint without `Entity` and no field target: set `Constraint.Entity` or give the output a field target.
+- **Dry run:** nothing is stored. The write-back result carries `previewFeatureValues` (`FeatureName`, `Previous`,
+  `Proposed`) for each target-less output whose proposed value differs from the record's latest stored Pipeline or
+  Human value, or that has none; a withheld output is omitted. The dialog shows each as a `<Feature> (feature value)` row.
+- **Coercion:** when an answer arrives as a string, `FeatureValueCacheService.ToTypedValue(value, constraintType)`
+  stores it by the output's constraint: `numeric` / `money` with a finite numeric string in `ValueNumeric`,
+  `boolean` with `'true'` / `'false'` (any case) in `ValueBoolean`, `date` with a string `Date.parse` accepts in
+  `ValueDate`. Anything else is stored by its JavaScript type. This applies to outputs with a target too.
+
 ## Dedup Cache scope
 
 Every cache call carries a `FeatureValueCacheScope`: the pipeline (or the whole prompt, `scope: 'prompt'`), the prompt,

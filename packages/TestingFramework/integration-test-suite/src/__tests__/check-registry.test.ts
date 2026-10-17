@@ -311,6 +311,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'entity-server-invariants': 9,
         'entity-writes': 10,
         'feature-pipeline-core': 7,
+        'feature-value-only': 5,
         'field-rules-bulk-update': 3,
         'fls-enforcement': 24,
         'fls-enforcement-client': 6,
@@ -409,7 +410,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(129);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(130);
     });
 });
 
@@ -539,6 +540,11 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'feature-pipeline-core.FP5',
         'feature-pipeline-core.FP6',
         'feature-pipeline-core.FP7',
+        'feature-value-only.FV1',
+        'feature-value-only.FV2',
+        'feature-value-only.FV3',
+        'feature-value-only.FV4',
+        'feature-value-only.FV5',
         'fls-lifecycle.LC1',
         'fls-lifecycle.LC2',
         'fls-lifecycle.LC3',

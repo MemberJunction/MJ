@@ -75,7 +75,7 @@ export class FeatureValuesPanelModel {
         return '';
     }
 
-    private static HasValue(row: FeatureValueRow): boolean {
+    private static hasValue(row: FeatureValueRow): boolean {
         return row.ValueNumeric != null || row.ValueBoolean != null || row.ValueDate != null
             || (row.ValueJSON != null && row.ValueJSON !== '') || row.ValueText != null;
     }
@@ -84,7 +84,7 @@ export class FeatureValuesPanelModel {
     public static Latest(rows: FeatureValueRow[]): FeatureValueCard[] {
         const best = new Map<string, FeatureValueRow>();
         for (const row of rows) {
-            if (!FeatureValuesPanelModel.HasValue(row)) continue;
+            if (!FeatureValuesPanelModel.hasValue(row)) continue;
             const key = keyOf(row.RecordProcessID, row.FeatureName);
             const current = best.get(key);
             if (!current || time(row) > time(current)) best.set(key, row);

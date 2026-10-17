@@ -245,6 +245,10 @@ the model, so its `MJ: AI Prompt Runs` are recorded and cost what a real run of 
 - Each record's `previewFields` / `previewChildren` / `previewTags` hold only what the real write would change, so the
   dialog's change count is what the following real run writes. Outputs withheld below their confidence floor are listed
   in `withheldFields` (and `withheldKeptFields` when the column does not allow null) and `withheldChildEntities`.
+- An output with no `Target` ("Feature value only") writes nothing to the record; its dry-run result is
+  `previewFeatureValues` (`FeatureName`, `Previous`, `Proposed`), listing the Feature Values a real run would store.
+  The dialog shows one `<Feature> (feature value)` row per item, counted as a change like any other row; a record
+  with no such rows counts as unchanged.
 
 ---
 
