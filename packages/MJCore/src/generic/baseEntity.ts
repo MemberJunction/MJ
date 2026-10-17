@@ -5566,7 +5566,7 @@ export abstract class BaseEntity<T = unknown> {
      *
      * 1. `StripDeniedReadFieldsFromClientInput` removes client-sent values for fields the caller
      *    cannot READ, which `SetMany` would otherwise make genuinely dirty with fabricated data.
-     * 2. `entityInfo.EnableFieldLevelSecurity` forces the truth-load branch, so the entity's
+     * 2. `entityInfo.FieldLevelSecurityApplies` forces the truth-load branch, so the entity's
      *    non-dirty baseline is the real stored row rather than the client's `OldValues___`.
      *
      * (2) is not redundant with (1). A value arriving through `LoadFromData` is recorded by the
@@ -5670,7 +5670,7 @@ export abstract class BaseEntity<T = unknown> {
      * the three cheap short-circuits in one place instead of repeated at each gate.
      */
     private deniedFieldsForActiveUser(select: (user: UserInfo) => Set<string>): Set<string> | null {
-        if (!this.EntityInfo?.EnableFieldLevelSecurity) {
+        if (!this.EntityInfo?.FieldLevelSecurityApplies) {
             return null; // one boolean for the overwhelming majority of entities
         }
         const u: UserInfo = this.resolveActiveUserOrNull();

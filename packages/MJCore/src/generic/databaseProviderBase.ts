@@ -1557,7 +1557,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
      * because there is nobody to check against.
      */
     protected CanUserReadRecordName(entity: EntityInfo, contextUser?: UserInfo): boolean {
-        if (!entity.EnableFieldLevelSecurity) {
+        if (!entity.FieldLevelSecurityApplies) {
             return true;
         }
         if (!contextUser) {
