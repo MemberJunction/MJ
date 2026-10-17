@@ -293,8 +293,13 @@ function guardMemberLookup(original: NunjucksRuntimeHooks['memberLookup']): Nunj
         if (RESTRICTED_MEMBER_NAMES.has(key) && !isOwnDataValue(obj, key)) {
             return undefined;
         }
-        assertAllowed(obj, `members of a restricted value (reading "${key}")`);
-        assertAllowed(readMember(obj, key), `the member "${key}"`);
+        if (RESTRICTED_VALUES.has(obj)) {
+            throw new TemplateSandboxError(`Templates may not access members of a restricted value (reading "${key}")`);
+        }
+        const memberVal = readMember(obj, key);
+        if (isRestrictedOrNunjucksValue(memberVal)) {
+            throw new TemplateSandboxError(`Templates may not access the member "${key}"`);
+        }
         return original(obj, key);
     };
 }
@@ -313,7 +318,9 @@ function guardContextOrFrameLookup(): NunjucksRuntimeHooks['contextOrFrameLookup
         if (value === undefined || (RESTRICTED_MEMBER_NAMES.has(name) && typeof value === 'function')) {
             return undefined;
         }
-        assertAllowed(value, `the name "${name}"`, context);
+        if (isRestrictedOrNunjucksValue(value, context)) {
+            throw new TemplateSandboxError(`Templates may not access the name "${name}"`);
+        }
         return value;
     };
 }
@@ -321,9 +328,13 @@ function guardContextOrFrameLookup(): NunjucksRuntimeHooks['contextOrFrameLookup
 /** A call such as `{{ fn(x) }}`. nunjucks passes the render context as `this`, so a call may not return it. */
 function guardCallWrap(original: NunjucksRuntimeHooks['callWrap']): NunjucksRuntimeHooks['callWrap'] {
     return (obj, name, context, args) => {
-        assertAllowed(obj, `the function "${name}"`, context);
+        if (isRestrictedOrNunjucksValue(obj, context)) {
+            throw new TemplateSandboxError(`Templates may not access the function "${name}"`);
+        }
         const result = original(obj, name, context, args);
-        assertAllowed(result, `the value returned by "${name}"`, context);
+        if (isRestrictedOrNunjucksValue(result, context)) {
+            throw new TemplateSandboxError(`Templates may not access the value returned by "${name}"`);
+        }
         return result;
     };
 }
@@ -359,7 +370,14 @@ function isNunjucksObject(value: unknown): boolean {
     if (typeof value !== 'object' || value === null) {
         return false;
     }
-    return NUNJUCKS_MODULES.has(value) || NUNJUCKS_OBJECT_PROTOTYPES.some((prototype) => prototype.isPrototypeOf(value));
+    if (NUNJUCKS_MODULES.has(value)) {
+        return true;
+    }
+    const proto = Object.getPrototypeOf(value);
+    if (proto === Object.prototype || proto === Array.prototype || proto === null) {
+        return false;
+    }
+    return NUNJUCKS_OBJECT_PROTOTYPES.some((prototype) => prototype.isPrototypeOf(value));
 }
 
 /** Reads a member the way a template does, including members of primitive strings and numbers. */
@@ -374,9 +392,10 @@ function pairKeyName(pair: unknown): string | undefined {
     return typeof value === 'string' ? value : undefined;
 }
 
-/** Throws when a lookup or call would give a template a restricted value, the render context or another nunjucks object. */
-function assertAllowed(value: unknown, subject: string, context?: NunjucksRenderContext): void {
-    if (RESTRICTED_VALUES.has(value) || isNunjucksObject(value) || (context !== undefined && value === context)) {
-        throw new TemplateSandboxError(`Templates may not access ${subject}`);
+/** Returns true when a lookup or call would give a template a restricted value, the render context or another nunjucks object. */
+function isRestrictedOrNunjucksValue(value: unknown, context?: NunjucksRenderContext): boolean {
+    if (value === null || (typeof value !== 'object' && typeof value !== 'function')) {
+        return false;
     }
+    return RESTRICTED_VALUES.has(value) || isNunjucksObject(value) || (context !== undefined && value === context);
 }

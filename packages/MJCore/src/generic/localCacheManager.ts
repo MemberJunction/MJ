@@ -2210,9 +2210,10 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         if (!this._storageProvider || !this._config.enabled) return;
 
         const key = this.buildDatasetKey(name, itemFilters, keyPrefix);
-        // Estimate size from a string representation (used only for cache eviction
-        // accounting; the actual stored value is the native object).
-        const sizeBytes = this.estimateSize(JSON.stringify(dataset));
+        // Estimate size by sampling item result arrays instead of stringifying the entire dataset
+        const sizeBytes = Array.isArray(dataset?.Results)
+            ? dataset.Results.reduce((sum, item) => sum + this.estimateResultsSize(item.Results), 128)
+            : 128;
 
         // Fourth write funnel, held to the same contract as SetRunViewResult /
         // SetRunQueryResult / storeCachedResults. `GetDataset` hands this object straight back
@@ -3973,18 +3974,24 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             runquery: { count: 0, sizeBytes: 0 }
         };
 
+        let totalSizeBytes = 0;
+        let oldestEntry = Infinity;
+        let newestEntry = 0;
+
         for (const entry of entries) {
             byType[entry.type].count++;
             byType[entry.type].sizeBytes += entry.sizeBytes;
+            totalSizeBytes += entry.sizeBytes;
+            if (entry.cachedAt < oldestEntry) oldestEntry = entry.cachedAt;
+            if (entry.cachedAt > newestEntry) newestEntry = entry.cachedAt;
         }
 
-        const timestamps = entries.map(e => e.cachedAt);
         return {
             totalEntries: entries.length,
-            totalSizeBytes: entries.reduce((sum, e) => sum + e.sizeBytes, 0),
+            totalSizeBytes,
             byType,
-            oldestEntry: timestamps.length ? Math.min(...timestamps) : 0,
-            newestEntry: timestamps.length ? Math.max(...timestamps) : 0,
+            oldestEntry: entries.length > 0 ? oldestEntry : 0,
+            newestEntry,
             hits: this._stats.hits,
             misses: this._stats.misses
         };
