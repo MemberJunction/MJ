@@ -1,0 +1,47 @@
+{
+  "name": "@memberjunction/ng-brand-kits",
+  "version": "6.2.0-edge.4",
+  "description": "MemberJunction Angular components for editing Brand Kit assets and AI generation policies.",
+  "main": "./dist/public-api.js",
+  "typings": "./dist/public-api.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "test": "vitest run",
+    "test:types": "tsc --noEmit -p tsconfig.spec.json",
+    "build": "ngc",
+    "test:watch": "vitest"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "BUSL-1.1",
+  "devDependencies": {
+    "@angular/compiler": "21.2.22",
+    "@angular/compiler-cli": "21.2.22",
+    "@memberjunction/ng-test-utils": "6.2.0-edge.4",
+    "vitest": "^4.0.18"
+  },
+  "peerDependencies": {
+    "@angular/common": "^21.2.22",
+    "@angular/core": "^21.2.22",
+    "@angular/forms": "^21.2.22"
+  },
+  "dependencies": {
+    "@memberjunction/core": "6.2.0-edge.4",
+    "@memberjunction/core-entities": "6.2.0-edge.4",
+    "@memberjunction/global": "6.2.0-edge.4",
+    "@memberjunction/graphql-dataprovider": "6.2.0-edge.4",
+    "@memberjunction/ng-base-types": "6.2.0-edge.4",
+    "@memberjunction/ng-file-storage": "6.2.0-edge.4",
+    "@memberjunction/ng-media-player": "6.2.0-edge.4",
+    "@memberjunction/ng-ui-components": "6.2.0-edge.4",
+    "tslib": "^2.8.1"
+  },
+  "sideEffects": false,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  },
+  "mjUILayer": "surface"
+}

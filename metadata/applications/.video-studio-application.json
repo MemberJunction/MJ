@@ -1,0 +1,42 @@
+[
+  {
+    "fields": {
+      "Name": "Video Studio",
+      "Description": "AI-powered video production studio with reusable brand kits, narrative archetypes, and multi-format rendering.",
+      "Icon": "fa-solid fa-film",
+      "DefaultSequence": 96,
+      "Color": "#7c3aed",
+      "Status": "Active",
+      "NavigationStyle": "Both",
+      "TopNavLocation": "Left of User Menu",
+      "AutoUpdateDefaultNavItems": true,
+      "DefaultNavItems": [
+        {
+          "Label": "Productions",
+          "Icon": "fa-solid fa-clapperboard",
+          "ResourceType": "Custom",
+          "DriverClass": "VideoStudioProductionsResource",
+          "isDefault": true,
+          "Description": "Production gallery with status, archetype, brand kit, and format filters."
+        },
+        {
+          "Label": "Brand Kits",
+          "Icon": "fa-solid fa-palette",
+          "ResourceType": "Custom",
+          "DriverClass": "VideoStudioBrandKitsResource",
+          "Description": "Brand visual identity, voice, assets, and AI generation policies."
+        },
+        {
+          "Label": "Archetypes",
+          "Icon": "fa-solid fa-film",
+          "ResourceType": "Custom",
+          "DriverClass": "VideoStudioArchetypesResource",
+          "Description": "Narrative video archetypes with beat templates and pacing profiles."
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "499C1083-C3EC-42D4-ABC4-EAE6F764BC56"
+    }
+  }
+]

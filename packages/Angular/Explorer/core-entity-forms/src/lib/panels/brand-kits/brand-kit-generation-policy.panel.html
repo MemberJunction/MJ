@@ -1,0 +1,15 @@
+<mj-collapsible-panel
+  SectionKey="brandKitGenerationPolicy"
+  [Order]="DisplayOrder"
+  SectionName="AI Generation Policy"
+  Icon="fa-solid fa-wand-magic-sparkles"
+  [Form]="FormComponent"
+  [FormContext]="FormContext">
+  <div class="mj-bkgpp-container">
+    <mj-brand-kit-generation-policy-editor
+      [BrandKit]="Record"
+      [Provider]="HostProvider"
+      [Readonly]="!EditMode">
+    </mj-brand-kit-generation-policy-editor>
+  </div>
+</mj-collapsible-panel>

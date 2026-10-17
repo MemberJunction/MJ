@@ -385,3 +385,14 @@ These three Knowledge Hub surfaces are **separate `BaseResourceComponent`s** (no
 > - **Visualize** (host) 🔒 only mode-switch + open-a-listed-record (view) + close-drilldown — **nothing mutates / deletes / re-tags**. The embedded Clusters child registers its own tools when standalone; here it's `Embedded`, so cluster recompute is reached through the child's UI, not duplicated on the host.
 > - **Analytics** 🔒 read-only reporting surface — CSV export is a local download of already-visible aggregate rows (no record bodies); RecomputeAnalyticsCoOccurrence only re-derives an aggregate table. **No content/tag/source/run mutation exists to gate.**
 > Each component carries a documented `🚨 SAFETY BOUNDARY` comment enumerating the exclusions.
+
+### Video Studio — Productions / Brand Kits / Archetypes (naturally-separate-surface pattern)
+
+The Video Studio app consists of three separate `BaseResourceComponent` nav items (`VideoStudioProductionsResource`, `VideoStudioBrandKitsResource`, `VideoStudioArchetypesResource`). Context is built by pure, vitest-tested helpers in [`src/VideoStudio/video-studio-agent-context.ts`](src/VideoStudio/video-studio-agent-context.ts) (`BuildProductionsAgentContext`, `BuildBrandKitsAgentContext`, `BuildArchetypesAgentContext`, `ResolveVideoStudioItem`, `CapVideoStudioNames`).
+
+| Surface | Context Fields | Notes |
+|---------|----------------|-------|
+| **Productions** | `view: 'productions'`, `totalCount`, `filteredCount`, `activeFilters` (searchText, status, brandKitId, companyId, dateFrom, dateTo), `selectedId`, `selectedName`, `selectedStatus`, `visibleNames` (capped at 25 + `visibleNamesTruncated`) | Queries `MJ: Artifacts` + `MJ: Artifact Version Attributes`, syncs `?production=<id>` via `UpdateQueryParams`/`OnQueryParamsChanged`, opens `<mj-artifact-viewer-panel>` in split pane |
+| **Brand Kits** | `view: 'brand-kits'`, `totalCount`, `filteredCount`, `activeFilters`, `selectedId`, `selectedName`, `visibleNames` (capped at 25) | Reads `BrandKitEngine.Instance.BrandKits` + `GetAssets(id)` |
+| **Archetypes** | `view: 'archetypes'`, `totalCount`, `filteredCount`, `activeFilters`, `selectedId`, `selectedName`, `selectedCategory`, `visibleNames` (capped at 25) | Reads `VideoStudioEngine.Instance.Archetypes`, groups by category, renders proportional beat timeline + inline slide-out |
+
