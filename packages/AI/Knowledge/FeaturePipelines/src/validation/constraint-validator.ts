@@ -226,6 +226,9 @@ function validateNumeric(
     if (isNaN(parsed)) {
       return applyPolicy(rawValue, policy, `String value '${rawValue}' cannot be parsed as a number.`);
     }
+    if (!Number.isFinite(parsed)) {
+      return applyPolicy(rawValue, policy, `String value '${rawValue}' cannot be parsed as a finite number.`);
+    }
     numVal = parsed;
   } else {
     return applyPolicy(rawValue, policy, `Expected numeric value, received ${typeof rawValue}.`);

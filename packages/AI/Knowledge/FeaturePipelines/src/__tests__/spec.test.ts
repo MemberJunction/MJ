@@ -10,6 +10,7 @@ import {
   ConstraintPromptTemplate,
 } from '../spec/data-feature-spec.js';
 import { ValidateOutputValue } from '../validation/constraint-validator.js';
+import { OutputTargets } from '../spec/output-target.js';
 import { SafeJSONParse } from '@memberjunction/global';
 
 /** A spec as a pipeline row's Configuration JSON yields it (malformed shapes go through the same parse as at run time). */
@@ -344,6 +345,12 @@ describe('validateOutputValue — runtime enforcement (P1-2)', () => {
     expect(coerceRes.valid).toBe(true);
     expect(coerceRes.value).toBe(42);
     expect(coerceRes.coerced).toBe(true);
+  });
+
+  it('rejects a numeric string that overflows to Infinity, even for a numeric column', () => {
+    const res = ValidateOutputValue('1e400', { Type: 'numeric', OnViolation: 'fail' }, { targetFieldTSType: 'number' });
+    expect(res.valid).toBe(false);
+    expect(res.violationMessage).toContain("String value '1e400' cannot be parsed as a finite number.");
   });
 
   it('enforces numeric bounds and integer constraint', () => {
@@ -991,6 +998,17 @@ describe('outputs without a write target', () => {
   });
   it('still runs the other per-output checks: numeric Min above Max', () => {
     expect(messages([{ Name: 'N', Ref: '$.N', Constraint: { Type: 'numeric', Min: 10, Max: 1, OnViolation: 'null' } }]).join('\n')).toMatch(/Min/);
+  });
+  it('treats a JSON "Target": null as no write target: no TypeError, validated as a feature-value-only output', () => {
+    const spec = parsedSpec({ ...specOf({ ...base, Outputs: [] }), Outputs: [
+      { Name: 'Years', Ref: '$.Years', Target: null, Constraint: { Type: 'numeric', Min: 0, Max: 60, OnViolation: 'null' } },
+      { Name: 'Kind', Ref: '$.Kind', Target: null, Constraint: { Type: 'enum', FromFieldMetadata: true, OnViolation: 'fail' } },
+    ] });
+    const issues = ValidateSpec(spec);
+    expect(issues.filter((i) => i.Severity === 'error').map((i) => i.Message)).toEqual([
+      "Output 'Kind' has no write target, so its enum constraint cannot read a field's value list: list Constraint.Values, or give the output a field target.",
+    ]);
+    expect(OutputTargets.HasWriteTarget(spec.Outputs[0])).toBe(false);
   });
   it('still runs the other per-output checks: enum with no Values', () => {
     expect(messages([{ Name: 'E', Ref: '$.E', Constraint: { Type: 'enum', OnViolation: 'fail' } }]).join('\n')).toMatch(/enum/i);

@@ -137,12 +137,17 @@ In the pipeline builder, choose the target mode `Feature value only (no write-ba
   - an `enum` constraint with `FromFieldMetadata: true` and no field target: list `Constraint.Values` or give the output a field target;
   - a `lookup` constraint without `Entity` and no field target: set `Constraint.Entity` or give the output a field target.
 - **Dry run:** nothing is stored. The write-back result carries `previewFeatureValues` (`FeatureName`, `Previous`,
-  `Proposed`) for each target-less output whose proposed value differs from the record's latest stored Pipeline or
-  Human value, or that has none; a withheld output is omitted. The dialog shows each as a `<Feature> (feature value)` row.
-- **Coercion:** when an answer arrives as a string, `FeatureValueCacheService.ToTypedValue(value, constraintType)`
-  stores it by the output's constraint: `numeric` / `money` with a trimmed decimal/exponent numeric string (no hex) in `ValueNumeric`,
-  `boolean` with `'true'` / `'false'` (any case) in `ValueBoolean`, `date` with an ISO date string (`YYYY-MM-DD…`) that `Date.parse` accepts in
-  `ValueDate`. Anything else is stored by its JavaScript type. This applies to outputs with a target too.
+  `Proposed`) for each target-less output whose proposed value differs from the record's latest stored Pipeline
+  value (the value a real run compares against for `Upserted` / `Unchanged`; a Human value is not consulted), or that
+  has none; a withheld output is omitted. The dialog shows each as a `<Feature> (feature value)` row.
+- **Coercion:** a string answer to a `numeric` / `money` or `boolean` constraint is checked as that type (the type the
+  constraint implies stands in for the missing column's TSType), so `'0.75'` passes as `0.75` and `'true'` as `true`; a
+  string that does not parse is a violation handled by `OnViolation`. When an answer still arrives as a string,
+  `FeatureValueCacheService.ToTypedValue(value, constraintType)` stores it by the output's constraint: `numeric` / `money`
+  with a trimmed, finite decimal/exponent numeric string (no hex; `'1e400'` stays text) in `ValueNumeric`, `boolean` with
+  `'true'` / `'false'` (any case) in `ValueBoolean`, `date` with an ISO date string (`YYYY-MM-DD…`) that `Date.parse`
+  accepts in `ValueDate`. Anything else is stored by its JavaScript type. This applies to outputs without a write target
+  only: an output with a target keeps its storage by JavaScript type.
 
 ## Dedup Cache scope
 

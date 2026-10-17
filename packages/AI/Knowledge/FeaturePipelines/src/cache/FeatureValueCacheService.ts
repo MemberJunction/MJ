@@ -454,29 +454,51 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
      */
     protected async LoadLatestPipelineValues(params: RecordFeatureValuesParams, provider: IMetadataProvider): Promise<Map<string, LatestPipelineValue>> {
         const latest = new Map<string, LatestPipelineValue>();
-        const names = [...new Set(params.outputs.map((o) => o.featureName))];
-        if (names.length === 0) {
-            return latest;
+        const rows = await this.readLatestPipelineRows({
+            RecordProcessID: params.recordProcessID, EntityID: params.entityID, RecordID: params.recordID,
+            FeatureNames: params.outputs.map((o) => o.featureName), ContextUser: params.contextUser, Provider: provider,
+        });
+        for (const [key, row] of rows) {
+            latest.set(key, { Value: FeatureValueCacheService.TypedValueOf(row), ValueKeyHash: row.ValueKeyHash || null });
         }
-        const recordFilter = `RecordProcessID = '${EscapeSQLString(params.recordProcessID)}' AND EntityID = '${EscapeSQLString(params.entityID)}'`
-            + ` AND RecordID = '${EscapeSQLString(params.recordID)}'${FeatureValueCacheService.SourceFilter('Pipeline')}`;
+        return latest;
+    }
+
+    /**
+     * The newest `Source='Pipeline'` row of each named feature of a record, by lower-cased feature name (a feature with
+     * none is absent): one batched round trip, one view per feature bounded to its newest row. Shared by
+     * {@link LoadLatestPipelineValues} and {@link GetLatestPipelineValues}.
+     * @throws Error naming the feature whose read failed.
+     */
+    private async readLatestPipelineRows(p: Omit<FeatureValueRecordRef, 'FeatureName'> & { FeatureNames: string[]; ExcludeProcessRunID?: string | null }):
+        Promise<Map<string, LatestFeatureValueRow & Pick<MJFeatureValueEntity, 'ValueKeyHash'>>> {
+        const rows = new Map<string, LatestFeatureValueRow & Pick<MJFeatureValueEntity, 'ValueKeyHash'>>();
+        const names = [...new Set(p.FeatureNames)];
+        if (names.length === 0) {
+            return rows;
+        }
+        const exclude = p.ExcludeProcessRunID
+            ? ` AND (ProcessRunID IS NULL OR ProcessRunID <> '${EscapeSQLString(p.ExcludeProcessRunID)}')`
+            : '';
+        const recordFilter = `RecordProcessID = '${EscapeSQLString(p.RecordProcessID)}' AND EntityID = '${EscapeSQLString(p.EntityID)}'`
+            + ` AND RecordID = '${EscapeSQLString(p.RecordID)}'${FeatureValueCacheService.SourceFilter('Pipeline')}${exclude}`;
         const shape = FeatureValueCacheService.LatestValueViewShape();
-        const results = await RunView.FromMetadataProvider(provider).RunViews<LatestFeatureValueRow & Pick<MJFeatureValueEntity, 'ValueKeyHash'>>(names.map((name) => ({
+        const results = await RunView.FromMetadataProvider(p.Provider).RunViews<LatestFeatureValueRow & Pick<MJFeatureValueEntity, 'ValueKeyHash'>>(names.map((name) => ({
             ...shape,
             Fields: [...(shape.Fields || []), 'ValueKeyHash'],
             ExtraFilter: `${recordFilter} AND FeatureName = '${EscapeSQLString(name)}'`,
             MaxRows: 1,
-        })), params.contextUser);
+        })), p.ContextUser);
         results.forEach((res, i) => {
             if (!res.Success) {
-                throw new Error(`FeatureValueCacheService: reading the latest Feature Value '${names[i]}' of record '${params.recordID}' failed: ${res.ErrorMessage}`);
+                throw new Error(`FeatureValueCacheService: reading the latest Feature Value '${names[i]}' of record '${p.RecordID}' failed: ${res.ErrorMessage}`);
             }
             const row = res.Results?.[0];
             if (row) {
-                latest.set(names[i].toLowerCase(), { Value: FeatureValueCacheService.TypedValueOf(row), ValueKeyHash: row.ValueKeyHash || null });
+                rows.set(names[i].toLowerCase(), row);
             }
         });
-        return latest;
+        return rows;
     }
 
     protected async LoadByKeyHashes(params: RecordFeatureValuesParams, provider: IMetadataProvider, keyHashes: string[]): Promise<Map<string, MJFeatureValueEntity>> {
@@ -524,34 +546,13 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
 
     /**
      * The most recent `Source='Pipeline'` value of each named feature of a record, by lower-cased feature name (a
-     * feature with none is absent). One read for all features.
-     * @throws Error when the read fails.
+     * feature with none is absent). One batched round trip, each feature's view bounded to its newest row.
+     * @throws Error naming the feature whose read failed.
      */
     public async GetLatestPipelineValues(p: Omit<FeatureValueRecordRef, 'FeatureName'> & { FeatureNames: string[]; ExcludeProcessRunID?: string | null }): Promise<Map<string, TypedFeatureValue>> {
         const latest = new Map<string, TypedFeatureValue>();
-        const names = [...new Set(p.FeatureNames)];
-        if (names.length === 0) {
-            return latest;
-        }
-        const exclude = p.ExcludeProcessRunID
-            ? ` AND (ProcessRunID IS NULL OR ProcessRunID <> '${EscapeSQLString(p.ExcludeProcessRunID)}')`
-            : '';
-        const shape = FeatureValueCacheService.LatestValueViewShape();
-        const res = await RunView.FromMetadataProvider(p.Provider).RunView<LatestFeatureValueRow>({
-            ...shape,
-            ExtraFilter: `RecordProcessID = '${EscapeSQLString(p.RecordProcessID)}' AND EntityID = '${EscapeSQLString(p.EntityID)}'`
-                + ` AND RecordID = '${EscapeSQLString(p.RecordID)}' AND FeatureName IN (${names.map((n) => `'${EscapeSQLString(n)}'`).join(', ')})`
-                + `${FeatureValueCacheService.SourceFilter('Pipeline')}${exclude}`,
-        }, p.ContextUser);
-        if (!res.Success) {
-            throw new Error(`FeatureValueCacheService: reading the latest Pipeline values of record '${p.RecordID}' failed: ${res.ErrorMessage}`);
-        }
-        // newest first, so the first row seen of a feature is its latest
-        for (const row of res.Results ?? []) {
-            const key = row.FeatureName.toLowerCase();
-            if (!latest.has(key)) {
-                latest.set(key, FeatureValueCacheService.TypedValueOf(row));
-            }
+        for (const [key, row] of await this.readLatestPipelineRows(p)) {
+            latest.set(key, FeatureValueCacheService.TypedValueOf(row));
         }
         return latest;
     }
@@ -662,7 +663,12 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
         const text = val.trim();
         const empty: TypedFeatureValue = { ValueText: null, ValueNumeric: null, ValueBoolean: null, ValueDate: null, ValueJSON: null };
         if ((constraintType === 'numeric' || constraintType === 'money') && FeatureValueCacheService.plainNumber.test(text)) {
-            return { ...empty, ValueNumeric: Number(text) };
+            const n = Number(text);
+            // a decimal that overflows (e.g. '1e400') parses to Infinity, which no numeric column holds: it stays text
+            if (Number.isFinite(n)) {
+                return { ...empty, ValueNumeric: n };
+            }
+            return undefined;
         }
         if (constraintType === 'boolean' && /^(true|false)$/i.test(text)) {
             return { ...empty, ValueBoolean: text.toLowerCase() === 'true' };

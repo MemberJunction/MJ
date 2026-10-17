@@ -13,16 +13,24 @@ const { MockRunView, logErrorSpy } = vi.hoisted(() => {
         public static queue: object[][] = [];
         public static lastParams: RunViewParams | undefined;
         public static calls: RunViewParams[] = [];
+        /** Each RunViews batch the service sent. */
+        public static batches: RunViewParams[][] = [];
+        /** When set, every read fails with this message. */
+        public static failWith: string | undefined;
         public static FromMetadataProvider() { return new MockRunView(); }
         public async RunView(params: RunViewParams) {
             MockRunView.lastParams = params;
             MockRunView.calls.push(params);
+            if (MockRunView.failWith) {
+                return { Success: false, Results: [], ErrorMessage: MockRunView.failWith };
+            }
             return {
                 Success: true,
                 Results: MockRunView.queue.shift() ?? MockRunView.mockResults,
             };
         }
         public async RunViews(params: RunViewParams[]) {
+            MockRunView.batches.push(params);
             return Promise.all(params.map((p) => this.RunView(p)));
         }
     }
@@ -55,6 +63,8 @@ describe('FeatureValueCacheService', () => {
         MockRunView.queue = [];
         MockRunView.lastParams = undefined;
         MockRunView.calls = [];
+        MockRunView.batches = [];
+        MockRunView.failWith = undefined;
         logErrorSpy.mockClear();
     });
     /** The provider the cache calls run on; the mocked RunView ignores it. */
@@ -480,23 +490,35 @@ describe('FeatureValueCacheService', () => {
             expect(view?.BypassCache).toBe(true);
         });
 
-        it('reads the newest Pipeline row of each named feature in one view', async () => {
+        it('reads the newest Pipeline row of each named feature: one batched read, one bounded view per feature', async () => {
             const empty = { ValueText: null, ValueNumeric: null, ValueBoolean: null, ValueDate: null, ValueJSON: null };
-            MockRunView.mockResults = [
-                { FeatureName: 'Years', ...empty, ValueNumeric: 7 },
-                { FeatureName: 'years', ...empty, ValueNumeric: 3 },
-                { FeatureName: 'Level', ...empty, ValueText: 'Director' },
+            MockRunView.queue = [
+                [{ FeatureName: 'Years', ...empty, ValueNumeric: 7 }],
+                [{ FeatureName: 'Level', ...empty, ValueText: 'Director' }],
+                [],
             ];
             const latest = await FeatureValueCacheService.Instance.GetLatestPipelineValues({ RecordProcessID: 'rp-1', EntityID: 'ENT-P', RecordID: 'person-1',
-                FeatureNames: ['Years', 'Level', 'Years', 'Missing'], ContextUser: mockUser, Provider: lookupProvider });
+                FeatureNames: ['Years', 'Level', 'Years', 'Missing'], ContextUser: mockUser, Provider: lookupProvider, ExcludeProcessRunID: 'run-9' });
             expect([...latest.keys()].sort()).toEqual(['level', 'years']);
             expect(latest.get('years')?.ValueNumeric).toBe(7);
             expect(latest.get('level')?.ValueText).toBe('Director');
-            const view = MockRunView.lastParams;
-            expect(view?.ExtraFilter).toContain("FeatureName IN ('Years', 'Level', 'Missing')");
-            expect(view?.ExtraFilter).toContain("Source = 'Pipeline'");
-            expect(view?.OrderBy).toBe(LATEST_ORDER);
-            expect(view?.BypassCache).toBe(true);
+            expect(MockRunView.batches).toHaveLength(1);
+            const views = MockRunView.batches[0];
+            expect(views.map((v) => v.ExtraFilter?.match(/FeatureName = '([^']+)'/)?.[1])).toEqual(['Years', 'Level', 'Missing']);
+            for (const view of views) {
+                expect(view.ExtraFilter).toContain("RecordProcessID = 'rp-1' AND EntityID = 'ENT-P' AND RecordID = 'person-1'");
+                expect(view.ExtraFilter).toContain("Source = 'Pipeline'");
+                expect(view.ExtraFilter).toContain("(ProcessRunID IS NULL OR ProcessRunID <> 'run-9')");
+                expect(view.OrderBy).toBe(LATEST_ORDER);
+                expect(view.MaxRows).toBe(1);
+                expect(view.BypassCache).toBe(true);
+            }
+        });
+
+        it('fails naming the feature whose read failed', async () => {
+            MockRunView.failWith = 'db down';
+            await expect(FeatureValueCacheService.Instance.GetLatestPipelineValues({ RecordProcessID: 'rp-1', EntityID: 'ENT-P', RecordID: 'person-1',
+                FeatureNames: ['Years'], ContextUser: mockUser, Provider: lookupProvider })).rejects.toThrow("reading the latest Feature Value 'Years' of record 'person-1' failed: db down");
         });
 
         it('reads nothing for no features', async () => {
@@ -541,6 +563,10 @@ describe('FeatureValueCacheService', () => {
             for (const v of ['Infinity', 'NaN', '0x10', 'abc', '']) {
                 expect(T(v, 'numeric')).toMatchObject({ ValueText: v, ValueNumeric: null });
             }
+        });
+        it('keeps a decimal string that overflows to Infinity as text', () => {
+            expect(T('1e400', 'numeric')).toMatchObject({ ValueText: '1e400', ValueNumeric: null });
+            expect(T('-1e400', 'money')).toMatchObject({ ValueText: '-1e400', ValueNumeric: null });
         });
         it('coerces boolean strings', () => {
             expect(T('TRUE', 'boolean')).toMatchObject({ ValueBoolean: true, ValueText: null });
