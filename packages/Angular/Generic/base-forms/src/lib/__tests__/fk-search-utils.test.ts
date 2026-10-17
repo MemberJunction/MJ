@@ -2,13 +2,15 @@
  * Tests for the pure FK-autocomplete helpers used by MjFormFieldComponent:
  * cell formatting and the in-memory cached-entity filter / focus-show.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
   FormatFKCell,
   FilterCachedFKRows,
   RankByPrefix,
   EscapeSqlLikeValue,
   QuoteSqlIdList,
+  WithFKSearchTimeout,
+  FKSearchTimeoutError,
 } from '../field/fk-search-utils';
 
 describe('FormatFKCell', () => {
@@ -176,5 +178,38 @@ describe('QuoteSqlIdList', () => {
 
   it('returns an empty string for no usable ids', () => {
     expect(QuoteSqlIdList([])).toBe('');
+  });
+});
+
+describe('WithFKSearchTimeout', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('settles with the work when it answers in time', async () => {
+    await expect(WithFKSearchTimeout(Promise.resolve('rows'), 1_000)).resolves.toBe('rows');
+  });
+
+  it('passes the work\'s own rejection through', async () => {
+    await expect(WithFKSearchTimeout(Promise.reject(new Error('boom')), 1_000)).rejects.toThrow('boom');
+  });
+
+  it('rejects with FKSearchTimeoutError when the work never answers', async () => {
+    vi.useFakeTimers();
+    const pending = WithFKSearchTimeout(new Promise<string>(() => undefined), 5_000);
+    const settled = expect(pending).rejects.toBeInstanceOf(FKSearchTimeoutError);
+    await vi.advanceTimersByTimeAsync(5_000);
+    await settled;
+  });
+
+  it('clears its timer once the work answers, leaving nothing scheduled', async () => {
+    vi.useFakeTimers();
+    await WithFKSearchTimeout(Promise.resolve('rows'), 5_000);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('waits indefinitely when the timeout is zero or less', async () => {
+    const work = Promise.resolve('rows');
+    expect(WithFKSearchTimeout(work, 0)).toBe(work);
   });
 });
