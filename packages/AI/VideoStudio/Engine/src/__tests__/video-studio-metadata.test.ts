@@ -2,6 +2,8 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { GetValueFromPath } from '@memberjunction/ai-core-plus';
+import { JSONValidator } from '@memberjunction/global';
 import {
     ValidateVideoGenerationSpec,
     VIDEO_STUDIO_SPEC_VERSION,
@@ -1006,4 +1008,245 @@ describe('Video Studio metadata pin (VS-AGT-1)', () => {
         }
     });
 });
+
+describe('Video Studio caller relationships (VS-INV-2)', () => {
+    const agents = readJson<MetadataRecord[]>('agents/.video-studio-agent.json');
+    const researchAgents = readJson<MetadataRecord[]>('agents/.research-agent.json');
+    const queryBuilderValidationTemplate = readJson<Record<string, unknown>>(
+        'agents/validation/query-builder-payload-validation.json',
+    );
+    const directorExample = readJson<{
+        payloadChangeRequest: {
+            replaceElements: Pick<VideoGenerationSpec, 'Status' | 'Archetype' | 'Film' | 'Assets' | 'DataBindings'>;
+        };
+    }>('prompts/output/video-studio/director.example.json');
+    const artDirectorExample = readJson<{
+        payloadChangeRequest: {
+            replaceElements: Pick<VideoGenerationSpec, 'Status' | 'Style'>;
+        };
+    }>('prompts/output/video-studio/art-director.example.json');
+    const storyboardExample = readJson<{
+        payloadChangeRequest: {
+            replaceElements: Pick<VideoGenerationSpec, 'Status' | 'Beats' | 'Audio'>;
+        };
+    }>('prompts/output/video-studio/storyboard.example.json');
+    const referenceAnalysisExample = readJson<ReferenceAnalysis>(
+        'prompts/output/video-studio/reference-analysis.example.json',
+    );
+
+    const root = agents[0];
+    const callerRelationships = root.relatedEntities?.['MJ: AI Agent Relationships'] ?? [];
+
+    const expectedOutputMapping: Record<string, string> = {
+        Status: 'video.Status',
+        'Film.OneSentence': 'video.OneSentence',
+        'Output.Videos': 'video.Videos',
+        'Output.PosterFileID': 'video.PosterFileID',
+        'Review.HumanReviewNotes': 'video.HumanReviewNotes',
+    };
+
+    const deliveredSpecFixture: VideoGenerationSpec = {
+        SpecVersion: VIDEO_STUDIO_SPEC_VERSION,
+        ...directorExample.payloadChangeRequest.replaceElements,
+        ...artDirectorExample.payloadChangeRequest.replaceElements,
+        ...storyboardExample.payloadChangeRequest.replaceElements,
+        Status: 'Delivered',
+        DataSnapshot: {
+            AsOf: '2026-10-17T00:00:00.000Z',
+            Sources: ['Query: Q3 Pipeline Summary'],
+            Inline: {
+                q3_pipeline_total: { Value: 4200000, Formatted: '$4.2M' },
+                q3_yoy_growth: { Value: 18, Formatted: '+18%' },
+            },
+        },
+        Render: {
+            Renderer: 'HyperFrames',
+            RendererVersion: '0.1.0',
+            Fps: 30,
+            Seed: 42,
+            Quality: 'standard',
+        },
+        Interaction: {
+            Mode: 'Autonomous',
+            MaxRepairRounds: 2,
+        },
+        Deliverables: {
+            Formats: ['16:9', '9:16'],
+            Poster: true,
+            ContactSheets: true,
+            Source: true,
+            Captions: true,
+        },
+        Output: {
+            Videos: {
+                '16:9': {
+                    Format: '16:9',
+                    FileID: '11111111-2222-4333-8444-555555555555',
+                    MimeType: 'video/mp4',
+                    Width: 1920,
+                    Height: 1080,
+                    DurationSeconds: 18,
+                    FileSizeBytes: 2450000,
+                },
+                '9:16': {
+                    Format: '9:16',
+                    FileID: '66666666-7777-4888-9999-000000000000',
+                    MimeType: 'video/mp4',
+                    Width: 1080,
+                    Height: 1920,
+                    DurationSeconds: 18,
+                    FileSizeBytes: 2150000,
+                },
+            },
+            PosterFileID: 'AAAAAAAA-BBBB-4CCC-8DDD-EEEEEEEEEEEE',
+            ContactSheetFileIDs: {
+                '16:9': ['12121212-3434-4565-8787-989898989898'],
+                '9:16': ['23232323-4545-4676-8989-010101010101'],
+            },
+            CaptionsFileID: '34343434-5656-4787-9090-121212121212',
+            RenderMetadata: {
+                Renderer: 'HyperFrames',
+                RendererVersion: '0.1.0',
+                Seed: 42,
+                Fps: 30,
+                DurationByFormat: { '16:9': 18, '9:16': 18 },
+                RenderedAt: '2026-10-17T00:01:00.000Z',
+            },
+        },
+        Review: {
+            Gates: [
+                { Gate: 'G1', Status: 'Passed', EvidenceRefs: ['step-g1'], Timestamp: '2026-10-17T00:00:10.000Z' },
+                { Gate: 'G2', Status: 'Passed', EvidenceRefs: ['step-g2'], Timestamp: '2026-10-17T00:00:20.000Z', Notes: 'Approved' },
+                { Gate: 'G3', Status: 'Passed', EvidenceRefs: ['step-g3'], Timestamp: '2026-10-17T00:01:05.000Z' },
+                { Gate: 'G4', Status: 'Passed', EvidenceRefs: ['step-g4'], Timestamp: '2026-10-17T00:01:15.000Z' },
+                { Gate: 'G5', Status: 'Passed', EvidenceRefs: ['step-g5'], Timestamp: '2026-10-17T00:01:15.000Z' },
+                { Gate: 'G6', Status: 'Passed', EvidenceRefs: ['step-g6'], Timestamp: '2026-10-17T00:01:20.000Z' },
+            ],
+            Rounds: [
+                {
+                    Round: 1,
+                    Timestamp: '2026-10-17T00:01:10.000Z',
+                    Defects: [],
+                    Summary: 'Clean delivery across all formats.',
+                },
+            ],
+            HumanReviewNotes: 'No open items.',
+        },
+    };
+
+    it('1. defines exactly two caller rows under Video Studio with SubAgentID=@parent:ID, Consult, and the Standard preset lookup', () => {
+        expect(callerRelationships).toHaveLength(2);
+
+        const expectedPresetLookup = '@lookup:MJ: AI Agent Configurations.Name=Standard&AgentID=@parent:ID';
+        for (const rel of callerRelationships) {
+            expect(rel.fields.SubAgentID).toBe('@parent:ID');
+            expect(rel.fields.Status).toBe('Active');
+            expect(rel.fields.ChatHandlingOption).toBe('Consult');
+            expect(rel.fields.ConfigurationPresetID).toBe(expectedPresetLookup);
+            expect(rel.fields.SubAgentOutputMapping).toEqual(expectedOutputMapping);
+        }
+
+        const qbRel = callerRelationships.find(
+            (r) => r.fields.AgentID === '@lookup:MJ: AI Agents.Name=Query Builder',
+        );
+        expect(qbRel).toBeDefined();
+        expect(qbRel!.fields.SubAgentContextPaths).toEqual([
+            'title',
+            'interpretation',
+            'savedQueryId',
+            'savedQueryName',
+            'metadata.sql',
+        ]);
+
+        const rrwRel = callerRelationships.find(
+            (r) => r.fields.AgentID === '@lookup:MJ: AI Agents.Name=Research Report Writer',
+        );
+        expect(rrwRel).toBeDefined();
+        expect(rrwRel!.fields.SubAgentInputMapping).toBeUndefined();
+        expect(rrwRel!.fields.SubAgentContextPaths).toEqual(['synthesis', 'report', 'sources']);
+    });
+
+    it('2. resolves every SubAgentOutputMapping source path on a delivered spec with GetValueFromPath', () => {
+        const validation = ValidateVideoGenerationSpec(deliveredSpecFixture, 'Delivered');
+        expect(validation.Errors).toEqual([]);
+        expect(validation.Valid).toBe(true);
+
+        for (const rel of callerRelationships) {
+            const outputMapping = rel.fields.SubAgentOutputMapping as Record<string, string>;
+            for (const [sourcePath, targetPath] of Object.entries(outputMapping)) {
+                expect(targetPath.startsWith('video.')).toBe(true);
+                const resolvedValue = GetValueFromPath(deliveredSpecFixture, sourcePath);
+                expect(
+                    resolvedValue,
+                    `Expected SubAgentOutputMapping source path "${sourcePath}" to resolve to a defined value`,
+                ).toBeDefined();
+            }
+        }
+    });
+
+    it('3. restricts the Query Builder input mapping targets to DataSnapshot.Inline.caller.*', () => {
+        const qbRel = callerRelationships.find(
+            (r) => r.fields.AgentID === '@lookup:MJ: AI Agents.Name=Query Builder',
+        )!;
+        const inputMapping = qbRel.fields.SubAgentInputMapping as Record<string, string>;
+        expect(inputMapping).toEqual({
+            rows: 'DataSnapshot.Inline.caller.rows',
+            columns: 'DataSnapshot.Inline.caller.columns',
+        });
+        for (const targetPath of Object.values(inputMapping)) {
+            expect(targetPath.startsWith('DataSnapshot.Inline.caller.')).toBe(true);
+        }
+    });
+
+    it('4. validates a Query Builder payload augmented with mapped video.* output against Query Builder JSONValidator template', () => {
+        const qbPayloadWithVideo = {
+            title: 'Q3 Revenue Pipeline by Segment',
+            plan: 'Aggregate Q3 closed-won and pipeline opportunities by segment.',
+            source: 'query',
+            columns: [
+                { field: 'Segment', displayName: 'Segment' },
+                { field: 'PipelineUSD', displayName: 'Pipeline (USD)' },
+            ],
+            rows: [
+                { Segment: 'Enterprise', PipelineUSD: 4200000 },
+                { Segment: 'Mid-Market', PipelineUSD: 1850000 },
+            ],
+            interpretation: 'Enterprise pipeline grew 18% YoY.',
+            metadata: {
+                sql: 'SELECT Segment, SUM(Amount) AS PipelineUSD FROM vwOpportunities GROUP BY Segment',
+                rowCount: 2,
+                executionTimeMs: 42,
+            },
+            video: {
+                Status: GetValueFromPath(deliveredSpecFixture, 'Status'),
+                OneSentence: GetValueFromPath(deliveredSpecFixture, 'Film.OneSentence'),
+                Videos: GetValueFromPath(deliveredSpecFixture, 'Output.Videos'),
+                PosterFileID: GetValueFromPath(deliveredSpecFixture, 'Output.PosterFileID'),
+                HumanReviewNotes: GetValueFromPath(deliveredSpecFixture, 'Review.HumanReviewNotes'),
+            },
+        };
+
+        const result = new JSONValidator().validate(qbPayloadWithVideo, queryBuilderValidationTemplate);
+        expect(result.Errors).toEqual([]);
+        expect(result.Success).toBe(true);
+    });
+
+    it('5. includes video.* in Research Report Writer PayloadUpstreamPaths and caller binding guidance in Director template', () => {
+        const researchRoot = researchAgents.find((a) => a.fields.Name === 'Research Agent');
+        expect(researchRoot).toBeDefined();
+        const children = researchRoot!.relatedEntities?.['MJ: AI Agents'] ?? [];
+        const reportWriter = children.find((c) => c.fields.Name === 'Research Report Writer');
+        expect(reportWriter).toBeDefined();
+        expect(reportWriter!.fields.PayloadUpstreamPaths).toContain('video.*');
+
+        const directorTemplate = readFileSync(
+            resolve(metadataDir, 'prompts/templates/video-studio/director.template.md'),
+            'utf8',
+        );
+        expect(directorTemplate).toContain('DataSnapshot.Inline.caller');
+        expect(directorTemplate).toContain("Source.Kind: 'Inline'");
+        expect(directorTemplate).toContain('QueryID');
+    });
+});
+
 

@@ -54,3 +54,10 @@ export {
     VideoRenderEngine,
 } from './render/video-render-engine.js';
 
+export {
+    LoadVideoStudioAgent,
+    VIDEO_STUDIO_STAGES,
+    VideoStudioAgent,
+    type VideoStudioStageName,
+} from './agents/video-studio-agent.js';
+
