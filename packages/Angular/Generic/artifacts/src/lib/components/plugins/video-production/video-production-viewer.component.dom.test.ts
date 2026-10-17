@@ -402,24 +402,35 @@ describe('VideoProductionViewerComponent & Tab Components (DOM)', () => {
   });
 
   it('logs LogError and shows the "Contains data" badge without a date when DataSnapshot.AsOf is invalid', () => {
-    const badAsOfSpec = makeSpec({
-      DataSnapshot: {
-        AsOf: 'not-a-valid-date',
-        Sources: ['Query:88888888-8888-4888-8888-888888888888'],
-      },
-    });
-    const fixture = renderComponentFixture(VideoProductionViewerComponent, {
-      imports: [ArtifactsModule],
-      inputs: {
-        artifactVersion: makeVersion(JSON.stringify(badAsOfSpec)),
-      },
-    });
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      const badAsOfSpec = makeSpec({
+        DataSnapshot: {
+          AsOf: '2026-02-30',
+          Sources: ['Query:88888888-8888-4888-8888-888888888888'],
+        },
+      });
+      const fixture = renderComponentFixture(VideoProductionViewerComponent, {
+        imports: [ArtifactsModule],
+        inputs: {
+          artifactVersion: makeVersion(JSON.stringify(badAsOfSpec)),
+        },
+      });
 
-    const badge = query(fixture, '.vp-badge--data');
-    expect(badge).not.toBeNull();
-    expect(badge?.textContent).toContain('Contains data');
-    expect(badge?.textContent).not.toContain('not-a-valid-date');
-    expect(query(fixture, '.vp-badge__as-of')).toBeNull();
+      const badge = query(fixture, '.vp-badge--data');
+      expect(badge).not.toBeNull();
+      expect(badge?.textContent).toContain('Contains data');
+      expect(badge?.textContent).not.toContain('2026-0');
+      expect(query(fixture, '.vp-badge__as-of')).toBeNull();
+
+      fixture.detectChanges();
+      const matchingCalls = errorSpy.mock.calls.filter((args) =>
+        args.some((arg) => String(arg).includes('2026-02-30')),
+      );
+      expect(matchingCalls).toHaveLength(1);
+    } finally {
+      errorSpy.mockRestore();
+    }
   });
 
   it('omits the data badge when DataBindings is empty', () => {
