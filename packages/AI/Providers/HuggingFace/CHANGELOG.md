@@ -1,5 +1,64 @@
 # @memberjunction/ai-huggingface
 
+## 6.2.0-edge.4
+
+### Patch Changes
+
+- 6c8798b: MJAPI realtime relay. `RealtimeProxyServer` also serves `/realtime/relay/<ticket>/…` (any suffix after the ticket, which a provider's browser SDK appends): a ticketed websocket that runs a provider's frame policy (`IRealtimeRelayPolicy` in `@memberjunction/ai`) between the browser and the upstream. A relay session (`RealtimeProxyRegistry.IssueRelaySession`) opens one fresh connection within 5 minutes of the mint, then only resumes that present a resumption handle the relay forwarded to that session; it ends at 30 minutes or `MaxSessionSeconds`, whichever comes first, or after 10 connections. The policy mints the upstream headers on every open, writes the opening frames, filters client frames and reports handles; server frames pass unchanged. The relay pings both legs every 20 s and terminates a leg that answers none of its last 2 pings (the other leg gets 1001 upstream or 1014 in the browser), closes a browser that falls more than 16 MiB behind (1013; the client resumes), closes on a client frame over 2 MiB, waits 10 s for the first client frame, keeps the 15 s upstream deadline and the 512-frame pre-open buffer, passes close codes through, keeps one live upstream per session, applies the Origin allowlist, and logs only counts, codes and an 8-character ticket prefix. Relay state is in memory, so a resume must reach the MJAPI instance that issued the session. The MJAPI public-URL helper moves from the HuggingFace driver to `@memberjunction/ai` (`ResolveRealtimeProxyBaseWsUrl`, `HttpOriginToWs`, `BuildRealtimeRelayUrl`); HuggingFace behaves as before. Nothing issues relay sessions yet, and `/realtime-proxy?ticket=` is unchanged.
+- Updated dependencies [d17de94]
+- Updated dependencies [7ada797]
+- Updated dependencies [432cb73]
+- Updated dependencies [293c316]
+- Updated dependencies [155aa45]
+- Updated dependencies [6cd23e1]
+- Updated dependencies [51634e7]
+- Updated dependencies [1d6e3e8]
+- Updated dependencies [de2dc2f]
+- Updated dependencies [1da00cb]
+- Updated dependencies [b699a37]
+- Updated dependencies [a4b23b7]
+- Updated dependencies [961d529]
+- Updated dependencies [10c2311]
+- Updated dependencies [4889fb2]
+- Updated dependencies [b2441c3]
+- Updated dependencies [69e19c5]
+- Updated dependencies [7316ac3]
+- Updated dependencies [8ef5e86]
+- Updated dependencies [596855c]
+- Updated dependencies [fdf6669]
+- Updated dependencies [4c682c1]
+- Updated dependencies [f325baa]
+- Updated dependencies [08a4cfc]
+- Updated dependencies [b09fe34]
+- Updated dependencies [95e5dd9]
+- Updated dependencies [ecc5658]
+- Updated dependencies [8bac4d6]
+- Updated dependencies [5a3de97]
+- Updated dependencies [0d0ba18]
+- Updated dependencies [b6fcb30]
+- Updated dependencies [f73e192]
+- Updated dependencies [8704df6]
+- Updated dependencies [5345e3d]
+- Updated dependencies [22c9074]
+- Updated dependencies [aee2d53]
+- Updated dependencies [5dc3752]
+- Updated dependencies [6c8798b]
+- Updated dependencies [5e21f50]
+- Updated dependencies [25f7b82]
+- Updated dependencies [35ed7b5]
+- Updated dependencies [d853bf8]
+- Updated dependencies [e293b68]
+- Updated dependencies [afe9eb4]
+- Updated dependencies [d2cb42e]
+- Updated dependencies [cbddadb]
+- Updated dependencies [1ba9315]
+- Updated dependencies [b8a9e5e]
+- Updated dependencies [e8258a1]
+- Updated dependencies [6b487b8]
+  - @memberjunction/ai@6.2.0-edge.4
+  - @memberjunction/ai-openai@6.2.0-edge.4
+  - @memberjunction/global@6.2.0-edge.4
+
 ## 6.2.0-edge.3
 
 ### Patch Changes

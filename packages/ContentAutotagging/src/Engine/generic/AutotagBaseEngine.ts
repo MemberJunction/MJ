@@ -786,6 +786,9 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
                     ResultType: 'simple',
                     Fields: ['EntityID', 'RecordID'],
                     MaxRows: 1,
+                    // A one-off lookup by ID. A cached RunView reads every column (DocumentText, VectorJSON)
+                    // and keeps a single-use slot, so bypass the cache and let Fields apply.
+                    BypassCache: true,
                 }, contextUser);
 
                 if (!erdResult.Success || erdResult.Results.length === 0) return;

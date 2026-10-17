@@ -241,9 +241,33 @@ export class SQLParser {
         return this._ast;
     }
 
+    /**
+     * The bracket identifiers the fallback parse renamed, as the name in {@link AST} mapped to the
+     * original bracketed text (for example `[My CTE]`). Null when the direct parse succeeded, so
+     * every identifier in the tree is as written. A name in this map is in the tree only where the
+     * fallback put it: no such name occurs in the SQL, and none runs into the text next to it.
+     */
+    get IdentifierAliases(): ReadonlyMap<string, string> | null {
+        return this._aliasMap;
+    }
+
+    /**
+     * True when `name` has the form of a name the fallback parse gives a renamed bracket
+     * identifier ({@link IdentifierAliases}), ignoring case: `_mjid_<n>`, or `_mjid<k>_<n>` when
+     * the SQL already contains `_mjid_`.
+     */
+    static IsIdentifierAliasName(name: string): boolean {
+        return SQLParser.ALIAS_NAME.test(name);
+    }
+
     /** The dialect supplied at construction. */
     get Dialect(): SQLParserDialect {
         return this._dialect;
+    }
+
+    /** The SQL supplied at construction, as written. */
+    get SQL(): string {
+        return this._sql;
     }
 
     /**
@@ -509,6 +533,11 @@ export class SQLParser {
      * quoted identifiers, and comments). A single trailing semicolon — or a run
      * of them followed only by whitespace/comments — is allowed.
      *
+     * Reads the tokens {@link LexSQL} produces for the dialect, so every quoted
+     * form the database recognizes hides its contents: `[…]` identifiers on SQL
+     * Server, `E'…'` strings with backslash escapes and dollar-quoted strings on
+     * PostgreSQL, and nested block comments on both.
+     *
      * Unlike an AST check, this fires even when the trailing payload makes the
      * SQL unparseable (`SELECT 1; EXEC xp_cmdshell '…'`, `SELECT 1; WAITFOR
      * DELAY '…'`), which is exactly the stacked-injection class an AST scan
@@ -516,51 +545,18 @@ export class SQLParser {
      * read query must be a single statement, so any internal `;` is rejected.
      */
     static HasStackedStatements(sql: string, dialect: SQLParserDialect): boolean {
-        const quoteSample = dialect.QuoteIdentifier('x');
-        const recognizeBrackets = quoteSample.startsWith('[');
-        const recognizeBackticks = quoteSample.startsWith('`');
-        const n = sql.length;
-        let i = 0;
         let sawSemicolon = false;
         // A semicolon before any content (the `;WITH` idiom) separates nothing.
         let sawContent = false;
-
-        while (i < n) {
-            const c = sql[i];
-
-            // line / block comments
-            if (c === '-' && i + 1 < n && sql[i + 1] === '-') {
-                while (i < n && sql[i] !== '\n') i++;
+        for (const token of SignificantTokens(LexSQL(sql, dialect))) {
+            if (token.Kind === 'semicolon') {
+                if (sawContent) sawSemicolon = true;
                 continue;
             }
-            if (c === '/' && i + 1 < n && sql[i + 1] === '*') {
-                i += 2;
-                while (i < n && !(sql[i] === '*' && i + 1 < n && sql[i + 1] === '/')) i++;
-                if (i < n) i += 2;
-                continue;
-            }
-
-            // string literals + quoted identifiers (skip wholesale)
-            if (c === "'" || c === '"' ||
-                (recognizeBrackets && c === '[') ||
-                (recognizeBackticks && c === '`')) {
-                const close = c === '[' ? ']' : c;
-                if (sawSemicolon) return true;
-                sawContent = true;
-                i = SQLParser.skipQuotedFrom(sql, i, close);
-                continue;
-            }
-
-            if (c === ';') { if (sawContent) sawSemicolon = true; i++; continue; }
-            if (c === ' ' || c === '\t' || c === '\n' || c === '\r') { i++; continue; }
-
-            // any other character is real statement content; if a top-level
-            // semicolon already appeared, this content is a second statement
+            // Real content after a separating semicolon is a second statement.
             if (sawSemicolon) return true;
             sawContent = true;
-            i++;
         }
-
         return false;
     }
 
@@ -1733,17 +1729,34 @@ export class SQLParser {
         };
     }
 
+    /** The start of every alias name the fallback gives a bracket identifier. */
+    private static readonly BRACKET_ALIAS_STEM = '_mjid';
+
+    /** Every alias name {@link aliasPrefixFor} and {@link aliasBracketIdentifiers} can produce. */
+    private static readonly ALIAS_NAME = /^_mjid\d*_\d+$/i;
+
+    /**
+     * An alias prefix in lower-case text, with its digits captured. The lookahead leaves the
+     * closing `_` unread, so a prefix that starts on that `_` is found too (`_mjid_mjid1_`).
+     */
+    private static readonly ALIAS_PREFIX_IN_TEXT = /_mjid(\d*)(?=_)/g;
+
+    /** A character that would join an alias written next to it into one longer name. */
+    private static readonly NAME_CHAR = /[\w@#$\u0080-\uffff]/;
+
     /**
      * Token-aware scan that aliases every bracket-quoted identifier. node-sql-parser
      * cannot handle brackets around some identifiers at all — interiors with spaces
      * or punctuation (`[Active People]`, `[my-cte]`, `[dbo.table]`), and CTE names of
-     * any kind (`WITH [x] AS …`). Aliases are stable, collision-safe tokens
-     * (`_mjid_<seq>`). Applies only to bracket-quoting dialects (SQL Server).
+     * any kind (`WITH [x] AS …`). Applies only to bracket-quoting dialects (SQL Server).
+     *
+     * Each alias is `<prefix><seq>`, with a prefix that does not occur in the SQL
+     * ({@link aliasPrefixFor}). A space keeps an alias apart from a name character or
+     * bracket written right next to the brackets, as SQL Server keeps them apart. So
+     * an alias name appears in the rewritten SQL only where this scan put it.
      *
      * Returns the rewritten SQL plus a forward map (original interior → alias).
      */
-    private static readonly BRACKET_ALIAS_PREFIX = '_mjid_';
-
     private static aliasBracketIdentifiers(
         sql: string,
         dialect: SQLParserDialect,
@@ -1751,6 +1764,7 @@ export class SQLParser {
         const forward = new Map<string, string>();
         if (!dialect.QuoteIdentifier('x').startsWith('[')) return { rewritten: sql, forward };
 
+        const prefix = SQLParser.aliasPrefixFor(sql);
         const n = sql.length;
         let out = '';
         let i = 0;
@@ -1787,11 +1801,15 @@ export class SQLParser {
                 }
                 if (interior.length > 0) {
                     let alias = forward.get(interior);
-                    if (!alias) { alias = `${SQLParser.BRACKET_ALIAS_PREFIX}${seq++}`; forward.set(interior, alias); }
+                    if (!alias) { alias = `${prefix}${seq++}`; forward.set(interior, alias); }
                     // Emit a BARE identifier — node-sql-parser rejects bracket-quoted
                     // CTE names entirely, so the alias must be unbracketed. sqlify
                     // re-quotes it ([_mjid_0]); restoreAliases handles every form.
-                    out += alias;
+                    // The character before the brackets comes from `sql`. A read from `out`, which
+                    // grows by `+=`, copies all of `out` each time.
+                    const before = i > 0 && SQLParser.NAME_CHAR.test(sql[i - 1]) ? ' ' : '';
+                    const after = j < n && (SQLParser.NAME_CHAR.test(sql[j]) || sql[j] === '[') ? ' ' : '';
+                    out += `${before}${alias}${after}`;
                 } else {
                     out += sql.substring(i, j); // leave non-problematic identifiers untouched
                 }
@@ -1804,10 +1822,23 @@ export class SQLParser {
     }
 
     /**
+     * The alias prefix for one SQL text: the first of `_mjid_`, `_mjid1_`, `_mjid2_`, … that does
+     * not occur in it, ignoring case. No name the SQL writes can then equal or contain an alias.
+     * One scan of the text collects the digits of every prefix it contains.
+     */
+    private static aliasPrefixFor(sql: string): string {
+        const used = new Set<string>();
+        for (const match of sql.toLowerCase().matchAll(SQLParser.ALIAS_PREFIX_IN_TEXT)) used.add(match[1]);
+        let digits = '';
+        for (let k = 1; used.has(digits); k++) digits = String(k);
+        return `${SQLParser.BRACKET_ALIAS_STEM}${digits}_`;
+    }
+
+    /**
      * Reverses bracket-identifier aliasing on a sqlify result. node-sql-parser
      * may emit the alias bare, bracketed, or backticked; all three forms are
-     * restored to the original bracketed identifier. Aliases are unique
-     * `BRACKET_ALIAS_PREFIX<seq>` tokens, so replacement is unambiguous.
+     * restored to the original bracketed identifier. No alias occurs in the
+     * caller's SQL ({@link aliasPrefixFor}), so replacement is unambiguous.
      */
     private static restoreAliases(sql: string, aliasMap: Map<string, string>): string {
         let out = sql;

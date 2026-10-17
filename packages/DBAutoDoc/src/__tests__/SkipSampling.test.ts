@@ -1,0 +1,289 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { AnalysisOrchestrator } from '../core/AnalysisOrchestrator.js';
+import { DBAutoDocConfig } from '../types/config.js';
+import { DatabaseDocumentation } from '../types/state.js';
+import { StateManager } from '../state/StateManager.js';
+
+const mockDriver = {
+  getExistingDescriptions: vi.fn().mockResolvedValue([]),
+  getColumnStatistics: vi.fn().mockResolvedValue({
+    totalRows: 100,
+    distinctCount: 50,
+    uniquenessRatio: 0.5,
+    nullCount: 0,
+    nullPercentage: 0,
+    sampleValues: ['val1', 'val2']
+  }),
+  close: vi.fn().mockResolvedValue(undefined)
+};
+
+const mockAnalyzeTable = vi.fn().mockResolvedValue(undefined);
+
+// Mock dependencies with classes
+vi.mock('../database/Database.js', () => {
+  class DatabaseConnection {
+    connect = vi.fn().mockResolvedValue(undefined);
+    test = vi.fn().mockResolvedValue({ success: true });
+    getDriver = vi.fn().mockReturnValue(mockDriver);
+    close = vi.fn().mockResolvedValue(undefined);
+  }
+
+  class Introspector {
+    getSchemas = vi.fn().mockResolvedValue([
+      {
+        name: 'dbo',
+        tables: [
+          {
+            name: 'Users',
+            rowCount: 100,
+            dependsOn: [],
+            dependents: [],
+            columns: [
+              { name: 'Id', dataType: 'int', isNullable: false, isPrimaryKey: true, isForeignKey: false, descriptionIterations: [] }
+            ],
+            descriptionIterations: []
+          }
+        ]
+      }
+    ]);
+    LoadIndexes = vi.fn().mockResolvedValue([]);
+  }
+
+  class DataSampler {
+    analyzeTable = mockAnalyzeTable;
+    AnalyzeTable = mockAnalyzeTable;
+  }
+
+  return {
+    DatabaseConnection,
+    Introspector,
+    DataSampler
+  };
+});
+
+vi.mock('../state/StateManager.js', () => {
+  class StateManager {
+    createInitialState = vi.fn().mockReturnValue({
+      version: '1.0.0',
+      database: { name: 'TestDB', server: 'localhost', analyzedAt: '2026-01-01T00:00:00Z' },
+      schemas: [],
+      summary: {},
+      phases: { descriptionGeneration: [] }
+    });
+    load = vi.fn().mockResolvedValue(null);
+    save = vi.fn().mockResolvedValue(undefined);
+    updateSummary = vi.fn();
+    createAnalysisRun = vi.fn().mockReturnValue({
+      id: 'run-1',
+      iterationsPerformed: 0,
+      totalTokensUsed: 0,
+      estimatedCost: 0
+    });
+    updateTableDescription = vi.fn();
+    updateColumnDescription = vi.fn();
+  }
+
+  return { StateManager };
+});
+
+vi.mock('fs/promises', () => ({
+  mkdir: vi.fn().mockResolvedValue(undefined),
+  readdir: vi.fn().mockResolvedValue([]),
+  readFile: vi.fn().mockResolvedValue('{}'),
+  writeFile: vi.fn().mockResolvedValue(undefined)
+}));
+
+function createTestConfig(overrides?: Partial<DBAutoDocConfig>): DBAutoDocConfig {
+  return {
+    version: '1.0.0',
+    database: { server: 'localhost', database: 'TestDB', user: 'sa', password: 'pass' },
+    ai: { provider: 'gemini', model: 'test-model', apiKey: 'test-key', temperature: 0.1 },
+    analysis: {
+      cardinalityThreshold: 20,
+      sampleSize: 10,
+      includeStatistics: true,
+      includePatternAnalysis: true,
+      convergence: { maxIterations: 1, stabilityWindow: 2, confidenceThreshold: 0.85 },
+      backpropagation: { enabled: false, maxDepth: 1 },
+      sanityChecks: { dependencyLevel: false, schemaLevel: false, crossSchema: false }
+    },
+    output: { stateFile: './state.json', outputDir: './output', sqlFile: './out.sql', markdownFile: './out.md' },
+    schemas: { exclude: ['sys'] },
+    tables: { exclude: [] },
+    ...overrides
+  };
+}
+
+/** Exposes the protected resume hook so a test can stub the state file without casting through unknown. */
+class ResumableOrchestrator extends AnalysisOrchestrator {
+  public override loadAndMergeState(statePath: string, stateManager: StateManager): Promise<DatabaseDocumentation> {
+    return super.loadAndMergeState(statePath, stateManager);
+  }
+}
+
+describe('Resumed sampling in AnalysisOrchestrator', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('samples only the tables that carry no statistics yet when resuming', async () => {
+    const progressMessages: string[] = [];
+    const sampled = { name: 'Users', rowCount: 100, dependsOn: [], dependents: [], descriptionIterations: [],
+      columns: [{ name: 'Id', dataType: 'int', isNullable: false, isPrimaryKey: true, isForeignKey: false, descriptionIterations: [], statistics: { totalRows: 100, distinctCount: 100, uniquenessRatio: 1, nullCount: 0, nullPercentage: 0, sampleValues: [] } }] };
+    const unsampled = { name: 'Orders', rowCount: 500, dependsOn: [], dependents: [], descriptionIterations: [],
+      columns: [{ name: 'Id', dataType: 'int', isNullable: false, isPrimaryKey: true, isForeignKey: false, descriptionIterations: [] }] };
+    const resumedState = { version: '1.0.0', database: { name: 'TestDB', server: 'localhost' }, summary: {}, phases: { descriptionGeneration: [] },
+      schemas: [{ name: 'dbo', tables: [sampled, unsampled], descriptionIterations: [] }] };
+    vi.spyOn(ResumableOrchestrator.prototype, 'loadAndMergeState').mockResolvedValue(resumedState as unknown as DatabaseDocumentation);
+
+    const orchestrator = new ResumableOrchestrator({
+      config: createTestConfig(),
+      resumeFromState: './output/run-1/state.json',
+      maxIterations: 0,
+      onProgress: (msg) => progressMessages.push(msg)
+    });
+    const result = await orchestrator.Execute();
+    expect(result.success).toBe(true);
+    expect(progressMessages).toContain('Resuming table data sampling: 1 of 2 tables have no statistics yet');
+    expect(progressMessages).toContain('Sampling table data [1/1]: dbo.Orders');
+    expect(mockAnalyzeTable).toHaveBeenCalledTimes(1);
+    expect(mockAnalyzeTable).toHaveBeenCalledWith('dbo', 'Orders', unsampled.columns);
+  });
+
+  it('records a partial phase and counts only the tables that were actually sampled when a table fails', async () => {
+    const col = () => ({ name: 'Id', dataType: 'int', isNullable: false, isPrimaryKey: true, isForeignKey: false, descriptionIterations: [] });
+    const users = { name: 'Users', rowCount: 100, dependsOn: [], dependents: [], descriptionIterations: [], columns: [col()] };
+    const orders = { name: 'Orders', rowCount: 500, dependsOn: [], dependents: [], descriptionIterations: [], columns: [col()] };
+    const resumedState = { version: '1.0.0', database: { name: 'TestDB', server: 'localhost' }, summary: {}, phases: { descriptionGeneration: [] },
+      schemas: [{ name: 'dbo', tables: [users, orders], descriptionIterations: [] }] };
+    vi.spyOn(ResumableOrchestrator.prototype, 'loadAndMergeState').mockResolvedValue(resumedState as unknown as DatabaseDocumentation);
+    mockAnalyzeTable.mockImplementation(async (_schema: string, tableName: string) => {
+      if (tableName === 'Orders') throw new Error('timeout');
+    });
+
+    const orchestrator = new ResumableOrchestrator({
+      config: createTestConfig(),
+      resumeFromState: './output/run-1/state.json',
+      maxIterations: 0,
+      onProgress: () => undefined
+    });
+    const result = await orchestrator.Execute();
+    expect(result.success).toBe(true);
+    expect(mockAnalyzeTable).toHaveBeenCalledTimes(2);
+    expect(resumedState.phases).toMatchObject({ dataSampling: { status: 'partial', sampledTables: 1, totalTables: 2 } });
+    mockAnalyzeTable.mockReset().mockResolvedValue(undefined);
+  });
+
+  it('does not start sampling on a resume when the resumed run skipped it', async () => {
+    const progressMessages: string[] = [];
+    const unsampled = { name: 'Orders', rowCount: 500, dependsOn: [], dependents: [], descriptionIterations: [],
+      columns: [{ name: 'Id', dataType: 'int', isNullable: false, isPrimaryKey: true, isForeignKey: false, descriptionIterations: [] }] };
+    const resumedState = { version: '1.0.0', database: { name: 'TestDB', server: 'localhost' }, summary: {},
+      phases: { descriptionGeneration: [], dataSampling: { status: 'skipped', startedAt: '2026-01-01T00:00:00Z', sampledTables: 0, totalTables: 1 } },
+      schemas: [{ name: 'dbo', tables: [unsampled], descriptionIterations: [] }] };
+    vi.spyOn(ResumableOrchestrator.prototype, 'loadAndMergeState').mockResolvedValue(resumedState as unknown as DatabaseDocumentation);
+
+    const orchestrator = new ResumableOrchestrator({
+      config: createTestConfig(),
+      resumeFromState: './output/run-1/state.json',
+      maxIterations: 0,
+      onProgress: (msg) => progressMessages.push(msg)
+    });
+    const result = await orchestrator.Execute();
+    expect(result.success).toBe(true);
+    expect(progressMessages.some(m => m.startsWith('Table data sampling skipped (the resumed run skipped it'))).toBe(true);
+    expect(mockAnalyzeTable).not.toHaveBeenCalled();
+  });
+});
+
+describe('SkipSampling in AnalysisOrchestrator', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('skips sampling when skipSampling: true is passed via options', async () => {
+    const progressMessages: string[] = [];
+    const config = createTestConfig();
+
+    const orchestrator = new AnalysisOrchestrator({
+      config,
+      skipSampling: true,
+      maxIterations: 0,
+      onProgress: (msg) => progressMessages.push(msg)
+    });
+
+    const result = await orchestrator.Execute();
+    expect(result.success).toBe(true);
+    expect(progressMessages).toContain('Table data sampling skipped');
+    expect(progressMessages).not.toContain('Analyzing table data');
+    expect(mockAnalyzeTable).not.toHaveBeenCalled();
+  });
+
+  it('still samples when config.analysis.includeStatistics is false (the flag is not a sampling switch)', async () => {
+    const progressMessages: string[] = [];
+    const config = createTestConfig();
+    config.analysis.includeStatistics = false;
+    const orchestrator = new AnalysisOrchestrator({
+      config,
+      maxIterations: 0,
+      onProgress: (msg) => progressMessages.push(msg)
+    });
+    const result = await orchestrator.Execute();
+    expect(result.success).toBe(true);
+    expect(progressMessages).toContain('Analyzing table data');
+    expect(mockAnalyzeTable).toHaveBeenCalled();
+  });
+
+  it('skips organic-key detection with a warning when sampling is skipped', async () => {
+    const progressMessages: string[] = [];
+    const config = createTestConfig();
+    config.analysis.organicKeyDetection = { enabled: true, provider: 'gemini', model: 'test-model' } as DBAutoDocConfig['analysis']['organicKeyDetection'];
+    const orchestrator = new AnalysisOrchestrator({
+      config,
+      skipSampling: true,
+      maxIterations: 0,
+      onProgress: (msg) => progressMessages.push(msg)
+    });
+    const result = await orchestrator.Execute();
+    expect(result.success).toBe(true);
+    expect(progressMessages).toContain('Organic-key detection skipped: it needs column statistics and no table has been sampled');
+    expect(progressMessages).not.toContain('Running organic-key detection');
+  });
+
+  it('skips sampling when config.analysis.skipSampling is true', async () => {
+    const progressMessages: string[] = [];
+    const config = createTestConfig();
+    config.analysis.skipSampling = true;
+
+    const orchestrator = new AnalysisOrchestrator({
+      config,
+      maxIterations: 0,
+      onProgress: (msg) => progressMessages.push(msg)
+    });
+
+    const result = await orchestrator.Execute();
+    expect(result.success).toBe(true);
+    expect(progressMessages).toContain('Table data sampling skipped');
+    expect(progressMessages).not.toContain('Analyzing table data');
+    expect(mockAnalyzeTable).not.toHaveBeenCalled();
+  });
+
+  it('runs sampling when skipSampling is false and includeStatistics is true', async () => {
+    const progressMessages: string[] = [];
+    const config = createTestConfig();
+
+    const orchestrator = new AnalysisOrchestrator({
+      config,
+      skipSampling: false,
+      maxIterations: 0,
+      onProgress: (msg) => progressMessages.push(msg)
+    });
+
+    const result = await orchestrator.Execute();
+    expect(result.success).toBe(true);
+    expect(progressMessages).toContain('Analyzing table data');
+    expect(progressMessages).toContain('Sampling table data [1/1]: dbo.Users');
+    expect(progressMessages).toContain('Data analysis complete');
+    expect(mockAnalyzeTable).toHaveBeenCalled();
+  });
+});

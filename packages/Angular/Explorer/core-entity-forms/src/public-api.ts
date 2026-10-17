@@ -39,6 +39,7 @@ export * from './lib/custom/MLModels/ml-model-view-models';
 // Custom form supporting components
 export { TemplateEditorComponent } from './lib/shared/components/template-editor.component';
 export { ChatMessageViewerComponent } from './lib/custom/AIPromptRuns/chat-message-viewer.component';
+export { PromptRunDataCaptureNoteComponent } from './lib/custom/AIPromptRuns/prompt-run-data-capture-note.component';
 export { AIAgentRunTimelineComponent } from './lib/custom/ai-agent-run/ai-agent-run-timeline.component';
 export { AIAgentRunStepNodeComponent } from './lib/custom/ai-agent-run/ai-agent-run-step-node.component';
 export { AIAgentRunAnalyticsComponent } from './lib/custom/ai-agent-run/ai-agent-run-analytics.component';

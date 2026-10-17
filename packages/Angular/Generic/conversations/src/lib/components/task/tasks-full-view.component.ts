@@ -166,6 +166,12 @@ export class TasksFullViewComponent extends BaseAngularComponent implements OnIn
   get baseFilter(): string {
     return this.BaseFilter;
   } // SQL filter for tasks (default: show all)
+
+  /**
+   * Builds the task filter each time the view loads or refreshes, so the list includes tasks
+   * created since the last load. Replaces {@link BaseFilter} when set.
+   */
+  @Input() BaseFilterResolver: (() => Promise<string>) | null = null;
   @Input() ActiveTaskId?: string;
 
   /** @deprecated Use {@link ActiveTaskId}. */
@@ -285,8 +291,9 @@ export class TasksFullViewComponent extends BaseAngularComponent implements OnIn
   }
 
   ngOnChanges(changes: SimpleChanges) {
-    // Reload tasks if baseFilter changes
-    if (changes['baseFilter'] && !changes['baseFilter'].firstChange) {
+    // Reload tasks if the filter or the filter builder changes
+    const filterChanged = (key: string) => !!changes[key] && !changes[key].firstChange;
+    if (filterChanged('baseFilter') || filterChanged('BaseFilterResolver')) {
       this.LoadTasks();
     }
 
@@ -310,14 +317,15 @@ export class TasksFullViewComponent extends BaseAngularComponent implements OnIn
       }
 
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+      const filter = this.BaseFilterResolver ? await this.BaseFilterResolver() : this.BaseFilter;
 
-      console.log('📝 Tasks filter SQL:', this.BaseFilter);
+      console.log('📝 Tasks filter SQL:', filter);
 
-      // Load all tasks with the provided filter
+      // Load all tasks with the filter
       const tasksResult = await rv.RunView<MJTaskEntity>(
         {
           EntityName: 'MJ: Tasks',
-          ExtraFilter: this.BaseFilter,
+          ExtraFilter: filter,
           OrderBy: '__mj_CreatedAt DESC',
           MaxRows: 1000,
           ResultType: 'entity_object'
