@@ -25,6 +25,8 @@
  * structured JSON benchmark report to that path and prints a Markdown summary table.
  */
 import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { performance } from 'node:perf_hooks';
 import {
     BaseEntity,
@@ -47,7 +49,7 @@ import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { AIEngine } from '@memberjunction/aiengine';
 import { PayloadManager } from '@memberjunction/ai-agents';
 import type { ExecuteAgentResult, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
-import { MJConversationDetailEntity, MJConversationEntity } from '@memberjunction/core-entities';
+import { MJConversationDetailEntity, MJConversationEntity, MJErrorLogEntity } from '@memberjunction/core-entities';
 import { RegisterTestLLM, TestLLM, type TestLLMOutcome } from '@memberjunction/unit-testing';
 import {
     Assert,
@@ -107,6 +109,9 @@ export interface PrimitiveBenchmarkMetrics {
     TemplateRenderSimpleMs?: number;
     ActionSnapshotAndEngineLookupMs?: number;
     PayloadApplyAndDeepDiffMs?: number;
+    DatestampsOnlyEntityCount?: number;
+    DatestampsOnlyEntitiesBySchema?: Record<string, number>;
+    DatestampsOnly10SavesMs?: number;
 }
 
 export interface AgentRunTreeMetrics {
@@ -1298,6 +1303,77 @@ export const PerformanceBenchmarkChecks: NamedCheck[] = [
             Assert(metrics.TotalStepsInTree > 0, 'PB12: Live Research Agent produced finalized steps');
         },
     },
+    {
+        Id: `${BUNDLE}.PB13`,
+        Name: 'PB13: SaveReturnMode datestamps_only catalog audit & 10-save roundtrip benchmark on large NVARCHAR(MAX) log rows',
+        Fn: async (ctx: IntegrationCheckContext): Promise<void> => {
+            const fx = requireFixture();
+            const datestampsOnlyEntities = ctx.Provider.Entities.filter(
+                (e) => e.SaveReturnMode === 'datestamps_only'
+            );
+            const bySchema: Record<string, number> = {};
+            for (const ent of datestampsOnlyEntities) {
+                bySchema[ent.SchemaName] = (bySchema[ent.SchemaName] ?? 0) + 1;
+            }
+            fx.Primitives.DatestampsOnlyEntityCount = datestampsOnlyEntities.length;
+            fx.Primitives.DatestampsOnlyEntitiesBySchema = bySchema;
+
+            // Verify key core write-heavy telemetry/execution entities are configured with datestamps_only
+            const requiredCoreEntities = [
+                'MJ: AI Agent Run Steps',
+                'MJ: AI Prompt Runs',
+                'MJ: AI Agent Runs',
+                'MJ: Action Execution Logs',
+                'MJ: Error Logs',
+                'MJ: Audit Logs',
+                'MJ: Record Changes',
+            ];
+            for (const name of requiredCoreEntities) {
+                const ent = ctx.Provider.Entities.find((e) => e.Name === name);
+                Assert(!!ent, `PB13: expected entity '${name}' in metadata`);
+                AssertEqual(
+                    ent!.SaveReturnMode,
+                    'datestamps_only',
+                    `PB13: expected '${name}' to have SaveReturnMode='datestamps_only'`
+                );
+            }
+
+            // Benchmark 10 consecutive saves of MJ: Error Logs carrying a ~32 KB Details payload
+            const largeDetails = JSON.stringify({
+                marker: fx.Marker,
+                stack: Array.from({ length: 120 }, (_, i) => `at Frame_${i} (module_${i}.ts:${i * 10}:15) — diagnostic payload text`).join('\n'),
+            });
+            const createdIds: string[] = [];
+            try {
+                const t0 = performance.now();
+                for (let i = 0; i < 10; i++) {
+                    const errLog = await ctx.Provider.GetEntityObject<MJErrorLogEntity>('MJ: Error Logs', ctx.User);
+                    errLog.NewRecord();
+                    errLog.Code = `PB13-${i}`;
+                    errLog.Message = `PB13 datestamps_only benchmark row #${i} (${fx.Marker})`;
+                    errLog.Details = largeDetails;
+                    errLog.Status = 'Info';
+                    errLog.Category = 'Benchmark';
+                    const saved = await errLog.Save();
+                    Assert(saved, `PB13: ErrorLog save #${i} failed: ${errLog.LatestResult?.CompleteMessage}`);
+                    const id = errLog.ID;
+                    Assert(!!id, `PB13: ErrorLog save #${i} populated ID`);
+                    Assert(!!errLog.__mj_CreatedAt, `PB13: ErrorLog save #${i} populated __mj_CreatedAt`);
+                    Assert(!!errLog.__mj_UpdatedAt, `PB13: ErrorLog save #${i} populated __mj_UpdatedAt`);
+                    createdIds.push(id);
+                }
+                const elapsedMs = Number((performance.now() - t0).toFixed(2));
+                fx.Primitives.DatestampsOnly10SavesMs = elapsedMs;
+                console.log(
+                    `      → PB13 SaveReturnMode='datestamps_only' (${datestampsOnlyEntities.length} entities across ${Object.keys(bySchema).length} schemas; 10x 32KB ErrorLog saves): ${elapsedMs} ms`
+                );
+            } finally {
+                for (const id of createdIds) {
+                    await DeleteById('MJ: Error Logs', id, ctx.Provider, ctx.User);
+                }
+            }
+        },
+    },
 ];
 
 for (const check of PerformanceBenchmarkChecks) {
@@ -1326,6 +1402,69 @@ function buildBenchmarkReport(fx: BenchmarkFixture): PerformanceBenchmarkReport 
     };
 }
 
+function formatBenchmarkMarkdown(report: PerformanceBenchmarkReport): string {
+    const lines: string[] = [
+        `# MemberJunction Performance & Agent Overhead Benchmark Report`,
+        ``,
+        `- **Timestamp**: \`${report.Timestamp}\``,
+        `- **Database**: \`${report.Database}\``,
+        `- **Primitives Total CPU Time (PB1–PB6)**: **${report.PrimitivesTotalMs} ms**`,
+        `- **\`SaveReturnMode: 'datestamps_only'\` Entities Active (PB13)**: **${report.Primitives.DatestampsOnlyEntityCount ?? 'n/a'}** (\`${JSON.stringify(report.Primitives.DatestampsOnlyEntitiesBySchema ?? {})}\`)`,
+        `- **10x 32 KB \`ErrorLog\` Saves with \`datestamps_only\` (PB13)**: **${report.Primitives.DatestampsOnly10SavesMs ?? 'n/a'} ms**`,
+        ``,
+        `## 1. Core & AI Primitive Microbenchmarks (PB1–PB6, PB13)`,
+        ``,
+        `| Check | Benchmark | Elapsed (ms) |`,
+        `|---|---|---:|`,
+        `| **PB1** | \`ClassFactory\` (\`GetRegistration\` + \`GetAllRegistrations\`) & \`ObjectCache.Find\` (10k iters / 450 classes) | ${report.Primitives.ClassFactoryAndObjectCacheMs ?? 'n/a'} |`,
+        `| **PB2** | \`EntityInfo.ChildEntities\` + \`BaseEntity\` Hydration (\`LoadFromData\`/\`SetMany\`/\`GetAll\`) + FLS (2,000 rows x 25 fields) | ${report.Primitives.EntityHydrateAndFlsMs ?? 'n/a'} |`,
+        `| **PB3** | \`LocalCacheManager\` \`SetRunViewResult\` + \`SetDataset\` + \`GetStats\` (80 large entries) | ${report.Primitives.LocalCacheWritesAndStatsMs ?? 'n/a'} |`,
+        `| **PB4** | \`TemplateEngineServer.RenderTemplateSimple\` + \`NunjucksSandbox\` (1,000 renders) | ${report.Primitives.TemplateRenderSimpleMs ?? 'n/a'} |`,
+        `| **PB5** | \`RedactParamsToJSON\` + \`AIEngineBase\` permissions & catalog lookup (500 iters) | ${report.Primitives.ActionSnapshotAndEngineLookupMs ?? 'n/a'} |`,
+        `| **PB6** | \`PayloadManager.applyAgentChangeRequest\` + \`DeepDiffer\` (50 turns) | ${report.Primitives.PayloadApplyAndDeepDiffMs ?? 'n/a'} |`,
+        `| **PB13** | \`SaveReturnMode: 'datestamps_only'\` 10x 32 KB \`MJ: Error Logs\` SQL roundtrips (${report.Primitives.DatestampsOnlyEntityCount ?? 0} entities configured) | ${report.Primitives.DatestampsOnly10SavesMs ?? 'n/a'} |`,
+        ``,
+        `## 2. Multi-Turn Agent Loop & SQL Server Footprint Benchmarks (PB7–PB12)`,
+        ``,
+        `| Check / Agent | Mode | Wall Time (ms) | LLM Time (ms) | Framework Overhead (ms) | Runs | Steps | Total Step DB Bytes | Pointer Steps (Start / End) | Est. Dedup Savings |`,
+        `|---|---|---:|---:|---:|---:|---:|---:|---|---:|`,
+    ];
+    for (const r of [...report.DeterministicAgentRuns, ...report.LiveAgentRuns]) {
+        lines.push(
+            `| **${r.Label}** | \`${r.Mode}\` | ${r.WallTimeMs} | ${r.LlmPromptExecutionMs} | ${r.FrameworkOverheadMs} | ${r.TotalRunsInTree} | ${r.TotalStepsInTree} | ${r.TotalStepStorageBytes.toLocaleString()} B | ${r.PayloadAtStartPointerSteps} / ${r.PayloadAtEndPointerSteps} | ${r.StorageSavingsPercent}% |`
+        );
+    }
+    lines.push('');
+    return lines.join('\n');
+}
+
+function writePersistentBenchmarkLogs(report: PerformanceBenchmarkReport): void {
+    const currentDir = path.dirname(fileURLToPath(import.meta.url));
+    const defaultLogDir = path.resolve(currentDir, '../../benchmark-logs');
+    const logDir = process.env.MJ_PERF_BENCHMARK_LOG_DIR ?? defaultLogDir;
+    try {
+        fs.mkdirSync(logDir, { recursive: true });
+        const safeTs = report.Timestamp.replace(/[:.]/g, '-');
+        const jsonPath = path.join(logDir, `benchmark-${safeTs}.json`);
+        const mdPath = path.join(logDir, `benchmark-${safeTs}.md`);
+        const latestJsonPath = path.join(logDir, 'latest.json');
+        const latestMdPath = path.join(logDir, 'latest.md');
+        const historyJsonlPath = path.join(logDir, 'history.jsonl');
+
+        const jsonContent = JSON.stringify(report, null, 2);
+        const mdContent = formatBenchmarkMarkdown(report);
+
+        fs.writeFileSync(jsonPath, jsonContent, 'utf8');
+        fs.writeFileSync(mdPath, mdContent, 'utf8');
+        fs.writeFileSync(latestJsonPath, jsonContent, 'utf8');
+        fs.writeFileSync(latestMdPath, mdContent, 'utf8');
+        fs.appendFileSync(historyJsonlPath, JSON.stringify(report) + '\n', 'utf8');
+        console.log(`  [performance-benchmark] Persisted benchmark logs to ${logDir} (latest.json, latest.md, history.jsonl)`);
+    } catch (e) {
+        console.error(`  [performance-benchmark] Failed to write persistent benchmark logs to ${logDir}:`, e);
+    }
+}
+
 function printBenchmarkSummary(report: PerformanceBenchmarkReport): void {
     console.log('\n╔══════════════════════════════════════════════════════════════════════════════════════════╗');
     console.log('║                    MJ PERFORMANCE & AGENT OVERHEAD BENCHMARK SUMMARY                     ║');
@@ -1338,6 +1477,7 @@ function printBenchmarkSummary(report: PerformanceBenchmarkReport): void {
     console.log(`    - PB4 TemplateEngineServer RenderSimple (1,000x):     ${report.Primitives.TemplateRenderSimpleMs ?? 'n/a'} ms`);
     console.log(`    - PB5 SnapshotActionParams & AIEngine Permissions:    ${report.Primitives.ActionSnapshotAndEngineLookupMs ?? 'n/a'} ms`);
     console.log(`    - PB6 PayloadManager.applyAgentChangeRequest (50x):   ${report.Primitives.PayloadApplyAndDeepDiffMs ?? 'n/a'} ms`);
+    console.log(`    - PB13 datestamps_only 10x 32KB ErrorLog saves:       ${report.Primitives.DatestampsOnly10SavesMs ?? 'n/a'} ms (${report.Primitives.DatestampsOnlyEntityCount ?? 0} entities)`);
 
     const allRuns = [...report.DeterministicAgentRuns, ...report.LiveAgentRuns];
     if (allRuns.length > 0) {
@@ -1375,6 +1515,7 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle(BUNDLE, {
 
         const report = buildBenchmarkReport(fx);
         printBenchmarkSummary(report);
+        writePersistentBenchmarkLogs(report);
 
         const outPath = process.env.MJ_PERF_BENCHMARK_OUT;
         if (outPath) {

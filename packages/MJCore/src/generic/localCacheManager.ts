@@ -4234,7 +4234,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             }
         };
 
-        const sampleCount = Math.min(rowCount, Math.max(3, Math.ceil(rowCount * 0.10)));
+        const sampleCount = rowCount <= 3 ? rowCount : Math.min(10, Math.max(3, Math.ceil(rowCount * 0.10)));
         if (sampleCount >= rowCount) {
             // Small result set — measure every row (no point sampling).
             let total = 0;

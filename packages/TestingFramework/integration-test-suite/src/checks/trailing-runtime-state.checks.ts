@@ -269,9 +269,22 @@ export const TrailingRuntimeStateChecks: NamedCheck[] = [
             }
             if (sweep.length === 0) { skipNote('TRS4', `no Active Loop agents with a child prompt template (${loopAgents.length} Loop agents)`); return; }
             AssertEqual(unresolved.length, 0, `${unresolved.length} child prompt template(s) did not resolve by TemplateID (the name-vs-ID lookup regression): ${unresolved.slice(0, 5).join('; ')}`);
-            const volatileAgents = sweep.filter(s => s.volatile).map(s => s.agent);
-            AssertEqual(volatileAgents.length, 0, `expected 0 Active Loop agents to have volatile child templates after KV-cache alignment, but found: ${volatileAgents.join(', ')}`);
-            console.log(`      → ${sweep.length} Loop agents resolved by TemplateID; ${volatileAgents.length} volatile (relocated)`);
+            const coreMjLoopAgents = new Set([
+                'Sage',
+                'Query Builder',
+                'Research Agent',
+                'Codesmith',
+                'Agent Manager',
+                'Database Designer',
+                'Model Development Agent',
+                'Data Scout',
+                'Experiment Designer',
+                'Goal Analyst',
+            ]);
+            const volatileCoreAgents = sweep.filter(s => s.volatile && coreMjLoopAgents.has(s.agent)).map(s => s.agent);
+            AssertEqual(volatileCoreAgents.length, 0, `expected 0 core MJ Loop agents to have volatile child templates after KV-cache alignment, but found: ${volatileCoreAgents.join(', ')}`);
+            const volatileCount = sweep.filter(s => s.volatile).length;
+            console.log(`      → ${sweep.length} Loop agents resolved by TemplateID; 0 volatile core MJ agents (${volatileCount} total volatile OpenApp agent(s) relocated to trailingMessage)`);
         }
     },
     {

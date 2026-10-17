@@ -318,6 +318,16 @@ export class WebURLPartComponent extends BaseDashboardPart implements AfterViewI
             return;
         }
 
+        // SECURITY: only http(s) URLs may be embedded. bypassSecurityTrustResourceUrl disables
+        // Angular's sanitizer, so without this check a stored javascript: (or other scheme) URL
+        // in a shared dashboard panel would execute in every viewer's browser.
+        if (!this.isEmbeddableUrl(url)) {
+            this.SafeUrl = null;
+            this.RawUrl = '';
+            this.setError('Only http:// and https:// URLs can be embedded.');
+            return;
+        }
+
         this.setLoading(true);
 
         try {
@@ -344,6 +354,19 @@ export class WebURLPartComponent extends BaseDashboardPart implements AfterViewI
 
         } catch (error) {
             this.setError(error instanceof Error ? error.message : 'Failed to load URL');
+        }
+    }
+
+    /**
+     * True when the URL parses and uses a scheme that is safe to hand to
+     * bypassSecurityTrustResourceUrl for iframe embedding (http/https only).
+     */
+    private isEmbeddableUrl(url: string): boolean {
+        try {
+            const parsed = new URL(url);
+            return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+        } catch {
+            return false;
         }
     }
 
