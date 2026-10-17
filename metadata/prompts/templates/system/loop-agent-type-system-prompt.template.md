@@ -55,7 +55,7 @@ interface LoopAgentResponse {
     /** Next action{% if not _IMPLICIT %}. Required when taskComplete=false{% endif %} */
     nextStep?: {
         /** Operation type */
-        type: {% if not _NATIVE_TOOL_CALLING %}'Actions' | {% endif %}{% if _NATIVE_CONTROL_FLOW != 'implicit' %}'Sub-Agent' | 'Chat' | {% endif %}'Retry'{% if clientToolDetails %} | 'ClientTools'{% endif %}{% if skillCount > 0 %} | 'Skill'{% endif %}{% if planModeActive and not planApproved %} | 'Plan'{% endif %}{% if __agentTypePromptParams.includeResponseTypeDefinition.forEach != false %} | 'ForEach'{% endif %}{% if __agentTypePromptParams.includeResponseTypeDefinition.while != false %} | 'While'{% endif %}{% if __agentTypePromptParams.includeResponseTypeDefinition.pipeline != false and _PIPELINE_TOOLS %} | 'Pipeline'{% endif %}{% if __agentTypePromptParams.includeResponseTypeDefinition.tasks %} | 'Tasks'{% endif %};
+        type: {% if not _NATIVE_TOOL_CALLING %}'Actions' | {% endif %}{% if _NATIVE_CONTROL_FLOW != 'implicit' %}'Sub-Agent' | 'Chat' | {% endif %}'Retry'{% if clientToolDetails %} | 'ClientTools'{% endif %}{% if skillCount > 0 %} | 'Skill'{% endif %}{% if planModeActive and not planApproved %} | 'Plan'{% endif %}{% if __agentTypePromptParams.includeResponseTypeDefinition.forEach != false %} | 'ForEach'{% endif %}{% if __agentTypePromptParams.includeResponseTypeDefinition.while != false %} | 'While'{% endif %}{% if __agentTypePromptParams.includeResponseTypeDefinition.pipeline != false and _PIPELINE_TOOLS %} | 'Pipeline'{% endif %}{% if __agentTypePromptParams.includeResponseTypeDefinition.tasks %} | 'Tasks'{% endif %}{% if __agentTypePromptParams.includeResponseTypeDefinition.handoff %} | 'Handoff'{% endif %};
 {% if not _NATIVE_TOOL_CALLING %}        /** Actions to execute — server-side tools (when type='Actions') */
         actions?: Array<{ name: string; params: Record<string, unknown> }>;
 {% endif %}{% if skillCount > 0 %}
@@ -93,6 +93,9 @@ interface LoopAgentResponse {
             continuation?: 'message' | 'reinvoke' | 'none';
             durable?: boolean;
         };
+{% endif %}{% if __agentTypePromptParams.includeResponseTypeDefinition.handoff %}
+        /** Transfer the conversation to another agent (when type='Handoff') — see Transferring the conversation below. Ends your turn. */
+        handoff?: { agentName: string; brief: string; reason: string };
 {% endif %}
 {% if clientToolDetails %}
         /** Client tools to execute — browser-side UI tools (when type='ClientTools') */
@@ -974,6 +977,14 @@ needs no dispatcher. Set `durable: true` if you specifically want the Task row a
 
 If your graph is malformed you will get every problem back at once — fix them all and re-emit the
 **complete** graph, not a patch.
+{% endif %}{% if __agentTypePromptParams.includeResponseTypeDefinition.handoff %}
+## Transferring the conversation (nextStep.type = 'Handoff')
+
+Use `nextStep.type = 'Handoff'` when another agent should own the request instead of you:
+
+- It ends your turn; the other agent answers in this conversation as itself, with its own settings.
+- Put everything it needs in `brief`, and explain why you are transferring in `reason`.
+- Use `'Handoff'` when another agent should own the request, and use `'Sub-Agent'` when you need a result back.
 {% endif %}
 
 {# ── Volatile blocks delivered in trailing user message ────────────────────────

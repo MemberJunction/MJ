@@ -366,6 +366,7 @@ class LoopHarness {
             GetAutoActivatableSkillsForAgent: (): unknown[] => [],
             GetSkillsForAgent: (): unknown[] => [],
             GetClientToolsForAgent: (): unknown[] => [],
+            GetAgentConfigurationPresets: (): unknown[] => [],
             GetAgentBaseCatalog: (agentId: string): unknown => this.catalog.get(agentId),
             SetAgentBaseCatalog: (agentId: string, cat: unknown): void => {
                 this.catalog.set(agentId, cat);
@@ -2611,6 +2612,7 @@ describe('BaseAgent.buildAgentBaseCatalog — relationship targets', () => {
             ],
             AgentActions: [],
             AgentTypes: [],
+            GetAgentConfigurationPresets: (): unknown[] => [],
         };
 
         const catalog = new HarnessAgent().ExposeBuildAgentBaseCatalog(

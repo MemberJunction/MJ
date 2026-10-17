@@ -46,6 +46,8 @@ vi.mock('@memberjunction/ai-agents', () => ({
         }
     },
     ArtifactToolManager: class {},
+    CanAgentOwnSubAgentConsults: vi.fn(() => false),
+    LoadOpenSubAgentConsults: vi.fn(async () => []),
 }));
 
 // Only the widget lookup is stubbed; ElevateUserPayload is the real one, so the widget-guest test runs

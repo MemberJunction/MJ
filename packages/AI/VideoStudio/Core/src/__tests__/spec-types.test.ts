@@ -5,6 +5,7 @@ import type {
     KeyframeRequest,
     RenderHealth,
     RenderRequest,
+    RenderWorkerErrorBody,
     StillsRequest,
     VideoBeatTemplate,
     VideoGenerationSpec,
@@ -557,6 +558,11 @@ describe('VideoGenerationSpec & Render Wire Contract Types', () => {
             Errors: [],
         };
 
+        const geometryMismatchError: RenderWorkerErrorBody = {
+            Code: 'GEOMETRY_MISMATCH',
+            Message: 'Entry HTML data-width (1280) does not match request Width (1920).',
+        };
+
         expect(renderRequest.Bundle.Format).toBe('16:9');
         expect(renderRequest.Bundle.Files).toHaveLength(2);
         expect(beatTemplate.Key).toBe('hook');
@@ -565,5 +571,6 @@ describe('VideoGenerationSpec & Render Wire Contract Types', () => {
         expect(checkRequest.AllowedDataLiterals).toContain('$14.2M');
         expect(keyframeRequest.MaxFrames).toBe(12);
         expect(health.Healthy).toBe(true);
+        expect(geometryMismatchError.Code).toBe('GEOMETRY_MISMATCH');
     });
 });

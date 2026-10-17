@@ -244,7 +244,7 @@ import {
     WorkOSProvider,
 } from '@memberjunction/auth-providers';
 
-// @memberjunction/core-entities (451 classes)
+// @memberjunction/core-entities (454 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -369,6 +369,8 @@ import {
     MJAuthenticationProviderEntity,
     MJAuthorizationEntity,
     MJAuthorizationRoleEntity,
+    MJBrandKitAssetEntity,
+    MJBrandKitEntity,
     MJClusterAnalysisClusterEntity,
     MJClusterAnalysisEntity,
     MJCollectionArtifactEntity,
@@ -685,6 +687,7 @@ import {
     MJVersionLabelEntity,
     MJVersionLabelItemEntity,
     MJVersionLabelRestoreEntity,
+    MJVideoArchetypeEntity,
     MJViewTypeEntity,
     MJWebSearchProviderEntity,
     MJWorkQueueDeduplicationEntity,
@@ -1363,7 +1366,7 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (63 classes)
+// @memberjunction/core-entities-server (64 classes)
 import {
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
@@ -1386,6 +1389,7 @@ import {
     MJActionEntityServer,
     MJApplicationEntityServer,
     MJArtifactVersionEntityServer,
+    MJBrandKitEntityServer,
     MJCompanyIntegrationEntityServer,
     MJComponentEntityServer,
     MJConversationDetailAttachmentEntityServer,
@@ -1884,14 +1888,16 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJAuthenticationProviderEntity,
     MJAuthorizationEntity,
     MJAuthorizationRoleEntity,
+    MJBrandKitAssetEntity,
+    MJBrandKitEntity,
     MJClusterAnalysisClusterEntity,
     MJClusterAnalysisEntity,
-    MJCollectionArtifactEntity,
-    MJCollectionEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJCollectionArtifactEntity,
+    MJCollectionEntity,
     MJCollectionPermissionEntity,
     MJCollectionPermissionEntityExtended,
     MJCommunicationBaseMessageTypeEntity,
@@ -2090,12 +2096,12 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJQueryParameterEntity,
     MJQueryPermissionEntity,
     MJQuerySQLEntity,
-    MJQueueEntity,
-    MJQueueTaskEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJQueueEntity,
+    MJQueueTaskEntity,
     MJQueueTypeEntity,
     MJRSUPendingWorkEntity,
     MJRecommendationEntity,
@@ -2208,6 +2214,7 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJVersionLabelEntity,
     MJVersionLabelItemEntity,
     MJVersionLabelRestoreEntity,
+    MJVideoArchetypeEntity,
     MJViewTypeEntity,
     MJWebSearchProviderEntity,
     MJWorkQueueDeduplicationEntity,
@@ -2293,13 +2300,13 @@ const CLASS_REGISTRATIONS_2: any[] = [
     ExportGoogleFormsCSVAction,
     ExportJotFormCSVAction,
     ExportSurveyMonkeyCSVAction,
-    ExportTypeformCSVAction,
-    GetGoogleFormAction,
-    GetGoogleFormsStatisticsAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    ExportTypeformCSVAction,
+    GetGoogleFormAction,
+    GetGoogleFormsStatisticsAction,
     GetJotFormAction,
     GetJotFormStatisticsAction,
     GetJotFormSubmissionsAction,
@@ -2497,13 +2504,13 @@ const CLASS_REGISTRATIONS_3: any[] = [
     NoopReRanker,
     OpenAIReRanker,
     OpenSearchSearchProvider,
-    SearchScopePermissionResolver,
-    StorageSearchProvider,
-    TagSearchProvider,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    SearchScopePermissionResolver,
+    StorageSearchProvider,
+    TagSearchProvider,
     TypesenseSearchProvider,
     VectorSearchProvider,
     VoyageReRanker,
@@ -2629,6 +2636,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJActionEntityServer,
     MJApplicationEntityServer,
     MJArtifactVersionEntityServer,
+    MJBrandKitEntityServer,
     MJCompanyIntegrationEntityServer,
     MJComponentEntityServer,
     MJConversationDetailAttachmentEntityServer,
@@ -2700,14 +2708,14 @@ const CLASS_REGISTRATIONS_4: any[] = [
     ActivateFormContributionVersionAction,
     ActivateInteractiveFormVersionAction,
     AddDocumentContentAction,
-    AddRecordsToListAction,
-    AddViewResultsToListAction,
-    AggregateDataAction,
-    AssignUserRolesAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    AddRecordsToListAction,
+    AddViewResultsToListAction,
+    AggregateDataAction,
+    AssignUserRolesAction,
     BraveSearchAction,
     BulkUpdateListItemStatusAction,
     BusinessDaysCalculatorAction,
@@ -2892,7 +2900,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1168;
+export const CLASS_REGISTRATIONS_COUNT = 1172;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

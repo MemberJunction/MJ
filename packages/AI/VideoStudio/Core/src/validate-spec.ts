@@ -294,9 +294,23 @@ export type VideoSpecErrorCode =
     | 'MissingDataSnapshot'
     | 'MissingOutputManifest'
     | 'MissingOutputVideoPayload'
-    | 'OutputVideoFormatKeyMismatch';
+    | 'OutputVideoFormatKeyMismatch'
+    | 'BrandKitNotFound'
+    | 'BrandKitNotInScope'
+    | 'ArchetypeNotFound'
+    | 'InvalidFileID'
+    | 'FileNotReadable'
+    | 'AsyncValidationFailed';
 
-/** All `VideoSpecErrorCode` values for test completeness checks. */
+type AsyncVideoSpecErrorCode =
+    | 'BrandKitNotFound'
+    | 'BrandKitNotInScope'
+    | 'ArchetypeNotFound'
+    | 'InvalidFileID'
+    | 'FileNotReadable'
+    | 'AsyncValidationFailed';
+
+/** All pure `VideoSpecErrorCode` values for test completeness checks. */
 export const VIDEO_SPEC_ERROR_CODES = [
     'InvalidSpecVersion',
     'InvalidEnumValue',
@@ -332,7 +346,10 @@ export const VIDEO_SPEC_ERROR_CODES = [
     'MissingOutputVideoPayload',
     'OutputVideoFormatKeyMismatch',
 ] as const satisfies readonly VideoSpecErrorCode[];
-const _exhaustiveErrorCodes: AssertExhaustiveTuple<VideoSpecErrorCode, typeof VIDEO_SPEC_ERROR_CODES> = VIDEO_SPEC_ERROR_CODES;
+const _exhaustiveErrorCodes: AssertExhaustiveTuple<
+    Exclude<VideoSpecErrorCode, AsyncVideoSpecErrorCode>,
+    typeof VIDEO_SPEC_ERROR_CODES
+> = VIDEO_SPEC_ERROR_CODES;
 void _exhaustiveErrorCodes;
 
 /**

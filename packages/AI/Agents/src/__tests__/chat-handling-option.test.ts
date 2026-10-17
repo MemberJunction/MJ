@@ -232,6 +232,7 @@ class ChatHandlingHarness {
             GetAutoActivatableSkillsForAgent: (): unknown[] => [],
             GetSkillsForAgent: (): unknown[] => [],
             GetClientToolsForAgent: (): unknown[] => [],
+            GetAgentConfigurationPresets: (): unknown[] => [],
             GetAgentBaseCatalog: (agentId: string): unknown => this.catalog.get(agentId),
             SetAgentBaseCatalog: (agentId: string, cat: unknown): void => {
                 this.catalog.set(agentId, cat);

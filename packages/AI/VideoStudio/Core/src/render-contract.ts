@@ -123,8 +123,8 @@ export interface RenderProgress {
 export interface RenderResult {
     /** Aspect ratio rendered. */
     Format: VideoFormat;
-    /** Base64-encoded MP4 bytes produced by HyperFrames and FFmpeg. */
-    VideoBase64: Base64String;
+    /** Raw MP4 bytes produced by HyperFrames and FFmpeg (streamed over HTTP, never JSON-encoded). */
+    Video: Uint8Array;
     /** Output container MIME type ('video/mp4'). */
     MimeType: 'video/mp4';
     /** Rendered frame width in pixels. */
@@ -137,10 +137,22 @@ export interface RenderResult {
     DurationSeconds: number;
     /** Total number of frames rendered. */
     FrameCount: number;
+    /** True when the rendered MP4 includes an audio stream. */
+    HasAudio: boolean;
     /** Exact `@hyperframes/producer` version that executed the job. */
     RendererVersion: string;
     /** Total wall-clock time in milliseconds spent rendering. */
     RenderDurationMs: number;
+}
+
+/**
+ * Non-binary metadata fields of a completed MP4 render result emitted on the NDJSON stream before `GET /videos/:id`.
+ */
+export interface RenderResultMetadata extends Omit<RenderResult, 'Video'> {
+    /** One-time identifier used to fetch the binary MP4 from `GET /videos/<VideoID>`. */
+    VideoID: string;
+    /** Byte length of the rendered MP4 file. */
+    VideoSizeBytes: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -426,3 +438,100 @@ export interface RenderHealth {
     /** Actionable diagnostic messages for any missing or unhealthy dependency (empty when `Healthy` is true). */
     Errors: string[];
 }
+
+// ---------------------------------------------------------------------------
+// Wire Protocol (§7.1, §7.2, §7.3)
+// ---------------------------------------------------------------------------
+
+/**
+ * Structured error codes returned by the render worker HTTP endpoints.
+ *
+ * `'GEOMETRY_MISMATCH'` (HTTP 400) indicates the request geometry (`Width`, `Height`, or
+ * `DurationSeconds`) differs from the composition's `data-width`, `data-height`, or `data-duration` attributes.
+ */
+export type RenderWorkerErrorCode =
+    | 'Unauthorized'
+    | 'NotFound'
+    | 'BodyTooLarge'
+    | 'InvalidRequest'
+    | 'InvalidBundle'
+    | 'GEOMETRY_MISMATCH' // HTTP 400: request geometry differs from the composition's data-* attributes
+    | 'LintBlocked'
+    | 'TooManyStills'
+    | 'Timeout'
+    | 'Cancelled'
+    | 'DependencyMissing'
+    | 'Internal';
+
+/**
+ * Error response body returned on non-2xx render worker responses and `Error` NDJSON events.
+ */
+export interface RenderWorkerErrorBody {
+    /** Machine-readable error code. */
+    Code: RenderWorkerErrorCode;
+    /** Human-readable error message. */
+    Message: string;
+    /** Optional lint/security issues attached when `Code === 'LintBlocked'`. */
+    Issues?: CheckIssue[];
+}
+
+/**
+ * Discriminated union of newline-delimited JSON (NDJSON) events streamed by `POST /render`.
+ */
+export type RenderStreamEvent =
+    | {
+          /** Progress event emitted as frames are captured and encoded. */
+          Type: 'Progress';
+          /** Current render progress payload. */
+          Progress: RenderProgress;
+      }
+    | {
+          /** Periodic keep-alive event emitted every 15 seconds while a render job is active. */
+          Type: 'Heartbeat';
+      }
+    | {
+          /** Terminal success event carrying MP4 metadata and `VideoID` for `GET /videos/<VideoID>`. */
+          Type: 'Result';
+          /** Completed render metadata. */
+          Result: RenderResultMetadata;
+      }
+    | {
+          /** Terminal error event emitted when a render job fails after streaming has begun. */
+          Type: 'Error';
+          /** Structured error details. */
+          Error: RenderWorkerErrorBody;
+      };
+
+/**
+ * Canonical HTTP route paths served by `@memberjunction/video-studio-render-worker`.
+ */
+export const RENDER_WORKER_ROUTES = {
+    Health: '/health',
+    Render: '/render',
+    Video: '/videos',
+    Stills: '/stills',
+    ContactSheet: '/contact-sheet',
+    Check: '/check',
+    Keyframes: '/keyframes',
+} as const;
+
+/**
+ * Prefix line printed to stdout by the render worker CLI once the HTTP server is listening,
+ * followed immediately by the bound port digits (`VIDEO_STUDIO_RENDER_WORKER_PORT=<port>\n`).
+ */
+export const RENDER_WORKER_PORT_PREFIX = 'VIDEO_STUDIO_RENDER_WORKER_PORT=' as const;
+
+/**
+ * Environment variable names read by the render worker and driver layer.
+ */
+export const RENDER_WORKER_ENV = {
+    Host: 'VIDEO_STUDIO_RENDER_HOST',
+    Port: 'VIDEO_STUDIO_RENDER_PORT',
+    Token: 'VIDEO_STUDIO_RENDER_TOKEN',
+    MaxBodyMb: 'VIDEO_STUDIO_RENDER_MAX_BODY_MB',
+    Concurrency: 'VIDEO_STUDIO_RENDER_CONCURRENCY',
+    MaxTimeoutMs: 'VIDEO_STUDIO_RENDER_MAX_TIMEOUT_MS',
+    AllowRoot: 'VIDEO_STUDIO_RENDER_ALLOW_ROOT',
+} as const;
+
+

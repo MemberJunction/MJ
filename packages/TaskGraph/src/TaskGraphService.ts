@@ -1391,10 +1391,7 @@ export class TaskGraphService {
             const agentID = agentIDsByName.get(agent!.agentName);
             if (!agentID) continue;
 
-            const target = presetName.toLowerCase();
-            const presets = AIEngine.Instance.GetAgentConfigurationPresets(agentID, true);
-            const matched = presets.find((p) => p.Name?.trim().toLowerCase() === target)
-                ?? presets.find((p) => p.DisplayName?.trim().toLowerCase() === target);
+            const matched = AIEngine.Instance.FindActiveAgentConfigurationPreset(agentID, presetName);
             if (!matched) {
                 invalid.push({
                     nodeLabel: node.name || node.tempId,

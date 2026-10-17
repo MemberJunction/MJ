@@ -7,7 +7,9 @@
 export * from './archetype-types.js';
 export * from './video-generation-spec.js';
 export * from './render-contract.js';
+export * from './composition-runtime.js';
 export * from './validate-spec.js';
 export * from './data-values.js';
-
+export * from './chart-kit-types.js';
+export * from './chart-kit.js';
 
