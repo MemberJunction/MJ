@@ -17,6 +17,7 @@ import {
   MJConversationEntity,
   MJEnvironmentEntityExtended,
 } from '@memberjunction/core-entities';
+import { UUIDsEqual } from '@memberjunction/global';
 import { NavigationRequest } from '@memberjunction/ng-artifacts';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { PendingAttachment } from '@memberjunction/ng-composer';
@@ -176,7 +177,7 @@ export class VSCopilotPanelComponent
     const trimmed = this.ConversationId?.trim() ?? '';
     if (trimmed.length > 0) {
       this.ChatIsNewConversation = false;
-      if (this.ActiveConversation && this.ActiveConversation.ID !== trimmed) {
+      if (this.ActiveConversation && !UUIDsEqual(this.ActiveConversation.ID, trimmed)) {
         this.ActiveConversation = null;
       }
     } else {
