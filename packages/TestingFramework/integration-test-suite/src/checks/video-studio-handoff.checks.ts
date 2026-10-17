@@ -10,13 +10,15 @@
  *   `MJ: Conversation Details` row for `Video Studio` (`ParentID` = source detail row, `Role = 'AI'`,
  *   `Status = 'Complete'`), and runs `Video Studio` as a root run (`ParentRunID IS NULL`) on the same
  *   `ConversationID`.
- * - VSH2: `Video Studio` target preset resolution: without a saved setting, the target run's
- *   `ConfigurationID` resolves to `Video Studio Standard` (`presetSource = 'Default'`); with
- *   `MJ: User Settings` `mj.agentMode.<video studio id lowercased> = 'High'`, it resolves to
- *   `Video Studio High` (`presetSource = 'UserSetting'`).
+ * - VSH2: `Video Studio` target preset resolution drops the source's configuration: when the source
+ *   runs with `Video Studio Draft`'s `AIConfigurationID`, the source run records `Draft`'s
+ *   `ConfigurationID` while the target run's `ConfigurationID` resolves to `Video Studio Standard`
+ *   (`presetSource = 'Default'`) without a saved setting and to `Video Studio High`
+ *   (`presetSource = 'UserSetting'`) with `MJ: User Settings`
+ *   `mj.agentMode.<video studio id lowercased> = 'High'`.
  * - VSH3: Continuity data on the conversation: the newest `Role = 'AI'` row whose `AgentID` differs
- *   from the source agent (`IT: Handoff Source`) is the `Video Studio` reply row (the exact predicate
- *   read by `findLastNonSageReply`).
+ *   from the source agent (`IT: Handoff Source`) is the `Video Studio` reply row (the same newest
+ *   non-manager AI row rule).
  *
  * NO LIVE MODEL CALLS. Every run passes `CredentialScope: 'RuntimeOnly'` and placeholder `apiKeys`
  * for every candidate chat driver class (`TestLLM` registered via `RegisterTestLLM`), and each check
@@ -187,7 +189,8 @@ interface ConversationHandoffRun {
 async function runSourceWithFollowHandoffs(
     ctx: IntegrationCheckContext,
     userMessage: string,
-    conversationName: string
+    conversationName: string,
+    sourceConfigurationId?: string
 ): Promise<ConversationHandoffRun> {
     const f = requireFixture();
     const runner = new AgentRunner(ctx.Provider);
@@ -200,6 +203,7 @@ async function runSourceWithFollowHandoffs(
         apiKeys: SCRIPTED_API_KEYS,
         CredentialScope: 'RuntimeOnly',
         handoffChain: [],
+        ...(sourceConfigurationId ? { configurationId: sourceConfigurationId } : {}),
     };
 
     const convRun = await runner.RunAgentInConversation(params, {
@@ -466,11 +470,11 @@ export const VideoStudioHandoffChecks: NamedCheck[] = [
     {
         Id: `${BUNDLE}.VSH2`,
         Name:
-            'VSH2: Video Studio preset resolution — without a saved setting ConfigurationID resolves to Video Studio Standard, and with mj.agentMode.<video studio id lowercased>=High it resolves to Video Studio High',
+            'VSH2: Video Studio preset resolution — source runs with Video Studio Draft, and target ConfigurationID resolves to Video Studio Standard without a saved setting and Video Studio High with mj.agentMode.<video studio id lowercased>=High',
         Fn: async (ctx: IntegrationCheckContext): Promise<void> => {
             const f = requireFixture();
             try {
-                // 1. Default preset without saved setting -> Video Studio Standard
+                // 1. Default preset without saved setting -> Video Studio Standard (dropping source's Draft configuration)
                 await deleteTargetModeSetting(ctx, f.Agents.Target.ID);
 
                 armScript(f, [
@@ -487,7 +491,12 @@ export const VideoStudioHandoffChecks: NamedCheck[] = [
                 const defaultRun = await runSourceWithFollowHandoffs(
                     ctx,
                     'Make a 60-second explainer about X with the default mode.',
-                    'IT150 VSH2 Default Standard'
+                    'IT150 VSH2 Default Standard',
+                    f.Presets.Draft.AIConfigurationID!
+                );
+                Assert(
+                    UUIDsEqual(defaultRun.SourceResult.agentRun!.ConfigurationID, f.Presets.Draft.AIConfigurationID),
+                    `VSH2 (Standard): source ConfigurationID ${defaultRun.SourceResult.agentRun!.ConfigurationID}, expected Video Studio Draft ${f.Presets.Draft.AIConfigurationID}`
                 );
                 AssertEqual(defaultRun.Outcomes.length, 1, 'VSH2 (Standard): FollowHandoffs hop count');
                 const defaultTargetRun = defaultRun.Outcomes[0].agentResult?.agentRun;
@@ -499,7 +508,7 @@ export const VideoStudioHandoffChecks: NamedCheck[] = [
                 );
                 AssertEqual(f.Llm.CallCount, 2, 'VSH2 (Standard): TestLLM.CallCount');
 
-                // 2. Saved MJ: User Settings mj.agentMode.<video studio id lowercased> = 'High' -> Video Studio High
+                // 2. Saved MJ: User Settings mj.agentMode.<video studio id lowercased> = 'High' -> Video Studio High (dropping source's Draft configuration)
                 await writeTargetModeSetting(ctx, f.Agents.Target.ID, PRESET_NAMES.High);
 
                 armScript(f, [
@@ -516,7 +525,12 @@ export const VideoStudioHandoffChecks: NamedCheck[] = [
                 const highRun = await runSourceWithFollowHandoffs(
                     ctx,
                     'Make a 60-second explainer about X with the saved High mode.',
-                    'IT150 VSH2 UserSetting High'
+                    'IT150 VSH2 UserSetting High',
+                    f.Presets.Draft.AIConfigurationID!
+                );
+                Assert(
+                    UUIDsEqual(highRun.SourceResult.agentRun!.ConfigurationID, f.Presets.Draft.AIConfigurationID),
+                    `VSH2 (High): source ConfigurationID ${highRun.SourceResult.agentRun!.ConfigurationID}, expected Video Studio Draft ${f.Presets.Draft.AIConfigurationID}`
                 );
                 AssertEqual(highRun.Outcomes.length, 1, 'VSH2 (High): FollowHandoffs hop count');
                 const highTargetRun = highRun.Outcomes[0].agentResult?.agentRun;
@@ -721,8 +735,9 @@ async function purgeRuns(ctx: IntegrationCheckContext, runIds: string[]): Promis
     const quotedRuns = runIds.map(id => `'${EscapeSQLString(id)}'`).join(',');
     const rv = RunView.FromMetadataProvider(ctx.Provider);
 
-    // 1. Delete MJ: AI Agent Requests referencing any of these runs (Video Studio has ChatHandlingOption = 'Consult',
-    // so a root Chat step creates an MJ: AI Agent Requests row referencing OriginatingAgentRunID & OriginatingAgentRunStepID)
+    // 1. Delete MJ: AI Agent Requests referencing any of these runs (every root agent's Chat step raises an
+    // MJ: AI Agent Requests row referencing OriginatingAgentRunID & OriginatingAgentRunStepID and ends AwaitingFeedback;
+    // ChatHandlingOption = 'Consult' governs only a sub-agent's Chat step)
     const reqsResult = await rv.RunView<{ ID: string }>(
         {
             EntityName: 'MJ: AI Agent Requests',
