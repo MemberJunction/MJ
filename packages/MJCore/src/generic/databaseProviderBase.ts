@@ -1785,6 +1785,13 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                 // Step 4: Generate provider-specific SQL
                 const sqlDetails = await this.GenerateSaveSQL(entity, bNewRecord, user, options);
                 const effectiveReturnMode: EntitySaveReturnMode = options?.SaveReturnMode ?? entity.EntityInfo.SaveReturnMode;
+                // Snapshot the entity's in-memory field values at the exact point SQL parameters were bound
+                // (before awaiting ExecuteSQL). If the caller mutates the entity in memory while an async
+                // save is in flight (e.g. BaseEntitySaveQueue pipelining an INSERT + UPDATE), merging
+                // post-await entity.GetAll() would falsely mark those in-flight mutations as clean/saved.
+                const preSaveValues: Record<string, unknown> | undefined = effectiveReturnMode === 'datestamps_only'
+                    ? (entity.GetAll() as Record<string, unknown>)
+                    : undefined;
 
                 if (entity.TransactionGroup && !bReplay) {
                     // ---- Transaction Group path ----
@@ -1810,8 +1817,8 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                                 if (success && transactionResult) {
                                     this.OnAfterSaveExecute(entity, user, options, saveContext);
                                     entityResult.Success = true;
-                                    const mergedResult: Record<string, unknown> = effectiveReturnMode === 'datestamps_only'
-                                        ? { ...(entity.GetAll() as Record<string, unknown>), ...transactionResult }
+                                    const mergedResult: Record<string, unknown> = preSaveValues
+                                        ? { ...preSaveValues, ...transactionResult }
                                         : transactionResult;
                                     entityResult.NewValues = this.MapTransactionResultToNewValues(mergedResult);
                                 } else {
@@ -1849,9 +1856,10 @@ export abstract class DatabaseProviderBase extends ProviderBase {
 
                         // In 'datestamps_only' mode, the SP/query returned only the PK and
                         // __mj_CreatedAt/__mj_UpdatedAt columns. Merge those returned values
-                        // onto the entity's in-memory state so caller-set fields remain intact.
-                        const mergedRow: Record<string, unknown> = effectiveReturnMode === 'datestamps_only'
-                            ? { ...(entity.GetAll() as Record<string, unknown>), ...result[0] }
+                        // onto the pre-save snapshot so caller-set fields remain intact without
+                        // falsely marking concurrent in-flight mutations as clean.
+                        const mergedRow: Record<string, unknown> = preSaveValues
+                            ? { ...preSaveValues, ...result[0] }
                             : result[0];
 
                         // OnSaveCompleted may return patch fields (e.g., updated lat/lng
