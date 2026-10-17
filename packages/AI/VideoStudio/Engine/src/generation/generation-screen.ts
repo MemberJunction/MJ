@@ -299,11 +299,7 @@ export function SumRecordedGenerationCost(spec: Partial<VideoGenerationSpec>): n
                         ? rawDuration
                         : DEFAULT_GENERATED_VIDEO_DURATION_SECONDS
                     : 1;
-            try {
-                total += EstimateLoadedGenerationCallCost(asset.Kind, durationSeconds);
-            } catch {
-                // If AIEngine is not configured during a standalone ScreenGenerationRequest call, skip fallback.
-            }
+            total += EstimateLoadedGenerationCallCost(asset.Kind, durationSeconds);
         }
     }
     return total;
