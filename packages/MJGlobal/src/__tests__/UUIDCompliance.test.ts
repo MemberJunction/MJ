@@ -398,7 +398,7 @@ const NESTED_SCAN_BASELINE: Record<string, number> = {
     'Rubrics/Engine/src/rubricCli.ts': 2,
     'Scheduling/engine/src/drivers/ActionScheduledJobDriver.ts': 1,
     'SearchEngine/src/generic/SearchEngine.ts': 4,
-    'SearchEngine/src/generic/StorageSearchProvider.ts': 4,
+    'SearchEngine/src/generic/StorageSearchProvider.ts': 1,
     'SearchEngine/src/generic/VectorSearchProvider.ts': 2,
     'SearchEngine/src/permissions/SearchScopePermissionResolver.ts': 1,
     'TaskGraph/src/TaskGraphDispatcher.ts': 2,
