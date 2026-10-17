@@ -85,7 +85,6 @@ const ALLOWED_ARCHETYPE_CATEGORIES = new Set<string>([
     'Tutorial',
     'Announcement',
     'Briefing',
-    'Other',
 ]);
 
 describe('Video Studio seed metadata (VS-FND-4)', () => {
@@ -201,8 +200,14 @@ describe('Video Studio seed metadata (VS-FND-4)', () => {
             expect((color.Usage ?? '').trim().length).toBeGreaterThan(0);
         }
 
+        // Must match BUNDLED_DEFAULT_FONTS in @memberjunction/video-studio-render-worker
+        // (Engine cannot import RenderWorker directly).
+        const bundledDefaultFonts = ['MJ Sans', 'MJ Mono'];
         for (const typeSpec of fields.Style.Typography) {
             expect(typeSpec.FontAssetID).toBeUndefined();
+            if (!typeSpec.FontAssetID) {
+                expect(bundledDefaultFonts).toContain(typeSpec.FontFamily);
+            }
         }
     });
 });

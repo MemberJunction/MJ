@@ -225,6 +225,32 @@ describe('Video Production artifact extract rules (VS-FND-4)', () => {
         expect(markdown).not.toContain('Contains AI-generated assets');
     });
 
+    it('truncates a 150-character OneSentence to 100 characters and falls back to Archetype.Name when OneSentence is empty', async () => {
+        const longSentence = 'A'.repeat(150);
+        const longSpec = buildKpiBriefingFixture();
+        longSpec.Film.OneSentence = longSentence;
+
+        const longResult = await ArtifactExtractor.ExtractAttributes({
+            content: JSON.stringify(longSpec),
+            extractRules,
+        });
+        expect(longResult.success).toBe(true);
+        const longName = longResult.attributes.find((a) => a.name === 'name')?.value as string;
+        expect(longName).toHaveLength(100);
+        expect(longName).toBe(longSentence.slice(0, 100));
+
+        const emptySpec = buildKpiBriefingFixture();
+        emptySpec.Film.OneSentence = '';
+
+        const emptyResult = await ArtifactExtractor.ExtractAttributes({
+            content: JSON.stringify(emptySpec),
+            extractRules,
+        });
+        expect(emptyResult.success).toBe(true);
+        const fallbackName = emptyResult.attributes.find((a) => a.name === 'name')?.value;
+        expect(fallbackName).toBe('KPI Briefing');
+    });
+
     it('returns safe fallbacks with zero errors when content is invalid JSON', async () => {
         const result = await ArtifactExtractor.ExtractAttributes({
             content: 'not json',

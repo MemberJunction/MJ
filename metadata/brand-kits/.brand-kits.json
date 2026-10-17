@@ -35,21 +35,21 @@
         "Typography": [
           {
             "Role": "Headline",
-            "FontFamily": "Inter",
+            "FontFamily": "MJ Sans",
             "Weight": 700,
-            "Notes": "Display headlines and beat titles with tight tracking."
+            "Notes": "MJ Sans is Inter (SIL OFL 1.1), bundled with the render worker. Display headlines and beat titles with tight tracking."
           },
           {
             "Role": "Body",
-            "FontFamily": "Inter",
+            "FontFamily": "MJ Sans",
             "Weight": 400,
-            "Notes": "Supporting labels, subtitles, and explanatory callouts."
+            "Notes": "MJ Sans is Inter (SIL OFL 1.1), bundled with the render worker. Supporting labels, subtitles, and explanatory callouts."
           },
           {
             "Role": "Data",
-            "FontFamily": "JetBrains Mono",
+            "FontFamily": "MJ Mono",
             "Weight": 500,
-            "Notes": "Tabular KPI figures, deltas, timestamps, and code identifiers."
+            "Notes": "MJ Mono is JetBrains Mono (SIL OFL 1.1), bundled with the render worker. Tabular KPI figures, deltas, timestamps, and code identifiers."
           }
         ],
         "ImageryStyle": "Clean, flat and high-contrast. Product UI only from real screenshots.",
