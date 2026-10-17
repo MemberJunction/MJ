@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import { BaseSingleton, GetGlobalObjectStore } from '@memberjunction/global';
 import { ArtifactBuilderService, DocumentOperation } from '../custom/utilities/artifact-builder-service';
 
 describe('ArtifactBuilderService', () => {
@@ -6,6 +7,13 @@ describe('ArtifactBuilderService', () => {
 
     beforeEach(() => {
         service = ArtifactBuilderService.Instance;
+    });
+
+    it('should extend BaseSingleton and store its instance in GlobalObjectStore', () => {
+        expect(service).toBeInstanceOf(BaseSingleton);
+        expect(ArtifactBuilderService.Instance).toBe(service);
+        const globalStore = GetGlobalObjectStore();
+        expect(globalStore?.['___SINGLETON__ArtifactBuilderService']).toBe(service);
     });
 
     describe('CreateDocument', () => {
