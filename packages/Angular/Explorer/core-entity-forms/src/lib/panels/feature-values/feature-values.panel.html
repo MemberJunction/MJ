@@ -1,0 +1,66 @@
+<!--
+  Entity-agnostic Feature Values panel (read-only). Renders NOTHING unless at
+  least one pipeline has materialized a feature value for this record.
+-->
+@if (Cards.length > 0) {
+  <mj-collapsible-panel
+      SectionKey="featureValues"
+      [Order]="DisplayOrder"
+      SectionName="Feature Values"
+      Icon="fa-solid fa-table-list"
+      [Form]="FormComponent"
+      [FormContext]="FormContext"
+      [BadgeCount]="Cards.length">
+    <table class="fvp-table">
+      <thead>
+        <tr>
+          <th>Feature</th>
+          <th>Value</th>
+          <th>Pipeline</th>
+          <th>Source</th>
+          <th>Computed</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (card of Cards; track card.Key) {
+          <tr class="fvp-row">
+            <td class="fvp-feature">{{ card.FeatureName }}</td>
+            <td class="fvp-value">{{ card.DisplayValue }}</td>
+            <td>{{ card.Pipeline }}@if (card.PipelineVersion != null) { <span class="fvp-muted"> v{{ card.PipelineVersion }}</span> }</td>
+            <td>{{ card.Source }}@if (card.Confidence != null) { <span class="fvp-muted"> ({{ card.Confidence }})</span> }</td>
+            <td class="fvp-muted">{{ card.ComputedAt ? (card.ComputedAt | date: 'yyyy-MM-dd HH:mm') : '' }}</td>
+            <td>
+              <button type="button" class="fvp-toggle" (click)="Toggle(card)"
+                      [attr.aria-expanded]="ExpandedKey === card.Key" title="Show reasoning and history">
+                <i class="fa-solid" [class.fa-chevron-down]="ExpandedKey !== card.Key" [class.fa-chevron-up]="ExpandedKey === card.Key" aria-hidden="true"></i>
+              </button>
+            </td>
+          </tr>
+          @if (ExpandedKey === card.Key) {
+            <tr class="fvp-detail">
+              <td colspan="6">
+                @if (card.Reasoning) {
+                  <div class="fvp-reasoning">{{ card.Reasoning }}</div>
+                }
+                <div class="fvp-history-title">History</div>
+                @if (HistoryFor(card).length === 0) {
+                  <div class="fvp-muted fvp-history-empty">No earlier values.</div>
+                } @else {
+                  <ul class="fvp-history">
+                    @for (h of HistoryFor(card); track h.ID) {
+                      <li class="fvp-history-item">
+                        <span class="fvp-value">{{ ValueOf(h) }}</span>
+                        <span class="fvp-muted">{{ h.ComputedAt ? (h.ComputedAt | date: 'yyyy-MM-dd HH:mm') : '' }}</span>
+                      </li>
+                    }
+                  </ul>
+                }
+              </td>
+            </tr>
+          }
+        }
+      </tbody>
+    </table>
+  </mj-collapsible-panel>
+}

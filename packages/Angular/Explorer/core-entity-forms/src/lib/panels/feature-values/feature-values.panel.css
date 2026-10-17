@@ -1,0 +1,68 @@
+/* Read-only Feature Values panel. Semantic design tokens only. */
+.fvp-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.fvp-table th {
+    text-align: left;
+    padding: 6px 10px;
+    color: var(--mj-text-secondary);
+    font-weight: 600;
+    border-bottom: 1px solid var(--mj-border-default);
+}
+
+.fvp-table td {
+    padding: 6px 10px;
+    color: var(--mj-text-primary);
+    border-bottom: 1px solid var(--mj-border-subtle, var(--mj-border-default));
+    vertical-align: top;
+}
+
+.fvp-feature,
+.fvp-value {
+    font-weight: 600;
+    word-break: break-word;
+}
+
+.fvp-muted {
+    color: var(--mj-text-secondary);
+    font-weight: 400;
+}
+
+.fvp-toggle {
+    background: transparent;
+    border: 0;
+    cursor: pointer;
+    color: var(--mj-text-secondary);
+    padding: 2px 6px;
+}
+
+.fvp-detail td {
+    background: var(--mj-bg-surface-card);
+}
+
+.fvp-reasoning {
+    margin-bottom: 8px;
+    color: var(--mj-text-primary);
+    white-space: pre-wrap;
+}
+
+.fvp-history-title {
+    font-weight: 600;
+    color: var(--mj-text-secondary);
+    margin-bottom: 4px;
+}
+
+.fvp-history {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.fvp-history-item {
+    display: flex;
+    gap: 12px;
+    padding: 2px 0;
+}
