@@ -3460,10 +3460,22 @@ importers:
 
   packages/AI/VideoStudio/Engine:
     dependencies:
+      '@memberjunction/core':
+        specifier: 6.2.0-edge.4
+        version: link:../../../MJCore
+      '@memberjunction/global':
+        specifier: 6.2.0-edge.4
+        version: link:../../../MJGlobal
       '@memberjunction/video-studio-core':
         specifier: 6.2.0-edge.4
         version: link:../Core
+      cosmiconfig:
+        specifier: 9.0.0
+        version: 9.0.0(typescript@5.9.3)
     devDependencies:
+      '@memberjunction/video-studio-render-worker':
+        specifier: 6.2.0-edge.4
+        version: link:../RenderWorker
       '@types/node':
         specifier: 24.10.11
         version: 24.10.11

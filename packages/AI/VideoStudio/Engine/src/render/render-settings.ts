@@ -1,0 +1,238 @@
+import { cosmiconfigSync } from 'cosmiconfig';
+import { LogWarning } from '@memberjunction/core';
+
+/** Default `VideoRenderDriverBase` registration key when `videoStudio.render.driver` is unset or invalid. */
+export const DEFAULT_VIDEO_RENDER_DRIVER = 'LocalWorker';
+
+/** Default worker startup timeout in milliseconds (60 seconds). */
+export const DEFAULT_RENDER_STARTUP_TIMEOUT_MS = 60_000;
+
+/** Default full MP4 render timeout in milliseconds (35 minutes). */
+export const DEFAULT_RENDER_TIMEOUT_MS = 35 * 60 * 1_000;
+
+/** Default non-render request timeout in milliseconds (10 minutes). */
+export const DEFAULT_RENDER_REQUEST_TIMEOUT_MS = 10 * 60 * 1_000;
+
+/**
+ * Shared timeout settings across all `VideoRenderDriverBase` implementations.
+ */
+export interface VideoRenderTimeoutsSettings {
+    /** Maximum time in milliseconds to wait for a managed worker to start and pass `/health` (default: 60,000). */
+    StartupMs: number;
+    /** Maximum time in milliseconds for a `Render` request (default: 2,100,000 / 35 min). */
+    RenderMs: number;
+    /** Maximum time in milliseconds for non-render requests (`Check`, `CaptureStills`, `BuildContactSheet`, `ExtractKeyframes`, `Health`; default: 600,000 / 10 min). */
+    RequestMs: number;
+}
+
+/**
+ * Local child-process worker settings used by `LocalWorkerRenderDriver`.
+ */
+export interface VideoRenderLocalSettings {
+    /** Optional explicit path to the render worker CLI entry script. */
+    WorkerEntry?: string;
+    /** Optional V8 `--max-old-space-size` limit in megabytes for the spawned worker process. */
+    MaxOldSpaceMb?: number;
+}
+
+/**
+ * Normalized PascalCase settings for `VideoRenderEngine` and its drivers (§7.2).
+ */
+export interface VideoRenderSettings {
+    /** Registered `VideoRenderDriverBase` key (`'LocalWorker'`, `'Remote'`, or `'Docker'`). */
+    Driver: string;
+    /** Shared timeout thresholds in milliseconds. */
+    Timeouts: VideoRenderTimeoutsSettings;
+    /** Configuration specific to the `LocalWorker` driver. */
+    Local: VideoRenderLocalSettings;
+}
+
+/**
+ * Non-exported raw camelCase shape of `videoStudio.render` in `mj.config.cjs`.
+ */
+interface RawVideoRenderConfig {
+    driver?: unknown;
+    timeouts?: unknown;
+    local?: unknown;
+}
+
+interface RawVideoStudioConfig {
+    render?: unknown;
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+    return Object.prototype.toString.call(value) === '[object Object]';
+}
+
+function readPositiveNumber(
+    rawValue: unknown,
+    fieldPath: string,
+    defaultValue: number,
+): number {
+    if (rawValue === undefined || rawValue === null) {
+        return defaultValue;
+    }
+    if (typeof rawValue === 'number' && Number.isFinite(rawValue) && rawValue > 0) {
+        return rawValue;
+    }
+    LogWarning(
+        `${fieldPath} '${String(rawValue)}' is not a positive finite number; using default ${defaultValue}.`,
+    );
+    return defaultValue;
+}
+
+function readOptionalPositiveInteger(
+    rawValue: unknown,
+    fieldPath: string,
+): number | undefined {
+    if (rawValue === undefined || rawValue === null) {
+        return undefined;
+    }
+    if (typeof rawValue === 'number' && Number.isFinite(rawValue) && rawValue > 0) {
+        return Math.round(rawValue);
+    }
+    LogWarning(
+        `${fieldPath} '${String(rawValue)}' is not a positive finite number; ignoring setting.`,
+    );
+    return undefined;
+}
+
+function readNonEmptyString(
+    rawValue: unknown,
+    fieldPath: string,
+    defaultValue: string,
+): string {
+    if (rawValue === undefined || rawValue === null) {
+        return defaultValue;
+    }
+    if (typeof rawValue === 'string' && rawValue.trim().length > 0) {
+        return rawValue.trim();
+    }
+    LogWarning(
+        `${fieldPath} '${String(rawValue)}' is not a non-empty string; using '${defaultValue}'.`,
+    );
+    return defaultValue;
+}
+
+function readOptionalNonEmptyString(
+    rawValue: unknown,
+    fieldPath: string,
+): string | undefined {
+    if (rawValue === undefined || rawValue === null) {
+        return undefined;
+    }
+    if (typeof rawValue === 'string' && rawValue.trim().length > 0) {
+        return rawValue.trim();
+    }
+    LogWarning(
+        `${fieldPath} '${String(rawValue)}' is not a non-empty string; ignoring setting.`,
+    );
+    return undefined;
+}
+
+/**
+ * Reads `videoStudio.render` from `mj.config.cjs` (searching upward from `searchFrom`) and returns
+ * normalized PascalCase `VideoRenderSettings`.
+ *
+ * Invalid values log a warning via `LogWarning` and fall back to defaults. Never throws.
+ */
+export function ReadVideoRenderSettings(searchFrom: string = process.cwd()): VideoRenderSettings {
+    const defaults: VideoRenderSettings = {
+        Driver: DEFAULT_VIDEO_RENDER_DRIVER,
+        Timeouts: {
+            StartupMs: DEFAULT_RENDER_STARTUP_TIMEOUT_MS,
+            RenderMs: DEFAULT_RENDER_TIMEOUT_MS,
+            RequestMs: DEFAULT_RENDER_REQUEST_TIMEOUT_MS,
+        },
+        Local: {},
+    };
+
+    let rawConfig: Record<string, unknown> | undefined;
+    try {
+        const explorer = cosmiconfigSync('mj', { searchStrategy: 'global' });
+        const result = explorer.search(searchFrom);
+        if (result && !result.isEmpty && isPlainObject(result.config)) {
+            rawConfig = result.config;
+        }
+    } catch (error) {
+        LogWarning(
+            `videoStudio.render: mj.config could not be read (${error instanceof Error ? error.message : String(error)}); using defaults.`,
+        );
+        return defaults;
+    }
+
+    if (!rawConfig || rawConfig.videoStudio === undefined || rawConfig.videoStudio === null) {
+        return defaults;
+    }
+    if (!isPlainObject(rawConfig.videoStudio)) {
+        LogWarning('videoStudio in mj.config is not an object; using default render settings.');
+        return defaults;
+    }
+
+    const videoStudioSection = rawConfig.videoStudio as RawVideoStudioConfig;
+    if (videoStudioSection.render === undefined || videoStudioSection.render === null) {
+        return defaults;
+    }
+    if (!isPlainObject(videoStudioSection.render)) {
+        LogWarning('videoStudio.render in mj.config is not an object; using default render settings.');
+        return defaults;
+    }
+
+    const renderSection = videoStudioSection.render as RawVideoRenderConfig;
+    const driver = readNonEmptyString(
+        renderSection.driver,
+        'videoStudio.render.driver',
+        DEFAULT_VIDEO_RENDER_DRIVER,
+    );
+
+    const timeouts: VideoRenderTimeoutsSettings = { ...defaults.Timeouts };
+    if (renderSection.timeouts !== undefined && renderSection.timeouts !== null) {
+        if (!isPlainObject(renderSection.timeouts)) {
+            LogWarning('videoStudio.render.timeouts in mj.config is not an object; using default timeouts.');
+        } else {
+            timeouts.StartupMs = readPositiveNumber(
+                renderSection.timeouts.startupMs,
+                'videoStudio.render.timeouts.startupMs',
+                DEFAULT_RENDER_STARTUP_TIMEOUT_MS,
+            );
+            timeouts.RenderMs = readPositiveNumber(
+                renderSection.timeouts.renderMs,
+                'videoStudio.render.timeouts.renderMs',
+                DEFAULT_RENDER_TIMEOUT_MS,
+            );
+            timeouts.RequestMs = readPositiveNumber(
+                renderSection.timeouts.requestMs,
+                'videoStudio.render.timeouts.requestMs',
+                DEFAULT_RENDER_REQUEST_TIMEOUT_MS,
+            );
+        }
+    }
+
+    const local: VideoRenderLocalSettings = {};
+    if (renderSection.local !== undefined && renderSection.local !== null) {
+        if (!isPlainObject(renderSection.local)) {
+            LogWarning('videoStudio.render.local in mj.config is not an object; using default local settings.');
+        } else {
+            const workerEntry = readOptionalNonEmptyString(
+                renderSection.local.workerEntry,
+                'videoStudio.render.local.workerEntry',
+            );
+            if (workerEntry !== undefined) {
+                local.WorkerEntry = workerEntry;
+            }
+            const maxOldSpaceMb = readOptionalPositiveInteger(
+                renderSection.local.maxOldSpaceMb,
+                'videoStudio.render.local.maxOldSpaceMb',
+            );
+            if (maxOldSpaceMb !== undefined) {
+                local.MaxOldSpaceMb = maxOldSpaceMb;
+            }
+        }
+    }
+
+    return {
+        Driver: driver,
+        Timeouts: timeouts,
+        Local: local,
+    };
+}
