@@ -10,8 +10,9 @@
  * transition, `StartedAt`/`CompletedAt`, the `TargetID` UUID guard, and the standard `OutputData` context
  * envelope (`success` / `durationMs` / `errorMessage`).
  *
- * {@link ResolvePayloadAtStart} and {@link ApplyResolvedPayloadAtStart} read a step's start payload back
- * when the row stores a pointer (`PayloadAtStartSourceStepID`) instead of a copy.
+ * {@link ResolvePayloadAtStart}, {@link ApplyResolvedPayloadAtStart}, {@link ResolvePayloadAtEnd}, and
+ * {@link ApplyResolvedPayloadAtEnd} read a step's start or end payload back when the row stores a pointer
+ * (`PayloadAtStartSourceStepID` / `PayloadAtEndSourceStepID`) instead of a copy.
  *
  * Extracted so external producers of agent-run steps — e.g. `@memberjunction/computer-use-engine`, which
  * nests a child `Prompt` step per controller/judge prompt under a goal's parent step — reuse the same
@@ -57,6 +58,11 @@ export interface InitAgentRunStepOptions {
     PayloadAtStartSourceStepID?: string | null;
     /** Optional pre-serialized end payload JSON. */
     PayloadAtEnd?: string | null;
+    /**
+     * Optional id of the step in the same run whose `PayloadAtEnd` is this step's end payload. When set,
+     * `PayloadAtEnd` is normally null (see {@link ResolvePayloadAtEnd}).
+     */
+    PayloadAtEndSourceStepID?: string | null;
 }
 
 /**
@@ -92,6 +98,9 @@ export function InitAgentRunStep(step: MJAIAgentRunStepEntity, opts: InitAgentRu
     }
     if (opts.PayloadAtEnd != null) {
         step.PayloadAtEnd = opts.PayloadAtEnd;
+    }
+    if (opts.PayloadAtEndSourceStepID != null) {
+        step.PayloadAtEndSourceStepID = opts.PayloadAtEndSourceStepID;
     }
 }
 
@@ -194,6 +203,51 @@ export function ApplyResolvedPayloadAtStart<
         const resolved = ResolvePayloadAtStart(step, stepsById);
         if (resolved != null) {
             step.PayloadAtStart = resolved;
+        }
+    }
+}
+
+/**
+ * Returns a step's end payload: the stored `PayloadAtEnd` when present, otherwise the `PayloadAtEnd`
+ * of the step that `PayloadAtEndSourceStepID` points at, otherwise null. Pure; accepts entity objects
+ * or plain rows.
+ *
+ * @param step The step whose end payload to resolve.
+ * @param stepsById Steps of the same run, keyed by ID (see `IndexByUUID`).
+ * @returns The end payload JSON, or null when the step has none or its source step is not in the map.
+ */
+export function ResolvePayloadAtEnd(
+    step: Pick<MJAIAgentRunStepEntity, 'PayloadAtEnd' | 'PayloadAtEndSourceStepID'>,
+    stepsById: UUIDMap<Pick<MJAIAgentRunStepEntity, 'PayloadAtEnd'>>
+): string | null {
+    if (step.PayloadAtEnd != null) {
+        return step.PayloadAtEnd;
+    }
+    if (!step.PayloadAtEndSourceStepID) {
+        return null;
+    }
+    return stepsById.Get(step.PayloadAtEndSourceStepID)?.PayloadAtEnd ?? null;
+}
+
+/**
+ * Fills `PayloadAtEnd` in place on each step whose end is null and whose `PayloadAtEndSourceStepID`
+ * resolves (see {@link ResolvePayloadAtEnd}), so code that reads `PayloadAtEnd` gets the end
+ * payload. Other steps are left as they are. Meant for readers that load all steps of one run; accepts
+ * entity objects or plain rows.
+ *
+ * @param steps All steps of one run. A pointer resolves only to a step in this array.
+ */
+export function ApplyResolvedPayloadAtEnd<
+    T extends Pick<MJAIAgentRunStepEntity, 'ID' | 'PayloadAtEnd' | 'PayloadAtEndSourceStepID'>
+>(steps: T[]): void {
+    const stepsById = IndexByUUID(steps);
+    for (const step of steps) {
+        if (step.PayloadAtEnd != null) {
+            continue;
+        }
+        const resolved = ResolvePayloadAtEnd(step, stepsById);
+        if (resolved != null) {
+            step.PayloadAtEnd = resolved;
         }
     }
 }
