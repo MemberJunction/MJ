@@ -6,6 +6,7 @@ import type {
     MJAIAgentRunEntityExtended,
     MJAIAgentRunStepEntityExtended,
 } from '@memberjunction/ai-core-plus';
+import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import type { UserInfo } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
 import type { VideoGenerationSpec } from '@memberjunction/video-studio-core';
@@ -18,10 +19,29 @@ import {
     VideoStudioRenderAgent,
 } from '../agents/render-agent.js';
 
+vi.mock('@memberjunction/ai-prompts', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/ai-prompts')>();
+    return {
+        ...actual,
+        AIPromptRunner: vi.fn(),
+    };
+});
+
 const mockUser = {
     ID: '00000000-0000-0000-0000-000000000001',
     Name: 'System',
 } as unknown as UserInfo;
+
+interface RenderAgentTestResult {
+    finalStep: {
+        step: string;
+        terminate: boolean;
+        newPayload: VideoGenerationSpec;
+        previousPayload: VideoGenerationSpec;
+        message?: string;
+    };
+    stepCount: number;
+}
 
 function createRenderAgentHarness(): {
     agent: VideoStudioRenderAgent;
@@ -31,9 +51,12 @@ function createRenderAgentHarness(): {
     execute: (
         spec: VideoGenerationSpec,
         cancellationToken?: AbortSignal,
-    ) => Promise<ReturnType<VideoStudioRenderAgent['executeAgentInternal']>>;
+    ) => Promise<RenderAgentTestResult>;
 } {
     const agent = new VideoStudioRenderAgent();
+    // BaseAgent initializes `private _promptRunner = new AIPromptRunner()` in its field initializer;
+    // clear that base-class field init so tests verify VideoStudioRenderAgent never constructs or invokes AIPromptRunner.
+    vi.mocked(AIPromptRunner).mockClear();
     const createdSteps: Array<{ stepType: string; stepName: string }> = [];
     const finalizedSteps: Array<{ stepName?: string; success: boolean; errorMessage?: string }> = [];
     const progressUpdates: Array<{ step: string; message: string }> = [];
@@ -386,6 +409,7 @@ describe('VideoStudioRenderAgent (VS-AGT-3)', () => {
             'check:16:9:passed',
             'check:9:16:passed',
         ]);
+        expect(AIPromptRunner).not.toHaveBeenCalled();
     });
 
     it('Check returning an Error issue fails on the "Check <fmt>" step before Render is called with [Category] Code: Message @ File:Line', async () => {
@@ -393,7 +417,7 @@ describe('VideoStudioRenderAgent (VS-AGT-3)', () => {
             CheckIssues: [
                 {
                     Code: 'MJ_TEXT_OVERLAP',
-                    Category: 'Overlap',
+                    Category: 'Layout',
                     Severity: 'Error',
                     Message: 'Elements #title and #subtitle overlap by 42px.',
                     File: 'index.html',
@@ -415,7 +439,7 @@ describe('VideoStudioRenderAgent (VS-AGT-3)', () => {
         expect(finalizedSteps[0].success).toBe(false);
         expect(renderSpy).not.toHaveBeenCalled();
         expect(result.finalStep.message).toContain(
-            '[Overlap] MJ_TEXT_OVERLAP: Elements #title and #subtitle overlap by 42px. @ index.html:18',
+            '[Layout] MJ_TEXT_OVERLAP: Elements #title and #subtitle overlap by 42px. @ index.html:18',
         );
     });
 

@@ -78,7 +78,9 @@ export function FrameSizeFor(
  * 3. `TransitionStart` / `TransitionEnd` (`0.1` s either side of each interior beat boundary)
  */
 export function StillPointsFor(
-    spec: Pick<VideoGenerationSpec, 'Beats' | 'Film' | 'Render'>,
+    spec: Pick<VideoGenerationSpec, 'Beats' | 'Film'> & {
+        Render?: Partial<VideoGenerationSpec['Render']>;
+    },
 ): StillCapturePoint[] {
     const beats = Array.isArray(spec.Beats) ? spec.Beats : [];
     const points: StillCapturePoint[] = [];

@@ -354,20 +354,21 @@ describe('bundle.ts (VS-AGT-3)', () => {
         expect(readStoredSpy).toHaveBeenCalledWith('file-123', mockUser, undefined);
 
         // 2. File-backed ArtifactVersionID
+        const runViewFn = vi.fn().mockResolvedValue({
+            Success: true,
+            Results: [
+                {
+                    ID: 'av-999',
+                    FileID: 'file-from-av',
+                    MimeType: 'image/svg+xml',
+                },
+            ],
+        });
         const mockProvider = {
-            RunView: vi.fn().mockResolvedValue({
-                Success: true,
-                Results: [
-                    {
-                        ID: 'av-999',
-                        FileID: 'file-from-av',
-                        MimeType: 'image/svg+xml',
-                    },
-                ],
-            }),
+            RunView: runViewFn,
         } as unknown as IMetadataProvider;
         vi.spyOn(RunView.prototype, 'RunView').mockImplementation(
-            mockProvider.RunView as unknown as typeof RunView.prototype.RunView,
+            runViewFn as unknown as typeof RunView.prototype.RunView,
         );
 
         const fromAv = await ReadAssetBytes(

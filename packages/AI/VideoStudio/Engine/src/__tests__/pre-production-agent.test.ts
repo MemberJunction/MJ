@@ -6,6 +6,7 @@ import type {
     MJAIAgentRunEntityExtended,
     MJAIAgentRunStepEntityExtended,
 } from '@memberjunction/ai-core-plus';
+import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import type { UserInfo } from '@memberjunction/core';
 import { VideoStudioEngine } from '@memberjunction/core-entities';
 import { MJGlobal } from '@memberjunction/global';
@@ -17,10 +18,29 @@ import {
     VideoStudioPreProductionAgent,
 } from '../agents/pre-production-agent.js';
 
+vi.mock('@memberjunction/ai-prompts', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/ai-prompts')>();
+    return {
+        ...actual,
+        AIPromptRunner: vi.fn(),
+    };
+});
+
 const mockUser = {
     ID: '00000000-0000-0000-0000-000000000001',
     Name: 'System',
 } as unknown as UserInfo;
+
+interface StepTrackingExecutionResult {
+    finalStep: {
+        step: string;
+        terminate: boolean;
+        newPayload: VideoGenerationSpec;
+        previousPayload: VideoGenerationSpec;
+        message?: string;
+    };
+    stepCount: number;
+}
 
 function createAgentWithStepTracking(): {
     agent: VideoStudioPreProductionAgent;
@@ -30,11 +50,12 @@ function createAgentWithStepTracking(): {
         success: boolean;
         errorMessage?: string;
     }>;
-    execute: (
-        spec: VideoGenerationSpec,
-    ) => Promise<ReturnType<VideoStudioPreProductionAgent['executeAgentInternal']>>;
+    execute: (spec: VideoGenerationSpec) => Promise<StepTrackingExecutionResult>;
 } {
     const agent = new VideoStudioPreProductionAgent();
+    // BaseAgent initializes `private _promptRunner = new AIPromptRunner()` in its field initializer;
+    // clear that base-class field init so tests verify VideoStudioPreProductionAgent never constructs or invokes AIPromptRunner.
+    vi.mocked(AIPromptRunner).mockClear();
     const createdSteps: Array<{ stepType: string; stepName: string }> = [];
     const finalizedSteps: Array<{
         stepName?: string;
@@ -396,6 +417,7 @@ describe('VideoStudioPreProductionAgent (VS-AGT-3)', () => {
         expect(updated.Assets.Approved[1].StagedPath).toBe('assets/Heading-Font.woff2');
         expect(updated.Audio.Narration?.Script[0].StagedPath).toBe('audio/Line-1.mp3');
         expect(updated.Audio.Narration?.Script[1].StagedPath).toBe('audio/Line-2.mp3');
+        expect(AIPromptRunner).not.toHaveBeenCalled();
     });
 
     it('skips "Data Snapshot" step when DataBindings is empty (stepCount === 2)', async () => {
