@@ -138,4 +138,24 @@ export {
     type MotionEngineerLintFixOutput,
 } from './agents/motion-engineer-agent.js';
 
+export {
+    ResolvePromptPrimaryModelId,
+} from './review/model-routing.js';
 
+export {
+    BuildReferenceBlocks,
+    MAX_INLINE_REFERENCE_VIDEO_BYTES,
+    MAX_KEYFRAME_IMAGES,
+    MAX_REFERENCES,
+    PickReferences,
+    type BuiltReferenceMedia,
+    type ExtractKeyframesFn,
+    type ReferenceMediaKind,
+} from './review/reference-media.js';
+
+export {
+    LoadVideoStudioArtDirectorAgent,
+    REFERENCE_ANALYSIS_PROMPT_ID,
+    REFERENCE_ANALYSIS_PROMPT_NAME,
+    VideoStudioArtDirectorAgent,
+} from './agents/art-director-agent.js';

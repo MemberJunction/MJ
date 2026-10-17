@@ -1472,13 +1472,14 @@ import {
     IntegrationTestDriver,
 } from '@memberjunction/testing-integration';
 
-// @memberjunction/video-studio (8 classes)
+// @memberjunction/video-studio (9 classes)
 import {
     DockerRenderDriver,
     LocalWorkerRenderDriver,
     ProduceVideoAction,
     RemoteRenderDriver,
     VideoStudioAgent,
+    VideoStudioArtDirectorAgent,
     VideoStudioMotionEngineerAgent,
     VideoStudioPreProductionAgent,
     VideoStudioRenderAgent,
@@ -2714,16 +2715,17 @@ const CLASS_REGISTRATIONS_4: any[] = [
     ProduceVideoAction,
     RemoteRenderDriver,
     VideoStudioAgent,
+    VideoStudioArtDirectorAgent,
     VideoStudioMotionEngineerAgent,
     VideoStudioPreProductionAgent,
     VideoStudioRenderAgent,
     BraveWebSearchProvider,
     DuckDuckGoWebSearchProvider,
-    GoogleCustomSearchWebSearchProvider,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    GoogleCustomSearchWebSearchProvider,
     PerplexityWebSearchProvider,
     TavilyWebSearchProvider,
     WebSearchQueryServerOperation,
@@ -2920,7 +2922,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1180;
+export const CLASS_REGISTRATIONS_COUNT = 1181;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
