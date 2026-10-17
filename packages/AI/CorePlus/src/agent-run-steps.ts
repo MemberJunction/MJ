@@ -261,6 +261,15 @@ export interface AgentRunStepFlushResult {
 }
 
 /**
+ * Prerequisite step(s) whose queued work must settle before a dependent step's INSERT runs.
+ * Accepts a single step (e.g., `parentStepEntity`) or an array of prerequisite steps
+ * (e.g., `[parentStepEntity, payloadAtStartSourceStep]`), with `undefined`/`null` entries ignored.
+ */
+export type AgentRunStepInsertPrerequisites =
+    | MJAIAgentRunStepEntity
+    | ReadonlyArray<MJAIAgentRunStepEntity | null | undefined>;
+
+/**
  * **Fire-and-forget save orchestration** for agent-run steps — a thin, typed façade over the shared
  * {@link BaseEntitySaveQueue} (`@memberjunction/core`). Keeps step writes OFF the hot loop so a run that
  * creates many steps (e.g. a goal-driven Computer Use loop with one prompt step per iteration) never pays
@@ -268,6 +277,10 @@ export interface AgentRunStepFlushResult {
  *
  * - {@link Insert} fires a step's "started" INSERT **without awaiting**; the step instance is the
  *   serialization key, so a later {@link QueueUpdate} chains *after* it (an UPDATE never races its INSERT).
+ * - {@link Insert} also accepts one or more prerequisite steps (such as `parentStep` for
+ *   `FK_AIAgentRunStep_ParentID` and an in-flight `payloadAtStartSource` step for
+ *   `FK_AIAgentRunStep_PayloadAtStartSourceStepID`) plus an optional `beforeInsert` guard that runs
+ *   after all prerequisites settle and immediately before `step.Save()` executes.
  * - {@link QueueUpdate} chains a **force-persisted** UPDATE (`IgnoreDirtyState`) after the step's INSERT.
  *   Its `applyMutation` runs INSIDE the post-INSERT task — after `finalizeSave`'s `init()` + `SetMany`
  *   reload — so it can't be reverted (the "step stuck at Running / null TargetLogID" bug is structurally
@@ -283,16 +296,77 @@ export class AgentRunStepSaveQueue {
      * Fires a step's "started" INSERT without awaiting (the caller continues immediately). The step's PK
      * must already be client-generated (`NewRecord`) so its id is valid before the INSERT lands.
      *
-     * @param parentStep When provided, the INSERT is chained **after** the parent step's pending INSERT
-     *   to satisfy the self-referencing `FK_AIAgentRunStep_ParentID` constraint. Without this, a child
-     *   step whose fire-and-forget INSERT races the parent's INSERT can hit an FK violation.
+     * @param step The newly created step entity to INSERT.
+     * @param prerequisites When provided, the INSERT is chained **after** all prerequisite steps' pending
+     *   work to satisfy self-referencing FK constraints (`FK_AIAgentRunStep_ParentID` and
+     *   `FK_AIAgentRunStep_PayloadAtStartSourceStepID`). Accepts either a single step or an array of steps.
+     * @param beforeInsert Optional callback invoked inside the queued INSERT task after all `prerequisites`
+     *   have settled and immediately before `step.Save()` runs. Useful for verifying that an in-flight
+     *   prerequisite step actually succeeded (`prereq.IsSaved`) and falling back (e.g., restoring inline
+     *   `PayloadAtStart` and clearing `PayloadAtStartSourceStepID`) if its INSERT failed.
      */
-    public Insert(step: MJAIAgentRunStepEntity, parentStep?: MJAIAgentRunStepEntity): void {
-        if (parentStep) {
-            this.queue.InsertAfter(step, parentStep);
-        } else {
+    public Insert(
+        step: MJAIAgentRunStepEntity,
+        prerequisites?: AgentRunStepInsertPrerequisites,
+        beforeInsert?: (step: MJAIAgentRunStepEntity) => void,
+    ): void {
+        const prereqList = this.normalizePrerequisites(step, prerequisites);
+
+        if (prereqList.length === 0 && !beforeInsert) {
             this.queue.Insert(step);
+            return;
         }
+        if (prereqList.length === 1 && !beforeInsert) {
+            this.queue.InsertAfter(step, prereqList[0]);
+            return;
+        }
+
+        // When multiple prerequisites or a `beforeInsert` hook are present, fan in all prerequisites onto a
+        // synthetic barrier key on the same serial queue, run `beforeInsert(step)` on the barrier's final hop
+        // (after every prerequisite has settled), and chain `step`'s real INSERT immediately after the barrier.
+        // This leaves `step.Save` untouched at all times.
+        let remainingBarrierHops = Math.max(1, prereqList.length);
+        const barrier = {
+            Save: async (): Promise<boolean> => {
+                remainingBarrierHops--;
+                if (remainingBarrierHops === 0) {
+                    beforeInsert?.(step);
+                }
+                return true;
+            },
+        } as unknown as MJAIAgentRunStepEntity;
+
+        if (prereqList.length === 0) {
+            this.queue.Insert(barrier);
+        } else {
+            for (const prereq of prereqList) {
+                this.queue.InsertAfter(barrier, prereq);
+            }
+        }
+        this.queue.InsertAfter(step, barrier);
+    }
+
+    /**
+     * Normalizes a single prerequisite or array of prerequisites into a deduplicated array of distinct
+     * step instances (excluding `null`, `undefined`, and `step` itself).
+     */
+    private normalizePrerequisites(
+        step: MJAIAgentRunStepEntity,
+        prerequisites?: AgentRunStepInsertPrerequisites,
+    ): MJAIAgentRunStepEntity[] {
+        if (!prerequisites) {
+            return [];
+        }
+        const rawList: ReadonlyArray<MJAIAgentRunStepEntity | null | undefined> = Array.isArray(prerequisites)
+            ? prerequisites
+            : [prerequisites as MJAIAgentRunStepEntity];
+        const unique = new Set<MJAIAgentRunStepEntity>();
+        for (const candidate of rawList) {
+            if (candidate && candidate !== step) {
+                unique.add(candidate);
+            }
+        }
+        return Array.from(unique);
     }
 
     /**

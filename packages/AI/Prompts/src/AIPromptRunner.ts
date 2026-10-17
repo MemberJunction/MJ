@@ -848,66 +848,71 @@ export class AIPromptRunner extends BaseModelRunner {
       }
     }
 
-    // Update with parallel execution metadata
+    // Update with parallel execution metadata (applied immediately in memory and re-applied inside the
+    // queued Update callback so an in-flight INSERT reload can never clobber the consolidated fields).
     const endTime = new Date();
-    consolidatedPromptRun.CompletedAt = endTime;
-    consolidatedPromptRun.ExecutionTimeMS = parallelResult.totalExecutionTimeMS;
-    consolidatedPromptRun.Result = selectedResult.rawResult || '';
-    consolidatedPromptRun.TokensUsed = parallelResult.totalTokensUsed;
-
-    // Layer 4 instrumentation, same as the single-model path. This path reaches the same
-    // `executeModel` and therefore declares tools, so leaving the column NULL here would tell the
-    // agent loop a NativeImplicit turn was not implicit — every control-flow call would then be
-    // rejected as an undeclared tool and the loop would retry on tools it declared itself.
-    consolidatedPromptRun.ToolCallingMode = GetToolCallingMode(selectedResult.modelResult) ?? null;
-    
-    // Extract token and cost info from selected result
-    const selectedResultUsage = selectedResult.modelResult?.data?.usage;
-    if (selectedResultUsage) {
-      consolidatedPromptRun.TokensPrompt = selectedResultUsage.promptTokens;
-      consolidatedPromptRun.TokensCompletion = selectedResultUsage.completionTokens;
-      // Persist the selected result's cache token counts so (a) they are recorded and (b) any
-      // downstream cost recompute (MJAIPromptRunEntityServer, when no provider cost is present)
-      // prices the full input including cached tokens rather than dropping them.
-      consolidatedPromptRun.TokensCacheRead = selectedResultUsage.cacheReadTokens ?? 0;
-      consolidatedPromptRun.TokensCacheWrite = selectedResultUsage.cacheWriteTokens ?? 0;
-      // NOTE (§5.1): On the parent, do NOT assign Cost from the selected arm. Leave Cost = null.
-      // TotalCost is maintained by server-side TriggerParentCostRollup.
-      if (selectedResultUsage.costCurrency !== undefined) {
-        consolidatedPromptRun.CostCurrency = selectedResultUsage.costCurrency;
-      }
-    }
-
-    // Store the parallel execution summary in the Messages field, with the messages and the allowed template inputs
-    const parallelMetadata: StoredParallelExecutionInfo = {
+    const storedMessagesJSON = this.buildStoredMessagesJSON(prompt, params, params.conversationMessages || [], {
       parallelizationMode: prompt.ParallelizationMode,
       totalTasks: executionTasks.length,
       successfulTasks: parallelResult.successCount,
       failedTasks: parallelResult.failureCount,
       selectedTaskId: selectedResult.task.taskId,
       executionGroups: Array.from(parallelResult.groupResults.keys()),
+    });
+    const selectedToolCallingMode = GetToolCallingMode(selectedResult.modelResult) ?? null;
+    const selectedResultUsage = selectedResult.modelResult?.data?.usage;
+    const consolidatedStatus: MJAIPromptRunEntityExtended['Status'] =
+      parallelResult.successCount > 0 ? 'Completed' : 'Failed';
+
+    const applyConsolidatedFields = (): void => {
+      consolidatedPromptRun.CompletedAt = endTime;
+      consolidatedPromptRun.ExecutionTimeMS = parallelResult.totalExecutionTimeMS;
+      consolidatedPromptRun.Result = selectedResult.rawResult || '';
+      consolidatedPromptRun.TokensUsed = parallelResult.totalTokensUsed;
+
+      // Layer 4 instrumentation, same as the single-model path. This path reaches the same
+      // `executeModel` and therefore declares tools, so leaving the column NULL here would tell the
+      // agent loop a NativeImplicit turn was not implicit — every control-flow call would then be
+      // rejected as an undeclared tool and the loop would retry on tools it declared itself.
+      consolidatedPromptRun.ToolCallingMode = selectedToolCallingMode;
+
+      // Extract token and cost info from selected result
+      if (selectedResultUsage) {
+        consolidatedPromptRun.TokensPrompt = selectedResultUsage.promptTokens;
+        consolidatedPromptRun.TokensCompletion = selectedResultUsage.completionTokens;
+        // Persist the selected result's cache token counts so (a) they are recorded and (b) any
+        // downstream cost recompute (MJAIPromptRunEntityServer, when no provider cost is present)
+        // prices the full input including cached tokens rather than dropping them.
+        consolidatedPromptRun.TokensCacheRead = selectedResultUsage.cacheReadTokens ?? 0;
+        consolidatedPromptRun.TokensCacheWrite = selectedResultUsage.cacheWriteTokens ?? 0;
+        // NOTE (§5.1): On the parent, do NOT assign Cost from the selected arm. Leave Cost = null.
+        // TotalCost is maintained by server-side TriggerParentCostRollup.
+        if (selectedResultUsage.costCurrency !== undefined) {
+          consolidatedPromptRun.CostCurrency = selectedResultUsage.costCurrency;
+        }
+      }
+
+      // Store the parallel execution summary in the Messages field, with the messages and the allowed template inputs
+      consolidatedPromptRun.Messages = storedMessagesJSON;
+
+      // For parallel execution, set rollup fields to match totals
+      consolidatedPromptRun.TokensPromptRollup = totalPromptTokens;
+      consolidatedPromptRun.TokensCompletionRollup = totalCompletionTokens;
+      consolidatedPromptRun.TokensUsedRollup = totalPromptTokens + totalCompletionTokens;
+      consolidatedPromptRun.TokensCacheReadRollup = totalCacheReadTokens;
+      consolidatedPromptRun.TokensCacheWriteRollup = totalCacheWriteTokens;
+      if (hasCost) {
+        consolidatedPromptRun.DescendantCost = totalCost;
+        consolidatedPromptRun.TotalCost = totalCost;
+      }
+
+      // Set Status and WasSelectedResult for parallel execution
+      consolidatedPromptRun.Status = consolidatedStatus;
+      consolidatedPromptRun.WasSelectedResult = false; // WasSelectedResult stays on the selected child, not the parent
     };
-    consolidatedPromptRun.Messages = this.buildStoredMessagesJSON(prompt, params, params.conversationMessages || [], parallelMetadata);
 
-    // For parallel execution, set rollup fields to match totals
-    consolidatedPromptRun.TokensPromptRollup = totalPromptTokens;
-    consolidatedPromptRun.TokensCompletionRollup = totalCompletionTokens;
-    consolidatedPromptRun.TokensUsedRollup = totalPromptTokens + totalCompletionTokens;
-    consolidatedPromptRun.TokensCacheReadRollup = totalCacheReadTokens;
-    consolidatedPromptRun.TokensCacheWriteRollup = totalCacheWriteTokens;
-    if (hasCost) {
-      consolidatedPromptRun.DescendantCost = totalCost;
-      consolidatedPromptRun.TotalCost = totalCost;
-    }
-    
-    // Set Status and WasSelectedResult for parallel execution
-    consolidatedPromptRun.Status = parallelResult.successCount > 0 ? 'Completed' : 'Failed';
-    consolidatedPromptRun.WasSelectedResult = false; // WasSelectedResult stays on the selected child, not the parent
-
-    // Persist the consolidated run fire-and-forget; the finalize UPDATE chains after its INSERT via
-    // the save queue. These fields are set after all the awaited parallel work, so the INSERT has long
-    // landed — a plain Update (no post-INSERT callback) is race-safe here.
-    this._promptRunQueue.Update(consolidatedPromptRun);
+    applyConsolidatedFields();
+    this._promptRunQueue.Update(consolidatedPromptRun, () => applyConsolidatedFields());
 
     // Create additional results from all other successful results (excluding the best one)
     const additionalResults: AIPromptRunResult<T>[] = [];
