@@ -309,8 +309,18 @@ export class MJVectorIndexEntityServer extends MJVectorIndexEntity {
             this.Dimensions = params.dimension;
             this.Metric = params.metric;
 
-            // Store full provider response + our spec as JSON config
-            const config: Record<string, unknown> = {};
+            // Store full provider response + our spec as JSON config while preserving existing keys (e.g. namespaceField)
+            let config: Record<string, unknown> = {};
+            if (this.ProviderConfig) {
+                try {
+                    const existing: unknown = JSON.parse(this.ProviderConfig);
+                    if (existing && typeof existing === 'object' && !Array.isArray(existing)) {
+                        config = { ...(existing as Record<string, unknown>) };
+                    }
+                } catch {
+                    // Ignore malformed existing JSON and start fresh
+                }
+            }
             if (params.additionalParams) {
                 config['spec'] = params.additionalParams;
             }

@@ -84,7 +84,10 @@ export async function BootstrapIntegrationServer(opts: BootstrapServerOptions = 
 
     // FIRST-CALLER cache init — MUST precede any provider setup (load-bearing on both backends).
     const storage = new InstrumentedLocalStorageProvider(opts.SharedStorage ?? new InMemoryLocalStorageProvider());
-    await LocalCacheManager.Instance.Initialize(storage, { verboseLogging: opts.VerboseCacheLogging ?? false });
+    await LocalCacheManager.Instance.Initialize(storage, {
+        verboseLogging: opts.VerboseCacheLogging ?? false,
+        maxSizeBytes: 512 * 1024 * 1024
+    });
     SetActiveStorage(storage);
 
     const ctx = db.Platform === 'postgresql'

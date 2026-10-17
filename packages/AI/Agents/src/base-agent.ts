@@ -274,6 +274,12 @@ interface MemoryWriteSkip {
     Told: string;
 }
 
+/** A message a Prompt step recorded in its InputData, with its serialized form at the time it was recorded. */
+interface RecordedPromptMessage {
+    Message: ChatMessage;
+    Serialized: string;
+}
+
 /**
  * Compact representation of a single action's execution result, used for
  * building the markdown summary that goes into conversation messages.
@@ -1831,10 +1837,11 @@ export class BaseAgent {
     private _promptTurnCount: number = 0;
 
     /**
-     * Tracks non-volatile ChatMessage instances already recorded in an earlier Prompt step's InputData
-     * during the current run so subsequent Prompt steps record only the per-turn message delta.
+     * The non-volatile stack the previous Prompt step of the current run recorded: each message's
+     * reference and its serialized form. A later Prompt step records only a delta when its stack
+     * extends this one append-only; otherwise it records the full stack.
      */
-    private _recordedPromptMessages: WeakSet<ChatMessage> | null = null;
+    private _lastRecordedPromptStack: RecordedPromptMessage[] | null = null;
 
     /**
      * Per-run config for structurally compressing inline action-result payloads.
@@ -8564,10 +8571,12 @@ The context is now within limits. Please retry your request with the recovered c
     /**
      * The stopped run's turns in the shape the loop builds, or null when they cannot be recovered.
      *
-     * The last prompt step recorded the run's whole message stack as it went into that prompt; the
-     * first prompt step recorded the stack the run started from (history plus this run's injections,
-     * which the new run adds for itself). The difference is the run's own turns. If the last prompt
-     * completed, its decision and the steps after it are rebuilt with the loop's own builders.
+     * The latest prompt step that recorded a full stack holds the run's whole message stack as it went
+     * into that prompt; the prompt steps after it recorded only the messages appended since (see
+     * {@link capturePromptStepMessages}). The first prompt step recorded the stack the run started from
+     * (history plus this run's injections, which the new run adds for itself). The difference is the
+     * run's own turns. If the last prompt completed, its decision and the steps after it are rebuilt
+     * with the loop's own builders.
      * @protected
      */
     protected buildResumedStoppedRunTurns(steps: StoppedRunStackStepRecord[], params: ExecuteAgentParams): AgentChatMessage[] | null {
@@ -8580,28 +8589,20 @@ The context is now within limits. Please retry your request with the recovered c
             return null;
         }
         const lastPrompt = prompts[prompts.length - 1];
-        let loopTurns: AgentChatMessage[] | null;
-        if (prompts.length > 1 && BaseAgent.isPromptStepDelta(lastPrompt)) {
-            loopTurns = [];
-            for (let i = 1; i < prompts.length; i++) {
-                const delta = BaseAgent.readPromptStepStack(prompts[i]);
-                if (!delta) {
-                    return null;
-                }
-                for (const m of delta) {
-                    if (m.metadata?.volatileState !== true) {
-                        loopTurns.push(m);
-                    }
-                }
-            }
-        } else {
-            loopTurns = BaseAgent.ExtractStoppedRunLoopTurns(
-                firstStack,
-                BaseAgent.readPromptStepStack(lastPrompt)
-            );
+        let fullAt = prompts.length - 1;
+        while (fullAt > 0 && BaseAgent.isPromptStepDelta(prompts[fullAt])) {
+            fullAt--;
         }
+        const loopTurns = BaseAgent.ExtractStoppedRunLoopTurns(firstStack, BaseAgent.readPromptStepStack(prompts[fullAt]));
         if (!loopTurns) {
             return null;
+        }
+        for (const prompt of prompts.slice(fullAt + 1)) {
+            const delta = BaseAgent.readPromptStepStack(prompt);
+            if (!delta) {
+                return null;
+            }
+            loopTurns.push(...delta.filter(m => m.metadata?.volatileState !== true));
         }
         const decision = lastPrompt.Status === 'Completed' ? BaseAgent.readPromptStepDecision(lastPrompt) : null;
         const tail = this.buildStoppedRunTail(decision, steps.filter(s => s.StepNumber > lastPrompt.StepNumber), params);
@@ -12935,7 +12936,7 @@ The context is now within limits. Please retry your request with the recovered c
         
         // Reset prompt turn counter for this execution
         this._promptTurnCount = 0;
-        this._recordedPromptMessages = null;
+        this._lastRecordedPromptStack = null;
         this._heldDecisions = undefined;
 
         // Resolve action-result compression config for this run (default on; opt out via
@@ -13433,25 +13434,30 @@ The context is now within limits. Please retry your request with the recovered c
         // during createStepEntity), an in-flight source step is allowed because createStepEntity chains
         // the new step's INSERT after the source step on _stepSaveQueue.
         const requireSavedSource = beforeStep != null;
+        let candidateStep: MJAIAgentRunStepEntityExtended | undefined;
         for (let i = startIdx; i >= 0; i--) {
             const step = steps[i];
             if (step.Status !== 'Running' && (step.PayloadAtEnd != null || step.PayloadAtEndSourceStepID != null)) {
-                if (requireSavedSource && !step.IsSaved) {
-                    return undefined;
-                }
-                const source = step.PayloadAtEndSourceStepID
-                    ? steps.find(s => UUIDsEqual(s.ID, step.PayloadAtEndSourceStepID))
-                    : step;
-                if (!source) {
-                    return undefined;
-                }
-                if (requireSavedSource && !source.IsSaved) {
-                    return undefined;
-                }
-                return source.PayloadAtEnd === serializedPayload ? source : undefined;
+                candidateStep = step;
+                break;
             }
         }
-        return undefined;
+        if (!candidateStep) {
+            return undefined;
+        }
+        if (requireSavedSource && !candidateStep.IsSaved) {
+            return undefined;
+        }
+        const source = candidateStep.PayloadAtEndSourceStepID
+            ? steps.find(s => UUIDsEqual(s.ID, candidateStep.PayloadAtEndSourceStepID))
+            : candidateStep;
+        if (!source) {
+            return undefined;
+        }
+        if (requireSavedSource && !source.IsSaved) {
+            return undefined;
+        }
+        return source.PayloadAtEnd === serializedPayload ? source : undefined;
     }
 
     /**
@@ -13521,40 +13527,33 @@ The context is now within limits. Please retry your request with the recovered c
      * persisting volatile `<mj-runtime-state>` envelopes or repeating messages already
      * recorded in an earlier `Prompt` step of the current run.
      *
-     * - First `Prompt` step of the run: stores all non-volatile initial messages.
-     * - Subsequent `Prompt` steps of the run: stores only the newly appended non-volatile
-     *   messages since the previous `Prompt` step, tagged with `conversationMessagesDelta: true`.
+     * - When the non-volatile stack extends the previous Prompt step's recorded stack append-only (the
+     *   same messages, unchanged, at the same positions), only the appended messages are stored, tagged
+     *   with `conversationMessagesDelta: true`.
+     * - Otherwise (the first Prompt step of the run, or a message was replaced, removed or changed by
+     *   expiry, compaction or expansion) the full non-volatile stack is stored, with no delta flag.
+     *
+     * {@link buildResumedStoppedRunTurns} rebuilds the stack from the latest full stack plus the deltas after it.
      */
     private capturePromptStepMessages(
         messages: ChatMessage[] | undefined
     ): { conversationMessages: ChatMessage[]; conversationMessagesDelta?: true } {
-        if (!messages || messages.length === 0) {
-            if (this._recordedPromptMessages === null) {
-                this._recordedPromptMessages = new WeakSet<ChatMessage>();
-                return { conversationMessages: [] };
-            }
-            return { conversationMessages: [], conversationMessagesDelta: true };
+        const nonVolatile = (messages ?? []).filter(m => (m as AgentChatMessage)?.metadata?.volatileState !== true);
+        const recorded = nonVolatile.map(m => ({ Message: m, Serialized: JSON.stringify(m) }));
+        const previous = this._lastRecordedPromptStack;
+        this._lastRecordedPromptStack = recorded;
+        if (previous && BaseAgent.isAppendOnlyExtension(previous, recorded)) {
+            return { conversationMessages: nonVolatile.slice(previous.length), conversationMessagesDelta: true };
         }
+        return { conversationMessages: nonVolatile };
+    }
 
-        const nonVolatile = messages.filter(m => (m as AgentChatMessage)?.metadata?.volatileState !== true);
-
-        if (this._recordedPromptMessages === null) {
-            this._recordedPromptMessages = new WeakSet<ChatMessage>();
-            for (let i = 0; i < nonVolatile.length; i++) {
-                this._recordedPromptMessages.add(nonVolatile[i]);
-            }
-            return { conversationMessages: nonVolatile };
+    /** True when `current` starts with every message of `previous`, by reference and unchanged. @private */
+    private static isAppendOnlyExtension(previous: RecordedPromptMessage[], current: RecordedPromptMessage[]): boolean {
+        if (current.length < previous.length) {
+            return false;
         }
-
-        const delta: ChatMessage[] = [];
-        for (let i = 0; i < nonVolatile.length; i++) {
-            const msg = nonVolatile[i];
-            if (!this._recordedPromptMessages.has(msg)) {
-                this._recordedPromptMessages.add(msg);
-                delta.push(msg);
-            }
-        }
-        return { conversationMessages: delta, conversationMessagesDelta: true };
+        return previous.every((p, i) => current[i].Message === p.Message && current[i].Serialized === p.Serialized);
     }
 
     /**

@@ -53,7 +53,8 @@ export class AppStateInspectorComponent extends BaseResourceComponent implements
         super();
     }
 
-    public ngOnInit(): void {
+    public override ngOnInit(): void {
+        super.ngOnInit();
         const p = DevToolsPrefs.Get<{ activeSection?: string }>('appStateInspector');
         if (p?.activeSection && this.Sections.some(s => s.id === p.activeSection)) {
             this.ActiveSection = p.activeSection;
