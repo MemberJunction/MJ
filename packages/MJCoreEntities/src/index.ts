@@ -49,6 +49,8 @@ export * from './engines/PermissionEngine';
 export * from './engines/AuditLogTypeEngine';
 export * from './engines/ResourceTypeEngine';
 export * from './engines/IdentityClaimEngine';
+export * from './engines/BrandKitEngine';
+export * from './engines/VideoStudioEngine';
 
 export * from './custom/PermissionProviders';
 export * from './custom/Permissions';
