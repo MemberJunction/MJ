@@ -334,7 +334,8 @@ export class RecordProcessRunnerUXComponent extends BaseEntityActionRuntimeUX {
     private async loadDiff(processRunID: string): Promise<void> {
         const rv = await RunView.FromMetadataProvider(this.Context?.Provider ?? Metadata.Provider).RunView<RawDetail>({
             EntityName: 'MJ: Process Run Details',
-            ExtraFilter: `ProcessRunID='${processRunID}'`,
+            // skipped details are never rendered (the summary carries their count), so they must not spend the row budget
+            ExtraFilter: `ProcessRunID='${processRunID}' AND Status <> 'Skipped'`,
             Fields: ['RecordID', 'Status', 'ResultPayload', 'ErrorMessage'],
             OrderBy: 'RecordID',
             MaxRows: RecordProcessRunnerUXComponent.MAX_PREVIEW_ROWS,
@@ -360,7 +361,7 @@ export class RecordProcessRunnerUXComponent extends BaseEntityActionRuntimeUX {
         this.DiffRows = rows;
         this.ChangedRecordCount = changedRecords;
         this.TotalChangeCount = totalChanges;
-        this.Truncated = (this.PreviewResult?.Processed ?? 0) > RecordProcessRunnerUXComponent.MAX_PREVIEW_ROWS;
+        this.Truncated = rv.Results.length >= RecordProcessRunnerUXComponent.MAX_PREVIEW_ROWS;
     }
 
     /** A FieldRules run's row: the changes the engine computed that it would apply. */

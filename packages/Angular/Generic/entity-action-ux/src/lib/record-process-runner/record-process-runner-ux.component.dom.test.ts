@@ -36,8 +36,12 @@ const writeBackPayload = (writeBack: Partial<WriteBackResult>): WriteBackRunPayl
     writeBack: { updatedRecord: false, changed: false, dryRun: true, ...writeBack },
 });
 
+/** The RunView params the dialog sent for the run details, captured by {@link renderPreview}. */
+const detailParams: RunViewParams[] = [];
+
 /** Renders the dialog over a fake provider answering the run details, and runs the preview. */
 async function renderPreview(details: DetailRow[], output: Partial<RecordProcessRunNowOutput> = {}) {
+    detailParams.length = 0;
     const operation = vi.spyOn(RecordProcessRunNowOperation.prototype, 'Execute').mockImplementation(
         async (_input: RecordProcessRunNowInput): Promise<RemoteOpResult<RecordProcessRunNowOutput>> => ({
             Success: true,
@@ -45,7 +49,11 @@ async function renderPreview(details: DetailRow[], output: Partial<RecordProcess
         }),
     );
     const provider = createFakeProvider({
-        runViewResults: (params: RunViewParams) => (params.EntityName === 'MJ: Process Run Details' ? details : []),
+        runViewResults: (params: RunViewParams) => {
+            if (params.EntityName !== 'MJ: Process Run Details') return [];
+            detailParams.push(params);
+            return details;
+        },
     });
     const context: EntityActionUXContext = {
         EntityInfo: MEMBERS, ScopeKind: 'records', SelectedRecordIDs: details.map((d) => d.RecordID),
@@ -98,6 +106,22 @@ describe('RecordProcessRunnerUXComponent dry-run preview (DOM)', () => {
         expect(errors).toEqual(['Seniority "Chief" has no row', 'Level proposed twice']);
         expect(f.componentInstance.TotalChangeCount).toBe(0);
         expect(applyButton(f)).toBeUndefined();
+    });
+
+    it('loads only the details that are not skipped, so a large scope spends its row budget on changed records', async () => {
+        const { f } = await renderPreview([detail('id-1', writeBackPayload({ previewFields: { Tier: 'Gold' } }))], { processed: 1308, skipped: 1303 });
+
+        expect(detailParams).toHaveLength(1);
+        expect(detailParams[0].ExtraFilter).toContain("Status <> 'Skipped'");
+        expect(f.componentInstance.Truncated).toBe(false);
+        expect(f.componentInstance.ChangedRecordCount).toBe(1);
+    });
+
+    it('is truncated when the details load reaches the row limit', async () => {
+        const rows = Array.from({ length: 500 }, (_, i) => detail(`id-${i}`, writeBackPayload({ previewFields: { Tier: 'Gold' } })));
+        const { f } = await renderPreview(rows, { processed: 600, success: 600 });
+
+        expect(f.componentInstance.Truncated).toBe(true);
     });
 
     it('still shows a FieldRules run\'s changes', async () => {
