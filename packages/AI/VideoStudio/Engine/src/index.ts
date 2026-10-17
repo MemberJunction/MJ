@@ -83,3 +83,27 @@ export {
     ProduceVideoAction,
 } from './actions/produce-video.action.js';
 
+export {
+    BuildCheckRequest,
+    BuildRenderBundle,
+    CheckProductionRules,
+    FrameSizeFor,
+    MAX_STILL_POINTS,
+    ReadAssetBytes,
+    SanitizeStageKey,
+    StillPointsFor,
+    type BuildRenderBundleContext,
+} from './render/bundle.js';
+
+export {
+    LoadVideoStudioPreProductionAgent,
+    VideoStudioPreProductionAgent,
+} from './agents/pre-production-agent.js';
+
+export {
+    FormatCheckIssue,
+    LoadVideoStudioRenderAgent,
+    NO_STORAGE_ACCOUNT_ERROR_MESSAGE,
+    VideoStudioRenderAgent,
+} from './agents/render-agent.js';
+

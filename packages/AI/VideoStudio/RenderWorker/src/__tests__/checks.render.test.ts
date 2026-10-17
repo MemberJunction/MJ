@@ -614,7 +614,7 @@ describe.skipIf(!RUN_RENDER_TESTS)('VS-RND-5 opt-in real-backend deterministic c
             expect.objectContaining({
                 Code: MJ_UNBUNDLED_FONT_CODE,
                 Selector: '#brand-heading',
-                Severity: 'Warning',
+                Severity: 'Error',
             }),
         ]);
     }, 90_000);
