@@ -1478,7 +1478,7 @@ import {
     WebSearchQueryServerOperation,
 } from '@memberjunction/web-search-engine';
 
-// @memberjunction/core-actions (156 classes)
+// @memberjunction/core-actions (157 classes)
 import {
     APIRateLimiterAction,
     ActionSmithAgent,
@@ -1542,6 +1542,7 @@ import {
     GammaGeneratePresentationAction,
     GenerateImageAction,
     GenerateIntegrationActionAction,
+    GenerateVideoAction,
     GeocodeAddressAction,
     GetActiveFormForEntityAction,
     GetDefaultFormScaffoldForEntityAction,
@@ -2760,6 +2761,7 @@ const CLASS_REGISTRATIONS_5: any[] = [
     GammaGeneratePresentationAction,
     GenerateImageAction,
     GenerateIntegrationActionAction,
+    GenerateVideoAction,
     GeocodeAddressAction,
     GetActiveFormForEntityAction,
     GetDefaultFormScaffoldForEntityAction,
@@ -2890,7 +2892,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1167;
+export const CLASS_REGISTRATIONS_COUNT = 1168;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

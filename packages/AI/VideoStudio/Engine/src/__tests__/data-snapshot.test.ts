@@ -1138,8 +1138,10 @@ describe('VS-DAT-1: CaptureDataSnapshot & LoadDataSnapshotValues', () => {
     });
 
     it('deduplicates case-differing ArtifactVersionIDs in the IN list via UUIDSet and matches both bindings via IndexByUUID', async () => {
-        const lowerId = ARTIFACT_VERSION_ID_1.toLowerCase();
-        const upperId = ARTIFACT_VERSION_ID_1.toUpperCase();
+        const caseDiffVersionId = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
+        const lowerId = caseDiffVersionId.toLowerCase();
+        const upperId = caseDiffVersionId.toUpperCase();
+        expect(lowerId).not.toBe(upperId);
 
         mockRunViews.mockResolvedValueOnce([
             {

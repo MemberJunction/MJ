@@ -1208,7 +1208,7 @@ import {
     MJVectorIndexEntityServer,
 } from '@memberjunction/core-entities-server';
 
-// @memberjunction/core-actions (156 classes)
+// @memberjunction/core-actions (157 classes)
 import {
     APIRateLimiterAction,
     ActionSmithAgent,
@@ -1272,6 +1272,7 @@ import {
     GammaGeneratePresentationAction,
     GenerateImageAction,
     GenerateIntegrationActionAction,
+    GenerateVideoAction,
     GeocodeAddressAction,
     GetActiveFormForEntityAction,
     GetDefaultFormScaffoldForEntityAction,
@@ -2389,6 +2390,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     GammaGeneratePresentationAction,
     GenerateImageAction,
     GenerateIntegrationActionAction,
+    GenerateVideoAction,
     GeocodeAddressAction,
     GetActiveFormForEntityAction,
     GetDefaultFormScaffoldForEntityAction,
@@ -2433,11 +2435,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     ObjectExistsAction,
     PDFExtractorAction,
     ParallelExecuteAction,
-    PasswordStrengthAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    PasswordStrengthAction,
     PerplexitySearchAction,
     PostalCodeLookupAction,
     PreviewDocumentAction,
@@ -2528,7 +2530,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1074;
+export const CLASS_REGISTRATIONS_COUNT = 1075;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

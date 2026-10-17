@@ -45,10 +45,10 @@
             "ActionID": "@parent:ID",
             "Name": "DurationSeconds",
             "DefaultValue": "5",
-            "Type": "Input",
+            "Type": "Both",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Requested clip duration in seconds (default: 5).",
+            "Description": "Requested clip duration in seconds on input (default: 5); actual duration of the generated video clip in seconds on output.",
             "IsRequired": false
           },
           "primaryKey": {
@@ -149,7 +149,7 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Optional active Video model Name or APIName to pin (for example 'FLUX 3' or 'flux-3'). When omitted, the Default Generative Video prompt's model bindings select the model with failover.",
+            "Description": "Optional active Video model Name or APIName to pin (for example 'FLUX 3 Video' or 'flux-3-video'). When omitted, the Default Generative Video prompt's model bindings select the model with failover.",
             "IsRequired": false
           },
           "primaryKey": {
@@ -181,19 +181,6 @@
           },
           "primaryKey": {
             "ID": "D994CB25-4272-42CE-9986-474CE57F3B43"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "DurationSeconds",
-            "Type": "Output",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Actual duration of the generated video clip in seconds."
-          },
-          "primaryKey": {
-            "ID": "8EBF8697-BE42-4BE6-9B69-F044AF4E0CAE"
           }
         },
         {
