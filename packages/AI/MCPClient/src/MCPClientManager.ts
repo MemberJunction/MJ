@@ -252,6 +252,9 @@ export class MCPClientManager extends BaseSingleton<MCPClientManager> {
             await this.disconnect(connectionId, { contextUser, force: true });
         }
 
+        // Held outside the try so the catch can release them if the connect never completes
+        let pendingTransport: Transport | undefined;
+        let pendingClient: Client | undefined;
         try {
             // Load connection configuration
             const connectionConfig = await this.loadConnectionConfig(connectionId, contextUser);
@@ -295,12 +298,15 @@ export class MCPClientManager extends BaseSingleton<MCPClientManager> {
                 connectionConfig,
                 credentials
             );
+            pendingTransport = transport;
 
             // Create MCP client
             const client = new Client({
                 name: MCPClientManager.CLIENT_NAME,
                 version: MCPClientManager.CLIENT_VERSION
             });
+
+            pendingClient = client;
 
             // Connect
             await client.connect(transport);
@@ -354,6 +360,9 @@ export class MCPClientManager extends BaseSingleton<MCPClientManager> {
             return activeConnection;
 
         } catch (error) {
+            // A failed connect would otherwise orphan the stdio child process / open SSE-HTTP stream
+            await this.releaseUnregisteredTransport(connectionId, pendingClient, pendingTransport);
+
             // Check for OAuth-specific errors and emit appropriate events
             if (error instanceof OAuthAuthorizationRequiredError) {
                 // Emit authorizationRequired event before re-throwing
@@ -1917,6 +1926,27 @@ export class MCPClientManager extends BaseSingleton<MCPClientManager> {
         tokenExpiresAt?: Date;
     } | null> {
         return this.GetOAuthConnectionStatus(connectionId, contextUser);
+    }
+
+    /**
+     * Closes a client/transport pair whose connection attempt failed before it was registered in
+     * `connections`. A connection that is registered is owned by `disconnect()` and left alone.
+     * Close errors are swallowed: the original connect failure is what the caller needs to see.
+     */
+    private async releaseUnregisteredTransport(
+        connectionId: string,
+        client: Client | undefined,
+        transport: Transport | undefined
+    ): Promise<void> {
+        if (!transport || this.connections.get(connectionId)?.transport === transport) {
+            return;
+        }
+        try {
+            // Client.close() closes its transport; fall back to the transport when no client was built
+            await (client ? client.close() : transport.close());
+        } catch (closeError) {
+            LogError(`[MCPClient] Failed to release transport for ${connectionId}: ${closeError}`);
+        }
     }
 
     /**

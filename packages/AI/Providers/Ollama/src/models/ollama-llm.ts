@@ -1,6 +1,7 @@
 import { BaseLLM, ChatParams, ChatResult, ChatResultChoice, ChatMessageRole, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, ModelUsage, ChatMessage, ChatMessageContentBlock, parseBase64DataUrl } from '@memberjunction/ai';
 import { RegisterClass, ToJSONSafe } from '@memberjunction/global';
-import { Ollama, ChatRequest, ChatResponse, GenerateRequest, GenerateResponse, Message, Fetch } from 'ollama';
+import { Ollama, ChatRequest, ChatResponse, GenerateRequest, GenerateResponse, Message } from 'ollama';
+import { CancellableOllamaClient, CreateCancellableOllamaClient } from './cancellable-client';
 
 /**
  * Ollama implementation of the BaseLLM class for local LLM inference
@@ -86,42 +87,36 @@ export class OllamaLLM extends BaseLLM {
      * and non-streaming alike) instead of merely abandoning the promise. With no token we reuse the
      * shared client, so the default path is unchanged.
      */
-    private clientForRequest(token: AbortSignal | undefined): Ollama {
+    private clientForRequest(token: AbortSignal | undefined): CancellableOllamaClient {
         if (!token) {
-            return this._client;
+            return { Client: this._client, Dispose: () => undefined };
         }
-        return new Ollama({ host: this._baseUrl, fetch: this.createCancellableFetch(token) });
+        return CreateCancellableOllamaClient(this._baseUrl, token);
     }
 
     /**
-     * A `fetch` wrapper that layers the caller's cancellation token on top of whatever signal the
-     * Ollama client already supplies (it creates its own AbortController for streamed requests, so
-     * both signals must be honored — aborting on EITHER cancels the request).
+     * Detaches the request's cancellation listener once the stream has been fully consumed, closed
+     * early, or has thrown. Without this the listener would stay on the (long-lived) run token.
      */
-    private createCancellableFetch(token: AbortSignal): Fetch {
-        return (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
-            return fetch(input, { ...init, signal: this.combineSignals(token, init?.signal) });
-        };
-    }
-
-    /**
-     * Combine two AbortSignals into one. Uses a plain AbortController rather than `AbortSignal.any`
-     * so this works on every Node version MJ supports (`any` only landed in Node 20.3).
-     */
-    private combineSignals(token: AbortSignal, existing: AbortSignal | null | undefined): AbortSignal {
-        if (!existing) {
-            return token;
+    private disposeWhenStreamEnds<T extends AsyncIterable<unknown>>(stream: T, scoped: CancellableOllamaClient): T {
+        if (typeof stream?.[Symbol.asyncIterator] !== 'function') {
+            scoped.Dispose();
+            return stream;
         }
-        const controller = new AbortController();
-        const abort = (source: AbortSignal) => controller.abort(source.reason);
-        for (const signal of [token, existing]) {
-            if (signal.aborted) {
-                controller.abort(signal.reason);
-                return controller.signal;
+        const originalIterator = stream[Symbol.asyncIterator].bind(stream);
+        const wrapped = async function* (): AsyncGenerator<unknown> {
+            const iterator = originalIterator();
+            try {
+                for (let step = await iterator.next(); !step.done; step = await iterator.next()) {
+                    yield step.value;
+                }
+            } finally {
+                scoped.Dispose();
+                await iterator.return?.();
             }
-            signal.addEventListener('abort', () => abort(signal), { once: true });
-        }
-        return controller.signal;
+        };
+        (stream as { [Symbol.asyncIterator]: () => AsyncIterator<unknown> })[Symbol.asyncIterator] = wrapped;
+        return stream;
     }
 
     /**
@@ -276,8 +271,13 @@ export class OllamaLLM extends BaseLLM {
             }
 
             // Make the chat completion request through a client carrying the cancellation token
-            const client = this.clientForRequest(params.cancellationToken);
-            const response = await client.chat(chatRequest) as ChatResponse;
+            const scoped = this.clientForRequest(params.cancellationToken);
+            let response: ChatResponse;
+            try {
+                response = await scoped.Client.chat(chatRequest) as ChatResponse;
+            } finally {
+                scoped.Dispose();
+            }
             const endTime = new Date();
 
             // Process thinking content if present (for models that support it)
@@ -444,8 +444,14 @@ export class OllamaLLM extends BaseLLM {
         // Return the streaming response, from a client carrying the cancellation token so that an
         // abort closes the socket instead of leaving the stream running.
         // Cast stream to true for TypeScript overload resolution
-        const client = this.clientForRequest(params.cancellationToken);
-        return client.chat({ ...chatRequest, stream: true } as ChatRequest & { stream: true });
+        const scoped = this.clientForRequest(params.cancellationToken);
+        try {
+            const stream = await scoped.Client.chat({ ...chatRequest, stream: true } as ChatRequest & { stream: true });
+            return this.disposeWhenStreamEnds(stream, scoped);
+        } catch (error) {
+            scoped.Dispose();
+            throw error;
+        }
     }
     
     /**
