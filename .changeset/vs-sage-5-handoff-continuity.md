@@ -1,5 +1,5 @@
 ---
-"@memberjunction/ng-shared": patch
+"@memberjunction/ng-shared-generic": patch
 "@memberjunction/ng-conversations": patch
 "@memberjunction/messaging-adapters": patch
 ---

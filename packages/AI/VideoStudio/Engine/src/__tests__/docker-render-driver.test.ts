@@ -478,16 +478,267 @@ describe('DockerRenderDriver isolation, hardening, and lifecycle unit tests', ()
         expect(code).not.toBe(0);
         expect(finalizations).toHaveLength(1);
     });
+
+    it('rejects with Code === "Internal" and never returns host file bytes when out/video.mp4 is a symlink to a host file', async () => {
+        const secretDir = await makeTempDir();
+        const secretFilePath = path.join(secretDir, 'host-secret.env');
+        await fs.writeFile(secretFilePath, 'DB_PASSWORD=hunter2', 'utf8');
+
+        const symlinkFileProvider: ISandboxProvider = {
+            Provision: async (key: WorkspaceKey): Promise<SandboxHandle> => {
+                const hostWorkspace = await fs.mkdtemp(
+                    path.join(os.tmpdir(), 'mj-vs-symlink-file-ws-'),
+                );
+                tempDirs.push(hostWorkspace);
+
+                const executor: SandboxExecutor = {
+                    Run: (): HarnessProcess => {
+                        const stdout = new PassThrough();
+                        const stderr = new PassThrough();
+                        const stdin = new PassThrough();
+
+                        const exitCode = (async (): Promise<number | null> => {
+                            try {
+                                const outDir = path.join(hostWorkspace, 'out');
+                                await fs.writeFile(
+                                    path.join(outDir, 'result.json'),
+                                    JSON.stringify({
+                                        Format: 'mp4',
+                                        VideoID: 'video.mp4',
+                                        VideoSizeBytes: 19,
+                                        MimeType: 'video/mp4',
+                                        Width: MINIMAL_BUNDLE_WIDTH,
+                                        Height: MINIMAL_BUNDLE_HEIGHT,
+                                        Fps: MINIMAL_BUNDLE_FPS,
+                                        DurationSeconds: MINIMAL_BUNDLE_DURATION_SECONDS,
+                                        FrameCount: 60,
+                                        HasAudio: false,
+                                        RendererVersion: 'test',
+                                        RenderDurationMs: 10,
+                                    }),
+                                    'utf8',
+                                );
+                                await fs.symlink(secretFilePath, path.join(outDir, 'video.mp4'));
+                                return 0;
+                            } finally {
+                                stdout.end();
+                                stderr.end();
+                            }
+                        })();
+
+                        return {
+                            Stdin: stdin,
+                            Stdout: streamToLines(stdout),
+                            Stderr: streamToLines(stderr),
+                            ExitCode: exitCode,
+                            Kill: () => stdin.end(),
+                        };
+                    },
+                };
+
+                return {
+                    WorkspacePath: '/workspace',
+                    HostWorkspacePath: hostWorkspace,
+                    Key: key,
+                    Ephemeral: true,
+                    Executor: executor,
+                };
+            },
+            Finalize: async (handle) => {
+                if (handle.HostWorkspacePath) {
+                    await fs.rm(handle.HostWorkspacePath, { recursive: true, force: true });
+                }
+            },
+        };
+
+        const driver = new DockerRenderDriver(makeDockerSettings(), symlinkFileProvider);
+        let caught: unknown;
+        try {
+            await driver.Render(CreateMinimalRenderRequest());
+        } catch (err) {
+            caught = err;
+        }
+        expect(caught).toBeInstanceOf(VideoRenderError);
+        const renderErr = caught as VideoRenderError;
+        expect(renderErr.Code).toBe('Internal');
+        expect(renderErr.message).not.toContain('hunter2');
+    });
+
+    it('rejects with Code === "Internal" and never returns host file bytes when out is replaced with a symlink to a host directory', async () => {
+        const externalOutDir = await makeTempDir();
+        await fs.writeFile(
+            path.join(externalOutDir, 'result.json'),
+            JSON.stringify({
+                Format: 'mp4',
+                VideoID: 'video.mp4',
+                VideoSizeBytes: 19,
+                MimeType: 'video/mp4',
+                Width: MINIMAL_BUNDLE_WIDTH,
+                Height: MINIMAL_BUNDLE_HEIGHT,
+                Fps: MINIMAL_BUNDLE_FPS,
+                DurationSeconds: MINIMAL_BUNDLE_DURATION_SECONDS,
+                FrameCount: 60,
+                HasAudio: false,
+                RendererVersion: 'test',
+                RenderDurationMs: 10,
+            }),
+            'utf8',
+        );
+        await fs.writeFile(path.join(externalOutDir, 'video.mp4'), 'DB_PASSWORD=hunter2', 'utf8');
+
+        const symlinkDirProvider: ISandboxProvider = {
+            Provision: async (key: WorkspaceKey): Promise<SandboxHandle> => {
+                const hostWorkspace = await fs.mkdtemp(
+                    path.join(os.tmpdir(), 'mj-vs-symlink-dir-ws-'),
+                );
+                tempDirs.push(hostWorkspace);
+
+                const executor: SandboxExecutor = {
+                    Run: (): HarnessProcess => {
+                        const stdout = new PassThrough();
+                        const stderr = new PassThrough();
+                        const stdin = new PassThrough();
+
+                        const exitCode = (async (): Promise<number | null> => {
+                            try {
+                                const outDir = path.join(hostWorkspace, 'out');
+                                await fs.rm(outDir, { recursive: true, force: true });
+                                await fs.symlink(externalOutDir, outDir);
+                                return 0;
+                            } finally {
+                                stdout.end();
+                                stderr.end();
+                            }
+                        })();
+
+                        return {
+                            Stdin: stdin,
+                            Stdout: streamToLines(stdout),
+                            Stderr: streamToLines(stderr),
+                            ExitCode: exitCode,
+                            Kill: () => stdin.end(),
+                        };
+                    },
+                };
+
+                return {
+                    WorkspacePath: '/workspace',
+                    HostWorkspacePath: hostWorkspace,
+                    Key: key,
+                    Ephemeral: true,
+                    Executor: executor,
+                };
+            },
+            Finalize: async (handle) => {
+                if (handle.HostWorkspacePath) {
+                    await fs.rm(handle.HostWorkspacePath, { recursive: true, force: true });
+                }
+            },
+        };
+
+        const driver = new DockerRenderDriver(makeDockerSettings(), symlinkDirProvider);
+        let caught: unknown;
+        try {
+            await driver.Render(CreateMinimalRenderRequest());
+        } catch (err) {
+            caught = err;
+        }
+        expect(caught).toBeInstanceOf(VideoRenderError);
+        const renderErr = caught as VideoRenderError;
+        expect(renderErr.Code).toBe('Internal');
+        expect(renderErr.message).not.toContain('hunter2');
+    });
+
+    it.runIf(process.platform === 'linux')(
+        'chmods the per-run host workspace to 0o700 on Linux before writing request.json',
+        async () => {
+            let recordedMode: number | undefined;
+
+            const modeRecordingProvider: ISandboxProvider = {
+                Provision: async (key: WorkspaceKey): Promise<SandboxHandle> => {
+                    const hostWorkspace = await fs.mkdtemp(
+                        path.join(os.tmpdir(), 'mj-vs-linux-mode-ws-'),
+                    );
+                    await fs.chmod(hostWorkspace, 0o755);
+                    tempDirs.push(hostWorkspace);
+
+                    const executor: SandboxExecutor = {
+                        Run: (): HarnessProcess => {
+                            const stdout = new PassThrough();
+                            const stderr = new PassThrough();
+                            const stdin = new PassThrough();
+
+                            const exitCode = (async (): Promise<number | null> => {
+                                try {
+                                    const stat = await fs.stat(hostWorkspace);
+                                    recordedMode = stat.mode & 0o777;
+                                    await fs.writeFile(
+                                        path.join(hostWorkspace, 'out', 'result.json'),
+                                        JSON.stringify({
+                                            Healthy: true,
+                                            NodeVersion: process.version,
+                                            HyperFramesVersion: '0.1.0',
+                                            Errors: [],
+                                        }),
+                                        'utf8',
+                                    );
+                                    return 0;
+                                } finally {
+                                    stdout.end();
+                                    stderr.end();
+                                }
+                            })();
+
+                            return {
+                                Stdin: stdin,
+                                Stdout: streamToLines(stdout),
+                                Stderr: streamToLines(stderr),
+                                ExitCode: exitCode,
+                                Kill: () => stdin.end(),
+                            };
+                        },
+                    };
+
+                    return {
+                        WorkspacePath: '/workspace',
+                        HostWorkspacePath: hostWorkspace,
+                        Key: key,
+                        Ephemeral: true,
+                        Executor: executor,
+                    };
+                },
+                Finalize: async (handle) => {
+                    if (handle.HostWorkspacePath) {
+                        await fs.rm(handle.HostWorkspacePath, { recursive: true, force: true });
+                    }
+                },
+            };
+
+            const driver = new DockerRenderDriver(makeDockerSettings(), modeRecordingProvider);
+            const health = await driver.Health();
+            expect(health.Healthy).toBe(true);
+            expect(recordedMode).toBe(0o700);
+        },
+    );
 });
 
 function checkCanRunRealDockerTests(): boolean {
     if (process.env.VIDEO_STUDIO_DOCKER_TESTS !== '1') {
+        console.info(
+            '[docker-render-driver.test] Skipping real-Docker contract suite: set VIDEO_STUDIO_DOCKER_TESTS=1 to enable.',
+        );
         return false;
     }
     const res = spawnSync('docker', ['image', 'inspect', DEFAULT_DOCKER_RENDER_IMAGE], {
         stdio: 'ignore',
     });
-    return res.status === 0;
+    if (res.status !== 0) {
+        console.info(
+            `[docker-render-driver.test] Skipping real-Docker contract suite: Docker image '${DEFAULT_DOCKER_RENDER_IMAGE}' is missing. Build it with: ${DOCKER_RENDER_IMAGE_BUILD_COMMAND}`,
+        );
+        return false;
+    }
+    return true;
 }
 
 const CAN_RUN_REAL_DOCKER_TESTS = checkCanRunRealDockerTests();
@@ -497,13 +748,22 @@ describe.skipIf(!CAN_RUN_REAL_DOCKER_TESTS)(
     () => {
         const configDirs: string[] = [];
 
-        afterEach(() => {
-            const psRes = spawnSync(
-                'docker',
-                ['ps', '-q', '--filter', `ancestor=${DEFAULT_DOCKER_RENDER_IMAGE}`],
-                { encoding: 'utf8' },
-            );
-            expect((psRes.stdout ?? '').trim()).toBe('');
+        afterEach(async () => {
+            let remaining = '';
+            const deadline = Date.now() + 2_000;
+            do {
+                const psRes = spawnSync(
+                    'docker',
+                    ['ps', '-a', '-q', '--filter', 'name=mj-harness-'],
+                    { encoding: 'utf8' },
+                );
+                remaining = (psRes.stdout ?? '').trim();
+                if (remaining === '') {
+                    break;
+                }
+                await new Promise((resolve) => setTimeout(resolve, 50));
+            } while (Date.now() < deadline);
+            expect(remaining).toBe('');
         });
 
         afterAll(async () => {

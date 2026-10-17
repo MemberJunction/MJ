@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { constants as fsConstants } from 'node:fs';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import {
@@ -51,6 +52,11 @@ const CONTAINER_OUT_DIR = '/workspace/out';
 const CONTAINER_TMP_DIR = '/workspace/tmp';
 const CONTAINER_HOME_DIR = '/workspace/home';
 const MAX_STDERR_TAIL_BYTES = 2048;
+
+const NOFOLLOW_OPEN_FLAGS =
+    fsConstants.O_RDONLY |
+    (typeof fsConstants.O_NOFOLLOW === 'number' ? fsConstants.O_NOFOLLOW : 0) |
+    (typeof fsConstants.O_NONBLOCK === 'number' ? fsConstants.O_NONBLOCK : 0);
 
 type DockerOneShotOperation =
     | 'render'
@@ -105,6 +111,64 @@ function buildProvisionUnavailableMessage(image: string, cause: unknown): string
         `Failed to provision Docker render container from image '${image}': ${detail}. ` +
         `Ensure the Docker daemon is running and build the worker image with: ${DOCKER_RENDER_IMAGE_BUILD_COMMAND}`
     );
+}
+
+async function moveAndVerifySafeOutDir(
+    hostOutDir: string,
+    safeOutDir: string,
+    op: DockerOneShotOperation,
+): Promise<void> {
+    try {
+        await fs.rm(safeOutDir, { recursive: true, force: true });
+        await fs.rename(hostOutDir, safeOutDir);
+        const outStat = await fs.lstat(safeOutDir);
+        if (!outStat.isDirectory() || outStat.isSymbolicLink()) {
+            throw new VideoRenderError(
+                'Internal',
+                `Docker render worker operation '${op}' replaced the output directory with a non-directory entry.`,
+            );
+        }
+    } catch (error) {
+        if (error instanceof VideoRenderError) {
+            throw error;
+        }
+        const detail = error instanceof Error ? error.message : String(error);
+        throw new VideoRenderError(
+            'Internal',
+            `Docker render worker operation '${op}' output directory could not be verified: ${detail}`,
+            { Cause: error },
+        );
+    }
+}
+
+async function readRegularFileNoFollow(
+    filePath: string,
+    op: DockerOneShotOperation,
+): Promise<Buffer> {
+    let handle: fs.FileHandle | undefined;
+    try {
+        handle = await fs.open(filePath, NOFOLLOW_OPEN_FLAGS);
+        const stat = await handle.stat();
+        if (!stat.isFile()) {
+            throw new VideoRenderError(
+                'Internal',
+                `Docker render worker operation '${op}' produced a non-regular file at '${path.basename(filePath)}'.`,
+            );
+        }
+        return await handle.readFile();
+    } catch (error) {
+        if (error instanceof VideoRenderError) {
+            throw error;
+        }
+        const detail = error instanceof Error ? error.message : String(error);
+        throw new VideoRenderError(
+            'Internal',
+            `Docker render worker operation '${op}' output file '${path.basename(filePath)}' could not be safely read: ${detail}`,
+            { Cause: error },
+        );
+    } finally {
+        await handle?.close().catch(() => undefined);
+    }
 }
 
 /**
@@ -310,6 +374,7 @@ export class DockerRenderDriver extends VideoRenderDriverBase {
         }
 
         let outcome: 'success' | 'failure' | 'cancelled' = 'failure';
+        let safeOutDir: string | undefined;
         try {
             if (signal?.aborted) {
                 outcome = 'cancelled';
@@ -317,6 +382,11 @@ export class DockerRenderDriver extends VideoRenderDriverBase {
             }
 
             const hostRoot = handle.HostWorkspacePath ?? handle.WorkspacePath;
+            safeOutDir = `${hostRoot}.out`;
+            if (process.platform === 'linux') {
+                await fs.chmod(hostRoot, 0o700);
+            }
+
             const hostRequestPath = path.join(hostRoot, 'request.json');
             const hostOutDir = path.join(hostRoot, 'out');
             const hostTmpDir = path.join(hostRoot, 'tmp');
@@ -361,8 +431,12 @@ export class DockerRenderDriver extends VideoRenderDriverBase {
                     for await (const line of proc.Stderr) {
                         stderrTail = appendStderrTail(stderrTail, Buffer.from(`${line}\n`, 'utf8'));
                     }
-                } catch {
-                    // Ignore stream teardown errors during abort/kill.
+                } catch (error) {
+                    const detail = error instanceof Error ? error.message : String(error);
+                    stderrTail = appendStderrTail(
+                        stderrTail,
+                        Buffer.from(`stderr stream error: ${detail}\n`, 'utf8'),
+                    );
                 }
             })();
 
@@ -406,18 +480,18 @@ export class DockerRenderDriver extends VideoRenderDriverBase {
                     for await (const line of proc.Stdout) {
                         processStdoutLine(line);
                     }
-                } catch {
-                    // Ignore stream teardown errors during abort/kill.
+                } catch (error) {
+                    const detail = error instanceof Error ? error.message : String(error);
+                    stderrTail = appendStderrTail(
+                        stderrTail,
+                        Buffer.from(`stdout stream error: ${detail}\n`, 'utf8'),
+                    );
                 }
             })();
 
             const onCallerAbort = (): void => {
                 combinedController.abort(signal?.reason);
-                try {
-                    proc.Stdin?.end();
-                } catch {
-                    // Best-effort stdin close.
-                }
+                proc.Stdin?.end();
                 proc.Kill();
             };
 
@@ -432,11 +506,7 @@ export class DockerRenderDriver extends VideoRenderDriverBase {
             const timeoutTimer = setTimeout(() => {
                 timedOut = true;
                 combinedController.abort();
-                try {
-                    proc.Stdin?.end();
-                } catch {
-                    // Best-effort stdin close.
-                }
+                proc.Stdin?.end();
                 proc.Kill();
             }, timeoutMs);
             timeoutTimer.unref();
@@ -467,16 +537,26 @@ export class DockerRenderDriver extends VideoRenderDriverBase {
 
             if (exitCode !== 0) {
                 outcome = 'failure';
-                throw await this.readFailureFromOutDir(op, hostOutDir, exitCode, stderrTail);
+                throw await this.readFailureFromOutDir(
+                    op,
+                    hostOutDir,
+                    safeOutDir,
+                    exitCode,
+                    stderrTail,
+                );
             }
 
-            const resultRaw = await fs.readFile(path.join(hostOutDir, 'result.json'), 'utf8');
+            await moveAndVerifySafeOutDir(hostOutDir, safeOutDir, op);
+
+            const resultRaw = (
+                await readRegularFileNoFollow(path.join(safeOutDir, 'result.json'), op)
+            ).toString('utf8');
             const parsedResult = JSON.parse(resultRaw) as unknown;
 
             if (op === 'render') {
                 const metadata = parsedResult as RenderResultMetadata;
                 const videoBytes = new Uint8Array(
-                    await fs.readFile(path.join(hostOutDir, 'video.mp4')),
+                    await readRegularFileNoFollow(path.join(safeOutDir, 'video.mp4'), op),
                 );
                 if (lastProgressPhase !== 'Complete' || lastProgressPercent !== 100) {
                     emitProgress({
@@ -502,6 +582,9 @@ export class DockerRenderDriver extends VideoRenderDriverBase {
             outcome = 'success';
             return parsedResult as TRes;
         } finally {
+            if (safeOutDir) {
+                await fs.rm(safeOutDir, { recursive: true, force: true }).catch(() => undefined);
+            }
             await this.provider.Finalize(handle, outcome);
         }
     }
@@ -509,13 +592,15 @@ export class DockerRenderDriver extends VideoRenderDriverBase {
     private async readFailureFromOutDir(
         op: DockerOneShotOperation,
         hostOutDir: string,
+        safeOutDir: string,
         exitCode: number | null,
         stderrTail: string,
     ): Promise<VideoRenderError> {
-        const errorJsonPath = path.join(hostOutDir, 'error.json');
+        const errorJsonPath = path.join(safeOutDir, 'error.json');
         let errorRaw: string | undefined;
         try {
-            errorRaw = await fs.readFile(errorJsonPath, 'utf8');
+            await moveAndVerifySafeOutDir(hostOutDir, safeOutDir, op);
+            errorRaw = (await readRegularFileNoFollow(errorJsonPath, op)).toString('utf8');
         } catch {
             errorRaw = undefined;
         }
