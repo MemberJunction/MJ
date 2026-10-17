@@ -119,13 +119,14 @@ In Pass 2, we configured `"SaveReturnMode": "datestamps_only"` in `Entity.Config
 
 ### 4.2 OpenApp Repositories (13 Entities Across 5 Repositories)
 
-| OpenApp Repository | Schema | Entities Configured with `SaveReturnMode: 'datestamps_only'` | Verification & Benchmark Check |
+| OpenApp Repository | Schema | Entities Configured with `SaveReturnMode: 'datestamps_only'` | CodeGen Stored Procedure Migration & Benchmark Check |
 |---|---|---|---|
-| **`MemberJunction/bizapps-common`** | `__mj_BizAppsCommon` | 26. `MJ_BizApps_Common: Activity Sync Run Details`<br>27. `MJ_BizApps_Common: Activity Sync Runs` | `activities.A6` (`5` `ActivitySyncRun` saves: **`10.2 ms`**, logged to `packages/IntegrationTests/benchmark-logs/`) |
-| **`MemberJunction/bizapps-orders`** | `__mj_BizAppsOrders` | 28. `MJ_BizApps_Orders: Payment Webhook Deliveries`<br>29. `MJ_BizApps_Orders: Outbound Deliveries`<br>30. `MJ_BizApps_Orders: Outbound Events`<br>31. `MJ_BizApps_Orders: Subscription Events` | `outbound-events.OB13` (Order confirm + `OutboundEvent` & `OutboundDelivery` writes, logged to `packages/IntegrationTests/benchmark-logs/`) |
-| **`MemberJunction/bizapps-tasks`** | `__mj_BizAppsTasks` | 32. `MJ_BizApps_Tasks: Task Activities`<br>33. `MJ_BizApps_Tasks: Task Notification Logs` | `task-action-hooks.AH4` (Task create + `TaskActivity` & action hook write, logged to `packages/IntegrationTests/benchmark-logs/`) |
-| **`MemberJunction/bizapps-forms`** | `__mj_BizAppsForms` | 34. `MJ_BizApps_Forms: Form Automation Runs`<br>35. `MJ_BizApps_Forms: Form Response Answers` | Verified via `PB13` (`__mj_BizAppsForms: 2` entities active) |
-| **`MemberJunction/bizapps-sonar`** | `__mj_BizAppsSonar` | 36. `MJ_BizApps_Sonar: Score Histories`<br>37. `MJ_BizApps_Sonar: Score Factor Contributions`<br>38. `MJ_BizApps_Sonar: Score Model Audit Events` | Verified via `PB13` (`__mj_BizAppsSonar: 3` entities active) |
+| **`MemberJunction/MJ`** | `__mj` | `1`–`25` (listed in §4.1 above) | `migrations/v6/V202610171645__v6.2.x__SaveReturnMode_DatestampsOnly_StoredProcedures.sql` + `SQLCodeGenBase.isRoutineSaveReturnModeChanged` self-heal |
+| **`MemberJunction/bizapps-common`** | `__mj_BizAppsCommon` | 26. `MJ_BizApps_Common: Activity Sync Run Details`<br>27. `MJ_BizApps_Common: Activity Sync Runs` | `migrations/V202610171645__v5.55.x__SaveReturnMode_DatestampsOnly_StoredProcedures.sql` + `activities.A6` (`5` `ActivitySyncRun` saves: **`10.2 ms`**, logged to `packages/IntegrationTests/benchmark-logs/`) |
+| **`MemberJunction/bizapps-orders`** | `__mj_BizAppsOrders` | 28. `MJ_BizApps_Orders: Payment Webhook Deliveries`<br>29. `MJ_BizApps_Orders: Outbound Deliveries`<br>30. `MJ_BizApps_Orders: Outbound Events`<br>31. `MJ_BizApps_Orders: Subscription Events` | `migrations/V202610171645__v5.36.x__SaveReturnMode_DatestampsOnly_StoredProcedures.sql` + `outbound-events.OB13` (logged to `packages/IntegrationTests/benchmark-logs/`) |
+| **`MemberJunction/bizapps-tasks`** | `__mj_BizAppsTasks` | 32. `MJ_BizApps_Tasks: Task Activities`<br>33. `MJ_BizApps_Tasks: Task Notification Logs` | `migrations/V202610171645__v1.9.x__SaveReturnMode_DatestampsOnly_StoredProcedures.sql` + `task-action-hooks.AH4` (logged to `packages/IntegrationTests/benchmark-logs/`) |
+| **`MemberJunction/bizapps-forms`** | `__mj_BizAppsForms` | 34. `MJ_BizApps_Forms: Form Automation Runs`<br>35. `MJ_BizApps_Forms: Form Response Answers` | `migrations/V202610171645__v0.15.x__SaveReturnMode_DatestampsOnly_StoredProcedures.sql` + verified via `PB13` (`__mj_BizAppsForms: 2` entities active) |
+| **`MemberJunction/bizapps-sonar`** | `__mj_BizAppsSonar` | 36. `MJ_BizApps_Sonar: Score Histories`<br>37. `MJ_BizApps_Sonar: Score Factor Contributions`<br>38. `MJ_BizApps_Sonar: Score Model Audit Events` | `migrations/V202610171645__v0.8.x__SaveReturnMode_DatestampsOnly_StoredProcedures.sql` + verified via `PB13` (`__mj_BizAppsSonar: 3` entities active) |
 
 ---
 
