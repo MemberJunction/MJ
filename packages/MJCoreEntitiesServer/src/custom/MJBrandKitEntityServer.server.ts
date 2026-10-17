@@ -5,9 +5,9 @@ import { MJBrandKitEntity } from '@memberjunction/core-entities';
 /**
  * Server-side `MJ: Brand Kits` entity enforcing the one-default-kit-per-scope rule (§4.1):
  * at most one brand kit with `IsDefault = 1` may exist per `CompanyID` scope (where
- * `CompanyID IS NULL` is the org-wide scope). Saving a second default kit in the same
- * scope fails with a `ValidationErrorInfo` naming the existing default kit rather than
- * silently swapping flags or hitting a raw SQL unique-index error.
+ * `CompanyID IS NULL` is the org-wide scope). No SQL index backs `IsDefault`; this
+ * `ValidateAsync` check is the only guard, failing a second default kit in the same scope
+ * with a `ValidationErrorInfo` naming the existing default kit rather than silently swapping flags.
  */
 @RegisterClass(BaseEntity, 'MJ: Brand Kits')
 export class MJBrandKitEntityServer extends MJBrandKitEntity {

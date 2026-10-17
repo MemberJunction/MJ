@@ -166,17 +166,7 @@ export class BrandKitEngine extends BaseEngine<BrandKitEngine> {
 
         let raw: unknown;
         try {
-            const kitRecord = kit as unknown as {
-                GenerationPolicyObject?: unknown;
-                GenerationPolicy?: string | null;
-            };
-            if ('GenerationPolicyObject' in kit) {
-                raw = kitRecord.GenerationPolicyObject;
-            } else if (kitRecord.GenerationPolicy == null) {
-                raw = null;
-            } else {
-                raw = JSON.parse(kitRecord.GenerationPolicy);
-            }
+            raw = kit.GenerationPolicyObject;
         } catch (err) {
             LogError(
                 `[BrandKitEngine] Failed to read GenerationPolicy for brand kit "${kit.Name ?? kit.ID}": ${err instanceof Error ? err.message : String(err)}`
