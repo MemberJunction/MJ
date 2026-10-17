@@ -46,7 +46,13 @@ type ActionablePlan = Extract<FeaturePipelineStewardPlan, { Kind: 'evaluate' | '
 type EvaluationRun = Pick<MJTestRunEntity, 'ID' | 'Status' | 'ErrorMessage'>;
 
 /** The fields of a pipeline's running Process Run the steward reads. */
-type RunningProcessRun = Pick<MJProcessRunEntity, 'ID' | 'StartTime'>;
+type RunningProcessRun = Pick<MJProcessRunEntity, 'ID' | 'StartTime' | '__mj_UpdatedAt'>;
+
+/**
+ * A `Running` run not checkpointed for this long is stale (its server stopped before settling it): the executor saves
+ * the run after every batch, so a live run is updated far more often.
+ */
+const STALE_RUN_MS = 30 * 60_000;
 
 /** How often a running backfill renews the pass's lease; the engine throttles effective beats itself. */
 const BACKFILL_HEARTBEAT_MS = 60_000;
@@ -58,7 +64,7 @@ const BACKFILL_HEARTBEAT_MS = 60_000;
  * pass re-selects the records whose latest value is still under another version, so it retries exactly the failed
  * ones. A record that fails permanently therefore keeps its version unbackfilled (the executor's circuit breaker
  * covers a systematic failure). A backfill is deferred while another non-dry run of the pipeline is still running,
- * so two runs never write the same scope at once.
+ * so two runs never write the same scope at once; a `Running` run not checkpointed for 30 minutes is stale and ignored.
  */
 export class FeaturePipelineVersionSteward extends BaseSingleton<FeaturePipelineVersionSteward> {
     public static get Instance(): FeaturePipelineVersionSteward {
@@ -220,20 +226,32 @@ export class FeaturePipelineVersionSteward extends BaseSingleton<FeaturePipeline
         return run.Status === 'Failed' && recordCount > 0 && run.Processed >= recordCount;
     }
 
-    /** A non-dry run of the pipeline still `Running`, if any; read fresh. */
+    /**
+     * The non-dry run of the pipeline still in progress, if any: the most recently checkpointed `Running` run, read
+     * fresh. One not checkpointed within {@link STALE_RUN_MS} (so neither is any other) is stale: warned and ignored.
+     */
     protected async RunningProcessRun(recordProcessID: string, p: StewardRunParams): Promise<RunningProcessRun | null> {
         const rv = await RunView.FromMetadataProvider(p.Provider).RunView<RunningProcessRun>({
             EntityName: 'MJ: Process Runs',
             ExtraFilter: `RecordProcessID='${EscapeSQLString(recordProcessID)}' AND Status='Running' AND DryRun=0`,
-            OrderBy: 'StartTime DESC',
-            Fields: ['ID', 'StartTime'],
+            OrderBy: '__mj_UpdatedAt DESC',
+            Fields: ['ID', 'StartTime', '__mj_UpdatedAt'],
             MaxRows: 1,
             BypassCache: true,
         }, p.ContextUser);
         if (!rv.Success) {
             throw new Error(`Reading MJ: Process Runs failed: ${rv.ErrorMessage}`);
         }
-        return rv.Results?.[0] || null;
+        const run = rv.Results?.[0];
+        if (!run) {
+            return null;
+        }
+        const updated = new Date(run.__mj_UpdatedAt); // epoch milliseconds: a UTC comparison
+        if (Date.now() - updated.getTime() > STALE_RUN_MS) {
+            console.warn(`FeaturePipelineVersionSteward: ignoring stale Process Run ${run.ID} (Running, last updated ${updated.toISOString()}); backfilling`);
+            return null;
+        }
+        return run;
     }
 
     /**

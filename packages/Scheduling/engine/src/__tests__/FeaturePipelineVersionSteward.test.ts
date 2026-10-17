@@ -56,7 +56,7 @@ class TestStewardJobRun extends MJScheduledJobRunEntity {
 }
 
 type TestRunRow = Pick<MJTestRunEntity, 'ID' | 'Status' | 'ErrorMessage'>;
-type ProcessRunRow = Pick<MJProcessRunEntity, 'ID' | 'StartTime'>;
+type ProcessRunRow = Pick<MJProcessRunEntity, 'ID' | 'StartTime' | '__mj_UpdatedAt'>;
 type ReadRow = MJRecordProcessEntity | TestRunRow | ProcessRunRow;
 
 /** The steward's reads: Record Processes, Test Runs and running Process Runs from memory; every read is recorded. */
@@ -199,7 +199,8 @@ describe('FeaturePipelineVersionSteward.RunOnce', () => {
 
     it('defers a backfill while another run of the pipeline is still running, and starts one when none is', async () => {
         plan.mockResolvedValue({ Kind: 'backfill', Version: 2, RecordIDs: ['r1', 'r2'] });
-        provider.RunningProcessRuns = [{ ID: 'PR-0', StartTime: new Date('2026-10-17T04:03:41Z') }];
+        // checkpointed 5 minutes ago: the run is still making progress
+        provider.RunningProcessRuns = [{ ID: 'PR-0', StartTime: new Date('2026-10-17T04:03:41Z'), __mj_UpdatedAt: new Date(Date.now() - 5 * 60_000) }];
         expect(await steward.RunOnce({ ContextUser: user, Provider: provider })).toMatchObject([{
             Action: 'held', Version: 2, ProcessRunID: 'PR-0',
             Detail: 'backfill deferred: Process Run PR-0 (started 2026-10-17T04:03:41.000Z) is still running',
@@ -208,11 +209,24 @@ describe('FeaturePipelineVersionSteward.RunOnce', () => {
         expect(markBackfilled).not.toHaveBeenCalled();
         expect(provider.Views.find((v) => v.EntityName === 'MJ: Process Runs')).toMatchObject({
             ExtraFilter: "RecordProcessID='RP-1' AND Status='Running' AND DryRun=0", BypassCache: true, MaxRows: 1,
+            Fields: ['ID', 'StartTime', '__mj_UpdatedAt'], OrderBy: '__mj_UpdatedAt DESC',
         });
         provider.RunningProcessRuns = [];
         runByID.mockResolvedValue(completedRun);
         expect((await steward.RunOnce({ ContextUser: user, Provider: provider })).map((o) => o.Action)).toEqual(['backfilled']);
         expect(runByID).toHaveBeenCalledTimes(1);
+    });
+
+    it('ignores a Running run not checkpointed for over 30 minutes (its server stopped), warning once, and backfills', async () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        plan.mockResolvedValue({ Kind: 'backfill', Version: 2, RecordIDs: ['r1', 'r2'] });
+        provider.RunningProcessRuns = [{ ID: 'PR-STALE', StartTime: new Date('2026-10-16T01:00:00Z'), __mj_UpdatedAt: new Date(Date.now() - 45 * 60_000) }];
+        runByID.mockResolvedValue(completedRun);
+        expect(await steward.RunOnce({ ContextUser: user, Provider: provider })).toMatchObject([{ Action: 'backfilled', ProcessRunID: 'PR-1' }]);
+        expect(runByID).toHaveBeenCalledTimes(1);
+        expect(warn).toHaveBeenCalledTimes(1);
+        expect(warn.mock.calls[0][0]).toContain('PR-STALE');
+        warn.mockRestore();
     });
 
     it('renews the lease every minute while a backfill runs, however long its batches take, and stops after it', async () => {
