@@ -226,20 +226,12 @@ async function readRegularFileNoFollow(
     }
 }
 
-type SandboxProviderWithRunningCheck = ISandboxProvider & {
-    IsContainerRunning?: (handle: SandboxHandle) => Promise<boolean>;
-};
-
 async function isProviderContainerRunning(
-    provider: ISandboxProvider,
+    provider: ISandboxProvider & Pick<DockerSandboxProvider, 'IsContainerRunning'>,
     handle: SandboxHandle,
 ): Promise<boolean> {
-    const providerWithCheck = provider as SandboxProviderWithRunningCheck;
-    if (typeof providerWithCheck.IsContainerRunning !== 'function') {
-        return false;
-    }
     try {
-        return await providerWithCheck.IsContainerRunning(handle);
+        return await provider.IsContainerRunning(handle);
     } catch {
         return true;
     }
@@ -259,14 +251,17 @@ async function isProviderContainerRunning(
 export class DockerRenderDriver extends VideoRenderDriverBase {
     private readonly settings: VideoRenderSettings;
     private readonly maxOutputBytes: number;
-    private readonly customProvider?: ISandboxProvider;
-    private defaultProviderPromise?: Promise<ISandboxProvider>;
+    private readonly customProvider?: ISandboxProvider &
+        Pick<DockerSandboxProvider, 'IsContainerRunning'>;
+    private defaultProviderPromise?: Promise<
+        ISandboxProvider & Pick<DockerSandboxProvider, 'IsContainerRunning'>
+    >;
     private resolvedWorkspaceRoot?: string;
     private readonly activeRuns = new Set<Promise<unknown>>();
 
     public constructor(
         settings: VideoRenderSettings = ReadVideoRenderSettings(),
-        provider?: ISandboxProvider,
+        provider?: ISandboxProvider & Pick<DockerSandboxProvider, 'IsContainerRunning'>,
     ) {
         super();
         this.settings = settings;
@@ -300,7 +295,9 @@ export class DockerRenderDriver extends VideoRenderDriverBase {
         return created;
     }
 
-    private async getProvider(): Promise<ISandboxProvider> {
+    private async getProvider(): Promise<
+        ISandboxProvider & Pick<DockerSandboxProvider, 'IsContainerRunning'>
+    > {
         const workspaceRoot = await this.ResolveWorkspaceRoot();
         if (this.customProvider) {
             return this.customProvider;
@@ -477,7 +474,7 @@ export class DockerRenderDriver extends VideoRenderDriverBase {
             );
         }
 
-        let provider: ISandboxProvider;
+        let provider: ISandboxProvider & Pick<DockerSandboxProvider, 'IsContainerRunning'>;
         let handle: SandboxHandle;
         try {
             provider = await this.getProvider();

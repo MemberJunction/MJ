@@ -65,7 +65,10 @@ async function* streamToLines(stream: Readable): AsyncIterable<string> {
     }
 }
 
-class InProcessOneShotSandboxProvider implements ISandboxProvider {
+type DockerTestSandboxProvider = ISandboxProvider &
+    Pick<DockerSandboxProvider, 'IsContainerRunning'>;
+
+class InProcessOneShotSandboxProvider implements DockerTestSandboxProvider {
     public readonly Provisions: RecordedProvision[] = [];
     public readonly ProcessSpecs: HarnessProcessSpec[] = [];
     public readonly Finalizations: RecordedFinalization[] = [];
@@ -77,6 +80,10 @@ class InProcessOneShotSandboxProvider implements ISandboxProvider {
     public constructor(options?: { StepDelayMs?: number; FailProvisionWithError?: Error }) {
         this.stepDelayMs = options?.StepDelayMs ?? 15;
         this.failProvisionWithError = options?.FailProvisionWithError;
+    }
+
+    public async IsContainerRunning(_handle: SandboxHandle): Promise<boolean> {
+        return false;
     }
 
     public async Provision(key: WorkspaceKey, config: SandboxConfig): Promise<SandboxHandle> {
@@ -404,7 +411,8 @@ describe('DockerRenderDriver isolation, hardening, and lifecycle unit tests', ()
         let capturedExitCode: Promise<number | null> | undefined;
         const finalizations: RecordedFinalization[] = [];
 
-        const stdinClosingProvider: ISandboxProvider = {
+        const stdinClosingProvider: DockerTestSandboxProvider = {
+            IsContainerRunning: async () => false,
             Provision: async (key: WorkspaceKey): Promise<SandboxHandle> => {
                 const hostWorkspace = await fs.mkdtemp(
                     path.join(os.tmpdir(), 'mj-vs-stdin-close-ws-'),
@@ -484,7 +492,8 @@ describe('DockerRenderDriver isolation, hardening, and lifecycle unit tests', ()
         const secretFilePath = path.join(secretDir, 'host-secret.env');
         await fs.writeFile(secretFilePath, 'DB_PASSWORD=hunter2', 'utf8');
 
-        const symlinkFileProvider: ISandboxProvider = {
+        const symlinkFileProvider: DockerTestSandboxProvider = {
+            IsContainerRunning: async () => false,
             Provision: async (key: WorkspaceKey): Promise<SandboxHandle> => {
                 const hostWorkspace = await fs.mkdtemp(
                     path.join(os.tmpdir(), 'mj-vs-symlink-file-ws-'),
@@ -586,7 +595,8 @@ describe('DockerRenderDriver isolation, hardening, and lifecycle unit tests', ()
         );
         await fs.writeFile(path.join(externalOutDir, 'video.mp4'), 'DB_PASSWORD=hunter2', 'utf8');
 
-        const symlinkDirProvider: ISandboxProvider = {
+        const symlinkDirProvider: DockerTestSandboxProvider = {
+            IsContainerRunning: async () => false,
             Provision: async (key: WorkspaceKey): Promise<SandboxHandle> => {
                 const hostWorkspace = await fs.mkdtemp(
                     path.join(os.tmpdir(), 'mj-vs-symlink-dir-ws-'),
@@ -654,7 +664,8 @@ describe('DockerRenderDriver isolation, hardening, and lifecycle unit tests', ()
         async () => {
             let recordedMode: number | undefined;
 
-            const modeRecordingProvider: ISandboxProvider = {
+            const modeRecordingProvider: DockerTestSandboxProvider = {
+                IsContainerRunning: async () => false,
                 Provision: async (key: WorkspaceKey): Promise<SandboxHandle> => {
                     const hostWorkspace = await fs.mkdtemp(
                         path.join(os.tmpdir(), 'mj-vs-linux-mode-ws-'),
@@ -727,7 +738,8 @@ describe('DockerRenderDriver isolation, hardening, and lifecycle unit tests', ()
         let safeOutRootModeDuringFinalize = 0;
 
         const baseProvider = createProvider();
-        const orderingProvider: ISandboxProvider = {
+        const orderingProvider: DockerTestSandboxProvider = {
+            IsContainerRunning: async (handle) => baseProvider.IsContainerRunning(handle),
             Provision: async (key, config) => {
                 const handle = await baseProvider.Provision(key, config);
                 hostWorkspacePath = handle.HostWorkspacePath ?? '';
@@ -788,7 +800,11 @@ describe('DockerRenderDriver isolation, hardening, and lifecycle unit tests', ()
             });
         const readFileSpy = vi.spyOn(fileHandleProto, 'readFile');
 
-        const makeFakeVideoProvider = (videoBytes: Uint8Array, declaredVideoSizeBytes: number): ISandboxProvider => ({
+        const makeFakeVideoProvider = (
+            videoBytes: Uint8Array,
+            declaredVideoSizeBytes: number,
+        ): DockerTestSandboxProvider => ({
+            IsContainerRunning: async () => false,
             Provision: async (key: WorkspaceKey): Promise<SandboxHandle> => {
                 const hostWorkspace = await fs.mkdtemp(
                     path.join(os.tmpdir(), 'mj-vs-size-cap-ws-'),
@@ -888,7 +904,8 @@ describe('DockerRenderDriver isolation, hardening, and lifecycle unit tests', ()
 
         // 3. Image-carrying JSON output (CaptureStills > 1 MiB) uses MaxOutputBytes instead of the 1 MiB JSON cap
         const largeBase64Still = Buffer.alloc(900_000, 0x55).toString('base64'); // ~1.2 MB base64 string (> 1 MiB)
-        const makeLargeStillsProvider = (): ISandboxProvider => ({
+        const makeLargeStillsProvider = (): DockerTestSandboxProvider => ({
+            IsContainerRunning: async () => false,
             Provision: async (key: WorkspaceKey): Promise<SandboxHandle> => {
                 const hostWorkspace = await fs.mkdtemp(
                     path.join(os.tmpdir(), 'mj-vs-large-stills-ws-'),
@@ -981,7 +998,8 @@ describe('DockerRenderDriver isolation, hardening, and lifecycle unit tests', ()
         expect(readFileSpy).toHaveBeenCalledTimes(0);
 
         // 4. Image result cap is clamped at buffer.constants.MAX_STRING_LENGTH even when MaxOutputBytes is larger
-        const makeSparseOverStringLimitStillsProvider = (): ISandboxProvider => ({
+        const makeSparseOverStringLimitStillsProvider = (): DockerTestSandboxProvider => ({
+            IsContainerRunning: async () => false,
             Provision: async (key: WorkspaceKey): Promise<SandboxHandle> => {
                 const hostWorkspace = await fs.mkdtemp(
                     path.join(os.tmpdir(), 'mj-vs-sparse-stills-ws-'),
@@ -1077,7 +1095,8 @@ describe('DockerRenderDriver isolation, hardening, and lifecycle unit tests', ()
             return st;
         });
 
-        const makeGrowingFileProvider = (): ISandboxProvider => ({
+        const makeGrowingFileProvider = (): DockerTestSandboxProvider => ({
+            IsContainerRunning: async () => false,
             Provision: async (key: WorkspaceKey): Promise<SandboxHandle> => {
                 const hostWorkspace = await fs.mkdtemp(
                     path.join(os.tmpdir(), 'mj-vs-grow-after-stat-ws-'),
@@ -1172,7 +1191,8 @@ describe('DockerRenderDriver isolation, hardening, and lifecycle unit tests', ()
         const oneMiBPlusOne = 1024 * 1024 + 1;
 
         // 1. Check result.json of 1 MiB + 1 byte rejects Internal naming 1048576
-        const oversizedCheckProvider: ISandboxProvider = {
+        const oversizedCheckProvider: DockerTestSandboxProvider = {
+            IsContainerRunning: async () => false,
             Provision: async (key: WorkspaceKey): Promise<SandboxHandle> => {
                 const hostWorkspace = await fs.mkdtemp(
                     path.join(os.tmpdir(), 'mj-vs-check-json-cap-ws-'),
@@ -1241,7 +1261,8 @@ describe('DockerRenderDriver isolation, hardening, and lifecycle unit tests', ()
         const oversizedErrorJson = `${prefix}${paddedMessage}${suffix}`;
         expect(Buffer.byteLength(oversizedErrorJson, 'utf8')).toBe(oneMiBPlusOne);
 
-        const oversizedErrorProvider: ISandboxProvider = {
+        const oversizedErrorProvider: DockerTestSandboxProvider = {
+            IsContainerRunning: async () => false,
             Provision: async (key: WorkspaceKey): Promise<SandboxHandle> => {
                 const hostWorkspace = await fs.mkdtemp(
                     path.join(os.tmpdir(), 'mj-vs-error-json-cap-ws-'),
@@ -1305,9 +1326,19 @@ describe('DockerRenderDriver isolation, hardening, and lifecycle unit tests', ()
         expect(renderErr.message).toContain('without writing a structured error.json');
     });
 
-    it('never deletes the workspace or .out directory when the container may still be running (stop+kill fail -> neither deleted, one log each; stop fails+kill works -> both deleted; inspect errors -> treated as running)', async () => {
+    it('never deletes the workspace or .out directory when the container may still be running (stop+kill fail -> neither deleted, one log each; stop fails+kill works -> both deleted; daemon inspect error -> treated as running; No such container -> both deleted)', async () => {
         const logErrorSpy = vi.spyOn(mjCore, 'LogError').mockImplementation(() => undefined);
         const wsRoot = await makeTempDir();
+
+        // Compile-time check: customProvider without IsContainerRunning is rejected by TypeScript
+        const providerMissingRunningCheck: ISandboxProvider = {
+            Provision: async () => {
+                throw new Error('not called');
+            },
+            Finalize: async () => undefined,
+        };
+        // @ts-expect-error customProvider must implement IsContainerRunning
+        void new DockerRenderDriver(makeDockerSettings(), providerMissingRunningCheck);
 
         const makeOneShotExecutor = (hostPath: string): SandboxExecutor => ({
             Run: (spec: HarnessProcessSpec): HarnessProcess => {
@@ -1374,9 +1405,12 @@ describe('DockerRenderDriver isolation, hardening, and lifecycle unit tests', ()
         expect(String(logErrorSpy.mock.calls[0]?.[0] ?? '')).toContain(lastHostPath);
         expect(String(logErrorSpy.mock.calls[1]?.[0] ?? '')).toContain(`${lastHostPath}.out`);
 
-        // 2. stop fails and kill works (inspect -> 'false') => both folders deleted, zero LogErrors
+        // 2. stop fails and kill works (inspect -> 'true' until kill is received, then 'false') => both folders deleted, zero LogErrors
         logErrorSpy.mockClear();
         lastHostPath = '';
+        let containerName2 = '';
+        let killed2 = false;
+        const killCalls2: string[][] = [];
         const providerKillOk = new DockerSandboxProvider({
             hostRootPath: wsRoot,
             dockerRunner: async (args: string[]): Promise<string> => {
@@ -1387,14 +1421,19 @@ describe('DockerRenderDriver isolation, hardening, and lifecycle unit tests', ()
                     throw new Error('stop failed');
                 }
                 if (args[0] === 'kill') {
+                    killCalls2.push(args);
+                    if (args[1] === containerName2) {
+                        killed2 = true;
+                    }
                     return 'killed';
                 }
                 if (args[0] === 'container' && args[1] === 'inspect') {
-                    return 'false';
+                    return killed2 ? 'false' : 'true';
                 }
                 return '';
             },
-            executorFactory: (_containerName, hostPath) => {
+            executorFactory: (containerName, hostPath) => {
+                containerName2 = containerName;
                 lastHostPath = hostPath;
                 return makeOneShotExecutor(hostPath);
             },
@@ -1402,11 +1441,13 @@ describe('DockerRenderDriver isolation, hardening, and lifecycle unit tests', ()
         const driver2 = new DockerRenderDriver(makeDockerSettings(), providerKillOk);
         const res2 = await driver2.Render(CreateMinimalRenderRequest());
         expect(res2.Video.byteLength).toBeGreaterThan(0);
+        expect(containerName2).toMatch(/^mj-harness-.+/);
+        expect(killCalls2).toEqual([['kill', containerName2]]);
         await expect(fs.stat(lastHostPath)).rejects.toMatchObject({ code: 'ENOENT' });
         await expect(fs.stat(`${lastHostPath}.out`)).rejects.toMatchObject({ code: 'ENOENT' });
         expect(logErrorSpy).toHaveBeenCalledTimes(0);
 
-        // 3. inspect errors => treated as running (neither folder deleted, one LogError each)
+        // 3. inspect errors with daemon failure => treated as running (neither folder deleted, one LogError each)
         logErrorSpy.mockClear();
         lastHostPath = '';
         const providerInspectErr = new DockerSandboxProvider({
@@ -1422,7 +1463,7 @@ describe('DockerRenderDriver isolation, hardening, and lifecycle unit tests', ()
                     return 'killed';
                 }
                 if (args[0] === 'container' && args[1] === 'inspect') {
-                    throw new Error('inspect failed');
+                    throw new Error('Cannot connect to the Docker daemon');
                 }
                 return '';
             },
@@ -1437,6 +1478,44 @@ describe('DockerRenderDriver isolation, hardening, and lifecycle unit tests', ()
         expect((await fs.stat(lastHostPath)).isDirectory()).toBe(true);
         expect((await fs.stat(`${lastHostPath}.out`)).isDirectory()).toBe(true);
         expect(logErrorSpy).toHaveBeenCalledTimes(2);
+
+        // 4. container already auto-removed by --rm (stop, kill, and inspect all reject with 'No such container') => both folders deleted, zero LogErrors
+        logErrorSpy.mockClear();
+        lastHostPath = '';
+        const providerAlreadyGone = new DockerSandboxProvider({
+            hostRootPath: wsRoot,
+            dockerRunner: async (args: string[]): Promise<string> => {
+                if (args[0] === 'run') {
+                    return 'cid-already-gone';
+                }
+                if (args[0] === 'stop') {
+                    throw new Error(
+                        `Error response from daemon: No such container: ${args[args.length - 1]}`,
+                    );
+                }
+                if (args[0] === 'kill') {
+                    throw new Error(
+                        `Error response from daemon: No such container: ${args[args.length - 1]}`,
+                    );
+                }
+                if (args[0] === 'container' && args[1] === 'inspect') {
+                    throw new Error(
+                        `Error response from daemon: No such container: ${args[args.length - 1]}`,
+                    );
+                }
+                return '';
+            },
+            executorFactory: (_containerName, hostPath) => {
+                lastHostPath = hostPath;
+                return makeOneShotExecutor(hostPath);
+            },
+        });
+        const driver4 = new DockerRenderDriver(makeDockerSettings(), providerAlreadyGone);
+        const res4 = await driver4.Render(CreateMinimalRenderRequest());
+        expect(res4.Video.byteLength).toBeGreaterThan(0);
+        await expect(fs.stat(lastHostPath)).rejects.toMatchObject({ code: 'ENOENT' });
+        await expect(fs.stat(`${lastHostPath}.out`)).rejects.toMatchObject({ code: 'ENOENT' });
+        expect(logErrorSpy).toHaveBeenCalledTimes(0);
     });
 
     it('fails closed on Windows (process.platform === "win32") naming the Remote driver without starting any container', async () => {

@@ -177,7 +177,7 @@ describe('DockerSandboxProvider and LocalDirectorySandboxProvider', () => {
         await provider.Finalize(handle, 'success');
     });
 
-    it('Finalize tries docker kill when docker stop fails, skips deleting the workspace with one LogError when the container is still running, deletes when kill succeeds, and treats inspect errors as running', async () => {
+    it('Finalize tries docker kill when docker stop fails, skips deleting the workspace with one LogError when the container is still running, deletes when kill succeeds or container is already gone, and treats daemon inspect errors as running', async () => {
         const logErrorSpy = vi.spyOn(mjCore, 'LogError').mockImplementation(() => undefined);
 
         // Case 1: stop fails and kill fails (inspect -> 'true') => workspace NOT deleted, one LogError
@@ -209,8 +209,10 @@ describe('DockerSandboxProvider and LocalDirectorySandboxProvider', () => {
         expect(logErrorSpy).toHaveBeenCalledTimes(1);
         expect(String(logErrorSpy.mock.calls[0]?.[0] ?? '')).toContain(hostDir1);
 
-        // Case 2: stop fails and kill works (inspect -> 'false') => workspace IS deleted, zero LogErrors
+        // Case 2: stop fails and kill works (inspect -> 'true' until ['kill', 'mj-harness-stop-fail-kill-ok'] is received, then 'false') => workspace IS deleted, zero LogErrors
         logErrorSpy.mockClear();
+        const killCalls2: string[][] = [];
+        let killed2 = false;
         const provider2 = new DockerSandboxProvider({
             hostRootPath: tempRoot,
             dockerRunner: async (args: string[]): Promise<string> => {
@@ -221,10 +223,14 @@ describe('DockerSandboxProvider and LocalDirectorySandboxProvider', () => {
                     throw new Error('stop timed out');
                 }
                 if (args[0] === 'kill') {
+                    killCalls2.push([...args]);
+                    if (args.length === 2 && args[1] === 'mj-harness-stop-fail-kill-ok') {
+                        killed2 = true;
+                    }
                     return 'mj-harness-stop-fail-kill-ok';
                 }
                 if (args[0] === 'container' && args[1] === 'inspect') {
-                    return 'false';
+                    return killed2 ? 'false' : 'true';
                 }
                 return '';
             },
@@ -235,10 +241,11 @@ describe('DockerSandboxProvider and LocalDirectorySandboxProvider', () => {
         );
         const hostDir2 = join(tempRoot, 'run', 'stop-fail-kill-ok');
         await provider2.Finalize(handle2, 'failure');
+        expect(killCalls2).toEqual([['kill', 'mj-harness-stop-fail-kill-ok']]);
         await expect(stat(hostDir2)).rejects.toMatchObject({ code: 'ENOENT' });
         expect(logErrorSpy).toHaveBeenCalledTimes(0);
 
-        // Case 3: inspect errors (or returns unclear output) => treated as running (fail-safe true)
+        // Case 3: inspect rejects with daemon error => treated as running (fail-safe true)
         logErrorSpy.mockClear();
         const provider3 = new DockerSandboxProvider({
             hostRootPath: tempRoot,
@@ -253,7 +260,7 @@ describe('DockerSandboxProvider and LocalDirectorySandboxProvider', () => {
                     return 'mj-harness-inspect-err';
                 }
                 if (args[0] === 'container' && args[1] === 'inspect') {
-                    throw new Error('docker daemon unreachable');
+                    throw new Error('Cannot connect to the Docker daemon');
                 }
                 return '';
             },
@@ -267,5 +274,35 @@ describe('DockerSandboxProvider and LocalDirectorySandboxProvider', () => {
         await provider3.Finalize(handle3, 'failure');
         expect((await stat(hostDir3)).isDirectory()).toBe(true);
         expect(logErrorSpy).toHaveBeenCalledTimes(1);
+
+        // Case 4: stop, kill, and inspect all reject with "Error response from daemon: No such container: mj-harness-<RunId>" => treated as not running (false), workspace IS deleted, zero LogErrors
+        logErrorSpy.mockClear();
+        const provider4 = new DockerSandboxProvider({
+            hostRootPath: tempRoot,
+            dockerRunner: async (args: string[]): Promise<string> => {
+                if (args[0] === 'run') {
+                    return 'cid-4';
+                }
+                if (
+                    args[0] === 'stop' ||
+                    args[0] === 'kill' ||
+                    (args[0] === 'container' && args[1] === 'inspect')
+                ) {
+                    throw new Error(
+                        'Error response from daemon: No such container: mj-harness-already-gone',
+                    );
+                }
+                return '';
+            },
+        });
+        const handle4 = await provider4.Provision(
+            { Scope: 'run', AgentId: 'video-studio-render', RunId: 'already-gone' },
+            { NetworkPolicy: 'none' },
+        );
+        expect(await provider4.IsContainerRunning(handle4)).toBe(false);
+        const hostDir4 = join(tempRoot, 'run', 'already-gone');
+        await provider4.Finalize(handle4, 'cancelled');
+        await expect(stat(hostDir4)).rejects.toMatchObject({ code: 'ENOENT' });
+        expect(logErrorSpy).toHaveBeenCalledTimes(0);
     });
 });

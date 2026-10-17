@@ -46,12 +46,13 @@ export class DockerSandboxProvider implements ISandboxProvider {
     private readonly dockerRunner?: (args: string[]) => Promise<string>;
     private readonly executorFactory?: (containerName: string, hostPath: string) => SandboxExecutor;
     private readonly containers = new Map<string, string>();
-    private readonly stoppedContainers = new Set<string>();
 
     public constructor(options?: {
         hostRootPath?: string;
         defaultImage?: string;
+        /** Test seam overriding the `docker` CLI command runner. */
         dockerRunner?: (args: string[]) => Promise<string>;
+        /** Test seam overriding the per-container executor; runs commands outside the container. */
         executorFactory?: (containerName: string, hostPath: string) => SandboxExecutor;
     }) {
         this.hostRootPath = options?.hostRootPath ?? join(tmpdir(), 'mj-agent-harness');
@@ -67,7 +68,6 @@ export class DockerSandboxProvider implements ISandboxProvider {
 
         const image = config.Image ?? this.defaultImage;
         const containerName = `mj-harness-${key.RunId}`;
-        this.stoppedContainers.delete(containerName);
         const args = [
             'run',
             '--detach',
@@ -107,14 +107,12 @@ export class DockerSandboxProvider implements ISandboxProvider {
     /**
      * Checks whether the container for `handle` is still running via `docker container inspect`.
      *
-     * Any error or unclear output returns `true` (fail-safe) so callers never delete bind-mounted
+     * Returns `false` when inspect prints `false` or fails with `No such container` / `No such object`.
+     * Any other error or unclear output returns `true` (fail-safe) so callers never delete bind-mounted
      * host directories while a container process might still be alive.
      */
     public async IsContainerRunning(handle: SandboxHandle): Promise<boolean> {
         const containerName = `mj-harness-${handle.Key.RunId}`;
-        if (this.stoppedContainers.has(containerName)) {
-            return false;
-        }
         try {
             const output = await this.runDockerCommand([
                 'container',
@@ -124,31 +122,11 @@ export class DockerSandboxProvider implements ISandboxProvider {
                 containerName,
             ]);
             const normalized = output.trim().replace(/^['"]|['"]$/g, '').trim();
-            if (normalized === 'false') {
+            return normalized !== 'false';
+        } catch (error) {
+            if (/no such (container|object)/i.test(describeError(error))) {
                 return false;
             }
-            if (normalized === 'true') {
-                return true;
-            }
-            try {
-                const parsed = JSON.parse(output) as unknown;
-                const entry = Array.isArray(parsed) && parsed.length === 1 ? parsed[0] : parsed;
-                if (
-                    entry &&
-                    typeof entry === 'object' &&
-                    'State' in entry &&
-                    entry.State &&
-                    typeof entry.State === 'object' &&
-                    'Running' in entry.State &&
-                    typeof (entry.State as { Running?: unknown }).Running === 'boolean'
-                ) {
-                    return (entry.State as { Running: boolean }).Running;
-                }
-            } catch {
-                // Fall through to fail-safe true.
-            }
-            return true;
-        } catch {
             return true;
         }
     }
@@ -161,7 +139,6 @@ export class DockerSandboxProvider implements ISandboxProvider {
         try {
             // --rm on the container means stopping it removes it, so this is both stop and cleanup.
             await this.runDockerCommand(['stop', '--time', '5', containerName]);
-            this.stoppedContainers.add(containerName);
         } catch (e) {
             stopError = e;
         }
@@ -187,7 +164,6 @@ export class DockerSandboxProvider implements ISandboxProvider {
                 this.containers.delete(containerName);
                 return;
             }
-            this.stoppedContainers.add(containerName);
         }
         this.containers.delete(containerName);
 
