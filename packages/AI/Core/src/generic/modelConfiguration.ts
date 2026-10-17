@@ -72,6 +72,17 @@ export interface RealtimeTurnDetectionSettings {
     Threshold?: number;
     /** Server-VAD trailing-silence duration in ms; ignored by profiles without a mapping. */
     SilenceDurationMs?: number;
+    /**
+     * Proactive re-engagement: once the assistant has finished speaking, how long (ms) the user may
+     * stay silent before the provider takes a turn on its own (a check-in such as "are you still
+     * there?"). The timer re-arms after every response. Server-VAD only; profiles without a mapping
+     * ignore it. Absent = never re-engage.
+     *
+     * On OpenAI-protocol endpoints this is `turn_detection.idle_timeout_ms` (OpenAI GA, xAI Grok
+     * Voice); a request carrying it with no `Mode` asks for server VAD, since that is the only mode
+     * the timer runs in.
+     */
+    IdleTimeoutMs?: number;
 
     /**
      * What a turn's input is allowed to include. Distinct from DETECTION (when a turn ends):

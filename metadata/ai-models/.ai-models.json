@@ -19395,7 +19395,7 @@
     "fields": {
       "Name": "Grok Voice",
       "PowerRank": 11,
-      "Description": "xAI's Grok Voice Agent API — a streaming, full-duplex, tool-calling speech-to-speech realtime model. OpenAI-Realtime-API compatible (WebSocket endpoint wss://api.x.ai/v1/realtime, Base64-encoded PCM16 @ 24 kHz audio), so the MJ driver reuses the OpenAI SDK pointed at xAI's base URL. Supports custom function tools plus xAI's built-in web search, X search, and RAG. Drives the Realtime agent type / Voice Co-Agent via BaseRealtimeModel (DriverClass GrokRealtime). Superseded by Grok Voice Think Fast 2.0 (announced July 29, 2026); xAI's grok-voice-latest alias resolves to Think Fast 2.0 as of August 5, 2026, while this entry's pinned grok-voice API name continues to serve the prior generation.",
+      "Description": "xAI's Grok Voice Agent API — a streaming, interruptible (barge-in), tool-calling speech-to-speech realtime model. OpenAI-Realtime-API compatible (WebSocket endpoint wss://api.x.ai/v1/realtime, Base64-encoded PCM16 @ 24 kHz audio), so the MJ driver reuses the OpenAI SDK pointed at xAI's base URL. Supports custom function tools plus xAI's built-in web search, X search, and RAG. Drives the Realtime agent type / Voice Co-Agent via BaseRealtimeModel (DriverClass GrokRealtime). Superseded by Grok Voice Think Fast 2.0 (announced July 29, 2026) and then Grok Voice 3.0 (October 14, 2026); xAI's grok-voice-latest alias resolved to Think Fast 2.0 from August 5, 2026 and to Grok Voice 3.0 from October 14, 2026, while this entry's pinned grok-voice API name continues to serve the prior generation.",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Realtime",
       "IsActive": true,
       "SpeedRank": 8,
@@ -23070,7 +23070,7 @@
     "fields": {
       "Name": "Grok Voice Think Fast 2.0",
       "PowerRank": 12,
-      "Description": "xAI's second-generation speech-to-speech realtime voice model, announced July 29, 2026; the grok-voice-latest alias resolves to it as of August 5, 2026. Reasons while speaking rather than pausing to think — ~60% fewer reasoning tokens than Think Fast 1.0 at ~0.70s time-to-first-audio. Transcription WER 1.5-2.0x better than dedicated STT (Deepgram Nova 3, ElevenLabs Scribe v2) on xAI's 24-language eval, widening to ~10x in noisy environments; 20+ languages with automatic language detection. OpenAI-Realtime-API compatible (WebSocket endpoint wss://api.x.ai/v1/realtime), so the MJ driver reuses the OpenAI SDK pointed at xAI's base URL. Supports custom function tools plus xAI's built-in web search, X search, collections search, and remote MCP tools. Priced per minute of audio ($0.08/min API list price). Drives the Realtime agent type / Voice Co-Agent via BaseRealtimeModel (DriverClass GrokRealtime).",
+      "Description": "xAI's second-generation speech-to-speech realtime voice model, announced July 29, 2026; the grok-voice-latest alias resolved to it from August 5, 2026 until Grok Voice 3.0 superseded it on October 14, 2026, when xAI marked 2.0 deprecated (no retirement date announced as of October 15, 2026). Reasons while speaking rather than pausing to think — ~60% fewer reasoning tokens than Think Fast 1.0 at ~0.70s time-to-first-audio. Transcription WER 1.5-2.0x better than dedicated STT (Deepgram Nova 3, ElevenLabs Scribe v2) on xAI's 24-language eval, widening to ~10x in noisy environments; 20+ languages with automatic language detection. OpenAI-Realtime-API compatible (WebSocket endpoint wss://api.x.ai/v1/realtime), so the MJ driver reuses the OpenAI SDK pointed at xAI's base URL. Supports custom function tools plus xAI's built-in web search, X search, collections search, and remote MCP tools. Priced per minute of audio ($0.08/min API list price). Drives the Realtime agent type / Voice Co-Agent via BaseRealtimeModel (DriverClass GrokRealtime).",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Realtime",
       "IsActive": true,
       "SpeedRank": 9,
@@ -28380,6 +28380,81 @@
     },
     "primaryKey": {
       "ID": "A207B3C3-0CF0-41D8-9CB4-04FE747DDDD6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Grok Voice 3.0",
+      "PowerRank": 18,
+      "Description": "xAI's third-generation speech-to-speech realtime voice model, released October 14, 2026; the grok-voice-latest alias moved to it automatically that day. xAI reports #1 on the Artificial Analysis Speech-to-Speech Index (86.9, vs GPT-Live-1 83.2 and Gemini 3.8 Live Extended Thinking 82.6), 97.0% on Full Duplex Bench (turn-taking, pauses, interruptions), 98.5% on Big Bench Audio and 71.6% on tau-Voice (GPT-Live-1 leads there at 74.5%) - xAI's own figures, at about 0.81s to first audio. Reasoning is on by default and can be switched off per session for faster turns (reasoning.effort high/none). 26 built-in voices plus custom voices, 0.7-1.5x speech speed, grok-transcribe user captions with a language hint and up to 100 keyterms, and an idle timeout that re-engages a silent caller. Hosted tools: web search, X search, collections (file) search and remote MCP servers, alongside custom function tools. Takes turns on server VAD with barge-in rather than listening while it speaks, so it is not full-duplex in the MJ sense. OpenAI-Realtime-API compatible (wss://api.x.ai/v1/realtime) with voice and turn_detection at the session top level. Priced per minute of audio ($0.08/min API list price, unchanged from 2.0). Drives the Realtime agent type / Voice Co-Agent via BaseRealtimeModel (DriverClass GrokRealtime).",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Realtime",
+      "IsActive": true,
+      "SpeedRank": 8,
+      "CostRank": 4,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=Grok Voice Think Fast 2.0"
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=x.ai",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "56064298-5501-48E1-B650-78EE09621FC3"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=x.ai",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "GrokRealtime",
+            "APIName": "grok-voice-3.0",
+            "MaxInputTokens": 128000,
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "E790A834-F0DA-4A19-9B8A-C59A79930BB2"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=x.ai",
+            "StartedAt": "2026-10-14T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Minutes",
+            "InputPricePerUnit": 0.08,
+            "OutputPricePerUnit": 0,
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per Minute",
+            "ProcessingType": "Realtime",
+            "Comments": "Grok Voice 3.0 API list pricing on x.ai as of the October 14, 2026 launch: $0.08 per minute of audio, unchanged from Grok Voice Think Fast 2.0. Follows the Think Fast 2.0 convention: one blended session rate in InputPricePerUnit with OutputPricePerUnit 0, so per-minute consumers multiply elapsed minutes by one rate and never double-count. Cache pricing does not apply to per-minute audio billing (both cache columns null)."
+          },
+          "primaryKey": {
+            "ID": "0DBA559B-436C-4585-86B0-E1FC635EFA92"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "98D1E493-B081-4675-99E2-5C9B0FEF4F49"
     }
   }
 ]

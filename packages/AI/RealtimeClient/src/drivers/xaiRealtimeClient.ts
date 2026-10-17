@@ -33,6 +33,15 @@ export const XAI_CLIENT_SECRET_SUBPROTOCOL_PREFIX = 'xai-client-secret.';
 export const XAI_PCM_SAMPLE_RATE = 24000;
 
 /**
+ * xAI's cumulative user-caption snapshot, streamed before the final `.completed` when the session
+ * transcribes with `grok-transcribe` (the server driver's default). Not part of the OpenAI protocol.
+ */
+const XAI_TRANSCRIPTION_UPDATED_EVENT = 'conversation.item.input_audio_transcription.updated';
+
+/** The provider re-engaged a silent user because the session's turn-detection idle timeout fired. */
+const XAI_IDLE_TIMEOUT_EVENT = 'input_audio_buffer.timeout_triggered';
+
+/**
  * Structural subset of the platform `WebSocket` used by the production
  * {@link xAIRealtimeClient.createSocket} seam (typed structurally so the package compiles
  * independent of DOM lib configuration). The two-arg constructor carries the subprotocol auth.
@@ -140,8 +149,33 @@ export class xAIRealtimeClient extends OpenAIProtocolWebSocketRealtimeClient {  
     /**
      * @inheritdoc
      *
+     * Adds the two xAI frames the shared brain does not know: the streamed caption snapshot, which
+     * goes through {@link onUserTranscriptFrame} exactly like Grok's repeated `.completed` frames (one
+     * in-place bubble per turn), and the idle-timeout notice, which is diagnostic only — the response
+     * frames that follow drive the state.
+     */
+    protected override handleEvent(event: OpenAIProtocolServerEvent): void {
+        const eventType: string = event.type;
+        if (eventType === XAI_TRANSCRIPTION_UPDATED_EVENT) {
+            const transcript = (event as OpenAIProtocolServerEvent & { transcript?: string }).transcript;
+            if (typeof transcript === 'string') {
+                this.onUserTranscriptFrame(transcript);
+            }
+            return;
+        }
+        if (eventType === XAI_IDLE_TIMEOUT_EVENT) {
+            console.debug('[xAIRealtimeClient] idle timeout reached — Grok is re-engaging the user');
+            return;
+        }
+        super.handleEvent(event);
+    }
+
+    /**
+     * @inheritdoc
+     *
      * Grok STREAMS the input transcription — repeated `input_audio_transcription.completed`
-     * events, each carrying the full text so far — unlike OpenAI's single final. So the FIRST
+     * events (and, with `grok-transcribe`, `.updated` snapshots), each carrying the full text so
+     * far — unlike OpenAI's single final. So the FIRST
      * emission of a turn appends a fresh caption and every later one is flagged
      * ReplacesPrevious, collapsing the stream into ONE in-place-updating user bubble. The
      * per-turn flag resets on the next `speech_started` ({@link onSpeechStartedFrame}).
