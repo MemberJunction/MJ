@@ -883,8 +883,8 @@ export class AgentUserPolicyEngine extends BaseSingleton<AgentUserPolicyEngine> 
         const safeUserId = (user.ID ?? '').replace(/'/g, "''");
         const safeEmail = (user.Email ?? '').replace(/'/g, "''");
         const interpolated = rawWhereClause
-            .replace(/\{\{\s*UserID\s*\}\}/gi, `'${safeUserId}'`)
-            .replace(/\{\{\s*UserEmail\s*\}\}/gi, `'${safeEmail}'`);
+            .replace(/\{\{\s*UserID\s*\}\}/gi, () => `'${safeUserId}'`)
+            .replace(/\{\{\s*UserEmail\s*\}\}/gi, () => `'${safeEmail}'`);
 
         const validation = SQLExpressionValidator.Instance.validate(interpolated, {
             context: 'where_clause',
