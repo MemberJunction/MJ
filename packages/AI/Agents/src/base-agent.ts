@@ -26,7 +26,7 @@ import { LoopAgentType } from './agent-types/loop-agent-type';
 import { ProviderRubricEngine } from '@memberjunction/rubrics';
 import { ExecuteSelfCheck, PickSelfCheckLink, type SelfCheckLink, type SelfCheckLinkRow } from './self-check';
 import { LoopAgentTypePromptParams } from './agent-types/loop-agent-prompt-params';
-import { CopyScalarsAndArrays, JSONValidator, MJGlobal, NormalizeUUID, SafeExpressionEvaluator, UUIDsEqual, EscapeSQLString, IsPlainObject, CleanAndParseJSON, IsValidUUID } from '@memberjunction/global';
+import { CopyScalarsAndArrays, GroupByUUID, IndexByUUID, JSONValidator, MJGlobal, NormalizeUUID, SafeExpressionEvaluator, UUIDsEqual, EscapeSQLString, IsPlainObject, CleanAndParseJSON, IsValidUUID } from '@memberjunction/global';
 // token optimization via @memberjunction/context-crush (SmartCrusher/CacheAligner-inspired)
 import { CrushJSON, DescribeCrush, PartitionStablePrefix, type JsonValue } from '@memberjunction/context-crush';
 // AST-aware code reduction (CodeCompressor-inspired) — opt-in per agent type
@@ -227,10 +227,12 @@ import { AgentDataPreloader } from './AgentDataPreloader';
 import { ClientToolRequestManager } from './ClientToolRequestManager';
 import { BuildClientToolResultMessage, ResolveClientToolResultMaxChars, ReplaceMediaBlocksWithStubs, IsMediaBlock, IMAGE_BLOCK_TOKEN_ESTIMATE } from './client-tool-results';
 import {
+    CanAgentOwnSubAgentConsults,
     DEFAULT_MAX_SUB_AGENT_CONSULT_ROUNDS,
     FormatReloadedConsultsMessage,
     FormatResponseFormSummary,
     FormatSubAgentConsultMessage,
+    LoadOpenSubAgentConsults,
     SubAgentConsultRecord
 } from './sub-agent-consult';
 import { ConversationMessageResolver } from './utils/ConversationMessageResolver';
@@ -6278,6 +6280,7 @@ export class BaseAgent {
 
         // Validate each requested sub-agent: existence + MaxExecutionsPerRun
         const seenResumeRunIds = new Set<string>();
+        const openConsultsBySubAgent = GroupByUUID(this._openSubAgentConsults.values(), c => c.subAgentId);
         for (const req of requested) {
             const name = req?.name;
             const subAgent = curAgentSubAgents.find(a => a.Name.trim().toLowerCase() === name?.trim().toLowerCase());
@@ -6321,10 +6324,9 @@ export class BaseAgent {
             }
 
             if (req.resumeRunId != null && req.resumeRunId !== '') {
-                const openForSubAgent = Array.from(this._openSubAgentConsults.values())
-                    .filter(c => UUIDsEqual(c.subAgentId, subAgent.ID));
+                const openForSubAgent = openConsultsBySubAgent.Get(subAgent.ID) ?? [];
                 const matchingConsult = IsValidUUID(req.resumeRunId)
-                    ? openForSubAgent.find(c => UUIDsEqual(c.childRunId, req.resumeRunId))
+                    ? IndexByUUID(openForSubAgent, c => c.childRunId).Get(req.resumeRunId)
                     : undefined;
                 if (!matchingConsult) {
                     const openIds = openForSubAgent.length > 0
@@ -8601,22 +8603,6 @@ The context is now within limits. Please retry your request with the recovered c
         }
     }
 
-    private static agentCanOwnConsult(agent: MJAIAgentEntityExtended): boolean {
-        if (agent.ChatHandlingOption === 'Consult') {
-            return true;
-        }
-        const relationships = AIEngine.Instance.AgentRelationships;
-        if (!Array.isArray(relationships)) {
-            return false;
-        }
-        return relationships.some(
-            ar =>
-                ar.Status === 'Active' &&
-                ar.ChatHandlingOption === 'Consult' &&
-                (ar.AgentID === agent.ID || UUIDsEqual(ar.AgentID, agent.ID))
-        );
-    }
-
     /**
      * Loads unanswered sub-agent consultations (`OutputData.consult`) from `params.lastRunId` when that
      * prior run paused with `FinalStep === 'Chat'` (and was not stopped by the user). Runs at any depth
@@ -8624,7 +8610,7 @@ The context is now within limits. Please retry your request with the recovered c
      * @private
      */
     private async loadOpenConsults(params: ExecuteAgentParams): Promise<SubAgentConsultRecord[]> {
-        if (!params.lastRunId || !IsValidUUID(params.lastRunId) || !BaseAgent.agentCanOwnConsult(params.agent)) {
+        if (!params.lastRunId || !IsValidUUID(params.lastRunId) || !CanAgentOwnSubAgentConsults(params.agent)) {
             return [];
         }
         try {
@@ -8652,39 +8638,7 @@ The context is now within limits. Please retry your request with the recovered c
                 return [];
             }
 
-            const stepsResult = await rv.RunView<{
-                StepNumber: number;
-                InputData: string | null;
-                OutputData: string | null;
-            }>({
-                EntityName: 'MJ: AI Agent Run Steps',
-                ExtraFilter: `AgentRunID='${params.lastRunId}' AND StepType='Sub-Agent'`,
-                OrderBy: 'StepNumber ASC',
-                Fields: ['StepNumber', 'InputData', 'OutputData'],
-                ResultType: 'simple',
-                BypassCache: true,
-            }, params.contextUser);
-
-            const steps = stepsResult.Success ? (stepsResult.Results || []) : [];
-            if (steps.length === 0) {
-                return [];
-            }
-
-            const openConsults: SubAgentConsultRecord[] = [];
-            for (let i = 0; i < steps.length; i++) {
-                const consult = BaseAgent.readStepConsultRecord(steps[i].OutputData);
-                if (!consult) {
-                    continue;
-                }
-                const answeredLater = steps.slice(i + 1).some(laterStep => {
-                    const resumedId = BaseAgent.readStepResumeRunId(laterStep.InputData);
-                    return resumedId != null && (resumedId === consult.childRunId || UUIDsEqual(resumedId, consult.childRunId));
-                });
-                if (!answeredLater) {
-                    openConsults.push(consult);
-                }
-            }
-            return openConsults;
+            return await LoadOpenSubAgentConsults(this.ProviderToUse, params.lastRunId, params.contextUser);
         } catch (error) {
             this.logStatus(
                 `[SubAgentConsult] Skipped loading open consults (contained error): ${error instanceof Error ? error.message : error}`,
@@ -8765,42 +8719,6 @@ The context is now within limits. Please retry your request with the recovered c
                 true,
                 params
             );
-        }
-    }
-
-    /** Parses `OutputData.consult` from a persisted Sub-Agent step row, or returns `null`. @private */
-    private static readStepConsultRecord(outputDataJson: string | null): SubAgentConsultRecord | null {
-        if (!outputDataJson) {
-            return null;
-        }
-        try {
-            const parsed: { consult?: Partial<SubAgentConsultRecord> } = JSON.parse(outputDataJson);
-            const c = parsed?.consult;
-            if (!c || typeof c.childRunId !== 'string' || !c.childRunId || typeof c.subAgentName !== 'string') {
-                return null;
-            }
-            return {
-                childRunId: c.childRunId,
-                subAgentId: typeof c.subAgentId === 'string' ? c.subAgentId : '',
-                subAgentName: c.subAgentName,
-                round: typeof c.round === 'number' ? c.round : 1,
-                question: typeof c.question === 'string' ? c.question : null,
-            };
-        } catch {
-            return null;
-        }
-    }
-
-    /** Parses `InputData.resumeRunId` from a persisted Sub-Agent step row, or returns `null`. @private */
-    private static readStepResumeRunId(inputDataJson: string | null): string | null {
-        if (!inputDataJson) {
-            return null;
-        }
-        try {
-            const parsed: { resumeRunId?: unknown } = JSON.parse(inputDataJson);
-            return typeof parsed?.resumeRunId === 'string' && parsed.resumeRunId ? parsed.resumeRunId : null;
-        } catch {
-            return null;
         }
     }
 

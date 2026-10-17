@@ -17,12 +17,16 @@ import { FormatResponseFormSummary } from '../sub-agent-consult';
  */
 
 // Mock dependencies
-vi.mock('@memberjunction/core', () => ({
-    LogError: vi.fn(),
-    LogStatus: vi.fn(),
-    LogStatusEx: vi.fn(),
-    IsVerboseLoggingEnabled: vi.fn(() => false),
-}));
+vi.mock('@memberjunction/core', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/core')>();
+    return {
+        ...actual,
+        LogError: vi.fn(),
+        LogStatus: vi.fn(),
+        LogStatusEx: vi.fn(),
+        IsVerboseLoggingEnabled: vi.fn(() => false),
+    };
+});
 
 // ─── Types ────────────────────────────────────────────────────────────────
 

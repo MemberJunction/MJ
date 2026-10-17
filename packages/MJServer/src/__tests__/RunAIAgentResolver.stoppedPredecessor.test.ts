@@ -24,13 +24,19 @@ vi.mock('type-graphql', () => {
     return Object.fromEntries(exportNames.map((name) => [name, decoratorFactory]));
 });
 
+const hoisted = vi.hoisted(() => ({
+    runAgentInConversation: vi.fn().mockResolvedValue({ agentResult: { success: true } }),
+}));
+
 vi.mock('@memberjunction/ai-agents', () => ({
     AgentRunner: class {
-        RunAgentInConversation() {
-            return Promise.resolve({ agentResult: { success: true } });
+        RunAgentInConversation(...args: unknown[]) {
+            return hoisted.runAgentInConversation(...args);
         }
     },
     ArtifactToolManager: class {},
+    CanAgentOwnSubAgentConsults: vi.fn(() => false),
+    LoadOpenSubAgentConsults: vi.fn(async () => []),
 }));
 
 vi.mock('../realtimeWidget/widgetGuestElevation.js', () => ({
@@ -43,6 +49,7 @@ import type { AppContext, UserPayload } from '../types.js';
 
 const USER = { ID: 'user-1', Email: 'user@example.com' };
 const STOPPED_RUN = '16787b44-29f6-44a5-8bd4-fc1538e79275';
+const CONSULT_RUN = 'c0ffee00-29f6-44a5-8bd4-fc1538e79275';
 
 type Fn = ReturnType<typeof vi.fn>;
 
@@ -52,7 +59,9 @@ interface ResolverSeams {
     loadConversationHistoryWithAttachments: Fn;
     executeAIAgent: Fn;
     executeAgentInBackground: Fn;
-    findUserStoppedPredecessorRunId: Fn;
+    findChainablePredecessor: Fn;
+    validateAgent: Fn;
+    syncFeedbackRequestFromConversation: Fn;
 }
 
 /** Argument positions of lastRunId / autoPopulateLastRunPayload on the two dispatch seams. */
@@ -66,7 +75,7 @@ function makeResolver(): { resolver: RunAIAgentResolver; seams: ResolverSeams } 
     seams.loadConversationHistoryWithAttachments = vi.fn().mockResolvedValue([]);
     seams.executeAIAgent = vi.fn().mockResolvedValue({ success: true, result: '{}' });
     seams.executeAgentInBackground = vi.fn();
-    seams.findUserStoppedPredecessorRunId = vi.fn().mockResolvedValue(null);
+    seams.findChainablePredecessor = vi.fn().mockResolvedValue(null);
     return { resolver, seams };
 }
 
@@ -99,7 +108,7 @@ afterEach(() => {
     vi.restoreAllMocks();
 });
 
-describe('RunAIAgentFromConversationDetail — continuing from a user-stopped run', () => {
+describe('RunAIAgentFromConversationDetail — continuing from a chainable predecessor run', () => {
     let resolver: RunAIAgentResolver;
     let seams: ResolverSeams;
 
@@ -108,19 +117,19 @@ describe('RunAIAgentFromConversationDetail — continuing from a user-stopped ru
     });
 
     it('chains the new run to the stopped predecessor and rolls its payload in when none was supplied', async () => {
-        seams.findUserStoppedPredecessorRunId.mockResolvedValue(STOPPED_RUN);
+        seams.findChainablePredecessor.mockResolvedValue({ runId: STOPPED_RUN, reason: 'stopped' });
 
         const result = await runMutation(resolver, {});
 
         expect(result.success).toBe(true);
-        expect(seams.findUserStoppedPredecessorRunId).toHaveBeenCalledWith('conv-1', 'agent-1', null, USER, expect.anything());
+        expect(seams.findChainablePredecessor).toHaveBeenCalledWith('conv-1', 'agent-1', null, USER, expect.anything());
         const args = seams.executeAIAgent.mock.calls[0];
         expect(args[SYNC_LAST_RUN]).toBe(STOPPED_RUN);
         expect(args[SYNC_AUTO]).toBe(true);
     });
 
     it('keeps the caller\'s payload as the start when one was supplied (chains, but does not roll the old one in)', async () => {
-        seams.findUserStoppedPredecessorRunId.mockResolvedValue(STOPPED_RUN);
+        seams.findChainablePredecessor.mockResolvedValue({ runId: STOPPED_RUN, reason: 'stopped' });
 
         await runMutation(resolver, { payload: '{"fromArtifact":true}' });
 
@@ -130,7 +139,7 @@ describe('RunAIAgentFromConversationDetail — continuing from a user-stopped ru
     });
 
     it('hands the chain to a fire-and-forget run too', async () => {
-        seams.findUserStoppedPredecessorRunId.mockResolvedValue(STOPPED_RUN);
+        seams.findChainablePredecessor.mockResolvedValue({ runId: STOPPED_RUN, reason: 'stopped' });
 
         await runMutation(resolver, { fireAndForget: true });
 
@@ -140,17 +149,83 @@ describe('RunAIAgentFromConversationDetail — continuing from a user-stopped ru
         expect(args[BG_AUTO]).toBe(true);
     });
 
+    it('chains an open-consult predecessor on both synchronous and fire-and-forget paths, setting autoPopulate only when no payload was supplied', async () => {
+        seams.findChainablePredecessor.mockResolvedValue({ runId: CONSULT_RUN, reason: 'open-consult' });
+
+        // 1. Synchronous without payload -> effectiveAutoPopulate = true
+        await runMutation(resolver, {});
+        const syncNoPayloadArgs = seams.executeAIAgent.mock.calls[0];
+        expect(syncNoPayloadArgs[SYNC_LAST_RUN]).toBe(CONSULT_RUN);
+        expect(syncNoPayloadArgs[SYNC_AUTO]).toBe(true);
+
+        // 2. Synchronous with payload -> effectiveAutoPopulate = undefined
+        await runMutation(resolver, { payload: '{"custom":1}' });
+        const syncWithPayloadArgs = seams.executeAIAgent.mock.calls[1];
+        expect(syncWithPayloadArgs[SYNC_LAST_RUN]).toBe(CONSULT_RUN);
+        expect(syncWithPayloadArgs[SYNC_AUTO]).toBeUndefined();
+
+        // 3. Fire-and-forget without payload -> effectiveAutoPopulate = true
+        await runMutation(resolver, { fireAndForget: true });
+        const bgNoPayloadArgs = seams.executeAgentInBackground.mock.calls[0];
+        expect(bgNoPayloadArgs[BG_LAST_RUN]).toBe(CONSULT_RUN);
+        expect(bgNoPayloadArgs[BG_AUTO]).toBe(true);
+
+        // 4. Fire-and-forget with payload -> effectiveAutoPopulate = undefined
+        await runMutation(resolver, { fireAndForget: true, payload: '{"custom":1}' });
+        const bgWithPayloadArgs = seams.executeAgentInBackground.mock.calls[1];
+        expect(bgWithPayloadArgs[BG_LAST_RUN]).toBe(CONSULT_RUN);
+        expect(bgWithPayloadArgs[BG_AUTO]).toBeUndefined();
+    });
+
+    it('threads a lastRunId chained from findChainablePredecessor into syncFeedbackRequestFromConversation when executeAIAgent runs', async () => {
+        const realResolver = new RunAIAgentResolver();
+        const realSeams = realResolver as unknown as ResolverSeams;
+        realSeams.CheckAPIKeyScopeAuthorization = vi.fn().mockResolvedValue(undefined);
+        realSeams.GetUserFromPayload = vi.fn().mockReturnValue(USER);
+        realSeams.loadConversationHistoryWithAttachments = vi.fn().mockResolvedValue([
+            { role: 'user', content: 'Proceed with option A' },
+        ]);
+        realSeams.findChainablePredecessor = vi.fn().mockResolvedValue({
+            runId: CONSULT_RUN,
+            reason: 'open-consult',
+        });
+        realSeams.validateAgent = vi.fn().mockResolvedValue({
+            ID: 'agent-1',
+            Name: 'Director',
+            Status: 'Active',
+        });
+        realSeams.syncFeedbackRequestFromConversation = vi.fn().mockResolvedValue(undefined);
+        hoisted.runAgentInConversation.mockResolvedValueOnce({
+            agentResult: {
+                success: true,
+                agentRun: { ID: 'new-run-99', ConversationDetailID: 'detail-1' },
+            },
+            conversationId: 'conv-1',
+        });
+
+        const res = await runMutation(realResolver, {});
+
+        expect(res.success).toBe(true);
+        expect(realSeams.syncFeedbackRequestFromConversation).toHaveBeenCalledWith(
+            CONSULT_RUN,
+            'new-run-99',
+            'Proceed with option A',
+            USER,
+            expect.anything()
+        );
+    });
+
     it('looks up the predecessor on the branch the reply row was created on', async () => {
         await runMutation(resolver, { branchId: 'B' });
-        expect(seams.findUserStoppedPredecessorRunId).toHaveBeenCalledWith('conv-1', 'agent-1', 'B', expect.anything(), expect.anything());
+        expect(seams.findChainablePredecessor).toHaveBeenCalledWith('conv-1', 'agent-1', 'B', expect.anything(), expect.anything());
         await runMutation(resolver, {});
-        expect(seams.findUserStoppedPredecessorRunId).toHaveBeenLastCalledWith('conv-1', 'agent-1', null, expect.anything(), expect.anything());
+        expect(seams.findChainablePredecessor).toHaveBeenLastCalledWith('conv-1', 'agent-1', null, expect.anything(), expect.anything());
     });
 
     it('a caller-supplied lastRunId wins and the lookup is skipped', async () => {
         await runMutation(resolver, { lastRunId: 'caller-run', autoPopulate: false });
 
-        expect(seams.findUserStoppedPredecessorRunId).not.toHaveBeenCalled();
+        expect(seams.findChainablePredecessor).not.toHaveBeenCalled();
         const args = seams.executeAIAgent.mock.calls[0];
         expect(args[SYNC_LAST_RUN]).toBe('caller-run');
         expect(args[SYNC_AUTO]).toBe(false);
