@@ -4,7 +4,7 @@
  * @module @memberjunction/ng-entity-action-ux
  */
 import { UUIDsEqual } from '@memberjunction/global';
-import type { TagWriteBackPreview, WriteBackResult } from '@memberjunction/record-set-processor-base';
+import type { FeatureValuePreview, TagWriteBackPreview, WriteBackResult } from '@memberjunction/record-set-processor-base';
 import { DisplayValue } from './scope';
 
 /** One change the preview shows: a field's old and new value, or a value, row or tag the write stores. */
@@ -39,6 +39,7 @@ export class WriteBackPreviewModel {
             ...Object.entries(writeBack.previewFields || {}).map(([field, value]) => WriteBackPreviewModel.addition(field, value)),
             ...(writeBack.previewChildren || []).map((values) => WriteBackPreviewModel.childChange(recordID, values)),
             ...(writeBack.previewTags || []).flatMap((t) => WriteBackPreviewModel.tagChange(t)),
+            ...(writeBack.previewFeatureValues || []).map(WriteBackPreviewModel.featureValueChange),
         ];
         return { Changes: changes, Errors: [], Withheld: WriteBackPreviewModel.WithheldLines(writeBack) };
     }
@@ -67,6 +68,18 @@ export class WriteBackPreviewModel {
             return [WriteBackPreviewModel.addition('Tag', tag.resolvedTagName || tag.tagText)];
         }
         return tag.created ? [WriteBackPreviewModel.addition('Tag', `${tag.tagText} (new tag)`)] : [];
+    }
+
+    /** A feature value an output with no write target would store: its previous value and the proposed one (no previous value is an addition). */
+    private static featureValueChange(p: FeatureValuePreview): PreviewChange {
+        return {
+            Field: `${p.FeatureName} (feature value)`,
+            OldValue: p.Previous,
+            NewValue: p.Proposed,
+            Applied: true,
+            Changed: true,
+            IsAddition: p.Previous === null || p.Previous === undefined,
+        };
     }
 
     private static addition(label: string, value: unknown): PreviewChange {

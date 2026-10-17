@@ -4,7 +4,24 @@ import { WriteBackPreviewModel } from '../lib/write-back-preview';
 
 const base: WriteBackResult = { updatedRecord: false, changed: false, dryRun: true };
 
+/** A write-back result for a test: the base result with the given preview fields set. */
+function previewOf(overrides: Partial<WriteBackResult>): WriteBackResult {
+    return { ...base, ...overrides };
+}
+
 describe('WriteBackPreviewModel.Build', () => {
+    it('lists a previewed feature value as a change', () => {
+        const rows = WriteBackPreviewModel.Build('r1', previewOf({ previewFeatureValues: [
+            { FeatureName: 'YearsInTrade', Previous: null, Proposed: 7 },
+            { FeatureName: 'Specialty', Previous: 'alpine', Proposed: 'chèvre' },
+        ] }));
+
+        expect(rows.Changes).toEqual([
+            { Field: 'YearsInTrade (feature value)', OldValue: null, NewValue: 7, Applied: true, Changed: true, IsAddition: true },
+            { Field: 'Specialty (feature value)', OldValue: 'alpine', NewValue: 'chèvre', Applied: true, Changed: true, IsAddition: false },
+        ]);
+    });
+
     it('shows each previewed field with the value the write stores', () => {
         const { Changes } = WriteBackPreviewModel.Build('id-1', { ...base, previewFields: { Tier: 'Gold' } });
 
