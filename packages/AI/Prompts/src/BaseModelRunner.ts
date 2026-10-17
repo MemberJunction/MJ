@@ -1219,7 +1219,8 @@ export abstract class BaseModelRunner {
           5000,
           'prompt-model',
           preferredVendorId,
-          pm.Priority
+          pm.Priority,
+          pm.VendorID
         );
         candidates.push(...modelCandidates);
       }
@@ -1270,7 +1271,8 @@ export abstract class BaseModelRunner {
             basePriority,
             'prompt-model',
             preferredVendorId,
-            pm.Priority
+            pm.Priority,
+            pm.VendorID
           );
           candidates.push(...modelCandidates);
         }
@@ -1303,7 +1305,8 @@ export abstract class BaseModelRunner {
           1000, // Lowest priority tier
           'prompt-model',
           preferredVendorId,
-          pm.Priority
+          pm.Priority,
+          pm.VendorID
         );
         candidates.push(...modelCandidates);
       }
@@ -1393,13 +1396,18 @@ export abstract class BaseModelRunner {
 
   /**
    * Helper: Create candidates for a model with AIModelVendor priorities (legacy behavior).
+   *
+   * @param promptModelVendorId - The AIPromptModel row's VendorID. When set, only that vendor is a
+   * candidate, the same as the 'Specific' path: a row that names a vendor never runs on another one.
+   * When null/undefined, every active inference vendor of the model is a candidate.
    */
   private createCandidatesForModel(
     model: MJAIModelEntityExtended,
     basePriority: number,
     source: ModelVendorCandidate['source'],
     preferredVendorId?: string,
-    promptModelPriority?: number
+    promptModelPriority?: number,
+    promptModelVendorId?: string | null
   ): ModelVendorCandidate[] {
     const modelCandidates: ModelVendorCandidate[] = [];
 
@@ -1408,6 +1416,7 @@ export abstract class BaseModelRunner {
     // the global ModelVendors array.
     const modelVendors = model.ModelVendors
       .filter(mv => mv.Status === 'Active' && this.IsInferenceProvider(mv))
+      .filter(mv => !promptModelVendorId || UUIDsEqual(mv.VendorID, promptModelVendorId))
       .sort((a, b) => b.Priority - a.Priority);
 
     // First, add preferred vendor if it exists
@@ -1445,8 +1454,9 @@ export abstract class BaseModelRunner {
       }
     }
 
-    // If no vendors found, add model with its default driver
-    if (modelCandidates.length === 0 && model.DriverClass) {
+    // If no vendors found, add model with its default driver — unless the row named a vendor, which
+    // the default driver may not be
+    if (modelCandidates.length === 0 && model.DriverClass && !promptModelVendorId) {
       modelCandidates.push({
         model,
         driverClass: model.DriverClass,
