@@ -22,9 +22,10 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Gemma 4 31B Instruct",
-            "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
-            "Priority": 100
+            "ModelID": "@lookup:MJ: AI Models.Name=Claude Opus 4.7",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "ConfigurationID": "@lookup:MJ: AI Configurations.Name=High Power",
+            "Priority": 110
           },
           "primaryKey": {
             "ID": "3F9A8B71-14E2-4D9A-821C-5E4B9D12A701"
@@ -33,9 +34,9 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=GPT-OSS-120B",
-            "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
-            "Priority": 25
+            "ModelID": "@lookup:MJ: AI Models.Name=Claude Sonnet 4.6",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 100
           },
           "primaryKey": {
             "ID": "3F9A8B71-14E2-4D9A-821C-5E4B9D12A702"
@@ -44,9 +45,9 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.1 Flash-Lite",
-            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
-            "Priority": 19
+            "ModelID": "@lookup:MJ: AI Models.Name=Claude Opus 4.7",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 95
           },
           "primaryKey": {
             "ID": "3F9A8B71-14E2-4D9A-821C-5E4B9D12A703"
@@ -55,12 +56,57 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=GPT 5.5 Instant",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT 5.4",
             "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
-            "Priority": 1
+            "Priority": 90
           },
           "primaryKey": {
             "ID": "3F9A8B71-14E2-4D9A-821C-5E4B9D12A704"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.1 Pro",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 85
+          },
+          "primaryKey": {
+            "ID": "3F9A8B71-14E2-4D9A-821C-5E4B9D12A705"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "ConfigurationID": "@lookup:MJ: AI Configurations.Name=Fast",
+            "Priority": 110
+          },
+          "primaryKey": {
+            "ID": "3F9A8B71-14E2-4D9A-821C-5E4B9D12A706"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 50
+          },
+          "primaryKey": {
+            "ID": "3F9A8B71-14E2-4D9A-821C-5E4B9D12A707"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
+            "Priority": 5
+          },
+          "primaryKey": {
+            "ID": "3F9A8B71-14E2-4D9A-821C-5E4B9D12A708"
           }
         }
       ]

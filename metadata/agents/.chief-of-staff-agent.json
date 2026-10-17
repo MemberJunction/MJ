@@ -10,6 +10,7 @@
       "SkillActivationMode": "Auto",
       "ExecutionOrder": 0,
       "ModelSelectionMode": "Agent",
+      "SearchScopeAccess": "All",
       "ArtifactCreationMode": "Always",
       "ExposeAsAction": true,
       "IconClass": "fa-solid fa-user-tie",
@@ -315,10 +316,10 @@
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "Name": "Text",
-            "DisplayName": "Text",
-            "Description": "Text Only",
-            "AIConfigurationID": "@lookup:MJ: AI Configurations.Name=Sage Text",
+            "Name": "Standard",
+            "DisplayName": "Standard",
+            "Description": "Frontier Executive Reasoning — Claude Sonnet 4.6, GPT 5.4, Gemini 3.1 Pro",
+            "AIConfigurationID": "@lookup:MJ: AI Configurations.Name=Standard",
             "IsDefault": true,
             "Priority": 1,
             "Status": "Active"
@@ -330,10 +331,10 @@
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "Name": "Multimodal",
-            "DisplayName": "Multimodal",
-            "Description": "Text + Audio + Images",
-            "AIConfigurationID": "@lookup:MJ: AI Configurations.Name=Sage Multimodal",
+            "Name": "High Power",
+            "DisplayName": "High Power",
+            "Description": "Deep Executive Synthesis — Claude Opus 4.7",
+            "AIConfigurationID": "@lookup:MJ: AI Configurations.Name=High Power",
             "IsDefault": false,
             "Priority": 2,
             "Status": "Active"

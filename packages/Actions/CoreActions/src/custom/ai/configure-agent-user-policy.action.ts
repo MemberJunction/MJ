@@ -36,18 +36,25 @@ export class ConfigureAgentUserPolicyAction extends BaseAction {
 
             await AIEngine.Instance.Config(false, contextUser);
             const rawAgentId = this.getStringParam(params, 'AgentID');
-            const rawAgentName = this.getStringParam(params, 'AgentName') ?? (rawAgentId ? null : 'Chief of Staff');
-            const agent = rawAgentId
+            const rawAgentName = this.getStringParam(params, 'AgentName');
+            const byName = rawAgentName
+                ? AIEngine.Instance.Agents.find(
+                      (a) => a.Name.trim().toLowerCase() === rawAgentName.trim().toLowerCase()
+                  )
+                : undefined;
+            const byId = rawAgentId
                 ? AIEngine.Instance.Agents.find((a) => UUIDsEqual(a.ID, rawAgentId))
-                : AIEngine.Instance.Agents.find(
-                      (a) => a.Name.trim().toLowerCase() === (rawAgentName ?? '').trim().toLowerCase()
-                  );
+                : undefined;
+            const defaultCos = !rawAgentName
+                ? AIEngine.Instance.Agents.find((a) => a.Name.trim().toLowerCase() === 'chief of staff')
+                : undefined;
+            const agent = byName ?? byId ?? defaultCos;
 
             if (!agent) {
                 return {
                     Success: false,
                     ResultCode: 'AGENT_NOT_FOUND',
-                    Message: `Agent "${ rawAgentId ?? rawAgentName }" not found.`,
+                    Message: `Agent "${ rawAgentId ?? rawAgentName ?? 'Chief of Staff' }" not found.`,
                     Params: params.Params,
                 };
             }
@@ -62,6 +69,14 @@ export class ConfigureAgentUserPolicyAction extends BaseAction {
             const policy =
                 existing ??
                 (await md.GetEntityObject<MJAIAgentUserPolicyEntity>('MJ: AI Agent User Policies', contextUser));
+            if (!policy) {
+                return {
+                    Success: false,
+                    ResultCode: 'ENTITY_METADATA_MISSING',
+                    Message: 'Entity "MJ: AI Agent User Policies" is not registered in Metadata. Restart MJAPI after running migrations.',
+                    Params: params.Params,
+                };
+            }
 
             policy.AgentID = agent.ID;
             policy.UserID = contextUser.ID;

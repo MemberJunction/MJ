@@ -19,7 +19,7 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "UUID of the AI Agent to wake",
+            "Description": "Optional UUID of the AI Agent — leave blank when scheduling Chief of Staff (defaults automatically to 'Chief of Staff')",
             "IsRequired": false
           },
           "primaryKey": {
@@ -33,7 +33,7 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Name of the AI Agent to wake (defaults to 'Chief of Staff' if AgentID is omitted)",
+            "Description": "Name of the AI Agent to wake (defaults to 'Chief of Staff' if omitted)",
             "IsRequired": false,
             "DefaultValue": "Chief of Staff"
           },
@@ -233,7 +233,7 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "UUID of the AI Agent (optional if AgentName is provided)",
+            "Description": "Optional UUID of the AI Agent — leave blank when configuring Chief of Staff (defaults automatically to 'Chief of Staff')",
             "IsRequired": false
           },
           "primaryKey": {
@@ -262,7 +262,7 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Custom display name for the user's Chief of Staff",
+            "Description": "Optional custom nickname for the agent itself (e.g., 'Pepper' or 'Jarvis') — NOT the human user's name. Leave blank to keep 'Chief of Staff'.",
             "IsRequired": false
           },
           "primaryKey": {

@@ -201,6 +201,47 @@ describe('Chief of Staff Actions Suite', () => {
             expect(res.Success).toBe(false);
             expect(res.ResultCode).toBe('PERMISSION_DENIED');
         });
+
+        it('prefers AgentName/default Chief of Staff when a hallucinated AgentID is passed and accepts ScheduleMode=Scheduled alias', async () => {
+            const routineStub = {
+                ID: 'routine-888',
+                UserID: '',
+                Name: '',
+                Description: null as string | null,
+                Status: 'Active' as MJUserRoutineEntity['Status'],
+                RoutineType: 'Standard' as MJUserRoutineEntity['RoutineType'],
+                ScheduleMode: 'OneShot' as MJUserRoutineEntity['ScheduleMode'],
+                TargetType: 'Agent' as MJUserRoutineEntity['TargetType'],
+                TargetID: '',
+                Timezone: 'UTC',
+                CronExpression: null as string | null,
+                InitialMessage: null as string | null,
+                StartingPayload: null as string | null,
+                WakeConfigurationObject: null as MJUserRoutineEntity['WakeConfigurationObject'],
+                NextRunAt: null as Date | null,
+                ConversationID: null as string | null,
+                Save: vi.fn().mockResolvedValue(true),
+            };
+            getEntityObjectMock.mockResolvedValue(routineStub);
+
+            const params: RunActionParams = {
+                Action: {} as RunActionParams['Action'],
+                ContextUser: makeUser('user-abc'),
+                Filters: [],
+                Params: [
+                    { Name: 'AgentID', Type: 'Input', Value: 'hallucinated-uuid-not-in-db' },
+                    { Name: 'ScheduleMode', Type: 'Input', Value: 'Scheduled' },
+                    { Name: 'CronExpression', Type: 'Input', Value: '0 8 * * 1-5' },
+                    { Name: 'WakeReason', Type: 'Input', Value: 'Morning weekday check-in' },
+                ],
+            };
+
+            const res = await invokeAction(new ScheduleNextAgentWakeAction(), params);
+            expect(res.Success).toBe(true);
+            expect(routineStub.TargetID).toBe('cos-agent-id');
+            expect(routineStub.ScheduleMode).toBe('Recurring');
+            expect(routineStub.CronExpression).toBe('0 8 * * 1-5');
+        });
     });
 
     describe('ConfigureAgentUserPolicyAction', () => {
@@ -235,6 +276,7 @@ describe('Chief of Staff Actions Suite', () => {
                 ContextUser: makeUser('user-777'),
                 Filters: [],
                 Params: [
+                    { Name: 'AgentID', Type: 'Input', Value: 'hallucinated-uuid-not-in-db' },
                     { Name: 'DisplayNameOverride', Type: 'Input', Value: 'Athena' },
                     { Name: 'OnboardingStatus', Type: 'Input', Value: 'Completed' },
                     { Name: 'CoordinationMode', Type: 'Input', Value: 'Coordinator' },
@@ -245,6 +287,7 @@ describe('Chief of Staff Actions Suite', () => {
 
             const res = await invokeAction(new ConfigureAgentUserPolicyAction(), params);
             expect(res.Success).toBe(true);
+            expect(policyStub.AgentID).toBe('cos-agent-id');
             expect(policyStub.UserID).toBe('user-777');
             expect(policyStub.DisplayNameOverride).toBe('Athena');
             expect(policyStub.OnboardingStatus).toBe('Completed');

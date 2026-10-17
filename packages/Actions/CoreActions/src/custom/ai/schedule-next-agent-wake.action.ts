@@ -39,9 +39,9 @@ export class ScheduleNextAgentWakeAction extends BaseAction {
             const { agentId, agentName } = agentResolution;
 
             const workstreamKey = (this.getStringParam(params, 'WorkstreamKey') ?? 'default').trim() || 'default';
-            const scheduleMode = this.resolveScheduleMode(this.getStringParam(params, 'ScheduleMode'));
-            const status = this.resolveRoutineStatus(this.getStringParam(params, 'Status'));
             const cronExpression = this.getStringParam(params, 'CronExpression');
+            const scheduleMode = this.resolveScheduleMode(this.getStringParam(params, 'ScheduleMode'), cronExpression);
+            const status = this.resolveRoutineStatus(this.getStringParam(params, 'Status'));
             const timezone = this.getStringParam(params, 'Timezone') ?? 'UTC';
             const wakeReason = this.getStringParam(params, 'WakeReason') ?? `Scheduled wake for ${ workstreamKey }`;
             const initialMessage =
@@ -163,20 +163,23 @@ export class ScheduleNextAgentWakeAction extends BaseAction {
     ): Promise<{ agentId: string; agentName: string } | { errorResult: ActionResultSimple }> {
         await AIEngine.Instance.Config(false, params.ContextUser);
         const rawId = this.getStringParam(params, 'AgentID');
-        const rawName = this.getStringParam(params, 'AgentName') ?? (rawId ? null : 'Chief of Staff');
+        const rawName = this.getStringParam(params, 'AgentName');
 
-        const agent = rawId
-            ? AIEngine.Instance.Agents.find((a) => UUIDsEqual(a.ID, rawId))
-            : AIEngine.Instance.Agents.find(
-                  (a) => a.Name.trim().toLowerCase() === (rawName ?? '').trim().toLowerCase()
-              );
+        const byName = rawName
+            ? AIEngine.Instance.Agents.find((a) => a.Name.trim().toLowerCase() === rawName.trim().toLowerCase())
+            : undefined;
+        const byId = rawId ? AIEngine.Instance.Agents.find((a) => UUIDsEqual(a.ID, rawId)) : undefined;
+        const defaultCos = !rawName
+            ? AIEngine.Instance.Agents.find((a) => a.Name.trim().toLowerCase() === 'chief of staff')
+            : undefined;
+        const agent = byName ?? byId ?? defaultCos;
 
         if (!agent) {
             return {
                 errorResult: {
                     Success: false,
                     ResultCode: 'AGENT_NOT_FOUND',
-                    Message: `Target agent ${ rawId ?? rawName } not found.`,
+                    Message: `Target agent ${ rawId ?? rawName ?? 'Chief of Staff' } not found.`,
                     Params: params.Params,
                 },
             };
@@ -229,9 +232,22 @@ export class ScheduleNextAgentWakeAction extends BaseAction {
         return null;
     }
 
-    private resolveScheduleMode(raw: string | null): MJUserRoutineEntity['ScheduleMode'] {
-        if (raw === 'OneShot' || raw === 'Adaptive' || raw === 'Recurring') {
-            return raw;
+    private resolveScheduleMode(
+        raw: string | null,
+        cronExpression: string | null
+    ): MJUserRoutineEntity['ScheduleMode'] {
+        const normalized = raw?.trim().toLowerCase();
+        if (normalized === 'oneshot' || normalized === 'one-shot') {
+            return 'OneShot';
+        }
+        if (normalized === 'recurring' || normalized === 'scheduled' || normalized === 'cron') {
+            return 'Recurring';
+        }
+        if (normalized === 'adaptive') {
+            return 'Adaptive';
+        }
+        if (cronExpression && cronExpression.trim().length > 0) {
+            return 'Recurring';
         }
         return 'Adaptive';
     }
