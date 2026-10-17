@@ -12,7 +12,7 @@ export interface FeatureValueRow {
     FeatureName: string;
     ValueText: string | null;
     ValueNumeric: number | null;
-    ValueBoolean: boolean | null;
+    ValueBoolean: boolean | number | string | null;
     ValueDate: string | Date | null;
     ValueJSON: string | null;
     Source: string;
@@ -56,7 +56,10 @@ export class FeatureValuesPanelModel {
     /** Human-readable value: number, Yes/No, ISO date part, compact JSON, or text. Empty when valueless. */
     public static DisplayValue(row: FeatureValueRow): string {
         if (row.ValueNumeric != null) return String(row.ValueNumeric);
-        if (row.ValueBoolean != null) return row.ValueBoolean ? 'Yes' : 'No';
+        if (row.ValueBoolean != null) {
+            const v: boolean | number | string = row.ValueBoolean;
+            return v === true || v === 1 || v === '1' ? 'Yes' : 'No';
+        }
         if (row.ValueDate != null) {
             const d = toDate(row.ValueDate);
             return d ? d.toISOString().slice(0, 10) : String(row.ValueDate);

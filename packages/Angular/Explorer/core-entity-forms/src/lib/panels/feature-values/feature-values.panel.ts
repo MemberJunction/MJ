@@ -40,11 +40,16 @@ export class FeatureValuesPanel extends BaseFormPanel implements OnInit {
         await this.Refresh();
     }
 
+    /** Reload when the parent form reloads the record, so stale rows never show. */
+    public override OnRecordRefreshed(): void {
+        void this.Refresh();
+    }
+
     /** Reload the feature values for the current record (one RunView). */
     public async Refresh(): Promise<void> {
         const entityId = this.Record?.EntityInfo?.ID ?? null;
-        const pkVal = this.Record?.FirstPrimaryKey?.Value; // first-pk-ok: Target entity single PK value for RecordID filter
-        const recordId = pkVal != null ? String(pkVal) : '';
+        // Same encoding the pipeline writes into RecordID: bare value for a single key, F1|v1||F2|v2 for composite.
+        const recordId = this.Record?.PrimaryKey?.ToCompactURLSegment() ?? '';
         if (!this.Record?.IsSaved || !entityId || !recordId) {
             this.rows = [];
             this.Cards = [];

@@ -11,6 +11,11 @@
       [Form]="FormComponent"
       [FormContext]="FormContext"
       [BadgeCount]="Cards.length">
+    <div class="fvp-toolbar">
+      <button type="button" class="fvp-refresh" (click)="Refresh()" title="Refresh feature values">
+        <i class="fa-solid fa-rotate" aria-hidden="true"></i> Refresh
+      </button>
+    </div>
     <table class="fvp-table">
       <thead>
         <tr>

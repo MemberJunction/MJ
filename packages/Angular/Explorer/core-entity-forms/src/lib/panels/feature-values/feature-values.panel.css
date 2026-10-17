@@ -66,3 +66,18 @@
     gap: 12px;
     padding: 2px 0;
 }
+
+.fvp-toolbar {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 6px;
+}
+
+.fvp-refresh {
+    background: transparent;
+    border: 1px solid var(--mj-border-default);
+    border-radius: var(--mj-radius-md, 8px);
+    color: var(--mj-text-secondary);
+    cursor: pointer;
+    padding: 2px 10px;
+}

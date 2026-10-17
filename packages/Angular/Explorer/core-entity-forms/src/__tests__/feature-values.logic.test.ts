@@ -20,6 +20,13 @@ describe('FeatureValuesPanelModel.DisplayValue', () => {
         expect(FeatureValuesPanelModel.DisplayValue(row({ ValueJSON: '{\n "a": 1,\n "b": [1, 2]\n}' }))).toBe('{"a":1,"b":[1,2]}');
         expect(FeatureValuesPanelModel.DisplayValue(row({ ValueText: 'hello' }))).toBe('hello');
     });
+    it('normalises 1/0 and "1"/"0" booleans', () => {
+        const b = (v: number | string) => FeatureValuesPanelModel.DisplayValue(row({ ValueBoolean: v }));
+        expect(b(1)).toBe('Yes');
+        expect(b('1')).toBe('Yes');
+        expect(b(0)).toBe('No');
+        expect(b('0')).toBe('No');
+    });
     it('returns empty string for a valueless row', () => {
         expect(FeatureValuesPanelModel.DisplayValue(row({}))).toBe('');
     });

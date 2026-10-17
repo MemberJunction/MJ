@@ -49,7 +49,7 @@ async function render(record: Record<string, unknown>): Promise<ComponentFixture
   return fixture;
 }
 
-const saved = { IsSaved: true, EntityInfo: { ID: 'ent-1' }, FirstPrimaryKey: { Value: "rec'1" } };
+const saved = { IsSaved: true, EntityInfo: { ID: 'ent-1' }, PrimaryKey: { ToCompactURLSegment: () => "rec'1" } };
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -63,6 +63,28 @@ describe('FeatureValuesPanel (DOM)', () => {
     expect(calls[0].OrderBy).toBe('ComputedAt DESC');
     expect(calls[0].MaxRows).toBe(500);
     expect(calls[0].ResultType).toBe('simple');
+  });
+
+  it('uses the compact composite key segment for a two-column key', async () => {
+    const calls = stubRunView([]);
+    await render({ IsSaved: true, EntityInfo: { ID: 'ent-1' }, PrimaryKey: { ToCompactURLSegment: () => 'OrderID|11||LineNo|3' } });
+    expect(calls[0].ExtraFilter).toBe("EntityID='ent-1' AND RecordID='OrderID|11||LineNo|3'");
+  });
+
+  it('Refresh button runs a second RunView', async () => {
+    const calls = stubRunView([fv({ ValueNumeric: 1 })]);
+    const fixture = await render(saved);
+    (query(fixture, '.fvp-refresh') as HTMLButtonElement).click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(calls).toHaveLength(2);
+  });
+
+  it('OnRecordRefreshed reloads', async () => {
+    const calls = stubRunView([]);
+    const fixture = await render(saved);
+    fixture.componentInstance.OnRecordRefreshed();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(calls).toHaveLength(2);
   });
 
   it('renders nothing for zero rows', async () => {
