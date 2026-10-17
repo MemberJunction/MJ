@@ -147,8 +147,10 @@ export function SortCheckIssues(issues: readonly CheckIssue[]): CheckIssue[] {
     });
 }
 
-const HTML_SCRIPT_OPEN_TAG_REGEX = /<script\b((?:[^>"']|"[^"]*"|'[^']*')*)>/gi;
-const HTML_SCRIPT_BLOCK_REGEX = /<script\b((?:[^>"']|"[^"]*"|'[^']*')*)>([\s\S]*?)<\/script>/gi;
+const HTML_SCRIPT_OPEN_TAG_REGEX = /<script\b([^>]*)>/gi;
+const HTML_SCRIPT_BLOCK_REGEX = /<script\b([^>]*)>([\s\S]*?)<\/script>/gi;
+const HTML_SCRIPT_TAG_ATTRS_SYNTAX_REGEX =
+    /^(?:\s+[^\s"'<>\/=]+(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'=<>`]+))?)*\s*\/?$/;
 const HTML_SCRIPT_TAG_ATTR_REGEX = /\b(src|href|xlink:href)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>"']+))/gi;
 const SCRIPT_OR_IMPORT_RAW_ALLOWLIST_REGEX = /^[A-Za-z0-9._@/-]+$/;
 
@@ -176,10 +178,21 @@ function scanHtmlFile(file: RenderCompositionFile, authoredFilePaths: ReadonlySe
     for (const scriptTagMatch of html.matchAll(HTML_SCRIPT_OPEN_TAG_REGEX)) {
         const attrs = scriptTagMatch[1] ?? '';
         const tagLine = computeLineNumber(html, scriptTagMatch.index ?? 0);
+        if (!HTML_SCRIPT_TAG_ATTRS_SYNTAX_REGEX.test(attrs)) {
+            issues.push({
+                Code: MJ_NON_BUNDLE_URL_CODE,
+                Category: 'RemoteUrl',
+                Severity: 'Error',
+                Message: 'Malformed or ambiguous <script> opening tag attributes are forbidden.',
+                File: file.Path,
+                Line: tagLine,
+            });
+            continue;
+        }
         for (const attrMatch of attrs.matchAll(HTML_SCRIPT_TAG_ATTR_REGEX)) {
             const attrName = attrMatch[1] ?? 'src';
-            const rawAttr = (attrMatch[2] ?? attrMatch[3] ?? attrMatch[4] ?? '').trim();
-            const decodedUrl = decodeHtmlEntities(rawAttr);
+            const rawAttr = attrMatch[2] ?? attrMatch[3] ?? attrMatch[4] ?? '';
+            const decodedUrl = decodeHtmlEntities(rawAttr.trim());
             if (!checkUrlReference(decodedUrl, file.Path, tagLine, `HTML attribute "${attrName}"`)) {
                 const targetIssue = checkScriptOrImportTarget(
                     rawAttr,
@@ -290,7 +303,7 @@ function scanJsBlock(
 
     for (const regex of [JS_IMPORT_FROM_REGEX, JS_SIDE_EFFECT_IMPORT_REGEX, JS_DYNAMIC_IMPORT_REGEX]) {
         for (const match of js.matchAll(regex)) {
-            const specifier = (match[1] ?? match[2] ?? match[3] ?? '').trim();
+            const specifier = match[1] ?? match[2] ?? match[3] ?? '';
             const line = baseLine + computeLineNumber(js, match.index ?? 0) - 1;
             const issue = checkScriptOrImportTarget(
                 specifier,
@@ -331,24 +344,23 @@ function checkScriptOrImportTarget(
     if (urlIssue) {
         return urlIssue;
     }
-    const trimmed = rawUrl.trim();
-    if (!SCRIPT_OR_IMPORT_RAW_ALLOWLIST_REGEX.test(trimmed) || trimmed.startsWith('/')) {
+    if (!SCRIPT_OR_IMPORT_RAW_ALLOWLIST_REGEX.test(rawUrl) || rawUrl.startsWith('/')) {
         return {
             Code: MJ_NON_BUNDLE_URL_CODE,
             Category: 'RemoteUrl',
             Severity: 'Error',
-            Message: `Script or module reference "${trimmed}" in ${contextLabel} must match ^[A-Za-z0-9._@/-]+$ with no leading "/" and resolve to an entry in bundle.Files.`,
+            Message: `Script or module reference "${rawUrl}" in ${contextLabel} must match ^[A-Za-z0-9._@/-]+$ with no leading "/" and resolve to an entry in bundle.Files.`,
             File: filePath,
             Line: line,
         };
     }
-    const resolved = resolveBundleRelativePath(filePath, trimmed);
+    const resolved = resolveBundleRelativePath(filePath, rawUrl);
     if (!resolved || !authoredFilePaths.has(resolved)) {
         return {
             Code: MJ_NON_BUNDLE_URL_CODE,
             Category: 'RemoteUrl',
             Severity: 'Error',
-            Message: `Script or module reference "${trimmed}" in ${contextLabel} must resolve to an entry in bundle.Files.`,
+            Message: `Script or module reference "${rawUrl}" in ${contextLabel} must resolve to an entry in bundle.Files.`,
             File: filePath,
             Line: line,
         };
