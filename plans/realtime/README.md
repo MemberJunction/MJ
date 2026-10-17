@@ -31,6 +31,7 @@ The realtime co-agent stack (1:1 voice + server-bridged meetings) is shipped and
 | [`livekit-recording-governance.md`](livekit-recording-governance.md) | Governed recording roadmap (basic control shipped; governance future). |
 | [`gemini-meeting-live-test-runbook.md`](gemini-meeting-live-test-runbook.md) | Runbook for the pending Gemini meeting-mode live validation (Next steps → 2). |
 | [`channels-v2/`](channels-v2/) | Build plan: the full channel (widget) contract, channel scoping, unified `ContextTool` dispatch, the Interactive Component (ComponentSpec) channel, multi-source visual perception with an "agent can see" chip, generic session events + mid-session identity verification, and the embeddable `<mj-realtime-widget>` element. |
+| [`whiteboard-agent-widget-interaction.md`](whiteboard-agent-widget-interaction.md) | Build plan: realtime agents inspect, operate and call actions inside live whiteboard HTML widgets (two-way bridge, three new `Whiteboard_*` tools, persisted widget state, host access control). Targeted for LXP by end of 2026. |
 | [`resources-channel/`](resources-channel/) | Design proposal: a realtime "Resources" channel + multi-channel layout (no code). |
 | [`mockups/`](mockups/) | UX mockups (design assets). |
 
