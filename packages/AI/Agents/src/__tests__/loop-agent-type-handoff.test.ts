@@ -175,4 +175,41 @@ describe('LoopAgentType — the Handoff primitive (VS-SAGE-1)', () => {
             expect(result.taskGraph).toBeUndefined();
         });
     });
+
+    describe('taskComplete pre-emption', () => {
+        it('pre-empts taskComplete: true when gate is on, returning step Handoff with terminate false and handoff set', async () => {
+            const result = await agent.DetermineNextStep(
+                emit(handoffReq(), {
+                    taskComplete: true,
+                    message: 'Transferring you to Video Studio.',
+                }),
+                paramsWith(true),
+                {},
+                {},
+            );
+            expect(result.step).toBe('Handoff');
+            expect(result.terminate).toBe(false);
+            expect(result.message).toBe('Transferring you to Video Studio.');
+            expect(result.handoff).toEqual({
+                agentName: 'Video Studio',
+                brief: 'User wants a 60-second product demo reel targeting retail buyers.',
+                reason: 'User asked to produce a video reel',
+            });
+        });
+
+        it('pre-empts taskComplete: true when gate is off, returning Retry with terminate false', async () => {
+            const result = await agent.DetermineNextStep(
+                emit(handoffReq(), {
+                    taskComplete: true,
+                    message: 'Transferring you to Video Studio.',
+                }),
+                paramsWith(false),
+                {},
+                {},
+            );
+            expect(result.step).toBe('Retry');
+            expect(result.terminate).toBe(false);
+            expect(result.errorMessage).toMatch(/not enabled/i);
+        });
+    });
 });

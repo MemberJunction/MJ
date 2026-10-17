@@ -18058,7 +18058,7 @@ The context is now within limits. Please retry your request with the recovered c
             sourceAgentId: params.agent.ID,
             brief: handoff.brief,
             reason: handoff.reason,
-            runStepId: stepEntity?.ID ?? ''
+            runStepId: stepEntity.ID
         };
 
         return {
