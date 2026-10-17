@@ -9,6 +9,7 @@ import { type IMetadataProvider, LogError } from '@memberjunction/core';
 import type { RecordFeatureValuesOutcome } from '@memberjunction/feature-pipelines';
 import {
     FeaturePipelineRunPin,
+    FeatureValuePreview,
     IRecordProcessor,
     RecordProcessorContext,
     RecordRef,
@@ -154,6 +155,12 @@ export class WriteBackProcessor implements IRecordProcessor {
             provider: context.provider, dryRun: dry, run, lookupCache: this._lookupCache,
             humanGuard: guard, overwriteHumanValues: context.overwriteHumanValues === true, unitWork, withheld,
         });
+        if (dry && WriteBackProcessor.supportsFeatureValuePreview(inner)) {
+            const preview = inner.PreviewFeatureValues(record.RecordID);
+            if (preview.length > 0) {
+                writeBack.previewFeatureValues = preview;
+            }
+        }
         const payload: WriteBackRunPayload = { output: result.ResultPayload, writeBack };
         const preserved = (writeBack.preservedHumanFields?.length || 0) + (writeBack.preservedHumanChildIDs?.length || 0);
         if (dry) {
@@ -198,6 +205,11 @@ export class WriteBackProcessor implements IRecordProcessor {
     /** Whether a processor's results can withhold write-back targets (a capability check, not a class check). */
     private static supportsWithheldTargets(p: IRecordProcessor): p is IRecordProcessor & WithheldTargetSource {
         return 'WithheldWriteBackTargets' in p && typeof p.WithheldWriteBackTargets === 'function';
+    }
+
+    /** Whether a processor can preview, on a dry run, the Feature Values of its outputs with no write target. */
+    private static supportsFeatureValuePreview(p: IRecordProcessor): p is IRecordProcessor & { PreviewFeatureValues(recordID: string): FeatureValuePreview[] } {
+        return 'PreviewFeatureValues' in p && typeof p.PreviewFeatureValues === 'function';
     }
 
     /** Whether a processor can say which target values a person entered (a capability check, not a class check). */

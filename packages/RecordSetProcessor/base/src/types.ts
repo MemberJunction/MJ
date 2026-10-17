@@ -226,6 +226,17 @@ export interface WriteBackResult {
     previewTags?: TagWriteBackPreview[];
     /** On a dry run: what the real write would fail on. Absent when the real write would go through. */
     PreviewErrors?: string[];
+    /** On a dry run: the Feature Values the pipeline's outputs with no write target would store. Absent when none would change. */
+    previewFeatureValues?: FeatureValuePreview[];
+}
+
+/** On a dry run, a Feature Value an output with no write target would store: the record's latest stored value and the run's answer. */
+export interface FeatureValuePreview {
+    FeatureName: string;
+    /** The record's latest stored Human or Pipeline value of the feature; null when it has none. */
+    Previous: unknown;
+    /** The value the run would store. */
+    Proposed: unknown;
 }
 
 /** The `MJ: Process Run Details.ResultPayload` of a record a write-back work type (Infer, Action, Agent) processed. */

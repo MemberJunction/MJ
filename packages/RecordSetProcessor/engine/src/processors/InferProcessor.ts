@@ -21,6 +21,7 @@ import { AIEngine } from '@memberjunction/aiengine';
 import { AIPromptParams, type AIPromptRunResult, type MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import {
     FeaturePipelineRunPin,
+    FeatureValuePreview,
     IRecordProcessor,
     RecordProcessorContext,
     RecordRef,
@@ -50,11 +51,13 @@ import {
     type ViolationPolicy,
     type FeaturePipelineFieldValueLookup,
     FindOutputByName,
+    OutputTargets,
     FeaturePipelinePin,
     type FeaturePipelinePinData,
     FeaturePipelineVersionService,
     type RecordFeatureValuesOutcome,
     type TypedFeatureValue,
+    type FeatureValueRecordRef,
     ConfidenceFloor,
     type BelowConfidenceOutput,
     PromptTemplateContent,
@@ -178,6 +181,9 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
 
     /** The pin and input hash each record of the current batch was written under, by record ID; same lifecycle. */
     private featureValueKeys = new Map<string, FeatureValueKeyParts>();
+
+    /** What each record of the current dry-run batch would store for its outputs with no write target, by record ID; same lifecycle. */
+    private featureValuePreviews = new Map<string, FeatureValuePreview[]>();
 
     /** The last pin resolved, and the inputs it was computed from (see {@link ResolvePin}). */
     private resolvedPin?: { Fingerprint: string; Pin: FeaturePipelinePinData };
@@ -810,6 +816,7 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
     /** Starts a batch: drops the previous batch's per-record state ({@link PreviousFeatureValues}, {@link FeatureValueKeyOf}). */
     protected ResetBatchState(): void {
         this.previousFeatureValues.clear();
+        this.featureValuePreviews.clear();
         this.featureValueKeys.clear();
         this.pendingFeatureValues.clear();
     }
@@ -943,7 +950,7 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
     /** Resolves every output's constraint and loads lookup rows through the run's provider ({@link OutputConstraintResolver.Resolve}). */
     protected async LoadResolvedConstraints(context: RecordProcessorContext): Promise<Map<string, ResolvedConstraint | null>> {
         const outputs = this.spec?.Outputs || [];
-        const needsField = outputs.some((o) => o.Constraint && o.Target.Mode === 'field');
+        const needsField = outputs.some((o) => o.Constraint && OutputTargets.HasWriteTarget(o) && o.Target.Mode === 'field');
         const entity = needsField && context.entityID ? context.provider.EntityByID(context.entityID) : undefined;
         return OutputConstraintResolver.Resolve(outputs, entity, (resolved) => LookupConstraintValues.Load(resolved, context.provider, context.contextUser));
     }
@@ -1353,6 +1360,9 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
      */
     protected async UpsertFeatureValues(params: FeatureValueWriteParams): Promise<RecordFeatureValuesOutcome | null> {
         if (params.Context.DryRun === true) {
+            if (!params.OmitValues) {
+                await this.PreviewFeatureValuesOf(params);
+            }
             return null;
         }
         if (!this.WritesHistory || !this.spec?.Outputs || this.spec.Outputs.length === 0 || !params.Context.recordProcessID || !params.Context.entityID) {
@@ -1365,6 +1375,60 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
             return null;
         }
         return this.WriteFeatureValues(params);
+    }
+
+    /**
+     * On a dry run, works out what the record's outputs with no write target would store and keeps it for
+     * {@link PreviewFeatureValues}: each one whose typed answer differs from the record's latest stored value
+     * (a Human value when there is one, else the Pipeline's), or that has none. A withheld output stores nothing, so it is omitted.
+     */
+    protected async PreviewFeatureValuesOf(params: FeatureValueWriteParams): Promise<void> {
+        const recordProcessID = params.Context.recordProcessID;
+        const entityID = params.Context.entityID;
+        const provider = params.Context.provider;
+        const targetless = (this.spec?.Outputs || []).filter((o) => !OutputTargets.HasWriteTarget(o));
+        if (!recordProcessID || !entityID || !provider || targetless.length === 0) {
+            return;
+        }
+        const withheld = new Set(InferProcessor.WithheldOutputsOf(params.Payload).map((w) => w.OutputName));
+        const previews: FeatureValuePreview[] = [];
+        for (const output of targetless.filter((o) => !withheld.has(o.Name))) {
+            const resolved = resolveMappingRef(output.Ref, { $: params.Payload });
+            const proposed = FeatureValueCacheService.ToTypedValue(resolved !== undefined ? resolved : null, output.Constraint?.Type);
+            const latest = await this.LatestStoredValue({
+                RecordProcessID: recordProcessID, EntityID: entityID, RecordID: params.Record.RecordID, FeatureName: output.Name,
+                ContextUser: params.Context.contextUser, Provider: provider,
+            });
+            const proposedValue = FeatureValueCacheService.NativeValueOf(proposed);
+            const previousValue = latest ? FeatureValueCacheService.NativeValueOf(latest) : null;
+            if (!latest || !InferProcessor.SameFeatureValue(previousValue, proposedValue)) {
+                previews.push({ FeatureName: output.Name, Previous: previousValue ?? null, Proposed: proposedValue });
+            }
+        }
+        if (previews.length > 0) {
+            this.featureValuePreviews.set(params.Record.RecordID, previews);
+        } else {
+            this.featureValuePreviews.delete(params.Record.RecordID);
+        }
+    }
+
+    /**
+     * The record's latest stored value of a feature: its Human value when it has one (a person's entry is what the
+     * pipeline answers against), else its Pipeline value; null when it has neither.
+     */
+    protected async LatestStoredValue(ref: FeatureValueRecordRef): Promise<TypedFeatureValue | null> {
+        const human = await FeatureValueCacheService.Instance.GetLatestValue({ ...ref, Source: 'Human' });
+        return human ?? FeatureValueCacheService.Instance.GetLatestValue({ ...ref, Source: 'Pipeline' });
+    }
+
+    /** Whether two native Feature Values are the same value (dates by instant, objects by content). */
+    private static SameFeatureValue(a: unknown, b: unknown): boolean {
+        return Canonicalize(a instanceof Date ? a.toISOString() : a) === Canonicalize(b instanceof Date ? b.toISOString() : b);
+    }
+
+    /** What the record's outputs with no write target would store on this dry-run batch; empty when none would change. */
+    public PreviewFeatureValues(recordID: string): FeatureValuePreview[] {
+        return this.featureValuePreviews.get(recordID) || [];
     }
 
     /** Writes one record's Feature Values now, on `params.Context.provider`, and keeps the values they replaced. */
@@ -1389,6 +1453,7 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
                 reasoning: params.Reasoning,
                 // `??` because 0 is a valid confidence
                 confidence: params.OutputConfidence?.[output.Name] ?? params.Confidence,
+                constraintType: output.Constraint?.Type,
             });
         }
 
@@ -1616,8 +1681,9 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
             const sources = { $: rawResult };
             const rawVal = resolveMappingRef(output.Ref, sources);
 
-            const target = output.Target;
-            const field = target.Mode === 'field'
+            // an output with no write target has no target field to take a type from
+            const target = OutputTargets.HasWriteTarget(output) ? output.Target : undefined;
+            const field = target?.Mode === 'field'
                 ? ctx.provider?.EntityByID(record.EntityID)?.Fields?.find(
                     (f) => f.Name.toLowerCase() === target.EntityFieldName.toLowerCase()
                 )
@@ -1724,7 +1790,10 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
         if (names.length === 0) {
             return undefined;
         }
-        const outputs = names.flatMap((n) => FindOutputByName(this.spec?.Outputs || [], n) || []);
+        const outputs = names.flatMap((n) => FindOutputByName(this.spec?.Outputs || [], n) || []).filter(OutputTargets.HasWriteTarget);
+        if (outputs.length === 0) {
+            return undefined;
+        }
         return {
             Fields: outputs.flatMap((o) => (o.Target.Mode === 'field' ? [o.Target.EntityFieldName] : [])),
             ChildEntities: outputs.flatMap((o) => (o.Target.Mode === 'child' ? [o.Target.EntityName] : [])),
