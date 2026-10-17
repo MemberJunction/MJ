@@ -15,10 +15,10 @@
 import { AgentRunner } from '@memberjunction/ai-agents';
 import { ChatMessageRole } from '@memberjunction/ai';
 import { AIEngine } from '@memberjunction/aiengine';
-import { IRunViewProvider, LogError, RunView } from '@memberjunction/core';
+import { LogError, RunView } from '@memberjunction/core';
 import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended } from '@memberjunction/ai-core-plus';
 import type { AgentExecutionProgressCallback } from '@memberjunction/ai-core-plus';
-import { IsValidUUID, UUIDsEqual } from '@memberjunction/global';
+import { IsValidUUID } from '@memberjunction/global';
 import type { TaskAgentRunner, TaskAgentRunParams, TaskAgentRunResult } from '@memberjunction/task-graph';
 
 /** Maximum number of ancestor `ParentRunID` hops to walk when reconstructing `parentAgentHierarchy`. */
@@ -152,7 +152,7 @@ export class TaskGraphAgentRunner implements TaskAgentRunner {
         }
 
         const leafToRootNames: string[] = [];
-        const submittingAgentName = this.resolveAgentName(parentRun.Agent, parentRun.AgentID);
+        const submittingAgentName = parentRun.Agent?.trim();
         if (submittingAgentName) {
             leafToRootNames.push(submittingAgentName);
         }
@@ -171,7 +171,7 @@ export class TaskGraphAgentRunner implements TaskAgentRunner {
 
             hops++;
             try {
-                const rv = new RunView(params.Provider as unknown as IRunViewProvider);
+                const rv = RunView.FromMetadataProvider(params.Provider);
                 const rvResult = await rv.RunView<AncestorRunRow>(
                     {
                         EntityName: 'MJ: AI Agent Runs',
@@ -208,20 +208,6 @@ export class TaskGraphAgentRunner implements TaskAgentRunner {
         }
 
         return leafToRootNames.length > 0 ? leafToRootNames.reverse() : undefined;
-    }
-
-    private resolveAgentName(agentName: string | null | undefined, agentId?: string | null): string | undefined {
-        const trimmed = agentName?.trim();
-        if (trimmed) {
-            return trimmed;
-        }
-        if (agentId) {
-            const fromEngine = AIEngine.Instance.Agents?.find((a) => UUIDsEqual(a.ID, agentId))?.Name?.trim();
-            if (fromEngine) {
-                return fromEngine;
-            }
-        }
-        return undefined;
     }
 
     /**

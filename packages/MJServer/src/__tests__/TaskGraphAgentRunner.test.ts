@@ -26,6 +26,7 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
         ...actual,
         LogError: (...args: unknown[]) => mockLogError(...args),
         RunView: class {
+            static FromMetadataProvider = () => ({ RunView: mockRunView });
             RunView = mockRunView;
         },
     };
