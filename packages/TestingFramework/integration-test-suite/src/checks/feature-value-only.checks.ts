@@ -47,8 +47,10 @@ class FeatureValueOnlyBundle {
     public static Records: Array<{ ID: string; Name: string }> = [];
     /** The Feature Value count after the real run (FV4 compares against it). */
     public static StoredAfterRealRun = 0;
+    /** Each bundle record's `__mj_UpdatedAt` (ms) at setup: the pipeline has no targets, so it must never change. */
+    public static UpdatedAtAtSetup = new Map<string, number>();
 
-    /** The Feature Value count before the dry run is not needed: the pipeline starts empty, so the dry run must leave 0. */
+    /** The record the stub answers with a low `ScoreConfidence`, so its `Score` is withheld. */
     public static get LowConfidence(): { ID: string; Name: string } {
         return FeatureValueOnlyBundle.Records[2];
     }
@@ -62,6 +64,7 @@ class FeatureValueOnlyBundle {
             throw new Error('MJ: Entities is not in the metadata');
         }
         FeatureValueOnlyBundle.Records = await FeatureValueOnlyBundle.PickRecords(ctx);
+        FeatureValueOnlyBundle.UpdatedAtAtSetup = await FeatureValueOnlyBundle.ReadUpdatedAt(ctx);
         await F.CreateStubPipeline(ctx, {
             Name: FeatureValueOnlyBundle.NAME,
             TypeName: FeatureValueOnlyBundle.TYPE_NAME,
@@ -73,10 +76,9 @@ class FeatureValueOnlyBundle {
             },
             Model: { ModelID: await FeatureValueOnlyBundle.FirstLLM(ctx), VendorID: null },
             Spec: FeatureValueOnlyBundle.Spec(),
-            // The runs hand the executor an explicit records scope, so the filter only has to admit those rows. The mapping is
-            // what the pipeline builder saves for a pipeline with no targets (no field maps); it is what makes the executor wrap
-            // the processor in the write-back, which carries the dry-run preview.
-            RecordProcess: { CategoryID: null, ScopeFilter: '1=1', OutputMapping: JSON.stringify({ fields: {} }), WatermarkStrategy: 'Checksum' },
+            // The runs hand the executor an explicit records scope, so the filter only has to admit those rows. No OutputMapping:
+            // the executor wraps the processor in the write-back because an output has no write target, which carries the dry-run preview.
+            RecordProcess: { CategoryID: null, ScopeFilter: '1=1', OutputMapping: null, WatermarkStrategy: 'Checksum' },
         });
         const table = FeaturePipelineGateStubTable.Instance;
         table.Clear();
@@ -114,6 +116,24 @@ class FeatureValueOnlyBundle {
             throw new Error(`MJ: Entities has fewer than three rows${res.Success ? '' : `: ${res.ErrorMessage}`}`);
         }
         return rows.map((r) => ({ ID: r.ID, Name: r.Name }));
+    }
+
+    /** The bundle records' `__mj_UpdatedAt` in ms, by record ID (read past the cache). */
+    public static async ReadUpdatedAt(ctx: IntegrationCheckContext): Promise<Map<string, number>> {
+        const ids = FeatureValueOnlyBundle.Records.map((r) => `'${EscapeSQLString(r.ID)}'`).join(',');
+        const res = await RunView.FromMetadataProvider(ctx.Provider).RunView<{ ID: string; __mj_UpdatedAt: Date | string }>({
+            EntityName: 'MJ: Entities', Fields: ['ID', '__mj_UpdatedAt'], ResultType: 'simple', BypassCache: true, ExtraFilter: `ID IN (${ids})`,
+        }, ctx.User);
+        Assert(res.Success, `reading the MJ: Entities rows: ${res.ErrorMessage}`);
+        return new Map((res.Results || []).map((x) => [x.ID.toLowerCase(), new Date(x.__mj_UpdatedAt).getTime()]));
+    }
+
+    /** Asserts the processed `MJ: Entities` rows were not written (their `__mj_UpdatedAt` is what Setup recorded). */
+    public static async AssertRecordsUntouched(ctx: IntegrationCheckContext): Promise<void> {
+        const now = await FeatureValueOnlyBundle.ReadUpdatedAt(ctx);
+        for (const rec of FeatureValueOnlyBundle.Records) {
+            AssertEqual(now.get(rec.ID.toLowerCase()), FeatureValueOnlyBundle.UpdatedAtAtSetup.get(rec.ID.toLowerCase()), `${rec.Name} __mj_UpdatedAt unchanged`);
+        }
     }
 
     /** Deletes the bundle's pipeline and everything hanging off it, and restores the shared stub table. Never throws. */
@@ -253,10 +273,14 @@ export const FeatureValueOnlyChecks: NamedCheck[] = [
             for (const rec of B.Records) {
                 AssertEqual(B.ValueOf(stored, rec.ID, 'Label')?.ValueText, 'A', `${rec.Name} Label ValueText`);
                 AssertEqual(B.ValueOf(stored, rec.ID, 'Flag')?.ValueBoolean, true, `${rec.Name} Flag ValueBoolean`);
-                if (!UUIDsEqual(rec.ID, B.LowConfidence.ID)) {
+                if (UUIDsEqual(rec.ID, B.LowConfidence.ID)) {
+                    const score = B.ValueOf(stored, rec.ID, 'Score');
+                    Assert(!score || (score.ValueNumeric == null && score.ValueText == null), `${rec.Name} withheld Score holds no value`);
+                } else {
                     AssertEqual(Number(B.ValueOf(stored, rec.ID, 'Score')?.ValueNumeric), 0.75, `${rec.Name} Score ValueNumeric`);
                 }
             }
+            await B.AssertRecordsUntouched(ctx);
             B.StoredAfterRealRun = stored.length;
             const details = await B.Details(ctx, run);
             AssertEqual(details.filter((d) => d.Status === 'Succeeded').length, B.Records.length, 'every detail Succeeded');
@@ -271,6 +295,7 @@ export const FeatureValueOnlyChecks: NamedCheck[] = [
             AssertEqual(summary.Unchanged, B.Records.length, 'every record unchanged');
             AssertEqual(summary.Upserted, 0, 'none upserted');
             AssertEqual((await B.Stored(ctx)).length, B.StoredAfterRealRun, 'no new Feature Values');
+            await B.AssertRecordsUntouched(ctx);
         },
     },
     {

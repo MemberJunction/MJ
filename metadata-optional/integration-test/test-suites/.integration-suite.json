@@ -1232,7 +1232,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT126 - Feature Value Only Outputs",
-            "Sequence": 50,
+            "Sequence": 77,
             "Status": "Active"
           },
           "primaryKey": {
