@@ -6,6 +6,7 @@
       "ParentID": "@lookup:MJ: Artifact Types.Name=JSON",
       "ContentType": "application/vnd.mj.video-production+json",
       "ExtractRules": "@file:extract-rules/video-production.json",
+      "DriverClass": "VideoProductionViewerPlugin",
       "IsEnabled": true,
       "Icon": "fa-solid fa-clapperboard"
     },

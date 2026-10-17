@@ -538,7 +538,7 @@ import {
     MJRecordProcessEntityExtended,
 } from '@memberjunction/feature-pipelines';
 
-// @memberjunction/ng-artifacts (14 classes)
+// @memberjunction/ng-artifacts (15 classes)
 import {
     AudioArtifactViewerComponent,
     CodeArtifactViewerComponent,
@@ -553,6 +553,7 @@ import {
     PdfArtifactViewerComponent,
     SvgArtifactViewerComponent,
     VideoArtifactViewerComponent,
+    VideoProductionViewerComponent,
     XlsxArtifactViewerComponent,
 } from '@memberjunction/ng-artifacts';
 
@@ -1229,6 +1230,7 @@ const CLASS_REGISTRATIONS_2: any[] = [
     PdfArtifactViewerComponent,
     SvgArtifactViewerComponent,
     VideoArtifactViewerComponent,
+    VideoProductionViewerComponent,
     XlsxArtifactViewerComponent,
     MJAuth0Provider,
     MJCognitoProvider,
@@ -1328,11 +1330,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MLModelFormPolicy,
     ProjectHierarchyPanel,
     QueryCategoryHierarchyPanel,
-    RecordProcessCategoryHierarchyPanel,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    RecordProcessCategoryHierarchyPanel,
     RecordProcessFormComponentExtended,
     RecordProcessFormPolicy,
     RubricAuthorPanel,
@@ -1368,7 +1370,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 621;
+export const CLASS_REGISTRATIONS_COUNT = 622;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

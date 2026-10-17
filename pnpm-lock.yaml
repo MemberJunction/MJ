@@ -6490,6 +6490,9 @@ importers:
       '@memberjunction/ng-ui-components':
         specifier: 6.2.0-edge.4
         version: link:../ui-components
+      '@memberjunction/video-studio-core':
+        specifier: 6.2.0-edge.4
+        version: link:../../../AI/VideoStudio/Core
       ag-grid-angular:
         specifier: ^35.0.1
         version: 35.0.1(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))

@@ -1,0 +1,101 @@
+:host {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow-y: auto;
+  background: var(--mj-bg-surface);
+  color: var(--mj-text-primary);
+}
+
+.vp-viewer {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px;
+}
+
+.vp-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--mj-border-default);
+}
+
+.vp-header__titles {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 240px;
+}
+
+.vp-header__title {
+  margin: 0;
+  font-size: var(--mj-text-lg);
+  font-weight: var(--mj-font-semibold);
+  color: var(--mj-text-primary);
+}
+
+.vp-header__one-sentence {
+  margin: 0;
+  font-size: var(--mj-text-sm);
+  color: var(--mj-text-secondary);
+}
+
+.vp-header__badges {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.vp-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--mj-radius-full);
+  font-size: var(--mj-text-xs);
+  font-weight: var(--mj-font-medium);
+  background: var(--mj-bg-surface-sunken);
+  color: var(--mj-text-secondary);
+  border: 1px solid var(--mj-border-subtle);
+}
+
+.vp-badge--data {
+  background: var(--mj-status-info-bg);
+  color: var(--mj-status-info-text);
+  border-color: var(--mj-status-info-border);
+}
+
+.vp-badge--status[data-status='Approved'] {
+  background: var(--mj-status-success-bg);
+  color: var(--mj-status-success-text);
+  border-color: var(--mj-status-success-border);
+}
+
+.vp-badge--status[data-status='Failed'] {
+  background: var(--mj-status-error-bg);
+  color: var(--mj-status-error-text);
+  border-color: var(--mj-status-error-border);
+}
+
+.vp-badge--duration {
+  font-family: var(--mj-font-mono);
+}
+
+.vp-format-switcher {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.vp-stage {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
