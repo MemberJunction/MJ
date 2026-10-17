@@ -723,6 +723,8 @@ export interface VideoDefect {
     Fix: string;
     /** Resolution state of the defect ('Open', 'Fixed', or 'Deferred'). */
     Status: DefectStatus;
+    /** Optional key in `Assets.Approved` implicated by the defect (triggers targeted asset regeneration in Pre-Production). */
+    AssetKey?: string;
 }
 
 /**

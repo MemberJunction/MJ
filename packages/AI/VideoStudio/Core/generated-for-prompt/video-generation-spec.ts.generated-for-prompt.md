@@ -365,6 +365,7 @@ interface VideoDefect {
     Evidence: string;  // What the Critic or deterministic check observed in the rendered frame.
     Fix: string;  // Specific, local adjustment instructed for the Motion Engineer.
     Status: DefectStatus;  // Resolution state of the defect ('Open', 'Fixed', or 'Deferred').
+    AssetKey?: string;  // Optional key in `Assets.Approved` implicated by the defect (triggers targeted asset regeneration...
 }
 
 interface CriticRound {

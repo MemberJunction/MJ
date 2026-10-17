@@ -159,3 +159,25 @@ export {
     REFERENCE_ANALYSIS_PROMPT_NAME,
     VideoStudioArtDirectorAgent,
 } from './agents/art-director-agent.js';
+
+export {
+    BuildBeatsTable,
+    BuildBoundValuesTable,
+    BuildRepairBrief,
+    BuildRubricCriteriaText,
+    BuildTimelineTable,
+    PickSheetsForCall,
+} from './review/critic-input.js';
+
+export {
+    ComposeHumanReviewNotes,
+} from './review/human-review-notes.js';
+
+export {
+    LoadVideoStudioCriticAgent,
+    MISSING_CRITIC_RUBRIC_ERROR_MESSAGE,
+    VideoStudioCriticAgent,
+    type CriticPromptCriterionScore,
+    type CriticPromptOutput,
+} from './agents/critic-agent.js';
+
