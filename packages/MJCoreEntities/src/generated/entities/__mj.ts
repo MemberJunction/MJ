@@ -2452,7 +2452,7 @@ export const MJAIAgentRunStepSchema = z.object({
         * * Field Name: PayloadAtEnd
         * * Display Name: Payload At End
         * * SQL Data Type: nvarchar(MAX)
-        * * Description: JSON serialization of the Payload state at the end of this step`),
+        * * Description: JSON serialization of the Payload state at the end of this step. NULL when PayloadAtEndSourceStepID is set; the ending payload is then the PayloadAtEnd of that step.`),
     FinalPayloadValidationResult: z.union([z.literal('Fail'), z.literal('Fail'), z.literal('Pass'), z.literal('Pass'), z.literal('Retry'), z.literal('Retry'), z.literal('Warn'), z.literal('Warn')]).nullable().describe(`
         * * Field Name: FinalPayloadValidationResult
         * * Display Name: Validation Result
@@ -2525,6 +2525,12 @@ detailed information about what validation rules failed.`),
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Agent Run Steps (vwAIAgentRunSteps.ID)
         * * Description: When set, PayloadAtStart is not stored on this row because it equals the PayloadAtEnd of the referenced step in the same run. Read that step's PayloadAtEnd to get this step's starting payload.`),
+    PayloadAtEndSourceStepID: z.string().nullable().describe(`
+        * * Field Name: PayloadAtEndSourceStepID
+        * * Display Name: Payload At End Source Step ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agent Run Steps (vwAIAgentRunSteps.ID)
+        * * Description: When set, PayloadAtEnd is not stored on this row because it equals the PayloadAtEnd of the referenced step in the same run. Read that step's PayloadAtEnd to get this step's ending payload.`),
     AgentRun: z.string().nullable().describe(`
         * * Field Name: AgentRun
         * * Display Name: Agent Run Context
@@ -2536,6 +2542,10 @@ detailed information about what validation rules failed.`),
     PayloadAtStartSourceStep: z.string().nullable().describe(`
         * * Field Name: PayloadAtStartSourceStep
         * * Display Name: Payload At Start Source Step
+        * * SQL Data Type: nvarchar(255)`),
+    PayloadAtEndSourceStep: z.string().nullable().describe(`
+        * * Field Name: PayloadAtEndSourceStep
+        * * Display Name: Payload At End Source Step
         * * SQL Data Type: nvarchar(255)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
@@ -45488,7 +45498,7 @@ export class MJAIAgentRunStepEntity extends BaseEntity<MJAIAgentRunStepEntityTyp
     * * Field Name: PayloadAtEnd
     * * Display Name: Payload At End
     * * SQL Data Type: nvarchar(MAX)
-    * * Description: JSON serialization of the Payload state at the end of this step
+    * * Description: JSON serialization of the Payload state at the end of this step. NULL when PayloadAtEndSourceStepID is set; the ending payload is then the PayloadAtEnd of that step.
     */
     get PayloadAtEnd(): string | null {
         return this.Get('PayloadAtEnd');
@@ -45665,6 +45675,20 @@ detailed information about what validation rules failed.
     }
 
     /**
+    * * Field Name: PayloadAtEndSourceStepID
+    * * Display Name: Payload At End Source Step ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Run Steps (vwAIAgentRunSteps.ID)
+    * * Description: When set, PayloadAtEnd is not stored on this row because it equals the PayloadAtEnd of the referenced step in the same run. Read that step's PayloadAtEnd to get this step's ending payload.
+    */
+    get PayloadAtEndSourceStepID(): string | null {
+        return this.Get('PayloadAtEndSourceStepID');
+    }
+    set PayloadAtEndSourceStepID(value: string | null) {
+        this.Set('PayloadAtEndSourceStepID', value);
+    }
+
+    /**
     * * Field Name: AgentRun
     * * Display Name: Agent Run Context
     * * SQL Data Type: nvarchar(255)
@@ -45689,6 +45713,15 @@ detailed information about what validation rules failed.
     */
     get PayloadAtStartSourceStep(): string | null {
         return this.Get('PayloadAtStartSourceStep');
+    }
+
+    /**
+    * * Field Name: PayloadAtEndSourceStep
+    * * Display Name: Payload At End Source Step
+    * * SQL Data Type: nvarchar(255)
+    */
+    get PayloadAtEndSourceStep(): string | null {
+        return this.Get('PayloadAtEndSourceStep');
     }
 
     /**
@@ -89353,6 +89386,18 @@ export class MJEncryptionKeyEntity extends BaseEntity<MJEncryptionKeyEntityType>
  *
  * @see guides/FORMS_ARCHITECTURE_GUIDE.md §7d
  */
+/**
+ * Controls which columns a save operation (`spCreate` / `spUpdate` and provider save wrappers)
+ * returns from the database:
+ * - `'full'` (default): Re-queries `SELECT * FROM <BaseView>` after `INSERT`/`UPDATE` so all
+ *   columns (including virtual/joined columns) are returned from the database.
+ * - `'datestamps_only'`: Returns only the primary key column(s) plus `__mj_CreatedAt` and
+ *   `__mj_UpdatedAt` (when present on the entity) directly from `<BaseTable>`, avoiding the
+ *   expensive `BaseView` JOINs and large column reads while still returning exact DB-generated
+ *   keys and timestamps for optimistic concurrency / inconsistency checks.
+ */
+export type MJEntityEntity_EntitySaveReturnMode = 'full' | 'datestamps_only';
+
 export interface MJEntityEntity_IEntityConfiguration {
     /**
      * Presentation / chrome. Null = host defaults (`Layout: auto`,
@@ -89373,6 +89418,14 @@ export interface MJEntityEntity_IEntityConfiguration {
      * policy says Deep, unless NotCloneable is true.
      */
     Clone?: MJEntityEntity_IEntityCloneConfiguration;
+
+    /**
+     * Controls which columns a save operation (`spCreate` / `spUpdate`) returns from the database.
+     * - `'full'` (default when omitted): Re-queries `SELECT * FROM <BaseView>` after `INSERT`/`UPDATE`.
+     * - `'datestamps_only'`: Selects only the primary key(s) and `__mj_CreatedAt`/`__mj_UpdatedAt`
+     *   directly from `<BaseTable>`, preserving in-memory field values on the saved entity.
+     */
+    SaveReturnMode?: MJEntityEntity_EntitySaveReturnMode;
 }
 
 /**

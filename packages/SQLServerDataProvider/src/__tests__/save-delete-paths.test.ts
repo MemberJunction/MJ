@@ -725,3 +725,79 @@ describe('SQLServerDataProvider Record Change text is sent as Unicode (N\'…\')
     expect(sql).toContain(`@ChangesDescription=N'Name changed to ${UNICODE_NAME}'`);
   });
 });
+
+describe("SQLServerDataProvider SaveReturnMode ('datestamps_only')", () => {
+  beforeEach(() => {
+    mssqlState.Reset();
+  });
+
+  it('declares @ResultTable with only PK + datestamps when EntityInfo.SaveReturnMode is datestamps_only and merges returned values onto entity state', async () => {
+    const provider = makeProvider();
+    provider.SetTestEntities([makeRecordChangesEntityInfo()]);
+    const entityInfo = makeWidgetEntityInfo({ trackRecordChanges: true, saveReturnMode: 'datestamps_only' });
+    const entity = makeNewWidgetEntity(entityInfo, TEST_USER);
+    entity.Set('ID', 'w-ds-01');
+    entity.Set('Name', 'High-Volume Step');
+    entity.Set('Description', 'Large JSON payload');
+    entity.Set('IsActive', true);
+
+    const createdAt = new Date('2026-04-17T10:00:00.000Z');
+    const updatedAt = new Date('2026-04-17T10:00:00.000Z');
+    mssqlState.QueueResult({
+      rows: [{ ID: 'w-ds-01', __mj_CreatedAt: createdAt, __mj_UpdatedAt: updatedAt }],
+    });
+
+    const result = await provider.Save(entity, TEST_USER, new EntitySaveOptions());
+
+    const sql = mssqlState.Queries[0].sql;
+    // @ResultTable contains ONLY ID, __mj_CreatedAt, __mj_UpdatedAt — NOT Name, Description, CategoryName
+    expect(sql).toContain('DECLARE @ResultTable TABLE');
+    expect(sql).toContain('[ID] uniqueidentifier NOT NULL');
+    expect(sql).toContain('[__mj_CreatedAt] datetimeoffset NOT NULL');
+    expect(sql).toContain('[__mj_UpdatedAt] datetimeoffset NOT NULL');
+    expect(sql).not.toContain('[Name] nvarchar(100) NOT NULL');
+    expect(sql).not.toContain('[CategoryName] nvarchar(100) NULL');
+    expect(sql).toContain('SELECT [ID], [__mj_CreatedAt], [__mj_UpdatedAt] FROM @ResultTable;');
+
+    // Returned row merges the DB's ID + datestamps onto the entity's in-memory fields
+    expect(result).toMatchObject({
+      ID: 'w-ds-01',
+      Name: 'High-Volume Step',
+      Description: 'Large JSON payload',
+      IsActive: true,
+      __mj_CreatedAt: createdAt,
+      __mj_UpdatedAt: updatedAt,
+    });
+  });
+
+  it('projects only PK + datestamps from @ResultTable when per-save options.SaveReturnMode is datestamps_only on a full entity', async () => {
+    const provider = makeProvider();
+    provider.SetTestEntities([makeRecordChangesEntityInfo()]);
+    const entityInfo = makeWidgetEntityInfo({ trackRecordChanges: true, saveReturnMode: 'full' });
+    const entity = makeSavedWidgetEntity(entityInfo, TEST_USER);
+    entity.Set('Name', 'Delta Updated Name');
+
+    const createdAt = new Date('2025-01-01T00:00:00.000Z');
+    const updatedAt = new Date('2026-04-17T11:30:00.000Z');
+    mssqlState.QueueResult({
+      rows: [{ ID: 'w-0001', __mj_CreatedAt: createdAt, __mj_UpdatedAt: updatedAt }],
+    });
+
+    const saveOpts = new EntitySaveOptions();
+    saveOpts.SaveReturnMode = 'datestamps_only';
+    const result = await provider.Save(entity, TEST_USER, saveOpts);
+
+    const sql = mssqlState.Queries[0].sql;
+    // The stored procedure returns all view columns so @ResultTable still declares all columns,
+    // while the final SELECT projects only [ID], [__mj_CreatedAt], [__mj_UpdatedAt] over the wire.
+    expect(sql).toContain('[Name] nvarchar(100) NOT NULL');
+    expect(sql).toContain('SELECT [ID], [__mj_CreatedAt], [__mj_UpdatedAt] FROM @ResultTable;');
+    expect(result).toMatchObject({
+      ID: 'w-0001',
+      Name: 'Delta Updated Name',
+      __mj_CreatedAt: createdAt,
+      __mj_UpdatedAt: updatedAt,
+    });
+  });
+});
+
