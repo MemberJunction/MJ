@@ -77,7 +77,8 @@ npm install @memberjunction/ai-core-plus
 
 | Type / Class | Purpose |
 |---|---|
-| `ExecuteAgentParams` | Parameters for agent execution: agent reference, messages, conversation context, user scope, configuration presets, effort level, action changes, and callbacks |
+| `ExecuteAgentParams` | Parameters for agent execution: agent reference, messages, conversation context, user scope, configuration presets, effort level, action changes, root-tree cumulative budgets (`treeBudget`, `maxTreeSteps`, `maxTreeTokens`, `maxTreeCost`, `maxTreeDurationMs`), and callbacks |
+| `AgentTreeBudget` | Shared cumulative budget state (`maxTreeSteps`, `maxTreeTokens`, `maxTreeCost`, `maxTreeDurationMs`, `totalSteps`, `totalTokens`, `totalCost`, `startedAtMs`, `breachedReason`) propagated by reference across root and sub-agent execution trees |
 | `ExecuteAgentResult` | Agent execution result with success status, output messages, actions performed, sub-agent requests, and model selection info |
 | `AgentContextData` | Contextual data injected into agent prompts (notes, examples, data sources) |
 | `AgentConfiguration` | Runtime configuration for an agent run (model overrides, effort level, max iterations) |

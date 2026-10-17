@@ -196,13 +196,35 @@ export class AgentRunner {
                 throw new Error(`Failed to create agent instance for driver class: ${driverClass}`);
             }
             
+            // Ensure caller params carries the shared AgentTreeBudget reference before any shallow
+            // clone occurs in hydrateConversationArtifacts or Execute.
+            if (!params.treeBudget) {
+                params.treeBudget = {
+                    maxTreeSteps: params.maxTreeSteps,
+                    maxTreeTokens: params.maxTreeTokens,
+                    maxTreeCost: params.maxTreeCost,
+                    maxTreeDurationMs: params.maxTreeDurationMs,
+                    totalSteps: 0,
+                    totalTokens: 0,
+                    totalCost: 0,
+                    startedAtMs: Date.now()
+                };
+            }
+
             // A conversation-linked run must see the conversation's artifacts no matter which
             // entry point the caller used. See hydrateConversationArtifacts for why.
             const runParams = await this.hydrateConversationArtifacts(params);
+            runParams.treeBudget = params.treeBudget;
 
             // Execute the agent and return the result directly, threading the isolated provider.
             // Favor provider already in params (caller-supplied) over the instance-level provider.
-            return await agentInstance.Execute({ ...runParams, provider: runParams.provider || this._provider } as ExecuteAgentParams<any>) as ExecuteAgentResult<R>;
+            try {
+                return await agentInstance.Execute({ ...runParams, provider: runParams.provider || this._provider }) as ExecuteAgentResult<R>;
+            } finally {
+                if (agentInstance.TreeBudget) {
+                    params.treeBudget = agentInstance.TreeBudget;
+                }
+            }
             
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
