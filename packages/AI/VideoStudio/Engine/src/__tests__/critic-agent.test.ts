@@ -5,7 +5,10 @@ import type {
     ExecuteAgentParams,
 } from '@memberjunction/ai-core-plus';
 import type { ChatMessageContentBlock } from '@memberjunction/ai';
-import type { VideoGenerationSpec } from '@memberjunction/video-studio-core';
+import type {
+    DefectSeverity,
+    VideoGenerationSpec,
+} from '@memberjunction/video-studio-core';
 
 const {
     mockReadStoredFile,
@@ -14,6 +17,7 @@ const {
     mockGetAgentRubrics,
     mockGetLatestPublishedVersion,
     mockPrompts,
+    mockGetConfigurationParamsWithInheritance,
 } = vi.hoisted(() => ({
     mockReadStoredFile: vi.fn(),
     mockLoadDataSnapshotValues: vi.fn(),
@@ -26,12 +30,16 @@ const {
             Name: 'Video Studio - Critic',
         },
     ],
+    mockGetConfigurationParamsWithInheritance: vi.fn(() => []),
 }));
 
 vi.mock('@memberjunction/ai-agents', () => ({
     BaseAgent: class MockBaseAgent {
         protected AgentRun: { ErrorMessage?: string } | null = {};
         protected ProviderToUse: unknown = undefined;
+        protected formatHierarchicalMessage(msg: string): string {
+            return msg;
+        }
         protected async createStepEntity(): Promise<{ ID: string; TargetLogID?: string }> {
             return { ID: 'step-1' };
         }
@@ -47,19 +55,24 @@ vi.mock('@memberjunction/aiengine', () => ({
             get Prompts() {
                 return mockPrompts;
             },
+            GetConfigurationParamsWithInheritance: mockGetConfigurationParamsWithInheritance,
         },
     },
 }));
 
-vi.mock('@memberjunction/rubrics-base', () => ({
-    RubricEngineBase: {
-        Instance: {
-            Config: mockRubricConfig,
-            GetAgentRubrics: mockGetAgentRubrics,
-            GetLatestPublishedVersion: mockGetLatestPublishedVersion,
+vi.mock('@memberjunction/rubrics-base', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/rubrics-base')>();
+    return {
+        ...actual,
+        RubricEngineBase: {
+            Instance: {
+                Config: mockRubricConfig,
+                GetAgentRubrics: mockGetAgentRubrics,
+                GetLatestPublishedVersion: mockGetLatestPublishedVersion,
+            },
         },
-    },
-}));
+    };
+});
 
 vi.mock('../storage.js', async (importOriginal) => {
     const actual = await importOriginal<typeof import('../storage.js')>();
@@ -82,6 +95,7 @@ import {
     VideoStudioCriticAgent,
     type CriticPromptOutput,
 } from '../agents/critic-agent.js';
+import { VideoStudioAgent } from '../agents/video-studio-agent.js';
 import { CreateDeliveredSpecFixture } from './fixtures/delivered-spec.fixture.js';
 
 const RUBRIC_ID = 'rubric-vpq-001';
@@ -261,12 +275,12 @@ describe('VideoStudioCriticAgent', () => {
                     },
                 ],
                 Scores: {
-                    OverallScore: 70,
-                    MaxScore: 100,
+                    OverallScore: 0.5,
+                    MaxScore: 1,
                     Passed: false,
                     Criteria: [
-                        { Key: 'text-legibility', Score: 60, Passed: false },
-                        { Key: 'generated-assets-are-honest-and-disclosed', Score: 100, Passed: true },
+                        { Key: 'text-legibility', Level: 'Miss', Score: 0, Passed: false },
+                        { Key: 'generated-assets-are-honest-and-disclosed', Level: 'Meets', Score: 1, Passed: true },
                     ],
                 },
             },
@@ -286,12 +300,12 @@ describe('VideoStudioCriticAgent', () => {
                     },
                 ],
                 Scores: {
-                    OverallScore: 90,
-                    MaxScore: 100,
+                    OverallScore: 1,
+                    MaxScore: 1,
                     Passed: true,
                     Criteria: [
-                        { Key: 'text-legibility', Score: 85, Passed: true },
-                        { Key: 'generated-assets-are-honest-and-disclosed', Score: 95, Passed: true },
+                        { Key: 'text-legibility', Level: 'Meets', Score: 1, Passed: true },
+                        { Key: 'generated-assets-are-honest-and-disclosed', Level: 'Meets', Score: 1, Passed: true },
                     ],
                 },
             },
@@ -345,14 +359,14 @@ describe('VideoStudioCriticAgent', () => {
         expect(r1.Defects[3].Key).toBe('r1-9:16-1');
         expect(r1.Defects.every((d) => d.Status === 'Open')).toBe(true);
 
-        // Scores: lowest per criterion across formats; Passed only if passed in all formats
+        // Scores: worst per criterion across formats via RubricScoring.Compute
         const scores = finalStep.newPayload?.Review?.Scores;
         expect(scores?.RubricID).toBe(RUBRIC_ID);
-        expect(scores?.OverallScore).toBe(80);
-        expect(scores?.MaxScore).toBe(100);
+        expect(scores?.OverallScore).toBe(0.5);
+        expect(scores?.MaxScore).toBe(1);
         expect(scores?.Passed).toBe(false);
         const legibility = scores?.Criteria.find((c) => c.Criterion === 'text-legibility');
-        expect(legibility?.Score).toBe(60);
+        expect(legibility?.Score).toBe(0);
         expect(legibility?.Passed).toBe(false);
     });
 
@@ -406,7 +420,7 @@ describe('VideoStudioCriticAgent', () => {
                         Fix: 'Increase padding',
                     },
                 ],
-                Scores: { OverallScore: 80, MaxScore: 100, Passed: false, Criteria: [] },
+                Scores: { OverallScore: 0.5, MaxScore: 1, Passed: false, Criteria: [] },
             },
         });
 
@@ -453,7 +467,7 @@ describe('VideoStudioCriticAgent', () => {
                         AssetKey: 'non_existent_asset_key_999',
                     },
                 ],
-                Scores: { OverallScore: 50, MaxScore: 100, Passed: false, Criteria: [] },
+                Scores: { OverallScore: 0.5, MaxScore: 1, Passed: false, Criteria: [] },
             },
         });
 
@@ -517,7 +531,15 @@ describe('VideoStudioCriticAgent', () => {
             result: {
                 Summary: 'Clean pass',
                 Defects: [],
-                Scores: { OverallScore: 95, MaxScore: 100, Passed: true, Criteria: [] },
+                Scores: {
+                    OverallScore: 1,
+                    MaxScore: 1,
+                    Passed: true,
+                    Criteria: [
+                        { Key: 'text-legibility', Level: 'Meets' },
+                        { Key: 'generated-assets-are-honest-and-disclosed', Level: 'Meets' },
+                    ],
+                },
             },
         });
 
@@ -531,6 +553,205 @@ describe('VideoStudioCriticAgent', () => {
         expect(finalStep.newPayload?.Review?.Gates).toEqual(originalGates);
         expect(finalStep.newPayload?.Beats).toEqual(originalBeats);
         expect(finalStep.newPayload?.Review?.Rounds).toHaveLength(2);
-        expect(finalStep.newPayload?.Review?.Scores?.OverallScore).toBe(95);
+        expect(finalStep.newPayload?.Review?.Scores?.OverallScore).toBe(1);
+    });
+
+    it('(7) resolves maxRounds from ResolveVideoStudioSettings(configId).MaxRepairRounds + 1 regardless of payload Interaction.MaxRepairRounds', async () => {
+        mockGetConfigurationParamsWithInheritance.mockReturnValue([
+            { Name: 'VideoStudio.MaxRepairRounds', Value: '3', Type: 'number' },
+        ]);
+
+        const specWithOverride = CreateDeliveredSpecFixture();
+        specWithOverride.Deliverables.Formats = ['16:9'];
+        specWithOverride.Interaction = { Mode: 'Autonomous', MaxRepairRounds: 9 };
+
+        const agent1 = new TestableCriticAgent();
+        agent1.EnqueuePromptOutcome({
+            success: true,
+            result: { Summary: 'Pass', Defects: [] },
+        });
+        await agent1.RunForTest({
+            agent: { ID: 'critic-id', ParentID: 'root-id' },
+            payload: specWithOverride,
+        } as unknown as ExecuteAgentParams<Partial<VideoGenerationSpec>>);
+
+        expect(agent1.ExecutedPromptCalls[0].data.maxRounds).toBe(4);
+
+        const specWithoutInteraction = CreateDeliveredSpecFixture();
+        specWithoutInteraction.Deliverables.Formats = ['16:9'];
+        delete specWithoutInteraction.Interaction;
+
+        const agent2 = new TestableCriticAgent();
+        agent2.EnqueuePromptOutcome({
+            success: true,
+            result: { Summary: 'Pass', Defects: [] },
+        });
+        await agent2.RunForTest({
+            agent: { ID: 'critic-id', ParentID: 'root-id' },
+            payload: specWithoutInteraction,
+        } as unknown as ExecuteAgentParams<Partial<VideoGenerationSpec>>);
+
+        expect(agent2.ExecutedPromptCalls[0].data.maxRounds).toBe(4);
+    });
+
+    it('(8) normalizes severity case-insensitively and maps unknown severities to Major so G5 fails on ApplyStageResult', async () => {
+        const spec = CreateDeliveredSpecFixture();
+        spec.Deliverables.Formats = ['16:9'];
+        spec.Review.Rounds = [];
+
+        const agent = new TestableCriticAgent();
+        agent.EnqueuePromptOutcome({
+            success: true,
+            result: {
+                Summary: 'Casing and unknown severity check',
+                Defects: [
+                    {
+                        Timestamp: 1.0,
+                        Beat: 'hook',
+                        Criterion: 'text-legibility',
+                        Severity: 'blocker' as DefectSeverity,
+                        Evidence: 'Lowercase blocker',
+                        Fix: 'Fix blocker',
+                    },
+                    {
+                        Timestamp: 2.0,
+                        Beat: 'proof',
+                        Criterion: 'text-legibility',
+                        Severity: 'Critical' as DefectSeverity,
+                        Evidence: 'Unrecognized severity',
+                        Fix: 'Fix critical',
+                    },
+                ],
+            },
+        });
+
+        const params = {
+            agent: { ID: 'critic-id', ParentID: 'root-id' },
+            payload: spec,
+        } as unknown as ExecuteAgentParams<Partial<VideoGenerationSpec>>;
+
+        const { finalStep } = await agent.RunForTest(params);
+        const defects = finalStep.newPayload?.Review?.Rounds?.[0]?.Defects ?? [];
+        expect(defects).toHaveLength(2);
+        expect(defects[0].Severity).toBe('Blocker');
+        expect(defects[1].Severity).toBe('Major');
+
+        // Verify that a single 'Critical' -> 'Major' defect causes G5 to fail in VideoStudioAgent.ApplyStageResult
+        class StageApplier extends VideoStudioAgent {
+            public Apply(p: ExecuteAgentParams, s: Partial<VideoGenerationSpec>): Partial<VideoGenerationSpec> {
+                return this.ApplyStageResult(p, 'Video Studio - Critic', s, true);
+            }
+        }
+        const singleCriticalSpec = CreateDeliveredSpecFixture();
+        singleCriticalSpec.Deliverables.Formats = ['16:9'];
+        singleCriticalSpec.Review.Rounds = [];
+
+        const agentCriticalOnly = new TestableCriticAgent();
+        agentCriticalOnly.EnqueuePromptOutcome({
+            success: true,
+            result: {
+                Summary: 'Critical only',
+                Defects: [
+                    {
+                        Timestamp: 2.0,
+                        Beat: 'proof',
+                        Criterion: 'text-legibility',
+                        Severity: 'Critical' as DefectSeverity,
+                        Evidence: 'Critical issue',
+                        Fix: 'Fix critical issue',
+                    },
+                ],
+            },
+        });
+        const { finalStep: critStep } = await agentCriticalOnly.RunForTest({
+            agent: { ID: 'critic-id', ParentID: 'root-id' },
+            payload: singleCriticalSpec,
+        } as unknown as ExecuteAgentParams<Partial<VideoGenerationSpec>>);
+
+        const applied = new StageApplier().Apply(params, critStep.newPayload!);
+        const g5 = applied.Review?.Gates.find((g) => g.Gate === 'G5');
+        expect(g5?.Status).toBe('Failed');
+    });
+
+    it('(9) computes scores via RubricScoring.Compute so a failed gate or omitted Scores produces Passed: false', async () => {
+        mockGetLatestPublishedVersion.mockReturnValue({
+            rubricId: RUBRIC_ID,
+            rubricName: 'Video Production Quality',
+            versionId: 'ver-1',
+            versionNumber: 1,
+            status: 'Published',
+            scoringMode: 'Weighted',
+            passThresholdScore: 0.7,
+            nodes: [
+                {
+                    id: 'crit-1',
+                    key: 'text-legibility',
+                    name: 'Text Legibility',
+                    description: 'Text is legible.',
+                    guidance: '',
+                    nodeType: 'Criterion',
+                    sequence: 1,
+                    weight: 50,
+                    isGate: false,
+                },
+                {
+                    id: 'crit-2',
+                    key: 'generated-assets-are-honest-and-disclosed',
+                    name: 'Generated Assets Are Honest and Disclosed',
+                    description: 'Assets are honest.',
+                    guidance: '',
+                    nodeType: 'Criterion',
+                    sequence: 2,
+                    weight: 50,
+                    isGate: true,
+                    gateMinimumScore: 0.6,
+                },
+            ],
+        });
+
+        const spec = CreateDeliveredSpecFixture();
+        spec.Deliverables.Formats = ['16:9'];
+        spec.Review.Rounds = [];
+
+        const agent = new TestableCriticAgent();
+        // Normal criterion at Meets (1.0) and gate criterion at Partial (0.5 < 0.6 gateMinimumScore):
+        // weighted mean is 0.75 (>= 0.7 passThreshold), but gate fails so Passed must be false!
+        agent.EnqueuePromptOutcome({
+            success: true,
+            result: {
+                Summary: 'Gate failed despite weighted score above threshold',
+                Defects: [],
+                Scores: {
+                    Criteria: [
+                        { Key: 'text-legibility', Level: 'Meets' },
+                        { Key: 'generated-assets-are-honest-and-disclosed', Level: 'Partial' },
+                    ],
+                },
+            },
+        });
+
+        const { finalStep } = await agent.RunForTest({
+            agent: { ID: 'critic-id', ParentID: 'root-id' },
+            payload: spec,
+        } as unknown as ExecuteAgentParams<Partial<VideoGenerationSpec>>);
+
+        expect(finalStep.newPayload?.Review?.Scores?.OverallScore).toBe(0.75);
+        expect(finalStep.newPayload?.Review?.Scores?.Passed).toBe(false);
+
+        // Also verify that when Scores is omitted by the prompt, Passed is false
+        const agentNoScores = new TestableCriticAgent();
+        agentNoScores.EnqueuePromptOutcome({
+            success: true,
+            result: {
+                Summary: 'Scores omitted by LLM',
+                Defects: [],
+            },
+        });
+        const { finalStep: emptyScoresStep } = await agentNoScores.RunForTest({
+            agent: { ID: 'critic-id', ParentID: 'root-id' },
+            payload: spec,
+        } as unknown as ExecuteAgentParams<Partial<VideoGenerationSpec>>);
+
+        expect(emptyScoresStep.newPayload?.Review?.Scores?.Passed).toBe(false);
     });
 });

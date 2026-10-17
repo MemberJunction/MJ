@@ -49,6 +49,8 @@ import {
 import { StoreFile } from '../storage.js';
 import { ValidateVideoGenerationSpecAsync } from '../validate-spec-async.js';
 
+export { ResolveVideoStudioSettings };
+
 /**
  * Ordered stage sub-agent names under the root `Video Studio` agent.
  */

@@ -1,4 +1,9 @@
-import type { RubricNodeSnapshot } from '@memberjunction/rubrics-base';
+import type {
+    RubricLevelAnchorSnapshot,
+    RubricNodeSnapshot,
+    RubricScaleSnapshot,
+    RubricVersionSnapshot,
+} from '@memberjunction/rubrics-base';
 import {
     BuildBoundDataLiterals,
     CreateMJChartKit,
@@ -13,15 +18,51 @@ import {
 const MAX_GRIDS_PER_CALL = 4;
 const CHART_KIT = CreateMJChartKit();
 
+const KNOWN_SCALE_LEVEL_LABELS: Record<string, string> = {
+    'e11f5b7e-9a5c-4d30-bf94-c5b0e9a84457': 'Meets',
+    'a3c58d64-d5eb-4f4b-b21b-74351908dbac': 'Partial',
+    'b1f561df-5c22-4de2-a532-d1b2a1ca0e0a': 'Miss',
+    'level-meets': 'Meets',
+    'level-partial': 'Partial',
+    'level-miss': 'Miss',
+    meets: 'Meets',
+    partial: 'Partial',
+    miss: 'Miss',
+};
+
+/**
+ * Input accepted by {@link BuildRubricCriteriaText}: either a full (or partial) published
+ * {@link RubricVersionSnapshot} or a flat array of {@link RubricNodeSnapshot} nodes.
+ */
+export type RubricCriteriaTextInput =
+    | readonly RubricNodeSnapshot[]
+    | (Pick<RubricVersionSnapshot, 'nodes'> &
+          Partial<Pick<RubricVersionSnapshot, 'instructions' | 'scales' | 'notApplicablePolicy'>>);
+
 /**
  * Renders every `Criterion` node in a published rubric tree as a bulleted plain-text list
  * suitable for the `Video Studio - Critic` prompt's `rubricCriteria` template variable.
  *
- * `Group` nodes are omitted. Each criterion line follows:
- * `- <key> (<name>, weight <w>): <description> <guidance>`
+ * Includes version-level `instructions` (when present), per-criterion `[GATE]` flags, and
+ * `Meets` / `Partial` / `Miss` level anchor descriptions. `Group` nodes are omitted.
  */
-export function BuildRubricCriteriaText(nodes: readonly RubricNodeSnapshot[]): string {
+export function BuildRubricCriteriaText(input: RubricCriteriaTextInput): string {
+    const isArrayInput = Array.isArray(input);
+    const nodes: readonly RubricNodeSnapshot[] = isArrayInput
+        ? input
+        : ((input as Pick<RubricVersionSnapshot, 'nodes'>)?.nodes ?? []);
+    const instructions = isArrayInput
+        ? ''
+        : ((input as Partial<RubricVersionSnapshot>)?.instructions ?? '').trim();
+    const scales: readonly RubricScaleSnapshot[] = isArrayInput
+        ? []
+        : ((input as Partial<RubricVersionSnapshot>)?.scales ?? []);
+
     const lines: string[] = [];
+    if (instructions.length > 0) {
+        lines.push(`Instructions: ${instructions}`);
+    }
+
     for (const node of nodes ?? []) {
         if (!node || node.nodeType !== 'Criterion') {
             continue;
@@ -29,9 +70,52 @@ export function BuildRubricCriteriaText(nodes: readonly RubricNodeSnapshot[]): s
         const description = (node.description ?? '').trim();
         const guidance = (node.guidance ?? '').trim();
         const details = [description, guidance].filter((part) => part.length > 0).join(' ');
-        lines.push(`- ${node.key} (${node.name}, weight ${node.weight}): ${details}`.trimEnd());
+        const gateTag = node.isGate ? ' [GATE]' : '';
+        const levelText = formatCriterionLevels(node, scales);
+        const levelSuffix = levelText ? ` | Levels — ${levelText}` : '';
+        lines.push(
+            `- ${node.key}${gateTag} (${node.name}, weight ${node.weight}): ${details}${levelSuffix}`.trimEnd(),
+        );
     }
     return lines.join('\n');
+}
+
+function formatCriterionLevels(
+    node: RubricNodeSnapshot,
+    scales: readonly RubricScaleSnapshot[],
+): string {
+    const anchors: readonly RubricLevelAnchorSnapshot[] = node.anchors ?? [];
+    const scale =
+        scales.find((candidate) => candidate.id === node.scaleId) ??
+        (scales.length === 1 ? scales[0] : undefined);
+
+    if (anchors.length === 0) {
+        if (!scale || !Array.isArray(scale.levels) || scale.levels.length === 0) {
+            return '';
+        }
+        const levelLabels = [...scale.levels]
+            .sort((a, b) => b.sequence - a.sequence)
+            .map((lvl) =>
+                lvl.description?.trim() ? `${lvl.label}: ${lvl.description.trim()}` : lvl.label,
+            );
+        return levelLabels.join('; ');
+    }
+
+    const parts: string[] = [];
+    for (const anchor of anchors) {
+        const descriptor = (anchor?.descriptor ?? '').trim();
+        if (!descriptor) {
+            continue;
+        }
+        const matchedLevel = scale?.levels?.find((lvl) => lvl.id === anchor.scaleLevelId);
+        const rawLevelId = (anchor.scaleLevelId ?? '').trim();
+        const label =
+            matchedLevel?.label ??
+            KNOWN_SCALE_LEVEL_LABELS[rawLevelId.toLowerCase()] ??
+            (rawLevelId || 'Level');
+        parts.push(`${label}: ${descriptor}`);
+    }
+    return parts.join('; ');
 }
 
 /**
@@ -173,9 +257,12 @@ export function BuildRepairBrief(spec: Partial<VideoGenerationSpec>): string {
     }
 
     const lines = openDefects.map((defect) => {
-        const fmt = defect.Format ?? 'default';
-        const criterion = defect.Criterion ? ` [criterion: ${defect.Criterion}]` : '';
-        return `- [${defect.Severity}] format ${fmt}, beat ${defect.Beat}, ${defect.Timestamp}s${criterion}: ${defect.Evidence} — Fix: ${defect.Fix}`;
+        const fmt = escapeCell(defect.Format ?? 'default') || 'default';
+        const beat = escapeCell(defect.Beat ?? '');
+        const criterion = defect.Criterion ? ` [criterion: ${escapeCell(defect.Criterion)}]` : '';
+        const evidence = escapeCell(defect.Evidence ?? '');
+        const fix = escapeCell(defect.Fix ?? '');
+        return `- [${defect.Severity}] format ${fmt}, beat ${beat}, ${defect.Timestamp}s${criterion}: ${evidence} — Fix: ${fix}`;
     });
 
     return [
@@ -186,5 +273,5 @@ export function BuildRepairBrief(spec: Partial<VideoGenerationSpec>): string {
 }
 
 function escapeCell(value: string): string {
-    return (value ?? '').replace(/\|/g, '\\|').replace(/\r?\n/g, ' ').trim();
+    return (value ?? '').replace(/\|/g, '\\|').replace(/\s+/g, ' ').trim();
 }

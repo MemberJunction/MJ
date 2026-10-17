@@ -6,11 +6,17 @@ import type {
     ExecuteAgentParams,
 } from '@memberjunction/ai-core-plus';
 import type { IMetadataProvider } from '@memberjunction/core';
-import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { RegisterClass } from '@memberjunction/global';
 import {
     RubricEngineBase,
+    RubricScoring,
     type AgentRubricRecord,
     type CachedPublishedVersion,
+    type RubricAnswer,
+    type RubricNodeSnapshot,
+    type RubricScaleLevelSnapshot,
+    type RubricScaleSnapshot,
+    type RubricVersionSnapshot,
 } from '@memberjunction/rubrics-base';
 import type {
     CriticRound,
@@ -33,6 +39,7 @@ import {
 } from '../review/critic-input.js';
 import { ReadStoredFile } from '../storage.js';
 import { VideoStudioAgentBase } from './video-studio-agent-base.js';
+import { ResolveVideoStudioSettings } from './video-studio-agent.js';
 
 /**
  * Error message returned when the `Video Production Quality` rubric is not linked to the parent agent
@@ -43,6 +50,37 @@ export const MISSING_CRITIC_RUBRIC_ERROR_MESSAGE =
 
 const CRITIC_PROMPT_NAME = 'Video Studio - Critic';
 const MAX_DEFECTS_PER_FORMAT = 3;
+
+const DEFAULT_THREE_LEVEL_SCALE_ID = '96B4F43A-2E7B-4BC7-8D9D-59C217F0E93B';
+const DEFAULT_THREE_LEVEL_SCALE: RubricScaleSnapshot = {
+    id: DEFAULT_THREE_LEVEL_SCALE_ID,
+    name: 'Three-Level Production Quality (Miss / Partial / Meets)',
+    scaleType: 'Levels',
+    higherIsBetter: true,
+    levels: [
+        {
+            id: 'B1F561DF-5C22-4DE2-A532-D1B2A1CA0E0A',
+            label: 'Miss',
+            value: 0,
+            normalizedValue: 0,
+            sequence: 1,
+        },
+        {
+            id: 'A3C58D64-D5EB-4F4B-B21B-74351908DBAC',
+            label: 'Partial',
+            value: 1,
+            normalizedValue: 0.5,
+            sequence: 2,
+        },
+        {
+            id: 'E11F5B7E-9A5C-4D30-BF94-C5B0E9A84457',
+            label: 'Meets',
+            value: 2,
+            normalizedValue: 1,
+            sequence: 3,
+        },
+    ],
+};
 
 const SEVERITY_ORDER: Record<DefectSeverity, number> = {
     Blocker: 0,
@@ -56,9 +94,11 @@ const SEVERITY_ORDER: Record<DefectSeverity, number> = {
 export interface CriticPromptCriterionScore {
     Criterion?: string;
     Key?: string;
-    Score: number;
+    Level?: 'Meets' | 'Partial' | 'Miss' | 'NotApplicable' | string;
+    NotApplicable?: boolean;
+    Score?: number;
     MaxScore?: number;
-    Passed: boolean;
+    Passed?: boolean;
     Notes?: string;
     Rationale?: string;
 }
@@ -71,7 +111,7 @@ export interface CriticPromptOutput {
         Timestamp?: number;
         Beat?: string;
         Criterion?: string;
-        Severity?: DefectSeverity;
+        Severity?: DefectSeverity | string;
         Evidence?: string;
         Fix?: string;
         AssetKey?: string;
@@ -91,7 +131,7 @@ export interface CriticPromptOutput {
  *
  * Evaluates rendered contact sheets per deliverable format against the published `Video Production Quality`
  * rubric linked to the parent `Video Studio` agent, updates defect history across rounds, and aggregates
- * worst-case per-criterion scores across formats.
+ * worst-case per-criterion scores across formats using `RubricScoring.Compute`.
  */
 @RegisterClass(BaseAgent, 'VideoStudioCriticAgent')
 export class VideoStudioCriticAgent extends VideoStudioAgentBase {
@@ -103,11 +143,11 @@ export class VideoStudioCriticAgent extends VideoStudioAgentBase {
 
         // 1. Load rubric criteria from parent agent's Evaluation rubric link
         const rubricVersion = await this.resolvePublishedEvaluationRubric(params);
-        if (!rubricVersion || !Array.isArray(rubricVersion.nodes) || rubricVersion.nodes.length === 0) {
+        if (!rubricVersion || rubricVersion.nodes.length === 0) {
             return this.buildFailedOutcome(params, MISSING_CRITIC_RUBRIC_ERROR_MESSAGE);
         }
 
-        const rubricCriteria = BuildRubricCriteriaText(rubricVersion.nodes);
+        const rubricCriteria = BuildRubricCriteriaText(rubricVersion);
         if (!rubricCriteria.trim()) {
             return this.buildFailedOutcome(params, MISSING_CRITIC_RUBRIC_ERROR_MESSAGE);
         }
@@ -127,7 +167,11 @@ export class VideoStudioCriticAgent extends VideoStudioAgentBase {
             : [];
 
         const roundNumber = existingRounds.length + 1;
-        const maxRounds = (incomingPayload.Interaction?.MaxRepairRounds ?? 2) + 1;
+        const configId =
+            params.configurationId ??
+            ((this.AgentRun as { ConfigurationID?: string | null } | null)?.ConfigurationID ?? null);
+        const settings = ResolveVideoStudioSettings(configId);
+        const maxRounds = settings.MaxRepairRounds + 1;
         const formats = ResolveDeliverableFormats(incomingPayload);
         const approvedAssetKeys = new Set(
             (incomingPayload.Assets?.Approved ?? [])
@@ -245,8 +289,8 @@ export class VideoStudioCriticAgent extends VideoStudioAgentBase {
 
         const updatedRounds = [...existingRounds, newRound];
 
-        // 6. Aggregate scores across formats
-        const aggregatedScores = this.aggregateScores(rubricVersion.rubricId, formatScores);
+        // 6. Score against published rubric version via RubricScoring.Compute
+        const aggregatedScores = this.aggregateScores(rubricVersion, formatScores);
 
         // 7. Return Success with Review.Rounds and Review.Scores only
         const newPayload = {
@@ -292,19 +336,14 @@ export class VideoStudioCriticAgent extends VideoStudioAgentBase {
             this.ProviderToUse as IMetadataProvider | undefined,
         );
 
-        const parentAgentId = params.agent?.ParentID ?? params.agent?.ID ?? '';
+        const parentAgentId = params.agent.ParentID;
         if (!parentAgentId) {
             return null;
         }
 
-        const links: AgentRubricRecord[] = engine.GetAgentRubrics(parentAgentId) ?? [];
+        const links: AgentRubricRecord[] = engine.GetAgentRubrics(parentAgentId);
         const evaluationLinks = links
-            .filter(
-                (link) =>
-                    link &&
-                    (link.status === undefined || link.status === 'Active') &&
-                    link.purpose === 'Evaluation',
-            )
+            .filter((link) => link.status === 'Active' && link.purpose === 'Evaluation')
             .sort((a, b) => {
                 if (Boolean(a.isDefault) !== Boolean(b.isDefault)) {
                     return a.isDefault ? -1 : 1;
@@ -374,11 +413,18 @@ export class VideoStudioCriticAgent extends VideoStudioAgentBase {
         });
     }
 
-    private normalizeSeverity(severity: DefectSeverity | undefined): DefectSeverity {
-        if (severity === 'Blocker' || severity === 'Major' || severity === 'Minor') {
-            return severity;
+    private normalizeSeverity(severity: unknown): DefectSeverity {
+        const normalized = typeof severity === 'string' ? severity.trim().toLowerCase() : '';
+        if (normalized === 'blocker') {
+            return 'Blocker';
         }
-        return 'Minor';
+        if (normalized === 'major') {
+            return 'Major';
+        }
+        if (normalized === 'minor') {
+            return 'Minor';
+        }
+        return 'Major';
     }
 
     private isSameDefect(earlier: VideoDefect, current: VideoDefect): boolean {
@@ -392,88 +438,276 @@ export class VideoStudioCriticAgent extends VideoStudioAgentBase {
     }
 
     private aggregateScores(
-        rubricId: string,
+        rawVersion: CachedPublishedVersion,
         formatScores: Array<NonNullable<CriticPromptOutput['Scores']>>,
     ): RubricScoreSummary {
+        const snapshot = this.normalizeRubricVersionSnapshot(rawVersion);
         if (formatScores.length === 0) {
+            const emptyScored = RubricScoring.Compute({ version: snapshot, answers: [] });
             return {
-                RubricID: rubricId,
-                OverallScore: 0,
-                MaxScore: 0,
-                Passed: true,
+                RubricID: snapshot.rubricId,
+                OverallScore: emptyScored.normalizedScore ?? 0,
+                MaxScore: 1,
+                Passed: emptyScored.passed === true,
                 Criteria: [],
             };
         }
 
-        const criterionOrder: string[] = [];
-        const criterionMap = new Map<
-            string,
-            { scores: number[]; maxScores: number[]; passedAll: boolean; notes: string[] }
-        >();
+        const leafNodes = snapshot.nodes.filter((n) => n.nodeType === 'Criterion');
+        const perCriterionEntries = new Map<string, CriticPromptCriterionScore[]>();
 
         for (const scoreBlock of formatScores) {
             for (const c of scoreBlock.Criteria ?? []) {
                 if (!c) {
                     continue;
                 }
-                const rawKey = c.Criterion ?? c.Key ?? '';
-                const key = rawKey.trim();
-                if (!key) {
+                const rawKey = (c.Criterion ?? c.Key ?? '').trim();
+                if (!rawKey) {
                     continue;
                 }
-                let entry = criterionMap.get(key);
-                if (!entry) {
-                    entry = { scores: [], maxScores: [], passedAll: true, notes: [] };
-                    criterionMap.set(key, entry);
-                    criterionOrder.push(key);
-                }
-                if (typeof c.Score === 'number') {
-                    entry.scores.push(c.Score);
-                }
-                if (typeof c.MaxScore === 'number') {
-                    entry.maxScores.push(c.MaxScore);
-                }
-                if (!c.Passed) {
-                    entry.passedAll = false;
-                }
-                const noteText = (c.Notes ?? c.Rationale ?? '').trim();
-                if (noteText) {
-                    entry.notes.push(noteText);
-                }
+                const matchedNode = leafNodes.find(
+                    (n) =>
+                        n.key.toLowerCase() === rawKey.toLowerCase() ||
+                        n.id.toLowerCase() === rawKey.toLowerCase() ||
+                        n.name.toLowerCase() === rawKey.toLowerCase(),
+                );
+                const canonicalKey = matchedNode ? matchedNode.key : rawKey;
+                const list = perCriterionEntries.get(canonicalKey) ?? [];
+                list.push(c);
+                perCriterionEntries.set(canonicalKey, list);
             }
         }
 
-        const criteria: RubricCriterionScore[] = criterionOrder.map((key) => {
-            const entry = criterionMap.get(key)!;
-            const lowestScore = entry.scores.length > 0 ? Math.min(...entry.scores) : 0;
-            const maxScore = entry.maxScores.length > 0 ? Math.max(...entry.maxScores) : 1;
-            const result: RubricCriterionScore = {
-                Criterion: key,
-                Score: lowestScore,
-                MaxScore: maxScore,
-                Passed: entry.passedAll,
-            };
-            if (entry.notes.length > 0) {
-                result.Notes = entry.notes.join(' | ');
-            }
-            return result;
-        });
+        const answers: RubricAnswer[] = [];
+        const notesByNodeId = new Map<string, string>();
 
-        const overallAvg =
-            formatScores.reduce((acc, s) => acc + (typeof s.OverallScore === 'number' ? s.OverallScore : 0), 0) /
-            formatScores.length;
-        const maxAvg =
-            formatScores.reduce((acc, s) => acc + (typeof s.MaxScore === 'number' ? s.MaxScore : 0), 0) /
-            formatScores.length;
-        const passedAll =
-            formatScores.every((s) => s.Passed !== false) && criteria.every((c) => c.Passed);
+        for (const node of leafNodes) {
+            const entries = perCriterionEntries.get(node.key) ?? [];
+            if (entries.length === 0) {
+                continue;
+            }
+            const scale =
+                snapshot.scales.find((s) => s.id === node.scaleId) ??
+                snapshot.scales[0] ??
+                DEFAULT_THREE_LEVEL_SCALE;
+            const effectiveNaPolicy = node.notApplicablePolicy ?? snapshot.notApplicablePolicy;
+
+            let worstLevel: RubricScaleLevelSnapshot | null = null;
+            let sawNotApplicable = false;
+            const notes: string[] = [];
+
+            for (const entry of entries) {
+                const noteText = (entry.Notes ?? entry.Rationale ?? '').trim();
+                if (noteText) {
+                    notes.push(noteText);
+                }
+                const resolved = this.resolveCriterionEntryLevel(
+                    entry,
+                    scale,
+                    effectiveNaPolicy !== 'NotAllowed',
+                );
+                if (resolved.isNotApplicable) {
+                    sawNotApplicable = true;
+                    continue;
+                }
+                if (resolved.level) {
+                    if (
+                        !worstLevel ||
+                        resolved.level.normalizedValue < worstLevel.normalizedValue
+                    ) {
+                        worstLevel = resolved.level;
+                    }
+                }
+            }
+
+            const combinedNotes = notes.join(' | ');
+            if (combinedNotes) {
+                notesByNodeId.set(node.id, combinedNotes);
+            }
+
+            if (worstLevel) {
+                answers.push({
+                    criterionId: node.id,
+                    scaleLevelId: worstLevel.id,
+                    rawValue: worstLevel.value,
+                    ...(combinedNotes ? { rationale: combinedNotes } : {}),
+                    ...(node.evidenceRequired
+                        ? { evidence: combinedNotes || worstLevel.label }
+                        : {}),
+                });
+            } else if (sawNotApplicable) {
+                answers.push({
+                    criterionId: node.id,
+                    isNotApplicable: true,
+                    ...(combinedNotes ? { rationale: combinedNotes } : {}),
+                });
+            }
+        }
+
+        const scored = RubricScoring.Compute({ version: snapshot, answers });
+        const scoredNodeById = new Map(scored.nodes.map((sn) => [sn.id, sn]));
+
+        const criteria: RubricCriterionScore[] = [];
+        for (const node of leafNodes) {
+            if (!perCriterionEntries.has(node.key)) {
+                continue;
+            }
+            const sn = scoredNodeById.get(node.id);
+            const normalizedScore = sn?.normalizedScore ?? 0;
+            const minPassScore = node.isGate
+                ? (node.gateMinimumScore ?? 0.6)
+                : (snapshot.passThreshold ?? 0.7);
+            const passed = sn
+                ? !sn.gateFailed &&
+                  (sn.isNotApplicable || (sn.normalizedScore !== null && normalizedScore >= minPassScore))
+                : false;
+            const criterionScore: RubricCriterionScore = {
+                Criterion: node.key,
+                Score: normalizedScore,
+                MaxScore: 1,
+                Passed: passed,
+            };
+            const combinedNotes = notesByNodeId.get(node.id);
+            if (combinedNotes) {
+                criterionScore.Notes = combinedNotes;
+            }
+            criteria.push(criterionScore);
+        }
 
         return {
-            RubricID: rubricId,
-            OverallScore: overallAvg,
-            MaxScore: maxAvg,
-            Passed: passedAll,
+            RubricID: snapshot.rubricId,
+            OverallScore: scored.normalizedScore ?? 0,
+            MaxScore: 1,
+            Passed: scored.passed === true,
             Criteria: criteria,
+        };
+    }
+
+    private resolveCriterionEntryLevel(
+        entry: CriticPromptCriterionScore,
+        scale: RubricScaleSnapshot,
+        allowNotApplicable: boolean,
+    ): { isNotApplicable: boolean; level: RubricScaleLevelSnapshot | null } {
+        const rawLevel = typeof entry.Level === 'string' ? entry.Level.trim().toLowerCase() : '';
+        if (
+            entry.NotApplicable === true ||
+            rawLevel === 'notapplicable' ||
+            rawLevel === 'not_applicable' ||
+            rawLevel === 'n/a'
+        ) {
+            if (allowNotApplicable) {
+                return { isNotApplicable: true, level: null };
+            }
+            const lowest = [...scale.levels].sort((a, b) => a.normalizedValue - b.normalizedValue)[0] ?? null;
+            return { isNotApplicable: false, level: lowest };
+        }
+
+        if (rawLevel.length > 0) {
+            const matched = scale.levels.find(
+                (lvl) =>
+                    lvl.label.trim().toLowerCase() === rawLevel ||
+                    lvl.id.trim().toLowerCase() === rawLevel,
+            );
+            if (matched) {
+                return { isNotApplicable: false, level: matched };
+            }
+        }
+
+        if (typeof entry.Score === 'number' && !Number.isNaN(entry.Score)) {
+            const max =
+                typeof entry.MaxScore === 'number' && entry.MaxScore > 0
+                    ? entry.MaxScore
+                    : entry.Score > 1
+                      ? 100
+                      : 1;
+            const norm = Math.max(0, Math.min(1, entry.Score / max));
+            const sorted = [...scale.levels].sort((a, b) => a.normalizedValue - b.normalizedValue);
+            if (sorted.length === 0) {
+                return { isNotApplicable: false, level: null };
+            }
+            let closest = sorted[0];
+            for (const candidate of sorted) {
+                if (
+                    Math.abs(candidate.normalizedValue - norm) <
+                    Math.abs(closest.normalizedValue - norm)
+                ) {
+                    closest = candidate;
+                }
+            }
+            if (entry.Passed === false && closest.normalizedValue >= 1 && sorted.length > 1) {
+                closest = sorted[sorted.length - 2];
+            }
+            return { isNotApplicable: false, level: closest };
+        }
+
+        return { isNotApplicable: false, level: null };
+    }
+
+    private normalizeRubricVersionSnapshot(raw: CachedPublishedVersion): RubricVersionSnapshot {
+        const scales: RubricScaleSnapshot[] =
+            Array.isArray(raw.scales) && raw.scales.length > 0
+                ? raw.scales
+                : [DEFAULT_THREE_LEVEL_SCALE];
+        const defaultScaleId = scales[0].id;
+        const nodeIds = new Set(raw.nodes.map((n) => n.id));
+
+        const legacyThresholdScore = (raw as { passThresholdScore?: number }).passThresholdScore;
+        const rawThreshold =
+            typeof raw.passThreshold === 'number'
+                ? raw.passThreshold
+                : typeof legacyThresholdScore === 'number'
+                  ? legacyThresholdScore
+                  : 0.7;
+        const passThreshold = rawThreshold > 1 ? rawThreshold / 100 : rawThreshold;
+
+        const nodes: RubricNodeSnapshot[] = raw.nodes.map((node) => {
+            const hasValidParent =
+                typeof node.parentId === 'string' &&
+                node.parentId.length > 0 &&
+                nodeIds.has(node.parentId);
+            const scaleId =
+                node.nodeType === 'Criterion'
+                    ? node.scaleId && scales.some((s) => s.id === node.scaleId)
+                        ? node.scaleId
+                        : defaultScaleId
+                    : (node.scaleId ?? null);
+            const isGate = Boolean(node.isGate);
+            const gateMinimumScore = isGate
+                ? typeof node.gateMinimumScore === 'number'
+                    ? node.gateMinimumScore
+                    : 0.6
+                : (node.gateMinimumScore ?? null);
+
+            return {
+                ...node,
+                parentId: hasValidParent ? node.parentId : null,
+                scaleId,
+                weight: typeof node.weight === 'number' ? node.weight : 1,
+                isAdvisory: Boolean(node.isAdvisory),
+                isGate,
+                gateMinimumScore,
+                evidenceRequired: Boolean(node.evidenceRequired),
+                rationaleRequired: Boolean(node.rationaleRequired),
+                sequence: typeof node.sequence === 'number' ? node.sequence : 1,
+            };
+        });
+
+        return {
+            id: raw.id ?? 'rubric-version-1',
+            rubricId: raw.rubricId,
+            majorVersion: raw.majorVersion ?? 1,
+            minorVersion: raw.minorVersion ?? 0,
+            patchVersion: raw.patchVersion ?? 0,
+            instructions: raw.instructions ?? null,
+            passThreshold,
+            minimumCompleteness:
+                typeof raw.minimumCompleteness === 'number' ? raw.minimumCompleteness : 1,
+            notApplicablePolicy: raw.notApplicablePolicy ?? 'ExcludeAndRedistribute',
+            scoreDisplayMin: typeof raw.scoreDisplayMin === 'number' ? raw.scoreDisplayMin : 0,
+            scoreDisplayMax: typeof raw.scoreDisplayMax === 'number' ? raw.scoreDisplayMax : 1,
+            nodes,
+            scales,
+            bands: Array.isArray(raw.bands) ? raw.bands : [],
         };
     }
 
@@ -502,6 +736,6 @@ export class VideoStudioCriticAgent extends VideoStudioAgentBase {
  */
 export function LoadVideoStudioCriticAgent(): void {
     if (false as boolean) {
-        const _keep: unknown = [VideoStudioCriticAgent, UUIDsEqual];
+        const _keep: unknown = [VideoStudioCriticAgent];
     }
 }

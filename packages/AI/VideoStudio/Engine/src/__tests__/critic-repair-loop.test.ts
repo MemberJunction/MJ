@@ -122,15 +122,19 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
     };
 });
 
-vi.mock('@memberjunction/rubrics-base', () => ({
-    RubricEngineBase: {
-        Instance: {
-            Config: mockRubricConfig,
-            GetAgentRubrics: mockGetAgentRubrics,
-            GetLatestPublishedVersion: mockGetLatestPublishedVersion,
+vi.mock('@memberjunction/rubrics-base', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/rubrics-base')>();
+    return {
+        ...actual,
+        RubricEngineBase: {
+            Instance: {
+                Config: mockRubricConfig,
+                GetAgentRubrics: mockGetAgentRubrics,
+                GetLatestPublishedVersion: mockGetLatestPublishedVersion,
+            },
         },
-    },
-}));
+    };
+});
 
 vi.mock('../storage.js', async (importOriginal) => {
     const actual = await importOriginal<typeof import('../storage.js')>();
