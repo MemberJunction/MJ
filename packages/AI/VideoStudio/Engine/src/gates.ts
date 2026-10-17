@@ -13,6 +13,8 @@ import {
     ValidateVideoGenerationSpec,
     VIDEO_STUDIO_SPEC_VERSION,
     type GateRecord,
+    type VideoAsset,
+    type VideoAssetGenerationRequest,
     type VideoFormat,
     type VideoGateId,
     type VideoGenerationSpec,
@@ -557,6 +559,11 @@ export function DeriveStatus(
         return 'Blocked';
     }
 
+    const generateRequests = Array.isArray(safeSpec.Assets?.Generate) ? safeSpec.Assets.Generate : [];
+    if (generateRequests.some((r) => r?.Status === 'Blocked')) {
+        return 'Blocked';
+    }
+
     const isStyled = Boolean(
         safeSpec.Style &&
             Array.isArray(safeSpec.Style.Palette) &&
@@ -599,11 +606,15 @@ export function DeriveStatus(
 
     const approvedAssets = Array.isArray(safeSpec.Assets?.Approved) ? safeSpec.Assets.Approved : [];
     const hasApprovedAssetIds = approvedAssets.every((a) => Boolean(a?.FileID?.trim() || a?.ArtifactVersionID?.trim()));
+    const allGeneratedRequestsDone =
+        generateRequests.length === 0 ||
+        generateRequests.every((r) => isGenerateRequestSatisfied(r, approvedAssets));
 
     const isPreProduced =
         hasDataSnapshotIfNeeded &&
         hasNarrationAudioIfNeeded &&
-        hasApprovedAssetIds;
+        hasApprovedAssetIds &&
+        allGeneratedRequestsDone;
     if (!isPreProduced) {
         return 'Approved';
     }
@@ -627,6 +638,24 @@ export function DeriveStatus(
     }
 
     return 'Reviewed';
+}
+
+function isGenerateRequestSatisfied(
+    req: VideoAssetGenerationRequest | undefined | null,
+    approvedAssets: ReadonlyArray<VideoAsset>,
+): boolean {
+    if (!req) {
+        return true;
+    }
+    if (req.Status === 'Blocked' || req.Status === 'Pending') {
+        return false;
+    }
+    if (req.Status === 'Generated') {
+        return true;
+    }
+    return approvedAssets.some(
+        (a) => a?.Key === req.Key && Boolean(a?.FileID?.trim() || a?.ArtifactVersionID?.trim()),
+    );
 }
 
 function hasCompositionFiles(src: { Files?: unknown } | undefined | null): boolean {
@@ -709,6 +738,24 @@ export function CheckStagePrerequisite(
             'Delivered',
         ];
         if (!allowedStatuses.includes(derived)) {
+            const generateRequests = Array.isArray(safeSpec.Assets?.Generate) ? safeSpec.Assets.Generate : [];
+            const blockedRequests = generateRequests.filter((r) => r?.Status === 'Blocked');
+            if (blockedRequests.length > 0) {
+                const summary = blockedRequests
+                    .map((r) => `${r.Key} (${r.BlockedReason || 'Blocked'})`)
+                    .join('; ');
+                return `G2 (Plan): Pre-Production blocked on generated asset request(s): ${summary}`;
+            }
+            const approvedAssets = Array.isArray(safeSpec.Assets?.Approved) ? safeSpec.Assets.Approved : [];
+            const ungeneratedRequests = generateRequests.filter(
+                (r) => !isGenerateRequestSatisfied(r, approvedAssets),
+            );
+            if (ungeneratedRequests.length > 0) {
+                const summary = ungeneratedRequests
+                    .map((r) => `${r.Key} (${r.Status ?? 'Pending'})`)
+                    .join('; ');
+                return `G2 (Plan): Pre-Production must complete generated asset request(s) [${summary}] (status is "${derived}", need "PreProduced") before running Motion Engineer`;
+            }
             return `G2 (Plan): Pre-Production must complete (status is "${derived}", need "PreProduced") before running Motion Engineer`;
         }
         return null;
@@ -1002,3 +1049,52 @@ export function DescribeStageProgress(stageName: string, spec: Partial<VideoGene
             return `${stage || 'Stage'} complete`;
     }
 }
+
+/**
+ * Pure helper that resets a `'Generated'` asset back to `'Pending'` on its matching
+ * `Assets.Generate` request when `RegenerationCount < maxRegenerations`.
+ *
+ * Allowed only when:
+ * - `spec.Assets.Approved` contains an entry with `Key === assetKey` and `Provenance === 'Generated'`, and
+ * - `spec.Assets.Generate` contains a request with `Key === assetKey` whose `(RegenerationCount ?? 0) < maxRegenerations`.
+ *
+ * When allowed, removes the generated asset (and any `<assetKey>-still` companion generated asset)
+ * from `Assets.Approved`, sets the request's `Status` to `'Pending'`, clears `BlockedReason`,
+ * and increments `RegenerationCount`.
+ */
+export function RequestRegeneration(
+    spec: Partial<VideoGenerationSpec>,
+    assetKey: string,
+    maxRegenerations: number,
+): { Spec: Partial<VideoGenerationSpec>; Allowed: boolean } {
+    const cloned: Partial<VideoGenerationSpec> = JSON.parse(JSON.stringify(spec ?? {}));
+    const trimmedKey = typeof assetKey === 'string' ? assetKey.trim() : '';
+    if (!trimmedKey || typeof maxRegenerations !== 'number' || maxRegenerations <= 0) {
+        return { Spec: cloned, Allowed: false };
+    }
+
+    const approved = Array.isArray(cloned.Assets?.Approved) ? cloned.Assets.Approved : [];
+    const generate = Array.isArray(cloned.Assets?.Generate) ? cloned.Assets.Generate : [];
+
+    const approvedAsset = approved.find((a) => a?.Key === trimmedKey && a.Provenance === 'Generated');
+    const request = generate.find((r) => r?.Key === trimmedKey);
+    if (!approvedAsset || !request) {
+        return { Spec: cloned, Allowed: false };
+    }
+
+    const currentCount = typeof request.RegenerationCount === 'number' ? request.RegenerationCount : 0;
+    if (currentCount >= maxRegenerations) {
+        return { Spec: cloned, Allowed: false };
+    }
+
+    const stillKey = `${trimmedKey}-still`;
+    cloned.Assets!.Approved = approved.filter(
+        (a) => a?.Key !== trimmedKey && !(a?.Key === stillKey && a.Provenance === 'Generated'),
+    );
+    request.Status = 'Pending';
+    delete request.BlockedReason;
+    request.RegenerationCount = currentCount + 1;
+
+    return { Spec: cloned, Allowed: true };
+}
+

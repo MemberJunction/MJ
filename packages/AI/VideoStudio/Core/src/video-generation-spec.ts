@@ -171,6 +171,14 @@ export interface VideoGenerationKeyframe {
 }
 
 /**
+ * Lifecycle status of an illustrative asset generation request in `Assets.Generate` (§13.3).
+ */
+export type VideoGenerationRequestStatus =
+    | 'Pending'   // Queued for screening and synthesis in Pre-Production (default when absent)
+    | 'Generated' // Synthesized, stored in MJStorage, and added to Assets.Approved with Generation provenance
+    | 'Blocked';  // Refused by pre-call policy/budget/integrity screen or failed during runner execution
+
+/**
  * Request for Pre-Production to synthesize an illustrative image or video clip (§13.3).
  */
 export interface VideoAssetGenerationRequest {
@@ -192,6 +200,12 @@ export interface VideoAssetGenerationRequest {
     Keyframes?: VideoGenerationKeyframe[];
     /** Defaults to false (clip audio muted); set true to preserve ambient generator audio. */
     WantAudio?: boolean;
+    /** Lifecycle status set by Pre-Production; absent means `'Pending'`. */
+    Status?: VideoGenerationRequestStatus;
+    /** Reason code and explanation when `Status` is `'Blocked'` (`'<Code>: <Reason>'`). */
+    BlockedReason?: string;
+    /** Number of times this request has been reset for regeneration after a Critic defect. */
+    RegenerationCount?: number;
 }
 
 /**

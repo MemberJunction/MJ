@@ -38,6 +38,7 @@ import {
     DescribeStoryboardForApproval,
     EvaluateGates,
     ReadApprovalDecision,
+    RequestRegeneration,
 } from '../gates.js';
 import { BuildRepairBrief } from '../review/critic-input.js';
 import { ComposeHumanReviewNotes } from '../review/human-review-notes.js';
@@ -285,10 +286,33 @@ export class VideoStudioAgent extends BaseAgent {
         };
 
         if (stageSucceeded && canonicalStage === 'Video Studio - Critic') {
+            const rounds = cloned.Review.Rounds;
+            const newestRound = rounds.length > 0 ? rounds[rounds.length - 1] : undefined;
+            if (newestRound && Array.isArray(newestRound.Defects)) {
+                const handledKeys = new Set<string>();
+                for (const defect of newestRound.Defects) {
+                    const assetKey = defect?.AssetKey?.trim();
+                    if (defect && defect.Status === 'Open' && assetKey && !handledKeys.has(assetKey)) {
+                        const isGenerated = (cloned.Assets?.Approved ?? []).some(
+                            (a) => a?.Key === assetKey && a.Provenance === 'Generated',
+                        );
+                        if (isGenerated) {
+                            handledKeys.add(assetKey);
+                            const regen = RequestRegeneration(
+                                cloned,
+                                assetKey,
+                                this._currentSettings.MaxRegenerations,
+                            );
+                            if (regen.Allowed && regen.Spec.Assets) {
+                                cloned.Assets = regen.Spec.Assets;
+                            }
+                        }
+                    }
+                }
+            }
+
             const g5 = gates.find((g) => g.Gate === 'G5');
             if (g5?.Status === 'Passed') {
-                const rounds = cloned.Review.Rounds;
-                const newestRound = rounds.length > 0 ? rounds[rounds.length - 1] : undefined;
                 if (newestRound && Array.isArray(newestRound.Defects)) {
                     for (const defect of newestRound.Defects) {
                         if (defect && defect.Status === 'Open') {
