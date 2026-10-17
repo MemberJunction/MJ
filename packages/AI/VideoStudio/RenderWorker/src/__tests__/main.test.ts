@@ -1,3 +1,4 @@
+import { spawn } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -137,6 +138,67 @@ describe('main CLI entrypoint and environment configuration', () => {
         expect(lockMatches.length).toBeGreaterThanOrEqual(6);
         for (const match of lockMatches) {
             expect(match[1]).toBe(pinnedVersion);
+        }
+    });
+
+    it('exits cleanly within 2 s when spawned with a piped stdin and the parent closes stdin', async () => {
+        const distMainPath = path.resolve(THIS_DIR, '../../dist/main.js');
+        const child = spawn(process.execPath, [distMainPath], {
+            stdio: ['pipe', 'pipe', 'pipe'],
+            env: {
+                PATH: process.env.PATH,
+                HOME: process.env.HOME,
+                TMPDIR: process.env.TMPDIR,
+                [RENDER_WORKER_ENV.Host]: '127.0.0.1',
+                [RENDER_WORKER_ENV.Port]: '0',
+                [RENDER_WORKER_ENV.Token]: 'stdin-eof-test-token',
+                [RENDER_WORKER_ENV.AllowRoot]: '1',
+            },
+        });
+
+        try {
+            await new Promise<void>((resolve, reject) => {
+                let stdoutBuf = '';
+                const timer = setTimeout(() => {
+                    reject(new Error('Timed out waiting for VIDEO_STUDIO_RENDER_WORKER_PORT='));
+                }, 10_000);
+                child.stdout.on('data', (chunk: Buffer) => {
+                    stdoutBuf += chunk.toString('utf8');
+                    if (
+                        stdoutBuf.includes(RENDER_WORKER_PORT_PREFIX) &&
+                        stdoutBuf.includes('\n')
+                    ) {
+                        clearTimeout(timer);
+                        resolve();
+                    }
+                });
+                child.once('exit', (code, signal) => {
+                    clearTimeout(timer);
+                    reject(
+                        new Error(
+                            `Worker exited prematurely (code=${String(code)}, signal=${String(signal)})`,
+                        ),
+                    );
+                });
+            });
+
+            const closeStartMs = Date.now();
+            const exitPromise = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>(
+                (resolve) => {
+                    child.once('exit', (code, signal) => resolve({ code, signal }));
+                },
+            );
+
+            child.stdin.end();
+            const { code } = await exitPromise;
+            const elapsedMs = Date.now() - closeStartMs;
+
+            expect(code).toBe(0);
+            expect(elapsedMs).toBeLessThan(2_000);
+        } finally {
+            if (child.exitCode === null && child.signalCode === null) {
+                child.kill('SIGKILL');
+            }
         }
     });
 });

@@ -13,7 +13,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "test:types": "tsc --noEmit"
+    "test:types": "tsc --noEmit -p tsconfig.spec.json"
   },
   "dependencies": {
     "@memberjunction/core": "6.2.0-edge.4",

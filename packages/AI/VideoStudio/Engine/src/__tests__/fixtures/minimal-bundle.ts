@@ -103,6 +103,7 @@ export function CreateMinimalRenderRequest(): RenderRequest {
         Height: MINIMAL_BUNDLE_HEIGHT,
         Fps: MINIMAL_BUNDLE_FPS,
         DurationSeconds: MINIMAL_BUNDLE_DURATION_SECONDS,
+        Quality: 'standard',
     };
 }
 
@@ -137,6 +138,7 @@ export function CreateHangRenderRequest(): RenderRequest {
         Height: HANG_BUNDLE_HEIGHT,
         Fps: HANG_BUNDLE_FPS,
         DurationSeconds: HANG_BUNDLE_DURATION_SECONDS,
+        Quality: 'standard',
     };
 }
 

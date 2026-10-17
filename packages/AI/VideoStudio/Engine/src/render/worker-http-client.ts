@@ -252,7 +252,7 @@ export class RenderWorkerHttpClient {
                 ? parsed.Message
                 : `Render worker returned ${parsed.Code} (HTTP ${status}).`;
             if (parsed.Code === 'Unauthorized' || status === 401) {
-                message = `${message} Check the render worker bearer token (VIDEO_STUDIO_RENDER_TOKEN or videoStudio.render.remote.token).`;
+                message = `${message} Check the render worker bearer token (VIDEO_STUDIO_RENDER_TOKEN).`;
             }
             const issues: CheckIssue[] | undefined = Array.isArray(parsed.Issues) ? parsed.Issues : undefined;
             return new VideoRenderError(parsed.Code, message, {
@@ -264,7 +264,7 @@ export class RenderWorkerHttpClient {
         if (status === 401) {
             return new VideoRenderError(
                 'Unauthorized',
-                'Render worker returned HTTP 401 Unauthorized. Check the render worker bearer token (VIDEO_STUDIO_RENDER_TOKEN or videoStudio.render.remote.token).',
+                'Render worker returned HTTP 401 Unauthorized. Check the render worker bearer token (VIDEO_STUDIO_RENDER_TOKEN).',
                 { Status: 401 },
             );
         }
@@ -448,8 +448,9 @@ export class RenderWorkerHttpClient {
                         }
                     };
 
-                    res.on('data', (chunk: Buffer) => {
-                        lineBuffer += chunk.toString('utf8');
+                    res.setEncoding('utf8');
+                    res.on('data', (chunk: string) => {
+                        lineBuffer += chunk;
                         let newlineIdx = lineBuffer.indexOf('\n');
                         while (newlineIdx !== -1) {
                             const line = lineBuffer.slice(0, newlineIdx);

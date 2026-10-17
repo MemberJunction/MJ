@@ -1,13 +1,15 @@
 import * as http from 'node:http';
+import type { AddressInfo } from 'node:net';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RENDER_WORKER_ROUTES } from '@memberjunction/video-studio-core';
 import {
     DEFAULT_RENDER_REQUEST_TIMEOUT_MS,
     DEFAULT_RENDER_STARTUP_TIMEOUT_MS,
     DEFAULT_RENDER_TIMEOUT_MS,
     LocalWorkerRenderDriver,
+    RenderWorkerHttpClient,
     VideoRenderError,
     type VideoRenderSettings,
 } from '../index.js';
@@ -57,6 +59,7 @@ describe('LocalWorkerRenderDriver lifecycle and security', () => {
     }
 
     afterEach(async () => {
+        vi.restoreAllMocks();
         while (activeDrivers.length > 0) {
             const driver = activeDrivers.pop()!;
             await driver.Shutdown();
@@ -64,12 +67,17 @@ describe('LocalWorkerRenderDriver lifecycle and security', () => {
     });
 
     it('two parallel Health calls share one in-flight startup and spawn a single child process', async () => {
+        const spawnSpy = vi.spyOn(
+            LocalWorkerRenderDriver.prototype as never,
+            'spawnAndWaitForReady',
+        );
         const driver = trackDriver(new LocalWorkerRenderDriver(createStubWorkerSettings()));
         expect(driver.ProcessId).toBeNull();
 
         const [h1, h2] = await Promise.all([driver.Health(), driver.Health()]);
         expect(h1.Healthy).toBe(true);
         expect(h2.Healthy).toBe(true);
+        expect(spawnSpy).toHaveBeenCalledTimes(1);
 
         const pid = driver.ProcessId;
         expect(typeof pid).toBe('number');
@@ -117,6 +125,71 @@ describe('LocalWorkerRenderDriver lifecycle and security', () => {
         expect(secondPid).not.toBe(firstPid);
     });
 
+    it('registers one process exit listener that kills the child on parent exit, keeps at most one on respawn, and removes it on Shutdown', async () => {
+        const baselineListeners = new Set(process.listeners('exit'));
+        const getNewExitListeners = () =>
+            process.listeners('exit').filter((fn) => !baselineListeners.has(fn));
+
+        const driver = trackDriver(new LocalWorkerRenderDriver(createStubWorkerSettings()));
+        expect(getNewExitListeners().length).toBe(0);
+
+        const firstHealth = await driver.Health();
+        expect(firstHealth.Healthy).toBe(true);
+        const firstPid = driver.ProcessId!;
+        expect(firstPid).toBeGreaterThan(0);
+
+        const listenersAfterFirstStart = getNewExitListeners();
+        expect(listenersAfterFirstStart.length).toBe(1);
+
+        // Calling the parent exit listener synchronously kills the child within 1 s
+        listenersAfterFirstStart[0]!(0);
+        const killStartMs = Date.now();
+        while (Date.now() - killStartMs < 1_000) {
+            try {
+                process.kill(firstPid, 0);
+            } catch {
+                break;
+            }
+            await new Promise<void>((r) => setTimeout(r, 20));
+        }
+        expect(() => process.kill(firstPid, 0)).toThrow();
+
+        // Wait for child 'exit' event to clear activeWorker, then respawn via Health()
+        await new Promise<void>((resolve) => {
+            const checkInterval = setInterval(() => {
+                if (driver.ProcessId === null) {
+                    clearInterval(checkInterval);
+                    resolve();
+                }
+            }, 20);
+        });
+
+        const secondHealth = await driver.Health();
+        expect(secondHealth.Healthy).toBe(true);
+        const secondPid = driver.ProcessId!;
+        expect(secondPid).toBeGreaterThan(0);
+        expect(getNewExitListeners().length).toBe(1);
+
+        // External kill + respawn still leaves at most one exit listener
+        await new Promise<void>((resolve) => {
+            const checkInterval = setInterval(() => {
+                if (driver.ProcessId === null) {
+                    clearInterval(checkInterval);
+                    resolve();
+                }
+            }, 20);
+            process.kill(secondPid, 'SIGKILL');
+        });
+        expect(getNewExitListeners().length).toBe(0);
+
+        const thirdHealth = await driver.Health();
+        expect(thirdHealth.Healthy).toBe(true);
+        expect(getNewExitListeners().length).toBe(1);
+
+        await driver.Shutdown();
+        expect(getNewExitListeners().length).toBe(0);
+    });
+
     it('requires the per-spawn bearer token on every worker route (raw request without token gets 401)', async () => {
         const driver = trackDriver(new LocalWorkerRenderDriver(createStubWorkerSettings()));
         const health = await driver.Health();
@@ -161,6 +234,58 @@ describe('LocalWorkerRenderDriver lifecycle and security', () => {
         const vErr = caught as VideoRenderError;
         expect(vErr.Code).toBe('WorkerUnavailable');
         expect(vErr.message).toContain('@memberjunction/video-studio-render-worker');
+    });
+
+    it('RenderWorkerHttpClient decodes multi-byte UTF-8 characters split across two NDJSON TCP chunks without corruption', async () => {
+        const fullLine =
+            JSON.stringify({
+                Type: 'Error',
+                Error: {
+                    Code: 'LintBlocked',
+                    Message: 'Texte trop petit: café',
+                },
+            }) + '\n';
+        const fullBytes = Buffer.from(fullLine, 'utf8');
+        // Locate the 2-byte UTF-8 sequence for 'é' (0xc3 0xa9) and split right between the two bytes
+        const splitIdx = fullBytes.indexOf(Buffer.from([0xc3, 0xa9])) + 1;
+        expect(splitIdx).toBeGreaterThan(1);
+        const firstChunk = fullBytes.subarray(0, splitIdx);
+        const secondChunk = fullBytes.subarray(splitIdx);
+
+        const server = http.createServer((req, res) => {
+            req.resume();
+            res.writeHead(200, { 'Content-Type': 'application/x-ndjson; charset=utf-8' });
+            res.write(firstChunk);
+            setTimeout(() => {
+                res.write(secondChunk);
+                res.end();
+            }, 50);
+        });
+
+        await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', () => resolve()));
+        const port = (server.address() as AddressInfo).port;
+
+        try {
+            const client = new RenderWorkerHttpClient({
+                BaseUrl: `http://127.0.0.1:${port}`,
+                RenderTimeoutMs: 10_000,
+                RequestTimeoutMs: 10_000,
+            });
+
+            let caught: unknown;
+            try {
+                await client.Render(CreateMinimalRenderRequest());
+            } catch (err) {
+                caught = err;
+            }
+
+            expect(caught).toBeInstanceOf(VideoRenderError);
+            const vErr = caught as VideoRenderError;
+            expect(vErr.Code).toBe('LintBlocked');
+            expect(vErr.message).toBe('Texte trop petit: café');
+        } finally {
+            await new Promise<void>((resolve) => server.close(() => resolve()));
+        }
     });
 });
 

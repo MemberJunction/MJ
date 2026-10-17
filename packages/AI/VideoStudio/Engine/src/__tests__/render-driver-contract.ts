@@ -121,14 +121,13 @@ export function DescribeRenderDriverContract(
                 Bundle: CreateMinimalBundle(),
                 Width: MINIMAL_BUNDLE_WIDTH,
                 Height: MINIMAL_BUNDLE_HEIGHT,
-                Fps: MINIMAL_BUNDLE_FPS,
                 Points: [
-                    { Key: 'frame-a', TimestampSeconds: 0.5, Role: 'HeroPeak', Label: 'Halfway A' },
+                    { Key: 'frame-a', TimestampSeconds: 0.5, Role: 'BeatMidpoint', Label: 'Halfway A' },
                     { Key: 'frame-b', TimestampSeconds: 0.0, Role: 'TransitionStart', Label: 'Start' },
                     { Key: 'frame-c', TimestampSeconds: 0.5, Role: 'TransitionEnd', Label: 'Halfway C' },
                     { Key: 'frame-d', TimestampSeconds: 0.8, Role: 'Custom', Label: 'Late' },
                 ],
-                Format: 'png',
+                ImageFormat: 'png',
             });
 
             expect(stillsRes.Stills.map((s) => s.Key)).toEqual([
@@ -144,10 +143,11 @@ export function DescribeRenderDriverContract(
                 Stills: stillsRes.Stills,
                 Format: '16:9',
                 MaxTilesPerSheet: 2,
-                TransitionStrip: true,
+                IncludeTransitionStrip: true,
             });
 
             expect(sheetRes.Sheets.length).toBeGreaterThan(0);
+            expect(sheetRes.Sheets.some((s) => s.Kind === 'TransitionStrip')).toBe(true);
             const coveredKeys = new Set(sheetRes.Sheets.flatMap((s) => s.StillKeys));
             for (const still of stillsRes.Stills) {
                 expect(coveredKeys.has(still.Key)).toBe(true);
@@ -187,6 +187,7 @@ export function DescribeRenderDriverContract(
                     Height: MINIMAL_BUNDLE_HEIGHT,
                     Fps: MINIMAL_BUNDLE_FPS,
                     DurationSeconds: MINIMAL_BUNDLE_DURATION_SECONDS,
+                    Quality: 'standard',
                 });
             } catch (err) {
                 renderErr = err;
@@ -212,12 +213,14 @@ export function DescribeRenderDriverContract(
             const maxFrames = 3;
             const keyframesRes = await driver.ExtractKeyframes({
                 VideoBase64: lastRenderedVideoBase64,
+                MimeType: 'video/mp4',
                 MaxFrames: maxFrames,
-                IncludeContactSheet: true,
+                BuildContactSheet: true,
             });
 
             expect(keyframesRes.Frames.length).toBeGreaterThan(0);
             expect(keyframesRes.Frames.length).toBeLessThanOrEqual(maxFrames);
+            expect(keyframesRes.Sheets?.length).toBeGreaterThan(0);
             for (let i = 1; i < keyframesRes.Frames.length; i++) {
                 expect(keyframesRes.Frames[i]!.TimestampSeconds).toBeGreaterThanOrEqual(
                     keyframesRes.Frames[i - 1]!.TimestampSeconds,

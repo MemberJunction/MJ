@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import * as fs from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { format as formatUtil } from 'node:util';
 import {
@@ -174,6 +175,19 @@ async function runCliEntrypoint(): Promise<void> {
 
         process.once('SIGINT', () => void shutdown());
         process.once('SIGTERM', () => void shutdown());
+
+        let isPipedStdin = false;
+        try {
+            const stdinStat = fs.fstatSync(0);
+            isPipedStdin = stdinStat.isFIFO() || stdinStat.isSocket();
+        } catch {
+            isPipedStdin = false;
+        }
+        if (isPipedStdin) {
+            process.stdin.once('end', () => void shutdown());
+            process.stdin.once('close', () => void shutdown());
+            process.stdin.resume();
+        }
     } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         process.stderr.write(`${message}\n`);

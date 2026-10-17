@@ -57,6 +57,19 @@ describe('VideoRenderEngine', () => {
         expect(warnSpy).toHaveBeenCalledTimes(1);
     });
 
+    it('logs LOCAL_WORKER_NETWORK_WARNING once when driver name case differs (e.g. localworker)', async () => {
+        const warnSpy = vi.spyOn(mjCore, 'LogWarning').mockImplementation(() => undefined);
+        const dir = await makeTempDirWithConfig(
+            `module.exports = { videoStudio: { render: { driver: 'localworker' } } };\n`,
+        );
+        VideoRenderEngine.Instance.SetSettingsSearchDir(dir);
+
+        const driver = VideoRenderEngine.Instance.Driver;
+        expect(driver).toBeInstanceOf(LocalWorkerRenderDriver);
+        expect(warnSpy).toHaveBeenCalledTimes(1);
+        expect(warnSpy).toHaveBeenCalledWith(LOCAL_WORKER_NETWORK_WARNING);
+    });
+
     it('throws VideoRenderError with Code === UnknownDriver when an unknown driver name is configured', async () => {
         const dir = await makeTempDirWithConfig(
             `module.exports = { videoStudio: { render: { driver: 'NonExistentDriver' } } };\n`,

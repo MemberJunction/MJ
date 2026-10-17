@@ -125,6 +125,7 @@ export class LocalWorkerRenderDriver extends VideoRenderDriverBase {
     private readonly settings: VideoRenderSettings;
     private activeWorker: ActiveWorkerState | null = null;
     private startPromise: Promise<ActiveWorkerState> | null = null;
+    private parentExitListener: (() => void) | null = null;
     private stopping = false;
 
     public constructor(settings: VideoRenderSettings = ReadVideoRenderSettings()) {
@@ -263,6 +264,7 @@ export class LocalWorkerRenderDriver extends VideoRenderDriverBase {
             }
         }
 
+        this.removeParentExitListener();
         const worker = this.activeWorker;
         this.activeWorker = null;
         if (!worker) {
@@ -270,6 +272,13 @@ export class LocalWorkerRenderDriver extends VideoRenderDriverBase {
         }
 
         await this.terminateChildProcess(worker.Child);
+    }
+
+    private removeParentExitListener(): void {
+        if (this.parentExitListener) {
+            process.removeListener('exit', this.parentExitListener);
+            this.parentExitListener = null;
+        }
     }
 
     private async ensureClient(signal?: AbortSignal): Promise<RenderWorkerHttpClient> {
@@ -369,7 +378,7 @@ export class LocalWorkerRenderDriver extends VideoRenderDriverBase {
         const deadline = Date.now() + startupTimeoutMs;
 
         const child = spawn(process.execPath, args, {
-            stdio: ['ignore', 'pipe', 'pipe'],
+            stdio: ['pipe', 'pipe', 'pipe'],
             env,
         });
 
@@ -422,7 +431,22 @@ export class LocalWorkerRenderDriver extends VideoRenderDriverBase {
             Client: client,
         };
 
+        this.removeParentExitListener();
+        const onParentExit = (): void => {
+            try {
+                child.kill('SIGKILL');
+            } catch {
+                // Ignore if child has already exited.
+            }
+        };
+        this.parentExitListener = onParentExit;
+        process.on('exit', onParentExit);
+
         const onChildExit = (): void => {
+            if (this.parentExitListener === onParentExit) {
+                process.removeListener('exit', onParentExit);
+                this.parentExitListener = null;
+            }
             if (this.activeWorker?.Child === child) {
                 this.activeWorker = null;
             }

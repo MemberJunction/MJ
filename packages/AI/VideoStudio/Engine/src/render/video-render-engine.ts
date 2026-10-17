@@ -75,10 +75,10 @@ export class VideoRenderEngine extends BaseSingleton<VideoRenderEngine> implemen
                 throw new VideoRenderError(
                     'UnknownDriver',
                     `Unknown video render driver '${settings.Driver}' configured in videoStudio.render.driver. ` +
-                        `Registered drivers: 'LocalWorker', 'Remote', 'Docker'.`,
+                        `Registered drivers: 'LocalWorker'.`,
                 );
             }
-            if (settings.Driver === 'LocalWorker' && !hasLoggedLocalWorkerWarning) {
+            if (lookup.Instance instanceof LocalWorkerRenderDriver && !hasLoggedLocalWorkerWarning) {
                 hasLoggedLocalWorkerWarning = true;
                 LogWarning(LOCAL_WORKER_NETWORK_WARNING);
             }
