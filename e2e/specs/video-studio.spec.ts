@@ -211,3 +211,70 @@ test.describe('Video Studio — Brand Kits & Archetypes (VS-UX-1)', () => {
   });
 });
 
+test.describe('Video Studio — Studio & Copilot Iterate (VS-UX-2)', () => {
+  test.describe.configure({ mode: 'serial' });
+
+  test('Studio tab picks archetype, brand kit, and topic, clicks Start production to send composed message to copilot, then verifies Productions Iterate opens conversation with artifact attached', async ({
+    page,
+  }) => {
+    await openVideoStudioTab(page, 'Studio');
+    await expect(
+      page.locator('mj-video-studio-studio-resource'),
+    ).toBeVisible({ timeout: 30_000 });
+
+    const startForm = page.getByTestId('studio-start-form');
+    const copilotPanel = page.getByTestId('vs-copilot-panel');
+    await expect(startForm).toBeVisible({ timeout: 30_000 });
+    await expect(copilotPanel).toBeVisible({ timeout: 30_000 });
+
+    const startBtn = page.getByTestId('studio-start-button');
+    await expect(startBtn).toBeDisabled();
+
+    // Pick first archetype card
+    const firstArchetype = page.locator('[data-testid^="studio-archetype-card-"]').first();
+    await expect(firstArchetype).toBeVisible({ timeout: 30_000 });
+    await firstArchetype.click();
+
+    // Pick first brand kit option (index 1, after 'None')
+    const brandKitSelect = page.getByTestId('studio-brand-kit-select');
+    await expect(brandKitSelect).toBeVisible();
+    await brandKitSelect.selectOption({ index: 1 });
+
+    // Enter topic
+    const topicInput = page.getByTestId('studio-topic-input');
+    const topicText = 'Q3 revenue highlights and customer momentum';
+    await topicInput.fill(topicText);
+
+    await expect(startBtn).toBeEnabled();
+    await startBtn.click();
+
+    // Verify copilot chat area receives the composed message
+    const chatArea = copilotPanel.getByTestId('vs-copilot-chat-area');
+    await expect(chatArea).toBeVisible({ timeout: 30_000 });
+    await expect(chatArea).toContainText(topicText, { timeout: 30_000 });
+
+    // Navigate to Productions and verify production + Iterate
+    await openVideoStudioTab(page, 'Productions');
+    await expect(
+      page.locator('mj-video-studio-productions-resource'),
+    ).toBeVisible({ timeout: 30_000 });
+
+    const firstProductionCard = page.locator('[data-testid^="production-card-"]').first();
+    await expect(firstProductionCard).toBeVisible({ timeout: 60_000 });
+    await firstProductionCard.click();
+
+    const detailPane = page.getByTestId('production-detail-pane');
+    await expect(detailPane).toBeVisible({ timeout: 30_000 });
+
+    const iterateBtn = detailPane.getByTestId('production-iterate-button');
+    await expect(iterateBtn).toBeVisible();
+    await expect(iterateBtn).toBeEnabled({ timeout: 30_000 });
+    await iterateBtn.click();
+
+    const dockedCopilot = detailPane.getByTestId('production-iterate-copilot');
+    await expect(dockedCopilot).toBeVisible({ timeout: 30_000 });
+    await expect(dockedCopilot.getByTestId('vs-copilot-chat-area')).toBeVisible({
+      timeout: 30_000,
+    });
+  });
+});

@@ -1,0 +1,112 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+}
+
+.vs-copilot-panel {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  background: var(--mj-bg-surface);
+  border-left: 1px solid var(--mj-border-default);
+}
+
+.vs-copilot-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface-card);
+  flex-shrink: 0;
+}
+
+.vs-copilot-panel__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--mj-text-sm);
+  font-weight: 600;
+  color: var(--mj-text-primary);
+}
+
+.vs-copilot-panel__title i {
+  color: var(--mj-brand-primary);
+}
+
+.vs-copilot-panel__close-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--mj-radius-sm);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--mj-text-muted);
+  cursor: pointer;
+}
+
+.vs-copilot-panel__close-btn:hover {
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-text-primary);
+}
+
+.vs-copilot-panel__body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.vs-copilot-panel__body mj-conversation-chat-area {
+  display: block;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+
+.vs-copilot-panel__loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  padding: 24px;
+}
+
+.vs-copilot-panel__missing {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  flex: 1;
+  padding: 24px;
+  margin: 16px;
+  border-radius: var(--mj-radius-md);
+  border: 1px solid var(--mj-status-warning-border);
+  background: var(--mj-status-warning-bg);
+  color: var(--mj-text-primary);
+  text-align: center;
+}
+
+.vs-copilot-panel__missing i {
+  font-size: 20px;
+  color: var(--mj-status-warning);
+}
+
+.vs-copilot-panel__missing-text {
+  margin: 0;
+  font-size: var(--mj-text-sm);
+  color: var(--mj-text-secondary);
+}

@@ -72,17 +72,18 @@ const {
             const hooks = params as ExecuteAgentParams<P> & {
                 __mockNextStepResult?: BaseAgentNextStep<P>;
             };
-            if (hooks.__mockNextStepResult) {
-                return hooks.__mockNextStepResult;
-            }
-            return (
+            const result =
+                hooks.__mockNextStepResult ??
                 previousDecision ??
                 ({
                     step: 'Retry',
                     terminate: false,
                     newPayload: params.payload,
-                } as BaseAgentNextStep<P>)
-            );
+                } as BaseAgentNextStep<P>);
+            if (this._agentRun && result.newPayload !== undefined) {
+                this._agentRun.FinalPayloadObject = JSON.parse(JSON.stringify(result.newPayload));
+            }
+            return result;
         }
 
         protected async validateNextStep<P = unknown>(
@@ -378,26 +379,33 @@ describe('VideoStudioAgent driver lifecycle', () => {
         );
         expect(pausedOnTurn2.step).toBe('Plan');
 
-        // Action caller with Interaction: { Mode: 'Autonomous', MaxRepairRounds: 2 } and the same archetype switch -> not required
+        // Action caller with Interaction: { Mode: 'Autonomous', MaxRepairRounds: 9 } and the same archetype switch -> not required,
+        // and MaxRepairRounds is always overwritten from settings (2) rather than trusting caller payload (9)
         const callerAutonomousAgent = createAgent();
         const callerAutonomousSpec = CreateDeliveredSpecFixture();
         callerAutonomousSpec.Archetype = { Name: 'Topic Explainer' };
-        callerAutonomousSpec.Interaction = { Mode: 'Autonomous', MaxRepairRounds: 2 };
+        callerAutonomousSpec.Interaction = { Mode: 'Autonomous', MaxRepairRounds: 9 };
         callerAutonomousSpec.Review.Gates = callerAutonomousSpec.Review.Gates.filter((g) => g.Gate !== 'G2');
+        let callerAutonomousSeeded: Partial<VideoGenerationSpec> | undefined;
         const callerAutonomousParams = {
             payload: callerAutonomousSpec,
             conversationMessages: [],
+            __onExecuteAgentInternal: (sp: ExecuteAgentParams<Partial<VideoGenerationSpec>>) => {
+                callerAutonomousSeeded = sp.payload;
+            },
         } as unknown as ExecuteAgentParams<Partial<VideoGenerationSpec>>;
         await callerAutonomousAgent.executeAgentInternal(callerAutonomousParams, dummyConfig);
+        expect(callerAutonomousSeeded?.Interaction).toEqual({ Mode: 'Autonomous', MaxRepairRounds: 2 });
         const callerSwitched = callerAutonomousAgent.ApplyStageResult(
             callerAutonomousParams,
             'Video Studio - Director',
             {
                 ...callerAutonomousSpec,
                 Archetype: { Name: 'Customer Story' },
+                Interaction: { Mode: 'Autonomous', MaxRepairRounds: 9 },
             },
         );
-        expect(callerSwitched.Interaction?.Mode).toBe('Autonomous');
+        expect(callerSwitched.Interaction).toEqual({ Mode: 'Autonomous', MaxRepairRounds: 2 });
         const allowedAutonomous = await callerAutonomousAgent.validateSubAgentNextStep(
             callerAutonomousParams,
             preProdStep,
@@ -407,18 +415,23 @@ describe('VideoStudioAgent driver lifecycle', () => {
         );
         expect(allowedAutonomous.step).toBe('Sub-Agent');
 
-        // Fix 4: A throwing GetArchetypeByName rejects instead of silently resolving to Autonomous
+        // A throwing GetArchetypeByName rejects instead of silently resolving to Autonomous
+        const throwingEngineAgent = createAgent();
+        const throwingEngineParams = {
+            payload: {},
+            conversationMessages: [],
+        } as unknown as ExecuteAgentParams<Partial<VideoGenerationSpec>>;
+        await throwingEngineAgent.executeAgentInternal(throwingEngineParams, dummyConfig);
         mockVideoStudioEngineInstance.GetArchetypeByName.mockImplementationOnce(() => {
             throw new Error('VideoStudioEngine not initialized');
         });
-        const throwingEngineAgent = createAgent();
         await expect(
-            throwingEngineAgent.executeAgentInternal(
-                {
-                    payload: { Archetype: { Name: 'Customer Story' } },
-                    conversationMessages: [],
-                } as unknown as ExecuteAgentParams<Partial<VideoGenerationSpec>>,
-                dummyConfig,
+            throwingEngineAgent.validateSubAgentNextStep(
+                throwingEngineParams,
+                preProdStep,
+                childStorySpec,
+                dummyRun,
+                dummyStep,
             ),
         ).rejects.toThrow('VideoStudioEngine not initialized');
     });
@@ -707,7 +720,7 @@ describe('VideoStudioAgent driver lifecycle', () => {
         expect(refusedTerminateAfter.retryInstructions).toBe('Stages never end the run; finish with Success');
         expect(refusedTerminateAfter.errorMessage).toBe('Stages never end the run; finish with Success');
 
-        // Sub-Agent targeting Critic with finishIf set is refused with errorMessage
+        // Sub-Agent targeting Critic with finishIf set on the BaseAgentNextStep object is refused with errorMessage
         const finishIfStep: BaseAgentNextStep<Partial<VideoGenerationSpec>> = {
             step: 'Sub-Agent',
             terminate: false,
@@ -715,8 +728,11 @@ describe('VideoStudioAgent driver lifecycle', () => {
                 name: 'Video Studio - Critic',
                 message: 'Conditional finish',
                 terminateAfter: false,
-                finishIf: 'payload.Status == "Reviewed"',
-            } as BaseAgentNextStep<Partial<VideoGenerationSpec>>['subAgent'],
+            },
+            finishIf: {
+                questions: ['Is the film finished?'],
+                message: 'Done',
+            },
         };
         const refusedFinishIf = await agent.validateSubAgentNextStep(
             params,
@@ -752,7 +768,7 @@ describe('VideoStudioAgent driver lifecycle', () => {
         expect(normalizedClientTools.terminate).toBe(false);
     });
 
-    it('(5) refuses Pre-Production before G2 with errorMessage, pauses with step = Plan (containing beats) at G2 under ApproveStoryboard, and advances on next turn when user approves without mutating caller params', async () => {
+    it('(5) refuses Pre-Production before G2 with errorMessage, pauses with step = Plan (containing beats) at G2 under ApproveStoryboard (including case-insensitive stage names), and advances on next turn when user approves without mutating caller params', async () => {
         const agent = createAgent();
         const spec = CreateDeliveredSpecFixture();
         spec.Interaction.Mode = 'ApproveStoryboard';
@@ -789,6 +805,27 @@ describe('VideoStudioAgent driver lifecycle', () => {
         expect(refusedBeforeG2.retryInstructions).toContain('G2 (Plan)');
         expect(refusedBeforeG2.errorMessage).toContain('G2 (Plan)');
 
+        // Case-insensitive stage name: 'video studio - pre-production' with no storyboard -> Retry naming G2
+        const lowercasePreProdStep: BaseAgentNextStep<Partial<VideoGenerationSpec>> = {
+            step: 'Sub-Agent',
+            terminate: false,
+            subAgent: {
+                name: 'video studio - pre-production',
+                message: 'Run pre-production lowercase',
+                terminateAfter: false,
+            },
+        };
+        const refusedLowercaseBeforeG2 = await agent.validateSubAgentNextStep(
+            unreadyParams,
+            lowercasePreProdStep,
+            unreadySpec,
+            dummyRun,
+            dummyStep,
+        );
+        expect(refusedLowercaseBeforeG2.step).toBe('Retry');
+        expect(refusedLowercaseBeforeG2.retryInstructions).toContain('G2 (Plan)');
+        expect(refusedLowercaseBeforeG2.errorMessage).toContain('G2 (Plan)');
+
         // With valid storyboard under ApproveStoryboard, Pre-Production returns step = 'Plan' with the beats table
         const params = {
             payload: spec,
@@ -797,6 +834,26 @@ describe('VideoStudioAgent driver lifecycle', () => {
         } as unknown as ExecuteAgentParams<Partial<VideoGenerationSpec>>;
 
         await agent.executeAgentInternal(params, dummyConfig);
+
+        // Case-insensitive stage name: 'VIDEO STUDIO - PRE-PRODUCTION' under ApproveStoryboard -> Plan
+        const uppercasePreProdStep: BaseAgentNextStep<Partial<VideoGenerationSpec>> = {
+            step: 'Sub-Agent',
+            terminate: false,
+            subAgent: {
+                name: 'VIDEO STUDIO - PRE-PRODUCTION',
+                message: 'Run pre-production uppercase',
+                terminateAfter: false,
+            },
+        };
+        const pausedUppercase = await agent.validateSubAgentNextStep(
+            params,
+            uppercasePreProdStep,
+            spec,
+            dummyRun,
+            dummyStep,
+        );
+        expect(pausedUppercase.step).toBe('Plan');
+        expect(pausedUppercase.planDetails?.plan).toContain('## Storyboard Review');
 
         const paused = await agent.validateSubAgentNextStep(
             params,
@@ -952,18 +1009,46 @@ describe('VideoStudioAgent driver lifecycle', () => {
         expect(afterMotion.Review?.Gates.find((g) => g.Gate === 'G4')?.Status).toBe('Failed');
         expect(afterMotion.Review?.Gates.find((g) => g.Gate === 'G4')?.Notes).not.toBe('Approved');
 
-        // Storyboard result clears G2 approval and Output.Source
+        // Storyboard result clears G2 approval and Output.Source, and executeNextStep updates AgentRun.FinalPayloadObject
+        // even when the stage name is lowercase ('video studio - storyboard')
         const specBeforeStoryboard = CreateDeliveredSpecFixture();
         specBeforeStoryboard.Interaction.Mode = 'ApproveStoryboard';
-        const afterStoryboard = agent.ApplyStageResult(
-            throwingProgressParams,
-            'Video Studio - Storyboard',
-            specBeforeStoryboard,
+        const storyboardParams = {
+            payload: specBeforeStoryboard,
+            __mockNextStepResult: {
+                step: 'Retry',
+                terminate: false,
+                newPayload: specBeforeStoryboard,
+            },
+        } as unknown as ExecuteAgentParams<Partial<VideoGenerationSpec>>;
+        await agent.executeAgentInternal(storyboardParams, dummyConfig);
+        (agent as unknown as { _agentRun: Partial<MJAIAgentRunEntityExtended> })._agentRun = {
+            FinalPayloadObject: undefined,
+        };
+        const storyboardStepResult = await agent.executeNextStep(
+            storyboardParams,
+            dummyConfig,
+            {
+                step: 'Sub-Agent',
+                terminate: false,
+                subAgent: {
+                    name: 'video studio - storyboard',
+                    message: 'Rebuild beats',
+                    terminateAfter: false,
+                },
+            },
+            1,
         );
-        expect(afterStoryboard.Output?.Source).toBeUndefined();
-        expect(afterStoryboard.Output?.Videos).toBeUndefined();
-        expect(afterStoryboard.Review?.Gates.find((g) => g.Gate === 'G2')?.Status).toBe('Pending');
-        expect(afterStoryboard.Review?.Gates.find((g) => g.Gate === 'G2')?.Notes).toBe('AwaitingApproval');
+        expect(storyboardStepResult.newPayload?.Output?.Source).toBeUndefined();
+        expect(storyboardStepResult.newPayload?.Output?.Videos).toBeUndefined();
+        expect(storyboardStepResult.newPayload?.Review?.Gates.find((g) => g.Gate === 'G2')?.Status).toBe('Pending');
+        expect(storyboardStepResult.newPayload?.Review?.Gates.find((g) => g.Gate === 'G2')?.Notes).toBe('AwaitingApproval');
+
+        const finalPayloadAfterStoryboard = agent.AgentRun?.FinalPayloadObject as Partial<VideoGenerationSpec> | undefined;
+        expect(finalPayloadAfterStoryboard?.Output?.Source).toBeUndefined();
+        expect(finalPayloadAfterStoryboard?.Output?.Videos).toBeUndefined();
+        expect(finalPayloadAfterStoryboard?.Review?.Gates.find((g) => g.Gate === 'G2')?.Status).toBe('Pending');
+        expect(finalPayloadAfterStoryboard?.Review?.Gates.find((g) => g.Gate === 'G2')?.Notes).toBe('AwaitingApproval');
 
         // When a stage sub-agent fails (result.step === 'Failed'), executeNextStep does NOT clear downstream evidence
         const specBeforeFailedMotion = CreateDeliveredSpecFixture();
@@ -1038,6 +1123,10 @@ describe('VideoStudioAgent driver lifecycle', () => {
 
         const missingAudioFileSpec = JSON.parse(JSON.stringify(narratedSpec)) as VideoGenerationSpec;
         delete missingAudioFileSpec.Audio.Narration!.Script[0].AudioFileID;
+        await agent.executeAgentInternal(
+            { payload: missingAudioFileSpec } as unknown as ExecuteAgentParams<Partial<VideoGenerationSpec>>,
+            dummyConfig,
+        );
         const afterIncompletePreProd = agent.ApplyStageResult(
             { payload: missingAudioFileSpec } as unknown as ExecuteAgentParams<Partial<VideoGenerationSpec>>,
             'Video Studio - Pre-Production',
@@ -1174,7 +1263,7 @@ describe('VideoStudioAgent driver lifecycle', () => {
         expect(delivered.newPayload?.Review?.HumanReviewNotes).toContain('hero_abstract_grid');
     });
 
-    it('(9) refuses forged Passed gates without Output (naming G4 with errorMessage), refuses G6 failure, enforces SPEC-2b before Render, injects templateParameters for Director/Art Director/Storyboard, and sets Status = Delivered when G1..G6 pass', async () => {
+    it('(9) refuses forged Passed gates without Output (naming G4 with errorMessage), refuses G6 failure, enforces SPEC-2b before Render (including Produce Video action payload shape without MaxRepairRounds), injects templateParameters for Director/Art Director/Storyboard, and sets Status = Delivered when G1..G6 pass', async () => {
         const agent = createAgent();
 
         // Acceptance item 2: Forged Passed gates with no Output is still a Retry naming G4 with errorMessage
@@ -1231,7 +1320,6 @@ describe('VideoStudioAgent driver lifecycle', () => {
         renderSpec.Assets.Required = [];
         for (const line of renderSpec.Audio.Narration!.Script) {
             line.Text = 'Momentum continues across every segment.';
-            delete line.AudioFileID;
         }
         renderSpec.Deliverables.Captions = false;
         for (const beat of renderSpec.Beats) {
@@ -1245,7 +1333,21 @@ describe('VideoStudioAgent driver lifecycle', () => {
         delete renderSpec.Output!.PosterFileID;
         delete renderSpec.Output!.CaptionsFileID;
         delete renderSpec.Output!.ContactSheetFileIDs;
-        mockVideoStudioEngineInstance.GetArchetypeByName.mockReturnValue(null);
+
+        // Round 3 Fix 1: Produce Video action's exact payload shape (Interaction: { Mode: 'Autonomous' } with no MaxRepairRounds)
+        // seeded via executeAgentInternal and passed to validateSubAgentNextStep for Render reaches Sub-Agent (not Retry with InvalidMaxRepairRounds)
+        const actionPayloadSpec = JSON.parse(JSON.stringify(renderSpec)) as VideoGenerationSpec;
+        actionPayloadSpec.Archetype = { Name: 'product-launch' };
+        actionPayloadSpec.Interaction = { Mode: 'Autonomous' } as VideoGenerationSpec['Interaction'];
+        let actionSeeded: Partial<VideoGenerationSpec> | undefined;
+        const actionRenderParams = {
+            payload: actionPayloadSpec,
+            __onExecuteAgentInternal: (sp: ExecuteAgentParams<Partial<VideoGenerationSpec>>) => {
+                actionSeeded = sp.payload;
+            },
+        } as unknown as ExecuteAgentParams<Partial<VideoGenerationSpec>>;
+        await agent.executeAgentInternal(actionRenderParams, dummyConfig);
+        expect(actionSeeded?.Interaction).toEqual({ Mode: 'Autonomous', MaxRepairRounds: 2 });
 
         const renderStep: BaseAgentNextStep<Partial<VideoGenerationSpec>> = {
             step: 'Sub-Agent',
@@ -1256,10 +1358,24 @@ describe('VideoStudioAgent driver lifecycle', () => {
                 terminateAfter: false,
             },
         };
+        const allowedActionRender = await agent.validateSubAgentNextStep(
+            actionRenderParams,
+            renderStep,
+            actionPayloadSpec,
+            dummyRun,
+            dummyStep,
+        );
+        expect(allowedActionRender.step).toBe('Sub-Agent');
+
+        for (const line of renderSpec.Audio.Narration!.Script) {
+            delete line.AudioFileID;
+        }
+        mockVideoStudioEngineInstance.GetArchetypeByName.mockReturnValue(null);
         const renderParamsWithUser = {
             payload: renderSpec,
             contextUser: { ID: 'user-1' },
         } as unknown as ExecuteAgentParams<Partial<VideoGenerationSpec>>;
+        await agent.executeAgentInternal(renderParamsWithUser, dummyConfig);
         const refusedRender = await agent.validateSubAgentNextStep(
             renderParamsWithUser,
             renderStep,

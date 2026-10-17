@@ -115,7 +115,7 @@ describe('VideoStudio gates', () => {
     });
 
     describe('Gate G2 (Plan)', () => {
-        it('passes in Autonomous mode when Storyboarded validation passes, even when Interaction is omitted', () => {
+        it('passes in Autonomous mode when Storyboarded validation passes, even when Interaction is omitted or omits MaxRepairRounds', () => {
             const spec = CreateDeliveredSpecFixture();
             spec.Review.Gates = [];
             const g2 = getGate(EvaluateGates(spec, standardCtx), 'G2');
@@ -126,6 +126,14 @@ describe('VideoStudio gates', () => {
             withoutInteraction.Review = { Gates: [], Rounds: [] };
             const g2WithoutInteraction = getGate(EvaluateGates(withoutInteraction, standardCtx), 'G2');
             expect(g2WithoutInteraction.Status).toBe('Passed');
+
+            const actionStyleInteraction = CreateDeliveredSpecFixture();
+            actionStyleInteraction.Interaction = { Mode: 'Autonomous' } as ReturnType<typeof CreateDeliveredSpecFixture>['Interaction'];
+            actionStyleInteraction.Review.Gates = [];
+            const g1ActionStyle = getGate(EvaluateGates(actionStyleInteraction, standardCtx), 'G1');
+            const g2ActionStyle = getGate(EvaluateGates(actionStyleInteraction, standardCtx), 'G2');
+            expect(g1ActionStyle.Status).toBe('Passed');
+            expect(g2ActionStyle.Status).toBe('Passed');
         });
 
         it('returns Pending with AwaitingApproval in ApproveStoryboard mode without approval, and Passed once Approved', () => {
@@ -435,7 +443,7 @@ describe('VideoStudio gates', () => {
                 '9:16',
             );
 
-            // Failed G3 blocks Critic
+            // Failed G3 blocks Critic (including lowercase/uppercase stage name variants)
             const failedG3Spec = CreateDeliveredSpecFixture();
             failedG3Spec.Review.Gates = [
                 { Gate: 'G3', Status: 'Failed', EvidenceRefs: [], Timestamp: '2026-10-17T00:01:05.000Z' },
@@ -444,13 +452,19 @@ describe('VideoStudio gates', () => {
             expect(
                 CheckStagePrerequisite('Video Studio - Critic', failedG3Spec, failedG3Gates, standardCtx.Settings),
             ).toContain('G3 (Stills)');
+            expect(
+                CheckStagePrerequisite('video studio - pre-production', unapprovedSpec, unapprovedGates, standardCtx.Settings),
+            ).toContain('G2 (Plan)');
+            expect(
+                CheckStagePrerequisite('VIDEO STUDIO - MOTION ENGINEER', spec, gates, draftSettings),
+            ).toContain('G5 (Repair)');
         });
     });
 
     describe('ClearStaleEvidence and formatting helpers', () => {
-        it('clears G2/G3/G4, Output.Source, and render evidence after Storyboard, and clears render evidence + G3/G4 after Motion Engineer and Pre-Production', () => {
+        it('clears G2/G3/G4, Output.Source, and render evidence after Storyboard (case-insensitively), and clears render evidence + G3/G4 after Motion Engineer and Pre-Production', () => {
             const afterStoryboard = CreateDeliveredSpecFixture();
-            ClearStaleEvidence('Video Studio - Storyboard', afterStoryboard);
+            ClearStaleEvidence('video studio - storyboard', afterStoryboard);
             expect(afterStoryboard.Output?.Source).toBeUndefined();
             expect(afterStoryboard.Output?.Videos).toBeUndefined();
             expect(afterStoryboard.Output?.ContactSheetFileIDs).toBeUndefined();
@@ -482,7 +496,7 @@ describe('VideoStudio gates', () => {
             expect(md).toContain('nar-1');
 
             expect(DescribeStageProgress('Video Studio - Director', spec)).toContain('Brief ready:');
-            expect(DescribeStageProgress('Video Studio - Storyboard', spec)).toContain('Storyboard ready:');
+            expect(DescribeStageProgress('video studio - storyboard', spec)).toContain('Storyboard ready:');
         });
     });
 });

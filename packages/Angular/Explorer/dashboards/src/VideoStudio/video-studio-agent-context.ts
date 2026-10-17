@@ -44,6 +44,14 @@ export function CapVideoStudioNames(names: readonly string[]): string[] {
 }
 
 /**
+ * Escape single quotes in a string literal for safe embedding in a RunView SQL ExtraFilter.
+ */
+export function EscapeSqlLiteral(value: string): string {
+    return (value ?? '').replace(/'/g, "''");
+}
+
+
+/**
  * Minimal identifiable item shape accepted by {@link ResolveVideoStudioItem}.
  */
 export interface NamedVideoStudioItem {
@@ -718,3 +726,220 @@ export function BuildArchetypesAgentContext(
 
     return context;
 }
+
+// ============================================================================
+// 4. STUDIO SURFACE HELPERS
+// ============================================================================
+
+/**
+ * Canonical video aspect-ratio format codes selectable in the Studio Start form.
+ */
+export const STUDIO_VIDEO_FORMATS = ['16:9', '9:16', '1:1', '4:5'] as const;
+
+export type StudioVideoFormat = (typeof STUDIO_VIDEO_FORMATS)[number];
+
+/**
+ * Saved query item selectable in the Studio Start form.
+ */
+export interface StudioSavedQueryItem extends NamedVideoStudioItem {
+    ID: string;
+    Name: string;
+}
+
+/**
+ * Parse an archetype's `DefaultFormats` string (JSON array or comma-separated list)
+ * into a deduplicated array of canonical {@link StudioVideoFormat} values.
+ * Falls back to `['16:9']` when no valid format codes are present.
+ */
+export function ParseArchetypeDefaultFormats(
+    raw: string | null | undefined,
+): StudioVideoFormat[] {
+    const text = (raw ?? '').trim();
+    if (!text) {
+        return ['16:9'];
+    }
+
+    let tokens: string[] = [];
+    if (text.startsWith('[')) {
+        try {
+            const parsed: unknown = JSON.parse(text);
+            if (Array.isArray(parsed)) {
+                tokens = parsed.filter((v): v is string => typeof v === 'string');
+            }
+        } catch {
+            tokens = text.split(',');
+        }
+    } else {
+        tokens = text.split(',');
+    }
+
+    const allowed = new Set<string>(STUDIO_VIDEO_FORMATS);
+    const seen = new Set<StudioVideoFormat>();
+    const result: StudioVideoFormat[] = [];
+
+    for (const token of tokens) {
+        const cleaned = token.replace(/['"\[\]\s]/g, '').trim();
+        if (allowed.has(cleaned)) {
+            const fmt = cleaned as StudioVideoFormat;
+            if (!seen.has(fmt)) {
+                seen.add(fmt);
+                result.push(fmt);
+            }
+        }
+    }
+
+    return result.length > 0 ? result : ['16:9'];
+}
+
+/**
+ * Clamp a requested duration in seconds to an archetype's `[min, max]` bounds.
+ */
+export function ClampStudioDuration(
+    value: number,
+    minSeconds: number,
+    maxSeconds: number,
+): number {
+    const safeMin = Number.isFinite(minSeconds) && minSeconds > 0 ? Math.round(minSeconds) : 5;
+    const safeMax =
+        Number.isFinite(maxSeconds) && maxSeconds >= safeMin ? Math.round(maxSeconds) : Math.max(safeMin, 180);
+    if (!Number.isFinite(value)) {
+        return safeMin;
+    }
+    const rounded = Math.round(value);
+    return Math.min(safeMax, Math.max(safeMin, rounded));
+}
+
+/**
+ * Input to {@link ComposeStudioFirstMessage}.
+ */
+export interface StudioFirstMessageInput {
+    ArchetypeName: string;
+    Topic: string;
+    DurationSeconds: number;
+    Formats: readonly string[];
+    BrandKitName?: string | null;
+    QueryNames?: readonly string[];
+}
+
+/**
+ * Deterministic plain-text first message composer for starting a new Studio production:
+ * `"Make a <archetype> video, about <topic>, <n> seconds, formats <list>, brand kit <name>, data from <query names>."`
+ */
+export function ComposeStudioFirstMessage(input: StudioFirstMessageInput): string {
+    const archetype = (input.ArchetypeName ?? '').trim() || 'Explainer';
+    const topic = (input.Topic ?? '').trim();
+    const duration = Number.isFinite(input.DurationSeconds) && input.DurationSeconds > 0
+        ? Math.round(input.DurationSeconds)
+        : 30;
+    const formats =
+        input.Formats && input.Formats.length > 0
+            ? input.Formats.map((f) => f.trim()).filter((f) => f.length > 0).join(', ')
+            : '16:9';
+    const brandKit = (input.BrandKitName ?? '').trim() || 'none';
+    const queriesList = (input.QueryNames ?? [])
+        .map((q) => q.trim())
+        .filter((q) => q.length > 0);
+    const queriesText = queriesList.length > 0 ? queriesList.join(', ') : 'none';
+
+    return `Make a ${archetype} video, about ${topic}, ${duration} seconds, formats ${formats}, brand kit ${brandKit}, data from ${queriesText}.`;
+}
+
+/**
+ * Structured `AppContext` payload passed to `<vs-copilot-panel>` when starting a production.
+ */
+export interface StudioAppContextPayload {
+    ArchetypeID: string | null;
+    BrandKitID: string | null;
+    Formats: string[];
+    DurationSeconds: number;
+    QueryIDs: string[];
+}
+
+/**
+ * Build the `{ VideoStudio: { ArchetypeID, BrandKitID, Formats, DurationSeconds, QueryIDs } }`
+ * app context object passed into `<vs-copilot-panel>` / `<mj-conversation-chat-area>`.
+ */
+export function BuildStudioAppContext(
+    input: StudioAppContextPayload,
+): { VideoStudio: StudioAppContextPayload } {
+    return {
+        VideoStudio: {
+            ArchetypeID: input.ArchetypeID ?? null,
+            BrandKitID: input.BrandKitID ?? null,
+            Formats: [...(input.Formats ?? [])],
+            DurationSeconds: input.DurationSeconds,
+            QueryIDs: [...(input.QueryIDs ?? [])],
+        },
+    };
+}
+
+/**
+ * Input snapshot used by {@link BuildStudioAgentContext}.
+ */
+export interface StudioAgentContextInput {
+    AllArchetypes: readonly NamedVideoStudioItem[];
+    AllBrandKits: readonly NamedVideoStudioItem[];
+    SelectedArchetype: ArchetypeCardSnapshot | null;
+    SelectedBrandKit: BrandKitCardSnapshot | null;
+    SelectedFormats: readonly string[];
+    DurationSeconds: number;
+    Topic: string;
+    SelectedQueries: readonly StudioSavedQueryItem[];
+    ActiveConversationId: string | null;
+    IsLoading: boolean;
+}
+
+/**
+ * Build the bounded, read-only agent context object for the Studio surface.
+ */
+export function BuildStudioAgentContext(
+    input: StudioAgentContextInput,
+): Record<string, unknown> {
+    const archetypeNames = input.AllArchetypes.map((a) => a.Name);
+    const brandKitNames = input.AllBrandKits.map((b) => b.Name);
+    const queryNames = input.SelectedQueries.map((q) => q.Name);
+
+    const cappedArchetypes = CapVideoStudioNames(archetypeNames);
+    const cappedBrandKits = CapVideoStudioNames(brandKitNames);
+    const cappedQueries = CapVideoStudioNames(queryNames);
+
+    const trimmedTopic = (input.Topic ?? '').trim();
+    const canStart = trimmedTopic.length > 0 && input.SelectedArchetype !== null;
+
+    const context: Record<string, unknown> = {
+        Surface: 'VideoStudioStudio',
+        TotalArchetypeCount: input.AllArchetypes.length,
+        TotalBrandKitCount: input.AllBrandKits.length,
+        SelectedArchetypeId: input.SelectedArchetype?.ID ?? null,
+        SelectedArchetypeName: input.SelectedArchetype?.Name ?? null,
+        SelectedBrandKitId: input.SelectedBrandKit?.ID ?? null,
+        SelectedBrandKitName: input.SelectedBrandKit?.Name ?? null,
+        SelectedFormats: [...input.SelectedFormats],
+        DurationSeconds: input.DurationSeconds,
+        MinDurationSeconds: input.SelectedArchetype?.MinDurationSeconds ?? 5,
+        MaxDurationSeconds: input.SelectedArchetype?.MaxDurationSeconds ?? 180,
+        Topic: trimmedTopic,
+        HasTopic: trimmedTopic.length > 0,
+        CanStartProduction: canStart,
+        SelectedQueryIds: input.SelectedQueries.map((q) => q.ID),
+        SelectedQueryNames: cappedQueries,
+        AvailableArchetypeNames: cappedArchetypes,
+        AvailableBrandKitNames: cappedBrandKits,
+        AvailableFormats: [...STUDIO_VIDEO_FORMATS],
+        ActiveConversationId: input.ActiveConversationId,
+        IsLoading: input.IsLoading,
+    };
+
+    if (archetypeNames.length > VIDEO_STUDIO_NAME_LIST_CAP) {
+        context['AvailableArchetypeCount'] = archetypeNames.length;
+    }
+    if (brandKitNames.length > VIDEO_STUDIO_NAME_LIST_CAP) {
+        context['AvailableBrandKitCount'] = brandKitNames.length;
+    }
+    if (queryNames.length > VIDEO_STUDIO_NAME_LIST_CAP) {
+        context['SelectedQueryCount'] = queryNames.length;
+    }
+
+    return context;
+}
+

@@ -28,6 +28,12 @@ import {
     ArchetypeCardSnapshot,
     ArchetypeFilterState,
     ArchetypesAgentContextInput,
+    STUDIO_VIDEO_FORMATS,
+    ParseArchetypeDefaultFormats,
+    ClampStudioDuration,
+    ComposeStudioFirstMessage,
+    BuildStudioAppContext,
+    BuildStudioAgentContext,
 } from '../VideoStudio/video-studio-agent-context';
 
 // ============================================================================
@@ -347,3 +353,112 @@ describe('FilterArchetypeCards, GroupArchetypesByCategory & BuildArchetypesAgent
         expect(ctx['AvailableCategories']).toEqual([...ARCHETYPE_CATEGORIES]);
     });
 });
+
+// ============================================================================
+// 4. Studio surface
+// ============================================================================
+
+describe('ParseArchetypeDefaultFormats, ClampStudioDuration, ComposeStudioFirstMessage & BuildStudioAgentContext', () => {
+    it('parses JSON array or comma-separated formats and falls back to 16:9 when empty/invalid', () => {
+        expect(ParseArchetypeDefaultFormats('["16:9", "9:16"]')).toEqual(['16:9', '9:16']);
+        expect(ParseArchetypeDefaultFormats('16:9, 1:1, 4:5, 16:9')).toEqual(['16:9', '1:1', '4:5']);
+        expect(ParseArchetypeDefaultFormats('invalid, 99:99')).toEqual(['16:9']);
+        expect(ParseArchetypeDefaultFormats('')).toEqual(['16:9']);
+        expect(ParseArchetypeDefaultFormats(null)).toEqual(['16:9']);
+    });
+
+    it('clamps duration to archetype min and max bounds', () => {
+        expect(ClampStudioDuration(45, 15, 90)).toBe(45);
+        expect(ClampStudioDuration(5, 15, 90)).toBe(15);
+        expect(ClampStudioDuration(140, 15, 90)).toBe(90);
+        expect(ClampStudioDuration(Number.NaN, 15, 90)).toBe(15);
+    });
+
+    it('composes deterministic plain-text first message naming archetype, topic, duration, formats, brand kit, and queries', () => {
+        const message = ComposeStudioFirstMessage({
+            ArchetypeName: 'Executive Briefing',
+            Topic: 'Q3 revenue growth and customer expansion',
+            DurationSeconds: 60,
+            Formats: ['16:9', '9:16'],
+            BrandKitName: 'Acme Primary Brand',
+            QueryNames: ['Quarterly ARR By Segment', 'Top Customer Renewals'],
+        });
+
+        expect(message).toBe(
+            'Make a Executive Briefing video, about Q3 revenue growth and customer expansion, 60 seconds, formats 16:9, 9:16, brand kit Acme Primary Brand, data from Quarterly ARR By Segment, Top Customer Renewals.',
+        );
+
+        const minimal = ComposeStudioFirstMessage({
+            ArchetypeName: 'Social Reel',
+            Topic: 'New feature launch',
+            DurationSeconds: 15,
+            Formats: ['9:16'],
+            BrandKitName: null,
+            QueryNames: [],
+        });
+
+        expect(minimal).toBe(
+            'Make a Social Reel video, about New feature launch, 15 seconds, formats 9:16, brand kit none, data from none.',
+        );
+    });
+
+    it('builds Studio app context and bounded Studio agent context', () => {
+        const appCtx = BuildStudioAppContext({
+            ArchetypeID: 'arch-1',
+            BrandKitID: 'kit-1',
+            Formats: ['16:9', '1:1'],
+            DurationSeconds: 75,
+            QueryIDs: ['q-1', 'q-2'],
+        });
+        expect(appCtx).toEqual({
+            VideoStudio: {
+                ArchetypeID: 'arch-1',
+                BrandKitID: 'kit-1',
+                Formats: ['16:9', '1:1'],
+                DurationSeconds: 75,
+                QueryIDs: ['q-1', 'q-2'],
+            },
+        });
+
+        const manyArchetypes = Array.from({ length: 30 }, (_, i) => ({
+            ID: `arch-${i}`,
+            Name: `Archetype ${i}`,
+        }));
+        const manyKits = Array.from({ length: 28 }, (_, i) => ({
+            ID: `kit-${i}`,
+            Name: `Brand Kit ${i}`,
+        }));
+        const manyQueries = Array.from({ length: 27 }, (_, i) => ({
+            ID: `q-${i}`,
+            Name: `Query ${i}`,
+        }));
+
+        const ctx = BuildStudioAgentContext({
+            AllArchetypes: manyArchetypes,
+            AllBrandKits: manyKits,
+            SelectedArchetype: makeArchetypeCard(),
+            SelectedBrandKit: makeBrandKitCard(),
+            SelectedFormats: ['16:9', '9:16'],
+            DurationSeconds: 90,
+            Topic: 'Annual membership recap',
+            SelectedQueries: manyQueries,
+            ActiveConversationId: 'conv-123',
+            IsLoading: false,
+        });
+
+        expect(ctx['Surface']).toBe('VideoStudioStudio');
+        expect(ctx['TotalArchetypeCount']).toBe(30);
+        expect(ctx['TotalBrandKitCount']).toBe(28);
+        expect(ctx['SelectedArchetypeId']).toBe('arch-1');
+        expect(ctx['SelectedBrandKitId']).toBe('kit-1');
+        expect(ctx['CanStartProduction']).toBe(true);
+        expect((ctx['AvailableArchetypeNames'] as string[]).length).toBe(VIDEO_STUDIO_NAME_LIST_CAP);
+        expect(ctx['AvailableArchetypeCount']).toBe(30);
+        expect((ctx['AvailableBrandKitNames'] as string[]).length).toBe(VIDEO_STUDIO_NAME_LIST_CAP);
+        expect(ctx['AvailableBrandKitCount']).toBe(28);
+        expect((ctx['SelectedQueryNames'] as string[]).length).toBe(VIDEO_STUDIO_NAME_LIST_CAP);
+        expect(ctx['SelectedQueryCount']).toBe(27);
+        expect(ctx['AvailableFormats']).toEqual([...STUDIO_VIDEO_FORMATS]);
+    });
+});
+

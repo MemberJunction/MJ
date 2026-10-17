@@ -86,18 +86,37 @@ function isValidInteractionMode(value: unknown): value is VideoInteractionMode {
     );
 }
 
+function resolveCanonicalStage(name: string | undefined | null): VideoStudioStageName | null {
+    if (!name) {
+        return null;
+    }
+    const trimmed = name.trim();
+    const lower = trimmed.toLowerCase();
+    const strippedLower = trimmed.replace(/^video\s+studio\s*-\s*/i, '').trim().toLowerCase();
+    for (const stage of VIDEO_STUDIO_STAGES) {
+        if (lower === stage.toLowerCase()) {
+            return stage;
+        }
+        const suffixLower = stage.replace('Video Studio - ', '').toLowerCase();
+        if (strippedLower === suffixLower && /^video\s+studio\s*-\s*/i.test(trimmed)) {
+            return stage;
+        }
+    }
+    return null;
+}
+
 function isVideoStudioStageName(name: string | undefined | null): boolean {
     if (!name) {
         return false;
     }
-    const trimmed = name.trim();
-    return (
-        (VIDEO_STUDIO_STAGES as readonly string[]).includes(trimmed) ||
-        /^video\s+studio\s*-\s*/i.test(trimmed)
-    );
+    return resolveCanonicalStage(name) !== null || /^video\s+studio\s*-\s*/i.test(name.trim());
 }
 
 function normalizeStageKey(stageName: string): string {
+    const canonical = resolveCanonicalStage(stageName);
+    if (canonical) {
+        return canonical.replace('Video Studio - ', '');
+    }
     return (stageName ?? '')
         .trim()
         .replace(/^video\s+studio\s*-\s*/i, '')
@@ -118,10 +137,8 @@ function normalizeStageKey(stageName: string): string {
 export class VideoStudioAgent extends BaseAgent {
     protected _currentSettings: VideoStudioSettings = { ...DEFAULT_VIDEO_STUDIO_SETTINGS };
     protected _brandKitInScope: boolean = true;
-    private _callerPayloadInteraction: VideoGenerationSpec['Interaction'] | undefined = undefined;
+    private _callerPayloadMode: VideoInteractionMode | null = null;
     private _callerMode: VideoInteractionMode | null = null;
-    private _turnCapturedParams: ExecuteAgentParams | null = null;
-    private _turnSeededParams: ExecuteAgentParams | null = null;
 
     protected override async validateAgent(
         agent: MJAIAgentEntityExtended,
@@ -189,8 +206,6 @@ export class VideoStudioAgent extends BaseAgent {
             ...params,
             payload: seeded as unknown as P,
         };
-        this._turnCapturedParams = params;
-        this._turnSeededParams = nextParams;
 
         return super.executeAgentInternal(nextParams, config);
     }
@@ -208,15 +223,19 @@ export class VideoStudioAgent extends BaseAgent {
                 previousDecision.subAgent?.name ??
                 previousDecision.subAgents?.[0]?.name ??
                 '';
-            if (isVideoStudioStageName(stageName)) {
+            const canonicalStage = resolveCanonicalStage(stageName);
+            if (canonicalStage) {
                 const candidatePayload = (result.newPayload ?? params.payload ?? {}) as Partial<VideoGenerationSpec>;
                 const stageSucceeded = result.step !== 'Failed';
                 const updatedPayload = this.ApplyStageResult(
                     params,
-                    stageName,
+                    canonicalStage,
                     candidatePayload,
                     stageSucceeded,
                 );
+                if (this.AgentRun) {
+                    this.AgentRun.FinalPayloadObject = updatedPayload;
+                }
                 return {
                     ...result,
                     newPayload: updatedPayload as unknown as P,
@@ -238,14 +257,14 @@ export class VideoStudioAgent extends BaseAgent {
         payload: Partial<VideoGenerationSpec>,
         stageSucceeded: boolean = true,
     ): Partial<VideoGenerationSpec> {
-        this.ensureCallerModeCaptured(params);
+        const canonicalStage = resolveCanonicalStage(stageName) ?? stageName.trim();
         const cloned = cloneSpec(payload ?? {});
 
         this.syncDeliverableFormats(cloned);
         this.restoreCallerInteraction(cloned);
 
         if (stageSucceeded) {
-            ClearStaleEvidence(stageName, cloned);
+            ClearStaleEvidence(canonicalStage, cloned);
         }
 
         const effectiveMode = this.resolveEffectiveInteractionMode(cloned);
@@ -261,13 +280,13 @@ export class VideoStudioAgent extends BaseAgent {
         };
         cloned.Status = DeriveStatus(cloned, gates);
 
-        const progressText = DescribeStageProgress(stageName, cloned);
-        const formattedMessage = this.safeFormatHierarchicalMessage(progressText);
+        const progressText = DescribeStageProgress(canonicalStage, cloned);
+        const formattedMessage = this.formatHierarchicalMessage(progressText);
         try {
             params.onProgress?.({
                 step: 'subagent_execution',
                 message: formattedMessage,
-                percentage: STAGE_PROGRESS_PERCENTAGE[stageName.trim()] ?? 50,
+                percentage: STAGE_PROGRESS_PERCENTAGE[canonicalStage] ?? 50,
                 metadata: {
                     VideoStudioStatus: cloned.Status,
                     Gates: gates,
@@ -373,13 +392,7 @@ export class VideoStudioAgent extends BaseAgent {
         const hasStepFinishIf =
             (baseResult.finishIf !== undefined && baseResult.finishIf !== null) ||
             (nextStep.finishIf !== undefined && nextStep.finishIf !== null);
-        if (
-            hasStepFinishIf ||
-            stageRequests.some((req) => {
-                const reqFinishIf = (req as { finishIf?: unknown } | undefined)?.finishIf;
-                return req?.terminateAfter === true || (reqFinishIf !== undefined && reqFinishIf !== null);
-            })
-        ) {
+        if (hasStepFinishIf || stageRequests.some((req) => req?.terminateAfter === true)) {
             const msg = 'Stages never end the run; finish with Success';
             return {
                 ...baseResult,
@@ -391,10 +404,9 @@ export class VideoStudioAgent extends BaseAgent {
         }
 
         const stageReq = stageRequests[0];
-        const stageName = stageReq.name;
+        const stageName = resolveCanonicalStage(stageReq.name) ?? stageReq.name;
         const normalizedStage = normalizeStageKey(stageName);
 
-        this.ensureCallerModeCaptured(params);
         const spec = cloneSpec((currentPayload ?? params.payload ?? {}) as Partial<VideoGenerationSpec>);
         this.syncDeliverableFormats(spec);
         this.restoreCallerInteraction(spec);
@@ -529,7 +541,6 @@ export class VideoStudioAgent extends BaseAgent {
             return baseResult;
         }
 
-        this.ensureCallerModeCaptured(params);
         const spec = cloneSpec(
             (baseResult.newPayload ?? currentPayload ?? params.payload ?? {}) as Partial<VideoGenerationSpec>,
         );
@@ -666,11 +677,8 @@ export class VideoStudioAgent extends BaseAgent {
         // Brand Kit seeding
         this.seedBrandKit(seeded, companyId);
 
-        // Interaction mode: the driver never writes Interaction.Mode; preserve only caller-supplied Interaction
+        // Interaction mode: the driver never writes Interaction.Mode; preserve only caller-supplied Interaction.Mode
         this.restoreCallerInteraction(seeded);
-        if (!this._callerMode) {
-            this.lookupArchetypeDefaultMode(seeded.Archetype?.Name, companyId);
-        }
 
         this.syncDeliverableFormats(seeded);
 
@@ -966,30 +974,26 @@ export class VideoStudioAgent extends BaseAgent {
             (Array.isArray(this.AgentHierarchy) && this.AgentHierarchy.length > 1);
 
         if (isValidInteractionMode(rawCallerMode)) {
-            this._callerPayloadInteraction = cloneSpec(callerInteraction);
+            this._callerPayloadMode = rawCallerMode;
             this._callerMode = rawCallerMode;
         } else if (params?.planMode === true) {
-            this._callerPayloadInteraction = undefined;
+            this._callerPayloadMode = null;
             this._callerMode = 'ApproveStoryboard';
         } else if (isBelowRoot) {
-            this._callerPayloadInteraction = undefined;
+            this._callerPayloadMode = null;
             this._callerMode = 'Autonomous';
         } else {
-            this._callerPayloadInteraction = undefined;
+            this._callerPayloadMode = null;
             this._callerMode = null;
-        }
-        this._turnCapturedParams = params;
-    }
-
-    private ensureCallerModeCaptured(params: ExecuteAgentParams): void {
-        if (params !== this._turnCapturedParams && params !== this._turnSeededParams) {
-            this.captureCallerMode(params);
         }
     }
 
     private restoreCallerInteraction(spec: Partial<VideoGenerationSpec>): void {
-        if (this._callerPayloadInteraction) {
-            spec.Interaction = cloneSpec(this._callerPayloadInteraction);
+        if (this._callerPayloadMode) {
+            spec.Interaction = {
+                Mode: this._callerPayloadMode,
+                MaxRepairRounds: this._currentSettings.MaxRepairRounds,
+            };
         } else {
             delete spec.Interaction;
         }
@@ -1100,12 +1104,10 @@ export class VideoStudioAgent extends BaseAgent {
     ): VideoGenerationSpec {
         const cloned = cloneSpec(spec) as VideoGenerationSpec;
         cloned.Status = stage;
-        if (!cloned.Interaction) {
-            cloned.Interaction = {
-                Mode: effectiveMode,
-                MaxRepairRounds: this._currentSettings.MaxRepairRounds,
-            };
-        }
+        cloned.Interaction = {
+            Mode: effectiveMode,
+            MaxRepairRounds: this._currentSettings.MaxRepairRounds,
+        };
         if (cloned.Render && cloned.Render.Renderer === 'HyperFrames' && !cloned.Render.RendererVersion?.trim()) {
             cloned.Render.RendererVersion = '0.0.0';
         }
@@ -1264,14 +1266,6 @@ export class VideoStudioAgent extends BaseAgent {
             notes.push(`Generated assets disclosed: ${genAssets.map((a) => a.Key).join(', ')}.`);
         }
         return notes.length > 0 ? notes.join(' ') : 'No open items.';
-    }
-
-    private safeFormatHierarchicalMessage(message: string): string {
-        try {
-            return this.formatHierarchicalMessage(message);
-        } catch {
-            return message;
-        }
     }
 }
 
