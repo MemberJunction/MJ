@@ -69,6 +69,7 @@ import { PriorTurnToolResultCache } from './prior-turn-tool-result-cache';
 import { PromptComponentResolver, InjectScopedPromptParts, type PromptComponentScope } from './prompt-component-resolver';
 import { ScopedPromptConfigResolver, ApplyScopedPromptConfig } from './scoped-prompt-config-resolver';
 import { AgentPreExecutionRAGResult } from './agent-pre-execution-rag';
+import { DEFAULT_ABSOLUTE_MAX_PAYLOAD_BYTES, PayloadSizeGuard } from './payload-size-guard';
 import {
     StringifyForPersistence,
     AIPromptParams,
@@ -1143,6 +1144,12 @@ export class BaseAgent {
      * on the right one, and neither shows up as an error.
      */
     protected static readonly DEFAULT_ABSOLUTE_MAX_ITERATIONS = 5000;
+
+    /**
+     * System-wide safety ceiling on serialized agent payload size (16 MiB), overridable
+     * per run via `ExecuteAgentParams.maxPayloadBytes`.
+     */
+    protected static readonly DEFAULT_ABSOLUTE_MAX_PAYLOAD_BYTES = DEFAULT_ABSOLUTE_MAX_PAYLOAD_BYTES;
 
     private _agentRun: MJAIAgentRunEntityExtended | null = null;
 
@@ -7013,7 +7020,7 @@ export class BaseAgent {
         }
 
         // Check if any guardrails are exceeded
-        const guardrailResult = await this.hasExceededAgentRunGuardrails(params, agentRun);
+        const guardrailResult = await this.hasExceededAgentRunGuardrails(params, agentRun, currentPayload);
         
         if (guardrailResult.exceeded) {
             // Log the guardrail violation
@@ -7060,15 +7067,17 @@ export class BaseAgent {
      * 
      * @param params - Execution parameters
      * @param agentRun - Current agent run
+     * @param currentPayload - Optional current step payload to measure against `maxPayloadBytes`
      * @returns Object indicating if guardrails exceeded and details
      * @protected
      */
-    protected async hasExceededAgentRunGuardrails(
+    protected async hasExceededAgentRunGuardrails<P = ExecuteAgentParams['payload']>(
         params: ExecuteAgentParams,
-        agentRun: MJAIAgentRunEntityExtended
+        agentRun: MJAIAgentRunEntityExtended,
+        currentPayload?: P
     ): Promise<{
         exceeded: boolean;
-        type?: 'cost' | 'tokens' | 'iterations' | 'time';
+        type?: 'cost' | 'tokens' | 'iterations' | 'time' | 'payload';
         limit?: number;
         current?: number;
         reason?: string;
@@ -7176,10 +7185,28 @@ export class BaseAgent {
             };
         }
 
+        // Evaluate serialized payload byte ceiling (per-run maxPayloadBytes or 16 MiB default)
+        const effectivePayload = currentPayload !== undefined ? currentPayload : params.payload;
+        const maxPayloadBytes = params.maxPayloadBytes ?? BaseAgent.DEFAULT_ABSOLUTE_MAX_PAYLOAD_BYTES;
+        const payloadCheck = PayloadSizeGuard.Evaluate(effectivePayload, maxPayloadBytes, 'run');
+        if (payloadCheck.exceeded) {
+            return {
+                exceeded: true,
+                type: 'payload',
+                limit: payloadCheck.limitBytes,
+                current: payloadCheck.currentBytes,
+                reason: payloadCheck.reason
+            };
+        }
+
         // Synchronize shared tree budget floor with the current agentRun's metrics (handles both
         // multi-agent trees and direct guardrail invocations with pre-populated agentRun entities)
-        // and evaluate cumulative root-tree ceilings (maxTreeSteps, maxTreeTokens, maxTreeCost, maxTreeDurationMs).
+        // and evaluate cumulative root-tree ceilings (maxTreeSteps, maxTreeTokens, maxTreeCost,
+        // maxTreeDurationMs, maxTreePayloadBytes).
         const budget = this.ensureTreeBudget(params);
+        if (payloadCheck.currentBytes > (budget.peakPayloadBytes ?? 0)) {
+            budget.peakPayloadBytes = payloadCheck.currentBytes;
+        }
         if (agentRun) {
             const runStepsCount = Math.max(agentRun.Steps?.length ?? 0, agentRun.TotalPromptIterations ?? 0);
             if (runStepsCount > budget.totalSteps) {
@@ -7211,7 +7238,7 @@ export class BaseAgent {
      *   counters (`totalSteps`, `totalTokens`, `totalCost`, `startedAtMs`, `breachedReason`).
      * - When `params.treeBudget` is absent (root run), a new {@link AgentTreeBudget} is created
      *   and seeded with any top-level convenience ceilings (`maxTreeSteps`, `maxTreeTokens`,
-     *   `maxTreeCost`, `maxTreeDurationMs`) declared on `params`.
+     *   `maxTreeCost`, `maxTreeDurationMs`, `maxTreePayloadBytes`) declared on `params`.
      *
      * @param params - Optional execution parameters for the current run.
      * @returns The shared {@link AgentTreeBudget} instance for the execution tree.
@@ -7226,9 +7253,11 @@ export class BaseAgent {
                 maxTreeTokens: effectiveParams?.maxTreeTokens,
                 maxTreeCost: effectiveParams?.maxTreeCost,
                 maxTreeDurationMs: effectiveParams?.maxTreeDurationMs,
+                maxTreePayloadBytes: effectiveParams?.maxTreePayloadBytes,
                 totalSteps: 0,
                 totalTokens: 0,
                 totalCost: 0,
+                peakPayloadBytes: 0,
                 startedAtMs: Date.now()
             };
         } else if (effectiveParams) {
@@ -7243,6 +7272,9 @@ export class BaseAgent {
             }
             if (budget.maxTreeDurationMs === undefined && effectiveParams.maxTreeDurationMs !== undefined) {
                 budget.maxTreeDurationMs = effectiveParams.maxTreeDurationMs;
+            }
+            if (budget.maxTreePayloadBytes === undefined && effectiveParams.maxTreePayloadBytes !== undefined) {
+                budget.maxTreePayloadBytes = effectiveParams.maxTreePayloadBytes;
             }
         }
 
@@ -7327,8 +7359,8 @@ export class BaseAgent {
 
     /**
      * Evaluates whether any root-tree cumulative budget ceiling (`maxTreeSteps`, `maxTreeTokens`,
-     * `maxTreeCost`, `maxTreeDurationMs`) on the shared {@link AgentTreeBudget} has been reached
-     * or exceeded.
+     * `maxTreeCost`, `maxTreeDurationMs`, `maxTreePayloadBytes`) on the shared {@link AgentTreeBudget}
+     * has been reached or exceeded.
      *
      * When a ceiling is breached, sets `budget.breachedReason` with a descriptive diagnostic
      * message so both the breaching agent and any ancestor agents in the call tree can terminate
@@ -7340,7 +7372,7 @@ export class BaseAgent {
      */
     protected checkTreeBudgetLimit(params?: ExecuteAgentParams): {
         exceeded: boolean;
-        type?: 'cost' | 'tokens' | 'iterations' | 'time';
+        type?: 'cost' | 'tokens' | 'iterations' | 'time' | 'payload';
         limit?: number;
         current?: number;
         reason?: string;
@@ -7393,6 +7425,23 @@ export class BaseAgent {
                     type: 'time',
                     limit: budget.maxTreeDurationMs,
                     current: elapsedMs,
+                    reason
+                };
+            }
+        }
+
+        if (budget.maxTreePayloadBytes != null) {
+            const peakBytes = budget.peakPayloadBytes ?? 0;
+            if (peakBytes >= budget.maxTreePayloadBytes) {
+                const reason =
+                    budget.breachedReason ??
+                    `Agent tree payload byte budget exceeded (${PayloadSizeGuard.FormatBytes(peakBytes)}/${PayloadSizeGuard.FormatBytes(budget.maxTreePayloadBytes)} peak payload across tree)`;
+                budget.breachedReason = reason;
+                return {
+                    exceeded: true,
+                    type: 'payload',
+                    limit: budget.maxTreePayloadBytes,
+                    current: peakBytes,
                     reason
                 };
             }

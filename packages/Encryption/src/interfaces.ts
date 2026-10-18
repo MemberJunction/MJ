@@ -11,6 +11,8 @@
  * @see {@link EncryptionKeySourceBase} for implementing custom key sources
  */
 
+import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
+
 /**
  * Configuration passed to encryption key source providers during instantiation.
  *
@@ -50,10 +52,11 @@ export interface EncryptionKeySourceConfig {
  * Represents the parsed components of an encrypted value string.
  *
  * Encrypted values follow the format:
- * `$ENC$<keyId>$<algorithm>$<iv>$<ciphertext>[$<authTag>]`
+ * - Versioned (v2+ envelope): `$ENC$<keyId>:<keyVersion>$<algorithm>$<iv>$<ciphertext>[$<authTag>]`
+ * - Legacy (v1 envelope): `$ENC$<keyId>$<algorithm>$<iv>$<ciphertext>[$<authTag>]`
  *
  * This structure allows the encryption engine to:
- * 1. Identify which key was used for encryption
+ * 1. Identify which key and key version were used for encryption
  * 2. Determine the algorithm for decryption
  * 3. Extract the IV and ciphertext for the crypto operation
  * 4. Verify authenticity with the auth tag (for AEAD algorithms)
@@ -62,6 +65,7 @@ export interface EncryptionKeySourceConfig {
  * ```typescript
  * const parts = engine.ParseEncryptedValue(encryptedValue);
  * console.log(parts.keyId); // UUID of the encryption key
+ * console.log(parts.keyVersion); // '1', '2', or undefined for legacy envelopes
  * console.log(parts.algorithm); // 'AES-256-GCM'
  * ```
  */
@@ -77,6 +81,13 @@ export interface EncryptedValueParts {
      * References the EncryptionKey entity in the database.
      */
     keyId: string;
+
+    /**
+     * The version of the encryption key embedded in the ciphertext envelope.
+     * Present on versioned envelopes (`$ENC$<keyId>:<keyVersion>$...` or `$ENC$<keyId>$v<keyVersion>$...`),
+     * and `undefined` on legacy unversioned v1 envelopes.
+     */
+    keyVersion?: string;
 
     /**
      * The algorithm name used for encryption.
@@ -191,6 +202,55 @@ export interface KeyValidationResult {
 }
 
 /**
+ * Context supplied to a registered out-of-band encrypted store during key rotation.
+ */
+export interface EncryptedStoreRotationContext {
+    /** UUID of the encryption key being rotated. */
+    encryptionKeyId: string;
+    /** Lookup value for the new key material. */
+    newKeyLookupValue: string;
+    /** Target key version being rotated into (e.g. `'2'`). */
+    newKeyVersion: string;
+    /** Configured batch size for rotation operations. */
+    batchSize: number;
+    /** Server-side user context for database operations. */
+    contextUser?: UserInfo;
+    /** Optional metadata provider override. */
+    provider?: IMetadataProvider;
+    /**
+     * Convenience callback that decrypts a single `$ENC$...` ciphertext with the key's
+     * historical version and re-encrypts it using the new key material and version.
+     */
+    reEncrypt: (ciphertext: string) => Promise<string>;
+}
+
+/**
+ * Registration descriptor for subsystems that store `$ENC$` ciphertexts outside
+ * standard `EntityField.Encrypt = 1` columns (for example, `CredentialEngine` JSON
+ * `Values` blobs or custom encrypted configuration payloads).
+ *
+ * Registering a store with `EncryptionEngine.Instance.RegisterEncryptedStore(...)`
+ * allows `RotateEncryptionKeyAction` to include it in key rotation or explicitly
+ * report it in `skippedStores` if no `rotate` callback is supplied.
+ */
+export interface EncryptedStoreRegistration {
+    /** Unique human-readable store identifier (e.g., `'MJ: Credentials.Values'`). */
+    storeName: string;
+    /**
+     * Optional UUID of the encryption key this store uses. When omitted, the store
+     * is evaluated for every key rotation (since individual JSON keys inside the store
+     * may reference any encryption key).
+     */
+    encryptionKeyId?: string;
+    /**
+     * Optional rotation callback that re-encrypts values in this store and returns
+     * the number of records rotated. When omitted, `RotateEncryptionKeyAction`
+     * records `storeName` in `RotateKeyResult.skippedStores`.
+     */
+    rotate?: (context: EncryptedStoreRotationContext) => Promise<number>;
+}
+
+/**
  * Result structure returned by key rotation operations.
  *
  * @see {@link RotateEncryptionKeyAction} for the rotation action
@@ -203,10 +263,16 @@ export interface RotateKeyResult {
     recordsProcessed: number;
 
     /**
-     * List of fields that were processed.
-     * Format: 'EntityName.FieldName'
+     * List of fields and registered stores that were processed.
+     * Format: `'EntityName.FieldName'` or registered `storeName`.
      */
     fieldsProcessed: string[];
+
+    /**
+     * Registered out-of-band encrypted stores that did not provide a `rotate` handler
+     * and therefore still hold ciphertexts under their historical key version.
+     */
+    skippedStores?: string[];
 
     /** Error message if rotation failed */
     error?: string;

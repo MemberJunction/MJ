@@ -395,6 +395,25 @@ export class ConfigFileKeySource extends EncryptionKeySourceBase {
      * @private
      */
     private buildKeyName(baseName: string, keyVersion?: string): string {
+        const versionMatch = /^(.+)_v(\d+)$/i.exec(baseName);
+        if (versionMatch) {
+            const rootName = versionMatch[1];
+            const embeddedVersion = versionMatch[2];
+            if (!keyVersion || keyVersion === embeddedVersion) {
+                return baseName;
+            }
+            if (keyVersion === '1') {
+                if (this._loadedConfig?.[rootName] !== undefined) {
+                    return rootName;
+                }
+                if (this._loadedConfig?.[`${rootName}_v1`] !== undefined) {
+                    return `${rootName}_v1`;
+                }
+                return baseName;
+            }
+            return `${rootName}_v${keyVersion}`;
+        }
+
         // No version or version '1' = use base name
         if (!keyVersion || keyVersion === '1') {
             return baseName;

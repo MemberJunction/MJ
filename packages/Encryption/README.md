@@ -214,23 +214,27 @@ The `EncryptionEngineBase` (defined in `@memberjunction/core-entities`) provides
 
 ### Encrypted Value Format
 
-Encrypted values are stored as self-describing strings that embed everything needed for decryption:
+Encrypted values are stored as self-describing strings that embed everything needed for decryption, including the key version (`<keyId>:<keyVersion>`):
 
 ```
-$ENC$<keyId>$<algorithm>$<iv>$<ciphertext>$<authTag>
+$ENC$<keyId>:<keyVersion>$<algorithm>$<iv>$<ciphertext>$<authTag>
 ```
 
 For example:
 
 ```
-$ENC$550e8400-e29b-41d4-a716-446655440000$AES-256-GCM$Base64IV$Base64Ciphertext$Base64AuthTag
+$ENC$550e8400-e29b-41d4-a716-446655440000:1$AES-256-GCM$Base64IV$Base64Ciphertext$Base64AuthTag
 ```
+
+Backward compatibility:
+- Unversioned v1 envelopes (`$ENC$<keyId>$<algorithm>$<iv>$<ciphertext>[$<authTag>]`) and explicit `$v<version>$` segments (`$ENC$<keyId>$v<keyVersion>$<algorithm>$...`) are transparently parsed and decrypted.
+- When `keyVersion` is present in the envelope, `Decrypt()` resolves key material for that specific version, ensuring historical ciphertexts remain decryptable even if they were not re-encrypted during a key rotation.
 
 This format enables:
 - Quick detection of encrypted values via the `$ENC$` marker
-- Identification of which key was used (for multi-key environments)
+- Identification of which key and key version produced the ciphertext
 - Algorithm-agnostic decryption
-- Key rotation without format changes
+- Safe key rotation with historical version fallback
 
 ### Encryption and Decryption Flow
 
@@ -472,6 +476,26 @@ flowchart TD
     style K fill:#2d8659,stroke:#1a5c3a,color:#fff
 ```
 
+### Out-of-Band Encrypted Store Registration
+
+Packages that call `EncryptionEngine.Instance.Encrypt()` directly outside of `EntityField` metadata (`Encrypt = 1`) can register their store with `EncryptionEngine` so `RotateEncryptionKeyAction` includes them during key rotation:
+
+```typescript
+import { EncryptionEngine } from '@memberjunction/encryption';
+
+EncryptionEngine.Instance.RegisterEncryptedStore({
+    Name: 'AuditArchivePayloads',
+    KeyID: encryptionKeyId,
+    Description: 'Encrypted JSON payloads in custom archive storage',
+    RotateKey: async (params, contextUser) => {
+        // Re-encrypt records using params.DecryptOldValue and params.EncryptNewValue
+        return rotatedRecordCount;
+    }
+});
+```
+
+If a store is registered without a `RotateKey` callback, `RotateEncryptionKeyAction` logs a warning reminding operators to retain historical key version material so existing versioned envelopes remain decryptable.
+
 ## API Reference
 
 ### EncryptionEngine
@@ -480,12 +504,16 @@ flowchart TD
 |--------|-------------|
 | `Instance` | Static property returning the singleton instance |
 | `Config(forceRefresh?, contextUser?, provider?)` | Loads encryption metadata from the database |
-| `Encrypt(plaintext, encryptionKeyId, contextUser?)` | Encrypts a value using the specified key |
-| `Decrypt(value, contextUser?)` | Decrypts an encrypted value; passes through non-encrypted values |
+| `Encrypt(plaintext, encryptionKeyId, contextUser?)` | Encrypts a value using the specified key and embeds `<keyId>:<keyVersion>` in the envelope |
+| `Decrypt(value, contextUser?)` | Decrypts an encrypted value using the envelope's key version; passes through non-encrypted values |
 | `IsEncrypted(value, marker?)` | Checks if a value is encrypted (synchronous) |
-| `ParseEncryptedValue(value)` | Parses an encrypted string into its component parts |
+| `ParseEncryptedValue(value)` | Parses an encrypted string into its component parts (including optional `keyVersion`) |
 | `ValidateKeyMaterial(lookupValue, keyId, contextUser?)` | Validates that key material is accessible and the correct length |
-| `EncryptWithLookup(plaintext, keyId, lookupValue, contextUser?)` | Encrypts using a specific key lookup value (used during rotation) |
+| `EncryptWithLookup(plaintext, keyId, lookupValue, contextUser?, keyVersionOverride?)` | Encrypts using a specific key lookup value and optional target key version (used during rotation) |
+| `RegisterEncryptedStore(registration)` | Registers an out-of-band encrypted store for visibility and key rotation |
+| `UnregisterEncryptedStore(name)` | Removes a previously registered out-of-band encrypted store |
+| `GetRegisteredEncryptedStores(keyId?)` | Returns registered out-of-band encrypted stores (optionally filtered by key ID) |
+| `ClearRegisteredEncryptedStores()` | Clears all registered out-of-band encrypted stores |
 | `ClearCaches()` | Clears the key material cache |
 | `ClearAllCaches()` | Clears all caches including base class metadata |
 
@@ -504,7 +532,9 @@ flowchart TD
 
 | Interface | Description |
 |-----------|-------------|
-| `EncryptedValueParts` | Parsed components of an encrypted value string (marker, keyId, algorithm, iv, ciphertext, authTag) |
+| `EncryptedValueParts` | Parsed components of an encrypted value string (marker, keyId, keyVersion, algorithm, iv, ciphertext, authTag) |
+| `EncryptedStoreRegistration` | Descriptor and optional `RotateKey` callback for out-of-band encrypted stores |
+| `EncryptedStoreRotationContext` | Context passed to `EncryptedStoreRegistration.RotateKey` during key rotation |
 | `KeyConfiguration` | Complete runtime key configuration (key ID, version, marker, algorithm details, source details) |
 | `EncryptionKeySourceConfig` | Configuration passed to key source providers (lookupValue, additionalConfig) |
 | `RotateKeyParams` / `RotateKeyResult` | Parameters and results for key rotation operations |

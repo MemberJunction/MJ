@@ -1,6 +1,6 @@
 # Week of 2026-09-19
 
-> **Status (2026-09-25):** All three ideas approved for implementation and now in progress — see individual idea docs for details.
+> **Status (Implemented in PR #4612):** All three core framework capabilities have been implemented, unit-tested, and verified end-to-end against a clean SQL Server database. Questionable/over-engineered portions of the initial exploration (`worker_threads` agent execution isolation, DB-wide `$ENC$` table scans, `ConsequentialDecisionDisclosure` statutory legal wrapper, and lossy `TrustGrade` float normalization) were intentionally stripped out. See individual idea docs for full implementation details.
 
 Three framework-level improvement ideas, grounded directly in this week's open GitHub issues,
 active PR backlog, and 2026 industry/regulatory research — continuing the recurring exploration
@@ -23,38 +23,45 @@ started in [`../README.md`](../README.md).
   transparency laws, PCI DSS 4.0 key-rotation expectations, multi-tenant "noisy neighbor"/bulkhead
   isolation patterns) rather than asserting real-world stakes without a source.
 
-## This week's three ideas
+## This week's three ideas (and what shipped in PR #4612)
 
 1. **[Execution Blast-Radius Containment Layer](./idea-1-execution-blast-radius-containment.md)** —
    a single misconfigured AI agent can exhaust the Node heap and crash the entire shared MJAPI
-   process for every user and every tenant on it (this happened on a dev instance this week, filed
-   as **#4539**). Proposes a size-based payload guard the existing iteration/cost/token caps
-   structurally cannot provide, sane non-null defaults, an explicit heap ceiling, and — as a scoped
-   future phase — real execution isolation via worker threads. Distinct from the in-flight Resource
-   Governance Engine (a $-budget/accounting question) and Tenant Isolation Guarantee (a data
-   question) — this is a runtime blast-radius question neither one answers.
+   process for every user and every tenant on it (filed as **#4539**).
+   - **Shipped:** `PayloadSizeGuard` (`packages/AI/Agents/src/payload-size-guard.ts`) wired into
+     `BaseAgent` (`DEFAULT_ABSOLUTE_MAX_PAYLOAD_BYTES = 16 MiB`, per-run `maxPayloadBytes`,
+     cross-sub-agent `maxTreePayloadBytes`, and `peakPayloadBytes` tracking on `AgentTreeBudget`),
+     plus an explicit `--max-old-space-size=8192` ceiling in `packages/MJAPI/package.json`.
+   - **Stripped out:** `worker_threads` bulkhead isolation (fights MJ's in-process singleton/metadata
+     architecture) and lowering `DEFAULT_ABSOLUTE_MAX_ITERATIONS` below `5000` (which would penalize
+     legitimate multi-step research/orchestration agents when the actual failure mode is byte size).
 
 2. **[Encryption Key Lifecycle & Envelope Governance](./idea-2-encryption-key-lifecycle-governance.md)** —
-   MJ's real, working field-level encryption engine has one structural gap: key rotation only finds
-   *declared* encrypted fields, and the ciphertext envelope carries no key version, so a
-   hand-encrypted value skipped by rotation becomes silently, permanently unreadable (**#4580**,
-   filed this week). Proposes envelope versioning (backward compatible, fixes the unrecoverable
-   case immediately), a registry so rotation can see out-of-band encrypted stores, and an honest
-   coverage/health dashboard — grounded in PCI DSS 4.0's explicit key-rotation documentation
-   expectations and the sector's own data on why small nonprofits are disproportionately targeted.
+   MJ's field-level encryption engine previously omitted the key version from `$ENC$` envelopes and
+   only rotated `EntityField` columns with `Encrypt = 1` (**#4580**).
+   - **Shipped:** Self-describing versioned envelopes
+     (`$ENC$<keyId>:<keyVersion>$<algorithm>$<iv>$<ciphertext>[$<authTag>]`) with full backward
+     compatibility for unversioned v1 envelopes and `$v<version>$` segments; version-aware key
+     lookup in `EncryptionEngine.Decrypt`, `EnvVarKeySource`, and `ConfigFileKeySource`; and
+     `RegisterEncryptedStore` / `GetRegisteredEncryptedStores` on `EncryptionEngine` integrated into
+     `RotateEncryptionKeyAction`.
+   - **Stripped out:** Expensive DB-wide arbitrary table scans searching every string column for
+     unregistered `$ENC$` prefixes.
 
 3. **[AI Confidence & Explainability Disclosure Layer](./idea-3-ai-confidence-disclosure-layer.md)** —
-   three MJ subsystems (Duplicate Detection, ContentAutotagging, Predictive Studio) each
-   independently invented their own confidence/rationale scale, with no shared component and no
-   consistent way for a non-technical staff member to calibrate trust in an AI suggestion before
-   acting on it — a gap `plans/predictive-studio.md:644` names as an open question but never
-   answers. Proposes a shared `AIConfidenceSignal` type, two reusable Angular components
-   (`AIConfidenceBadge`/`AIExplanationPanel`), and an optional statutory-disclosure wrapper —
-   grounded in the Colorado AI Act's February 2026 consequential-decision disclosure requirement.
+   unifies the confidence and rationale signals across Duplicate Detection, Content Autotagging, and
+   Predictive Studio into a single contract and reusable Angular L1 components.
+   - **Shipped:** `AIConfidenceSignal` and pure adapters (`FromDuplicateVerdict`,
+     `FromContentItemTag`, `FromTrustVerdict`, `DeriveConfidenceBand`, `NormalizeProbabilityScore`)
+     in `@memberjunction/ai-core-plus`, plus standalone `<mj-ai-confidence-badge>` and
+     `<mj-ai-explanation-panel>` components in `@memberjunction/ng-ui-components`.
+   - **Stripped out:** `ConsequentialDecisionDisclosure` statutory legal-boilerplate wrapper and
+     lossy float conversion of coarse grades (`TrustGrade` stays on `scale: 'grade'` with `rawLabel`
+     intact and no fabricated probability score).
 
 ## Format
 
 Each idea document follows the established structure: the problem framed for the world first, an
 explicit "what already exists" section proving it against the actual codebase and against every
-prior week so nothing is duplicated, a phased architecture, open questions, and a link to a full
-HTML UX mockup with a rendered screenshot for anything that touches UX (all three do this week).
+prior week so nothing is duplicated, the shipped implementation and what was intentionally stripped
+out, and a link to a full HTML UX mockup with a rendered screenshot.

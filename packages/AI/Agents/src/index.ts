@@ -27,6 +27,7 @@ export * from './agent-types';
 export * from './AgentRunner';
 export * from './artifact-target-plan';
 export * from './PayloadManager';
+export * from './payload-size-guard';
 export * from './ScratchpadManager';
 export * from './constants';
 export * from './runtime-state-fragment';

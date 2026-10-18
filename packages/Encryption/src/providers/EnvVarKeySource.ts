@@ -305,6 +305,25 @@ export class EnvVarKeySource extends EncryptionKeySourceBase {
      * @private
      */
     private buildEnvVarName(baseName: string, keyVersion?: string): string {
+        const versionMatch = /^(.+)_V(\d+)$/i.exec(baseName);
+        if (versionMatch) {
+            const rootName = versionMatch[1];
+            const embeddedVersion = versionMatch[2];
+            if (!keyVersion || keyVersion === embeddedVersion) {
+                return baseName;
+            }
+            if (keyVersion === '1') {
+                if (process.env[rootName] !== undefined) {
+                    return rootName;
+                }
+                if (process.env[`${rootName}_V1`] !== undefined) {
+                    return `${rootName}_V1`;
+                }
+                return baseName;
+            }
+            return `${rootName}_V${keyVersion}`;
+        }
+
         // No version or version '1' = use base name
         if (!keyVersion || keyVersion === '1') {
             return baseName;

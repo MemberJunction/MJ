@@ -115,12 +115,18 @@ export class RotateEncryptionKeyAction {
             if (recordsParam) recordsParam.Value = result.recordsProcessed;
             const fieldsParam = outputParams.find(p => p.Name === 'FieldsProcessed');
             if (fieldsParam) fieldsParam.Value = result.fieldsProcessed;
+            const skippedStoresParam = outputParams.find(p => p.Name === 'SkippedStores');
+            if (skippedStoresParam && result.skippedStores) skippedStoresParam.Value = result.skippedStores;
 
             if (result.success) {
+                const skippedSuffix =
+                    result.skippedStores && result.skippedStores.length > 0
+                        ? ` Skipped ${result.skippedStores.length} registered store(s) without rotation handlers (${result.skippedStores.join(', ')}); historical key version material remains required to decrypt those values.`
+                        : '';
                 return {
                     Success: true,
                     ResultCode: 'SUCCESS',
-                    Message: `Key rotation completed successfully. Processed ${result.recordsProcessed} records across ${result.fieldsProcessed.length} fields.`,
+                    Message: `Key rotation completed successfully. Processed ${result.recordsProcessed} records across ${result.fieldsProcessed.length} fields.${skippedSuffix}`,
                     Params: outputParams
                 };
             } else {
@@ -162,6 +168,7 @@ export class RotateEncryptionKeyAction {
 
         // Track progress
         const fieldsProcessed: string[] = [];
+        const skippedStores: string[] = [];
         let totalRecordsProcessed = 0;
 
         try {
@@ -188,6 +195,8 @@ export class RotateEncryptionKeyAction {
 
             const encryptionKey = keyResult.Results[0];
             const originalVersion = encryptionKey.KeyVersion || '1';
+            const parsedOriginalVersion = parseInt(originalVersion, 10);
+            const newVersion = String(Number.isNaN(parsedOriginalVersion) ? 2 : parsedOriginalVersion + 1);
 
             // Step 3: Set key status to 'Rotating'
             encryptionKey.Status = 'Rotating';
@@ -252,6 +261,7 @@ export class RotateEncryptionKeyAction {
                             ExtraFilter: `${fieldName} IS NOT NULL AND ${fieldName} LIKE '$ENC$%'`,
                             OrderBy: entityInfo.PrimaryKeys.map(pk => pk.Name).join(', '),
                             MaxRows: batchSize,
+                            StartRow: offset,
                             ResultType: 'entity_object'
                         }, contextUser);
 
@@ -276,13 +286,14 @@ export class RotateEncryptionKeyAction {
                                     continue;
                                 }
 
-                                // Decrypt with old key and re-encrypt with new key using the new lookup value
+                                // Decrypt with old key and re-encrypt with new key using the new lookup value and target version
                                 const decrypted = await engine.Decrypt(encryptedValue, contextUser);
                                 const reEncrypted = await engine.EncryptWithLookup(
                                     decrypted,
                                     encryptionKeyId,
                                     newKeyLookupValue,
-                                    contextUser
+                                    contextUser,
+                                    newVersion
                                 );
 
                                 record.Set(fieldName, reEncrypted);
@@ -313,9 +324,52 @@ export class RotateEncryptionKeyAction {
                 }
             }
 
+            // Step 5b: Process registered out-of-band encrypted secret stores (e.g. CredentialEngine)
+            const registeredStores =
+                typeof engine.GetRegisteredEncryptedStores === 'function'
+                    ? engine.GetRegisteredEncryptedStores(encryptionKeyId)
+                    : [];
+
+            for (const store of registeredStores) {
+                if (!store.rotate) {
+                    skippedStores.push(store.storeName);
+                    LogStatus(
+                        `Skipping registered encrypted store "${store.storeName}" (no rotation callback registered). ` +
+                        `Retain historical key version ${originalVersion} material to decrypt existing values.`
+                    );
+                    continue;
+                }
+
+                LogStatus(`Processing registered encrypted store: ${store.storeName}`);
+                const rotatedInStore = await store.rotate({
+                    encryptionKeyId,
+                    newKeyLookupValue,
+                    newKeyVersion: newVersion,
+                    batchSize,
+                    contextUser,
+                    provider: md,
+                    reEncrypt: async (ciphertext: string): Promise<string> => {
+                        if (!ciphertext || !engine.IsEncrypted(ciphertext)) {
+                            return ciphertext;
+                        }
+                        const decrypted = await engine.Decrypt(ciphertext, contextUser);
+                        return engine.EncryptWithLookup(
+                            decrypted,
+                            encryptionKeyId,
+                            newKeyLookupValue,
+                            contextUser,
+                            newVersion
+                        );
+                    },
+                });
+                totalRecordsProcessed += rotatedInStore;
+                fieldsProcessed.push(store.storeName);
+                LogStatus(`Completed registered encrypted store: ${store.storeName} (${rotatedInStore} record(s))`);
+            }
+
             // Step 6: Update key metadata to point to new key
             encryptionKey.KeyLookupValue = newKeyLookupValue;
-            encryptionKey.KeyVersion = String(parseInt(originalVersion) + 1);
+            encryptionKey.KeyVersion = newVersion;
             encryptionKey.Status = 'Active';
             const finalSaveResult = await encryptionKey.Save();
 
@@ -324,19 +378,24 @@ export class RotateEncryptionKeyAction {
                     success: false,
                     recordsProcessed: totalRecordsProcessed,
                     fieldsProcessed,
+                    ...(skippedStores.length > 0 ? { skippedStores } : {}),
                     error: 'Failed to update key metadata after rotation. Data has been re-encrypted but key metadata update failed.'
                 };
             }
 
-            // Step 7: Clear encryption engine caches to use new key
+            // Step 7: Clear encryption engine caches to use new key and refresh metadata
             engine.ClearCaches();
+            if (typeof engine.ClearAllCaches === 'function') {
+                await engine.ClearAllCaches();
+            }
 
             LogStatus(`Key rotation completed. Processed ${totalRecordsProcessed} records across ${fieldsProcessed.length} fields.`);
 
             return {
                 success: true,
                 recordsProcessed: totalRecordsProcessed,
-                fieldsProcessed
+                fieldsProcessed,
+                ...(skippedStores.length > 0 ? { skippedStores } : {})
             };
 
         } catch (error) {
@@ -364,6 +423,7 @@ export class RotateEncryptionKeyAction {
                 success: false,
                 recordsProcessed: totalRecordsProcessed,
                 fieldsProcessed,
+                ...(skippedStores.length > 0 ? { skippedStores } : {}),
                 error: message
             };
         }

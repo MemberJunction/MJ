@@ -356,6 +356,20 @@ Config-driven filter stack: `Fields: FilterFieldConfig[]` with `type: 'text' | '
 ### `mj-applied-filters` — MJAppliedFiltersComponent
 "Filtered by …" removable chip row. Renders nothing when `Filters` is empty, so it's safe to place unconditionally. `(Remove)`, `(ClearAll)`.
 
+### `mj-ai-confidence-badge` / `mj-ai-explanation-panel` — MJAIConfidenceBadgeComponent, MJAIExplanationPanelComponent
+Unified L1 disclosure primitives for AI confidence and explainability across Duplicate Detection, Content Autotagging, Predictive Studio, and custom AI workflows (consuming `AIConfidenceSignal` from `@memberjunction/ai-core-plus`).
+
+- **`mj-ai-confidence-badge`**: Compact pill that pairs a plain-language confidence band (`High confidence`, `Moderate confidence`, `Low confidence — review recommended`, `Confidence unavailable`) with either a formatted percentage (when `scale === 'probability'`) or the preserved coarse `rawLabel` (when `scale === 'grade' | 'ordinal'`, avoiding fabricated float precision). Inputs: `Signal: AIConfidenceSignal | null`, `Size: 'sm' | 'md'`, `ShowScore: boolean` (default `true`), `Interactive: boolean` (default `false`), `Expanded: boolean` (default `false`). Output: `(Toggle)` when `Interactive` is true.
+- **`mj-ai-explanation-panel`**: Accessible disclosure region (`role="region"`) that embeds the confidence badge, optional recommendation pill (`Merge`, `Review`, etc.), plain-language `reasoning`, contributing `factors` list (`positive` / `negative` / `neutral` impact icons), and an optional trace button (`(TraceClicked)` emitting `sourceRunID`). Inputs: `Signal: AIConfidenceSignal | null`, `Title` (default `'Why the AI suggested this'`), `Expanded` + `(ExpandedChange)`.
+- Import the standalone components directly or via `MJAIConfidenceModule`.
+
+```html
+<mj-ai-explanation-panel
+  [Signal]="confidenceSignal"
+  [(Expanded)]="showExplanation"
+  (TraceClicked)="openPromptRun($event)" />
+```
+
 ---
 
 ## Contributing
