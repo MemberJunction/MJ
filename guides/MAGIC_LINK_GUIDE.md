@@ -364,7 +364,8 @@ No new mechanism — it's reads over existing data:
   resource-scoped session is confined by RLS tokens, which exist only on paths that go
   through entity permissions. Entry points that run server work instead — actions,
   AI prompts and agents, templates, stored and ad-hoc queries, MCP tools, integrations,
-  entity communications, API-key creation — refuse these sessions, mostly through
+  entity communications, API-key creation, duplicate checks, knowledge search, remote browser
+  control, meetings and most component-registry calls — refuse these sessions, mostly through
   `@RefuseScopeLimitedPrincipals()` in `MJServer/src/auth/scopeLimitedAccess.ts`
   (`RunAction`, `ExecuteAdhocQuery` and `RunDecision` refuse inline with
   `IsScopeLimitedPrincipal`). Two
@@ -372,6 +373,8 @@ No new mechanism — it's reads over existing data:
   pinned by the widget instance and runs under a server principal) and Remote Operations
   that set `AllowScopeLimitedPrincipals` and check the scope in `Authorize`
   ([Remote Operations Guide](REMOTE_OPERATIONS_GUIDE.md#serving-magic-link-guests)).
+  `GetRegistryComponent` also stays open: rendering a shared interactive artifact fetches
+  external-registry component specs through it, and a spec is public component code.
   A custom resolver that does server work on a guest's request should carry the same
   decorator.
 - **Revocation** — set an invite's `Status` to `Revoked` to kill an unredeemed

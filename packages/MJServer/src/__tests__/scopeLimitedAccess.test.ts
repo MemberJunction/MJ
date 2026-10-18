@@ -230,19 +230,25 @@ const DECORATOR = 'RefuseScopeLimitedPrincipals';
 const CLASS_GUARDED: Record<string, string[]> = {
     'APIKeyResolver.ts': ['APIKeyResolver'],
     'AutotagPipelineResolver.ts': ['AutotagPipelineResolver'],
+    'DuplicateEntryCheckResolver.ts': ['DuplicateEntryCheckResolver'],
     'EntityCommunicationsResolver.ts': ['ReportResolver'],
     'FetchEntityVectorsResolver.ts': ['FetchEntityVectorsResolver'],
     'GenerateSeedTaxonomyResolver.ts': ['GenerateSeedTaxonomyResolver'],
     'GetDataContextDataResolver.ts': ['GetDataContextDataResolver'],
     'IntegrationDiscoveryResolver.ts': ['IntegrationDiscoveryResolver'],
     'MCPResolver.ts': ['MCPResolver'],
+    'MeetingResolver.ts': ['MeetingResolver'],
     'MergeRecordsResolver.ts': ['EntityDependencyResolver', 'RecordDependencyResolver', 'RecordMergeResolver'],
+    'PotentialDuplicateRecordResolver.ts': ['DuplicateRecordResolver'],
     'QueryResolver.ts': ['RunQueryResolver'],
     'RSUResolver.ts': ['RSUResolver'],
+    'RemoteBrowserActionResolver.ts': ['RemoteBrowserActionResolver'],
     'RunAIPromptResolver.ts': ['RunAIPromptResolver'],
     'RunClusterAnalysisResolver.ts': ['RunClusterAnalysisResolver'],
     'RunTemplateResolver.ts': ['RunTemplateResolver'],
     'RunTestResolver.ts': ['RunTestResolver'],
+    'SearchKnowledgeResolver.ts': ['SearchKnowledgeResolver'],
+    'SearchKnowledgeStreamResolver.ts': ['SearchKnowledgeStreamResolver'],
     'SqlLoggingConfigResolver.ts': ['SqlLoggingConfigResolver'],
     'TagGovernanceResolver.ts': ['TagGovernanceResolver'],
     'TelemetryResolver.ts': ['TelemetryResolver'],
@@ -256,6 +262,11 @@ const METHOD_GUARDED: Record<string, Record<string, string[]>> = {
     // ActionResolver.authorization.test.ts, "RunAction: scope-limited sessions"); only
     // RunEntityAction takes the decorator, so RunAction has exactly one guard.
     'ActionResolver.ts': { ActionResolver: ['RunEntityAction'] },
+    // GetRegistryComponent stays open: rendering a shared interactive artifact fetches
+    // external-registry component specs through it (asserted below).
+    'ComponentRegistryResolver.ts': {
+        ComponentRegistryExtendedResolver: ['SearchRegistryComponents', 'ResolveComponentDependencies', 'SendComponentFeedback'],
+    },
     'RunAIAgentResolver.ts': { RunAIAgentResolver: ['RunAIAgent', 'RespondToAgentRequest', 'ReassignAgentRequest'] },
 };
 
@@ -310,6 +321,17 @@ describe('MJServer execution resolvers refuse scope-limited principals', () => {
         );
         expect(runAction).toBeDefined();
         expect(hasGuardDecorator(runAction!)).toBe(false);
+    });
+
+    it('ComponentRegistryExtendedResolver.GetRegistryComponent stays open, for rendering shared artifacts', () => {
+        const cls = findClass(parse('ComponentRegistryResolver.ts'), 'ComponentRegistryExtendedResolver');
+        expect(cls).toBeDefined();
+        expect(hasGuardDecorator(cls!)).toBe(false);
+        const getComponent = cls!.members.find(
+            (m): m is ts.MethodDeclaration => ts.isMethodDeclaration(m) && ts.isIdentifier(m.name) && m.name.text === 'GetRegistryComponent',
+        );
+        expect(getComponent).toBeDefined();
+        expect(hasGuardDecorator(getComponent!)).toBe(false);
     });
 
     it('Serve() applies the guards after resolvers load and before the schema is built', () => {

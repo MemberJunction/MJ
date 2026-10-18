@@ -986,7 +986,9 @@ export class RunAIAgentResolver extends ResolverBase {
         const widgetElevation = await ResolveWidgetGuestRunContext(userPayload, p);
         // Every OTHER scope-limited session (resource-scoped magic links, anonymous guests without a
         // resolvable widget) is refused: its RLS scope does not bound which agent runs or what the
-        // agent does, so only the pinned-agent widget path above may dispatch for a guest.
+        // agent does, so only the pinned-agent widget path above may dispatch for a guest. The refusal
+        // returns this resolver's own { success: false } shape rather than throwing the decorator's
+        // AuthorizationError, so a refused guest sees the same result as any other failed run.
         if (!widgetElevation && IsScopeLimitedPrincipal(currentUser) && !userPayload.isSystemUser) {
             const errorMessage = 'RunAIAgentFromConversationDetail is not available to scope-limited sessions';
             LogStatus(`[Auth] Refused RunAIAgentFromConversationDetail for a scope-limited session (user ${currentUser.ID}).`);

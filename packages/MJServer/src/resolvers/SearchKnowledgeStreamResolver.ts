@@ -40,6 +40,7 @@ import {
 import { MJAIAgentEntity } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
 import { SearchKnowledgeResultItem, SearchScoreBreakdown, SearchSourceCounts } from './SearchKnowledgeResolver.js';
+import { RefuseScopeLimitedPrincipals } from '../auth/scopeLimitedAccess.js';
 
 const SEARCH_STREAM_TOPIC = 'SEARCH_STREAM';
 
@@ -101,6 +102,7 @@ export class SearchStreamStartResult {
     ErrorMessage?: string;
 }
 
+@RefuseScopeLimitedPrincipals()
 @Resolver()
 export class SearchKnowledgeStreamResolver extends ResolverBase {
     /**

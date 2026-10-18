@@ -49,7 +49,9 @@ export const ScopeLimitedPrincipalGuard: MiddlewareFn<AppContext> = async ({ con
  * magic-link guests and resource-scoped magic-link sessions.
  *
  * - On a **method**, guards that one `@Query` / `@Mutation` / `@Subscription`.
- * - On a **resolver class**, guards every root field the class itself declares.
+ * - On a **resolver class**, guards every root field the class itself declares. Fields declared
+ *   by a subclass are not covered: a subclass of a decorated resolver must carry the decorator
+ *   itself.
  *
  * Use it on any entry point whose work is not bounded by entity permissions and RLS. A field
  * that must serve a particular kind of guest (for example, the public web widget's pinned
