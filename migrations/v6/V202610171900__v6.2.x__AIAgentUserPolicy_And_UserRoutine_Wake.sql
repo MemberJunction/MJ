@@ -2283,7 +2283,7 @@ GO
       END;
 
 /* SQL text to update existing entity fields from schema */
-EXEC [${flyway:defaultSchema}].[spUpdateExistingEntityFieldsFromSchema] @ExcludedSchemaNames='sys,staging', @IncludedSchemaNames='${flyway:defaultSchema}';
+EXEC [${flyway:defaultSchema}].[spUpdateExistingEntityFieldsFromSchema] @ExcludedSchemaNames='sys,staging', @EntityIDs='62925804-D598-45A7-A338-B2604AE96F11,D6CA6018-D288-4F79-B6A9-168C75C3363B,7EFB8744-CF96-4C61-8A78-92FAC4FE1B77', @IncludedSchemaNames='${flyway:defaultSchema}';
 
 /* SQL text to set default column width where needed */
 EXEC [${flyway:defaultSchema}].[spSetDefaultColumnWidthWhereNeeded] @ExcludedSchemaNames='sys,staging', @IncludedSchemaNames='${flyway:defaultSchema}';

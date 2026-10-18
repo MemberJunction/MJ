@@ -4147,6 +4147,18 @@ export const MJAIAgentUserPolicySchema = z.object({
     *   * Disabled
     *   * Enabled
         * * Description: Messaging channel permission level (Slack/Teams/In-App): Disabled or Enabled.`),
+    CalendarChannelMode: z.union([z.literal('Autonomous'), z.literal('Disabled'), z.literal('ProposeWithApproval'), z.literal('ReadOnly')]).describe(`
+        * * Field Name: CalendarChannelMode
+        * * Display Name: Calendar Channel Mode
+        * * SQL Data Type: nvarchar(30)
+        * * Default Value: ReadOnly
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Autonomous
+    *   * Disabled
+    *   * ProposeWithApproval
+    *   * ReadOnly
+        * * Description: Calendar channel permission level: Disabled, ReadOnly (check events & free/busy only), ProposeWithApproval (create/modify events or send invites only with explicit user approval), or Autonomous.`),
     AllowInterAgentCoordination: z.boolean().describe(`
         * * Field Name: AllowInterAgentCoordination
         * * Display Name: Allow Inter-Agent Coordination
@@ -4203,18 +4215,6 @@ export const MJAIAgentUserPolicySchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    CalendarChannelMode: z.union([z.literal('Autonomous'), z.literal('Disabled'), z.literal('ProposeWithApproval'), z.literal('ReadOnly')]).describe(`
-        * * Field Name: CalendarChannelMode
-        * * Display Name: Calendar Channel Mode
-        * * SQL Data Type: nvarchar(30)
-        * * Default Value: ReadOnly
-    * * Value List Type: List
-    * * Possible Values 
-    *   * Autonomous
-    *   * Disabled
-    *   * ProposeWithApproval
-    *   * ReadOnly
-        * * Description: Calendar channel permission level: Disabled, ReadOnly (check events & free/busy only), ProposeWithApproval (create/modify events or send invites only with explicit user approval), or Autonomous.`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent Name
@@ -50378,6 +50378,26 @@ export class MJAIAgentUserPolicyEntity extends BaseEntity<MJAIAgentUserPolicyEnt
     }
 
     /**
+    * * Field Name: CalendarChannelMode
+    * * Display Name: Calendar Channel Mode
+    * * SQL Data Type: nvarchar(30)
+    * * Default Value: ReadOnly
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Autonomous
+    *   * Disabled
+    *   * ProposeWithApproval
+    *   * ReadOnly
+    * * Description: Calendar channel permission level: Disabled, ReadOnly (check events & free/busy only), ProposeWithApproval (create/modify events or send invites only with explicit user approval), or Autonomous.
+    */
+    get CalendarChannelMode(): 'Autonomous' | 'Disabled' | 'ProposeWithApproval' | 'ReadOnly' {
+        return this.Get('CalendarChannelMode');
+    }
+    set CalendarChannelMode(value: 'Autonomous' | 'Disabled' | 'ProposeWithApproval' | 'ReadOnly') {
+        this.Set('CalendarChannelMode', value);
+    }
+
+    /**
     * * Field Name: AllowInterAgentCoordination
     * * Display Name: Allow Inter-Agent Coordination
     * * SQL Data Type: bit
@@ -50535,26 +50555,6 @@ export class MJAIAgentUserPolicyEntity extends BaseEntity<MJAIAgentUserPolicyEnt
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
-    }
-
-    /**
-    * * Field Name: CalendarChannelMode
-    * * Display Name: Calendar Channel Mode
-    * * SQL Data Type: nvarchar(30)
-    * * Default Value: ReadOnly
-    * * Value List Type: List
-    * * Possible Values 
-    *   * Autonomous
-    *   * Disabled
-    *   * ProposeWithApproval
-    *   * ReadOnly
-    * * Description: Calendar channel permission level: Disabled, ReadOnly (check events & free/busy only), ProposeWithApproval (create/modify events or send invites only with explicit user approval), or Autonomous.
-    */
-    get CalendarChannelMode(): 'Autonomous' | 'Disabled' | 'ProposeWithApproval' | 'ReadOnly' {
-        return this.Get('CalendarChannelMode');
-    }
-    set CalendarChannelMode(value: 'Autonomous' | 'Disabled' | 'ProposeWithApproval' | 'ReadOnly') {
-        this.Set('CalendarChannelMode', value);
     }
 
     /**
