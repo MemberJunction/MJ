@@ -628,6 +628,33 @@ describe('MjRecordFormContainerComponent (DOM) — the placement preview', () =>
     }
   });
 
+  /**
+   * A panel that draws its section only once its data has loaded (Feature Values, Model
+   * Predictions) mounts after every structural trigger has fired. The section announces
+   * itself through the chrome coordinator, and the rail is worked out again — otherwise
+   * the section belongs to no rail group and a left-nav form never shows it.
+   */
+  it('works out the rail again when a section mounts after the rail was built', () => {
+    vi.useFakeTimers();
+    const resolve = vi.spyOn(MjRecordFormContainerComponent.prototype as unknown as Resolving, 'resolveChrome')
+      .mockImplementation(() => undefined);
+    try {
+      const f = renderComponentFixture(MjRecordFormContainerComponent, {
+        imports: CHILD_STUBS,
+        declarations: [MjRecordFormContainerComponent],
+        inputs: { Record: RECORD, EntityInfo: { Name: 'Accounts' } },
+      });
+      vi.advanceTimersByTime(10);
+      const before = resolve.mock.calls.length;
+      f.componentRef.injector.get(FormChromeCoordinator).NotifySectionsChanged();
+      vi.advanceTimersByTime(10);
+      expect(resolve.mock.calls.length).toBe(before + 1);
+    } finally {
+      resolve.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+
   function renderPreviewForm(spec: FormChromeSpec) {
     const preview = new FormPlacementPreview();
     const f = renderComponentFixture(MjRecordFormContainerComponent, {
