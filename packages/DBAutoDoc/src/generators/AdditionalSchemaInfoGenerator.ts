@@ -17,9 +17,9 @@
  * }
  */
 
+import { IsUniquelyIndexed } from '../utils/index-hints.js';
 import { DatabaseDocumentation, SchemaDefinition, TableDefinition, ColumnDefinition } from '../types/state.js';
 import { PKCandidate, FKCandidate } from '../types/discovery.js';
-import { IsUniquelyIndexed } from '../utils/index-hints.js';
 import { DetectedOrganicKeysOutput, OrganicKeyConfig } from '../discovery/OrganicKeyTranslator.js';
 
 export interface AdditionalSchemaInfoOptions {
