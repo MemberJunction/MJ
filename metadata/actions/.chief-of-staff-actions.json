@@ -1,0 +1,1255 @@
+[
+  {
+    "fields": {
+      "Name": "Schedule Next Agent Wake",
+      "Description": "Schedules or updates an autonomous agent wake routine in MJ: User Routines (RoutineType = 'AgentWake') with a 3-Tier Wake Gate (Tier 0 Entity Watermarks, Tier 1 SafeExpressionEvaluator, Tier 2 Decision Model, Tier 3 Prompt).",
+      "DriverClass": "Schedule Next Agent Wake",
+      "Type": "Custom",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Agent Management",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-clock-rotate-left"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "AgentID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional UUID of the AI Agent — leave blank when scheduling Chief of Staff (defaults automatically to 'Chief of Staff')",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B1F29E01-4C11-4E8A-9B01-1A2B3C4D5E01"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "AgentName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Name of the AI Agent to wake (defaults to 'Chief of Staff' if omitted)",
+            "IsRequired": false,
+            "DefaultValue": "Chief of Staff"
+          },
+          "primaryKey": {
+            "ID": "B1F29E01-4C11-4E8A-9B01-1A2B3C4D5E02"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ScheduleMode",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Schedule mode: 'OneShot', 'Adaptive', or 'Recurring'",
+            "IsRequired": false,
+            "DefaultValue": "OneShot"
+          },
+          "primaryKey": {
+            "ID": "B1F29E01-4C11-4E8A-9B01-1A2B3C4D5E03"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "NextWakeAt",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ISO-8601 timestamp for when the agent should wake next",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B1F29E01-4C11-4E8A-9B01-1A2B3C4D5E04"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DelayMinutes",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Minutes from now to schedule the next wake when NextWakeAt is omitted (default: 60)",
+            "IsRequired": false,
+            "DefaultValue": "60"
+          },
+          "primaryKey": {
+            "ID": "B1F29E01-4C11-4E8A-9B01-1A2B3C4D5E05"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CronExpression",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Cron expression when ScheduleMode is 'Recurring' or 'Adaptive'",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B1F29E01-4C11-4E8A-9B01-1A2B3C4D5E06"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "WakeReason",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Concise explanation of why the agent is waking and what workstream it is checking",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "B1F29E01-4C11-4E8A-9B01-1A2B3C4D5E07"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "StateSummary",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Summary of current workstream state to carry forward into the next wake run",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B1F29E01-4C11-4E8A-9B01-1A2B3C4D5E08"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ConversationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional Conversation ID to post wake results to",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B1F29E01-4C11-4E8A-9B01-1A2B3C4D5E09"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "WakeConfigurationJSON",
+            "Type": "Input",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "3-tier wake gate configuration (IRoutineWakeConfiguration JSON object or string)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B1F29E01-4C11-4E8A-9B01-1A2B3C4D5E10"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "RoutineID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the created or updated UserRoutine record",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B1F29E01-4C11-4E8A-9B01-1A2B3C4D5E11"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ScheduledWakeTime",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ISO-8601 timestamp of the scheduled next wake",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B1F29E01-4C11-4E8A-9B01-1A2B3C4D5E12"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Agent wake routine scheduled successfully"
+          },
+          "primaryKey": {
+            "ID": "B1F29E01-4C11-4E8A-9B01-1A2B3C4D5E91"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "AGENT_NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "Target AI Agent could not be found"
+          },
+          "primaryKey": {
+            "ID": "B1F29E01-4C11-4E8A-9B01-1A2B3C4D5E92"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "B1F29E01-4C11-4E8A-9B01-1A2B3C4D5E00"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Configure Agent User Policy",
+      "Description": "Creates or updates the invoking user's MJ: AI Agent User Policies record (onboarding status, custom agent name, coordination mode, channel modes, approval switches, entity RLS/FLS narrowing rules, and action time-window policies).",
+      "DriverClass": "Configure Agent User Policy",
+      "Type": "Custom",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Agent Management",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-user-shield"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "AgentID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional UUID of the AI Agent — leave blank when configuring Chief of Staff (defaults automatically to 'Chief of Staff')",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B2F29E01-4C11-4E8A-9B01-1A2B3C4D5E01"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "AgentName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Name of the AI Agent (defaults to 'Chief of Staff')",
+            "IsRequired": false,
+            "DefaultValue": "Chief of Staff"
+          },
+          "primaryKey": {
+            "ID": "B2F29E01-4C11-4E8A-9B01-1A2B3C4D5E02"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DisplayNameOverride",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional custom nickname for the agent itself (e.g., 'Pepper' or 'Jarvis') — NOT the human user's name. Leave blank to keep 'Chief of Staff'.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B2F29E01-4C11-4E8A-9B01-1A2B3C4D5E03"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "OnboardingStatus",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Onboarding status: 'NotStarted', 'InProgress', or 'Completed'",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B2F29E01-4C11-4E8A-9B01-1A2B3C4D5E04"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CoordinationMode",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Coordination mode: 'Observer', 'Coordinator', or 'Autonomous'",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B2F29E01-4C11-4E8A-9B01-1A2B3C4D5E05"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "EmailChannelMode",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Email channel mode: 'Disabled', 'ReadOnly', 'DraftOnly', 'SendAsAgent', or 'SendAsUser'",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B2F29E01-4C11-4E8A-9B01-1A2B3C4D5E06"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CalendarChannelMode",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Calendar channel mode: 'Disabled', 'ReadOnly', 'ProposeWithApproval', or 'Autonomous'",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B2F29E01-4C11-4E8A-9B01-1A2B3C4D5E11"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PhoneChannelMode",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Phone channel mode: 'Disabled', 'InboundOnly', 'OutboundWithApproval', or 'OutboundAutonomous'",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B2F29E01-4C11-4E8A-9B01-1A2B3C4D5E07"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MessagingChannelMode",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Messaging channel mode: 'Disabled' or 'Enabled'",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B2F29E01-4C11-4E8A-9B01-1A2B3C4D5E08"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "InstructionsOverride",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Custom standing instructions and preferences for this user",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B2F29E01-4C11-4E8A-9B01-1A2B3C4D5E09"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PolicyID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the created or updated AIAgentUserPolicy record",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B2F29E01-4C11-4E8A-9B01-1A2B3C4D5E10"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Agent user policy configured successfully"
+          },
+          "primaryKey": {
+            "ID": "B2F29E01-4C11-4E8A-9B01-1A2B3C4D5E91"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "B2F29E01-4C11-4E8A-9B01-1A2B3C4D5E00"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Chief of Staff Inter-Agent Request",
+      "Description": "Sends a structured coordination request from one user's Chief of Staff to another user's Chief of Staff while respecting sender CoordinationMode and recipient data boundaries.",
+      "DriverClass": "Chief of Staff Inter-Agent Request",
+      "Type": "Custom",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Agent Management",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-handshake"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TargetUserID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "UUID of the target MJ User whose Chief of Staff should receive the request",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B3F29E01-4C11-4E8A-9B01-1A2B3C4D5E01"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TargetPersonID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "UUID of the target Person record (resolved via People.LinkedUserID when TargetUserID is omitted)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B3F29E01-4C11-4E8A-9B01-1A2B3C4D5E02"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Subject",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Subject of the inter-agent coordination request",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "B3F29E01-4C11-4E8A-9B01-1A2B3C4D5E03"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "RequestBody",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Structured message body for the recipient's Chief of Staff",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "B3F29E01-4C11-4E8A-9B01-1A2B3C4D5E04"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "RelatedEntityName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional related entity name (e.g., 'MJ: Tasks' or 'MJ: Issues')",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B3F29E01-4C11-4E8A-9B01-1A2B3C4D5E05"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "RelatedRecordID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional related record primary key",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B3F29E01-4C11-4E8A-9B01-1A2B3C4D5E06"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TargetConversationID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the recipient's Chief of Staff conversation",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B3F29E01-4C11-4E8A-9B01-1A2B3C4D5E07"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Inter-agent coordination request delivered"
+          },
+          "primaryKey": {
+            "ID": "B3F29E01-4C11-4E8A-9B01-1A2B3C4D5E91"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "POLICY_OBSERVER_ONLY",
+            "IsSuccess": false,
+            "Description": "Sender user's CoordinationMode is Observer, which forbids inter-agent requests"
+          },
+          "primaryKey": {
+            "ID": "B3F29E01-4C11-4E8A-9B01-1A2B3C4D5E92"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "B3F29E01-4C11-4E8A-9B01-1A2B3C4D5E00"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Prepare Chief of Staff Outbound Call",
+      "Description": "Validates the user's PhoneChannelMode policy and generates a structured outbound telephony brief with mandatory AI disclosure greeting, tight objective, fallback plan, and prohibited commitments.",
+      "DriverClass": "Prepare Chief of Staff Outbound Call",
+      "Type": "Custom",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Agent Management",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-phone-volume"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "RecipientName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Name of the person or business being called",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "B4F29E01-4C11-4E8A-9B01-1A2B3C4D5E01"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "RecipientPhone",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "E.164 or standard phone number of the recipient",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "B4F29E01-4C11-4E8A-9B01-1A2B3C4D5E02"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Objective",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Specific objective of the phone call",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "B4F29E01-4C11-4E8A-9B01-1A2B3C4D5E03"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "FallbackPlan",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Fallback options if the primary request cannot be fulfilled",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B4F29E01-4C11-4E8A-9B01-1A2B3C4D5E04"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "UserApproved",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Whether the user has explicitly approved this call (required when PhoneChannelMode is OutboundWithApproval)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B4F29E01-4C11-4E8A-9B01-1A2B3C4D5E05"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CallBrief",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "Structured outbound call brief including mandatory AI disclosure greeting",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B4F29E01-4C11-4E8A-9B01-1A2B3C4D5E06"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Outbound call brief prepared and policy verified"
+          },
+          "primaryKey": {
+            "ID": "B4F29E01-4C11-4E8A-9B01-1A2B3C4D5E91"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "APPROVAL_REQUIRED",
+            "IsSuccess": false,
+            "Description": "User policy requires explicit user approval before placing this outbound call"
+          },
+          "primaryKey": {
+            "ID": "B4F29E01-4C11-4E8A-9B01-1A2B3C4D5E92"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "CHANNEL_DISABLED",
+            "IsSuccess": false,
+            "Description": "Outbound phone calls are disabled by user policy"
+          },
+          "primaryKey": {
+            "ID": "B4F29E01-4C11-4E8A-9B01-1A2B3C4D5E93"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "B4F29E01-4C11-4E8A-9B01-1A2B3C4D5E00"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Verify My Communication Capabilities",
+      "Description": "Inspects enterprise communication providers, EnterpriseScopeMode, AllowedEmailDomains, live VerifyMailboxAccess preflight for the calling user's email and calendar, dedicated agent utility mailboxes, and external scheduling connectors (HubSpot Meetings API v3 / Calendly API v2).",
+      "DriverClass": "__VerifyMyCommunicationCapabilities",
+      "Type": "Custom",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Agent Management",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-shield-check"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "AgentName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Name of the AI Agent (defaults to 'Chief of Staff')",
+            "IsRequired": false,
+            "DefaultValue": "Chief of Staff"
+          },
+          "primaryKey": {
+            "ID": "B5F29E01-4C11-4E8A-9B01-1A2B3C4D5E01"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CapabilitiesReport",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "Structured report of active providers, mailbox/calendar preflight checks, user channel modes, and external scheduling connectors",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B5F29E01-4C11-4E8A-9B01-1A2B3C4D5E02"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Communication capabilities verified"
+          },
+          "primaryKey": {
+            "ID": "B5F29E01-4C11-4E8A-9B01-1A2B3C4D5E91"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "B5F29E01-4C11-4E8A-9B01-1A2B3C4D5E00"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Get My Calendar Events and Availability",
+      "Description": "Reads the calling user's calendar events, queries free/busy schedules across attendees, finds candidate meeting times, or checks external scheduling availability via HubSpot Meetings API v3 and Calendly API v2. Hard-pinned to ContextUser.Email and gated by EnterpriseMailboxSecurityGate.",
+      "DriverClass": "__GetMyCalendarAndAvailability",
+      "Type": "Custom",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Communication",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-calendar-check"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Operation",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Operation: 'GetEvents', 'GetFreeBusy', 'FindMeetingTimes', or 'CheckExternalSchedulingAvailability'",
+            "IsRequired": false,
+            "DefaultValue": "GetEvents"
+          },
+          "primaryKey": {
+            "ID": "B6F29E01-4C11-4E8A-9B01-1A2B3C4D5E01"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "StartDateTime",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ISO-8601 start of the time window",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B6F29E01-4C11-4E8A-9B01-1A2B3C4D5E02"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "EndDateTime",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ISO-8601 end of the time window",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B6F29E01-4C11-4E8A-9B01-1A2B3C4D5E03"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "AttendeeEmails",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Comma-separated or JSON array of attendee email addresses for GetFreeBusy or FindMeetingTimes",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B6F29E01-4C11-4E8A-9B01-1A2B3C4D5E04"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DurationMinutes",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Meeting duration in minutes for FindMeetingTimes (default: 30)",
+            "IsRequired": false,
+            "DefaultValue": "30"
+          },
+          "primaryKey": {
+            "ID": "B6F29E01-4C11-4E8A-9B01-1A2B3C4D5E05"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ExternalSchedulingSystem",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "External scheduling system when Operation is CheckExternalSchedulingAvailability: 'All', 'HubSpot', or 'Calendly'",
+            "IsRequired": false,
+            "DefaultValue": "All"
+          },
+          "primaryKey": {
+            "ID": "B6F29E01-4C11-4E8A-9B01-1A2B3C4D5E06"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Events",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Normalized calendar events when Operation is GetEvents",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B6F29E01-4C11-4E8A-9B01-1A2B3C4D5E07"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Schedules",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Normalized free/busy schedules when Operation is GetFreeBusy",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B6F29E01-4C11-4E8A-9B01-1A2B3C4D5E08"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Suggestions",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Candidate meeting time suggestions when Operation is FindMeetingTimes",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B6F29E01-4C11-4E8A-9B01-1A2B3C4D5E09"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ExternalAvailabilitySlots",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Available slots returned from HubSpot Meetings API v3 and Calendly API v2",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B6F29E01-4C11-4E8A-9B01-1A2B3C4D5E10"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Calendar and availability retrieved successfully"
+          },
+          "primaryKey": {
+            "ID": "B6F29E01-4C11-4E8A-9B01-1A2B3C4D5E91"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "POLICY_DENIED",
+            "IsSuccess": false,
+            "Description": "Blocked by user CalendarChannelMode policy"
+          },
+          "primaryKey": {
+            "ID": "B6F29E01-4C11-4E8A-9B01-1A2B3C4D5E92"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "B6F29E01-4C11-4E8A-9B01-1A2B3C4D5E00"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Manage My Calendar Event",
+      "Description": "Creates, updates, responds to (Accept/TentativelyAccept/Decline), or cancels a calendar event on the calling user's calendar, or generates a single-use Calendly scheduling link. Enforces CalendarChannelMode (queuing an MJ: AI Agent Requests approval when ProposeWithApproval).",
+      "DriverClass": "__ManageMyCalendarEvent",
+      "Type": "Custom",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Communication",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-calendar-plus"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Operation",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Operation: 'Create', 'Update', 'Respond', 'Cancel', or 'CreateCalendlySingleUseLink'",
+            "IsRequired": true,
+            "DefaultValue": "Create"
+          },
+          "primaryKey": {
+            "ID": "B7F29E01-4C11-4E8A-9B01-1A2B3C4D5E01"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "EventID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "External calendar event ID (required for Update, Respond, and Cancel)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B7F29E01-4C11-4E8A-9B01-1A2B3C4D5E02"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Subject",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Event title/subject",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B7F29E01-4C11-4E8A-9B01-1A2B3C4D5E03"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Body",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Event agenda/description",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B7F29E01-4C11-4E8A-9B01-1A2B3C4D5E04"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "StartTime",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ISO-8601 event start time",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B7F29E01-4C11-4E8A-9B01-1A2B3C4D5E05"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "EndTime",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ISO-8601 event end time",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B7F29E01-4C11-4E8A-9B01-1A2B3C4D5E06"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "AttendeeEmails",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Comma-separated or JSON array of attendee email addresses",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B7F29E01-4C11-4E8A-9B01-1A2B3C4D5E07"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Response",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "RSVP response when Operation is Respond: 'Accept', 'TentativelyAccept', or 'Decline'",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B7F29E01-4C11-4E8A-9B01-1A2B3C4D5E08"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ApprovalRequestID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the created MJ: AI Agent Requests record when CalendarChannelMode is ProposeWithApproval",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B7F29E01-4C11-4E8A-9B01-1A2B3C4D5E09"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Calendar event operation completed"
+          },
+          "primaryKey": {
+            "ID": "B7F29E01-4C11-4E8A-9B01-1A2B3C4D5E91"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "APPROVAL_REQUIRED",
+            "IsSuccess": true,
+            "Description": "Dry-run preview created and queued for user approval in MJ: AI Agent Requests"
+          },
+          "primaryKey": {
+            "ID": "B7F29E01-4C11-4E8A-9B01-1A2B3C4D5E92"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "B7F29E01-4C11-4E8A-9B01-1A2B3C4D5E00"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Manage My Email Inbox and Drafts",
+      "Description": "Lists messages, searches threads, reads single messages, creates email drafts, or replies/forwards in the calling user's personal mailbox or dedicated agent utility mailbox. Hard-pinned to ContextUser.Email or the user's AIBridgeAgentIdentity and gated by EmailChannelMode.",
+      "DriverClass": "__ManageMyEmailInbox",
+      "Type": "Custom",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Communication",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-envelope-open-text"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Operation",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Operation: 'ListMessages', 'SearchMessages', 'GetSingleMessage', 'CreateDraft', 'Reply', or 'Forward'",
+            "IsRequired": true,
+            "DefaultValue": "ListMessages"
+          },
+          "primaryKey": {
+            "ID": "B8F29E01-4C11-4E8A-9B01-1A2B3C4D5E01"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Query",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Search query when Operation is SearchMessages",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B8F29E01-4C11-4E8A-9B01-1A2B3C4D5E02"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MessageID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Message ID for GetSingleMessage, Reply, or Forward",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B8F29E01-4C11-4E8A-9B01-1A2B3C4D5E03"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "To",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Recipient email address for CreateDraft or Forward",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B8F29E01-4C11-4E8A-9B01-1A2B3C4D5E04"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Subject",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Email subject for CreateDraft",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B8F29E01-4C11-4E8A-9B01-1A2B3C4D5E05"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Body",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Email body content for CreateDraft, Reply, or Forward",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B8F29E01-4C11-4E8A-9B01-1A2B3C4D5E06"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Messages",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Retrieved messages for ListMessages or SearchMessages",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B8F29E01-4C11-4E8A-9B01-1A2B3C4D5E07"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DraftID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Created draft ID when Operation is CreateDraft",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B8F29E01-4C11-4E8A-9B01-1A2B3C4D5E08"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Email operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "B8F29E01-4C11-4E8A-9B01-1A2B3C4D5E91"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "POLICY_DENIED",
+            "IsSuccess": false,
+            "Description": "Email operation blocked by user EmailChannelMode policy"
+          },
+          "primaryKey": {
+            "ID": "B8F29E01-4C11-4E8A-9B01-1A2B3C4D5E92"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "B8F29E01-4C11-4E8A-9B01-1A2B3C4D5E00"
+    }
+  }
+]

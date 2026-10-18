@@ -2452,7 +2452,7 @@ export const MJAIAgentRunStepSchema = z.object({
         * * Field Name: PayloadAtEnd
         * * Display Name: Payload At End
         * * SQL Data Type: nvarchar(MAX)
-        * * Description: JSON serialization of the Payload state at the end of this step`),
+        * * Description: JSON serialization of the Payload state at the end of this step. NULL when PayloadAtEndSourceStepID is set; the ending payload is then the PayloadAtEnd of that step.`),
     FinalPayloadValidationResult: z.union([z.literal('Fail'), z.literal('Fail'), z.literal('Pass'), z.literal('Pass'), z.literal('Retry'), z.literal('Retry'), z.literal('Warn'), z.literal('Warn')]).nullable().describe(`
         * * Field Name: FinalPayloadValidationResult
         * * Display Name: Validation Result
@@ -2525,6 +2525,12 @@ detailed information about what validation rules failed.`),
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Agent Run Steps (vwAIAgentRunSteps.ID)
         * * Description: When set, PayloadAtStart is not stored on this row because it equals the PayloadAtEnd of the referenced step in the same run. Read that step's PayloadAtEnd to get this step's starting payload.`),
+    PayloadAtEndSourceStepID: z.string().nullable().describe(`
+        * * Field Name: PayloadAtEndSourceStepID
+        * * Display Name: Payload At End Source Step ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agent Run Steps (vwAIAgentRunSteps.ID)
+        * * Description: When set, PayloadAtEnd is not stored on this row because it equals the PayloadAtEnd of the referenced step in the same run. Read that step's PayloadAtEnd to get this step's ending payload.`),
     AgentRun: z.string().nullable().describe(`
         * * Field Name: AgentRun
         * * Display Name: Agent Run Context
@@ -2536,6 +2542,10 @@ detailed information about what validation rules failed.`),
     PayloadAtStartSourceStep: z.string().nullable().describe(`
         * * Field Name: PayloadAtStartSourceStep
         * * Display Name: Payload At Start Source Step
+        * * SQL Data Type: nvarchar(255)`),
+    PayloadAtEndSourceStep: z.string().nullable().describe(`
+        * * Field Name: PayloadAtEndSourceStep
+        * * Display Name: Payload At End Source Step
         * * SQL Data Type: nvarchar(255)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
@@ -4022,6 +4032,206 @@ export const MJAIAgentTypeSchema = z.object({
 export type MJAIAgentTypeEntityType = z.infer<typeof MJAIAgentTypeSchema>;
 
 /**
+ * zod schema definition for the entity MJ: AI Agent User Policies
+ */
+export const MJAIAgentUserPolicySchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    AgentID: z.string().describe(`
+        * * Field Name: AgentID
+        * * Display Name: Agent
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
+        * * Description: The AI Agent governed by this user policy.`),
+    UserID: z.string().describe(`
+        * * Field Name: UserID
+        * * Display Name: User
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: The MJ User who owns this policy and under whose security principal the agent executes.`),
+    DisplayNameOverride: z.string().nullable().describe(`
+        * * Field Name: DisplayNameOverride
+        * * Display Name: Display Name Override
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Optional user-personalized display name for this agent (e.g., "Maya" for a user's Chief of Staff).`),
+    PreferredPersonaID: z.string().nullable().describe(`
+        * * Field Name: PreferredPersonaID
+        * * Display Name: Preferred Persona
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Personas (vwAIPersonas.ID)
+        * * Description: Optional AI Persona selected by the user for this agent's voice and communication style.`),
+    Status: z.union([z.literal('Active'), z.literal('Disabled'), z.literal('Paused')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+    *   * Paused
+        * * Description: Policy lifecycle status: Active, Paused (autonomous wakes suspended), or Disabled.`),
+    OnboardingStatus: z.union([z.literal('Completed'), z.literal('InProgress'), z.literal('NotStarted')]).describe(`
+        * * Field Name: OnboardingStatus
+        * * Display Name: Onboarding Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: NotStarted
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Completed
+    *   * InProgress
+    *   * NotStarted
+        * * Description: Onboarding progression for this user-agent pair: NotStarted, InProgress, or Completed.`),
+    OnboardedAt: z.date().nullable().describe(`
+        * * Field Name: OnboardedAt
+        * * Display Name: Onboarded At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Timestamp when the user completed onboarding for this agent.`),
+    CoordinationMode: z.union([z.literal('Autonomous'), z.literal('Coordinator'), z.literal('Observer')]).describe(`
+        * * Field Name: CoordinationMode
+        * * Display Name: Coordination Mode
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Observer
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Autonomous
+    *   * Coordinator
+    *   * Observer
+        * * Description: Operating posture: Observer (tracks and reports only; never nudges others), Coordinator (nudges internal task/priority owners and peer CoS agents), or Autonomous (proactively coordinates within approval boundaries).`),
+    DefaultDataAccessMode: z.union([z.literal('AllowListOnly'), z.literal('ReadOnly'), z.literal('UserCeiling')]).describe(`
+        * * Field Name: DefaultDataAccessMode
+        * * Display Name: Default Data Access Mode
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: UserCeiling
+    * * Value List Type: List
+    * * Possible Values 
+    *   * AllowListOnly
+    *   * ReadOnly
+    *   * UserCeiling
+        * * Description: Default entity access ceiling when no explicit rule in EntityAccessRules matches: UserCeiling (inherit user's MJ permissions), ReadOnly (read permitted entities, block all writes unless explicitly allowed), or AllowListOnly (deny all entities not listed in EntityAccessRules).`),
+    EmailChannelMode: z.union([z.literal('Disabled'), z.literal('DraftOnly'), z.literal('ReadOnly'), z.literal('SendAsAgent'), z.literal('SendAsUser')]).describe(`
+        * * Field Name: EmailChannelMode
+        * * Display Name: Email Channel Mode
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: DraftOnly
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Disabled
+    *   * DraftOnly
+    *   * ReadOnly
+    *   * SendAsAgent
+    *   * SendAsUser
+        * * Description: Email channel permission level: Disabled, ReadOnly, DraftOnly, SendAsAgent, or SendAsUser.`),
+    PhoneChannelMode: z.union([z.literal('Disabled'), z.literal('InboundOnly'), z.literal('OutboundAutonomous'), z.literal('OutboundWithApproval')]).describe(`
+        * * Field Name: PhoneChannelMode
+        * * Display Name: Phone Channel Mode
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: InboundOnly
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Disabled
+    *   * InboundOnly
+    *   * OutboundAutonomous
+    *   * OutboundWithApproval
+        * * Description: Telephony channel permission level: Disabled, InboundOnly, OutboundWithApproval, or OutboundAutonomous.`),
+    MessagingChannelMode: z.union([z.literal('Disabled'), z.literal('Enabled')]).describe(`
+        * * Field Name: MessagingChannelMode
+        * * Display Name: Messaging Channel Mode
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Enabled
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Disabled
+    *   * Enabled
+        * * Description: Messaging channel permission level (Slack/Teams/In-App): Disabled or Enabled.`),
+    AllowInterAgentCoordination: z.boolean().describe(`
+        * * Field Name: AllowInterAgentCoordination
+        * * Display Name: Allow Inter-Agent Coordination
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Whether this user's agent may send or respond to structured coordination requests from other users' Chief of Staff agents.`),
+    RequireApprovalForExternalComms: z.boolean().describe(`
+        * * Field Name: RequireApprovalForExternalComms
+        * * Display Name: Require Approval For External Comms
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When 1, any external email, message, or outbound call to non-internal recipients requires explicit user approval via AIAgentRequest.`),
+    RequireApprovalForFinancials: z.boolean().describe(`
+        * * Field Name: RequireApprovalForFinancials
+        * * Display Name: Require Approval For Financials
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When 1, financial commitments, purchases, or accounting/order approvals require explicit user approval.`),
+    RequireApprovalForDestructiveActions: z.boolean().describe(`
+        * * Field Name: RequireApprovalForDestructiveActions
+        * * Display Name: Require Approval For Destructive Actions
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When 1, deleting records or cancelling active workflows requires explicit user approval.`),
+    AutoApproveAmountThreshold: z.number().nullable().describe(`
+        * * Field Name: AutoApproveAmountThreshold
+        * * Display Name: Auto Approve Amount Threshold
+        * * SQL Data Type: decimal(18, 2)
+        * * Description: Optional monetary threshold below which low-risk financial actions may proceed when RequireApprovalForFinancials is 0. NULL means no automatic monetary threshold.`),
+    EntityAccessRules: z.any().nullable().describe(`
+        * * Field Name: EntityAccessRules
+        * * Display Name: Entity Access Rules
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: Array<MJAIAgentUserPolicyEntity_IAgentUserEntityAccessRule>
+        * * Description: JSON array of IAgentUserEntityAccessRule objects defining per-entity or wildcard CRUD narrowing, additional Row-Level Security (RLS) filters, additional Field-Level Security (FLS) field masks, and allowed time windows.`),
+    ActionPolicyRules: z.any().nullable().describe(`
+        * * Field Name: ActionPolicyRules
+        * * Display Name: Action Policy Rules
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: Array<MJAIAgentUserPolicyEntity_IAgentUserActionPolicyRule>
+        * * Description: JSON array of IAgentUserActionPolicyRule objects defining per-action Allow/RequireApproval/Deny policies, SafeExpressionEvaluator parameter conditions, and allowed time windows.`),
+    InstructionsOverride: z.string().nullable().describe(`
+        * * Field Name: InstructionsOverride
+        * * Display Name: Instructions Override
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional user-specific standing instructions injected into the agent's system context on every run.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    CalendarChannelMode: z.union([z.literal('Autonomous'), z.literal('Disabled'), z.literal('ProposeWithApproval'), z.literal('ReadOnly')]).describe(`
+        * * Field Name: CalendarChannelMode
+        * * Display Name: Calendar Channel Mode
+        * * SQL Data Type: nvarchar(30)
+        * * Default Value: ReadOnly
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Autonomous
+    *   * Disabled
+    *   * ProposeWithApproval
+    *   * ReadOnly
+        * * Description: Calendar channel permission level: Disabled, ReadOnly (check events & free/busy only), ProposeWithApproval (create/modify events or send invites only with explicit user approval), or Autonomous.`),
+    Agent: z.string().nullable().describe(`
+        * * Field Name: Agent
+        * * Display Name: Agent Name
+        * * SQL Data Type: nvarchar(255)`),
+    User: z.string().describe(`
+        * * Field Name: User
+        * * Display Name: User Name
+        * * SQL Data Type: nvarchar(100)`),
+    PreferredPersona: z.string().nullable().describe(`
+        * * Field Name: PreferredPersona
+        * * Display Name: Preferred Persona Name
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type MJAIAgentUserPolicyEntityType = z.infer<typeof MJAIAgentUserPolicySchema>;
+
+/**
  * zod schema definition for the entity MJ: AI Agents
  */
 export const MJAIAgentSchema = z.object({
@@ -4770,6 +4980,12 @@ export const MJAIBridgeAgentIdentitySchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    UserID: z.string().nullable().describe(`
+        * * Field Name: UserID
+        * * Display Name: User
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: Optional owning MJ User when this email address, phone DID, or platform account identity is dedicated to a specific user's personal agent instance (such as their Chief of Staff). NULL for shared/org-wide agent identities.`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent Name
@@ -4777,6 +4993,10 @@ export const MJAIBridgeAgentIdentitySchema = z.object({
     Provider: z.string().describe(`
         * * Field Name: Provider
         * * Display Name: Provider Name
+        * * SQL Data Type: nvarchar(100)`),
+    User: z.string().nullable().describe(`
+        * * Field Name: User
+        * * Display Name: User Name
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -11955,6 +12175,44 @@ export const MJCommunicationProviderSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Whether or not the provider supports creating draft messages`),
+    SupportsCalendar: z.boolean().describe(`
+        * * Field Name: SupportsCalendar
+        * * Display Name: Supports Calendar
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether the provider supports calendar event reading, creation, updating, and invitation responses.`),
+    SupportsFreeBusy: z.boolean().describe(`
+        * * Field Name: SupportsFreeBusy
+        * * Display Name: Supports Free Busy
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether the provider supports checking free/busy schedules and finding optimal meeting times.`),
+    EnterpriseScopeMode: z.union([z.literal('SecurityGroupScoped'), z.literal('TenantWide'), z.literal('UtilityMailboxesOnly')]).describe(`
+        * * Field Name: EnterpriseScopeMode
+        * * Display Name: Enterprise Scope Mode
+        * * SQL Data Type: nvarchar(40)
+        * * Default Value: UtilityMailboxesOnly
+    * * Value List Type: List
+    * * Possible Values 
+    *   * SecurityGroupScoped
+    *   * TenantWide
+    *   * UtilityMailboxesOnly
+        * * Description: Enterprise mailbox scope posture for this provider: UtilityMailboxesOnly (restricted to shared/agent utility mailboxes), SecurityGroupScoped (Exchange RBAC / Workspace group-scoped user mailboxes), or TenantWide.`),
+    AllowedEmailDomains: z.string().nullable().describe(`
+        * * Field Name: AllowedEmailDomains
+        * * Display Name: Allowed Email Domains
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Optional comma-separated list of corporate email domains permitted for user-scoped mailbox and calendar operations (e.g., "company.com,subsidiary.com").`),
+    DefaultCredentialID: z.string().nullable().describe(`
+        * * Field Name: DefaultCredentialID
+        * * Display Name: Default Credential ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Credentials (vwCredentials.ID)
+        * * Description: Optional default MJ Credential used by this communication provider when no per-request credential override is supplied.`),
+    DefaultCredential: z.string().nullable().describe(`
+        * * Field Name: DefaultCredential
+        * * Display Name: Default Credential
+        * * SQL Data Type: nvarchar(200)`),
 });
 
 export type MJCommunicationProviderEntityType = z.infer<typeof MJCommunicationProviderSchema>;
@@ -36537,16 +36795,17 @@ export const MJUserRoutineSchema = z.object({
     *   * Disabled
     *   * Paused
         * * Description: Lifecycle status: Active (eligible to run), Paused (temporarily off), Disabled (off).`),
-    RoutineType: z.union([z.literal('Monitoring'), z.literal('Scheduled')]).describe(`
+    RoutineType: z.union([z.literal('AgentWake'), z.literal('Monitoring'), z.literal('Scheduled')]).describe(`
         * * Field Name: RoutineType
         * * Display Name: Routine Type
         * * SQL Data Type: nvarchar(20)
         * * Default Value: Scheduled
     * * Value List Type: List
     * * Possible Values 
+    *   * AgentWake
     *   * Monitoring
     *   * Scheduled
-        * * Description: Scheduled (always notify per NotifyCondition) or Monitoring (intended for OnChange detection via result hashing).`),
+        * * Description: Scheduled (user cron routine), Monitoring (OnChange detection via result hashing), or AgentWake (autonomous agent self-scheduled wake/monitor entry, hidden from the default user cron list).`),
     TargetType: z.union([z.literal('Action'), z.literal('Agent'), z.literal('Prompt')]).describe(`
         * * Field Name: TargetType
         * * Display Name: Target Type
@@ -36577,11 +36836,11 @@ export const MJUserRoutineSchema = z.object({
         * * Display Name: Requested Skills
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Optional JSON array of MJ: AI Skills IDs to pre-activate when the routine target is an Agent — threaded as ExecuteAgentParams.requestedSkillIDs so the agent starts each scheduled run with the requested skills' instructions and tools in effect (subject to all availability gates; ActivationMode does not gate this explicit-request path). Ignored for Action/Prompt targets.`),
-    CronExpression: z.string().describe(`
+    CronExpression: z.string().nullable().describe(`
         * * Field Name: CronExpression
         * * Display Name: Cron Expression
         * * SQL Data Type: nvarchar(100)
-        * * Description: Standard cron expression evaluated by the dispatcher to determine when the routine is due.`),
+        * * Description: Standard cron expression evaluated by the dispatcher for Recurring and Adaptive routines. NULL when ScheduleMode is OneShot.`),
     StartAt: z.date().nullable().describe(`
         * * Field Name: StartAt
         * * Display Name: Start At
@@ -36670,6 +36929,28 @@ export const MJUserRoutineSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Conversations (vwConversations.ID)
         * * Description: The dedicated conversation this routine's Agent runs append to (created on first conversation-mode run, Application-scoped so it stays out of the default chat list). NULL when the routine has never run in conversation mode.`),
+    ScheduleMode: z.union([z.literal('Adaptive'), z.literal('OneShot'), z.literal('Recurring')]).describe(`
+        * * Field Name: ScheduleMode
+        * * Display Name: Schedule Mode
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Recurring
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Adaptive
+    *   * OneShot
+    *   * Recurring
+        * * Description: Scheduling mode: Recurring (fixed cron schedule), OneShot (single future wake at NextRunAt, auto-disables after firing unless rescheduled by the agent), or Adaptive (fallback CronExpression combined with agent-set NextRunAt and event/condition wake gates).`),
+    WakeConfiguration: z.any().nullable().describe(`
+        * * Field Name: WakeConfiguration
+        * * Display Name: Wake Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJUserRoutineEntity_IRoutineWakeConfiguration
+        * * Description: Optional JSON configuration (IRoutineWakeConfiguration) specifying watchedEntities for durable watermark/RecordChange polling and the 3-tier wake gate (Tier 1 SafeExpressionEvaluator, Tier 2 AIDecisionRunner fast decision model, Tier 3 AIPromptRunner metadata prompt).`),
+    LastCheckedAt: z.date().nullable().describe(`
+        * * Field Name: LastCheckedAt
+        * * Display Name: Last Checked At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Timestamp when the dispatcher last evaluated this routine's watched entities and wake gate conditions.`),
     User: z.string().describe(`
         * * Field Name: User
         * * Display Name: User Name
@@ -45488,7 +45769,7 @@ export class MJAIAgentRunStepEntity extends BaseEntity<MJAIAgentRunStepEntityTyp
     * * Field Name: PayloadAtEnd
     * * Display Name: Payload At End
     * * SQL Data Type: nvarchar(MAX)
-    * * Description: JSON serialization of the Payload state at the end of this step
+    * * Description: JSON serialization of the Payload state at the end of this step. NULL when PayloadAtEndSourceStepID is set; the ending payload is then the PayloadAtEnd of that step.
     */
     get PayloadAtEnd(): string | null {
         return this.Get('PayloadAtEnd');
@@ -45665,6 +45946,20 @@ detailed information about what validation rules failed.
     }
 
     /**
+    * * Field Name: PayloadAtEndSourceStepID
+    * * Display Name: Payload At End Source Step ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Run Steps (vwAIAgentRunSteps.ID)
+    * * Description: When set, PayloadAtEnd is not stored on this row because it equals the PayloadAtEnd of the referenced step in the same run. Read that step's PayloadAtEnd to get this step's ending payload.
+    */
+    get PayloadAtEndSourceStepID(): string | null {
+        return this.Get('PayloadAtEndSourceStepID');
+    }
+    set PayloadAtEndSourceStepID(value: string | null) {
+        this.Set('PayloadAtEndSourceStepID', value);
+    }
+
+    /**
     * * Field Name: AgentRun
     * * Display Name: Agent Run Context
     * * SQL Data Type: nvarchar(255)
@@ -45689,6 +45984,15 @@ detailed information about what validation rules failed.
     */
     get PayloadAtStartSourceStep(): string | null {
         return this.Get('PayloadAtStartSourceStep');
+    }
+
+    /**
+    * * Field Name: PayloadAtEndSourceStep
+    * * Display Name: Payload At End Source Step
+    * * SQL Data Type: nvarchar(255)
+    */
+    get PayloadAtEndSourceStep(): string | null {
+        return this.Get('PayloadAtEndSourceStep');
     }
 
     /**
@@ -49687,6 +49991,602 @@ export class MJAIAgentTypeEntity extends BaseEntity<MJAIAgentTypeEntityType> {
 
 
 /**
+ * Per-entity or wildcard entity access rule stored in the `EntityAccessRules` JSON array
+ * on `MJ: AI Agent User Policies` (`AIAgentUserPolicy.EntityAccessRules`).
+ *
+ * The owning user's MJ permissions (`contextUser`: Entity CRUD permissions, role-based
+ * Row-Level Security filters, and role-based Field-Level Security permissions) are the
+ * non-negotiable ceiling. Rules in this array strictly narrow access below that ceiling:
+ * - CRUD narrowing (`Deny`, `ReadOnly`, `ReadWrite`, `RequireApprovalOnWrite`)
+ * - Additional RLS narrowing (extra `RowLevelSecurityFilter` ID, SQL `whereClause` validated
+ *   via `SQLExpressionValidator`, or in-memory `recordConditionExpression` evaluated via
+ *   `SafeExpressionEvaluator`)
+ * - Additional FLS narrowing (`deniedFields`, `readOnlyFields`, `requireApprovalFields`)
+ * - Time-of-day / day-of-week / date-range windows (`timeWindows`)
+ */
+export interface MJAIAgentUserPolicyEntity_IAgentUserEntityAccessRule {
+    /**
+     * Exact MJ Entity Name or wildcard pattern (e.g. `"*"`, `"MJ_BizApps_Accounting:*"`,
+     * `"MJ_BizApps_Sales: Deals"`).
+     */
+    entityPattern: string;
+
+    /**
+     * Maximum CRUD mode allowed on matching entities. Intersected with `contextUser`'s
+     * actual `EntityPermission` — never grants access the user does not already hold.
+     */
+    access: 'Deny' | 'ReadOnly' | 'ReadWrite' | 'RequireApprovalOnWrite';
+
+    /**
+     * Optional Row-Level Security (RLS) narrowing — AND-combined with the user's role RLS.
+     */
+    rlsNarrowing?: {
+        /** Optional ID of a reusable `MJ: Row Level Security Filters` record. */
+        rowLevelSecurityFilterId?: string;
+        /**
+         * Inline SQL filter validated via `SQLExpressionValidator` (`context: 'where_clause'`).
+         * Supports user tokens such as `{{UserID}}` and `{{UserEmail}}`.
+         */
+        whereClause?: string;
+        /**
+         * Safe AST-validated boolean expression evaluated via `SafeExpressionEvaluator`
+         * against `{ record, user, now }` before returning or saving a `BaseEntity`.
+         */
+        recordConditionExpression?: string;
+    };
+
+    /**
+     * Optional Field-Level Security (FLS) narrowing — merged with the user's role FLS.
+     * Each array supports exact field names or `*` wildcard patterns (e.g. `["Salary", "*SSN*"]`).
+     */
+    flsNarrowing?: {
+        /** Fields stripped from read projections and blocked from write mutations. */
+        deniedFields?: string[];
+        /** Fields readable by the agent, but blocked from modification on Create/Update. */
+        readOnlyFields?: string[];
+        /** Modifying any matching field escalates the save to a user approval request (`AIAgentRequest`). */
+        requireApprovalFields?: string[];
+    };
+
+    /**
+     * Optional time-of-day / day-of-week windows restricting when access (especially writes)
+     * is permitted on matching entities.
+     */
+    timeWindows?: Array<{
+        /** Allowed days of week (e.g. `['Mon', 'Tue', 'Wed', 'Thu', 'Fri']`). */
+        daysOfWeek?: Array<'Sun' | 'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri' | 'Sat'>;
+        /** 24-hour start time in `HH:mm` format (e.g. `"08:00"`). */
+        startTime?: string;
+        /** 24-hour end time in `HH:mm` format (e.g. `"18:00"`). */
+        endTime?: string;
+        /** IANA timezone (e.g. `"America/Chicago"`); defaults to UTC when omitted. */
+        timezone?: string;
+        /** Optional ISO-8601 start timestamp for temporary grants. */
+        validFromISO?: string;
+        /** Optional ISO-8601 end timestamp for temporary grants. */
+        validUntilISO?: string;
+        /**
+         * Behavior when an operation is attempted outside the allowed window:
+         * - `'Deny'`: Reject immediately
+         * - `'ReadOnly'`: Allow reads, block writes
+         * - `'RequireApproval'`: Create an `AIAgentRequest` for user approval
+         * - `'DeferUntilNextWindow'`: Return `nextWindowStartISO` so the agent can self-schedule an `AgentWake`
+         */
+        outsideWindowBehavior?: 'Deny' | 'ReadOnly' | 'RequireApproval' | 'DeferUntilNextWindow';
+    }>;
+}
+
+/**
+ * Per-action or wildcard action policy rule stored in the `ActionPolicyRules` JSON array
+ * on `MJ: AI Agent User Policies` (`AIAgentUserPolicy.ActionPolicyRules`).
+ *
+ * Evaluated by `BaseAgent` before executing any action or tool on behalf of the user.
+ */
+export interface MJAIAgentUserPolicyEntity_IAgentUserActionPolicyRule {
+    /**
+     * Exact Action Name, category prefix, or `"*"` wildcard pattern
+     * (e.g. `"Send Single Message"`, `"*Email*"`, `"Place Outbound*"`).
+     */
+    actionPattern: string;
+
+    /**
+     * Execution gate applied when this rule matches:
+     * - `'Allow'`: Proceed automatically (within the user's permission ceiling)
+     * - `'RequireApproval'`: Pause and create an `MJ: AI Agent Requests` approval item
+     * - `'Deny'`: Block execution and return a policy denial message to the agent
+     */
+    policy: 'Allow' | 'RequireApproval' | 'Deny';
+
+    /**
+     * Optional `SafeExpressionEvaluator` boolean condition evaluated against
+     * `{ params, user, now }` (e.g. `"params.Amount > 500 || params.IsExternal === true"`).
+     * When omitted, the rule applies unconditionally to matching actions.
+     */
+    conditionExpression?: string;
+
+    /**
+     * Optional time-of-day / day-of-week windows restricting when the action may run
+     * (e.g. allowing outbound follow-up nudges only Monday–Friday 08:00–18:00).
+     */
+    timeWindows?: Array<{
+        /** Allowed days of week (e.g. `['Mon', 'Tue', 'Wed', 'Thu', 'Fri']`). */
+        daysOfWeek?: Array<'Sun' | 'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri' | 'Sat'>;
+        /** 24-hour start time in `HH:mm` format (e.g. `"08:00"`). */
+        startTime?: string;
+        /** 24-hour end time in `HH:mm` format (e.g. `"18:00"`). */
+        endTime?: string;
+        /** IANA timezone (e.g. `"America/Chicago"`); defaults to UTC when omitted. */
+        timezone?: string;
+        /** Optional ISO-8601 start timestamp for temporary grants. */
+        validFromISO?: string;
+        /** Optional ISO-8601 end timestamp for temporary grants. */
+        validUntilISO?: string;
+        /**
+         * Behavior when the action is invoked outside the allowed window:
+         * - `'Deny'`: Reject immediately
+         * - `'RequireApproval'`: Create an `AIAgentRequest` for user approval
+         * - `'DeferUntilNextWindow'`: Return `nextWindowStartISO` so the agent can self-schedule an `AgentWake`
+         */
+        outsideWindowBehavior?: 'Deny' | 'ReadOnly' | 'RequireApproval' | 'DeferUntilNextWindow';
+    }>;
+}
+
+/**
+ * MJ: AI Agent User Policies - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIAgentUserPolicy
+ * * Base View: vwAIAgentUserPolicies
+ * * @description Per-(Agent, User) policy and personalization record. The owning user's MJ permissions (Entity CRUD, Role RLS, Role FLS) form the hard ceiling; this table defines strict narrowing rules, channel modes, time windows, and approval gates.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Agent User Policies')
+export class MJAIAgentUserPolicyEntity extends BaseEntity<MJAIAgentUserPolicyEntityType> {
+    /**
+    * Loads the MJ: AI Agent User Policies record from the database
+    * @param ID: string - primary key value to load the MJ: AI Agent User Policies record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJAIAgentUserPolicyEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: AgentID
+    * * Display Name: Agent
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
+    * * Description: The AI Agent governed by this user policy.
+    */
+    get AgentID(): string {
+        return this.Get('AgentID');
+    }
+    set AgentID(value: string) {
+        this.Set('AgentID', value);
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: The MJ User who owns this policy and under whose security principal the agent executes.
+    */
+    get UserID(): string {
+        return this.Get('UserID');
+    }
+    set UserID(value: string) {
+        this.Set('UserID', value);
+    }
+
+    /**
+    * * Field Name: DisplayNameOverride
+    * * Display Name: Display Name Override
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Optional user-personalized display name for this agent (e.g., "Maya" for a user's Chief of Staff).
+    */
+    get DisplayNameOverride(): string | null {
+        return this.Get('DisplayNameOverride');
+    }
+    set DisplayNameOverride(value: string | null) {
+        this.Set('DisplayNameOverride', value);
+    }
+
+    /**
+    * * Field Name: PreferredPersonaID
+    * * Display Name: Preferred Persona
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Personas (vwAIPersonas.ID)
+    * * Description: Optional AI Persona selected by the user for this agent's voice and communication style.
+    */
+    get PreferredPersonaID(): string | null {
+        return this.Get('PreferredPersonaID');
+    }
+    set PreferredPersonaID(value: string | null) {
+        this.Set('PreferredPersonaID', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+    *   * Paused
+    * * Description: Policy lifecycle status: Active, Paused (autonomous wakes suspended), or Disabled.
+    */
+    get Status(): 'Active' | 'Disabled' | 'Paused' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Disabled' | 'Paused') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: OnboardingStatus
+    * * Display Name: Onboarding Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: NotStarted
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Completed
+    *   * InProgress
+    *   * NotStarted
+    * * Description: Onboarding progression for this user-agent pair: NotStarted, InProgress, or Completed.
+    */
+    get OnboardingStatus(): 'Completed' | 'InProgress' | 'NotStarted' {
+        return this.Get('OnboardingStatus');
+    }
+    set OnboardingStatus(value: 'Completed' | 'InProgress' | 'NotStarted') {
+        this.Set('OnboardingStatus', value);
+    }
+
+    /**
+    * * Field Name: OnboardedAt
+    * * Display Name: Onboarded At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp when the user completed onboarding for this agent.
+    */
+    get OnboardedAt(): Date | null {
+        return this.Get('OnboardedAt');
+    }
+    set OnboardedAt(value: Date | null) {
+        this.Set('OnboardedAt', value);
+    }
+
+    /**
+    * * Field Name: CoordinationMode
+    * * Display Name: Coordination Mode
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Observer
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Autonomous
+    *   * Coordinator
+    *   * Observer
+    * * Description: Operating posture: Observer (tracks and reports only; never nudges others), Coordinator (nudges internal task/priority owners and peer CoS agents), or Autonomous (proactively coordinates within approval boundaries).
+    */
+    get CoordinationMode(): 'Autonomous' | 'Coordinator' | 'Observer' {
+        return this.Get('CoordinationMode');
+    }
+    set CoordinationMode(value: 'Autonomous' | 'Coordinator' | 'Observer') {
+        this.Set('CoordinationMode', value);
+    }
+
+    /**
+    * * Field Name: DefaultDataAccessMode
+    * * Display Name: Default Data Access Mode
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: UserCeiling
+    * * Value List Type: List
+    * * Possible Values 
+    *   * AllowListOnly
+    *   * ReadOnly
+    *   * UserCeiling
+    * * Description: Default entity access ceiling when no explicit rule in EntityAccessRules matches: UserCeiling (inherit user's MJ permissions), ReadOnly (read permitted entities, block all writes unless explicitly allowed), or AllowListOnly (deny all entities not listed in EntityAccessRules).
+    */
+    get DefaultDataAccessMode(): 'AllowListOnly' | 'ReadOnly' | 'UserCeiling' {
+        return this.Get('DefaultDataAccessMode');
+    }
+    set DefaultDataAccessMode(value: 'AllowListOnly' | 'ReadOnly' | 'UserCeiling') {
+        this.Set('DefaultDataAccessMode', value);
+    }
+
+    /**
+    * * Field Name: EmailChannelMode
+    * * Display Name: Email Channel Mode
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: DraftOnly
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Disabled
+    *   * DraftOnly
+    *   * ReadOnly
+    *   * SendAsAgent
+    *   * SendAsUser
+    * * Description: Email channel permission level: Disabled, ReadOnly, DraftOnly, SendAsAgent, or SendAsUser.
+    */
+    get EmailChannelMode(): 'Disabled' | 'DraftOnly' | 'ReadOnly' | 'SendAsAgent' | 'SendAsUser' {
+        return this.Get('EmailChannelMode');
+    }
+    set EmailChannelMode(value: 'Disabled' | 'DraftOnly' | 'ReadOnly' | 'SendAsAgent' | 'SendAsUser') {
+        this.Set('EmailChannelMode', value);
+    }
+
+    /**
+    * * Field Name: PhoneChannelMode
+    * * Display Name: Phone Channel Mode
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: InboundOnly
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Disabled
+    *   * InboundOnly
+    *   * OutboundAutonomous
+    *   * OutboundWithApproval
+    * * Description: Telephony channel permission level: Disabled, InboundOnly, OutboundWithApproval, or OutboundAutonomous.
+    */
+    get PhoneChannelMode(): 'Disabled' | 'InboundOnly' | 'OutboundAutonomous' | 'OutboundWithApproval' {
+        return this.Get('PhoneChannelMode');
+    }
+    set PhoneChannelMode(value: 'Disabled' | 'InboundOnly' | 'OutboundAutonomous' | 'OutboundWithApproval') {
+        this.Set('PhoneChannelMode', value);
+    }
+
+    /**
+    * * Field Name: MessagingChannelMode
+    * * Display Name: Messaging Channel Mode
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Enabled
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Disabled
+    *   * Enabled
+    * * Description: Messaging channel permission level (Slack/Teams/In-App): Disabled or Enabled.
+    */
+    get MessagingChannelMode(): 'Disabled' | 'Enabled' {
+        return this.Get('MessagingChannelMode');
+    }
+    set MessagingChannelMode(value: 'Disabled' | 'Enabled') {
+        this.Set('MessagingChannelMode', value);
+    }
+
+    /**
+    * * Field Name: AllowInterAgentCoordination
+    * * Display Name: Allow Inter-Agent Coordination
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Whether this user's agent may send or respond to structured coordination requests from other users' Chief of Staff agents.
+    */
+    get AllowInterAgentCoordination(): boolean {
+        return this.Get('AllowInterAgentCoordination');
+    }
+    set AllowInterAgentCoordination(value: boolean) {
+        this.Set('AllowInterAgentCoordination', value);
+    }
+
+    /**
+    * * Field Name: RequireApprovalForExternalComms
+    * * Display Name: Require Approval For External Comms
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When 1, any external email, message, or outbound call to non-internal recipients requires explicit user approval via AIAgentRequest.
+    */
+    get RequireApprovalForExternalComms(): boolean {
+        return this.Get('RequireApprovalForExternalComms');
+    }
+    set RequireApprovalForExternalComms(value: boolean) {
+        this.Set('RequireApprovalForExternalComms', value);
+    }
+
+    /**
+    * * Field Name: RequireApprovalForFinancials
+    * * Display Name: Require Approval For Financials
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When 1, financial commitments, purchases, or accounting/order approvals require explicit user approval.
+    */
+    get RequireApprovalForFinancials(): boolean {
+        return this.Get('RequireApprovalForFinancials');
+    }
+    set RequireApprovalForFinancials(value: boolean) {
+        this.Set('RequireApprovalForFinancials', value);
+    }
+
+    /**
+    * * Field Name: RequireApprovalForDestructiveActions
+    * * Display Name: Require Approval For Destructive Actions
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When 1, deleting records or cancelling active workflows requires explicit user approval.
+    */
+    get RequireApprovalForDestructiveActions(): boolean {
+        return this.Get('RequireApprovalForDestructiveActions');
+    }
+    set RequireApprovalForDestructiveActions(value: boolean) {
+        this.Set('RequireApprovalForDestructiveActions', value);
+    }
+
+    /**
+    * * Field Name: AutoApproveAmountThreshold
+    * * Display Name: Auto Approve Amount Threshold
+    * * SQL Data Type: decimal(18, 2)
+    * * Description: Optional monetary threshold below which low-risk financial actions may proceed when RequireApprovalForFinancials is 0. NULL means no automatic monetary threshold.
+    */
+    get AutoApproveAmountThreshold(): number | null {
+        return this.Get('AutoApproveAmountThreshold');
+    }
+    set AutoApproveAmountThreshold(value: number | null) {
+        this.Set('AutoApproveAmountThreshold', value);
+    }
+
+    /**
+    * * Field Name: EntityAccessRules
+    * * Display Name: Entity Access Rules
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: Array<MJAIAgentUserPolicyEntity_IAgentUserEntityAccessRule>
+    * * Description: JSON array of IAgentUserEntityAccessRule objects defining per-entity or wildcard CRUD narrowing, additional Row-Level Security (RLS) filters, additional Field-Level Security (FLS) field masks, and allowed time windows.
+    */
+    get EntityAccessRules(): string | null {
+        return this.Get('EntityAccessRules');
+    }
+    set EntityAccessRules(value: string | null) {
+        this.Set('EntityAccessRules', value);
+    }
+
+    /**
+    * Typed accessor for EntityAccessRules — a live view of the parsed JSON as Array<MJAIAgentUserPolicyEntity_IAgentUserEntityAccessRule>.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying EntityAccessRules field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get EntityAccessRulesObject(): Array<MJAIAgentUserPolicyEntity_IAgentUserEntityAccessRule> | null {
+        return this.GetJSONFieldObject<Array<MJAIAgentUserPolicyEntity_IAgentUserEntityAccessRule>>('EntityAccessRules');
+    }
+    set EntityAccessRulesObject(value: Array<MJAIAgentUserPolicyEntity_IAgentUserEntityAccessRule> | null) {
+        this.SetJSONFieldObject<Array<MJAIAgentUserPolicyEntity_IAgentUserEntityAccessRule>>('EntityAccessRules', value);
+    }
+
+    /**
+    * * Field Name: ActionPolicyRules
+    * * Display Name: Action Policy Rules
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: Array<MJAIAgentUserPolicyEntity_IAgentUserActionPolicyRule>
+    * * Description: JSON array of IAgentUserActionPolicyRule objects defining per-action Allow/RequireApproval/Deny policies, SafeExpressionEvaluator parameter conditions, and allowed time windows.
+    */
+    get ActionPolicyRules(): string | null {
+        return this.Get('ActionPolicyRules');
+    }
+    set ActionPolicyRules(value: string | null) {
+        this.Set('ActionPolicyRules', value);
+    }
+
+    /**
+    * Typed accessor for ActionPolicyRules — a live view of the parsed JSON as Array<MJAIAgentUserPolicyEntity_IAgentUserActionPolicyRule>.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying ActionPolicyRules field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get ActionPolicyRulesObject(): Array<MJAIAgentUserPolicyEntity_IAgentUserActionPolicyRule> | null {
+        return this.GetJSONFieldObject<Array<MJAIAgentUserPolicyEntity_IAgentUserActionPolicyRule>>('ActionPolicyRules');
+    }
+    set ActionPolicyRulesObject(value: Array<MJAIAgentUserPolicyEntity_IAgentUserActionPolicyRule> | null) {
+        this.SetJSONFieldObject<Array<MJAIAgentUserPolicyEntity_IAgentUserActionPolicyRule>>('ActionPolicyRules', value);
+    }
+
+    /**
+    * * Field Name: InstructionsOverride
+    * * Display Name: Instructions Override
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional user-specific standing instructions injected into the agent's system context on every run.
+    */
+    get InstructionsOverride(): string | null {
+        return this.Get('InstructionsOverride');
+    }
+    set InstructionsOverride(value: string | null) {
+        this.Set('InstructionsOverride', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: CalendarChannelMode
+    * * Display Name: Calendar Channel Mode
+    * * SQL Data Type: nvarchar(30)
+    * * Default Value: ReadOnly
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Autonomous
+    *   * Disabled
+    *   * ProposeWithApproval
+    *   * ReadOnly
+    * * Description: Calendar channel permission level: Disabled, ReadOnly (check events & free/busy only), ProposeWithApproval (create/modify events or send invites only with explicit user approval), or Autonomous.
+    */
+    get CalendarChannelMode(): 'Autonomous' | 'Disabled' | 'ProposeWithApproval' | 'ReadOnly' {
+        return this.Get('CalendarChannelMode');
+    }
+    set CalendarChannelMode(value: 'Autonomous' | 'Disabled' | 'ProposeWithApproval' | 'ReadOnly') {
+        this.Set('CalendarChannelMode', value);
+    }
+
+    /**
+    * * Field Name: Agent
+    * * Display Name: Agent Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Agent(): string | null {
+        return this.Get('Agent');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get User(): string {
+        return this.Get('User');
+    }
+
+    /**
+    * * Field Name: PreferredPersona
+    * * Display Name: Preferred Persona Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get PreferredPersona(): string | null {
+        return this.Get('PreferredPersona');
+    }
+}
+
+
+/**
  * MJ: AI Agents - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: AIAgent
@@ -51702,6 +52602,20 @@ export class MJAIBridgeAgentIdentityEntity extends BaseEntity<MJAIBridgeAgentIde
     }
 
     /**
+    * * Field Name: UserID
+    * * Display Name: User
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: Optional owning MJ User when this email address, phone DID, or platform account identity is dedicated to a specific user's personal agent instance (such as their Chief of Staff). NULL for shared/org-wide agent identities.
+    */
+    get UserID(): string | null {
+        return this.Get('UserID');
+    }
+    set UserID(value: string | null) {
+        this.Set('UserID', value);
+    }
+
+    /**
     * * Field Name: Agent
     * * Display Name: Agent Name
     * * SQL Data Type: nvarchar(255)
@@ -51717,6 +52631,15 @@ export class MJAIBridgeAgentIdentityEntity extends BaseEntity<MJAIBridgeAgentIde
     */
     get Provider(): string {
         return this.Get('Provider');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get User(): string | null {
+        return this.Get('User');
     }
 }
 
@@ -74060,6 +74983,89 @@ export class MJCommunicationProviderEntity extends BaseEntity<MJCommunicationPro
     set SupportsDrafts(value: boolean) {
         this.Set('SupportsDrafts', value);
     }
+
+    /**
+    * * Field Name: SupportsCalendar
+    * * Display Name: Supports Calendar
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether the provider supports calendar event reading, creation, updating, and invitation responses.
+    */
+    get SupportsCalendar(): boolean {
+        return this.Get('SupportsCalendar');
+    }
+    set SupportsCalendar(value: boolean) {
+        this.Set('SupportsCalendar', value);
+    }
+
+    /**
+    * * Field Name: SupportsFreeBusy
+    * * Display Name: Supports Free Busy
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether the provider supports checking free/busy schedules and finding optimal meeting times.
+    */
+    get SupportsFreeBusy(): boolean {
+        return this.Get('SupportsFreeBusy');
+    }
+    set SupportsFreeBusy(value: boolean) {
+        this.Set('SupportsFreeBusy', value);
+    }
+
+    /**
+    * * Field Name: EnterpriseScopeMode
+    * * Display Name: Enterprise Scope Mode
+    * * SQL Data Type: nvarchar(40)
+    * * Default Value: UtilityMailboxesOnly
+    * * Value List Type: List
+    * * Possible Values 
+    *   * SecurityGroupScoped
+    *   * TenantWide
+    *   * UtilityMailboxesOnly
+    * * Description: Enterprise mailbox scope posture for this provider: UtilityMailboxesOnly (restricted to shared/agent utility mailboxes), SecurityGroupScoped (Exchange RBAC / Workspace group-scoped user mailboxes), or TenantWide.
+    */
+    get EnterpriseScopeMode(): 'SecurityGroupScoped' | 'TenantWide' | 'UtilityMailboxesOnly' {
+        return this.Get('EnterpriseScopeMode');
+    }
+    set EnterpriseScopeMode(value: 'SecurityGroupScoped' | 'TenantWide' | 'UtilityMailboxesOnly') {
+        this.Set('EnterpriseScopeMode', value);
+    }
+
+    /**
+    * * Field Name: AllowedEmailDomains
+    * * Display Name: Allowed Email Domains
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Optional comma-separated list of corporate email domains permitted for user-scoped mailbox and calendar operations (e.g., "company.com,subsidiary.com").
+    */
+    get AllowedEmailDomains(): string | null {
+        return this.Get('AllowedEmailDomains');
+    }
+    set AllowedEmailDomains(value: string | null) {
+        this.Set('AllowedEmailDomains', value);
+    }
+
+    /**
+    * * Field Name: DefaultCredentialID
+    * * Display Name: Default Credential ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Credentials (vwCredentials.ID)
+    * * Description: Optional default MJ Credential used by this communication provider when no per-request credential override is supplied.
+    */
+    get DefaultCredentialID(): string | null {
+        return this.Get('DefaultCredentialID');
+    }
+    set DefaultCredentialID(value: string | null) {
+        this.Set('DefaultCredentialID', value);
+    }
+
+    /**
+    * * Field Name: DefaultCredential
+    * * Display Name: Default Credential
+    * * SQL Data Type: nvarchar(200)
+    */
+    get DefaultCredential(): string | null {
+        return this.Get('DefaultCredential');
+    }
 }
 
 
@@ -89353,6 +90359,18 @@ export class MJEncryptionKeyEntity extends BaseEntity<MJEncryptionKeyEntityType>
  *
  * @see guides/FORMS_ARCHITECTURE_GUIDE.md §7d
  */
+/**
+ * Controls which columns a save operation (`spCreate` / `spUpdate` and provider save wrappers)
+ * returns from the database:
+ * - `'full'` (default): Re-queries `SELECT * FROM <BaseView>` after `INSERT`/`UPDATE` so all
+ *   columns (including virtual/joined columns) are returned from the database.
+ * - `'datestamps_only'`: Returns only the primary key column(s) plus `__mj_CreatedAt` and
+ *   `__mj_UpdatedAt` (when present on the entity) directly from `<BaseTable>`, avoiding the
+ *   expensive `BaseView` JOINs and large column reads while still returning exact DB-generated
+ *   keys and timestamps for optimistic concurrency / inconsistency checks.
+ */
+export type MJEntityEntity_EntitySaveReturnMode = 'full' | 'datestamps_only';
+
 export interface MJEntityEntity_IEntityConfiguration {
     /**
      * Presentation / chrome. Null = host defaults (`Layout: auto`,
@@ -89373,6 +90391,14 @@ export interface MJEntityEntity_IEntityConfiguration {
      * policy says Deep, unless NotCloneable is true.
      */
     Clone?: MJEntityEntity_IEntityCloneConfiguration;
+
+    /**
+     * Controls which columns a save operation (`spCreate` / `spUpdate`) returns from the database.
+     * - `'full'` (default when omitted): Re-queries `SELECT * FROM <BaseView>` after `INSERT`/`UPDATE`.
+     * - `'datestamps_only'`: Selects only the primary key(s) and `__mj_CreatedAt`/`__mj_UpdatedAt`
+     *   directly from `<BaseTable>`, preserving in-memory field values on the saved entity.
+     */
+    SaveReturnMode?: MJEntityEntity_EntitySaveReturnMode;
 }
 
 /**
@@ -140336,6 +141362,102 @@ export class MJUserRoutineRunEntity extends BaseEntity<MJUserRoutineRunEntityTyp
 
 
 /**
+ * Configuration for autonomous wake conditions and durable entity change watching
+ * on `MJ: User Routines` (`UserRoutine.WakeConfiguration`).
+ *
+ * Evaluated by `WakeGateEvaluator` inside `UserRoutineDispatcherDriver` before invoking
+ * the routine's target (Agent, Action, or Prompt) so routines only spend LLM tokens
+ * when meaningful state changes or scheduled wake deadlines occur.
+ */
+export interface MJUserRoutineEntity_IRoutineWakeConfiguration {
+    /**
+     * Logical workstream or monitor key used by self-scheduling agents (e.g. `"q4-okr-rollup"`,
+     * `"chief-of-staff-main"`) to upsert a specific `AgentWake` routine row per workstream.
+     */
+    workstreamKey?: string;
+
+    /**
+     * Human-readable reason the agent scheduled this wake (injected into the wake prompt).
+     */
+    wakeReason?: string;
+
+    /**
+     * Arbitrary JSON state saved by the agent when going to sleep and restored into the
+     * conversation/payload when the routine wakes.
+     */
+    resumeState?: Record<string, unknown>;
+
+    /**
+     * Entities watched for durable change detection since `UserRoutine.LastCheckedAt`.
+     * Checked via `GetRunViewsDatabaseStatus` (`COUNT(*)` + `MAX(__mj_UpdatedAt)`) and/or
+     * `MJ: Record Changes` under the routine owner's `contextUser` security scope.
+     */
+    watchedEntities?: Array<{
+        /** Exact MJ Entity Name (e.g. `"MJ_BizApps_Tasks: Tasks"`, `"MJ_BizApps_Issues: Issues"`). */
+        entityName: string;
+        /** Optional SQL `ExtraFilter` (validated via `SQLExpressionValidator`) scoping watched rows. */
+        extraFilter?: string;
+        /** Optional alias used as the key inside `deltas.<alias>` for Tier 1 expressions. */
+        alias?: string;
+        /** When true, also inspects `MJ: Record Changes` for field-level diffs since `LastCheckedAt`. */
+        includeRecordChanges?: boolean;
+    }>;
+
+    /**
+     * 3-Tier Wake Condition Gate evaluated in order of increasing cost:
+     * - Tier 0: Durable watermark / hash comparison (0 tokens)
+     * - Tier 1: Deterministic `SafeExpressionEvaluator` boolean expression (0 tokens)
+     * - Tier 2: Fast classifier / decision model via `AIDecisionRunner` (~100 tokens)
+     * - Tier 3: Full metadata `MJ: AI Prompts` evaluation via `AIPromptRunner`
+     */
+    wakeGate?: {
+        /**
+         * When true, skips target execution if watched entities and signals have not changed
+         * since `LastCheckedAt` AND any `forceWakeAfterMinutes` deadline has not elapsed.
+         */
+        skipIfUnchanged?: boolean;
+
+        /**
+         * Optional maximum minutes of silence before forcing a wake even if watched entities
+         * are unchanged (e.g. `480` for an 8-hour heartbeat).
+         */
+        forceWakeAfterMinutes?: number;
+
+        /**
+         * Tier 1: Deterministic boolean expression evaluated by `SafeExpressionEvaluator`
+         * against `{ deltas, totalChangedCount, elapsedMinutes, isScheduledWakeTimeReached, payload }`.
+         * When it evaluates to `false`, the wake is skipped with zero LLM cost.
+         */
+        tier1Expression?: string;
+
+        /**
+         * Tier 2: Fast Decision Model question evaluated via `AIDecisionRunner` (`Default Decision` /
+         * `Jev` / `Kev`) when Tier 1 passes (or when Tier 1 is omitted).
+         */
+        tier2Decision?: {
+            /** Question posed to the decision model along with the delta summary. */
+            question: string;
+            /** Decision type (`'Likelihood'` 0-100 or `'Choice'`). Defaults to `'Likelihood'`. */
+            type?: 'Likelihood' | 'Choice';
+            /** Minimum likelihood score (0-100) required to wake the agent when `type === 'Likelihood'`. */
+            wakeIfAtLeast?: number;
+            /** Choice options when `type === 'Choice'`. */
+            options?: Array<{ key: string; description: string }>;
+            /** Option keys that trigger a wake when `type === 'Choice'`. */
+            wakeOnChoices?: string[];
+            /** Optional extra context instructions for the decision classifier. */
+            additionalInstructions?: string;
+        };
+
+        /**
+         * Tier 3: Optional `MJ: AI Prompts` ID executed via `AIPromptRunner` as the final gate
+         * when deeper synthesis is required before waking the full agent.
+         */
+        tier3WakePromptId?: string;
+    };
+}
+
+/**
  * MJ: User Routines - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: UserRoutine
@@ -140457,14 +141579,15 @@ export class MJUserRoutineEntity extends BaseEntity<MJUserRoutineEntityType> {
     * * Default Value: Scheduled
     * * Value List Type: List
     * * Possible Values 
+    *   * AgentWake
     *   * Monitoring
     *   * Scheduled
-    * * Description: Scheduled (always notify per NotifyCondition) or Monitoring (intended for OnChange detection via result hashing).
+    * * Description: Scheduled (user cron routine), Monitoring (OnChange detection via result hashing), or AgentWake (autonomous agent self-scheduled wake/monitor entry, hidden from the default user cron list).
     */
-    get RoutineType(): 'Monitoring' | 'Scheduled' {
+    get RoutineType(): 'AgentWake' | 'Monitoring' | 'Scheduled' {
         return this.Get('RoutineType');
     }
-    set RoutineType(value: 'Monitoring' | 'Scheduled') {
+    set RoutineType(value: 'AgentWake' | 'Monitoring' | 'Scheduled') {
         this.Set('RoutineType', value);
     }
 
@@ -140542,12 +141665,12 @@ export class MJUserRoutineEntity extends BaseEntity<MJUserRoutineEntityType> {
     * * Field Name: CronExpression
     * * Display Name: Cron Expression
     * * SQL Data Type: nvarchar(100)
-    * * Description: Standard cron expression evaluated by the dispatcher to determine when the routine is due.
+    * * Description: Standard cron expression evaluated by the dispatcher for Recurring and Adaptive routines. NULL when ScheduleMode is OneShot.
     */
-    get CronExpression(): string {
+    get CronExpression(): string | null {
         return this.Get('CronExpression');
     }
-    set CronExpression(value: string) {
+    set CronExpression(value: string | null) {
         this.Set('CronExpression', value);
     }
 
@@ -140743,6 +141866,67 @@ export class MJUserRoutineEntity extends BaseEntity<MJUserRoutineEntityType> {
     }
     set ConversationID(value: string | null) {
         this.Set('ConversationID', value);
+    }
+
+    /**
+    * * Field Name: ScheduleMode
+    * * Display Name: Schedule Mode
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Recurring
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Adaptive
+    *   * OneShot
+    *   * Recurring
+    * * Description: Scheduling mode: Recurring (fixed cron schedule), OneShot (single future wake at NextRunAt, auto-disables after firing unless rescheduled by the agent), or Adaptive (fallback CronExpression combined with agent-set NextRunAt and event/condition wake gates).
+    */
+    get ScheduleMode(): 'Adaptive' | 'OneShot' | 'Recurring' {
+        return this.Get('ScheduleMode');
+    }
+    set ScheduleMode(value: 'Adaptive' | 'OneShot' | 'Recurring') {
+        this.Set('ScheduleMode', value);
+    }
+
+    /**
+    * * Field Name: WakeConfiguration
+    * * Display Name: Wake Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJUserRoutineEntity_IRoutineWakeConfiguration
+    * * Description: Optional JSON configuration (IRoutineWakeConfiguration) specifying watchedEntities for durable watermark/RecordChange polling and the 3-tier wake gate (Tier 1 SafeExpressionEvaluator, Tier 2 AIDecisionRunner fast decision model, Tier 3 AIPromptRunner metadata prompt).
+    */
+    get WakeConfiguration(): string | null {
+        return this.Get('WakeConfiguration');
+    }
+    set WakeConfiguration(value: string | null) {
+        this.Set('WakeConfiguration', value);
+    }
+
+    /**
+    * Typed accessor for WakeConfiguration — a live view of the parsed JSON as MJUserRoutineEntity_IRoutineWakeConfiguration.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying WakeConfiguration field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get WakeConfigurationObject(): MJUserRoutineEntity_IRoutineWakeConfiguration | null {
+        return this.GetJSONFieldObject<MJUserRoutineEntity_IRoutineWakeConfiguration>('WakeConfiguration');
+    }
+    set WakeConfigurationObject(value: MJUserRoutineEntity_IRoutineWakeConfiguration | null) {
+        this.SetJSONFieldObject<MJUserRoutineEntity_IRoutineWakeConfiguration>('WakeConfiguration', value);
+    }
+
+    /**
+    * * Field Name: LastCheckedAt
+    * * Display Name: Last Checked At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp when the dispatcher last evaluated this routine's watched entities and wake gate conditions.
+    */
+    get LastCheckedAt(): Date | null {
+        return this.Get('LastCheckedAt');
+    }
+    set LastCheckedAt(value: Date | null) {
+        this.Set('LastCheckedAt', value);
     }
 
     /**

@@ -6,7 +6,7 @@
 **************************************************************************************************************/
 
 import { BaseEntity, BaseEntityEvent, IEntityDataProvider, IMetadataProvider, IRunViewProvider, ProviderConfigDataBase, RunViewResult,
-         EntityInfo, EntityFieldInfo, EntityFieldTSType, TenantContext,
+         EntityInfo, type EntityField, EntityFieldInfo, EntityFieldTSType, TenantContext,
          RunViewParams, ProviderBase, ProviderType, UserInfo, UserRoleInfo, RecordChange,
          ILocalStorageProvider, EntitySaveOptions, EntityMergeOptions, LogError, LogStatus, LogStatusEx,
          TransactionGroupBase, TransactionItem, DatasetItemFilterType, DatasetResultType, DatasetStatusResultType, EntityRecordNameInput, EntityRecordNameCache,
@@ -2154,6 +2154,51 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         return row;
     }
 
+    /**
+     * Checks whether `field` is dirty on `entity` or, for IS-A child entities where parent
+     * fields are mirrored as virtual fields, on any ancestor in the `ISAParent` chain.
+     */
+    private isFieldDirtyOnChain(entity: BaseEntity, field: EntityField): boolean {
+        if (entity.ISAParent && entity.EntityInfo.ParentEntityFieldNames?.has(field.Name)) {
+            const parentField = entity.ISAParent.Fields.find(pf => pf.Name === field.Name);
+            if (parentField) {
+                return this.isFieldDirtyOnChain(entity.ISAParent, parentField) || field.Dirty;
+            }
+        }
+        return field.Dirty;
+    }
+
+    /**
+     * Retrieves the pre-mutation `OldValue` for `field` on `entity`, consulting the `ISAParent`
+     * chain for the authoritative `OldValue` of parent-owned fields.
+     */
+    private getFieldOldValueOnChain(entity: BaseEntity, field: EntityField): unknown {
+        if (entity.ISAParent && entity.EntityInfo.ParentEntityFieldNames?.has(field.Name)) {
+            const parentField = entity.ISAParent.Fields.find(pf => pf.Name === field.Name);
+            if (parentField) {
+                return this.getFieldOldValueOnChain(entity.ISAParent, parentField);
+            }
+        }
+        return field.OldValue;
+    }
+
+    /**
+     * Persists a `BaseEntity` over GraphQL via the generated `Create<Type>` or `Update<Type>` mutation.
+     *
+     * ### Delta-Only Update Wire Protocol
+     * - **Create (`!entity.IsSaved` or IS-A promotion create)**: Sends all loaded, writable,
+     *   non-denied-read fields in `vars.input` (plus the shared primary key on an IS-A promotion create),
+     *   ensuring client-initialized `NewRecord()` defaults and required `Create*Input` fields are transmitted.
+     * - **Update (`entity.IsSaved && !isaPromotionCreate`)**: Sends **only** primary keys and dirty
+     *   writable fields (`f.IsPrimaryKey || (!f.ReadOnly && !f.NotLoaded && f.Dirty)`) in both
+     *   `vars.input` and `vars.input.OldValues___`. Clean fields, read-only fields (`__mj_CreatedAt`,
+     *   `__mj_UpdatedAt`), virtual fields, and `NotLoaded` fields are omitted from the mutation input.
+     * - **Forced full save (`options?.IgnoreDirtyState === true`)**: Bypasses the dirty-only filter on
+     *   `Update` and sends all loaded writable fields in both `vars.input` and `OldValues___`.
+     * - **Full response selection**: The GraphQL mutation response selection set always requests all
+     *   readable fields so `BaseEntity.finalizeSave()` refreshes computed/virtual columns and server
+     *   timestamps without marking clean fields `NotLoaded`.
+     */
     public async Save(entity: BaseEntity, user: UserInfo, options: EntitySaveOptions) : Promise<{}> {
         // IS-A parent entity save: the full ORM pipeline (permissions, validation, events)
         // already ran in BaseEntity._InnerSave(). Skip the network call — the leaf entity's
@@ -2201,6 +2246,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             // parent is saved: a whole-chain create (new parent + new child) keeps sending no key,
             // so the server still mints the root identity and pays no parent lookup on that path.
             //
+            // On an Update (when options.IgnoreDirtyState is not set), only primary keys and dirty
+            // writable fields are included in vars.input (generated Update*Input types mark all
+            // non-PK fields optional).
+            //
             // NotLoaded fields are OMITTED from the mutation input entirely (legal — the
             // generated Update input types mark every non-PK field optional): their value is
             // a construction artifact the user was never shown, and the NOT-NULL fabrication
@@ -2212,18 +2261,19 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             // NotLoaded on the refresh, and a denied NOT-NULL column no longer breaks response
             // serialization.
             //
-            // Only the READ verb is filtered here. A readable-but-update-denied field must
-            // still be SENT, or the server cannot reject an attempt to change it — its check
-            // is dirty-only (BaseEntity.CheckFieldLevelUpdatePermissions), so an unchanged
-            // value round-trips safely and a changed one is refused. Create-denied values are
+            // Only the READ verb is filtered here. A readable-but-update-denied field that was
+            // dirtied is still SENT so the server can reject the attempt to change it — its check
+            // is dirty-only (BaseEntity.CheckFieldLevelUpdatePermissions). Create-denied values are
             // dropped server-side (ApplyFieldLevelCreateSuppression). Filtering either verb
             // here would replace a visible refusal with a silent success.
             const isaPromotionCreate = !entity.IsSaved && entity.EntityInfo.IsChildType && entity.ISAParent?.IsSaved === true;
+            const isUpdate = entity.IsSaved && !isaPromotionCreate;
+            const filterToDirtyOnly = isUpdate && !options?.IgnoreDirtyState;
             const deniedReadFields = this.getDeniedReadFieldNamesForCurrentUser(entity.EntityInfo);
             const isDeniedRead = (fieldName: string) => deniedReadFields.has(fieldName.trim().toLowerCase());
             const filteredFields = entity.Fields.filter(f =>
                 (!f.ReadOnly || (f.IsPrimaryKey && (entity.IsSaved || isaPromotionCreate))) &&
-                (f.IsPrimaryKey || (!f.NotLoaded && !isDeniedRead(f.Name))));
+                (f.IsPrimaryKey || (!f.NotLoaded && !isDeniedRead(f.Name) && (!filterToDirtyOnly || this.isFieldDirtyOnChain(entity, f)))));
                 const inner = `                ${mutationName}(input: $input) {
                 ${entity.Fields.filter(f => !isDeniedRead(f.Name))
                     .map(f => SharedFieldMapper.MapFieldName(f.CodeName)).join("\n                    ")}
@@ -2294,26 +2344,31 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 };
             }
 
-            // now add an OldValues prop to the vars IF the type === 'update' and the options.SkipOldValuesCheck === false
-            if (type.trim().toLowerCase() === 'update' &&
-                options.SkipOldValuesCheck === false) {
-                const ov = [];
-                entity.Fields.forEach(f => {
-                    // A NotLoaded field has no real old value — sending a fabricated null
-                    // would feed the server's conflict detection fiction. Omit it entirely.
-                    if (f.NotLoaded && !f.IsPrimaryKey) return;
-                    let val = null;
-                    if (f.OldValue !== null && f.OldValue !== undefined) {
-                        if (f.EntityFieldInfo.TSType === EntityFieldTSType.Date) 
-                            val = f.OldValue.getTime().toString();
+            // On Update (when SkipOldValuesCheck === false), attach OldValues___ for server-side
+            // optimistic concurrency checking.
+            // Delta-only OldValues___: on normal updates (!options?.IgnoreDirtyState), include ONLY
+            // primary keys and dirty writable fields (matching the delta sent in vars.input),
+            // omitting clean fields, read-only fields, virtual fields, and NotLoaded fields.
+            // When options?.IgnoreDirtyState is true, include all loaded writable fields alongside
+            // primary keys.
+            if (isUpdate && options?.SkipOldValuesCheck === false) {
+                const oldValueFields = options?.IgnoreDirtyState
+                    ? entity.Fields.filter(f => f.IsPrimaryKey || (!f.NotLoaded && !f.ReadOnly && !isDeniedRead(f.Name)))
+                    : entity.Fields.filter(f => f.IsPrimaryKey || (!f.NotLoaded && !f.ReadOnly && !isDeniedRead(f.Name) && this.isFieldDirtyOnChain(entity, f)));
+                const ov = oldValueFields.map(f => {
+                    const rawOldVal = this.getFieldOldValueOnChain(entity, f);
+                    let val: string | null = null;
+                    if (rawOldVal !== null && rawOldVal !== undefined) {
+                        if (f.EntityFieldInfo.TSType === EntityFieldTSType.Date)
+                            val = (rawOldVal instanceof Date ? rawOldVal.getTime() : new Date(String(rawOldVal)).getTime()).toString();
                         else if (f.EntityFieldInfo.TSType === EntityFieldTSType.Boolean)
-                            val = f.OldValue === true ? "1" : "0";
-                        else if (typeof f.OldValue !== "string")
-                            val = f.OldValue.toString();
+                            val = rawOldVal === true ? "1" : "0";
+                        else if (typeof rawOldVal !== "string")
+                            val = String(rawOldVal);
                         else
-                            val = f.OldValue;
+                            val = rawOldVal;
                     }
-                    ov.push({Key: SharedFieldMapper.MapFieldName(f.CodeName), Value: val }); // pass ALL old values to server, slightly inefficient but we want full record
+                    return { Key: SharedFieldMapper.MapFieldName(f.CodeName), Value: val };
                 });
                 vars.input['OldValues___'] = ov; // add the OldValues prop to the input property that is part of the vars already
             }
@@ -2325,6 +2380,17 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                         inputType: mutationName + 'Input!'
                     }
                 ];
+                const extraData: {
+                    mutationName: string;
+                    mutationInputTypes: { varName: string; inputType: string }[];
+                    ignoreDirtyState?: boolean;
+                } = {
+                    mutationName,
+                    mutationInputTypes: mutationInputTypes
+                };
+                if (options?.IgnoreDirtyState) {
+                    extraData.ignoreDirtyState = true;
+                }
 
                 entity.RaiseReadyForTransaction(); // let the entity know we're ready to be part of the transaction
 
@@ -2333,10 +2399,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 entity.TransactionGroup.AddTransaction(new TransactionItem(        entity, 
                                                                                    result.Type === 'create' ? 'Create' : 'Update', 
                                                                                    inner, vars, 
-                                                                                   {
-                                                                                      mutationName,
-                                                                                      mutationInputTypes: mutationInputTypes
-                                                                                   },
+                                                                                   extraData,
                                                                                    (results: any, success: boolean) => {
                     // we get here whenever the transaction group does gets around to committing
                     // our query. We need to update our entity with the values that were returned
@@ -2403,7 +2466,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             let pkeyOuterParamString: string = '';
 
             for (let i = 0; i < primaryKey.KeyValuePairs.length; i++) {
-                const field: EntityFieldInfo = entity.Fields.find(f => f.Name.trim().toLowerCase() === primaryKey.KeyValuePairs[i].FieldName.trim().toLowerCase()).EntityFieldInfo;
+                const field: EntityFieldInfo = entity.EntityInfo.FieldByName(primaryKey.KeyValuePairs[i].FieldName);
                 const val = primaryKey.GetValueByIndex(i);
                 const pkeyGraphQLType: string = field.GraphQLType;
 
@@ -2444,9 +2507,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             const deniedReadFields = this.getDeniedReadFieldNamesForCurrentUser(entity.EntityInfo);
                 const query = gql`query Single${graphQLTypeName}${rel.length > 0 ? 'Full' : ''} (${pkeyOuterParamString}) {
                 ${graphQLTypeName}(${pkeyInnerParamString}) {
-                                    ${entity.Fields.filter((f) => !deniedReadFields.has(f.Name.trim().toLowerCase())) /* binary fields included: a single-record Load hydrates every readable field, binary values arriving as base64 */
+                                    ${entity.EntityInfo.Fields.filter((f) => !deniedReadFields.has(f.Name.trim().toLowerCase())) /* binary fields included: a single-record Load hydrates every readable field, binary values arriving as base64 */
                                       .map((f) => {
-                                        if (f.EntityFieldInfo.Name.trim().toLowerCase().startsWith('__mj_')) {
+                                        if (f.Name.trim().toLowerCase().startsWith('__mj_')) {
                                           // fields that start with __mj_ need to be converted to _mj__ for the GraphQL query
                                           return f.CodeName.replace('__mj_', '_mj__');
                                         } else {
@@ -2537,7 +2600,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             let pkeyOuterParamString: string = '';
             let returnValues: string = '';
             for (let kv of entity.PrimaryKey.KeyValuePairs) {
-                const pk = entity.Fields.find(f => f.Name.trim().toLowerCase() === kv.FieldName.trim().toLowerCase()); // get the field for the primary key field
+                const pk = entity.GetFieldByName(kv.FieldName); // get the field for the primary key field
                 vars[pk.CodeName] = pk.Value;
                 mutationInputTypes.push({varName: pk.CodeName, inputType: pk.EntityFieldInfo.GraphQLType + '!'}); // only used when doing a transaction group, but it is easier to do in this main loop
                 // GraphQL forbids '__'-prefixed arg/field names; sanitize a '__mj_'-prefixed PK to '_mj__' to match
