@@ -2386,7 +2386,7 @@ export class BaseAgent {
             // Report initialization progress
             wrappedParams.onProgress?.({
                 step: 'initialization',
-                message: this.formatHierarchicalMessage(`Initializing ${params.agent.Name} agent and preparing execution environment`),
+                message: this.buildInitializationProgressMessage(params),
                 metadata: {
                     stepCount: 0,
                     hierarchicalStep: this.buildHierarchicalStep(0, this._parentStepCounts)
@@ -2449,7 +2449,7 @@ export class BaseAgent {
             // Report validation progress
             wrappedParams.onProgress?.({
                 step: 'validation',
-                message: this.formatHierarchicalMessage('Validating agent configuration and loading prompts'),
+                message: this.formatHierarchicalMessage('Gathering context...'),
                 metadata: {
                     stepCount: 0,
                     hierarchicalStep: this.buildHierarchicalStep(0, this._parentStepCounts)
@@ -2590,7 +2590,7 @@ export class BaseAgent {
                     stepCount: executionResult.stepCount,
                     hierarchicalStep: this.buildHierarchicalStep(executionResult.stepCount, this._parentStepCounts)
                 },
-                message: this.formatHierarchicalMessage('Finalizing agent execution')
+                message: this.formatHierarchicalMessage('Wrapping up...')
             });
 
             // Finalize the agent run
@@ -13796,6 +13796,76 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
+     * Builds the user-oriented initialization progress message for an agent run.
+     *
+     * - Root agent (`_depth === 0`): `'Getting ready...'`
+     * - Direct sub-agent (`_depth === 1`): `'Starting <SubAgentName>...'`
+     * - Nested sub-agent (`_depth > 1`): `'<ParentBreadcrumb>: Starting <SubAgentName>...'`
+     *
+     * @protected
+     * @param {ExecuteAgentParams} params - Execution parameters for the current agent
+     * @returns {string} Formatted initialization progress message
+     */
+    protected buildInitializationProgressMessage(params: ExecuteAgentParams): string {
+        if (this._depth === 0) {
+            return 'Getting ready...';
+        }
+        const startPhrase = `Starting ${params.agent.Name}...`;
+        const parentBreadcrumb = this._agentHierarchy.slice(1, -1).join(' → ');
+        return parentBreadcrumb ? `${parentBreadcrumb}: ${startPhrase}` : startPhrase;
+    }
+
+    /**
+     * Builds a user-oriented progress message for a prompt execution step without
+     * exposing internal framework terminology ("initial prompt", "payload", "context")
+     * or duplicating the sub-agent name when prefixed by {@link formatHierarchicalMessage}.
+     *
+     * @protected
+     * @param {ExecuteAgentParams} params - Execution parameters for the current agent
+     * @param {BaseAgentNextStep | null} [previousDecision] - Previous step decision when re-prompting
+     * @returns {string} Base progress message (before `formatHierarchicalMessage` breadcrumb prefixing)
+     */
+    protected buildPromptProgressMessage(
+        params: ExecuteAgentParams,
+        previousDecision?: BaseAgentNextStep | null
+    ): string {
+        if (!previousDecision) {
+            return this._depth > 0
+                ? 'Thinking...'
+                : `${params.agent.Name} is thinking...`;
+        }
+
+        const retryReason = previousDecision.retryReason?.trim();
+        if (retryReason) {
+            if (retryReason === 'Payload change applied') {
+                return this._depth > 0
+                    ? 'Thinking through the next steps...'
+                    : `${params.agent.Name} is thinking through the next steps...`;
+            }
+            if (retryReason.startsWith('Context recovery')) {
+                return this._depth > 0
+                    ? 'Thinking...'
+                    : `${params.agent.Name} is thinking...`;
+            }
+            if (retryReason === 'Error while processing actions, retry') {
+                return 'Recovering from an error and trying another approach...';
+            }
+            return retryReason;
+        }
+
+        const retryInstructions = previousDecision.retryInstructions?.trim();
+        if (retryInstructions) {
+            return this._depth > 0
+                ? 'Reviewing batch results...'
+                : `${params.agent.Name} is reviewing batch results...`;
+        }
+
+        return this._depth > 0
+            ? 'Thinking through the next steps...'
+            : `${params.agent.Name} is thinking through the next steps...`;
+    }
+
+    /**
      * Trims a step name to what `AIAgentRunStep.StepName` can hold. Step names are built from free
      * text — a termination message quoting a provider's error, a tool name with its arguments, the
      * hierarchy breadcrumb in front of either — and one longer than the column made the whole row
@@ -14196,9 +14266,7 @@ The context is now within limits. Please retry your request with the recovered c
         try {
             // Report prompt execution progress with context
             const isRetry = !!previousDecision;
-            const promptMessage = isRetry
-                ? `Running ${params.agent.Name} with context from ${previousDecision.retryReason || 'previous actions'}`
-                : `Running ${params.agent.Name}'s initial prompt...`;
+            const promptMessage = this.buildPromptProgressMessage(params, previousDecision);
 
             const hierarchicalStepToEmit = this.buildHierarchicalStep(stepCount + 1, this._parentStepCounts);
 
@@ -15097,6 +15165,9 @@ The context is now within limits. Please retry your request with the recovered c
                 step: subAgentResult.success ? 'Success' : 'Failed',
                 // Capture error message from sub-agent run for proper error propagation
                 errorMessage: subAgentResult.success ? undefined : (subAgentResult.agentRun?.ErrorMessage || 'Sub-agent failed with no error message'),
+                retryReason: subAgentResult.success
+                    ? `Reviewing results from ${subAgentRequest.name}`
+                    : `Handling error from ${subAgentRequest.name}`,
                 terminate: shouldTerminate,
                 previousPayload: previousDecision?.newPayload,
                 newPayload: mergedPayload,
@@ -15761,8 +15832,12 @@ The context is now within limits. Please retry your request with the recovered c
         const shouldTerminateParent = allExecutions.some(e =>
             e.request.terminateAfter === true
         );
+        const subAgentNames = allExecutions.map(e => e.request.name).join(', ');
         return {
             step: anyFailure ? 'Failed' : (shouldTerminateParent ? 'Success' : 'Retry'),
+            retryReason: anyFailure
+                ? `Reviewing results and errors from ${subAgentNames}`
+                : `Reviewing results from ${subAgentNames}`,
             terminate: shouldTerminateParent,
             newPayload: mergedPayload,
             previousPayload: previousDecision.newPayload
@@ -16056,6 +16131,9 @@ The context is now within limits. Please retry your request with the recovered c
                 step: subAgentResult.success ? 'Success' : 'Failed',
                 // Capture error message from sub-agent run for proper error propagation
                 errorMessage: subAgentResult.success ? undefined : (subAgentResult.agentRun?.ErrorMessage || 'Related sub-agent failed with no error message'),
+                retryReason: subAgentResult.success
+                    ? `Reviewing results from ${subAgentRequest.name}`
+                    : `Handling error from ${subAgentRequest.name}`,
                 terminate: shouldTerminate,
                 previousPayload: previousDecision?.newPayload,
                 newPayload: mergedPayload,
@@ -16718,6 +16796,8 @@ The context is now within limits. Please retry your request with the recovered c
             // After actions complete, we need to process the results
             // The retry step is used to re-execute the prompt with the action results
             // This allows the agent to analyze the results and determine what to do next
+            const failedNoun = failedActions.length === 1 ? 'action' : 'actions';
+            const completedNoun = actionSummaries.length === 1 ? 'action' : 'actions';
             return {
                 terminate: false,
                 step: 'Retry',
@@ -16725,8 +16805,8 @@ The context is now within limits. Please retry your request with the recovered c
                 newPayload: finalPayload, // Use the final payload after any post-processing
                 priorStepResult: actionSummaries,
                 retryReason: failedActions.length > 0
-                    ? `Processing results with ${failedActions.length} failed action(s): ${failedActions.map(a => a.actionName).join(', ')}`
-                    : `Analyzing results from ${actionSummaries.length} completed action(s) to formulate response`
+                    ? `Processing results with ${failedActions.length} failed ${failedNoun}: ${failedActions.map(a => a.actionName).join(', ')}`
+                    : `Analyzing results from ${actionSummaries.length} completed ${completedNoun} to formulate response`
             };
         }
         catch (e) {
