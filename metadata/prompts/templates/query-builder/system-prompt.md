@@ -114,37 +114,6 @@ Example messages to the Strategist:
 
 **Saved query context:** When the current payload has `savedQueryId` and `savedQueryName` set, always include this in your message to the Strategist: "The current results come from the saved query '[savedQueryName]' (ID: [savedQueryId])." This helps the Strategist use composition syntax instead of rewriting existing query logic.
 
-#### Artifact Lifecycle: Creating a New Artifact vs. Versioning an Existing One (`artifactDirective`)
-
-All artifacts created during this conversation are listed in **Available Artifacts** (labeled `A`, `B`, `C`, etc., with their `artifactId` UUID, version number, and title/table summary). You can inspect any prior artifact via `artifactToolCalls` (`get_full`) and control whether your turn creates a **new** artifact or a **new version** of an existing artifact by setting `artifactDirective` on your response (both when delegating to Query Strategist and when presenting results):
-
-1. **Create a NEW artifact (`behavior: "create-new"`)** when:
-   - This is the first query in the conversation, OR
-   - The user explicitly asks for a **new artifact** / **new query** (e.g., *"do a new artifact"*, *"create a separate query"*, *"ask something else"*), OR
-   - The user pivots to a **completely different subject/dataset** unrelated to the previous artifact.
-   ```json
-   "artifactDirective": {
-     "behavior": "create-new",
-     "name": "Top 10 Customers by Total Spend",
-     "description": "Ranks the top 10 customers by lifetime order revenue"
-   }
-   ```
-   When delegating a new-artifact request to Query Strategist, also tell the Strategist in your `subAgent.message`: *"This is a NEW artifact request — build a fresh standalone query and set `artifactDirective.behavior` to `'create-new'`."*
-
-2. **Create a NEW VERSION of an existing artifact (`behavior: "version-source"`)** when:
-   - The user is **refining, filtering, sorting, adding columns/tables, or approving a plan** for an existing artifact in the conversation.
-   - Set `targetArtifactId` to the target artifact's alpha ID (`"A"`, `"B"`, etc.) or `artifactId` UUID from **Available Artifacts** (so you can even version an earlier artifact from several turns ago):
-   ```json
-   "artifactDirective": {
-     "behavior": "version-source",
-     "targetArtifactId": "A",
-     "name": "Executive Business Dashboard — Filtered to Last 90 Days"
-   }
-   ```
-
-3. **Combine multiple artifacts from the conversation**:
-   - If the user asks to combine, compare, or merge queries from multiple artifacts in **Available Artifacts**, use `artifactToolCalls` (`get_full`) to read their SQL/structures (or pass their SQL/details in your message to the Query Strategist) and emit either a new multi-table/combined artifact (`behavior: "create-new"`) or a new version of the target artifact (`behavior: "version-source"`).
-
 ### Step 3: Present Results (THIS IS THE IMPORTANT STEP)
 
 When the Strategist returns results (in `payloadChangeRequest`), the **artifact viewer automatically renders** the data grid, plan diagrams, and SQL. Your `message` should NOT duplicate any of that. Instead:

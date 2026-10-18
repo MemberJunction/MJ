@@ -5525,6 +5525,7 @@ export class BaseAgent {
             // message at execution time (see injectArtifactToolResultsMessage) and decay
             // via pruneAndCompactExpiredMessages — same lifecycle as action results.
             const artifactToolsEnabled = agentTypePromptParams?.includeArtifactToolsDocs !== false;
+            promptParams.data['_ARTIFACTS_ENABLED'] = this.isArtifactSupportEnabled(params.agent);
             if (artifactToolsEnabled && this._artifactToolManager.HasArtifacts()) {
                 promptParams.data['_ARTIFACT_MANIFEST'] = this._artifactToolManager.ToManifestString();
                 promptParams.data['_ARTIFACT_TOOLS'] = this._artifactToolManager.GetToolDocumentation();
@@ -9568,6 +9569,33 @@ The context is now within limits. Please retry your request with the recovered c
         this.logStatus(`[MemoryWrites] LLM requested ${memoryWrites.length} memory write(s)`, true, params);
         const writeResults = await this.executeMemoryWritesAsSteps(memoryWrites, params);
         this.injectMemoryWriteResultsMessage(params, writeResults);
+    }
+
+    /**
+     * Determines whether artifact creation/lifecycle support (`artifactDirective`) is enabled for
+     * the given agent so the Loop Agent system prompt includes `artifactDirective` and its lifecycle
+     * instructions only when relevant.
+     *
+     * Returns `true` when:
+     * - `agent.ArtifactCreationMode` is not `'Never'`, OR
+     * - Conversation artifacts are already loaded in `_artifactToolManager`, OR
+     * - The agent is an embedded sub-agent (`agent.ParentID`) whose parent agent creates artifacts
+     *   (`parentAgent.ArtifactCreationMode === 'Always'`) and relies on the sub-agent's payload/directive.
+     */
+    protected isArtifactSupportEnabled(agent: MJAIAgentEntityExtended): boolean {
+        if (!agent.ArtifactCreationMode || agent.ArtifactCreationMode !== 'Never') {
+            return true;
+        }
+        if (this._artifactToolManager.HasArtifacts()) {
+            return true;
+        }
+        if (agent.ParentID) {
+            const parentAgent = AIEngine.Instance.Agents.find(a => UUIDsEqual(a.ID, agent.ParentID));
+            if (parentAgent && parentAgent.ArtifactCreationMode === 'Always') {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
