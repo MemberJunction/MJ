@@ -26,7 +26,7 @@ import {
 } from '@memberjunction/core';
 import { MJAuditLogEntity, MJErrorLogEntity, MJUserViewEntityExtended } from '@memberjunction/core-entities';
 import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
-import { UserCache } from '@memberjunction/generic-database-provider';
+import { ClientClauseScreen, UserCache, type EntityBaseViewAllowList } from '@memberjunction/generic-database-provider';
 import { PubSubEngine, AuthorizationError } from 'type-graphql';
 import { GraphQLError } from 'graphql';
 import { RefusalExtensions } from './refusalExtensions.js';
@@ -37,15 +37,26 @@ import { httpTransport, CloudEvent, emitterFor } from 'cloudevents';
 import { RunViewGenericParams, UserPayload } from '../types.js';
 import { RunDynamicViewInput, RunViewByIDInput, RunViewByNameInput } from './RunViewResolver.js';
 import { DeleteOptionsInput } from './DeleteOptionsInput.js';
-import { MJEvent, MJEventType, MJGlobal, ENCRYPTED_SENTINEL, EscapeSQLString, IsValueEncrypted, IsOnlyTimezoneShift } from '@memberjunction/global';
-import { SQLParser } from '@memberjunction/sql-parser';
-import { PostgreSQLDialect, SQLServerDialect, type SQLParserDialect } from '@memberjunction/sql-dialect';
-import { EncryptionEngine } from '@memberjunction/encryption';
+import { MJEvent, MJEventType, MJGlobal, ENCRYPTED_SENTINEL, ReplaceByteArraysWithBase64, EscapeSQLString, IsValueEncrypted, IsOnlyTimezoneShift } from '@memberjunction/global';
+import { SQLParser, IsBalancedSQLFragment, LexSQL } from '@memberjunction/sql-parser';
+import type { SQLParserDialect } from '@memberjunction/sql-dialect';
+import { EncryptionEngine, IsEncryptionKeyUnavailable, ReportEncryptionKeyUnavailable } from '@memberjunction/encryption';
 import { PUSH_STATUS_UPDATES_TOPIC, PublishStatusUpdate } from './PushStatusResolver.js';
 import { CACHE_INVALIDATION_TOPIC, MayBroadcastRecordData } from './CacheInvalidationResolver.js';
 import { PubSubManager } from './PubSubManager.js';
 import { FieldMapper } from '@memberjunction/graphql-dataprovider';
 import { Subscription } from 'rxjs';
+
+/**
+ * Entities whose update is always hydrated from the stored row, never from the client's `OldValues___`, though they
+ * do not track record changes: their server-side write rules compare against the prior state, which a client could
+ * otherwise supply itself (lower-case names). See `ResolverBase.MustLoadTruthFromDatabase`.
+ */
+const ENTITIES_THAT_ALWAYS_LOAD_STORED_ROW: ReadonlySet<string> = new Set([
+  'mj: record changes',
+  'mj: conversation details',
+  'mj: data context items',
+]);
 
 export class ResolverBase {
   private static _emit = process.env.CLOUDEVENTS_HTTP_TRANSPORT ? emitterFor(httpTransport(process.env.CLOUDEVENTS_HTTP_TRANSPORT)) : null;
@@ -99,7 +110,10 @@ export class ResolverBase {
       return null;
     }
     // Shallow copy up front so every write below lands on our object, never the caller's.
-    dataObject = { ...dataObject };
+    // Binary values are base64 strings everywhere above the providers; any byte array that still
+    // reaches a resolver (custom code, an external driver) is converted here, because GraphQL's
+    // String scalar cannot serialize a Buffer and would fail the whole response.
+    dataObject = ReplaceByteArraysWithBase64({ ...dataObject });
 
     // for the given entity name provided, check to see if there are any fields
     // where the code name is different from the field name, and for just those
@@ -196,7 +210,11 @@ export class ResolverBase {
                   const decryptedValue = await engine.Decrypt(value, contextUser);
                   dataObject[fieldName] = decryptedValue;
                 } catch (err) {
-                  LogError(`Failed to decrypt field ${fieldName} for API response: ${err}`);
+                  if (IsEncryptionKeyUnavailable(err)) {
+                    ReportEncryptionKeyUnavailable(err);
+                  } else {
+                    LogError(`Failed to decrypt field ${fieldName} for API response: ${err}`);
+                  }
                   // On decryption failure, use sentinel for safety
                   dataObject[fieldName] = ENCRYPTED_SENTINEL;
                 }
@@ -359,13 +377,16 @@ export class ResolverBase {
    * @param dataObject - The data object containing field values
    * @param encryptionEngine - Optional encryption engine for re-encryption (lazy loaded if needed)
    * @param contextUser - User context for encryption operations
+   * @param fieldKey - What the object's keys are: field CodeNames (GraphQL transport rows, the
+   *   default) or field Names (raw provider rows, such as dataset item results)
    * @returns The filtered data object
    */
   protected async FilterEncryptedFieldsForAPI(
     entityName: string,
     dataObject: Record<string, unknown>,
     contextUser: UserInfo,
-    provider?: IMetadataProvider
+    provider?: IMetadataProvider,
+    fieldKey: 'CodeName' | 'Name' = 'CodeName'
   ): Promise<Record<string, unknown>> {
     if (!dataObject) return dataObject;
 
@@ -379,7 +400,7 @@ export class ResolverBase {
 
     // Process each encrypted field
     for (const field of encryptedFields) {
-      const fieldName = field.CodeName;
+      const fieldName = fieldKey === 'Name' ? field.Name : field.CodeName;
       const value = dataObject[fieldName];
 
       // Skip null/undefined values
@@ -420,13 +441,15 @@ export class ResolverBase {
   }
 
   /**
-   * Filters encrypted fields for an array of data objects
+   * Filters encrypted fields for an array of data objects. `fieldKey` is as for
+   * {@link FilterEncryptedFieldsForAPI}.
    */
   protected async ArrayFilterEncryptedFieldsForAPI(
     entityName: string,
     dataObjectArray: Record<string, unknown>[],
     contextUser: UserInfo,
-    provider?: IMetadataProvider
+    provider?: IMetadataProvider,
+    fieldKey: 'CodeName' | 'Name' = 'CodeName'
   ): Promise<Record<string, unknown>[]> {
     if (!dataObjectArray || dataObjectArray.length === 0) return dataObjectArray;
 
@@ -440,7 +463,7 @@ export class ResolverBase {
 
     // Process each element
     for (const element of dataObjectArray) {
-      await this.FilterEncryptedFieldsForAPI(entityName, element, contextUser, provider);
+      await this.FilterEncryptedFieldsForAPI(entityName, element, contextUser, provider, fieldKey);
     }
 
     return dataObjectArray;
@@ -566,7 +589,8 @@ export class ResolverBase {
             ? CompositeKey.FromKeyValuePairs((viewInput.AfterKey as { KeyValuePairs: { FieldName: string; Value: string }[] }).KeyValuePairs)
             : undefined,
           viewInput.BypassCache,
-          viewInput.DataSource
+          viewInput.DataSource,
+          viewInput.IncludeBinaryFields
         );
       }
       else {
@@ -610,7 +634,8 @@ export class ResolverBase {
         viewInput.Aggregates,
         undefined,
         viewInput.BypassCache,
-        viewInput.DataSource
+        viewInput.DataSource,
+        viewInput.IncludeBinaryFields
       );
     } catch (err) {
       console.log(err);
@@ -657,7 +682,8 @@ export class ResolverBase {
         viewInput.Aggregates,
         undefined,
         viewInput.BypassCache,
-        viewInput.DataSource
+        viewInput.DataSource,
+        viewInput.IncludeBinaryFields
       );
     } catch (err) {
       console.log(err);
@@ -732,6 +758,7 @@ export class ResolverBase {
           aggregates: viewInput.Aggregates,
           bypassCache: viewInput.BypassCache,
           dataSource: viewInput.DataSource,
+          includeBinaryFields: viewInput.IncludeBinaryFields,
         });
       } catch (err) {
         LogError(err);
@@ -914,51 +941,105 @@ export class ResolverBase {
    * This screen uses `@memberjunction/sql-parser` (same wrap as EDS `assertReadOnlyClause`):
    * wrap the fragment as a single SELECT, fail closed if it does not parse as a read, then
    * allow a FROM only when it is an entity **BaseView**. Base tables (`Meeting`, `__mj.User`)
-   * and catalogs are rejected. Server-internal RunView callers never hit this.
+   * and catalogs are rejected. Server-internal RunView callers get only the provider's
+   * statement-separator check, which cannot refuse a legitimate filter.
+   *
+   * The screen is `ClientClauseScreen` in `@memberjunction/generic-database-provider`, shared
+   * with the REST view routes, ad-hoc list sources, and the provider's saved-view checks.
+   *
+   * Before that parse, the fragment must be balanced on its own (`IsBalancedSQLFragment`). The
+   * provider and the tenant hook splice it inside parentheses and AND their own filters after
+   * it, so a fragment that closes those parentheses (`1=1) OR (1=1`) would leave row-level
+   * security, API-key row filters and tenant scope on one side of an OR the caller controls.
+   * The parse wraps the fragment in parentheses too, which is why it cannot catch this alone.
+   * A backslash inside a quoted string or identifier is refused as well: the parser reads `\'`
+   * inside a plain literal as an escaped quote, but SQL Server and PostgreSQL end the literal
+   * there, so the text after it could be code that the parse-based checks never saw.
    *
    * RLS is applied by RunView as an outer WHERE around the entity being queried, not compiled
-   * into the view. Subqueries against another entity's BaseView therefore do not inherit that
-   * entity's RLS; they are still restricted to the view (not the table).
+   * into the view, and RunView removes denied fields from its own result only. A subquery reads a
+   * base view directly with neither, so the screen refuses one over any entity the user reads under
+   * a row filter or with denied fields (`ClientClauseScreen.AssertUnscopedRead`), the queried
+   * entity included.
    */
   protected assertClientClauseUsesEntityBaseViews(
     clause: string | undefined | null,
     label: string,
     provider?: IMetadataProvider,
+    user?: UserInfo,
+    options?: { LeaveUnparseableToProvider?: boolean },
   ): void {
     if (!clause?.trim()) return;
 
+    // The balance and backslash checks run before the shared screen: it parses the fragment
+    // inside its own parentheses, so it cannot see a fragment that closes the parentheses the
+    // provider and the tenant hook splice it into.
     const dialect = this.dialectForProvider(provider);
     if (SQLParser.HasStackedStatements(clause, dialect)) {
       throw new Error(`Invalid ${label}: multiple statements are not permitted in client-supplied filters`);
     }
+    const balance = IsBalancedSQLFragment(clause, dialect);
+    if (!balance.IsBalanced) {
+      throw new Error(`Invalid ${label}: ${balance.Reason}`);
+    }
+    if (this.hasBackslashInQuotes(clause, dialect)) {
+      throw new Error(`Invalid ${label}: a backslash inside a quoted string or identifier is not permitted in client-supplied filters`);
+    }
 
-    const wrapped =
-      label === 'OrderBy'
-        ? `SELECT 1 FROM __mj_clause_screen ORDER BY ${clause}`
-        : `SELECT 1 FROM __mj_clause_screen WHERE (${clause})`;
-    const parser = new SQLParser(wrapped, dialect);
+    ClientClauseScreen.AssertClauseUsesEntityBaseViews(clause, label, provider?.Entities ?? [], dialect, user, options);
+  }
+
+  /**
+   * SECURITY — screen for a FULL client-supplied SQL statement (ad-hoc query path). In addition
+   * to the SELECT-only validation the caller performs, every table reference must resolve to an
+   * entity BaseView the acting user can read UNSCOPED. A reference is excluded only when it reads a
+   * CTE that is in scope there (`StatementRelation.IsCTEReference`): unqualified, declared by its
+   * own SELECT or an enclosing one, and matched by the dialect's identifier rules. A name reserved
+   * for the SQL parser is refused before parsing (`ClientClauseScreen.AssertNoIdentifierAliasNames`).
+   * Fails closed: no user, or an unresolvable reference, refuses.
+   *
+   * The references come from a walk of the whole parse tree
+   * (`ClientClauseScreen.CollectStatementReads`). The statement is refused when that walk does not
+   * account for every SELECT in the text, or when a FROM item names no table (a table function or
+   * a row list).
+   *
+   * Entity CanRead is not unscoped base-view read authority: RunView narrows a granted read with
+   * row-level security and denied-field projection, and raw SQL applies neither. Rather than try
+   * to rewrite arbitrary SQL (joins, CTEs) to compose that policy, this refuses any entity that
+   * carries a row filter or a denied field for the caller — those reads belong on RunView. For
+   * the remaining entities CanRead genuinely means "every row and field of the view".
+   */
+  protected assertFullQueryUsesReadableEntityViews(
+    sqlText: string,
+    provider: IMetadataProvider | undefined,
+    user: UserInfo | undefined,
+    label = 'SQL',
+  ): void {
+    if (!user) {
+      throw new Error(`Invalid ${label}: no acting user resolved for ad-hoc SQL — refusing`);
+    }
+    const dialect = this.dialectForProvider(provider);
+    ClientClauseScreen.AssertNoIdentifierAliasNames(sqlText, dialect, label);
+    const parser = new SQLParser(sqlText, dialect);
     if (!parser.IsValid || parser.HasWriteStatement || parser.StatementKind !== 'select') {
-      throw new Error(
-        `Invalid ${label}: not a safe read-only filter fragment — refusing under uncertainty`,
-      );
+      throw new Error(`Invalid ${label}: not a safe read-only statement — refusing under uncertainty`);
     }
     if (this.astContainsWriteNode(parser.AST)) {
       throw new Error(`Invalid ${label}: write/DDL nested in a subquery is not permitted`);
     }
-
+    const reads = ClientClauseScreen.CollectStatementReads(parser);
+    ClientClauseScreen.AssertEverySelectAccountedFor(sqlText, dialect, reads, label);
     const allowed = this.entityBaseViewAllowList(provider);
-    const tables = SQLParser.ExtractTableRefs(wrapped, dialect);
-    for (const t of tables) {
-      const table = this.stripSqlIdent(t.TableName);
-      const schema = this.stripSqlIdent(t.SchemaName);
-      if (table.toLowerCase() === '__mj_clause_screen') continue;
-      const qualified = `${schema}.${table}`.toLowerCase();
-      const bare = table.toLowerCase();
-      if (allowed.qualified.has(qualified) || allowed.bare.has(bare)) continue;
-      throw new Error(
-        `Invalid ${label}: subquery must use an entity base view, not '${schema}.${table}'`,
-      );
+    for (const relation of reads.Relations) {
+      if (relation.IsCTEReference) continue;
+      const entity = ClientClauseScreen.AssertRelationReadable(allowed, relation, label, user);
+      if (entity) this.assertUnscopedRead(entity, user, label);
     }
+  }
+
+  /** Refuses an entity whose read is narrowed for this user; see `ClientClauseScreen.AssertUnscopedRead`. */
+  private assertUnscopedRead(entity: EntityInfo, user: UserInfo, label: string): void {
+    ClientClauseScreen.AssertUnscopedRead(entity, user, label);
   }
 
   /**
@@ -982,6 +1063,11 @@ export class ResolverBase {
    * The single place that is not true is a field carrying `UserSearchParamFormatAPI`, whose
    * admin-authored format may splice the term in unquoted; `createViewUserSearchSQL` re-applies
    * `ValidateUserProvidedSQLClause` for exactly those entities.
+   *
+   * Each `Aggregates[].expression` gets the same screen, except that text the parser cannot read
+   * goes on to the provider, which refuses it per aggregate. The provider never runs the caller's
+   * aggregate text: it runs the SQL that `CheckAggregateExpression` rebuilds from a single
+   * aggregate call over the entity's columns, and refuses everything else per aggregate.
    */
   protected screenClientViewClauses(
     clauses: {
@@ -989,57 +1075,39 @@ export class ResolverBase {
       orderBy?: string | null;
       userSearchString?: string | null;
       overrideExcludeFilter?: string | null;
+      aggregates?: AggregateExpression[] | null;
     },
     provider?: IMetadataProvider,
+    user?: UserInfo,
   ): void {
-    this.assertClientClauseUsesEntityBaseViews(clauses.extraFilter, 'ExtraFilter', provider);
-    this.assertClientClauseUsesEntityBaseViews(clauses.orderBy, 'OrderBy', provider);
-    this.assertClientClauseUsesEntityBaseViews(clauses.overrideExcludeFilter, 'OverrideExcludeFilter', provider);
-  }
-
-  /** Same write-node walk as EDS `sqlReadOnlyScreen.astContainsWriteNode`. */
-  private astContainsWriteNode(node: unknown): boolean {
-    if (!node || typeof node !== 'object') return false;
-    if (Array.isArray(node)) return node.some((n) => this.astContainsWriteNode(n));
-    const obj = node as Record<string, unknown>;
-    const type = obj.type;
-    if (typeof type === 'string' && ResolverBase.WRITE_NODE_TYPES.has(type.toLowerCase())) {
-      return true;
+    this.assertClientClauseUsesEntityBaseViews(clauses.extraFilter, 'ExtraFilter', provider, user);
+    this.assertClientClauseUsesEntityBaseViews(clauses.orderBy, 'OrderBy', provider, user);
+    this.assertClientClauseUsesEntityBaseViews(clauses.overrideExcludeFilter, 'OverrideExcludeFilter', provider, user);
+    for (const aggregate of clauses.aggregates ?? []) {
+      this.assertClientClauseUsesEntityBaseViews(aggregate?.expression, 'Aggregate', provider, user, { LeaveUnparseableToProvider: true });
     }
-    return Object.values(obj).some((v) => this.astContainsWriteNode(v));
   }
 
-  private static readonly WRITE_NODE_TYPES = new Set<string>([
-    'insert', 'update', 'delete', 'merge', 'replace', 'drop', 'create', 'alter', 'truncate',
-    'rename', 'call', 'exec', 'execute', 'grant', 'revoke', 'use', 'load', 'copy', 'do',
-  ]);
+  /**
+   * True when a string literal or quoted identifier in `clause`, read the way the database reads
+   * it, contains a backslash (see {@link assertClientClauseUsesEntityBaseViews}).
+   */
+  private hasBackslashInQuotes(clause: string, dialect: SQLParserDialect): boolean {
+    return LexSQL(clause, dialect).some((t) => (t.Kind === 'string' || t.Kind === 'identifier') && t.Text.includes('\\'));
+  }
+
+  /** Write/DDL node walk shared with the clause screen; see `ClientClauseScreen.AstContainsWriteNode`. */
+  private astContainsWriteNode(node: unknown): boolean {
+    return ClientClauseScreen.AstContainsWriteNode(node);
+  }
 
   private dialectForProvider(provider?: IMetadataProvider): SQLParserDialect {
-    const name = provider?.constructor?.name ?? '';
-    if (/postgres/i.test(name)) return new PostgreSQLDialect();
-    return new SQLServerDialect();
+    return ClientClauseScreen.DialectFor(provider);
   }
 
-  private stripSqlIdent(name: string | null | undefined): string {
-    if (!name) return '';
-    return name.replace(/^\[|\]$/g, '').replace(/^"|"$/g, '').replace(/^`|`$/g, '');
-  }
-
-  private entityBaseViewAllowList(provider?: IMetadataProvider): {
-    qualified: Set<string>;
-    bare: Set<string>;
-  } {
-    const qualified = new Set<string>();
-    const bare = new Set<string>();
-    const entities = provider?.Entities ?? [];
-    for (const e of entities) {
-      const view = this.stripSqlIdent(e.BaseView);
-      if (!view) continue;
-      const schema = this.stripSqlIdent(e.SchemaName);
-      bare.add(view.toLowerCase());
-      if (schema) qualified.add(`${schema}.${view}`.toLowerCase());
-    }
-    return { qualified, bare };
+  /** The entity base-view allow-list for a provider's entities. */
+  private entityBaseViewAllowList(provider?: IMetadataProvider): EntityBaseViewAllowList {
+    return ClientClauseScreen.BuildEntityBaseViewAllowList(provider?.Entities ?? []);
   }
 
   /**
@@ -1068,22 +1136,12 @@ export class ResolverBase {
     aggregates?: AggregateExpression[],
     afterKey?: CompositeKey,
     bypassCache?: boolean,
-    dataSource?: 'Live' | 'Materialized'
+    dataSource?: 'Live' | 'Materialized',
+    includeBinaryFields?: boolean
   ) {
     try {
       if (!viewInfo || !userPayload) return null;
 
-      // SECURITY: GraphQL ExtraFilter may contain IN (SELECT … FROM <base view>).
-      // Screen at this boundary: parse, reject writes, allow only entity BaseViews.
-      this.screenClientViewClauses(
-        { extraFilter, orderBy, userSearchString, overrideExcludeFilter },
-        provider as unknown as IMetadataProvider,
-      );
-
-      // Check API key scope authorization for view operations
-      await this.CheckAPIKeyScopeAuthorization('view:run', viewInfo.Entity, userPayload);
-
-      const md = provider
       // Prefer the authenticated session's payload user — it is the authoritative per-request
       // identity and (for magic-link sessions) carries the per-session resource scope / synthesized
       // roles that drive RLS. The cached lookup is a fallback for paths where the payload user
@@ -1091,6 +1149,20 @@ export class ResolverBase {
       const user = this.GetUserFromPayload(userPayload)
         ?? UserCache.Users.find((u) => u.Email.toLowerCase().trim() === userPayload?.email.toLowerCase().trim());
       if (!user) throw new Error(`User ${userPayload?.email} not found in metadata`);
+
+      // SECURITY: GraphQL ExtraFilter may contain IN (SELECT … FROM <base view>).
+      // Screen at this boundary: parse, reject writes, allow only entity BaseViews the
+      // acting user can read (subqueries do not inherit the top entity's permission check).
+      this.screenClientViewClauses(
+        { extraFilter, orderBy, userSearchString, overrideExcludeFilter, aggregates },
+        provider as unknown as IMetadataProvider,
+        user,
+      );
+
+      // Check API key scope authorization for view operations
+      await this.CheckAPIKeyScopeAuthorization('view:run', viewInfo.Entity, userPayload);
+
+      const md = provider
 
       const entityInfo = md.Entities.find((e) => e.Name === viewInfo.Entity);
       if (!entityInfo) throw new Error(`Entity ${viewInfo.Entity} not found in metadata`);
@@ -1146,6 +1218,7 @@ export class ResolverBase {
           Aggregates: aggregates,
           BypassCache: bypassCache,
           DataSource: dataSource,
+          IncludeBinaryFields: includeBinaryFields,
         },
         user
       );
@@ -1248,8 +1321,10 @@ export class ResolverBase {
             orderBy: param.orderBy,
             userSearchString: param.userSearchString,
             overrideExcludeFilter: param.overrideExcludeFilter,
+            aggregates: param.aggregates,
           },
           md,
+          contextUser ?? undefined,
         );
 
         if (param.viewInfo) {
@@ -1293,6 +1368,7 @@ export class ResolverBase {
           Aggregates: param.aggregates,
           BypassCache: param.bypassCache,
           DataSource: param.dataSource,
+          IncludeBinaryFields: param.includeBinaryFields,
         });
       }
 
@@ -1674,9 +1750,10 @@ export class ResolverBase {
       // that hydrates from those values — never loading what the database actually holds.
       const hasNarrowedAuditPayload = this.StripRecordChangePayloadFromClientInput(entityInfo, userInfo, input, clientNewValues);
 
-      if (this.MustLoadTruthFromDatabase(entityInfo, input, hasDeniedReadFields, hasNarrowedAuditPayload)) {
+      if (this.MustLoadTruthFromDatabase(entityInfo, input, hasDeniedReadFields, hasNarrowedAuditPayload, userInfo)) {
         // We get here because the entity tracks record changes, OR the client did not provide OldValues,
-        // OR field-level security is in play — in every case we need the true old values from the DB
+        // OR field-level security or an Update row filter is in play — in every case we need the true
+        // old values from the DB
         const cKey = new CompositeKey(
           entityInfo.PrimaryKeys.map((pk) => {
             return {
@@ -1751,12 +1828,40 @@ export class ResolverBase {
   }
   
   /**
+   * Checks whether `oldValues` (`input.OldValues___`) contains every writable in-table field of
+   * `entityInfo` (plus primary keys).
+   *
+   * With the delta-only `Save()` wire protocol, `GraphQLDataProvider.Save()` sends only primary keys
+   * and dirty writable fields in `vars.input` and `OldValues___` on normal updates. Hydrating an
+   * entity directly from a partial-delta `OldValues___` via `entityObject.LoadFromData(oldValues)`
+   * (without first loading the authoritative row via `InnerLoad`) would leave every untouched column
+   * `NotLoaded = true` (or `null`), causing `spUpdate` or custom `Validate()` hooks to see incomplete
+   * state. Returning `false` for partial deltas ensures {@link MustLoadTruthFromDatabase} routes
+   * delta updates through `InnerLoad(cKey)` + {@link TestAndSetClientOldValuesToDBValues}, even on
+   * entities with `TrackRecordChanges === false`.
+   */
+  protected hasCompleteOldValues(
+    entityInfo: EntityInfo,
+    oldValues?: Array<{ Key: string; Value: unknown }> | null
+  ): boolean {
+    if (!oldValues || oldValues.length === 0) {
+      return false;
+    }
+    const providedKeys = new Set(oldValues.map((kv) => kv.Key));
+    return entityInfo.Fields.every(
+      (f) => (!f.IsPrimaryKey && (f.ReadOnly || f.IsVirtual)) || providedKeys.has(f.Name) || providedKeys.has(f.CodeName)
+    );
+  }
+
+  /**
    * Whether `UpdateRecord` must hydrate the entity from the DATABASE rather than from the
    * client's `OldValues___`.
    *
-   * The `OldValues___` path exists as an optimization: when nothing needs the true prior state,
-   * the client already holds it and a round trip is wasted. Each condition below is a reason
-   * that assumption fails.
+   * The `OldValues___` path exists as an optimization when a client supplies the complete pre-save
+   * record (e.g. `IgnoreDirtyState: true`) and nothing else requires the database's authoritative prior
+   * state. Under the delta-only `Save()` wire protocol, normal updates send only primary keys and dirty
+   * writable fields in `OldValues___`, so {@link hasCompleteOldValues} returns `false` and forces the
+   * database load (`InnerLoad`) so untouched columns retain their stored values.
    *
    * `EnableFieldLevelSecurity` is the security-critical one, and it is NOT redundant with
    * `hasDeniedReadFields`. That flag reports READ denials, and the canonical FLS configuration is
@@ -1774,27 +1879,48 @@ export class ResolverBase {
    * it never applies them to the entity. An update-denied field can then only become dirty by being
    * named in the mutation input itself, which is precisely the case that check does catch.
    *
-   * Ordered so the boolean flag is evaluated last: the extra load lands only on entities that have
-   * the feature switched on, which is almost none of them.
+   * The flag comes after the cheap terms, so the extra load lands only on entities that have the
+   * feature switched on, which is almost none of them.
    *
    * `MJ: Record Changes` always loads from the database: its server class allows an update only when
    * Comments is the one dirty field, and "dirty" compared against client-supplied OldValues lets a
    * caller pin forged audit columns as both old and new values. It doesn't track its own changes, so
    * nothing else forces the load.
+   *
+   * `MJ: Data Context Items` always loads from the database for the same reason: its server class
+   * lets only an administrator save an item that holds SQL, and decides that from the item's `Type`
+   * and `SQL`. Hydrated from OldValues, a client could leave both out, and the stored procedure would
+   * keep the stored SQL item while the rule saw none.
+   *
+   * `MJ: Conversation Details` always loads for the same reason: its write gate decides from the stored
+   * row (who wrote a person's message, its role, the owner's rating), and an OldValues-hydrated entity
+   * would let a grantee claim to be a message's author while rewriting it. See
+   * {@link ENTITIES_THAT_ALWAYS_LOAD_STORED_ROW}.
+   *
+   * A caller under an Update row filter (a role's Update RLS filter or an API-key row filter) always
+   * loads from the database too (#4919). The save's post-image check skips its query when no column
+   * the filter reads is dirty, and dirtiness measured against client OldValues is the caller's to
+   * choose: claiming the new value of a filter column as its old value made it clean, so the update
+   * moved the row outside the caller's scope without the check ever running. Evaluated last: it
+   * builds the filter clause, and only callers with such a filter pay for the load. A missing user
+   * (a user-cache miss) also loads: with no user the filter can't be ruled out.
    */
   protected MustLoadTruthFromDatabase(
     entityInfo: EntityInfo,
     input: { OldValues___?: Array<{ Key: string; Value: unknown }> },
     hasDeniedReadFields: boolean,
-    hasNarrowedAuditPayload: boolean
+    hasNarrowedAuditPayload: boolean,
+    user: UserInfo | undefined
   ): boolean {
     return (
       entityInfo.TrackRecordChanges ||
-      entityInfo.Name.trim().toLowerCase() === 'mj: record changes' ||
-      !input.OldValues___ ||
+      ENTITIES_THAT_ALWAYS_LOAD_STORED_ROW.has(entityInfo.Name.trim().toLowerCase()) ||
+      !this.hasCompleteOldValues(entityInfo, input.OldValues___) ||
       hasDeniedReadFields ||
       hasNarrowedAuditPayload ||
-      entityInfo.EnableFieldLevelSecurity
+      entityInfo.EnableFieldLevelSecurity ||
+      !user ||
+      entityInfo.GetEffectiveRowFilterWhereClause(user, EntityPermissionType.Update, '').length > 0
     );
   }
 
@@ -1963,11 +2089,17 @@ export class ResolverBase {
   }
 
   /**
-   * This routine compares the OldValues property in the input object to the values in the DB that we just loaded. If there are differences, we need to check to see if the client
-   * is trying to update any of those fields (e.g. overlap). If there is overlap, we throw an error. If there is no overlap, we can proceed with the update even if the DB Values
-   * and the ClientOldValues are not 100% the same, so long as there is no overlap in the specific FIELDS that are different.
+   * Compares the client-supplied `OldValues___` array in `input` against the authoritative database
+   * values just loaded onto `entityObject` via `InnerLoad`, checks for overlapping concurrent field
+   * modifications, and then applies `clientNewValues` onto `entityObject` via `SetMany`.
    *
-   * ASSUMES: input object has an OldValues___ property that is an array of Key/Value pairs that represent the old values of the record that the client is trying to update.
+   * Supports both full-record and delta-only `OldValues___` payloads: only keys present in
+   * `input.OldValues___` (e.g. primary keys + dirty writable fields) are compared against `dbValues`,
+   * and `entityObject.SetMany(clientNewValues)` mutates only the fields sent in `clientNewValues`
+   * while preserving all untouched DB-loaded fields on `entityObject`.
+   *
+   * ASSUMES: `input` has an `OldValues___` property that is an array of Key/Value pairs representing
+   * the pre-mutation values of the fields the client is updating.
    */
   protected async TestAndSetClientOldValuesToDBValues(input: any, clientNewValues: any, entityObject: BaseEntity, contextUser: UserInfo) {
     // we have OldValues, so we need to compare them to the values we just loaded from the DB
@@ -1975,7 +2107,7 @@ export class ResolverBase {
     // for each item in the oldValues array, add it to the clientOldValues object
     input.OldValues___.forEach((item) => {
       // we need to do a quick transform on the values to make sure they match the TS Type for the given field because item.Value will always be a string
-      const field = entityObject.EntityInfo.Fields.find((f) => f.CodeName === item.Key);
+      const field = entityObject.EntityInfo.Fields.find((f) => f.CodeName === item.Key || f.Name === item.Key);
       const val = this.ClientOldValueToFieldValue(field, item.Value);
       clientOldValues[item.Key] = val;
     });
@@ -1987,19 +2119,20 @@ export class ResolverBase {
     // now we need to compare clientOldValues and dbValues and have a new array that has entries for any differences and have FieldName, clientOldValue and dbValue as properties
     const dbDifferences = [];
     Object.keys(clientOldValues).forEach((key) => {
-      const f = entityObject.EntityInfo.Fields.find((f) => f.CodeName === key);
+      const f = entityObject.EntityInfo.Fields.find((f) => f.CodeName === key || f.Name === key);
+      const dbVal = f && f.Name in dbValues ? dbValues[f.Name] : dbValues[key];
       let different = false;
       switch (typeof clientOldValues[key]) {
         case 'number':
-          different = clientOldValues[key] !== dbValues[key];
+          different = clientOldValues[key] !== dbVal;
           break;
         case 'boolean':
-          different = clientOldValues[key] !== dbValues[key];
+          different = clientOldValues[key] !== dbVal;
           break;
         case 'object':
           if (clientOldValues[key] instanceof Date) {
             const clientDate = clientOldValues[key] as Date;
-            const dbDate = dbValues[key];
+            const dbDate = dbVal;
             if (dbDate == null || !(dbDate instanceof Date)) {
               different = true;
             } else if (clientDate.getTime() !== dbDate.getTime()) {
@@ -2017,11 +2150,11 @@ export class ResolverBase {
               }
             }
           } else if (clientOldValues[key] === null) {
-            different = dbValues[key] !== null;
+            different = dbVal !== null;
           }
           break;
         default:
-          different = clientOldValues[key] !== dbValues[key];
+          different = clientOldValues[key] !== dbVal;
           break;
       }
       if (different && f && !f.ReadOnly) {
@@ -2029,7 +2162,7 @@ export class ResolverBase {
         dbDifferences.push({
           FieldName: key,
           ClientOldValue: clientOldValues[key],
-          DBValue: dbValues[key],
+          DBValue: dbVal,
         });
       }
     });
@@ -2039,8 +2172,8 @@ export class ResolverBase {
       // first step is to get clientNewValues into an object that is like clientOldValues, get the diff and then compare that diff to the differences array that shows diff between DB and ClientOld
       const clientDifferences = [];
       Object.keys(clientOldValues).forEach((key) => {
-        const f = entityObject.EntityInfo.Fields.find((f) => f.CodeName === key);
-        if (clientOldValues[key] !== clientNewValues[key] && f && f.AllowUpdateAPI && !f.IsPrimaryKey) {
+        const f = entityObject.EntityInfo.Fields.find((f) => f.CodeName === key || f.Name === key);
+        if (key in clientNewValues && clientOldValues[key] !== clientNewValues[key] && f && f.AllowUpdateAPI && !f.IsPrimaryKey) {
           // only include updateable fields
           clientDifferences.push({
             FieldName: key,

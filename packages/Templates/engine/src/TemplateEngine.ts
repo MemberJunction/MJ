@@ -3,8 +3,14 @@ import { MJTemplateCategoryEntity, MJTemplateContentEntity, MJTemplateContentTyp
 import nunjucks from 'nunjucks';
 import { BaseSingleton, MJGlobal, UUIDsEqual } from "@memberjunction/global";
 import { TemplateExtensionBase } from "./extensions/TemplateExtensionBase";
+import { HardenNunjucksRuntime } from "./NunjucksSandbox";
+import { CollectReferencedVariables, ReferencedVariablesResult } from "./TemplateVariableAnalysis";
 import { TemplateRenderResult, TemplateEngineBase } from '@memberjunction/templates-base-types'
-  
+
+// Stored templates are user-editable, so nunjucks is guarded as soon as the engine loads. The guard
+// is process-wide: it also covers nunjucks environments that other packages create.
+HardenNunjucksRuntime();
+
 /**
  * This class extends the nunjucks loader to allow adding templates directly to the loader
  */
@@ -95,7 +101,7 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
         this.ensureNunjucksInitialized(contextUser);
     }
 
-    /** One-time nunjucks environment + registered-extension setup, performed after the base templates load. */
+    /** One-time nunjucks environment + registered-extension setup. {@link Config} and {@link GetReferencedVariables} call it. */
     private ensureNunjucksInitialized(contextUser?: UserInfo): void {
         if (this._oneTimeLoadingComplete) {
             return;
@@ -107,6 +113,7 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
         this._nunjucksEnvNoAutoescape = undefined; // rebound lazily against the fresh loader on next no-autoescape render
 
         // get all of the extensions that are registered and register them with nunjucks
+        this._registeredExtensions = [];
         const extensions = MJGlobal.Instance.ClassFactory.GetAllRegistrations(TemplateExtensionBase);
         if (extensions && extensions.length > 0) {
             for (const ext of extensions) {
@@ -114,6 +121,7 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
                 const instance = new SubClassConstructor(contextUser!);
                 if (ext.Key) {
                     this._nunjucksEnv.addExtension(ext.Key, instance);
+                    this._registeredExtensions.push(instance);
                 }
             }
         }
@@ -131,11 +139,13 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
     public get TemplateContents(): MJTemplateContentEntity[] { return this.base.TemplateContents; }
     public get TemplateParams(): MJTemplateParamEntity[] { return this.base.TemplateParams; }
     public FindTemplate(templateName: string): MJTemplateEntityExtended { return this.base.FindTemplate(templateName); }
+    public FindTemplateByID(templateId: string): MJTemplateEntityExtended | undefined { return this.base.FindTemplateByID(templateId); }
 
     public SetupNunjucks(): void {
         this._templateLoader = new TemplateEntityLoader();
         this._nunjucksEnv = this.createConfiguredNunjucksEnv(true);
         this._nunjucksEnvNoAutoescape = undefined; // rebound lazily against the fresh loader on next no-autoescape render
+        this._simpleTemplateCache.clear();
     }
 
     private _nunjucksEnv: nunjucks.Environment;
@@ -148,6 +158,8 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
      */
     private _nunjucksEnvNoAutoescape?: nunjucks.Environment;
     private _templateLoader: TemplateEntityLoader;
+    /** The extension instances registered on {@link _nunjucksEnv}. The variable analysis parses their custom tags. */
+    private _registeredExtensions: nunjucks.Extension[] = [];
 
     /**
      * Builds a Nunjucks environment bound to the shared template loader with our custom filters applied.
@@ -200,6 +212,16 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
      * Cache for templates that have been created by nunjucks so we don't have to create them over and over
      */
     private _templateCache: Map<string, any> = new Map<string, any>();
+
+    /**
+     * Bounded LRU cache for ad-hoc templates rendered via {@link RenderTemplateSimple}.
+     * Keyed by `${autoescape ? '1:' : '0:'}${templateText}`.
+     */
+    private static readonly MAX_SIMPLE_TEMPLATE_CACHE_SIZE = 2000;
+    private _simpleTemplateCache: Map<string, nunjucks.Template> = new Map<string, nunjucks.Template>();
+
+    /** {@link GetReferencedVariables} results by template text. */
+    private _referencedVariablesCache = new Map<string, ReferencedVariablesResult>();
 
     public AddTemplate(templateEntity: MJTemplateEntityExtended) {
         this._templateLoader.AddTemplate(templateEntity.ID, templateEntity);
@@ -291,8 +313,24 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
      */
     public async RenderTemplateSimple(templateText: string, data: any, options?: { autoescape?: boolean }): Promise<TemplateRenderResult> {
         try {
-            const env = this.getSimpleRenderEnv(options?.autoescape ?? true);
-            const template = this.createNunjucksTemplate(templateText, env);
+            const autoescape = options?.autoescape ?? true;
+            const cacheKey = `${autoescape ? '1:' : '0:'}${templateText}`;
+            let template = this._simpleTemplateCache.get(cacheKey);
+            if (template) {
+                // Refresh LRU order
+                this._simpleTemplateCache.delete(cacheKey);
+                this._simpleTemplateCache.set(cacheKey, template);
+            } else {
+                const env = this.getSimpleRenderEnv(autoescape);
+                template = this.createNunjucksTemplate(templateText, env);
+                if (this._simpleTemplateCache.size >= TemplateEngineServer.MAX_SIMPLE_TEMPLATE_CACHE_SIZE) {
+                    const oldestKey = this._simpleTemplateCache.keys().next().value;
+                    if (oldestKey !== undefined) {
+                        this._simpleTemplateCache.delete(oldestKey);
+                    }
+                }
+                this._simpleTemplateCache.set(cacheKey, template);
+            }
             const result = await this.renderTemplateAsync(template, data);
             return {
                 Success: true,
@@ -308,6 +346,32 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
                 Message: e.message
             };
         }
+    }
+
+    /**
+     * Returns the top-level variable names a template's text reads, following stored templates it
+     * pulls in by literal name (`{% include %}`, `{% import %}`, `{% from %}`, `{% extends %}`,
+     * `{% template %}`). It sets up the Nunjucks environment first, so the registered extensions' tags
+     * parse before the first {@link Config} too. The result is frozen and cached per template text until
+     * {@link ClearTemplateCache}; a result whose text does not parse is not cached.
+     */
+    public GetReferencedVariables(templateText: string): ReferencedVariablesResult {
+        const cached = this._referencedVariablesCache.get(templateText);
+        if (cached) {
+            return cached;
+        }
+        this.ensureNunjucksInitialized(this.ContextUser);
+        const result = Object.freeze(CollectReferencedVariables(templateText, {
+            Extensions: this._registeredExtensions,
+            ResolveTemplateTexts: (name) => {
+                const template = this.FindTemplate(name);
+                return template ? template.Content.map((c) => c.TemplateText).filter((t): t is string => !!t) : null;
+            },
+        }));
+        if (!result.ParseFailed) {
+            this._referencedVariablesCache.set(templateText, result);
+        }
+        return result;
     }
 
     /**
@@ -358,8 +422,11 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
         return this._nunjucksEnvNoAutoescape;
     }
 
+    /** Clears the compiled-template cache and the cached {@link GetReferencedVariables} results. */
     public ClearTemplateCache() {
         this._templateCache.clear();
+        this._simpleTemplateCache.clear();
+        this._referencedVariablesCache.clear();
     }
 
     /**
@@ -368,6 +435,7 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
      * @param data the data to render the template with
      */
     protected async renderTemplateAsync(template: nunjucks.Template, data: any): Promise<string> {
+        HardenNunjucksRuntime(); // no-op unless something replaced a guarded nunjucks hook
         return new Promise((resolve, reject) => {
             template.render(data, (err, result) => {
                 if (err) {
@@ -399,19 +467,26 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
         
         // Get all parameters applicable to this content
         const params = templateEntity.GetParametersForContent(contentId);
+        if (!params || params.length === 0) {
+            return mergedData;
+        }
         
         // Group parameters by name to handle precedence
         const paramsByName = new Map<string, MJTemplateParamEntity>();
         
-        // First add global parameters
-        params.filter(p => !(p as any).TemplateContentID).forEach(p => {
-            paramsByName.set(p.Name, p);
-        });
-        
-        // Then add/override with content-specific parameters
-        params.filter(p => UUIDsEqual((p as any).TemplateContentID, contentId)).forEach(p => {
-            paramsByName.set(p.Name, p);
-        });
+        // First add global parameters, then override with content-specific parameters
+        for (let i = 0; i < params.length; i++) {
+            const p = params[i];
+            if (!(p as any).TemplateContentID) {
+                paramsByName.set(p.Name, p);
+            }
+        }
+        for (let i = 0; i < params.length; i++) {
+            const p = params[i];
+            if ((p as any).TemplateContentID && UUIDsEqual((p as any).TemplateContentID, contentId)) {
+                paramsByName.set(p.Name, p);
+            }
+        }
         
         // Apply default values for missing parameters
         paramsByName.forEach((param, name) => {

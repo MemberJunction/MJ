@@ -21,6 +21,9 @@ import {
     TWILIO_MEDIA_WSS_PATH,
     SetTwilioTelephonyService,
     TwilioTelephonyService,
+    BuildCallbackUrl,
+    ReadSharedTelephonySettings,
+    ResolveOnMachine,
 } from '../telephony/index.js';
 
 @RegisterClass(BaseServerExtension, 'TwilioTelephonyExtension')
@@ -47,6 +50,9 @@ export class TwilioTelephonyExtension extends BaseServerExtension {
             };
         }
 
+        const rootPath = context.config.RootPath || TWILIO_TELEPHONY_MOUNT_PATH;
+        const publicUrl = context.publicUrl || 'http://localhost:4000';
+
         const config: TwilioTelephonyConfig = {
             accountSid: rawSettings.accountSid,
             authToken: rawSettings.authToken,
@@ -54,12 +60,14 @@ export class TwilioTelephonyExtension extends BaseServerExtension {
             apiKeySecret: rawSettings.apiKeySecret,
             streamPublicUrl: rawSettings.streamPublicUrl,
             webhookSigningSecret: rawSettings.webhookSigningSecret,
-            statusCallbackUrl: rawSettings.statusCallbackUrl,
+            // Outbound calls report lifecycle + the answering-machine verdict back to the routes this extension
+            // mounts; an explicit setting wins.
+            statusCallbackUrl: rawSettings.statusCallbackUrl ?? BuildCallbackUrl(publicUrl, rootPath, '/status'),
+            amdStatusCallbackUrl: rawSettings.amdStatusCallbackUrl ?? BuildCallbackUrl(publicUrl, rootPath, '/amd'),
+            onMachine: ResolveOnMachine(rawSettings.onMachine),
+            ...ReadSharedTelephonySettings(rawSettings),
         };
         this.config = config;
-
-        const rootPath = context.config.RootPath || TWILIO_TELEPHONY_MOUNT_PATH;
-        const publicUrl = context.publicUrl || 'http://localhost:4000';
 
         const handler = createTwilioTelephonyHandler(publicUrl, config);
         this.service = handler.service;
@@ -90,6 +98,7 @@ export class TwilioTelephonyExtension extends BaseServerExtension {
     }
 
     public async Shutdown(): Promise<void> {
+        this.service?.Dispose();
         SetTwilioTelephonyService(undefined);
         this.service = null;
     }

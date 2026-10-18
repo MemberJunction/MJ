@@ -609,5 +609,18 @@
       "lastModified": "2026-09-14T00:43:05.195Z",
       "checksum": "af3d006e4f981ac3689d5b20d230b6a884fc5fd20e8fdcdb5a259f53d8c4c730"
     }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: User Record Logs",
+      "RoleID": "@lookup:MJ: Roles.Name=UI",
+      "CanRead": true,
+      "CanCreate": true,
+      "CanUpdate": true,
+      "CanDelete": false
+    },
+    "primaryKey": {
+      "ID": "6BD4DF77-ECA1-4D70-9694-B194FD0024B9"
+    }
   }
 ]

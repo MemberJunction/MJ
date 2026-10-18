@@ -5,10 +5,12 @@ import { TemplateEngineServer } from '@memberjunction/templates';
 import {
   AIErrorType,
   BaseDecision,
+  BuildCancellationErrorInfo,
   DecisionParams,
   DecisionQuestion,
   DecisionResult,
   ErrorAnalyzer,
+  IsRequestAborted,
   ModelUsage,
 } from '@memberjunction/ai';
 import {
@@ -17,6 +19,7 @@ import {
   AIModelSelectionInfo,
   SystemPlaceholderManager,
   AIPromptParams,
+  PickPromptExecutionScope,
 } from '@memberjunction/ai-core-plus';
 import {
   BaseModelRunner,
@@ -417,6 +420,11 @@ export class AIDecisionRunner extends BaseModelRunner {
         return `LLMDecision's chat prompt '${candidate.apiName ?? ''}' was not found`;
       }
       driver = MJGlobal.Instance.ClassFactory.CreateInstance<BaseDecision>(BaseDecision, candidate.driverClass, apiKey, chatPrompt.ID, params.contextUser);
+      // LLMDecision answers by running a chat prompt of its own, which must spend the decision's
+      // credentials, not resolve its own from the platform.
+      if (driver instanceof LLMDecision) {
+        driver.ExecutionScope = PickPromptExecutionScope(params);
+      }
     } else {
       driver = MJGlobal.Instance.ClassFactory.CreateInstance<BaseDecision>(BaseDecision, candidate.driverClass, apiKey);
     }
@@ -445,7 +453,11 @@ export class AIDecisionRunner extends BaseModelRunner {
       return await driver.Decide(driverParams);
     } catch (err: unknown) {
       const failed = this.failedDecision(err instanceof Error ? err.message : String(err), 'Unknown');
-      failed.errorInfo = ErrorAnalyzer.AnalyzeError(err, candidate.vendorName);
+      // An abort is classified by the bound's signal: a caller cancellation is not failed over, a
+      // timeout is.
+      failed.errorInfo = IsRequestAborted(err, bound.Signal)
+        ? BuildCancellationErrorInfo({ error: err, signal: bound.Signal, provider: candidate.vendorName })
+        : ErrorAnalyzer.AnalyzeError(err, candidate.vendorName);
       return failed;
     } finally {
       bound.Dispose();

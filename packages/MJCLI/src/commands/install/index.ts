@@ -1,4 +1,4 @@
-import { select, confirm, input } from '@inquirer/prompts';
+import { select, confirm, input, password } from '@inquirer/prompts';
 import { Command, Flags } from '@oclif/core';
 import chalk from 'chalk';
 import {
@@ -299,6 +299,13 @@ export default class Install extends Command {
         answer = await input({
           message: event.Message,
           default: event.Default,
+        });
+        break;
+
+      case 'password':
+        answer = await password({
+          message: event.Message,
+          mask: '*',
         });
         break;
 

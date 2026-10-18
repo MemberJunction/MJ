@@ -1,0 +1,229 @@
+<section class="author" aria-label="Rubric author">
+  <div class="card cockpit">
+    <div class="hero">
+      <span class="hero-mark" aria-hidden="true"><i class="fa-solid fa-scale-balanced"></i></span>
+      <div>
+        <span class="eyebrow">Rubric author</span>
+        @if (Name) { <h2>{{ Name }}</h2> }
+      </div>
+    </div>
+    @if (PublishedLabel || NextVersion) {
+      <div class="cockpit-bar">
+        <span class="eyebrow">Select version</span>
+        <div class="segmented">
+          @if (PublishedLabel) {
+            <button mjButton variant="outline" size="sm" type="button" [attr.aria-pressed]="Viewing === 'published'" (click)="ViewingChange.emit('published')">Published {{ PublishedLabel }}</button>
+          }
+          <button mjButton variant="outline" size="sm" type="button" [attr.aria-pressed]="Viewing === 'draft'" (click)="ViewingChange.emit('draft')">Draft (next {{ NextVersion }})</button>
+        </div>
+        @if (ComputedBump) { <span class="pill-major"><i class="fa-solid fa-triangle-exclamation"></i> {{ ComputedBump }}</span> }
+      </div>
+    }
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <h3><i class="fa-solid fa-sitemap"></i> Criteria</h3>
+      @if (!ReadOnly) {
+        <div class="rubric-actions">
+          <button mjButton variant="outline" size="sm" type="button" (click)="OnAdd('Group')">Add group</button>
+          <button mjButton variant="primary" size="sm" type="button" (click)="OnAdd('Criterion')">Add criterion</button>
+        </div>
+      }
+    </div>
+    <ol class="rubric-list">
+      @for (node of Nodes; track node.id) {
+        <li class="criterion">
+          <header class="criterion-header">
+            <div class="criterion-title">
+              <strong>{{ node.name }}</strong>
+              <code>{{ node.key }}</code>
+            </div>
+            <div class="fact-row">
+              <span class="fact">Weight {{ node.weight }} · {{ Share(node.id) }}%</span>
+              @if (node.nodeType === 'Criterion') {
+                <span class="fact fact-scale">{{ ScaleLabel(node) }}</span>
+                <span class="fact" [class.fact-gate]="node.isGate">{{ node.isGate ? 'Gate ≥ ' + node.gateMinimumScore : 'Gate off' }}</span>
+              }
+            </div>
+          </header>
+          @if (!ReadOnly) {
+            <div class="criterion-body">
+              <div class="editor-grid">
+                <label>Name <input type="text" [value]="node.name" (change)="OnText(node, 'name', $event)" /></label>
+                <label>Key <input type="text" [value]="node.key" (change)="OnText(node, 'key', $event)" /></label>
+                <label>Type
+                  <select [value]="node.nodeType" (change)="OnNodeType(node, $event)">
+                    <option value="Criterion">Criterion</option>
+                    <option value="Group">Group</option>
+                  </select>
+                </label>
+                <label>Parent
+                  <select [value]="node.parentId ?? ''" (change)="OnParent(node, $event)">
+                    <option value="">Top</option>
+                    @for (parent of Parents(node); track parent.id) {
+                      <option [value]="parent.id">{{ parent.name }}</option>
+                    }
+                  </select>
+                </label>
+                <label>Weight
+                  <input type="number" min="0" step="0.1" [value]="node.weight" (change)="OnWeight(node, $event)" />
+                </label>
+                @if (node.nodeType === 'Criterion') {
+                  <label>Scale
+                    <select [value]="ScaleValue(node)" (change)="OnScale(node, $event)">
+                      <option value="">None</option>
+                      @for (scale of Scales; track scale.id) {
+                        <option [value]="scale.id">{{ scale.name || scale.id }}</option>
+                      }
+                    </select>
+                  </label>
+                }
+              </div>
+              @if (node.nodeType === 'Criterion') {
+                <div class="gate-box">
+                  <label class="gate-check">
+                    <input type="checkbox" [checked]="node.isGate" (change)="OnGate(node, $event)" />
+                    <span>
+                      <strong>Quality gate</strong>
+                      <small>A score under the minimum fails the evaluation.</small>
+                    </span>
+                  </label>
+                  @if (node.isGate) {
+                    <label class="gate-min">Minimum
+                      <input type="number" min="0" max="1" step="0.1" [value]="node.gateMinimumScore ?? ''" (change)="OnMinimum(node, $event)" />
+                    </label>
+                  }
+                </div>
+                <div class="anchor-box">
+                  <div class="box-title">Scale anchors</div>
+                  <div class="rubric-split">
+                    @for (level of Levels(node); track level.id; let first = $first) {
+                      <label class="anchor" [class.anchor-meet]="first" [class.anchor-miss]="!first" [class.filled]="Anchor(node, level.id)">
+                        <span>{{ level.label }}</span>
+                        <input type="text" [value]="Anchor(node, level.id)" (input)="OnAnchor(node, level.id, $event)" />
+                      </label>
+                    }
+                  </div>
+                </div>
+              }
+              <label class="stack-field">Description <textarea [value]="node.description ?? ''" (change)="OnText(node, 'description', $event)"></textarea></label>
+              <label class="stack-field">Guidance <textarea [value]="node.guidance ?? ''" (change)="OnText(node, 'guidance', $event)"></textarea></label>
+              <label>Rollup
+                <select [value]="node.rollupMethod ?? ''" (change)="OnRollup(node, $event)">
+                  <option value="">Default</option>
+                  <option value="WeightedMean">Weighted mean</option>
+                  <option value="Minimum">Minimum</option>
+                  <option value="Maximum">Maximum</option>
+                </select>
+              </label>
+              <label class="gate-check"><input type="checkbox" [checked]="node.isAdvisory" (change)="OnFlag(node, 'isAdvisory', $event)" /> Advisory</label>
+              <label class="gate-check"><input type="checkbox" [checked]="node.evidenceRequired" (change)="OnFlag(node, 'evidenceRequired', $event)" /> Evidence required</label>
+              <label class="gate-check"><input type="checkbox" [checked]="node.rationaleRequired" (change)="OnFlag(node, 'rationaleRequired', $event)" /> Rationale required</label>
+              <button mjButton variant="outline" size="sm" type="button" (click)="OnDeleteNode(node)">Delete</button>
+              <label class="stack-field">Not applicable
+                <select [value]="node.notApplicablePolicy ?? ''" (change)="OnPolicy(node, $event)">
+                  <option value="">Version default</option>
+                  <option value="ExcludeAndRedistribute">Exclude and redistribute</option>
+                  <option value="CountAsZero">Count as zero</option>
+                  <option value="FailEvaluation">Fail the evaluation</option>
+                  <option value="NotAllowed">Not allowed</option>
+                </select>
+              </label>
+            </div>
+          } @else {
+            <div class="criterion-body">
+              <div class="editor-grid">
+                <p><span class="eyebrow">Name</span> {{ node.name }}</p>
+                <p><span class="eyebrow">Key</span> {{ node.key }}</p>
+                <p><span class="eyebrow">Type</span> {{ node.nodeType }}</p>
+                <p><span class="eyebrow">Parent</span> {{ ParentName(node) }}</p>
+                <p><span class="eyebrow">Weight</span> {{ node.weight }}</p>
+                @if (node.nodeType === 'Criterion') {
+                  <p><span class="eyebrow">Scale</span> {{ ScaleLabel(node) }}</p>
+                }
+              </div>
+              @if (node.nodeType === 'Criterion') {
+                <p><span class="eyebrow">Quality gate</span> {{ node.isGate ? 'On, minimum ' + node.gateMinimumScore : 'Off' }}</p>
+                <div class="anchor-box">
+                  <div class="box-title">Scale anchors</div>
+                  @for (level of Levels(node); track level.id) {
+                    <p><span class="eyebrow">{{ level.label }}</span> {{ Anchor(node, level.id) || '—' }}</p>
+                  }
+                </div>
+              }
+              <p><span class="eyebrow">Description</span> {{ node.description || '—' }}</p>
+              <p><span class="eyebrow">Guidance</span> {{ node.guidance || '—' }}</p>
+              <p><span class="eyebrow">Rollup</span> {{ node.rollupMethod || 'Default' }}</p>
+              <p><span class="eyebrow">Advisory</span> {{ node.isAdvisory ? 'Yes' : 'No' }}</p>
+              <p><span class="eyebrow">Evidence required</span> {{ node.evidenceRequired ? 'Yes' : 'No' }}</p>
+              <p><span class="eyebrow">Rationale required</span> {{ node.rationaleRequired ? 'Yes' : 'No' }}</p>
+              <p><span class="eyebrow">Not applicable</span> {{ PolicyLabel(node.notApplicablePolicy) }}</p>
+            </div>
+          }
+        </li>
+      }
+    </ol>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <h3>Bands</h3>
+      @if (!ReadOnly) {
+        <button mjButton variant="outline" size="sm" type="button" (click)="OnAddBand()">Add band</button>
+      }
+    </div>
+    @for (band of Removed; track band.label) {
+      <p class="removed"><span>Removed in draft</span> Band {{ band.label }} ({{ band.minScore }}–{{ band.maxScore }})</p>
+    }
+    <ul class="rubric-list">
+      @for (band of Bands; track band.id) {
+        <li class="band-row">
+          @if (ReadOnly) {
+            <span>Band {{ band.label }} ({{ band.minScore }}–{{ band.maxScore }})</span>
+          } @else {
+            <label>Label <input type="text" [value]="band.label" (input)="OnBand(band.id, 'label', $event)" /></label>
+            <label>Min <input type="number" min="0" max="1" step="0.1" [value]="band.minScore" (change)="OnBand(band.id, 'minScore', $event)" /></label>
+            <label>Max <input type="number" min="0" max="1" step="0.1" [value]="band.maxScore" (change)="OnBand(band.id, 'maxScore', $event)" /></label>
+            <label>Tone
+              <select [value]="band.displayTone" (change)="OnBand(band.id, 'displayTone', $event)">
+                <option>Neutral</option>
+                <option>Success</option>
+                <option>Info</option>
+                <option>Warning</option>
+                <option>Error</option>
+              </select>
+            </label>
+            <label>Sequence <input type="number" [value]="band.sequence" (change)="OnBand(band.id, 'sequence', $event)" /></label>
+            <button mjButton variant="outline" size="sm" type="button" (click)="OnDeleteBand(band.id)">Delete</button>
+          }
+        </li>
+      }
+    </ul>
+  </div>
+
+  <div class="card">
+    <h3><i class="fa-solid fa-flask"></i> Live scoring</h3>
+    <div class="simulator">
+      <div>
+        <span class="eyebrow">Simulated score</span>
+        @if (Preview) {
+          <p class="score-line"><strong>{{ Preview.normalizedScore }}</strong> <span>{{ Preview.outcome }}</span></p>
+        } @else {
+          <p class="score-line"><strong>—</strong></p>
+        }
+      </div>
+      <div class="rubric-actions">
+        <button mjButton variant="primary" size="sm" type="button" (click)="Simulate(true)">Simulate Meets</button>
+        <button mjButton variant="outline" size="sm" type="button" (click)="Simulate(false)">Simulate Miss</button>
+      </div>
+    </div>
+  </div>
+
+  @if (MoveProblem) { <p class="removed">{{ MoveProblem }}</p> }
+  @if (Problems.length) {
+    <ul class="removed">
+      @for (problem of Problems; track problem) { <li>{{ problem }}</li> }
+    </ul>
+  }
+</section>

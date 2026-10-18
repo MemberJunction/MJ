@@ -9,6 +9,7 @@ import { CreateLLMInstance } from '../utils/llm-factory.js';
 import { ResolveCallTimeoutMs, WithCallDeadline } from '../utils/call-deadline.js';
 import { BaseAutoDocDriver } from '../drivers/BaseAutoDocDriver.js';
 import { ColumnStatsCache } from './ColumnStatsCache.js';
+import { BuildIndexHints, FormatIndexHint } from '../utils/index-hints.js';
 import { SchemaDefinition } from '../types/state.js';
 import {
   PKCandidate,
@@ -231,8 +232,15 @@ export class LLMDiscoveryValidator {
       TargetTable: targetTable,
       RelatedTables: relatedTables,
       pkCandidates: pkContext,
-      fkCandidates: fkContext
+      fkCandidates: fkContext,
+      ExistingIndexes: this.indexHintLines(schemaName, tableName)
     };
+  }
+
+  /** Existing indexes on the table as prompt lines, from the introspected schema. */
+  private indexHintLines(schemaName: string, tableName: string): string[] {
+    const table = this.schemas.find(s => s.name === schemaName)?.tables.find(t => t.name === tableName);
+    return BuildIndexHints(table).map(FormatIndexHint);
   }
 
   /**
@@ -564,6 +572,15 @@ ${context.RelatedTables
     : ''
 }
 
+${
+  context.ExistingIndexes && context.ExistingIndexes.length > 0
+    ? `### Existing Indexes (declared in the database):
+${context.ExistingIndexes.map(line => `- ${line}`).join('\n')}
+
+Indexes are evidence, not proof: a UNIQUE index or PRIMARY KEY on non-null columns strongly supports a PK candidate on exactly those columns; a non-unique index led by an ID-like column often marks a foreign key. "(expression)" is a computed key part.
+`
+    : ''
+}
 ### Statistical Analysis Found:
 
 **Primary Key Candidates:**

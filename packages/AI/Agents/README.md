@@ -240,6 +240,12 @@ Key pieces in this package:
 - **`MediaChannelServer`** (`src/realtime/media-channel-server.ts`, key `'MediaChannelServer'`) — the server channel plugin for the **Media** surface. Like the Whiteboard it canonicalizes the channel's persisted media state, and additionally resolves the agent's **media kit** at session start: it implements `IRealtimeChannelServerDataAware` to receive the session `contextUser`+`provider`, reads a per-session `mediaCollectionID` override out of `RealtimeChannelServerContext.AgentSessionConfig` (the persisted `AIAgentSession.Config_`), and feeds the model a manifest via `SendContextNote`. The kit-resolution logic is the pure, unit-tested `agent-media-library.ts` (`buildAgentMediaContextNote` / `resolveAgentMediaManifest` / `formatAgentMediaManifest`); precedence is `runtime override > AIAgent.DefaultMediaCollectionID > none`. The agent then surfaces items with the existing `Media_ShowMedia` client tool — no new client tool. `LoadMediaChannelServer()` is invoked from MJServer's `agentSessions` module. See the [Real-Time Co-Agents Guide](../../../guides/REALTIME_CO_AGENTS_GUIDE.md).
 - **`AgentMemoryContextBuilder`** (`src/agent-memory-context-builder.ts`) — the memory/RAG injection orchestration extracted out of `BaseAgent` so the co-agent assembles the **same** notes/examples/context a loop agent does, with no duplicated logic.
 
+- **`realtime-channel-policy.ts`** (`BuildSessionChannelPolicy`) — the **server half of channel scoping** for client-direct sessions, pure and unit-tested. At mint the browser reports its channel candidates (`channelCandidatesJson`); `RealtimeClientSessionService` matches each to its `MJ: AI Agent Channels` row *from the server's own registry* (the client's view is never trusted), folds the cascade's `realtime.channels` section (agent layers plus `Application.AgentSettings.Realtime.Channels`) through `ResolveRealtimeChannelScope`, and returns the resolved `RealtimeSessionClientPolicy` (`PrepareClientSession` → `ClientPolicy`; the resolver returns it as `ClientPolicyJson` and persists the in-scope channel keys on the session). The tools the model is told about are narrowed to match: a vetoed channel's native tools never reach the provider, an included `'opt-in'` channel's are added by name, an `'on-demand'` channel declares none (it is opened through `ContextTool`), and tools no candidate owns (the host's own) pass through. Server plugins start before the scope is known, so `RealtimeChannelServerHost.PruneSessionChannels` drops the excluded channels' server halves afterwards. Absent candidates (a client that predates scoping, or a host that mints through its own proxy) ⇒ tools used exactly as declared and no policy.
+- **`ClientOnlyChannelServer`** (`src/realtime/client-only-channel-server.ts`, key `'ClientOnlyChannelServer'`) — the generic server half for any channel that runs entirely in the browser. `MJ: AI Agent Channels.ServerPluginClass` is `NOT NULL`, so a client-only channel (an Open App's form or game channel) sets its row's `ServerPluginClass` to this key instead of writing an empty plugin. It takes its channel name from the registry row it was resolved for (`BindChannelName`, called by `RealtimeChannelServerHost`), contributes no server tools and does not interpret or rewrite saves. It does not decide scope (resolved before any plugin exists) and cannot stop a save (the host persists whatever the client submits when a plugin returns `null`), so persistence is controlled by the client plugin's `SerializeState()`. `LoadClientOnlyChannelServer()` is invoked from MJServer's `agentSessions` module.
+- **`InteractiveComponentChannelServer`** (`src/realtime/interactive-component-channel-server.ts`, key `'InteractiveComponentChannelServer'`) — the deliberately thin server half of the **Interactive Component** channel (`MJ: AI Agent Channels` row `InteractiveComponent`), a `ClientOnlyChannelServer` subclass that keeps its existing registry key: no server tools, and the client plugin saves no state of record, because the channel's actions are derived from the open component's spec and run in the browser. `LoadInteractiveComponentChannelServer()` is invoked from MJServer's `agentSessions` module.
+- **Channel exposure and zero data retention.** `BuildSessionChannelPolicy` also resolves each channel's **exposure** (`min(channel ceiling, agent cap, zero-data-retention ceiling)`; the user's own choice is applied by the browser). The agent cap is `realtime.channels.config.<Key>.maxExposure`; `requireZeroDataRetentionFor: ['state' | 'pixels']` (in the realtime configuration cascade and in `Application.AgentSettings.Realtime.Channels.RequireZeroDataRetentionFor`) lowers exposure when the session model's effective configuration (`AIEngine.GetEffectiveModelConfiguration`) does not declare `Privacy.ZeroDataRetention: true`; a failed model lookup fails closed. The resolved exposure and the reasons for any downgrade ride back in `ClientPolicyJson`. Also in the realtime session tuning section: `session.unverifiedMaxSeconds` / `session.verifiedMaxSeconds` (positive integers, carried through the cascade for the session-deadline logic; never forwarded to the provider driver).
+- **App client tools and the unified resolver.** `Application.AgentSettings.ClientTools` is now actually read by the realtime path: resolved against the tool-definition catalog and layered, through `ResolveClientTools` (`override → session → app → static`), beneath the live surface's manifest in the app-context snapshot the companion prompt renders. The agent's static `MJ: AI Agent Client Tools` junction tools ride the returned policy (so the browser can describe them) but are deliberately not added to the voice prompt — voice prompts are token-sensitive and a tool with no browser handler is noise. The app's `AgentSettings` column is parsed with `ParseAgentSettings` rather than the generated accessor.
+
 Delegated runs link to the co-agent's run via `ParentRunID` and share the session's `AgentSessionID`, so the whole episode — session, co-agent run (with its prompt run + Timeline step), delegated runs, transcript (`ConversationDetail` rows), channel state, usage telemetry (checkpointed server-side, or relayed from the browser via `RelayRealtimeUsage`) — groups under one session record with full standard observability.
 
 The browser-side driver layer lives in [`@memberjunction/ai-realtime-client`](../RealtimeClient/README.md); the model primitive (`BaseRealtimeModel` / `IRealtimeSession`) lives in `@memberjunction/ai`; the Angular UX (call overlay, interactive channels, the live whiteboard) lives in `@memberjunction/ng-conversations`. **The flagship guide — concept, triple-registry plugin architecture, topologies, session lifecycle, channels, narration, security — is [guides/REALTIME_CO_AGENTS_GUIDE.md](../../../guides/REALTIME_CO_AGENTS_GUIDE.md).**
@@ -305,7 +311,7 @@ Handles persistent memory operations for agents:
 - Consolidation, decay, and protection-tier maintenance over the agent note pool (see below)
 - **Hardening pass** over agent-authored provisional notes — runs unconditionally at the start of every cycle (before the consolidation-gated phases): LLM-dedupes each `Status='Provisional'` note against hardened notes (duplicates archived with `ConsolidatedIntoNoteID` lineage), and hardens survivors to `Status='Active'` with `ExpiresAt=NULL` so they join importance scoring, consolidation, contradiction detection, and decay in the same cycle
 
-**Session tuning & resilience (v5.49)**: the effective config's `realtime.session` section (`effortLevel` — MJ-normalized, `parallelToolCalls`, `mcpTools`, `inputTranscriptionModel`) flows into the driver Config bag on both topologies via `GetSessionTuningSettings`. The session runner observes the chained cancellation signal (`AbortSignal` dep), performs bounded transport reconnects on fatal drops (`MaxTransportReconnects`, default 1), and accumulates per-modality usage detail (`RealtimeUsage.Input/OutputTokenDetails`) that the checkpoint persists for multi-channel cost attribution. See `guides/REALTIME_CO_AGENTS_GUIDE.md` § "Session tuning, cost attribution & resilience".
+**Session tuning & resilience (v5.49)**: the effective config's `realtime.session` section (`effortLevel` — MJ-normalized, `parallelToolCalls`, `mcpTools`, `inputTranscriptionModel`, `transcriptionLanguages`) flows into the driver Config bag on both topologies via `GetSessionTuningSettings`. The session runner observes the chained cancellation signal (`AbortSignal` dep), performs bounded transport reconnects on fatal drops (`MaxTransportReconnects`, default 1), and accumulates per-modality usage detail (`RealtimeUsage.Input/OutputTokenDetails`) that the checkpoint persists for multi-channel cost attribution. See `guides/REALTIME_CO_AGENTS_GUIDE.md` § "Session tuning, cost attribution & resilience".
 
 #### Consolidation Pipeline
 
@@ -403,6 +409,21 @@ const result = await runner.ExecuteAgent({
 
 See [`docs/AGENT_MEMORY_SCOPING.md`](./docs/AGENT_MEMORY_SCOPING.md) for the full model — built-in scopes, primary/secondary semantics, inheritance modes, and how scope propagates through sub-agent invocations.
 
+### For an Audience (Shared Conversations)
+
+When an agent answers in a conversation several people share, set `Audience` so the run shows only what the asker **and** every other participant may see. Set it from the host's own participant list, server-side; it is never read from `data`.
+
+```typescript
+const result = await new AgentRunner().RunAgent({
+    agent,
+    conversationMessages: messages,
+    contextUser: asker,
+    Audience: { Mode: 'Intersection', UserIDs: otherParticipantIDs }   // MJ: Users IDs
+});
+```
+
+The run fails before any prompt if the audience is malformed or names an ID no user has (the server's `UserCache` is refreshed once first). Under an audience that adds a reader besides the caller: pre-execution RAG checks every reader's scope permission and searches with `SearchParams.Audience`; only shared notes and examples are injected; data-source preloading and the previous turn's tool results are skipped; task graphs, client tools, the caller's app context, memory writes and realtime sessions are withheld or refused; no out-of-conversation request (`MJ: AI Agent Requests`) is raised, so the run is never resumed without the audience; and every action call carries `RunActionParams.Audience`, which the action engine refuses (`AUDIENCE_UNSUPPORTED`, locked out for the run under its own `'audience'` breaker reason) for any action that does not declare `SupportsAudience` — today only Search and Scoped Search do. Sub-agents inherit the audience. Limits (no persisted audience to resume with; per-reader scope expansion; no `Union` mode) and the full table are in [Searching for an audience](../../../guides/SEARCH_SCOPES_AND_RAG_GUIDE.md#searching-for-an-audience).
+
 ### With Message Lifecycle Management
 
 ```typescript
@@ -418,6 +439,28 @@ const result = await runner.ExecuteAgent({
     },
     onMessageLifecycle: (event) => {
         console.log(`${event.type}: ${event.reason} (saved ${event.tokensSaved} tokens)`);
+    }
+});
+```
+
+### With Post-Run Compaction, Scratchpad Pruning & Memory Extraction (`compactAfterRun`)
+
+Programmatic callers and multi-run workflows can opt into automatic post-run cleanup once an agent run settles via `ExecuteAgentParams.compactAfterRun`. When enabled (`true` or an `AgentPostRunCompactionConfig` object), `BaseAgent.finalizeAgentRun` executes a failure-isolated post-run compaction pass after pending step writes and the run record are saved:
+
+1. **Conversation Message Compaction** — When `params.conversationMessages.length >= messageCountThreshold` (default: `12`), older non-system messages (`[1 .. length - preserveRecentCount - 1]`) are compacted via `compactSingleMessage()` while preserving the initial user goal (`index 0`) and the most recent turns.
+2. **Scratchpad Pruning** — When the loop scratchpad contains more notes or completed tasks than `maxScratchpadNotes` (default: `20`), `ScratchpadManager.PruneNotes()` and `ScratchpadManager.EnforceTaskLimit()` prune the oldest low-priority note lines first (preserving `[HIGH]` / `[IMPORTANT]` / `[PINNED]` / `❗` / `⚠️` notes) and trim excess completed tasks.
+3. **Background Memory Extraction** — When `extractMemories !== false` and `agentRun.Success` is `true`, triggers background memory extraction (`triggerPostRunMemoryExtraction`) to harvest durable learnings from the completed run without blocking the caller.
+
+```typescript
+const result = await runner.ExecuteAgent({
+    agentId: 'my-agent-id',
+    conversationMessages: messages,
+    contextUser: currentUser,
+    compactAfterRun: {
+        enabled: true,
+        messageCountThreshold: 12,
+        extractMemories: true,
+        maxScratchpadNotes: 20
     }
 });
 ```
@@ -440,10 +483,10 @@ In-memory caching is integrated into `AIEngine.EmbedText` to bypass redundant lo
 `AgentDataPreloader.PreloadAgentData` resolves agent data sources concurrently with a bounded concurrency cap (default 10 in-flight at once) so a long list of sources can't saturate the DB connection pool.
 
 ### 3. Non-blocking Observability DB Logging
-Observability writes (`AIAgentRunStep` records) are completely non-blocking:
-* Step creation and finalization `.Save()` operations are queued immediately into `_pendingSaves` promises.
-* Sequenced queueing via `_stepSavePromises` chains saves on the *same* step ID to prevent database write races (e.g. executing a step `UPDATE` before its initial `INSERT` completes).
-* All pending logging writes are drained with `Promise.allSettled` inside `finalizeAgentRun()` and the queues are cleared, so a reused agent instance doesn't leak settled promises. Save failures (rejected promises OR `Save()===false`) are logged via `LogError` and a summary is folded into `agentRun.ErrorMessage` for visibility.
+Observability writes (`AIAgentRunStep` and `AIPromptRun` records) are non-blocking during step execution and settled at terminal boundaries:
+* **Per-entity and cross-step save chaining (`AgentRunStepSaveQueue`)**: Step creation (`createStepEntity`) and finalization (`finalizeStepEntity`) enqueue `INSERT` and `UPDATE` operations onto `_stepSaveQueue` without blocking the agent loop. Updates on a step are chained behind its initial `INSERT`, and child steps (`ParentID`) are chained behind their parent step's `INSERT`.
+* **In-flight `PayloadAtStartSourceStepID` FK ordering (`FK_AIAgentRunStep_PayloadAtStartSourceStep`)**: `findPayloadAtStartSource` matches the latest non-`Running` step with `PayloadAtEnd` even when that source step's initial `INSERT` is still in flight (`!sourceStep.IsSaved`), avoiding redundant multi-kilobyte `PayloadAtStart` clones on fast sequential steps. When the matched source step is not yet saved, `createStepEntity` chains the new step's `INSERT` after `[parentStepEntity, payloadAtStartSource]` and attaches a `beforeInsert` safety fallback that restores inline `PayloadAtStart` (and clears `PayloadAtStartSourceStepID = null`) if the source step's `INSERT` failed.
+* **Complete terminal settlement**: `_stepSaveQueue.Flush()` and `_promptRunner.FlushPendingSaves()` are awaited across all terminal paths — normal completion (`finalizeAgentRun`), failure (`createFailureResult`), cancellation (`createCancelledResult`), and post-turn conversation compaction (`recordCompactionRunStep`) — before the final `agentRun.Save()` executes, ensuring no orphaned or `Running` steps/prompt runs remain in Flight when `ExecuteAgent()` resolves. Save failures are logged via `LogError` and folded into `agentRun.ErrorMessage` for visibility.
 
 ### 4. Concurrent Sub-Agent Execution
 Loop agents can request multiple sub-agents to run in parallel by returning a `subAgents` array in their `nextStep` decision:
@@ -511,6 +554,36 @@ Long conversations no longer grow the agent's context without bound. Two coopera
 | Attempt budget | `ACTION_FAILURE_BUDGET` (5) consecutive failures, any arguments | Action disabled for the run |
 
 A success clears both counters. A blocked call returns a `CircuitBreakerActionResult` (carrying `Reason`) in ~0 ms without reaching the action engine, and the model receives a `[CRITICAL/ACTION_UNAVAILABLE | REPEATED_IDENTICAL_CALL | ATTEMPTS_EXHAUSTED]` directive as a user message (a `[WARNING/ACTION_FAILURE]` with an "attempt N of 5" counter otherwise). Argument identity is `normalizeActionParams` (three protected layers: outer → per-entry → recursive value). The pipeline registry and the ForEach / While operators pass `{ skipCircuitBreaker: true }` and bypass every rule, leaving the history untouched. Evidence and thresholds: [Performance and Cost Briefing §4](./docs/PROMPT_CACHE_PERFORMANCE_BRIEFING.md).
+
+## Root-Tree Cumulative Budget Guards (`AgentTreeBudget`)
+
+Per-agent entity guardrails (`MaxIterationsPerRun`, `MaxTokensPerRun`, `MaxCostPerRun`, `MaxTimePerRun`) bound each `AIAgentRun` in isolation, which cannot stop multiplicative fan-out when a parent agent delegates to sequential or parallel sub-agents (for example, a depth-3 tree where each agent stays under a 10-step limit can still execute hundreds of steps across the tree).
+
+`BaseAgent` enforces **root-tree cumulative budget guards** via a single shared `AgentTreeBudget` instance initialized at the root run and passed by object reference (`params.treeBudget`) to every child, related, parallel, and realtime-delegated sub-agent run:
+
+| Ceiling on `ExecuteAgentParams` / `AgentTreeBudget` | Shared Counter | Breach Message |
+|---|---|---|
+| `maxTreeSteps` | `totalSteps` (incremented on every `createStepEntity`) | `Agent tree step budget exceeded (${totalSteps}/${maxTreeSteps} total steps across tree)` |
+| `maxTreeTokens` | `totalTokens` (accumulated after every prompt, decision, and compaction run) | `Agent tree token budget exceeded (${totalTokens}/${maxTreeTokens} total tokens across tree)` |
+| `maxTreeCost` | `totalCost` (accumulated USD cost across all prompt runs in the tree) | `Agent tree cost budget exceeded ($${totalCost.toFixed(4)}/$${maxTreeCost.toFixed(4)} across tree)` |
+| `maxTreeDurationMs` | `Date.now() - startedAtMs` (wall-clock elapsed time since root run started) | `Agent tree duration budget exceeded (${elapsedMs}ms/${maxTreeDurationMs}ms across tree)` |
+
+When any ceiling is reached:
+1. `budget.breachedReason` is stamped on the shared `AgentTreeBudget` instance.
+2. `hasExceededAgentRunGuardrails()` and `executeNextStep()` immediately return a terminal `{ step: 'Failed', terminate: true }` decision with the breach reason.
+3. Any parent or parallel sibling sharing the `AgentTreeBudget` observes `breachedReason` as soon as its in-flight step settles and halts the tree cleanly.
+
+```typescript
+const result = await runner.RunAgent({
+    agent: orchestratorAgent,
+    conversationMessages: messages,
+    contextUser: currentUser,
+    maxTreeSteps: 25,
+    maxTreeTokens: 100_000,
+    maxTreeCost: 1.50,
+    maxTreeDurationMs: 120_000
+});
+```
 
 ## Documentation
 

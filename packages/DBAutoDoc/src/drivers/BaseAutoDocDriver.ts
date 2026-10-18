@@ -13,7 +13,8 @@ import {
   AutoDocSchemaFilter,
   AutoDocTableFilter,
   AutoDocColumnStatistics,
-  AutoDocExistingDescription
+  AutoDocExistingDescription,
+  AutoDocIndex
 } from '../types/driver.js';
 
 /**
@@ -69,6 +70,12 @@ export abstract class BaseAutoDocDriver {
     schemaName: string,
     tableName: string
   ): Promise<AutoDocColumn[]>;
+
+  /**
+   * Get every existing index (primary-key indexes included) on the tables of one schema,
+   * in a single catalog query.
+   */
+  public abstract GetIndexes(schemaName: string): Promise<AutoDocIndex[]>;
 
   /**
    * Get existing descriptions from database metadata

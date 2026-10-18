@@ -1,18 +1,40 @@
-import { BaseEntity, EntitySaveOptions, LogError, LogStatus, Metadata, RunView } from "@memberjunction/core";
+import { BaseEntity, EntitySaveOptions, IMetadataProvider, LogError, LogStatus, Metadata, RunView } from "@memberjunction/core";
 import { RegisterClass, MJGlobal } from "@memberjunction/global";
 import { MJVectorIndexEntity, MJVectorDatabaseEntity } from "@memberjunction/core-entities";
 import { VectorDBBase, CreateIndexParams, IndexModelMetricEnum } from "@memberjunction/ai-vectordb";
 import { GetAIAPIKey } from "@memberjunction/ai";
+import { AIEmbeddingRunner } from "@memberjunction/ai-prompts";
+import { AIEngineBase } from "@memberjunction/ai-engine-base";
 
 /**
  * Server-side VectorIndex entity that syncs with the vector database provider.
  * On create: calls vectorDB.CreateIndex() to provision the index in the provider (e.g., Pinecone).
  * On delete: calls vectorDB.DeleteIndex() to remove the index from the provider.
+ *
+ * Provisioning is DETACHED from the save that triggers it: the save returns once the metadata row is
+ * written, and the provider call runs afterwards (see {@link Save}). That call is bounded by
+ * {@link CREATE_INDEX_TIMEOUT_MS}: past it the hook stops waiting, logs, and skips the metadata
+ * write-back. The provider call itself is abandoned, not cancelled (there is no cancellation handle),
+ * so the bound limits how long this record's provisioning stays open, not the provider's work.
+ * Pinecone's createIndex returns as soon as the request is accepted (we never pass waitUntilReady),
+ * so the bound only ever trips on a hung connection, not on a slow index build.
  */
 @RegisterClass(BaseEntity, 'MJ: Vector Indexes')
 export class MJVectorIndexEntityServer extends MJVectorIndexEntity {
+    /** Upper bound on one provider CreateIndex call. */
+    public static readonly CREATE_INDEX_TIMEOUT_MS = 60_000;
+    /** Upper bound on the one embedding call that learns a model's width (see resolveDimensions). */
+    public static readonly DIMENSION_PROBE_TIMEOUT_MS = 30_000;
+    /** Width used only when the record has none and the probe cannot answer (OpenAI text-embedding-3-small). */
+    public static readonly DEFAULT_DIMENSIONS = 1536;
+    /** The one string embedded to learn a model's width; its content is irrelevant, only the vector's length is read. */
+    private static readonly DIMENSION_PROBE_TEXT = 'dimension probe';
+
     /**
      * After saving, if this is a new record, create the index in the provider.
+     * The provider call is deliberately NOT awaited: the client only needs the metadata row, and the
+     * request that triggered the save (an "Auto" index from the UI, or the Config page) must not wait
+     * on the provider. Failures are logged; the record keeps its metadata row either way.
      */
     public override async Save(options?: EntitySaveOptions): Promise<boolean> {
         const isNew = this.IsSaved === false;
@@ -82,7 +104,7 @@ export class MJVectorIndexEntityServer extends MJVectorIndexEntity {
 
         const params: CreateIndexParams = {
             id: sanitizedName,
-            dimension: this.resolveDimensions(),
+            dimension: await this.resolveDimensions(),
             metric: 'cosine' as IndexModelMetricEnum,
             additionalParams: {
                 serverless: {
@@ -94,7 +116,11 @@ export class MJVectorIndexEntityServer extends MJVectorIndexEntity {
 
         LogStatus(`Creating index "${sanitizedName}" in vector DB provider...`);
         try {
-            const result = await vectorDB.CreateIndex(params);
+            const result = await MJVectorIndexEntityServer.withTimeout(
+                vectorDB.CreateIndex(params),
+                MJVectorIndexEntityServer.CREATE_INDEX_TIMEOUT_MS,
+                `CreateIndex("${sanitizedName}")`
+            );
             if (result.success) {
                 LogStatus(`Index "${sanitizedName}" created successfully in provider`);
                 await this.saveProviderMetadata(result.data, params, sanitizedName);
@@ -116,8 +142,9 @@ export class MJVectorIndexEntityServer extends MJVectorIndexEntity {
             return;
         }
 
-        // Use ExternalID if available (the sanitized name stored in the provider), fall back to Name
-        const providerIndexName = this.ExternalID || this.sanitizeIndexName(this.Name);
+        // Same rule every read path uses to address the index on its provider (ExternalID, else Name).
+        // An index provisioned through Save() above always has ExternalID set to its sanitized name.
+        const providerIndexName = AIEngineBase.Instance.GetProviderIndexName(this);
         LogStatus(`Deleting index "${providerIndexName}" from vector DB provider...`);
         const result = await vectorDB.DeleteIndex({ id: providerIndexName });
         if (result.success) {
@@ -183,15 +210,88 @@ export class MJVectorIndexEntityServer extends MJVectorIndexEntity {
      * Resolve the embedding dimensions to create the provider index at.
      *
      * Prefers this index's own `Dimensions` column, which is where the operator states it and what the
-     * embedding call already honors. Falling straight through to 1536 ignored that column entirely, so
-     * an index for any other model was created at the wrong width — harmless with providers that don't
-     * enforce it, and fatal with ones that do: a colocated SQL Server index is a `VECTOR(n)` column, and
-     * inserting 384-dimension vectors into a `VECTOR(1536)` is rejected outright.
+     * embedding call already honors. When the record carries none (every index created from the UI:
+     * the Config page's Create Index and the "Vector Index: Auto" path both leave it null, and
+     * `MJ: AI Models` has no width column to copy from), the width is learned by embedding one short
+     * string with the index's own model and reading the vector's length. Every provider fixes the width
+     * at create time, so guessing it wrong gives an index the sync can never write to: a 384-dimension
+     * model's vectors are rejected by a `VECTOR(1536)` column or a 1536-wide Pinecone index outright.
      *
-     * 1536 (OpenAI text-embedding-3-small) remains the fallback for records that never set it.
+     * 1536 (OpenAI text-embedding-3-small) remains the fallback only when the probe cannot run or
+     * fails, and the failure is logged so the width can be set by hand.
      */
-    private resolveDimensions(): number {
-        return this.Dimensions ?? 1536;
+    private async resolveDimensions(): Promise<number> {
+        if (this.Dimensions) {
+            return this.Dimensions;
+        }
+        const probed = await this.probeModelDimensions();
+        if (probed === null) {
+            LogError(`Vector index "${this.Name}": could not learn the embedding width; creating the provider index at the ${MJVectorIndexEntityServer.DEFAULT_DIMENSIONS} fallback. Set Dimensions on the record if the model's width differs.`);
+            return MJVectorIndexEntityServer.DEFAULT_DIMENSIONS;
+        }
+        return probed;
+    }
+
+    /**
+     * Embed one short string with this index's embedding model and return the vector's length, or null
+     * when there is no model, no user context, or the call fails. `ModelID` is pinned so the answer
+     * comes from the model the index is for; the run row is skipped since this is not a real workload.
+     */
+    private async probeModelDimensions(): Promise<number | null> {
+        if (!this.EmbeddingModelID) {
+            LogError(`Vector index "${this.Name}" has no EmbeddingModelID; cannot probe its embedding width`);
+            return null;
+        }
+        if (!this.ContextCurrentUser) {
+            LogError(`Vector index "${this.Name}" has no context user; cannot probe its embedding width`);
+            return null;
+        }
+        try {
+            const result = await MJVectorIndexEntityServer.withTimeout(
+                new AIEmbeddingRunner().RunEmbedding({
+                    Texts: [MJVectorIndexEntityServer.DIMENSION_PROBE_TEXT],
+                    ModelID: this.EmbeddingModelID,
+                    ContextUser: this.ContextCurrentUser,
+                    // The entity's data provider is the same object as its metadata provider; this is
+                    // the cast BaseEntity itself uses wherever it needs the metadata view of it.
+                    Provider: this.ProviderToUse as unknown as IMetadataProvider,
+                    SkipRunRecord: true,
+                    Description: `Vector index "${this.Name}" dimension probe`,
+                }),
+                MJVectorIndexEntityServer.DIMENSION_PROBE_TIMEOUT_MS,
+                `Dimension probe for vector index "${this.Name}"`
+            );
+            const width = result.Success ? result.Vectors?.[0]?.length ?? 0 : 0;
+            if (width <= 0) {
+                LogError(`Dimension probe for vector index "${this.Name}" returned no vector: ${result.ErrorMessage ?? 'empty result'}`);
+                return null;
+            }
+            LogStatus(`Vector index "${this.Name}": embedding width ${width} learned from model ${result.ModelName ?? this.EmbeddingModelID}`);
+            return width;
+        } catch (error) {
+            LogError(`Dimension probe for vector index "${this.Name}" failed`, undefined, error);
+            return null;
+        }
+    }
+
+    /**
+     * Resolve `work` or reject after `timeoutMs`, whichever comes first. The timer is cleared when the
+     * work settles, so a fast provider leaves nothing behind. On timeout the provider may still finish
+     * on its side; the record simply does not get its metadata written back, and the log says so.
+     */
+    private static withTimeout<T>(work: Promise<T> | T, timeoutMs: number, label: string): Promise<T> {
+        return new Promise<T>((resolve, reject) => {
+            const timer = setTimeout(() => {
+                reject(new Error(
+                    `${label} timed out after ${timeoutMs}ms; the provider may still finish creating the index, ` +
+                    `but its metadata was not written back to the record`
+                ));
+            }, timeoutMs);
+            Promise.resolve(work).then(
+                (value) => { clearTimeout(timer); resolve(value); },
+                (error) => { clearTimeout(timer); reject(error); }
+            );
+        });
     }
 
     /**
@@ -209,8 +309,18 @@ export class MJVectorIndexEntityServer extends MJVectorIndexEntity {
             this.Dimensions = params.dimension;
             this.Metric = params.metric;
 
-            // Store full provider response + our spec as JSON config
-            const config: Record<string, unknown> = {};
+            // Store full provider response + our spec as JSON config while preserving existing keys (e.g. namespaceField)
+            let config: Record<string, unknown> = {};
+            if (this.ProviderConfig) {
+                try {
+                    const existing: unknown = JSON.parse(this.ProviderConfig);
+                    if (existing && typeof existing === 'object' && !Array.isArray(existing)) {
+                        config = { ...(existing as Record<string, unknown>) };
+                    }
+                } catch {
+                    // Ignore malformed existing JSON and start fresh
+                }
+            }
             if (params.additionalParams) {
                 config['spec'] = params.additionalParams;
             }
