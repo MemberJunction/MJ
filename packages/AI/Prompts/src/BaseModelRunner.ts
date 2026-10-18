@@ -98,6 +98,23 @@ export interface ModelVendorCandidate {
 }
 
 /**
+ * A single candidate entry returned by {@link BaseModelRunner.PreviewModelSelection},
+ * reporting the model, vendor, driver class, and whether credentials are available.
+ */
+export interface ModelSelectionPreviewItem {
+  /** ID of the candidate AI model */
+  ModelID: string;
+  /** Display name of the candidate AI model */
+  ModelName: string;
+  /** Display name of the inference provider vendor, when available */
+  VendorName?: string;
+  /** Driver class used to invoke the model-vendor pair */
+  DriverClass: string;
+  /** Whether platform or environment credentials are available for this candidate */
+  HasCredentials: boolean;
+}
+
+/**
  * Configuration for failover behavior when primary model fails.
  *
  * Exported because it is the return type of `AIPromptRunner.getFailoverConfiguration`, a
@@ -737,6 +754,34 @@ export abstract class BaseModelRunner {
     // PHASE 3: Build candidates with configuration-aware fallback hierarchy
     // (SelectionStrategy='Default' or 'ByPower')
     return this.buildCandidatesForGeneralSelection(prompt, configurationId, preferredVendorId, verbose);
+  }
+
+  /**
+   * Previews the ordered model-vendor candidate list for `prompt` (optionally scoped to
+   * `configurationId`) and checks whether credentials are available for each candidate.
+   * Performs no model call and records no prompt run.
+   *
+   * @param prompt - The AI prompt whose model selection should be previewed
+   * @param configurationId - Optional AI configuration ID for preset-scoped candidate ordering
+   * @returns Ordered array of candidate preview items with credential availability flags
+   */
+  public PreviewModelSelection(
+    prompt: MJAIPromptEntityExtended,
+    configurationId?: string
+  ): ModelSelectionPreviewItem[] {
+    const candidates = this.BuildModelVendorCandidates(prompt, undefined, configurationId);
+    return candidates.map(candidate => ({
+      ModelID: candidate.model.ID,
+      ModelName: candidate.model.Name,
+      ...(candidate.vendorName != null ? { VendorName: candidate.vendorName } : {}),
+      DriverClass: candidate.driverClass,
+      HasCredentials: this.HasCredentialsAvailable(
+        candidate.driverClass,
+        prompt.ID,
+        candidate.model.ID,
+        candidate.vendorId
+      ),
+    }));
   }
 
   /**

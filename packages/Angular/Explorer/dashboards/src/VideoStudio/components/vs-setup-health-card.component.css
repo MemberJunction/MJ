@@ -1,0 +1,146 @@
+:host {
+  display: block;
+  width: 100%;
+}
+
+.vs-health-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: var(--mj-radius-md);
+  border: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface-card);
+  color: var(--mj-text-primary);
+}
+
+.vs-health-card--healthy {
+  border-color: var(--mj-border-subtle);
+  background: var(--mj-bg-surface-sunken);
+}
+
+.vs-health-card--warning {
+  border-color: var(--mj-status-warning);
+}
+
+.vs-health-card--unhealthy {
+  border-color: var(--mj-status-error);
+}
+
+.vs-health-card__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.vs-health-card__summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.vs-health-card__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--mj-text-primary);
+  font-family: inherit;
+  font-size: var(--mj-text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.vs-health-card__summary-text {
+  font-size: var(--mj-text-sm);
+  font-weight: 600;
+  color: var(--mj-text-primary);
+}
+
+.vs-health-card__chevron {
+  font-size: var(--mj-text-xs);
+  color: var(--mj-text-muted);
+}
+
+.vs-health-card__recheck {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.vs-health-card__icon {
+  font-size: var(--mj-text-sm);
+  flex-shrink: 0;
+}
+
+.vs-health-card__icon--ok {
+  color: var(--mj-status-success);
+}
+
+.vs-health-card__icon--warning {
+  color: var(--mj-status-warning);
+}
+
+.vs-health-card__icon--error {
+  color: var(--mj-status-error);
+}
+
+.vs-health-card__icon--muted {
+  color: var(--mj-text-muted);
+}
+
+.vs-health-card__checks,
+.vs-health-card__expanded {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 6px;
+  border-top: 1px solid var(--mj-border-subtle);
+}
+
+.vs-health-card__row,
+.vs-health-card__detail-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: var(--mj-text-xs);
+}
+
+.vs-health-card__row-body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  flex: 1;
+}
+
+.vs-health-card__row-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.vs-health-card__row-title {
+  font-weight: 600;
+  color: var(--mj-text-primary);
+}
+
+.vs-health-card__row-message {
+  color: var(--mj-text-secondary);
+}
+
+.vs-health-card__row-action {
+  color: var(--mj-text-primary);
+  font-weight: 500;
+}
+
+.vs-health-card__details {
+  margin: 2px 0 0;
+  padding-left: 16px;
+  color: var(--mj-text-muted);
+}

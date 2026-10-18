@@ -15,6 +15,8 @@ import {
   MJVideoArchetypeEntity,
   ResourceData,
   VideoStudioEngine,
+  VideoStudioSetupHealthOperation,
+  VideoStudioSetupHealthOutput,
 } from '@memberjunction/core-entities';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { NavigationRequest } from '@memberjunction/ng-artifacts';
@@ -75,6 +77,9 @@ export class VideoStudioStudioResourceComponent
   public IsStarting = false;
   public StartError: string | null = null;
 
+  public SetupHealthResult: VideoStudioSetupHealthOutput | null = null;
+  public IsCheckingSetupHealth = false;
+
   public AllArchetypes: ArchetypeCardSnapshot[] = [];
   public AllBrandKits: BrandKitCardSnapshot[] = [];
   public FilteredBrandKits: BrandKitCardSnapshot[] = [];
@@ -113,9 +118,51 @@ export class VideoStudioStudioResourceComponent
     super.ngOnInit();
     this.registerAgentClientTools();
     try {
-      await this.LoadStudioData(false);
+      await Promise.all([this.LoadStudioData(false), this.CheckSetupHealth()]);
     } finally {
       this.NotifyLoadComplete();
+    }
+  }
+
+  public async CheckSetupHealth(): Promise<void> {
+    this.IsCheckingSetupHealth = true;
+    this.cdr.markForCheck();
+    try {
+      const res = await new VideoStudioSetupHealthOperation().Execute(
+        {},
+        { provider: this.ProviderToUse },
+      );
+      if (res.Success && res.Output) {
+        this.SetupHealthResult = res.Output;
+      } else {
+        this.SetupHealthResult = {
+          Healthy: false,
+          Checks: [
+            {
+              Key: 'Render',
+              Status: 'Error',
+              Title: 'Setup Health',
+              Message: res.ErrorMessage || 'Failed to check Video Studio setup health.',
+            },
+          ],
+        };
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      this.SetupHealthResult = {
+        Healthy: false,
+        Checks: [
+          {
+            Key: 'Render',
+            Status: 'Error',
+            Title: 'Setup Health',
+            Message: msg || 'Failed to check Video Studio setup health.',
+          },
+        ],
+      };
+    } finally {
+      this.IsCheckingSetupHealth = false;
+      this.cdr.markForCheck();
     }
   }
 

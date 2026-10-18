@@ -17,6 +17,13 @@
     <div class="vs-studio-workspace" data-testid="vs-studio-workspace">
       <!-- Left Pane: Start Form -->
       <section class="vs-studio-form-pane" data-testid="studio-start-form">
+        <vs-setup-health-card
+          data-testid="studio-setup-health-card"
+          [Result]="SetupHealthResult"
+          [Loading]="IsCheckingSetupHealth"
+          (Recheck)="CheckSetupHealth()"
+        ></vs-setup-health-card>
+
         @if (LoadError) {
           <mj-alert Variant="error" data-testid="studio-load-error">
             {{ LoadError }}

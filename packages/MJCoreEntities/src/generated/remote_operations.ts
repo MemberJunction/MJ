@@ -1035,6 +1035,42 @@ export interface TemplateRunOutput {
     executionTimeMs?: number;
 }
 
+/** Input for `VideoStudio.SetupHealth`. */
+export interface VideoStudioSetupHealthInput {
+    /** Optional timeout in milliseconds for the render worker health probe (default 10000, clamped to 1000..30000). */
+    RenderTimeoutMs?: number;
+}
+
+/** Subsystem checked by `VideoStudio.SetupHealth`. */
+export type VideoStudioSetupHealthCheckKey = 'Storage' | 'Render' | 'Models';
+
+/** Severity of one setup health check in `VideoStudio.SetupHealth`. */
+export type VideoStudioSetupHealthCheckStatus = 'OK' | 'Warning' | 'Error';
+
+/** One subsystem check returned by `VideoStudio.SetupHealth`. */
+export interface VideoStudioSetupHealthCheck {
+    /** Subsystem identifier (`Storage`, `Render`, or `Models`). */
+    Key: VideoStudioSetupHealthCheckKey;
+    /** Check severity (`OK`, `Warning`, or `Error`). */
+    Status: VideoStudioSetupHealthCheckStatus;
+    /** Short human-readable heading for the subsystem check. */
+    Title: string;
+    /** Summary of the check finding. */
+    Message: string;
+    /** Actionable remediation step when the check is not `OK`. */
+    Action?: string;
+    /** Optional supplementary diagnostic lines (such as tool versions, error strings, or per-preset details). */
+    Details?: string[];
+}
+
+/** Output of `VideoStudio.SetupHealth`. */
+export interface VideoStudioSetupHealthOutput {
+    /** True when no check reported `Status === 'Error'`. */
+    Healthy: boolean;
+    /** Ordered check results for Storage, Render, and Models. */
+    Checks: VideoStudioSetupHealthCheck[];
+}
+
 /**
  * Input for `WebSearch.Query`.
  *
@@ -1965,6 +2001,21 @@ export class TemplateRunOperation extends BaseRemotableOperation<TemplateRunInpu
     public readonly OperationKey = "Template.Run";
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "template:execute";
+    public readonly RequiresSystemUser = false;
+}
+
+// ============================================================
+// VideoStudio.SetupHealth — Video Studio Setup Health
+// ============================================================
+/**
+ * Video Studio Setup Health
+ * Checks Video Studio setup readiness across file storage, the render worker, and stage prompt model credentials. Implemented by VideoStudioSetupHealthServerOperation in @memberjunction/video-studio.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'VideoStudio.SetupHealth'. This generated base provides the typed contract only (client-safe).
+ */
+export class VideoStudioSetupHealthOperation extends BaseRemotableOperation<VideoStudioSetupHealthInput, VideoStudioSetupHealthOutput> {
+    public readonly OperationKey = "VideoStudio.SetupHealth";
+    public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiresSystemUser = false;
 }
 

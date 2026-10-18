@@ -25,6 +25,7 @@ import {
   MJStatBadgeComponent,
 } from '@memberjunction/ng-ui-components';
 import { VSCopilotPanelComponent } from './VideoStudio/components/vs-copilot-panel.component';
+import { VSSetupHealthCardComponent } from './VideoStudio/components/vs-setup-health-card.component';
 import { VideoStudioArchetypesResourceComponent } from './VideoStudio/resources/video-studio-archetypes-resource.component';
 import { VideoStudioBrandKitsResourceComponent } from './VideoStudio/resources/video-studio-brand-kits-resource.component';
 import { VideoStudioProductionsResourceComponent } from './VideoStudio/resources/video-studio-productions-resource.component';
@@ -53,6 +54,7 @@ import { VideoStudioStudioResourceComponent } from './VideoStudio/resources/vide
     ArtifactShareModalComponent,
     ArtifactCollectionPickerModalComponent,
     VSCopilotPanelComponent,
+    VSSetupHealthCardComponent,
     MJAlertComponent,
     MJButtonDirective,
     MJDialogComponent,
@@ -75,6 +77,7 @@ import { VideoStudioStudioResourceComponent } from './VideoStudio/resources/vide
     VideoStudioBrandKitsResourceComponent,
     VideoStudioArchetypesResourceComponent,
     VSCopilotPanelComponent,
+    VSSetupHealthCardComponent,
   ],
 })
 export class VideoStudioDashboardsModule {}
@@ -85,5 +88,7 @@ export {
   VideoStudioBrandKitsResourceComponent,
   VideoStudioArchetypesResourceComponent,
   VSCopilotPanelComponent,
+  VSSetupHealthCardComponent,
 };
+
 

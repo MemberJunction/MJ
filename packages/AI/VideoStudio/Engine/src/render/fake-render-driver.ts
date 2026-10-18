@@ -55,6 +55,11 @@ export interface FakeRenderDriverOptions {
     CheckIssues?: CheckIssue[];
     /** Optional scripted `RenderHealth` returned by `Health`. */
     Health?: RenderHealth;
+    /**
+     * Optional override for `IsNetworkIsolated` on the fake driver.
+     * Defaults to `true` because `FakeRenderDriver` runs deterministically in-process without network access.
+     */
+    IsNetworkIsolated?: boolean;
 }
 
 function scanBundleForRemoteUrls(bundle: RenderProjectBundle): CheckIssue[] {
@@ -109,12 +114,18 @@ function waitForAbortSignal(signal?: AbortSignal): Promise<never> {
 export class FakeRenderDriver extends VideoRenderDriverBase {
     private readonly scriptedIssues: CheckIssue[];
     private readonly scriptedHealth?: RenderHealth;
+    private readonly isNetworkIsolated: boolean;
     public ShutdownCallCount = 0;
 
     public constructor(options: FakeRenderDriverOptions = {}) {
         super();
         this.scriptedIssues = options.CheckIssues ? [...options.CheckIssues] : [];
         this.scriptedHealth = options.Health ? { ...options.Health, Errors: [...options.Health.Errors] } : undefined;
+        this.isNetworkIsolated = options.IsNetworkIsolated ?? true;
+    }
+
+    public override get IsNetworkIsolated(): boolean {
+        return this.isNetworkIsolated;
     }
 
     public override async Render(

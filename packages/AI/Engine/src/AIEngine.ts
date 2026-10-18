@@ -28,7 +28,8 @@ import { MJAIActionEntity, MJActionEntity,
          MJAIAgentClientToolEntity, MJAIAgentCategoryEntity, IsInjectableNoteStatus,
          MJAISkillEntity, MJAISkillActionEntity, MJAISkillSubAgentEntity, MJAIAgentSkillEntity, MJAISkillPermissionEntity,
          MJAIPersonaEntity, MJAIPersonaVendorEntity, MJAIModelPersonaEntity, MJAIAgentPersonaEntity } from "@memberjunction/core-entities";
-import { AIEngineBase, ResolvedModelPersona, ResolvedAgentPersona, EffectiveAgentPersona, EffectiveAgentPermissions } from "@memberjunction/ai-engine-base";
+import { AIEngineBase, ResolvedModelPersona, ResolvedAgentPersona, EffectiveAgentPersona, EffectiveAgentPermissions, AgentStorageAccountResolution, AgentStorageAccountSource } from "@memberjunction/ai-engine-base";
+export type { AgentStorageAccountResolution, AgentStorageAccountSource } from "@memberjunction/ai-engine-base";
 import { ReadStoredVector, SimpleVectorService, VectorInputEntry } from "@memberjunction/ai-vectors-memory";
 import { NoteEmbeddingMetadata, NoteMatchResult } from "./types/NoteMatchResult";
 import { ExampleEmbeddingMetadata, ExampleMatchResult } from "./types/ExampleMatchResult";
@@ -287,6 +288,13 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
     public get ClientToolDefinitions(): MJAIClientToolDefinitionEntity[] { return this.Base.ClientToolDefinitions; }
     public get AgentClientTools(): MJAIAgentClientToolEntity[] { return this.Base.AgentClientTools; }
     public GetClientToolsForAgent(agentId: string): MJAIClientToolDefinitionEntity[] { return this.Base.GetClientToolsForAgent(agentId); }
+    /** Agent storage-account routing with source tier — see {@link AIEngineBase.ResolveAgentStorageAccount}. */
+    public ResolveAgentStorageAccount(
+        agent: Parameters<AIEngineBase['ResolveAgentStorageAccount']>[0],
+        overrideStorageAccountId?: string | null
+    ): AgentStorageAccountResolution {
+        return this.Base.ResolveAgentStorageAccount(agent, overrideStorageAccountId);
+    }
     /** Agent storage-account routing — see {@link AIEngineBase.ResolveAgentStorageAccountID}. */
     public ResolveAgentStorageAccountID(
         agent: Parameters<AIEngineBase['ResolveAgentStorageAccountID']>[0],

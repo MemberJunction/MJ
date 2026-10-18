@@ -191,4 +191,17 @@ export * from './generation/generation-policy.js';
 export * from './generation/generation-screen.js';
 export * from './generation/generate-assets.js';
 
-
+export {
+    DEFAULT_SETUP_HEALTH_RENDER_TIMEOUT_MS,
+    LoadVideoStudioSetupHealthOperation,
+    MAX_SETUP_HEALTH_RENDER_TIMEOUT_MS,
+    MIN_SETUP_HEALTH_RENDER_TIMEOUT_MS,
+    SETUP_HEALTH_NO_STORAGE_MESSAGE,
+    SETUP_HEALTH_RENDER_NETWORK_WARNING_ACTION,
+    SETUP_HEALTH_RENDER_NETWORK_WARNING_MESSAGE,
+    SETUP_HEALTH_STORAGE_ACTION,
+    VIDEO_STUDIO_AGENT_NAME,
+    VIDEO_STUDIO_ORCHESTRATOR_PROMPT_NAME,
+    VideoStudioSetupHealthServerOperation,
+    type SetupHealthPromptPreviewRunner,
+} from './operations/setup-health.operation.js';

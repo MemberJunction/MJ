@@ -9,6 +9,7 @@ import {
   MJBrandKitEntity,
   MJVideoArchetypeEntity,
   VideoStudioEngine,
+  VideoStudioSetupHealthOperation,
 } from '@memberjunction/core-entities';
 import { NavigationService } from '@memberjunction/ng-shared';
 import { query, queryAll, renderComponentFixture } from '@memberjunction/ng-test-utils';
@@ -18,6 +19,7 @@ import {
   MJNumericInputComponent,
 } from '@memberjunction/ng-ui-components';
 import { VSCopilotPanelComponent } from '../components/vs-copilot-panel.component';
+import { VSSetupHealthCardComponent } from '../components/vs-setup-health-card.component';
 import { VideoStudioStudioResourceComponent } from './video-studio-studio-resource.component';
 
 const STUDIO_TEST_IMPORTS = [
@@ -25,6 +27,7 @@ const STUDIO_TEST_IMPORTS = [
   MJAlertComponent,
   MJDropdownComponent,
   MJNumericInputComponent,
+  VSSetupHealthCardComponent,
 ];
 
 function createNavigationServiceStub(): {
@@ -127,6 +130,20 @@ function setupStudioMocks() {
     ],
   });
 
+  const setupHealthSpy = vi
+    .spyOn(VideoStudioSetupHealthOperation.prototype, 'Execute')
+    .mockResolvedValue({
+      Success: true,
+      Output: {
+        Healthy: true,
+        Checks: [
+          { Key: 'Storage', Status: 'OK', Title: 'File Storage', Message: 'Ready' },
+          { Key: 'Render', Status: 'OK', Title: 'Render Sandbox', Message: 'Ready' },
+          { Key: 'Models', Status: 'OK', Title: 'AI Models', Message: 'Ready' },
+        ],
+      },
+    });
+
   vi.spyOn(AIEngineBase, 'GetProviderInstance').mockReturnValue(aiEngineStub);
   vi.spyOn(VideoStudioEngine, 'GetProviderInstance').mockReturnValue(vsEngineStub);
   vi.spyOn(BrandKitEngine, 'GetProviderInstance').mockReturnValue(bkEngineStub);
@@ -134,7 +151,7 @@ function setupStudioMocks() {
     RunView: runViewFn,
   } as unknown as RunView);
 
-  return { navStub, customProvider, runViewFn, aiEngineStub };
+  return { navStub, customProvider, runViewFn, aiEngineStub, setupHealthSpy };
 }
 
 describe('VideoStudioStudioResourceComponent DOM', () => {
@@ -460,4 +477,44 @@ describe('VideoStudioStudioResourceComponent DOM', () => {
     fixture.destroy();
     vi.restoreAllMocks();
   });
+
+  it('calls VideoStudioSetupHealthOperation once on load, re-runs on Recheck, and renders an Error row when the operation fails', async () => {
+    const { navStub, customProvider, setupHealthSpy } = setupStudioMocks();
+
+    const fixture = renderComponentFixture(VideoStudioStudioResourceComponent, {
+      inputs: { Provider: customProvider },
+      imports: STUDIO_TEST_IMPORTS,
+      providers: [{ provide: NavigationService, useValue: navStub }],
+    });
+
+    await flushAsync();
+    fixture.detectChanges();
+
+    expect(setupHealthSpy).toHaveBeenCalledTimes(1);
+    expect(setupHealthSpy).toHaveBeenCalledWith({}, { provider: customProvider });
+    expect(query(fixture, '[data-testid="vs-setup-health-ok-toggle"]')?.textContent).toContain(
+      'Setup OK',
+    );
+
+    setupHealthSpy.mockResolvedValueOnce({
+      Success: false,
+      ErrorMessage: 'Not authorized to execute VideoStudio.SetupHealth.',
+    });
+
+    const recheckBtn = query(fixture, '[data-testid="vs-setup-health-recheck"]');
+    expect(recheckBtn).toBeTruthy();
+    recheckBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+    await flushAsync();
+    fixture.detectChanges();
+
+    expect(setupHealthSpy).toHaveBeenCalledTimes(2);
+    expect(fixture.componentInstance.SetupHealthResult?.Healthy).toBe(false);
+    const errorRow = query(fixture, '[data-testid="vs-setup-health-row-Render"]');
+    expect(errorRow?.textContent).toContain('Not authorized to execute VideoStudio.SetupHealth.');
+
+    fixture.destroy();
+    vi.restoreAllMocks();
+  });
 });
+

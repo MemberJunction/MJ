@@ -659,3 +659,115 @@ describe('ParallelExecutionCoordinator — reuses base execution path (no drift)
     expect(onContent).toHaveBeenCalledWith('tok', false);              // OnContent bridged via onStreaming
   });
 });
+
+// ============================================================================
+// BaseModelRunner.PreviewModelSelection (VS-UX-3)
+// ============================================================================
+
+describe('BaseModelRunner.PreviewModelSelection (VS-UX-3)', () => {
+  const m1 = makeModel('m-1', 'Claude Opus 5.5', { PowerRank: 30, CostRank: 30 });
+  const m2 = makeModel('m-2', 'Gemini 3.8 Pro', { PowerRank: 20, CostRank: 15 });
+  const m3 = makeModel('m-3', 'GPT-5', { PowerRank: 10, CostRank: 20 });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetEngineState();
+    engineState.models = [m1, m2, m3];
+    engineState.vendors = [
+      makeVendor('v-anth', 'Anthropic'),
+      makeVendor('v-google', 'Google'),
+      makeVendor('v-openai', 'OpenAI'),
+    ];
+    engineState.modelVendors = [
+      makeModelVendor('mv-1', 'm-1', 'v-anth', 'AnthropicLLM', 'claude-opus-5-5', 100),
+      makeModelVendor('mv-2', 'm-2', 'v-google', 'GeminiLLM', 'gemini-3-8-pro', 90),
+      makeModelVendor('mv-3', 'm-3', 'v-openai', 'OpenAILLM', 'gpt-5', 80),
+    ];
+    engineState.promptModels = [
+      makePromptModel('pm-1', 'p-1', 'm-1', 10, { VendorID: 'v-anth', ConfigurationID: 'cfg-std' }),
+      makePromptModel('pm-2', 'p-1', 'm-2', 5, { VendorID: 'v-google', ConfigurationID: 'cfg-std' }),
+      makePromptModel('pm-3', 'p-1', 'm-3', 1, { VendorID: 'v-openai', ConfigurationID: null }),
+    ];
+  });
+
+  it('returns the exact candidate order from BuildModelVendorCandidates, flags HasCredentials per candidate, and makes no driver call', () => {
+    setEnvKeys({ AI_VENDOR_API_KEY__GEMINI_LLM: 'sk-google-key' });
+    const previewRunner = new AIPromptRunner();
+    const classFactorySpy = vi.spyOn(MJGlobal.Instance.ClassFactory, 'CreateInstance');
+    const execModelSpy = vi.spyOn(
+      previewRunner as unknown as { executeModel: (...args: unknown[]) => unknown },
+      'executeModel',
+    );
+    const buildCandidates = (
+      previewRunner as unknown as {
+        BuildModelVendorCandidates: (
+          prompt: MJAIPromptEntityExtended,
+          explicitModelId?: string,
+          configurationId?: string,
+        ) => Array<{ model: MJAIModelEntityExtended; vendor?: MJAIVendorEntity; driverClass: string }>;
+      }
+    ).BuildModelVendorCandidates.bind(previewRunner);
+
+    const prompt = makePrompt({ SelectionStrategy: 'Specific', FailoverStrategy: 'SameModelDifferentVendor' });
+    const rawCandidates = buildCandidates(prompt, undefined, 'cfg-std');
+    const preview = previewRunner.PreviewModelSelection(prompt, 'cfg-std');
+
+    expect(preview.map((item) => item.ModelID)).toEqual(rawCandidates.map((c) => c.model.ID));
+    expect(preview).toEqual([
+      {
+        ModelID: 'm-1',
+        ModelName: 'Claude Opus 5.5',
+        VendorName: 'Anthropic',
+        DriverClass: 'AnthropicLLM',
+        HasCredentials: false,
+      },
+      {
+        ModelID: 'm-2',
+        ModelName: 'Gemini 3.8 Pro',
+        VendorName: 'Google',
+        DriverClass: 'GeminiLLM',
+        HasCredentials: true,
+      },
+      {
+        ModelID: 'm-3',
+        ModelName: 'GPT-5',
+        VendorName: 'OpenAI',
+        DriverClass: 'OpenAILLM',
+        HasCredentials: false,
+      },
+    ]);
+    expect(classFactorySpy).not.toHaveBeenCalled();
+    expect(execModelSpy).not.toHaveBeenCalled();
+  });
+
+  it('reflects platform credential bindings on the model or vendor without instantiating any LLM', () => {
+    engineState.credentialBindings = [
+      {
+        ID: 'cb-1',
+        BindingType: 'Vendor',
+        AIVendorID: 'v-anth',
+        AIModelVendorID: null,
+        AIPromptModelID: null,
+        Status: 'Active',
+        CredentialID: 'cred-anth',
+        Priority: 1,
+      },
+    ];
+    const previewRunner = new AIPromptRunner();
+    const classFactorySpy = vi.spyOn(MJGlobal.Instance.ClassFactory, 'CreateInstance');
+    const prompt = makePrompt({ SelectionStrategy: 'Specific' });
+
+    const preview = previewRunner.PreviewModelSelection(prompt, 'cfg-std');
+
+    expect(preview[0]).toMatchObject({
+      ModelID: 'm-1',
+      ModelName: 'Claude Opus 5.5',
+      VendorName: 'Anthropic',
+      DriverClass: 'AnthropicLLM',
+      HasCredentials: true,
+    });
+    expect(preview[1].HasCredentials).toBe(false);
+    expect(classFactorySpy).not.toHaveBeenCalled();
+  });
+});
+

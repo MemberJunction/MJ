@@ -124,5 +124,15 @@
       "lastModified": "2026-10-02T21:42:50.419Z",
       "checksum": "d4d281674bd094e032d2289aea0db934379b268676572d5bcce0ba131f397f09"
     }
+  },
+  {
+    "fields": {
+      "Name": "Video Studio",
+      "Description": "Setup health and operational diagnostics for Video Studio.",
+      "ParentID": null
+    },
+    "primaryKey": {
+      "ID": "88DD44B0-004B-4F2E-807F-39DDE962CCAE"
+    }
   }
 ]
