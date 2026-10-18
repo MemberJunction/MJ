@@ -2,10 +2,10 @@
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
     "Name": "IT02 - RunQuery Cache Integrity",
-    "Description": "Ports runquery-cache-tests.ts Q1-Q10 (TTL + smart-validation query cache modes). The whole bundle mutates the DB by design: it creates/tears down a Query Category + two Queries via a driver-level try/finally inside the bundle, and creates/deletes MJ: User Settings rows the fixture queries count. Q10 verifies a TTL slot serves byte-identical row data on the hit (not just a matching row count).",
+    "Description": "RunQuery result cache (Q1-Q21): TTL and smart-validation modes, slot fingerprinting, permission parity, and query definition changes. The whole bundle mutates the DB by design: it creates/tears down a Query Category + two Queries via a driver-level try/finally inside the bundle, creates/deletes MJ: User Settings rows the fixture queries count, and Q13-Q19 create and edit their own throwaway queries. Q10 verifies a TTL slot serves byte-identical row data on the hit. Q13-Q19 verify that editing a query's SQL, a parameter's validation filters, a composed query, or the platform SQL variant makes the next cached run miss with the new SQL's rows; that a description edit does not; that requests by ID, name or both share one slot; and that an edited query's old slots are deleted once the edit settles. Q20-Q21 verify that smart validation answers stale when the client's slot came from another query definition, and that a client sending no definition hash keeps data-only validation.",
     "InputDefinition": {},
     "ExpectedOutcomes": {
-      "summary": "current/stale/no_validation statuses correct; MaxRows/Parameters fingerprint separately; TTL slot serves byte-identical row data on the hit; failed executions never cached; fixtures cleaned up."
+      "summary": "current/stale/no_validation statuses correct; MaxRows/Parameters fingerprint separately; TTL slot serves byte-identical row data on the hit; failed executions never cached; a result-affecting query edit makes the next run miss with the new rows and a descriptive edit does not; edited queries' slots are deleted; a definition mismatch is stale on client validation; fixtures cleaned up."
     },
     "Configuration": {
       "tier": "deterministic",

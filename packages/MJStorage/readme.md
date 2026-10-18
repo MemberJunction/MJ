@@ -251,6 +251,79 @@ sequenceDiagram
     Driver-->>App: initialized driver
 ```
 
+### Account Permissions (`StorageAccessEvaluator`)
+
+Neither `FileStorageEngine.GetDriver()` nor the utility functions check who is asking — they act on whatever account
+they are given. Anything that acts on an account on a user's behalf must ask `StorageAccessEvaluator` first. It is the
+one place `MJ: File Storage Account Permissions` (Everyone / Role / User rows with `CanRead` / `CanWrite`) are decided,
+and the one place the tracked-file rule (below) is decided:
+
+```typescript
+import { FileStorageEngine, StorageAccessEvaluator } from '@memberjunction/storage';
+
+const evaluator = StorageAccessEvaluator.Instance;
+
+// Throws StorageAccountAccessDeniedError ("You do not have access to this storage account or it does not exist.")
+await evaluator.AssertAccountAccess(accountId, contextUser, 'Write', provider);
+
+// Or filter a list: returns the NormalizeUUID'd IDs the user may read
+const readable = await evaluator.AccessibleAccountIDs(accountIds, contextUser, 'Read', provider);
+
+// Object keys in an account that back an MJ: Files row the user cannot read — pass the account's driver so keys are
+// compared the way that driver addresses them
+const driver = await FileStorageEngine.Instance.GetDriver(accountId, contextUser);
+const blocked = await evaluator.UnreadableTrackedObjectKeys(account.ProviderID, [objectKey], contextUser, provider, driver);
+// Or throw TrackedFileAccessDeniedError ("You do not have access to this file or it does not exist.")
+await evaluator.AssertTrackedObjectsReadable(account.ProviderID, [objectKey], contextUser, provider, driver);
+
+// From an MJ: Files row (loaded as the caller) to its bytes: account gate + tracked-file rule, then the driver
+const resolved = await FileStorageEngine.Instance.ResolveFileObject(fileRow, contextUser, 'Read', provider);
+const bytes = resolved ? await resolved.Driver.GetObject({ fullPath: resolved.ObjectKey }) : null;
+```
+
+**The account rule**
+
+- **Evaluated per call** — nothing is cached, so a grant or revocation applies to the next call.
+- **Read as the system user, decided for the caller** — the permission rows are read with the MJ system user
+  (`WellKnownUserSource`), so a caller who cannot read the permission table is not mistaken for an account with no rows.
+- **Never truncated** — every read sets `IgnoreMaxRows`, so the entity's row cap cannot drop an account's rows (which
+  would make it look like an account with none) or a tracked file's row.
+- **An account with no permission rows is open** to every authenticated user (the current product rule, kept in one
+  place in the evaluator; flipping it needs a data migration that writes explicit `Everyone` rows).
+- **`Read` vs `Write`** — listing, downloading, signing a download URL and searching need `CanRead`; uploading, signing an
+  upload URL, copying into, moving, deleting and creating directories need `CanWrite`. A copy between accounts needs
+  `Read` on the source and `Write` on the destination.
+- **Fails closed** — an unknown account, a malformed ID, a user without `UserRoles`, a missing system user or a failed
+  read all mean "no access". An unknown account is refused with the same message as a restricted one.
+
+**The tracked-file rule**
+
+- An object that backs an `MJ: Files` row — the row's `ProviderKey`, or `Name` when `ProviderKey` is empty, on the
+  account's storage provider — may be read, signed, listed or returned by search only when the caller can read that row
+  (entity permission and row-level security, asked as the caller). Untracked objects are governed by the account rule
+  alone. Rows are keyed by provider, not account, so a row in another account on the same provider counts too.
+- **Writes**: an object may be overwritten (upload, upload URL, copy/move destination), moved, copied out of or deleted
+  only when the caller can read every row that tracks it — the minimum; the account rule still requires `CanWrite`.
+  `UploadFile` applies this before `PutObject`.
+- **Matching** — the client's key and the row's key both go through the account driver's `NormalizeObjectKey` (default:
+  trim, collapse repeated `/`, strip leading/trailing `/`; S3 also strips its key prefix the way it addresses keys) and
+  are compared case-insensitively, so `/hr/secret.pdf`, `hr/secret.pdf/` and `HR/Secret.PDF` are the same tracked
+  object.
+- **Refused keys** — a key with a `.`/`..` segment, a backslash, a percent-encoded `/`, `\`, `.` or control character
+  (`%2F`, `%5C`, `%2E`, `%00`–`%1F`, `%7F`) or a raw control character is never compared: its meaning depends on the
+  provider, so it is treated as an object the caller may not read. A literal `%` otherwise (`50% off.pdf`) is fine.
+- **File-ID routes** (`DownloadUrl`, `GetFileContents`, `CreateMediaAccessToken`, `DeleteFile`, the artifact download
+  URL, the agent file handler, the realtime recording reader) go through `FileStorageEngine.ResolveFileObject`: the
+  row's provider resolves to its first account, which must allow the access, and the row's object gets the tracked-file
+  rule — so a row whose `ProviderKey`/`Name` aliases another row's object is refused. On the server, `ProviderID` and
+  `ProviderKey` cannot be changed on an existing row by a client save (`MJFileEntityServer`).
+
+**Pre-authenticated URLs** are scoped to one object: Azure Blob URLs carry a blob-scoped service SAS (`sr=b`, `r` to
+download, `cw` to upload), never an account SAS; every URL expires after 10 minutes.
+
+The MJServer storage GraphQL routes, the File Storage core actions (and `List Storage Accounts`, which lists only the
+accounts the caller may read), `StorageSearchProvider` and `SearchEngine`'s late permission filter all use it.
+
 ### Using Utility Functions
 
 The library provides high-level utility functions that work with MemberJunction's entity system:

@@ -102,6 +102,12 @@ export class RunQueryCacheStatusInput {
 
   @Field(() => Int, { description: 'The number of rows in cached results' })
   rowCount: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
+
+  @Field(() => String, {
+    nullable: true,
+    description: "The query definition hash the cached results were written under, as this server returned it. When it differs from the server's, the result is 'stale' with fresh rows. Empty string for a slot with no hash; omit to skip the definition check."
+  })
+  definitionHash?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name, matching its siblings
 }
 
 @InputType()
@@ -141,6 +147,9 @@ export class RunQueryWithCacheCheckResultOutput {
 
   @Field(() => String, { nullable: true, description: 'Error message if status is error' })
   errorMessage?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
+
+  @Field(() => String, { nullable: true, description: "The server's definition hash for the query; store it with the cached results and send it back in cacheStatus.definitionHash" })
+  definitionHash?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name, matching its siblings
 }
 
 @ObjectType()
@@ -560,6 +569,7 @@ export class RunQueryResolver extends ResolverBase {
         cacheStatus: item.cacheStatus ? {
           maxUpdatedAt: item.cacheStatus.maxUpdatedAt,
           rowCount: item.cacheStatus.rowCount,
+          definitionHash: item.cacheStatus.definitionHash ?? undefined,
         } : undefined,
       }));
 
@@ -574,6 +584,7 @@ export class RunQueryResolver extends ResolverBase {
         maxUpdatedAt: result.maxUpdatedAt,
         rowCount: result.rowCount,
         errorMessage: result.errorMessage,
+        definitionHash: result.definitionHash,
       }));
 
       return {

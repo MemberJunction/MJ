@@ -7,6 +7,9 @@
 
 import { BaseLLM } from '@memberjunction/ai';
 import { MJGlobal } from '@memberjunction/global';
+// The LLM drivers register with MJGlobal.ClassFactory as a side effect of this manifest; without it a
+// standalone CLI process has no provider classes to instantiate.
+import '@memberjunction/server-bootstrap-lite/mj-class-registrations';
 
 /**
  * Provider name to LLM driver class name mapping
