@@ -282,12 +282,16 @@ export class AdditionalSchemaInfoGenerator {
     // Source 1: Hard keys from introspection (skip if discoveredOnly)
     if (!discoveredOnly) {
       this.collectIntrospectedPKs(table, pks);
-      this.collectIntrospectedFKs(state, schema, table, fks);
+      this.collectIntrospectedFKs(schema, table, fks);
     }
 
     // Source 2: AI-discovered keys
     this.collectDiscoveredPKs(schema.name, table.name, discoveredPKs, pks);
     this.collectDiscoveredFKs(schema.name, table.name, discoveredFKs, fks);
+
+    // A composite FK's column pairs whose target is not unique on its own are dropped whichever
+    // source proposed them: introspection, a discovery pass, or the LLM confirming the constraint.
+    this.dropNonUniqueCompositePairs(state, schema, table, fks);
 
     // Source 3: Value-list fields from enum detection
     const fields = excludeValueLists
@@ -363,42 +367,19 @@ export class AdditionalSchemaInfoGenerator {
 
   /**
    * Collect foreign key columns from introspected table definition.
-   *
-   * MJ models a foreign key as one column, so a composite key is written as one entry per column
-   * pair. Only a pair whose target is unique on its own is written: the other columns of a
-   * composite key usually point at columns that repeat in the target table (a join on them alone
-   * multiplies rows), so they are left out rather than guessed. Single-column keys are unchanged.
    */
   private collectIntrospectedFKs(
-    state: DatabaseDocumentation,
     schema: SchemaDefinition,
     table: TableDefinition,
     fks: SoftFKEntry[]
   ): void {
     const existingKeys = new Set(fks.map(f => `${f.FieldName}->${f.RelatedTable}.${f.RelatedField}`));
 
-    // Column pairs of a composite constraint whose target is not unique on its own. They are
-    // skipped on both paths below: the analysis passes also mark a composite constraint's columns
-    // as foreign keys, so the column-level path would otherwise write the same pairs back.
-    const columnsPerConstraint = new Map<string, number>();
-    for (const dep of table.dependsOn) {
-      if (dep.constraintName) {
-        columnsPerConstraint.set(dep.constraintName, (columnsPerConstraint.get(dep.constraintName) ?? 0) + 1);
-      }
-    }
-    const nonUniqueCompositePairs = new Set(
-      table.dependsOn
-        .filter(dep => !!dep.constraintName && (columnsPerConstraint.get(dep.constraintName) ?? 0) > 1)
-        .filter(dep => !this.isUniqueOnItsOwn(state, dep.schema || schema.name, dep.table, dep.referencedColumn))
-        .map(dep => `${dep.column}->${dep.table}.${dep.referencedColumn}`)
-    );
-
     // From column-level foreignKeyReferences
     for (const col of table.columns) {
       if (col.isForeignKey && col.foreignKeyReferences) {
         const ref = col.foreignKeyReferences;
         const key = `${col.name}->${ref.table}.${ref.referencedColumn}`;
-        if (nonUniqueCompositePairs.has(key)) continue;
         if (!existingKeys.has(key)) {
           existingKeys.add(key);
           fks.push({
@@ -415,7 +396,6 @@ export class AdditionalSchemaInfoGenerator {
     // From table-level dependsOn relationships
     for (const dep of table.dependsOn) {
       const key = `${dep.column}->${dep.table}.${dep.referencedColumn}`;
-      if (nonUniqueCompositePairs.has(key)) continue;
       if (!existingKeys.has(key)) {
         existingKeys.add(key);
         fks.push({
@@ -426,6 +406,33 @@ export class AdditionalSchemaInfoGenerator {
         });
       }
     }
+  }
+
+  /**
+   * MJ models a foreign key as one column, so a composite key is written as one entry per column
+   * pair. Only a pair whose target is unique on its own is kept: the other columns of a composite
+   * key usually point at columns that repeat in the target table (a join on them alone multiplies
+   * rows), so they are left out rather than guessed. A column of the constraint that points
+   * somewhere else (a different, real target) is kept; single-column keys are unchanged.
+   */
+  private dropNonUniqueCompositePairs(state: DatabaseDocumentation, schema: SchemaDefinition, table: TableDefinition, fks: SoftFKEntry[]): void {
+    const columnsPerConstraint = new Map<string, number>();
+    for (const dep of table.dependsOn) {
+      if (dep.constraintName) {
+        columnsPerConstraint.set(dep.constraintName, (columnsPerConstraint.get(dep.constraintName) ?? 0) + 1);
+      }
+    }
+    const drop = new Set(
+      table.dependsOn
+        .filter(dep => !!dep.constraintName && (columnsPerConstraint.get(dep.constraintName) ?? 0) > 1)
+        .filter(dep => !this.isUniqueOnItsOwn(state, dep.schema || schema.name, dep.table, dep.referencedColumn))
+        .map(dep => `${dep.column}->${dep.table}.${dep.referencedColumn}`)
+    );
+    if (drop.size === 0) {
+      return;
+    }
+    const kept = fks.filter(f => !drop.has(`${f.FieldName}->${f.RelatedTable}.${f.RelatedField}`));
+    fks.splice(0, fks.length, ...kept);
   }
 
   /**

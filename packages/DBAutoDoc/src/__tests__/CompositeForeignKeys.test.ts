@@ -4,6 +4,7 @@ import { Introspector } from '../database/Database.js';
 import { BaseAutoDocDriver } from '../drivers/BaseAutoDocDriver.js';
 import { AutoDocIndex, AutoDocSchema } from '../types/driver.js';
 import { ColumnDefinition, DatabaseDocumentation, ForeignKeyReference, TableDefinition } from '../types/state.js';
+import { FKCandidate, RelationshipDiscoveryPhase } from '../types/discovery.js';
 
 /**
  * #4534: MJ models a foreign key as one column, so a composite FK was written to
@@ -29,12 +30,13 @@ function compositeFK(constraintName = 'fk_line_price'): ForeignKeyReference[] {
   ];
 }
 
-function emittedFKs(tables: TableDefinition[]): string[] {
+function emittedFKs(tables: TableDefinition[], discoveredFKs: FKCandidate[] = []): string[] {
+  const keyDetection = { discovered: { primaryKeys: [], foreignKeys: discoveredFKs } } as Partial<RelationshipDiscoveryPhase> as RelationshipDiscoveryPhase;
   const state: DatabaseDocumentation = {
     version: '1.0.0',
     summary: { createdAt: '', lastModified: '', totalIterations: 0, totalPromptsRun: 0, totalInputTokens: 0, totalOutputTokens: 0, totalTokens: 0, estimatedCost: 0, totalSchemas: 1, totalTables: tables.length, totalColumns: 0 },
     database: { name: 'T', server: 'x', analyzedAt: '' },
-    phases: { descriptionGeneration: [] },
+    phases: { descriptionGeneration: [], keyDetection },
     schemas: [{ name: 'app', tables, descriptionIterations: [] }],
   };
   const out = JSON.parse(new AdditionalSchemaInfoGenerator().Generate(state)) as Record<string, Array<{ TableName: string; ForeignKeys?: Array<{ FieldName: string; RelatedTable: string; RelatedField: string }> }>>;
@@ -82,6 +84,16 @@ describe('composite foreign keys in additionalSchemaInfo', () => {
     const toProduct: ColumnDefinition = { ...col('a_prd_key'), isForeignKey: true, foreignKeyReferences: { schema: 'app', table: 'product', column: 'a_prd_key', referencedColumn: 'prd_key' } };
     const line = table('line', [col('id', true), col('a_key'), toProduct, col('a_ptp_key')], compositeFK());
     expect(emittedFKs([line, price, product]).sort()).toEqual(['a_key->price.prc_key', 'a_prd_key->product.prd_key']);
+  });
+
+  it('drops the same pairs when a discovery or LLM pass confirmed them', () => {
+    // The live run that found this: the LLM confirmed every column pair of the declared composite
+    // FK, and the discovered-FK path wrote them back.
+    const price = table('price', [col('prc_key', true), col('prc_prd_key'), col('prc_prd_ptp_key')]);
+    const confirmed = (sourceColumn: string, targetColumn: string): FKCandidate =>
+      ({ schemaName: 'app', sourceTable: 'line', sourceColumn, targetSchema: 'app', targetTable: 'price', targetColumn, confidence: 95, status: 'confirmed' } as Partial<FKCandidate> as FKCandidate);
+    const discovered = [confirmed('a_key', 'prc_key'), confirmed('a_prd_key', 'prc_prd_key'), confirmed('a_ptp_key', 'prc_prd_ptp_key')];
+    expect(emittedFKs([table('line', lineColumns, compositeFK()), price], discovered)).toEqual(['a_key->price.prc_key']);
   });
 
   it('leaves single-column foreign keys alone', () => {
