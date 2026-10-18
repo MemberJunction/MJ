@@ -40,13 +40,13 @@ function createParams(agentName: string): ExecuteAgentParams {
 
 describe('BaseAgent streaming progress message formatting', () => {
     describe('Root agent (_depth === 0)', () => {
-        it('includes the root agent name on initial prompt', () => {
+        it('uses user-friendly "thinking" phrasing with the root agent name on initial turn', () => {
             const agent = new ProgressMessageTestAgent();
             agent.setHierarchyForTest(0, ['Sage']);
             const params = createParams('Sage');
 
             expect(agent.testFormatHierarchicalPromptMessage(params, null)).toBe(
-                "Running Sage's initial prompt..."
+                'Sage is thinking...'
             );
         });
 
@@ -66,7 +66,7 @@ describe('BaseAgent streaming progress message formatting', () => {
             );
         });
 
-        it('formats "Payload change applied" as a clean continuation status', () => {
+        it('translates internal "Payload change applied" retryReason into user-friendly thinking phrasing', () => {
             const agent = new ProgressMessageTestAgent();
             agent.setHierarchyForTest(0, ['Sage']);
             const params = createParams('Sage');
@@ -78,11 +78,27 @@ describe('BaseAgent streaming progress message formatting', () => {
             };
 
             expect(agent.testFormatHierarchicalPromptMessage(params, decision)).toBe(
-                'Continuing after payload update...'
+                'Sage is thinking through the next steps...'
             );
         });
 
-        it('uses retryInstructions when retryReason is omitted (e.g. ForEach / While loops)', () => {
+        it('translates internal "Context recovery" retryReason into user-friendly thinking phrasing', () => {
+            const agent = new ProgressMessageTestAgent();
+            agent.setHierarchyForTest(0, ['Sage']);
+            const params = createParams('Sage');
+
+            const decision: BaseAgentNextStep = {
+                step: 'Retry',
+                terminate: false,
+                retryReason: 'Context recovery successful - 1200 tokens freed',
+            };
+
+            expect(agent.testFormatHierarchicalPromptMessage(params, decision)).toBe(
+                'Sage is thinking...'
+            );
+        });
+
+        it('translates internal loop retryInstructions into user-friendly batch review phrasing', () => {
             const agent = new ProgressMessageTestAgent();
             agent.setHierarchyForTest(0, ['Sage']);
             const params = createParams('Sage');
@@ -94,11 +110,11 @@ describe('BaseAgent streaming progress message formatting', () => {
             };
 
             expect(agent.testFormatHierarchicalPromptMessage(params, decision)).toBe(
-                "Completed ForEach loop request using collection at 'items'"
+                'Sage is reviewing batch results...'
             );
         });
 
-        it('falls back to "Running <Agent> with updated context..." when neither retryReason nor retryInstructions is present', () => {
+        it('falls back to "<Agent> is thinking through the next steps..." when neither retryReason nor retryInstructions is present', () => {
             const agent = new ProgressMessageTestAgent();
             agent.setHierarchyForTest(0, ['Sage']);
             const params = createParams('Sage');
@@ -109,19 +125,19 @@ describe('BaseAgent streaming progress message formatting', () => {
             };
 
             expect(agent.testFormatHierarchicalPromptMessage(params, decision)).toBe(
-                'Running Sage with updated context...'
+                'Sage is thinking through the next steps...'
             );
         });
     });
 
     describe('Sub-agent (_depth > 0)', () => {
-        it('does not repeat the sub-agent name on initial prompt when prefixed by hierarchy breadcrumb', () => {
+        it('emits "<SubAgent>: Thinking..." without repeating the sub-agent name on initial turn', () => {
             const agent = new ProgressMessageTestAgent();
             agent.setHierarchyForTest(1, ['Sage', 'Query Strategist']);
             const params = createParams('Query Strategist');
 
             expect(agent.testFormatHierarchicalPromptMessage(params, null)).toBe(
-                'Query Strategist: Running initial prompt...'
+                'Query Strategist: Thinking...'
             );
         });
 
@@ -141,6 +157,22 @@ describe('BaseAgent streaming progress message formatting', () => {
             );
         });
 
+        it('translates internal "Payload change applied" into "<SubAgent>: Thinking through the next steps..."', () => {
+            const agent = new ProgressMessageTestAgent();
+            agent.setHierarchyForTest(1, ['Sage', 'Query Strategist']);
+            const params = createParams('Query Strategist');
+
+            const decision: BaseAgentNextStep = {
+                step: 'Retry',
+                terminate: false,
+                retryReason: 'Payload change applied',
+            };
+
+            expect(agent.testFormatHierarchicalPromptMessage(params, decision)).toBe(
+                'Query Strategist: Thinking through the next steps...'
+            );
+        });
+
         it('formats sub-agent review retry cleanly on nested sub-agent hierarchies', () => {
             const agent = new ProgressMessageTestAgent();
             agent.setHierarchyForTest(2, ['Sage', 'Query Builder', 'Query Strategist']);
@@ -157,7 +189,7 @@ describe('BaseAgent streaming progress message formatting', () => {
             );
         });
 
-        it('falls back to "Continuing with updated context..." without repeating the sub-agent name', () => {
+        it('falls back to "Thinking through the next steps..." without repeating the sub-agent name', () => {
             const agent = new ProgressMessageTestAgent();
             agent.setHierarchyForTest(1, ['Sage', 'Query Strategist']);
             const params = createParams('Query Strategist');
@@ -168,7 +200,7 @@ describe('BaseAgent streaming progress message formatting', () => {
             };
 
             expect(agent.testFormatHierarchicalPromptMessage(params, decision)).toBe(
-                'Query Strategist: Continuing with updated context...'
+                'Query Strategist: Thinking through the next steps...'
             );
         });
     });
