@@ -1029,6 +1029,14 @@ export interface InputArtifact {
     name: string;
     typeName: string;
     content: string | Buffer;
+    /** Optional MJ: Artifacts record ID (UUID) when backed by a persisted artifact. */
+    artifactId?: string;
+    /** Optional MJ: Artifact Versions record ID (UUID) when backed by a persisted artifact version. */
+    versionId?: string;
+    /** Optional 1-based version number on the parent artifact (e.g., 1, 2, 3). */
+    versionNumber?: number;
+    /** Optional human-readable description of the artifact or version. */
+    description?: string;
     /** MIME type of the artifact content (e.g., 'application/pdf').
      *  Populated for file-backed artifacts from ArtifactVersion.MimeType. */
     mimeType?: string;
@@ -1090,6 +1098,35 @@ export interface AgentRunAudience {
  * `ExecuteAgentParams.stopContinuationMode` only to choose `'summary'`.
  */
 export type StopContinuationMode = 'full_stack' | 'summary';
+
+/**
+ * Configuration for background post-run conversation compaction, memory extraction,
+ * and scratchpad pruning after an agent run completes (`finalizeAgentRun`), so the
+ * next user turn starts with a pre-compacted message window and zero compaction latency.
+ *
+ * When enabled via {@link ExecuteAgentParams.compactAfterRun}, `BaseAgent.finalizeAgentRun`
+ * runs post-run maintenance after flushing step saves and persisting the run record:
+ * 1. **Message Window Pre-Compaction**: Compacts older conversation messages when the
+ *    conversation length reaches {@link messageCountThreshold} (default: `20`), preserving
+ *    the initial goal message (`index 0`) and the most recent messages.
+ * 2. **Scratchpad Pruning**: When {@link maxScratchpadNotes} is specified, prunes excess
+ *    low-priority scratchpad note lines and completed tasks down to the configured limit.
+ * 3. **Memory Extraction Trigger**: When {@link extractMemories} is enabled (default: `true`)
+ *    and the run succeeded, triggers asynchronous memory extraction via `MemoryManagerAgent`.
+ *
+ * All post-run maintenance runs inside defensive error boundaries so failures are logged
+ * diagnostically without ever failing a completed agent run.
+ */
+export interface AgentPostRunCompactionConfig {
+    /** Whether post-run compaction is enabled */
+    enabled: boolean;
+    /** Minimum conversation message count before post-run compaction triggers (default: 20) */
+    messageCountThreshold?: number;
+    /** Whether to trigger async note/example extraction via MemoryManager (default: true) */
+    extractMemories?: boolean;
+    /** Maximum number of scratchpad notes to retain after pruning expired/excess notes (optional) */
+    maxScratchpadNotes?: number;
+}
 
 /**
  * Parameters required to execute an AI Agent.
@@ -1937,7 +1974,162 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      */
     maxExecutionTimeMs?: number;
 
+    /**
+     * Shared cumulative budget and live usage counters across an entire root-to-leaf
+     * agent execution tree (including sequential child/related sub-agents and parallel
+     * sub-agent fan-outs).
+     *
+     * When omitted on a root agent run, `BaseAgent.Execute()` automatically initializes
+     * a root `AgentTreeBudget` instance (seeding any limits from `maxTreeSteps`,
+     * `maxTreeTokens`, `maxTreeCost`, and `maxTreeDurationMs`) and propagates the
+     * shared object reference to every sub-agent invocation via `ExecuteAgentParams.treeBudget`.
+     *
+     * Because the budget object is passed by reference in-process, all agents in the
+     * hierarchy increment and evaluate the exact same live counters (`totalSteps`,
+     * `totalTokens`, `totalCost`, `startedAtMs`, `breachedReason`), preventing deep or
+     * wide sub-agent trees from multiplying per-agent guardrails without bound.
+     *
+     * @example
+     * ```typescript
+     * const treeBudget: AgentTreeBudget = {
+     *   maxTreeSteps: 25,
+     *   maxTreeTokens: 100_000,
+     *   maxTreeCost: 2.50,
+     *   maxTreeDurationMs: 120_000,
+     *   totalSteps: 0,
+     *   totalTokens: 0,
+     *   totalCost: 0,
+     *   startedAtMs: Date.now()
+     * };
+     * const result = await runner.RunAgent({
+     *   agent: rootAgent,
+     *   conversationMessages: messages,
+     *   contextUser,
+     *   treeBudget
+     * });
+     * ```
+     */
+    treeBudget?: AgentTreeBudget;
+
+    /**
+     * Convenience top-level limit for the maximum total steps allowed across the entire
+     * root-to-leaf agent execution tree (root agent + all sequential and parallel sub-agents).
+     *
+     * Unlike per-agent `MaxIterationsPerRun` (which applies independently to each individual
+     * agent run), `maxTreeSteps` caps the cumulative number of steps created across the
+     * whole hierarchy. When `treeBudget` is not pre-initialized by the caller, `BaseAgent`
+     * copies this value into `treeBudget.maxTreeSteps`.
+     */
+    maxTreeSteps?: number;
+
+    /**
+     * Convenience top-level limit for the maximum cumulative tokens (prompt + completion)
+     * allowed across the entire root-to-leaf agent execution tree.
+     *
+     * Unlike per-agent `MaxTokensPerRun`, `maxTreeTokens` caps the combined token consumption
+     * across the root agent and all descendant sub-agents. When `treeBudget` is not
+     * pre-initialized by the caller, `BaseAgent` copies this value into `treeBudget.maxTreeTokens`.
+     */
+    maxTreeTokens?: number;
+
+    /**
+     * Convenience top-level limit for the maximum cumulative LLM cost (in USD) allowed
+     * across the entire root-to-leaf agent execution tree.
+     *
+     * Unlike per-agent `MaxCostPerRun`, `maxTreeCost` caps the combined cost accumulated
+     * across the root agent and all descendant sub-agents. When `treeBudget` is not
+     * pre-initialized by the caller, `BaseAgent` copies this value into `treeBudget.maxTreeCost`.
+     */
+    maxTreeCost?: number;
+
+    /**
+     * Convenience top-level limit for the maximum wall-clock duration (in milliseconds)
+     * allowed across the entire root-to-leaf agent execution tree, measured from the
+     * root run's `startedAtMs` timestamp.
+     *
+     * When `treeBudget` is not pre-initialized by the caller, `BaseAgent` copies this
+     * value into `treeBudget.maxTreeDurationMs`.
+     */
+    maxTreeDurationMs?: number;
+
+    /**
+     * Optional post-run conversation compaction, memory extraction, and scratchpad pruning
+     * configuration.
+     *
+     * When set to `true` or an {@link AgentPostRunCompactionConfig} with `enabled: true`,
+     * `BaseAgent.finalizeAgentRun` executes post-run maintenance after flushing step saves
+     * and saving the completed `AIAgentRun` record:
+     * - Compacts older messages in `conversationMessages` when the message count reaches
+     *   `messageCountThreshold` (default: `20`), preserving the initial goal message
+     *   (`index 0`) and the most recent messages.
+     * - Prunes excess scratchpad notes and completed tasks down to `maxScratchpadNotes`
+     *   when specified.
+     * - Triggers asynchronous memory extraction via `MemoryManagerAgent` when
+     *   `extractMemories` is enabled (default: `true`) and the run succeeded.
+     *
+     * Moving compaction to the end of `finalizeAgentRun` shifts maintenance off the
+     * critical user-waiting path so the next user turn starts with a pre-compacted
+     * message window and zero pre-turn compaction latency. Errors during post-run
+     * maintenance are caught and logged diagnostically without ever failing the run.
+     *
+     * @example
+     * ```typescript
+     * // Enable with defaults (messageCountThreshold: 20, extractMemories: true)
+     * const result = await agent.Execute({
+     *   agent: myAgent,
+     *   conversationMessages: messages,
+     *   compactAfterRun: true
+     * });
+     *
+     * // Fine-grained post-run compaction and scratchpad pruning
+     * const result = await agent.Execute({
+     *   agent: myAgent,
+     *   conversationMessages: messages,
+     *   compactAfterRun: {
+     *     enabled: true,
+     *     messageCountThreshold: 12,
+     *     extractMemories: true,
+     *     maxScratchpadNotes: 10
+     *   }
+     * });
+     * ```
+     */
+    compactAfterRun?: boolean | AgentPostRunCompactionConfig;
+
 }
+
+/**
+ * Shared cumulative budget and live usage counters across an entire root-to-leaf
+ * agent execution tree (including sequential and parallel sub-agents).
+ *
+ * A single `AgentTreeBudget` instance is created at the root of an agent execution
+ * (or supplied by the caller on `ExecuteAgentParams.treeBudget`) and passed by
+ * reference into every child, related, and parallel sub-agent invocation. Every
+ * agent in the hierarchy increments the shared counters (`totalSteps`, `totalTokens`,
+ * `totalCost`) and checks the shared ceilings (`maxTreeSteps`, `maxTreeTokens`,
+ * `maxTreeCost`, `maxTreeDurationMs`) before and after executing steps.
+ */
+export interface AgentTreeBudget {
+    /** Maximum total steps allowed across the entire root-to-leaf agent tree */
+    maxTreeSteps?: number;
+    /** Maximum total tokens (prompt + completion) allowed across the entire agent tree */
+    maxTreeTokens?: number;
+    /** Maximum cumulative LLM cost (in USD) allowed across the entire agent tree */
+    maxTreeCost?: number;
+    /** Maximum wall-clock duration (in milliseconds) allowed for the entire agent tree */
+    maxTreeDurationMs?: number;
+    /** Live cumulative step counter shared by reference across the agent tree (initialized to 0) */
+    totalSteps: number;
+    /** Live cumulative token counter shared by reference across the agent tree (initialized to 0) */
+    totalTokens: number;
+    /** Live cumulative cost accumulator shared by reference across the agent tree (initialized to 0) */
+    totalCost: number;
+    /** Epoch timestamp (Date.now()) when the root agent run started */
+    startedAtMs: number;
+    /** Set to the breach reason once any tree limit is exceeded */
+    breachedReason?: string;
+}
+
 
 /**
  * Context data provided to agent prompts during execution.

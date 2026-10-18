@@ -493,8 +493,9 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   @Input() public ReadOnly = false;
 
   /**
-   * Whether the Stop control is offered on an in-progress agent reply. A host can turn stopping
-   * off for a surface without making the conversation read-only. Default true.
+   * Whether the Stop control is offered on an in-progress agent reply, and the Continue control on
+   * a stopped one. A host can turn stopping off for a surface without making the conversation
+   * read-only. Default true.
    */
   @Input() public AllowStopRun = true;
 
@@ -1946,10 +1947,11 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
   /**
    * Whether the Continue control is offered: the last message in the conversation is a reply the
-   * user stopped, and the viewer may write. Any message resumes the run; this one says so.
+   * user stopped, the viewer may write, and the host allows stopping ({@link AllowStopRun}). Any
+   * message resumes the run; this one says so.
    */
   public get CanContinueStoppedRun(): boolean {
-    return this.WasStoppedByUser && this.IsLastMessageInConversation && !this.ReadOnly;
+    return this.WasStoppedByUser && this.IsLastMessageInConversation && !this.ReadOnly && this.AllowStopRun !== false;
   }
 
   /** The Continue control: sends {@link ContinueMessage} the way a suggested response is sent. */

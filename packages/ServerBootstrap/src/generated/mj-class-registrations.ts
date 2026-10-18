@@ -292,6 +292,7 @@ import {
     MJAIAgentStepEntity,
     MJAIAgentStepPathEntity,
     MJAIAgentTypeEntity,
+    MJAIAgentUserPolicyEntity,
     MJAIArchitectureEntity,
     MJAIBridgeAgentIdentityEntity,
     MJAIBridgeProviderChannelEntity,
@@ -1488,7 +1489,7 @@ import {
     WebSearchQueryServerOperation,
 } from '@memberjunction/web-search-engine';
 
-// @memberjunction/core-actions (156 classes)
+// @memberjunction/core-actions (164 classes)
 import {
     APIRateLimiterAction,
     ActionSmithAgent,
@@ -1506,11 +1507,13 @@ import {
     CalculateExpressionAction,
     CensusDataLookupAction,
     CheckUserPermissionAction,
+    ChiefOfStaffInterAgentRequestAction,
     CloneRecordAction,
     CloneRecordsAction,
     ColorConverterAction,
     ComposeListsAction,
     ConditionalAction,
+    ConfigureAgentUserPolicyAction,
     CopyObjectAction,
     CreateDirectoryAction,
     CreateDocumentAction,
@@ -1564,6 +1567,7 @@ import {
     GetFormContributionsForEntityAction,
     GetListRecordsAction,
     GetMetadataAction,
+    GetMyCalendarAndAvailabilityAction,
     GetObjectAction,
     GetRecordAction,
     GetRecordListMembershipAction,
@@ -1586,6 +1590,8 @@ import {
     LoadAgentSpecAction,
     LoopAction,
     MCPToolAction,
+    ManageMyCalendarEventAction,
+    ManageMyEmailInboxAction,
     MaterializeListFromViewAction,
     ModifyDocumentSectionAction,
     ModifyFormContributionAction,
@@ -1599,6 +1605,7 @@ import {
     PasswordStrengthAction,
     PerplexitySearchAction,
     PostalCodeLookupAction,
+    PrepareChiefOfStaffOutboundCallAction,
     PreviewDocumentAction,
     QRCodeAction,
     ReadRSSFeedAction,
@@ -1614,6 +1621,7 @@ import {
     RunDecisionAction,
     RunRecordProcessAction,
     RunStoredQueryAction,
+    ScheduleNextAgentWakeAction,
     ScheduledGeocodingAction,
     ScopedSearchAction,
     SearchAction,
@@ -1641,6 +1649,7 @@ import {
     ValidateAddressAction,
     ValidateEmailUniqueAction,
     VectorizeEntityAction,
+    VerifyMyCommunicationCapabilitiesAction,
     VoidSignatureRequestAction,
     WebPageContentAction,
     WebSearchAction,
@@ -1816,6 +1825,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJAIAgentStepEntity,
     MJAIAgentStepPathEntity,
     MJAIAgentTypeEntity,
+    MJAIAgentUserPolicyEntity,
     MJAIArchitectureEntity,
     MJAIBridgeAgentIdentityEntity,
     MJAIBridgeProviderChannelEntity,
@@ -1896,11 +1906,11 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJClusterAnalysisClusterEntity,
     MJClusterAnalysisEntity,
     MJCollectionArtifactEntity,
-    MJCollectionEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJCollectionEntity,
     MJCollectionPermissionEntity,
     MJCollectionPermissionEntityExtended,
     MJCommunicationBaseMessageTypeEntity,
@@ -2509,6 +2519,7 @@ const CLASS_REGISTRATIONS_3: any[] = [
     EntitySearchProvider,
     FullTextSearchProvider,
     NoopReRanker,
+    OpenAIReRanker,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -2713,6 +2724,9 @@ const CLASS_REGISTRATIONS_4: any[] = [
     APIRateLimiterAction,
     ActionSmithAgent,
     ActivateFormContributionVersionAction,
+    ActivateInteractiveFormVersionAction,
+    AddDocumentContentAction,
+    AddRecordsToListAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -2730,11 +2744,13 @@ const CLASS_REGISTRATIONS_5: any[] = [
     CalculateExpressionAction,
     CensusDataLookupAction,
     CheckUserPermissionAction,
+    ChiefOfStaffInterAgentRequestAction,
     CloneRecordAction,
     CloneRecordsAction,
     ColorConverterAction,
     ComposeListsAction,
     ConditionalAction,
+    ConfigureAgentUserPolicyAction,
     CopyObjectAction,
     CreateDirectoryAction,
     CreateDocumentAction,
@@ -2788,6 +2804,7 @@ const CLASS_REGISTRATIONS_5: any[] = [
     GetFormContributionsForEntityAction,
     GetListRecordsAction,
     GetMetadataAction,
+    GetMyCalendarAndAvailabilityAction,
     GetObjectAction,
     GetRecordAction,
     GetRecordListMembershipAction,
@@ -2810,6 +2827,8 @@ const CLASS_REGISTRATIONS_5: any[] = [
     LoadAgentSpecAction,
     LoopAction,
     MCPToolAction,
+    ManageMyCalendarEventAction,
+    ManageMyEmailInboxAction,
     MaterializeListFromViewAction,
     ModifyDocumentSectionAction,
     ModifyFormContributionAction,
@@ -2823,6 +2842,7 @@ const CLASS_REGISTRATIONS_5: any[] = [
     PasswordStrengthAction,
     PerplexitySearchAction,
     PostalCodeLookupAction,
+    PrepareChiefOfStaffOutboundCallAction,
     PreviewDocumentAction,
     QRCodeAction,
     ReadRSSFeedAction,
@@ -2838,6 +2858,7 @@ const CLASS_REGISTRATIONS_5: any[] = [
     RunDecisionAction,
     RunRecordProcessAction,
     RunStoredQueryAction,
+    ScheduleNextAgentWakeAction,
     ScheduledGeocodingAction,
     ScopedSearchAction,
     SearchAction,
@@ -2865,6 +2886,7 @@ const CLASS_REGISTRATIONS_5: any[] = [
     ValidateAddressAction,
     ValidateEmailUniqueAction,
     VectorizeEntityAction,
+    VerifyMyCommunicationCapabilitiesAction,
     VoidSignatureRequestAction,
     WebPageContentAction,
     WebSearchAction,

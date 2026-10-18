@@ -84,6 +84,7 @@ import {
     MJAIAgentStepEntity,
     MJAIAgentStepPathEntity,
     MJAIAgentTypeEntity,
+    MJAIAgentUserPolicyEntity,
     MJAIArchitectureEntity,
     MJAIBridgeAgentIdentityEntity,
     MJAIBridgeProviderChannelEntity,
@@ -914,6 +915,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJAIAgentStepEntity,
     MJAIAgentStepPathEntity,
     MJAIAgentTypeEntity,
+    MJAIAgentUserPolicyEntity,
     MJAIArchitectureEntity,
     MJAIBridgeAgentIdentityEntity,
     MJAIBridgeProviderChannelEntity,
@@ -1054,11 +1056,11 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJDashboardCategoryLinkEntity,
     MJDashboardCategoryPermissionEntity,
     MJDashboardEntity,
-    MJDashboardEntityExtended,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJDashboardEntityExtended,
     MJDashboardPartTypeEntity,
     MJDashboardPermissionEntity,
     MJDashboardPermissionEntityExtended,
@@ -1463,6 +1465,7 @@ const CLASS_REGISTRATIONS_2: any[] = [
     RubricEvaluationComparePanel,
     RubricEvaluationFormPolicy,
     RubricEvaluationResultPanel,
+    RubricFormPolicy,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
