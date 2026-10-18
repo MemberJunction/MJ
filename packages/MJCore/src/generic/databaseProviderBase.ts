@@ -1967,13 +1967,13 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                         (transactionResult: Record<string, unknown>, success: boolean) => {
                             entityResult.EndedAt = new Date();
                             if (success && transactionResult) {
-                                this.OnAfterDeleteExecute(entity, user, options);
-                                for (const key of entity.PrimaryKeys) {
-                                    if (key.Value !== transactionResult[key.Name]) {
-                                        entityResult.Success = false;
-                                        entityResult.Message = 'Transaction failed to commit';
-                                    }
+                                // Same key check as the direct path, through the provider's own override
+                                // (PostgreSQL accepts its legacy `_result_id` shape there).
+                                if (!this.ValidateDeleteResult(entity, [transactionResult], entityResult)) {
+                                    entityResult.Success = false;
+                                    return;
                                 }
+                                this.OnAfterDeleteExecute(entity, user, options);
                                 entityResult.NewValues = this.MapTransactionResultToNewValues(transactionResult);
                                 entityResult.Success = true;
                             } else {
