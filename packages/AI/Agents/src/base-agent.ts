@@ -14469,10 +14469,11 @@ The context is now within limits. Please retry your request with the recovered c
             const initialNextStep = await this.determineNextStep<P>(params, config.agentType, promptResult, payload);
             
             // Apply payload changes if provided
+            const isUnmodifiedInheritedPayload = payload === params.payload;
             let finalPayload = (initialNextStep.artifactDirective?.behavior === 'create-new'
                 && !initialNextStep.payloadChangeRequest
                 && initialNextStep.step === 'Sub-Agent'
-                && this._promptTurnCount <= 1)
+                && (this._promptTurnCount <= 1 || isUnmodifiedInheritedPayload))
                 ? ({} as P)
                 : payload; // Start with current payload
             let currentStepPayloadChangeResult = undefined;
@@ -14482,11 +14483,12 @@ The context is now within limits. Please retry your request with the recovered c
                     ? JSON.parse(params.agent.PayloadSelfWritePaths) 
                     : this.getDefaultPayloadSelfWritePaths();
 
-                // When creating a brand-new artifact on the first turn (where payload is inherited from a
-                // prior conversation run) or when replaceElements is used with behavior='create-new',
-                // apply against a clean empty object so keys from the previous artifact cannot bleed in.
+                // When creating a brand-new artifact where the current payload is still the inherited
+                // payload from a prior conversation run (even if read-only action steps ran first) or when
+                // replaceElements is used with behavior='create-new', apply against a clean empty object
+                // so keys from the previous artifact cannot bleed in.
                 const basePayload = (initialNextStep.artifactDirective?.behavior === 'create-new'
-                    && (this._promptTurnCount <= 1 || Boolean(initialNextStep.payloadChangeRequest.replaceElements)))
+                    && (this._promptTurnCount <= 1 || isUnmodifiedInheritedPayload || Boolean(initialNextStep.payloadChangeRequest.replaceElements)))
                     ? ({} as P)
                     : payload;
 
