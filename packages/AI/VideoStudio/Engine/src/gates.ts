@@ -280,7 +280,9 @@ function evaluateGateG2(
         ...(normalizedDeliverables ? { Deliverables: normalizedDeliverables } : {}),
     } as VideoGenerationSpec;
 
-    const storyboardValidation = ValidateVideoGenerationSpec(candidateSpec, 'Storyboarded');
+    const storyboardValidation = ValidateVideoGenerationSpec(candidateSpec, 'Storyboarded', {
+        MaxGeneratedVideoSeconds: ctx.Settings.MaxGeneratedVideoSeconds,
+    });
 
     if (storyboardValidation.Errors.length > 0) {
         return {

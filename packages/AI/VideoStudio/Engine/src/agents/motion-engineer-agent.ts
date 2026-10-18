@@ -132,6 +132,7 @@ export class VideoStudioMotionEngineerAgent extends VideoStudioAgentBase {
             params.payload ??
             {}) as Partial<VideoGenerationSpec>;
         const workingSpec = structuredClone(candidateSpec);
+        // INTERIM: PayloadManager drops keys that contain a dot (plan-notes 37)
         const changeReq = nextStep.payloadChangeRequest as
             | {
                   newElements?: Partial<VideoGenerationSpec>;

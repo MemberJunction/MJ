@@ -584,4 +584,38 @@ describe('RunNarrationPipeline and ResolveNarrationModelID', () => {
             }),
         );
     });
+
+    it('forwards runtime APIKeys and CredentialScope to AITextToSpeechRunner.RunTextToSpeech', async () => {
+        const spec = makeBaseSpec();
+        spec.Audio.Narration!.Script = [
+            { Key: 'line-1', BeatKey: 'beat-1', Text: 'Scoped narration test.' },
+        ];
+        mockRunTextToSpeech.mockResolvedValueOnce({
+            Success: true,
+            PromptRunID: 'pr-scoped-1',
+            SpeechResult: {
+                success: true,
+                content: '',
+                data: Buffer.alloc(16_000),
+                Alignment: makeAlignmentForWord('Scoped', 0.0, 1.5),
+            } satisfies SpeechResult,
+        });
+
+        const runtimeKeys = [{ driverClass: 'ElevenLabsAudioGenerator', apiKey: 'xi-runtime-key' }];
+        await RunNarrationPipeline(spec, {
+            ContextUser: fakeUser,
+            ModelID: 'model-eleven-v4',
+            APIKeys: runtimeKeys,
+            CredentialScope: 'RuntimeOnly',
+        });
+
+        expect(mockRunTextToSpeech).toHaveBeenCalledTimes(1);
+        expect(mockRunTextToSpeech).toHaveBeenCalledWith(
+            expect.objectContaining({
+                APIKeys: runtimeKeys,
+                CredentialScope: 'RuntimeOnly',
+            }),
+        );
+    });
 });
+

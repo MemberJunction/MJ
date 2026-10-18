@@ -17,8 +17,14 @@ import {
     AudioModel,
     AvatarInfo,
     AvatarVideoParams,
+    BaseImageGenerator,
     BaseTextToSpeech,
     BaseVideoGenerator,
+    ImageEditParams,
+    ImageGenerationParams,
+    ImageGenerationResult,
+    ImageModelInfo,
+    ImageVariationParams,
     ModelUsage,
     PronounciationDictionary,
     SpeechResult,
@@ -432,7 +438,125 @@ export function RegisterFakeTextToSpeech(): FakeTextToSpeechHandle {
     };
 }
 
-// ─── 3b. Scoped Fake Global API Keys (for ActionEngine paths that do not take apiKeys) ───────────
+// ─── 3b. Fake Image Generator (for refusing image generation when VS_LIVE_GENERATION !== '1') ────
+
+export const IMAGE_GENERATOR_DRIVER_CLASSES: readonly string[] = [
+    'FLUXImageGenerator',
+    'GeminiImageGenerator',
+    'OpenAIImageGenerator',
+];
+
+export class ScriptedITImageGenerator extends BaseImageGenerator {
+    public SubmitCount = 0;
+
+    constructor(apiKey = '') {
+        super(apiKey);
+    }
+
+    public ResetSubmits(): void {
+        this.SubmitCount = 0;
+    }
+
+    public override async GenerateImage(_params: ImageGenerationParams): Promise<ImageGenerationResult> {
+        this.SubmitCount += 1;
+        throw new Error('The scripted image driver is not armed');
+    }
+
+    public override async EditImage(_params: ImageEditParams): Promise<ImageGenerationResult> {
+        this.SubmitCount += 1;
+        throw new Error('The scripted image driver is not armed');
+    }
+
+    public override async CreateVariation(_params: ImageVariationParams): Promise<ImageGenerationResult> {
+        this.SubmitCount += 1;
+        throw new Error('The scripted image driver is not armed');
+    }
+
+    public override async GetModels(): Promise<ImageModelInfo[]> {
+        return [];
+    }
+
+    public override async GetSupportedMethods(): Promise<string[]> {
+        return ['GenerateImage'];
+    }
+}
+
+function highestImagePriority(driverClass: string): number {
+    return Math.max(
+        0,
+        ...MJGlobal.Instance.ClassFactory.GetAllRegistrations(BaseImageGenerator, driverClass).map(
+            (r) => r.Priority,
+        ),
+    );
+}
+
+interface FakeImageGeneratorHandle {
+    Driver: ScriptedITImageGenerator;
+    DriverClasses: string[];
+    restore: () => void;
+}
+
+export function RegisterFakeImageGenerator(): FakeImageGeneratorHandle {
+    const driver = new ScriptedITImageGenerator();
+    const classes = new Set<string>([...IMAGE_GENERATOR_DRIVER_CLASSES]);
+    if (AIEngine.Instance.Loaded) {
+        for (const m of AIEngine.Instance.Models) {
+            const modelType = m.AIModelType?.trim().toLowerCase();
+            if (modelType === 'image' || modelType === 'images') {
+                for (const mv of m.ModelVendors ?? []) {
+                    if (mv.DriverClass) {
+                        classes.add(mv.DriverClass);
+                    }
+                }
+            }
+        }
+    }
+
+    const factory = MJGlobal.Instance.ClassFactory;
+    const driverClasses = [...classes];
+    const restores: Array<() => void> = [];
+
+    for (const driverClass of driverClasses) {
+        const previous = factory.GetRegistration(BaseImageGenerator, driverClass);
+
+        class ScriptedImageRegistrationHandle extends ScriptedITImageGenerator {
+            constructor(apiKey?: string) {
+                super(apiKey);
+                return driver;
+            }
+        }
+
+        factory.Register(
+            BaseImageGenerator,
+            ScriptedImageRegistrationHandle,
+            driverClass,
+            Math.max(100, highestImagePriority(driverClass) + 1),
+        );
+
+        restores.push(() => {
+            if (previous) {
+                factory.Register(
+                    BaseImageGenerator,
+                    previous.SubClass,
+                    driverClass,
+                    highestImagePriority(driverClass) + 1,
+                );
+            }
+        });
+    }
+
+    return {
+        Driver: driver,
+        DriverClasses: driverClasses,
+        restore: (): void => {
+            for (const r of restores) {
+                r();
+            }
+        },
+    };
+}
+
+// ─── 3c. Scoped Fake Global API Keys (for ActionEngine paths that do not take apiKeys) ───────────
 
 function highestApiKeysPriority(): number {
     return Math.max(
@@ -472,14 +596,12 @@ export function RegisterFakeAPIKeys(allowedDriverClasses: readonly string[]): ()
     );
 
     return (): void => {
-        if (previous) {
-            factory.Register(
-                AIAPIKeys,
-                previous.SubClass,
-                undefined,
-                highestApiKeysPriority() + 1,
-            );
-        }
+        factory.Register(
+            AIAPIKeys,
+            previous?.SubClass ?? AIAPIKeys,
+            undefined,
+            highestApiKeysPriority() + 1,
+        );
     };
 }
 
@@ -696,7 +818,8 @@ interface MemoryStorageHandle {
  * Creates a temporary AWS S3 storage account fixture via `storage.checks.ts`, registers an
  * in-memory `FileStorageBase` over `'AWS S3 Storage'` above every priority, refreshes the
  * storage and credential caches, and asserts `AIEngine.Instance.ResolveAgentStorageAccountID`
- * for `Video Studio` resolves to the fixture account.
+ * and `AIEngine.Instance.ResolveAgentStorageAccount` for `Video Studio` resolve unambiguously to
+ * the fixture account.
  */
 export async function UseMemoryStorage(
     ctx: IntegrationCheckContext,
@@ -743,59 +866,80 @@ export async function UseMemoryStorage(
     }
 
     const fixture = fixtureOrReason;
+    const restore = async (): Promise<void> => {
+        memoryDriver.Clear();
+        if (previousReg) {
+            factory.Register(
+                FileStorageBase,
+                previousReg.SubClass,
+                serverDriverKey,
+                highestStoragePriority(serverDriverKey) + 1,
+            );
+        }
+        for (const perm of fixture.Permissions) {
+            await deleteEntityQuietly(perm);
+        }
+        await deleteEntityQuietly(fixture.Account);
+        await deleteEntityQuietly(fixture.CreatedCredential);
+        await storageEngine.Config(true, ctx.User, ctx.Provider).catch(() => undefined);
+    };
 
-    if (fixture.CreatedCredential) {
-        await CredentialEngine.Instance.Config(true, ctx.User, ctx.Provider);
-    }
-    await storageEngine.Config(true, ctx.User, ctx.Provider);
+    try {
+        if (fixture.CreatedCredential) {
+            await CredentialEngine.Instance.Config(true, ctx.User, ctx.Provider);
+        }
+        await storageEngine.Config(true, ctx.User, ctx.Provider);
 
-    // Ensure the driver instance is initialized and cached for the fixture account
-    await memoryDriver.initialize({
-        accountId: fixture.Account.ID,
-        accountName: fixture.Account.Name,
-    });
-    const driverCache = (
-        storageEngine as unknown as { _driverCache?: Map<string, FileStorageBase> }
-    )._driverCache;
-    driverCache?.set(fixture.Account.ID, memoryDriver);
+        // Ensure the driver instance is initialized and cached for the fixture account
+        await memoryDriver.initialize({
+            accountId: fixture.Account.ID,
+            accountName: fixture.Account.Name,
+        });
+        const driverCache = (
+            storageEngine as unknown as { _driverCache?: Map<string, FileStorageBase> }
+        )._driverCache;
+        driverCache?.set(fixture.Account.ID, memoryDriver);
 
-    await AIEngine.Instance.Config(false, ctx.User, ctx.Provider);
-    const videoStudioAgent = AIEngine.Instance.Agents.find((a) => a.Name === 'Video Studio');
-    Assert(
-        videoStudioAgent != null,
-        "UseMemoryStorage: 'Video Studio' agent is not loaded in AIEngine.Instance.Agents",
-    );
-
-    const resolvedAccountId = AIEngine.Instance.ResolveAgentStorageAccountID(videoStudioAgent!);
-    if (!UUIDsEqual(resolvedAccountId, fixture.Account.ID)) {
-        const allAccounts = storageEngine.Accounts.map((a) => `${a.Name} (${a.ID})`).join(', ');
-        throw new Error(
-            `UseMemoryStorage: Video Studio resolved storage account '${resolvedAccountId ?? '(null)'}' ` +
-                `instead of fixture account '${fixture.Account.Name} (${fixture.Account.ID})'. ` +
-                `Active accounts in FileStorageEngine: [${allAccounts || '(none)'}].`,
+        await AIEngine.Instance.Config(false, ctx.User, ctx.Provider);
+        const videoStudioAgent = AIEngine.Instance.Agents.find((a) => a.Name === 'Video Studio');
+        Assert(
+            videoStudioAgent != null,
+            "UseMemoryStorage: 'Video Studio' agent is not loaded in AIEngine.Instance.Agents",
         );
+
+        const resolvedAccountId = AIEngine.Instance.ResolveAgentStorageAccountID(videoStudioAgent!);
+        if (!UUIDsEqual(resolvedAccountId, fixture.Account.ID)) {
+            const allAccounts = storageEngine.Accounts.map((a) => `${a.Name} (${a.ID})`).join(', ');
+            throw new Error(
+                `UseMemoryStorage: Video Studio resolved storage account '${resolvedAccountId ?? '(null)'}' ` +
+                    `instead of fixture account '${fixture.Account.Name} (${fixture.Account.ID})'. ` +
+                    `Active accounts in FileStorageEngine: [${allAccounts || '(none)'}].`,
+            );
+        }
+
+        const resolvedInfo = AIEngine.Instance.ResolveAgentStorageAccount(videoStudioAgent!);
+        if (
+            !UUIDsEqual(resolvedInfo.AccountID, fixture.Account.ID) ||
+            (resolvedInfo.Source !== 'Category' && resolvedInfo.Source !== 'Agent') ||
+            resolvedInfo.Ambiguous !== false
+        ) {
+            const allAccounts = storageEngine.Accounts.map((a) => `${a.Name} (${a.ID})`).join(', ');
+            throw new Error(
+                `UseMemoryStorage: ResolveAgentStorageAccount('${videoStudioAgent!.ID}') returned ` +
+                    `AccountID='${resolvedInfo.AccountID ?? '(null)'}', Source='${resolvedInfo.Source}', Ambiguous=${resolvedInfo.Ambiguous} ` +
+                    `instead of unambiguous fixture account '${fixture.Account.Name} (${fixture.Account.ID})'. ` +
+                    `Active accounts in FileStorageEngine: [${allAccounts || '(none)'}].`,
+            );
+        }
+    } catch (err) {
+        await restore();
+        throw err;
     }
 
     return {
         AccountID: fixture.Account.ID,
         Driver: memoryDriver,
         Fixture: fixture,
-        restore: async (): Promise<void> => {
-            memoryDriver.Clear();
-            if (previousReg) {
-                factory.Register(
-                    FileStorageBase,
-                    previousReg.SubClass,
-                    serverDriverKey,
-                    highestStoragePriority(serverDriverKey) + 1,
-                );
-            }
-            for (const perm of fixture.Permissions) {
-                await deleteEntityQuietly(perm);
-            }
-            await deleteEntityQuietly(fixture.Account);
-            await deleteEntityQuietly(fixture.CreatedCredential);
-            await storageEngine.Config(true, ctx.User, ctx.Provider).catch(() => undefined);
-        },
+        restore,
     };
 }

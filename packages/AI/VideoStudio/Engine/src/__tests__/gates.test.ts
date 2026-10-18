@@ -175,6 +175,31 @@ describe('VideoStudio gates', () => {
             expect(g2Silent.Status).toBe('Failed');
             expect(g2Silent.Notes).toContain('MissingNarrationScript');
         });
+
+        it('fails with GenerationDurationExceedsLimit when a 25s generation request exceeds a 20s MaxGeneratedVideoSeconds cap', () => {
+            const spec = CreateDeliveredSpecFixture();
+            spec.Assets.Generate = [
+                {
+                    Key: 'gen-over-cap',
+                    Prompt: 'Aerial skyline dolly shot',
+                    Kind: 'Video',
+                    Purpose: 'Illustrative clip',
+                    ReferenceKeys: [],
+                    DurationSeconds: 25,
+                    Format: '16:9',
+                    Status: 'Pending',
+                },
+            ];
+            const g2 = getGate(
+                EvaluateGates(spec, {
+                    ...standardCtx,
+                    Settings: { ...standardCtx.Settings, MaxGeneratedVideoSeconds: 20 },
+                }),
+                'G2',
+            );
+            expect(g2.Status).toBe('Failed');
+            expect(g2.Notes).toContain('GenerationDurationExceedsLimit');
+        });
     });
 
     describe('Gate G3 (Stills)', () => {

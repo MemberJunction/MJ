@@ -9,16 +9,15 @@
  * 2. `PreviewModelSelection` on `Video Studio`'s prompt under `Video Studio Draft` finds no
  *    credentialed model candidate.
  */
-import { RunView, type UserInfo } from '@memberjunction/core';
+import { RunView } from '@memberjunction/core';
 import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { AgentRunner } from '@memberjunction/ai-agents';
-import {
-    AIPromptParams,
-    type MJAIAgentEntityExtended,
-    type MJAIPromptEntityExtended,
+import type {
+    MJAIAgentEntityExtended,
+    MJAIPromptEntityExtended,
 } from '@memberjunction/ai-core-plus';
 import type { MJAIAgentConfigurationEntity } from '@memberjunction/core-entities';
 import type { VideoGenerationSpec } from '@memberjunction/video-studio-core';
@@ -36,27 +35,13 @@ import {
 } from '@memberjunction/testing-integration';
 import { UserTurn } from './agent-live-shared';
 import { CollectRunTree, DeepDeleteRunTrees, DeleteMatching } from './_it-live-agent-harness';
+import {
+    RegisterFakeImageGenerator,
+    RegisterFakeVideoGenerator,
+} from './video-studio-fakes';
 
 const BUNDLE = 'video-studio-live-smoke';
 const SETTLE_MS = Number(process.env.AGENT_LIVE_SETTLE_MS ?? 3000);
-
-class ModelSelectionProbeRunner extends AIPromptRunner {
-    public async PreviewModelSelection(
-        prompt: MJAIPromptEntityExtended,
-        contextUser: UserInfo,
-        configurationId?: string,
-    ): Promise<{ model: unknown | null; selectionReason?: string }> {
-        const params = new AIPromptParams();
-        params.prompt = prompt;
-        params.contextUser = contextUser;
-        params.configurationId = configurationId;
-        const sel = await this.selectModel(prompt, undefined, contextUser, configurationId, undefined, params);
-        return {
-            model: sel.model,
-            selectionReason: sel.selectionInfo?.selectionReason,
-        };
-    }
-}
 
 interface VideoStudioLiveSmokeFixture {
     RootRunIDs: string[];
@@ -106,22 +91,20 @@ export const VideoStudioLiveSmokeChecks: NamedCheck[] = [
                 return;
             }
 
-            // 2. Check model credential availability via PreviewModelSelection
+            // 2. Check model credential availability via AIPromptRunner.PreviewModelSelection
             const draftPreset = resolveVideoStudioDraftPreset(agent);
             const prompt = resolvePrimaryAgentPrompt(agent);
             if (!prompt) {
                 console.log("      → SKIPPED: 'Video Studio' has no bound primary prompt in metadata.");
                 return;
             }
-            const probe = new ModelSelectionProbeRunner();
-            const selection = await probe.PreviewModelSelection(
+            const candidates = new AIPromptRunner().PreviewModelSelection(
                 prompt,
-                ctx.User,
                 draftPreset?.AIConfigurationID ?? undefined,
             );
-            if (!selection.model) {
+            if (!candidates.some((c) => c.HasCredentials)) {
                 console.log(
-                    `      → SKIPPED: PreviewModelSelection found no credentialed model for '${prompt.Name}': ${selection.selectionReason ?? 'no API keys available'}`,
+                    `      → SKIPPED: PreviewModelSelection found no credentialed model candidate for '${prompt.Name}' (${candidates.length} candidate(s) inspected).`,
                 );
                 return;
             }
@@ -151,15 +134,38 @@ export const VideoStudioLiveSmokeChecks: NamedCheck[] = [
                 ? 'Create a 15-second Draft Social Short (9:16) highlighting 42 percent faster onboarding. Keep narration brief.'
                 : 'Create a 15-second Draft Social Short (9:16) highlighting 42 percent faster onboarding using motion graphics only (0 generative video clips, no TTS narration).';
 
-            const runner = new AgentRunner(ctx.Provider);
-            const result = await runner.RunAgent<VideoGenerationSpec>({
-                agent,
-                conversationMessages: UserTurn(promptText),
-                payload: specSeed as VideoGenerationSpec,
-                configurationId: draftPreset?.AIConfigurationID ?? undefined,
-                contextUser: ctx.User,
-            });
-            await settle(SETTLE_MS);
+            const videoFake = allowLiveGen ? undefined : RegisterFakeVideoGenerator();
+            const imageFake = allowLiveGen ? undefined : RegisterFakeImageGenerator();
+            videoFake?.Driver.Disarm();
+
+            let result;
+            try {
+                const runner = new AgentRunner(ctx.Provider);
+                result = await runner.RunAgent<VideoGenerationSpec>({
+                    agent,
+                    conversationMessages: UserTurn(promptText),
+                    payload: specSeed as VideoGenerationSpec,
+                    configurationId: draftPreset?.AIConfigurationID ?? undefined,
+                    contextUser: ctx.User,
+                });
+                await settle(SETTLE_MS);
+            } finally {
+                videoFake?.restore();
+                imageFake?.restore();
+            }
+
+            if (!allowLiveGen) {
+                AssertEqual(
+                    videoFake!.Driver.SubmitCount,
+                    0,
+                    'VSLS1: Video generator SubmitCount must be 0 when VS_LIVE_GENERATION !== "1"',
+                );
+                AssertEqual(
+                    imageFake!.Driver.SubmitCount,
+                    0,
+                    'VSLS1: Image generator SubmitCount must be 0 when VS_LIVE_GENERATION !== "1"',
+                );
+            }
 
             if (result.agentRun?.ID) {
                 liveSmokeFixture.RootRunIDs.push(result.agentRun.ID);

@@ -142,6 +142,7 @@ export class VideoStudioAgent extends BaseAgent {
     private _callerMode: VideoInteractionMode | null = null;
     private _startedWithBrief: boolean = false;
     private _initialRoundCount: number = 0;
+    // INTERIM: PayloadManager drops keys that contain a dot (plan-notes 37)
     private _lastSubAgentPayload: Partial<VideoGenerationSpec> | undefined;
 
     protected override async ExecuteSubAgent<SC = any, SR = any>(
@@ -258,6 +259,7 @@ export class VideoStudioAgent extends BaseAgent {
             if (canonicalStage) {
                 const candidatePayload = (result.newPayload ?? params.payload ?? {}) as Partial<VideoGenerationSpec>;
                 const stageSucceeded = result.step !== 'Failed';
+                // INTERIM: PayloadManager drops keys that contain a dot (plan-notes 37)
                 if (
                     stageSucceeded &&
                     canonicalStage === 'Video Studio - Motion Engineer' &&
@@ -746,7 +748,7 @@ export class VideoStudioAgent extends BaseAgent {
             }
         }
 
-        const isSubAgentRun = Array.isArray(this.AgentHierarchy) && this.AgentHierarchy.length > 1;
+        const isSubAgentRun = this.AgentHierarchy.length > 1;
         if (isSubAgentRun) {
             const videos = spec.Output?.Videos ?? {};
             for (const [fmt, entry] of Object.entries(videos)) {
@@ -1134,7 +1136,7 @@ export class VideoStudioAgent extends BaseAgent {
         const rawCallerMode = callerInteraction?.Mode;
         const isBelowRoot =
             Boolean(params?.parentRun) ||
-            (Array.isArray(this.AgentHierarchy) && this.AgentHierarchy.length > 1);
+            this.AgentHierarchy.length > 1;
 
         if (isValidInteractionMode(rawCallerMode)) {
             this._callerPayloadMode = rawCallerMode;
@@ -1240,16 +1242,12 @@ export class VideoStudioAgent extends BaseAgent {
         if (!archetypeName || spec.Archetype?.ArchetypeID?.trim()) {
             return;
         }
-        try {
-            const matched = VideoStudioEngine.Instance.GetArchetypeByName(
-                archetypeName,
-                spec.CompanyID ?? null,
-            );
-            if (matched?.ID) {
-                spec.Archetype!.ArchetypeID = matched.ID;
-            }
-        } catch {
-            // Engine not initialized or lookup unavailable; leave ArchetypeID unset
+        const matched = VideoStudioEngine.Instance.GetArchetypeByName(
+            archetypeName,
+            spec.CompanyID ?? null,
+        );
+        if (matched?.ID) {
+            spec.Archetype!.ArchetypeID = matched.ID;
         }
     }
 

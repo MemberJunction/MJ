@@ -1061,5 +1061,40 @@ describe('VideoStudioMotionEngineerAgent (VS-AGT-4)', () => {
         expect(promptFinalizations).toHaveLength(2);
         expect(promptFinalizations.every((f) => f.success === false)).toBe(true);
     });
+
+    it('restores dotted filenames (index.html) from payloadChangeRequest when PayloadManager drops dotted keys from newPayload', async () => {
+        const agent = new VideoStudioMotionEngineerAgent() as unknown as TestableMotionEngineerAgent;
+        const validSpec = makeSpec(['16:9']);
+        const authoredSource = structuredClone(validSpec.Output!.Source!);
+
+        // Simulate PayloadManager.applyAgentChangeRequest dropping dotted 'index.html' key on newPayload
+        const corruptedSpec = makeSpec(['16:9']);
+        corruptedSpec.Output!.Source!['16:9']!.Files = {} as Record<string, string>;
+
+        const outcome = await agent.validateSuccessNextStep(
+            { contextUser: MOCK_USER } as ExecuteAgentParams,
+            {
+                step: 'Success',
+                terminate: true,
+                newPayload: corruptedSpec,
+                payloadChangeRequest: {
+                    updateElements: {
+                        Output: {
+                            Source: authoredSource,
+                        },
+                    },
+                },
+            } as unknown as BaseAgentNextStep<VideoGenerationSpec>,
+            corruptedSpec,
+            {} as MJAIAgentRunEntityExtended,
+            {} as MJAIAgentRunStepEntityExtended,
+        );
+
+        expect(outcome.step).toBe('Success');
+        expect(outcome.newPayload?.Output?.Source?.['16:9']?.Files?.['index.html']).toBe(
+            authoredSource['16:9']!.Files['index.html'],
+        );
+    });
 });
+
 

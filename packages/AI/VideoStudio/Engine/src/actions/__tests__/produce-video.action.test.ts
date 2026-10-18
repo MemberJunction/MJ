@@ -219,6 +219,7 @@ describe('ProduceVideoAction', () => {
             ],
             ContextUser: contextUser as RunActionParams['ContextUser'],
             CredentialScope: 'RuntimeOnly' as RunActionParams['CredentialScope'],
+            RuntimeAPIKeyResolver: () => 'runtime-secret-key',
             AbortSignal: abortController.signal,
             RunScope: {
                 PrimaryScopeEntityName: 'Organizations',
@@ -255,6 +256,7 @@ describe('ProduceVideoAction', () => {
         });
         expect(runAgentCall.cancellationToken).toBe(abortController.signal);
         expect(runAgentCall).not.toHaveProperty('TrustReservedRunData');
+        expect(runAgentCall).not.toHaveProperty('apiKeys');
 
         expect(processAgentArtifactsMock).toHaveBeenCalledTimes(1);
         expect(processAgentArtifactsMock).toHaveBeenCalledWith(

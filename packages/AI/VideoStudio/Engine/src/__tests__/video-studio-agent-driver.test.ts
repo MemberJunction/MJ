@@ -121,6 +121,19 @@ const {
             return nextStep;
         }
 
+        protected async ExecuteSubAgent<SC = unknown, SR = unknown>(
+            _params: ExecuteAgentParams<SC>,
+            _subAgentRequest: unknown,
+            _subAgent: unknown,
+            _stepEntity: MJAIAgentRunStepEntityExtended,
+            payload?: SR,
+        ): Promise<{ success: boolean; payload?: SR }> {
+            return {
+                success: true,
+                payload,
+            };
+        }
+
         protected formatHierarchicalMessage(message: string): string {
             return message;
         }
@@ -208,6 +221,13 @@ type TestableVideoStudioAgent = VideoStudioAgent & {
         payload: Partial<VideoGenerationSpec>,
         stageSucceeded?: boolean,
     ): Partial<VideoGenerationSpec>;
+    ExecuteSubAgent<SC = unknown, SR = unknown>(
+        params: ExecuteAgentParams<SC>,
+        subAgentRequest: unknown,
+        subAgent: unknown,
+        stepEntity: MJAIAgentRunStepEntityExtended,
+        payload?: SR,
+    ): Promise<{ success: boolean; payload?: SR }>;
 };
 
 describe('VideoStudioAgent driver lifecycle', () => {
@@ -1768,6 +1788,136 @@ describe('VideoStudioAgent driver lifecycle', () => {
             },
         ]);
     });
+
+    it('(16) preserves dotted filenames in Output.Source across ExecuteSubAgent + executeNextStep when PayloadManager drops dotted keys', async () => {
+        const agent = createAgent();
+        const subAgentPayload: Partial<VideoGenerationSpec> = {
+            ...CreateDeliveredSpecFixture(),
+            Output: {
+                Videos: {},
+                RenderMetadata: {
+                    Renderer: 'HyperFrames',
+                    RendererVersion: '0.1.0',
+                    Seed: 42,
+                    Fps: 30,
+                    DurationByFormat: {},
+                    RenderedAt: '',
+                },
+                Source: {
+                    '16:9': {
+                        Format: '16:9',
+                        EntryFile: 'index.html',
+                        Files: {
+                            'index.html': '<!doctype html><html><body>composed</body></html>',
+                        },
+                        AssetKeys: [],
+                    },
+                },
+            },
+        };
+
+        const params = {
+            payload: {},
+            conversationMessages: [],
+        } as unknown as ExecuteAgentParams<Partial<VideoGenerationSpec>>;
+
+        await agent.ExecuteSubAgent(
+            params,
+            { name: 'Video Studio - Motion Engineer' },
+            { Name: 'Video Studio - Motion Engineer' },
+            dummyStep,
+            subAgentPayload,
+        );
+
+        // Simulate PayloadManager.MergeUpstreamPayload dropping the dotted 'index.html' key
+        const corruptedByPayloadManager: Partial<VideoGenerationSpec> = {
+            ...subAgentPayload,
+            Output: {
+                ...subAgentPayload.Output!,
+                Source: {
+                    '16:9': {
+                        Format: '16:9',
+                        EntryFile: 'index.html',
+                        Files: {
+                            index: {} as unknown as string,
+                        },
+                        AssetKeys: [],
+                    },
+                },
+            },
+        };
+
+        const nextParams = {
+            ...params,
+            __mockNextStepResult: {
+                step: 'Retry',
+                terminate: false,
+                newPayload: corruptedByPayloadManager,
+            } as BaseAgentNextStep<Partial<VideoGenerationSpec>>,
+        } as unknown as ExecuteAgentParams<Partial<VideoGenerationSpec>>;
+
+        const stepResult = await agent.executeNextStep(
+            nextParams,
+            dummyConfig,
+            {
+                step: 'Sub-Agent',
+                terminate: false,
+                subAgent: {
+                    name: 'Video Studio - Motion Engineer',
+                    message: 'Compose HTML',
+                    terminateAfter: false,
+                },
+            } as BaseAgentNextStep<Partial<VideoGenerationSpec>>,
+            1,
+        );
+
+        expect(stepResult.newPayload?.Output?.Source?.['16:9']?.Files?.['index.html']).toBe(
+            '<!doctype html><html><body>composed</body></html>',
+        );
+    });
+
+    it('(17) syncArchetypeId populates Archetype.ArchetypeID from VideoStudioEngine by name and preserves an existing ArchetypeID', () => {
+        const agent = createAgent();
+        mockVideoStudioEngineInstance.GetArchetypeByName.mockImplementation((name: string) =>
+            name === 'Data Story' ? { ID: 'arch-data-story-uuid', Name: 'Data Story' } : null,
+        );
+
+        const params = {
+            payload: {},
+            conversationMessages: [],
+        } as unknown as ExecuteAgentParams<Partial<VideoGenerationSpec>>;
+
+        const populated = agent.ApplyStageResult(params, 'Video Studio - Director', {
+            Archetype: {
+                Name: 'Data Story',
+            },
+        });
+        expect(populated.Archetype?.ArchetypeID).toBe('arch-data-story-uuid');
+        expect(mockVideoStudioEngineInstance.GetArchetypeByName).toHaveBeenCalledWith(
+            'Data Story',
+            null,
+        );
+
+        const preserved = agent.ApplyStageResult(params, 'Video Studio - Director', {
+            Archetype: {
+                ArchetypeID: 'existing-arch-uuid',
+                Name: 'Data Story',
+            },
+        });
+        expect(preserved.Archetype?.ArchetypeID).toBe('existing-arch-uuid');
+
+        mockVideoStudioEngineInstance.GetArchetypeByName.mockClear();
+        (
+            agent as unknown as { syncArchetypeId(spec: Partial<VideoGenerationSpec>): void }
+        ).syncArchetypeId({
+            Archetype: {
+                ArchetypeID: 'existing-arch-uuid',
+                Name: 'Data Story',
+            },
+        });
+        expect(mockVideoStudioEngineInstance.GetArchetypeByName).not.toHaveBeenCalled();
+    });
 });
+
 
 

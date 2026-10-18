@@ -16,7 +16,7 @@
  * Checks:
  * - VSP1: Standalone Topic Explainer under Draft walks Director -> Art Director -> Storyboard ->
  *   Pre-Production -> Motion Engineer -> Render -> Critic -> Delivered, passes all 6 gates (G1..G6),
- *   persists Output.Videos['16:9'].FileID, Output.PosterFileID, and Review.ContactSheets[0].FileID
+ *   persists Output.Videos['16:9'].FileID, Output.PosterFileID, and Output.ContactSheetFileIDs['16:9'][0]
  *   in MJ: Files, leaves InlineBase64 unset and zero MP4 bytes in MJ: AI Agent Run Medias.InlineData,
  *   and calls FakeRenderDriver once (13 scripted LLM calls).
  * - VSP2: Related-agent invocation (IT: VS Data Caller -> Video Studio) over a runtime copy of the
@@ -32,15 +32,16 @@
  *   Review.HumanReviewNotes, and saves an MJ: Artifacts / MJ: Artifact Versions record via ProcessAgentArtifacts.
  * - VSP5: Guards before spend: (a) a generation request naming "our CEO speaking" against NeverInvent: ['real people']
  *   is blocked before spend (Status: 'Blocked', FinalStep: 'Chat', SubmitCount === 0, RenderCallCount === 0);
- *   (b) a generation request of 25 seconds under Draft (cap 20s) is refused before any vendor or render call.
+ *   (b) a generation request of 25 seconds under Draft (cap 20s) is refused at Gate G2 before Pre-Production.
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { RunView } from '@memberjunction/core';
-import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, UUIDsEqual, UUIDSet } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
+import { AIVideoRunner } from '@memberjunction/ai-prompts';
 import { AgentRunner } from '@memberjunction/ai-agents';
 import type { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import type {
@@ -63,7 +64,7 @@ import {
     type IntegrationCheckContext,
     type NamedCheck,
 } from '@memberjunction/testing-integration';
-import { UserTurn } from './agent-live-shared';
+import { ResolvePromptRunIdsForAgentRuns, UserTurn } from './agent-live-shared';
 import { CollectRunTree, DeepDeleteRunTrees, DeleteMatching } from './_it-live-agent-harness';
 import {
     UseFakeRenderDriver,
@@ -93,16 +94,28 @@ const CHAT_DRIVER_CLASSES: readonly string[] = [
     'GroqLLM',
 ];
 
+const VIDEO_STUDIO_STAGE_AGENT_NAMES: readonly string[] = [
+    'Video Studio',
+    'Video Studio - Director',
+    'Video Studio - Art Director',
+    'Video Studio - Storyboard',
+    'Video Studio - Pre-Production',
+    'Video Studio - Motion Engineer',
+    'Video Studio - Critic',
+    'IT: VS Data Caller',
+];
+
 interface VideoStudioProductionFixture {
-    VideoStudioAgent: MJAIAgentEntityExtended;
-    CallerAgent: MJAIAgentEntityExtended;
+    SetupStartedAtIso: string;
+    VideoStudioAgent?: MJAIAgentEntityExtended;
+    CallerAgent?: MJAIAgentEntityExtended;
     Llm: TestLLM;
-    RestoreLlm: () => void;
-    Render: ReturnType<typeof UseFakeRenderDriver>;
-    VideoGen: ReturnType<typeof RegisterFakeVideoGenerator>;
-    Tts: ReturnType<typeof RegisterFakeTextToSpeech>;
-    Storage: Awaited<ReturnType<typeof UseMemoryStorage>>;
-    RestoreApiKeys: () => void;
+    RestoreLlm?: () => void;
+    Render?: ReturnType<typeof UseFakeRenderDriver>;
+    VideoGen?: ReturnType<typeof RegisterFakeVideoGenerator>;
+    Tts?: ReturnType<typeof RegisterFakeTextToSpeech>;
+    Storage?: Awaited<ReturnType<typeof UseMemoryStorage>>;
+    RestoreApiKeys?: () => void;
     AllowedDriverClasses: readonly string[];
     RuntimeRelationshipID?: string;
     RootRunIDs: string[];
@@ -112,13 +125,46 @@ interface VideoStudioProductionFixture {
     ArtifactVersionIDs: string[];
 }
 
+type InitializedVideoStudioProductionFixture = Required<
+    Pick<
+        VideoStudioProductionFixture,
+        | 'SetupStartedAtIso'
+        | 'VideoStudioAgent'
+        | 'CallerAgent'
+        | 'Llm'
+        | 'RestoreLlm'
+        | 'Render'
+        | 'VideoGen'
+        | 'Tts'
+        | 'Storage'
+        | 'RestoreApiKeys'
+        | 'AllowedDriverClasses'
+        | 'RootRunIDs'
+        | 'ExtraPromptRunIDs'
+        | 'FileIDs'
+        | 'ArtifactIDs'
+        | 'ArtifactVersionIDs'
+    >
+> & {
+    RuntimeRelationshipID?: string;
+};
+
 let productionFixture: VideoStudioProductionFixture | undefined;
 
-function requireFixture(): VideoStudioProductionFixture {
-    if (!productionFixture) {
-        throw new Error(`${BUNDLE} fixture is not initialized (Setup has not run).`);
+function requireFixture(): InitializedVideoStudioProductionFixture {
+    if (
+        !productionFixture?.VideoStudioAgent ||
+        !productionFixture.CallerAgent ||
+        !productionFixture.RestoreLlm ||
+        !productionFixture.Render ||
+        !productionFixture.VideoGen ||
+        !productionFixture.Tts ||
+        !productionFixture.Storage ||
+        !productionFixture.RestoreApiKeys
+    ) {
+        throw new Error(`${BUNDLE} fixture is not initialized (Setup has not completed).`);
     }
-    return productionFixture;
+    return productionFixture as InitializedVideoStudioProductionFixture;
 }
 
 function loadAgent(name: string): MJAIAgentEntityExtended {
@@ -376,12 +422,14 @@ export const VideoStudioProductionChecks: NamedCheck[] = [
                 'VSP2: Child Video Studio agent run must exist under caller run',
             );
             const childRun = childRunsRes.Results[0];
-            if (standardPreset?.AIConfigurationID) {
-                Assert(
-                    UUIDsEqual(childRun.ConfigurationID, standardPreset.AIConfigurationID),
-                    `VSP2: Child Video Studio run ConfigurationID (${childRun.ConfigurationID}) must match Video Studio Standard preset (${standardPreset.AIConfigurationID})`,
-                );
-            }
+            Assert(
+                Boolean(standardPreset?.AIConfigurationID),
+                'VSP2: Video Studio Standard preset must define AIConfigurationID in metadata',
+            );
+            Assert(
+                UUIDsEqual(childRun.ConfigurationID, standardPreset!.AIConfigurationID),
+                `VSP2: Child Video Studio run ConfigurationID (${childRun.ConfigurationID}) must match Video Studio Standard preset (${standardPreset!.AIConfigurationID})`,
+            );
 
             const childSpec = childRun.FinalPayload
                 ? (JSON.parse(childRun.FinalPayload) as VideoGenerationSpec)
@@ -425,6 +473,7 @@ export const VideoStudioProductionChecks: NamedCheck[] = [
             const f = requireFixture();
             f.Render.Driver.RenderCallCount = 0;
             f.VideoGen.Driver.ResetSubmits();
+            f.Tts.Driver.CallCount = 0;
 
             armScriptFromFiles(f, [
                 '01-root-to-director.json',
@@ -451,8 +500,7 @@ export const VideoStudioProductionChecks: NamedCheck[] = [
             params.ContextUser = ctx.User;
             params.Provider = ctx.Provider;
             params.SkipActionLog = true;
-            params.CredentialScope = 'RuntimeOnly';
-            params.RuntimeAPIKeyResolver = () => SCRIPTED_API_KEY;
+            params.CredentialScope = 'Any';
             params.Params = [
                 { Name: 'Topic', Type: 'Input', Value: '15-second Topic Explainer' },
                 { Name: 'Archetype', Type: 'Input', Value: 'Topic Explainer' },
@@ -460,6 +508,7 @@ export const VideoStudioProductionChecks: NamedCheck[] = [
                 { Name: 'PowerLevel', Type: 'Input', Value: 'Draft' },
             ];
 
+            const vsp3StartIso = new Date().toISOString();
             const actionResult = await ActionEngineServer.Instance.RunAction(params);
             await settle(SETTLE_MS);
 
@@ -485,6 +534,7 @@ export const VideoStudioProductionChecks: NamedCheck[] = [
                 f.ArtifactVersionIDs.push(artifactVersionId);
             }
 
+            Assert(Boolean(agentRunId), 'VSP3: AgentRunID output param must be populated');
             Assert(Boolean(artifactId), 'VSP3: ArtifactID output param must be populated');
             Assert(Boolean(artifactVersionId), 'VSP3: ArtifactVersionID output param must be populated');
             Assert(Boolean(videoFileIds?.['16:9']), 'VSP3: VideoFileIDs["16:9"] output param must be populated');
@@ -523,6 +573,49 @@ export const VideoStudioProductionChecks: NamedCheck[] = [
                 posterFileId,
                 'VSP3: Saved artifact version Output.PosterFileID must match PosterFileID',
             );
+
+            // Verify every prompt run in the action's agent run tree used a model handled by the fake drivers
+            const actionRunTreeIds = await CollectRunTree(ctx.Provider, ctx.User, agentRunId!);
+            const stepPromptRunIds = await ResolvePromptRunIdsForAgentRuns(actionRunTreeIds, ctx.User, ctx.Provider);
+            const stageAgentIds = VIDEO_STUDIO_STAGE_AGENT_NAMES
+                .map((name) => AIEngine.Instance.GetAgentByName(name)?.ID)
+                .filter((id): id is string => Boolean(id));
+            const filterParts: string[] = [];
+            if (stepPromptRunIds.length > 0) {
+                const quotedStepPrIds = stepPromptRunIds.map((id) => `'${EscapeSQLString(id)}'`).join(',');
+                filterParts.push(`ID IN (${quotedStepPrIds})`);
+            }
+            if (stageAgentIds.length > 0) {
+                const quotedStageIds = stageAgentIds.map((id) => `'${EscapeSQLString(id)}'`).join(',');
+                filterParts.push(`(AgentID IN (${quotedStageIds}) AND __mj_CreatedAt >= '${vsp3StartIso}')`);
+            }
+            const actionPrRes = await rv.RunView<{ ID: string; ModelID: string | null }>({
+                EntityName: 'MJ: AI Prompt Runs',
+                ExtraFilter: filterParts.join(' OR '),
+                Fields: ['ID', 'ModelID'],
+                ResultType: 'simple',
+                BypassCache: true,
+            }, ctx.User);
+            Assert(
+                actionPrRes.Success && actionPrRes.Results.length >= 13,
+                `VSP3: Expected at least 13 prompt runs in action agent run tree, got ${actionPrRes.Results.length}`,
+            );
+            const allowedUpper = new Set(f.AllowedDriverClasses.map((d) => d.trim().toUpperCase()));
+            const allowedModelIds = new UUIDSet(
+                AIEngine.Instance.ModelVendors
+                    .filter((mv) => allowedUpper.has((mv.DriverClass ?? '').trim().toUpperCase()))
+                    .map((mv) => mv.ModelID),
+            );
+            for (const pr of actionPrRes.Results) {
+                Assert(Boolean(pr.ModelID), `VSP3: PromptRun ${pr.ID} must have a ModelID`);
+                Assert(
+                    allowedModelIds.Has(pr.ModelID!),
+                    `VSP3: PromptRun ${pr.ID} ModelID ${pr.ModelID} must be served by a registered fake driver`,
+                );
+            }
+            AssertEqual(f.Render.Driver.RenderCallCount, 1, 'VSP3: FakeRenderDriver RenderCallCount');
+            AssertEqual(f.VideoGen.Driver.SubmitCount, 0, 'VSP3: FakeVideoGenerator SubmitCount');
+            Assert(f.Tts.Driver.CallCount >= 1, 'VSP3: FakeTextToSpeech CallCount must be >= 1');
             AssertEqual(f.Llm.CallCount, 13, 'VSP3: TestLLM.CallCount');
         },
     },
@@ -639,13 +732,22 @@ export const VideoStudioProductionChecks: NamedCheck[] = [
     },
     {
         Id: `${BUNDLE}.VSP5`,
-        Name: 'VSP5: Guards before spend: (a) NeverInvent blocks synthetic depiction of real people and (b) Draft 20s cap blocks a 25s request with zero vendor/render calls',
+        Name: 'VSP5: Guards before spend: (a) NeverInvent blocks synthetic depiction of real people and (b) Draft 20s cap blocks a 25s request at Gate G2 with zero vendor/render calls',
         Fn: async (ctx: IntegrationCheckContext): Promise<void> => {
             const f = requireFixture();
             const draftPreset = resolveAgentPreset(f.VideoStudioAgent, 'Draft');
             const runner = new AgentRunner(ctx.Provider);
+            const rv = RunView.FromMetadataProvider(ctx.Provider);
+            const genPrompt = AIEngine.Instance.Prompts.find(
+                (p) => p.Name?.trim() === AIVideoRunner.GENERATIVE_PROMPT_NAME,
+            );
+            Assert(
+                Boolean(genPrompt),
+                `VSP5: Canonical generative video prompt '${AIVideoRunner.GENERATIVE_PROMPT_NAME}' must exist in metadata`,
+            );
 
             // (a) NeverInvent subject guard ("our CEO speaking" against NeverInvent: ['real people'])
+            const caseAStartIso = new Date().toISOString();
             f.Render.Driver.RenderCallCount = 0;
             f.VideoGen.Driver.ResetSubmits();
             armScriptFromFiles(f, [
@@ -679,15 +781,23 @@ export const VideoStudioProductionChecks: NamedCheck[] = [
             Assert(Boolean(specA), 'VSP5(a): result.payload must be defined');
             const genReqA = specA!.Assets?.Generate?.[0];
             AssertEqual(genReqA?.Status, 'Blocked', 'VSP5(a): Assets.Generate[0].Status must be Blocked');
-            Assert(
-                resultA.agentRun?.FinalStep === 'Chat' || specA!.Status === 'Blocked',
-                `VSP5(a): Agent must ask via Chat or set Status=Blocked, got FinalStep=${resultA.agentRun?.FinalStep}, Status=${specA!.Status}`,
-            );
+            AssertEqual(specA!.Status, 'Blocked', 'VSP5(a): spec.Status must be Blocked');
+            AssertEqual(resultA.agentRun?.FinalStep, 'Chat', 'VSP5(a): agentRun.FinalStep must be Chat');
             AssertEqual(f.VideoGen.Driver.SubmitCount, 0, 'VSP5(a): FakeVideoGenerator SubmitCount must be 0');
             AssertEqual(f.Render.Driver.RenderCallCount, 0, 'VSP5(a): FakeRenderDriver RenderCallCount must be 0');
+            const genPrResA = await rv.RunView<{ ID: string }>({
+                EntityName: 'MJ: AI Prompt Runs',
+                ExtraFilter: `PromptID='${EscapeSQLString(genPrompt!.ID)}' AND __mj_CreatedAt >= '${EscapeSQLString(caseAStartIso)}'`,
+                Fields: ['ID'],
+                ResultType: 'simple',
+                BypassCache: true,
+            }, ctx.User);
+            Assert(genPrResA.Success, `VSP5(a): PromptRun query failed: ${genPrResA.ErrorMessage}`);
+            AssertEqual(genPrResA.Results.length, 0, 'VSP5(a): Zero Video Generation prompt runs must be created');
             AssertEqual(f.Llm.CallCount, 8, 'VSP5(a): TestLLM.CallCount');
 
-            // (b) Draft 20s generated-video duration cap guard (25s requested)
+            // (b) Draft 20s generated-video duration cap guard (25s requested) refused at Gate G2 before Pre-Production
+            const caseBStartIso = new Date().toISOString();
             f.Render.Driver.RenderCallCount = 0;
             f.VideoGen.Driver.ResetSubmits();
             armScriptFromFiles(f, [
@@ -697,7 +807,6 @@ export const VideoStudioProductionChecks: NamedCheck[] = [
                 '04-art-director.json',
                 '05-root-to-storyboard.json',
                 '06-storyboard.json',
-                '07-root-to-pre-production.json',
                 '08-root-blocked-ask.json',
             ]);
 
@@ -719,11 +828,41 @@ export const VideoStudioProductionChecks: NamedCheck[] = [
             collectSpecCleanupIds(specB, f);
 
             Assert(Boolean(specB), 'VSP5(b): result.payload must be defined');
-            const genReqB = specB!.Assets?.Generate?.[0];
-            AssertEqual(genReqB?.Status, 'Blocked', 'VSP5(b): Assets.Generate[0].Status must be Blocked');
+            const g2GateB = specB!.Review?.Gates?.find((g) => g.Gate === 'G2');
+            AssertEqual(g2GateB?.Status, 'Failed', 'VSP5(b): Gate G2 Status must be Failed');
+            Assert(
+                (g2GateB?.Notes ?? '').includes('GenerationDurationExceedsLimit'),
+                `VSP5(b): Gate G2 Notes must include GenerationDurationExceedsLimit, got: ${g2GateB?.Notes ?? '(empty)'}`,
+            );
+
+            const preProdAgent = loadAgent('Video Studio - Pre-Production');
+            const childRunsB = await rv.RunView<{ ID: string }>({
+                EntityName: 'MJ: AI Agent Runs',
+                ExtraFilter: `ParentRunID='${EscapeSQLString(resultB.agentRun!.ID)}' AND AgentID='${EscapeSQLString(preProdAgent.ID)}'`,
+                Fields: ['ID'],
+                ResultType: 'simple',
+                BypassCache: true,
+            }, ctx.User);
+            Assert(childRunsB.Success, `VSP5(b): Child run query failed: ${childRunsB.ErrorMessage}`);
+            AssertEqual(
+                childRunsB.Results.length,
+                0,
+                'VSP5(b): Video Studio - Pre-Production must not execute when Gate G2 fails',
+            );
+
+            AssertEqual(resultB.agentRun?.FinalStep, 'Chat', 'VSP5(b): agentRun.FinalStep must be Chat');
             AssertEqual(f.VideoGen.Driver.SubmitCount, 0, 'VSP5(b): FakeVideoGenerator SubmitCount must be 0');
             AssertEqual(f.Render.Driver.RenderCallCount, 0, 'VSP5(b): FakeRenderDriver RenderCallCount must be 0');
-            AssertEqual(f.Llm.CallCount, 8, 'VSP5(b): TestLLM.CallCount');
+            const genPrResB = await rv.RunView<{ ID: string }>({
+                EntityName: 'MJ: AI Prompt Runs',
+                ExtraFilter: `PromptID='${EscapeSQLString(genPrompt!.ID)}' AND __mj_CreatedAt >= '${EscapeSQLString(caseBStartIso)}'`,
+                Fields: ['ID'],
+                ResultType: 'simple',
+                BypassCache: true,
+            }, ctx.User);
+            Assert(genPrResB.Success, `VSP5(b): PromptRun query failed: ${genPrResB.ErrorMessage}`);
+            AssertEqual(genPrResB.Results.length, 0, 'VSP5(b): Zero Video Generation prompt runs must be created');
+            AssertEqual(f.Llm.CallCount, 7, 'VSP5(b): TestLLM.CallCount');
         },
     },
 ];
@@ -734,6 +873,18 @@ for (const check of VideoStudioProductionChecks) {
 
 IntegrationCheckRegistry.Instance.RegisterLifecycle(BUNDLE, {
     Setup: async (ctx: IntegrationCheckContext): Promise<void> => {
+        const llm = new TestLLM();
+        productionFixture = {
+            SetupStartedAtIso: new Date().toISOString(),
+            Llm: llm,
+            AllowedDriverClasses: [],
+            RootRunIDs: [],
+            ExtraPromptRunIDs: [],
+            FileIDs: [],
+            ArtifactIDs: [],
+            ArtifactVersionIDs: [],
+        };
+
         LoadVideoStudioAgent();
         LoadProduceVideoAction();
         await AIEngine.Instance.Config(false, ctx.User);
@@ -741,89 +892,73 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle(BUNDLE, {
 
         const videoStudioAgent = loadAgent('Video Studio');
         const callerAgent = loadAgent('IT: VS Data Caller');
+        productionFixture.VideoStudioAgent = videoStudioAgent;
+        productionFixture.CallerAgent = callerAgent;
 
-        // Create a runtime MJ: AI Agent Relationships row for IT: VS Data Caller -> Video Studio
-        // copied verbatim from the shipped Query Builder -> Video Studio relationship contract.
-        let runtimeRelationshipId: string | undefined;
+        // Require the shipped Query Builder -> Video Studio relationship and Video Studio Standard preset in metadata
+        const queryBuilderAgent = loadAgent('Query Builder');
+        const templateRel = AIEngine.Instance.AgentRelationships.find(
+            (r) => UUIDsEqual(r.AgentID, queryBuilderAgent.ID) && UUIDsEqual(r.SubAgentID, videoStudioAgent.ID),
+        );
+        if (!templateRel) {
+            throw new Error(
+                `Setup: Shipped 'Query Builder -> Video Studio' relationship row is missing from AIEngine.Instance.AgentRelationships. Push metadata before running ${BUNDLE}.`,
+            );
+        }
+        const standardPreset = resolveAgentPreset(videoStudioAgent, 'Standard');
+        if (!standardPreset || !standardPreset.AIConfigurationID) {
+            throw new Error(
+                `Setup: Shipped 'Video Studio Standard' preset (with AIConfigurationID) is missing from AIEngine.Instance.AgentConfigurations. Push metadata before running ${BUNDLE}.`,
+            );
+        }
+
+        // Remove any stale runtime relationship row before creating a fresh copy from templateRel
         const existingRel = AIEngine.Instance.AgentRelationships.find(
             (r) => UUIDsEqual(r.AgentID, callerAgent.ID) && UUIDsEqual(r.SubAgentID, videoStudioAgent.ID),
         );
-        if (!existingRel) {
-            const queryBuilderAgent = AIEngine.Instance.Agents.find((a) => a.Name?.trim() === 'Query Builder');
-            const templateRel = AIEngine.Instance.AgentRelationships.find(
-                (r) =>
-                    UUIDsEqual(r.SubAgentID, videoStudioAgent.ID) &&
-                    (queryBuilderAgent ? UUIDsEqual(r.AgentID, queryBuilderAgent.ID) : true),
-            );
-            const standardPreset = resolveAgentPreset(videoStudioAgent, 'Standard');
-            const relEntity = await ctx.Provider.GetEntityObject<MJAIAgentRelationshipEntity>(
-                'MJ: AI Agent Relationships',
+        if (existingRel) {
+            await DeleteMatching(
+                ctx.Provider,
                 ctx.User,
+                'MJ: AI Agent Relationships',
+                `ID='${EscapeSQLString(existingRel.ID)}'`,
             );
-            relEntity.NewRecord();
-            relEntity.AgentID = callerAgent.ID;
-            relEntity.SubAgentID = videoStudioAgent.ID;
-            relEntity.Status = 'Active';
-            relEntity.SubAgentInputMapping =
-                templateRel?.SubAgentInputMapping ??
-                JSON.stringify({
-                    rows: 'DataSnapshot.Inline.caller.rows',
-                    columns: 'DataSnapshot.Inline.caller.columns',
-                });
-            relEntity.SubAgentOutputMapping =
-                templateRel?.SubAgentOutputMapping ??
-                JSON.stringify({
-                    Status: 'video.Status',
-                    'Film.OneSentence': 'video.OneSentence',
-                    'Output.Videos': 'video.Videos',
-                    'Output.PosterFileID': 'video.PosterFileID',
-                    'Review.HumanReviewNotes': 'video.HumanReviewNotes',
-                });
-            relEntity.SubAgentContextPaths =
-                templateRel?.SubAgentContextPaths ??
-                JSON.stringify(['title', 'interpretation', 'savedQueryId', 'savedQueryName', 'metadata.sql']);
-            relEntity.ChatHandlingOption = templateRel?.ChatHandlingOption ?? 'Consult';
-            relEntity.ConfigurationPresetID =
-                templateRel?.ConfigurationPresetID ?? standardPreset?.ID ?? null;
-            const saved = await relEntity.Save();
-            Assert(saved, `Setup: Failed to save runtime MJ: AI Agent Relationships row: ${relEntity.LatestResult?.CompleteMessage ?? ''}`);
-            runtimeRelationshipId = relEntity.ID;
-            await AIEngine.Instance.Config(true, ctx.User);
-            await AIEngineBase.Instance.Config(true, ctx.User);
         }
 
-        const llm = new TestLLM();
-        const restoreLlm = RegisterTestLLM(llm, [...CHAT_DRIVER_CLASSES]);
-        const render = UseFakeRenderDriver();
+        const relEntity = await ctx.Provider.GetEntityObject<MJAIAgentRelationshipEntity>(
+            'MJ: AI Agent Relationships',
+            ctx.User,
+        );
+        relEntity.NewRecord();
+        relEntity.AgentID = callerAgent.ID;
+        relEntity.SubAgentID = videoStudioAgent.ID;
+        relEntity.Status = 'Active';
+        relEntity.SubAgentInputMapping = templateRel.SubAgentInputMapping;
+        relEntity.SubAgentOutputMapping = templateRel.SubAgentOutputMapping;
+        relEntity.SubAgentContextPaths = templateRel.SubAgentContextPaths;
+        relEntity.ChatHandlingOption = templateRel.ChatHandlingOption;
+        relEntity.ConfigurationPresetID = templateRel.ConfigurationPresetID;
+        const saved = await relEntity.Save();
+        Assert(saved, `Setup: Failed to save runtime MJ: AI Agent Relationships row: ${relEntity.LatestResult?.CompleteMessage ?? ''}`);
+        productionFixture.RuntimeRelationshipID = relEntity.ID;
+        await AIEngine.Instance.Config(true, ctx.User);
+        await AIEngineBase.Instance.Config(true, ctx.User);
+
+        productionFixture.RestoreLlm = RegisterTestLLM(llm, [...CHAT_DRIVER_CLASSES]);
+        productionFixture.Render = UseFakeRenderDriver();
         const videoGen = RegisterFakeVideoGenerator();
+        productionFixture.VideoGen = videoGen;
         const tts = RegisterFakeTextToSpeech();
-        const storage = await UseMemoryStorage(ctx);
+        productionFixture.Tts = tts;
+        productionFixture.Storage = await UseMemoryStorage(ctx);
 
         const allowedDriverClasses = [
             ...CHAT_DRIVER_CLASSES,
             ...videoGen.DriverClasses,
             ...tts.DriverClasses,
         ];
-        const restoreApiKeys = RegisterFakeAPIKeys(allowedDriverClasses);
-
-        productionFixture = {
-            VideoStudioAgent: videoStudioAgent,
-            CallerAgent: callerAgent,
-            Llm: llm,
-            RestoreLlm: restoreLlm,
-            Render: render,
-            VideoGen: videoGen,
-            Tts: tts,
-            Storage: storage,
-            RestoreApiKeys: restoreApiKeys,
-            AllowedDriverClasses: allowedDriverClasses,
-            RuntimeRelationshipID: runtimeRelationshipId,
-            RootRunIDs: [],
-            ExtraPromptRunIDs: [],
-            FileIDs: [],
-            ArtifactIDs: [],
-            ArtifactVersionIDs: [],
-        };
+        productionFixture.AllowedDriverClasses = allowedDriverClasses;
+        productionFixture.RestoreApiKeys = RegisterFakeAPIKeys(allowedDriverClasses);
     },
     Teardown: async (ctx: IntegrationCheckContext): Promise<void> => {
         const f = productionFixture;
@@ -837,11 +972,13 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle(BUNDLE, {
             kind: 'fail',
             error: new Error(`The ${BUNDLE} TestLLM is not armed: its bundle has finished`),
         });
-        f.RestoreLlm();
-        f.Render.restore();
-        f.VideoGen.restore();
-        f.Tts.restore();
-        f.RestoreApiKeys();
+        f.RestoreLlm?.();
+        f.Render?.restore();
+        f.VideoGen?.restore();
+        f.Tts?.restore();
+        f.RestoreApiKeys?.();
+
+        const rv = RunView.FromMetadataProvider(ctx.Provider);
 
         // 1. Collect all agent run IDs in the run trees so we can delete MJ: AI Agent Requests first
         const allRunIds = new Set<string>();
@@ -867,16 +1004,61 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle(BUNDLE, {
         // 2. Delete agent run trees (steps -> prompt runs -> runs)
         await DeepDeleteRunTrees(ctx.Provider, ctx.User, f.RootRunIDs);
 
-        // 3. Delete any extra prompt runs created by Pre-Production (video gen / TTS)
+        // 3. Delete any extra prompt runs created by Pre-Production (video gen / TTS) or stage agents during the window
         const uniquePromptRuns = [...new Set(f.ExtraPromptRunIDs)];
         if (uniquePromptRuns.length > 0) {
             const quotedPr = uniquePromptRuns.map((id) => `'${EscapeSQLString(id)}'`).join(',');
             await DeleteMatching(ctx.Provider, ctx.User, 'MJ: AI Prompt Runs', `ID IN (${quotedPr})`);
         }
+        const stageAgentIds = AIEngine.Instance.Agents
+            .filter((a) => VIDEO_STUDIO_STAGE_AGENT_NAMES.includes(a.Name?.trim() ?? ''))
+            .map((a) => `'${EscapeSQLString(a.ID)}'`);
+        if (stageAgentIds.length > 0 && f.SetupStartedAtIso) {
+            await DeleteMatching(
+                ctx.Provider,
+                ctx.User,
+                'MJ: AI Prompt Runs',
+                `AgentID IN (${stageAgentIds.join(',')}) AND __mj_CreatedAt >= '${EscapeSQLString(f.SetupStartedAtIso)}'`,
+            );
+        }
 
-        // 4. Delete artifact versions, permissions, and artifacts created in VSP3 / VSP4
-        for (const versionId of f.ArtifactVersionIDs) {
-            await DeleteMatching(ctx.Provider, ctx.User, 'MJ: Artifact Versions', `ID='${EscapeSQLString(versionId)}'`);
+        // 4. Delete artifact version attributes, artifact versions, permissions, and artifacts created in VSP3 / VSP4
+        const versionFilters: string[] = [];
+        if (f.ArtifactVersionIDs.length > 0) {
+            const quotedVers = [...new Set(f.ArtifactVersionIDs)].map((id) => `'${EscapeSQLString(id)}'`).join(',');
+            versionFilters.push(`ID IN (${quotedVers})`);
+        }
+        if (f.ArtifactIDs.length > 0) {
+            const quotedArts = [...new Set(f.ArtifactIDs)].map((id) => `'${EscapeSQLString(id)}'`).join(',');
+            versionFilters.push(`ArtifactID IN (${quotedArts})`);
+        }
+        if (versionFilters.length > 0) {
+            const versionsRes = await rv.RunView<{ ID: string }>({
+                EntityName: 'MJ: Artifact Versions',
+                ExtraFilter: versionFilters.join(' OR '),
+                Fields: ['ID'],
+                ResultType: 'simple',
+                BypassCache: true,
+            }, ctx.User);
+            const allVersionIds = new Set<string>([
+                ...f.ArtifactVersionIDs,
+                ...(versionsRes.Success ? versionsRes.Results.map((r) => r.ID) : []),
+            ]);
+            if (allVersionIds.size > 0) {
+                const quotedAllVers = [...allVersionIds].map((id) => `'${EscapeSQLString(id)}'`).join(',');
+                await DeleteMatching(
+                    ctx.Provider,
+                    ctx.User,
+                    'MJ: Artifact Version Attributes',
+                    `ArtifactVersionID IN (${quotedAllVers})`,
+                );
+                await DeleteMatching(
+                    ctx.Provider,
+                    ctx.User,
+                    'MJ: Artifact Versions',
+                    `ID IN (${quotedAllVers})`,
+                );
+            }
         }
         for (const artifactId of f.ArtifactIDs) {
             await DeleteMatching(ctx.Provider, ctx.User, 'MJ: Artifact Versions', `ArtifactID='${EscapeSQLString(artifactId)}'`);
@@ -884,11 +1066,23 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle(BUNDLE, {
             await DeleteMatching(ctx.Provider, ctx.User, 'MJ: Artifacts', `ID='${EscapeSQLString(artifactId)}'`);
         }
 
-        // 5. Delete any created MJ: Files rows before restoring storage
+        // 5. Delete any created MJ: Files rows (by FileIDs, fixture AccountID, or in-memory ProviderKey) before restoring storage
+        const fileFilters: string[] = [];
         const uniqueFiles = [...new Set(f.FileIDs)];
         if (uniqueFiles.length > 0) {
             const quotedFiles = uniqueFiles.map((id) => `'${EscapeSQLString(id)}'`).join(',');
-            await DeleteMatching(ctx.Provider, ctx.User, 'MJ: Files', `ID IN (${quotedFiles})`);
+            fileFilters.push(`ID IN (${quotedFiles})`);
+        }
+        if (f.Storage?.AccountID) {
+            fileFilters.push(`AccountID='${EscapeSQLString(f.Storage.AccountID)}'`);
+        }
+        const storageKeys = f.Storage?.Driver.Keys ?? [];
+        if (storageKeys.length > 0) {
+            const quotedKeys = storageKeys.map((k) => `'${EscapeSQLString(k)}'`).join(',');
+            fileFilters.push(`ProviderKey IN (${quotedKeys})`);
+        }
+        if (fileFilters.length > 0) {
+            await DeleteMatching(ctx.Provider, ctx.User, 'MJ: Files', fileFilters.join(' OR '));
         }
 
         // 6. Delete runtime relationship row if created
@@ -904,6 +1098,6 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle(BUNDLE, {
         }
 
         // 7. Restore storage (deletes temporary MJ: File Storage Accounts)
-        await f.Storage.restore();
+        await f.Storage?.restore();
     },
 });

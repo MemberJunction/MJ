@@ -948,5 +948,50 @@ describe('VideoStudioPreProductionAgent (VS-AGT-3)', () => {
         expect(result.finalStep.message).toContain('bad-gen-video');
         expect(result.finalStep.message).toContain('is not a valid UUID');
     });
+
+    it('forwards params.apiKeys and params.CredentialScope to RunNarrationPipeline', async () => {
+        const { agent } = createAgentWithStepTracking();
+        const spec = makeBaseSpec();
+        spec.DataBindings = [];
+
+        const narrationSpy = vi
+            .spyOn(narrationPipelineModule, 'RunNarrationPipeline')
+            .mockResolvedValue({
+                Spec: structuredClone(spec),
+                Clips: [],
+                Issues: [],
+            });
+
+        const runtimeKeys = [{ driverClass: 'ElevenLabsAudioGenerator', apiKey: 'xi-key-123' }];
+        const internal = agent as unknown as {
+            executeAgentInternal: (
+                params: ExecuteAgentParams<VideoGenerationSpec>,
+                config: AgentConfiguration,
+            ) => Promise<StepTrackingExecutionResult>;
+        };
+
+        const result = await internal.executeAgentInternal(
+            {
+                agent: { ID: 'agent-pre-prod' } as never,
+                conversationMessages: [],
+                contextUser: mockUser,
+                payload: spec,
+                apiKeys: runtimeKeys,
+                CredentialScope: 'RuntimeOnly',
+            },
+            {} as AgentConfiguration,
+        );
+
+        expect(result.finalStep.step).toBe('Success');
+        expect(narrationSpy).toHaveBeenCalledTimes(1);
+        expect(narrationSpy).toHaveBeenCalledWith(
+            expect.anything(),
+            expect.objectContaining({
+                APIKeys: runtimeKeys,
+                CredentialScope: 'RuntimeOnly',
+            }),
+        );
+    });
 });
+
 
