@@ -146,7 +146,7 @@ const entity = await md.GetEntityObject<AIModelEntity>('AI Models');
       }
   }
   ```
-- **Known weak singletons** that need migration: ~26 classes across the codebase including `GraphQLDataProvider`, `UserCache`, `StartupManager`, `RunQuerySQLFilterManager`, `QueueManager`, `SQLExpressionValidator`, `WarningManager`, `AuthProviderFactory`, `MCPClientManager`, `AgentDataPreloader`, and Angular/React services. See GitHub issue tracking this migration.
+- **When a class cannot extend `BaseSingleton<T>`** (e.g. `GraphQLDataProvider extends ProviderBase`, Angular `@Injectable()` services with DI constructor args, or classes whose constructor takes required arguments): back `Instance` with `GetGlobalObjectStore()` from `@memberjunction/global` under `private static readonly _globalStoreKey = '___SINGLETON__ClassName'` instead of a `private static _instance` field.
 
 ## 🚨 NO DYNAMIC `import()` UNLESS NARROWLY JUSTIFIED
 
@@ -183,6 +183,22 @@ The guard lives at `.github/scripts/check-esm-imports.mjs`. Only `OWN_DIST_MISSI
 
 ---
 
+## 🚨 COMPARE UUIDs WITH THE `@memberjunction/global` HELPERS — NEVER `===`, NEVER A NESTED SCAN
+
+SQL Server returns UUIDs upper-case and PostgreSQL lower-case, so `===`, `.includes()`, and a plain `Set`/`Map` keyed by ID break when the database changes. And a `.find()`/`.filter()` with `UUIDsEqual` inside a loop is an `n × m` scan.
+
+| Need | Use |
+|---|---|
+| Compare two IDs | `UUIDsEqual(a, b)` |
+| A set or map keyed by ID | `UUIDSet` / `UUIDMap` (not `Set` / `Map`) |
+| Look items up by ID inside a loop | `const byID = IndexByUUID(items);` once, then `byID.Get(id)` |
+| Children by parent ID inside a loop | `const byParent = GroupByUUID(items, x => x.ParentID);` once, then `byParent.Get(id) ?? []` |
+| Items whose ID is / is not in a list | `FilterByUUIDs(items, ids)` / `ExcludeByUUIDs(items, ids)` |
+
+`UUIDCompliance.test.ts` (the Source guards CI check) fails a PR that adds either pattern. Full patterns: [`guides/UUID_COMPARISON_GUIDE.md`](../../guides/UUID_COMPARISON_GUIDE.md).
+
+---
+
 ## Code Style Guide
 
 - Use TypeScript strict mode and explicit typing
@@ -191,10 +207,13 @@ The guard lives at `.github/scripts/check-esm-imports.mjs`. Only `OWN_DIST_MISSI
 - No explicit `any` types - see above
 - Prefer union types over enums for better package exports (e.g., `type Status = 'active' | 'inactive'` instead of `enum Status`)
 - Prefer object shorthand syntax
-- Follow existing naming conventions:
+- Follow existing naming conventions. **Pick a member's case by its visibility first** — public → PascalCase, `private` → camelCase, a new `protected` extension point → PascalCase — and treat SCREAMING_SNAKE as an allowed alternative for any constant. **An override always keeps its parent's casing** (some base classes, e.g. `BaseDashboard.initDashboard()`, have camelCase protected hooks), so check the base class before naming a `protected` member. `static` and `readonly` never change the case: a `public static` member is PascalCase, but a `private static readonly` is `maxEntries` or `MAX_ENTRIES`, **never** `MaxEntries`.
   - PascalCase for classes and interfaces
-  - **PascalCase for public class members** (properties, methods, `@Input()`, `@Output()`)
-  - **camelCase for private/protected class members**
+  - **PascalCase for public class members** (properties, methods, `@Input()`, `@Output()`) — and remember TypeScript's default visibility is *public*, so a member with **no** access modifier follows this rule too
+  - **camelCase for `private` class members** (a leading `_` is fine — `_config` backing a `public get Config()` is idiomatic)
+  - **PascalCase for `protected` extension points** — see the carve-out below; `protected` is NOT camelCase in MJ
+  - **PascalCase for exported functions, classes, interfaces, types and enums**; exported value `const`s are PascalCase or `SCREAMING_SNAKE`
+  - `SCREAMING_SNAKE_CASE` is allowed for constants at any visibility — an alternative to the case above, not a third option for privates (a private constant is camelCase or SCREAMING_SNAKE, never PascalCase)
   - camelCase for local variables and function parameters
   - Use descriptive names and avoid abbreviations
 - Imports: group imports by type (external, internal, relative)
@@ -208,7 +227,7 @@ The guard lives at `.github/scripts/check-esm-imports.mjs`. Only `OWN_DIST_MISSI
 
 ### Class Member Naming Convention (IMPORTANT)
 
-MemberJunction uses **PascalCase for all public class members** and **camelCase for private/protected members**. This applies to:
+MemberJunction uses **PascalCase for all public class members** and **camelCase for `private` members**. `protected` members are PascalCase when they are inherited extension points — see the carve-out below. This applies to:
 
 ```typescript
 // ✅ CORRECT - MemberJunction naming convention
@@ -221,19 +240,27 @@ export class MyComponent {
     public IsLoading: boolean = false;
     public SelectedRows: Record<string, unknown>[] = [];
 
-    // Private/protected properties - camelCase
+    // Statics and constants - visibility decides; SCREAMING_SNAKE is allowed for constants
+    public static readonly ComponentName = 'my-component'; // public static → PascalCase
+    public static readonly DEFAULT_TIMEOUT_MS = 30_000;    // constant → SCREAMING_SNAKE
+    private static readonly MAX_ENTRIES = 10_000;          // private constant → SCREAMING_SNAKE…
+    private static readonly sweepThreshold = 1_000;        // …or camelCase
+
+    // Private properties - camelCase
     private destroy$ = new Subject<void>();
     private _internalState: string = '';
-    protected cdr: ChangeDetectorRef;
+    private readonly cdr = inject(ChangeDetectorRef);
 
     // Public methods - PascalCase
     public LoadData(): void { }
     public OnGridReady(event: GridReadyEvent): void { }
     public GetSelectedRows(): Record<string, unknown>[] { }
 
-    // Private/protected methods - camelCase
+    // Private methods - camelCase
     private buildColumnDefs(): void { }
-    protected applyVisualConfig(): void { }
+
+    // Protected extension points - PascalCase (see the carve-out below)
+    protected ApplyVisualConfig(): void { }
 }
 
 // ❌ WRONG - Standard TypeScript convention (not used in MJ)
@@ -242,13 +269,99 @@ export class MyComponent {
     public isLoading: boolean = false;        // Should be PascalCase
     public loadData(): void { }               // Should be PascalCase
 }
+
+// ❌ ALSO WRONG - PascalCase on a private member (the gate fails the build on these)
+export class MyService {
+    private static readonly MaxEntries = 10_000;  // private is never PascalCase → MAX_ENTRIES or maxEntries
+    private LoadInternal(): void { }             // private method → loadInternal
+}
 ```
+
+**Don't copy a neighbor's casing without checking its visibility.** A public static member next to
+your new one is PascalCase because it is public; that says nothing about a `private` constant you add
+beside it. After adding or renaming class members, run `pnpm run check:naming` — it checks public and
+private members but not `protected`, so for a protected member check the base class yourself.
 
 **Why this matters:**
 - Consistency across the entire MemberJunction codebase
 - Clear visual distinction between public API and internal implementation
 - Matches the naming style used in MJ's generated entity classes
 - HTML template bindings must match the PascalCase property names
+
+#### 🚨 `protected` is PascalCase, not camelCase
+
+MJ's base classes declare **PascalCase protected extension points**, and an override must match the
+parent's casing exactly. `BaseAction.InternalRunAction` is overridden ~300 times;
+`BaseEngine.AdditionalLoading`, `BaseResourceComponent.OnQueryParamsChanged` and `ProviderToUse` are
+the same shape. This is the template-method pattern and it is load-bearing, so **write new protected
+extension points in PascalCase** and never "fix" an existing one — renaming it breaks every subclass.
+
+The `private`/`protected` split is therefore not symmetric: `private` has no inheritance contract to
+honour, so it stays camelCase and is the only half the gate enforces.
+
+```typescript
+export class MyAction extends BaseAction {
+    protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> { }  // ✅ matches the base
+    private buildPayload(): Payload { }                                                          // ✅ camelCase
+    private BuildPayload(): Payload { }                                                          // ❌ flagged
+}
+```
+
+#### Exported members are API surface too
+
+An exported type's members are a published contract, so the rule reaches them: members of an
+exported `interface`, of an exported `type` alias's object literals, and of an exported `enum` are
+PascalCase. Members of a **non-exported** interface are an implementation detail and are not
+checked. Public constructor parameter properties (`constructor(public QueryId: string)`) are class
+members and follow the member rule. Names published via `export { Foo }` follow the export rule.
+
+An interface that `extends` another, or a class that `implements` one, inherits its names — the
+finding lands on the declaring interface, which is the one place a rename can start. For a payload
+that mirrors a vendor's JSON (`access_token`), keep the remote casing and use the marker.
+
+#### Exported functions are PascalCase
+
+The repo was split almost evenly with nothing written down, so this is now settled: the public API
+surface is PascalCase whether it is a class member or a module export. A `const` holding an arrow
+function follows the function rule, not the const rule.
+
+```typescript
+export function EscapeSQLString(v: string): string { }   // ✅
+export const ResolveRestore = () => { };                 // ✅
+export function computeContentHash(): string { }         // ❌ flagged
+export const TERMINAL_STATUSES = ['Complete'];           // ✅ value const — SCREAMING_SNAKE
+```
+
+#### The gate
+
+Enforced on every PR by the `naming-conventions` standard — an AST pass over every `.ts` file.
+Severity says whether a **compatible fix exists**: anything a deprecated stub can fix — class
+members, exported functions and consts — is an `error` and fails the build. Members of an exported
+data shape are a `warn`, because an interface is erased at compile time, so there is no carrier for
+a stub and no rename that keeps consumers compiling.
+
+**The fix is a rename plus a deprecated stub**, which is what the gate is built around:
+
+```typescript
+public LoadData(): void { /* the real implementation */ }
+
+/** @deprecated Use {@link LoadData}. */
+public loadData(): void { return this.LoadData(); }
+```
+
+Anything carrying `@deprecated` is exempt, so the stub is not itself a violation. Name the
+replacement with `{@link}` and give no removal version.
+
+```bash
+pnpm run check:naming       # this check alone
+pnpm run check:standards    # every adopted standard, as CI runs it
+```
+
+Framework contracts (Angular `ng*` hooks, oclif command members, base-class overrides, `__mj_*`
+columns, `SCREAMING_SNAKE` constants, `@HostListener`/`@HostBinding`) are exempt automatically. For
+anything else, `// case-violation-ok-legacy-back-compat: <reason>` on the offending line or the one directly above it.
+Full detail, including why renaming an Angular `@Input()` also means editing its HTML template:
+[`guides/NAMING_CONVENTIONS_GUIDE.md`](../../guides/NAMING_CONVENTIONS_GUIDE.md).
 
 ---
 

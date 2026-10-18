@@ -9,13 +9,13 @@ type BridgeStatus = MJAIAgentSessionBridgeEntity['Status'];
 /** One node in the lifecycle timeline header. */
 export interface BridgeTimelineStep {
     /** The status this step represents. */
-    status: BridgeStatus;
-    label: string;
-    icon: string;
+    status: BridgeStatus;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    label: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+    icon: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
     /** The timestamp field that marks this step reached, if any. */
-    timestamp: Date | null;
+    timestamp: Date | null;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
     /** 'done' = passed, 'current' = the record's current status, 'pending' = not yet reached. */
-    state: 'done' | 'current' | 'pending';
+    state: 'done' | 'current' | 'pending';  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
 }
 
 /** The canonical happy-path lifecycle order for index comparison. */

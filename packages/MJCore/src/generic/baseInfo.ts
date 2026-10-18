@@ -1,4 +1,13 @@
 import { ExtractActualDefaultValue } from "./util";
+import type { IMetadataProvider } from "./interfaces";
+
+/**
+ * Back-references from Info objects to the metadata provider that built them. Held OUTSIDE the
+ * instances (a WeakMap rather than a field) so the reference can never leak into `toJSON()`,
+ * `Object.keys()`, `copyInitData` of a clone, or the local metadata cache — and so an Info object
+ * never keeps its provider reachable on its own account.
+ */
+const owningProviders = new WeakMap<BaseInfo, IMetadataProvider>();
 
 /**
  * Base class for all MemberJunction metadata info classes.
@@ -10,6 +19,56 @@ export abstract class BaseInfo {
      * Primary Key
      */
     ID: any = null
+
+    /**
+     * The metadata provider that built this Info object, when known.
+     *
+     * Info getters that resolve sibling metadata (an entity's IS-A children, a permission's RLS
+     * filter, a query's fields, an authorization's roles, …) must read from the SAME provider the
+     * object came from. In a multi-provider process — several `GraphQLDataProvider` instances with
+     * `separateConnection`, or a server servicing several connections — the global
+     * `Metadata.Provider` is a different provider or not set at all. Providers pass themselves to
+     * every Info constructor (`new m.class(row, provider)`), and container Info objects hand it to
+     * the child Info objects they construct.
+     *
+     * `undefined` for an Info object built outside a provider (tests, ad-hoc construction). Callers
+     * then fall back to the global provider, which is exactly the pre-existing behavior.
+     */
+    public get OwningProvider(): IMetadataProvider | undefined {
+        return owningProviders.get(this);
+    }
+
+    /**
+     * Records the provider that owns this Info object. A null/undefined provider is ignored, so
+     * passing an optional constructor argument straight through is always safe.
+     * @param provider - the provider whose metadata this object belongs to
+     */
+    public SetOwningProvider(provider: IMetadataProvider | null | undefined): void {
+        if (provider) {
+            owningProviders.set(this, provider);
+        }
+    }
+
+    /**
+     * Whether `key` resolves to a settable accessor somewhere on the prototype chain.
+     *
+     * A `@deprecated` alias for a renamed field is a get/set pair on the prototype, not an own
+     * property, so `hasOwnProperty` does not see it. Without this the incoming value is silently
+     * dropped: the DB column `spCreate` stops reaching `SpCreate`, and the entity loads with its
+     * custom routine name missing rather than failing loudly.
+     *
+     * Only accessors that can be WRITTEN qualify. A read-only getter has nothing to assign to, and
+     * requiring a setter keeps inherited methods out of the copy.
+     */
+    private settableAccessor(key: string): boolean {
+        let target = Object.getPrototypeOf(this);
+        while (target && target !== Object.prototype) {
+            const descriptor = Object.getOwnPropertyDescriptor(target, key);
+            if (descriptor) return typeof descriptor.set === 'function';
+            target = Object.getPrototypeOf(target);
+        }
+        return false;
+    }
 
     /**
      * Copies initialization data from a plain object to the class instance.
@@ -24,7 +83,7 @@ export abstract class BaseInfo {
             for (let j = 0; j < keys.length; j++) {
                 const key = keys[j];
                 // make sure it is one of our keys, we don't want to create NEW fields
-                if (Object.prototype.hasOwnProperty.call(this, key)) {
+                if (Object.prototype.hasOwnProperty.call(this, key) || this.settableAccessor(key)) {
                     // fast path for exact match first, fallback to length check + lowercasing
                     if ((key === 'DefaultValue' || (key.length === 12 && key.toLowerCase() === 'defaultvalue')) && initData[key]) {
                         // strip parens from default value from the DB, if they exist, for example defaults might be ((1)) or (getdate())   

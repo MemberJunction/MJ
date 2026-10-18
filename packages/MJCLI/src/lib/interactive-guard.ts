@@ -24,8 +24,13 @@ export { NonInteractiveError };
  * running in CI. Reads the env var the prerun hook sets from the global `--interactive`
  * / `--no-interactive` flags, then falls back to detecting the terminal.
  */
-export function isInteractiveRun(overrides: InteractivityInput = {}): boolean {
+export function IsInteractiveRun(overrides: InteractivityInput = {}): boolean {
   return ResolveInteractivity(overrides).interactive;
+}
+
+/** @deprecated Use {@link IsInteractiveRun}. */
+export function isInteractiveRun(overrides: InteractivityInput = {}): boolean {
+  return IsInteractiveRun(overrides);
 }
 
 /**
@@ -34,10 +39,10 @@ export function isInteractiveRun(overrides: InteractivityInput = {}): boolean {
  * Thin re-export of cli-core's `ResolveOrPrompt` so unmigrated commands import from
  * one place and pick up the env-based interactivity default automatically.
  */
-export const resolveOrPrompt = ResolveOrPrompt;
+export const resolveOrPrompt = ResolveOrPrompt;  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
 
 /** Guards a command that is interactive by nature and has no flag equivalent. */
-export const requireInteractive = RequireInteractive;
+export const requireInteractive = RequireInteractive;  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
 
 /**
  * Renders a {@link NonInteractiveError} through oclif's error path for commands that
@@ -49,7 +54,7 @@ export const requireInteractive = RequireInteractive;
  *
  * Re-throws anything that isn't a `NonInteractiveError` untouched.
  */
-export function failOnNonInteractive(
+export function FailOnNonInteractive(
   command: { error: (message: string | Error, options?: { exit?: number; suggestions?: string[] }) => never },
   error: unknown
 ): never {
@@ -59,18 +64,34 @@ export function failOnNonInteractive(
   throw error;
 }
 
+/** @deprecated Use {@link FailOnNonInteractive}. */
+export function failOnNonInteractive(
+  command: { error: (message: string | Error, options?: { exit?: number; suggestions?: string[] }) => never },
+  error: unknown
+): never {
+  return FailOnNonInteractive(command, error);
+}
+
 /**
  * Wraps a command body so any {@link NonInteractiveError} raised anywhere inside it
  * — including deep in a service callback — surfaces as a clean, actionable failure
  * instead of an unhandled rejection.
  */
-export async function withNonInteractiveHandling<T>(
+export async function WithNonInteractiveHandling<T>(
   command: { error: (message: string | Error, options?: { exit?: number; suggestions?: string[] }) => never },
   body: () => Promise<T>
 ): Promise<T> {
   try {
     return await body();
   } catch (e) {
-    return failOnNonInteractive(command, e);
+    return FailOnNonInteractive(command, e);
   }
+}
+
+/** @deprecated Use {@link WithNonInteractiveHandling}. */
+export async function withNonInteractiveHandling<T>(
+  command: { error: (message: string | Error, options?: { exit?: number; suggestions?: string[] }) => never },
+  body: () => Promise<T>
+): Promise<T> {
+  return WithNonInteractiveHandling(command, body);
 }

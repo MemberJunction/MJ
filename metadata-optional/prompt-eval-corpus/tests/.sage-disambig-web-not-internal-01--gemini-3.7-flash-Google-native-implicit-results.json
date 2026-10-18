@@ -19,7 +19,7 @@
         "kind": "action",
         "actions": [
           {
-            "name": "Perplexity Search"
+            "name": "Web Search"
           }
         ],
         "allowAdditionalActions": true,
@@ -49,7 +49,7 @@
             "kind": "action",
             "actions": [
               {
-                "name": "Perplexity Search"
+                "name": "Web Search"
               }
             ],
             "allowAdditionalActions": true,

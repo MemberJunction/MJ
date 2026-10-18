@@ -2,23 +2,23 @@ import { Resolver, Mutation, Arg, Ctx, ObjectType, Field } from 'type-graphql';
 import { AppContext, UserPayload } from '../types.js';
 import { LogError, LogStatus, Metadata, RunView } from '@memberjunction/core';
 import { MJTemplateContentEntity, MJTemplateEntityExtended } from '@memberjunction/core-entities';
-import { TemplateEngineServer } from '@memberjunction/templates';
+import { GetTemplateRunRefusal, TemplateEngineServer } from '@memberjunction/templates';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { GetReadWriteProvider } from '../util.js';
 
 @ObjectType()
 export class TemplateRunResult {
     @Field()
-    success: boolean;
+    success: boolean;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field({ nullable: true })
-    output?: string;
+    output?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field({ nullable: true })
-    error?: string;
+    error?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field({ nullable: true })
-    executionTimeMs?: number;
+    executionTimeMs?: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 }
 
 /**
@@ -45,6 +45,18 @@ export class RunTemplateResolver extends ResolverBase {
         try {
             LogStatus(`=== RUNNING TEMPLATE FOR ID: ${templateId} ===`);
 
+            // Same rule as the Template.Run remote operation, checked before anything is loaded
+            const currentUser = this.GetUserFromPayload(userPayload);
+            const p = GetReadWriteProvider(providers);
+            const refusal = GetTemplateRunRefusal(currentUser, p);
+            if (refusal) {
+                return {
+                    success: false,
+                    error: refusal,
+                    executionTimeMs: Date.now() - startTime
+                };
+            }
+
             // Parse context data (JSON string)
             let data = {};
             if (contextData) {
@@ -59,17 +71,6 @@ export class RunTemplateResolver extends ResolverBase {
                 }
             }
 
-            // Get current user from payload
-            const currentUser = this.GetUserFromPayload(userPayload);
-            if (!currentUser) {
-                return {
-                    success: false,
-                    error: 'Unable to determine current user',
-                    executionTimeMs: Date.now() - startTime
-                };
-            }
-            
-            const p = GetReadWriteProvider(providers);
             // Load the template entity
             const templateEntity = await p.GetEntityObject<MJTemplateEntityExtended>('MJ: Templates', currentUser);
             await templateEntity.Load(templateId);

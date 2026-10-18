@@ -380,7 +380,7 @@ export class MJDialogService {
   /**
    * Kendo-compatible alias — lowercase `open` for easier migration.
    */
-  open(settings: MJDialogSettings): MJDialogRef {
+  open(settings: MJDialogSettings): MJDialogRef {  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
     return this.Open(settings);
   }
 }

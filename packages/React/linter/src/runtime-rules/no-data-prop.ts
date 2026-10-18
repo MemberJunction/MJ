@@ -1,4 +1,4 @@
-import { traverse, NodePath } from '../lint-utils';
+import { Traverse, NodePath } from '../lint-utils';
 import * as t from '@babel/types';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseLintRule } from '../lint-rule';
@@ -39,7 +39,7 @@ export class NoDataPropRule extends BaseLintRule {
       return violations; // Skip - generic data prop is expected for chart components
     }
 
-    traverse(ast, {
+    Traverse(ast, {
       // Check function parameters for 'data' prop
       FunctionDeclaration(path: NodePath<t.FunctionDeclaration>) {
         if (path.node.id && path.node.id.name === componentName && path.node.params[0]) {

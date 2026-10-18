@@ -1,14 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import {
-  createDefaultTreeNode,
-  createDefaultBranchConfig,
-  createDefaultLeafConfig
+  CreateDefaultTreeNode,
+  CreateDefaultBranchConfig,
+  CreateDefaultLeafConfig
 } from '../lib/models/tree-types';
 import type { TreeNode, TreeBranchConfig, TreeLeafConfig } from '../lib/models/tree-types';
 
 describe('createDefaultTreeNode', () => {
   it('should create node with all default values', () => {
-    const node = createDefaultTreeNode();
+    const node = CreateDefaultTreeNode();
     expect(node.ID).toBe('');
     expect(node.Label).toBe('');
     expect(node.Type).toBe('branch');
@@ -26,7 +26,7 @@ describe('createDefaultTreeNode', () => {
   });
 
   it('should allow partial overrides', () => {
-    const node = createDefaultTreeNode({
+    const node = CreateDefaultTreeNode({
       ID: 'node-1',
       Label: 'Test Node',
       Type: 'leaf',
@@ -42,16 +42,16 @@ describe('createDefaultTreeNode', () => {
   });
 
   it('should create independent instances', () => {
-    const node1 = createDefaultTreeNode({ ID: 'a' });
-    const node2 = createDefaultTreeNode({ ID: 'b' });
-    node1.Children.push(createDefaultTreeNode({ ID: 'child' }));
+    const node1 = CreateDefaultTreeNode({ ID: 'a' });
+    const node2 = CreateDefaultTreeNode({ ID: 'b' });
+    node1.Children.push(CreateDefaultTreeNode({ ID: 'child' }));
     expect(node2.Children).toHaveLength(0);
   });
 });
 
 describe('createDefaultBranchConfig', () => {
   it('should create config with defaults', () => {
-    const config = createDefaultBranchConfig();
+    const config = CreateDefaultBranchConfig();
     expect(config.EntityName).toBe('');
     expect(config.DisplayField).toBe('Name');
     expect(config.IDField).toBe('ID');
@@ -61,7 +61,7 @@ describe('createDefaultBranchConfig', () => {
   });
 
   it('should allow overrides', () => {
-    const config = createDefaultBranchConfig({
+    const config = CreateDefaultBranchConfig({
       EntityName: 'MJ: Query Categories',
       DefaultIcon: 'fa-solid fa-database'
     });
@@ -73,7 +73,7 @@ describe('createDefaultBranchConfig', () => {
 
 describe('createDefaultLeafConfig', () => {
   it('should create config with defaults', () => {
-    const config = createDefaultLeafConfig();
+    const config = CreateDefaultLeafConfig();
     expect(config.EntityName).toBe('');
     expect(config.ParentField).toBe('');
     expect(config.DisplayField).toBe('Name');
@@ -83,7 +83,7 @@ describe('createDefaultLeafConfig', () => {
   });
 
   it('should allow overrides', () => {
-    const config = createDefaultLeafConfig({
+    const config = CreateDefaultLeafConfig({
       EntityName: 'MJ: Queries',
       ParentField: 'CategoryID'
     });

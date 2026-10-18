@@ -6,7 +6,7 @@ import { MJComputerUseEngine } from '../engine/MJComputerUseEngine.js';
 import type { DriverExecutionContext } from '@memberjunction/testing-engine';
 import { MJRunComputerUseParams } from '../types/mj-params.js';
 import { ComputerUseTestConfig, ComputerUseTestInput } from '../test-driver/types.js';
-import { loadScript } from '../test-driver/script-store.js';
+import { LoadScript } from '../test-driver/script-store.js';
 
 /**
  * `dispatchRun` and `maybeRecordScript` are where the replay tier's promises are
@@ -172,7 +172,7 @@ describe('dispatchRun tier selection', () => {
         const engine = new MutatingEngine(result('Completed'), result('Completed'));
         await driver.dispatch(engine as unknown as MJComputerUseEngine, params(), {}, ctx(test));
 
-        expect(loadScript(test)!.Steps[0].Action.Target!.Selector).toBe('#old');
+        expect(LoadScript(test)!.Steps[0].Action.Target!.Selector).toBe('#old');
     });
 
     it('honours forceTier llm even when a script exists', async () => {

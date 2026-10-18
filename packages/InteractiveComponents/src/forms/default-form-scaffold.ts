@@ -16,7 +16,7 @@
  */
 import type { EntityInfo, EntityFieldInfo, IMetadataProvider } from '@memberjunction/core';
 import type { ComponentSpec } from '../component-spec';
-import { curateFromEntityInfo, type CuratedFormField, type CuratedFormSchema } from './curated-form-schema';
+import { CurateFromEntityInfo, type CuratedFormField, type CuratedFormSchema } from './curated-form-schema';
 
 /** A field-type → input-type mapping mirroring CodeGen's behaviour. */
 type ScaffoldInputType = 'textbox' | 'textarea' | 'number' | 'checkbox' | 'datepicker' | 'select' | 'fk';
@@ -62,24 +62,32 @@ const DEFAULT_ICON = 'fa-solid fa-circle-info';
  *   - System Metadata section is always last and starts collapsed.
  *   - 2-column grid by default; long-string and textarea fields go full-span.
  */
-export function buildDefaultFormScaffold(
+export function BuildDefaultFormScaffold(
     entityName: string,
     provider: IMetadataProvider,
 ): ComponentSpec | null {
     const entity = provider.EntityByName(entityName);
     if (!entity) return null;
-    return buildScaffoldFromEntityInfo(entity, provider);
+    return BuildScaffoldFromEntityInfo(entity, provider);
+}
+
+/** @deprecated Use {@link BuildDefaultFormScaffold}. */
+export function buildDefaultFormScaffold(
+    entityName: string,
+    provider: IMetadataProvider,
+): ComponentSpec | null {
+    return BuildDefaultFormScaffold(entityName, provider);
 }
 
 /** Same as {@link buildDefaultFormScaffold} but takes an already-resolved EntityInfo. */
-export function buildScaffoldFromEntityInfo(
+export function BuildScaffoldFromEntityInfo(
     entity: EntityInfo,
     provider: IMetadataProvider,
 ): ComponentSpec {
-    const schema = curateFromEntityInfo(entity, provider);
+    const schema = CurateFromEntityInfo(entity, provider);
     const layout = computeSectionLayout(entity, schema);
     const code = renderJsx(entity, schema, layout);
-    const name = sanitizeComponentName(`${entity.ClassName || entity.Name}Form`);
+    const name = SanitizeComponentName(`${entity.ClassName || entity.Name}Form`);
     return {
         name,
         title: `${schema.displayName} Form`,
@@ -91,6 +99,14 @@ export function buildScaffoldFromEntityInfo(
         functionalRequirements: defaultFunctionalRequirements(schema),
         technicalDesign: defaultTechnicalDesign(schema, layout),
     } as ComponentSpec;
+}
+
+/** @deprecated Use {@link BuildScaffoldFromEntityInfo}. */
+export function buildScaffoldFromEntityInfo(
+    entity: EntityInfo,
+    provider: IMetadataProvider,
+): ComponentSpec {
+    return BuildScaffoldFromEntityInfo(entity, provider);
 }
 
 // ── section / field planning ─────────────────────────────────────────────
@@ -213,7 +229,7 @@ function iconForCategory(category: string, _entity: EntityInfo): string {
 // ── JSX rendering ────────────────────────────────────────────────────────
 
 function renderJsx(entity: EntityInfo, schema: CuratedFormSchema, layout: ScaffoldSection[]): string {
-    const componentName = sanitizeComponentName(`${entity.ClassName || entity.Name}Form`);
+    const componentName = SanitizeComponentName(`${entity.ClassName || entity.Name}Form`);
     const renderField = (f: ScaffoldField, indent: string): string => {
         const span = f.fullSpan ? ' span={2}' : '';
         const readOnly = f.readOnly ? ' readOnly' : '';
@@ -327,10 +343,15 @@ function defaultTechnicalDesign(schema: CuratedFormSchema, layout: ScaffoldSecti
 }
 
 /** Strip non-identifier characters so the function name is valid JS. */
-export function sanitizeComponentName(raw: string): string {
+export function SanitizeComponentName(raw: string): string {
     const cleaned = raw.replace(/[^A-Za-z0-9_]/g, '');
     if (!cleaned || /^\d/.test(cleaned)) return `Form_${cleaned || 'Component'}`;
     return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+}
+
+/** @deprecated Use {@link SanitizeComponentName}. */
+export function sanitizeComponentName(raw: string): string {
+    return SanitizeComponentName(raw);
 }
 
 function escapeJsx(s: string): string {

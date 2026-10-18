@@ -21,7 +21,7 @@ export class HistoryCommand {
      * @param flags - Command flags
      * @param contextUser - Optional user context (will be fetched if not provided)
      */
-    async execute(testId: string | undefined, flags: HistoryFlags, contextUser?: UserInfo): Promise<void> {
+    async Execute(testId: string | undefined, flags: HistoryFlags, contextUser?: UserInfo): Promise<void> {
         try {
             console.log(OutputFormatter.formatInfo('History command not yet implemented'));
             console.log('\nPlanned features:');
@@ -43,5 +43,10 @@ export class HistoryCommand {
             console.error(OutputFormatter.formatError('Failed to show history', error as Error));
             process.exit(1);
         }
+    }
+
+    /** @deprecated Use {@link Execute}. */
+    async execute(testId: string | undefined, flags: HistoryFlags, contextUser?: UserInfo): Promise<void> {
+        return this.Execute(testId, flags, contextUser);
     }
 }

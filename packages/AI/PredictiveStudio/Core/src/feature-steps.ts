@@ -120,6 +120,8 @@ export interface LLMDerivedFeatureStep extends FeatureStepBase {
   Kind: 'llm-derived';
   /** Reference to the upstream Feature Pipeline that persisted these features. */
   FeaturePipelineRef: string;
+  /** Explicit persisted column names populated by this Feature Pipeline. */
+  Columns: string[];
 }
 
 /**

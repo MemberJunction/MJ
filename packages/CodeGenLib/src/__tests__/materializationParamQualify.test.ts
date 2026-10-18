@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { SQLServerDialect } from '@memberjunction/sql-dialect';
-import { qualifyParameterizedQuery, proveFilterColumnBinding, type ParamClassification } from '../Database/materializationAnalysis';
+import { QualifyParameterizedQuery, ProveFilterColumnBinding, type ParamClassification } from '../Database/materializationAnalysis';
 
 /**
  * Phase 2a — parameterization qualifying core (plan §9 buckets + §10 asymmetric-risk).
@@ -18,13 +18,13 @@ describe('qualifyParameterizedQuery', () => {
     const sql = "SELECT ID, Amount, ChapterID, Region FROM Orders WHERE ChapterID = 7 AND Region = 'East'";
 
     it('no params → mode None, qualifies', () => {
-        const r = qualifyParameterizedQuery({ queryName: 'Q', params: [], outputColumns: out });
+        const r = QualifyParameterizedQuery({ queryName: 'Q', params: [], outputColumns: out });
         expect(r).toEqual({ qualifies: true, paramMode: 'None', rowFilterColumns: [], readFilterSpec: [] });
     });
 
     it('single row-filter on a present output column → RowFilterBroad + that column + read-filter spec', () => {
         const params: ParamClassification[] = [{ name: 'chapterId', role: 'RowFilter', filterColumn: 'ChapterID', filterOperator: '=', filterKind: 'scalar' }];
-        const r = qualifyParameterizedQuery({ queryName: 'Q', params, outputColumns: out, allowRowFilterBroad: true, sql, dialect });
+        const r = QualifyParameterizedQuery({ queryName: 'Q', params, outputColumns: out, allowRowFilterBroad: true, sql, dialect });
         expect(r.qualifies).toBe(true);
         expect(r.paramMode).toBe('RowFilterBroad');
         expect(r.rowFilterColumns).toEqual(['ChapterID']);
@@ -36,7 +36,7 @@ describe('qualifyParameterizedQuery', () => {
             { name: 'chapterId', role: 'RowFilter', filterColumn: 'ChapterID', filterOperator: '>=', filterKind: 'scalar' },
             { name: 'regions', role: 'RowFilter', filterColumn: 'Region', filterOperator: 'IN', filterKind: 'list' },
         ];
-        const r = qualifyParameterizedQuery({ queryName: 'Q', params, outputColumns: out, allowRowFilterBroad: true, sql, dialect });
+        const r = QualifyParameterizedQuery({ queryName: 'Q', params, outputColumns: out, allowRowFilterBroad: true, sql, dialect });
         expect(r.paramMode).toBe('RowFilterBroad');
         expect(r.rowFilterColumns).toEqual(['ChapterID', 'Region']);
         expect(r.readFilterSpec).toEqual([
@@ -47,14 +47,14 @@ describe('qualifyParameterizedQuery', () => {
 
     it('row-filter column matched case-insensitively', () => {
         const params: ParamClassification[] = [{ name: 'c', role: 'RowFilter', filterColumn: 'chapterid', filterOperator: '=', filterKind: 'scalar' }];
-        const r = qualifyParameterizedQuery({ queryName: 'Q', params, outputColumns: out, allowRowFilterBroad: true, sql, dialect });
+        const r = QualifyParameterizedQuery({ queryName: 'Q', params, outputColumns: out, allowRowFilterBroad: true, sql, dialect });
         expect(r.qualifies).toBe(true);
         expect(r.paramMode).toBe('RowFilterBroad');
     });
 
     it('row-filter refuses BY DEFAULT (RowFilterBroad enablement switch off)', () => {
         const params: ParamClassification[] = [{ name: 'chapterId', role: 'RowFilter', filterColumn: 'ChapterID', filterOperator: '=', filterKind: 'scalar' }];
-        const r = qualifyParameterizedQuery({ queryName: 'Q', params, outputColumns: out, sql, dialect }); // allowRowFilterBroad omitted → false
+        const r = QualifyParameterizedQuery({ queryName: 'Q', params, outputColumns: out, sql, dialect }); // allowRowFilterBroad omitted → false
         expect(r.qualifies).toBe(false);
         expect(r.paramMode).toBe('None');
         expect(r.reason).toMatch(/not enabled in this build/i);
@@ -62,63 +62,63 @@ describe('qualifyParameterizedQuery', () => {
 
     it('row-filter with an UNSAFE operator (LIKE) → refuse (stays live-only), even when enabled', () => {
         const params: ParamClassification[] = [{ name: 'q', role: 'RowFilter', filterColumn: 'Region', filterOperator: 'LIKE', filterKind: 'scalar' }];
-        const r = qualifyParameterizedQuery({ queryName: 'Q', params, outputColumns: out, allowRowFilterBroad: true });
+        const r = QualifyParameterizedQuery({ queryName: 'Q', params, outputColumns: out, allowRowFilterBroad: true });
         expect(r.qualifies).toBe(false);
         expect(r.reason).toMatch(/read-time-safe operator set/i);
     });
 
     it('row-filter with operator/value-shape mismatch (IN but scalar kind) → refuse under uncertainty', () => {
         const params: ParamClassification[] = [{ name: 'x', role: 'RowFilter', filterColumn: 'Region', filterOperator: 'IN', filterKind: 'scalar' }];
-        const r = qualifyParameterizedQuery({ queryName: 'Q', params, outputColumns: out, allowRowFilterBroad: true });
+        const r = QualifyParameterizedQuery({ queryName: 'Q', params, outputColumns: out, allowRowFilterBroad: true });
         expect(r.qualifies).toBe(false);
         expect(r.reason).toMatch(/expects a list value/i);
     });
 
     it('row-filter with an unresolved operator → refuse (cannot reconstruct the predicate)', () => {
         const params: ParamClassification[] = [{ name: 'x', role: 'RowFilter', filterColumn: 'ChapterID' }]; // no operator
-        const r = qualifyParameterizedQuery({ queryName: 'Q', params, outputColumns: out, allowRowFilterBroad: true });
+        const r = QualifyParameterizedQuery({ queryName: 'Q', params, outputColumns: out, allowRowFilterBroad: true });
         expect(r.qualifies).toBe(false);
         expect(r.reason).toMatch(/read-time-safe operator set/i);
     });
 
     it('row-filter on a column NOT in the output → refuse (unsound to filter a projected-away column)', () => {
         const params: ParamClassification[] = [{ name: 'x', role: 'RowFilter', filterColumn: 'NotProjected' }];
-        const r = qualifyParameterizedQuery({ queryName: 'Q', params, outputColumns: out });
+        const r = QualifyParameterizedQuery({ queryName: 'Q', params, outputColumns: out });
         expect(r.qualifies).toBe(false);
         expect(r.reason).toMatch(/not in the materialized output/i);
     });
 
     it('row-filter with no resolved column → refuse under uncertainty', () => {
         const params: ParamClassification[] = [{ name: 'x', role: 'RowFilter' }];
-        const r = qualifyParameterizedQuery({ queryName: 'Q', params, outputColumns: out });
+        const r = QualifyParameterizedQuery({ queryName: 'Q', params, outputColumns: out });
         expect(r.qualifies).toBe(false);
         expect(r.reason).toMatch(/no filter column/i);
     });
 
     it('unbounded structural (Bucket 3) → refuse', () => {
         const params: ParamClassification[] = [{ name: 'sql', role: 'Unbounded' }];
-        const r = qualifyParameterizedQuery({ queryName: 'Q', params, outputColumns: out });
+        const r = QualifyParameterizedQuery({ queryName: 'Q', params, outputColumns: out });
         expect(r.qualifies).toBe(false);
         expect(r.reason).toMatch(/unbounded|Bucket 3/i);
     });
 
     it('structural (Bucket 2) refuses by default (per-value cache disabled)', () => {
         const params: ParamClassification[] = [{ name: 'reportType', role: 'Structural', boundedDomain: ['a', 'b'] }];
-        const r = qualifyParameterizedQuery({ queryName: 'Q', params, outputColumns: out });
+        const r = QualifyParameterizedQuery({ queryName: 'Q', params, outputColumns: out });
         expect(r.qualifies).toBe(false);
         expect(r.reason).toMatch(/per-value cache is disabled/i);
     });
 
     it('structural with bounded domain → PerValueCache when explicitly enabled', () => {
         const params: ParamClassification[] = [{ name: 'reportType', role: 'Structural', boundedDomain: ['a', 'b', 'c'] }];
-        const r = qualifyParameterizedQuery({ queryName: 'Q', params, outputColumns: out, allowPerValueCache: true });
+        const r = QualifyParameterizedQuery({ queryName: 'Q', params, outputColumns: out, allowPerValueCache: true });
         expect(r.qualifies).toBe(true);
         expect(r.paramMode).toBe('PerValueCache');
     });
 
     it('structural enabled but with no bounded domain → refuse', () => {
         const params: ParamClassification[] = [{ name: 'reportType', role: 'Structural' }];
-        const r = qualifyParameterizedQuery({ queryName: 'Q', params, outputColumns: out, allowPerValueCache: true });
+        const r = QualifyParameterizedQuery({ queryName: 'Q', params, outputColumns: out, allowPerValueCache: true });
         expect(r.qualifies).toBe(false);
         expect(r.reason).toMatch(/no bounded domain/i);
     });
@@ -128,7 +128,7 @@ describe('qualifyParameterizedQuery', () => {
             { name: 'chapterId', role: 'RowFilter', filterColumn: 'ChapterID', filterOperator: '=', filterKind: 'scalar' },
             { name: 'reportType', role: 'Structural', boundedDomain: ['a'] },
         ];
-        const r = qualifyParameterizedQuery({ queryName: 'Q', params, outputColumns: out, allowPerValueCache: true, sql, dialect });
+        const r = QualifyParameterizedQuery({ queryName: 'Q', params, outputColumns: out, allowPerValueCache: true, sql, dialect });
         expect(r.qualifies).toBe(false);
         expect(r.reason).toMatch(/mixes row-filter and structural/i);
     });
@@ -144,7 +144,7 @@ describe('qualifyParameterizedQuery', () => {
         it('JOIN COLLISION: predicate on o.Status, output projects c.Status → refuse', () => {
             const joinSQL = "SELECT o.ID, c.Status FROM Orders o INNER JOIN Customers c ON c.ID = o.CustomerID WHERE o.Status = 'X'";
             const params: ParamClassification[] = [{ name: 's', role: 'RowFilter', filterColumn: 'Status', filterOperator: '=', filterKind: 'scalar' }];
-            const r = qualifyParameterizedQuery({ queryName: 'Q', params, outputColumns: ['ID', 'Status'], allowRowFilterBroad: true, sql: joinSQL, dialect });
+            const r = QualifyParameterizedQuery({ queryName: 'Q', params, outputColumns: ['ID', 'Status'], allowRowFilterBroad: true, sql: joinSQL, dialect });
             expect(r.qualifies).toBe(false);
             expect(r.paramMode).not.toBe('RowFilterBroad');
             expect(r.reason).toMatch(/different source column/i);
@@ -153,14 +153,14 @@ describe('qualifyParameterizedQuery', () => {
         it('ALIAS REBINDING: output BillRegion is an alias over ShipRegion → refuse', () => {
             const aliasSQL = "SELECT ID, ShipRegion AS BillRegion FROM Orders WHERE BillRegion = 'East'";
             const params: ParamClassification[] = [{ name: 'r', role: 'RowFilter', filterColumn: 'BillRegion', filterOperator: '=', filterKind: 'scalar' }];
-            const r = qualifyParameterizedQuery({ queryName: 'Q', params, outputColumns: ['ID', 'BillRegion'], allowRowFilterBroad: true, sql: aliasSQL, dialect });
+            const r = QualifyParameterizedQuery({ queryName: 'Q', params, outputColumns: ['ID', 'BillRegion'], allowRowFilterBroad: true, sql: aliasSQL, dialect });
             expect(r.qualifies).toBe(false);
             expect(r.reason).toMatch(/ALIAS over source column "ShipRegion"/i);
         });
 
         it('no rendered SQL supplied → refuse (fail closed; nothing can prove the binding)', () => {
             const params: ParamClassification[] = [{ name: 'c', role: 'RowFilter', filterColumn: 'ChapterID', filterOperator: '=', filterKind: 'scalar' }];
-            const r = qualifyParameterizedQuery({ queryName: 'Q', params, outputColumns: out, allowRowFilterBroad: true });
+            const r = QualifyParameterizedQuery({ queryName: 'Q', params, outputColumns: out, allowRowFilterBroad: true });
             expect(r.qualifies).toBe(false);
             expect(r.reason).toMatch(/no rendered SQL was supplied/i);
         });
@@ -168,7 +168,7 @@ describe('qualifyParameterizedQuery', () => {
         it('NON-REGRESSION: a JOIN whose predicate and projection share the SAME qualifier still qualifies', () => {
             const joinSQL = "SELECT o.ID, o.Status FROM Orders o INNER JOIN Customers c ON c.ID = o.CustomerID WHERE o.Status = 'X'";
             const params: ParamClassification[] = [{ name: 's', role: 'RowFilter', filterColumn: 'Status', filterOperator: '=', filterKind: 'scalar' }];
-            const r = qualifyParameterizedQuery({ queryName: 'Q', params, outputColumns: ['ID', 'Status'], allowRowFilterBroad: true, sql: joinSQL, dialect });
+            const r = QualifyParameterizedQuery({ queryName: 'Q', params, outputColumns: ['ID', 'Status'], allowRowFilterBroad: true, sql: joinSQL, dialect });
             expect(r.qualifies).toBe(true);
             expect(r.paramMode).toBe('RowFilterBroad');
             expect(r.rowFilterColumns).toEqual(['Status']);
@@ -178,7 +178,7 @@ describe('qualifyParameterizedQuery', () => {
 
 describe('proveFilterColumnBinding', () => {
     const dialect = new SQLServerDialect();
-    const prove = (sql: string, filterColumn: string) => proveFilterColumnBinding({ sql, dialect, filterColumn });
+    const prove = (sql: string, filterColumn: string) => ProveFilterColumnBinding({ sql, dialect, filterColumn });
 
     it('proves the ordinary single-table, unqualified, un-aliased case', () => {
         expect(prove("SELECT ID, Region FROM Orders WHERE Region = 'East'", 'Region')).toEqual({ provable: true });

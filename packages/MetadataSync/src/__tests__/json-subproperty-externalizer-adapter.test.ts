@@ -4,9 +4,9 @@ import * as os from 'os';
 import * as path from 'path';
 import { FieldExternalizer } from '../lib/FieldExternalizer.js';
 import {
-    fieldExternalizerAdapter,
-    externalizeSubProperties,
-    findSubPropertyExternalizations,
+    FieldExternalizerAdapter,
+    ExternalizeSubProperties,
+    FindSubPropertyExternalizations,
 } from '../lib/json-subproperty-externalization.js';
 
 /**
@@ -21,13 +21,13 @@ describe('fieldExternalizerAdapter', () => {
     const properties = { Name: 'T001 - Login Smoke', ID: 'abc' };
 
     function adapter(targetDir: string, mergeStrategy = 'merge') {
-        return fieldExternalizerAdapter(new FieldExternalizer(), properties, targetDir, mergeStrategy);
+        return FieldExternalizerAdapter(new FieldExternalizer(), properties, targetDir, mergeStrategy);
     }
 
     async function run(fieldValue: unknown, existingFieldValue?: unknown, mergeStrategy = 'merge') {
-        return externalizeSubProperties(
+        return ExternalizeSubProperties(
             fieldValue,
-            findSubPropertyExternalizations('Configuration', config),
+            FindSubPropertyExternalizations('Configuration', config),
             adapter(dir, mergeStrategy),
             existingFieldValue
         );

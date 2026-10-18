@@ -31,7 +31,7 @@ export interface ExpectNoAxeViolationsOptions {
    * always pair it with an `// A11Y-DEBT:` comment at the call site naming each rule and
    * why it's waived, so the debt is grep-able and the rest of the rule set keeps gating.
    */
-  disableRules?: readonly string[];
+  disableRules?: readonly string[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /** One line per violation: id, impact, help text, and the CSS targets of every impacted node. */

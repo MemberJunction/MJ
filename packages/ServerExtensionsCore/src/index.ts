@@ -47,16 +47,22 @@ export {
     MAX_SERVER_EXTENSION_ROOT_PATH_LENGTH,
     RESERVED_SERVER_EXTENSION_ROOTS,
     RESERVED_SERVER_EXTENSION_ROOT_PREFIXES,
-    describeServerExtensionMount,
-    extractServerExtensionsFromModule,
-    extractServerExtensionsFromPackageJson,
-    mergeServerExtensionConfigs,
-    normalizeServerExtensionConfigs,
-    prepareServerExtensionConfigs,
-    serverExtensionRootsOverlap,
-    validateServerExtensionRootPath,
+    DescribeServerExtensionMount, describeServerExtensionMount,
+    ExtractServerExtensionsFromModule, extractServerExtensionsFromModule,
+    ExtractServerExtensionsFromPackageJson, extractServerExtensionsFromPackageJson,
+    MergeServerExtensionConfigs, mergeServerExtensionConfigs,
+    NormalizeServerExtensionConfigs, normalizeServerExtensionConfigs,
+    PrepareServerExtensionConfigs, prepareServerExtensionConfigs,
+    ServerExtensionRootsOverlap, serverExtensionRootsOverlap,
+    ValidateServerExtensionRootPath, validateServerExtensionRootPath,
+    ComposeServerExtensionMountPath,
 } from './collect.js';
 export type { NormalizeServerExtensionOptions, PrepareServerExtensionOptions } from './collect.js';
+export {
+    GetCorsOwningServerExtensionRoots,
+    IsPathUnderServerExtensionRoot,
+    SkipForServerExtensionRoots,
+} from './corsOwnership.js';
 export {
     RegisterMediaUpgradeRoute,
     InstallMediaUpgradeDispatcher,

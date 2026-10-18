@@ -37,7 +37,8 @@
 export type ActionableCommand =
     | OpenResourceCommand
     | OpenURLCommand
-    | CaptureDataSnapshotCommand;
+    | CaptureDataSnapshotCommand
+    | ComposeEmailCommand;
 
 /**
  * Command to open a resource in the MemberJunction UI.
@@ -382,4 +383,154 @@ export interface ShowNotificationCommand {
      * Default: 3000 (3 seconds)
      */
     duration?: number;
+}
+
+/**
+ * Command offering the user a pre-filled email to send THEMSELVES.
+ *
+ * The agent drafts; the user sends. Nothing in this path transmits mail — the host opens the
+ * user's own compose surface with the fields filled in, and the user decides whether to send.
+ * Agents that need to actually send mail should use MJ's Communication providers instead.
+ *
+ * Deliberately carries NO target field (no "open in Outlook Web", no "use the in-app composer").
+ * Which compose surface opens is the HOST's decision, so retargeting later — a Gmail/Outlook web
+ * deep link, an in-app composer — is a change in one handler rather than a migration across every
+ * agent that ever emitted one of these.
+ *
+ * Bodies are PLAIN TEXT. The `mailto:` scheme has no HTML body parameter, so markdown an agent
+ * emits will appear literally in the user's compose window; instruct agents accordingly.
+ *
+ * @example
+ * ```json
+ * {
+ *   "type": "compose:email",
+ *   "label": "Open draft in Mail",
+ *   "icon": "fa-envelope",
+ *   "to": ["bob@example.com"],
+ *   "subject": "Membership renewal",
+ *   "body": "Hi Bob,\n\nYour membership renews on [date]."
+ * }
+ * ```
+ */
+export interface ComposeEmailCommand {
+    /** Command type identifier */
+    type: 'compose:email';
+    /**
+     * Button label shown to the user.
+     * Should make clear that a draft opens rather than anything being sent
+     * (e.g. "Open draft in Mail"), never "Send email".
+     */
+    label: string;
+    /**
+     * Optional Font Awesome icon class to display on the button.
+     * Commonly: "fa-envelope".
+     */
+    icon?: string;
+    /**
+     * Recipient addresses.
+     *
+     * OMIT this when the address is not known. The compose window then opens with an empty To
+     * field for the user to fill, which is the safe outcome — a guessed address does not fail
+     * loudly, it delivers the user's message to a stranger.
+     */
+    to?: string[];
+    /** Carbon-copy addresses. Same rule as {@link to}: omit rather than guess. */
+    cc?: string[];
+    /**
+     * Blind-carbon-copy addresses. Same rule as {@link to}: omit rather than guess.
+     *
+     * CAUTION: `bcc` is honored INCONSISTENTLY by mail clients — Outlook's desktop handler is
+     * known to drop it — and it fails silently, exactly like the truncation case above. Do not use
+     * it for anything that must happen (a compliance or archive copy); the user will send believing
+     * the copy went out.
+     */
+    bcc?: string[];
+    /** Subject line. */
+    subject?: string;
+    /** Body text. PLAIN TEXT only — see the note on this interface. */
+    body?: string;
+    /**
+     * Optional artifact holding the full draft.
+     *
+     * Actionable commands render only on a conversation's LAST message, so this button disappears
+     * as soon as the user asks a follow-up. When the draft is too long to survive a `mailto:` URL
+     * (see {@link MAILTO_MAX_URL_LENGTH}) the host falls back to opening this artifact instead,
+     * and it is also what keeps the draft reachable after the turn has moved on.
+     */
+    artifactId?: string;
+}
+
+/**
+ * Practical ceiling on the length of a `mailto:` URL, in characters.
+ *
+ * This is an observed floor across mail clients, not a published figure; Outlook on Windows binds
+ * first. It exists because of a specific and silent failure: a client handed a URL past its limit
+ * does NOT refuse it — it opens a draft with the body TRUNCATED, and the user sends half a message
+ * without noticing. Hosts must check {@link IsMailtoURLWithinLimit} and fall back to the artifact
+ * rather than risk that.
+ */
+export const MAILTO_MAX_URL_LENGTH = 1800;
+
+/**
+ * Build a `mailto:` URL from a compose-email command.
+ *
+ * Recipients are comma-joined into the path; everything else rides in the query string. Every
+ * field is percent-encoded, because subjects and bodies routinely contain `&`, `#` and `+`, each
+ * of which silently corrupts the parse if left raw.
+ *
+ * Note that encoding INFLATES the text — every space becomes `%20`, every newline `%0A` — so a
+ * body of roughly 1,000 characters already yields a ~1,450-character URL. Agents should be told a
+ * body ceiling near 1,000, not one near {@link MAILTO_MAX_URL_LENGTH}.
+ */
+export interface MailtoURLResult {
+    /** The built `mailto:` URL. */
+    url: string;
+    /**
+     * Whether {@link url} is short enough for a mail client to open without truncating the body.
+     * When false the caller must NOT open it — show the full draft another way.
+     */
+    withinLimit: boolean;
+}
+
+export function BuildMailtoURL(command: Pick<ComposeEmailCommand, 'to' | 'cc' | 'bcc' | 'subject' | 'body'>): MailtoURLResult {
+    const clean = (values?: string[]): string[] => (values ?? []).map((v) => v.trim()).filter((v) => v.length > 0);
+    const params: string[] = [];
+
+    const addList = (key: string, values?: string[]): void => {
+        const list = clean(values);
+        if (list.length > 0) {
+            params.push(`${key}=${encodeURIComponent(list.join(','))}`);
+        }
+    };
+
+    addList('cc', command.cc);
+    addList('bcc', command.bcc);
+    if (command.subject) {
+        params.push(`subject=${encodeURIComponent(command.subject)}`);
+    }
+    if (command.body) {
+        params.push(`body=${encodeURIComponent(command.body)}`);
+    }
+
+    // Encoded, then `@` restored: `@` is legal in an addr-spec (RFC 6068) and every other mailto
+    // builder leaves it, but a registered web-mail protocol handler that does not percent-decode
+    // the path would put a literal `a%40x.com` in the user's To field. Everything else stays
+    // encoded, so an address carrying a delimiter still cannot break the URL.
+    const path = clean(command.to).map((r) => encodeURIComponent(r).replace(/%40/g, '@')).join(',');
+    const query = params.length > 0 ? `?${params.join('&')}` : '';
+    const url = `mailto:${path}${query}`;
+    // The verdict rides WITH the URL on purpose. A separate opt-in check is one a caller can
+    // forget, and forgetting it silently reintroduces the truncated-body bug the limit exists to
+    // prevent — so the only way to get a URL from here is to also be handed whether it is safe.
+    return { url, withinLimit: IsMailtoURLWithinLimit(url) };
+}
+
+/**
+ * Whether a `mailto:` URL is short enough that the mail client will not truncate the body.
+ *
+ * {@link BuildMailtoURL} already reports this as `withinLimit`, so prefer that; this is exported
+ * for a caller holding a URL it did not build here.
+ */
+export function IsMailtoURLWithinLimit(url: string): boolean {
+    return url.length <= MAILTO_MAX_URL_LENGTH;
 }

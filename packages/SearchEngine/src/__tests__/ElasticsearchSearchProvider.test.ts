@@ -23,7 +23,7 @@ vi.mock('@elastic/elasticsearch', () => ({
 
 import {
     ElasticsearchSearchProvider,
-    __resetElasticsearchClientLoaderForTests,
+    ResetElasticsearchClientLoaderForTests,
 } from '../providers/ElasticsearchSearchProvider';
 import type { UserInfo } from '@memberjunction/core';
 import type { ScopeConstraints } from '../generic/search.types';
@@ -49,7 +49,7 @@ function basicConfig() {
 describe('ElasticsearchSearchProvider', () => {
     beforeEach(() => {
         vi.clearAllMocks();
-        __resetElasticsearchClientLoaderForTests();
+        ResetElasticsearchClientLoaderForTests();
         mockPing.mockResolvedValue({});
     });
 
@@ -105,6 +105,21 @@ describe('ElasticsearchSearchProvider', () => {
             // Score normalized to [0,1] with the top hit at 1
             expect(results[0].Score).toBeCloseTo(1);
             expect(results[1].Score).toBeCloseTo(0.5);
+        });
+
+        it('a scoped search with no Elasticsearch row queries nothing — never the default index', async () => {
+            const p = new ElasticsearchSearchProvider();
+            await p.Initialize(basicConfig(), fakeUser);
+            await p.CheckAvailability(fakeUser);
+
+            const none = await p.Search('plain query', 10, undefined, fakeUser, { ExternalIndexes: [] });
+            const otherType = await p.Search('plain query', 10, undefined, fakeUser, {
+                ExternalIndexes: [{ IndexType: 'OpenSearch', ExternalIndexName: 'os-docs' }],
+            });
+
+            expect(none).toEqual([]);
+            expect(otherType).toEqual([]);
+            expect(mockSearch).not.toHaveBeenCalled();
         });
 
         it('uses scope external-indexes when present (overrides defaultIndex)', async () => {

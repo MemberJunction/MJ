@@ -2,7 +2,7 @@ import { UserInfo, IMetadataProvider, RunView, LogError, LogStatus } from '@memb
 import { NormalizeUUID } from '@memberjunction/global';
 import { MJContentItemEntity } from '@memberjunction/core-entities';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
-import { AIModelRunner, AIPromptRunner } from '@memberjunction/ai-prompts';
+import { AIEmbeddingRunner, AIPromptRunner } from '@memberjunction/ai-prompts';
 // NOTE: AIPromptParams lives in @memberjunction/ai-core-plus, which is a direct dependency
 // of @memberjunction/ai-prompts (already a TagEngine dependency) and is therefore resolvable.
 // Ideally it would be declared as a direct dependency in this package's package.json — that
@@ -75,7 +75,7 @@ const FALLBACK_SAMPLE_TEXT_CHARS = 600;
  * @param contextUser User context (required server-side).
  * @param provider    Optional metadata provider override.
  */
-export async function generateSeedTaxonomy(
+export async function GenerateSeedTaxonomy(
     sourceID: string,
     sampleSize: number,
     contextUser?: UserInfo,
@@ -109,6 +109,16 @@ export async function generateSeedTaxonomy(
         SampleSize: items.length,
         Message: vectors.length < 2 ? 'Vectors unavailable; used AI prompt over sampled content.' : undefined,
     };
+}
+
+/** @deprecated Use {@link GenerateSeedTaxonomy}. */
+export async function generateSeedTaxonomy(
+    sourceID: string,
+    sampleSize: number,
+    contextUser?: UserInfo,
+    provider?: IMetadataProvider,
+): Promise<SeedTaxonomyResult> {
+    return GenerateSeedTaxonomy(sourceID, sampleSize, contextUser, provider);
 }
 
 /** Load up to `sampleSize` content items (with text) for the source. */
@@ -153,7 +163,7 @@ async function embedContentItems(
 
     const texts = items.map(buildEmbeddingText);
     try {
-        const runner = new AIModelRunner();
+        const runner = new AIEmbeddingRunner();
         const result = await runner.RunEmbedding({
             Texts: texts,
             ContextUser: contextUser,

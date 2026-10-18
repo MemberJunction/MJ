@@ -7,6 +7,7 @@ import {
 } from '@memberjunction/core-entities';
 
 import { NotificationEngine } from './NotificationEngine';
+import { NOTIFICATION_ORIGIN_SCOPE, type NotificationOrigin } from './scoped-notification-config-resolver';
 
 /**
  * `@memberjunction/core-entities` hosts the share-notification dispatcher
@@ -28,7 +29,7 @@ const NOTIFICATION_TYPE_NAME = 'Resource Shared';
  * Exported separately for testability; prefer
  * {@link RegisterResourceSharedNotificationHandler} for production wiring.
  */
-export function createResourceSharedHandler(): ShareNotificationHandler {
+export function CreateResourceSharedHandler(): ShareNotificationHandler {
     return async (input: ShareNotificationInput): Promise<boolean> => {
         try {
             // Ensure the engine is configured. Safe to call repeatedly — BaseEngine
@@ -36,7 +37,8 @@ export function createResourceSharedHandler(): ShareNotificationHandler {
             // before the server's explicit startup Config().
             await NotificationEngine.Instance.Config(false, input.ContextUser);
 
-            const grantorName = await resolveGrantorName(input);
+            const grantor = await resolveGrantor(input);
+            const grantorName = grantor.name;
             const resourceTypeLabel = input.ResourceTypeLabel || 'resource';
             const resourceName = input.ResourceName ?? `a ${resourceTypeLabel.toLowerCase()}`;
             const actionsSummary = input.ActionsSummary ?? '';
@@ -65,7 +67,10 @@ export function createResourceSharedHandler(): ShareNotificationHandler {
                         resourceTypeLabel,
                         actionsSummary,
                         resourceUrl: null // TODO: build deep link once navigation registry exposes a server-side helper
-                    }
+                    },
+                    // Who caused the share: the system (Owner-type) user writing a grant as plumbing, or a person.
+                    // `MJ: Scoped Notification Configs` can quiet one and not the other.
+                    scope: { secondaryScopes: { [NOTIFICATION_ORIGIN_SCOPE]: grantor.origin } }
                 },
                 input.ContextUser
             );
@@ -79,25 +84,39 @@ export function createResourceSharedHandler(): ShareNotificationHandler {
     };
 }
 
+/** @deprecated Use {@link CreateResourceSharedHandler}. */
+export function createResourceSharedHandler(): ShareNotificationHandler {
+    return CreateResourceSharedHandler();
+}
+
 /**
  * Install the handler so every `CreateShareNotification` call fans through
  * `NotificationEngine.SendNotification`. Idempotent — calling again replaces
  * the previously-registered handler.
  */
 export function RegisterResourceSharedNotificationHandler(): void {
-    RegisterShareNotificationHandler(createResourceSharedHandler());
+    RegisterShareNotificationHandler(CreateResourceSharedHandler());
 }
 
-async function resolveGrantorName(input: ShareNotificationInput): Promise<string> {
+/** The grantor's display name, and the notice's origin: `System` for MJ's Owner-type user, `Person` for anyone else. */
+async function resolveGrantor(input: ShareNotificationInput): Promise<{ name: string; origin: NotificationOrigin }> {
     try {
         const user = await input.Provider.GetEntityObject<
             import('@memberjunction/core-entities').MJUserEntity
         >('MJ: Users', input.ContextUser);
         await user.Load(input.GrantorUserID);
-        return user.Name || user.Email || 'Another user';
+        return {
+            name: user.Name || user.Email || 'Another user',
+            origin: OriginForUserType(user.Type),
+        };
     } catch {
-        return 'Another user';
+        return { name: 'Another user', origin: 'Person' };
     }
+}
+
+/** MJ's system user is the one of type `Owner`; a grant it writes is plumbing, not a person sharing. */
+export function OriginForUserType(userType: string | null | undefined): NotificationOrigin {
+    return (userType ?? '').trim().toLowerCase() === 'owner' ? 'System' : 'Person';
 }
 
 async function resolveResourceTypeId(input: ShareNotificationInput): Promise<string | undefined> {

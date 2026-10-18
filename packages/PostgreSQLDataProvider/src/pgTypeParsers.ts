@@ -12,17 +12,27 @@ export const PG_NUMERIC_OID = 1700;
  * safe-integer range are returned as the original string rather than silently
  * losing precision.
  */
-export function parseInt8(value: string): number | string {
+export function ParseInt8(value: string): number | string {
     const n = Number(value);
     return Number.isSafeInteger(n) ? n : value;
+}
+
+/** @deprecated Use {@link ParseInt8}. */
+export function parseInt8(value: string): number | string {
+    return ParseInt8(value);
 }
 
 /**
  * Parses a NUMERIC/DECIMAL text value to a JS number. Mirrors the SQL Server
  * provider, whose driver (tedious) parses decimal columns into JS numbers.
  */
-export function parseNumeric(value: string): number {
+export function ParseNumeric(value: string): number {
     return parseFloat(value);
+}
+
+/** @deprecated Use {@link ParseNumeric}. */
+export function parseNumeric(value: string): number {
+    return ParseNumeric(value);
 }
 
 /**
@@ -39,10 +49,10 @@ export const MJPostgresTypes: pg.CustomTypesConfig = {
     getTypeParser: ((oid: number, format?: 'text' | 'binary') => {
         if (format !== 'binary') {
             if (oid === PG_INT8_OID) {
-                return parseInt8;
+                return ParseInt8;
             }
             if (oid === PG_NUMERIC_OID) {
-                return parseNumeric;
+                return ParseNumeric;
             }
         }
         return pg.types.getTypeParser(oid as never, format as never);

@@ -29,8 +29,13 @@ export const ARCHIVE_NAME_LIST_CAP = 25;
  * @param names - the full list (caller owns de-duplication / ordering)
  * @returns the first N names, where N is the cap
  */
-export function capArchiveNames(names: readonly string[]): string[] {
+export function CapArchiveNames(names: readonly string[]): string[] {
     return names.slice(0, ARCHIVE_NAME_LIST_CAP);
+}
+
+/** @deprecated Use {@link CapArchiveNames}. */
+export function capArchiveNames(names: readonly string[]): string[] {
+    return CapArchiveNames(names);
 }
 
 /**
@@ -59,8 +64,13 @@ export type ArchiveRunStatusFilter = (typeof ARCHIVE_RUN_STATUS_FILTERS)[number]
  * @param status - candidate status string (may be anything the agent passes)
  * @returns true when `status` is one of {@link ARCHIVE_RUN_STATUS_FILTERS}
  */
-export function isValidArchiveRunStatusFilter(status: unknown): status is ArchiveRunStatusFilter {
+export function IsValidArchiveRunStatusFilter(status: unknown): status is ArchiveRunStatusFilter {
     return typeof status === 'string' && (ARCHIVE_RUN_STATUS_FILTERS as readonly string[]).includes(status);
+}
+
+/** @deprecated Use {@link IsValidArchiveRunStatusFilter}. */
+export function isValidArchiveRunStatusFilter(status: unknown): status is ArchiveRunStatusFilter {
+    return IsValidArchiveRunStatusFilter(status);
 }
 
 /**
@@ -100,8 +110,8 @@ export interface ArchiveRunSummaryItem {
 
 /** Outcome of {@link resolveArchiveRun}: a matched run, or a tolerant error. */
 export type ArchiveRunResolution =
-    | { ok: true; run: ArchiveRunSnapshot }
-    | { ok: false; error: string };
+    | { Ok: true; Run: ArchiveRunSnapshot }
+    | { Ok: false; Error: string };
 
 /**
  * Resolve an agent-supplied run reference (an ID or a configuration name) to one
@@ -117,36 +127,44 @@ export type ArchiveRunResolution =
  * @param runs - the runs currently loaded in the viewer
  * @returns the matched run, or a clear error message
  */
-export function resolveArchiveRun(
+export function ResolveArchiveRun(
     reference: string,
     runs: readonly ArchiveRunSnapshot[],
 ): ArchiveRunResolution {
     const needle = reference.trim().toLowerCase();
     if (!needle) {
-        return { ok: false, error: 'A run ID or configuration name is required.' };
+        return { Ok: false, Error: 'A run ID or configuration name is required.' };
     }
     if (runs.length === 0) {
-        return { ok: false, error: 'No archive runs are currently loaded to select from.' };
+        return { Ok: false, Error: 'No archive runs are currently loaded to select from.' };
     }
     const byId = runs.find((r) => r.ID.toLowerCase() === needle);
     if (byId) {
-        return { ok: true, run: byId };
+        return { Ok: true, Run: byId };
     }
     const byName = runs.find((r) => (r.ConfigurationName ?? '').toLowerCase() === needle);
     if (byName) {
-        return { ok: true, run: byName };
+        return { Ok: true, Run: byName };
     }
     const byContains = runs.find((r) => (r.ConfigurationName ?? '').toLowerCase().includes(needle));
     if (byContains) {
-        return { ok: true, run: byContains };
+        return { Ok: true, Run: byContains };
     }
-    const sample = capArchiveNames(
+    const sample = CapArchiveNames(
         runs.map((r) => r.ConfigurationName).filter((n) => !!n),
     ).join(', ');
     return {
-        ok: false,
-        error: `No archive run matches "${reference}". Available runs include: ${sample}.`,
+        Ok: false,
+        Error: `No archive run matches "${reference}". Available runs include: ${sample}.`,
     };
+}
+
+/** @deprecated Use {@link ResolveArchiveRun}. */
+export function resolveArchiveRun(
+    reference: string,
+    runs: readonly ArchiveRunSnapshot[],
+): ArchiveRunResolution {
+    return ResolveArchiveRun(reference, runs);
 }
 
 /** Counts of runs bucketed by outcome. */
@@ -171,7 +189,7 @@ export interface ArchiveRunStatusCounts {
  * @param runs - the runs to bucket (only their Status is read)
  * @returns the four outcome counts
  */
-export function computeArchiveRunStatusCounts(runs: readonly ArchiveRunStatusSnapshot[]): ArchiveRunStatusCounts {
+export function ComputeArchiveRunStatusCounts(runs: readonly ArchiveRunStatusSnapshot[]): ArchiveRunStatusCounts {
     let successful = 0;
     let failed = 0;
     let running = 0;
@@ -193,6 +211,11 @@ export function computeArchiveRunStatusCounts(runs: readonly ArchiveRunStatusSna
     };
 }
 
+/** @deprecated Use {@link ComputeArchiveRunStatusCounts}. */
+export function computeArchiveRunStatusCounts(runs: readonly ArchiveRunStatusSnapshot[]): ArchiveRunStatusCounts {
+    return ComputeArchiveRunStatusCounts(runs);
+}
+
 /**
  * Filter a list of runs by a status filter. `'all'` returns the runs unchanged;
  * any other value keeps only runs whose status matches (case-insensitive).
@@ -201,7 +224,7 @@ export function computeArchiveRunStatusCounts(runs: readonly ArchiveRunStatusSna
  * @param filter - the active status filter
  * @returns the filtered subset (a new array)
  */
-export function filterArchiveRunsByStatus<T extends ArchiveRunStatusSnapshot>(
+export function FilterArchiveRunsByStatus<T extends ArchiveRunStatusSnapshot>(
     runs: readonly T[],
     filter: ArchiveRunStatusFilter,
 ): T[] {
@@ -210,6 +233,14 @@ export function filterArchiveRunsByStatus<T extends ArchiveRunStatusSnapshot>(
     }
     const wanted = filter.toLowerCase();
     return runs.filter((r) => (r.Status ?? '').toLowerCase() === wanted);
+}
+
+/** @deprecated Use {@link FilterArchiveRunsByStatus}. */
+export function filterArchiveRunsByStatus<T extends ArchiveRunStatusSnapshot>(
+    runs: readonly T[],
+    filter: ArchiveRunStatusFilter,
+): T[] {
+    return FilterArchiveRunsByStatus(runs, filter);
 }
 
 /** Component-supplied snapshot for the Archive Configuration surface. */
@@ -251,7 +282,7 @@ export interface ArchiveConfigAgentContextInput {
  * @param input - the component's current state snapshot
  * @returns a flat key-value object suitable for `SetAgentContext`
  */
-export function buildArchiveConfigAgentContext(input: ArchiveConfigAgentContextInput): Record<string, unknown> {
+export function BuildArchiveConfigAgentContext(input: ArchiveConfigAgentContextInput): Record<string, unknown> {
     const context: Record<string, unknown> = {
         Surface: 'ArchiveConfiguration',
         PolicyCount: input.PolicyCount,
@@ -261,18 +292,23 @@ export function buildArchiveConfigAgentContext(input: ArchiveConfigAgentContextI
     };
 
     if (input.PolicyNames.length > 0) {
-        context['PolicyNames'] = capArchiveNames(input.PolicyNames);
+        context['PolicyNames'] = CapArchiveNames(input.PolicyNames);
         if (input.PolicyNames.length > ARCHIVE_NAME_LIST_CAP) {
             context['PolicyNameCount'] = input.PolicyNames.length;
         }
     }
     if (input.ArchivedEntityNames.length > 0) {
-        context['ArchivedEntityNames'] = capArchiveNames(input.ArchivedEntityNames);
+        context['ArchivedEntityNames'] = CapArchiveNames(input.ArchivedEntityNames);
         if (input.ArchivedEntityNames.length > ARCHIVE_NAME_LIST_CAP) {
             context['ArchivedEntityNameCount'] = input.ArchivedEntityNames.length;
         }
     }
     return context;
+}
+
+/** @deprecated Use {@link BuildArchiveConfigAgentContext}. */
+export function buildArchiveConfigAgentContext(input: ArchiveConfigAgentContextInput): Record<string, unknown> {
+    return BuildArchiveConfigAgentContext(input);
 }
 
 /** Component-supplied snapshot for the Archive Run History surface. */
@@ -315,7 +351,7 @@ export interface ArchiveRunsAgentContextInput {
  * @param input - the component's current state snapshot
  * @returns a flat key-value object suitable for `SetAgentContext`
  */
-export function buildArchiveRunsAgentContext(input: ArchiveRunsAgentContextInput): Record<string, unknown> {
+export function BuildArchiveRunsAgentContext(input: ArchiveRunsAgentContextInput): Record<string, unknown> {
     const context: Record<string, unknown> = {
         Surface: 'ArchiveRunHistory',
         TotalRuns: input.Counts.TotalRuns,
@@ -337,4 +373,9 @@ export function buildArchiveRunsAgentContext(input: ArchiveRunsAgentContextInput
         }
     }
     return context;
+}
+
+/** @deprecated Use {@link BuildArchiveRunsAgentContext}. */
+export function buildArchiveRunsAgentContext(input: ArchiveRunsAgentContextInput): Record<string, unknown> {
+    return BuildArchiveRunsAgentContext(input);
 }

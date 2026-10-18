@@ -29,7 +29,7 @@ export class MetadataExporter {
    * @param config - QueryGen configuration
    * @returns Export result with file path and query count
    */
-  async exportQueries(
+  async ExportQueries(
     validatedQueries: ValidatedQuery[],
     uniqueCategories: QueryCategoryInfo[],
     config: QueryGenConfig
@@ -85,6 +85,15 @@ export class MetadataExporter {
       outputPath,
       queryCount: queryMetadata.length
     };
+  }
+
+  /** @deprecated Use {@link ExportQueries}. */
+  async exportQueries(
+    validatedQueries: ValidatedQuery[],
+    uniqueCategories: QueryCategoryInfo[],
+    config: QueryGenConfig
+  ): Promise<ExportResult> {
+    return this.ExportQueries(validatedQueries, uniqueCategories, config);
   }
 
   /**

@@ -29,7 +29,7 @@ const GRID_H = 8;
  * hash as "no comparison possible" and fall back to their prior behavior).
  * Never throws — this is telemetry-grade and must not disrupt a run.
  */
-export function computePerceptualHash(base64Png: string): string {
+export function ComputePerceptualHash(base64Png: string): string {
     if (!base64Png) {
         return '';
     }
@@ -43,12 +43,17 @@ export function computePerceptualHash(base64Png: string): string {
     }
 }
 
+/** @deprecated Use {@link ComputePerceptualHash}. */
+export function computePerceptualHash(base64Png: string): string {
+    return ComputePerceptualHash(base64Png);
+}
+
 /**
  * Hamming distance (number of differing bits, 0–64) between two hex dHash
  * strings. Returns 64 (maximally different) if either hash is empty or the
  * lengths differ, so an unusable hash never registers as "similar".
  */
-export function hashDistance(a: string, b: string): number {
+export function HashDistance(a: string, b: string): number {
     if (!a || !b || a.length !== b.length) {
         return 64;
     }
@@ -60,17 +65,27 @@ export function hashDistance(a: string, b: string): number {
     return distance;
 }
 
+/** @deprecated Use {@link HashDistance}. */
+export function hashDistance(a: string, b: string): number {
+    return HashDistance(a, b);
+}
+
 /**
  * True when two frames are visually unchanged within `threshold` bits.
  * Default 3 tolerates spinner animation / anti-aliasing jitter while still
  * catching any real content change. Two empty hashes are NOT similar (we
  * cannot prove sameness without data).
  */
-export function hashesSimilar(a: string, b: string, threshold: number = 3): boolean {
+export function HashesSimilar(a: string, b: string, threshold: number = 3): boolean {
     if (!a || !b) {
         return false;
     }
-    return hashDistance(a, b) <= threshold;
+    return HashDistance(a, b) <= threshold;
+}
+
+/** @deprecated Use {@link HashesSimilar}. */
+export function hashesSimilar(a: string, b: string, threshold: number = 3): boolean {
+    return HashesSimilar(a, b, threshold);
 }
 
 // ─── internals ─────────────────────────────────────────────

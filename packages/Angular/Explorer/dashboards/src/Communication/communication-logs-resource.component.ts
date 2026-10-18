@@ -192,10 +192,37 @@ import { FilterFieldConfig } from '@memberjunction/ng-ui-components';
   `]
 })
 export class CommunicationLogsResourceComponent extends BaseResourceComponent implements OnInit, OnDestroy {
-    public logs: MJCommunicationLogEntity[] = [];
-    public filteredLogs: MJCommunicationLogEntity[] = [];
+    public Logs: MJCommunicationLogEntity[] = [];
+
+    /** @deprecated Use {@link Logs}. */
+    public get logs(): MJCommunicationLogEntity[] {
+      return this.Logs;
+    }
+    /** @deprecated Use {@link Logs}. */
+    public set logs(value: MJCommunicationLogEntity[]) {
+      this.Logs = value;
+    }
+    public FilteredLogs: MJCommunicationLogEntity[] = [];
+
+    /** @deprecated Use {@link FilteredLogs}. */
+    public get filteredLogs(): MJCommunicationLogEntity[] {
+      return this.FilteredLogs;
+    }
+    /** @deprecated Use {@link FilteredLogs}. */
+    public set filteredLogs(value: MJCommunicationLogEntity[]) {
+      this.FilteredLogs = value;
+    }
     public isLoading = false;
-    public statusFilter = '';
+    public StatusFilter = '';
+
+    /** @deprecated Use {@link StatusFilter}. */
+    public get statusFilter() {
+      return this.StatusFilter;
+    }
+    /** @deprecated Use {@link StatusFilter}. */
+    public set statusFilter(value) {
+      this.StatusFilter = value;
+    }
     private searchTerm = '';
 
     /** The current free-text search applied to the log list (read-only, for agent context). */
@@ -231,7 +258,7 @@ export class CommunicationLogsResourceComponent extends BaseResourceComponent im
             });
 
             if (result.Success) {
-                this.logs = result.Results;
+                this.Logs = result.Results;
                 this.applyFilter();
             }
         } catch (error) {
@@ -242,19 +269,29 @@ export class CommunicationLogsResourceComponent extends BaseResourceComponent im
         }
     }
 
-    public onSearchValue(value: string): void {
+    public OnSearchValue(value: string): void {
         this.searchTerm = (value ?? '').toLowerCase();
         this.applyFilter();
     }
 
-    public onStatusFilter(status: string): void {
-        this.statusFilter = status;
+    /** @deprecated Use {@link OnSearchValue}. */
+    public onSearchValue(value: string): void {
+      return this.OnSearchValue(value);
+    }
+
+    public OnStatusFilter(status: string): void {
+        this.StatusFilter = status;
         this.applyFilter();
+    }
+
+    /** @deprecated Use {@link OnStatusFilter}. */
+    public onStatusFilter(status: string): void {
+      return this.OnStatusFilter(status);
     }
 
     // -- Concise chrome: Status lives behind the one Filter popover -----------
 
-    public get filterFields(): FilterFieldConfig[] {
+    public get FilterFields(): FilterFieldConfig[] {
         return [{
             key: 'status',
             type: 'chips',
@@ -268,23 +305,43 @@ export class CommunicationLogsResourceComponent extends BaseResourceComponent im
         }];
     }
 
+    /** @deprecated Use {@link FilterFields}. */
+    public get filterFields(): FilterFieldConfig[] {
+      return this.FilterFields;
+    }
+
+    public get FilterValues(): Record<string, unknown> {
+        return { status: this.StatusFilter };
+    }
+
+    /** @deprecated Use {@link FilterValues}. */
     public get filterValues(): Record<string, unknown> {
-        return { status: this.statusFilter };
+      return this.FilterValues;
     }
 
     public get ActiveFilterCount(): number {
-        return this.statusFilter ? 1 : 0;
+        return this.StatusFilter ? 1 : 0;
     }
 
+    public OnFilterValuesChange(values: Record<string, unknown>): void {
+        this.OnStatusFilter((values['status'] as string) ?? '');
+    }
+
+    /** @deprecated Use {@link OnFilterValuesChange}. */
     public onFilterValuesChange(values: Record<string, unknown>): void {
-        this.onStatusFilter((values['status'] as string) ?? '');
+      return this.OnFilterValuesChange(values);
     }
 
+    public ResetFilters(): void {
+        this.OnStatusFilter('');
+    }
+
+    /** @deprecated Use {@link ResetFilters}. */
     public resetFilters(): void {
-        this.onStatusFilter('');
+      return this.ResetFilters();
     }
 
-    public getStatusClass(status: string): string {
+    public GetStatusClass(status: string): string {
         const s = (status || '').toLowerCase();
         if (s === 'complete') return 'complete';
         if (s === 'failed') return 'failed';
@@ -293,7 +350,12 @@ export class CommunicationLogsResourceComponent extends BaseResourceComponent im
         return '';
     }
 
-    public getStatusIcon(status: string): string {
+    /** @deprecated Use {@link GetStatusClass}. */
+    public getStatusClass(status: string): string {
+      return this.GetStatusClass(status);
+    }
+
+    public GetStatusIcon(status: string): string {
         const s = (status || '').toLowerCase();
         if (s === 'complete') return 'fa-solid fa-check';
         if (s === 'failed') return 'fa-solid fa-xmark';
@@ -302,7 +364,12 @@ export class CommunicationLogsResourceComponent extends BaseResourceComponent im
         return 'fa-solid fa-circle';
     }
 
-    public getProviderIcon(name: string): string {
+    /** @deprecated Use {@link GetStatusIcon}. */
+    public getStatusIcon(status: string): string {
+      return this.GetStatusIcon(status);
+    }
+
+    public GetProviderIcon(name: string): string {
         if (!name) return 'fa-solid fa-server';
         const n = name.toLowerCase();
         if (n.includes('sendgrid')) return 'fa-solid fa-envelope';
@@ -312,7 +379,12 @@ export class CommunicationLogsResourceComponent extends BaseResourceComponent im
         return 'fa-solid fa-server';
     }
 
-    public getProviderColor(name: string): string {
+    /** @deprecated Use {@link GetProviderIcon}. */
+    public getProviderIcon(name: string): string {
+      return this.GetProviderIcon(name);
+    }
+
+    public GetProviderColor(name: string): string {
         if (!name) return 'inherit';
         const n = name.toLowerCase();
         if (n.includes('sendgrid')) return '#1A82E2';
@@ -322,11 +394,16 @@ export class CommunicationLogsResourceComponent extends BaseResourceComponent im
         return 'inherit';
     }
 
-    private applyFilter(): void {
-        let filtered = this.logs;
+    /** @deprecated Use {@link GetProviderColor}. */
+    public getProviderColor(name: string): string {
+      return this.GetProviderColor(name);
+    }
 
-        if (this.statusFilter) {
-            filtered = filtered.filter(l => l.Status === this.statusFilter);
+    private applyFilter(): void {
+        let filtered = this.Logs;
+
+        if (this.StatusFilter) {
+            filtered = filtered.filter(l => l.Status === this.StatusFilter);
         }
 
         if (this.searchTerm) {
@@ -338,7 +415,7 @@ export class CommunicationLogsResourceComponent extends BaseResourceComponent im
             );
         }
 
-        this.filteredLogs = filtered;
+        this.FilteredLogs = filtered;
         this.cdr.detectChanges();
     }
 

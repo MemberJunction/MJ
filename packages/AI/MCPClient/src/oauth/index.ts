@@ -36,7 +36,7 @@ export { ClientRegistration } from './ClientRegistration.js';
 export { TokenManager } from './TokenManager.js';
 export { OAuthManager } from './OAuthManager.js';
 export { OAuthErrorMessages } from './ErrorMessages.js';
-export { OAuthAuditLogger, getOAuthAuditLogger } from './OAuthAuditLogger.js';
+export { OAuthAuditLogger, GetOAuthAuditLogger, getOAuthAuditLogger } from './OAuthAuditLogger.js';
 
 // Type definitions
 export type {

@@ -10,6 +10,7 @@
 
 import type { StandardCheck } from './types.js';
 import { UILayersCheck } from './checks/ui-layers.js';
+import { NamingConventionsCheck } from './checks/naming-conventions.js';
 
 /**
  * Every registered standard.
@@ -22,7 +23,7 @@ import { UILayersCheck } from './checks/ui-layers.js';
  * no longer exists gets an "unknown check" warning rather than a silent no-op, so removal is
  * visible — but it is still a breaking change for anyone whose CI names it.
  */
-export const STANDARD_CHECKS: readonly StandardCheck[] = [UILayersCheck];
+export const STANDARD_CHECKS: readonly StandardCheck[] = [UILayersCheck, NamingConventionsCheck];
 
 /** Look up a check by its config key. */
 export function GetCheck(id: string): StandardCheck | undefined {

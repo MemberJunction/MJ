@@ -130,7 +130,7 @@ export interface TabConfiguration {
 /**
  * Create default workspace configuration
  */
-export function createDefaultWorkspaceConfiguration(): WorkspaceConfiguration {
+export function CreateDefaultWorkspaceConfiguration(): WorkspaceConfiguration {
   return {
     version: 1,
     layout: {
@@ -148,4 +148,9 @@ export function createDefaultWorkspaceConfiguration(): WorkspaceConfiguration {
     },
     tabs: []
   };
+}
+
+/** @deprecated Use {@link CreateDefaultWorkspaceConfiguration}. */
+export function createDefaultWorkspaceConfiguration(): WorkspaceConfiguration {
+  return CreateDefaultWorkspaceConfiguration();
 }

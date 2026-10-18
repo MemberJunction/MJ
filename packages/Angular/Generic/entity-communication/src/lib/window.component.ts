@@ -16,8 +16,26 @@ export class EntityCommunicationsPreviewWindowComponent {
   @Input() MinHeight = 350;
   @Input() Resizable = true;
 
-  @Input() entityInfo: EntityInfo | undefined;
-  @Input() runViewParams: RunViewParams | undefined;
+  @Input() EntityInfo: EntityInfo | undefined;
+
+  /** @deprecated Use {@link EntityInfo}. */
+  @Input() set entityInfo(value: EntityInfo | undefined) {
+    this.EntityInfo = value;
+  }
+  /** @deprecated Use {@link EntityInfo}. */
+  get entityInfo(): EntityInfo | undefined {
+    return this.EntityInfo;
+  }
+  @Input() RunViewParams: RunViewParams | undefined;
+
+  /** @deprecated Use {@link RunViewParams}. */
+  @Input() set runViewParams(value: RunViewParams | undefined) {
+    this.RunViewParams = value;
+  }
+  /** @deprecated Use {@link RunViewParams}. */
+  get runViewParams(): RunViewParams | undefined {
+    return this.RunViewParams;
+  }
 
   @Input() get DialogVisible(): boolean {
     return this._dialogVisible;

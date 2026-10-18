@@ -1686,7 +1686,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
       // guard), whose body legitimately contains `;`+newline. A naive split tears those apart.
       // The dialect owns this: PostgreSQLDialect.SplitStatements is dollar-quote-aware; the
       // base SplitStatements (SQL Server) is the prior naive `;`+EOL split.
-      const statements = GetDialect(this.Platform).SplitStatements(batch);
+      const statements = GetDialect(this.platform).SplitStatements(batch);
       this.rsuLog(`  Oversized batch (${batch.length} chars, ${statements.length} statements) — chunking into groups of ${STATEMENTS_PER_CHUNK}`);
       for (let i = 0; i < statements.length; i += STATEMENTS_PER_CHUNK) {
         finalBatches.push(statements.slice(i, i + STATEMENTS_PER_CHUNK).join('\n'));
@@ -2203,7 +2203,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
   // ─── DB-Backed Mutex (Multi-Instance Safety) ──────────────────
 
   /** Whether the DB-backed lock is enabled via RSU_DB_LOCK_ENABLED=1. */
-  private get IsDBLockEnabled(): boolean {
+  private get IsDBLockEnabled(): boolean {  // case-violation-ok-legacy-back-compat: reached by bracket access outside the declaring class, where a same-named key on an unrelated object is indistinguishable
     return rsuConfig.IsDBLockEnabled;
   }
 
@@ -2242,7 +2242,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
     if (!this._dbLockId) return;
 
     try {
-      const d = this.Dialect;
+      const d = this.dialect;
       const defaultSchema = rsuConfig.DefaultSchema;
       const quotedTable = d.QuoteSchema(defaultSchema, 'RSULock');
       const sql = `DELETE FROM ${quotedTable} WHERE LockID = '${this._dbLockId}';`;
@@ -2279,7 +2279,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
   // ─── Platform Abstraction ────────────────────────────────────────
 
   /** Resolve the database platform from environment configuration. */
-  private get Platform(): DatabasePlatform {
+  private get platform(): DatabasePlatform {
     const platform = (process.env.DB_PLATFORM || 'sqlserver').toLowerCase();
     if (platform !== 'sqlserver' && platform !== 'postgresql') {
       throw new RSUError('CONFIG', `Unsupported DB_PLATFORM: "${platform}". Must be "sqlserver" or "postgresql".`);
@@ -2288,8 +2288,8 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
   }
 
   /** Get the SQLDialect for the configured platform (SQL generation). */
-  private get Dialect() {
-    return GetDialect(this.Platform);
+  private get dialect() {
+    return GetDialect(this.platform);
   }
 
   /** Get the database provider for DDL operations. Prefers the dedicated DDL provider if set. */
@@ -2308,7 +2308,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
    * and attempt to acquire the lock.
    */
   private buildAcquireLockSQL(schema: string, lockId: string): string {
-    const d = this.Dialect;
+    const d = this.dialect;
     const quotedTable = d.QuoteSchema(schema, 'RSULock');
     const utcNow = d.CurrentTimestampUTC();
     const varchar200 = d.MapDataTypeToString('NVARCHAR', 200);
@@ -2335,7 +2335,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
 
   /** Generate SQL to create the RSUAuditLog table if it doesn't exist. */
   private buildAuditTableDDL(schema: string): string {
-    const d = this.Dialect;
+    const d = this.dialect;
     const intType = d.MapDataTypeToString('INT');
     const autoIncrement = d.AutoIncrementPKExpression();
     const varchar500 = d.MapDataTypeToString('NVARCHAR', 500);
@@ -2372,7 +2372,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
    * The CREATE TABLE DDL runs separately (no user input, safe as-is).
    */
   private async writeAuditInsert(schema: string, input: RSUPipelineInput, result: RSUPipelineResult): Promise<void> {
-    const d = this.Dialect;
+    const d = this.dialect;
     const quotedTable = d.QuoteSchema(schema, 'RSUAuditLog');
     const totalMs = result.Steps.reduce((sum, s) => sum + s.DurationMs, 0);
     const stepsJson = JSON.stringify(result.Steps).substring(0, 8000);

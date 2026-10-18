@@ -19,8 +19,8 @@
 import type { Locator, Page } from 'playwright';
 import { InteractiveElement, BoundingBox } from '../types/browser.js';
 import { TraceTarget } from '../types/trace.js';
-import { reresolveTarget, shouldAcceptHeal } from '../engine/replay.js';
-import { isBlockedByDismissableOverlay, dismissOverlay } from './overlay-dismiss.js';
+import { ReresolveTarget, ShouldAcceptHeal } from '../engine/replay.js';
+import { IsBlockedByDismissableOverlay, DismissOverlay } from './overlay-dismiss.js';
 
 /** Raw per-element record the in-page probe returns (plain JSON, browser context). */
 interface RawInteractiveElement {
@@ -60,7 +60,7 @@ const DEFAULT_PROBE_TIMEOUT_MS = 10000;
  * can reach it, and the caller's worker waits on a promise that never settles.
  * Timing out degrades to the same empty list as any other probe failure.
  */
-export async function extractInteractiveElements(
+export async function ExtractInteractiveElements(
     page: Page | null,
     timeoutMs: number = DEFAULT_PROBE_TIMEOUT_MS
 ): Promise<InteractiveElement[]> {
@@ -74,7 +74,7 @@ export async function extractInteractiveElements(
         const expiry = new Promise<null>(resolve => {
             timer = setTimeout(() => resolve(null), timeoutMs);
         });
-        const raws = await Promise.race([page.evaluate(INTERACTIVITY_PROBE), expiry]);
+        const raws = await Promise.race([page.evaluate(INTERACTIVITYPROBE), expiry]);
         if (raws === null) {
             return [];
         }
@@ -86,6 +86,14 @@ export async function extractInteractiveElements(
         // event loop open for the rest of the bound on every single step.
         clearTimeout(timer);
     }
+}
+
+/** @deprecated Use {@link ExtractInteractiveElements}. */
+export async function extractInteractiveElements(
+    page: Page | null,
+    timeoutMs: number = DEFAULT_PROBE_TIMEOUT_MS
+): Promise<InteractiveElement[]> {
+    return ExtractInteractiveElements(page, timeoutMs);
 }
 
 /** Map one raw probe record + its assigned index to the typed element. */
@@ -142,8 +150,8 @@ async function healElementSelector(
     target.Role = element.Role;
     target.Name = element.Name;
 
-    const resolution = reresolveTarget(target, await extractInteractiveElements(page, probeTimeoutMs));
-    return shouldAcceptHeal(resolution.confidence) ? resolution.selector : undefined;
+    const resolution = ReresolveTarget(target, await ExtractInteractiveElements(page, probeTimeoutMs));
+    return ShouldAcceptHeal(resolution.confidence) ? resolution.selector : undefined;
 }
 
 /**
@@ -174,9 +182,9 @@ async function actOnElement(
         // its whole budget. A person just presses Escape and clicks again; do that.
         // (Seen on T124: an open Filters popover blocked every attempt to clear the
         // search box, and the run died on loop detection with budget to spare.)
-        if (isBlockedByDismissableOverlay(error)) {
+        if (IsBlockedByDismissableOverlay(error)) {
             try {
-                await dismissOverlay(page);
+                await DismissOverlay(page);
                 await act(locatorFor(page, element), preciseMs);
                 return;
             } catch { /* fall through to the selector heal below */ }
@@ -190,7 +198,7 @@ async function actOnElement(
 }
 
 /** Click an extracted element via its locator, honoring click-count/button/modifiers. */
-export async function clickInteractiveElement(
+export async function ClickInteractiveElement(
     page: Page,
     element: InteractiveElement,
     opts: { clickCount?: number; button?: 'left' | 'right' | 'middle'; modifiers?: Array<'Shift' | 'Control' | 'Alt' | 'Meta' | 'ControlOrMeta'> },
@@ -206,8 +214,18 @@ export async function clickInteractiveElement(
     );
 }
 
+/** @deprecated Use {@link ClickInteractiveElement}. */
+export async function clickInteractiveElement(
+    page: Page,
+    element: InteractiveElement,
+    opts: { clickCount?: number; button?: 'left' | 'right' | 'middle'; modifiers?: Array<'Shift' | 'Control' | 'Alt' | 'Meta' | 'ControlOrMeta'> },
+    actionTimeoutMs: number
+): Promise<void> {
+    return ClickInteractiveElement(page, element, opts, actionTimeoutMs);
+}
+
 /** Fill text into an extracted element via its locator; optionally press Enter. */
-export async function typeIntoInteractiveElement(
+export async function TypeIntoInteractiveElement(
     page: Page,
     element: InteractiveElement,
     text: string,
@@ -222,13 +240,24 @@ export async function typeIntoInteractiveElement(
     });
 }
 
+/** @deprecated Use {@link TypeIntoInteractiveElement}. */
+export async function typeIntoInteractiveElement(
+    page: Page,
+    element: InteractiveElement,
+    text: string,
+    pressEnter: boolean,
+    actionTimeoutMs: number
+): Promise<void> {
+    return TypeIntoInteractiveElement(page, element, text, pressEnter, actionTimeoutMs);
+}
+
 /**
  * The in-page interactivity probe (serialized into the browser via
  * `page.evaluate`). Returns interactive elements with role/name/xpath/bbox +
  * scrollable/disabled/value flags. Kept as a single self-contained function so
  * it captures no Node closure state.
  */
-export const INTERACTIVITY_PROBE = (): RawInteractiveElement[] => {
+export const INTERACTIVITYPROBE = (): RawInteractiveElement[] => {
     const INTERACTIVE_SELECTOR = [
         'a[href]', 'button', 'input', 'select', 'textarea', 'summary',
         '[role="button"]', '[role="link"]', '[role="checkbox"]', '[role="radio"]',
@@ -426,3 +455,6 @@ export const INTERACTIVITY_PROBE = (): RawInteractiveElement[] => {
 
     return results;
 };
+
+/** @deprecated Use {@link INTERACTIVITYPROBE}. */
+export const INTERACTIVITY_PROBE = INTERACTIVITYPROBE;

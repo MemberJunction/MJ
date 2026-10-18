@@ -3,7 +3,7 @@ import {
   MJAIAgentRunEntity,
   MJAIAgentRunStepEntity
 } from '@memberjunction/core-entities';
-import { initializeMJProvider } from '../lib/mj-provider';
+import { InitializeMJProvider } from '../lib/mj-provider';
 import { AuditAnalyzer } from '../lib/audit-analyzer';
 import { AuditFormatter, AuditOutputFormat } from '../lib/audit-formatter';
 
@@ -136,24 +136,29 @@ export class AgentAuditService {
     this.formatter = new AuditFormatter();
   }
 
-  async initialize(): Promise<void> {
+  async Initialize(): Promise<void> {
     if (this.initialized) return;
 
-    await initializeMJProvider();
+    await InitializeMJProvider();
     this.contextUser = await this.getContextUser();
     this.initialized = true;
   }
 
+  /** @deprecated Use {@link Initialize}. */
+  async initialize(): Promise<void> {
+    return this.Initialize();
+  }
+
   private async ensureInitialized(): Promise<void> {
     if (!this.initialized) {
-      await this.initialize();
+      await this.Initialize();
     }
   }
 
   /**
    * List recent agent runs with filtering
    */
-  async listRecentRuns(options: ListRunsOptions): Promise<MJAIAgentRunEntity[]> {
+  async ListRecentRuns(options: ListRunsOptions): Promise<MJAIAgentRunEntity[]> {
     await this.ensureInitialized();
 
     const endDate = new Date();
@@ -191,10 +196,15 @@ export class AgentAuditService {
     return result.Results || [];
   }
 
+  /** @deprecated Use {@link ListRecentRuns}. */
+  async listRecentRuns(options: ListRunsOptions): Promise<MJAIAgentRunEntity[]> {
+    return this.ListRecentRuns(options);
+  }
+
   /**
    * Get high-level summary of a run with step list
    */
-  async getRunSummary(runId: string, options: RunSummaryOptions): Promise<RunSummary> {
+  async GetRunSummary(runId: string, options: RunSummaryOptions): Promise<RunSummary> {
     await this.ensureInitialized();
 
     // Load run entity
@@ -269,10 +279,15 @@ export class AgentAuditService {
     return summary;
   }
 
+  /** @deprecated Use {@link GetRunSummary}. */
+  async getRunSummary(runId: string, options: RunSummaryOptions): Promise<RunSummary> {
+    return this.GetRunSummary(runId, options);
+  }
+
   /**
    * Get detailed information for a specific step
    */
-  async getStepDetail(runId: string, stepNumber: number, options: StepDetailOptions): Promise<StepDetail> {
+  async GetStepDetail(runId: string, stepNumber: number, options: StepDetailOptions): Promise<StepDetail> {
     await this.ensureInitialized();
 
     // Load all steps to find the right one by sequence
@@ -336,19 +351,24 @@ export class AgentAuditService {
     return detail;
   }
 
+  /** @deprecated Use {@link GetStepDetail}. */
+  async getStepDetail(runId: string, stepNumber: number, options: StepDetailOptions): Promise<StepDetail> {
+    return this.GetStepDetail(runId, stepNumber, options);
+  }
+
   /**
    * Analyze all errors in a run with context
    */
-  async analyzeErrors(runId: string): Promise<ErrorAnalysis> {
+  async AnalyzeErrors(runId: string): Promise<ErrorAnalysis> {
     await this.ensureInitialized();
 
-    const summary = await this.getRunSummary(runId, { includeStepList: true, maxTokens: 500 });
+    const summary = await this.GetRunSummary(runId, { includeStepList: true, maxTokens: 500 });
 
     const failedSteps = summary.steps.filter(s => s.status === 'Failed' || s.errorMessage);
 
     const failedStepDetails = await Promise.all(
       failedSteps.map(async (step) => {
-        const detail = await this.getStepDetail(runId, step.stepNumber, {
+        const detail = await this.GetStepDetail(runId, step.stepNumber, {
           detailLevel: 'standard',
           maxTokens: 1000,
         });
@@ -356,7 +376,7 @@ export class AgentAuditService {
         // Get previous step context
         let previousStep;
         if (step.stepNumber > 1) {
-          const prevDetail = await this.getStepDetail(runId, step.stepNumber - 1, {
+          const prevDetail = await this.GetStepDetail(runId, step.stepNumber - 1, {
             detailLevel: 'minimal',
             maxTokens: 500,
           });
@@ -393,13 +413,18 @@ export class AgentAuditService {
     };
   }
 
+  /** @deprecated Use {@link AnalyzeErrors}. */
+  async analyzeErrors(runId: string): Promise<ErrorAnalysis> {
+    return this.AnalyzeErrors(runId);
+  }
+
   /**
    * Export full run data to file (no truncation)
    */
-  async exportRun(runId: string, exportType: 'full' | 'summary' | 'steps'): Promise<RunSummary | StepDetail[] | { summary: RunSummary; steps: StepDetail[] }> {
+  async ExportRun(runId: string, exportType: 'full' | 'summary' | 'steps'): Promise<RunSummary | StepDetail[] | { summary: RunSummary; steps: StepDetail[] }> {
     await this.ensureInitialized();
 
-    const summary = await this.getRunSummary(runId, { includeStepList: true, maxTokens: 0 });
+    const summary = await this.GetRunSummary(runId, { includeStepList: true, maxTokens: 0 });
 
     if (exportType === 'summary') {
       return summary;
@@ -408,7 +433,7 @@ export class AgentAuditService {
     // Load full step details
     const stepDetails = await Promise.all(
       summary.steps.map(step =>
-        this.getStepDetail(runId, step.stepNumber, {
+        this.GetStepDetail(runId, step.stepNumber, {
           detailLevel: 'full',
           maxTokens: 0, // No truncation for export
         })
@@ -426,32 +451,57 @@ export class AgentAuditService {
     };
   }
 
+  /** @deprecated Use {@link ExportRun}. */
+  async exportRun(runId: string, exportType: 'full' | 'summary' | 'steps'): Promise<RunSummary | StepDetail[] | { summary: RunSummary; steps: StepDetail[] }> {
+    return this.ExportRun(runId, exportType);
+  }
+
   /**
    * Format run list for display
    */
-  formatRunList(runs: MJAIAgentRunEntity[], format: AuditOutputFormat): string {
+  FormatRunList(runs: MJAIAgentRunEntity[], format: AuditOutputFormat): string {
     return this.formatter.formatRunList(runs, format);
+  }
+
+  /** @deprecated Use {@link FormatRunList}. */
+  formatRunList(runs: MJAIAgentRunEntity[], format: AuditOutputFormat): string {
+    return this.FormatRunList(runs, format);
   }
 
   /**
    * Format run summary for display
    */
-  formatRunSummary(summary: RunSummary, format: AuditOutputFormat): string {
+  FormatRunSummary(summary: RunSummary, format: AuditOutputFormat): string {
     return this.formatter.formatRunSummary(summary, format);
+  }
+
+  /** @deprecated Use {@link FormatRunSummary}. */
+  formatRunSummary(summary: RunSummary, format: AuditOutputFormat): string {
+    return this.FormatRunSummary(summary, format);
   }
 
   /**
    * Format step detail for display
    */
-  formatStepDetail(detail: StepDetail, format: AuditOutputFormat): string {
+  FormatStepDetail(detail: StepDetail, format: AuditOutputFormat): string {
     return this.formatter.formatStepDetail(detail, format);
+  }
+
+  /** @deprecated Use {@link FormatStepDetail}. */
+  formatStepDetail(detail: StepDetail, format: AuditOutputFormat): string {
+    return this.FormatStepDetail(detail, format);
   }
 
   /**
    * Format error analysis for display
    */
-  formatErrorAnalysis(analysis: ErrorAnalysis, format: AuditOutputFormat): string {
+  FormatErrorAnalysis(analysis: ErrorAnalysis, format: AuditOutputFormat): string {
     return this.formatter.formatErrorAnalysis(analysis, format);
+  }
+
+  /** @deprecated Use {@link FormatErrorAnalysis}. */
+  formatErrorAnalysis(analysis: ErrorAnalysis, format: AuditOutputFormat): string {
+    return this.FormatErrorAnalysis(analysis, format);
   }
 
   private async getContextUser(): Promise<UserInfo> {

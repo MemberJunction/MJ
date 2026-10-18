@@ -25,7 +25,7 @@ import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 
 /** SM1: a task-mode Startup executes ZERO of the process's real registrations. */
-export async function CheckSm1_TaskModeExecutesZeroEngines(ctx: IntegrationCheckContext): Promise<void> {
+export async function CheckSm1TaskModeExecutesZeroEngines(ctx: IntegrationCheckContext): Promise<void> {
     const sm = StartupManager.Instance;
     const registrationCount = sm.GetRegistrations().length;
     Assert(registrationCount > 0, 'precondition: the integration process must have @RegisterForStartup registrations (server packages imported)');
@@ -36,19 +36,29 @@ export async function CheckSm1_TaskModeExecutesZeroEngines(ctx: IntegrationCheck
     Assert(sm.LoadCompleted, 'task-mode Startup must mark startup completed (same idempotency semantics as full mode)');
 }
 
+/** @deprecated Use {@link CheckSm1TaskModeExecutesZeroEngines}. */
+export async function CheckSm1_TaskModeExecutesZeroEngines(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckSm1TaskModeExecutesZeroEngines(ctx);
+}
+
 /**
  * SM2: after a task-mode Startup, an engine still loads on demand via its own
  * Config() — the "first touch pays the load" contract. forceRefresh=true makes
  * this a REAL reload (Config(false) would no-op for engines the harness
  * bootstrap already warmed).
  */
-export async function CheckSm2_LazyEngineLoadAfterTaskMode(ctx: IntegrationCheckContext): Promise<void> {
+export async function CheckSm2LazyEngineLoadAfterTaskMode(ctx: IntegrationCheckContext): Promise<void> {
     await UserInfoEngine.Instance.Config(true, ctx.User, ctx.Provider);
     Assert(UserInfoEngine.Instance.Loaded, 'UserInfoEngine must load on demand after a task-mode Startup left it un-pre-warmed');
 }
 
+/** @deprecated Use {@link CheckSm2LazyEngineLoadAfterTaskMode}. */
+export async function CheckSm2_LazyEngineLoadAfterTaskMode(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckSm2LazyEngineLoadAfterTaskMode(ctx);
+}
+
 /** SM3: a full-mode Startup executes every sync registration (and restores canonical state). */
-export async function CheckSm3_FullModeRunsAllSyncEngines(ctx: IntegrationCheckContext): Promise<void> {
+export async function CheckSm3FullModeRunsAllSyncEngines(ctx: IntegrationCheckContext): Promise<void> {
     const sm = StartupManager.Instance;
     const syncCount = sm.GetRegistrations().filter(r => !r.options.deferred).length;
 
@@ -57,22 +67,27 @@ export async function CheckSm3_FullModeRunsAllSyncEngines(ctx: IntegrationCheckC
     AssertEqual(result.results.length, syncCount, 'full mode must execute (and report) every sync registration');
 }
 
+/** @deprecated Use {@link CheckSm3FullModeRunsAllSyncEngines}. */
+export async function CheckSm3_FullModeRunsAllSyncEngines(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckSm3FullModeRunsAllSyncEngines(ctx);
+}
+
 /** The ordered 'startup-mode' bundle. SM1 → task state, SM2 → lazy load from it, SM3 → full restore. */
 export const StartupModeChecks: NamedCheck[] = [
     {
         Id: 'startup-mode.SM1',
         Name: 'SM1: task-mode Startup executes zero registered engines (LocalCacheManager still initialized)',
-        Fn: CheckSm1_TaskModeExecutesZeroEngines
+        Fn: CheckSm1TaskModeExecutesZeroEngines
     },
     {
         Id: 'startup-mode.SM2',
         Name: 'SM2: an engine lazy-loads on first touch after a task-mode boot (Config on demand)',
-        Fn: CheckSm2_LazyEngineLoadAfterTaskMode
+        Fn: CheckSm2LazyEngineLoadAfterTaskMode
     },
     {
         Id: 'startup-mode.SM3',
         Name: 'SM3: full-mode Startup executes every sync registration (canonical behavior unchanged)',
-        Fn: CheckSm3_FullModeRunsAllSyncEngines
+        Fn: CheckSm3FullModeRunsAllSyncEngines
     }
 ];
 

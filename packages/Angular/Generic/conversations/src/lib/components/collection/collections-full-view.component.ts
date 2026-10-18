@@ -1732,62 +1732,296 @@ import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
   `]
 })
 export class CollectionsFullViewComponent extends BaseAngularComponent implements OnInit, OnDestroy  {
-  @Input() environmentId!: string;
-  @Input() currentUser!: UserInfo;
-  @Output() collectionNavigated = new EventEmitter<{
+  @Input() EnvironmentId!: string;
+
+  /** @deprecated Use {@link EnvironmentId}. */
+  @Input() set environmentId(value: string) {
+    this.EnvironmentId = value;
+  }
+  /** @deprecated Use {@link EnvironmentId}. */
+  get environmentId(): string {
+    return this.EnvironmentId;
+  }
+  @Input() CurrentUser!: UserInfo;
+
+  /** @deprecated Use {@link CurrentUser}. */
+  @Input() set currentUser(value: UserInfo) {
+    this.CurrentUser = value;
+  }
+  /** @deprecated Use {@link CurrentUser}. */
+  get currentUser(): UserInfo {
+    return this.CurrentUser;
+  }
+  @Output() CollectionNavigated = new EventEmitter<{
     collectionId: string | null;
     versionId?: string | null;
   }>();
 
+  /**
+   * @deprecated Use {@link CollectionNavigated}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (collectionNavigated) keeps working. Must stay AFTER CollectionNavigated: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() collectionNavigated = this.CollectionNavigated;
+
   /** Emitted when the user asks to open the conversation an artifact was produced in. */
-  @Output() openConversationRequested = new EventEmitter<{ conversationId: string }>();
+  @Output() OpenConversationRequested = new EventEmitter<{ conversationId: string }>();
 
-  public collections: MJCollectionEntity[] = [];
-  public artifactVersions: Array<{ version: MJArtifactVersionEntity; artifact: MJArtifactEntity }> = [];
-  public filteredCollections: MJCollectionEntity[] = [];
-  public filteredArtifactVersions: Array<{ version: MJArtifactVersionEntity; artifact: MJArtifactEntity }> = [];
+  /**
+   * @deprecated Use {@link OpenConversationRequested}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (openConversationRequested) keeps working. Must stay AFTER OpenConversationRequested: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() openConversationRequested = this.OpenConversationRequested;
+
+  public Collections: MJCollectionEntity[] = [];
+
+  /** @deprecated Use {@link Collections}. */
+  public get collections(): MJCollectionEntity[] {
+    return this.Collections;
+  }
+  /** @deprecated Use {@link Collections}. */
+  public set collections(value: MJCollectionEntity[]) {
+    this.Collections = value;
+  }
+  public ArtifactVersions: Array<{ version: MJArtifactVersionEntity; artifact: MJArtifactEntity }> = [];
+
+  /** @deprecated Use {@link ArtifactVersions}. */
+  public get artifactVersions(): Array<{ version: MJArtifactVersionEntity; artifact: MJArtifactEntity }> {
+    return this.ArtifactVersions;
+  }
+  /** @deprecated Use {@link ArtifactVersions}. */
+  public set artifactVersions(value: Array<{ version: MJArtifactVersionEntity; artifact: MJArtifactEntity }>) {
+    this.ArtifactVersions = value;
+  }
+  public FilteredCollections: MJCollectionEntity[] = [];
+
+  /** @deprecated Use {@link FilteredCollections}. */
+  public get filteredCollections(): MJCollectionEntity[] {
+    return this.FilteredCollections;
+  }
+  /** @deprecated Use {@link FilteredCollections}. */
+  public set filteredCollections(value: MJCollectionEntity[]) {
+    this.FilteredCollections = value;
+  }
+  public FilteredArtifactVersions: Array<{ version: MJArtifactVersionEntity; artifact: MJArtifactEntity }> = [];
+
+  /** @deprecated Use {@link FilteredArtifactVersions}. */
+  public get filteredArtifactVersions(): Array<{ version: MJArtifactVersionEntity; artifact: MJArtifactEntity }> {
+    return this.FilteredArtifactVersions;
+  }
+  /** @deprecated Use {@link FilteredArtifactVersions}. */
+  public set filteredArtifactVersions(value: Array<{ version: MJArtifactVersionEntity; artifact: MJArtifactEntity }>) {
+    this.FilteredArtifactVersions = value;
+  }
   public isLoading: boolean = false;
-  public breadcrumbs: Array<{ id: string; name: string }> = [];
-  public currentCollectionId: string | null = null;
-  public currentCollection: MJCollectionEntity | null = null;
+  public Breadcrumbs: Array<{ id: string; name: string }> = [];
 
-  public isFormModalOpen: boolean = false;
-  public editingCollection?: MJCollectionEntity;
-  public isArtifactModalOpen: boolean = false;
+  /** @deprecated Use {@link Breadcrumbs}. */
+  public get breadcrumbs(): Array<{ id: string; name: string }> {
+    return this.Breadcrumbs;
+  }
+  /** @deprecated Use {@link Breadcrumbs}. */
+  public set breadcrumbs(value: Array<{ id: string; name: string }>) {
+    this.Breadcrumbs = value;
+  }
+  public CurrentCollectionId: string | null = null;
 
-  public userPermissions: Map<string, CollectionPermission> = new Map();
-  public isShareModalOpen: boolean = false;
-  public sharingCollection: MJCollectionEntity | null = null;
+  /** @deprecated Use {@link CurrentCollectionId}. */
+  public get currentCollectionId(): string | null {
+    return this.CurrentCollectionId;
+  }
+  /** @deprecated Use {@link CurrentCollectionId}. */
+  public set currentCollectionId(value: string | null) {
+    this.CurrentCollectionId = value;
+  }
+  public CurrentCollection: MJCollectionEntity | null = null;
+
+  /** @deprecated Use {@link CurrentCollection}. */
+  public get currentCollection(): MJCollectionEntity | null {
+    return this.CurrentCollection;
+  }
+  /** @deprecated Use {@link CurrentCollection}. */
+  public set currentCollection(value: MJCollectionEntity | null) {
+    this.CurrentCollection = value;
+  }
+
+  public IsFormModalOpen: boolean = false;
+
+  /** @deprecated Use {@link IsFormModalOpen}. */
+  public get isFormModalOpen(): boolean {
+    return this.IsFormModalOpen;
+  }
+  /** @deprecated Use {@link IsFormModalOpen}. */
+  public set isFormModalOpen(value: boolean) {
+    this.IsFormModalOpen = value;
+  }
+  public editingCollection?: MJCollectionEntity;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+  public IsArtifactModalOpen: boolean = false;
+
+  /** @deprecated Use {@link IsArtifactModalOpen}. */
+  public get isArtifactModalOpen(): boolean {
+    return this.IsArtifactModalOpen;
+  }
+  /** @deprecated Use {@link IsArtifactModalOpen}. */
+  public set isArtifactModalOpen(value: boolean) {
+    this.IsArtifactModalOpen = value;
+  }
+
+  public UserPermissions: Map<string, CollectionPermission> = new Map();
+
+  /** @deprecated Use {@link UserPermissions}. */
+  public get userPermissions(): Map<string, CollectionPermission> {
+    return this.UserPermissions;
+  }
+  /** @deprecated Use {@link UserPermissions}. */
+  public set userPermissions(value: Map<string, CollectionPermission>) {
+    this.UserPermissions = value;
+  }
+  public IsShareModalOpen: boolean = false;
+
+  /** @deprecated Use {@link IsShareModalOpen}. */
+  public get isShareModalOpen(): boolean {
+    return this.IsShareModalOpen;
+  }
+  /** @deprecated Use {@link IsShareModalOpen}. */
+  public set isShareModalOpen(value: boolean) {
+    this.IsShareModalOpen = value;
+  }
+  public SharingCollection: MJCollectionEntity | null = null;
+
+  /** @deprecated Use {@link SharingCollection}. */
+  public get sharingCollection(): MJCollectionEntity | null {
+    return this.SharingCollection;
+  }
+  /** @deprecated Use {@link SharingCollection}. */
+  public set sharingCollection(value: MJCollectionEntity | null) {
+    this.SharingCollection = value;
+  }
 
   // New UI state for Mac Finder-style view
-  public viewMode: CollectionViewMode = 'grid';
-  public sortBy: CollectionSortBy = 'name';
-  public sortOrder: CollectionSortOrder = 'asc';
-  public searchQuery: string = '';
+  public ViewMode: CollectionViewMode = 'grid';
+
+  /** @deprecated Use {@link ViewMode}. */
+  public get viewMode(): CollectionViewMode {
+    return this.ViewMode;
+  }
+  /** @deprecated Use {@link ViewMode}. */
+  public set viewMode(value: CollectionViewMode) {
+    this.ViewMode = value;
+  }
+  public SortBy: CollectionSortBy = 'name';
+
+  /** @deprecated Use {@link SortBy}. */
+  public get sortBy(): CollectionSortBy {
+    return this.SortBy;
+  }
+  /** @deprecated Use {@link SortBy}. */
+  public set sortBy(value: CollectionSortBy) {
+    this.SortBy = value;
+  }
+  public SortOrder: CollectionSortOrder = 'asc';
+
+  /** @deprecated Use {@link SortOrder}. */
+  public get sortOrder(): CollectionSortOrder {
+    return this.SortOrder;
+  }
+  /** @deprecated Use {@link SortOrder}. */
+  public set sortOrder(value: CollectionSortOrder) {
+    this.SortOrder = value;
+  }
+  public SearchQuery: string = '';
+
+  /** @deprecated Use {@link SearchQuery}. */
+  public get searchQuery(): string {
+    return this.SearchQuery;
+  }
+  /** @deprecated Use {@link SearchQuery}. */
+  public set searchQuery(value: string) {
+    this.SearchQuery = value;
+  }
 
   /** Empty-state heading — varies by search / root / inside-collection context. */
   public get EmptyStateTitle(): string {
-    if (this.searchQuery) return 'No items found';
-    if (!this.currentCollectionId) return 'No collections yet';
+    if (this.SearchQuery) return 'No items found';
+    if (!this.CurrentCollectionId) return 'No collections yet';
     return 'This collection is empty';
   }
 
   /** Empty-state supporting message (the rich inside-collection hint is projected, not bound here). */
   public get EmptyStateMessage(): string {
-    if (this.searchQuery) return 'Try adjusting your search';
-    if (!this.currentCollectionId) return 'Create your first collection to get started';
+    if (this.SearchQuery) return 'Try adjusting your search';
+    if (!this.CurrentCollectionId) return 'Create your first collection to get started';
     return '';
   }
 
-  public unifiedItems: CollectionViewItem[] = [];
-  public selectedItems: Set<string> = new Set();
-  public showNewDropdown: boolean = false;
-  public showSortDropdown: boolean = false;
-  public activeArtifactId: string | null = null; // Track which artifact is currently being viewed
+  public UnifiedItems: CollectionViewItem[] = [];
+
+  /** @deprecated Use {@link UnifiedItems}. */
+  public get unifiedItems(): CollectionViewItem[] {
+    return this.UnifiedItems;
+  }
+  /** @deprecated Use {@link UnifiedItems}. */
+  public set unifiedItems(value: CollectionViewItem[]) {
+    this.UnifiedItems = value;
+  }
+  public SelectedItems: Set<string> = new Set();
+
+  /** @deprecated Use {@link SelectedItems}. */
+  public get selectedItems(): Set<string> {
+    return this.SelectedItems;
+  }
+  /** @deprecated Use {@link SelectedItems}. */
+  public set selectedItems(value: Set<string>) {
+    this.SelectedItems = value;
+  }
+  public ShowNewDropdown: boolean = false;
+
+  /** @deprecated Use {@link ShowNewDropdown}. */
+  public get showNewDropdown(): boolean {
+    return this.ShowNewDropdown;
+  }
+  /** @deprecated Use {@link ShowNewDropdown}. */
+  public set showNewDropdown(value: boolean) {
+    this.ShowNewDropdown = value;
+  }
+  public ShowSortDropdown: boolean = false;
+
+  /** @deprecated Use {@link ShowSortDropdown}. */
+  public get showSortDropdown(): boolean {
+    return this.ShowSortDropdown;
+  }
+  /** @deprecated Use {@link ShowSortDropdown}. */
+  public set showSortDropdown(value: boolean) {
+    this.ShowSortDropdown = value;
+  }
+  public ActiveArtifactId: string | null = null;
+
+  /** @deprecated Use {@link ActiveArtifactId}. */
+  public get activeArtifactId(): string | null {
+    return this.ActiveArtifactId;
+  }
+  /** @deprecated Use {@link ActiveArtifactId}. */
+  public set activeArtifactId(value: string | null) {
+    this.ActiveArtifactId = value;
+  } // Track which artifact is currently being viewed
   private itemCountMap: Map<string, number> = new Map();
   /** Normalized OwnerID → friendly display name (FirstName LastName when available, else Users.Name) */
   private ownerNameMap: Map<string, string> = new Map();
-  public isSelectMode: boolean = false; // Toggle for selection mode
+  public IsSelectMode: boolean = false;
+
+  /** @deprecated Use {@link IsSelectMode}. */
+  public get isSelectMode(): boolean {
+    return this.IsSelectMode;
+  }
+  /** @deprecated Use {@link IsSelectMode}. */
+  public set isSelectMode(value: boolean) {
+    this.IsSelectMode = value;
+  } // Toggle for selection mode
 
   // Pagination state
   public PageSize: number = 50;
@@ -1795,13 +2029,13 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
 
   /** Total number of pages based on current items and page size */
   get TotalPages(): number {
-    return Math.max(1, Math.ceil(this.unifiedItems.length / this.PageSize));
+    return Math.max(1, Math.ceil(this.UnifiedItems.length / this.PageSize));
   }
 
   /** Items for the current page */
   get PagedItems(): CollectionViewItem[] {
     const start = (this.CurrentPage - 1) * this.PageSize;
-    return this.unifiedItems.slice(start, start + this.PageSize);
+    return this.UnifiedItems.slice(start, start + this.PageSize);
   }
 
   /** Navigate to a specific page */
@@ -1810,38 +2044,155 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
   }
 
   IsArtifactActive(item: CollectionViewItem): boolean {
-    return UUIDsEqual(item.artifact?.ID, this.activeArtifactId);
+    return UUIDsEqual(item.artifact?.ID, this.ActiveArtifactId);
   }
 
   // Context menu state
-  public showContextMenu: boolean = false;
-  public contextMenuPosition: { x: number; y: number } = { x: 0, y: 0 };
-  public contextMenuItem: CollectionViewItem | null = null;
+  public ShowContextMenu: boolean = false;
+
+  /** @deprecated Use {@link ShowContextMenu}. */
+  public get showContextMenu(): boolean {
+    return this.ShowContextMenu;
+  }
+  /** @deprecated Use {@link ShowContextMenu}. */
+  public set showContextMenu(value: boolean) {
+    this.ShowContextMenu = value;
+  }
+  public ContextMenuPosition: { x: number; y: number } = { x: 0, y: 0 };
+
+  /** @deprecated Use {@link ContextMenuPosition}. */
+  public get contextMenuPosition(): { x: number; y: number } {
+    return this.ContextMenuPosition;
+  }
+  /** @deprecated Use {@link ContextMenuPosition}. */
+  public set contextMenuPosition(value: { x: number; y: number }) {
+    this.ContextMenuPosition = value;
+  }
+  public ContextMenuItem: CollectionViewItem | null = null;
+
+  /** @deprecated Use {@link ContextMenuItem}. */
+  public get contextMenuItem(): CollectionViewItem | null {
+    return this.ContextMenuItem;
+  }
+  /** @deprecated Use {@link ContextMenuItem}. */
+  public set contextMenuItem(value: CollectionViewItem | null) {
+    this.ContextMenuItem = value;
+  }
 
   /** "Move to Collection" submenu state (within the artifact context menu). */
-  public showMoveSubmenu: boolean = false;
-  public isLoadingMoveTargets: boolean = false;
-  public moveTargets: Array<{ collection: MJCollectionEntity; depth: number }> = [];
+  public ShowMoveSubmenu: boolean = false;
+
+  /** @deprecated Use {@link ShowMoveSubmenu}. */
+  public get showMoveSubmenu(): boolean {
+    return this.ShowMoveSubmenu;
+  }
+  /** @deprecated Use {@link ShowMoveSubmenu}. */
+  public set showMoveSubmenu(value: boolean) {
+    this.ShowMoveSubmenu = value;
+  }
+  public IsLoadingMoveTargets: boolean = false;
+
+  /** @deprecated Use {@link IsLoadingMoveTargets}. */
+  public get isLoadingMoveTargets(): boolean {
+    return this.IsLoadingMoveTargets;
+  }
+  /** @deprecated Use {@link IsLoadingMoveTargets}. */
+  public set isLoadingMoveTargets(value: boolean) {
+    this.IsLoadingMoveTargets = value;
+  }
+  public MoveTargets: Array<{ collection: MJCollectionEntity; depth: number }> = [];
+
+  /** @deprecated Use {@link MoveTargets}. */
+  public get moveTargets(): Array<{ collection: MJCollectionEntity; depth: number }> {
+    return this.MoveTargets;
+  }
+  /** @deprecated Use {@link MoveTargets}. */
+  public set moveTargets(value: Array<{ collection: MJCollectionEntity; depth: number }>) {
+    this.MoveTargets = value;
+  }
 
   /** Anchor index (into unifiedItems) for shift-click range selection. */
   private lastSelectedIndex: number | null = null;
 
   /** Drag-and-drop state. draggedItemIds = the item ids being dragged (1 or the whole selection). */
-  public draggedItemIds: string[] = [];
+  public DraggedItemIds: string[] = [];
+
+  /** @deprecated Use {@link DraggedItemIds}. */
+  public get draggedItemIds(): string[] {
+    return this.DraggedItemIds;
+  }
+  /** @deprecated Use {@link DraggedItemIds}. */
+  public set draggedItemIds(value: string[]) {
+    this.DraggedItemIds = value;
+  }
   /** Tag of the current drop target for highlight: item id, 'root', 'crumb:<id>', or 'nav:<id>'. */
-  public dragOverTargetId: string | null = null;
+  public DragOverTargetId: string | null = null;
+
+  /** @deprecated Use {@link DragOverTargetId}. */
+  public get dragOverTargetId(): string | null {
+    return this.DragOverTargetId;
+  }
+  /** @deprecated Use {@link DragOverTargetId}. */
+  public set dragOverTargetId(value: string | null) {
+    this.DragOverTargetId = value;
+  }
 
   /** Bulk "Move to…" popover (selection toolbar). */
-  public showBulkMovePopover: boolean = false;
+  public ShowBulkMovePopover: boolean = false;
+
+  /** @deprecated Use {@link ShowBulkMovePopover}. */
+  public get showBulkMovePopover(): boolean {
+    return this.ShowBulkMovePopover;
+  }
+  /** @deprecated Use {@link ShowBulkMovePopover}. */
+  public set showBulkMovePopover(value: boolean) {
+    this.ShowBulkMovePopover = value;
+  }
 
   /** All accessible collections (navigator pane + move targets + folder-cycle checks). */
-  public allCollections: MJCollectionEntity[] = [];
+  public AllCollections: MJCollectionEntity[] = [];
+
+  /** @deprecated Use {@link AllCollections}. */
+  public get allCollections(): MJCollectionEntity[] {
+    return this.AllCollections;
+  }
+  /** @deprecated Use {@link AllCollections}. */
+  public set allCollections(value: MJCollectionEntity[]) {
+    this.AllCollections = value;
+  }
   private allCollectionsById: Map<string, MJCollectionEntity> = new Map();
-  public navigatorNodes: Array<{ collection: MJCollectionEntity; depth: number }> = [];
-  public showNavigator: boolean = true;
+  public NavigatorNodes: Array<{ collection: MJCollectionEntity; depth: number }> = [];
+
+  /** @deprecated Use {@link NavigatorNodes}. */
+  public get navigatorNodes(): Array<{ collection: MJCollectionEntity; depth: number }> {
+    return this.NavigatorNodes;
+  }
+  /** @deprecated Use {@link NavigatorNodes}. */
+  public set navigatorNodes(value: Array<{ collection: MJCollectionEntity; depth: number }>) {
+    this.NavigatorNodes = value;
+  }
+  public ShowNavigator: boolean = true;
+
+  /** @deprecated Use {@link ShowNavigator}. */
+  public get showNavigator(): boolean {
+    return this.ShowNavigator;
+  }
+  /** @deprecated Use {@link ShowNavigator}. */
+  public set showNavigator(value: boolean) {
+    this.ShowNavigator = value;
+  }
 
   /** Staging shelf: items held across navigation, then dropped into a destination collection. */
-  public shelf: Array<{ item: CollectionViewItem; sourceCollectionId: string | null }> = [];
+  public Shelf: Array<{ item: CollectionViewItem; sourceCollectionId: string | null }> = [];
+
+  /** @deprecated Use {@link Shelf}. */
+  public get shelf(): Array<{ item: CollectionViewItem; sourceCollectionId: string | null }> {
+    return this.Shelf;
+  }
+  /** @deprecated Use {@link Shelf}. */
+  public set shelf(value: Array<{ item: CollectionViewItem; sourceCollectionId: string | null }>) {
+    this.Shelf = value;
+  }
 
   private destroy$ = new Subject<void>();
   private isNavigatingProgrammatically = false;
@@ -1870,14 +2221,14 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
     this.subscribeToArtifactState();
 
     // Load the full collection set for the navigator pane + drag targets + cycle checks
-    void this.loadAllCollections();
+    void this.LoadAllCollections();
 
     // Check if there's an active collection from URL params (set by parent component)
     const activeCollectionId = this.collectionState.activeCollectionId;
     if (activeCollectionId) {
       // If there's an active collection, navigate to it (which will call loadData)
       console.log('📁 Initial load with active collection:', activeCollectionId);
-      this.navigateToCollectionById(activeCollectionId);
+      this.NavigateToCollectionById(activeCollectionId);
     } else {
       // Otherwise, just load the root level
       this.loadData();
@@ -1904,13 +2255,13 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
 
         // Only navigate if the state is different from our current state
         // This prevents double-loading during initialization
-        if (collectionId !== this.currentCollectionId) {
+        if (collectionId !== this.CurrentCollectionId) {
           if (collectionId) {
             console.log('📁 Collection state changed externally, navigating to:', collectionId);
-            this.navigateToCollectionById(collectionId);
+            this.NavigateToCollectionById(collectionId);
           } else {
             console.log('📁 Collection state cleared externally, navigating to root');
-            this.navigateToRoot();
+            this.NavigateToRoot();
           }
         }
       });
@@ -1924,14 +2275,14 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
       .pipe(takeUntil(this.destroy$))
       .subscribe(artifact => {
         // Update active artifact ID for highlighting
-        this.activeArtifactId = artifact?.ID || null;
+        this.ActiveArtifactId = artifact?.ID || null;
       });
   }
 
   async loadData(): Promise<void> {
     // Only show loading spinner if we don't have data yet
     // This prevents flash of loading when navigating between collections
-    const hasData = this.collections.length > 0 || this.unifiedItems.length > 0;
+    const hasData = this.Collections.length > 0 || this.UnifiedItems.length > 0;
     if (!hasData) {
       this.isLoading = true;
     }
@@ -1940,17 +2291,17 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
       // Load saved view preferences from localStorage
       const savedMode = localStorage.getItem('collections-view-mode');
       if (savedMode === 'grid' || savedMode === 'list') {
-        this.viewMode = savedMode;
+        this.ViewMode = savedMode;
       }
 
       const savedSortBy = localStorage.getItem('collections-sort-by');
       if (savedSortBy === 'name' || savedSortBy === 'date' || savedSortBy === 'type') {
-        this.sortBy = savedSortBy;
+        this.SortBy = savedSortBy;
       }
 
       const savedSortOrder = localStorage.getItem('collections-sort-order');
       if (savedSortOrder === 'asc' || savedSortOrder === 'desc') {
-        this.sortOrder = savedSortOrder;
+        this.SortOrder = savedSortOrder;
       }
 
       await Promise.all([
@@ -1972,15 +2323,15 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
 
       // Load collections where user is owner OR has permissions
-      const ownerFilter = `OwnerID='${this.currentUser.ID}'`;
+      const ownerFilter = `OwnerID='${this.CurrentUser.ID}'`;
       const permissionSubquery = `ID IN (
         SELECT CollectionID
         FROM [__mj].[vwCollectionPermissions]
-        WHERE UserID='${this.currentUser.ID}'
+        WHERE UserID='${this.CurrentUser.ID}'
       )`;
 
-      const baseFilter = `EnvironmentID='${this.environmentId}'` +
-                         (this.currentCollectionId ? ` AND ParentID='${this.currentCollectionId}'` : ' AND ParentID IS NULL');
+      const baseFilter = `EnvironmentID='${this.EnvironmentId}'` +
+                         (this.CurrentCollectionId ? ` AND ParentID='${this.CurrentCollectionId}'` : ' AND ParentID IS NULL');
 
       const filter = `${baseFilter} AND (OwnerID IS NULL OR ${ownerFilter} OR ${permissionSubquery})`;
 
@@ -1993,17 +2344,17 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
           ResultType: 'entity_object',
           BypassCache: bypassCache
         },
-        this.currentUser
+        this.CurrentUser
       );
 
       if (result.Success) {
-        this.collections = result.Results || [];
+        this.Collections = result.Results || [];
         await Promise.all([
           this.loadUserPermissions(),
           this.loadItemCounts(bypassCache),
           this.loadOwnerNames()
         ]);
-        this.filteredCollections = [...this.collections];
+        this.FilteredCollections = [...this.Collections];
       }
     } catch (error) {
       console.error('Failed to load collections:', error);
@@ -2017,9 +2368,9 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
    */
   private async loadItemCounts(bypassCache: boolean = false): Promise<void> {
     this.itemCountMap.clear();
-    if (this.collections.length === 0) return;
+    if (this.Collections.length === 0) return;
 
-    const collectionIds = this.collections.map(c => c.ID);
+    const collectionIds = this.Collections.map(c => c.ID);
     const inClause = collectionIds.map(id => `'${id}'`).join(',');
 
     const rv = RunView.FromMetadataProvider(this.ProviderToUse);
@@ -2040,7 +2391,7 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
           BypassCache: bypassCache
         }
       ],
-      this.currentUser
+      this.CurrentUser
     );
 
     // Count children per parent
@@ -2070,7 +2421,7 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
     // instead of serving a previous run's stale entries
     this.ownerNameMap.clear();
     const ownerIds = [...new Set(
-      this.collections
+      this.Collections
         .filter(c => c.OwnerID)
         .map(c => NormalizeUUID(c.OwnerID as string))
     )];
@@ -2085,7 +2436,7 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
           Fields: ['ID', 'Name', 'FirstName', 'LastName'],
           ResultType: 'simple'
         },
-        this.currentUser
+        this.CurrentUser
       );
 
       if (result.Success) {
@@ -2109,70 +2460,70 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
   }
 
   private async loadUserPermissions(): Promise<void> {
-    this.userPermissions.clear();
+    this.UserPermissions.clear();
 
-    for (const collection of this.collections) {
+    for (const collection of this.Collections) {
       const permission = await this.permissionService.checkPermission(
         collection.ID,
-        this.currentUser.ID,
-        this.currentUser
+        this.CurrentUser.ID,
+        this.CurrentUser
       );
 
       if (permission) {
-        this.userPermissions.set(collection.ID, permission);
+        this.UserPermissions.set(collection.ID, permission);
       }
     }
   }
 
   private async loadCurrentCollectionPermission(): Promise<void> {
-    if (!this.currentCollectionId || !this.currentCollection) {
+    if (!this.CurrentCollectionId || !this.CurrentCollection) {
       return;
     }
 
     const permission = await this.permissionService.checkPermission(
-      this.currentCollectionId,
-      this.currentUser.ID,
-      this.currentUser
+      this.CurrentCollectionId,
+      this.CurrentUser.ID,
+      this.CurrentUser
     );
 
     if (permission) {
-      this.userPermissions.set(this.currentCollectionId, permission);
+      this.UserPermissions.set(this.CurrentCollectionId, permission);
     }
   }
 
   private async loadArtifacts(bypassCache: boolean = false): Promise<void> {
-    if (!this.currentCollectionId) {
-      this.artifactVersions = [];
-      this.filteredArtifactVersions = [];
+    if (!this.CurrentCollectionId) {
+      this.ArtifactVersions = [];
+      this.FilteredArtifactVersions = [];
       return;
     }
 
     try {
-      this.artifactVersions = await this.artifactState.loadArtifactVersionsForCollection(
-        this.currentCollectionId,
-        this.currentUser,
+      this.ArtifactVersions = await this.artifactState.loadArtifactVersionsForCollection(
+        this.CurrentCollectionId,
+        this.CurrentUser,
         bypassCache
       );
-      this.filteredArtifactVersions = [...this.artifactVersions];
+      this.FilteredArtifactVersions = [...this.ArtifactVersions];
     } catch (error) {
       console.error('Failed to load artifact versions:', error);
     }
   }
 
-  async openCollection(collection: MJCollectionEntity): Promise<void> {
+  async OpenCollection(collection: MJCollectionEntity): Promise<void> {
     this.isNavigatingProgrammatically = true;
     try {
-      this.breadcrumbs.push({ id: collection.ID, name: collection.Name });
-      this.currentCollectionId = collection.ID;
-      this.currentCollection = collection;
-      this.activeArtifactId = null; // Clear active artifact when switching collections
+      this.Breadcrumbs.push({ id: collection.ID, name: collection.Name });
+      this.CurrentCollectionId = collection.ID;
+      this.CurrentCollection = collection;
+      this.ActiveArtifactId = null; // Clear active artifact when switching collections
       await this.loadData();
 
       // Update state service
       this.collectionState.setActiveCollection(collection.ID);
 
       // Close any open artifact when switching collections
-      this.collectionNavigated.emit({
+      this.CollectionNavigated.emit({
         collectionId: collection.ID,
         versionId: null
       });
@@ -2181,18 +2532,23 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
     }
   }
 
-  async navigateTo(crumb: { id: string; name: string }): Promise<void> {
+  /** @deprecated Use {@link OpenCollection}. */
+  async openCollection(collection: MJCollectionEntity): Promise<void> {
+    return this.OpenCollection(collection);
+  }
+
+  async NavigateTo(crumb: { id: string; name: string }): Promise<void> {
     this.isNavigatingProgrammatically = true;
     try {
-      const index = this.breadcrumbs.findIndex(b => b.id === crumb.id);
+      const index = this.Breadcrumbs.findIndex(b => b.id === crumb.id);
       if (index !== -1) {
-        this.breadcrumbs = this.breadcrumbs.slice(0, index + 1);
-        this.currentCollectionId = crumb.id;
+        this.Breadcrumbs = this.Breadcrumbs.slice(0, index + 1);
+        this.CurrentCollectionId = crumb.id;
 
         // Load the collection entity
         const md = this.ProviderToUse;
-        this.currentCollection = await md.GetEntityObject<MJCollectionEntity>('MJ: Collections', this.currentUser);
-        await this.currentCollection.Load(crumb.id);
+        this.CurrentCollection = await md.GetEntityObject<MJCollectionEntity>('MJ: Collections', this.CurrentUser);
+        await this.CurrentCollection.Load(crumb.id);
 
         await this.loadData();
 
@@ -2200,7 +2556,7 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
         this.collectionState.setActiveCollection(crumb.id);
 
         // Close any open artifact when navigating collections
-        this.collectionNavigated.emit({
+        this.CollectionNavigated.emit({
           collectionId: crumb.id,
           versionId: null
         });
@@ -2210,19 +2566,24 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
     }
   }
 
-  async navigateToRoot(): Promise<void> {
+  /** @deprecated Use {@link NavigateTo}. */
+  async navigateTo(crumb: { id: string; name: string }): Promise<void> {
+    return this.NavigateTo(crumb);
+  }
+
+  async NavigateToRoot(): Promise<void> {
     this.isNavigatingProgrammatically = true;
     try {
-      this.breadcrumbs = [];
-      this.currentCollectionId = null;
-      this.currentCollection = null;
+      this.Breadcrumbs = [];
+      this.CurrentCollectionId = null;
+      this.CurrentCollection = null;
       await this.loadData();
 
       // Update state service
       this.collectionState.setActiveCollection(null);
 
       // Close any open artifact when navigating to root
-      this.collectionNavigated.emit({
+      this.CollectionNavigated.emit({
         collectionId: null,
         versionId: null
       });
@@ -2231,11 +2592,16 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
     }
   }
 
+  /** @deprecated Use {@link NavigateToRoot}. */
+  async navigateToRoot(): Promise<void> {
+    return this.NavigateToRoot();
+  }
+
   /**
    * Update a breadcrumb entry's name in place (e.g., after rename)
    */
   private updateBreadcrumbName(collectionId: string, newName: string): void {
-    const crumb = this.breadcrumbs.find(b => UUIDsEqual(b.id, collectionId));
+    const crumb = this.Breadcrumbs.find(b => UUIDsEqual(b.id, collectionId));
     if (crumb) {
       crumb.name = newName;
     }
@@ -2245,14 +2611,14 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
    * Navigate to a collection by ID, building the breadcrumb trail
    * Used for deep linking from search results or URL parameters
    */
-  async navigateToCollectionById(collectionId: string): Promise<void> {
+  async NavigateToCollectionById(collectionId: string): Promise<void> {
     this.isNavigatingProgrammatically = true;
     try {
       console.log('📁 Navigating to collection by ID:', collectionId);
 
       // Load the target collection
       const md = this.ProviderToUse;
-      const targetCollection = await md.GetEntityObject<MJCollectionEntity>('MJ: Collections', this.currentUser);
+      const targetCollection = await md.GetEntityObject<MJCollectionEntity>('MJ: Collections', this.CurrentUser);
       await targetCollection.Load(collectionId);
 
       if (!targetCollection || !targetCollection.ID) {
@@ -2266,7 +2632,7 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
       let currentId: string | null = targetCollection.ParentID;
 
       while (currentId) {
-        const parentCollection = await md.GetEntityObject<MJCollectionEntity>('MJ: Collections', this.currentUser);
+        const parentCollection = await md.GetEntityObject<MJCollectionEntity>('MJ: Collections', this.CurrentUser);
         await parentCollection.Load(currentId);
 
         if (parentCollection && parentCollection.ID) {
@@ -2288,9 +2654,9 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
       });
 
       // Update component state
-      this.breadcrumbs = trail;
-      this.currentCollectionId = targetCollection.ID;
-      this.currentCollection = targetCollection;
+      this.Breadcrumbs = trail;
+      this.CurrentCollectionId = targetCollection.ID;
+      this.CurrentCollection = targetCollection;
 
       // Load collections and artifacts for this collection
       await this.loadData();
@@ -2301,7 +2667,7 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
       // Emit navigation event
       // NOTE: We don't emit artifactId here because this is for deep linking/programmatic navigation
       // Artifact state is managed separately by the artifact state service
-      this.collectionNavigated.emit({
+      this.CollectionNavigated.emit({
         collectionId: targetCollection.ID
       });
 
@@ -2313,31 +2679,51 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
     }
   }
 
-  refresh(): void {
+  /** @deprecated Use {@link NavigateToCollectionById}. */
+  async navigateToCollectionById(collectionId: string): Promise<void> {
+    return this.NavigateToCollectionById(collectionId);
+  }
+
+  Refresh(): void {
     this.loadData();
   }
 
-  async createCollection(): Promise<void> {
+  /** @deprecated Use {@link Refresh}. */
+  refresh(): void {
+    return this.Refresh();
+  }
+
+  async CreateCollection(): Promise<void> {
     // Validate user can edit current collection (or at root level)
-    if (this.currentCollection) {
-      const canEdit = await this.validatePermission(this.currentCollection, 'edit');
+    if (this.CurrentCollection) {
+      const canEdit = await this.validatePermission(this.CurrentCollection, 'edit');
       if (!canEdit) return;
     }
 
-    this.showNewDropdown = false;
+    this.ShowNewDropdown = false;
     this.editingCollection = undefined;
-    this.isFormModalOpen = true;
+    this.IsFormModalOpen = true;
   }
 
-  async editCollection(collection: MJCollectionEntity): Promise<void> {
+  /** @deprecated Use {@link CreateCollection}. */
+  async createCollection(): Promise<void> {
+    return this.CreateCollection();
+  }
+
+  async EditCollection(collection: MJCollectionEntity): Promise<void> {
     const canEdit = await this.validatePermission(collection, 'edit');
     if (!canEdit) return;
 
     this.editingCollection = collection;
-    this.isFormModalOpen = true;
+    this.IsFormModalOpen = true;
   }
 
-  async deleteCollection(collection: MJCollectionEntity): Promise<void> {
+  /** @deprecated Use {@link EditCollection}. */
+  async editCollection(collection: MJCollectionEntity): Promise<void> {
+    return this.EditCollection(collection);
+  }
+
+  async DeleteCollection(collection: MJCollectionEntity): Promise<void> {
     console.log('deleteCollection called for:', collection.Name, collection.ID);
 
     // Validate user has delete permission
@@ -2359,12 +2745,17 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
         console.log('Attempting to delete collection and all children...');
         await this.deleteCollectionRecursive(collection.ID);
         await this.loadCollections(true);
-        await this.loadAllCollections(true);
+        await this.LoadAllCollections(true);
       } catch (error) {
         console.error('Error deleting collection:', error);
         await this.dialogService.alert('Error', `An error occurred while deleting the collection: ${error}`);
       }
     }
+  }
+
+  /** @deprecated Use {@link DeleteCollection}. */
+  async deleteCollection(collection: MJCollectionEntity): Promise<void> {
+    return this.DeleteCollection(collection);
   }
 
   private async deleteCollectionRecursive(collectionId: string): Promise<void> {
@@ -2378,7 +2769,7 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
         MaxRows: 1000,
         ResultType: 'entity_object'
       },
-      this.currentUser
+      this.CurrentUser
     );
 
     if (childrenResult.Success && childrenResult.Results) {
@@ -2388,7 +2779,7 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
     }
 
     // Step 2: Delete all permissions for this collection
-    await this.permissionService.deleteAllPermissions(collectionId, this.currentUser);
+    await this.permissionService.deleteAllPermissions(collectionId, this.CurrentUser);
 
     // Step 3: Delete all artifact links for this collection
     const artifactsResult = await rv.RunView<any>(
@@ -2398,7 +2789,7 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
         MaxRows: 1000,
         ResultType: 'entity_object'
       },
-      this.currentUser
+      this.CurrentUser
     );
 
     if (artifactsResult.Success && artifactsResult.Results) {
@@ -2409,7 +2800,7 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
 
     // Step 4: Delete the collection itself
     const md = this.ProviderToUse;
-    const collection = await md.GetEntityObject<MJCollectionEntity>('MJ: Collections', this.currentUser);
+    const collection = await md.GetEntityObject<MJCollectionEntity>('MJ: Collections', this.CurrentUser);
     await collection.Load(collectionId);
     const deleted = await collection.Delete();
 
@@ -2418,18 +2809,18 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
     }
   }
 
-  async onCollectionSaved(collection: MJCollectionEntity): Promise<void> {
-    this.isFormModalOpen = false;
+  async OnCollectionSaved(collection: MJCollectionEntity): Promise<void> {
+    this.IsFormModalOpen = false;
     this.editingCollection = undefined;
     await this.loadCollections(true);
-    await this.loadAllCollections(true);
+    await this.LoadAllCollections(true);
     // Reload current collection permission (it was cleared by loadUserPermissions)
     await this.loadCurrentCollectionPermission();
 
     // Update breadcrumb and currentCollection if the saved collection is in the trail
     this.updateBreadcrumbName(collection.ID, collection.Name);
-    if (this.currentCollection && UUIDsEqual(this.currentCollection.ID, collection.ID)) {
-      this.currentCollection = collection;
+    if (this.CurrentCollection && UUIDsEqual(this.CurrentCollection.ID, collection.ID)) {
+      this.CurrentCollection = collection;
     }
 
     // Rebuild unified list to show new collection
@@ -2437,38 +2828,63 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
     this.cdr.detectChanges();
   }
 
-  onFormCancelled(): void {
-    this.isFormModalOpen = false;
+  /** @deprecated Use {@link OnCollectionSaved}. */
+  async onCollectionSaved(collection: MJCollectionEntity): Promise<void> {
+    return this.OnCollectionSaved(collection);
+  }
+
+  OnFormCancelled(): void {
+    this.IsFormModalOpen = false;
     this.editingCollection = undefined;
   }
 
-  async addArtifact(): Promise<void> {
+  /** @deprecated Use {@link OnFormCancelled}. */
+  onFormCancelled(): void {
+    return this.OnFormCancelled();
+  }
+
+  async AddArtifact(): Promise<void> {
     // Validate user can edit current collection
-    if (this.currentCollection) {
-      const canEdit = await this.validatePermission(this.currentCollection, 'edit');
+    if (this.CurrentCollection) {
+      const canEdit = await this.validatePermission(this.CurrentCollection, 'edit');
       if (!canEdit) return;
     }
 
-    this.showNewDropdown = false;
-    this.isArtifactModalOpen = true;
+    this.ShowNewDropdown = false;
+    this.IsArtifactModalOpen = true;
   }
 
-  async onArtifactSaved(artifact: MJArtifactEntity): Promise<void> {
-    this.isArtifactModalOpen = false;
+  /** @deprecated Use {@link AddArtifact}. */
+  async addArtifact(): Promise<void> {
+    return this.AddArtifact();
+  }
+
+  async OnArtifactSaved(artifact: MJArtifactEntity): Promise<void> {
+    this.IsArtifactModalOpen = false;
     await this.loadArtifacts(true);
     this.cdr.detectChanges();
   }
 
-  onArtifactModalCancelled(): void {
-    this.isArtifactModalOpen = false;
+  /** @deprecated Use {@link OnArtifactSaved}. */
+  async onArtifactSaved(artifact: MJArtifactEntity): Promise<void> {
+    return this.OnArtifactSaved(artifact);
   }
 
-  async removeArtifact(item: { version: MJArtifactVersionEntity; artifact: MJArtifactEntity }): Promise<void> {
-    if (!this.currentCollectionId) return;
+  OnArtifactModalCancelled(): void {
+    this.IsArtifactModalOpen = false;
+  }
+
+  /** @deprecated Use {@link OnArtifactModalCancelled}. */
+  onArtifactModalCancelled(): void {
+    return this.OnArtifactModalCancelled();
+  }
+
+  async RemoveArtifact(item: { version: MJArtifactVersionEntity; artifact: MJArtifactEntity }): Promise<void> {
+    if (!this.CurrentCollectionId) return;
 
     // Validate user has delete permission on current collection
-    if (this.currentCollection) {
-      const canDelete = await this.validatePermission(this.currentCollection, 'delete');
+    if (this.CurrentCollection) {
+      const canDelete = await this.validatePermission(this.CurrentCollection, 'delete');
       if (!canDelete) return;
     }
 
@@ -2486,9 +2902,9 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
         const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const result = await rv.RunView({
           EntityName: 'MJ: Collection Artifacts',
-          ExtraFilter: `CollectionID='${this.currentCollectionId}' AND ArtifactVersionID='${item.version.ID}'`,
+          ExtraFilter: `CollectionID='${this.CurrentCollectionId}' AND ArtifactVersionID='${item.version.ID}'`,
           ResultType: 'entity_object'
-        }, this.currentUser);
+        }, this.CurrentUser);
 
         if (result.Success && result.Results && result.Results.length > 0) {
           // Delete this version association
@@ -2507,9 +2923,19 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
     }
   }
 
-  viewArtifact(item: { version: MJArtifactVersionEntity; artifact: MJArtifactEntity }): void {
-    this.activeArtifactId = item.artifact.ID;
+  /** @deprecated Use {@link RemoveArtifact}. */
+  async removeArtifact(item: { version: MJArtifactVersionEntity; artifact: MJArtifactEntity }): Promise<void> {
+    return this.RemoveArtifact(item);
+  }
+
+  ViewArtifact(item: { version: MJArtifactVersionEntity; artifact: MJArtifactEntity }): void {
+    this.ActiveArtifactId = item.artifact.ID;
     this.artifactState.openArtifact(item.artifact.ID, item.version.VersionNumber);
+  }
+
+  /** @deprecated Use {@link ViewArtifact}. */
+  viewArtifact(item: { version: MJArtifactVersionEntity; artifact: MJArtifactEntity }): void {
+    return this.ViewArtifact(item);
   }
 
   // Permission validation and checking methods
@@ -2524,12 +2950,12 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
       return true;
     }
     if (collection.OwnerID
-      ? UUIDsEqual(collection.OwnerID, this.currentUser.ID)
+      ? UUIDsEqual(collection.OwnerID, this.CurrentUser.ID)
       : requiredPermission !== 'share') {
       return true;
     }
 
-    const permission = this.userPermissions.get(collection.ID);
+    const permission = this.UserPermissions.get(collection.ID);
     if (!permission) {
       await this.dialogService.alert(
         'Permission Denied',
@@ -2557,19 +2983,19 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
 
   canEdit(collection: MJCollectionEntity): boolean {
     // Backwards compatibility: treat null OwnerID as owned by current user
-    if (!collection.OwnerID || UUIDsEqual(collection.OwnerID, this.currentUser.ID)) return true;
+    if (!collection.OwnerID || UUIDsEqual(collection.OwnerID, this.CurrentUser.ID)) return true;
 
     // Check permission record
-    const permission = this.userPermissions.get(collection.ID);
+    const permission = this.UserPermissions.get(collection.ID);
     return permission?.canEdit || false;
   }
 
   canDelete(collection: MJCollectionEntity): boolean {
     // Backwards compatibility: treat null OwnerID as owned by current user
-    if (!collection.OwnerID || UUIDsEqual(collection.OwnerID, this.currentUser.ID)) return true;
+    if (!collection.OwnerID || UUIDsEqual(collection.OwnerID, this.CurrentUser.ID)) return true;
 
     // Check permission record
-    const permission = this.userPermissions.get(collection.ID);
+    const permission = this.UserPermissions.get(collection.ID);
     return permission?.canDelete || false;
   }
 
@@ -2578,89 +3004,144 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
     // treatment: the server-side create gate requires a real owner or an explicit
     // Share grant, so offering Share on a legacy null-owner collection would
     // always be rejected server-side (permit-then-deny UX).
-    if (collection.OwnerID && UUIDsEqual(collection.OwnerID, this.currentUser.ID)) return true;
+    if (collection.OwnerID && UUIDsEqual(collection.OwnerID, this.CurrentUser.ID)) return true;
 
     // Check permission record
-    const permission = this.userPermissions.get(collection.ID);
+    const permission = this.UserPermissions.get(collection.ID);
     return permission?.canShare || false;
   }
 
-  canEditCurrent(): boolean {
+  CanEditCurrent(): boolean {
     // At root level, anyone can create
-    if (!this.currentCollectionId || !this.currentCollection) {
+    if (!this.CurrentCollectionId || !this.CurrentCollection) {
       return true;
     }
-    return this.canEdit(this.currentCollection);
+    return this.canEdit(this.CurrentCollection);
   }
 
-  canDeleteCurrent(): boolean {
+  /** @deprecated Use {@link CanEditCurrent}. */
+  canEditCurrent(): boolean {
+    return this.CanEditCurrent();
+  }
+
+  CanDeleteCurrent(): boolean {
     // At root level, no delete needed
-    if (!this.currentCollectionId || !this.currentCollection) {
+    if (!this.CurrentCollectionId || !this.CurrentCollection) {
       return false;
     }
-    return this.canDelete(this.currentCollection);
+    return this.canDelete(this.CurrentCollection);
   }
 
-  canShareCurrent(): boolean {
+  /** @deprecated Use {@link CanDeleteCurrent}. */
+  canDeleteCurrent(): boolean {
+    return this.CanDeleteCurrent();
+  }
+
+  CanShareCurrent(): boolean {
     // At root level, no share needed
-    if (!this.currentCollectionId || !this.currentCollection) {
+    if (!this.CurrentCollectionId || !this.CurrentCollection) {
       return false;
     }
-    return this.canShare(this.currentCollection);
+    return this.canShare(this.CurrentCollection);
   }
 
-  isShared(collection: MJCollectionEntity): boolean {
+  /** @deprecated Use {@link CanShareCurrent}. */
+  canShareCurrent(): boolean {
+    return this.CanShareCurrent();
+  }
+
+  IsShared(collection: MJCollectionEntity): boolean {
     // Collection is shared if user is not the owner and OwnerID is set
-    return collection.OwnerID != null && !UUIDsEqual(collection.OwnerID, this.currentUser.ID);
+    return collection.OwnerID != null && !UUIDsEqual(collection.OwnerID, this.CurrentUser.ID);
+  }
+
+  /** @deprecated Use {@link IsShared}. */
+  isShared(collection: MJCollectionEntity): boolean {
+    return this.IsShared(collection);
   }
 
   // Sharing methods
-  async shareCollection(collection: MJCollectionEntity): Promise<void> {
+  async ShareCollection(collection: MJCollectionEntity): Promise<void> {
     // Validate user has share permission
     const canShare = await this.validatePermission(collection, 'share');
     if (!canShare) return;
 
-    this.sharingCollection = collection;
-    this.isShareModalOpen = true;
+    this.SharingCollection = collection;
+    this.IsShareModalOpen = true;
   }
 
-  async onPermissionsChanged(): Promise<void> {
+  /** @deprecated Use {@link ShareCollection}. */
+  async shareCollection(collection: MJCollectionEntity): Promise<void> {
+    return this.ShareCollection(collection);
+  }
+
+  async OnPermissionsChanged(): Promise<void> {
     // Reload collections and permissions after sharing changes
     await this.loadCollections(true);
-    await this.loadAllCollections(true);
+    await this.LoadAllCollections(true);
     this.cdr.detectChanges();
   }
 
+  /** @deprecated Use {@link OnPermissionsChanged}. */
+  async onPermissionsChanged(): Promise<void> {
+    return this.OnPermissionsChanged();
+  }
+
+  OnShareModalCancelled(): void {
+    this.IsShareModalOpen = false;
+    this.SharingCollection = null;
+  }
+
+  /** @deprecated Use {@link OnShareModalCancelled}. */
   onShareModalCancelled(): void {
-    this.isShareModalOpen = false;
-    this.sharingCollection = null;
+    return this.OnShareModalCancelled();
   }
 
   // Header toolbar action methods
+  ShareCurrentCollection(): void {
+    if (this.CurrentCollection) {
+      this.ShareCollection(this.CurrentCollection);
+    }
+  }
+
+  /** @deprecated Use {@link ShareCurrentCollection}. */
   shareCurrentCollection(): void {
-    if (this.currentCollection) {
-      this.shareCollection(this.currentCollection);
+    return this.ShareCurrentCollection();
+  }
+
+  EditCurrentCollection(): void {
+    if (this.CurrentCollection) {
+      this.EditCollection(this.CurrentCollection);
     }
   }
 
+  /** @deprecated Use {@link EditCurrentCollection}. */
   editCurrentCollection(): void {
-    if (this.currentCollection) {
-      this.editCollection(this.currentCollection);
+    return this.EditCurrentCollection();
+  }
+
+  DeleteCurrentCollection(): void {
+    if (this.CurrentCollection) {
+      this.DeleteCollection(this.CurrentCollection);
     }
   }
 
+  /** @deprecated Use {@link DeleteCurrentCollection}. */
   deleteCurrentCollection(): void {
-    if (this.currentCollection) {
-      this.deleteCollection(this.currentCollection);
-    }
+    return this.DeleteCurrentCollection();
   }
 
   /**
    * Get the icon for an artifact using the centralized icon service.
    * Fallback priority: Plugin icon > Metadata icon > Hardcoded mapping > Generic icon
    */
-  public getArtifactIcon(artifact: MJArtifactEntity): string {
+  public GetArtifactIcon(artifact: MJArtifactEntity): string {
     return this.artifactIconService.getArtifactIcon(artifact);
+  }
+
+  /** @deprecated Use {@link GetArtifactIcon}. */
+  public getArtifactIcon(artifact: MJArtifactEntity): string {
+    return this.GetArtifactIcon(artifact);
   }
 
   // ==================== NEW MAC FINDER-STYLE METHODS ====================
@@ -2672,7 +3153,7 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
     const items: CollectionViewItem[] = [];
 
     // Add folders first (collections)
-    for (const collection of this.filteredCollections) {
+    for (const collection of this.FilteredCollections) {
       items.push({
         type: 'folder',
         id: collection.ID,
@@ -2681,31 +3162,31 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
         icon: 'fa-folder',
         itemCount: this.itemCountMap.get(collection.ID) || 0,
         owner: this.getOwnerDisplayName(collection),
-        isShared: this.isShared(collection),
-        selected: this.selectedItems.has(collection.ID),
+        isShared: this.IsShared(collection),
+        selected: this.SelectedItems.has(collection.ID),
         collection: collection
       });
     }
 
     // Then add artifacts
-    for (const item of this.filteredArtifactVersions) {
+    for (const item of this.FilteredArtifactVersions) {
       items.push({
         type: 'artifact',
         id: item.version.ID,
         name: item.artifact.Name,
         description: item.artifact.Description || undefined,
-        icon: this.getArtifactIcon(item.artifact),
+        icon: this.GetArtifactIcon(item.artifact),
         versionNumber: item.version.VersionNumber,
         artifactType: item.artifact.Type,
         lastModified: item.version.__mj_UpdatedAt,
-        selected: this.selectedItems.has(item.version.ID),
+        selected: this.SelectedItems.has(item.version.ID),
         artifact: item.artifact,
         version: item.version
       });
     }
 
     // Apply sorting and reset pagination
-    this.unifiedItems = this.sortItems(items);
+    this.UnifiedItems = this.sortItems(items);
     this.CurrentPage = 1;
     this.cdr.detectChanges();
   }
@@ -2723,7 +3204,7 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
       }
 
       // Then sort by selected criteria
-      switch (this.sortBy) {
+      switch (this.SortBy) {
         case 'name':
           comparison = a.name.localeCompare(b.name);
           break;
@@ -2737,26 +3218,36 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
           break;
       }
 
-      return this.sortOrder === 'asc' ? comparison : -comparison;
+      return this.SortOrder === 'asc' ? comparison : -comparison;
     });
   }
 
   /**
    * Toggle between grid and list view
    */
-  public toggleViewMode(): void {
-    this.viewMode = this.viewMode === 'grid' ? 'list' : 'grid';
+  public ToggleViewMode(): void {
+    this.ViewMode = this.ViewMode === 'grid' ? 'list' : 'grid';
     // Save preference to localStorage
-    localStorage.setItem('collections-view-mode', this.viewMode);
+    localStorage.setItem('collections-view-mode', this.ViewMode);
+  }
+
+  /** @deprecated Use {@link ToggleViewMode}. */
+  public toggleViewMode(): void {
+    return this.ToggleViewMode();
   }
 
   /**
    * Set view mode explicitly
    */
-  public setViewMode(mode: CollectionViewMode): void {
-    this.viewMode = mode;
+  public SetViewMode(mode: CollectionViewMode): void {
+    this.ViewMode = mode;
     // Save preference to localStorage
     localStorage.setItem('collections-view-mode', mode);
+  }
+
+  /** @deprecated Use {@link SetViewMode}. */
+  public setViewMode(mode: CollectionViewMode): void {
+    return this.SetViewMode(mode);
   }
 
   /**
@@ -2764,53 +3255,63 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
    * When entering select mode, clicks toggle selection instead of opening items
    * When exiting select mode, clears any selections
    */
-  public toggleSelectMode(): void {
-    this.isSelectMode = !this.isSelectMode;
-    if (!this.isSelectMode) {
+  public ToggleSelectMode(): void {
+    this.IsSelectMode = !this.IsSelectMode;
+    if (!this.IsSelectMode) {
       // Clear selection when exiting select mode (clearSelection calls buildUnifiedItemList which calls cdr)
-      this.clearSelection();
+      this.ClearSelection();
     } else {
       this.cdr.detectChanges();
     }
+  }
+
+  /** @deprecated Use {@link ToggleSelectMode}. */
+  public toggleSelectMode(): void {
+    return this.ToggleSelectMode();
   }
 
   /**
    * Exit selection mode (called when navigating to a new folder)
    */
   private exitSelectMode(): void {
-    if (this.isSelectMode) {
-      this.isSelectMode = false;
-      this.clearSelection();
+    if (this.IsSelectMode) {
+      this.IsSelectMode = false;
+      this.ClearSelection();
     }
   }
 
   /**
    * Set sort order - toggles asc/desc if clicking same column
    */
-  public setSortBy(sortBy: CollectionSortBy): void {
-    if (this.sortBy === sortBy) {
+  public SetSortBy(sortBy: CollectionSortBy): void {
+    if (this.SortBy === sortBy) {
       // Toggle order if same sort
-      this.sortOrder = this.sortOrder === 'asc' ? 'desc' : 'asc';
+      this.SortOrder = this.SortOrder === 'asc' ? 'desc' : 'asc';
     } else {
-      this.sortBy = sortBy;
-      this.sortOrder = 'asc';
+      this.SortBy = sortBy;
+      this.SortOrder = 'asc';
     }
 
     // Save sort preferences to localStorage
-    localStorage.setItem('collections-sort-by', this.sortBy);
-    localStorage.setItem('collections-sort-order', this.sortOrder);
+    localStorage.setItem('collections-sort-by', this.SortBy);
+    localStorage.setItem('collections-sort-order', this.SortOrder);
 
     // Close dropdown and rebuild list
-    this.showSortDropdown = false;
+    this.ShowSortDropdown = false;
     this.buildUnifiedItemList();
+  }
+
+  /** @deprecated Use {@link SetSortBy}. */
+  public setSortBy(sortBy: CollectionSortBy): void {
+    return this.SetSortBy(sortBy);
   }
 
   /**
    * Filter items by search query (Phase 2)
    */
-  public onSearchChange(query?: string): void {
+  public OnSearchChange(query?: string): void {
     // If query parameter provided, use it; otherwise use searchQuery property
-    const searchText = query !== undefined ? query : this.searchQuery;
+    const searchText = query !== undefined ? query : this.SearchQuery;
 
     if (!searchText.trim()) {
       // Reset to all items
@@ -2819,56 +3320,76 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
     }
 
     const lowerQuery = searchText.toLowerCase();
-    this.unifiedItems = this.unifiedItems.filter(item =>
+    this.UnifiedItems = this.UnifiedItems.filter(item =>
       item.name.toLowerCase().includes(lowerQuery) ||
       item.description?.toLowerCase().includes(lowerQuery)
     );
   }
 
+  /** @deprecated Use {@link OnSearchChange}. */
+  public onSearchChange(query?: string): void {
+    return this.OnSearchChange(query);
+  }
+
   /**
    * Multi-select: Toggle item selection (Phase 3)
    */
-  public toggleItemSelection(item: CollectionViewItem, event: MouseEvent): void {
+  public ToggleItemSelection(item: CollectionViewItem, event: MouseEvent): void {
     event.stopPropagation();
     // Checkbox click: additive toggle by default, shift = range, cmd/ctrl = toggle.
     this.applySelectionGesture(item, event);
   }
 
+  /** @deprecated Use {@link ToggleItemSelection}. */
+  public toggleItemSelection(item: CollectionViewItem, event: MouseEvent): void {
+    return this.ToggleItemSelection(item, event);
+  }
+
   /**
    * Multi-select: Select all items (Phase 3)
    */
-  public selectAll(): void {
-    this.selectedItems.clear();
-    for (const item of this.unifiedItems) {
-      this.selectedItems.add(item.id);
+  public SelectAll(): void {
+    this.SelectedItems.clear();
+    for (const item of this.UnifiedItems) {
+      this.SelectedItems.add(item.id);
     }
     this.refreshSelectionFlags();
+  }
+
+  /** @deprecated Use {@link SelectAll}. */
+  public selectAll(): void {
+    return this.SelectAll();
   }
 
   /**
    * Multi-select: Clear selection (Phase 3)
    */
-  public clearSelection(): void {
-    this.selectedItems.clear();
+  public ClearSelection(): void {
+    this.SelectedItems.clear();
     this.lastSelectedIndex = null;
     this.refreshSelectionFlags();
+  }
+
+  /** @deprecated Use {@link ClearSelection}. */
+  public clearSelection(): void {
+    return this.ClearSelection();
   }
 
   /**
    * Multi-select: Delete selected items
    */
-  public async deleteSelected(): Promise<void> {
-    if (this.selectedItems.size === 0) return;
+  public async DeleteSelected(): Promise<void> {
+    if (this.SelectedItems.size === 0) return;
 
     const confirmed = await this.dialogService.confirm({
-      title: `Delete ${this.selectedItems.size} item(s)?`,
+      title: `Delete ${this.SelectedItems.size} item(s)?`,
       message: 'This action cannot be undone.',
       dangerous: true
     });
 
     if (!confirmed) return;
 
-    const selectedViewItems = this.unifiedItems.filter(item => this.selectedItems.has(item.id));
+    const selectedViewItems = this.UnifiedItems.filter(item => this.SelectedItems.has(item.id));
     const folderItems = selectedViewItems.filter(item => item.type === 'folder' && item.collection);
     const artifactItems = selectedViewItems.filter(item => item.type === 'artifact' && item.version);
 
@@ -2877,14 +3398,14 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
         await this.deleteCollectionRecursive(item.collection!.ID);
       }
 
-      if (artifactItems.length > 0 && this.currentCollectionId) {
+      if (artifactItems.length > 0 && this.CurrentCollectionId) {
         const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         for (const item of artifactItems) {
           const result = await rv.RunView<MJCollectionArtifactEntity>({
             EntityName: 'MJ: Collection Artifacts',
-            ExtraFilter: `CollectionID='${this.currentCollectionId}' AND ArtifactVersionID='${item.version!.ID}'`,
+            ExtraFilter: `CollectionID='${this.CurrentCollectionId}' AND ArtifactVersionID='${item.version!.ID}'`,
             ResultType: 'entity_object'
-          }, this.currentUser);
+          }, this.CurrentUser);
 
           if (result.Success && result.Results) {
             for (const joinRecord of result.Results) {
@@ -2894,9 +3415,9 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
         }
       }
 
-      this.clearSelection();
+      this.ClearSelection();
       await this.loadCollections(true);
-      await this.loadAllCollections(true);
+      await this.LoadAllCollections(true);
       if (artifactItems.length > 0) {
         await this.loadArtifacts(true);
       }
@@ -2905,6 +3426,11 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
       console.error('Error deleting selected items:', error);
       await this.dialogService.alert('Error', `An error occurred while deleting: ${error}`);
     }
+  }
+
+  /** @deprecated Use {@link DeleteSelected}. */
+  public async deleteSelected(): Promise<void> {
+    return this.DeleteSelected();
   }
 
   /**
@@ -2919,7 +3445,7 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
    * In select mode: toggles selection
    * In normal mode: opens item (folder or artifact)
    */
-  public onItemClick(item: CollectionViewItem, event?: MouseEvent): void {
+  public OnItemClick(item: CollectionViewItem, event?: MouseEvent): void {
     // Modifier-click selects without needing select mode (shift = range, cmd/ctrl = toggle)
     if (event && (event.shiftKey || event.metaKey || event.ctrlKey)) {
       this.applySelectionGesture(item, event, true);
@@ -2927,7 +3453,7 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
     }
 
     // In sticky select mode, a plain click toggles selection
-    if (this.isSelectMode) {
+    if (this.IsSelectMode) {
       this.toggleItemSelectionSimple(item);
       return;
     }
@@ -2936,13 +3462,23 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
     this.openItem(item);
   }
 
+  /** @deprecated Use {@link OnItemClick}. */
+  public onItemClick(item: CollectionViewItem, event?: MouseEvent): void {
+    return this.OnItemClick(item, event);
+  }
+
   /**
    * Handle double-clicking on unified item
    * Always opens the item, even in select mode
    */
-  public onItemDoubleClick(item: CollectionViewItem, event?: MouseEvent): void {
+  public OnItemDoubleClick(item: CollectionViewItem, event?: MouseEvent): void {
     event?.preventDefault();
     this.openItem(item);
+  }
+
+  /** @deprecated Use {@link OnItemDoubleClick}. */
+  public onItemDoubleClick(item: CollectionViewItem, event?: MouseEvent): void {
+    return this.OnItemDoubleClick(item, event);
   }
 
   /**
@@ -2952,13 +3488,13 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
     if (item.type === 'folder' && item.collection) {
       // Exit select mode when navigating to a new folder
       this.exitSelectMode();
-      this.openCollection(item.collection);
+      this.OpenCollection(item.collection);
     } else if (item.type === 'artifact') {
       if (!item.artifact || !item.version) {
         console.error('Artifact or version is missing for item:', item.id);
         return;
       }
-      this.viewArtifact({ artifact: item.artifact, version: item.version });
+      this.ViewArtifact({ artifact: item.artifact, version: item.version });
     }
   }
 
@@ -2966,10 +3502,10 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
    * Simple toggle for item selection (used in select mode)
    */
   private toggleItemSelectionSimple(item: CollectionViewItem): void {
-    if (this.selectedItems.has(item.id)) {
-      this.selectedItems.delete(item.id);
+    if (this.SelectedItems.has(item.id)) {
+      this.SelectedItems.delete(item.id);
     } else {
-      this.selectedItems.add(item.id);
+      this.SelectedItems.add(item.id);
     }
     this.lastSelectedIndex = this.indexOfItem(item.id);
     this.refreshSelectionFlags();
@@ -2978,15 +3514,15 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
   /**
    * Get item count text for display
    */
-  public getItemCountText(itemCount?: number): string {
+  public GetItemCountText(itemCount?: number): string {
     if (itemCount !== undefined) {
       if (itemCount === 0) return 'Empty';
       if (itemCount === 1) return '1 item';
       return `${itemCount} items`;
     }
 
-    const folders = this.unifiedItems.filter(i => i.type === 'folder').length;
-    const artifacts = this.unifiedItems.filter(i => i.type === 'artifact').length;
+    const folders = this.UnifiedItems.filter(i => i.type === 'folder').length;
+    const artifacts = this.UnifiedItems.filter(i => i.type === 'artifact').length;
     const total = folders + artifacts;
 
     if (total === 0) return 'No items';
@@ -2999,58 +3535,73 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
     return parts.join(', ');
   }
 
+  /** @deprecated Use {@link GetItemCountText}. */
+  public getItemCountText(itemCount?: number): string {
+    return this.GetItemCountText(itemCount);
+  }
+
   /**
    * Handle keyboard shortcuts
    * - Cmd/Ctrl+A: Select all (enters select mode if not already)
    * - Escape: Exit select mode and clear selection
    * - Delete/Backspace: Delete selected items
    */
-  public handleKeyboardShortcut(event: KeyboardEvent): void {
+  public HandleKeyboardShortcut(event: KeyboardEvent): void {
     // Cmd+A / Ctrl+A: Select all (enters select mode)
     if ((event.metaKey || event.ctrlKey) && event.key === 'a') {
       event.preventDefault();
-      if (!this.isSelectMode) {
-        this.isSelectMode = true;
+      if (!this.IsSelectMode) {
+        this.IsSelectMode = true;
       }
-      this.selectAll();
+      this.SelectAll();
       return;
     }
 
     // Escape: Exit select mode
-    if (event.key === 'Escape' && this.isSelectMode) {
+    if (event.key === 'Escape' && this.IsSelectMode) {
       event.preventDefault();
       this.exitSelectMode();
       return;
     }
 
     // Delete/Backspace: Delete selected items
-    if ((event.key === 'Delete' || event.key === 'Backspace') && this.selectedItems.size > 0) {
+    if ((event.key === 'Delete' || event.key === 'Backspace') && this.SelectedItems.size > 0) {
       // Only if not focused on an input
       const target = event.target as HTMLElement;
       if (target.tagName !== 'INPUT' && target.tagName !== 'TEXTAREA') {
         event.preventDefault();
-        this.deleteSelected();
+        this.DeleteSelected();
       }
       return;
     }
   }
 
+  /** @deprecated Use {@link HandleKeyboardShortcut}. */
+  public handleKeyboardShortcut(event: KeyboardEvent): void {
+    return this.HandleKeyboardShortcut(event);
+  }
+
   /**
    * Handle right-click context menu - shows custom context menu with permission-gated actions
    */
-  public onItemContextMenu(item: CollectionViewItem, event: MouseEvent): void {
+  public OnItemContextMenu(item: CollectionViewItem, event: MouseEvent): void {
     event.preventDefault();
     event.stopPropagation();
 
     // Close any open dropdowns
-    this.showNewDropdown = false;
-    this.showSortDropdown = false;
+    this.ShowNewDropdown = false;
+    this.ShowSortDropdown = false;
 
-    this.contextMenuItem = item;
-    this.contextMenuPosition = this.clampContextMenuPosition(event.clientX, event.clientY);
-    this.showContextMenu = true;
-    this.showMoveSubmenu = false;
+    this.ContextMenuItem = item;
+    this.ContextMenuPosition = this.clampContextMenuPosition(event.clientX, event.clientY);
+    this.ShowContextMenu = true;
+    this.ShowMoveSubmenu = false;
     this.cdr.detectChanges();
+  }
+
+  /** @deprecated Use {@link OnItemContextMenu}. */
+  public onItemContextMenu(item: CollectionViewItem, event: MouseEvent): void {
+    return this.OnItemContextMenu(item, event);
   }
 
   /** Clamp menu position to keep it within the viewport */
@@ -3066,38 +3617,53 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
     };
   }
 
-  public closeContextMenu(): void {
-    this.showContextMenu = false;
-    this.contextMenuItem = null;
-    this.showMoveSubmenu = false;
+  public CloseContextMenu(): void {
+    this.ShowContextMenu = false;
+    this.ContextMenuItem = null;
+    this.ShowMoveSubmenu = false;
     this.cdr.detectChanges();
+  }
+
+  /** @deprecated Use {@link CloseContextMenu}. */
+  public closeContextMenu(): void {
+    return this.CloseContextMenu();
   }
 
   /** Opens the inline "Move to Collection" submenu and loads candidate target collections. */
-  public openMoveSubmenu(event: Event): void {
+  public OpenMoveSubmenu(event: Event): void {
     event.stopPropagation();
-    this.showMoveSubmenu = true;
+    this.ShowMoveSubmenu = true;
     void this.loadMoveTargets();
   }
 
-  public closeMoveSubmenu(event: Event): void {
+  /** @deprecated Use {@link OpenMoveSubmenu}. */
+  public openMoveSubmenu(event: Event): void {
+    return this.OpenMoveSubmenu(event);
+  }
+
+  public CloseMoveSubmenu(event: Event): void {
     event.stopPropagation();
-    this.showMoveSubmenu = false;
+    this.ShowMoveSubmenu = false;
     this.cdr.detectChanges();
+  }
+
+  /** @deprecated Use {@link CloseMoveSubmenu}. */
+  public closeMoveSubmenu(event: Event): void {
+    return this.CloseMoveSubmenu(event);
   }
 
   /** Loads every collection the user can access in this environment (flattened, indented), minus the current one. */
   private async loadMoveTargets(): Promise<void> {
-    this.isLoadingMoveTargets = true;
-    this.moveTargets = [];
+    this.IsLoadingMoveTargets = true;
+    this.MoveTargets = [];
     this.cdr.detectChanges();
     try {
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-      const ownerFilter = `OwnerID='${this.currentUser.ID}'`;
+      const ownerFilter = `OwnerID='${this.CurrentUser.ID}'`;
       const permissionSubquery = `ID IN (
-        SELECT CollectionID FROM [__mj].[vwCollectionPermissions] WHERE UserID='${this.currentUser.ID}'
+        SELECT CollectionID FROM [__mj].[vwCollectionPermissions] WHERE UserID='${this.CurrentUser.ID}'
       )`;
-      const filter = `EnvironmentID='${this.environmentId}' AND (OwnerID IS NULL OR ${ownerFilter} OR ${permissionSubquery})`;
+      const filter = `EnvironmentID='${this.EnvironmentId}' AND (OwnerID IS NULL OR ${ownerFilter} OR ${permissionSubquery})`;
 
       const result = await rv.RunView<MJCollectionEntity>({
         EntityName: 'MJ: Collections',
@@ -3105,18 +3671,18 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
         OrderBy: 'Name ASC',
         MaxRows: 1000,
         ResultType: 'entity_object'
-      }, this.currentUser);
+      }, this.CurrentUser);
 
       const all = result.Success ? (result.Results || []) : [];
       const flattened = this.flattenCollectionTree(all);
-      this.moveTargets = this.currentCollectionId
-        ? flattened.filter(t => !UUIDsEqual(t.collection.ID, this.currentCollectionId!))
+      this.MoveTargets = this.CurrentCollectionId
+        ? flattened.filter(t => !UUIDsEqual(t.collection.ID, this.CurrentCollectionId!))
         : flattened;
     } catch (error) {
       console.error('Failed to load move targets:', error);
-      this.moveTargets = [];
+      this.MoveTargets = [];
     } finally {
-      this.isLoadingMoveTargets = false;
+      this.IsLoadingMoveTargets = false;
       this.cdr.detectChanges();
     }
   }
@@ -3148,10 +3714,10 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
    * Adds to the target first (so a failure never drops it from the source), then removes
    * the version's join row from the source collection.
    */
-  public async moveArtifactToCollection(target: MJCollectionEntity): Promise<void> {
-    const item = this.contextMenuItem;
-    const fromCollectionId = this.currentCollectionId;
-    this.closeContextMenu();
+  public async MoveArtifactToCollection(target: MJCollectionEntity): Promise<void> {
+    const item = this.ContextMenuItem;
+    const fromCollectionId = this.CurrentCollectionId;
+    this.CloseContextMenu();
 
     if (!item?.artifact || !item.version || !fromCollectionId) return;
     if (UUIDsEqual(target.ID, fromCollectionId)) return;
@@ -3166,10 +3732,10 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
         ExtraFilter: `CollectionID='${target.ID}' AND ArtifactVersionID='${item.version.ID}'`,
         ResultType: 'simple',
         Fields: ['ID']
-      }, this.currentUser);
+      }, this.CurrentUser);
 
       if (!(existing.Success && (existing.Results?.length ?? 0) > 0)) {
-        const junction = await p.GetEntityObject<MJCollectionArtifactEntity>('MJ: Collection Artifacts', this.currentUser);
+        const junction = await p.GetEntityObject<MJCollectionArtifactEntity>('MJ: Collection Artifacts', this.CurrentUser);
         junction.CollectionID = target.ID;
         junction.ArtifactVersionID = item.version.ID;
         junction.Sequence = 0;
@@ -3184,7 +3750,7 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
         EntityName: 'MJ: Collection Artifacts',
         ExtraFilter: `CollectionID='${fromCollectionId}' AND ArtifactVersionID='${item.version.ID}'`,
         ResultType: 'entity_object'
-      }, this.currentUser);
+      }, this.CurrentUser);
 
       if (sourceRows.Success && sourceRows.Results) {
         for (const row of sourceRows.Results) {
@@ -3194,7 +3760,7 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
 
       await this.loadArtifacts(true);
       await this.loadCollections(true);
-      await this.loadAllCollections(true);
+      await this.LoadAllCollections(true);
       this.buildUnifiedItemList();
     } catch (error) {
       console.error('Error moving artifact:', error);
@@ -3202,10 +3768,15 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
     }
   }
 
+  /** @deprecated Use {@link MoveArtifactToCollection}. */
+  public async moveArtifactToCollection(target: MJCollectionEntity): Promise<void> {
+    return this.MoveArtifactToCollection(target);
+  }
+
   /** Handle context menu action dispatch */
-  public onContextMenuAction(action: string): void {
-    const item = this.contextMenuItem;
-    this.closeContextMenu();
+  public OnContextMenuAction(action: string): void {
+    const item = this.ContextMenuItem;
+    this.CloseContextMenu();
     if (!item) return;
 
     switch (action) {
@@ -3217,22 +3788,22 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
         break;
       case 'share':
         if (item.collection) {
-          this.shareCollection(item.collection);
+          this.ShareCollection(item.collection);
         }
         break;
       case 'edit':
         if (item.collection) {
-          this.editCollection(item.collection);
+          this.EditCollection(item.collection);
         }
         break;
       case 'delete':
         if (item.collection) {
-          this.deleteCollection(item.collection);
+          this.DeleteCollection(item.collection);
         }
         break;
       case 'remove':
         if (item.artifact && item.version) {
-          this.removeArtifact({ artifact: item.artifact, version: item.version });
+          this.RemoveArtifact({ artifact: item.artifact, version: item.version });
         }
         break;
       case 'openConversation':
@@ -3241,6 +3812,11 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
         }
         break;
     }
+  }
+
+  /** @deprecated Use {@link OnContextMenuAction}. */
+  public onContextMenuAction(action: string): void {
+    return this.OnContextMenuAction(action);
   }
 
   /**
@@ -3252,7 +3828,7 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
     if (!item.version) return;
     const conversationId = await this.resolveArtifactToConversation(item.version.ID);
     if (conversationId) {
-      this.openConversationRequested.emit({ conversationId });
+      this.OpenConversationRequested.emit({ conversationId });
     } else {
       await this.dialogService.alert('No Source Conversation', 'This artifact is not linked to a conversation.');
     }
@@ -3268,7 +3844,7 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
       ExtraFilter: `ArtifactVersionID='${artifactVersionId}'`,
       Fields: ['ConversationDetailID', 'Direction'],
       ResultType: 'simple'
-    }, this.currentUser);
+    }, this.CurrentUser);
 
     const links = linkResult.Success ? (linkResult.Results ?? []) : [];
     if (links.length === 0) return null;
@@ -3279,7 +3855,7 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
       ExtraFilter: `ID='${link.ConversationDetailID}'`,
       Fields: ['ConversationID'],
       ResultType: 'simple'
-    }, this.currentUser);
+    }, this.CurrentUser);
 
     return detailResult.Success ? (detailResult.Results?.[0]?.ConversationID ?? null) : null;
   }
@@ -3287,8 +3863,8 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
   /** Close context menu on Escape key */
   @HostListener('document:keydown.escape')
   public onEscapeKey(): void {
-    if (this.showContextMenu) {
-      this.closeContextMenu();
+    if (this.ShowContextMenu) {
+      this.CloseContextMenu();
     }
   }
 
@@ -3297,13 +3873,13 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
   // ============================================================
 
   private indexOfItem(id: string): number {
-    return this.unifiedItems.findIndex(i => i.id === id);
+    return this.UnifiedItems.findIndex(i => i.id === id);
   }
 
   /** Re-sync each item's `selected` flag from the set without rebuilding (preserves page). */
   private refreshSelectionFlags(): void {
-    for (const it of this.unifiedItems) {
-      it.selected = this.selectedItems.has(it.id);
+    for (const it of this.UnifiedItems) {
+      it.selected = this.SelectedItems.has(it.id);
     }
     this.cdr.detectChanges();
   }
@@ -3320,87 +3896,122 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
       const lo = Math.min(this.lastSelectedIndex, idx);
       const hi = Math.max(this.lastSelectedIndex, idx);
       for (let i = lo; i <= hi; i++) {
-        const it = this.unifiedItems[i];
-        if (it) this.selectedItems.add(it.id);
+        const it = this.UnifiedItems[i];
+        if (it) this.SelectedItems.add(it.id);
       }
     } else if (event.metaKey || event.ctrlKey || !plainReplaces) {
-      if (this.selectedItems.has(item.id)) {
-        this.selectedItems.delete(item.id);
+      if (this.SelectedItems.has(item.id)) {
+        this.SelectedItems.delete(item.id);
       } else {
-        this.selectedItems.add(item.id);
+        this.SelectedItems.add(item.id);
       }
       this.lastSelectedIndex = idx;
     } else {
-      this.selectedItems.clear();
-      this.selectedItems.add(item.id);
+      this.SelectedItems.clear();
+      this.SelectedItems.add(item.id);
       this.lastSelectedIndex = idx;
     }
     this.refreshSelectionFlags();
   }
 
   /** Hover-checkbox click — selects without requiring an explicit "select mode". */
-  public onCheckboxClick(item: CollectionViewItem, event: MouseEvent): void {
+  public OnCheckboxClick(item: CollectionViewItem, event: MouseEvent): void {
     event.stopPropagation();
     this.applySelectionGesture(item, event);
+  }
+
+  /** @deprecated Use {@link OnCheckboxClick}. */
+  public onCheckboxClick(item: CollectionViewItem, event: MouseEvent): void {
+    return this.OnCheckboxClick(item, event);
   }
 
   // ============================================================
   //  Drag-and-drop (#1, #2 — drag items onto folders / breadcrumbs / navigator)
   // ============================================================
 
-  public onItemDragStart(item: CollectionViewItem, event: DragEvent): void {
+  public OnItemDragStart(item: CollectionViewItem, event: DragEvent): void {
     // If the dragged item is part of the current selection, drag the whole selection;
     // otherwise drag just this item.
-    this.draggedItemIds = (this.selectedItems.has(item.id) && this.selectedItems.size > 0)
-      ? Array.from(this.selectedItems)
+    this.DraggedItemIds = (this.SelectedItems.has(item.id) && this.SelectedItems.size > 0)
+      ? Array.from(this.SelectedItems)
       : [item.id];
     if (event.dataTransfer) {
       event.dataTransfer.effectAllowed = 'move';
-      event.dataTransfer.setData('text/plain', this.draggedItemIds.join(','));
+      event.dataTransfer.setData('text/plain', this.DraggedItemIds.join(','));
     }
   }
 
+  /** @deprecated Use {@link OnItemDragStart}. */
+  public onItemDragStart(item: CollectionViewItem, event: DragEvent): void {
+    return this.OnItemDragStart(item, event);
+  }
+
+  public OnItemDragEnd(): void {
+    this.DraggedItemIds = [];
+    this.DragOverTargetId = null;
+  }
+
+  /** @deprecated Use {@link OnItemDragEnd}. */
   public onItemDragEnd(): void {
-    this.draggedItemIds = [];
-    this.dragOverTargetId = null;
+    return this.OnItemDragEnd();
   }
 
   private draggedItems(): CollectionViewItem[] {
-    return this.unifiedItems.filter(i => this.draggedItemIds.includes(i.id));
+    return this.UnifiedItems.filter(i => this.DraggedItemIds.includes(i.id));
   }
 
   /** Folder grid card / list row as a drop target. */
-  public onFolderItemDragOver(folderItem: CollectionViewItem, event: DragEvent): void {
+  public OnFolderItemDragOver(folderItem: CollectionViewItem, event: DragEvent): void {
     const targetId = folderItem.collection?.ID;
-    if (this.draggedItemIds.length === 0 || this.draggedItemIds.includes(folderItem.id)) return;
+    if (this.DraggedItemIds.length === 0 || this.DraggedItemIds.includes(folderItem.id)) return;
     if (!this.canDropOnCollection(targetId)) return;
     event.preventDefault();
     if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
-    this.dragOverTargetId = folderItem.id;
+    this.DragOverTargetId = folderItem.id;
   }
 
-  public onFolderItemDrop(folderItem: CollectionViewItem, event: DragEvent): void {
+  /** @deprecated Use {@link OnFolderItemDragOver}. */
+  public onFolderItemDragOver(folderItem: CollectionViewItem, event: DragEvent): void {
+    return this.OnFolderItemDragOver(folderItem, event);
+  }
+
+  public OnFolderItemDrop(folderItem: CollectionViewItem, event: DragEvent): void {
     event.preventDefault();
     const targetId = folderItem.collection?.ID ?? null;
-    this.dragOverTargetId = null;
+    this.DragOverTargetId = null;
     void this.moveDraggedItemsTo(targetId);
   }
 
+  /** @deprecated Use {@link OnFolderItemDrop}. */
+  public onFolderItemDrop(folderItem: CollectionViewItem, event: DragEvent): void {
+    return this.OnFolderItemDrop(folderItem, event);
+  }
+
   /** Breadcrumb crumb / Home root as a drop target. crumbId null = top level. */
-  public onCrumbDragOver(crumbId: string | null, event: DragEvent): void {
-    if (this.draggedItemIds.length === 0) return;
+  public OnCrumbDragOver(crumbId: string | null, event: DragEvent): void {
+    if (this.DraggedItemIds.length === 0) return;
     // Artifacts can't live at the top level (no collection)
     if (crumbId === null && this.draggedItems().some(i => i.type === 'artifact')) return;
     if (!this.canDropOnCollection(crumbId)) return;
     event.preventDefault();
     if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
-    this.dragOverTargetId = crumbId === null ? 'root' : 'crumb:' + crumbId;
+    this.DragOverTargetId = crumbId === null ? 'root' : 'crumb:' + crumbId;
   }
 
-  public onCrumbDrop(crumbId: string | null, event: DragEvent): void {
+  /** @deprecated Use {@link OnCrumbDragOver}. */
+  public onCrumbDragOver(crumbId: string | null, event: DragEvent): void {
+    return this.OnCrumbDragOver(crumbId, event);
+  }
+
+  public OnCrumbDrop(crumbId: string | null, event: DragEvent): void {
     event.preventDefault();
-    this.dragOverTargetId = null;
+    this.DragOverTargetId = null;
     void this.moveDraggedItemsTo(crumbId);
+  }
+
+  /** @deprecated Use {@link OnCrumbDrop}. */
+  public onCrumbDrop(crumbId: string | null, event: DragEvent): void {
+    return this.OnCrumbDrop(crumbId, event);
   }
 
   /** True when the dragged set may be dropped on the target collection (blocks folder cycles). */
@@ -3431,8 +4042,8 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
 
   private async moveDraggedItemsTo(targetCollectionId: string | null): Promise<void> {
     const items = this.draggedItems();
-    this.draggedItemIds = [];
-    await this.moveItemsTo(items, targetCollectionId, this.currentCollectionId);
+    this.DraggedItemIds = [];
+    await this.moveItemsTo(items, targetCollectionId, this.CurrentCollectionId);
   }
 
   // ============================================================
@@ -3469,10 +4080,10 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
         }
       }
 
-      this.clearSelection();
+      this.ClearSelection();
       await this.loadCollections(true);
       await this.loadArtifacts(true);
-      await this.loadAllCollections(true);
+      await this.LoadAllCollections(true);
       this.buildUnifiedItemList();
     } catch (error) {
       console.error('Error moving items:', error);
@@ -3486,10 +4097,10 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
       ExtraFilter: `CollectionID='${collectionId}' AND ArtifactVersionID='${versionId}'`,
       ResultType: 'simple',
       Fields: ['ID']
-    }, this.currentUser);
+    }, this.CurrentUser);
     if (existing.Success && (existing.Results?.length ?? 0) > 0) return;
 
-    const junction = await p.GetEntityObject<MJCollectionArtifactEntity>('MJ: Collection Artifacts', this.currentUser);
+    const junction = await p.GetEntityObject<MJCollectionArtifactEntity>('MJ: Collection Artifacts', this.CurrentUser);
     junction.CollectionID = collectionId;
     junction.ArtifactVersionID = versionId;
     junction.Sequence = 0;
@@ -3502,7 +4113,7 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
       EntityName: 'MJ: Collection Artifacts',
       ExtraFilter: `CollectionID='${collectionId}' AND ArtifactVersionID='${versionId}'`,
       ResultType: 'entity_object'
-    }, this.currentUser);
+    }, this.CurrentUser);
     if (rows.Success && rows.Results) {
       for (const row of rows.Results) await row.Delete();
     }
@@ -3510,7 +4121,7 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
 
   private async reparentCollection(collectionId: string, newParentId: string | null): Promise<void> {
     const p = this.ProviderToUse;
-    const collection = await p.GetEntityObject<MJCollectionEntity>('MJ: Collections', this.currentUser);
+    const collection = await p.GetEntityObject<MJCollectionEntity>('MJ: Collections', this.CurrentUser);
     await collection.Load(collectionId);
     collection.ParentID = newParentId;
     const ok = await collection.Save();
@@ -3521,13 +4132,13 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
   //  All-collections cache (navigator + cycle checks + bulk move)
   // ============================================================
 
-  public async loadAllCollections(bypassCache: boolean = false): Promise<void> {
+  public async LoadAllCollections(bypassCache: boolean = false): Promise<void> {
     const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-    const ownerFilter = `OwnerID='${this.currentUser.ID}'`;
+    const ownerFilter = `OwnerID='${this.CurrentUser.ID}'`;
     const permissionSubquery = `ID IN (
-      SELECT CollectionID FROM [__mj].[vwCollectionPermissions] WHERE UserID='${this.currentUser.ID}'
+      SELECT CollectionID FROM [__mj].[vwCollectionPermissions] WHERE UserID='${this.CurrentUser.ID}'
     )`;
-    const filter = `EnvironmentID='${this.environmentId}' AND (OwnerID IS NULL OR ${ownerFilter} OR ${permissionSubquery})`;
+    const filter = `EnvironmentID='${this.EnvironmentId}' AND (OwnerID IS NULL OR ${ownerFilter} OR ${permissionSubquery})`;
     const result = await rv.RunView<MJCollectionEntity>({
       EntityName: 'MJ: Collections',
       ExtraFilter: filter,
@@ -3535,96 +4146,161 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
       MaxRows: 1000,
       ResultType: 'entity_object',
       BypassCache: bypassCache
-    }, this.currentUser);
-    this.allCollections = result.Success ? (result.Results || []) : [];
-    this.allCollectionsById = new Map(this.allCollections.map(c => [NormalizeUUID(c.ID), c]));
-    this.navigatorNodes = this.flattenCollectionTree(this.allCollections);
+    }, this.CurrentUser);
+    this.AllCollections = result.Success ? (result.Results || []) : [];
+    this.allCollectionsById = new Map(this.AllCollections.map(c => [NormalizeUUID(c.ID), c]));
+    this.NavigatorNodes = this.flattenCollectionTree(this.AllCollections);
     this.cdr.detectChanges();
   }
 
+  /** @deprecated Use {@link LoadAllCollections}. */
+  public async loadAllCollections(bypassCache: boolean = false): Promise<void> {
+    return this.LoadAllCollections(bypassCache);
+  }
+
+  public ToggleNavigator(): void {
+    this.ShowNavigator = !this.ShowNavigator;
+  }
+
+  /** @deprecated Use {@link ToggleNavigator}. */
   public toggleNavigator(): void {
-    this.showNavigator = !this.showNavigator;
+    return this.ToggleNavigator();
   }
 
+  public NavigatorClick(collection: MJCollectionEntity): void {
+    void this.NavigateToCollectionById(collection.ID);
+  }
+
+  /** @deprecated Use {@link NavigatorClick}. */
   public navigatorClick(collection: MJCollectionEntity): void {
-    void this.navigateToCollectionById(collection.ID);
+    return this.NavigatorClick(collection);
   }
 
+  public IsCurrentNavigator(collection: MJCollectionEntity): boolean {
+    return !!this.CurrentCollectionId && UUIDsEqual(collection.ID, this.CurrentCollectionId);
+  }
+
+  /** @deprecated Use {@link IsCurrentNavigator}. */
   public isCurrentNavigator(collection: MJCollectionEntity): boolean {
-    return !!this.currentCollectionId && UUIDsEqual(collection.ID, this.currentCollectionId);
+    return this.IsCurrentNavigator(collection);
   }
 
-  public onNavigatorDragOver(collection: MJCollectionEntity, event: DragEvent): void {
-    if (this.draggedItemIds.length === 0 || this.draggedItemIds.some(id => UUIDsEqual(id, collection.ID))) return;
+  public OnNavigatorDragOver(collection: MJCollectionEntity, event: DragEvent): void {
+    if (this.DraggedItemIds.length === 0 || this.DraggedItemIds.some(id => UUIDsEqual(id, collection.ID))) return;
     if (!this.canDropOnCollection(collection.ID)) return;
     event.preventDefault();
     if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
-    this.dragOverTargetId = 'nav:' + collection.ID;
+    this.DragOverTargetId = 'nav:' + collection.ID;
   }
 
-  public onNavigatorDrop(collection: MJCollectionEntity, event: DragEvent): void {
+  /** @deprecated Use {@link OnNavigatorDragOver}. */
+  public onNavigatorDragOver(collection: MJCollectionEntity, event: DragEvent): void {
+    return this.OnNavigatorDragOver(collection, event);
+  }
+
+  public OnNavigatorDrop(collection: MJCollectionEntity, event: DragEvent): void {
     event.preventDefault();
-    this.dragOverTargetId = null;
+    this.DragOverTargetId = null;
     void this.moveDraggedItemsTo(collection.ID);
   }
 
+  /** @deprecated Use {@link OnNavigatorDrop}. */
+  public onNavigatorDrop(collection: MJCollectionEntity, event: DragEvent): void {
+    return this.OnNavigatorDrop(collection, event);
+  }
+
+  public OnDragLeave(tag: string): void {
+    if (this.DragOverTargetId === tag) this.DragOverTargetId = null;
+  }
+
+  /** @deprecated Use {@link OnDragLeave}. */
   public onDragLeave(tag: string): void {
-    if (this.dragOverTargetId === tag) this.dragOverTargetId = null;
+    return this.OnDragLeave(tag);
   }
 
   // ============================================================
   //  Bulk "Move to…" (#3)
   // ============================================================
 
-  public openBulkMove(event: Event): void {
+  public OpenBulkMove(event: Event): void {
     event.stopPropagation();
-    if (this.navigatorNodes.length === 0) void this.loadAllCollections();
-    this.showBulkMovePopover = true;
+    if (this.NavigatorNodes.length === 0) void this.LoadAllCollections();
+    this.ShowBulkMovePopover = true;
   }
 
+  /** @deprecated Use {@link OpenBulkMove}. */
+  public openBulkMove(event: Event): void {
+    return this.OpenBulkMove(event);
+  }
+
+  public CloseBulkMove(): void {
+    this.ShowBulkMovePopover = false;
+  }
+
+  /** @deprecated Use {@link CloseBulkMove}. */
   public closeBulkMove(): void {
-    this.showBulkMovePopover = false;
+    return this.CloseBulkMove();
   }
 
+  public async BulkMoveTo(collection: MJCollectionEntity): Promise<void> {
+    const items = this.UnifiedItems.filter(i => this.SelectedItems.has(i.id));
+    this.ShowBulkMovePopover = false;
+    await this.moveItemsTo(items, collection.ID, this.CurrentCollectionId);
+  }
+
+  /** @deprecated Use {@link BulkMoveTo}. */
   public async bulkMoveTo(collection: MJCollectionEntity): Promise<void> {
-    const items = this.unifiedItems.filter(i => this.selectedItems.has(i.id));
-    this.showBulkMovePopover = false;
-    await this.moveItemsTo(items, collection.ID, this.currentCollectionId);
+    return this.BulkMoveTo(collection);
   }
 
   // ============================================================
   //  Staging shelf (#5)
   // ============================================================
 
-  public stageSelected(): void {
-    const items = this.unifiedItems.filter(i => this.selectedItems.has(i.id));
+  public StageSelected(): void {
+    const items = this.UnifiedItems.filter(i => this.SelectedItems.has(i.id));
     for (const it of items) {
-      if (!this.shelf.some(s => s.item.id === it.id)) {
-        this.shelf.push({ item: it, sourceCollectionId: this.currentCollectionId });
+      if (!this.Shelf.some(s => s.item.id === it.id)) {
+        this.Shelf.push({ item: it, sourceCollectionId: this.CurrentCollectionId });
       }
     }
-    this.clearSelection();
+    this.ClearSelection();
     this.cdr.detectChanges();
   }
 
+  /** @deprecated Use {@link StageSelected}. */
+  public stageSelected(): void {
+    return this.StageSelected();
+  }
+
+  public RemoveFromShelf(id: string): void {
+    this.Shelf = this.Shelf.filter(s => s.item.id !== id);
+    this.cdr.detectChanges();
+  }
+
+  /** @deprecated Use {@link RemoveFromShelf}. */
   public removeFromShelf(id: string): void {
-    this.shelf = this.shelf.filter(s => s.item.id !== id);
+    return this.RemoveFromShelf(id);
+  }
+
+  public ClearShelf(): void {
+    this.Shelf = [];
     this.cdr.detectChanges();
   }
 
+  /** @deprecated Use {@link ClearShelf}. */
   public clearShelf(): void {
-    this.shelf = [];
-    this.cdr.detectChanges();
+    return this.ClearShelf();
   }
 
   /** Moves all staged items into the currently-open collection. */
-  public async dropShelfHere(): Promise<void> {
-    if (this.shelf.length === 0 || !this.currentCollectionId) return;
-    const target = this.currentCollectionId;
+  public async DropShelfHere(): Promise<void> {
+    if (this.Shelf.length === 0 || !this.CurrentCollectionId) return;
+    const target = this.CurrentCollectionId;
     try {
       const p = this.ProviderToUse;
       const rv = RunView.FromMetadataProvider(p);
-      for (const entry of this.shelf) {
+      for (const entry of this.Shelf) {
         const it = entry.item;
         if (it.type === 'artifact' && it.version) {
           if (entry.sourceCollectionId && UUIDsEqual(entry.sourceCollectionId, target)) continue;
@@ -3638,14 +4314,19 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
           await this.reparentCollection(fid, target);
         }
       }
-      this.shelf = [];
+      this.Shelf = [];
       await this.loadCollections(true);
       await this.loadArtifacts(true);
-      await this.loadAllCollections(true);
+      await this.LoadAllCollections(true);
       this.buildUnifiedItemList();
     } catch (error) {
       console.error('Error moving staged items:', error);
       await this.dialogService.alert('Error', 'Failed to move staged items. Please try again.');
     }
+  }
+
+  /** @deprecated Use {@link DropShelfHere}. */
+  public async dropShelfHere(): Promise<void> {
+    return this.DropShelfHere();
   }
 }

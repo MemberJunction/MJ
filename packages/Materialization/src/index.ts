@@ -8,7 +8,7 @@ export {
 } from './MaterializationRefresher';
 export {
     MaterializationFreshness,
-    analyzeMixedFreshness,
+    AnalyzeMixedFreshness, analyzeMixedFreshness,
     type EntityFreshness,
     type MixedFreshnessReport,
     type PlannedEntityRead,

@@ -10,18 +10,18 @@ import { describe, it, expect, vi } from 'vitest';
 import {
     ZoomNativeMeetingSdk,
     BindZoomNative,
-    readNativeConfig,
-    mapNativeAudioFrame,
-    mapNativeParticipant,
-    mapNativeRole,
-    defaultNativeLoader,
+    ReadNativeConfig,
+    MapNativeAudioFrame,
+    MapNativeParticipant,
+    MapNativeRole,
+    DefaultNativeLoader,
     NativeMeetingModule,
     NativeMeetingClient,
     NativeAudioFrame,
     NativeParticipant,
     NativeJoinArgs,
 } from '../zoom-native-sdk';
-import { toArrayBuffer } from '../zoom-rtms-sdk';
+import { ToArrayBuffer } from '../zoom-rtms-sdk';
 import { ZoomAudioFrame, ZoomJoinArgs, ZoomParticipant } from '../zoom-sdk';
 
 /** An in-memory {@link NativeMeetingClient} with drive helpers + capture sinks (no addon, no network). */
@@ -102,21 +102,21 @@ const cfg = { NativeModuleSpecifier: '@acme/zoom-native-addon', SdkKey: 'k', Sdk
 
 describe('ZoomNativeMeetingSdk — pure mappings', () => {
     it('mapNativeRole normalizes host/cohost/participant', () => {
-        expect(mapNativeRole('host')).toBe('Host');
-        expect(mapNativeRole('co-host')).toBe('CoHost');
-        expect(mapNativeRole('cohost')).toBe('CoHost');
-        expect(mapNativeRole('attendee')).toBe('Participant');
-        expect(mapNativeRole(undefined)).toBe('Participant');
+        expect(MapNativeRole('host')).toBe('Host');
+        expect(MapNativeRole('co-host')).toBe('CoHost');
+        expect(MapNativeRole('cohost')).toBe('CoHost');
+        expect(MapNativeRole('attendee')).toBe('Participant');
+        expect(MapNativeRole(undefined)).toBe('Participant');
     });
 
     it('mapNativeParticipant coerces numeric ids and maps role + self flag', () => {
-        const p: ZoomParticipant = mapNativeParticipant({ participantId: 42, displayName: 'Dana', role: 'host', isSelf: true });
+        const p: ZoomParticipant = MapNativeParticipant({ participantId: 42, displayName: 'Dana', role: 'host', isSelf: true });
         expect(p).toEqual({ ParticipantId: '42', DisplayName: 'Dana', Role: 'Host', IsSelf: true });
     });
 
     it('mapNativeAudioFrame copies PCM, resolves label, defaults timestamp', () => {
         const view = new Uint8Array([1, 2, 3]);
-        const frame: ZoomAudioFrame = mapNativeAudioFrame({ data: view, participantId: 7, displayName: 'Lee', timestampMs: 99 });
+        const frame: ZoomAudioFrame = MapNativeAudioFrame({ data: view, participantId: 7, displayName: 'Lee', timestampMs: 99 });
         expect(frame.ParticipantId).toBe('7');
         expect(frame.DisplayName).toBe('Lee');
         expect(frame.TimestampMs).toBe(99);
@@ -126,7 +126,7 @@ describe('ZoomNativeMeetingSdk — pure mappings', () => {
     it('toArrayBuffer copies a Uint8Array view (not aliasing the underlying buffer window)', () => {
         const backing = new Uint8Array([9, 8, 7, 6]).buffer;
         const view = new Uint8Array(backing, 1, 2); // [8,7]
-        const out = toArrayBuffer(view);
+        const out = ToArrayBuffer(view);
         expect(out.byteLength).toBe(2);
         expect(new Uint8Array(out)).toEqual(new Uint8Array([8, 7]));
     });
@@ -135,7 +135,7 @@ describe('ZoomNativeMeetingSdk — pure mappings', () => {
 describe('ZoomNativeMeetingSdk — join + two-way audio', () => {
     it('join() loads the addon, joins with the resolved signature, and returns bot/meeting ids', async () => {
         const client = new FakeNativeClient();
-        const sdk = new ZoomNativeMeetingSdk(readNativeConfig(cfg), async () => fakeModule(client));
+        const sdk = new ZoomNativeMeetingSdk(ReadNativeConfig(cfg), async () => fakeModule(client));
         const result = await sdk.join(baseArgs);
         expect(result).toEqual({ BotParticipantId: 'bot-1', MeetingId: '123456789' });
         expect(client.joined?.sdkSignature).toBe('sig-jwt');
@@ -144,7 +144,7 @@ describe('ZoomNativeMeetingSdk — join + two-way audio', () => {
 
     it('sendAudioFrame forwards the agent voice to the native virtual-mic (the thing RTMS cannot do)', async () => {
         const client = new FakeNativeClient();
-        const sdk = new ZoomNativeMeetingSdk(readNativeConfig(cfg), async () => fakeModule(client));
+        const sdk = new ZoomNativeMeetingSdk(ReadNativeConfig(cfg), async () => fakeModule(client));
         await sdk.join(baseArgs);
         const pcm = new Uint8Array([5, 5, 5]).buffer;
         sdk.sendAudioFrame(pcm);
@@ -153,13 +153,13 @@ describe('ZoomNativeMeetingSdk — join + two-way audio', () => {
     });
 
     it('sendAudioFrame before join is a safe no-op (no throw)', () => {
-        const sdk = new ZoomNativeMeetingSdk(readNativeConfig(cfg), async () => fakeModule(new FakeNativeClient()));
+        const sdk = new ZoomNativeMeetingSdk(ReadNativeConfig(cfg), async () => fakeModule(new FakeNativeClient()));
         expect(() => sdk.sendAudioFrame(new ArrayBuffer(2))).not.toThrow();
     });
 
     it('inbound native audio is mapped to a diarized ZoomAudioFrame and delivered to the handler', async () => {
         const client = new FakeNativeClient();
-        const sdk = new ZoomNativeMeetingSdk(readNativeConfig(cfg), async () => fakeModule(client));
+        const sdk = new ZoomNativeMeetingSdk(ReadNativeConfig(cfg), async () => fakeModule(client));
         const heard: ZoomAudioFrame[] = [];
         sdk.onAudioFrame((f) => heard.push(f));
         await sdk.join(baseArgs);
@@ -173,7 +173,7 @@ describe('ZoomNativeMeetingSdk — join + two-way audio', () => {
 describe('ZoomNativeMeetingSdk — roster, signals, host controls', () => {
     it('participant join/leave + hand-raise events map and reach the handlers', async () => {
         const client = new FakeNativeClient();
-        const sdk = new ZoomNativeMeetingSdk(readNativeConfig(cfg), async () => fakeModule(client));
+        const sdk = new ZoomNativeMeetingSdk(ReadNativeConfig(cfg), async () => fakeModule(client));
         const joined: ZoomParticipant[] = [];
         const left: string[] = [];
         const hands: Array<[string, boolean]> = [];
@@ -194,14 +194,14 @@ describe('ZoomNativeMeetingSdk — roster, signals, host controls', () => {
     it('getParticipants maps the native roster', async () => {
         const client = new FakeNativeClient();
         client.roster = [{ participantId: 1, displayName: 'Host', role: 'host', isSelf: false }];
-        const sdk = new ZoomNativeMeetingSdk(readNativeConfig(cfg), async () => fakeModule(client));
+        const sdk = new ZoomNativeMeetingSdk(ReadNativeConfig(cfg), async () => fakeModule(client));
         await sdk.join(baseArgs);
         expect(await sdk.getParticipants()).toEqual([{ ParticipantId: '1', DisplayName: 'Host', Role: 'Host', IsSelf: false }]);
     });
 
     it('postChatMessage + muteParticipant reach the native client (real host controls)', async () => {
         const client = new FakeNativeClient();
-        const sdk = new ZoomNativeMeetingSdk(readNativeConfig(cfg), async () => fakeModule(client));
+        const sdk = new ZoomNativeMeetingSdk(ReadNativeConfig(cfg), async () => fakeModule(client));
         await sdk.join(baseArgs);
         await sdk.postChatMessage('hello');
         await sdk.muteParticipant('11');
@@ -211,7 +211,7 @@ describe('ZoomNativeMeetingSdk — roster, signals, host controls', () => {
 
     it('meeting-ended fires the handler; leave() releases the client', async () => {
         const client = new FakeNativeClient();
-        const sdk = new ZoomNativeMeetingSdk(readNativeConfig(cfg), async () => fakeModule(client));
+        const sdk = new ZoomNativeMeetingSdk(ReadNativeConfig(cfg), async () => fakeModule(client));
         const ended = vi.fn();
         sdk.onMeetingEnded(ended);
         await sdk.join(baseArgs);
@@ -224,7 +224,7 @@ describe('ZoomNativeMeetingSdk — roster, signals, host controls', () => {
 
 describe('ZoomNativeMeetingSdk — config + errors', () => {
     it('readNativeConfig extracts typed fields and ignores wrong types', () => {
-        const out = readNativeConfig({
+        const out = ReadNativeConfig({
             SdkKey: 'k',
             SdkSecret: 's',
             SdkSignature: 'jwt',
@@ -248,19 +248,19 @@ describe('ZoomNativeMeetingSdk — config + errors', () => {
     });
 
     it('readNativeConfig drops non-finite / non-string values', () => {
-        const out = readNativeConfig({ SampleRate: NaN, Channels: 'two', SdkKey: 42 });
+        const out = ReadNativeConfig({ SampleRate: NaN, Channels: 'two', SdkKey: 42 });
         expect(out.SampleRate).toBeUndefined();
         expect(out.Channels).toBeUndefined();
         expect(out.SdkKey).toBeUndefined();
     });
 
     it('join() throws an actionable error when no NativeModuleSpecifier is configured', async () => {
-        const sdk = new ZoomNativeMeetingSdk(readNativeConfig({}), async () => fakeModule(new FakeNativeClient()));
+        const sdk = new ZoomNativeMeetingSdk(ReadNativeConfig({}), async () => fakeModule(new FakeNativeClient()));
         await expect(sdk.join(baseArgs)).rejects.toThrow(/NativeModuleSpecifier/);
     });
 
     it('defaultNativeLoader throws an actionable error when the addon specifier cannot be resolved', async () => {
-        await expect(defaultNativeLoader('@nonexistent/zoom-native-addon-xyz')).rejects.toThrow(
+        await expect(DefaultNativeLoader('@nonexistent/zoom-native-addon-xyz')).rejects.toThrow(
             /could not load the native Meeting SDK addon/,
         );
     });

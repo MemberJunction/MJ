@@ -39,8 +39,8 @@ import _ from 'lodash';
 import { PayloadChangeAnalyzer, PayloadAnalysisResult, PayloadWarning } from './PayloadChangeAnalyzer';
 import { 
     PayloadOperation, 
-    parsePathWithOperations, 
-    parsePathsWithOperations,
+    ParsePathWithOperations, 
+    ParsePathsWithOperations,
     isOperationAllowed 
 } from './types/payload-operations';
 
@@ -172,7 +172,7 @@ export class PayloadManager {
      * // Returns: { customer: { id: 1, name: 'John' }, order: { id: 2 } }
      * ```
      */
-    public extractDownstreamPayload<P = any>(subAgentName: string, fullPayload: P | null | undefined, downstreamPaths: string[]): Partial<P> | null {
+    public ExtractDownstreamPayload<P = any>(subAgentName: string, fullPayload: P | null | undefined, downstreamPaths: string[]): Partial<P> | null {
         if (!fullPayload) return null;
         if (!downstreamPaths || downstreamPaths.length === 0) return {};
         
@@ -194,6 +194,11 @@ export class PayloadManager {
         return result;
     }
 
+    /** @deprecated Use {@link ExtractDownstreamPayload}. */
+    public extractDownstreamPayload<P = any>(subAgentName: string, fullPayload: P | null | undefined, downstreamPaths: string[]): Partial<P> | null {
+        return this.ExtractDownstreamPayload(subAgentName, fullPayload, downstreamPaths);
+    }
+
     /**
      * Merges sub-agent results back into the parent payload, respecting write permissions.
      * 
@@ -211,7 +216,7 @@ export class PayloadManager {
      * // Returns: { customer: { id: 1 }, analysis: { sentiment: 'positive', score: 0.9 } }
      * ```
      */
-    public mergeUpstreamPayload<P = any>(
+    public MergeUpstreamPayload<P = any>(
         subAgentName: string,
         parentPayload: P | null | undefined, 
         subAgentPayload: Partial<P> | null | undefined, 
@@ -266,7 +271,7 @@ export class PayloadManager {
         
         // Handle wildcard - merge everything
         if (upstreamPaths.includes('*')) {
-            const merged = this.deepMerge(result, subAgentPayload);
+            const merged = this.DeepMerge(result, subAgentPayload);
             // Count changes
             this.countChanges(parentPayload, merged, counts);
             return {
@@ -288,6 +293,17 @@ export class PayloadManager {
             timestamp: new Date(),
             blockedOperations: mergeResult.blockedOperations
         };
+    }
+
+    /** @deprecated Use {@link MergeUpstreamPayload}. */
+    public mergeUpstreamPayload<P = any>(
+        subAgentName: string,
+        parentPayload: P | null | undefined, 
+        subAgentPayload: Partial<P> | null | undefined, 
+        upstreamPaths: string[],
+        verbose?: boolean
+    ): PayloadManagerResult<P> {
+        return this.MergeUpstreamPayload(subAgentName, parentPayload, subAgentPayload, upstreamPaths, verbose);
     }
 
     /**
@@ -939,7 +955,7 @@ export class PayloadManager {
         
         for (const pattern of allowedPatterns) {
             // Parse the pattern to extract path and operations
-            const parsedPattern = parsePathWithOperations(pattern);
+            const parsedPattern = ParsePathWithOperations(pattern);
             const pathPattern = parsedPattern.path;
             
             if (pathPattern === '*') return true;
@@ -994,7 +1010,7 @@ export class PayloadManager {
         allowedPatterns: string[]
     ): boolean {
         const normalizedPath = actualPath.replace(/\[(\d+)\]/g, '.$1');
-        const parsedPatterns = parsePathsWithOperations(allowedPatterns);
+        const parsedPatterns = ParsePathsWithOperations(allowedPatterns);
         
         for (const parsedPattern of parsedPatterns) {
             const pathPattern = parsedPattern.path;
@@ -1090,7 +1106,7 @@ export class PayloadManager {
      *
      * @public
      */
-    public deepMerge<T = any>(destination: T | null | undefined, source: Partial<T> | null | undefined): T {
+    public DeepMerge<T = any>(destination: T | null | undefined, source: Partial<T> | null | undefined): T {
         if (!source) return destination as T;
         if (!destination) return _.cloneDeep(source) as T;
         
@@ -1100,7 +1116,7 @@ export class PayloadManager {
             if (source.hasOwnProperty(key)) {
                 if (_.isObject(source[key]) && !_.isArray(source[key]) && _.isObject(result[key]) && !_.isArray(result[key])) {
                     // Both are objects - recursive merge
-                    result[key] = this.deepMerge(result[key], source[key]) as T[Extract<keyof T, string>];
+                    result[key] = this.DeepMerge(result[key], source[key]) as T[Extract<keyof T, string>];
                 } else {
                     // Otherwise, source overwrites destination
                     result[key] = _.cloneDeep(source[key]) as T[Extract<keyof T, string>];
@@ -1111,6 +1127,66 @@ export class PayloadManager {
         return result;
     }
 
+    /** @deprecated Use {@link DeepMerge}. */
+    public deepMerge<T = any>(destination: T | null | undefined, source: Partial<T> | null | undefined): T {
+        return this.DeepMerge(destination, source);
+    }
+
+    private _defaultAnalyzer = new PayloadChangeAnalyzer();
+    private _defaultDiffer = new DeepDiffer();
+
+    /**
+     * Fast deep-clone for JSON-like payload trees (plain objects, arrays, primitives),
+     * falling back to lodash `_.cloneDeep` for exotic instances (Date, Map, Set, etc.).
+     */
+    private fastCloneDeep<T>(value: T): T {
+        if (value === null || typeof value !== 'object') {
+            return value;
+        }
+        if (Array.isArray(value)) {
+            const len = value.length;
+            const copy = new Array(len);
+            for (let i = 0; i < len; i++) {
+                const item = value[i];
+                copy[i] = (item !== null && typeof item === 'object') ? this.fastCloneDeep(item) : item;
+            }
+            return copy as unknown as T;
+        }
+        const proto = Object.getPrototypeOf(value);
+        if (proto === Object.prototype || proto === null) {
+            const copy: Record<string, unknown> = {};
+            const keys = Object.keys(value);
+            for (let i = 0; i < keys.length; i++) {
+                const k = keys[i];
+                const val = (value as Record<string, unknown>)[k];
+                copy[k] = (val !== null && typeof val === 'object') ? this.fastCloneDeep(val) : val;
+            }
+            return copy as unknown as T;
+        }
+        return _.cloneDeep(value);
+    }
+
+    /**
+     * Returns true if any property key inside a changeRequest bucket contains '.' or '['
+     * (e.g. from TransformChangeRequestPaths).
+     */
+    private hasDottedKeys(obj: unknown): boolean {
+        if (!obj || typeof obj !== 'object') return false;
+        if (Array.isArray(obj)) {
+            for (let i = 0; i < obj.length; i++) {
+                if (this.hasDottedKeys(obj[i])) return true;
+            }
+            return false;
+        }
+        const keys = Object.keys(obj);
+        for (let i = 0; i < keys.length; i++) {
+            const k = keys[i];
+            if (k.includes('.') || k.includes('[')) return true;
+            if (this.hasDottedKeys((obj as Record<string, unknown>)[k])) return true;
+        }
+        return false;
+    }
+
     /**
      * Applies an AgentPayloadChangeRequest to a payload
      * 
@@ -1119,7 +1195,7 @@ export class PayloadManager {
      * @param options Configuration options for the operation
      * @returns Result object with the modified payload, operation counts, and any warnings
      */
-    public applyAgentChangeRequest<P = any>(
+    public ApplyAgentChangeRequest<P = any>(
         originalPayload: P,
         changeRequest: AgentPayloadChangeRequest<any>,
         options?: {
@@ -1151,8 +1227,13 @@ export class PayloadManager {
             this.autoCorrectStrayKeys(changeRequest, originalPayload, warnings, options?.agentName);
         }
 
-        const result = _.cloneDeep(originalPayload) || {} as P;
+        const result = this.fastCloneDeep(originalPayload) || {} as P;
         const counts = { additions: 0, updates: 0, deletions: 0 };
+        const requestHasDottedKeys =
+            this.hasDottedKeys(changeRequest.newElements) ||
+            this.hasDottedKeys(changeRequest.updateElements) ||
+            this.hasDottedKeys(changeRequest.removeElements) ||
+            this.hasDottedKeys(changeRequest.replaceElements);
 
         // Process all changes recursively
         this.processChangeRequest(
@@ -1163,7 +1244,8 @@ export class PayloadManager {
             counts,
             warnings,
             options?.allowedPaths,
-            blockedOperations
+            blockedOperations,
+            requestHasDottedKeys
         );
         
         // Log if requested and in verbose mode
@@ -1174,8 +1256,7 @@ export class PayloadManager {
         // Analyze changes if requested
         let analysis: PayloadAnalysisResult | undefined;
         if (options?.analyzeChanges !== false) { // Default to true
-            const analyzer = new PayloadChangeAnalyzer();
-            analysis = analyzer.analyzeChangeRequest(originalPayload, changeRequest, result);
+            analysis = this._defaultAnalyzer.AnalyzeChangeRequest(originalPayload, changeRequest, result);
             
             // Add analysis warnings to the main warnings array
             if (analysis.warnings.length > 0) {
@@ -1186,8 +1267,7 @@ export class PayloadManager {
         // Generate diff if requested
         let diff: DeepDiffResult | undefined;
         if (options?.generateDiff !== false) { // Default to true
-            const differ = new DeepDiffer();
-            diff = differ.diff(originalPayload, result);
+            diff = this._defaultDiffer.Diff(originalPayload, result);
         }
         
         return {
@@ -1200,6 +1280,24 @@ export class PayloadManager {
             timestamp: new Date(),
             blockedOperations
         };
+    }
+
+    /** @deprecated Use {@link ApplyAgentChangeRequest}. */
+    public applyAgentChangeRequest<P = any>(
+        originalPayload: P,
+        changeRequest: AgentPayloadChangeRequest<any>,
+        options?: {
+            validateChanges?: boolean;
+            logChanges?: boolean;
+            agentName?: string;
+            analyzeChanges?: boolean;
+            generateDiff?: boolean;
+            allowedPaths?: string[];
+            verbose?: boolean;
+            ignoreStrayKeys?: boolean;
+        }
+    ): PayloadManagerResult<P> {
+        return this.ApplyAgentChangeRequest(originalPayload, changeRequest, options);
     }
 
     /**
@@ -1220,12 +1318,13 @@ export class PayloadManager {
             to?: any;
             reason: string;
             timestamp: string;
-        }>
+        }>,
+        requestHasDottedKeys: boolean = false
     ): void {
         if (Array.isArray(target)) {
-            this.processArrayChanges(target, original, changeRequest, path, counts, warnings, allowedPaths, blockedOperations);
+            this.processArrayChanges(target, original, changeRequest, path, counts, warnings, allowedPaths, blockedOperations, requestHasDottedKeys);
         } else if (typeof target === 'object' && target !== null) {
-            this.processObjectChanges(target, original, changeRequest, path, counts, warnings, allowedPaths, blockedOperations);
+            this.processObjectChanges(target, original, changeRequest, path, counts, warnings, allowedPaths, blockedOperations, requestHasDottedKeys);
         }
     }
 
@@ -1324,7 +1423,8 @@ export class PayloadManager {
             to?: unknown;
             reason: string;
             timestamp: string;
-        }>
+        }>,
+        requestHasDottedKeys: boolean = false
     ): void {
         const pathStr = path.join('.');
         
@@ -1332,6 +1432,7 @@ export class PayloadManager {
         const removeArray = pathStr ? _.get(changeRequest.removeElements, pathStr) : changeRequest.removeElements;
         const updateArray = pathStr ? _.get(changeRequest.updateElements, pathStr) : changeRequest.updateElements;
         const newArray = pathStr ? _.get(changeRequest.newElements, pathStr) : changeRequest.newElements;
+        const replaceArray = pathStr ? _.get(changeRequest.replaceElements, pathStr) : changeRequest.replaceElements;
         
         // Build a new array with all changes applied
         const newTargetArray: unknown[] = [];
@@ -1357,8 +1458,6 @@ export class PayloadManager {
                 if (typeof updateArray[i] === 'object' && typeof elementToAdd === 'object' && 
                     !Array.isArray(updateArray[i]) && !Array.isArray(elementToAdd) &&
                     updateArray[i] !== null && elementToAdd !== null) {
-                    // Deep merge for object elements - preserve existing properties
-                    elementToAdd = _.cloneDeep(elementToAdd);
                     // Create a synthetic change request with just this update
                     // The updateElements should be the object itself at the root level
                     const elementChangeRequest: AgentPayloadChangeRequest<any> = {
@@ -1372,18 +1471,22 @@ export class PayloadManager {
                         counts,
                         warnings,
                         allowedPaths,
-                        blockedOperations
+                        blockedOperations,
+                        requestHasDottedKeys
                     );
                 } else {
                     // For primitives or arrays, replace entirely (existing behavior)
                     elementToAdd = updateArray[i];
                     counts.updates++;
                 }
-            } else if (typeof elementToAdd === 'object' && elementToAdd !== null) {
-                // For objects/arrays that aren't being replaced, process nested changes
+            } else if (
+                typeof elementToAdd === 'object' &&
+                elementToAdd !== null &&
+                (requestHasDottedKeys || (removeArray && removeArray[i] !== undefined) || (replaceArray && replaceArray[i] !== undefined))
+            ) {
+                // For objects/arrays that aren't being replaced, process nested changes only when changes exist
                 // IMPORTANT: Don't pass newElements for existing array elements -
                 // newElements items should be appended to the array, not merged into existing items
-                elementToAdd = _.cloneDeep(elementToAdd);
                 const changeRequestWithoutNew: AgentPayloadChangeRequest<any> = {
                     updateElements: changeRequest.updateElements,
                     removeElements: changeRequest.removeElements,
@@ -1399,7 +1502,8 @@ export class PayloadManager {
                     counts,
                     warnings,
                     allowedPaths,
-                    blockedOperations
+                    blockedOperations,
+                    requestHasDottedKeys
                 );
             }
             
@@ -1451,7 +1555,8 @@ export class PayloadManager {
             to?: unknown;
             reason: string;
             timestamp: string;
-        }>
+        }>,
+        requestHasDottedKeys: boolean = false
     ): void {
         // Get all unique keys from change request
         const changeKeys = this.getChangeKeys(changeRequest, path);
@@ -1467,7 +1572,8 @@ export class PayloadManager {
                 counts,
                 warnings,
                 allowedPaths,
-                blockedOperations
+                blockedOperations,
+                requestHasDottedKeys
             );
         }
         
@@ -1492,19 +1598,22 @@ export class PayloadManager {
             }
         }
         
-        // Recurse into all existing keys for nested changes
-        for (const key of Object.keys(target)) {
-            if (!changeKeys.has(key) && typeof target[key] === 'object' && target[key] !== null) {
-                this.processChangeRequest(
-                    target[key],
-                    original ? original[key] : undefined,
-                    changeRequest,
-                    [...path, key],
-                    counts,
-                    warnings,
-                    allowedPaths,
-                    blockedOperations
-                );
+        // Only recurse into keys not in changeKeys if the changeRequest contains dotted/bracketed keys
+        if (requestHasDottedKeys) {
+            for (const key of Object.keys(target)) {
+                if (!changeKeys.has(key) && typeof target[key] === 'object' && target[key] !== null) {
+                    this.processChangeRequest(
+                        target[key],
+                        original ? original[key] : undefined,
+                        changeRequest,
+                        [...path, key],
+                        counts,
+                        warnings,
+                        allowedPaths,
+                        blockedOperations,
+                        requestHasDottedKeys
+                    );
+                }
             }
         }
     }
@@ -1528,7 +1637,8 @@ export class PayloadManager {
             to?: unknown;
             reason: string;
             timestamp: string;
-        }>
+        }>,
+        requestHasDottedKeys: boolean = false
     ): void {
         const pathStr = keyPath.join('.');
         
@@ -1666,7 +1776,8 @@ export class PayloadManager {
                     counts,
                     warnings,
                     allowedPaths,
-                    blockedOperations
+                    blockedOperations,
+                    requestHasDottedKeys
                 );
             } else {
                 // For primitives or type mismatches, replace the value
@@ -1712,7 +1823,8 @@ export class PayloadManager {
                 counts,
                 warnings,
                 allowedPaths,
-                blockedOperations
+                blockedOperations,
+                requestHasDottedKeys
             );
         } else if (newValue !== undefined && Array.isArray(newValue) && Array.isArray(target[key])) {
             // Handle array append: newElements has an array for an existing array key
@@ -1725,7 +1837,8 @@ export class PayloadManager {
                 counts,
                 warnings,
                 allowedPaths,
-                blockedOperations
+                blockedOperations,
+                requestHasDottedKeys
             );
         } else if (bothAreObjects) {
             // Handle object in newElements for existing object key
@@ -1738,7 +1851,8 @@ export class PayloadManager {
                 counts,
                 warnings,
                 allowedPaths,
-                blockedOperations
+                blockedOperations,
+                requestHasDottedKeys
             );
         }
     }
@@ -1811,21 +1925,21 @@ export class PayloadManager {
      * This method first applies the change request, then enforces upstream path restrictions
      * to ensure the sub-agent only modifies allowed paths.
      */
-    public applySubAgentChangeRequest<P = any>(
+    public ApplySubAgentChangeRequest<P = any>(
         parentPayload: P,
         changeRequest: AgentPayloadChangeRequest<P>,
         upstreamPaths: string[],
         subAgentName: string
     ): PayloadManagerResult<P> & { blocked: number } {
         // First apply the full change request
-        const changeResult = this.applyAgentChangeRequest(
+        const changeResult = this.ApplyAgentChangeRequest(
             parentPayload,
             changeRequest,
             { validateChanges: true }
         );
         
         // Then apply upstream guardrails
-        const guardedResult = this.mergeUpstreamPayload(
+        const guardedResult = this.MergeUpstreamPayload(
             subAgentName,
             parentPayload,
             changeResult.result,
@@ -1841,6 +1955,16 @@ export class PayloadManager {
             blocked,
             blockedOperations: guardedResult.blockedOperations
         };
+    }
+
+    /** @deprecated Use {@link ApplySubAgentChangeRequest}. */
+    public applySubAgentChangeRequest<P = any>(
+        parentPayload: P,
+        changeRequest: AgentPayloadChangeRequest<P>,
+        upstreamPaths: string[],
+        subAgentName: string
+    ): PayloadManagerResult<P> & { blocked: number } {
+        return this.ApplySubAgentChangeRequest(parentPayload, changeRequest, upstreamPaths, subAgentName);
     }
 
     /**
@@ -1868,7 +1992,7 @@ export class PayloadManager {
      * // Returns: { feature1: "..." }
      * ```
      */
-    public applyPayloadScope<P = any>(payload: P, scopePath: string): any | null {
+    public ApplyPayloadScope<P = any>(payload: P, scopePath: string): any | null {
         if (!payload || !scopePath) return payload;
         
         // Remove leading slash and split path
@@ -1891,6 +2015,11 @@ export class PayloadManager {
         return _.cloneDeep(current);
     }
 
+    /** @deprecated Use {@link ApplyPayloadScope}. */
+    public applyPayloadScope<P = any>(payload: P, scopePath: string): any | null {
+        return this.ApplyPayloadScope(payload, scopePath);
+    }
+
     /**
      * Reverses a payload scope transformation by wrapping the scoped content back into the full structure.
      * 
@@ -1905,7 +2034,7 @@ export class PayloadManager {
      * // Returns: { functionalRequirements: { feature1: "updated" } }
      * ```
      */
-    public reversePayloadScope<P = any>(scopedPayload: unknown, scopePath: string): P {
+    public ReversePayloadScope<P = any>(scopedPayload: unknown, scopePath: string): P {
         if (!scopePath) return scopedPayload as P;
         
         // Remove leading slash and split path
@@ -1920,6 +2049,11 @@ export class PayloadManager {
         }
         
         return result as P;
+    }
+
+    /** @deprecated Use {@link ReversePayloadScope}. */
+    public reversePayloadScope<P = any>(scopedPayload: unknown, scopePath: string): P {
+        return this.ReversePayloadScope(scopedPayload, scopePath);
     }
 
     /**
@@ -1937,7 +2071,7 @@ export class PayloadManager {
      * // Returns: { updateElements: { "functionalRequirements.field1": "value" } }
      * ```
      */
-    public transformChangeRequestPaths<P = any>(
+    public TransformChangeRequestPaths<P = any>(
         changeRequest: AgentPayloadChangeRequest<P>,
         scopePath: string
     ): AgentPayloadChangeRequest<P> {
@@ -1976,6 +2110,14 @@ export class PayloadManager {
             replaceElements: transformObject(changeRequest.replaceElements, pathPrefix) as Partial<P>,
             reasoning: changeRequest.reasoning
         } as AgentPayloadChangeRequest<P>;
+    }
+
+    /** @deprecated Use {@link TransformChangeRequestPaths}. */
+    public transformChangeRequestPaths<P = any>(
+        changeRequest: AgentPayloadChangeRequest<P>,
+        scopePath: string
+    ): AgentPayloadChangeRequest<P> {
+        return this.TransformChangeRequestPaths(changeRequest, scopePath);
     }
 
     /**

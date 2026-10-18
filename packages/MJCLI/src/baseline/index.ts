@@ -5,14 +5,14 @@
 
 export * from './types';
 export * from './util';
-export { introspectMssql } from './introspector-mssql';
-export { introspectPostgres } from './introspector-postgres';
-export { dumpTables } from './data-dumper';
+export { IntrospectMssql, introspectMssql } from './introspector-mssql';
+export { IntrospectPostgres, introspectPostgres } from './introspector-postgres';
+export { DumpTables, dumpTables } from './data-dumper';
 export type { DumpProgress, DumpOptions } from './data-dumper';
-export { emitBaselineTsql } from './emitter';
+export { EmitBaselineTsql, emitBaselineTsql } from './emitter';
 export type { EmitInput } from './emitter';
-export { compareSnapshots } from './comparator';
+export { CompareSnapshots, compareSnapshots } from './comparator';
 export type { CompareInput } from './comparator';
-export { renderJson, renderMarkdown } from './report';
-export { openConnection } from './connection';
+export { RenderJson, renderJson, RenderMarkdown, renderMarkdown } from './report';
+export { OpenConnection, openConnection } from './connection';
 export type { DbConnectionParams, DbConnectionOverrides, QueryRunner } from './connection';

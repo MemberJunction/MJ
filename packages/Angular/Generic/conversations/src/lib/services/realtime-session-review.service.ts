@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { IMetadataProvider, Metadata, RunView, RunViewParams } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { RealtimeDelegationCardVM, RealtimeThreadItem } from '../components/realtime/realtime-session-state';
-import { ParsedDelegationArtifact, FormatToolName } from './delegation-result-parser';
+import { ParsedDelegationArtifact, FormatToolName } from '@memberjunction/realtime-runtime';
 
 /**
  * Why a reviewed session was closed, as stamped server-side by `SessionManager.CloseSession`

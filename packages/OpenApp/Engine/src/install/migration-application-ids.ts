@@ -59,7 +59,7 @@ function collectApplicationIds(sql: string, out: Set<string>): void {
  *
  * @param migrationsDir absolute path to the app's migrations directory
  */
-export async function extractApplicationIds(migrationsDir: string): Promise<string[]> {
+export async function ExtractApplicationIds(migrationsDir: string): Promise<string[]> {
   let files: string[];
   try {
     files = (await fs.readdir(migrationsDir)).filter((f) => /\.sql$/i.test(f));
@@ -75,4 +75,9 @@ export async function extractApplicationIds(migrationsDir: string): Promise<stri
     }
   }
   return [...ids];
+}
+
+/** @deprecated Use {@link ExtractApplicationIds}. */
+export async function extractApplicationIds(migrationsDir: string): Promise<string[]> {
+  return ExtractApplicationIds(migrationsDir);
 }

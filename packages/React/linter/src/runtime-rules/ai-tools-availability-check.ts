@@ -1,4 +1,4 @@
-import { traverse, NodePath } from '../lint-utils';
+import { Traverse, NodePath } from '../lint-utils';
 import * as t from '@babel/types';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseLintRule } from '../lint-rule';
@@ -142,7 +142,7 @@ function isUtilitiesAiAccess(node: t.Node): boolean {
  */
 function isInConsequent(targetNode: t.Node, ifStatement: t.IfStatement): boolean {
   let found = false;
-  traverse(ifStatement.consequent, {
+  Traverse(ifStatement.consequent, {
     enter(innerPath: NodePath) {
       if (innerPath.node === targetNode) {
         found = true;
@@ -195,7 +195,7 @@ export class AiToolsAvailabilityCheckRule extends BaseLintRule {
     // First pass: count total utilities.ai accesses (guarded and unguarded)
     // If the component uses utilities.ai extensively, it's designed for AI environments
     let totalAiAccesses = 0;
-    traverse(ast, {
+    Traverse(ast, {
       MemberExpression(path: NodePath<t.MemberExpression>) {
         if (isUtilitiesAiMethodAccess(path.node)) totalAiAccesses++;
       },
@@ -208,7 +208,7 @@ export class AiToolsAvailabilityCheckRule extends BaseLintRule {
     // If >=3 total accesses, the component is designed for AI environments — skip
     if (totalAiAccesses >= 3) return violations;
 
-    traverse(ast, {
+    Traverse(ast, {
       MemberExpression(path: NodePath<t.MemberExpression>) {
         // We want to find utilities.ai.SomeMethod or utilities.ai.someProp
         if (!isUtilitiesAiMethodAccess(path.node)) return;

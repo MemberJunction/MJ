@@ -19,7 +19,7 @@
 import type { DecisionKind, ObservedDecision } from './decision';
 import type { ParamExpectation, ParamMatcher } from './matchers';
 import type { ChatMessage } from '@memberjunction/ai';
-import { evaluateDecision, type DecisionEvaluation, type DecisionExpectation, type ExpectedAction } from './expectation';
+import { EvaluateDecision, type DecisionEvaluation, type DecisionExpectation, type ExpectedAction } from './expectation';
 
 /** A parameter matcher as written in a golden file. */
 export interface CorpusParamMatcher {
@@ -83,7 +83,7 @@ function fail(caseId: string, message: string): never {
 }
 
 /** Translates one on-disk matcher into the evaluator's union, rejecting anything malformed. */
-export function toParamMatcher(caseId: string, param: string, spec: CorpusParamMatcher): ParamMatcher {
+export function ToParamMatcher(caseId: string, param: string, spec: CorpusParamMatcher): ParamMatcher {
     switch (spec.matcher) {
         case 'exact':
             return { kind: 'exact', value: spec.value };
@@ -129,12 +129,17 @@ export function toParamMatcher(caseId: string, param: string, spec: CorpusParamM
     }
 }
 
+/** @deprecated Use {@link ToParamMatcher}. */
+export function toParamMatcher(caseId: string, param: string, spec: CorpusParamMatcher): ParamMatcher {
+    return ToParamMatcher(caseId, param, spec);
+}
+
 const DECISION_KINDS: DecisionKind[] = ['action', 'subAgent', 'chat', 'taskComplete', 'payloadChange', 'other', 'unparseable', 'empty'];
 
 function toParamExpectations(caseId: string, params: Record<string, CorpusParamMatcher> | undefined): ParamExpectation[] {
     return Object.entries(params ?? {}).map(([param, spec]) => ({
         param,
-        matcher: toParamMatcher(caseId, param, spec),
+        matcher: ToParamMatcher(caseId, param, spec),
         optional: spec.optional === true
     }));
 }
@@ -149,7 +154,7 @@ function toExpectedActions(caseId: string, actions: CorpusExpectedAction[] | und
 }
 
 /** Translates a golden-file expectation into the evaluator's {@link DecisionExpectation}. */
-export function toDecisionExpectation(caseId: string, expect: CorpusExpectation): DecisionExpectation {
+export function ToDecisionExpectation(caseId: string, expect: CorpusExpectation): DecisionExpectation {
     if (!DECISION_KINDS.includes(expect.kind as DecisionKind)) {
         fail(caseId, `unknown expectation kind '${expect.kind}'`);
     }
@@ -160,7 +165,7 @@ export function toDecisionExpectation(caseId: string, expect: CorpusExpectation)
         kind: expect.kind as DecisionKind,
         actions: toExpectedActions(caseId, expect.actions),
         subAgents: expect.subAgents,
-        message: expect.message ? toParamMatcher(caseId, 'message', expect.message) : undefined,
+        message: expect.message ? ToParamMatcher(caseId, 'message', expect.message) : undefined,
         forbiddenActions: expect.forbiddenActions,
         ordered: expect.ordered,
         allowAdditionalActions: expect.allowAdditionalActions,
@@ -169,8 +174,13 @@ export function toDecisionExpectation(caseId: string, expect: CorpusExpectation)
     };
 }
 
+/** @deprecated Use {@link ToDecisionExpectation}. */
+export function toDecisionExpectation(caseId: string, expect: CorpusExpectation): DecisionExpectation {
+    return ToDecisionExpectation(caseId, expect);
+}
+
 /** Validates a parsed golden file and returns it typed. Throws with the case id on any problem. */
-export function parseCorpusCase(raw: unknown): CorpusCase {
+export function ParseCorpusCase(raw: unknown): CorpusCase {
     const record = raw as Partial<CorpusCase> | null;
     if (!record || typeof record !== 'object') {
         throw new Error('Corpus case must be a JSON object');
@@ -194,6 +204,11 @@ export function parseCorpusCase(raw: unknown): CorpusCase {
     return { ...record, id, agent: record.agent, description: record.description ?? '', input: record.input ?? {}, expect: record.expect } as CorpusCase;
 }
 
+/** @deprecated Use {@link ParseCorpusCase}. */
+export function parseCorpusCase(raw: unknown): CorpusCase {
+    return ParseCorpusCase(raw);
+}
+
 function validateExpectation(caseId: string, expect: CorpusExpectation): void {
     if (expect.kind === 'anyOf') {
         if (!expect.anyOf?.length) {
@@ -202,7 +217,7 @@ function validateExpectation(caseId: string, expect: CorpusExpectation): void {
         expect.anyOf.forEach((branch) => validateExpectation(caseId, branch));
         return;
     }
-    toDecisionExpectation(caseId, expect);
+    ToDecisionExpectation(caseId, expect);
 }
 
 /**
@@ -213,14 +228,19 @@ function validateExpectation(caseId: string, expect: CorpusExpectation): void {
  * makes a failure diagnosable: "expected chat OR action, got unparseable" is less useful than the
  * branch that came nearest.
  */
-export function evaluateCorpusExpectation(caseId: string, expect: CorpusExpectation, observed: ObservedDecision): DecisionEvaluation {
+export function EvaluateCorpusExpectation(caseId: string, expect: CorpusExpectation, observed: ObservedDecision): DecisionEvaluation {
     if (expect.kind !== 'anyOf') {
-        return evaluateDecision(toDecisionExpectation(caseId, expect), observed);
+        return EvaluateDecision(ToDecisionExpectation(caseId, expect), observed);
     }
-    const branches = (expect.anyOf ?? []).map((branch) => evaluateCorpusExpectation(caseId, branch, observed));
+    const branches = (expect.anyOf ?? []).map((branch) => EvaluateCorpusExpectation(caseId, branch, observed));
     const passing = branches.find((b) => b.passed);
     if (passing) {
         return passing;
     }
     return branches.reduce((best, current) => (current.score > best.score ? current : best), branches[0]);
+}
+
+/** @deprecated Use {@link EvaluateCorpusExpectation}. */
+export function evaluateCorpusExpectation(caseId: string, expect: CorpusExpectation, observed: ObservedDecision): DecisionEvaluation {
+    return EvaluateCorpusExpectation(caseId, expect, observed);
 }

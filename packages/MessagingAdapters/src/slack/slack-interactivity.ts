@@ -18,7 +18,7 @@
 import { WebClient } from '@slack/web-api';
 import { LogError, LogStatus } from '@memberjunction/core';
 import type { AgentResponseForm } from '@memberjunction/ai-core-plus';
-import { buildFormModal, getFullResponseText } from './slack-block-builder.js';
+import { BuildFormModal, GetFullResponseText } from './slack-block-builder.js';
 import type { SlackAdapter } from './SlackAdapter.js';
 import type { IncomingMessage } from '../base/types.js';
 
@@ -34,7 +34,7 @@ const FORM_STORE_TTL_MS = 30 * 60 * 1000;
  * Register a response form for a given channel/thread so it can be opened as a modal.
  * Called by the block builder when a form with non-choice questions is rendered.
  */
-export function registerActiveForm(channelId: string, threadTs: string, form: AgentResponseForm): void {
+export function RegisterActiveForm(channelId: string, threadTs: string, form: AgentResponseForm): void {
     const key = `${channelId}:${threadTs}`;
     activeFormStore.set(key, { form, timestamp: Date.now() });
     // Cleanup old entries
@@ -43,6 +43,11 @@ export function registerActiveForm(channelId: string, threadTs: string, form: Ag
             activeFormStore.delete(k);
         }
     }
+}
+
+/** @deprecated Use {@link RegisterActiveForm}. */
+export function registerActiveForm(channelId: string, threadTs: string, form: AgentResponseForm): void {
+    return RegisterActiveForm(channelId, threadTs, form);
 }
 
 /**
@@ -82,7 +87,7 @@ interface SlackAction {
  * @param client - Slack WebClient for API calls (e.g., opening modals).
  * @param adapter - Optional SlackAdapter for form round-trip (posting choices back as messages).
  */
-export async function handleSlackInteraction(
+export async function HandleSlackInteraction(
     rawPayload: string,
     client: WebClient,
     adapter?: SlackAdapter
@@ -109,6 +114,15 @@ export async function handleSlackInteraction(
     for (const action of actions) {
         await routeAction(action, payload, client, adapter);
     }
+}
+
+/** @deprecated Use {@link HandleSlackInteraction}. */
+export async function handleSlackInteraction(
+    rawPayload: string,
+    client: WebClient,
+    adapter?: SlackAdapter
+): Promise<void> {
+    return HandleSlackInteraction(rawPayload, client, adapter);
 }
 
 /**
@@ -153,7 +167,7 @@ async function handleViewFull(
     try {
         // Try to retrieve stored full text first (preserves content lost during truncation)
         const storeKey = action.value;
-        const storedText = storeKey ? getFullResponseText(storeKey) : null;
+        const storedText = storeKey ? GetFullResponseText(storeKey) : null;
 
         // Fall back to extracting from already-truncated blocks
         const messageBlocks = payload.message?.blocks ?? [];
@@ -262,7 +276,7 @@ async function handleFormModalOpen(
             return;
         }
 
-        const modalView = buildFormModal(form);
+        const modalView = BuildFormModal(form);
         // Store channel/thread in private_metadata so we can post the response back
         (modalView as Record<string, unknown>).private_metadata = JSON.stringify({ channelId, threadTs });
 

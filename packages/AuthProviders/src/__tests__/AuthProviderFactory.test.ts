@@ -103,3 +103,77 @@ describe('AuthProviderFactory cache (memory-leak fix R2-C4)', () => {
         expect(issuerMultiCache.Size).toBe(0);
     });
 });
+
+describe('AuthProviderFactory provider disposal (memory-leak audit 2026-09-19)', () => {
+    // `register()`/`clear()` used to drop the old IAuthProvider value with no disposal call.
+    // Each BaseAuthProvider instance owns a keep-alive https.Agent + jwksClient; discarding it
+    // without disposing left its socket pool open until its own 60s idle timeout, on every
+    // admin-triggered auth-catalog refresh (`refreshAuthProviders()`).
+    let factory: AuthProviderFactory;
+
+    beforeEach(() => {
+        factory = AuthProviderFactory.Instance;
+        factory.clear();
+    });
+
+    it('does not call Dispose when registering a brand-new provider name', () => {
+        const provider = makeProvider('p1', 'auth0.com');
+        const disposeSpy = vi.fn();
+        provider.Dispose = disposeSpy;
+
+        factory.register(provider);
+
+        expect(disposeSpy).not.toHaveBeenCalled();
+    });
+
+    it('disposes the outgoing provider when register() replaces an existing name', () => {
+        const oldProvider = makeProvider('p1', 'auth0.com');
+        const oldDispose = vi.fn();
+        oldProvider.Dispose = oldDispose;
+        factory.register(oldProvider);
+
+        const newProvider = makeProvider('p1', 'auth0.com');
+        const newDispose = vi.fn();
+        newProvider.Dispose = newDispose;
+        factory.register(newProvider);
+
+        expect(oldDispose).toHaveBeenCalledTimes(1);
+        expect(newDispose).not.toHaveBeenCalled();
+    });
+
+    it('does not dispose a provider that re-registers itself (same instance)', () => {
+        const provider = makeProvider('p1', 'auth0.com');
+        const disposeSpy = vi.fn();
+        provider.Dispose = disposeSpy;
+
+        factory.register(provider);
+        factory.register(provider); // idempotent re-register of the SAME instance
+
+        expect(disposeSpy).not.toHaveBeenCalled();
+    });
+
+    it('disposes every registered provider on clear()', () => {
+        const p1 = makeProvider('p1', 'auth0.com');
+        const p2 = makeProvider('p2', 'okta.com');
+        const dispose1 = vi.fn();
+        const dispose2 = vi.fn();
+        p1.Dispose = dispose1;
+        p2.Dispose = dispose2;
+        factory.register(p1);
+        factory.register(p2);
+
+        factory.clear();
+
+        expect(dispose1).toHaveBeenCalledTimes(1);
+        expect(dispose2).toHaveBeenCalledTimes(1);
+    });
+
+    it('tolerates providers with no Dispose method (optional on IAuthProvider)', () => {
+        // makeProvider() intentionally does not set Dispose - most of this file's fixtures don't.
+        expect(() => {
+            factory.register(makeProvider('p1', 'auth0.com'));
+            factory.register(makeProvider('p1', 'auth0.com')); // replaces p1, old has no Dispose
+            factory.clear();
+        }).not.toThrow();
+    });
+});

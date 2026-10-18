@@ -5,25 +5,25 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { decideScheduleAction, buildScheduledJobFields } from '../custom/MJRecordProcessEntityServer.server';
+import { DecideScheduleAction, BuildScheduledJobFields } from '../custom/MJRecordProcessEntityServer.server';
 
 describe('decideScheduleAction', () => {
     it("upserts when Active + ScheduleEnabled + a CronExpression", () => {
-        expect(decideScheduleAction({ status: 'Active', scheduleEnabled: true, cronExpression: '0 0 * * *' })).toBe('upsert');
+        expect(DecideScheduleAction({ status: 'Active', scheduleEnabled: true, cronExpression: '0 0 * * *' })).toBe('upsert');
     });
 
     it('disables when ScheduleEnabled is false', () => {
-        expect(decideScheduleAction({ status: 'Active', scheduleEnabled: false, cronExpression: '0 0 * * *' })).toBe('disable');
+        expect(DecideScheduleAction({ status: 'Active', scheduleEnabled: false, cronExpression: '0 0 * * *' })).toBe('disable');
     });
 
     it('disables when there is no CronExpression', () => {
-        expect(decideScheduleAction({ status: 'Active', scheduleEnabled: true, cronExpression: null })).toBe('disable');
-        expect(decideScheduleAction({ status: 'Active', scheduleEnabled: true, cronExpression: '' })).toBe('disable');
+        expect(DecideScheduleAction({ status: 'Active', scheduleEnabled: true, cronExpression: null })).toBe('disable');
+        expect(DecideScheduleAction({ status: 'Active', scheduleEnabled: true, cronExpression: '' })).toBe('disable');
     });
 
     it('disables when the process is not Active (Draft/Disabled)', () => {
-        expect(decideScheduleAction({ status: 'Draft', scheduleEnabled: true, cronExpression: '0 0 * * *' })).toBe('disable');
-        expect(decideScheduleAction({ status: 'Disabled', scheduleEnabled: true, cronExpression: '0 0 * * *' })).toBe('disable');
+        expect(DecideScheduleAction({ status: 'Draft', scheduleEnabled: true, cronExpression: '0 0 * * *' })).toBe('disable');
+        expect(DecideScheduleAction({ status: 'Disabled', scheduleEnabled: true, cronExpression: '0 0 * * *' })).toBe('disable');
     });
 });
 
@@ -37,7 +37,7 @@ describe('buildScheduledJobFields', () => {
     };
 
     it('maps every Scheduled Job field, prefixing the name and embedding the RecordProcessID', () => {
-        const f = buildScheduledJobFields(base);
+        const f = BuildScheduledJobFields(base);
         expect(f).toEqual({
             JobTypeID: 'JT-1',
             Name: 'Record Process: Summarize Customers',
@@ -49,11 +49,11 @@ describe('buildScheduledJobFields', () => {
     });
 
     it('defaults Timezone to UTC when the process has none', () => {
-        expect(buildScheduledJobFields({ ...base, timezone: null }).Timezone).toBe('UTC');
+        expect(BuildScheduledJobFields({ ...base, timezone: null }).Timezone).toBe('UTC');
     });
 
     it('produces Configuration the driver can parse back to the RecordProcessID', () => {
-        const f = buildScheduledJobFields(base);
+        const f = BuildScheduledJobFields(base);
         expect(JSON.parse(f.Configuration)).toEqual({ RecordProcessID: 'RP-9' });
     });
 });

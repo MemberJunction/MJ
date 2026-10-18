@@ -41,13 +41,14 @@ type LoadableEntity = BaseEntity<unknown> & {
             [disabled]="isSaving"
             (click)="OpenRatingDialog()"
             [title]="currentUserRating != null ? 'Edit your rating' : 'Rate this response'"
+            [attr.aria-label]="currentUserRating != null ? null : 'Rate response'"
             type="button">
             @if (currentUserRating != null) {
               <i class="fa-solid fa-pen-to-square"></i>
               <span class="my-rating">My rating: {{ currentUserRating }}/10</span>
             } @else {
-              <i class="fa-regular fa-comment-dots"></i>
-              <span>Rate response</span>
+              <i class="fa-regular fa-comment-dots" aria-hidden="true"></i>
+              <span class="rate-label">Rate response</span>
             }
           </button>
         } @else if (currentUserRating != null) {
@@ -77,7 +78,7 @@ type LoadableEntity = BaseEntity<unknown> & {
     .rating-button {
       display: inline-flex;
       align-items: center;
-      gap: 6px;
+      gap: var(--mj-space-2);
       background: var(--mj-bg-surface);
       border: 1px solid var(--mj-border-strong);
       border-radius: 6px;
@@ -109,6 +110,13 @@ type LoadableEntity = BaseEntity<unknown> & {
       font-weight: 500;
     }
 
+    /* Phones: "Rate response" collapses to its icon */
+    @media (max-width: 768px) {
+      .rate-label {
+        display: none;
+      }
+    }
+
     .rating-readonly {
       display: inline-flex;
       align-items: center;
@@ -124,8 +132,26 @@ type LoadableEntity = BaseEntity<unknown> & {
   `]
 })
 export class ConversationMessageRatingComponent extends BaseAngularComponent implements OnInit {
-  @Input() conversationDetailId!: string;
-  @Input() currentUser!: UserInfo;
+  @Input() ConversationDetailId!: string;
+
+  /** @deprecated Use {@link ConversationDetailId}. */
+  @Input() set conversationDetailId(value: string) {
+    this.ConversationDetailId = value;
+  }
+  /** @deprecated Use {@link ConversationDetailId}. */
+  get conversationDetailId(): string {
+    return this.ConversationDetailId;
+  }
+  @Input() CurrentUser!: UserInfo;
+
+  /** @deprecated Use {@link CurrentUser}. */
+  @Input() set currentUser(value: UserInfo) {
+    this.CurrentUser = value;
+  }
+  /** @deprecated Use {@link CurrentUser}. */
+  get currentUser(): UserInfo {
+    return this.CurrentUser;
+  }
 
   /**
    * When false, the rating UI renders as a read-only badge instead of an editable
@@ -140,24 +166,87 @@ export class ConversationMessageRatingComponent extends BaseAngularComponent imp
    * `MJ: Conversation Details` (which has `UserRating`/`UserFeedback`).
    * Skip-Brain hosts pass `'Conversation Details__Skip'`.
    */
-  @Input() ratingEntityName: string = 'MJ: Conversation Details';
+  @Input() RatingEntityName: string = 'MJ: Conversation Details';
+
+  /** @deprecated Use {@link RatingEntityName}. */
+  @Input() set ratingEntityName(value: string) {
+    this.RatingEntityName = value;
+  }
+  /** @deprecated Use {@link RatingEntityName}. */
+  get ratingEntityName(): string {
+    return this.RatingEntityName;
+  }
 
   /** Column on the entity that stores the 1-10 rating. */
-  @Input() ratingField: string = 'UserRating';
+  @Input() RatingField: string = 'UserRating';
+
+  /** @deprecated Use {@link RatingField}. */
+  @Input() set ratingField(value: string) {
+    this.RatingField = value;
+  }
+  /** @deprecated Use {@link RatingField}. */
+  get ratingField(): string {
+    return this.RatingField;
+  }
 
   /** Column on the entity that stores the free-form feedback. */
-  @Input() ratingCommentField: string = 'UserFeedback';
+  @Input() RatingCommentField: string = 'UserFeedback';
+
+  /** @deprecated Use {@link RatingCommentField}. */
+  @Input() set ratingCommentField(value: string) {
+    this.RatingCommentField = value;
+  }
+  /** @deprecated Use {@link RatingCommentField}. */
+  get ratingCommentField(): string {
+    return this.RatingCommentField;
+  }
 
   /**
    * Optional: legacy pre-loaded ratings array (no longer used by storage; kept
    * to preserve the input shape used by existing call sites like
    * MessageItemComponent).
    */
-  @Input() ratingsData?: RatingJSON[];
+  @Input() RatingsData?: RatingJSON[];
 
-  currentUserRating: number | null = null;
-  currentUserComments: string = '';
-  isSaving = false;
+  /** @deprecated Use {@link RatingsData}. */
+  @Input() set ratingsData(value: RatingJSON[] | undefined) {
+    this.RatingsData = value;
+  }
+  /** @deprecated Use {@link RatingsData}. */
+  get ratingsData(): RatingJSON[] | undefined {
+    return this.RatingsData;
+  }
+
+  CurrentUserRating: number | null = null;
+
+  /** @deprecated Use {@link CurrentUserRating}. */
+  get currentUserRating(): number | null {
+    return this.CurrentUserRating;
+  }
+  /** @deprecated Use {@link CurrentUserRating}. */
+  set currentUserRating(value: number | null) {
+    this.CurrentUserRating = value;
+  }
+  CurrentUserComments: string = '';
+
+  /** @deprecated Use {@link CurrentUserComments}. */
+  get currentUserComments(): string {
+    return this.CurrentUserComments;
+  }
+  /** @deprecated Use {@link CurrentUserComments}. */
+  set currentUserComments(value: string) {
+    this.CurrentUserComments = value;
+  }
+  IsSaving = false;
+
+  /** @deprecated Use {@link IsSaving}. */
+  get isSaving() {
+    return this.IsSaving;
+  }
+  /** @deprecated Use {@link IsSaving}. */
+  set isSaving(value) {
+    this.IsSaving = value;
+  }
 
   constructor(
     private cdr: ChangeDetectorRef,
@@ -171,7 +260,7 @@ export class ConversationMessageRatingComponent extends BaseAngularComponent imp
   }
 
   async OpenRatingDialog(): Promise<void> {
-    if (this.isSaving) return;
+    if (this.IsSaving) return;
     if (!this.canEdit) return;
 
     let consentAcknowledged = false;
@@ -183,10 +272,10 @@ export class ConversationMessageRatingComponent extends BaseAngularComponent imp
     }
 
     const result = await this.dialogService.rating({
-      title: this.currentUserRating != null ? 'Edit your rating' : 'Rate this response',
+      title: this.CurrentUserRating != null ? 'Edit your rating' : 'Rate this response',
       message: 'Rate the response on a 1-10 scale and (optionally) describe what was good or bad.',
-      initialRating: this.currentUserRating,
-      initialComments: this.currentUserComments,
+      initialRating: this.CurrentUserRating,
+      initialComments: this.CurrentUserComments,
       okText: 'Submit',
       requireConsent: !consentAcknowledged
     });
@@ -258,15 +347,15 @@ export class ConversationMessageRatingComponent extends BaseAngularComponent imp
   }
 
   private async loadRating(): Promise<void> {
-    if (!this.conversationDetailId) return;
+    if (!this.ConversationDetailId) return;
     try {
       const md = this.ProviderToUse;
-      const entity = (await md.GetEntityObject(this.ratingEntityName)) as LoadableEntity;
-      const loaded = await entity.Load(this.conversationDetailId);
+      const entity = (await md.GetEntityObject(this.RatingEntityName)) as LoadableEntity;
+      const loaded = await entity.Load(this.ConversationDetailId);
       if (loaded) {
-        const rating = entity.Get(this.ratingField);
-        this.currentUserRating = rating != null ? Number(rating) : null;
-        this.currentUserComments = (entity.Get(this.ratingCommentField) ?? '') as string;
+        const rating = entity.Get(this.RatingField);
+        this.CurrentUserRating = rating != null ? Number(rating) : null;
+        this.CurrentUserComments = (entity.Get(this.RatingCommentField) ?? '') as string;
         this.cdr.detectChanges();
       }
     } catch (error) {
@@ -276,27 +365,27 @@ export class ConversationMessageRatingComponent extends BaseAngularComponent imp
   }
 
   private async saveRating(rating: number, comments: string): Promise<string | null> {
-    if (this.isSaving) return null;
+    if (this.IsSaving) return null;
     if (rating < 1 || rating > 10) return null;
-    if (!this.conversationDetailId) return null;
+    if (!this.ConversationDetailId) return null;
 
-    const prevRating = this.currentUserRating;
-    const prevComments = this.currentUserComments;
+    const prevRating = this.CurrentUserRating;
+    const prevComments = this.CurrentUserComments;
 
-    this.isSaving = true;
-    this.currentUserRating = rating;
-    this.currentUserComments = comments;
+    this.IsSaving = true;
+    this.CurrentUserRating = rating;
+    this.CurrentUserComments = comments;
     this.cdr.detectChanges();
 
     try {
       const md = this.ProviderToUse;
-      const entity = (await md.GetEntityObject(this.ratingEntityName)) as LoadableEntity;
-      const loaded = await entity.Load(this.conversationDetailId);
+      const entity = (await md.GetEntityObject(this.RatingEntityName)) as LoadableEntity;
+      const loaded = await entity.Load(this.ConversationDetailId);
       if (!loaded) {
-        throw new Error(`ConversationDetail ${this.conversationDetailId} not found in ${this.ratingEntityName}`);
+        throw new Error(`ConversationDetail ${this.ConversationDetailId} not found in ${this.RatingEntityName}`);
       }
-      entity.Set(this.ratingField, rating);
-      entity.Set(this.ratingCommentField, comments || null);
+      entity.Set(this.RatingField, rating);
+      entity.Set(this.RatingCommentField, comments || null);
       const saveResult = await entity.Save();
       if (!saveResult) {
         throw new Error(`Save failed: ${(entity as any).LatestResult?.Message ?? 'unknown'}`);
@@ -305,12 +394,12 @@ export class ConversationMessageRatingComponent extends BaseAngularComponent imp
       return typeof conversationID === 'string' ? conversationID : null;
     } catch (error) {
       console.error('[Rating] save failed:', error);
-      this.currentUserRating = prevRating;
-      this.currentUserComments = prevComments;
+      this.CurrentUserRating = prevRating;
+      this.CurrentUserComments = prevComments;
       this.cdr.detectChanges();
       return null;
     } finally {
-      this.isSaving = false;
+      this.IsSaving = false;
       this.cdr.detectChanges();
     }
   }

@@ -3,18 +3,26 @@
  */
 
 import { DatabaseDocumentation } from '../types/state.js';
+import { ErdClusterPlan } from './ErdClusterer.js';
+
+/** Hub descriptions are long; the Subject Areas table shows this much of each. */
+const SUBJECT_AREA_DESCRIPTION_CHARS = 200;
 
 export interface HTMLGeneratorOptions {
   approvedOnly?: boolean;
   confidenceThreshold?: number;
   includeMermaid?: boolean;
+  /** When set, a "Subject areas" section links to the per-cluster diagrams and the inline per-schema ERD is replaced by a link to them. */
+  clusterPlan?: ErdClusterPlan;
+  /** Directory of the cluster pages, relative to documentation.html. Default `erd`. */
+  clusterDir?: string;
 }
 
 export class HTMLGenerator {
   /**
    * Generate interactive HTML documentation
    */
-  public generate(
+  public Generate(
     state: DatabaseDocumentation,
     options: HTMLGeneratorOptions = {}
   ): string {
@@ -32,7 +40,7 @@ export class HTMLGenerator {
 
     // Sidebar with navigation
     htmlLines.push('<div class="main-wrapper">');
-    this.appendSidebar(htmlLines, state);
+    this.appendSidebar(htmlLines, state, options);
 
     // Main content
     htmlLines.push('<div class="main-content">');
@@ -42,6 +50,11 @@ export class HTMLGenerator {
 
     // Database context
     this.appendDatabaseContext(htmlLines, state);
+
+    // Subject areas (clustered ERDs), when export produced them
+    if (options.clusterPlan) {
+      this.appendSubjectAreas(htmlLines, options.clusterPlan, options.clusterDir ?? 'erd');
+    }
 
     // Searchable table/column list
     this.appendSearchableList(htmlLines, state, options);
@@ -56,6 +69,14 @@ export class HTMLGenerator {
     htmlLines.push('</html>');
 
     return htmlLines.join('\n');
+  }
+
+  /** @deprecated Use {@link Generate}. */
+  public generate(
+    state: DatabaseDocumentation,
+    options: HTMLGeneratorOptions = {}
+  ): string {
+    return this.Generate(state, options);
   }
 
   private appendHtmlHeader(lines: string[], state: DatabaseDocumentation): void {
@@ -440,8 +461,12 @@ export class HTMLGenerator {
     lines.push('</header>');
   }
 
-  private appendSidebar(lines: string[], state: DatabaseDocumentation): void {
+  private appendSidebar(lines: string[], state: DatabaseDocumentation, options: HTMLGeneratorOptions = {}): void {
     lines.push('<aside class="sidebar">');
+    if (options.clusterPlan) {
+      lines.push('<h3>🗺️ Subject Areas</h3>');
+      lines.push('<a href="#subject-areas">Overview</a>');
+    }
     lines.push('<h3>📑 Schemas</h3>');
 
     for (const schema of state.schemas) {
@@ -632,11 +657,16 @@ export class HTMLGenerator {
         lines.push(`<p><strong>Business Domains:</strong> ${schema.businessDomains.map(d => this.escapeHtml(d)).join(', ')}</p>`);
       }
 
-      // Entity Relationship Diagram
+      // Entity Relationship Diagram. With a cluster plan the schema-wide diagram is replaced by the
+      // subject-area pages: one diagram of every table exceeds Mermaid's text limit on large schemas.
       lines.push('<h3>Entity Relationship Diagram</h3>');
-      lines.push('<div class="mermaid">');
-      lines.push(this.generateMermaidERD(schema));
-      lines.push('</div>');
+      if (options.clusterPlan) {
+        lines.push(`<p>Drawn per subject area — see <a href="#subject-areas">Subject Areas</a> or open <a href="${this.escapeHtml(options.clusterDir ?? 'erd')}/index.html">the subject-area index</a>.</p>`);
+      } else {
+        lines.push('<div class="mermaid">');
+        lines.push(this.generateMermaidERD(schema));
+        lines.push('</div>');
+      }
 
       // Tables
       lines.push('<h3>Tables</h3>');
@@ -727,6 +757,26 @@ export class HTMLGenerator {
     // Add Mermaid script
     lines.push('<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"><\/script>');
     lines.push('<script>mermaid.initialize({ startOnLoad: true, theme: "default" }); mermaid.contentLoaded();<\/script>');
+  }
+
+  private appendSubjectAreas(lines: string[], plan: ErdClusterPlan, dir: string): void {
+    const covered = plan.Clusters.reduce((n, c) => n + c.Tables.length, 0);
+    lines.push('<section id="subject-areas">');
+    lines.push('<h2>🗺️ Subject Areas</h2>');
+    lines.push(`<p>${plan.TotalTables} tables and ${plan.TotalEdges} foreign-key relationships, drawn as ${plan.Clusters.length} subject areas covering ${covered} tables. Each area is centred on a hub table that many others reference. <a href="${this.escapeHtml(dir)}/index.html">Open the subject-area index</a> for reference tables and tables outside every area.</p>`);
+    lines.push('<table>');
+    lines.push('<thead><tr><th>Subject area</th><th>Tables</th><th>Diagram</th><th>Hub description</th></tr></thead>');
+    lines.push('<tbody>');
+    for (const cluster of plan.Clusters) {
+      const hub = plan.TableOf(cluster.Hub);
+      const pages = cluster.Pages.length > 1
+        ? cluster.Pages.map(p => `<a href="${this.escapeHtml(`${dir}/${p.BaseName}`)}.html">page ${p.Number}</a>`).join(', ')
+        : `<a href="${this.escapeHtml(`${dir}/${cluster.Pages[0].BaseName}`)}.html">diagram</a>`;
+      lines.push(`<tr><td><a href="#table-${this.toAnchor(hub.name)}">${this.escapeHtml(cluster.HubName)}</a></td><td>${cluster.Tables.length}</td><td>${pages}</td><td>${this.escapeHtml((hub.description ?? '').slice(0, SUBJECT_AREA_DESCRIPTION_CHARS))}</td></tr>`);
+    }
+    lines.push('</tbody>');
+    lines.push('</table>');
+    lines.push('</section>');
   }
 
   private generateMermaidERD(schema: any): string {

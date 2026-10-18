@@ -21,7 +21,16 @@ import { MJAuthBase } from './mjexplorer-auth-base.service';
     `
 })
 export class RedirectComponent implements OnInit {
-  isProcessing = false;
+  IsProcessing = false;
+
+  /** @deprecated Use {@link IsProcessing}. */
+  get isProcessing() {
+    return this.IsProcessing;
+  }
+  /** @deprecated Use {@link IsProcessing}. */
+  set isProcessing(value) {
+    this.IsProcessing = value;
+  }
 
   constructor(
     private authService: MJAuthBase,
@@ -42,7 +51,7 @@ export class RedirectComponent implements OnInit {
     const isMCPOAuthCallback = window.location.pathname.startsWith('/oauth/callback');
 
     if (hasAuthCode && !isMCPOAuthCallback) {
-      this.isProcessing = true;
+      this.IsProcessing = true;
       this.cdr.markForCheck();
       try {
         // Handle the callback for the current auth provider
@@ -51,7 +60,7 @@ export class RedirectComponent implements OnInit {
         console.error('Error handling auth callback:', error);
       } finally {
         // Always hide the component after processing
-        this.isProcessing = false;
+        this.IsProcessing = false;
         this.cdr.markForCheck();
       }
     }

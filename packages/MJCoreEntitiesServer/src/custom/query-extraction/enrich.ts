@@ -150,8 +150,8 @@ function BuildMergedParameter(
         isRequired: dp.isRequired,
         description: llmMatch?.description ?? inheritedDescription ?? GenerateParameterDescription(dp),
         usage: llmMatch?.usage ?? dp.usageLocations,
-        defaultValue: ResolveDefaultValue(dp, llmMatch),
-        sampleValue: hintValue ?? llmMatch?.sampleValue ?? ptContext?.sampleValue ?? GenerateSampleValue(dp),
+        DefaultValue: ResolveDefaultValue(dp, llmMatch),
+        SampleValue: hintValue ?? llmMatch?.SampleValue ?? ptContext?.SampleValue ?? GenerateSampleValue(dp),
     };
 }
 
@@ -190,7 +190,7 @@ function ResolveDefaultValue(
 ): string | null {
     const raw = dp.defaultValue !== null
         ? String(dp.defaultValue)
-        : (llmMatch?.defaultValue ?? null);
+        : (llmMatch?.DefaultValue ?? null);
 
     if (raw === null) return null;
 
@@ -247,10 +247,10 @@ export function BuildPassthroughDescription(
     param: MJParameterInfo,
     context: PassthroughParamContext,
 ): string {
-    const suffix = ` (passed through to "${context.depQueryName}" as "${context.depParamName}")`;
+    const suffix = ` (passed through to "${context.DepQueryName}" as "${context.DepParamName}")`;
 
-    if (context.description) {
-        return `${context.description}${suffix}`;
+    if (context.Description) {
+        return `${context.Description}${suffix}`;
     }
 
     return `${GenerateParameterDescription(param)}${suffix}`;

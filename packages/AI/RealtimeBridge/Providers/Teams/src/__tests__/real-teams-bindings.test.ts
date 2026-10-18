@@ -2,13 +2,13 @@ import { describe, it, expect } from 'vitest';
 import { resamplePcm16Buffer } from '@memberjunction/ai-bridge-base';
 import {
     RealTeamsBindings,
-    buildGraphCreateCallRequest,
-    parseTeamsJoinUrl,
-    mapGraphRole,
-    normalizeGraphParticipant,
-    normalizeGraphRoster,
-    transcodeInboundAudio,
-    transcodeOutboundAudio,
+    BuildGraphCreateCallRequest,
+    ParseTeamsJoinUrl,
+    MapGraphRole,
+    NormalizeGraphParticipant,
+    NormalizeGraphRoster,
+    TranscodeInboundAudio,
+    TranscodeOutboundAudio,
     GraphCallParticipant,
     GraphCreateCallRequest,
     GraphCreateCallResult,
@@ -148,7 +148,7 @@ const JOIN_ARGS: TeamsJoinArgs = { JoinUrl: TEAMS_JOIN_URL, BotDisplayName: 'Sag
 
 describe('parseTeamsJoinUrl', () => {
     it('extracts the thread id, organizer, and tenant from a full join URL', () => {
-        const coords = parseTeamsJoinUrl(TEAMS_JOIN_URL);
+        const coords = ParseTeamsJoinUrl(TEAMS_JOIN_URL);
         expect(coords).not.toBeNull();
         expect(coords!.ThreadId).toBe('19:meeting_ZmExOTk5@thread.v2');
         expect(coords!.OrganizerId).toBe('organizer-456');
@@ -157,7 +157,7 @@ describe('parseTeamsJoinUrl', () => {
     });
 
     it('extracts the thread id when there is no context blob', () => {
-        const coords = parseTeamsJoinUrl(
+        const coords = ParseTeamsJoinUrl(
             'https://teams.microsoft.com/l/meetup-join/19%3Ameeting_ABC%40thread.v2/0',
         );
         expect(coords!.ThreadId).toBe('19:meeting_ABC@thread.v2');
@@ -166,7 +166,7 @@ describe('parseTeamsJoinUrl', () => {
     });
 
     it('tolerates a malformed context blob without throwing', () => {
-        const coords = parseTeamsJoinUrl(
+        const coords = ParseTeamsJoinUrl(
             'https://teams.microsoft.com/l/meetup-join/19%3Ameeting_ABC%40thread.v2/0?context=not-json',
         );
         expect(coords!.ThreadId).toBe('19:meeting_ABC@thread.v2');
@@ -174,7 +174,7 @@ describe('parseTeamsJoinUrl', () => {
     });
 
     it('returns null when no thread id is present', () => {
-        expect(parseTeamsJoinUrl('https://teams.microsoft.com/somethingelse')).toBeNull();
+        expect(ParseTeamsJoinUrl('https://teams.microsoft.com/somethingelse')).toBeNull();
     });
 });
 
@@ -184,7 +184,7 @@ describe('parseTeamsJoinUrl', () => {
 
 describe('buildGraphCreateCallRequest', () => {
     it('builds an application-hosted-media meeting-join request from a join URL', () => {
-        const req = buildGraphCreateCallRequest(JOIN_ARGS);
+        const req = BuildGraphCreateCallRequest(JOIN_ARGS);
         expect(req.CallType).toBe('meeting');
         expect(req.AppHostedMedia).toBe(true);
         expect(req.BotDisplayName).toBe('Sage');
@@ -195,7 +195,7 @@ describe('buildGraphCreateCallRequest', () => {
     });
 
     it('prefers an explicit ThreadId / TenantId over the URL-parsed values', () => {
-        const req = buildGraphCreateCallRequest({
+        const req = BuildGraphCreateCallRequest({
             ...JOIN_ARGS,
             ThreadId: '19:meeting_EXPLICIT@thread.v2',
             TenantId: 'tenant-override',
@@ -206,7 +206,7 @@ describe('buildGraphCreateCallRequest', () => {
 
     it('throws when no thread id can be resolved', () => {
         expect(() =>
-            buildGraphCreateCallRequest({ JoinUrl: 'https://teams.microsoft.com/nope', BotDisplayName: 'Sage' }),
+            BuildGraphCreateCallRequest({ JoinUrl: 'https://teams.microsoft.com/nope', BotDisplayName: 'Sage' }),
         ).toThrow(/could not resolve a meeting thread id/i);
     });
 });
@@ -217,15 +217,15 @@ describe('buildGraphCreateCallRequest', () => {
 
 describe('roster normalization', () => {
     it('mapGraphRole maps organizer/presenter/coorganizer/attendee', () => {
-        expect(mapGraphRole('organizer')).toBe('Organizer');
-        expect(mapGraphRole('presenter')).toBe('Presenter');
-        expect(mapGraphRole('coOrganizer')).toBe('Presenter');
-        expect(mapGraphRole('attendee')).toBe('Attendee');
-        expect(mapGraphRole(undefined)).toBe('Attendee');
+        expect(MapGraphRole('organizer')).toBe('Organizer');
+        expect(MapGraphRole('presenter')).toBe('Presenter');
+        expect(MapGraphRole('coOrganizer')).toBe('Presenter');
+        expect(MapGraphRole('attendee')).toBe('Attendee');
+        expect(MapGraphRole(undefined)).toBe('Attendee');
     });
 
     it('normalizeGraphParticipant maps a Graph participant onto the bridge shape', () => {
-        const p = normalizeGraphParticipant({ id: 'p-alice', displayName: 'Alice', role: 'organizer', isSelf: false });
+        const p = NormalizeGraphParticipant({ id: 'p-alice', displayName: 'Alice', role: 'organizer', isSelf: false });
         expect(p).toEqual<TeamsParticipant>({
             ParticipantId: 'p-alice',
             DisplayName: 'Alice',
@@ -235,7 +235,7 @@ describe('roster normalization', () => {
     });
 
     it('normalizeGraphRoster maps a full collection', () => {
-        const roster = normalizeGraphRoster([
+        const roster = NormalizeGraphRoster([
             { id: 'p-alice', displayName: 'Alice', role: 'organizer' },
             { id: 'bot-1', displayName: 'Sage', role: 'attendee', isSelf: true },
         ]);
@@ -252,7 +252,7 @@ describe('roster normalization', () => {
 describe('audio transcode (T0 codec)', () => {
     it('passes PCM through unchanged when ACS and model rates match', () => {
         const frame: AcsInboundAudioFrame = { Pcm: pcm16(100, -100, 5000), ParticipantId: 'p-alice', TimestampMs: 7 };
-        const out = transcodeInboundAudio(frame, 16000, 16000);
+        const out = TranscodeInboundAudio(frame, 16000, 16000);
         expect(new Uint8Array(out.Pcm)).toEqual(new Uint8Array(frame.Pcm));
         expect(out.ParticipantId).toBe('p-alice');
         expect(out.TimestampMs).toBe(7);
@@ -261,7 +261,7 @@ describe('audio transcode (T0 codec)', () => {
     it('resamples inbound ACS 16k → model 24k via the T0 codec, preserving the speaker label', () => {
         const src = pcm16(0, 1000, 2000, 3000, 4000, 5000);
         const frame: AcsInboundAudioFrame = { Pcm: src, ParticipantId: 'p-bob', DisplayName: 'Bob' };
-        const out = transcodeInboundAudio(frame, 16000, 24000);
+        const out = TranscodeInboundAudio(frame, 16000, 24000);
         const expected = resamplePcm16Buffer(src, 16000, 24000);
         expect(new Uint8Array(out.Pcm)).toEqual(new Uint8Array(expected));
         expect(out.ParticipantId).toBe('p-bob');
@@ -270,14 +270,14 @@ describe('audio transcode (T0 codec)', () => {
 
     it('resamples outbound model 24k → ACS 16k via the T0 codec', () => {
         const src = pcm16(0, 1000, 2000, 3000, 4000, 5000);
-        const out = transcodeOutboundAudio(src, 24000, 16000);
+        const out = TranscodeOutboundAudio(src, 24000, 16000);
         const expected = resamplePcm16Buffer(src, 24000, 16000);
         expect(new Uint8Array(out)).toEqual(new Uint8Array(expected));
     });
 
     it('outbound returns a fresh copy (never the same reference) when rates match', () => {
         const src = pcm16(1, 2, 3);
-        const out = transcodeOutboundAudio(src, 16000, 16000);
+        const out = TranscodeOutboundAudio(src, 16000, 16000);
         expect(out).not.toBe(src);
         expect(new Uint8Array(out)).toEqual(new Uint8Array(src));
     });

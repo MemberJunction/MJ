@@ -1,4 +1,4 @@
-import { RegisterClass } from '@memberjunction/global';
+import { EscapeSQLString, RegisterClass } from '@memberjunction/global';
 import { Metadata, RunView, LogError, EntitySaveOptions } from '@memberjunction/core';
 import { NewUserBase } from './newUsers.js';
 import { ResolveConfiguredPrincipal } from './principals.js';
@@ -43,7 +43,7 @@ export class ExampleNewUserSubClass extends NewUserBase {
       const viewResults = await rv.RunView(
         {
           EntityName: 'Persons',
-          ExtraFilter: `Email = '${email}'`,
+          ExtraFilter: `Email = '${EscapeSQLString(email)}'`,
         },
         contextUser
       );

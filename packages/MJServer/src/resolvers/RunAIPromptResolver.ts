@@ -15,70 +15,70 @@ import { GetReadWriteProvider } from '../util.js';
 @ObjectType()
 export class AIPromptRunResult {
     @Field()
-    success: boolean;
+    success: boolean;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field({ nullable: true })
-    output?: string;
+    output?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field({ nullable: true })
-    parsedResult?: string;
+    parsedResult?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field({ nullable: true })
-    error?: string;
+    error?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field({ nullable: true })
-    executionTimeMs?: number;
+    executionTimeMs?: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field({ nullable: true })
-    tokensUsed?: number;
+    tokensUsed?: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field({ nullable: true })
-    promptRunId?: string;
+    promptRunId?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field({ nullable: true })
-    rawResult?: string;
+    rawResult?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field({ nullable: true })
-    validationResult?: string;
+    validationResult?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field({ nullable: true })
-    chatResult?: string;
+    chatResult?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 }
 
 @ObjectType()
 export class SimplePromptResult {
     @Field()
-    success: boolean;
+    success: boolean;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field({ nullable: true })
-    result?: string;
+    result?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field({ nullable: true })
-    resultObject?: string; // JSON stringified object
+    resultObject?: string; // JSON stringified object — case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field()
-    modelName: string;
+    modelName: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field({ nullable: true })
-    error?: string;
+    error?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field({ nullable: true })
-    executionTimeMs?: number;
+    executionTimeMs?: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 }
 
 @ObjectType()
 export class EmbedTextResult {
     @Field(() => [[Number]])
-    embeddings: number[][];
+    embeddings: number[][];  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field()
-    modelName: string;
+    modelName: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => Int)
-    vectorDimensions: number;
+    vectorDimensions: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field({ nullable: true })
-    error?: string;
+    error?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 }
 
 /**
@@ -418,7 +418,7 @@ export class RunAIPromptResolver extends ResolverBase {
     }
 
     /** The `AI Model Types.Name` that means "a chat LLM", compared lowercased. */
-    private static readonly SimplePromptLLMTypeName = 'llm';
+    private static readonly simplePromptLLMTypeName = 'llm';
 
     /**
      * Selects a runnable model + vendor for simple prompt execution.
@@ -551,7 +551,7 @@ export class RunAIPromptResolver extends ResolverBase {
      */
     private isLLMModel(model: MJAIModelEntityExtended): boolean {
         const typeName = AIEngine.Instance.ModelTypesByID.get(model.AIModelTypeID)?.Name ?? model.AIModelType;
-        return typeName?.trim().toLowerCase() === RunAIPromptResolver.SimplePromptLLMTypeName;
+        return typeName?.trim().toLowerCase() === RunAIPromptResolver.simplePromptLLMTypeName;
     }
 
     /**

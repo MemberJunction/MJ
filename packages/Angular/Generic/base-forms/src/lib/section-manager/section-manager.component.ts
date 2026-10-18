@@ -82,7 +82,7 @@ export class MjSectionManagerComponent implements OnChanges {
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['Sections'] || changes['SectionOrder'] || changes['MoreSectionKeys'] || changes['LockedMoreKeys']) {
-      this.RebuildOrderedSections();
+      this.rebuildOrderedSections();
     }
   }
 
@@ -110,7 +110,7 @@ export class MjSectionManagerComponent implements OnChanges {
     const newOrder = this.OrderedSections.map(s => s.SectionKey);
     [newOrder[index - 1], newOrder[index]] = [newOrder[index], newOrder[index - 1]];
     this.SectionOrderChange.emit(newOrder);
-    this.ApplyOrder(newOrder);
+    this.applyOrder(newOrder);
   }
 
   OnMoveDown(index: number): void {
@@ -118,7 +118,7 @@ export class MjSectionManagerComponent implements OnChanges {
     const newOrder = this.OrderedSections.map(s => s.SectionKey);
     [newOrder[index], newOrder[index + 1]] = [newOrder[index + 1], newOrder[index]];
     this.SectionOrderChange.emit(newOrder);
-    this.ApplyOrder(newOrder);
+    this.applyOrder(newOrder);
   }
 
   OnMoveGroupUp(list: SectionManagerItem[], index: number): void {
@@ -158,7 +158,7 @@ export class MjSectionManagerComponent implements OnChanges {
       ? [...keys, ...other.map((s) => s.SectionKey)]
       : [...other.map((s) => s.SectionKey), ...keys];
     this.SectionOrderChange.emit(combined);
-    this.ApplyOrder(combined);
+    this.applyOrder(combined);
   }
 
   OnReset(): void {
@@ -181,7 +181,7 @@ export class MjSectionManagerComponent implements OnChanges {
     }
   }
 
-  private RebuildOrderedSections(): void {
+  private rebuildOrderedSections(): void {
     if (!this.Sections || this.Sections.length === 0) {
       this.OrderedSections = [];
       return;
@@ -217,7 +217,7 @@ export class MjSectionManagerComponent implements OnChanges {
     this.cdr.markForCheck();
   }
 
-  private ApplyOrder(newOrder: string[]): void {
+  private applyOrder(newOrder: string[]): void {
     const sectionMap = new Map<string, SectionManagerItem>();
     for (const s of this.OrderedSections) {
       sectionMap.set(s.SectionKey, s);

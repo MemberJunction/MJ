@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { serializeKeyValue } from '../KeySerialization.js';
+import { SerializeKeyValue } from '../KeySerialization.js';
 
 /**
  * Controlled reproduction of the object-valued-PK identity bug (PropFuel `checkin_questions`).
@@ -19,7 +19,7 @@ describe('serializeKeyValue', () => {
 
     it('serializes an object-valued PK to its JSON text, NOT "[object Object]"', () => {
         const objectPK = { id: 158077958, checkin_id: 153650723, created_at: '2026-04-30 02:00:33' };
-        const key = serializeKeyValue(objectPK);
+        const key = SerializeKeyValue(objectPK);
         expect(key).not.toBe('[object Object]');
         expect(key).toBe(JSON.stringify(objectPK));
     });
@@ -27,28 +27,28 @@ describe('serializeKeyValue', () => {
     it('produces a key byte-identical to the value the write path stores (object PK)', () => {
         const objectPK = { id: 158077958, checkin_id: 153650723, rating: null, created_at: '2026-04-30 02:00:33' };
         // The load/match key and the stored column value must be the same string for the lookup to hit.
-        expect(serializeKeyValue(objectPK)).toBe(writeSideStored(objectPK));
+        expect(SerializeKeyValue(objectPK)).toBe(writeSideStored(objectPK));
     });
 
     it('distinct object PKs serialize to distinct keys (no collision into "[object Object]")', () => {
-        const a = serializeKeyValue({ id: 1 });
-        const b = serializeKeyValue({ id: 2 });
+        const a = SerializeKeyValue({ id: 1 });
+        const b = SerializeKeyValue({ id: 2 });
         expect(a).not.toBe(b);
     });
 
     it('passes scalar keys through String() unchanged', () => {
-        expect(serializeKeyValue('abc-123')).toBe('abc-123');
-        expect(serializeKeyValue(42)).toBe('42');
-        expect(serializeKeyValue(true)).toBe('true');
+        expect(SerializeKeyValue('abc-123')).toBe('abc-123');
+        expect(SerializeKeyValue(42)).toBe('42');
+        expect(SerializeKeyValue(true)).toBe('true');
     });
 
     it('treats null/undefined as the empty key (the "no value" sentinel callers null-check on)', () => {
-        expect(serializeKeyValue(null)).toBe('');
-        expect(serializeKeyValue(undefined)).toBe('');
+        expect(SerializeKeyValue(null)).toBe('');
+        expect(SerializeKeyValue(undefined)).toBe('');
     });
 
     it('does not double-encode a Date (left to String, like the write coercion)', () => {
         const d = new Date('2026-04-30T02:00:33.000Z');
-        expect(serializeKeyValue(d)).toBe(String(d));
+        expect(SerializeKeyValue(d)).toBe(String(d));
     });
 });

@@ -21,7 +21,7 @@ import {
     MJTemplateContentEntity,
     KnowledgeHubMetadataEngine
 } from '@memberjunction/core-entities';
-import { RegisterClass, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual, NormalizeUUID, EscapeSQLString } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService, ActivityService } from '@memberjunction/ng-shared';
 import { ViewToggleOption } from '@memberjunction/ng-ui-components';
 import { KPICardData } from '../widgets/kpi-card.component';
@@ -32,18 +32,31 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { MJScheduledJobEntity } from '@memberjunction/core-entities';
 import { BuildSingleStaticParamConfiguration, ResolveActionJobTypeID } from '../../../shared/action-scheduled-job';
 import { CronToHumanReadable } from '../autotagging/shared/classify.format';
+import { BuildAutoVectorIndexName, FindMatchingVectorIndex } from './vector-index-auto';
 import {
-    buildVectorAgentContext,
-    resolveSyncRow,
+    BuildVectorAgentContext,
+    ResolveSyncRow,
     VectorSyncRowCandidate,
 } from './vector-management-agent-context';
-import { validateStringParam } from '../../../shared/agent-tool-validation';
+import { ValidateStringParam } from '../../../shared/agent-tool-validation';
+import { WithoutSensitiveFields, SensitiveFieldsInTemplate } from './sensitive-fields';
+import {
+    ENTITY_DOCUMENT_TYPE_BY_USE_CASE,
+    MAX_TEMPLATE_FIELDS,
+    CapSelectedFields,
+    EntityDocumentTypeForUseCase,
+    SuggestionUseCaseForDocumentType,
+    IsVectorizableEntity,
+    TemplateFieldCapRefusal,
+} from './vector-document-rules';
 
 /** Flattened row for the entity sync table */
 interface EntitySyncRow {
     EntityDocumentID: string;
     EntityName: string;
     DocumentName: string;
+    /** Entity Document Type name, e.g. 'Search'. Fixed at creation, shown read-only. */
+    DocumentType: string;
     VectorCount: number;
     LastSynced: Date | null;
     Status: 'Synced' | 'Syncing' | 'Error' | 'Pending';
@@ -134,6 +147,8 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
     public EditDocVectorIndexID = '';
     public EditDocStatus = '';
     public EditDocTemplate = '';
+    /** Entity Document Type of the document being edited. Fixed at creation, shown read-only. */
+    public EditDocType = '';
     public IsEditRegenerating = false;
 
     /** Parse {{ FieldName }} patterns from the edit panel's template */
@@ -156,10 +171,11 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         this.EditDocID = doc.ID;
         this.EditDocName = doc.Name;
         this.EditDocEntityName = doc.Entity || '';
-        this.EditDocVectorDBID = doc.VectorDatabaseID;
-        this.EditDocAIModelID = doc.AIModelID;
+        this.EditDocVectorDBID = doc.VectorDatabaseID ?? '';
+        this.EditDocAIModelID = doc.AIModelID ?? '';
         this.EditDocVectorIndexID = doc.VectorIndexID || '';
         this.EditDocStatus = doc.Status;
+        this.EditDocType = doc.Type || '';
         this.EditDocTemplate = '';
         this.IsEditRegenerating = false;
         this.ShowEditPanel = true;
@@ -206,9 +222,17 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
             if (!loaded) throw new Error('Could not load entity document');
 
             doc.Name = this.EditDocName;
-            doc.VectorDatabaseID = this.EditDocVectorDBID;
-            doc.AIModelID = this.EditDocAIModelID;
-            doc.VectorIndexID = this.EditDocVectorIndexID || null;
+            const vectorDatabaseID = this.EditDocVectorDBID || null;
+            const aiModelID = this.EditDocAIModelID || null;
+            doc.VectorDatabaseID = vectorDatabaseID;
+            doc.AIModelID = aiModelID;
+            // "Auto (create/find matching index)" resolves to a real index for this DB + model, so the
+            // syncer always has one to write into; without both parts there is nothing to match.
+            doc.VectorIndexID = this.EditDocVectorIndexID
+                ? this.EditDocVectorIndexID
+                : (vectorDatabaseID && aiModelID
+                    ? await this.resolveOrCreateVectorIndex(vectorDatabaseID, aiModelID, this.EditDocEntityName)
+                    : null);
             doc.Status = this.EditDocStatus as 'Active' | 'Inactive';
 
             const saved = await doc.Save();
@@ -257,11 +281,22 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
     public async RegenerateTemplate(): Promise<void> {
         if (!this.EditDocEntityName || this.IsEditRegenerating) return;
 
+        // Ask for the use case this document's type stands for, so the regenerated template
+        // still matches the type. Refuse rather than fall back to another use case.
+        const useCase = SuggestionUseCaseForDocumentType(this.EditDocType);
+        if (!useCase) {
+            MJNotificationService.Instance.CreateSimpleNotification(
+                `Can't regenerate: documents of type "${this.EditDocType || 'unknown'}" have no AI template use case.`,
+                'error', 5000
+            );
+            return;
+        }
+
         this.IsEditRegenerating = true;
         this.cdr.detectChanges();
 
         try {
-            const result = await this.callSuggestionPrompt(this.EditDocEntityName, 'duplicate detection');
+            const result = await this.callSuggestionPrompt(this.EditDocEntityName, useCase);
             if (result) {
                 this.EditDocTemplate = result.template;
                 MJNotificationService.Instance.CreateSimpleNotification(
@@ -474,7 +509,16 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
     public ShowEntityPicker = false;
     public SelectedEntityIndex = -1;
     /** Reference to the entity search input for programmatic focus */
-    @ViewChild('entitySearchInput') entitySearchInput?: ElementRef<HTMLInputElement>;
+    @ViewChild('entitySearchInput') EntitySearchInput?: ElementRef<HTMLInputElement>;
+
+    /** @deprecated Use {@link EntitySearchInput}. */
+    get entitySearchInput(): ElementRef<HTMLInputElement> | undefined {
+        return this.EntitySearchInput;
+    }
+    /** @deprecated Use {@link EntitySearchInput}. */
+    set entitySearchInput(value: ElementRef<HTMLInputElement> | undefined) {
+        this.EntitySearchInput = value;
+    }
 
     // --- Raw entity data (private) ---
     private entityDocuments: MJEntityDocumentEntity[] = [];
@@ -513,7 +557,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         if (this.HideToolbar) {
             return;
         }
-        this.navigationService.SetAgentContext(this, buildVectorAgentContext({
+        this.navigationService.SetAgentContext(this, BuildVectorAgentContext({
             TotalVectors: this.TotalVectors,
             EntityDocumentCount: this.SyncRows.length,
             SyncingCount: this.SyncingIds.size,
@@ -581,9 +625,9 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
                     required: ['entityName'],
                 },
                 Handler: async (params: Record<string, unknown>) => {
-                    const v = validateStringParam(params['entityName'], 'entityName');
+                    const v = ValidateStringParam(params['entityName'], 'entityName');
                     if (!v.ok) return v.result;
-                    const resolved = resolveSyncRow(v.value, this.getSyncRowCandidates());
+                    const resolved = ResolveSyncRow(v.value, this.getSyncRowCandidates());
                     if (!resolved.ok) return { Success: false, ErrorMessage: resolved.error };
                     if (this.IsSyncing(resolved.value.EntityDocumentID)) {
                         return { Success: false, ErrorMessage: `"${resolved.value.EntityName}" is already syncing` };
@@ -621,9 +665,9 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
                     required: ['document'],
                 },
                 Handler: async (params: Record<string, unknown>) => {
-                    const v = validateStringParam(params['document'], 'document');
+                    const v = ValidateStringParam(params['document'], 'document');
                     if (!v.ok) return v.result;
-                    const resolved = resolveSyncRow(v.value, this.getSyncRowCandidates());
+                    const resolved = ResolveSyncRow(v.value, this.getSyncRowCandidates());
                     if (!resolved.ok) return { Success: false, ErrorMessage: resolved.error };
                     await this.OpenEditPanel(resolved.value.EntityDocumentID);
                     return { Success: true, Data: { EntityName: resolved.value.EntityName, DocumentName: resolved.value.DocumentName } };
@@ -1012,8 +1056,8 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
             this.cdr.detectChanges();
             // Focus search input after the @if block renders — deferred past the click event
             setTimeout(() => {
-                if (this.entitySearchInput?.nativeElement) {
-                    this.entitySearchInput.nativeElement.focus();
+                if (this.EntitySearchInput?.nativeElement) {
+                    this.EntitySearchInput.nativeElement.focus();
                 }
             }, 0);
         } else {
@@ -1059,6 +1103,19 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         try {
             const result = await this.callSuggestionPrompt(this.SuggestEntityName, this.SuggestUseCase);
             if (result) {
+                // The field list is whatever the model returned — no cap, no filter. Bound it
+                // here so an over-wide suggestion is visible immediately rather than at save.
+                const capped = CapSelectedFields(result.selectedFields);
+                if (capped.dropped > 0) {
+                    MJNotificationService.Instance.CreateSimpleNotification(
+                        `The suggestion selected ${capped.fields.length + capped.dropped} fields. ` +
+                        `Keeping the first ${MAX_TEMPLATE_FIELDS} and dropping ${capped.dropped} — a list ` +
+                        `this long usually means the whole table was pulled in. Check the template.`,
+                        'warning',
+                        6000
+                    );
+                }
+                result.selectedFields = capped.fields;
                 this.SuggestionResult = result;
                 this.EditableTemplate = result.template;
                 this.SaveDocumentName = `${this.SuggestEntityName} - ${this.SuggestUseCase}`;
@@ -1084,8 +1141,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
 
         try {
             const md = this.ProviderToUse;
-            const entityDoc = await md.GetEntityObject<MJEntityDocumentEntity>('MJ: Entity Documents');
-            entityDoc.NewRecord();
+            const entityDoc = await this.findOrCreateEntityDocument();
             entityDoc.Name = this.SaveDocumentName;
 
             const matchingEntity = md.Entities.find(e => e.Name === this.SuggestEntityName);
@@ -1192,12 +1248,17 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         // auto-refresh handles updates from saves/deletes on the entities it tracks.
         const engine = KnowledgeHubMetadataEngine.Instance;
         await engine.Config(forceRefresh);
-        // AIEngineBase is deferred at startup; ensure loaded before reading .VectorDatabases.
+        // AIEngineBase is deferred at startup; ensure loaded before reading .VectorDatabases / .VectorIndexes.
         await AIEngineBase.Instance.EnsureLoaded();
+        if (forceRefresh) {
+            await AIEngineBase.Instance.RefreshItem('_vectorIndexes');
+        }
 
         this.entityDocuments = engine.EntityDocuments;
         this.vectorDatabases = AIEngineBase.Instance.VectorDatabases;
-        this.vectorIndexes = engine.VectorIndexes;
+        // A copy: resolveOrCreateVectorIndex() appends the index it creates, and the engine's getter
+        // hands out its own cached array, which this component must not mutate.
+        this.vectorIndexes = [...AIEngineBase.Instance.VectorIndexes];
 
         // Build per-EntityDocument aggregate stats (vector count + last synced).
         // Each query fetches only the most recent row (MaxRows: 1) and uses
@@ -1253,6 +1314,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
                 EntityDocumentID: doc.ID,
                 EntityName: doc.Entity || '',
                 DocumentName: doc.Name,
+                DocumentType: doc.Type || '',
                 VectorCount: vectorCount,
                 LastSynced: lastSynced,
                 Status: status,
@@ -1425,39 +1487,104 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
             throw new Error(`Prerequisites not configured: ${missing.join(', ')}. Go to the Configuration tab to set these up.`);
         }
 
-        // TypeID — look up 'Record Duplicate' entity document type
-        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-        const typeResult = await rv.RunView<{ ID: string }>({
-            EntityName: 'MJ: Entity Document Types',
-            ExtraFilter: "Name = 'Record Duplicate'",
-            ResultType: 'simple',
-            Fields: ['ID']
-        });
-        if (typeResult.Success && typeResult.Results.length > 0) {
-            entityDoc.TypeID = typeResult.Results[0].ID;
-        } else {
-            throw new Error('Entity Document Type "Record Duplicate" not found in database');
+        // TypeID — from the use case the user actually chose. This used to be hardcoded to
+        // 'Record Duplicate', so picking "search" in the dialog silently produced a
+        // duplicate-detection document: the selection was discarded and the document was the
+        // wrong type. A vector pool is typed — Provider.SearchEntity and the Search Entity
+        // action read Search-typed documents — so the mislabelled document is also invisible
+        // to the feature that asked for it.
+        const wantedTypeName = EntityDocumentTypeForUseCase(this.SuggestUseCase);
+        if (!wantedTypeName) {
+            throw new Error(
+                `No Entity Document Type is defined for the "${this.SuggestUseCase}" use case. ` +
+                `Known use cases: ${Object.keys(ENTITY_DOCUMENT_TYPE_BY_USE_CASE).join(', ')}.`
+            );
         }
 
-        // If a vector index is selected, use its DB + model so the syncer finds it
-        // instead of auto-creating a new one
-        if (this.SelectedVectorIndexID) {
-            const idx = this.AvailableVectorIndexes.find(i => UUIDsEqual(i.ID, this.SelectedVectorIndexID));
-            if (idx) {
-                entityDoc.VectorDatabaseID = idx.VectorDatabaseID;
-                entityDoc.AIModelID = idx.EmbeddingModelID;
-                entityDoc.VectorIndexID = idx.ID;
-            } else {
-                entityDoc.VectorDatabaseID = this.SelectedVectorDBID || this.vectorDatabases[0].ID;
-                entityDoc.AIModelID = this.SelectedEmbeddingModelID || this.findEmbeddingModel()!.ID;
-            }
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+        const typeResult = await rv.RunView<{ ID: string; Name: string }>({
+            EntityName: 'MJ: Entity Document Types',
+            ResultType: 'simple',
+            Fields: ['ID', 'Name']
+        });
+        const availableTypes = typeResult.Success ? typeResult.Results : [];
+        // Trimmed, case-insensitive comparison — the same match EntityDocumentCache
+        // .GetDocumentTypeByName makes server-side, so the dialog and the syncer agree.
+        const wanted = wantedTypeName.trim().toLowerCase();
+        const matchedType = availableTypes.find(t => t.Name?.trim().toLowerCase() === wanted);
+        if (matchedType) {
+            entityDoc.TypeID = matchedType.ID;
         } else {
-            entityDoc.VectorDatabaseID = this.SelectedVectorDBID || this.vectorDatabases[0].ID;
-            entityDoc.AIModelID = this.SelectedEmbeddingModelID || this.findEmbeddingModel()!.ID;
+            // Never substitute a type that happens to exist: that is the defect above.
+            const names = availableTypes.map(t => t.Name).sort();
+            throw new Error(
+                `Entity Document Type "${wantedTypeName}" not found in database. It is the type the ` +
+                `"${this.SuggestUseCase}" use case needs, and no other type will be used in its place. ` +
+                (names.length > 0
+                    ? `Types that do exist: ${names.join(', ')}. Add "${wantedTypeName}" to MJ: Entity Document Types.`
+                    : 'No Entity Document Types exist at all.')
+            );
+        }
+
+        // An explicitly chosen index fixes the DB + model. "Auto (create/find matching index)" resolves
+        // (or creates) the index for the chosen DB + model, so the syncer always has a VectorIndexID:
+        // it refuses to run without one, which made the Auto choice a dead end before.
+        const chosen = this.SelectedVectorIndexID
+            ? this.AvailableVectorIndexes.find(i => UUIDsEqual(i.ID, this.SelectedVectorIndexID))
+            : undefined;
+        if (chosen) {
+            entityDoc.VectorDatabaseID = chosen.VectorDatabaseID;
+            entityDoc.AIModelID = chosen.EmbeddingModelID;
+            entityDoc.VectorIndexID = chosen.ID;
+        } else {
+            const vectorDatabaseID = this.SelectedVectorDBID || this.vectorDatabases[0].ID;
+            const aiModelID = this.SelectedEmbeddingModelID || this.findEmbeddingModel()!.ID;
+            entityDoc.VectorDatabaseID = vectorDatabaseID;
+            entityDoc.AIModelID = aiModelID;
+            entityDoc.VectorIndexID = await this.resolveOrCreateVectorIndex(vectorDatabaseID, aiModelID, this.SuggestEntityName);
         }
 
         // TemplateID — create a Template record with the generated template content
         await this.createTemplateForDocument(entityDoc);
+    }
+
+    /**
+     * "Auto (create/find matching index)": reuse the index already built for this vector database +
+     * embedding model, or create the `MJ: Vector Indexes` record for one. Only the metadata row is
+     * written here and the save returns as soon as it is stored; the server-side entity hook then
+     * provisions the index in the provider (bounded by its own timeout) and writes the provider
+     * metadata back, so this request is never held while the provider works.
+     * Returns the index ID to store on the document.
+     */
+    private async resolveOrCreateVectorIndex(vectorDatabaseID: string, aiModelID: string, entityName: string): Promise<string> {
+        const existing = FindMatchingVectorIndex(this.vectorIndexes, vectorDatabaseID, aiModelID);
+        if (existing) {
+            return existing.ID;
+        }
+
+        const md = this.ProviderToUse;
+        const modelName = this.aiModels.find(m => UUIDsEqual(m.ID, aiModelID))?.Name ?? null;
+        const index = await md.GetEntityObject<MJVectorIndexEntity>('MJ: Vector Indexes');
+        index.NewRecord();
+        index.Name = BuildAutoVectorIndexName(entityName, modelName);
+        index.VectorDatabaseID = vectorDatabaseID;
+        index.EmbeddingModelID = aiModelID;
+        index.Description = `Auto-created for the "${entityName}" entity document (${modelName ?? 'embedding model'})`;
+
+        const saved = await index.Save();
+        if (!saved) {
+            throw new Error(
+                `Could not create a vector index for "${entityName}": ${index.LatestResult?.CompleteMessage || 'unknown error'}`
+            );
+        }
+        this.vectorIndexes.push(index);
+        this.AvailableVectorIndexes.push({
+            ID: index.ID,
+            Name: index.Name,
+            VectorDatabaseID: index.VectorDatabaseID,
+            EmbeddingModelID: index.EmbeddingModelID,
+        });
+        return index.ID;
     }
 
     /** Create a Template + TemplateContent record for the entity document */
@@ -1468,12 +1595,37 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
             throw new Error('No template content to save');
         }
 
-        // Create Template record
-        const template = await md.GetEntityObject<MJTemplateEntity>('MJ: Templates');
-        template.NewRecord();
-        template.Name = `Template for ${this.SaveDocumentName}`;
+        // LAYER 2: the template is hand-editable after the model returns, so a user can type
+        // a field the picker never offered. Refuse before anything is written — once values
+        // reach the vector index they are retrievable by similarity search, outside the
+        // entity permissions that guard the source column, and not fully reversible.
+        const sensitive = SensitiveFieldsInTemplate(templateText);
+        if (sensitive.length > 0) {
+            throw new Error(
+                `This template references ${sensitive.length === 1 ? 'a field' : 'fields'} that must not be ` +
+                `vectorized: ${sensitive.join(', ')}. Embedding copies the values into the vector index, ` +
+                `where they are retrievable by similarity search rather than by an authorized query. ` +
+                `Remove ${sensitive.length === 1 ? 'it' : 'them'} from the template and save again.`
+            );
+        }
+
+        // The field list is unbounded and comes straight from a prompt, and the template stays
+        // hand-editable after the model returns — so the authoritative bound is here, on what
+        // actually gets embedded, not on the model's own description of what it picked.
+        const capRefusal = TemplateFieldCapRefusal(templateText);
+        if (capRefusal) {
+            throw new Error(capRefusal);
+        }
+
+        // Find-or-create, so a retry after a mid-flow failure converges on one set of rows.
+        const templateName = this.templateNameForDocument();
+        const template = await this.findOrCreateTemplate(templateName, entityDoc.TemplateID);
+        template.Name = templateName;
         template.Description = `Auto-generated template for entity document: ${this.SaveDocumentName}`;
-        template.UserID = md.CurrentUser.ID;
+        // An adopted template keeps its owner; only a new one is the current user's.
+        if (!template.UserID) {
+            template.UserID = md.CurrentUser.ID;
+        }
         template.IsActive = true;
         const templateSaved = await template.Save();
         if (!templateSaved) {
@@ -1496,8 +1648,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         // Create TemplateContent record with the template text
         // Server-side MJTemplateContentEntityServer hook auto-creates Scalar params
         // for each {{FieldName}} — GetTemplateData() handles them via the flat convention.
-        const content = await md.GetEntityObject<MJTemplateContentEntity>('MJ: Template Contents');
-        content.NewRecord();
+        const content = await this.findOrCreateTemplateContent(template.ID);
         content.TemplateID = template.ID;
         content.TypeID = contentTypeResult.Results[0].ID;
         content.TemplateText = templateText;
@@ -1509,12 +1660,149 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         }
     }
 
+    /** The Template name this dialog deterministically gives the current document. */
+    private templateNameForDocument(): string {
+        return `Template for ${this.SaveDocumentName}`;
+    }
+
+    /**
+     * The Entity Document for the current dialog, reusing the row an earlier attempt created
+     * rather than adding a second one.
+     *
+     * This flow writes three rows — Template, Template Content, Entity Document — in that
+     * order, and only the last is protected by a unique index (`UQ_EntityDocument_Name` on
+     * `EntityDocument.Name`). So a duplicate was not a rare partial-failure case: that index
+     * guarantees a second attempt with the same name fails at the final step, *after* the
+     * Template and Template Content rows have been written again. Orphans accumulated one
+     * pair per retry.
+     *
+     * Matched on Name, because that is the identity the database itself enforces.
+     *
+     * An existing document is adopted only when this dialog created it — its TemplateID points
+     * at the template named `Template for <document name>` — and only for the same entity, so a
+     * retry never moves another entity's document. A collision with a document
+     * authored anywhere else is refused, because silently overwriting somebody's configured
+     * document is worse than asking for a different name.
+     */
+    private async findOrCreateEntityDocument(): Promise<MJEntityDocumentEntity> {
+        const md = this.ProviderToUse;
+        const rv = RunView.FromMetadataProvider(md);
+        const existing = await rv.RunView<MJEntityDocumentEntity>({
+            EntityName: 'MJ: Entity Documents',
+            ExtraFilter: `Name='${EscapeSQLString(this.SaveDocumentName)}'`,
+            ResultType: 'entity_object',
+            MaxRows: 1,
+        });
+
+        if (existing.Success && existing.Results.length > 0) {
+            const priorDoc = existing.Results[0];
+            const ownTemplate = priorDoc.TemplateID
+                ? await this.templateHasName(priorDoc.TemplateID, this.templateNameForDocument())
+                : false;
+            if (!ownTemplate) {
+                throw new Error(
+                    `An Entity Document named "${this.SaveDocumentName}" already exists and was not ` +
+                    `created here, so it will not be overwritten. Choose a different name.`
+                );
+            }
+            // Adopting a document for another entity would move it to this one.
+            const entity = md.Entities.find(e => e.Name === this.SuggestEntityName);
+            if (entity && priorDoc.EntityID && !UUIDsEqual(priorDoc.EntityID, entity.ID)) {
+                throw new Error(
+                    `An Entity Document named "${this.SaveDocumentName}" already exists for ` +
+                    `${priorDoc.Entity || 'another entity'}, so it will not be reused. Choose a different name.`
+                );
+            }
+            return priorDoc;
+        }
+
+        const entityDoc = await md.GetEntityObject<MJEntityDocumentEntity>('MJ: Entity Documents');
+        entityDoc.NewRecord();
+        return entityDoc;
+    }
+
+    /**
+     * The Template for the current document, reusing an earlier attempt's row.
+     *
+     * An adopted Entity Document already points at its template (findOrCreateEntityDocument
+     * checked its name), so that row is reused by ID. Matching it on Name + UserID instead
+     * misses it when another user created it, writes a second template, re-points the document
+     * and orphans the first Template and Template Content.
+     *
+     * For a new document, matched on Name + UserID: `Template` carries no unique index, and that
+     * pair is exactly what this flow writes, so it identifies our own prior row without claiming
+     * anyone else's.
+     */
+    private async findOrCreateTemplate(templateName: string, adoptedTemplateId?: string | null): Promise<MJTemplateEntity> {
+        const md = this.ProviderToUse;
+        const rv = RunView.FromMetadataProvider(md);
+        const existing = await rv.RunView<MJTemplateEntity>({
+            EntityName: 'MJ: Templates',
+            ExtraFilter: adoptedTemplateId
+                ? `ID='${EscapeSQLString(adoptedTemplateId)}'`
+                : `Name='${EscapeSQLString(templateName)}' AND UserID='${md.CurrentUser.ID}'`,
+            ResultType: 'entity_object',
+            MaxRows: 1,
+        });
+        if (existing.Success && existing.Results.length > 0) {
+            return existing.Results[0];
+        }
+        const template = await md.GetEntityObject<MJTemplateEntity>('MJ: Templates');
+        template.NewRecord();
+        return template;
+    }
+
+    /**
+     * The Template Content row for a template, reusing the one it already has.
+     *
+     * `Priority ASC`, first row, is how loadEditDocTemplate and saveEditDocTemplate already
+     * identify "the" content of a template — this follows that convention rather than adding
+     * a second one.
+     */
+    private async findOrCreateTemplateContent(templateId: string): Promise<MJTemplateContentEntity> {
+        const md = this.ProviderToUse;
+        const rv = RunView.FromMetadataProvider(md);
+        const existing = await rv.RunView<MJTemplateContentEntity>({
+            EntityName: 'MJ: Template Contents',
+            ExtraFilter: `TemplateID='${templateId}'`,
+            ResultType: 'entity_object',
+            OrderBy: 'Priority ASC',
+            MaxRows: 1,
+        });
+        if (existing.Success && existing.Results.length > 0) {
+            return existing.Results[0];
+        }
+        const content = await md.GetEntityObject<MJTemplateContentEntity>('MJ: Template Contents');
+        content.NewRecord();
+        return content;
+    }
+
+    /** True when the template with this ID carries the given name. */
+    private async templateHasName(templateId: string, name: string): Promise<boolean> {
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+        const result = await rv.RunView<{ Name: string }>({
+            EntityName: 'MJ: Templates',
+            ExtraFilter: `ID='${templateId}'`,
+            Fields: ['Name'],
+            ResultType: 'simple',
+            MaxRows: 1,
+        });
+        return result.Success && result.Results.length > 0 && result.Results[0].Name === name;
+    }
+
+
     /** Build grouped entity list from metadata, grouped by SchemaName */
     private loadEntityGroups(): void {
         const md = this.ProviderToUse;
         const groupMap = new Map<string, { Name: string; ID: string }[]>();
 
         for (const entity of md.Entities) {
+            // The picker used to list every entity in metadata, so MJ's own internal entities
+            // were offered as vectorization targets. See vector-document-rules.ts for the rule
+            // and the precedent it follows.
+            if (!IsVectorizableEntity(entity)) {
+                continue;
+            }
             const schema = entity.SchemaName || '__default';
             const existing = groupMap.get(schema);
             if (existing) {
@@ -1647,7 +1935,9 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
 
     /** Build the data payload for the suggestion prompt */
     private buildPromptData(entity: EntityInfo, useCase: string): Record<string, unknown> {
-        const fields = entity.Fields.map(f => ({
+        // LAYER 1 of the sensitive-field refusal: the model never sees these columns, so it
+        // cannot suggest them. See sensitive-fields.ts for why this cannot live in the prompt.
+        const fields = WithoutSensitiveFields(entity.Fields).map(f => ({
             Name: f.Name,
             Type: f.Type,
             IsPrimaryKey: f.IsPrimaryKey,
@@ -1663,8 +1953,9 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
             .slice(0, 20)
             .map(r => {
                 const relatedEntity = md.Entities.find(e => e.Name === r.RelatedEntity);
+                // Layer 1 covers related entities too: their fields reach the model here.
                 const relFields = relatedEntity
-                    ? relatedEntity.Fields
+                    ? WithoutSensitiveFields(relatedEntity.Fields)
                         .filter(f => !f.IsPrimaryKey && f.Type !== 'datetimeoffset')
                         .map(f => f.Name)
                     : [];

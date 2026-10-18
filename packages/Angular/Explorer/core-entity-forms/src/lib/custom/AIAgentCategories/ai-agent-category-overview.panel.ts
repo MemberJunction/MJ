@@ -13,9 +13,9 @@ interface AgentRow {
 }
 
 @RegisterClassEx(BaseFormPanel, {
-    key: 'form-panel:AI Agent Categories:overview',
+    key: 'form-panel:MJ: AI Agent Categories:overview',
     metadata: {
-        entity: 'AI Agent Categories',
+        entity: 'MJ: AI Agent Categories',
         slot: 'before-fields',
         sortKey: 10,
     },
@@ -31,10 +31,14 @@ interface AgentRow {
             <div class="mj-overview-card">
                 <div class="mj-card-header">
                     <div class="mj-card-title"><i class="fa-solid fa-robot" style="color: var(--mj-brand-primary, #38bdf8);"></i> Active Agents in Category</div>
-                    <span class="mj-card-badge">{{ Agents.length }} Registered</span>
+                    @if (!LoadError) {
+                        <span class="mj-card-badge">{{ Agents.length }} Registered</span>
+                    }
                 </div>
                 <div class="mj-card-body">
-                    @if (Agents.length === 0) {
+                    @if (LoadError) {
+                        <span class="mj-load-error">{{ LoadError }}</span>
+                    } @else if (Agents.length === 0) {
                         <span style="font-size: 12px; color: var(--mj-text-muted);">No agents assigned to this category yet.</span>
                     } @else {
                         @for (agent of Agents; track agent.ID) {
@@ -123,6 +127,7 @@ interface AgentRow {
         }
         .mj-metric-label { color: var(--mj-text-secondary, #94a3b8); }
         .mj-metric-val { font-weight: 600; color: var(--mj-text-primary, #f8fafc); font-family: monospace; }
+        .mj-load-error { font-size: 12px; color: var(--mj-status-error); }
         .mj-pill {
             font-size: 10.5px;
             font-weight: 700;
@@ -135,28 +140,38 @@ interface AgentRow {
 export class AIAgentCategoryOverviewPanel extends BaseFormPanel<MJAIAgentCategoryEntity> implements OnInit {
     private cdr = inject(ChangeDetectorRef);
     public Agents: AgentRow[] = [];
+    /** Set when the query fails, so the card shows the failure instead of an empty list. */
+    public LoadError: string | null = null;
 
     public ngOnInit(): void {
-        this.LoadCategoryAgents();
+        this.loadCategoryAgents();
     }
 
-    private async LoadCategoryAgents(): Promise<void> {
+    private async loadCategoryAgents(): Promise<void> {
         if (!this.Record?.ID) return;
         try {
             const rv = new RunView();
             const res = await rv.RunView<AgentRow>({
-                EntityName: 'AI Agents',
+                EntityName: 'MJ: AI Agents',
                 ExtraFilter: `CategoryID = '${this.Record.ID}'`,
                 Fields: ['ID', 'Name', 'Status'],
                 MaxRows: 20,
                 ResultType: 'simple'
             });
-            if (res.Success && res.Results) {
-                this.Agents = res.Results;
-                this.cdr.markForCheck();
+            if (res.Success) {
+                this.Agents = res.Results ?? [];
+            } else {
+                this.showLoadError(res.ErrorMessage);
             }
         } catch (e) {
             console.error('Failed to load category agents:', e);
+            this.showLoadError(e instanceof Error ? e.message : undefined);
         }
+        this.cdr.markForCheck();
+    }
+
+    /** Shows a short "could not load" line, with the underlying message when there is one. */
+    private showLoadError(detail: string | undefined): void {
+        this.LoadError = detail ? `Could not load agents: ${detail}` : 'Could not load agents.';
     }
 }

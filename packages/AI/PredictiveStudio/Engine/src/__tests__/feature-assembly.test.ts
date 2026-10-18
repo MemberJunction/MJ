@@ -383,6 +383,25 @@ describe('FeatureAssemblyExecutor — anti-skew: required-column hydration + har
     expect(score.matrix).toEqual(train.matrix);
   });
 
+  it('hydrates missing feature columns when row IDs have differing UUID casing', async () => {
+    const narrowRows: SourceRow[] = [
+      { ID: 'uuid-abc-123', AutoRenew: 1 },
+    ];
+    const viewRows: SourceRow[] = [
+      { ID: 'UUID-ABC-123', AutoRenew: 1, MembershipType: 'Individual' },
+    ];
+
+    const result = await new FeatureAssemblyExecutor().assemble({
+      ...base,
+      records: narrowRows,
+      dataAccess: new InMemoryDataAccess({ Members: viewRows }),
+      context: 'on-demand',
+    });
+
+    expect(result.matrix.rows).toHaveLength(1);
+    expect(result.matrix.rows[0]).toEqual([1, 'Individual']);
+  });
+
   it("hydrates the AsOfStrategy 'column' date when the scored rows' projection dropped it", async () => {
     // Real-world repro: Event No-Show Risk (AsOf column = RegistrationDate). The on-demand scope
     // handed rows without RegistrationDate → every record failed at resolveAsOfDate → 0/6747 +
@@ -425,3 +444,101 @@ describe('FeatureAssemblyExecutor — anti-skew: required-column hydration + har
     ).rejects.toThrow(/required feature column\(s\) \[RegistrationDate\] are absent/);
   });
 });
+
+describe('FeatureAssemblyExecutor — llm-derived step planning', () => {
+  it('reads explicit Columns without falling back to FeaturePipelineRef as column name', async () => {
+    const members: SourceRow[] = [
+      { ID: 'm1', JobFunction: 'Engineer', SeniorityLevel: 'Senior', Renewed: 1 },
+    ];
+    const dataAccess = new InMemoryDataAccess({ Members: members });
+    const steps: FeatureStepGraph = {
+      Steps: [
+        {
+          Id: 'llm-step-1',
+          Kind: 'llm-derived',
+          FeaturePipelineRef: 'JobFunctionSeniorityPipeline',
+          Columns: ['JobFunction', 'SeniorityLevel'],
+        },
+      ],
+    };
+    const result = await new FeatureAssemblyExecutor().assemble({
+      targetEntityName: 'Members',
+      records: members,
+      sources,
+      steps,
+      asOf: { Mode: 'none' },
+      leakageGuard: noLeakGuard,
+      targetVariable: 'Renewed',
+      dataAccess,
+    });
+
+    expect(result.featureSchema.map((s) => s.Name)).toEqual(['JobFunction', 'SeniorityLevel']);
+    expect(result.featureSchema[0].Kind).toBe('llm-derived');
+    expect(result.matrix.columns).toEqual(['JobFunction', 'SeniorityLevel', 'Renewed']);
+    expect(result.matrix.rows[0]).toEqual(['Engineer', 'Senior', 1]);
+  });
+
+  it('deduplicates planned columns when an llm-derived column overlaps with select', async () => {
+    const members: SourceRow[] = [
+      { ID: 'm1', JobFunction: 'Engineer', SeniorityLevel: 'Senior', Renewed: 1 },
+    ];
+    const dataAccess = new InMemoryDataAccess({ Members: members });
+    const steps: FeatureStepGraph = {
+      Steps: [
+        { Id: 's1', Kind: 'select', Columns: ['JobFunction'] },
+        {
+          Id: 'llm-step-1',
+          Kind: 'llm-derived',
+          FeaturePipelineRef: 'JobFunctionSeniorityPipeline',
+          Columns: ['JobFunction', 'SeniorityLevel'],
+        },
+      ],
+    };
+    const result = await new FeatureAssemblyExecutor().assemble({
+      targetEntityName: 'Members',
+      records: members,
+      sources,
+      steps,
+      asOf: { Mode: 'none' },
+      leakageGuard: noLeakGuard,
+      targetVariable: 'Renewed',
+      dataAccess,
+    });
+
+    // JobFunction appears once (from select), followed by SeniorityLevel (from llm-derived)
+    expect(result.featureSchema.map((s) => s.Name)).toEqual(['JobFunction', 'SeniorityLevel']);
+    expect(result.matrix.columns).toEqual(['JobFunction', 'SeniorityLevel', 'Renewed']);
+  });
+
+  it('skips column emission when Columns is empty', async () => {
+    const members: SourceRow[] = [
+      { ID: 'm1', tenure: 10, Renewed: 1 },
+    ];
+    const dataAccess = new InMemoryDataAccess({ Members: members });
+    const steps: FeatureStepGraph = {
+      Steps: [
+        { Id: 's1', Kind: 'select', Columns: ['tenure'] },
+        {
+          Id: 'llm-empty',
+          Kind: 'llm-derived',
+          FeaturePipelineRef: 'JobFunctionSeniorityPipeline',
+          Columns: [],
+        },
+      ],
+    };
+    const result = await new FeatureAssemblyExecutor().assemble({
+      targetEntityName: 'Members',
+      records: members,
+      sources,
+      steps,
+      asOf: { Mode: 'none' },
+      leakageGuard: noLeakGuard,
+      targetVariable: 'Renewed',
+      dataAccess,
+    });
+
+    expect(result.featureSchema.map((s) => s.Name)).toEqual(['tenure']);
+    expect(result.matrix.columns).toEqual(['tenure', 'Renewed']);
+  });
+});
+

@@ -14,7 +14,7 @@ import { BaseJudge } from './BaseJudge.js';
 import { JudgeContext, JudgeVerdict } from '../types/judge.js';
 import { JudgePromptRequest, JudgePromptResponse } from '../types/controller.js';
 import { DEFAULT_JUDGE_PROMPT } from '../prompts/default-judge.js';
-import { evaluateRubric, CriterionVerdict } from './rubric.js';
+import { EvaluateRubric, CriterionVerdict } from './rubric.js';
 
 /**
  * Callback type for executing judge prompts.
@@ -146,16 +146,16 @@ export class LLMJudge extends BaseJudge {
             met: c.met === true,
             evidence: String(c.evidence ?? ''),
         }));
-        const rubric = evaluateRubric(criteria);
+        const rubric = EvaluateRubric(criteria);
         verdict.CriteriaVerdicts = criteria;
         // Impossible stays the model's call; the rubric governs Done/coverage.
         if (!verdict.Impossible) {
             verdict.Done = rubric.done;
         }
-        verdict.Confidence = rubric.coverage;
+        verdict.Confidence = rubric.Coverage;
         verdict.Reason = rubric.done
-            ? `All ${rubric.total} criteria met. ${verdict.Reason}`.trim()
-            : `${rubric.metCount}/${rubric.total} criteria met; unmet: ${rubric.unmet.join('; ')}`;
+            ? `All ${rubric.Total} criteria met. ${verdict.Reason}`.trim()
+            : `${rubric.MetCount}/${rubric.Total} criteria met; unmet: ${rubric.Unmet.join('; ')}`;
         return verdict;
     }
 

@@ -35,7 +35,7 @@ import type {
  * Returns `null` if AIEngine isn't loadable or no language model is active —
  * pipeline silently skips the LLM tier in that case (verdict cascades to `none`).
  */
-export async function buildIntegrationLLMPKCallback(
+export async function BuildIntegrationLLMPKCallback(
     contextUser: UserInfo,
 ): Promise<LLMOneShotCallback | null> {
     try {
@@ -143,4 +143,11 @@ export async function buildIntegrationLLMPKCallback(
             return { nominee: null, confidence: 0, reason: `Exception during LLM inference: ${msg}` };
         }
     };
+}
+
+/** @deprecated Use {@link BuildIntegrationLLMPKCallback}. */
+export async function buildIntegrationLLMPKCallback(
+    contextUser: UserInfo,
+): Promise<LLMOneShotCallback | null> {
+    return BuildIntegrationLLMPKCallback(contextUser);
 }

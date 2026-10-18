@@ -7,11 +7,11 @@
  */
 import type { IConversionRule, ConversionContext, StatementType } from './types.js';
 import {
-  convertIdentifiers, convertDateFunctions, convertCharIndex, convertStuff,
-  convertStringConcat, convertTopToLimit, convertCastTypes, convertIIF,
-  convertConvertFunction, removeNPrefix, removeCollate, convertCommonFunctions,
-  convertBooleanLiteralComparisons,
-  escapeRegExp,
+  ConvertIdentifiers, ConvertDateFunctions, ConvertCharIndex, ConvertStuff,
+  ConvertStringConcat, ConvertTopToLimit, ConvertCastTypes, ConvertIIF,
+  ConvertConvertFunction, RemoveNPrefix, RemoveCollate, ConvertCommonFunctions,
+  ConvertBooleanLiteralComparisons,
+  EscapeRegExp,
 } from './ExpressionHelpers.js';
 
 /** SQL keywords that should NOT be quoted as column references */
@@ -61,17 +61,17 @@ export class ViewRule implements IConversionRule {
     }
 
     // Identifier conversion
-    result = convertIdentifiers(result);
+    result = ConvertIdentifiers(result);
 
     // Schema normalization: "schema".Name → schema."Name"
     // Function replacements throughout: `schema` is a configured identifier that
     // may legally contain `$`, and a string replacement would expand it (and any
     // `$&`/`` $` ``/`$'`) while emitting SQL. Capture groups are carried through
     // as named callback parameters instead of `$1`/`$2`. See issue #3171.
-    const quotedSchemaPattern = new RegExp(`"${escapeRegExp(schema)}"\\.(?!")`, 'g');
+    const quotedSchemaPattern = new RegExp(`"${EscapeRegExp(schema)}"\\.(?!")`, 'g');
     result = result.replace(quotedSchemaPattern, () => `${schema}.`);
     // Quote unquoted table references after schema.
-    const bareSchemaPattern = new RegExp(`\\b${escapeRegExp(schema)}\\.(?!")((?:vw)?[A-Za-z]\\w+)\\b`, 'g');
+    const bareSchemaPattern = new RegExp(`\\b${EscapeRegExp(schema)}\\.(?!")((?:vw)?[A-Za-z]\\w+)\\b`, 'g');
     result = result.replace(bareSchemaPattern, (_match, table: string) => `${schema}."${table}"`);
     // Add schema to bare view references: FROM vwXxx → FROM schema."vwXxx"
     result = result.replace(
@@ -90,17 +90,17 @@ export class ViewRule implements IConversionRule {
     result = this.quoteBareIdentifiers(result);
 
     // Expression conversions
-    result = removeNPrefix(result);
-    result = convertCommonFunctions(result);
-    result = convertCastTypes(result);
-    result = convertStringConcat(result, context.TableColumns);
-    result = convertTopToLimit(result);
-    result = removeCollate(result);
-    result = convertDateFunctions(result);
+    result = RemoveNPrefix(result);
+    result = ConvertCommonFunctions(result);
+    result = ConvertCastTypes(result);
+    result = ConvertStringConcat(result, context.TableColumns);
+    result = ConvertTopToLimit(result);
+    result = RemoveCollate(result);
+    result = ConvertDateFunctions(result);
 
     // SS BIT comparisons (`bool_col = 1`) → PG boolean literals (`= TRUE`).
     // Required for views: the boolean=integer mismatch errors at CREATE time.
-    result = convertBooleanLiteralComparisons(result, context.TableColumns);
+    result = ConvertBooleanLiteralComparisons(result, context.TableColumns);
 
     // Fix DATEDIFF TIME column casts — TIME columns can't be cast to TIMESTAMPTZ.
     // Remove ::TIMESTAMPTZ from references to columns known to be TIME type.
@@ -113,10 +113,10 @@ export class ViewRule implements IConversionRule {
       }
     }
 
-    result = convertCharIndex(result);
-    result = convertStuff(result);
-    result = convertIIF(result);
-    result = convertConvertFunction(result);
+    result = ConvertCharIndex(result);
+    result = ConvertStuff(result);
+    result = ConvertIIF(result);
+    result = ConvertConvertFunction(result);
 
     // STRING_AGG WITHIN GROUP rewriting
     result = result.replace(

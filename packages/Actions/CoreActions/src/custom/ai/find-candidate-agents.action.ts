@@ -2,8 +2,9 @@ import { RunActionParams } from "@memberjunction/actions-base";
 import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
 import { MJAIAgentEntityExtended } from "@memberjunction/ai-core-plus";
+import { AIAgentPermissionHelper } from "@memberjunction/ai-engine-base";
 import { BaseFindAgentsAction } from "./base-find-agents.action";
-import { getActionBooleanParam } from "./semantic-entity-search.helper";
+import { GetActionBooleanParam } from "./semantic-entity-search.helper";
 
 /**
  * Finds candidate AI agents for a given task using semantic search.
@@ -31,10 +32,10 @@ export class FindCandidateAgentsAction extends BaseFindAgentsAction {
     protected get includeSubAgentDetails(): boolean { return true; }
 
     protected override applyInvocationFilter(agents: MJAIAgentEntityExtended[], params: RunActionParams): MJAIAgentEntityExtended[] {
-        const excludeSubAgents = getActionBooleanParam(params, 'excludesubagents', true);
+        const excludeSubAgents = GetActionBooleanParam(params, 'excludesubagents', true);
         if (excludeSubAgents) {
             // Sub-Agents and child agents are meant to be called by other agents, not discovered directly
-            return agents.filter(a => a.InvocationMode !== 'Sub-Agent' && !a.ParentID);
+            return agents.filter(a => AIAgentPermissionHelper.IsDirectlyDiscoverable(a));
         }
         return agents;
     }

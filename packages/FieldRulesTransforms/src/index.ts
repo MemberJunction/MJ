@@ -23,5 +23,5 @@ export function RegisterFieldRulesTransforms(): void {
 // Side-effect registration on import.
 RegisterFieldRulesTransforms();
 
-export { jsonPathTransform } from './jsonpath-transform.js';
-export { xPathTransform } from './xpath-transform.js';
+export { JsonPathTransform, jsonPathTransform } from './jsonpath-transform.js';
+export { XPathTransform, xPathTransform } from './xpath-transform.js';

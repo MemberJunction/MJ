@@ -1,10 +1,14 @@
-import { BaseAction } from "@memberjunction/actions";
-import { RegisterClass } from "@memberjunction/global";
+import { BaseAction } from '@memberjunction/actions';
+import { EscapeSQLString, RegisterClass } from '@memberjunction/global';
+import { BaseEntity, CompositeKey, EntityInfo, IMetadataProvider, LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import * as Config from './config';
-import { BaseEntity, IMetadataProvider, LogError, LogStatus, Metadata, RunView, UserInfo, CompositeKey } from "@memberjunction/core";
-import { HttpError, HttpGet, HttpPost, HttpRequestConfig, HttpResponse, IsHttpError } from '@memberjunction/network-utils';
-import { AccountEntityFields, AccountTechnologyEntityFields, ContactEducationHistoryEntityFields, ContactEntityFields, OrganizationEnrichmentOrganization, OrganizationEnrichmentResponse, ProcessSingleDomainParams, SearchPeopleResponse, SearchPeopleResponsePerson, TechnologyCategoryEntityFields, TechnologyMap } from "./generic/apollo.types";
-import { ActionParam, ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
+import { AccountEntityFields, AccountTechnologyEntityFields, ContactEducationHistoryEntityFields, ContactEntityFields, OrganizationEnrichmentOrganization, ProcessSingleDomainParams, TechnologyCategoryEntityFields, TechnologyMap } from './generic/apollo.types';
+import { IApolloRESTClient } from './generic/apollo-lists.types';
+import { ApolloAuthError, ApolloRateLimitError } from './http/ApolloHttp';
+import { ApolloRESTClient } from './lists/ApolloRESTClient';
+import { ResolveApolloAPIKey } from './lists/credentials';
+import { ApolloPeopleClient, ApolloPersonMatch, DomainOf } from './people/ApolloPeopleClient';
 
 /**
  * Configuration parameters for account enrichment action
@@ -16,445 +20,215 @@ interface AccountEnrichmentParams {
     technologyCategoryEntityFields?: TechnologyCategoryEntityFields | null;
     contactEntityFields?: ContactEntityFields | null;
     contactEducationHistoryEntityFields?: ContactEducationHistoryEntityFields | null;
+    /** Resolve the Apollo key from this company's credential; null means the environment key. */
+    companyID: string | null;
 }
 
+/** The two Apollo clients one run uses: enrichment (header auth, bulk_match) and prospecting search. */
+export interface ApolloAccountClients {
+    People: ApolloPeopleClient;
+    Search: IApolloRESTClient;
+}
+
+/** Everything one run needs, resolved once in InternalRunAction and threaded through. */
+interface AccountRunContext {
+    Clients: ApolloAccountClients;
+    Md: IMetadataProvider;
+    User: UserInfo;
+    Params: AccountEnrichmentParams;
+}
+
+const MAX_EXECUTIONS = 5;
+const SEARCH_PAGE_SIZE = 100;
+
 /**
- * Action that enriches account records using Apollo.io's organization and people data
- * 
- * This action performs comprehensive account enrichment by:
- * 1. Enriching organization data (address, phone, social profiles, etc.)
- * 2. Creating technology stack records for the organization
- * 3. Finding and enriching contacts associated with the organization
- * 4. Creating employment/education history for contacts
- * 
- * @example
- * ```typescript
- * // Basic account enrichment
- * await runAction({
- *   ActionName: 'ApolloEnrichmentAccountsAction',
- *   Params: [{
- *     Name: 'AccountEntityFieldMappings',
- *     Value: JSON.stringify({
- *       EntityName: 'Accounts',
- *       Filter: 'Domain IS NOT NULL AND EnrichedAt IS NULL',
- *       DomainField: 'Domain',
- *       AccountIDField: 'ID',
- *       EnrichedAtField: 'EnrichedAt'
- *     })
- *   }]
- * });
- * 
- * // Full enrichment with contacts and technologies
- * await runAction({
- *   ActionName: 'ApolloEnrichmentAccountsAction',
- *   Params: [{
- *     Name: 'AccountEntityFieldMappings',
- *     Value: JSON.stringify(accountConfig)
- *   }, {
- *     Name: 'ContactEntityFieldMappings',
- *     Value: JSON.stringify(contactConfig)
- *   }, {
- *     Name: 'AccountTechnologyEntityFieldMappings',
- *     Value: JSON.stringify(technologyConfig)
- *   }]
- * });
- * ```
+ * Apollo.io Account Enrichment Action
+ *
+ * Enriches account records with organization data (`organizations/enrich`), their technology
+ * stack, and the people Apollo lists at the account's domain. People discovery is two steps:
+ * `mixed_people/api_search` (free, obfuscated: ids, first names and titles only) and then a paid
+ * `people/bulk_match` by id, ten at a time, for emails and profiles. Each matched person costs
+ * one Apollo credit; a domain with no people costs nothing.
+ *
+ * Params: AccountEntityFieldMappings (required); ContactEntityFieldMappings,
+ * AccountTechnologyEntityFieldMappings, TechnologyCategoryEntityFieldMappings,
+ * ContactEducationHistoryEntityFieldMappings, CompanyID (optional).
+ *
+ * Result codes: SUCCESS, VALIDATION_ERROR, CONFIGURATION_ERROR, RATE_LIMIT_EXCEEDED, FAILED.
  */
-@RegisterClass(BaseAction, "ApolloEnrichmentAccountsAction")
+@RegisterClass(BaseAction, 'ApolloEnrichmentAccountsAction')
 export class ApolloEnrichmentAccountsAction extends BaseAction {
-    /**
-     * Job titles to exclude when creating contact records
-     * These are typically not decision-makers or relevant contacts
-     */
-    private readonly ExcludeTitles: string[] = ['member', 'student member', 'student', 'volunteer'];
+    /** Job titles to exclude when creating contact records (not decision-makers). */
+    private readonly excludeTitles: string[] = ['member', 'student member', 'student', 'volunteer'];
 
-    /**
-     * Main entry point for the Apollo account enrichment action
-     * 
-     * @param params - The action parameters containing:
-     *   - AccountEntityFieldMappings: Required JSON configuration for account entity field mappings
-     *   - ContactEntityFieldMappings: Optional JSON configuration for contact entity field mappings
-     *   - AccountTechnologyEntityFieldMappings: Optional JSON configuration for technology tracking
-     *   - TechnologyCategoryEntityFieldMappings: Optional JSON configuration for technology categories
-     *   - ContactEducationHistoryEntityFieldMappings: Optional JSON configuration for education history
-     * 
-     * @returns Promise<ActionResultSimple> indicating success/failure and any error messages
-     */
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
+        const parsed = this.extractAndValidateParameters(params);
+        if (parsed.success === false) return parsed.error;
+
+        let clients: ApolloAccountClients;
         try {
-            // Validate API configuration
-            const configValidation = this.validateConfiguration();
-            if (!configValidation.success) {
-                return configValidation.error!;
-            }
-
-            // Extract and validate parameters
-            const paramValidation = this.extractAndValidateParameters(params);
-            if (!paramValidation.success) {
-                return paramValidation.error!;
-            }
-
-            const actionParams = paramValidation.data!;
-
-            // Process all account records
-            return await this.processAllAccountRecords(actionParams, params.ContextUser, 1, params.Provider);
+            const resolved = await this.CreateClients(parsed.data.companyID, params.ContextUser);
+            if (!resolved) return Failure('CONFIGURATION_ERROR', 'Apollo.io API key not found in configuration');
+            clients = resolved;
         } catch (error) {
+            return Failure('CONFIGURATION_ERROR', MessageOf(error));
+        }
+
+        const ctx: AccountRunContext = { Clients: clients, Md: params.Provider ?? Metadata.Provider, User: params.ContextUser, Params: parsed.data };
+        try {
+            return await this.processAllAccountRecords(ctx, 1);
+        } catch (error) {
+            if (error instanceof ApolloRateLimitError) {
+                return Failure('RATE_LIMIT_EXCEEDED', `Apollo.io rate limit (${error.Window}) reached; run again later.`);
+            }
+            if (error instanceof ApolloAuthError) return Failure('CONFIGURATION_ERROR', error.message);
             LogError('Unexpected error in ApolloAccountsEnrichmentAction', undefined, error);
-            return {
-                Success: false,
-                Message: `Unexpected error: ${error instanceof Error ? error.message : 'Unknown error'}`,
-                ResultCode: "FAILED"
-            };
+            return Failure('FAILED', `Unexpected error: ${MessageOf(error)}`);
         }
     }
 
     /**
-     * Validates that the Apollo.io API key is configured properly
-     * @returns Validation result with success flag and potential error details
+     * Resolve the key (company credential first, then `APOLLO_API_KEY`) and build both clients.
+     * A protected seam so tests can substitute clients that never reach api.apollo.io.
      */
-    private validateConfiguration(): { success: boolean; error?: ActionResultSimple } {
-        if (!Config.ApolloAPIKey) {
-            return {
-                success: false,
-                error: {
-                    Success: false,
-                    Message: 'Apollo.io API key not found in configuration',
-                    ResultCode: "CONFIGURATION_ERROR"
-                }
-            };
-        }
-        return { success: true };
+    protected async CreateClients(companyID: string | null, contextUser: UserInfo): Promise<ApolloAccountClients | null> {
+        const key = await ResolveApolloAPIKey(companyID, contextUser);
+        if (!key) return null;
+        return { People: new ApolloPeopleClient(key.apiKey), Search: new ApolloRESTClient(key.apiKey) };
     }
 
-    /**
-     * Extracts and validates all action parameters from the request
-     * 
-     * @param params - The action parameters containing JSON configurations
-     * @returns Object with success flag, validated parameters, or error details
-     */
-    private extractAndValidateParameters(params: RunActionParams): { 
-        success: boolean; 
-        data?: AccountEnrichmentParams; 
-        error?: ActionResultSimple 
-    } {
+    // ─── Parameters ──────────────────────────────────────────────────────────
+
+    private extractAndValidateParameters(params: RunActionParams): { success: true; data: AccountEnrichmentParams } | { success: false; error: ActionResultSimple } {
         const accountEntityFieldsParam = this.getRequiredParam(params, 'AccountEntityFieldMappings');
         if (!accountEntityFieldsParam) {
-            return {
-                success: false,
-                error: {
-                    Success: false,
-                    Message: 'Missing required parameter: AccountEntityFieldMappings',
-                    ResultCode: "VALIDATION_ERROR"
-                }
-            };
+            return { success: false, error: Failure('VALIDATION_ERROR', 'Missing required parameter: AccountEntityFieldMappings') };
         }
-
         let accountEntityFields: AccountEntityFields;
         try {
-            accountEntityFields = this.parseJSONParam(accountEntityFieldsParam.Value);
-            if (!accountEntityFields) {
-                throw new Error('Parsed AccountEntityFieldMappings is empty');
-            }
-        } catch (error) {
-            return {
-                success: false,
-                error: {
-                    Success: false,
-                    Message: 'Invalid AccountEntityFieldMappings parameter: must be valid JSON or object',
-                    ResultCode: "VALIDATION_ERROR"
-                }
-            };
+            accountEntityFields = this.parseJSONParam<AccountEntityFields>(accountEntityFieldsParam.Value);
+            if (!accountEntityFields) throw new Error('Parsed AccountEntityFieldMappings is empty');
+        } catch {
+            return { success: false, error: Failure('VALIDATION_ERROR', 'Invalid AccountEntityFieldMappings parameter: must be valid JSON or object') };
         }
-
-        // Extract optional parameters
-        const accountTechnologyEntityFields = this.parseOptionalJSONParam<AccountTechnologyEntityFields>(params, 'AccountTechnologyEntityFieldMappings');
-        const technologyCategoryEntityFields = this.parseOptionalJSONParam<TechnologyCategoryEntityFields>(params, 'TechnologyCategoryEntityFieldMappings');
-        const contactEntityFields = this.parseOptionalJSONParam<ContactEntityFields>(params, 'ContactEntityFieldMappings');
-        const contactEducationHistoryEntityFields = this.parseOptionalJSONParam<ContactEducationHistoryEntityFields>(params, 'ContactEducationHistoryEntityFieldMappings');
-
+        const companyRaw = params.Params.find((p) => p.Name.trim().toLowerCase() === 'companyid')?.Value;
         return {
             success: true,
             data: {
                 accountEntityFields,
-                accountTechnologyEntityFields,
-                technologyCategoryEntityFields,
-                contactEntityFields,
-                contactEducationHistoryEntityFields
-            }
+                accountTechnologyEntityFields: this.parseOptionalJSONParam<AccountTechnologyEntityFields>(params, 'AccountTechnologyEntityFieldMappings'),
+                technologyCategoryEntityFields: this.parseOptionalJSONParam<TechnologyCategoryEntityFields>(params, 'TechnologyCategoryEntityFieldMappings'),
+                contactEntityFields: this.parseOptionalJSONParam<ContactEntityFields>(params, 'ContactEntityFieldMappings'),
+                contactEducationHistoryEntityFields: this.parseOptionalJSONParam<ContactEducationHistoryEntityFields>(params, 'ContactEducationHistoryEntityFieldMappings'),
+                companyID: typeof companyRaw === 'string' && companyRaw.trim().length > 0 && companyRaw !== 'null' ? companyRaw.trim() : null,
+            },
         };
     }
 
-    /**
-     * Gets a required parameter from the action parameters
-     * @param params - The action parameters
-     * @param paramName - Name of the required parameter
-     * @returns The parameter if found, null otherwise
-     */
     private getRequiredParam(params: RunActionParams, paramName: string): ActionParam | null {
-        const param = params.Params.find(p => p.Name === paramName);
-        return param || null;
+        return params.Params.find((p) => p.Name === paramName) ?? null;
     }
 
-    /**
-     * Parses an optional JSON parameter with error handling
-     * @param params - The action parameters
-     * @param paramName - Name of the optional JSON parameter
-     * @returns Parsed object of type T or null if not provided/invalid
-     */
     private parseOptionalJSONParam<T>(params: RunActionParams, paramName: string): T | null {
-        const param = params.Params.find(p => p.Name === paramName);
-        if (!param || !param.Value) {
-            return null;
-        }
-        
+        const param = params.Params.find((p) => p.Name === paramName);
+        if (!param || !param.Value) return null;
         try {
-            return this.parseJSONParam(param.Value) || null;
+            return this.parseJSONParam<T>(param.Value) || null;
         } catch (error) {
             LogError(`Error parsing ${paramName}`, undefined, error);
             return null;
         }
     }
 
-    /**
-     * Parses a parameter value that may be a JSON string or already parsed object
-     * Handles the case where action parameters ending with JSON can be either strings or objects
-     * 
-     * @param value - The parameter value to parse (string or object)
-     * @returns Parsed object of type T
-     * @throws Error if value cannot be parsed as JSON (when it's a string)
-     */
-    private parseJSONParam<T = any>(value: any): T {
-        // If value is already an object (not a string), return it directly
-        if (typeof value === 'object' && value !== null) {
-            return value;
-        }
-        
-        // If value is a string, try to parse it as JSON
-        if (typeof value === 'string') {
-            return JSON.parse(value);
-        }
-        
-        // For other types, try to convert to string first then parse
-        return JSON.parse(String(value));
+    /** A parameter value that may be a JSON string or an already-parsed object. */
+    private parseJSONParam<T>(value: unknown): T {
+        if (typeof value === 'object' && value !== null) return value as T;
+        return JSON.parse(String(value)) as T;
     }
 
+    // ─── Accounts ────────────────────────────────────────────────────────────
+
     /**
-     * Recursively processes all account records that match the filter criteria
-     * Uses batching and concurrency control to handle large datasets efficiently
-     * 
-     * @param actionParams - Validated action parameters with entity field mappings
-     * @param contextUser - User context for data access and security
-     * @param executionCount - Current execution count to prevent infinite recursion (max 5)
-     * @returns Promise indicating overall success/failure of the batch
+     * Processes every account the filter selects, re-running the query until it drains or
+     * {@link MAX_EXECUTIONS} passes have run. The filter is expected to exclude stamped rows
+     * (every processed account is stamped, matched or not).
      */
-    private async processAllAccountRecords(
-        actionParams: AccountEnrichmentParams,
-        contextUser: UserInfo,
-        executionCount: number = 1,
-        provider?: IMetadataProvider
-    ): Promise<ActionResultSimple> {
-        const md: IMetadataProvider = provider ?? (new Metadata() as unknown as IMetadataProvider);
-        const rv = RunView.FromMetadataProvider(md);
-
-        // Initial query to get accounts to process
-        const runViewResult = await rv.RunView({
-            EntityName: actionParams.accountEntityFields.EntityName,
-            ExtraFilter: actionParams.accountEntityFields.Filter,
-        }, contextUser);
-
-        if (!runViewResult.Success) {
-            return {
-                Success: false,
-                Message: runViewResult.ErrorMessage,
-                ResultCode: "FAILED"
-            };
-        }
-
-        const results = runViewResult.Results;
-        const resultLength = results.length;
-
-        if (resultLength === 0) {
+    private async processAllAccountRecords(ctx: AccountRunContext, executionCount: number): Promise<ActionResultSimple> {
+        const rv = RunView.FromMetadataProvider(ctx.Md);
+        const result = await rv.RunView<Record<string, unknown>>({ EntityName: ctx.Params.accountEntityFields.EntityName, ExtraFilter: ctx.Params.accountEntityFields.Filter }, ctx.User);
+        if (!result.Success) return Failure('FAILED', result.ErrorMessage);
+        if (result.Results.length === 0) {
             LogStatus('+++ Completed domain enrichment, no records left to process.');
-            return {
-                Success: true,
-                Message: "ApolloAccountsEnrichment executed successfully.",
-                ResultCode: "SUCCESS"
-            };
+            return { Success: true, Message: 'ApolloAccountsEnrichment executed successfully.', ResultCode: 'SUCCESS' };
         }
-
-        // Check execution limit to prevent infinite recursion
-        if (executionCount >= 5) {
-            LogStatus(`+++ Reached maximum execution limit (${executionCount}), stopping to prevent infinite recursion.`);
-            return {
-                Success: true,
-                Message: `ApolloAccountsEnrichment stopped after ${executionCount} executions to prevent infinite recursion. ${resultLength} records may remain unprocessed.`,
-                ResultCode: "SUCCESS"
-            };
+        if (executionCount > MAX_EXECUTIONS) {
+            LogStatus(`+++ Reached maximum execution limit (${MAX_EXECUTIONS}), stopping to prevent infinite recursion.`);
+            return { Success: true, Message: `ApolloAccountsEnrichment stopped after ${MAX_EXECUTIONS} executions to prevent infinite recursion. ${result.Results.length} records may remain unprocessed.`, ResultCode: 'SUCCESS' };
         }
-
-        // Process accounts in concurrent groups
-        await this.processAccountGroups(results, actionParams, md, contextUser);
-
-        // Check if there are more records to process by running the query again
-        LogStatus(`--- Checking for remaining records... (execution ${executionCount + 1}/5)`);
-        return await this.processAllAccountRecords(actionParams, contextUser, executionCount + 1);
+        let failures = 0;
+        for (const record of result.Results) {
+            const ok = await this.ProcessSingleDomain(ctx, record);
+            if (!ok) failures++;
+        }
+        if (failures > 0) return Failure('FAILED', `ApolloAccountsEnrichment finished with ${failures} of ${result.Results.length} accounts failing; see the log.`);
+        LogStatus(`--- Checking for remaining records... (execution ${executionCount + 1}/${MAX_EXECUTIONS})`);
+        return this.processAllAccountRecords(ctx, executionCount + 1);
     }
 
-    /**
-     * Processes account records in concurrent groups to optimize performance
-     * Respects the configured concurrency limit to avoid overwhelming APIs
-     * 
-     * @param results - Array of account records to process
-     * @param actionParams - Configuration parameters for enrichment
-     * @param md - Metadata instance for entity operations
-     * @param contextUser - User context for data access
-     */
-    private async processAccountGroups(
-        results: any[],
-        actionParams: AccountEnrichmentParams,
-        md: IMetadataProvider,
-        contextUser: UserInfo
-    ): Promise<void> {
-        const tasks = [];
-        const resultLength = results.length;
-
-        for (const [index, record] of results.entries()) {
-            const processParams: ProcessSingleDomainParams = {
-                Record: record,
-                AccountEntity: actionParams.accountEntityFields,
-                AccountTechnologyEntity: actionParams.accountTechnologyEntityFields || null,
-                TechnologyCategoryEntity: actionParams.technologyCategoryEntityFields || null,
-                ContactEntity: actionParams.contactEntityFields || null,
-                ContactEducationHistoryEntity: actionParams.contactEducationHistoryEntityFields || null
-            };
-
-            const task = this.ProcessSingleDomain(processParams, index, resultLength, md, contextUser);
-            tasks.push(task);
-
-            if (tasks.length === Config.ConcurrentGroups || index + 1 >= resultLength) {
-                await Promise.all(tasks);
-                tasks.length = 0;
-            }
+    /** Enriches one account and, when contacts are configured, the people at its domain. */
+    protected async ProcessSingleDomain(ctx: AccountRunContext, record: Record<string, unknown>): Promise<boolean> {
+        const p = ctx.Params;
+        const params: ProcessSingleDomainParams = {
+            Record: record,
+            AccountEntity: p.accountEntityFields,
+            AccountTechnologyEntity: p.accountTechnologyEntityFields ?? null,
+            TechnologyCategoryEntity: p.technologyCategoryEntityFields ?? null,
+            ContactEntity: p.contactEntityFields ?? null,
+            ContactEducationHistoryEntity: p.contactEducationHistoryEntityFields ?? null,
+        };
+        const domain = StringOf(record[p.accountEntityFields.DomainField]);
+        if (!domain) {
+            LogStatus('  > Account has no domain; stamping it without a lookup');
+            return this.updateAccountEnrichedTimestamp(params, record, ctx.Md, ctx.User);
         }
+        const accountID = record[p.accountEntityFields.AccountIDField] as string | number;
+        const enriched = await this.enrichOrganization(ctx, params, domain);
+        const people = await this.createAndEnrichPeople(ctx, params, accountID, domain);
+        return enriched && people;
     }
 
-    /**
-     * Processes a single domain for both organization and people enrichment
-     * This is the main orchestration method for enriching one account
-     * 
-     * @param params - Domain processing parameters with entity configurations
-     * @param startRow - Current row number for progress tracking
-     * @param totalRows - Total number of rows for progress tracking
-     * @param md - Metadata instance for entity operations
-     * @param currentUser - User context for data access
-     * @returns Promise<boolean> indicating success/failure of domain processing
-     */
-    protected async ProcessSingleDomain(params: ProcessSingleDomainParams, startRow: number, totalRows: number, md: IMetadataProvider, currentUser: UserInfo): Promise<boolean> {
-        const record = params.Record;
-        const accountID = record[params.AccountEntity.AccountIDField];
-        const domain = record[params.AccountEntity.DomainField];
-
-        const enrichOrganizationResult = await this.enrichOrganization(params, startRow, totalRows, md, currentUser);
-        const createAndEnrichPeopleResult = await this.createAndEnrichPeople(params, accountID, domain, startRow, md, currentUser);
-        
-        return enrichOrganizationResult && createAndEnrichPeopleResult;
+    /** `organizations/enrich` for the account's domain; a miss still stamps the account. */
+    private async enrichOrganization(ctx: AccountRunContext, params: ProcessSingleDomainParams, domain: string): Promise<boolean> {
+        const organization = await ctx.Clients.People.EnrichOrganization(domain);
+        if (!organization) {
+            LogStatus(`  > No matches found for this domain: ${domain}`);
+            return this.updateAccountEnrichedTimestamp(params, params.Record, ctx.Md, ctx.User);
+        }
+        const saved = await this.updateAccountWithOrganizationData(organization, params, params.Record, ctx.Md, ctx.User);
+        if (!saved || !params.AccountTechnologyEntity) return saved;
+        const accountID = params.Record[params.AccountEntity.AccountIDField] as string | number;
+        return this.CreateAccountTechnologyRecords(params, accountID, organization.current_technologies, ctx.Md, ctx.User);
     }
 
-    /**
-     * Enriches organization data using Apollo.io's organization enrichment endpoint
-     * Updates account record with company information and triggers technology processing
-     * 
-     * @param params - Domain processing parameters
-     * @param startRow - Current row for progress tracking
-     * @param totalRows - Total rows for progress tracking
-     * @param md - Metadata instance for entity operations
-     * @param currentUser - User context for data access
-     * @returns Promise<boolean> indicating success/failure
-     */
-    private async enrichOrganization(params: ProcessSingleDomainParams, startRow: number, totalRows: number, md: IMetadataProvider, currentUser: UserInfo): Promise<boolean> {
+    /** Maps Apollo organization fields to the configured account entity fields and stamps the account. */
+    private async updateAccountWithOrganizationData(organization: OrganizationEnrichmentOrganization, params: ProcessSingleDomainParams, record: Record<string, unknown>, md: IMetadataProvider, currentUser: UserInfo): Promise<boolean> {
         try {
-            const record = params.Record;
-            const orgQueryString = {
-                api_key: Config.ApolloAPIKey,
-                domain: record[params.AccountEntity.DomainField]
-            };
-    
-            const headers = {
-                'Cache-Control': 'no-cache',
-                'Content-Type': 'application/json' 
-            };
-
-            // Get the organization enrichment data
-            const orgResponse = await this.WrapApolloCall<OrganizationEnrichmentResponse>('get', 'organizations/enrich', null, { Query: orgQueryString, Headers: headers });
-            
-            if (!orgResponse || orgResponse.Status !== 200) {
-                return false;
-            }
-
-            const result = orgResponse.Data;
-            let bSuccess = true;
-            
-            if (result && result.organization) {
-                bSuccess = await this.updateAccountWithOrganizationData(result.organization, params, record, md, currentUser);
-                
-                if (params.AccountTechnologyEntity && bSuccess) {
-                    const accountID = record[params.AccountEntity.AccountIDField];
-                    bSuccess = bSuccess && await this.CreateAccountTechnologyRecords(params, accountID, result.organization.current_technologies, md, currentUser);
-                }
-            } else {
-                // No match found, but still update enriched timestamp
-                LogStatus(`  > No matches found for this domain: ${params.Record[params.AccountEntity.DomainField]}`);
-                bSuccess = await this.updateAccountEnrichedTimestamp(params, record, md, currentUser);
-            }
-
-            return bSuccess;
-        } catch (error) {
-            LogError('Error enriching organization', undefined, error);
-            return false;
-        }
-    }
-
-    /**
-     * Updates an account entity with enriched organization data from Apollo.io
-     * Maps Apollo organization fields to the configured account entity fields
-     * 
-     * @param organization - Apollo organization data
-     * @param params - Processing parameters with field mappings
-     * @param record - Current account record data
-     * @param md - Metadata instance for entity operations
-     * @param currentUser - User context for data access
-     * @returns Promise<boolean> indicating save success/failure
-     */
-    private async updateAccountWithOrganizationData(
-        organization: OrganizationEnrichmentOrganization,
-        params: ProcessSingleDomainParams,
-        record: Record<string, any>,
-        md: IMetadataProvider,
-        currentUser: UserInfo
-    ): Promise<boolean> {
-        try {
-            // The account entity is configured, not fixed — build the key from its real primary key column(s).
-            const accountEntity = await md.GetEntityObject(params.AccountEntity.EntityName, CompositeKey.FromEntityRecord(md.EntityByName(params.AccountEntity.EntityName)!, record), currentUser);
-
-            // Set organization data fields
-            this.setFieldIfExists(accountEntity, params.AccountEntity.AddressField, organization.street_address);
-            this.setFieldIfExists(accountEntity, params.AccountEntity.CityField, organization.city);
-            this.setFieldIfExists(accountEntity, params.AccountEntity.StateProvinceField, organization.state);
-            this.setFieldIfExists(accountEntity, params.AccountEntity.PostalCodeField, organization.postal_code);
-            this.setFieldIfExists(accountEntity, params.AccountEntity.DescriptionField, organization.short_description);
-            this.setFieldIfExists(accountEntity, params.AccountEntity.PhoneNumberField, organization.phone);
-            this.setFieldIfExists(accountEntity, params.AccountEntity.CountryField, organization.country);
-            this.setFieldIfExists(accountEntity, params.AccountEntity.LinkedInField, organization.linkedin_url);
-            this.setFieldIfExists(accountEntity, params.AccountEntity.LogoURLField, organization.logo_url);
-            this.setFieldIfExists(accountEntity, params.AccountEntity.FacebookField, organization.facebook_url);
-            this.setFieldIfExists(accountEntity, params.AccountEntity.TwitterField, organization.twitter_url);
-            this.setFieldIfExists(accountEntity, params.AccountEntity.EnrichedAtField, new Date());
-
+            const a = params.AccountEntity;
+            const accountEntity = await md.GetEntityObject<BaseEntity>(a.EntityName, CompositeKey.FromEntityRecord(EntityOf(md, a.EntityName), record), currentUser);
+            this.setFieldIfExists(accountEntity, a.AddressField, organization.street_address);
+            this.setFieldIfExists(accountEntity, a.CityField, organization.city);
+            this.setFieldIfExists(accountEntity, a.StateProvinceField, organization.state);
+            this.setFieldIfExists(accountEntity, a.PostalCodeField, organization.postal_code);
+            this.setFieldIfExists(accountEntity, a.DescriptionField, organization.short_description);
+            this.setFieldIfExists(accountEntity, a.PhoneNumberField, organization.phone);
+            this.setFieldIfExists(accountEntity, a.CountryField, organization.country);
+            this.setFieldIfExists(accountEntity, a.LinkedInField, organization.linkedin_url);
+            this.setFieldIfExists(accountEntity, a.LogoURLField, organization.logo_url);
+            this.setFieldIfExists(accountEntity, a.FacebookField, organization.facebook_url);
+            this.setFieldIfExists(accountEntity, a.TwitterField, organization.twitter_url);
+            accountEntity.Set(a.EnrichedAtField, new Date());
             const saveResult = await accountEntity.Save();
-            if (!saveResult) {
-                LogError('Error updating account record with enriched data', undefined, accountEntity.LatestResult);
-            }
-
+            if (!saveResult) LogError(`Error updating account record with enriched data: ${accountEntity.LatestResult?.CompleteMessage ?? 'no details'}`);
             return saveResult;
         } catch (error) {
             LogError('Error updating account with organization data', undefined, error);
@@ -462,32 +236,14 @@ export class ApolloEnrichmentAccountsAction extends BaseAction {
         }
     }
 
-    /**
-     * Updates the enrichment timestamp on an account even when no data was found
-     * Prevents repeated attempts to enrich accounts with no Apollo data
-     * 
-     * @param params - Processing parameters with field mappings
-     * @param record - Current account record data
-     * @param md - Metadata instance for entity operations
-     * @param currentUser - User context for data access
-     * @returns Promise<boolean> indicating save success/failure
-     */
-    private async updateAccountEnrichedTimestamp(
-        params: ProcessSingleDomainParams,
-        record: Record<string, any>,
-        md: IMetadataProvider,
-        currentUser: UserInfo
-    ): Promise<boolean> {
+    /** Stamps the account's enrichment timestamp when Apollo had nothing, so it is not retried every run. */
+    private async updateAccountEnrichedTimestamp(params: ProcessSingleDomainParams, record: Record<string, unknown>, md: IMetadataProvider, currentUser: UserInfo): Promise<boolean> {
         try {
-            // The account entity is configured, not fixed — build the key from its real primary key column(s), as updateAccountWithOrganizationData does.
-            const accountEntity = await md.GetEntityObject<BaseEntity>(params.AccountEntity.EntityName, CompositeKey.FromEntityRecord(md.EntityByName(params.AccountEntity.EntityName)!, record), currentUser);
-            accountEntity.Set(params.AccountEntity.EnrichedAtField, new Date());
-            
+            const a = params.AccountEntity;
+            const accountEntity = await md.GetEntityObject<BaseEntity>(a.EntityName, CompositeKey.FromEntityRecord(EntityOf(md, a.EntityName), record), currentUser);
+            accountEntity.Set(a.EnrichedAtField, new Date());
             const saveResult = await accountEntity.Save();
-            if (!saveResult) {
-                LogError('Error updating account record with enriched timestamp', undefined, accountEntity.LatestResult);
-            }
-            
+            if (!saveResult) LogError(`Error updating account record with enriched timestamp: ${accountEntity.LatestResult?.CompleteMessage ?? 'no details'}`);
             return saveResult;
         } catch (error) {
             LogError('Error updating account enriched timestamp', undefined, error);
@@ -495,616 +251,343 @@ export class ApolloEnrichmentAccountsAction extends BaseAction {
         }
     }
 
-    /**
-     * Safely sets a field on an entity if the field name is defined and value is not null
-     * Prevents errors from undefined field mappings
-     * 
-     * @param entity - Target entity to update
-     * @param fieldName - Name of the field (can be undefined)
-     * @param value - Value to set (checked for null/undefined)
-     */
-    private setFieldIfExists(entity: BaseEntity, fieldName: string | undefined, value: any): void {
-        if (fieldName && value != null) {
-            entity.Set(fieldName, value);
-        }
+    /** Sets a field when the mapping names it and the value is present. */
+    private setFieldIfExists(entity: BaseEntity, fieldName: string | undefined, value: unknown): void {
+        if (fieldName && value !== null && value !== undefined) entity.Set(fieldName, value);
     }
 
+    // ─── Technologies ────────────────────────────────────────────────────────
+
     /**
-     * Creates or updates technology records associated with an account
-     * Manages the relationship between accounts and their technology stack
-     * Marks old technologies as ended if no longer detected
-     * 
-     * @param params - Processing parameters with technology entity configuration
-     * @param accountID - ID of the account to associate technologies with
-     * @param technologies - Array of technology data from Apollo
-     * @param md - Metadata instance for entity operations
-     * @param currentUser - User context for data access
-     * @returns Promise<boolean> indicating overall success/failure
+     * Creates account-technology rows for technologies Apollo reports and marks the rows for
+     * technologies it no longer reports as ended. Every save runs; a failure is counted, never
+     * allowed to skip the rows after it.
      */
     protected async CreateAccountTechnologyRecords(params: ProcessSingleDomainParams, accountID: string | number, technologies: TechnologyMap[], md: IMetadataProvider, currentUser: UserInfo): Promise<boolean> {
-        if (!params.AccountTechnologyEntity || !technologies || technologies.length === 0) {
-            return true;
-        }
-
+        const ATEntity = params.AccountTechnologyEntity;
+        if (!ATEntity || !technologies || technologies.length === 0) return true;
+        if (!ATEntity.TechnologyIDField || !ATEntity.TechnologyField || !ATEntity.CategoryField) return true;
         try {
-            let bSuccess = true;
-            const ATEntity = params.AccountTechnologyEntity;
-
-            if (ATEntity.TechnologyIDField && ATEntity.TechnologyField && ATEntity.CategoryField) {
-                const rv = new RunView();
-                
-                const runViewResult = await rv.RunView({
-                    EntityName: ATEntity.EntityName,
-                    ExtraFilter: `${ATEntity.AccountIDField} = ${accountID}`
-                }, currentUser);
-
-                if (!runViewResult.Success) {
-                    LogError('Error querying for existing Account Technologies', undefined, runViewResult.ErrorMessage);
-                    return false;
-                }
-
-                // Process each technology
-                for (const technology of technologies) {
-                    const categoryId = await this.getOrCreateTechnologyCategoryId(params, technology.category, md, currentUser);
-                    const existingRow = runViewResult.Results.find((r: any) => 
-                        r[ATEntity.CategoryField]?.trim().toLowerCase() === technology.category.trim().toLowerCase() && 
-                        r[ATEntity.TechnologyField]?.trim().toLowerCase() === technology.name.trim().toLowerCase()
-                    );
-
-                    if (!existingRow) {
-                        // Create new technology record
-                        const at = await md.GetEntityObject(ATEntity.EntityName, currentUser);
-                        at.NewRecord();
-                        at.Set(ATEntity.AccountIDField, accountID);
-                        at.Set(ATEntity.TechnologyIDField, await this.getOrCreateTechnologyId(technology.name, categoryId, md, currentUser));
-                        bSuccess = bSuccess && await at.Save();
-                    } else {
-                        existingRow.matchFound = true;
-                    }
-                }
-
-                // Mark unmatched technologies as ended
-                for (const record of runViewResult.Results) {
-                    if (!record.matchFound) {
-                        const entity = await md.GetEntityObject<BaseEntity>(ATEntity.EntityName, CompositeKey.FromEntityRecord(md.EntityByName(ATEntity.EntityName)!, record), currentUser);
-                        entity.Set(ATEntity.EndedUseAtField, new Date());
-                        
-                        const saveResult = await entity.Save();
-
-                        if (!saveResult) {
-                            LogError('Error updating Account Technology record', undefined, entity.LatestResult);
-                        }
-                        bSuccess = bSuccess && saveResult;
-                    }
-                }
+            const rv = RunView.FromMetadataProvider(md);
+            const existing = await rv.RunView<Record<string, unknown>>({ EntityName: ATEntity.EntityName, ExtraFilter: FieldPredicate(md, ATEntity.EntityName, ATEntity.AccountIDField, accountID) }, currentUser);
+            if (!existing.Success) {
+                LogError(`Error querying for existing Account Technologies: ${existing.ErrorMessage}`);
+                return false;
             }
-
-            return bSuccess;
+            const matched = new Set<Record<string, unknown>>();
+            let bSuccess = true;
+            for (const technology of technologies) {
+                const row = existing.Results.find((r) => SameText(r[ATEntity.CategoryField], technology.category) && SameText(r[ATEntity.TechnologyField], technology.name));
+                if (row) {
+                    matched.add(row);
+                    continue;
+                }
+                const categoryId = await this.getOrCreateTechnologyCategoryId(params, technology.category, md, currentUser);
+                const at = await md.GetEntityObject<BaseEntity>(ATEntity.EntityName, currentUser);
+                at.NewRecord();
+                at.Set(ATEntity.AccountIDField, accountID);
+                at.Set(ATEntity.TechnologyIDField, await this.getOrCreateTechnologyId(technology.name, categoryId, md, currentUser));
+                const saved = await at.Save();
+                if (!saved) LogError(`Error creating Account Technology record: ${at.LatestResult?.CompleteMessage ?? 'no details'}`);
+                bSuccess = bSuccess && saved;
+            }
+            const ended = await this.endUnmatchedTechnologies(ATEntity, existing.Results.filter((r) => !matched.has(r)), md, currentUser);
+            return bSuccess && ended;
         } catch (error) {
             LogError('Error creating account technology records', undefined, error);
             return false;
         }
     }
 
-    /**
-     * Gets or creates a technology category record by name
-     * Ensures technology categories exist before creating technology records
-     * 
-     * @param params - Processing parameters with category entity configuration
-     * @param categoryName - Name of the technology category
-     * @param md - Metadata instance for entity operations
-     * @param currentUser - User context for data access
-     * @returns Promise<number> - ID of the category (0 if error)
-     */
-    private async getOrCreateTechnologyCategoryId(params: ProcessSingleDomainParams, categoryName: string, md: IMetadataProvider, currentUser: UserInfo): Promise<number> {
-        const TCEntity = params.TechnologyCategoryEntity;
-        if (!TCEntity) {
-            return 0;
+    private async endUnmatchedTechnologies(ATEntity: AccountTechnologyEntityFields, rows: Record<string, unknown>[], md: IMetadataProvider, currentUser: UserInfo): Promise<boolean> {
+        let bSuccess = true;
+        for (const record of rows) {
+            const entity = await md.GetEntityObject<BaseEntity>(ATEntity.EntityName, CompositeKey.FromEntityRecord(EntityOf(md, ATEntity.EntityName), record), currentUser);
+            entity.Set(ATEntity.EndedUseAtField, new Date());
+            const saved = await entity.Save();
+            if (!saved) LogError(`Error updating Account Technology record: ${entity.LatestResult?.CompleteMessage ?? 'no details'}`);
+            bSuccess = bSuccess && saved;
         }
-        
-        try {
-            const rv = new RunView();
-            const runViewResult = await rv.RunView({
-                EntityName: TCEntity.EntityName,
-                ExtraFilter: `${TCEntity.NameField} = '${this.EscapeSingleQuotes(categoryName)}'`
-            }, currentUser);
+        return bSuccess;
+    }
 
-            if (!runViewResult.Success) {
-                LogError('Error querying for existing Technology Categories', undefined, runViewResult.ErrorMessage);
+    /** The configured category entity's key for a category name, creating the row when absent. 0 on error. */
+    private async getOrCreateTechnologyCategoryId(params: ProcessSingleDomainParams, categoryName: string, md: IMetadataProvider, currentUser: UserInfo): Promise<number | string> {
+        const TCEntity = params.TechnologyCategoryEntity;
+        if (!TCEntity) return 0;
+        try {
+            const rv = RunView.FromMetadataProvider(md);
+            const existing = await rv.RunView<Record<string, unknown>>({ EntityName: TCEntity.EntityName, ExtraFilter: `[${TCEntity.NameField}] = '${EscapeSQLString(categoryName)}'` }, currentUser);
+            if (!existing.Success) {
+                LogError(`Error querying for existing Technology Categories: ${existing.ErrorMessage}`);
                 return 0;
             }
-
-            if (runViewResult.Results.length > 0) {
-                return runViewResult.Results[0].ID;
-            }
-
-            // Create new record
+            if (existing.Results.length > 0) return existing.Results[0][TCEntity.IDField] as number | string;
             const entity = await md.GetEntityObject<BaseEntity>(TCEntity.EntityName, currentUser);
             entity.NewRecord();
             entity.Set(TCEntity.NameField, categoryName);
-            
-            const saveResult = await entity.Save();
-            if (!saveResult) {
-                LogError('Error creating new Technology Category record', undefined, entity.LatestResult);
+            if (!(await entity.Save())) {
+                LogError(`Error creating new Technology Category record: ${entity.LatestResult?.CompleteMessage ?? 'no details'}`);
                 return 0;
             }
-
-            return entity.Get(TCEntity.IDField);
+            return entity.Get(TCEntity.IDField) as number | string;
         } catch (error) {
             LogError('Error getting or creating technology category', undefined, error);
             return 0;
         }
     }
 
-    /**
-     * Gets or creates a technology record by name and category
-     * Maintains referential integrity between technologies and categories
-     * 
-     * @param name - Name of the technology
-     * @param categoryId - ID of the technology category
-     * @param md - Metadata instance for entity operations
-     * @param currentUser - User context for data access
-     * @returns Promise<number> - ID of the technology (0 if error)
-     */
-    private async getOrCreateTechnologyId(name: string, categoryId: number, md: IMetadataProvider, currentUser: UserInfo): Promise<number> {
+    /** The `Technologies` entity's key for a name within a category, creating the row when absent. 0 on error. */
+    private async getOrCreateTechnologyId(name: string, categoryId: number | string, md: IMetadataProvider, currentUser: UserInfo): Promise<number | string> {
         try {
-            const rv = new RunView();
-            const runViewResult = await rv.RunView({
-                EntityName: 'Technologies',
-                ExtraFilter: `Name = '${this.EscapeSingleQuotes(name)}' AND CategoryID = ${categoryId}`
-            }, currentUser);
-
-            if (!runViewResult.Success) {
-                LogError('Error querying for existing Technologies', undefined, runViewResult.ErrorMessage);
+            const info = EntityOf(md, 'Technologies');
+            const rv = RunView.FromMetadataProvider(md);
+            const existing = await rv.RunView<Record<string, unknown>>({ EntityName: 'Technologies', ExtraFilter: `[Name] = '${EscapeSQLString(name)}' AND ${FieldPredicate(md, 'Technologies', 'CategoryID', categoryId)}` }, currentUser);
+            if (!existing.Success) {
+                LogError(`Error querying for existing Technologies: ${existing.ErrorMessage}`);
                 return 0;
             }
-
-            if (runViewResult.Results.length > 0) {
-                return runViewResult.Results[0].ID;
-            }
-
-            // Create new technology record
+            const pkName = info.FirstPrimaryKey.Name; // first-pk-ok: Technologies is a single-key MJ entity; the value is returned for a single FK column
+            if (existing.Results.length > 0) return existing.Results[0][pkName] as number | string;
             const technologyEntity = await md.GetEntityObject<BaseEntity>('Technologies', currentUser);
             technologyEntity.NewRecord();
             technologyEntity.Set('Name', name);
             technologyEntity.Set('CategoryID', categoryId);
-            
-            const saveResult = await technologyEntity.Save();
-            if (!saveResult) {
-                LogError('Error creating new Technology record', undefined, technologyEntity.LatestResult);
+            if (!(await technologyEntity.Save())) {
+                LogError(`Error creating new Technology record: ${technologyEntity.LatestResult?.CompleteMessage ?? 'no details'}`);
                 return 0;
             }
-
-            return technologyEntity.Get('ID');
+            return technologyEntity.Get(pkName) as number | string;
         } catch (error) {
             LogError('Error getting or creating technology', undefined, error);
             return 0;
         }
     }
 
+    // ─── People ──────────────────────────────────────────────────────────────
+
     /**
-     * Searches for and enriches people associated with an organization's domain
-     * Uses Apollo's people search to find contacts at the organization
-     * Handles pagination to retrieve all available contacts (up to configured limit)
-     * 
-     * @param params - Processing parameters with contact entity configuration
-     * @param accountID - ID of the account to associate contacts with
-     * @param domain - Organization domain to search for people
-     * @param startRow - Current row for progress tracking
-     * @param md - Metadata instance for entity operations
-     * @param currentUser - User context for data access
-     * @returns Promise<boolean> indicating success/failure of people processing
+     * Discovers the people Apollo lists at the domain (free search, ids only), then matches them
+     * ten at a time by id (one credit per match) and creates or updates a contact for each.
      */
-    private async createAndEnrichPeople(params: ProcessSingleDomainParams, accountID: string | number, domain: string, startRow: number, md: IMetadataProvider, currentUser: UserInfo): Promise<boolean> {
-        if (!params.ContactEntity) {
-            return true; // No contact processing needed
+    private async createAndEnrichPeople(ctx: AccountRunContext, params: ProcessSingleDomainParams, accountID: string | number, domain: string): Promise<boolean> {
+        if (!params.ContactEntity) return true;
+        const ids = await this.discoverPeopleIDs(ctx, domain);
+        if (ids.length === 0) {
+            LogStatus(`No people found for this domain: ${domain}`);
+            return true;
         }
-
-        try {
-            const APIparams = {
-                api_key: Config.ApolloAPIKey,
-                reveal_personal_emails: true,
-                q_organization_domains: domain,
-                page: 1
-            };
-
-            const headers = {
-                'Cache-Control': 'no-cache',
-                'Content-Type': 'application/json' 
-            }; 
-
-            const response = await this.WrapApolloCall<SearchPeopleResponse>('post', 'mixed_people/search', APIparams, { Headers: headers });
-
-            if (!response || response.Status !== 200) {
-                LogError(`Error fetching data from Apollo.io: ${response?.StatusText}`);
-                return false;
+        let bSuccess = true;
+        let sequence = 0;
+        for (let i = 0; i < ids.length; i += ApolloPeopleClient.MaxBatchSize) {
+            const group = ids.slice(i, i + ApolloPeopleClient.MaxBatchSize);
+            const result = await ctx.Clients.People.BulkMatch(group.map((id) => ({ Key: id, ApolloPersonID: id })), { RevealPersonalEmails: true });
+            for (const match of result.Matches) {
+                sequence++;
+                if (this.shouldSkipPerson(match, domain)) continue;
+                const ok = await this.createAndEnrichContact(ctx, params, accountID, match, sequence, ids.length);
+                bSuccess = bSuccess && ok;
             }
-
-            const data: SearchPeopleResponse = response.Data;
-            const allPeople: SearchPeopleResponsePerson[] = data.people;
-
-            // Fetch additional pages
-            for (let i = 1; i < data.pagination.total_pages && i < (Config.MaxPeopleToEnrichPerOrg / 10); i++) {
-                APIparams.page = i + 1;
-                const nextResponse = await this.WrapApolloCall<SearchPeopleResponse>('post', 'mixed_people/search', APIparams, { Headers: headers });
-                
-                if (nextResponse.Status !== 200) {
-                    console.error(`Error fetching data from Apollo.io: ${nextResponse.StatusText}`);
-                    return false;
-                }
-                
-                const nextResult: SearchPeopleResponse = nextResponse.Data;
-                allPeople.push(...nextResult.people);
-            }
-
-            if (allPeople.length === 0) {
-                LogStatus(`No people found for this domain: ${domain}`);
-                return true;
-            }
-
-            // Process all people
-            let bSuccess = true;
-            for (let i = 0; i < allPeople.length; i++) {
-                const person = allPeople[i];
-                
-                if (this.shouldSkipPerson(person, domain)) {
-                    continue;
-                }
-
-                bSuccess = bSuccess && await this.createAndEnrichContact(params, accountID, person, md, currentUser, i, allPeople.length);
-            }
-
-            return bSuccess;
-        } catch (error) {
-            LogError('Error creating and enriching people', undefined, error);
-            return false;
         }
+        return bSuccess;
     }
 
-    /**
-     * Determines if a person should be skipped during contact creation
-     * Filters out people with missing data or excluded job titles
-     * 
-     * @param person - Person data from Apollo search response
-     * @param domain - Expected domain for email validation
-     * @returns boolean - true if person should be skipped
-     */
-    private shouldSkipPerson(person: SearchPeopleResponsePerson, domain: string): boolean {
-        // Check for missing required data
-        if (!person.last_name || !person.email || person.email.split('@')[1] !== domain) {
-            LogStatus(`Skipping person: ${person.first_name} ${person.last_name} because email is missing or does not match domain`);
+    /** Apollo ids of the people at the domain, from `api_search`, up to `MaxPeopleToEnrichPerOrg`. */
+    private async discoverPeopleIDs(ctx: AccountRunContext, domain: string): Promise<string[]> {
+        const ids: string[] = [];
+        const maxPages = Math.max(1, Math.ceil(Config.MaxPeopleToEnrichPerOrg / SEARCH_PAGE_SIZE));
+        for (let page = 1; page <= maxPages; page++) {
+            const result = await ctx.Clients.Search.searchPeople({ organizationDomains: [domain] }, { page, perPage: SEARCH_PAGE_SIZE });
+            for (const person of result.people) {
+                if (person.id && ids.length < Config.MaxPeopleToEnrichPerOrg) ids.push(person.id);
+            }
+            if (result.people.length < SEARCH_PAGE_SIZE || page >= result.pagination.totalPages || ids.length >= Config.MaxPeopleToEnrichPerOrg) break;
+        }
+        return ids;
+    }
+
+    /** Skips a miss, a person with no last name or email, an email outside the domain, and an excluded title. */
+    private shouldSkipPerson(match: ApolloPersonMatch, domain: string): boolean {
+        if (!match.Matched || !match.LastName || !match.Email || DomainOf(match.Email.split('@')[1]) !== domain.toLowerCase()) {
+            LogStatus(`Skipping person: ${match.FirstName ?? ''} ${match.LastName ?? ''} because email is missing or does not match domain`);
             return true;
         }
-
-        // Check for excluded titles
-        if (this.IsExcludedTitle(person.title)) {
-            LogStatus(`Skipping person: ${person.first_name} ${person.last_name} because title is excluded`);
+        if (this.IsExcludedTitle(match.Title ?? '')) {
+            LogStatus(`Skipping person: ${match.FirstName} ${match.LastName} because title is excluded`);
             return true;
         }
-
         return false;
     }
 
-    /**
-     * Creates or updates a contact record with enriched data from Apollo
-     * Handles contact deduplication and data validation
-     * 
-     * @param params - Processing parameters with contact entity configuration
-     * @param accountID - ID of the account to associate contact with
-     * @param person - Person data from Apollo search response
-     * @param md - Metadata instance for entity operations
-     * @param currentUser - User context for data access
-     * @param sequence - Current contact number for progress tracking
-     * @param total - Total contacts for progress tracking
-     * @returns Promise<boolean> indicating success/failure
-     */
-    private async createAndEnrichContact(params: ProcessSingleDomainParams, accountID: string | number, person: SearchPeopleResponsePerson, md: IMetadataProvider, currentUser: UserInfo, sequence: number, total: number): Promise<boolean> {
+    /** Creates or updates one contact and, when configured, its education history. */
+    private async createAndEnrichContact(ctx: AccountRunContext, params: ProcessSingleDomainParams, accountID: string | number, match: ApolloPersonMatch, sequence: number, total: number): Promise<boolean> {
         const CEntity = params.ContactEntity;
-        if (!CEntity) {
-            return false;
-        }
-        
+        if (!CEntity) return false;
         try {
-            LogStatus(`Enriching contact for person: ${person.first_name} ${person.last_name}, accountID: ${accountID} (${sequence} of ${total})`);
-            
-            const contact = await this.getOrCreateContact(params, accountID, person, md, currentUser);
-            if (!contact) {
+            LogStatus(`Enriching contact for person: ${match.FirstName} ${match.LastName}, accountID: ${accountID} (${sequence} of ${total})`);
+            const contact = await this.getOrCreateContact(ctx, params, accountID, match);
+            if (!contact) return false;
+            this.updateContactFields(contact, match, CEntity);
+            const saved = await contact.Save();
+            if (!saved) {
+                LogError(`Error updating contact record with enriched data: ${contact.LatestResult?.CompleteMessage ?? 'no details'}`);
                 return false;
             }
-    
-            // Update contact with enriched data
-            this.updateContactFields(contact, person, CEntity);
-
-            const saveResult = await contact.Save();
-            if (!saveResult) {
-                LogError('Error updating contact record with enriched data', undefined, contact.LatestResult);
-                return false;
-            }
-
-            // Update employment and education history if configured
-            if (params.ContactEducationHistoryEntity) {
-                return await this.createUpdateContactEmploymentAndEducationHistory(params, contact.Get("ID"), person, md, currentUser);
-            }
-
-            return true;
+            if (!params.ContactEducationHistoryEntity) return true;
+            return this.createUpdateContactEducationHistory(ctx, params, contact, match);
         } catch (error) {
+            if (error instanceof ApolloRateLimitError || error instanceof ApolloAuthError) throw error;
             LogError('Error creating and enriching contact', undefined, error);
             return false;
         }
     }
 
-    /**
-     * Updates contact entity fields with person data from Apollo
-     * Maps Apollo person fields to the configured contact entity fields
-     * 
-     * @param contact - Contact entity to update
-     * @param person - Person data from Apollo
-     * @param CEntity - Contact entity field name mappings
-     */
-    private updateContactFields(contact: BaseEntity, person: SearchPeopleResponsePerson, CEntity: ContactEntityFields): void {
-        contact.Set(CEntity.FirstNameField, person.first_name);
-        contact.Set(CEntity.LastNameField, person.last_name);
-        contact.Set(CEntity.TitleField, person.title);
-        
-        if (person.email) {
-            contact.Set(CEntity.EmailField, person.email);
-        }
-
-        this.setFieldIfExists(contact, CEntity.FacebookField, person.facebook_url);
-        this.setFieldIfExists(contact, CEntity.LinkedInField, person.linkedin_url);
-        this.setFieldIfExists(contact, CEntity.TwitterField, person.twitter_url);
-        this.setFieldIfExists(contact, CEntity.ProfilePictureURLField, person.photo_url);
+    private updateContactFields(contact: BaseEntity, match: ApolloPersonMatch, CEntity: ContactEntityFields): void {
+        contact.Set(CEntity.FirstNameField, match.FirstName);
+        contact.Set(CEntity.LastNameField, match.LastName);
+        contact.Set(CEntity.TitleField, match.Title);
+        if (match.Email) contact.Set(CEntity.EmailField, match.Email);
+        this.setFieldIfExists(contact, CEntity.FacebookField, match.FacebookURL);
+        this.setFieldIfExists(contact, CEntity.LinkedInField, match.LinkedInURL);
+        this.setFieldIfExists(contact, CEntity.TwitterField, match.TwitterURL);
+        this.setFieldIfExists(contact, CEntity.ProfilePictureURLField, match.PhotoURL);
         contact.Set(CEntity.EnrichedAtField, new Date());
     }
 
     /**
-     * Gets an existing contact or creates a new one with conflict detection
-     * Prevents duplicate contacts across different accounts
-     * Supports matching by email or name combination
-     * 
-     * @param params - Processing parameters with contact entity configuration
-     * @param accountID - ID of the account to associate contact with
-     * @param person - Person data from Apollo
-     * @param md - Metadata instance for entity operations
-     * @param currentUser - User context for data access
-     * @returns Promise<BaseEntity | null> - Contact entity or null if conflict/error
+     * The existing contact for this account (by email, or by first and last name), or a new one.
+     * Null when the person is already a contact of a different account, or on a lookup error.
      */
-    private async getOrCreateContact(params: ProcessSingleDomainParams, accountID: number | string, person: SearchPeopleResponsePerson, md: IMetadataProvider, currentUser: UserInfo): Promise<BaseEntity | null> {
+    private async getOrCreateContact(ctx: AccountRunContext, params: ProcessSingleDomainParams, accountID: string | number, match: ApolloPersonMatch): Promise<BaseEntity | null> {
         const CEntity = params.ContactEntity;
-        if (!CEntity) {
+        if (!CEntity) return null;
+        const md = ctx.Md;
+        const rv = RunView.FromMetadataProvider(md);
+        const email = `[${CEntity.EmailField}] = '${EscapeSQLString(match.Email ?? '')}'`;
+        const conflict = await rv.RunView<Record<string, unknown>>({ EntityName: CEntity.EntityName, ExtraFilter: `${email} AND ${FieldPredicate(md, CEntity.EntityName, CEntity.AccountIDField, accountID, '<>')}` }, ctx.User);
+        if (!conflict.Success) {
+            LogError(`Error querying for existing Contacts: ${conflict.ErrorMessage}`);
             return null;
         }
-
-        try {
-            const rv = new RunView();
-            
-            // Check if contact exists with different account
-            const conflictResult = await rv.RunView({
-                EntityName: CEntity.EntityName,
-                ExtraFilter: `${CEntity.EmailField} = '${this.EscapeSingleQuotes(person.email)}' AND ${CEntity.AccountIDField} <> ${accountID}`
-            }, currentUser);
-
-            if (!conflictResult.Success) {
-                LogError('Error querying for existing Contacts', undefined, conflictResult.ErrorMessage);
-                return null;
-            }
-
-            if (conflictResult.Results.length > 0) {
-                const existing = conflictResult.Results[0];
-                LogError(`*** SKIPPING new contact record for ${person.first_name} ${person.last_name} because they are already associated with AccountID: ${existing.AccountID} - ContactID: ${existing.ID}`);
-                return null;
-            }
-
-            // Check if contact exists for this account
-            const existingResult = await rv.RunView({
-                EntityName: CEntity.EntityName,
-                ExtraFilter: `(${CEntity.EmailField} = '${this.EscapeSingleQuotes(person.email)}' OR (${CEntity.FirstNameField} = '${this.EscapeSingleQuotes(person.first_name)}' AND ${CEntity.LastNameField} = '${this.EscapeSingleQuotes(person.last_name)}')) AND ${CEntity.AccountIDField} = ${accountID}` 
-            }, currentUser);
-
-            if (!existingResult.Success) {
-                LogError('Error querying for existing Contacts', undefined, existingResult.ErrorMessage);
-                return null;
-            }
-
-            let contactEntity: BaseEntity | null = null;
-            
-            if (existingResult.Results.length > 0) {
-                // Update existing contact
-                contactEntity = await md.GetEntityObject<BaseEntity>(CEntity.EntityName, existingResult.Results[0].ID, currentUser);
-                contactEntity.Set(CEntity.EmailField, person.email);
-            } else {
-                // Create new contact
-                LogStatus(`   > Creating new contact record for ${person.first_name} ${person.last_name}`);
-                contactEntity = await md.GetEntityObject<BaseEntity>(CEntity.EntityName, currentUser);
-                contactEntity.NewRecord();
-                contactEntity.Set(CEntity.EmailField, person.email);
-                contactEntity.Set(CEntity.AccountIDField, accountID);
-                contactEntity.Set(CEntity.ActivityCountField, 0);
-                contactEntity.Set(CEntity.EmailSourceField, Config.EmailSourceName);
-            }
-
-            return contactEntity;
-        } catch (error) {
-            LogError('Error getting or creating contact', undefined, error);
+        if (conflict.Results.length > 0) {
+            LogError(`*** SKIPPING new contact record for ${match.FirstName} ${match.LastName} because they are already associated with another account (${CEntity.AccountIDField}: ${String(conflict.Results[0][CEntity.AccountIDField])})`);
             return null;
         }
+        const byName = `([${CEntity.FirstNameField}] = '${EscapeSQLString(match.FirstName ?? '')}' AND [${CEntity.LastNameField}] = '${EscapeSQLString(match.LastName ?? '')}')`;
+        const existing = await rv.RunView<Record<string, unknown>>({ EntityName: CEntity.EntityName, ExtraFilter: `(${email} OR ${byName}) AND ${FieldPredicate(md, CEntity.EntityName, CEntity.AccountIDField, accountID)}` }, ctx.User);
+        if (!existing.Success) {
+            LogError(`Error querying for existing Contacts: ${existing.ErrorMessage}`);
+            return null;
+        }
+        if (existing.Results.length > 0) {
+            return md.GetEntityObject<BaseEntity>(CEntity.EntityName, CompositeKey.FromEntityRecord(EntityOf(md, CEntity.EntityName), existing.Results[0]), ctx.User);
+        }
+        LogStatus(`   > Creating new contact record for ${match.FirstName} ${match.LastName}`);
+        const contactEntity = await md.GetEntityObject<BaseEntity>(CEntity.EntityName, ctx.User);
+        contactEntity.NewRecord();
+        contactEntity.Set(CEntity.AccountIDField, accountID);
+        contactEntity.Set(CEntity.ActivityCountField, 0);
+        contactEntity.Set(CEntity.EmailSourceField, Config.EmailSourceName);
+        return contactEntity;
     }
 
-    /**
-     * Creates or updates employment and education history records for a contact
-     * Processes Apollo employment history data to create education records
-     * 
-     * @param params - Processing parameters with education entity configuration
-     * @param contactID - ID of the contact to create history for
-     * @param person - Person data containing employment history
-     * @param md - Metadata instance for entity operations
-     * @param currentUser - User context for data access
-     * @returns Promise<boolean> indicating success/failure
-     */
-    private async createUpdateContactEmploymentAndEducationHistory(params: ProcessSingleDomainParams, contactID: number | string, person: SearchPeopleResponsePerson, md: IMetadataProvider, currentUser: UserInfo): Promise<boolean> {
+    /** Writes the match's education entries to the configured education history entity. */
+    private async createUpdateContactEducationHistory(ctx: AccountRunContext, params: ProcessSingleDomainParams, contact: BaseEntity, match: ApolloPersonMatch): Promise<boolean> {
         const CEntity = params.ContactEducationHistoryEntity;
-        if (!CEntity || !person.employment_history) {
-            return true;
-        }
-
-        try {
-            let bSuccess = true;
-            const rv = new RunView();
-
-            for (const history of person.employment_history) {
-                if (history.degree && history.degree.length > 0) {
-                    const EHRunViewResult = await rv.RunView({
-                        EntityName: CEntity.EntityName,
-                        ExtraFilter: `${CEntity.ContactIDField} = ${contactID} AND ${CEntity.InstitutionField} = '${this.EscapeSingleQuotes(history.organization_name)}' AND ${CEntity.DegreeField} = '${this.EscapeSingleQuotes(history.degree)}'`
-                    }, currentUser);
-
-                    if (!EHRunViewResult.Success) {
-                        LogError('Error querying for existing Employment History', undefined, EHRunViewResult.ErrorMessage);
-                        bSuccess = false;
-                        continue;
-                    }
-
-                    let historyEntity: BaseEntity | null = null;
-                    
-                    if (EHRunViewResult.Results.length > 0) {
-                        historyEntity = await md.GetEntityObject<BaseEntity>(CEntity.EntityName, CompositeKey.FromEntityRecord(md.EntityByName(CEntity.EntityName)!, EHRunViewResult.Results[0]), currentUser);
-                    } else {
-                        historyEntity = await md.GetEntityObject<BaseEntity>(CEntity.EntityName, currentUser);
-                        historyEntity.NewRecord();
-                        historyEntity.Set(CEntity.ContactIDField, contactID);
-                    }
-
-                    // Set history data
-                    historyEntity.Set(CEntity.InstitutionField, history.organization_name);
-                    historyEntity.Set(CEntity.DegreeField, history.degree);
-                    historyEntity.Set(CEntity.GradeLevelField, !isNaN(history.grade_level as any) ? parseInt(history.grade_level) : 0);
-                    
-                    if (this.IsValidDate(history.start_date)) {
-                        historyEntity.Set(CEntity.StartDateField, new Date(history.start_date));
-                    }
-
-                    if (this.IsValidDate(history.end_date)) {
-                        historyEntity.Set(CEntity.EndDateField, new Date(history.end_date));
-                    }
-
-                    historyEntity.Set(CEntity.IsCurrentField, history.current);
-                    
-                    const saveResult = await historyEntity.Save();
-                    if (!saveResult) {
-                        LogError('Error saving Employment History record', undefined, historyEntity.LatestResult);
-                        bSuccess = false;
-                    }
-                }
-            }
-
-            return bSuccess;
-        } catch (error) {
-            LogError('Error creating/updating contact employment and education history', undefined, error);
+        if (!CEntity || match.Education.length === 0) return true;
+        if (contact.PrimaryKeys.length !== 1) {
+            LogError(`Unable to write education history: entity '${contact.EntityInfo.Name}' has a composite primary key, which a single foreign key column cannot reference`);
             return false;
         }
+        const contactID = contact.FirstPrimaryKey.Value; // first-pk-ok: FK target — the education entity's contact FK column references the contact's single-column key (guarded above)
+        const md = ctx.Md;
+        const rv = RunView.FromMetadataProvider(md);
+        let bSuccess = true;
+        for (const history of match.Education) {
+            const filter = `${FieldPredicate(md, CEntity.EntityName, CEntity.ContactIDField, contactID)} AND [${CEntity.InstitutionField}] = '${EscapeSQLString(history.InstitutionName)}' AND [${CEntity.DegreeField}] = '${EscapeSQLString(history.Degree ?? '')}'`;
+            const existing = await rv.RunView<Record<string, unknown>>({ EntityName: CEntity.EntityName, ExtraFilter: filter }, ctx.User);
+            if (!existing.Success) {
+                LogError(`Error querying for existing Education History: ${existing.ErrorMessage}`);
+                bSuccess = false;
+                continue;
+            }
+            const saved = await this.saveEducationRow(ctx, CEntity, contactID, history, existing.Results[0]);
+            bSuccess = bSuccess && saved;
+        }
+        return bSuccess;
     }
-    
-    /**
-     * Validates if a date string represents a valid date
-     * Used for employment/education history date validation
-     * 
-     * @param dateString - Date string to validate
-     * @returns boolean - true if valid date
-     */
+
+    private async saveEducationRow(ctx: AccountRunContext, CEntity: ContactEducationHistoryEntityFields, contactID: unknown, history: ApolloPersonMatch['Education'][number], existingRow: Record<string, unknown> | undefined): Promise<boolean> {
+        const md = ctx.Md;
+        let row: BaseEntity;
+        if (existingRow) {
+            row = await md.GetEntityObject<BaseEntity>(CEntity.EntityName, CompositeKey.FromEntityRecord(EntityOf(md, CEntity.EntityName), existingRow), ctx.User);
+        } else {
+            row = await md.GetEntityObject<BaseEntity>(CEntity.EntityName, ctx.User);
+            row.NewRecord();
+            row.Set(CEntity.ContactIDField, contactID);
+        }
+        row.Set(CEntity.InstitutionField, history.InstitutionName);
+        row.Set(CEntity.DegreeField, history.Degree);
+        const grade = history.GradeLevel !== null && !Number.isNaN(Number(history.GradeLevel)) ? Number.parseInt(history.GradeLevel, 10) : 0;
+        this.setFieldIfExists(row, CEntity.GradeLevelField, grade);
+        if (this.IsValidDate(history.StartDate ?? '')) this.setFieldIfExists(row, CEntity.StartDateField, new Date(history.StartDate as string));
+        if (this.IsValidDate(history.EndDate ?? '')) this.setFieldIfExists(row, CEntity.EndDateField, new Date(history.EndDate as string));
+        this.setFieldIfExists(row, CEntity.IsCurrentField, history.EndDate === null);
+        const saved = await row.Save();
+        if (!saved) LogError(`Error saving Education History record: ${row.LatestResult?.CompleteMessage ?? 'no details'}`);
+        return saved;
+    }
+
+    // ─── Small helpers ───────────────────────────────────────────────────────
+
+    /** True when the string parses as a date. */
     protected IsValidDate(dateString: string): boolean {
         if (dateString && dateString.length > 0) {
             const date = new Date(dateString);
-            return date instanceof Date && !isNaN(date.getTime());    
+            return !Number.isNaN(date.getTime());
         }
         return false;
     }
 
-    /**
-     * Checks if a job title should be excluded from contact creation
-     * Filters out non-business contacts like students and volunteers
-     * 
-     * @param title - Job title to check
-     * @returns boolean - true if title should be excluded
-     */
+    /** True for titles that are not decision-makers (members, students, volunteers). */
     protected IsExcludedTitle(title: string): boolean {
-        if (!title) {
-            return false;
-        }
-        return this.ExcludeTitles.includes(title.toLowerCase());
+        if (!title) return false;
+        return this.excludeTitles.includes(title.trim().toLowerCase());
     }
+}
 
-    /**
-     * Escapes single quotes in strings for SQL query safety
-     * Prevents SQL injection in dynamic filter construction
-     * 
-     * @param str - String to escape
-     * @returns string - Escaped string with doubled single quotes
-     */
-    protected EscapeSingleQuotes(str: string): string {
-        if (str) {
-            return str.replace(/'/g, "''");
-        }
-        return '';
-    } 
-    
-    /**
-     * Wraps Apollo.io API calls with retry logic for rate limiting
-     * Handles 429 (Too Many Requests) responses with exponential backoff
-     * 
-     * @param method - HTTP method ('get' or 'post')
-     * @param endpoint - Apollo API endpoint path
-     * @param data - Request payload for POST requests
-     * @param config - request configuration (headers / query params)
-     * @param retryAttempts - Number of retry attempts remaining (default: 1)
-     * @returns Promise<HttpResponse> - Apollo API response
-     * @throws Error if rate limit exceeded or other API errors
-     */
-    protected async WrapApolloCall<T = unknown>(method: 'get' | 'post', endpoint: string, data: unknown, config: Omit<HttpRequestConfig, 'Url' | 'Method' | 'Body'>, retryAttempts: number = 1): Promise<HttpResponse<T>> {
-        try {
-            const url = `${Config.ApolloAPIEndpoint}/${endpoint}`;  
-            
-            // ThrowOnError stays on by default, so a 429 surfaces in the catch below;
-            // the explicit status check here mirrors the original belt-and-braces handling.
-            const response: HttpResponse<T> = method === 'get' ? await HttpGet<T>(url, config) : await HttpPost<T>(url, data, config);
-            if (response.Status === 429) {
-                if (retryAttempts > 0) {
-                    LogStatus('   >>> Too many requests to Apollo.io API, waiting 1 minute and trying again...')
-                    await this.Timeout(60000); // wait 1 minute
-                    return await this.WrapApolloCall<T>(method, endpoint, data, config, retryAttempts - 1);
-                }
-                else{
-                    throw {message: 'Too many requests to Apollo.io API', code: 429};
-                }
-            }
+// ─── Module helpers ──────────────────────────────────────────────────────────
 
-            return response;    
-        }
-        catch (apolloError: unknown) {
-            // A 429 arrives as a thrown HttpError rather than a returned response, so handle it here too
-            if (IsHttpError(apolloError) && apolloError.Status === 429) {
-                if (retryAttempts > 0) {
-                    LogStatus('   >>> Too many requests to Apollo.io API, waiting 1 minute and trying again...')
-                    await this.Timeout(60000); // wait 1 minute
-                    return await this.WrapApolloCall<T>(method, endpoint, data, config, retryAttempts - 1);
-                }
-                else {
-                    throw {message: 'Too many requests to Apollo.io API', code: 429};
-                }
-            }
-            else {
-                throw apolloError;
-            }
-        }
-    }
-    
-    /**
-     * Utility method for creating delays in async operations
-     * Used for rate limit backoff and API throttling
-     * 
-     * @param ms - Number of milliseconds to wait
-     * @returns Promise that resolves after the specified delay
-     */
-    private async Timeout(ms: number): Promise<void> {
-        return new Promise(resolve => setTimeout(resolve, ms));
-    }  
+function Failure(code: string, message: string): ActionResultSimple {
+    return { Success: false, Message: message, ResultCode: code };
+}
+
+function MessageOf(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
+}
+
+function StringOf(value: unknown): string | null {
+    return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
+}
+
+function SameText(a: unknown, b: string): boolean {
+    return typeof a === 'string' && a.trim().toLowerCase() === b.trim().toLowerCase();
+}
+
+function EntityOf(md: IMetadataProvider, entityName: string): EntityInfo {
+    const info = md.EntityByName(entityName);
+    if (!info) throw new Error(`Entity '${entityName}' was not found`);
+    return info;
+}
+
+/**
+ * `[field] <op> <literal>` with the literal quoted per the column's type, so a UUID or string key
+ * is quoted and an integer key is not. An unknown column is treated as needing quotes.
+ */
+export function FieldPredicate(md: IMetadataProvider, entityName: string, fieldName: string, value: unknown, op: '=' | '<>' = '='): string {
+    const field = md.EntityByName(entityName)?.Fields.find((f) => f.Name.toLowerCase() === fieldName.toLowerCase());
+    const needsQuotes = field ? field.NeedsQuotes : typeof value !== 'number';
+    const literal = needsQuotes ? `'${EscapeSQLString(String(value))}'` : String(value);
+    return `[${fieldName}] ${op} ${literal}`;
 }

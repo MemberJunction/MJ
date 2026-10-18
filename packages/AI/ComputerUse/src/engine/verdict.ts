@@ -11,7 +11,7 @@ import { StepRecord, JudgeVerdict } from '../types/judge.js';
 import { RunCheckpoint } from '../types/params.js';
 import type { CriterionVerdict } from '../judge/rubric.js';
 import { InteractiveElement } from '../types/browser.js';
-import { normalizeTraceUrl, traceUrlMatches } from './trace.js';
+import { NormalizeTraceUrl, TraceUrlMatches } from './trace.js';
 
 // ─── Goal Postconditions & Prelude Landing ─────────────
 
@@ -36,11 +36,11 @@ export interface DistillOptions {
  * landmark headings (role/name presence). Returns [] when there's nothing to
  * distill.
  */
-export function distillGoalPostconditions(options: DistillOptions): GoalPostcondition[] {
+export function DistillGoalPostconditions(options: DistillOptions): GoalPostcondition[] {
     const posts: GoalPostcondition[] = [];
     const volatile = options.volatileParams ?? [];
 
-    const url = normalizeTraceUrl(options.finalUrl ?? options.finalStep?.UrlAfter ?? options.finalStep?.Url ?? '', volatile);
+    const url = NormalizeTraceUrl(options.finalUrl ?? options.finalStep?.UrlAfter ?? options.finalStep?.Url ?? '', volatile);
     if (url) {
         const p = new GoalPostcondition();
         p.Kind = 'url';
@@ -65,6 +65,11 @@ export function distillGoalPostconditions(options: DistillOptions): GoalPostcond
     return posts;
 }
 
+/** @deprecated Use {@link DistillGoalPostconditions}. */
+export function distillGoalPostconditions(options: DistillOptions): GoalPostcondition[] {
+    return DistillGoalPostconditions(options);
+}
+
 export interface GoalPostconditionResult {
     post: GoalPostcondition;
     met: boolean;
@@ -75,13 +80,21 @@ export interface GoalPostconditionResult {
  * Execute distilled goal postconditions against an observed end-state (URL +
  * interactive-element list). Pure — the engine supplies the observed facts.
  */
-export function executeGoalPostconditions(
+export function ExecuteGoalPostconditions(
     posts: GoalPostcondition[],
     observed: { url: string; elements: InteractiveElement[]; volatileParams?: string[] }
 ): { passed: boolean; results: GoalPostconditionResult[] } {
     const volatile = observed.volatileParams ?? [];
     const results = posts.map(post => evaluateOne(post, observed.url, observed.elements, volatile));
     return { passed: results.every(r => r.met), results };
+}
+
+/** @deprecated Use {@link ExecuteGoalPostconditions}. */
+export function executeGoalPostconditions(
+    posts: GoalPostcondition[],
+    observed: { url: string; elements: InteractiveElement[]; volatileParams?: string[] }
+): { passed: boolean; results: GoalPostconditionResult[] } {
+    return ExecuteGoalPostconditions(posts, observed);
 }
 
 function evaluateOne(
@@ -91,7 +104,7 @@ function evaluateOne(
     volatile: string[]
 ): GoalPostconditionResult {
     if (post.Kind === 'url') {
-        const met = post.UrlPattern ? traceUrlMatches(post.UrlPattern, url, volatile) : true;
+        const met = post.UrlPattern ? TraceUrlMatches(post.UrlPattern, url, volatile) : true;
         return { post, met, detail: met ? 'URL matched' : `URL did not match: expected ${post.UrlPattern} — saw ${url}` };
     }
     const present = post.Target ? elementPresent(post.Target, elements) : false;
@@ -131,7 +144,7 @@ export interface PreludeLandingObserved {
  * Whether a prelude reached its declared landing. Declaring nothing trivially
  * lands — the prelude was fire-and-forget setup with no assertion.
  */
-export function evaluatePreludeLanding(o: PreludeLandingObserved): { landed: boolean; reason: string } {
+export function EvaluatePreludeLanding(o: PreludeLandingObserved): { landed: boolean; reason: string } {
     if (o.hasSelector && !o.selectorVisible) {
         return { landed: false, reason: 'expected landing element not visible after prelude' };
     }
@@ -139,6 +152,11 @@ export function evaluatePreludeLanding(o: PreludeLandingObserved): { landed: boo
         return { landed: false, reason: 'landed on an unexpected URL after prelude' };
     }
     return { landed: true, reason: 'prelude landed as expected' };
+}
+
+/** @deprecated Use {@link EvaluatePreludeLanding}. */
+export function evaluatePreludeLanding(o: PreludeLandingObserved): { landed: boolean; reason: string } {
+    return EvaluatePreludeLanding(o);
 }
 
 // ─── Checkpoint Tours ──────────────────────────────────
@@ -167,8 +185,13 @@ export interface CheckpointObservation {
 }
 
 /** Whether this run is a checkpoint tour (has ≥1 checkpoint). */
-export function isCheckpointRun(checkpoints?: RunCheckpoint[]): checkpoints is RunCheckpoint[] {
+export function IsCheckpointRun(checkpoints?: RunCheckpoint[]): checkpoints is RunCheckpoint[] {
     return Array.isArray(checkpoints) && checkpoints.length > 0;
+}
+
+/** @deprecated Use {@link IsCheckpointRun}. */
+export function isCheckpointRun(checkpoints?: RunCheckpoint[]): checkpoints is RunCheckpoint[] {
+    return IsCheckpointRun(checkpoints);
 }
 
 function hasAssertions(cp: RunCheckpoint): boolean {
@@ -215,7 +238,7 @@ function finalize(latch: CheckpointLatch, stepNumber: number): void {
  * state. Free (no LLM); call every step. Sticky — a satisfied sub-condition is
  * never re-evaluated. Mutates and returns `latches`.
  */
-export function latchDeterministic(
+export function LatchDeterministic(
     checkpoints: RunCheckpoint[],
     latches: Map<string, CheckpointLatch>,
     observed: CheckpointObservation,
@@ -224,7 +247,7 @@ export function latchDeterministic(
     for (const cp of checkpoints) {
         const latch = ensureLatch(cp, latches);
         if (latch.assertionsMet) continue; // already satisfied (or none declared)
-        const { passed, results } = executeGoalPostconditions(cp.Assertions ?? [], observed);
+        const { passed, results } = ExecuteGoalPostconditions(cp.Assertions ?? [], observed);
         if (passed) {
             latch.assertionsMet = true;
             latch.evidence = appendEvidence(latch.evidence, results.map(r => r.detail).join('; '));
@@ -232,6 +255,16 @@ export function latchDeterministic(
         }
     }
     return latches;
+}
+
+/** @deprecated Use {@link LatchDeterministic}. */
+export function latchDeterministic(
+    checkpoints: RunCheckpoint[],
+    latches: Map<string, CheckpointLatch>,
+    observed: CheckpointObservation,
+    stepNumber: number
+): Map<string, CheckpointLatch> {
+    return LatchDeterministic(checkpoints, latches, observed, stepNumber);
 }
 
 /**
@@ -252,7 +285,7 @@ export function latchDeterministic(
  * judge call itself was narrowed, so a scalar `Done` cannot vouch for sections
  * the judge was never shown.
  */
-export function latchVisualFromVerdict(
+export function LatchVisualFromVerdict(
     checkpoints: RunCheckpoint[],
     latches: Map<string, CheckpointLatch>,
     verdict: JudgeVerdict,
@@ -289,12 +322,23 @@ export function latchVisualFromVerdict(
     return latches;
 }
 
+/** @deprecated Use {@link LatchVisualFromVerdict}. */
+export function latchVisualFromVerdict(
+    checkpoints: RunCheckpoint[],
+    latches: Map<string, CheckpointLatch>,
+    verdict: JudgeVerdict,
+    stepNumber: number,
+    onlyCheckpoint?: string
+): Map<string, CheckpointLatch> {
+    return LatchVisualFromVerdict(checkpoints, latches, verdict, stepNumber, onlyCheckpoint);
+}
+
 /**
  * The union of visual criteria for checkpoints whose visual sub-condition is not
  * yet latched — what the judge should evaluate next in checkpoint mode. Empty
  * when every remaining checkpoint is deterministic-only (⇒ skip the judge).
  */
-export function unlatchedVisualCriteria(
+export function UnlatchedVisualCriteria(
     checkpoints: RunCheckpoint[],
     latches: Map<string, CheckpointLatch>
 ): string[] {
@@ -307,6 +351,14 @@ export function unlatchedVisualCriteria(
         }
     }
     return out;
+}
+
+/** @deprecated Use {@link UnlatchedVisualCriteria}. */
+export function unlatchedVisualCriteria(
+    checkpoints: RunCheckpoint[],
+    latches: Map<string, CheckpointLatch>
+): string[] {
+    return UnlatchedVisualCriteria(checkpoints, latches);
 }
 
 /** One frame of a replayed trajectory: where the run was, and what it looked like. */
@@ -335,7 +387,7 @@ export interface ReplayFrame {
  * settle. Returns undefined when the checkpoint names no URL, or when the
  * trajectory never reached it; the caller then falls back to the end state.
  */
-export function selectCheckpointFrame(
+export function SelectCheckpointFrame(
     checkpoint: RunCheckpoint,
     frames: ReplayFrame[],
     volatileParams: string[] = []
@@ -347,17 +399,31 @@ export function selectCheckpointFrame(
         return undefined;
     }
     for (let i = frames.length - 1; i >= 0; i--) {
-        if (patterns.every(p => traceUrlMatches(p, frames[i].url, volatileParams))) {
+        if (patterns.every(p => TraceUrlMatches(p, frames[i].url, volatileParams))) {
             return frames[i];
         }
     }
     return undefined;
 }
 
+/** @deprecated Use {@link SelectCheckpointFrame}. */
+export function selectCheckpointFrame(
+    checkpoint: RunCheckpoint,
+    frames: ReplayFrame[],
+    volatileParams: string[] = []
+): ReplayFrame | undefined {
+    return SelectCheckpointFrame(checkpoint, frames, volatileParams);
+}
+
 /** Find a checkpoint by name (case-insensitive, trimmed) — tolerant of LLM casing drift. */
-export function findCheckpoint(checkpoints: RunCheckpoint[], name: string): RunCheckpoint | undefined {
+export function FindCheckpoint(checkpoints: RunCheckpoint[], name: string): RunCheckpoint | undefined {
     const key = name.trim().toLowerCase();
     return checkpoints.find(cp => cp.Name.trim().toLowerCase() === key);
+}
+
+/** @deprecated Use {@link FindCheckpoint}. */
+export function findCheckpoint(checkpoints: RunCheckpoint[], name: string): RunCheckpoint | undefined {
+    return FindCheckpoint(checkpoints, name);
 }
 
 /**
@@ -366,12 +432,12 @@ export function findCheckpoint(checkpoints: RunCheckpoint[], name: string): RunC
  * section so it can't cross-contaminate other sections' criteria. Empty when the
  * name is unknown, the checkpoint has no visual criteria, or they're already latched.
  */
-export function checkpointVisualCriteria(
+export function CheckpointVisualCriteria(
     checkpoints: RunCheckpoint[],
     latches: Map<string, CheckpointLatch>,
     name: string
 ): string[] {
-    const cp = findCheckpoint(checkpoints, name);
+    const cp = FindCheckpoint(checkpoints, name);
     if (!cp || !hasVisual(cp)) {
         return [];
     }
@@ -381,12 +447,29 @@ export function checkpointVisualCriteria(
     return [...(cp.VisualCriteria ?? [])];
 }
 
+/** @deprecated Use {@link CheckpointVisualCriteria}. */
+export function checkpointVisualCriteria(
+    checkpoints: RunCheckpoint[],
+    latches: Map<string, CheckpointLatch>,
+    name: string
+): string[] {
+    return CheckpointVisualCriteria(checkpoints, latches, name);
+}
+
 /** True iff every checkpoint is fully met. */
-export function allCheckpointsMet(
+export function AllCheckpointsMet(
     checkpoints: RunCheckpoint[],
     latches: Map<string, CheckpointLatch>
 ): boolean {
     return checkpoints.every(cp => ensureLatch(cp, latches).met);
+}
+
+/** @deprecated Use {@link AllCheckpointsMet}. */
+export function allCheckpointsMet(
+    checkpoints: RunCheckpoint[],
+    latches: Map<string, CheckpointLatch>
+): boolean {
+    return AllCheckpointsMet(checkpoints, latches);
 }
 
 /**
@@ -397,11 +480,19 @@ export function allCheckpointsMet(
  * panel, a chip toggling), and returning to a prior state is often *required*
  * (open→cancel, A→B→A). See the loop-reset in the engine's main loop.
  */
-export function countMetCheckpoints(
+export function CountMetCheckpoints(
     checkpoints: RunCheckpoint[],
     latches: Map<string, CheckpointLatch>
 ): number {
     return checkpoints.filter(cp => ensureLatch(cp, latches).met).length;
+}
+
+/** @deprecated Use {@link CountMetCheckpoints}. */
+export function countMetCheckpoints(
+    checkpoints: RunCheckpoint[],
+    latches: Map<string, CheckpointLatch>
+): number {
+    return CountMetCheckpoints(checkpoints, latches);
 }
 
 /**
@@ -410,7 +501,7 @@ export function countMetCheckpoints(
  * This rides the existing verdict → `FinalJudgeVerdict` → `GoalCompletionOracle`
  * path with no oracle change.
  */
-export function synthesizeCheckpointVerdict(
+export function SynthesizeCheckpointVerdict(
     checkpoints: RunCheckpoint[],
     latches: Map<string, CheckpointLatch>
 ): JudgeVerdict {
@@ -435,36 +526,79 @@ export function synthesizeCheckpointVerdict(
     return verdict;
 }
 
+/** @deprecated Use {@link SynthesizeCheckpointVerdict}. */
+export function synthesizeCheckpointVerdict(
+    checkpoints: RunCheckpoint[],
+    latches: Map<string, CheckpointLatch>
+): JudgeVerdict {
+    return SynthesizeCheckpointVerdict(checkpoints, latches);
+}
+
 // ─── Judge-Verdict Cache ───────────────────────────────
 
 /** Build a stable cache key from the goal hash, current URL, and state hash. */
+export function MakeJudgeCacheKey(
+    goalHash: string,
+    url: string,
+    stateHash: string,
+    volatileParams: string[] = []
+): string {
+    return `${goalHash}|${NormalizeTraceUrl(url, volatileParams)}|${stateHash}`;
+}
+
+/** @deprecated Use {@link MakeJudgeCacheKey}. */
 export function makeJudgeCacheKey(
     goalHash: string,
     url: string,
     stateHash: string,
     volatileParams: string[] = []
 ): string {
-    return `${goalHash}|${normalizeTraceUrl(url, volatileParams)}|${stateHash}`;
+    return MakeJudgeCacheKey(goalHash, url, stateHash, volatileParams);
 }
 
 /** An in-memory verdict cache keyed by {@link makeJudgeCacheKey}. */
 export class JudgeVerdictCache {
     private store = new Map<string, JudgeVerdict>();
 
-    public get(key: string): JudgeVerdict | undefined {
+    public Get(key: string): JudgeVerdict | undefined {
         return this.store.get(key);
     }
-    public set(key: string, verdict: JudgeVerdict): void {
+
+    /** @deprecated Use {@link Get}. */
+    public get(key: string): JudgeVerdict | undefined {
+        return this.Get(key);
+    }
+    public Set(key: string, verdict: JudgeVerdict): void {
         this.store.set(key, verdict);
     }
-    public has(key: string): boolean {
+
+    /** @deprecated Use {@link Set}. */
+    public set(key: string, verdict: JudgeVerdict): void {
+        return this.Set(key, verdict);
+    }
+    public Has(key: string): boolean {
         return this.store.has(key);
     }
-    public get size(): number {
+
+    /** @deprecated Use {@link Has}. */
+    public has(key: string): boolean {
+        return this.Has(key);
+    }
+    public get Size(): number {
         return this.store.size;
     }
-    public clear(): void {
+
+    /** @deprecated Use {@link Size}. */
+    public get size(): number {
+        return this.Size;
+    }
+    public Clear(): void {
         this.store.clear();
+    }
+
+    /** @deprecated Use {@link Clear}. */
+    public clear(): void {
+        return this.Clear();
     }
 }
 
@@ -491,7 +625,7 @@ export interface ImpossibleGateResult {
  * incremented, not reset) — a boot screen shouldn't build toward *or* clear the
  * quorum.
  */
-export function gateImpossibleVerdict(params: {
+export function GateImpossibleVerdict(params: {
     impossible: boolean;
     pageLoading: boolean;
     priorCount: number;
@@ -505,6 +639,16 @@ export function gateImpossibleVerdict(params: {
     }
     const newCount = params.priorCount + 1;
     return { accept: newCount >= params.quorum, newCount, suppressed: false };
+}
+
+/** @deprecated Use {@link GateImpossibleVerdict}. */
+export function gateImpossibleVerdict(params: {
+    impossible: boolean;
+    pageLoading: boolean;
+    priorCount: number;
+    quorum: number;
+}): ImpossibleGateResult {
+    return GateImpossibleVerdict(params);
 }
 
 // ─── Failure Memo ──────────────────────────────────────
@@ -535,7 +679,7 @@ export const DEFAULT_FAILURE_MEMO_MAX_CHARS = 500;
  * there is nothing useful to say (e.g. a clean pass — callers only emit it on
  * non-passing terminals). Always bounded to `maxChars`.
  */
-export function buildFailureMemo(input: FailureMemoInput, maxChars: number = DEFAULT_FAILURE_MEMO_MAX_CHARS): string {
+export function BuildFailureMemo(input: FailureMemoInput, maxChars: number = DEFAULT_FAILURE_MEMO_MAX_CHARS): string {
     const parts: string[] = [];
 
     const reason = input.failureReason ? `${input.status} (${input.failureReason})` : input.status;
@@ -560,6 +704,11 @@ export function buildFailureMemo(input: FailureMemoInput, maxChars: number = DEF
     }
 
     return truncate(parts.join(' '), maxChars);
+}
+
+/** @deprecated Use {@link BuildFailureMemo}. */
+export function buildFailureMemo(input: FailureMemoInput, maxChars: number = DEFAULT_FAILURE_MEMO_MAX_CHARS): string {
+    return BuildFailureMemo(input, maxChars);
 }
 
 // ─── Internals ─────────────────────────────────────────────

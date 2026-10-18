@@ -9,17 +9,17 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-    buildRealtimeRecordingsAgentContext,
-    buildSessionNotFoundError,
-    isValidSessionSortDirection,
-    isValidSessionSortField,
+    BuildRealtimeRecordingsAgentContext,
+    BuildSessionNotFoundError,
+    IsValidSessionSortDirection,
+    IsValidSessionSortField,
     REALTIME_RECORDINGS_NAME_LIST_CAP,
     RealtimeRecordingsAgentContextInput,
-    resolveSessionByIdOrName,
+    ResolveSessionByIdOrName,
     SelectedSessionAgentSnapshot,
     SessionListItemSnapshot,
-    sessionDisplayLabel,
-    sessionMatchesQuery,
+    SessionDisplayLabel,
+    SessionMatchesQuery,
     SessionResolveCandidate,
     SessionSearchFields,
 } from '../RealtimeRecordings/realtime-recordings-agent-context';
@@ -71,16 +71,16 @@ function makeSearchFields(overrides: Partial<SessionSearchFields> = {}): Session
 
 describe('sessionDisplayLabel', () => {
     it('combines agent + conversation when both present', () => {
-        expect(sessionDisplayLabel({ AgentName: 'Sage', ConversationName: 'Review' })).toBe('Sage — Review');
+        expect(SessionDisplayLabel({ AgentName: 'Sage', ConversationName: 'Review' })).toBe('Sage — Review');
     });
     it('falls back to the agent name alone when there is no conversation', () => {
-        expect(sessionDisplayLabel({ AgentName: 'Sage', ConversationName: null })).toBe('Sage');
+        expect(SessionDisplayLabel({ AgentName: 'Sage', ConversationName: null })).toBe('Sage');
     });
 });
 
 describe('buildRealtimeRecordingsAgentContext', () => {
     it('reports the empty-selection surface with filter/sort state', () => {
-        const ctx = buildRealtimeRecordingsAgentContext(makeInput({ SessionCount: 5 }));
+        const ctx = BuildRealtimeRecordingsAgentContext(makeInput({ SessionCount: 5 }));
         expect(ctx['SessionCount']).toBe(5);
         expect(ctx['FilteredSessionCount']).toBe(0);
         expect(ctx['HasSelection']).toBe(false);
@@ -95,7 +95,7 @@ describe('buildRealtimeRecordingsAgentContext', () => {
     });
 
     it('projects the selected recording into the context', () => {
-        const ctx = buildRealtimeRecordingsAgentContext(makeInput({
+        const ctx = BuildRealtimeRecordingsAgentContext(makeInput({
             SessionCount: 12,
             SelectedSession: makeSelected({ ID: 'sess-9' }),
             TurnCount: 27,
@@ -112,7 +112,7 @@ describe('buildRealtimeRecordingsAgentContext', () => {
     });
 
     it('preserves null optional fields on the selected recording', () => {
-        const ctx = buildRealtimeRecordingsAgentContext(makeInput({
+        const ctx = BuildRealtimeRecordingsAgentContext(makeInput({
             SessionCount: 1,
             SelectedSession: makeSelected({ ConversationName: null, RecordingMedia: null, DurationLabel: null }),
         }));
@@ -123,7 +123,7 @@ describe('buildRealtimeRecordingsAgentContext', () => {
     });
 
     it('surfaces the search query + filtered count + visible summary when present', () => {
-        const ctx = buildRealtimeRecordingsAgentContext(makeInput({
+        const ctx = BuildRealtimeRecordingsAgentContext(makeInput({
             SessionCount: 3,
             SearchQuery: 'sage',
             VisibleSessions: [makeListItem({ ID: 'a' }), makeListItem({ ID: 'b', ConversationName: null })],
@@ -137,7 +137,7 @@ describe('buildRealtimeRecordingsAgentContext', () => {
 
     it('bounds the visible-session lists and flags truncation', () => {
         const many = Array.from({ length: REALTIME_RECORDINGS_NAME_LIST_CAP + 4 }, (_, i) => makeListItem({ ID: `s${i}`, AgentName: `Agent ${i}` }));
-        const ctx = buildRealtimeRecordingsAgentContext(makeInput({ SessionCount: many.length, VisibleSessions: many }));
+        const ctx = BuildRealtimeRecordingsAgentContext(makeInput({ SessionCount: many.length, VisibleSessions: many }));
         expect((ctx['VisibleSessionNames'] as string[]).length).toBe(REALTIME_RECORDINGS_NAME_LIST_CAP);
         expect((ctx['VisibleSessions'] as unknown[]).length).toBe(REALTIME_RECORDINGS_NAME_LIST_CAP);
         expect(ctx['VisibleSessionsTruncated']).toBe(true);
@@ -147,24 +147,24 @@ describe('buildRealtimeRecordingsAgentContext', () => {
 
 describe('sessionMatchesQuery', () => {
     it('matches case-insensitively against agent, conversation, and media', () => {
-        expect(sessionMatchesQuery(makeSearchFields(), 'SAGE')).toBe(true);
-        expect(sessionMatchesQuery(makeSearchFields(), 'quarterly')).toBe(true);
-        expect(sessionMatchesQuery(makeSearchFields(), 'audiovideo')).toBe(true);
+        expect(SessionMatchesQuery(makeSearchFields(), 'SAGE')).toBe(true);
+        expect(SessionMatchesQuery(makeSearchFields(), 'quarterly')).toBe(true);
+        expect(SessionMatchesQuery(makeSearchFields(), 'audiovideo')).toBe(true);
     });
 
     it('returns false when nothing matches', () => {
-        expect(sessionMatchesQuery(makeSearchFields(), 'nonexistent')).toBe(false);
+        expect(SessionMatchesQuery(makeSearchFields(), 'nonexistent')).toBe(false);
     });
 
     it('treats an empty / whitespace query as matching everything', () => {
-        expect(sessionMatchesQuery(makeSearchFields(), '')).toBe(true);
-        expect(sessionMatchesQuery(makeSearchFields(), '   ')).toBe(true);
+        expect(SessionMatchesQuery(makeSearchFields(), '')).toBe(true);
+        expect(SessionMatchesQuery(makeSearchFields(), '   ')).toBe(true);
     });
 
     it('tolerates null optional fields without throwing', () => {
         const sparse = makeSearchFields({ ConversationName: null, RecordingMedia: null });
-        expect(sessionMatchesQuery(sparse, 'sage')).toBe(true);
-        expect(sessionMatchesQuery(sparse, 'quarterly')).toBe(false);
+        expect(SessionMatchesQuery(sparse, 'sage')).toBe(true);
+        expect(SessionMatchesQuery(sparse, 'quarterly')).toBe(false);
     });
 });
 
@@ -176,34 +176,34 @@ describe('resolveSessionByIdOrName', () => {
     ];
 
     it('resolves by exact ID (case-insensitive)', () => {
-        expect(resolveSessionByIdOrName('ID-2', candidates)?.ID).toBe('id-2');
+        expect(ResolveSessionByIdOrName('ID-2', candidates)?.ID).toBe('id-2');
     });
 
     it('resolves by the combined "Agent — Conversation" label', () => {
-        expect(resolveSessionByIdOrName('Sage — Quarterly Review', candidates)?.ID).toBe('id-1');
+        expect(ResolveSessionByIdOrName('Sage — Quarterly Review', candidates)?.ID).toBe('id-1');
     });
 
     it('resolves by exact agent name', () => {
-        expect(resolveSessionByIdOrName('Atlas', candidates)?.ID).toBe('id-2');
+        expect(ResolveSessionByIdOrName('Atlas', candidates)?.ID).toBe('id-2');
     });
 
     it('resolves by exact conversation name', () => {
-        expect(resolveSessionByIdOrName('onboarding', candidates)?.ID).toBe('id-2');
+        expect(ResolveSessionByIdOrName('onboarding', candidates)?.ID).toBe('id-2');
     });
 
     it('falls back to a partial (contains) match on the label', () => {
-        expect(resolveSessionByIdOrName('quarterly', candidates)?.ID).toBe('id-1');
+        expect(ResolveSessionByIdOrName('quarterly', candidates)?.ID).toBe('id-1');
     });
 
     it('returns null on a miss / blank input', () => {
-        expect(resolveSessionByIdOrName('nope', candidates)).toBeNull();
-        expect(resolveSessionByIdOrName('  ', candidates)).toBeNull();
+        expect(ResolveSessionByIdOrName('nope', candidates)).toBeNull();
+        expect(ResolveSessionByIdOrName('  ', candidates)).toBeNull();
     });
 });
 
 describe('buildSessionNotFoundError', () => {
     it('lists a bounded sample of available recording labels', () => {
-        const msg = buildSessionNotFoundError('xyz', [
+        const msg = BuildSessionNotFoundError('xyz', [
             { ID: '1', AgentName: 'Sage', ConversationName: 'Review' },
             { ID: '2', AgentName: 'Atlas', ConversationName: null },
         ]);
@@ -213,23 +213,23 @@ describe('buildSessionNotFoundError', () => {
     });
 
     it('handles an empty candidate list gracefully', () => {
-        expect(buildSessionNotFoundError('x', [])).toContain('(none)');
+        expect(BuildSessionNotFoundError('x', [])).toContain('(none)');
     });
 });
 
 describe('SortSessions guards', () => {
     it('validates sort fields', () => {
-        expect(isValidSessionSortField('date')).toBe(true);
-        expect(isValidSessionSortField('agent')).toBe(true);
-        expect(isValidSessionSortField('duration')).toBe(true);
-        expect(isValidSessionSortField('bogus')).toBe(false);
-        expect(isValidSessionSortField(42)).toBe(false);
+        expect(IsValidSessionSortField('date')).toBe(true);
+        expect(IsValidSessionSortField('agent')).toBe(true);
+        expect(IsValidSessionSortField('duration')).toBe(true);
+        expect(IsValidSessionSortField('bogus')).toBe(false);
+        expect(IsValidSessionSortField(42)).toBe(false);
     });
 
     it('validates sort directions', () => {
-        expect(isValidSessionSortDirection('asc')).toBe(true);
-        expect(isValidSessionSortDirection('desc')).toBe(true);
-        expect(isValidSessionSortDirection('sideways')).toBe(false);
-        expect(isValidSessionSortDirection(null)).toBe(false);
+        expect(IsValidSessionSortDirection('asc')).toBe(true);
+        expect(IsValidSessionSortDirection('desc')).toBe(true);
+        expect(IsValidSessionSortDirection('sideways')).toBe(false);
+        expect(IsValidSessionSortDirection(null)).toBe(false);
     });
 });

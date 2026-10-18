@@ -1,19 +1,20 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, ViewChildren, QueryList, ContentChildren, TemplateRef, ElementRef, AfterViewChecked, inject } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UserInfo, RunView, RunQuery, Metadata, CompositeKey, LogStatusEx, TransformSimpleObjectToEntityObject, DataSnapshot } from '@memberjunction/core';
-import { MJConversationEntity, MJConversationDetailEntity, MJAIAgentRunEntity, MJArtifactEntity, MJTaskEntity, ArtifactMetadataEngine, ConversationEngine, ConversationDetailComplete, RatingJSON, ArtifactJSON } from '@memberjunction/core-entities';
+import { MJConversationEntity, MJConversationDetailEntity, type MJUserEntity, MJAIAgentRunEntity, MJArtifactEntity, MJTaskEntity, ArtifactMetadataEngine, ConversationEngine, CONVERSATIONS_FORK_AUTHORIZATION, CONVERSATIONS_FORKING_SETTING_KEY, UserInfoEngine, ConversationDetailComplete, RatingJSON, ArtifactJSON, ConversationBranchRow, type ConversationScope, type CreateForkInput, type MJConversationBranchEntity, type ForkPoint, type ForkKind, type ForkParticipant, type ForkSummary } from '@memberjunction/core-entities';
 import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, CaptureDataSnapshotCommand, AppContextSnapshot, ConversationUtility, OpenResourceCommand } from "@memberjunction/ai-core-plus";
 import { ActionableCommandRequest, UICommandHandlerService } from '../../services/ui-command-handler.service';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { AgentStateService } from '../../services/agent-state.service';
+import { ConversationLivenessDomService } from '../../services/conversation-liveness-dom.service';
 import { ConversationAgentService } from '../../services/conversation-agent.service';
 import {
   ConversationDetailWindowStore,
   ConversationDetailWindowSnapshot
 } from '../../services/conversation-detail-window.store';
 import { ActiveTasksService } from '../../services/active-tasks.service';
-import { PendingAttachment } from '@memberjunction/ng-composer';
+import { PendingAttachment, SendSlotMode } from '@memberjunction/ng-composer';
 import { MentionAutocompleteService } from '../../services/mention-autocomplete.service';
 import { ArtifactPermissionService } from '../../services/artifact-permission.service';
 import { ConversationAttachmentService } from '../../services/conversation-attachment.service';
@@ -21,28 +22,37 @@ import { MJResourcePermissionShareAdapter, ResourceShareContext } from '@memberj
 
 /** `MJ: Resource Types.ID` for Conversations. */
 const CONVERSATIONS_RESOURCE_TYPE_ID = '81D4BC3D-9FEB-EF11-B01A-286B35C04427';
-import { MessageAttachment } from '../message/message-item.component';
+import { STOP_RETRY_AFTER_MS, MessageAttachment } from '../message/message-item.component';
 import { LazyArtifactInfo } from '../../models/lazy-artifact-info';
 import { MessageInputComponent } from '../message/message-input.component';
 import { ArtifactViewerPanelComponent, NavigationRequest, AnalyzeArtifactService, InteractiveFormApplyService } from '@memberjunction/ng-artifacts';
 import type { ComponentSpec } from '@memberjunction/interactive-component-types';
+import type { FormAgentContext } from '@memberjunction/ng-base-forms';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ComposerDraftStore } from '../../services/composer-draft-store';
 import { ConversationEmptyStateComponent } from './conversation-empty-state.component';
 import { TestFeedbackDialogData, TestFeedbackDialogResult } from '@memberjunction/ng-testing';
 import { DialogService as ConversationsDialogService } from '../../services/dialog.service';
-import { Subject } from 'rxjs';
-import { takeUntil } from 'rxjs/operators';
+import { Subject, firstValueFrom } from 'rxjs';
+import { map, takeUntil } from 'rxjs/operators';
 import { ConversationStreamingService } from '../../services/conversation-streaming.service';
 import { ConversationBridgeService } from '../../services/conversation-bridge.service';
 import { AgentClientService } from '@memberjunction/ng-agent-client';
-import { ConversationsRuntime } from '@memberjunction/conversations-runtime';
+import { ConversationsRuntime, type MentionPerson } from '@memberjunction/conversations-runtime';
+import type { AgentReplyMode, AgentTurnHandler } from '../../models/agent-turn.model';
 import { RealtimeSessionService } from '../../services/realtime-session.service';
+import { UserHoldsAuthorization } from '../../services/user-authorization';
 import { RealtimeSessionReview, RealtimeSessionReviewService } from '../../services/realtime-session-review.service';
-import { GenerateAndApplyConversationName } from '../../services/conversation-naming';
+import { GenerateAndApplyConversationName, GenerateAndApplyForkName, SaveForkName } from '../../services/conversation-naming';
 import type { ExportBranding } from '../../services/export.service';
 import { RealtimeNavigateRequest, RealtimeStartLiveRequest } from '../realtime/realtime-session-overlay.component';
-import { RealtimeSessionTimelineMeta } from '../../utils/realtime-session-timeline';
+import {
+  CollectRealtimeSessionIDs,
+  MapRealtimeSessionMeta,
+  REALTIME_SESSION_META_FIELDS,
+  RealtimeSessionMetaRow,
+  RealtimeSessionTimelineMeta
+} from '../../utils/realtime-session-timeline';
 import {
   ResolveDateJumpTarget,
   CombineDateJumpOutcome,
@@ -51,12 +61,51 @@ import {
   type DateJumpPeriod,
   type DateJumpOutcome
 } from '../../utils/date-jump';
+import { InjectFrameZone } from '../../util/frame-zone';
 import { MessageListComponent } from '../message/message-list.component';
-import { decideArtifactPanelAction, snapshotArtifactVersions, ArtifactPanelAction, ArtifactPanelBaseline, ArtifactVersionRef } from '../../utils/artifact-panel-action';
-import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
+import { IsForkPointOrEarlier } from '../../utils/conversation-branching';
+import {
+  BackLabelOf,
+  BuildForkBreadcrumbs,
+  BuildForkHeaderPath,
+  BuildForkMarkerText,
+  BuildForkComposerHint,
+  BuildForkViewLayout,
+  BuildViewForkChipMap,
+  CanForkFrom,
+  FindLatestTurn,
+  FirstOwnRowID,
+  ForkDependsOnRows,
+  IsRowInOpenView,
+  MAIN_COMPOSER_PLACEHOLDER,
+  MAIN_OPEN_VIEW,
+  ParentForkIdOf,
+  ReadBranchIdOf,
+  SameOpenView,
+  SplitForkRows,
+  TurnRowsAfter,
+  FORK_COMPOSER_PLACEHOLDER,
+  ForkInitials,
+  ForkKindIcon,
+  DRAFT_FORK_TITLE,
+  type ConversationOpenView,
+  type DraftForkOpenView,
+  type ForkBreadcrumb,
+  type ForkChainRow,
+  type ForkHeaderPath,
+  type ForkChipAvatar,
+  type ForkChipOpenRequest,
+  type ForkRows,
+  type ForkViewLayout,
+  type LatestTurn,
+  type MessageForkChip
+} from '../../utils/conversation-forks';
+import { DecideArtifactPanelAction, SnapshotArtifactVersions, ArtifactPanelAction, ArtifactPanelBaseline, ArtifactVersionRef } from '../../utils/artifact-panel-action';
+import { NormalizeUUID, UUIDsEqual, UUIDSet, IndexByUUID } from '@memberjunction/global';
 
 // PR 2c — Widget extension surface
 import { ChatSlotDirective, type MJChatSlotName } from '../../directives/chat-slot.directive';
+import { ConversationCallStartOptions } from '../realtime/capture/realtime-capture-channel';
 import type {
   IMJChatAgentPresenceComponent,
   MJChatAgentPresenceState,
@@ -69,6 +118,8 @@ import {
   AfterToolInvokedEventArgs,
   BeforeResponseFormSubmittedEventArgs,
   AfterResponseFormSubmittedEventArgs,
+  BeforeStopClickedEventArgs,
+  AfterStopClickedEventArgs,
   SessionStartedEventArgs,
   SessionChannelStateChangedEventArgs,
   SessionEndedEventArgs,
@@ -101,8 +152,45 @@ export interface EmptyStateConfig {
   hideDefaultPrompts?: boolean;
 }
 
+/** Run statuses that mean the run is over, for the run-list fallback. `Paused` is still working. */
+const RUN_LIST_TERMINAL_STATUSES: string[] = ['Completed', 'AwaitingFeedback', 'Failed', 'Cancelled'];
+
 /** Default width (percentage) for the artifact viewer pane */
 export const DEFAULT_ARTIFACT_PANE_WIDTH = 40;
+
+/**
+ * ReadReplyFromTop: how long bottom-follow stays off after a turn lands at its top, so a status
+ * row or a repeated completion emit arriving right behind the landing cannot yank the reader
+ * back down. Re-armed per frame while a streamed reply grows beneath an anchored turn, so a turn
+ * that never settles (a cancelled run, a dropped socket) releases it a moment after its last delta.
+ */
+const POST_LANDING_FOLLOW_HOLD_MS = 1500;
+/** A scroll position this far from where the stream last pinned it means the reader moved. */
+const STREAM_ANCHOR_TOLERANCE_PX = 2;
+/** Numbers the forks popovers of the chat areas on a page, so each popover id is unique. */
+let forksPopoverCount = 0;
+
+/** How many times a new fork's composer prefill waits for the composer to render, and how long each wait is. */
+const PREFILL_MAX_ATTEMPTS = 10;
+const PREFILL_RETRY_MS = 100;
+
+/** True when a key event comes from a text field or an editable element, where Escape belongs to the field. */
+function isTextEntryTarget(target: EventTarget | null): boolean {
+  const el = target as Partial<Pick<HTMLElement, 'isContentEditable' | 'tagName'>> | null;
+  const tag = el?.tagName ?? '';
+  return !!el?.isContentEditable || tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+}
+
+/** True when a key event comes from inside an open menu's trigger (`aria-expanded="true"`), which closes on Escape itself. */
+function isInOpenMenuTrigger(target: EventTarget | null): boolean {
+  const el = target as Partial<Pick<Element, 'closest'>> | null;
+  return !!el?.closest?.('[aria-expanded="true"]');
+}
+
+/** No rows; one shared instance so {@link ConversationChatAreaComponent.InPlaceTurn} can compare by identity. */
+const NO_DETAILS: MJConversationDetailEntity[] = [];
+/** No fork rows; one shared instance for the same reason. */
+const NO_BRANCHES: ConversationBranchRow[] = [];
 
 @Component({
   standalone: false,
@@ -111,13 +199,31 @@ export const DEFAULT_ARTIFACT_PANE_WIDTH = 40;
   styleUrls: ['./conversation-chat-area.component.css']
 })
 export class ConversationChatAreaComponent extends BaseAngularComponent implements OnInit, OnDestroy, AfterViewChecked  {
-  @Input() environmentId!: string;
-  @Input() currentUser!: UserInfo;
+  @Input() EnvironmentId!: string;
+
+  /** @deprecated Use {@link EnvironmentId}. */
+  @Input() set environmentId(value: string) {
+    this.EnvironmentId = value;
+  }
+  /** @deprecated Use {@link EnvironmentId}. */
+  get environmentId(): string {
+    return this.EnvironmentId;
+  }
+  @Input() CurrentUser!: UserInfo;
+
+  /** @deprecated Use {@link CurrentUser}. */
+  @Input() set currentUser(value: UserInfo) {
+    this.CurrentUser = value;
+  }
+  /** @deprecated Use {@link CurrentUser}. */
+  get currentUser(): UserInfo {
+    return this.CurrentUser;
+  }
 
   // LOCAL STATE INPUTS - passed from parent workspace
   private _conversationId: string | null = null;
   @Input()
-  set conversationId(value: string | null) {
+  set ConversationId(value: string | null) {
     if (value !== this._conversationId) {
       // Leaving a conversation is a save point for its in-progress draft.
       // (Optional-chained: harness-constructed instances may skip field initializers.)
@@ -135,13 +241,29 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       }
     }
   }
-  get conversationId(): string | null {
+  get ConversationId(): string | null {
     return this._conversationId;
   }
 
-  @Input() conversation: MJConversationEntity | null = null;
-  @Input() threadId: string | null = null;
+  /** @deprecated Use {@link ConversationId}. */
+  get conversationId(): string | null {
+    return this.ConversationId;
+  }
+  /** @deprecated Use {@link ConversationId}. */
+  @Input() set conversationId(value: string | null) {
+    this.ConversationId = value;
+  }
 
+  @Input() Conversation: MJConversationEntity | null = null;
+
+  /** @deprecated Use {@link Conversation}. */
+  @Input() set conversation(value: MJConversationEntity | null) {
+    this.Conversation = value;
+  }
+  /** @deprecated Use {@link Conversation}. */
+  get conversation(): MJConversationEntity | null {
+    return this.Conversation;
+  }
   /**
    * When true, render the normal message-list + message-input layout even
    * before a conversation exists, instead of the centered empty-state
@@ -150,7 +272,16 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * pick a mode before typing. The first send still routes through
    * MessageInputComponent and triggers conversationCreated as usual.
    */
-  @Input() suppressNewConversationEmptyState = false;
+  @Input() SuppressNewConversationEmptyState = false;
+
+  /** @deprecated Use {@link SuppressNewConversationEmptyState}. */
+  @Input() set suppressNewConversationEmptyState(value: ConversationChatAreaComponent['SuppressNewConversationEmptyState']) {
+    this.SuppressNewConversationEmptyState = value;
+  }
+  /** @deprecated Use {@link SuppressNewConversationEmptyState}. */
+  get suppressNewConversationEmptyState(): ConversationChatAreaComponent['SuppressNewConversationEmptyState'] {
+    return this.SuppressNewConversationEmptyState;
+  }
 
   /**
    * Host-level MASTER cap for the composer's mention/command triggers.
@@ -158,7 +289,16 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * are off regardless of the per-type flags below. Hosts addressing a single
    * fixed agent (e.g. Form Builder cockpit) can set false wholesale.
    */
-  @Input() allowMentions = true;
+  @Input() AllowMentions = true;
+
+  /** @deprecated Use {@link AllowMentions}. */
+  @Input() set allowMentions(value: ConversationChatAreaComponent['AllowMentions']) {
+    this.AllowMentions = value;
+  }
+  /** @deprecated Use {@link AllowMentions}. */
+  get allowMentions(): ConversationChatAreaComponent['AllowMentions'] {
+    return this.AllowMentions;
+  }
 
   /**
    * Per-type caps under {@link allowMentions}, all default true. Let a host keep
@@ -167,9 +307,36 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * mentions (an `@` overrides the pinned default agent in message routing).
    * Effective only when `allowMentions` is also true.
    */
-  @Input() allowAgentMentions = true;
-  @Input() allowEntityMentions = true;
-  @Input() allowSkillCommands = true;
+  @Input() AllowAgentMentions = true;
+
+  /** @deprecated Use {@link AllowAgentMentions}. */
+  @Input() set allowAgentMentions(value: ConversationChatAreaComponent['AllowAgentMentions']) {
+    this.AllowAgentMentions = value;
+  }
+  /** @deprecated Use {@link AllowAgentMentions}. */
+  get allowAgentMentions(): ConversationChatAreaComponent['AllowAgentMentions'] {
+    return this.AllowAgentMentions;
+  }
+  @Input() AllowEntityMentions = true;
+
+  /** @deprecated Use {@link AllowEntityMentions}. */
+  @Input() set allowEntityMentions(value: ConversationChatAreaComponent['AllowEntityMentions']) {
+    this.AllowEntityMentions = value;
+  }
+  /** @deprecated Use {@link AllowEntityMentions}. */
+  get allowEntityMentions(): ConversationChatAreaComponent['AllowEntityMentions'] {
+    return this.AllowEntityMentions;
+  }
+  @Input() AllowSkillCommands = true;
+
+  /** @deprecated Use {@link AllowSkillCommands}. */
+  @Input() set allowSkillCommands(value: ConversationChatAreaComponent['AllowSkillCommands']) {
+    this.AllowSkillCommands = value;
+  }
+  /** @deprecated Use {@link AllowSkillCommands}. */
+  get allowSkillCommands(): ConversationChatAreaComponent['AllowSkillCommands'] {
+    return this.AllowSkillCommands;
+  }
 
   /**
    * Host-level cap for attachments. Defaults true. When false, the host
@@ -178,28 +345,83 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * When true (default), attachment availability still depends on the
    * agent's modality support, computed at runtime.
    */
-  @Input() allowAttachments = true;
+  @Input() AllowAttachments = true;
+
+  /** @deprecated Use {@link AllowAttachments}. */
+  @Input() set allowAttachments(value: ConversationChatAreaComponent['AllowAttachments']) {
+    this.AllowAttachments = value;
+  }
+  /** @deprecated Use {@link AllowAttachments}. */
+  get allowAttachments(): ConversationChatAreaComponent['AllowAttachments'] {
+    return this.AllowAttachments;
+  }
 
   /**
    * Host-level cap for the composer's Plan Mode toggle. Defaults true
    * (current behavior). White-labeled / end-user hosts that don't expose
    * plan-mode workflows set false to remove the button entirely.
    */
-  @Input() allowPlanMode = true;
+  @Input() AllowPlanMode = true;
+
+  /** @deprecated Use {@link AllowPlanMode}. */
+  @Input() set allowPlanMode(value: ConversationChatAreaComponent['AllowPlanMode']) {
+    this.AllowPlanMode = value;
+  }
+  /** @deprecated Use {@link AllowPlanMode}. */
+  get allowPlanMode(): ConversationChatAreaComponent['AllowPlanMode'] {
+    return this.AllowPlanMode;
+  }
 
   /**
    * Host-level cap for the composer's realtime voice-call launcher (and its
    * options caret). Defaults true (current behavior). Hosts with no voice
    * experience set false to remove the buttons entirely.
    */
-  @Input() allowRealtime = true;
+  @Input() AllowRealtime = true;
+
+  /** @deprecated Use {@link AllowRealtime}. */
+  @Input() set allowRealtime(value: ConversationChatAreaComponent['AllowRealtime']) {
+    this.AllowRealtime = value;
+  }
+  /** @deprecated Use {@link AllowRealtime}. */
+  get allowRealtime(): ConversationChatAreaComponent['AllowRealtime'] {
+    return this.AllowRealtime;
+  }
+
+  /**
+   * Host-level cap for starting conversation forks: Fork from here, and Edit or
+   * Regenerate as a fork. Defaults true (current behavior). Hosts with no forking
+   * experience set false; Edit and Regenerate then change the latest turn in place,
+   * as for a person without the `Conversations: Fork` authorization. UI only: deny
+   * that authorization to a role to stop the server creating forks as well.
+   */
+  @Input() AllowForking = true;
+
+  /**
+   * Host-level cap for stopping and continuing agent runs: the composer's Stop and Stop all, the
+   * Stop pill on an in-progress reply, the Continue button on a stopped reply, and the "Continue,
+   * or tell {agent} what to do differently" placeholder. Defaults true (current behavior). Hosts
+   * with no stop experience (a review surface, a space whose runs are managed elsewhere) set false
+   * without making the conversation read-only. UI only: a run stopped from another client still
+   * shows as stopped, and the next message still continues it.
+   */
+  @Input() public AllowStopRun = true;
 
   /**
    * Whether the message list renders its built-in "No messages yet" filler
    * when a conversation has zero messages. Defaults true. Hosts that render
    * their own empty-state chrome around the chat area set false.
    */
-  @Input() showEmptyFill = true;
+  @Input() ShowEmptyFill = true;
+
+  /** @deprecated Use {@link ShowEmptyFill}. */
+  @Input() set showEmptyFill(value: ConversationChatAreaComponent['ShowEmptyFill']) {
+    this.ShowEmptyFill = value;
+  }
+  /** @deprecated Use {@link ShowEmptyFill}. */
+  get showEmptyFill(): ConversationChatAreaComponent['ShowEmptyFill'] {
+    return this.ShowEmptyFill;
+  }
 
   /**
    * Whether the built-in centered loading indicator renders while a
@@ -208,7 +430,16 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * no premature empty-state flash). Hosts with their own loading chrome
    * set false.
    */
-  @Input() showLoadingState = true;
+  @Input() ShowLoadingState = true;
+
+  /** @deprecated Use {@link ShowLoadingState}. */
+  @Input() set showLoadingState(value: ConversationChatAreaComponent['ShowLoadingState']) {
+    this.ShowLoadingState = value;
+  }
+  /** @deprecated Use {@link ShowLoadingState}. */
+  get showLoadingState(): ConversationChatAreaComponent['ShowLoadingState'] {
+    return this.ShowLoadingState;
+  }
 
   /**
    * Read each reply from its top instead of its bottom.
@@ -222,28 +453,117 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * turn that fits stays where it is: it is all on screen anyway. A reader who scrolled up
    * during the run is never moved; the scroll-to-bottom button is their way back.
    */
-  @Input() readReplyFromTop = false;
+  @Input() ReadReplyFromTop = false;
+
+  /** @deprecated Use {@link ReadReplyFromTop}. */
+  @Input() set readReplyFromTop(value: ConversationChatAreaComponent['ReadReplyFromTop']) {
+    this.ReadReplyFromTop = value;
+  }
+  /** @deprecated Use {@link ReadReplyFromTop}. */
+  get readReplyFromTop(): ConversationChatAreaComponent['ReadReplyFromTop'] {
+    return this.ReadReplyFromTop;
+  }
 
   // --- Additional host-level feature gates (all default true; false removes the
   //     affordance entirely). Forwarded to the message list / message items / empty
   //     state so white-labeled end-user surfaces can pare the chat down through the
   //     component contract instead of CSS on internal class names. ---
   /** Show the per-message agent run-detail grid (run ID, step/token counts, $ cost). */
-  @Input() showAgentRunDetails = true;
+  @Input() ShowAgentRunDetails = true;
+
+  /** @deprecated Use {@link ShowAgentRunDetails}. */
+  @Input() set showAgentRunDetails(value: ConversationChatAreaComponent['ShowAgentRunDetails']) {
+    this.ShowAgentRunDetails = value;
+  }
+  /** @deprecated Use {@link ShowAgentRunDetails}. */
+  get showAgentRunDetails(): ConversationChatAreaComponent['ShowAgentRunDetails'] {
+    return this.ShowAgentRunDetails;
+  }
   /** Show the per-message reaction buttons (like / comment). */
-  @Input() showReactions = true;
+  @Input() ShowReactions = true;
+
+  /** @deprecated Use {@link ShowReactions}. */
+  @Input() set showReactions(value: ConversationChatAreaComponent['ShowReactions']) {
+    this.ShowReactions = value;
+  }
+  /** @deprecated Use {@link ShowReactions}. */
+  get showReactions(): ConversationChatAreaComponent['ShowReactions'] {
+    return this.ShowReactions;
+  }
   /** Show the per-message thumbs rating control on completed AI messages. */
-  @Input() showMessageRating = true;
+  @Input() ShowMessageRating = true;
+
+  /** @deprecated Use {@link ShowMessageRating}. */
+  @Input() set showMessageRating(value: ConversationChatAreaComponent['ShowMessageRating']) {
+    this.ShowMessageRating = value;
+  }
+  /** @deprecated Use {@link ShowMessageRating}. */
+  get showMessageRating(): ConversationChatAreaComponent['ShowMessageRating'] {
+    return this.ShowMessageRating;
+  }
   /** Allow pinning messages (per-message pin button, the header pin chip, and the pinned-messages panel). */
-  @Input() allowPinning = true;
+  @Input() AllowPinning = true;
+
+  /** @deprecated Use {@link AllowPinning}. */
+  @Input() set allowPinning(value: ConversationChatAreaComponent['AllowPinning']) {
+    this.AllowPinning = value;
+  }
+  /** @deprecated Use {@link AllowPinning}. */
+  get allowPinning(): ConversationChatAreaComponent['AllowPinning'] {
+    return this.AllowPinning;
+  }
   /** Allow editing the user's own messages (per-message edit button). */
-  @Input() allowMessageEdit = true;
+  @Input() AllowMessageEdit = true;
+
+  /** @deprecated Use {@link AllowMessageEdit}. */
+  @Input() set allowMessageEdit(value: ConversationChatAreaComponent['AllowMessageEdit']) {
+    this.AllowMessageEdit = value;
+  }
+  /** @deprecated Use {@link AllowMessageEdit}. */
+  get allowMessageEdit(): ConversationChatAreaComponent['AllowMessageEdit'] {
+    return this.AllowMessageEdit;
+  }
   /** Allow deleting the user's own messages (per-message delete button). */
-  @Input() allowMessageDelete = true;
+  @Input() AllowMessageDelete = true;
+
+  /** @deprecated Use {@link AllowMessageDelete}. */
+  @Input() set allowMessageDelete(value: ConversationChatAreaComponent['AllowMessageDelete']) {
+    this.AllowMessageDelete = value;
+  }
+  /** @deprecated Use {@link AllowMessageDelete}. */
+  get allowMessageDelete(): ConversationChatAreaComponent['AllowMessageDelete'] {
+    return this.AllowMessageDelete;
+  }
+  /**
+   * Host-forced read-only. Hides every composer. A View share
+   * ({@link IsReadOnlyView}) with this left false keeps today's disabled composer.
+   */
+  @Input() ReadOnly = false;
+
+  /** Banner copy when {@link ReadOnly} is set. Null uses the View-share text. */
+  @Input() ReadOnlyMessage: string | null = null;
   /** Show the empty-state's built-in suggested-prompt chips (and the @mention tip). */
-  @Input() showSuggestedPrompts = true;
+  @Input() ShowSuggestedPrompts = true;
+
+  /** @deprecated Use {@link ShowSuggestedPrompts}. */
+  @Input() set showSuggestedPrompts(value: ConversationChatAreaComponent['ShowSuggestedPrompts']) {
+    this.ShowSuggestedPrompts = value;
+  }
+  /** @deprecated Use {@link ShowSuggestedPrompts}. */
+  get showSuggestedPrompts(): ConversationChatAreaComponent['ShowSuggestedPrompts'] {
+    return this.ShowSuggestedPrompts;
+  }
   /** Show the message list's sticky date header + jump-to-date navigation. */
-  @Input() showDateNavigation = true;
+  @Input() ShowDateNavigation = true;
+
+  /** @deprecated Use {@link ShowDateNavigation}. */
+  @Input() set showDateNavigation(value: ConversationChatAreaComponent['ShowDateNavigation']) {
+    this.ShowDateNavigation = value;
+  }
+  /** @deprecated Use {@link ShowDateNavigation}. */
+  get showDateNavigation(): ConversationChatAreaComponent['ShowDateNavigation'] {
+    return this.ShowDateNavigation;
+  }
 
   // --- Assistant identity overrides (both default null = engine-resolved agent
   //     identity, today's behavior). White-label hosts brand the AI side of the
@@ -252,26 +572,53 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   //     instead of ::ng-deep on .message-sender / .avatar-circle internals.
   //     Complements agentCharacterConfig, which covers only the presence strip. ---
   /** Display name for AI messages (e.g. a per-tenant persona). Null = the agent record's name. */
-  @Input() assistantDisplayName: string | null = null;
+  @Input() AssistantDisplayName: string | null = null;
+
+  /** @deprecated Use {@link AssistantDisplayName}. */
+  @Input() set assistantDisplayName(value: string | null) {
+    this.AssistantDisplayName = value;
+  }
+  /** @deprecated Use {@link AssistantDisplayName}. */
+  get assistantDisplayName(): string | null {
+    return this.AssistantDisplayName;
+  }
   /** Image URL for the AI message avatar. Null = the agent's Font Awesome icon. */
-  @Input() assistantAvatarUrl: string | null = null;
+  @Input() AssistantAvatarUrl: string | null = null;
+
+  /** @deprecated Use {@link AssistantAvatarUrl}. */
+  @Input() set assistantAvatarUrl(value: string | null) {
+    this.AssistantAvatarUrl = value;
+  }
+  /** @deprecated Use {@link AssistantAvatarUrl}. */
+  get assistantAvatarUrl(): string | null {
+    return this.AssistantAvatarUrl;
+  }
 
   private _isNewConversation: boolean = false;
   @Input()
-  set isNewConversation(value: boolean) {
+  set IsNewConversation(value: boolean) {
     this._isNewConversation = value;
     if (value) {
       this.focusEmptyStateInput();
     }
   }
-  get isNewConversation(): boolean {
+  get IsNewConversation(): boolean {
     return this._isNewConversation;
+  }
+
+  /** @deprecated Use {@link IsNewConversation}. */
+  get isNewConversation(): boolean {
+    return this.IsNewConversation;
+  }
+  /** @deprecated Use {@link IsNewConversation}. */
+  @Input() set isNewConversation(value: boolean) {
+    this.IsNewConversation = value;
   }
 
   // Using getter/setter to ensure correct type handling
   private _pendingMessage: string | null = null;
   @Input()
-  set pendingMessage(value: string | null) {
+  set PendingMessage(value: string | null) {
     const previousPendingMessage = this._pendingMessage;
     // Handle case where an object is incorrectly passed
     if (value && typeof value === 'object' && 'text' in value) {
@@ -288,8 +635,17 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       this._pendingMessageReservedTargetId = null;
     }
   }
-  get pendingMessage(): string | null {
+  get PendingMessage(): string | null {
     return this._pendingMessage;
+  }
+
+  /** @deprecated Use {@link PendingMessage}. */
+  get pendingMessage(): string | null {
+    return this.PendingMessage;
+  }
+  /** @deprecated Use {@link PendingMessage}. */
+  @Input() set pendingMessage(value: string | null) {
+    this.PendingMessage = value;
   }
 
   /**
@@ -302,7 +658,16 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * Hosts MAY set this explicitly; it also self-resolves from {@link _pendingMessageTargetId}
    * (captured in onEmptyStateMessageSent) so the guard works regardless of host wiring.
    */
-  @Input() pendingMessageConversationId: string | null = null;
+  @Input() PendingMessageConversationId: string | null = null;
+
+  /** @deprecated Use {@link PendingMessageConversationId}. */
+  @Input() set pendingMessageConversationId(value: string | null) {
+    this.PendingMessageConversationId = value;
+  }
+  /** @deprecated Use {@link PendingMessageConversationId}. */
+  get pendingMessageConversationId(): string | null {
+    return this.PendingMessageConversationId;
+  }
 
   /** Internally-captured target for {@link pendingMessage}, set when this component creates a
    *  new conversation from the empty state. Host-independent; immune to conversation-swap timing. */
@@ -315,39 +680,116 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * (legacy fallback for single-conversation hosts that never swap).
    */
   public get EffectivePendingMessageTarget(): string | null {
-    return this.pendingMessageConversationId ?? this._pendingMessageTargetId ?? this.conversationId;
+    return this.PendingMessageConversationId ?? this._pendingMessageTargetId ?? this.ConversationId;
   }
 
-  public shouldDeliverPendingMessageTo(conversationId: string): boolean {
+  public ShouldDeliverPendingMessageTo(conversationId: string): boolean {
     const targetId = this.EffectivePendingMessageTarget;
     return UUIDsEqual(conversationId, targetId) && !UUIDsEqual(this._pendingMessageReservedTargetId, targetId);
+  }
+
+  /** @deprecated Use {@link ShouldDeliverPendingMessageTo}. */
+  public shouldDeliverPendingMessageTo(conversationId: string): boolean {
+    return this.ShouldDeliverPendingMessageTo(conversationId);
   }
 
   // Using getter/setter to ensure reactivity
   private _pendingAttachments: PendingAttachment[] | null = null;
   @Input()
-  set pendingAttachments(value: PendingAttachment[] | null) {
+  set PendingAttachments(value: PendingAttachment[] | null) {
     this._pendingAttachments = value;
   }
-  get pendingAttachments(): PendingAttachment[] | null {
+  get PendingAttachments(): PendingAttachment[] | null {
     return this._pendingAttachments;
   }
 
-  @Input() pendingArtifactId: string | null = null;
-  @Input() pendingArtifactVersionNumber: number | null = null;
-  @Input() pendingArtifactConversationId: string | null = null;
+  /** @deprecated Use {@link PendingAttachments}. */
+  get pendingAttachments(): PendingAttachment[] | null {
+    return this.PendingAttachments;
+  }
+  /** @deprecated Use {@link PendingAttachments}. */
+  @Input() set pendingAttachments(value: PendingAttachment[] | null) {
+    this.PendingAttachments = value;
+  }
+
+  @Input() PendingArtifactId: string | null = null;
+
+  /** @deprecated Use {@link PendingArtifactId}. */
+  @Input() set pendingArtifactId(value: string | null) {
+    this.PendingArtifactId = value;
+  }
+  /** @deprecated Use {@link PendingArtifactId}. */
+  get pendingArtifactId(): string | null {
+    return this.PendingArtifactId;
+  }
+  @Input() PendingArtifactVersionNumber: number | null = null;
+
+  /** @deprecated Use {@link PendingArtifactVersionNumber}. */
+  @Input() set pendingArtifactVersionNumber(value: number | null) {
+    this.PendingArtifactVersionNumber = value;
+  }
+  /** @deprecated Use {@link PendingArtifactVersionNumber}. */
+  get pendingArtifactVersionNumber(): number | null {
+    return this.PendingArtifactVersionNumber;
+  }
+  @Input() PendingArtifactConversationId: string | null = null;
+
+  /** @deprecated Use {@link PendingArtifactConversationId}. */
+  @Input() set pendingArtifactConversationId(value: string | null) {
+    this.PendingArtifactConversationId = value;
+  }
+  /** @deprecated Use {@link PendingArtifactConversationId}. */
+  get pendingArtifactConversationId(): string | null {
+    return this.PendingArtifactConversationId;
+  }
 
   /** When true, the component is rendered inside the floating overlay (hides suggested topics, etc.) */
-  @Input() overlayMode: boolean = false;
+  @Input() OverlayMode: boolean = false;
+
+  /** @deprecated Use {@link OverlayMode}. */
+  @Input() set overlayMode(value: boolean) {
+    this.OverlayMode = value;
+  }
+  /** @deprecated Use {@link OverlayMode}. */
+  get overlayMode(): boolean {
+    return this.OverlayMode;
+  }
 
   /** Show the Export button in the conversation header. Default true. */
-  @Input() showExportButton: boolean = true;
+  @Input() ShowExportButton: boolean = true;
+
+  /** @deprecated Use {@link ShowExportButton}. */
+  @Input() set showExportButton(value: boolean) {
+    this.ShowExportButton = value;
+  }
+  /** @deprecated Use {@link ShowExportButton}. */
+  get showExportButton(): boolean {
+    return this.ShowExportButton;
+  }
 
   /** Label for the header Export button (white-label hosts relabel it, e.g. "Download"). */
-  @Input() exportButtonLabel: string = 'Export';
+  @Input() ExportButtonLabel: string = 'Export';
+
+  /** @deprecated Use {@link ExportButtonLabel}. */
+  @Input() set exportButtonLabel(value: string) {
+    this.ExportButtonLabel = value;
+  }
+  /** @deprecated Use {@link ExportButtonLabel}. */
+  get exportButtonLabel(): string {
+    return this.ExportButtonLabel;
+  }
 
   /** Font Awesome class(es) for the header Export button's icon. */
-  @Input() exportButtonIcon: string = 'fas fa-download';
+  @Input() ExportButtonIcon: string = 'fas fa-download';
+
+  /** @deprecated Use {@link ExportButtonIcon}. */
+  @Input() set exportButtonIcon(value: string) {
+    this.ExportButtonIcon = value;
+  }
+  /** @deprecated Use {@link ExportButtonIcon}. */
+  get exportButtonIcon(): string {
+    return this.ExportButtonIcon;
+  }
 
   /**
    * Branding applied to exported files (theme tokens / logo / title) — forwarded
@@ -355,16 +797,52 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * on. See `ExportBranding` in the export service. Null (default) keeps the
    * stock unthemed export.
    */
-  @Input() exportBranding: ExportBranding | null = null;
+  @Input() ExportBranding: ExportBranding | null = null;
+
+  /** @deprecated Use {@link ExportBranding}. */
+  @Input() set exportBranding(value: ExportBranding | null) {
+    this.ExportBranding = value;
+  }
+  /** @deprecated Use {@link ExportBranding}. */
+  get exportBranding(): ExportBranding | null {
+    return this.ExportBranding;
+  }
 
   /** Show the Share button in the conversation header. Default true. */
-  @Input() showShareButton: boolean = true;
+  @Input() ShowShareButton: boolean = true;
+
+  /** @deprecated Use {@link ShowShareButton}. */
+  @Input() set showShareButton(value: boolean) {
+    this.ShowShareButton = value;
+  }
+  /** @deprecated Use {@link ShowShareButton}. */
+  get showShareButton(): boolean {
+    return this.ShowShareButton;
+  }
 
   /** Show the artifact count indicator in the conversation header. Default true. */
-  @Input() showArtifactIndicator: boolean = true;
+  @Input() ShowArtifactIndicator: boolean = true;
+
+  /** @deprecated Use {@link ShowArtifactIndicator}. */
+  @Input() set showArtifactIndicator(value: boolean) {
+    this.ShowArtifactIndicator = value;
+  }
+  /** @deprecated Use {@link ShowArtifactIndicator}. */
+  get showArtifactIndicator(): boolean {
+    return this.ShowArtifactIndicator;
+  }
 
   /** Application context snapshot for AI agent awareness. Included in agent execution data. */
-  @Input() appContext: Record<string, unknown> | null = null;
+  @Input() AppContext: Record<string, unknown> | null = null;
+
+  /** @deprecated Use {@link AppContext}. */
+  @Input() set appContext(value: Record<string, unknown> | null) {
+    this.AppContext = value;
+  }
+  /** @deprecated Use {@link AppContext}. */
+  get appContext(): Record<string, unknown> | null {
+    return this.AppContext;
+  }
 
   /**
    * Optional default agent ID for the conversation. Forwarded to
@@ -377,7 +855,75 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * set this to the specialist agent's ID; the main Chat app leaves it
    * unset to preserve the Sage-fronted UX.
    */
-  @Input() defaultAgentId: string | null = null;
+  @Input() DefaultAgentId: string | null = null;
+
+  /** @deprecated Use {@link DefaultAgentId}. */
+  @Input() set defaultAgentId(value: string | null) {
+    this.DefaultAgentId = value;
+  }
+  /** @deprecated Use {@link DefaultAgentId}. */
+  get defaultAgentId(): string | null {
+    return this.DefaultAgentId;
+  }
+
+  // ── Host rules for chats with several people ────────────────────────────
+  // All opt-in and forwarded to every composer the chat area shows. Left at their defaults,
+  // the chat area behaves exactly as before. See MessageInputComponent for each rule in full.
+
+  /**
+   * When a message starts an agent turn. `'Always'` (the default) answers every message;
+   * `'MentionOnly'` answers only a message that tags an agent, and posts any other message
+   * with no turn at all (no reply row, no placeholder, no turn events).
+   */
+  @Input() AgentReplyMode: AgentReplyMode = 'Always';
+
+  /**
+   * The agents that may answer in this chat: narrows the '@' list, every route, the
+   * conversation manager's delegation, and the pin and voice pickers. Null (the default)
+   * allows every agent the user can run; an empty list allows none.
+   */
+  @Input() AllowedAgentIDs: readonly string[] | null = null;
+
+  /**
+   * The people the '@' list offers, such as the chat's members. Null (the default) offers only
+   * the current user, as before.
+   */
+  @Input() MentionPeople: readonly MentionPerson[] | null = null;
+
+  /**
+   * The first moment of the conversation an agent turn may read. The server loads the agent's
+   * history from there and uses no summary of earlier messages. Null (the default) reads the
+   * whole conversation.
+   */
+  @Input() AgentHistoryFrom: Date | null = null;
+
+  /**
+   * Runs agent turns on the host's server instead of MJ's own path, after routing and
+   * `BeforeAgentTurn`, before any reply row exists. Null (the default) runs them on MJ's path.
+   */
+  @Input() AgentTurnHandler: AgentTurnHandler | null = null;
+
+  /**
+   * Whether MJ names a new conversation from its first message or its first voice utterance.
+   * True (the default) keeps today's behavior; a host that names its own chats turns it off.
+   */
+  @Input() AutoNameConversation: boolean = true;
+
+  /**
+   * Whether an untagged message asks one fast typed decision which agent in the conversation
+   * should answer it, instead of always going back to the last agent that answered. It replaces
+   * that agent only when the answer is confident and arrives within `DECISION_ROUTING_TIMEOUT_MS`
+   * (250 ms). False (the default)
+   * changes nothing: no decision call, and today's routing. See
+   * `MessageInputComponent.EnableDecisionRouting`.
+   *
+   * Turning it on sends conversation text to the model behind the `Default Decision` prompt, which
+   * can be a different vendor from the agents' own: the first 1,000 characters of the new message,
+   * the last 6 turns (150 characters each), each participant's name, description and last reply,
+   * and the names of their artifact versions. Each call writes an `MJ: AI Prompt Runs` row, even
+   * when the answer comes too late to be used.
+   */
+  @Input() EnableDecisionRouting: boolean = false;
 
   /**
    * Scope to apply when this surface CREATES a new conversation. Forwarded
@@ -387,7 +933,16 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * conversations don't pollute the main Chat app list. Main Chat leaves
    * it as the default `'Global'`. Has no effect on existing conversations.
    */
-  @Input() applicationScope: 'Global' | 'Application' | 'Both' = 'Global';
+  @Input() ApplicationScope: 'Global' | 'Application' | 'Both' = 'Global';
+
+  /** @deprecated Use {@link ApplicationScope}. */
+  @Input() set applicationScope(value: 'Global' | 'Application' | 'Both') {
+    this.ApplicationScope = value;
+  }
+  /** @deprecated Use {@link ApplicationScope}. */
+  get applicationScope(): 'Global' | 'Application' | 'Both' {
+    return this.ApplicationScope;
+  }
 
   /**
    * Application ID to bind a newly-created conversation to. REQUIRED when
@@ -395,7 +950,16 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * enforces it). Used by embedded chat surfaces to scope their
    * conversations to their owning Application.
    */
-  @Input() applicationId: string | null = null;
+  @Input() ApplicationId: string | null = null;
+
+  /** @deprecated Use {@link ApplicationId}. */
+  @Input() set applicationId(value: string | null) {
+    this.ApplicationId = value;
+  }
+  /** @deprecated Use {@link ApplicationId}. */
+  get applicationId(): string | null {
+    return this.ApplicationId;
+  }
 
   /**
    * "What is this conversation about?" — the Entity ID this conversation
@@ -407,7 +971,16 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * later list "prior conversations about THIS form/component."
    * Has no effect on existing conversations.
    */
-  @Input() linkedEntityId: string | null = null;
+  @Input() LinkedEntityId: string | null = null;
+
+  /** @deprecated Use {@link LinkedEntityId}. */
+  @Input() set linkedEntityId(value: string | null) {
+    this.LinkedEntityId = value;
+  }
+  /** @deprecated Use {@link LinkedEntityId}. */
+  get linkedEntityId(): string | null {
+    return this.LinkedEntityId;
+  }
 
   /**
    * Primary key of the linked record, serialized as a string. Used with
@@ -415,7 +988,16 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * form's ComponentID; Component Studio's AI panel passes the
    * currently-selected component's ID.
    */
-  @Input() linkedRecordId: string | null = null;
+  @Input() LinkedRecordId: string | null = null;
+
+  /** @deprecated Use {@link LinkedRecordId}. */
+  @Input() set linkedRecordId(value: string | null) {
+    this.LinkedRecordId = value;
+  }
+  /** @deprecated Use {@link LinkedRecordId}. */
+  get linkedRecordId(): string | null {
+    return this.LinkedRecordId;
+  }
 
   /**
    * Whether the conversation header should render the per-conversation
@@ -425,7 +1007,16 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * to that agent instead of through Sage. Surfaces with no meaningful
    * agent-choice UX can set this to false to hide the widget.
    */
-  @Input() showAgentPicker: boolean = true;
+  @Input() ShowAgentPicker: boolean = true;
+
+  /** @deprecated Use {@link ShowAgentPicker}. */
+  @Input() set showAgentPicker(value: boolean) {
+    this.ShowAgentPicker = value;
+  }
+  /** @deprecated Use {@link ShowAgentPicker}. */
+  get showAgentPicker(): boolean {
+    return this.ShowAgentPicker;
+  }
 
   /**
    * Whether the chat header should render the per-agent mode/quality
@@ -435,7 +1026,16 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * off only when the surface should never expose model-tier choice
    * (kiosks, specialty embeds).
    */
-  @Input() showAgentModePicker: boolean = true;
+  @Input() ShowAgentModePicker: boolean = true;
+
+  /** @deprecated Use {@link ShowAgentModePicker}. */
+  @Input() set showAgentModePicker(value: boolean) {
+    this.ShowAgentModePicker = value;
+  }
+  /** @deprecated Use {@link ShowAgentModePicker}. */
+  get showAgentModePicker(): boolean {
+    return this.ShowAgentModePicker;
+  }
 
   /**
    * The mode/preset picker's selected configuration ID, forwarded to
@@ -463,12 +1063,12 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * instead of waiting for the first message to create a conversation.
    */
   public get HasPreConversationHeader(): boolean {
-    return this.showAgentModePicker && !!this.ModePickerTargetAgentId;
+    return this.ShowAgentModePicker && !!this.ModePickerTargetAgentId;
   }
 
   public get ModePickerTargetAgentId(): string | null {
-    return this.conversation?.DefaultAgentID
-        ?? this.defaultAgentId
+    return this.Conversation?.DefaultAgentID
+        ?? this.DefaultAgentId
         ?? this.conversationManagerAgent?.ID
         ?? null;
   }
@@ -485,10 +1085,28 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   /** Greeting message shown in the empty state when no conversation is active */
-  @Input() emptyStateGreeting: string = 'How can I help you?';
+  @Input() EmptyStateGreeting: string = 'How can I help you?';
+
+  /** @deprecated Use {@link EmptyStateGreeting}. */
+  @Input() set emptyStateGreeting(value: string) {
+    this.EmptyStateGreeting = value;
+  }
+  /** @deprecated Use {@link EmptyStateGreeting}. */
+  get emptyStateGreeting(): string {
+    return this.EmptyStateGreeting;
+  }
 
   // Sidebar toggle - when true, shows toggle button in header to expand sidebar
-  @Input() showSidebarToggle: boolean = false;
+  @Input() ShowSidebarToggle: boolean = false;
+
+  /** @deprecated Use {@link ShowSidebarToggle}. */
+  @Input() set showSidebarToggle(value: boolean) {
+    this.ShowSidebarToggle = value;
+  }
+  /** @deprecated Use {@link ShowSidebarToggle}. */
+  get showSidebarToggle(): boolean {
+    return this.ShowSidebarToggle;
+  }
 
   // ────────────────────────────────────────────────────────────────────
   // PR 2c — Widget extension surface (additive — no breaking changes)
@@ -500,14 +1118,32 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * so existing embeds (Form Builder, Component Studio AI Assistant, the
    * corner overlay) see no UI change.
    */
-  @Input() showAgentCharacter: boolean = false;
+  @Input() ShowAgentCharacter: boolean = false;
+
+  /** @deprecated Use {@link ShowAgentCharacter}. */
+  @Input() set showAgentCharacter(value: boolean) {
+    this.ShowAgentCharacter = value;
+  }
+  /** @deprecated Use {@link ShowAgentCharacter}. */
+  get showAgentCharacter(): boolean {
+    return this.ShowAgentCharacter;
+  }
 
   /**
    * Visualization data forwarded to the `agentPresence` slot's default
    * component (or to any consumer-projected template via slot context).
    * Includes avatar URL, character name, voice state, and visual intensity.
    */
-  @Input() agentCharacterConfig: AgentCharacterConfig | null = null;
+  @Input() AgentCharacterConfig: AgentCharacterConfig | null = null;
+
+  /** @deprecated Use {@link AgentCharacterConfig}. */
+  @Input() set agentCharacterConfig(value: AgentCharacterConfig | null) {
+    this.AgentCharacterConfig = value;
+  }
+  /** @deprecated Use {@link AgentCharacterConfig}. */
+  get agentCharacterConfig(): AgentCharacterConfig | null {
+    return this.AgentCharacterConfig;
+  }
 
   /**
    * Structured config for the `emptyState` slot's default component —
@@ -515,7 +1151,16 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * with the existing `emptyStateGreeting` input (which still wins when
    * `emptyStateConfig` is null).
    */
-  @Input() emptyStateConfig: EmptyStateConfig | null = null;
+  @Input() EmptyStateConfig: EmptyStateConfig | null = null;
+
+  /** @deprecated Use {@link EmptyStateConfig}. */
+  @Input() set emptyStateConfig(value: EmptyStateConfig | null) {
+    this.EmptyStateConfig = value;
+  }
+  /** @deprecated Use {@link EmptyStateConfig}. */
+  get emptyStateConfig(): EmptyStateConfig | null {
+    return this.EmptyStateConfig;
+  }
 
   /**
    * Activate the `demonstrationSurface` slot layout-mode. Per Matt's 06-10
@@ -529,7 +1174,16 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * agent emits a demonstration intent → host sets this true; user dismisses
    * → host sets it false). The widget itself doesn't decide.
    */
-  @Input() showDemonstrationSurface: boolean = false;
+  @Input() ShowDemonstrationSurface: boolean = false;
+
+  /** @deprecated Use {@link ShowDemonstrationSurface}. */
+  @Input() set showDemonstrationSurface(value: boolean) {
+    this.ShowDemonstrationSurface = value;
+  }
+  /** @deprecated Use {@link ShowDemonstrationSurface}. */
+  get showDemonstrationSurface(): boolean {
+    return this.ShowDemonstrationSurface;
+  }
 
   /**
    * Content payload forwarded to the `demonstrationSurface` slot via
@@ -537,15 +1191,29 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * {@link IMJChatDemonstrationSurfaceComponent} interface — the widget
    * doesn't introspect or render it directly, just hands it through.
    */
-  @Input() demonstrationSurfaceContent: unknown = null;
+  @Input() DemonstrationSurfaceContent: unknown = null;
+
+  /** @deprecated Use {@link DemonstrationSurfaceContent}. */
+  @Input() set demonstrationSurfaceContent(value: unknown) {
+    this.DemonstrationSurfaceContent = value;
+  }
+  /** @deprecated Use {@link DemonstrationSurfaceContent}. */
+  get demonstrationSurfaceContent(): unknown {
+    return this.DemonstrationSurfaceContent;
+  }
 
   /**
    * True when the demonstrationSurface layout-mode is BOTH opted-in
    * (`showDemonstrationSurface`) AND has a slot template projected to render
    * into. Both conditions must hold for the layout restructure to kick in.
    */
+  public get IsDemonstrationActive(): boolean {
+    return this.ShowDemonstrationSurface && this.SlotTemplate('demonstrationSurface') !== null;
+  }
+
+  /** @deprecated Use {@link IsDemonstrationActive}. */
   public get isDemonstrationActive(): boolean {
-    return this.showDemonstrationSurface && this.slotTemplate('demonstrationSurface') !== null;
+    return this.IsDemonstrationActive;
   }
 
   // ────────────────────────────────────────────────────────────────────
@@ -558,8 +1226,9 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   // stay as single emitters without a Before-pair.
   //
   // WIRING STATUS:
-  //   ✓ beforeAgentTurn / afterAgentTurn — wired in message-input.component
-  //     around `agentService.processMessage()` (re-emitted from chat-area).
+  //   ✓ beforeAgentTurn / afterAgentTurn — wired in message-input.component:
+  //     BeforeAgentTurn fires once per turn on every route, before any reply
+  //     row exists (re-emitted from chat-area).
   //   ✓ beforeResponseFormSubmitted / afterResponseFormSubmitted — wired in
   //     message-item.component's `onFormSubmitted()`, forwarded through
   //     message-list to chat-area.
@@ -578,57 +1247,266 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   //     (diffed for open/close) / SessionEnded$. Non-Angular hosts (React,
   //     Vue, Node) register their own adapter — the chat-area code is unchanged.
 
-  /** Cancelable — fired BEFORE a user message is sent to the agent. */
-  @Output() beforeAgentTurn = new EventEmitter<BeforeAgentTurnEventArgs>();
-  /** Fired AFTER a successful agent turn completes. */
-  @Output() afterAgentTurn = new EventEmitter<AfterAgentTurnEventArgs>();
+  /**
+   * Cancelable — fired once per agent turn, on every route, after routing picked the agent and
+   * before any reply row exists. Cancel it to write nothing more, or set `RedirectAgentId` to
+   * send the turn to another allowed agent. A message that starts no turn fires nothing.
+   */
+  @Output() BeforeAgentTurn = new EventEmitter<BeforeAgentTurnEventArgs>();
+
+  /**
+   * @deprecated Use {@link BeforeAgentTurn}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (beforeAgentTurn) keeps working. Must stay AFTER BeforeAgentTurn: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() beforeAgentTurn = this.BeforeAgentTurn;
+  /** Fired AFTER a successful agent turn completes, on every route. */
+  @Output() AfterAgentTurn = new EventEmitter<AfterAgentTurnEventArgs>();
+
+  /**
+   * @deprecated Use {@link AfterAgentTurn}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (afterAgentTurn) keeps working. Must stay AFTER AfterAgentTurn: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() afterAgentTurn = this.AfterAgentTurn;
 
   /** Cancelable — fired BEFORE a registered client tool is invoked by the agent. */
-  @Output() beforeToolInvoked = new EventEmitter<BeforeToolInvokedEventArgs>();
+  @Output() BeforeToolInvoked = new EventEmitter<BeforeToolInvokedEventArgs>();
+
+  /**
+   * @deprecated Use {@link BeforeToolInvoked}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (beforeToolInvoked) keeps working. Must stay AFTER BeforeToolInvoked: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() beforeToolInvoked = this.BeforeToolInvoked;
   /** Fired AFTER a client tool invocation completes. */
-  @Output() afterToolInvoked = new EventEmitter<AfterToolInvokedEventArgs>();
+  @Output() AfterToolInvoked = new EventEmitter<AfterToolInvokedEventArgs>();
+
+  /**
+   * @deprecated Use {@link AfterToolInvoked}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (afterToolInvoked) keeps working. Must stay AFTER AfterToolInvoked: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() afterToolInvoked = this.AfterToolInvoked;
 
   /** Cancelable — fired BEFORE a response form's submitted values are sent. */
-  @Output() beforeResponseFormSubmitted = new EventEmitter<BeforeResponseFormSubmittedEventArgs>();
+  @Output() BeforeResponseFormSubmitted = new EventEmitter<BeforeResponseFormSubmittedEventArgs>();
+
+  /**
+   * @deprecated Use {@link BeforeResponseFormSubmitted}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (beforeResponseFormSubmitted) keeps working. Must stay AFTER BeforeResponseFormSubmitted: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() beforeResponseFormSubmitted = this.BeforeResponseFormSubmitted;
   /** Fired AFTER a response form's values have been sent. */
-  @Output() afterResponseFormSubmitted = new EventEmitter<AfterResponseFormSubmittedEventArgs>();
+  @Output() AfterResponseFormSubmitted = new EventEmitter<AfterResponseFormSubmittedEventArgs>();
+
+  /**
+   * @deprecated Use {@link AfterResponseFormSubmitted}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (afterResponseFormSubmitted) keeps working. Must stay AFTER AfterResponseFormSubmitted: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() afterResponseFormSubmitted = this.AfterResponseFormSubmitted;
+
+  /**
+   * Fired BEFORE an in-progress agent run is stopped from its reply. Cancelable: set
+   * `event.Cancel = true` to keep the run going; `AfterStopClicked` then does not fire.
+   */
+  @Output() BeforeStopClicked = new EventEmitter<BeforeStopClickedEventArgs>();
+
+  /**
+   * Fired AFTER a stop was attempted, with whether the run's row was marked Cancelled.
+   * Not fired when `BeforeStopClicked` was canceled.
+   */
+  @Output() AfterStopClicked = new EventEmitter<AfterStopClickedEventArgs>();
 
   /** Informational. */
-  @Output() sessionStarted = new EventEmitter<SessionStartedEventArgs>();
-  /** Informational. */
-  @Output() sessionChannelStateChanged = new EventEmitter<SessionChannelStateChangedEventArgs>();
-  /** Informational. */
-  @Output() sessionEnded = new EventEmitter<SessionEndedEventArgs>();
+  @Output() SessionStarted = new EventEmitter<SessionStartedEventArgs>();
 
-  @Output() conversationRenamed = new EventEmitter<{conversationId: string; name: string; description: string}>();
-  @Output() openEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
+  /**
+   * @deprecated Use {@link SessionStarted}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (sessionStarted) keeps working. Must stay AFTER SessionStarted: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() sessionStarted = this.SessionStarted;
+  /** Informational. */
+  @Output() SessionChannelStateChanged = new EventEmitter<SessionChannelStateChangedEventArgs>();
+
+  /**
+   * @deprecated Use {@link SessionChannelStateChanged}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (sessionChannelStateChanged) keeps working. Must stay AFTER SessionChannelStateChanged: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() sessionChannelStateChanged = this.SessionChannelStateChanged;
+  /** Informational. */
+  @Output() SessionEnded = new EventEmitter<SessionEndedEventArgs>();
+
+  /**
+   * @deprecated Use {@link SessionEnded}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (sessionEnded) keeps working. Must stay AFTER SessionEnded: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() sessionEnded = this.SessionEnded;
+
+  @Output() ConversationRenamed = new EventEmitter<{conversationId: string; name: string; description: string}>();
+
+  /**
+   * @deprecated Use {@link ConversationRenamed}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (conversationRenamed) keeps working. Must stay AFTER ConversationRenamed: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() conversationRenamed = this.ConversationRenamed;
+  @Output() OpenEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
+
+  /**
+   * @deprecated Use {@link OpenEntityRecord}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (openEntityRecord) keeps working. Must stay AFTER OpenEntityRecord: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() openEntityRecord = this.OpenEntityRecord;
 
   /**
    * A realtime session that CREATED its own conversation has ended — the new
    * conversation is named (background, shared helper) and ready. The workspace folds
    * it into the cached list and selects it when the conversation list is visible.
    */
-  @Output() realtimeConversationReady = new EventEmitter<{conversationId: string; select: boolean}>();
+  @Output() RealtimeConversationReady = new EventEmitter<{conversationId: string; select: boolean}>();
+
+  /**
+   * @deprecated Use {@link RealtimeConversationReady}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (realtimeConversationReady) keeps working. Must stay AFTER RealtimeConversationReady: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() realtimeConversationReady = this.RealtimeConversationReady;
   @Output() navigationRequest = new EventEmitter<NavigationRequest>();
-  @Output() taskClicked = new EventEmitter<MJTaskEntity>();
-  @Output() artifactLinkClicked = new EventEmitter<{type: 'conversation' | 'collection'; id: string}>();
-  @Output() sidebarToggleClicked = new EventEmitter<void>();
+  @Output() TaskClicked = new EventEmitter<MJTaskEntity>();
+
+  /**
+   * @deprecated Use {@link TaskClicked}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (taskClicked) keeps working. Must stay AFTER TaskClicked: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() taskClicked = this.TaskClicked;
+  @Output() ArtifactLinkClicked = new EventEmitter<{type: 'conversation' | 'collection'; id: string}>();
+
+  /**
+   * @deprecated Use {@link ArtifactLinkClicked}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (artifactLinkClicked) keeps working. Must stay AFTER ArtifactLinkClicked: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() artifactLinkClicked = this.ArtifactLinkClicked;
+  @Output() SidebarToggleClicked = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link SidebarToggleClicked}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (sidebarToggleClicked) keeps working. Must stay AFTER SidebarToggleClicked: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() sidebarToggleClicked = this.SidebarToggleClicked;
 
   // STATE CHANGE OUTPUTS - notify parent of state changes
   // conversationCreated now includes pendingMessage and pendingAttachments to ensure atomic state update
-  @Output() conversationCreated = new EventEmitter<{
+  @Output() ConversationCreated = new EventEmitter<{
     conversation: MJConversationEntity;
     pendingMessage?: string;
     pendingAttachments?: PendingAttachment[];
   }>();
-  @Output() threadOpened = new EventEmitter<string>();
-  @Output() threadClosed = new EventEmitter<void>();
-  @Output() pendingArtifactConsumed = new EventEmitter<void>();
-  @Output() pendingMessageConsumed = new EventEmitter<void>();
-  // pendingMessageRequested is deprecated - use conversationCreated with pendingMessage instead
-  @Output() pendingMessageRequested = new EventEmitter<{text: string; attachments: PendingAttachment[]}>();
 
-  @ViewChild('scrollContainer') private scrollContainer!: ElementRef;
+  /**
+   * @deprecated Use {@link ConversationCreated}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (conversationCreated) keeps working. Must stay AFTER ConversationCreated: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() conversationCreated = this.ConversationCreated;
+  @Output() PendingArtifactConsumed = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link PendingArtifactConsumed}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (pendingArtifactConsumed) keeps working. Must stay AFTER PendingArtifactConsumed: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() pendingArtifactConsumed = this.PendingArtifactConsumed;
+  @Output() PendingMessageConsumed = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link PendingMessageConsumed}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (pendingMessageConsumed) keeps working. Must stay AFTER PendingMessageConsumed: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() pendingMessageConsumed = this.PendingMessageConsumed;
+  // pendingMessageRequested is deprecated - use conversationCreated with pendingMessage instead
+  @Output() PendingMessageRequested = new EventEmitter<{text: string; attachments: PendingAttachment[]}>();
+
+  /**
+   * @deprecated Use {@link PendingMessageRequested}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (pendingMessageRequested) keeps working. Must stay AFTER PendingMessageRequested: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() pendingMessageRequested = this.PendingMessageRequested;
+
+  private scrollContainer?: ElementRef<HTMLElement>;
+
+  /** The transcript scroller; watched so the scroll-to-bottom arrow follows content that grows or shrinks without a scroll. */
+  @ViewChild('scrollContainer') private set scrollContainerRef(ref: ElementRef<HTMLElement> | undefined) {
+    this.scrollContainer = ref;
+    this.watchScrollContent(ref?.nativeElement ?? null);
+  }
+
+  /** Re-checks the scroll state when the transcript or its content changes size; null when nothing is watched. */
+  private scrollResizeObserver: ResizeObserver | null = null;
+
+  /** Watches `container` and its content for size changes (a new view, removed rows), which fire no scroll event. */
+  private watchScrollContent(container: HTMLElement | null): void {
+    this.scrollResizeObserver?.disconnect();
+    this.scrollResizeObserver = null;
+    if (!container || typeof ResizeObserver === 'undefined') {
+      return;
+    }
+    const observer = new ResizeObserver(() => this.CheckScroll());
+    observer.observe(container);
+    for (const child of Array.from(container.children)) {
+      observer.observe(child);
+    }
+    this.scrollResizeObserver = observer;
+  }
   @ViewChildren('messageInput') private messageInputComponents!: QueryList<MessageInputComponent>;
 
   /**
@@ -638,9 +1516,27 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * briefly because the target input mounts asynchronously (config params can arrive
    * before the first render).
    */
-  @Input() composerDraft: string | null = null;
+  @Input() ComposerDraft: string | null = null;
 
-  @Output() composerDraftConsumed = new EventEmitter<void>();
+  /** @deprecated Use {@link ComposerDraft}. */
+  @Input() set composerDraft(value: string | null) {
+    this.ComposerDraft = value;
+  }
+  /** @deprecated Use {@link ComposerDraft}. */
+  get composerDraft(): string | null {
+    return this.ComposerDraft;
+  }
+
+  @Output() ComposerDraftConsumed = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link ComposerDraftConsumed}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (composerDraftConsumed) keeps working. Must stay AFTER ComposerDraftConsumed: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() composerDraftConsumed = this.ComposerDraftConsumed;
 
   /**
    * Pre-address the composer to an AGENT as a resolved mention pill (+ space +
@@ -648,7 +1544,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * agent's name. Emits composerAgentMentionConsumed once applied.
    */
   @Input()
-  set composerAgentMention(value: string | null) {
+  set ComposerAgentMention(value: string | null) {
     if (value && value !== this._composerAgentMention) {
       this._composerAgentMention = value;
       this.applyComposerAgentMention(0);
@@ -656,12 +1552,30 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       this._composerAgentMention = null;
     }
   }
-  get composerAgentMention(): string | null {
+  get ComposerAgentMention(): string | null {
     return this._composerAgentMention;
+  }
+
+  /** @deprecated Use {@link ComposerAgentMention}. */
+  get composerAgentMention(): string | null {
+    return this.ComposerAgentMention;
+  }
+  /** @deprecated Use {@link ComposerAgentMention}. */
+  @Input() set composerAgentMention(value: string | null) {
+    this.ComposerAgentMention = value;
   }
   private _composerAgentMention: string | null = null;
 
-  @Output() composerAgentMentionConsumed = new EventEmitter<void>();
+  @Output() ComposerAgentMentionConsumed = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link ComposerAgentMentionConsumed}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (composerAgentMentionConsumed) keeps working. Must stay AFTER ComposerAgentMentionConsumed: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() composerAgentMentionConsumed = this.ComposerAgentMentionConsumed;
 
   /**
    * Per-user persisted composer drafts (UserInfoEngine-backed): restore on mount,
@@ -687,8 +1601,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       let snapshot: string | null;
       if (this._composerAgentMention) {
         snapshot = null; // pre-address wins; never restore over it
-      } else if (!conversationId && this.composerDraft) {
-        snapshot = this.composerDraft;
+      } else if (!conversationId && this.ComposerDraft) {
+        snapshot = this.ComposerDraft;
       } else {
         snapshot = this.draftStore.GetDraft(conversationId);
       }
@@ -733,7 +1647,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         if (applied) {
           console.log(`[Omnibar→Chat] chat-area apply('${agentName}'): APPLIED on ${target} (attempt ${attempt})`);
           this._composerAgentMention = null;
-          this.composerAgentMentionConsumed.emit();
+          this.ComposerAgentMentionConsumed.emit();
         } else if (attempt < ConversationChatAreaComponent.AGENT_MENTION_MAX_ATTEMPTS) {
           setTimeout(() => this.applyComposerAgentMention(attempt + 1), 150);
         } else {
@@ -751,8 +1665,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
   /** The empty-state input applied the staged draft — clear + inform the host. */
   public OnComposerDraftApplied(): void {
-    this.composerDraft = null;
-    this.composerDraftConsumed.emit();
+    this.ComposerDraft = null;
+    this.ComposerDraftConsumed.emit();
   }
   @ViewChild(ArtifactViewerPanelComponent) private artifactViewerComponent?: ArtifactViewerPanelComponent;
   @ViewChild(ConversationEmptyStateComponent) private emptyStateComponent?: ConversationEmptyStateComponent;
@@ -769,12 +1683,26 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * projected for that slot. When `null`, the template should render the
    * slot's default standalone component.
    */
-  public slotTemplate(name: MJChatSlotName): TemplateRef<unknown> | null {
+  public SlotTemplate(name: MJChatSlotName): TemplateRef<unknown> | null {
     return this.chatSlotChildren?.find((s) => s.SlotName === name)?.Template ?? null;
   }
 
+  /** @deprecated Use {@link SlotTemplate}. */
+  public slotTemplate(name: MJChatSlotName): TemplateRef<unknown> | null {
+    return this.SlotTemplate(name);
+  }
+
   public messages: MJConversationDetailEntity[] = [];
-  public showScrollToBottomIcon = false;
+  public ShowScrollToBottomIcon = false;
+
+  /** @deprecated Use {@link ShowScrollToBottomIcon}. */
+  public get showScrollToBottomIcon() {
+    return this.ShowScrollToBottomIcon;
+  }
+  /** @deprecated Use {@link ShowScrollToBottomIcon}. */
+  public set showScrollToBottomIcon(value) {
+    this.ShowScrollToBottomIcon = value;
+  }
   private scrollToBottom = false;
   /**
    * Whether the reader was at (within a few px of) the bottom at the last scroll event.
@@ -791,34 +1719,226 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * last progress updates must not fire and drag the reader back down.
    */
   private bottomFollowSuppressedUntil = 0;
+  /**
+   * ReadReplyFromTop while a reply streams: the scroll position the turn's top was last pinned
+   * to, `'declined'` once the reader has moved away (they are then left alone and completion
+   * decides as it always has), null before the turn's first delta. Reset where the turn opens.
+   */
+  private streamAnchor: number | 'declined' | null = null;
+  /**
+   * The turn's first message as rendered, and the clearance above it, resolved once per turn for
+   * the stream pin: both are stable across frames and finding them is a timeline walk plus a
+   * computed style, which is not work for a 60fps path. Re-resolved only if the node leaves the DOM.
+   */
+  private streamPin: { target: HTMLElement; clearance: number } | null = null;
+  private readonly ngZone = InjectFrameZone();
   private turnStartRetryHandle: ReturnType<typeof setTimeout> | null = null;
   /** Gap kept between the pane's top edge and the turn's first message. */
   private static readonly TURN_TOP_GAP_PX = 16;
   private lastLoadedConversationId: string | null = null; // Track which conversation's peripheral data was loaded
   private currentlyLoadingConversationId: string | null = null; // Track which conversation is currently being loaded
   private conversationLoadToken = 0; // Monotonic token to discard stale async conversation loads
-  public isProcessing: boolean = false;
+  /** The conversation whose load has ended; null while a load runs and before the first one. */
+  private readyConversationId: string | null = null;
+  /** Emits each time a conversation load ends. */
+  private readonly conversationLoadEnded$ = new Subject<void>();
+  /** The reconcile passes in progress, shared by every caller that arrives while they run. */
+  private reconcileInFlight: Promise<void> | null = null;
+  /** Reason for one more reconcile pass, requested while a pass was running. */
+  private reconcileRerunReason: string | null = null;
+  public IsProcessing: boolean = false;
+
+  /** @deprecated Use {@link IsProcessing}. */
+  public get isProcessing(): boolean {
+    return this.IsProcessing;
+  }
+  /** @deprecated Use {@link IsProcessing}. */
+  public set isProcessing(value: boolean) {
+    this.IsProcessing = value;
+  }
   private intentCheckMessage: MJConversationDetailEntity | null = null; // Temporary message shown during intent checking
-  public isLoadingConversation: boolean = false; // Set to true only when actively loading conversation data
+  public IsLoadingConversation: boolean = false;
+
+  /** @deprecated Use {@link IsLoadingConversation}. */
+  public get isLoadingConversation(): boolean {
+    return this.IsLoadingConversation;
+  }
+  /** @deprecated Use {@link IsLoadingConversation}. */
+  public set isLoadingConversation(value: boolean) {
+    this.IsLoadingConversation = value;
+  } // Set to true only when actively loading conversation data
 
   // User avatar map derived from engine cache
-  public userAvatarMap: Map<string, {imageUrl: string | null; iconClass: string | null}> = new Map();
-  public memberCount: number = 1;
-  public artifactCount: number = 0;
-  public artifactCountDisplay: number = 0;
-  public isShared: boolean = false;
-  public showExportModal: boolean = false;
-  public showShareModal: boolean = false;
-  public shareContext: ResourceShareContext | null = null;
-  public shareAdapter = new MJResourcePermissionShareAdapter(CONVERSATIONS_RESOURCE_TYPE_ID);
-  public showAgentPanel: boolean = false;
-  public showMembersModal: boolean = false;
-  public showProjectSelector: boolean = false;
-  public showArtifactPanel: boolean = false;
-  public showArtifactsModal: boolean = false;
-  public showSystemArtifacts: boolean = false; // Toggle for showing system-only artifacts
-  public selectedArtifactId: string | null = null;
-  public selectedVersionNumber: number | undefined = undefined; // Version to show in artifact viewer
+  public UserAvatarMap: Map<string, {imageUrl: string | null; iconClass: string | null}> = new Map();
+
+  /** @deprecated Use {@link UserAvatarMap}. */
+  public get userAvatarMap(): Map<string, {imageUrl: string | null; iconClass: string | null}> {
+    return this.UserAvatarMap;
+  }
+  /** @deprecated Use {@link UserAvatarMap}. */
+  public set userAvatarMap(value: Map<string, {imageUrl: string | null; iconClass: string | null}>) {
+    this.UserAvatarMap = value;
+  }
+  public MemberCount: number = 1;
+
+  /** @deprecated Use {@link MemberCount}. */
+  public get memberCount(): number {
+    return this.MemberCount;
+  }
+  /** @deprecated Use {@link MemberCount}. */
+  public set memberCount(value: number) {
+    this.MemberCount = value;
+  }
+  public ArtifactCount: number = 0;
+
+  /** @deprecated Use {@link ArtifactCount}. */
+  public get artifactCount(): number {
+    return this.ArtifactCount;
+  }
+  /** @deprecated Use {@link ArtifactCount}. */
+  public set artifactCount(value: number) {
+    this.ArtifactCount = value;
+  }
+  public ArtifactCountDisplay: number = 0;
+
+  /** @deprecated Use {@link ArtifactCountDisplay}. */
+  public get artifactCountDisplay(): number {
+    return this.ArtifactCountDisplay;
+  }
+  /** @deprecated Use {@link ArtifactCountDisplay}. */
+  public set artifactCountDisplay(value: number) {
+    this.ArtifactCountDisplay = value;
+  }
+  public IsShared: boolean = false;
+
+  /** @deprecated Use {@link IsShared}. */
+  public get isShared(): boolean {
+    return this.IsShared;
+  }
+  /** @deprecated Use {@link IsShared}. */
+  public set isShared(value: boolean) {
+    this.IsShared = value;
+  }
+  public ShowExportModal: boolean = false;
+
+  /** @deprecated Use {@link ShowExportModal}. */
+  public get showExportModal(): boolean {
+    return this.ShowExportModal;
+  }
+  /** @deprecated Use {@link ShowExportModal}. */
+  public set showExportModal(value: boolean) {
+    this.ShowExportModal = value;
+  }
+  public ShowShareModal: boolean = false;
+
+  /** @deprecated Use {@link ShowShareModal}. */
+  public get showShareModal(): boolean {
+    return this.ShowShareModal;
+  }
+  /** @deprecated Use {@link ShowShareModal}. */
+  public set showShareModal(value: boolean) {
+    this.ShowShareModal = value;
+  }
+  public ShareContext: ResourceShareContext | null = null;
+
+  /** @deprecated Use {@link ShareContext}. */
+  public get shareContext(): ResourceShareContext | null {
+    return this.ShareContext;
+  }
+  /** @deprecated Use {@link ShareContext}. */
+  public set shareContext(value: ResourceShareContext | null) {
+    this.ShareContext = value;
+  }
+  public ShareAdapter = new MJResourcePermissionShareAdapter(CONVERSATIONS_RESOURCE_TYPE_ID);
+
+  /** @deprecated Use {@link ShareAdapter}. */
+  public get shareAdapter() {
+    return this.ShareAdapter;
+  }
+  /** @deprecated Use {@link ShareAdapter}. */
+  public set shareAdapter(value) {
+    this.ShareAdapter = value;
+  }
+  public ShowAgentPanel: boolean = false;
+
+  /** @deprecated Use {@link ShowAgentPanel}. */
+  public get showAgentPanel(): boolean {
+    return this.ShowAgentPanel;
+  }
+  /** @deprecated Use {@link ShowAgentPanel}. */
+  public set showAgentPanel(value: boolean) {
+    this.ShowAgentPanel = value;
+  }
+  public ShowMembersModal: boolean = false;
+
+  /** @deprecated Use {@link ShowMembersModal}. */
+  public get showMembersModal(): boolean {
+    return this.ShowMembersModal;
+  }
+  /** @deprecated Use {@link ShowMembersModal}. */
+  public set showMembersModal(value: boolean) {
+    this.ShowMembersModal = value;
+  }
+  public ShowProjectSelector: boolean = false;
+
+  /** @deprecated Use {@link ShowProjectSelector}. */
+  public get showProjectSelector(): boolean {
+    return this.ShowProjectSelector;
+  }
+  /** @deprecated Use {@link ShowProjectSelector}. */
+  public set showProjectSelector(value: boolean) {
+    this.ShowProjectSelector = value;
+  }
+  public ShowArtifactPanel: boolean = false;
+
+  /** @deprecated Use {@link ShowArtifactPanel}. */
+  public get showArtifactPanel(): boolean {
+    return this.ShowArtifactPanel;
+  }
+  /** @deprecated Use {@link ShowArtifactPanel}. */
+  public set showArtifactPanel(value: boolean) {
+    this.ShowArtifactPanel = value;
+  }
+  public ShowArtifactsModal: boolean = false;
+
+  /** @deprecated Use {@link ShowArtifactsModal}. */
+  public get showArtifactsModal(): boolean {
+    return this.ShowArtifactsModal;
+  }
+  /** @deprecated Use {@link ShowArtifactsModal}. */
+  public set showArtifactsModal(value: boolean) {
+    this.ShowArtifactsModal = value;
+  }
+  public ShowSystemArtifacts: boolean = false;
+
+  /** @deprecated Use {@link ShowSystemArtifacts}. */
+  public get showSystemArtifacts(): boolean {
+    return this.ShowSystemArtifacts;
+  }
+  /** @deprecated Use {@link ShowSystemArtifacts}. */
+  public set showSystemArtifacts(value: boolean) {
+    this.ShowSystemArtifacts = value;
+  } // Toggle for showing system-only artifacts
+  public SelectedArtifactId: string | null = null;
+
+  /** @deprecated Use {@link SelectedArtifactId}. */
+  public get selectedArtifactId(): string | null {
+    return this.SelectedArtifactId;
+  }
+  /** @deprecated Use {@link SelectedArtifactId}. */
+  public set selectedArtifactId(value: string | null) {
+    this.SelectedArtifactId = value;
+  }
+  public SelectedVersionNumber: number | undefined = undefined;
+
+  /** @deprecated Use {@link SelectedVersionNumber}. */
+  public get selectedVersionNumber(): number | undefined {
+    return this.SelectedVersionNumber;
+  }
+  /** @deprecated Use {@link SelectedVersionNumber}. */
+  public set selectedVersionNumber(value: number | undefined) {
+    this.SelectedVersionNumber = value;
+  } // Version to show in artifact viewer
 
   /**
    * Bumped whenever artifacts are MERGED into `artifactsByDetailId` by something other than the
@@ -836,58 +1956,423 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * the selection the user just made.
    */
   private artifactSelectionEpoch = 0;
-  public artifactPaneWidth: number = DEFAULT_ARTIFACT_PANE_WIDTH;
-  public isArtifactPaneMaximized: boolean = false; // Track maximize state
+  public ArtifactPaneWidth: number = DEFAULT_ARTIFACT_PANE_WIDTH;
+
+  /** @deprecated Use {@link ArtifactPaneWidth}. */
+  public get artifactPaneWidth(): number {
+    return this.ArtifactPaneWidth;
+  }
+  /** @deprecated Use {@link ArtifactPaneWidth}. */
+  public set artifactPaneWidth(value: number) {
+    this.ArtifactPaneWidth = value;
+  }
+  public IsArtifactPaneMaximized: boolean = false;
+
+  /** @deprecated Use {@link IsArtifactPaneMaximized}. */
+  public get isArtifactPaneMaximized(): boolean {
+    return this.IsArtifactPaneMaximized;
+  }
+  /** @deprecated Use {@link IsArtifactPaneMaximized}. */
+  public set isArtifactPaneMaximized(value: boolean) {
+    this.IsArtifactPaneMaximized = value;
+  } // Track maximize state
   private artifactPaneWidthBeforeMaximize: number = DEFAULT_ARTIFACT_PANE_WIDTH;
-  public expandedArtifactId: string | null = null; // Track which artifact card is expanded in modal
-  public showCollectionPicker: boolean = false;
-  public collectionPickerArtifactId: string | null = null;
-  public collectionPickerExcludedIds: string[] = [];
-  public collectionPickerVersionId: string | null = null;
-  public collectionPickerArtifactName: string = '';
-  public collectionPickerVersionNumber: number | null = null;
+  public ExpandedArtifactId: string | null = null;
+
+  /** @deprecated Use {@link ExpandedArtifactId}. */
+  public get expandedArtifactId(): string | null {
+    return this.ExpandedArtifactId;
+  }
+  /** @deprecated Use {@link ExpandedArtifactId}. */
+  public set expandedArtifactId(value: string | null) {
+    this.ExpandedArtifactId = value;
+  } // Track which artifact card is expanded in modal
+  public ShowCollectionPicker: boolean = false;
+
+  /** @deprecated Use {@link ShowCollectionPicker}. */
+  public get showCollectionPicker(): boolean {
+    return this.ShowCollectionPicker;
+  }
+  /** @deprecated Use {@link ShowCollectionPicker}. */
+  public set showCollectionPicker(value: boolean) {
+    this.ShowCollectionPicker = value;
+  }
+  public CollectionPickerArtifactId: string | null = null;
+
+  /** @deprecated Use {@link CollectionPickerArtifactId}. */
+  public get collectionPickerArtifactId(): string | null {
+    return this.CollectionPickerArtifactId;
+  }
+  /** @deprecated Use {@link CollectionPickerArtifactId}. */
+  public set collectionPickerArtifactId(value: string | null) {
+    this.CollectionPickerArtifactId = value;
+  }
+  public CollectionPickerExcludedIds: string[] = [];
+
+  /** @deprecated Use {@link CollectionPickerExcludedIds}. */
+  public get collectionPickerExcludedIds(): string[] {
+    return this.CollectionPickerExcludedIds;
+  }
+  /** @deprecated Use {@link CollectionPickerExcludedIds}. */
+  public set collectionPickerExcludedIds(value: string[]) {
+    this.CollectionPickerExcludedIds = value;
+  }
+  public CollectionPickerVersionId: string | null = null;
+
+  /** @deprecated Use {@link CollectionPickerVersionId}. */
+  public get collectionPickerVersionId(): string | null {
+    return this.CollectionPickerVersionId;
+  }
+  /** @deprecated Use {@link CollectionPickerVersionId}. */
+  public set collectionPickerVersionId(value: string | null) {
+    this.CollectionPickerVersionId = value;
+  }
+  public CollectionPickerArtifactName: string = '';
+
+  /** @deprecated Use {@link CollectionPickerArtifactName}. */
+  public get collectionPickerArtifactName(): string {
+    return this.CollectionPickerArtifactName;
+  }
+  /** @deprecated Use {@link CollectionPickerArtifactName}. */
+  public set collectionPickerArtifactName(value: string) {
+    this.CollectionPickerArtifactName = value;
+  }
+  public CollectionPickerVersionNumber: number | null = null;
+
+  /** @deprecated Use {@link CollectionPickerVersionNumber}. */
+  public get collectionPickerVersionNumber(): number | null {
+    return this.CollectionPickerVersionNumber;
+  }
+  /** @deprecated Use {@link CollectionPickerVersionNumber}. */
+  public set collectionPickerVersionNumber(value: number | null) {
+    this.CollectionPickerVersionNumber = value;
+  }
 
   // Artifact permissions
-  public canShareSelectedArtifact: boolean = false;
-  public canEditSelectedArtifact: boolean = false;
+  public CanShareSelectedArtifact: boolean = false;
+
+  /** @deprecated Use {@link CanShareSelectedArtifact}. */
+  public get canShareSelectedArtifact(): boolean {
+    return this.CanShareSelectedArtifact;
+  }
+  /** @deprecated Use {@link CanShareSelectedArtifact}. */
+  public set canShareSelectedArtifact(value: boolean) {
+    this.CanShareSelectedArtifact = value;
+  }
+  public CanEditSelectedArtifact: boolean = false;
+
+  /** @deprecated Use {@link CanEditSelectedArtifact}. */
+  public get canEditSelectedArtifact(): boolean {
+    return this.CanEditSelectedArtifact;
+  }
+  /** @deprecated Use {@link CanEditSelectedArtifact}. */
+  public set canEditSelectedArtifact(value: boolean) {
+    this.CanEditSelectedArtifact = value;
+  }
 
   // Share modal state
-  public isArtifactShareModalOpen: boolean = false;
-  public artifactToShare: MJArtifactEntity | null = null;
+  public IsArtifactShareModalOpen: boolean = false;
+
+  /** @deprecated Use {@link IsArtifactShareModalOpen}. */
+  public get isArtifactShareModalOpen(): boolean {
+    return this.IsArtifactShareModalOpen;
+  }
+  /** @deprecated Use {@link IsArtifactShareModalOpen}. */
+  public set isArtifactShareModalOpen(value: boolean) {
+    this.IsArtifactShareModalOpen = value;
+  }
+  public ArtifactToShare: MJArtifactEntity | null = null;
+
+  /** @deprecated Use {@link ArtifactToShare}. */
+  public get artifactToShare(): MJArtifactEntity | null {
+    return this.ArtifactToShare;
+  }
+  /** @deprecated Use {@link ArtifactToShare}. */
+  public set artifactToShare(value: MJArtifactEntity | null) {
+    this.ArtifactToShare = value;
+  }
 
 
   // Artifact mapping: ConversationDetailID -> Array of LazyArtifactInfo
   // Uses lazy-loading pattern: display data loaded immediately, full entities on-demand
   // Supports multiple artifacts per conversation detail (0-N relationship)
-  public artifactsByDetailId = new Map<string, LazyArtifactInfo[]>();
+  public ArtifactsByDetailId = new Map<string, LazyArtifactInfo[]>();
+
+  /** @deprecated Use {@link ArtifactsByDetailId}. */
+  public get artifactsByDetailId() {
+    return this.ArtifactsByDetailId;
+  }
+  /** @deprecated Use {@link ArtifactsByDetailId}. */
+  public set artifactsByDetailId(value) {
+    this.ArtifactsByDetailId = value;
+  }
 
   // System artifacts mapping: ConversationDetailID -> Array of LazyArtifactInfo (Visibility='System Only')
   // Kept separate so we can toggle their display without reloading
   // Made public so it can be passed to MessageInputComponent for payload loading
-  public systemArtifactsByDetailId = new Map<string, LazyArtifactInfo[]>();
+  public SystemArtifactsByDetailId = new Map<string, LazyArtifactInfo[]>();
+
+  /** @deprecated Use {@link SystemArtifactsByDetailId}. */
+  public get systemArtifactsByDetailId() {
+    return this.SystemArtifactsByDetailId;
+  }
+  /** @deprecated Use {@link SystemArtifactsByDetailId}. */
+  public set systemArtifactsByDetailId(value) {
+    this.SystemArtifactsByDetailId = value;
+  }
 
   // Cached combined artifacts map - updated when toggle changes
   private _combinedArtifactsMap: Map<string, LazyArtifactInfo[]> | null = null;
 
   // Agent run mapping: ConversationDetailID -> MJAIAgentRunEntityExtended
   // Loaded once per conversation and kept in sync as new runs are created
-  public agentRunsByDetailId = new Map<string, MJAIAgentRunEntityExtended>();
+  public AgentRunsByDetailId = new Map<string, MJAIAgentRunEntityExtended>();
+
+  /** @deprecated Use {@link AgentRunsByDetailId}. */
+  public get agentRunsByDetailId() {
+    return this.AgentRunsByDetailId;
+  }
+  /** @deprecated Use {@link AgentRunsByDetailId}. */
+  public set agentRunsByDetailId(value) {
+    this.AgentRunsByDetailId = value;
+  }
 
   /**
    * Ratings by conversation detail ID (parsed from RatingsJSON)
    */
-  public ratingsByDetailId = new Map<string, RatingJSON[]>();
+  public RatingsByDetailId = new Map<string, RatingJSON[]>();
+
+  /** @deprecated Use {@link RatingsByDetailId}. */
+  public get ratingsByDetailId() {
+    return this.RatingsByDetailId;
+  }
+  /** @deprecated Use {@link RatingsByDetailId}. */
+  public set ratingsByDetailId(value) {
+    this.RatingsByDetailId = value;
+  }
 
   /**
    * Attachments by conversation detail ID (loaded from ConversationDetailAttachments)
    */
-  public attachmentsByDetailId = new Map<string, MessageAttachment[]>();
+  public AttachmentsByDetailId = new Map<string, MessageAttachment[]>();
+
+  /** @deprecated Use {@link AttachmentsByDetailId}. */
+  public get attachmentsByDetailId() {
+    return this.AttachmentsByDetailId;
+  }
+  /** @deprecated Use {@link AttachmentsByDetailId}. */
+  public set attachmentsByDetailId(value) {
+    this.AttachmentsByDetailId = value;
+  }
 
   /**
    * In-progress message IDs for streaming reconnection
    * Passed to message-input component to reconnect PubSub updates
    */
-  public inProgressMessageIds: string[] = [];
+  public get InProgressMessageIds(): string[] {
+    return this._inProgressMessageIds ?? [];
+  }
+  public set InProgressMessageIds(value: string[]) {
+    this._inProgressMessageIds = value;
+    this.syncSendSlot();
+  }
+  private _inProgressMessageIds: string[] = [];
+
+  // ── The composer's send slot as the stop control ──────────────────────────────────────
+  // While replies are in flight the composer's send slot is the stop control (one run: "Stop
+  // {agent}"; several: "Stop all N", and each reply shows its own pill as well). The slot's mode,
+  // label and status line are derived here from the in-flight replies; the generic composer box
+  // knows nothing about runs. A stop goes through the same cancelable path as the per-reply pill.
+
+  /** Replies the person asked to stop that have not left In-Progress yet. */
+  public StoppingDetailIds = new Set<string>();
+  private _stopFallbackTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private _sendSlotTicker: ReturnType<typeof setInterval> | null = null;
+  /** The elapsed time of the in-flight reply, ticked once a second while one is in flight. */
+  public SendSlotElapsed: string | null = null;
+
+  /** How many agent replies are in flight in the open view. */
+  public get InFlightCount(): number {
+    return this.InProgressMessageIds.length;
+  }
+
+  /** What the composer's send slot is: Stop while replies are in flight and the viewer may stop them. */
+  public get SendSlotMode(): SendSlotMode {
+    if (this.InFlightCount === 0 || this.EffectiveReadOnly || !this.AllowStopRun) {
+      return 'send';
+    }
+    return this.isAnyStopping() ? 'stopping' : 'stop';
+  }
+
+  /** The count the slot shows: the in-flight replies, or none when the slot is Send. */
+  public get StopCount(): number {
+    return this.SendSlotMode === 'send' ? 0 : this.InFlightCount;
+  }
+
+  /** The slot's tooltip and accessible name: "Stop {agent}", or "Stop all N runs". */
+  public get StopLabel(): string {
+    const count = this.InFlightCount;
+    if (count > 1) {
+      return `Stop all ${count} runs`;
+    }
+    const agent = this.inFlightAgentName();
+    return agent ? `Stop ${agent}` : 'Stop';
+  }
+
+  /** The composer's status line: who is working, or what is being stopped. Null when the slot is Send. */
+  public get StatusText(): string | null {
+    const mode = this.SendSlotMode;
+    if (mode === 'send') {
+      return null;
+    }
+    const count = this.InFlightCount;
+    const agent = this.inFlightAgentName();
+    if (mode === 'stopping') {
+      return count > 1 ? `Stopping ${count} runs…` : `Stopping ${agent ?? 'the run'}…`;
+    }
+    return count > 1 ? `${count} agents working` : `${agent ?? 'The agent'} is working`;
+  }
+
+  /** The elapsed time after the status line, for a single run that is working. */
+  public get StatusElapsed(): string | null {
+    return this.SendSlotMode === 'stop' && this.InFlightCount === 1 ? this.SendSlotElapsed : null;
+  }
+
+  /**
+   * The composer's stop control. Every in-flight reply is stopped through the same path as the
+   * per-reply pill: `BeforeStopClicked` first (a listener that cancels keeps that run going),
+   * then {@link OnStopMessage}, which fires `AfterStopClicked` with the outcome. Each reply asked
+   * to stop reads as stopping until it leaves In-Progress, or until the retry window passes,
+   * when the slot offers Stop again and a toast says the stop did not take.
+   */
+  public async OnComposerStopClicked(): Promise<void> {
+    if (this.SendSlotMode !== 'stop') {
+      return;
+    }
+    const byId = IndexByUUID(this.messages);
+    for (const id of [...this.InProgressMessageIds]) {
+      const detail = byId.Get(id);
+      if (!detail) {
+        continue;
+      }
+      const before = new BeforeStopClickedEventArgs(detail.ID, this.AgentRunsByDetailId.get(detail.ID)?.ID ?? null);
+      this.BeforeStopClicked.emit(before);
+      if (before.Cancel) {
+        continue;
+      }
+      this.markStopping(detail.ID);
+      await this.OnStopMessage(detail);
+    }
+    this.cdr?.markForCheck?.();
+  }
+
+  /** The agent name of an in-flight reply: its run's agent, else the reply's, else the assistant name. */
+  private agentNameFor(detailId: string): string | null {
+    const run = this.AgentRunsByDetailId?.get(detailId);
+    const detail = this.messages?.find((m) => UUIDsEqual(m.ID, detailId));
+    return run?.Agent ?? detail?.Agent ?? this.assistantDisplayName ?? null;
+  }
+
+  private inFlightAgentName(): string | null {
+    const id = this.InProgressMessageIds[0];
+    return id ? this.agentNameFor(id) : null;
+  }
+
+  private isAnyStopping(): boolean {
+    const inFlight = new UUIDSet(this.InProgressMessageIds);
+    for (const id of this.StoppingDetailIds ?? []) {
+      if (inFlight.Has(id)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private markStopping(detailId: string): void {
+    this.StoppingDetailIds ??= new Set<string>();
+    this._stopFallbackTimers ??= new Map();
+    this.StoppingDetailIds.add(detailId);
+    this.clearStopFallbackTimer(detailId);
+    this._stopFallbackTimers.set(detailId, setTimeout(() => {
+      this._stopFallbackTimers.delete(detailId);
+      if (!this.StoppingDetailIds.delete(detailId)) {
+        return;
+      }
+      if (this.InProgressMessageIds.some((x) => UUIDsEqual(x, detailId))) {
+        MJNotificationService.Instance.CreateSimpleNotification(`${this.agentNameFor(detailId) ?? 'The run'} did not stop. Try again.`, 'warning', 4000);
+      }
+      this.cdr?.markForCheck?.();
+    }, STOP_RETRY_AFTER_MS));
+  }
+
+  private clearStopFallbackTimer(detailId: string): void {
+    const timer = this._stopFallbackTimers?.get(detailId);
+    if (timer) {
+      clearTimeout(timer);
+      this._stopFallbackTimers.delete(detailId);
+    }
+  }
+
+  /**
+   * Follows a change in the in-flight replies: a reply that left In-Progress is no longer
+   * stopping, and the one-second elapsed ticker runs only while something is in flight.
+   */
+  private syncSendSlot(): void {
+    // Specs build this component off its prototype, where field initializers never ran.
+    this.StoppingDetailIds ??= new Set<string>();
+    this._stopFallbackTimers ??= new Map();
+    const inFlightIds = new UUIDSet(this.InProgressMessageIds);
+    for (const id of [...this.StoppingDetailIds]) {
+      if (!inFlightIds.Has(id)) {
+        this.StoppingDetailIds.delete(id);
+        this.clearStopFallbackTimer(id);
+      }
+    }
+    const inFlight = this.InProgressMessageIds.length > 0;
+    if (inFlight && !this._sendSlotTicker) {
+      this.updateSendSlotElapsed();
+      this._sendSlotTicker = setInterval(() => {
+        this.updateSendSlotElapsed();
+        this.cdr?.markForCheck?.();
+      }, 1000);
+    } else if (!inFlight && this._sendSlotTicker) {
+      this.stopSendSlotTicker();
+    }
+  }
+
+  private updateSendSlotElapsed(): void {
+    const id = this.InProgressMessageIds[0];
+    const detail = id ? this.messages.find((m) => UUIDsEqual(m.ID, id)) : undefined;
+    const started = detail?.__mj_CreatedAt ? new Date(detail.__mj_CreatedAt).getTime() : NaN;
+    this.SendSlotElapsed = Number.isFinite(started) ? ConversationChatAreaComponent.FormatElapsed(Date.now() - started) : null;
+  }
+
+  private stopSendSlotTicker(): void {
+    if (this._sendSlotTicker) {
+      clearInterval(this._sendSlotTicker);
+      this._sendSlotTicker = null;
+    }
+    this.SendSlotElapsed = null;
+  }
+
+  /** `m:ss` (or `h:mm:ss`), the same shape as the reply's time pill. */
+  public static FormatElapsed(ms: number): string {
+    let seconds = Math.floor(Math.max(0, ms) / 1000);
+    let minutes = Math.floor(seconds / 60);
+    seconds = seconds % 60;
+    const hours = Math.floor(minutes / 60);
+    minutes = minutes % 60;
+    return (hours > 0 ? `${hours}:` : '') + (hours > 0 && minutes < 10 ? '0' : '') + `${minutes}:` + (seconds < 10 ? '0' : '') + `${seconds}`;
+  }
+
+  /** @deprecated Use {@link InProgressMessageIds}. */
+  public get inProgressMessageIds(): string[] {
+    return this.InProgressMessageIds;
+  }
+  /** @deprecated Use {@link InProgressMessageIds}. */
+  public set inProgressMessageIds(value: string[]) {
+    this.InProgressMessageIds = value;
+  }
 
   // Subject for cleanup on destroy
   private destroy$ = new Subject<void>();
@@ -897,15 +2382,48 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   private messageInputMetadataCache = new Map<string, {conversationId: string; conversationName: string | null}>();
 
   // Empty collections for hidden message-input components
-  public readonly emptyArtifactsMap = new Map<string, LazyArtifactInfo[]>();
-  public readonly emptyAgentRunsMap = new Map<string, MJAIAgentRunEntityExtended>();
-  public readonly emptyInProgressIds: string[] = [];
+  public readonly EmptyArtifactsMap = new Map<string, LazyArtifactInfo[]>();
+
+  /** @deprecated Use {@link EmptyArtifactsMap}. */
+  public get emptyArtifactsMap() {
+    return this.EmptyArtifactsMap;
+  }
+  public readonly EmptyAgentRunsMap = new Map<string, MJAIAgentRunEntityExtended>();
+
+  /** @deprecated Use {@link EmptyAgentRunsMap}. */
+  public get emptyAgentRunsMap() {
+    return this.EmptyAgentRunsMap;
+  }
+  public readonly EmptyInProgressIds: string[] = [];
+
+  /** @deprecated Use {@link EmptyInProgressIds}. */
+  public get emptyInProgressIds(): string[] {
+    return this.EmptyInProgressIds;
+  }
 
   // Loading state for peripheral data
-  public isLoadingPeripheralData: boolean = false;
+  public IsLoadingPeripheralData: boolean = false;
+
+  /** @deprecated Use {@link IsLoadingPeripheralData}. */
+  public get isLoadingPeripheralData(): boolean {
+    return this.IsLoadingPeripheralData;
+  }
+  /** @deprecated Use {@link IsLoadingPeripheralData}. */
+  public set isLoadingPeripheralData(value: boolean) {
+    this.IsLoadingPeripheralData = value;
+  }
 
   // Subject to trigger artifact viewer refresh when new version is created
-  public artifactViewerRefresh$ = new Subject<{artifactId: string; versionNumber: number}>();
+  public ArtifactViewerRefresh$ = new Subject<{artifactId: string; versionNumber: number}>();
+
+  /** @deprecated Use {@link ArtifactViewerRefresh$}. */
+  public get artifactViewerRefresh$() {
+    return this.ArtifactViewerRefresh$;
+  }
+  /** @deprecated Use {@link ArtifactViewerRefresh$}. */
+  public set artifactViewerRefresh$(value) {
+    this.ArtifactViewerRefresh$ = value;
+  }
 
   // Track initialization state to prevent loading messages before agents are ready
   private isInitialized: boolean = false;
@@ -929,48 +2447,74 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   private readonly ARTIFACT_PANE_WIDTH_KEY = 'mj-conversations-artifact-pane-width';
 
   // Pinned messages panel state
-  public showPinsPanel: boolean = false;
+  public ShowPinsPanel: boolean = false;
+
+  /** @deprecated Use {@link ShowPinsPanel}. */
+  public get showPinsPanel(): boolean {
+    return this.ShowPinsPanel;
+  }
+  /** @deprecated Use {@link ShowPinsPanel}. */
+  public set showPinsPanel(value: boolean) {
+    this.ShowPinsPanel = value;
+  }
 
   /** True once the pin ENTITIES are loaded. The COUNT is known from conversation open. */
   private pinsHydrated = false;
 
   /** Spinner state for the panel's first open — the rows now arrive after the panel does. */
-  public isLoadingPins = false;
+  public IsLoadingPins = false;
+
+  /** @deprecated Use {@link IsLoadingPins}. */
+  public get isLoadingPins() {
+    return this.IsLoadingPins;
+  }
+  /** @deprecated Use {@link IsLoadingPins}. */
+  public set isLoadingPins(value) {
+    this.IsLoadingPins = value;
+  }
 
   /**
    * TRUE pin count for the chip. Deliberately NOT `pinnedMessages.length`, which is 0 until
    * the panel has been opened and would hide the chip on a conversation full of pins.
    */
-  get pinnedMessageCount(): number {
+  get PinnedMessageCount(): number {
     return this.windowStore.PinnedTotalCount;
   }
 
+  /** @deprecated Use {@link PinnedMessageCount}. */
+  get pinnedMessageCount(): number {
+    return this.PinnedMessageCount;
+  }
+
   /**
-   * Opens/closes the pins panel, hydrating its rows on first open.
+   * Opens/closes the pins panel, hydrating its rows on first open. Opening it closes the forks list.
    *
    * Lazy on purpose: the panel is closed by default, so loading pin entities during
    * conversation open costs every user for a panel most never open.
    */
   public async TogglePinsPanel(): Promise<void> {
-    this.showPinsPanel = !this.showPinsPanel;
-    if (this.showPinsPanel && !this.pinsHydrated && this.conversationId) {
-      this.isLoadingPins = true;
+    this.ShowPinsPanel = !this.ShowPinsPanel;
+    if (this.ShowPinsPanel) {
+      this.ShowForksPopover = false;
+    }
+    if (this.ShowPinsPanel && !this.pinsHydrated && this.ConversationId) {
+      this.IsLoadingPins = true;
       this.cdr.detectChanges();
       try {
-        await this.hydratePinnedMessages(this.conversationId);
+        await this.hydratePinnedMessages(this.ConversationId);
       } finally {
-        this.isLoadingPins = false;
+        this.IsLoadingPins = false;
       }
     }
     this.cdr.detectChanges();
   }
 
   /**
-   * All currently pinned messages in the active conversation, newest pin first.
+   * The pinned messages on the open view's path, newest pin first.
    *
    * Read from the window store's separate pin set, NOT filtered out of `messages` — a pin
-   * older than the loaded window would otherwise vanish from the panel. Loaded by its own
-   * `IsPinned=1` query in {@link loadMessages}, already ordered `Sequence DESC`.
+   * older than the loaded window would otherwise vanish from the panel. Loaded by
+   * {@link hydratePinnedMessages} when the pins panel first opens, already ordered `Sequence DESC`.
    *
    * This and the three getters around it are TEMPLATE-BOUND, so they run on every change
    * detection cycle. They read the store's cheap single-value accessors rather than
@@ -978,18 +2522,33 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * cycle, during streaming per token, is exactly the length-proportional work this feature
    * exists to remove.
    */
-  get pinnedMessages(): readonly MJConversationDetailEntity[] {
+  get PinnedMessages(): readonly MJConversationDetailEntity[] {
     return this.windowStore.PinnedDetails;
   }
 
+  /** @deprecated Use {@link PinnedMessages}. */
+  get pinnedMessages(): readonly MJConversationDetailEntity[] {
+    return this.PinnedMessages;
+  }
+
   /** True when older transcript pages remain above the loaded window (drives the sentinel). */
-  get hasMoreMessagesAbove(): boolean {
+  get HasMoreMessagesAbove(): boolean {
     return this.windowStore.HasMoreAbove;
   }
 
+  /** @deprecated Use {@link HasMoreMessagesAbove}. */
+  get hasMoreMessagesAbove(): boolean {
+    return this.HasMoreMessagesAbove;
+  }
+
   /** True while an older transcript page is being fetched. */
-  get isLoadingOlderMessages(): boolean {
+  get IsLoadingOlderMessages(): boolean {
     return this.windowStore.IsLoadingOlder;
+  }
+
+  /** @deprecated Use {@link IsLoadingOlderMessages}. */
+  get isLoadingOlderMessages(): boolean {
+    return this.IsLoadingOlderMessages;
   }
 
   /**
@@ -1006,8 +2565,13 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * `min-height: 0` that make it a real scroller. Passing it down beats having the list
    * discover it, which depends on layout having settled.
    */
-  public get messageScrollRoot(): HTMLElement | null {
+  public get MessageScrollRoot(): HTMLElement | null {
     return this.scrollContainer?.nativeElement ?? null;
+  }
+
+  /** @deprecated Use {@link MessageScrollRoot}. */
+  public get messageScrollRoot(): HTMLElement | null {
+    return this.MessageScrollRoot;
   }
 
   /**
@@ -1018,13 +2582,18 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * array so the list's ngOnChanges runs; the list then detects the prepend and holds the
    * user's scroll position rather than jumping.
    */
-  public async onOlderMessagesRequested(): Promise<void> {
-    const conversationId = this.conversationId;
-    await this.windowStore.LoadOlder(this.currentUser);
+  public async OnOlderMessagesRequested(): Promise<void> {
+    const conversationId = this.ConversationId;
+    await this.windowStore.LoadOlder(this.CurrentUser);
     if (!this.isActiveConversation(conversationId)) {
       return;
     }
     await this.refreshAfterPaging(conversationId!);
+  }
+
+  /** @deprecated Use {@link OnOlderMessagesRequested}. */
+  public async onOlderMessagesRequested(): Promise<void> {
+    return this.OnOlderMessagesRequested();
   }
 
   /**
@@ -1066,8 +2635,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * pages until the target is in the loaded set, history runs out, or the page cap is hit —
    * and always reports the outcome, because the plan forbids a silent no-op here.
    */
-  public async onDateJumpRequested(period: DateJumpPeriod): Promise<void> {
-    const conversationId = this.conversationId;
+  public async OnDateJumpRequested(period: DateJumpPeriod): Promise<void> {
+    const conversationId = this.ConversationId;
     let pagesLoaded = 0;
 
     // The loop's ONLY job is to load enough history for the jump to be answerable. It does
@@ -1081,7 +2650,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
       // Store-level paging: the per-page peripheral rebuild is deferred to a single
       // refresh below, so a deep jump costs one rebuild instead of one per page.
-      await this.windowStore.LoadOlder(this.currentUser);
+      await this.windowStore.LoadOlder(this.CurrentUser);
       if (!this.isActiveConversation(conversationId)) {
         return;                             // user switched away mid-jump
       }
@@ -1103,32 +2672,321 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     }
   }
 
+  /** @deprecated Use {@link OnDateJumpRequested}. */
+  public async onDateJumpRequested(period: DateJumpPeriod): Promise<void> {
+    return this.OnDateJumpRequested(period);
+  }
+
   // Test feedback dialog state
-  public showTestFeedbackDialog: boolean = false;
-  public testFeedbackDialogData: TestFeedbackDialogData | null = null;
+  public ShowTestFeedbackDialog: boolean = false;
+
+  /** @deprecated Use {@link ShowTestFeedbackDialog}. */
+  public get showTestFeedbackDialog(): boolean {
+    return this.ShowTestFeedbackDialog;
+  }
+  /** @deprecated Use {@link ShowTestFeedbackDialog}. */
+  public set showTestFeedbackDialog(value: boolean) {
+    this.ShowTestFeedbackDialog = value;
+  }
+  public TestFeedbackDialogData: TestFeedbackDialogData | null = null;
+
+  /** @deprecated Use {@link TestFeedbackDialogData}. */
+  public get testFeedbackDialogData(): TestFeedbackDialogData | null {
+    return this.TestFeedbackDialogData;
+  }
+  /** @deprecated Use {@link TestFeedbackDialogData}. */
+  public set testFeedbackDialogData(value: TestFeedbackDialogData | null) {
+    this.TestFeedbackDialogData = value;
+  }
 
   // Image viewer state
-  public showImageViewer: boolean = false;
-  public selectedImageUrl: string = '';
-  public selectedImageAlt: string = '';
-  public selectedImageFileName: string = '';
+  public ShowImageViewer: boolean = false;
+
+  /** @deprecated Use {@link ShowImageViewer}. */
+  public get showImageViewer(): boolean {
+    return this.ShowImageViewer;
+  }
+  /** @deprecated Use {@link ShowImageViewer}. */
+  public set showImageViewer(value: boolean) {
+    this.ShowImageViewer = value;
+  }
+  public SelectedImageUrl: string = '';
+
+  /** @deprecated Use {@link SelectedImageUrl}. */
+  public get selectedImageUrl(): string {
+    return this.SelectedImageUrl;
+  }
+  /** @deprecated Use {@link SelectedImageUrl}. */
+  public set selectedImageUrl(value: string) {
+    this.SelectedImageUrl = value;
+  }
+  public SelectedImageAlt: string = '';
+
+  /** @deprecated Use {@link SelectedImageAlt}. */
+  public get selectedImageAlt(): string {
+    return this.SelectedImageAlt;
+  }
+  /** @deprecated Use {@link SelectedImageAlt}. */
+  public set selectedImageAlt(value: string) {
+    this.SelectedImageAlt = value;
+  }
+  public SelectedImageFileName: string = '';
+
+  /** @deprecated Use {@link SelectedImageFileName}. */
+  public get selectedImageFileName(): string {
+    return this.SelectedImageFileName;
+  }
+  /** @deprecated Use {@link SelectedImageFileName}. */
+  public set selectedImageFileName(value: string) {
+    this.SelectedImageFileName = value;
+  }
 
   // Upload indicator state (shown centered in conversation area)
-  public isUploadingAttachments: boolean = false;
-  public uploadingMessage: string = '';
+  public IsUploadingAttachments: boolean = false;
+
+  /** @deprecated Use {@link IsUploadingAttachments}. */
+  public get isUploadingAttachments(): boolean {
+    return this.IsUploadingAttachments;
+  }
+  /** @deprecated Use {@link IsUploadingAttachments}. */
+  public set isUploadingAttachments(value: boolean) {
+    this.IsUploadingAttachments = value;
+  }
+  public UploadingMessage: string = '';
+
+  /** @deprecated Use {@link UploadingMessage}. */
+  public get uploadingMessage(): string {
+    return this.UploadingMessage;
+  }
+  /** @deprecated Use {@link UploadingMessage}. */
+  public set uploadingMessage(value: string) {
+    this.UploadingMessage = value;
+  }
 
   // Attachment support based on agent modalities
   // Computed from conversation manager (Sage) and any previous agent in conversation
-  public enableAttachments: boolean = false;
-  public maxAttachments: number = 10;
-  public maxAttachmentSizeBytes: number = 20 * 1024 * 1024; // 20MB default
-  public acceptedFileTypes: string = 'image/*';
+  public EnableAttachments: boolean = false;
+
+  /** @deprecated Use {@link EnableAttachments}. */
+  public get enableAttachments(): boolean {
+    return this.EnableAttachments;
+  }
+  /** @deprecated Use {@link EnableAttachments}. */
+  public set enableAttachments(value: boolean) {
+    this.EnableAttachments = value;
+  }
+  public MaxAttachments: number = 10;
+
+  /** @deprecated Use {@link MaxAttachments}. */
+  public get maxAttachments(): number {
+    return this.MaxAttachments;
+  }
+  /** @deprecated Use {@link MaxAttachments}. */
+  public set maxAttachments(value: number) {
+    this.MaxAttachments = value;
+  }
+  public MaxAttachmentSizeBytes: number = 20 * 1024 * 1024;
+
+  /** @deprecated Use {@link MaxAttachmentSizeBytes}. */
+  public get maxAttachmentSizeBytes(): number {
+    return this.MaxAttachmentSizeBytes;
+  }
+  /** @deprecated Use {@link MaxAttachmentSizeBytes}. */
+  public set maxAttachmentSizeBytes(value: number) {
+    this.MaxAttachmentSizeBytes = value;
+  } // 20MB default
+  public AcceptedFileTypes: string = 'image/*';
+
+  /** @deprecated Use {@link AcceptedFileTypes}. */
+  public get acceptedFileTypes(): string {
+    return this.AcceptedFileTypes;
+  }
+  /** @deprecated Use {@link AcceptedFileTypes}. */
+  public set acceptedFileTypes(value: string) {
+    this.AcceptedFileTypes = value;
+  }
   private conversationManagerAgent: MJAIAgentEntityExtended | null = null;
 
   private engine = ConversationEngine.Instance;
 
   private windowStore = new ConversationDetailWindowStore(ConversationEngine.Instance);
 
+  /**
+   * This chat area's fork rows of the active conversation, loaded with the transcript. The scope of the
+   * open view is built from them; no other chat area reads or changes them.
+   */
+  private branches: ConversationBranchRow[] = [];
+  /** The conversation whose fork rows {@link branches} holds; null when none are loaded. */
+  private branchRowsConversationId: string | null = null;
+  /** The conversation and branch of the last Main fallback that {@link openViewScope} logged. */
+  private scopeFallbackLogged: string | null = null;
+
+  /** What this chat area shows of the active conversation: Main or one fork. Per instance, in memory only. */
+  private openView: ConversationOpenView = MAIN_OPEN_VIEW;
+  /**
+   * The view the loaded rows belong to: the open view once its window is applied. While a view change
+   * reloads, the rows on screen keep the layout of this view.
+   */
+  private windowView: ConversationOpenView = MAIN_OPEN_VIEW;
+  /** True while a view change ends a voice session and reloads; other view changes are ignored meanwhile. */
+  private viewChangeInFlight = false;
+  /** True while a fork is being created and opened; other start actions are ignored meanwhile. */
+  private forkStartInFlight = false;
+  /** True while an in-place rerun hides a turn's answer and starts the agent again; other reruns are ignored meanwhile. */
+  private inPlaceRerunInFlight = false;
+  /** The in-place turn built for a window, with the inputs it was built from. */
+  private inPlaceTurnCache: {
+    Messages: MJConversationDetailEntity[];
+    View: ConversationOpenView;
+    Branches: ConversationBranchRow[];
+    CanFork: boolean;
+    Turn: LatestTurn | null;
+  } | null = null;
+  /** The draft whose fork a first send is creating, with that creation; a send in the same draft awaits it. */
+  private draftForkStart: { View: DraftForkOpenView; ForkID: Promise<string | undefined> } | null = null;
+  /** The fork a draft's first send created; the first user message sent into it names it ({@link nameForkFromFirstSend}). */
+  private forkNamedByFirstSend: { ConversationID: string; ForkID: string } | null = null;
+  /** True while the header title (the conversation name in Main, the fork name in a fork) is edited. */
+  public IsRenamingTitle = false;
+  /** The text of the title name field. */
+  public TitleRenameText = '';
+  /** The title name field; focused when renaming starts. */
+  @ViewChild('titleNameInput') private titleNameInput?: ElementRef<HTMLInputElement>;
+  /** The rename button of the header title; focus goes back to it when the name field closes from the keyboard. */
+  @ViewChild('titleRenameButton', { read: ElementRef }) private titleRenameButton?: ElementRef<HTMLButtonElement>;
+  /** The breadcrumb built for a view, with the inputs it was built from. */
+  private breadcrumbCache: {
+    View: ConversationOpenView;
+    Branches: ConversationBranchRow[];
+    Summaries: ForkSummary[];
+    ConversationName: string;
+    Crumbs: ForkBreadcrumb[];
+  } | null = null;
+  /** Increments on every view reload; a reload whose token is no longer current stops. */
+  private viewReloadToken = 0;
+  /**
+   * The pins recorded before a view reload reset the store, with the conversation load they belong
+   * to. A reload that replaces a running one in the same conversation load reuses them.
+   */
+  private pinsDuringViewReload: { LoadToken: number; Count: number; Details: MJConversationDetailEntity[] } | null = null;
+  /** The fork summaries of the active conversation: chips, the fork header and the forks list read them. */
+  public ForkSummaries: ForkSummary[] = [];
+  /** True while the forks list is open. */
+  public ShowForksPopover = false;
+  /** The id of this chat area's forks popover; the header Forks button points at it. */
+  public readonly ForksPopoverID = `mj-conversation-forks-popover-${++forksPopoverCount}`;
+  /** The header Forks button; focus goes back to it when the forks list closes. */
+  @ViewChild('forksButton', { read: ElementRef }) private forksButton?: ElementRef<HTMLButtonElement>;
+  private forkSummaryRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Numbers each fork summary read, so an older read cannot overwrite a newer one. */
+  private forkSummaryReadSequence = 0;
+  /** The number of the newest fork summary read whose result is shown. */
+  private forkSummaryShownSequence = 0;
+  /**
+   * The chip map built from {@link ForkSummaries} for a window view, with the summaries, the view, the
+   * fork's first own row and the avatar map (and its version) it was built from.
+   */
+  private forkChipCache: {
+    Summaries: ForkSummary[];
+    View: ConversationOpenView;
+    FirstOwnID: string | null;
+    AvatarMap: Map<string, {imageUrl: string | null; iconClass: string | null}>;
+    AvatarVersion: number;
+    Map: ReadonlyMap<string, readonly MessageForkChip[]>;
+  } | null = null;
+  /** Increments each time {@link UserAvatarMap} is filled, so the chip map is built again with the new avatars. */
+  private userAvatarMapVersion = 0;
+  /** The loaded rows split for the window view, and the rows shown from that split. */
+  private displayCache: {
+    Messages: MJConversationDetailEntity[];
+    View: ConversationOpenView;
+    Split: ForkRows<MJConversationDetailEntity>;
+    Rows: MJConversationDetailEntity[];
+  } | null = null;
+  /** The layout and composer hint of the rows shown, with the inputs they were built from. */
+  private layoutCache: {
+    Rows: MJConversationDetailEntity[];
+    View: ConversationOpenView;
+    Summaries: ForkSummary[];
+    Layout: ForkViewLayout | null;
+    Hint: string | null;
+  } | null = null;
+
+  /** The open view; Main when none was set. */
+  public get OpenView(): ConversationOpenView {
+    return this.openView ?? MAIN_OPEN_VIEW;
+  }
+
+  /** The branch whose path the open view reads; null is Main. */
+  public get OpenViewBranchId(): string | null {
+    return ReadBranchIdOf(this.OpenView);
+  }
+
+  /** The branch a composer of `conversationId` writes to: the open view's for the active conversation, else Main. */
+  public TargetBranchIdFor(conversationId: string | null | undefined): string | null {
+    return conversationId && UUIDsEqual(conversationId, this.ConversationId) ? this.OpenViewBranchId : null;
+  }
+
+  /**
+   * The scope of what this chat area shows of a conversation: the open view's path for the active
+   * conversation, Main for any other. Built from this chat area's own fork rows. While the rows of
+   * the open fork are not loaded yet, returns Main and logs once per conversation and branch.
+   */
+  private openViewScope(conversationId: string): ConversationScope {
+    const branchId = UUIDsEqual(conversationId, this.ConversationId) ? this.OpenViewBranchId : null;
+    if (!branchId) {
+      return ConversationEngine.TrunkScope(conversationId);
+    }
+    const branches = UUIDsEqual(this.branchRowsConversationId, conversationId) ? this.branches : [];
+    const branch = branches.find(b => UUIDsEqual(b.ID, branchId));
+    if (branch) {
+      return { ConversationID: conversationId, BranchID: branch.ID, Branches: branches };
+    }
+    const key = `${NormalizeUUID(conversationId)}|${NormalizeUUID(branchId)}`;
+    if (this.scopeFallbackLogged !== key) {
+      this.scopeFallbackLogged = key;
+      console.warn(`Conversation ${conversationId} is read in Main until the rows of fork ${branchId} are loaded`);
+    }
+    return ConversationEngine.TrunkScope(conversationId);
+  }
+
+  /** The open view's scope, passed to the artifact viewer; null with no conversation. */
+  public get ArtifactViewerScope(): ConversationScope | null {
+    const conversationId = this.ConversationId;
+    return conversationId ? this.openViewScope(conversationId) : null;
+  }
+
+  /** The open view's scope, passed to the export modal; null with no conversation. */
+  public get ExportScope(): ConversationScope | null {
+    return this.ArtifactViewerScope;
+  }
+
+  /**
+   * Answers the active composer's "which branch does this new message go to": the open fork, or null
+   * for Main. In a draft fork, creates the fork first and opens it; undefined (the send stops) when
+   * that fails. Bound to the composer's ResolveTargetBranch input, so it is one stable function.
+   */
+  public readonly ResolveComposerBranch = (): Promise<string | null | undefined> => this.resolveComposerBranch();
+
+  private async resolveComposerBranch(): Promise<string | null | undefined> {
+    const view = this.OpenView;
+    if (view.Kind === 'DraftFork') {
+      return this.materializeDraftFork(view);
+    }
+    if (view.Kind === 'Fork') {
+      return view.BranchID;
+    }
+    return null;
+  }
+
+  /**
+   * Keeps the fork rows loaded for a conversation as this chat area's rows, so
+   * {@link openViewScope} can build the scope of the open fork.
+   */
+  private setBranchRows(conversationId: string, rows: ConversationBranchRow[]): void {
+    this.branches = rows;
+    this.branchRowsConversationId = conversationId;
+  }
 
   /**
    * Voice session service — exposed to the template so the realtime "call mode"
@@ -1155,14 +3013,28 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * `MJ: AI Agent Sessions` lookup per conversation, only when stamped rows exist.
    * Tolerant: a failed lookup leaves the map empty and cards render their generic label.
    */
-  public realtimeSessionMetaMap: Map<string, RealtimeSessionTimelineMeta> = new Map();
+  public RealtimeSessionMetaMap: Map<string, RealtimeSessionTimelineMeta> = new Map();
+
+  /** @deprecated Use {@link RealtimeSessionMetaMap}. */
+  public get realtimeSessionMetaMap(): Map<string, RealtimeSessionTimelineMeta> {
+    return this.RealtimeSessionMetaMap;
+  }
+  /** @deprecated Use {@link RealtimeSessionMetaMap}. */
+  public set realtimeSessionMetaMap(value: Map<string, RealtimeSessionTimelineMeta>) {
+    this.RealtimeSessionMetaMap = value;
+  }
 
   /** Agent name the overlay banner shows: the reviewed session's agent while reviewing, else the live call's. */
-  public get realtimeOverlayAgentName(): string {
+  public get RealtimeOverlayAgentName(): string {
     if (this.RealtimeReview && !this.RealtimeSession.IsActive) {
       return this.RealtimeReview.AgentName;
     }
     return this.RealtimeSession.CurrentAgentName;
+  }
+
+  /** @deprecated Use {@link RealtimeOverlayAgentName}. */
+  public get realtimeOverlayAgentName(): string {
+    return this.RealtimeOverlayAgentName;
   }
 
   // Shared AI mention/suggestion engine (BaseSingleton — same instance the composer plugins use)
@@ -1170,6 +3042,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
   constructor(
     private agentStateService: AgentStateService,
+    private livenessDom: ConversationLivenessDomService,
     private conversationAgentService: ConversationAgentService,
     private activeTasks: ActiveTasksService,
     private cdr: ChangeDetectorRef,
@@ -1186,16 +3059,23 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   super();}
 
   /**
-   * Apply a form-role artifact's spec as an EntityFormOverride for the
-   * current user. The service handles the Create-vs-Modify decision (based
-   * on whether an Active override already exists), confirms via dialog,
-   * and surfaces success/failure via notification.
+   * Apply a form-role artifact's spec for the current user — an EntityFormOverride for a
+   * whole form, a form contribution for a panel. The service picks the path, handles the
+   * Create-vs-Modify decision, confirms via dialog, and notifies.
+   *
+   * The agent context names the record form the user has open (`AdditionalContext.Form`,
+   * published by the record tab). The service reads that form's full composition from the
+   * `FormCompositionRegistry`, to check a panel's placement against the live form and detect
+   * an installed contribution holding the same key. With no open form it asks the server for
+   * the composition instead.
    */
   async OnApplyFormRequested(event: { spec: unknown; entityName: string }): Promise<void> {
+    const additional = (this.AppContext?.['AdditionalContext'] ?? null) as { Form?: FormAgentContext } | null;
     await this.interactiveFormApplyService.ConfirmAndApply(
       event.spec as ComponentSpec,
       event.entityName,
       this.ProviderToUse,
+      additional?.Form ?? null,
     );
   }
 
@@ -1263,7 +3143,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.RealtimeSession.Captions$
       .pipe(takeUntil(this.destroy$))
       .subscribe((captions) => {
-        if (namedThisSession) {
+        if (namedThisSession || !this.AutoNameConversation) {
           return;
         }
         const created = this.RealtimeSession.SessionCreatedConversationId;
@@ -1274,7 +3154,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
             ConversationId: created,
             MessageText: seed,
             Provider: this.ProviderToUse as GraphQLDataProvider,
-            CurrentUser: this.currentUser
+            CurrentUser: this.CurrentUser
           });
         }
       });
@@ -1298,7 +3178,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
           toolEvent.Request.ToolName,
           toolEvent.Request.Params
         );
-        this.beforeToolInvoked.emit(args);
+        this.BeforeToolInvoked.emit(args);
         if (args.Cancel) {
           toolEvent.Cancel = true;
           toolEvent.CancelReason = args.CancelReason;
@@ -1307,7 +3187,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.agentClientService.ToolExecuted$
       .pipe(takeUntil(this.destroy$))
       .subscribe((toolEvent) => {
-        this.afterToolInvoked.emit(
+        this.AfterToolInvoked.emit(
           new AfterToolInvokedEventArgs(
             toolEvent.Request.ToolName,
             toolEvent.Request.Params,
@@ -1327,12 +3207,12 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       .subscribe((event) => {
         switch (event.kind) {
           case 'session-started':
-            this.sessionStarted.emit(
+            this.SessionStarted.emit(
               new SessionStartedEventArgs(event.sessionId, event.channelKinds)
             );
             return;
           case 'session-channel':
-            this.sessionChannelStateChanged.emit(
+            this.SessionChannelStateChanged.emit(
               new SessionChannelStateChangedEventArgs(
                 event.sessionId,
                 event.channelKind,
@@ -1341,7 +3221,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
             );
             return;
           case 'session-ended':
-            this.sessionEnded.emit(
+            this.SessionEnded.emit(
               new SessionEndedEventArgs(event.sessionId, event.reason)
             );
             return;
@@ -1355,13 +3235,13 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     // Fallback: If workspace didn't initialize (shouldn't happen), initialize now
     if (!this.mentionAutocompleteService.IsInitialized) {
       console.warn('⚠️ Mention autocomplete not initialized by workspace, initializing now...');
-      await this.mentionAutocompleteService.initialize(this.currentUser);
+      await this.mentionAutocompleteService.initialize(this.CurrentUser);
     }
 
     // Ensure ConversationEngine and ArtifactMetadataEngine are loaded.
     // Config(false) is a no-op if already loaded by another component.
     // ConversationEngine.Config() also initializes ArtifactMetadataEngine internally.
-    await ConversationEngine.Instance.Config(false, this.currentUser);
+    await ConversationEngine.Instance.Config(false, this.CurrentUser);
 
     // Initialize attachment support based on agent modalities
     await this.initializeAttachmentSupport();
@@ -1373,8 +3253,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.isInitialized = true;
 
     // Initial load if there's already an active conversation
-    if (this.conversationId) {
-      await this.onConversationChanged(this.conversationId);
+    if (this.ConversationId) {
+      await this.onConversationChanged(this.ConversationId);
     }
 
     // Setup resize listeners
@@ -1404,11 +3284,32 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       .pipe(takeUntil(this.destroy$))
       .subscribe(async (event) => {
         // Find the message in our current conversation
-        const conversationId = this.conversationId;
+        const conversationId = this.ConversationId;
         const message = this.messages.find(m => UUIDsEqual(m.ID, event.conversationDetailId));
         if (message && conversationId) {
           await this.handleMessageCompletion(message, event.agentRunId, conversationId);
+        } else if (conversationId) {
+          // The completion is for a message we do not currently hold — it belongs to another
+          // conversation, or to one scrolled out of the loaded window. Previously this event was
+          // simply dropped, and for the scrolled-out case nothing else ever picked it up: the
+          // `recentCompletions` replay only fires on conversation OPEN. Reconciling reads durable
+          // state for every in-progress message we do hold, which repairs it if it is ours and
+          // costs one narrow query if it is not.
+          await this.ReconcileNow('completion-for-unloaded-message');
         }
+      });
+
+    // Reconciliation triggers that do NOT depend on a clean socket close. This is the
+    // independent second layer: `retryAttempts`, `_socketStateSubject`,
+    // `ServerConnectivityService`, `scheduleReconnection()` and `FireAndForgetHelper.onStreamEnd`
+    // are all downstream of `on('closed')`, so on a half-open socket they fail together. The
+    // supervisor coalesces socket-reconnect, stream-reconnect, tab-visible and browser-online
+    // into one pass (MJ #4222).
+    this.livenessDom.Start();
+    ConversationsRuntime.Instance.Liveness.ReconciliationRequired$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe((reason) => {
+        void this.ReconcileNow(reason);
       });
 
     // Subscribe to polling-based agent state as a secondary fallback for completion detection.
@@ -1419,7 +3320,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.agentStateService.activeAgents$
       .pipe(takeUntil(this.destroy$))
       .subscribe(async (agents) => {
-        const conversationId = this.conversationId;
+        const conversationId = this.ConversationId;
         if (!conversationId) return;
         const conversationAgents = agents.filter(a => UUIDsEqual(a.run.ConversationID, conversationId));
         const hasActiveAgents = conversationAgents.length > 0;
@@ -1428,7 +3329,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
           // updated agent runs, and new artifacts. Deliberately not the engine's full-history
           // RefreshConversationDetails: that would re-query the whole conversation and, via
           // GetCachedDetails, replace the loaded window with every row.
-          await this.windowStore.RefreshLatest(this.currentUser);
+          await this.windowStore.RefreshLatest(this.CurrentUser);
           if (!this.isActiveConversation(conversationId)) {
             return;
           }
@@ -1474,19 +3375,19 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       if (this.conversationManagerAgent?.ID) {
         // Get attachment limits from agent metadata (uses Agent → Model → System → Default cascade)
         const limits = AIEngineBase.Instance.GetAgentAttachmentLimits(this.conversationManagerAgent.ID);
-        this.enableAttachments = limits.enabled;
-        this.maxAttachments = limits.maxAttachments;
-        this.maxAttachmentSizeBytes = limits.maxAttachmentSizeBytes;
-        this.acceptedFileTypes = limits.acceptedFileTypes;
-        LogStatusEx({message: `Attachment support initialized: ${this.enableAttachments} (max ${this.maxAttachments}, ${(this.maxAttachmentSizeBytes / 1024 / 1024).toFixed(0)}MB)`, verboseOnly: true});
+        this.EnableAttachments = limits.enabled;
+        this.MaxAttachments = limits.maxAttachments;
+        this.MaxAttachmentSizeBytes = limits.maxAttachmentSizeBytes;
+        this.AcceptedFileTypes = limits.acceptedFileTypes;
+        LogStatusEx({message: `Attachment support initialized: ${this.EnableAttachments} (max ${this.MaxAttachments}, ${(this.MaxAttachmentSizeBytes / 1024 / 1024).toFixed(0)}MB)`, verboseOnly: true});
       } else {
         // Default to false if we can't determine
-        this.enableAttachments = false;
+        this.EnableAttachments = false;
         LogStatusEx({message: 'Attachment support disabled: conversation manager agent not available', verboseOnly: true});
       }
     } catch (error) {
       console.warn('Failed to initialize attachment support:', error);
-      this.enableAttachments = false;
+      this.EnableAttachments = false;
     }
   }
 
@@ -1520,12 +3421,12 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     // Get limits from the determined agent
     if (agentIdForLimits) {
       const limits = AIEngineBase.Instance.GetAgentAttachmentLimits(agentIdForLimits);
-      this.enableAttachments = limits.enabled;
-      this.maxAttachments = limits.maxAttachments;
-      this.maxAttachmentSizeBytes = limits.maxAttachmentSizeBytes;
-      this.acceptedFileTypes = limits.acceptedFileTypes;
+      this.EnableAttachments = limits.enabled;
+      this.MaxAttachments = limits.maxAttachments;
+      this.MaxAttachmentSizeBytes = limits.maxAttachmentSizeBytes;
+      this.AcceptedFileTypes = limits.acceptedFileTypes;
     } else {
-      this.enableAttachments = false;
+      this.EnableAttachments = false;
     }
   }
 
@@ -1536,9 +3437,9 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         if (Date.now() < this.bottomFollowSuppressedUntil) {
           return;
         }
-        this.scrollToBottomNow();
+        this.ScrollToBottomNow();
         // Check scroll state after scrolling to bottom
-        this.checkScroll();
+        this.CheckScroll();
       }, 100);
     }
     if (this.pendingTurnStartMessageId) {
@@ -1557,14 +3458,24 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   ngOnDestroy() {
+    this.scrollResizeObserver?.disconnect();
+    this.scrollResizeObserver = null;
     // Stop polling when component is destroyed
     this.agentStateService.stopPolling();
+    if (this.forkSummaryRefreshTimer) {
+      clearTimeout(this.forkSummaryRefreshTimer);
+      this.forkSummaryRefreshTimer = null;
+    }
 
     // Complete destroy subject to cleanup subscriptions
     this.destroy$.next();
     this.destroy$.complete();
 
     this.clearTurnTracking();
+    this.stopSendSlotTicker();
+    for (const id of [...(this._stopFallbackTimers?.keys() ?? [])]) {
+      this.clearStopFallbackTimer(id);
+    }
 
     // Remove resize listeners
     window.removeEventListener('mousemove', this.boundOnResizeMove);
@@ -1574,7 +3485,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   private isActiveConversation(conversationId: string | null | undefined): boolean {
-    return UUIDsEqual(conversationId, this.conversationId);
+    return UUIDsEqual(conversationId, this.ConversationId);
   }
 
   private isActiveConversationLoad(conversationId: string | null | undefined, loadToken: number): boolean {
@@ -1589,55 +3500,66 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
   private resetConversationScopedViewState(): void {
     this.clearTurnTracking();
-    this.showArtifactPanel = false;
-    this.selectedArtifactId = null;
-    this.selectedVersionNumber = undefined;
-    this.canShareSelectedArtifact = false;
-    this.canEditSelectedArtifact = false;
-    this.showArtifactsModal = false;
-    this.showSystemArtifacts = false;
-    this.expandedArtifactId = null;
+    this.ShowArtifactPanel = false;
+    this.SelectedArtifactId = null;
+    this.SelectedVersionNumber = undefined;
+    this.CanShareSelectedArtifact = false;
+    this.CanEditSelectedArtifact = false;
+    this.ShowArtifactsModal = false;
+    this.ShowSystemArtifacts = false;
+    this.ExpandedArtifactId = null;
     this._combinedArtifactsMap = null;
 
-    this.isArtifactShareModalOpen = false;
-    this.artifactToShare = null;
-    this.showCollectionPicker = false;
-    this.collectionPickerArtifactId = null;
-    this.collectionPickerExcludedIds = [];
-    this.collectionPickerVersionId = null;
-    this.collectionPickerArtifactName = '';
-    this.collectionPickerVersionNumber = null;
+    this.IsArtifactShareModalOpen = false;
+    this.ArtifactToShare = null;
+    this.ShowCollectionPicker = false;
+    this.CollectionPickerArtifactId = null;
+    this.CollectionPickerExcludedIds = [];
+    this.CollectionPickerVersionId = null;
+    this.CollectionPickerArtifactName = '';
+    this.CollectionPickerVersionNumber = null;
 
-    this.showImageViewer = false;
-    this.selectedImageUrl = '';
-    this.selectedImageAlt = '';
-    this.selectedImageFileName = '';
-    this.showTestFeedbackDialog = false;
-    this.testFeedbackDialogData = null;
-    this.showPinsPanel = false;
+    this.ShowImageViewer = false;
+    this.SelectedImageUrl = '';
+    this.SelectedImageAlt = '';
+    this.SelectedImageFileName = '';
+    this.ShowTestFeedbackDialog = false;
+    this.TestFeedbackDialogData = null;
+    this.ShowPinsPanel = false;
     this.pinsHydrated = false;
-    this.showAgentPanel = false;
-    this.showExportModal = false;
-    this.showShareModal = false;
-    this.shareContext = null;
-    this.showMembersModal = false;
-    this.showProjectSelector = false;
-    this.isUploadingAttachments = false;
-    this.uploadingMessage = '';
+    this.ShowAgentPanel = false;
+    this.ShowExportModal = false;
+    this.ShowShareModal = false;
+    this.ShareContext = null;
+    this.ShowMembersModal = false;
+    this.ShowProjectSelector = false;
+    this.IsUploadingAttachments = false;
+    this.UploadingMessage = '';
     this.intentCheckMessage = null;
+    this.branches = [];
+    this.branchRowsConversationId = null;
+    this.openView = MAIN_OPEN_VIEW;
+    this.windowView = MAIN_OPEN_VIEW;
+    this.ForkSummaries = [];
+    this.ShowForksPopover = false;
+    this.IsRenamingTitle = false;
+    if (this.forkSummaryRefreshTimer) {
+      clearTimeout(this.forkSummaryRefreshTimer);
+      this.forkSummaryRefreshTimer = null;
+    }
 
     // Reset width along with the flag — otherwise a pane maximized in the
     // previous conversation leaves artifactPaneWidth at 100, and the next
     // artifact opens overflowing the viewport (chat area still visible).
     // Guarded so a non-maximized user-dragged width survives the switch.
-    if (this.isArtifactPaneMaximized) {
+    if (this.IsArtifactPaneMaximized) {
       this.resetArtifactPaneSizing();
     }
   }
 
   private resetArtifactPaneSizing(): void {
-    this.isArtifactPaneMaximized = false;
-    this.artifactPaneWidth = DEFAULT_ARTIFACT_PANE_WIDTH;
+    this.IsArtifactPaneMaximized = false;
+    this.ArtifactPaneWidth = DEFAULT_ARTIFACT_PANE_WIDTH;
   }
 
   private async onConversationChanged(conversationId: string | null): Promise<void> {
@@ -1647,6 +3569,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       return;
     }
     const loadToken = ++this.conversationLoadToken;
+    this.readyConversationId = null;
 
     this.resetConversationScopedViewState();
 
@@ -1660,7 +3583,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       if (!this.messageInputMetadataCache.has(conversationId)) {
         this.messageInputMetadataCache.set(conversationId, {
           conversationId: conversationId,
-          conversationName: this.conversation?.Name || null
+          conversationName: this.Conversation?.Name || null
         });
       }
 
@@ -1668,7 +3591,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       // This prevents the "no messages" flash when switching between conversations.
       const hasCachedMessages = this.engine.HasCachedDetails(conversationId);
       if (!hasCachedMessages) {
-        this.isLoadingConversation = true;
+        this.IsLoadingConversation = true;
         this.messages = [];
         this.cdr.detectChanges();
       }
@@ -1683,7 +3606,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
           return;
         }
         // TODO: Replace polling with PubSub - see plans/repair-conversations-ui-performance.md
-        this.agentStateService.startPolling(this.currentUser, conversationId);
+        this.agentStateService.startPolling(this.CurrentUser, conversationId, this.openViewScope(conversationId));
       } catch (error) {
         if (!this.isActiveConversationLoad(conversationId, loadToken)) {
           return;
@@ -1695,11 +3618,14 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
           return;
         }
         this.currentlyLoadingConversationId = null;
-        this.isLoadingConversation = false;
+        this.IsLoadingConversation = false;
 
         // Create new array reference to trigger Angular change detection
         this.messages = [...this.messages];
         this.cdr.detectChanges();
+        this.readyConversationId = conversationId;
+        // Optional-chained: harness-constructed instances may skip field initializers.
+        this.conversationLoadEnded$?.next();
 
         // Defensive fallback: force another change detection cycle after async ops complete
         setTimeout(() => {
@@ -1712,10 +3638,11 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     } else {
       // No active conversation - show empty state
       this.messages = [];
-      this.isLoadingConversation = false;
+      this.IsLoadingConversation = false;
       this.currentlyLoadingConversationId = null;
       this.lastLoadedConversationId = null;
       this.agentStateService.stopPolling();
+      this.conversationLoadEnded$?.next();
     }
   }
 
@@ -1724,8 +3651,13 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * This allows multiple message-input components to exist simultaneously (hidden)
    * preserving their state when switching conversations
    */
-  public getCachedInputs(): Array<{conversationId: string; conversationName: string | null}> {
+  public GetCachedInputs(): Array<{conversationId: string; conversationName: string | null}> {
     return Array.from(this.messageInputMetadataCache.values());
+  }
+
+  /** @deprecated Use {@link GetCachedInputs}. */
+  public getCachedInputs(): Array<{conversationId: string; conversationName: string | null}> {
+    return this.GetCachedInputs();
   }
 
   /**
@@ -1746,11 +3678,11 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * we need to find the one that matches the current conversationId.
    */
   private getActiveMessageInputComponent(): MessageInputComponent | undefined {
-    if (!this.messageInputComponents || !this.conversationId) {
+    if (!this.messageInputComponents || !this.ConversationId) {
       return undefined;
     }
     return this.messageInputComponents.find(
-      component => component.conversationId === this.conversationId
+      component => component.conversationId === this.ConversationId
     );
   }
 
@@ -1776,52 +3708,36 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       // complete history. A separate `_partialDetailCache` is the shape to reach for if
       // measurement says re-entry is worth it. Measure before building it.
       // Pins are counted separately: a pin can sit far below the window's oldest Sequence,
-      // and the pins panel must list ALL of them, not just the ones currently on screen.
-      // Concurrent with the window — the two share only the conversation id, and running the
-      // pin read after the window made it delay first paint for no reason.
-      await Promise.all([
-        this.windowStore.LoadLatest(conversationId, this.currentUser),
-        this.loadPinnedMessageCount(conversationId, loadToken)
+      // and the pins panel must list ALL of them on the open view's path, not just the ones
+      // currently on screen.
+      // Fork rows load alongside the window: the scope and the fork summaries need them. The
+      // pin count reads after the fork rows, because its filter is the scope of the open view's
+      // path. First paint waits for the longer of the window read and the fork rows plus the pin
+      // count. The count stays awaited: the load token only stops a count whose conversation load
+      // was replaced, so a count still running when a view change starts in this load could
+      // overwrite the new view's count.
+      const [, branches] = await Promise.all([
+        this.loadWindowForOpenView(conversationId),
+        this.loadBranchesAndPinCount(conversationId, loadToken)
       ]);
       if (!this.isActiveConversationLoad(conversationId, loadToken)) {
         return;
       }
-
-      // Read the loaded window back off the store
+      this.setBranchRows(conversationId, branches);
+      this.applyWindowSnapshot();
       const snapshot = this.windowStore.GetSnapshot();
-      this.messages = snapshot.Details;
-
-      // Copy user avatars from the window result
-      this.userAvatarMap.clear();
-      for (const [userId, avatar] of snapshot.UserAvatars) {
-        this.userAvatarMap.set(userId, {
-          imageUrl: avatar.ImageURL,
-          iconClass: avatar.IconClass
-        });
-      }
-
-      this.updateAttachmentSupport();
-
-      // Detect in-progress messages for streaming reconnection
-      this.inProgressMessageIds = [...this.messages
-        .filter(m => m.Status === 'In-Progress')
-        .map(m => m.ID)];
-
-      if (this.inProgressMessageIds.length > 0) {
-        LogStatusEx({message: `🔌 Detected ${this.inProgressMessageIds.length} in-progress messages for reconnection`, verboseOnly: true});
-      }
 
       // Check for missed completions (user navigated away, agent completed, user returned)
       for (const message of this.messages) {
         if (message.Status === 'In-Progress' && message.ID) {
-          const recentCompletion = this.streamingService.getRecentCompletion(message.ID);
+          const recentCompletion = this.streamingService.GetRecentCompletion(message.ID);
           if (recentCompletion) {
             LogStatusEx({message: `📥 Found missed completion for message ${message.ID}, handling...`, verboseOnly: true});
             await this.handleMessageCompletion(message, recentCompletion.agentRunId, conversationId, loadToken);
             if (!this.isActiveConversationLoad(conversationId, loadToken)) {
               return;
             }
-            this.streamingService.clearRecentCompletion(message.ID);
+            this.streamingService.ClearRecentCompletion(message.ID);
           }
         }
       }
@@ -1849,6 +3765,71 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     }
   }
 
+  /**
+   * Reads the store's loaded window into the transcript: messages, user avatars, attachment
+   * support and in-progress message IDs.
+   */
+  private applyWindowSnapshot(): void {
+    const snapshot = this.windowStore.GetSnapshot();
+    this.messages = snapshot.Details;
+    this.windowView = this.OpenView;
+
+    // Copy user avatars from the window result
+    this.UserAvatarMap.clear();
+    for (const [userId, avatar] of snapshot.UserAvatars) {
+      this.UserAvatarMap.set(userId, {
+        imageUrl: avatar.ImageURL,
+        iconClass: avatar.IconClass
+      });
+    }
+    this.markUserAvatarMapChanged();
+
+    this.updateAttachmentSupport();
+
+    // Detect in-progress messages for streaming reconnection
+    this.InProgressMessageIds = [...this.messages
+      .filter(m => m.Status === 'In-Progress')
+      .map(m => m.ID)];
+
+    if (this.InProgressMessageIds.length > 0) {
+      LogStatusEx({message: `🔌 Detected ${this.InProgressMessageIds.length} in-progress messages for reconnection`, verboseOnly: true});
+    }
+  }
+
+  /**
+   * The conversation's fork rows. An empty list when they cannot be read, so the transcript
+   * still loads.
+   */
+  private async loadBranchesOrEmpty(conversationId: string): Promise<ConversationBranchRow[]> {
+    return (await this.loadBranchesOrNull(conversationId)) ?? [];
+  }
+
+  /** The conversation's fork rows; null when they cannot be read. */
+  private async loadBranchesOrNull(conversationId: string): Promise<ConversationBranchRow[] | null> {
+    try {
+      return await ConversationEngine.LoadBranchesFresh(conversationId, this.CurrentUser, this.ProviderToUse);
+    } catch (error) {
+      console.error(`Failed to load branches for conversation ${conversationId}:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Loads the fork rows and keeps them, starts the fork summary read, then counts the pins
+   * in the scope of the open view's path. Keeps and counts nothing when a newer conversation
+   * load started.
+   */
+  private async loadBranchesAndPinCount(conversationId: string, loadToken: number): Promise<ConversationBranchRow[]> {
+    const branches = await this.loadBranchesOrEmpty(conversationId);
+    if (!this.isActiveConversationLoad(conversationId, loadToken)) {
+      return branches;
+    }
+    this.setBranchRows(conversationId, branches);
+    void this.loadForkSummaries(conversationId, branches, loadToken);
+    await this.loadPinnedMessageCount(conversationId, loadToken);
+    return branches;
+  }
+
 
   /**
    * Reads only the PIN COUNT on conversation open.
@@ -1864,9 +3845,9 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const result = await rv.RunView<MJConversationDetailEntity>({
       EntityName: 'MJ: Conversation Details',
-      ExtraFilter: `ConversationID='${conversationId}' AND IsPinned=1`,
+      ExtraFilter: `${ConversationEngine.LiveRowsFilter(ConversationEngine.ScopeFilter(this.openViewScope(conversationId)))} AND [IsPinned]=1`,
       ResultType: 'count_only'
-    }, this.currentUser);
+    }, this.CurrentUser);
 
     if (!this.isActiveConversationLoad(conversationId, loadToken)) {
       return;
@@ -1888,10 +3869,10 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const result = await rv.RunView<MJConversationDetailEntity>({
       EntityName: 'MJ: Conversation Details',
-      ExtraFilter: `ConversationID='${conversationId}' AND IsPinned=1`,
+      ExtraFilter: `${ConversationEngine.LiveRowsFilter(ConversationEngine.ScopeFilter(this.openViewScope(conversationId)))} AND [IsPinned]=1`,
       OrderBy: 'Sequence DESC',   // newest pin first — the panel's order
       ResultType: 'entity_object'
-    }, this.currentUser);
+    }, this.CurrentUser);
 
     if (!this.isActiveConversation(conversationId)) {
       return;
@@ -1902,6 +3883,21 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     }
     this.windowStore.SetPinnedDetails(result.Results ?? []);
     this.pinsHydrated = true;
+  }
+
+  /**
+   * Reads the pin count in the scope of the open view's path and, when the pins panel's rows
+   * are loaded, reads those rows again too. A read that throws is logged and changes nothing.
+   */
+  private async reloadPinsForScope(conversationId: string, loadToken: number): Promise<void> {
+    try {
+      await this.loadPinnedMessageCount(conversationId, loadToken);
+      if (this.pinsHydrated && this.isActiveConversationLoad(conversationId, loadToken)) {
+        await this.hydratePinnedMessages(conversationId);
+      }
+    } catch (error) {
+      console.error(`Failed to read the pins for conversation ${conversationId}:`, error);
+    }
   }
 
 
@@ -1915,7 +3911,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     const systemArtifactList: LazyArtifactInfo[] = [];
 
     for (const artifactData of artifacts) {
-      const lazyInfo = new LazyArtifactInfo(artifactData, this.currentUser);
+      const lazyInfo = new LazyArtifactInfo(artifactData, this.CurrentUser);
       if (artifactData.Visibility === 'System Only') {
         systemArtifactList.push(lazyInfo);
       } else {
@@ -1924,10 +3920,10 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     }
 
     if (artifactList.length > 0) {
-      this.artifactsByDetailId.set(detailId, artifactList);
+      this.ArtifactsByDetailId.set(detailId, artifactList);
     }
     if (systemArtifactList.length > 0) {
-      this.systemArtifactsByDetailId.set(detailId, systemArtifactList);
+      this.SystemArtifactsByDetailId.set(detailId, systemArtifactList);
     }
   }
 
@@ -1959,7 +3955,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     for (const detailId of newIds) {
       const agentRun = snapshot.AgentRunsByDetailId.get(detailId);
       if (agentRun) {
-        this.agentRunsByDetailId.set(detailId, agentRun as MJAIAgentRunEntityExtended);
+        this.AgentRunsByDetailId.set(detailId, agentRun as MJAIAgentRunEntityExtended);
       }
       const artifacts = snapshot.ArtifactsByDetailId.get(detailId);
       if (artifacts) {
@@ -1967,17 +3963,17 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       }
       const ratings = snapshot.RatingsByDetailId.get(detailId);
       if (ratings) {
-        this.ratingsByDetailId.set(detailId, ratings);
+        this.RatingsByDetailId.set(detailId, ratings);
       }
     }
 
     if (newIds.length > 0) {
-      const attachmentsMap = await this.attachmentService.loadAttachmentsForMessages(newIds, this.currentUser);
+      const attachmentsMap = await this.attachmentService.loadAttachmentsForMessages(newIds, this.CurrentUser);
       if (!this.isActiveConversation(conversationId)) {
         return;
       }
       for (const [detailId, attachments] of attachmentsMap) {
-        this.attachmentsByDetailId.set(detailId, attachments);
+        this.AttachmentsByDetailId.set(detailId, attachments);
       }
     }
 
@@ -1988,7 +3984,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       return;
     }
     if (sessionMeta.size > 0) {
-      this.realtimeSessionMetaMap = new Map([...this.realtimeSessionMetaMap, ...sessionMeta]);
+      this.RealtimeSessionMetaMap = new Map([...this.RealtimeSessionMetaMap, ...sessionMeta]);
     }
 
     // A page of OLDER artifacts just entered the map. Any artifact-panel baseline taken before
@@ -1997,14 +3993,14 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.artifactMapGeneration++;
 
     // New references so the message list's ngOnChanges sees the extended maps.
-    this.agentRunsByDetailId = new Map(this.agentRunsByDetailId);
-    this.artifactsByDetailId = new Map(this.artifactsByDetailId);
-    this.ratingsByDetailId = new Map(this.ratingsByDetailId);
-    this.systemArtifactsByDetailId = new Map(this.systemArtifactsByDetailId);
-    this.attachmentsByDetailId = new Map(this.attachmentsByDetailId);
+    this.AgentRunsByDetailId = new Map(this.AgentRunsByDetailId);
+    this.ArtifactsByDetailId = new Map(this.ArtifactsByDetailId);
+    this.RatingsByDetailId = new Map(this.RatingsByDetailId);
+    this.SystemArtifactsByDetailId = new Map(this.SystemArtifactsByDetailId);
+    this.AttachmentsByDetailId = new Map(this.AttachmentsByDetailId);
 
     this._combinedArtifactsMap = null;
-    this.artifactCount = this.calculateUniqueArtifactCount();
+    this.ArtifactCount = this.calculateUniqueArtifactCount();
     this.updateArtifactCountDisplay();
   }
 
@@ -2038,14 +4034,14 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       const cacheEntry = snapshot;
 
       // Clear and rebuild component maps from the window's peripherals
-      this.agentRunsByDetailId.clear();
-      this.artifactsByDetailId.clear();
-      this.systemArtifactsByDetailId.clear();
-      this.ratingsByDetailId.clear();
+      this.AgentRunsByDetailId.clear();
+      this.ArtifactsByDetailId.clear();
+      this.SystemArtifactsByDetailId.clear();
+      this.RatingsByDetailId.clear();
 
       // Copy agent runs from engine (cast to extended type for UI compatibility)
       for (const [detailId, agentRun] of cacheEntry.AgentRunsByDetailId) {
-        this.agentRunsByDetailId.set(detailId, agentRun as MJAIAgentRunEntityExtended);
+        this.AgentRunsByDetailId.set(detailId, agentRun as MJAIAgentRunEntityExtended);
       }
 
       // Convert ArtifactJSON[] from engine cache into LazyArtifactInfo[] for UI
@@ -2055,19 +4051,19 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
       // Copy ratings from engine cache
       for (const [detailId, ratings] of cacheEntry.RatingsByDetailId) {
-        this.ratingsByDetailId.set(detailId, ratings);
+        this.RatingsByDetailId.set(detailId, ratings);
       }
 
       // Load attachments (still separate — not part of GetConversationComplete query)
-      this.attachmentsByDetailId.clear();
+      this.AttachmentsByDetailId.clear();
       const messageIds = cacheEntry.Details.map(d => d.ID).filter((id): id is string => !!id);
       if (messageIds.length > 0) {
-        const attachmentsMap = await this.attachmentService.loadAttachmentsForMessages(messageIds, this.currentUser);
+        const attachmentsMap = await this.attachmentService.loadAttachmentsForMessages(messageIds, this.CurrentUser);
         if (!this.isCurrentConversationContext(conversationId, loadToken)) {
           return;
         }
         for (const [detailId, attachments] of attachmentsMap) {
-          this.attachmentsByDetailId.set(detailId, attachments);
+          this.AttachmentsByDetailId.set(detailId, attachments);
         }
       }
 
@@ -2079,17 +4075,17 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       }
 
       // Create new Map references to trigger Angular change detection
-      this.agentRunsByDetailId = new Map(this.agentRunsByDetailId);
-      this.artifactsByDetailId = new Map(this.artifactsByDetailId);
-      this.ratingsByDetailId = new Map(this.ratingsByDetailId);
-      this.systemArtifactsByDetailId = new Map(this.systemArtifactsByDetailId);
-      this.attachmentsByDetailId = new Map(this.attachmentsByDetailId);
+      this.AgentRunsByDetailId = new Map(this.AgentRunsByDetailId);
+      this.ArtifactsByDetailId = new Map(this.ArtifactsByDetailId);
+      this.RatingsByDetailId = new Map(this.RatingsByDetailId);
+      this.SystemArtifactsByDetailId = new Map(this.SystemArtifactsByDetailId);
+      this.AttachmentsByDetailId = new Map(this.AttachmentsByDetailId);
 
       // Clear combined cache since we loaded new artifacts
       this._combinedArtifactsMap = null;
 
       // Update artifact count for header display
-      this.artifactCount = this.calculateUniqueArtifactCount();
+      this.ArtifactCount = this.calculateUniqueArtifactCount();
       this.updateArtifactCountDisplay();
 
       this.lastLoadedConversationId = conversationId;
@@ -2116,7 +4112,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       return;                 // stale load — the conversation changed underneath
     }
     // New reference so the message list's ngOnChanges sees the update
-    this.realtimeSessionMetaMap = metaMap;
+    this.RealtimeSessionMetaMap = metaMap;
   }
 
   /**
@@ -2134,48 +4130,24 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     conversationId?: string,
     loadToken?: number
   ): Promise<Map<string, RealtimeSessionTimelineMeta> | null> {
-    const sessionIds: string[] = [];
-    const seen = new Set<string>();
-    for (const detail of details) {
-      const raw = detail.AgentSessionID?.trim() ?? '';
-      if (raw.length === 0) {
-        continue;
-      }
-      const key = NormalizeUUID(raw);
-      if (!seen.has(key)) {
-        seen.add(key);
-        sessionIds.push(raw);
-      }
-    }
+    // Collecting the ids and mapping the rows both live in the runtime, so the React Native thread
+    // keys its map the same way (NormalizeUUID) and parses ClosedAt the same way. The query itself
+    // stays here — it is the one part that is genuinely host-specific.
+    const sessionIds = CollectRealtimeSessionIDs(details);
 
-    const metaMap = new Map<string, RealtimeSessionTimelineMeta>();
+    let metaMap = new Map<string, RealtimeSessionTimelineMeta>();
     if (sessionIds.length > 0) {
       try {
         const idList = sessionIds.map(id => `'${id.replace(/'/g, "''")}'`).join(',');
         const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-        const result = await rv.RunView<{
-          ID: string;
-          Agent: string | null;
-          Status: 'Active' | 'Closed' | 'Idle';
-          CloseReason: string | null;
-          ClosedAt: string | Date | null;
-        }>({
+        const result = await rv.RunView<RealtimeSessionMetaRow>({
           EntityName: 'MJ: AI Agent Sessions',
           ExtraFilter: `ID IN (${idList})`,
-          Fields: ['ID', 'Agent', 'Status', 'CloseReason', 'ClosedAt'],
+          Fields: [...REALTIME_SESSION_META_FIELDS],
           ResultType: 'simple'
         });
         if (result.Success) {
-          for (const row of result.Results ?? []) {
-            const closedAt = row.ClosedAt ? new Date(row.ClosedAt) : null;
-            metaMap.set(NormalizeUUID(row.ID), {
-              SessionID: row.ID,
-              AgentName: row.Agent ?? null,
-              Status: row.Status ?? null,
-              CloseReason: row.CloseReason ?? null,
-              ClosedAt: closedAt && !isNaN(closedAt.getTime()) ? closedAt : null
-            });
-          }
+          metaMap = MapRealtimeSessionMeta(result.Results);
         }
       } catch (error) {
         console.warn('Failed to load realtime session meta — session cards render without status chips:', error);
@@ -2197,23 +4169,77 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     // Database tasks are loaded separately by TasksDropdownComponent
   }
 
-  async onMessageSent(message: MJConversationDetailEntity): Promise<void> {
+  /**
+   * A streamed delta landed on an in-progress message (MessageInputComponent.MessageStreamed).
+   * Unlike {@link OnMessageSent} this does not replace the `messages` array: that rebuilt the
+   * whole timeline, re-measured the mounted range and armed a scroll-to-bottom timer on every
+   * delta, which is what made a streaming reply flash and jump. The bubble is refreshed in place
+   * and the viewport is kept steady. With `ReadReplyFromTop` the turn lands at its top once, on
+   * the first delta, and the reply grows beneath it; otherwise the bottom is pinned in the same
+   * frame as the DOM update, so the growth and the scroll paint together.
+   */
+  public OnMessageStreamed(message: MJConversationDetailEntity): void {
+    if (!this.isActiveConversation(message.ConversationID) || message.Status !== 'In-Progress') {
+      return;
+    }
+    // A frame of a reply written in another view is not on screen here: it only refreshes the fork summaries.
+    if (!IsRowInOpenView(this.OpenView, message)) {
+      if (message.BranchID != null) {
+        this.scheduleForkSummaryRefresh();
+      }
+      return;
+    }
+    const index = this.messages.findIndex(m => UUIDsEqual(m.ID, message.ID));
+    if (index >= 0 && this.messages[index] !== message) {
+      if (this.isSettled(this.messages[index])) {
+        return; // a frame that outlived completion; the completion path owns the bubble
+      }
+      // Keep the array and the window pointing at the entity the stream mutates, in place: a new
+      // array reference would rebuild the timeline, which is the cost this path exists to avoid.
+      this.messages[index] = message;
+      this.replaceDisplayedRow(message);
+      this.windowStore.ApplyLocalDetail(message);
+    }
+    if (!this.messageListComponent?.RefreshRenderedMessage(message)) {
+      // The first delta can beat the bubble's own render; the full path handles that one update.
+      this.ngZone.run(() => void this.OnMessageSent(message));
+      return;
+    }
+    this.followTranscript('stream');
+  }
+
+  /** Drops a landing still queued or retrying, so it cannot resolve after a newer one. */
+  private cancelPendingLanding(): void {
+    this.pendingTurnStartMessageId = null;
+    if (this.turnStartRetryHandle) {
+      clearTimeout(this.turnStartRetryHandle);
+      this.turnStartRetryHandle = null;
+    }
+  }
+
+  async OnMessageSent(message: MJConversationDetailEntity): Promise<void> {
+    this.nameForkFromFirstSend(message);
+    // A row of the active conversation written in another view (a turn started in Main while a
+    // fork is open) is not on screen here and is not this view's send: it changes no draft.
+    if (UUIDsEqual(message.ConversationID, this.ConversationId) && !this.acceptRowForOpenView(message)) {
+      return;
+    }
     // The draft became a message — remove it from the persisted map + snapshot.
-    const sentKey = (message.ConversationID ?? this.conversationId ?? '').trim().toLowerCase();
-    this.draftStore.ClearDraft(message.ConversationID ?? this.conversationId);
+    const sentKey = (message.ConversationID ?? this.ConversationId ?? '').trim().toLowerCase();
+    this.draftStore.ClearDraft(message.ConversationID ?? this.ConversationId);
     if (sentKey) {
       this.initialDraftSnapshots.delete(sentKey);
     }
-    if (this.pendingMessage && this.isPendingMessageTarget(message.ConversationID)) {
+    if (this.PendingMessage && this.isPendingMessageTarget(message.ConversationID)) {
       this._pendingMessageReservedTargetId = null;
-      this.pendingMessageConsumed.emit();
+      this.PendingMessageConsumed.emit();
     }
 
     // Guard: ignore events from hidden message-input instances belonging to other conversations.
     // Multiple inputs are kept alive in the DOM cache (one per visited conversation) and all
     // emit events to this single parent. Without this check, a background agent's response
     // for conversation A would pollute conversation B's message list.
-    if (!UUIDsEqual(message.ConversationID, this.conversationId)) {
+    if (!UUIDsEqual(message.ConversationID, this.ConversationId)) {
       // Invalidate that conversation's cache so fresh data loads when the user switches back
       if (message.ConversationID) {
         this.resetComponentState(message.ConversationID);
@@ -2246,8 +4272,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       // Invalidate cache when new message is added.
       // Without this, navigating away and back would load stale cached data
       // that doesn't include this new message.
-      if (this.conversationId) {
-        this.resetComponentState(this.conversationId);
+      if (this.ConversationId) {
+        this.resetComponentState(this.ConversationId);
       }
 
       // Load attachments for the new message (if any were saved with it)
@@ -2256,14 +4282,22 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       if (!this.isActiveConversation(message.ConversationID)) {
         return;
       }
+    }
 
-      // CRITICAL: If this is a new In-Progress AI message, add it to inProgressMessageIds
-      // immediately so message-input registers a PubSub streaming callback for it.
-      // buildMessagesFromCache handles the nav-away/nav-back reconnection case;
-      // this handles the active-session case where the agent just started.
-      // Without this, inProgressMessageIds stays [] and the completion event is never received.
-      if (message.Status === 'In-Progress' && message.ID && !this.inProgressMessageIds.includes(message.ID)) {
-        this.inProgressMessageIds = [...this.inProgressMessageIds, message.ID];
+    // A host turn can finish before this row is on screen. The completion is already in the
+    // streaming service's replay window; apply it the way a conversation load does, so the
+    // row does not stay In-Progress until the conversation is opened again. Register the row
+    // for the live callback either way — an update of an existing In-Progress row included.
+    if (message.Status === 'In-Progress' && message.ID) {
+      if (!this.InProgressMessageIds.some((id) => UUIDsEqual(id, message.ID))) {
+        this.InProgressMessageIds = [...this.InProgressMessageIds, message.ID];
+      }
+      const recentCompletion = this.streamingService.GetRecentCompletion(message.ID);
+      if (recentCompletion) {
+        await this.handleMessageCompletion(message, recentCompletion.agentRunId, message.ConversationID);
+        if (this.isActiveConversation(message.ConversationID)) {
+          this.streamingService.ClearRecentCompletion(message.ID);
+        }
       }
     }
 
@@ -2277,16 +4311,31 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.cdr.detectChanges();
   }
 
-  onInitialMessageAutoSendStarted(event: {conversationId: string}): void {
-    if (this.pendingMessage && this.isPendingMessageTarget(event.conversationId)) {
+  /** @deprecated Use {@link OnMessageSent}. */
+  async onMessageSent(message: MJConversationDetailEntity): Promise<void> {
+    return this.OnMessageSent(message);
+  }
+
+  OnInitialMessageAutoSendStarted(event: {conversationId: string}): void {
+    if (this.PendingMessage && this.isPendingMessageTarget(event.conversationId)) {
       this._pendingMessageReservedTargetId = event.conversationId;
     }
   }
 
-  onInitialMessageAutoSendFailed(event: {conversationId: string}): void {
+  /** @deprecated Use {@link OnInitialMessageAutoSendStarted}. */
+  onInitialMessageAutoSendStarted(event: {conversationId: string}): void {
+    return this.OnInitialMessageAutoSendStarted(event);
+  }
+
+  OnInitialMessageAutoSendFailed(event: {conversationId: string}): void {
     if (UUIDsEqual(event.conversationId, this._pendingMessageReservedTargetId)) {
       this._pendingMessageReservedTargetId = null;
     }
+  }
+
+  /** @deprecated Use {@link OnInitialMessageAutoSendFailed}. */
+  onInitialMessageAutoSendFailed(event: {conversationId: string}): void {
+    return this.OnInitialMessageAutoSendFailed(event);
   }
 
   private isPendingMessageTarget(conversationId: string | null | undefined): boolean {
@@ -2299,14 +4348,14 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    */
   private async loadAttachmentsForMessage(messageId: string, conversationId: string | null | undefined): Promise<void> {
     try {
-      const attachments = await this.attachmentService.loadAttachmentsForMessage(messageId, this.currentUser);
+      const attachments = await this.attachmentService.loadAttachmentsForMessage(messageId, this.CurrentUser);
       if (!this.isActiveConversation(conversationId)) {
         return;
       }
       if (attachments.length > 0) {
-        this.attachmentsByDetailId.set(messageId, attachments);
+        this.AttachmentsByDetailId.set(messageId, attachments);
         // Create new map reference to trigger Angular change detection
-        this.attachmentsByDetailId = new Map(this.attachmentsByDetailId);
+        this.AttachmentsByDetailId = new Map(this.AttachmentsByDetailId);
         LogStatusEx({message: `Loaded ${attachments.length} attachment(s) for message ${messageId}`, verboseOnly: true});
       }
     } catch (error) {
@@ -2319,22 +4368,23 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * Called when new messages are created to ensure avatar data is available
    */
   private async ensureCurrentUserInAvatarMap(): Promise<void> {
-    const userId = this.currentUser.ID;
+    const userId = this.CurrentUser.ID;
 
     // If user already in map, skip
-    if (this.userAvatarMap.has(userId)) {
+    if (this.UserAvatarMap.has(userId)) {
       return;
     }
 
     // Load the current user's avatar data
     const md = this.ProviderToUse;
-    const userEntity = await md.GetEntityObject<any>('MJ: Users');
+    const userEntity = await md.GetEntityObject<MJUserEntity>('MJ: Users');
     await userEntity.Load(userId);
 
-    this.userAvatarMap.set(userId, {
+    this.UserAvatarMap.set(userId, {
       imageUrl: userEntity.UserImageURL || null,
       iconClass: userEntity.UserImageIconClass || null
     });
+    this.markUserAvatarMapChanged();
 
     LogStatusEx({message: `👤 Added current user to avatar map`, verboseOnly: true});
   }
@@ -2343,7 +4393,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * Handle agent run detected event from progress updates
    * This is called when the first progress update arrives with an agent run ID
    */
-  async onAgentRunDetected(event: {conversationId: string; conversationDetailId: string; agentRunId: string}): Promise<void> {
+  async OnAgentRunDetected(event: {conversationId: string; conversationDetailId: string; agentRunId: string}): Promise<void> {
     // Guard: ignore events from a background conversation's (hidden, still-streaming) input
     // after a conversation swap. Without this, a background run would be written into the
     // active conversation's agent-run map and engine cache. See onMessageSent() for context.
@@ -2353,12 +4403,17 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     await this.addAgentRunToMap(event.conversationId, event.conversationDetailId, event.agentRunId);
   }
 
+  /** @deprecated Use {@link OnAgentRunDetected}. */
+  async onAgentRunDetected(event: {conversationId: string; conversationDetailId: string; agentRunId: string}): Promise<void> {
+    return this.OnAgentRunDetected(event);
+  }
+
   /**
    * Handle message completion event from message-input
    * Refreshes the agent run data in-place to get final status and timestamps
    * Also reloads attachments created during agent execution (e.g., generated images)
    */
-  async onMessageComplete(event: {conversationId: string; conversationDetailId: string; agentId?: string}): Promise<void> {
+  async OnMessageComplete(event: {conversationId: string; conversationDetailId: string; agentId?: string}): Promise<void> {
     // Guard: ignore completion of a background conversation's run after a conversation swap.
     // Without this, a background run is refreshed into the active conversation's engine cache
     // (keyed by this.conversationId) and its attachments loaded into the active map.
@@ -2367,7 +4422,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     }
 
     // Get existing agent run from map
-    const existingAgentRun = this.agentRunsByDetailId.get(event.conversationDetailId);
+    const existingAgentRun = this.AgentRunsByDetailId.get(event.conversationDetailId);
 
     if (existingAgentRun?.ID) {
       // Refresh the SAME object by calling Load() - preserves all references
@@ -2384,7 +4439,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         const newEntity = await md.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs');
         newEntity.LoadFromData(existingAgentRun);
         // swap the map entry to have this object now
-        this.agentRunsByDetailId.set(event.conversationDetailId, newEntity);
+        this.AgentRunsByDetailId.set(event.conversationDetailId, newEntity);
 
         // Also update ConversationEngine's cache
         if (event.conversationId) {
@@ -2407,12 +4462,17 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.cdr.detectChanges();
   }
 
+  /** @deprecated Use {@link OnMessageComplete}. */
+  async onMessageComplete(event: {conversationId: string; conversationDetailId: string; agentId?: string}): Promise<void> {
+    return this.OnMessageComplete(event);
+  }
+
   /**
    * Handle agent run update event from progress updates
    * This is called on EVERY progress update with the full, live agent run object
    * Provides real-time updates of status, timestamps, tokens, cost during execution
    */
-  async onAgentRunUpdate(event: {conversationId: string; conversationDetailId: string; agentRun?: MJAIAgentRunEntityExtended, agentRunId?: string}): Promise<void> {
+  async OnAgentRunUpdate(event: {conversationId: string; conversationDetailId: string; agentRun?: MJAIAgentRunEntityExtended, agentRunId?: string}): Promise<void> {
     // Guard: ignore live progress updates from a background conversation's run after a swap.
     // Without this, a background run is written into the active conversation's agent-run map
     // and into ConversationEngine's cache keyed by this.conversationId. See onMessageSent().
@@ -2422,7 +4482,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     if (event.agentRun) {
       // Directly update map with fresh data from progress (no database query needed)
       // Don't create new Map - message-list component needs to keep the same reference
-      this.agentRunsByDetailId.set(event.conversationDetailId, event.agentRun);
+      this.AgentRunsByDetailId.set(event.conversationDetailId, event.agentRun);
 
       // Also update ConversationEngine's cache for other consumers
       if (event.conversationId) {
@@ -2440,13 +4500,23 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.cdr.detectChanges();
   }
 
+  /** @deprecated Use {@link OnAgentRunUpdate}. */
+  async onAgentRunUpdate(event: {conversationId: string; conversationDetailId: string; agentRun?: MJAIAgentRunEntityExtended, agentRunId?: string}): Promise<void> {
+    return this.OnAgentRunUpdate(event);
+  }
+
   /**
    * Public entry point to reload messages in the active conversation.
    * Called by the parent resource wrapper when the user clicks the Refresh button,
    * so that new agent responses are visible without a full page reload.
    */
-  public async reloadMessages(): Promise<void> {
+  public async ReloadMessages(): Promise<void> {
     await this.reloadMessagesForActiveConversation();
+  }
+
+  /** @deprecated Use {@link ReloadMessages}. */
+  public async reloadMessages(): Promise<void> {
+    return this.ReloadMessages();
   }
 
   /**
@@ -2455,7 +4525,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * Called when agent completion is detected to discover newly delegated agent messages.
    */
   private async reloadMessagesForActiveConversation(): Promise<void> {
-    const conversationId = this.conversationId;
+    const conversationId = this.ConversationId;
     if (!conversationId) {
       return;
     }
@@ -2464,7 +4534,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       // Refresh the newest window page rather than reading the engine's full-history cache,
       // which the windowed path never populates — reading it here returned undefined and
       // silently skipped everything below, so delegated-agent messages never appeared.
-      await this.windowStore.RefreshLatest(this.currentUser);
+      await this.windowStore.RefreshLatest(this.CurrentUser);
       if (!this.isActiveConversation(conversationId)) {
         return;
       }
@@ -2504,7 +4574,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         if (message.AgentID && message.ID) {
           const agentRun = this.engine.GetAgentRunForDetail(conversationId, message.ID);
           if (agentRun) {
-            this.agentRunsByDetailId.set(message.ID, agentRun as MJAIAgentRunEntityExtended);
+            this.AgentRunsByDetailId.set(message.ID, agentRun as MJAIAgentRunEntityExtended);
             LogStatusEx({message: `✅ Found cached agent run for new delegated message ${message.ID}`, verboseOnly: true});
           }
         }
@@ -2515,6 +4585,1350 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       console.error('Failed to reload messages for active conversation:', error);
     }
   }
+
+  /**
+   * Shows `next` for the active conversation. Ends a voice session open for the conversation first (a
+   * session keeps the path it started on), then reloads the window, fork rows, artifact viewer, agent
+   * polling, peripherals and pins on the view's path (a draft reads its parent's path up to its
+   * anchor). A view equal to the open one changes nothing. Ignored while another view change runs.
+   * @returns true when `next` is shown; false when ignored, when there is no conversation, or when the reload failed.
+   */
+  private async changeOpenView(next: ConversationOpenView): Promise<boolean> {
+    const conversationId = this.ConversationId;
+    if (!conversationId || this.viewChangeInFlight) {
+      return false;
+    }
+    if (SameOpenView(this.OpenView, next)) {
+      return true;
+    }
+    this.viewChangeInFlight = true;
+    try {
+      await this.endRealtimeSessionForViewChange(conversationId);
+      if (!this.isActiveConversation(conversationId)) {
+        return false;
+      }
+      this.IsRenamingTitle = false;
+      this.openView = next;
+      return await this.reloadWindowForView();
+    } finally {
+      this.viewChangeInFlight = false;
+    }
+  }
+
+  /** Opens a fork of the active conversation in the full view. */
+  public async OpenFork(branchId: string): Promise<boolean> {
+    return this.changeOpenView({ Kind: 'Fork', BranchID: branchId });
+  }
+
+  /** Shows Main of the active conversation. */
+  public async BackToMain(): Promise<boolean> {
+    return this.changeOpenView(MAIN_OPEN_VIEW);
+  }
+
+  /**
+   * The fork the back button opens; null is Main. A fork's parent fork, or a draft's ParentBranchID
+   * (the view it started from).
+   */
+  public get BackForkId(): string | null {
+    return ParentForkIdOf(this.OpenView, this.knownForkRows());
+  }
+
+  /** The label and aria-label of the back button: "Back to <parent fork>", or "Back to Main". */
+  public get BackLabel(): string {
+    const parentId = this.BackForkId;
+    return BackLabelOf(parentId ? this.forkLabelOf(parentId) : null);
+  }
+
+  /** Goes up one level: opens the parent fork of the open fork or draft, else Main. */
+  public async GoBack(): Promise<boolean> {
+    const parentId = this.BackForkId;
+    return parentId ? this.OpenFork(parentId) : this.BackToMain();
+  }
+
+  /**
+   * The breadcrumb of the header in a fork: the conversation, each ancestor fork, then the open fork ("New fork"
+   * in a draft). Empty in Main. The same array until the view, the fork rows, the summaries or the
+   * conversation name change.
+   */
+  public get ForkBreadcrumbs(): ForkBreadcrumb[] {
+    const view = this.OpenView;
+    const branches = this.branches ?? [];
+    const summaries = this.ForkSummaries ?? [];
+    const conversationName = this.Conversation?.Name || 'Conversation';
+    const cache = this.breadcrumbCache;
+    if (cache && cache.View === view && cache.Branches === branches && cache.Summaries === summaries && cache.ConversationName === conversationName) {
+      return cache.Crumbs;
+    }
+    const crumbs = BuildForkBreadcrumbs(view, conversationName, this.knownForkRows(), id => this.forkLabelOf(id));
+    this.breadcrumbCache = { View: view, Branches: branches, Summaries: summaries, ConversationName: conversationName, Crumbs: crumbs };
+    return crumbs;
+  }
+
+  /** The header path of the open fork or draft: the breadcrumb with the crumbs that collapse into an ellipsis. */
+  public get HeaderPath(): ForkHeaderPath {
+    const crumbs = this.ForkBreadcrumbs;
+    if (this.headerPathCache?.Crumbs !== crumbs) {
+      this.headerPathCache = { Crumbs: crumbs, Path: BuildForkHeaderPath(crumbs) };
+    }
+    return this.headerPathCache.Path;
+  }
+  private headerPathCache: { Crumbs: ForkBreadcrumb[]; Path: ForkHeaderPath } | null = null;
+
+  /** The path's ellipsis was chosen: opens the forks list, which shows the whole chain. */
+  public ShowWholePath(): void {
+    if (!this.ShowForksPopover) {
+      this.ToggleForksPopover();
+    }
+  }
+
+  /**
+   * Escape in the header or the transcript of a fork view: closes the forks list when it is open, else goes
+   * up one level ({@link GoBack}). Ignored when an inner control handled the key (the rename field, a
+   * message editor, an open menu), in a text field, and in Main.
+   */
+  public OnViewEscape(event: Event): void {
+    if (this.OpenView.Kind === 'Main' || event.defaultPrevented || this.IsRenamingTitle || isTextEntryTarget(event.target)) {
+      return;
+    }
+    if (this.ShowForksPopover) {
+      event.preventDefault();
+      this.CloseForksPopover();
+      return;
+    }
+    if (isInOpenMenuTrigger(event.target)) {
+      return;
+    }
+    event.preventDefault();
+    void this.GoBack();
+  }
+
+  /** A crumb was chosen: opens its fork, or Main for the conversation crumb. The last crumb opens nothing. */
+  public async OpenCrumb(crumb: ForkBreadcrumb): Promise<boolean> {
+    if (crumb.IsCurrent) {
+      return false;
+    }
+    return crumb.BranchID ? this.OpenFork(crumb.BranchID) : this.BackToMain();
+  }
+
+  /** The fork rows this chat area knows: its loaded rows, then the rows of the fork summaries. */
+  private knownForkRows(): ForkChainRow[] {
+    const branches: ForkChainRow[] = this.branches ?? [];
+    const summaries = this.ForkSummaries ?? [];
+    return summaries.length === 0 ? branches : [...branches, ...summaries.map(s => s.Branch)];
+  }
+
+  /** A fork's row among the loaded rows or the summaries; null when neither has it. */
+  private knownForkRow(branchId: string): ConversationBranchRow | null {
+    return (this.branches ?? []).find(b => UUIDsEqual(b.ID, branchId))
+      ?? (this.ForkSummaries ?? []).find(s => UUIDsEqual(s.Branch.ID, branchId))?.Branch
+      ?? null;
+  }
+
+  /** The display name of a fork: its summary's, else the default from its row, else "Fork". */
+  private forkLabelOf(branchId: string): string {
+    const summary = (this.ForkSummaries ?? []).find(s => UUIDsEqual(s.Branch.ID, branchId));
+    if (summary) {
+      return summary.DisplayName;
+    }
+    const row = this.knownForkRow(branchId);
+    return row ? ConversationEngine.ForkDisplayName(row, null) : 'Fork';
+  }
+
+  /** True when the open fork may be renamed: a saved fork (not a draft) of a conversation the person may write to. */
+  public get CanRenameFork(): boolean {
+    return this.OpenView.Kind === 'Fork' && !this.EffectiveReadOnly;
+  }
+
+  /** True when the conversation may be renamed from the header: Main is open and the person may write to it. */
+  public get CanRenameConversation(): boolean {
+    return this.OpenView.Kind === 'Main' && !!this.Conversation && !this.EffectiveReadOnly;
+  }
+
+  /** True when the header title may be renamed: the conversation in Main, the fork in a fork. */
+  public get CanRenameTitle(): boolean {
+    return this.OpenView.Kind === 'Main' ? this.CanRenameConversation : this.CanRenameFork;
+  }
+
+  /** The header title: the conversation name in Main, the open fork's display name in a fork or draft. */
+  public get HeaderTitle(): string {
+    return this.OpenView.Kind === 'Main' ? (this.Conversation?.Name || '') : this.OpenViewTitle;
+  }
+
+  /** The label of the title rename button and name field. */
+  public get TitleRenameLabel(): string {
+    return this.OpenView.Kind === 'Main' ? 'Rename conversation' : 'Rename fork';
+  }
+
+  /** Turns the header title into a text field holding its current name, and focuses it. */
+  public StartTitleRename(): void {
+    if (!this.CanRenameTitle) {
+      return;
+    }
+    this.TitleRenameText = this.HeaderTitle;
+    this.IsRenamingTitle = true;
+    this.cdr.detectChanges();
+    const input = this.titleNameInput?.nativeElement;
+    input?.focus();
+    input?.select();
+  }
+
+  /** Closes the title name field without saving (Escape) and puts focus back on the rename button. */
+  public CancelTitleRename(): void {
+    if (!this.IsRenamingTitle) {
+      return;
+    }
+    this.IsRenamingTitle = false;
+    this.focusTitleRenameButton();
+  }
+
+  /** Puts focus on the title rename button once the name field is gone, when the button is on the page. */
+  private focusTitleRenameButton(): void {
+    this.cdr.detectChanges();
+    const button = this.titleRenameButton?.nativeElement;
+    if (button?.isConnected) {
+      button.focus();
+    }
+  }
+
+  /**
+   * Saves the title name field (Enter, or leaving the field) to the conversation in Main or to the open
+   * fork. With `restoreFocus` (Enter), focus goes back to the rename button.
+   * @returns true when saved or unchanged; false when nothing was being renamed or the save failed.
+   */
+  public async SaveTitleRename(restoreFocus = false): Promise<boolean> {
+    if (!this.IsRenamingTitle) {
+      return false;
+    }
+    this.IsRenamingTitle = false;
+    if (restoreFocus) {
+      this.focusTitleRenameButton();
+    }
+    const view = this.OpenView;
+    const conversationId = this.ConversationId;
+    if (!conversationId || this.EffectiveReadOnly) {
+      return false;
+    }
+    if (view.Kind === 'Main') {
+      return this.saveConversationName(conversationId);
+    }
+    return view.Kind === 'Fork' ? this.saveForkName(conversationId, view.BranchID) : false;
+  }
+
+  /**
+   * Saves the title field as the conversation's Name through the engine, then tells the host. A blank or
+   * unchanged name saves nothing. Shows "Could not rename the conversation" when the save fails.
+   */
+  private async saveConversationName(conversationId: string): Promise<boolean> {
+    const name = (this.TitleRenameText ?? '').trim();
+    const conversation = this.Conversation;
+    if (!conversation || !name || name === (conversation.Name ?? '').trim()) {
+      return true;
+    }
+    try {
+      await this.engine.SaveConversation(conversationId, { Name: name }, this.CurrentUser);
+    } catch (error) {
+      console.error(`Failed to rename conversation ${conversationId}:`, error);
+      MJNotificationService.Instance.CreateSimpleNotification('Could not rename the conversation', 'error', 3000);
+      return false;
+    }
+    if (conversation !== this.engine.GetConversation(conversationId)) {
+      conversation.SetMany({ Name: name }, true, true);
+    }
+    this.ConversationRenamed.emit({ conversationId, name, description: conversation.Description ?? '' });
+    return true;
+  }
+
+  /**
+   * Saves the title field as the fork's Name through the branch entity, then refreshes the fork summaries.
+   * A blank name clears the Name so the default label shows; an unchanged name saves nothing. Shows
+   * "Could not rename the fork" when the save fails.
+   */
+  private async saveForkName(conversationId: string, forkId: string): Promise<boolean> {
+    const name = (this.TitleRenameText ?? '').trim() || null;
+    const stored = this.knownForkRow(forkId)?.Name?.trim() || null;
+    if (name === stored || (stored === null && name === this.OpenViewTitle)) {
+      return true;
+    }
+    let saved = false;
+    try {
+      saved = await SaveForkName({ ForkId: forkId, Name: name, Provider: this.ProviderToUse, CurrentUser: this.CurrentUser });
+    } catch (error) {
+      console.error(`Failed to rename fork ${forkId}:`, error);
+    }
+    if (!saved) {
+      MJNotificationService.Instance.CreateSimpleNotification('Could not rename the fork', 'error', 3000);
+      return false;
+    }
+    if (this.isActiveConversation(conversationId)) {
+      await this.RefreshForkSummaries();
+    }
+    return true;
+  }
+
+  /**
+   * Names a new Fork or Edit fork from its first message, in the background: runs the Name Conversation
+   * prompt and saves the name only when the fork still has none, then refreshes the fork summaries. Off
+   * when {@link AutoNameConversation} is false. Failures are logged; no notice.
+   */
+  private nameForkInBackground(conversationId: string, forkId: string, message: string | null | undefined): void {
+    if (this.AutoNameConversation === false) {
+      return;
+    }
+    const text = ConversationEngine.ForkPlainText(message);
+    if (!text) {
+      return;
+    }
+    void GenerateAndApplyForkName({
+      ForkId: forkId,
+      MessageText: text,
+      Provider: this.ProviderToUse as GraphQLDataProvider,
+      CurrentUser: this.CurrentUser,
+    })
+      .then(name => {
+        if (name && this.isActiveConversation(conversationId)) {
+          return this.RefreshForkSummaries();
+        }
+        return undefined;
+      })
+      .catch(error => console.error(`Failed to name fork ${forkId}:`, error));
+  }
+
+  /** Names the fork a draft's first send created from the first user message sent into it; once per fork. */
+  private nameForkFromFirstSend(message: MJConversationDetailEntity): void {
+    const pending = this.forkNamedByFirstSend;
+    if (!pending || message.Role !== 'User' || !UUIDsEqual(message.ConversationID, pending.ConversationID)
+      || !UUIDsEqual(message.BranchID ?? null, pending.ForkID)) {
+      return;
+    }
+    this.forkNamedByFirstSend = null;
+    this.nameForkInBackground(pending.ConversationID, pending.ForkID, message.Message);
+  }
+
+  /**
+   * Opens a new fork that replaces `message` (Fork from here): the full fork view with no own rows,
+   * starting at the row before the message on its path (the same fork point as an edit). Nothing is
+   * created until the first send. Ends a voice session of the conversation first, then puts the
+   * message's text in the composer unless the composer holds unsent text.
+   * @returns false for a message of another conversation, when the row before it cannot be found (after
+   * a notice), or when the view change is ignored.
+   */
+  public async OpenDraftFork(message: MJConversationDetailEntity): Promise<boolean> {
+    const conversationId = this.ConversationId;
+    if (!conversationId || !UUIDsEqual(message.ConversationID, conversationId)) {
+      return false;
+    }
+    const forkPoint = await this.editForkPointOrNotify(message, 'Could not locate the message before this one');
+    if (forkPoint === undefined || !this.isActiveConversation(conversationId)) {
+      return false;
+    }
+    const opened = await this.changeOpenView({
+      Kind: 'DraftFork',
+      ParentBranchID: forkPoint.ParentBranchID,
+      ForkFromSequence: forkPoint.ForkFromSequence,
+      AnchorDetailID: this.loadedRowAt(forkPoint)?.ID ?? null,
+      SourceDetailID: message.ID,
+      SourceAuthorName: this.rowAuthorOf(message),
+    });
+    if (opened) {
+      const draftView = this.OpenView;
+      this.prefillComposer(message.Message, () => this.OpenView === draftView);
+    }
+    return opened;
+  }
+
+  /** The loaded row at a fork point (its branch and Sequence); null when there is none or it is not loaded. */
+  private loadedRowAt(forkPoint: ForkPoint): MJConversationDetailEntity | null {
+    const sequence = forkPoint.ForkFromSequence;
+    if (sequence == null) {
+      return null;
+    }
+    return (this.messages ?? []).find(m => m.Sequence === sequence && UUIDsEqual(m.BranchID ?? null, forkPoint.ParentBranchID)) ?? null;
+  }
+
+  /**
+   * Puts `text` in the active composer, unless the composer holds unsent text or there is no text. When the
+   * composer has not rendered yet after the view change, tries again shortly, while `stillOpen` holds.
+   */
+  private prefillComposer(text: string | null | undefined, stillOpen: () => boolean, attempt = 0): void {
+    if (!text?.trim() || !stillOpen()) {
+      return;
+    }
+    this.cdr.detectChanges();
+    const input = this.getActiveMessageInputComponent();
+    if (!input) {
+      if (attempt < PREFILL_MAX_ATTEMPTS) {
+        setTimeout(() => this.prefillComposer(text, stillOpen, attempt + 1), PREFILL_RETRY_MS);
+      }
+      return;
+    }
+    if (!input.GetSerializedDraft()) {
+      input.SetDraft(text);
+    }
+  }
+
+  /**
+   * A chip was clicked: opens its fork. An original chip opens its view (a fork, or Main) positioned at
+   * the replaced message, as a search hit does ({@link OpenMessage}).
+   */
+  public OnForkOpenRequested(event: ForkChipOpenRequest): void {
+    const conversationId = this.ConversationId;
+    if (event.Sequence != null && conversationId) {
+      void this.OpenMessage(conversationId, event.BranchID, event.Sequence);
+      return;
+    }
+    void (event.BranchID ? this.OpenFork(event.BranchID) : this.BackToMain());
+  }
+
+  /** Opens or closes the forks list. Opening it closes the pinned messages panel. */
+  public ToggleForksPopover(): void {
+    this.ShowForksPopover = !this.ShowForksPopover;
+    if (this.ShowForksPopover) {
+      this.ShowPinsPanel = false;
+    }
+  }
+
+  /** Closes the forks list and puts focus back on the header Forks button when it is on the page. */
+  public CloseForksPopover(): void {
+    this.ShowForksPopover = false;
+    const button = this.forksButton?.nativeElement;
+    if (button?.isConnected) {
+      button.focus();
+    }
+  }
+
+  /** A row of the forks list was chosen: close the list and open that fork. */
+  public OnForkSelectedFromList(branchId: string): void {
+    this.CloseForksPopover();
+    void this.OpenFork(branchId);
+  }
+
+  /**
+   * Ends the voice session open for `conversationId`, if any, and waits for it. Shows a notice when it
+   * ended. When ending fails, logs the error and returns, so the view change still goes on.
+   */
+  private async endRealtimeSessionForViewChange(conversationId: string): Promise<void> {
+    if (!this.RealtimeSession.IsActiveFor(conversationId)) {
+      return;
+    }
+    try {
+      await this.RealtimeSession.EndRealtimeSession();
+    } catch (error) {
+      console.error('Failed to end the voice session before changing the view:', error);
+      return;
+    }
+    MJNotificationService.Instance.CreateSimpleNotification('Voice session ended to change the view', 'info', 3000);
+  }
+
+  /**
+   * Creates a fork, refreshes the fork summaries and opens the fork. Shows `failureText` when the
+   * fork cannot be created, and `openFailureText` when it was created but could not be opened.
+   * @returns the new fork's id when it is open; null otherwise.
+   */
+  private async createForkAndOpen(
+    conversationId: string,
+    input: CreateForkInput,
+    failureText: string,
+    openFailureText = 'The fork was created but could not be opened'
+  ): Promise<string | null> {
+    let fork: MJConversationBranchEntity;
+    try {
+      fork = await ConversationEngine.Instance.CreateFork(input, this.CurrentUser);
+    } catch (error) {
+      console.error('Failed to create a fork:', error);
+      MJNotificationService.Instance.CreateSimpleNotification(failureText, 'error', 3000);
+      return null;
+    }
+    if (!this.isActiveConversation(conversationId)) {
+      return null;
+    }
+    this.addForkRow(conversationId, this.forkRowOf(fork));
+    void this.RefreshForkSummaries();
+    if (!(await this.OpenFork(fork.ID))) {
+      MJNotificationService.Instance.CreateSimpleNotification(openFailureText, 'error', 3000);
+      return null;
+    }
+    return fork.ID;
+  }
+
+  /**
+   * Creates the fork of a draft on its first send and opens it. A send in the same draft while that
+   * runs gets the same fork. Returns the new fork's id, or undefined (with a notice) when it could
+   * not be created or opened, or while another start action runs; undefined stops the send.
+   */
+  private materializeDraftFork(view: DraftForkOpenView): Promise<string | undefined> {
+    const running = this.draftForkStart;
+    if (running && SameOpenView(running.View, view)) {
+      return running.ForkID;
+    }
+    const conversationId = this.ConversationId;
+    if (!conversationId) {
+      return Promise.resolve(undefined);
+    }
+    if (this.forkStartInFlight) {
+      MJNotificationService.Instance.CreateSimpleNotification('Could not create the fork; the message was not sent', 'error', 3000);
+      return Promise.resolve(undefined);
+    }
+    const start = { View: view, ForkID: this.createDraftForkAndOpen(conversationId, view) };
+    this.draftForkStart = start;
+    return start.ForkID;
+  }
+
+  /**
+   * Creates and opens the fork of a draft (Kind Fork, SourceDetailID the replaced message), with
+   * {@link forkStartInFlight} set. Clears the draft's running creation when done; that runs after an
+   * await, so after {@link materializeDraftFork} has recorded it.
+   */
+  private async createDraftForkAndOpen(conversationId: string, view: DraftForkOpenView): Promise<string | undefined> {
+    this.forkStartInFlight = true;
+    try {
+      const forkId = await this.createForkAndOpen(
+        conversationId,
+        {
+          ConversationID: conversationId,
+          Kind: 'Fork',
+          ParentBranchID: view.ParentBranchID,
+          ForkFromSequence: view.ForkFromSequence,
+          SourceDetailID: view.SourceDetailID,
+        },
+        'Could not create the fork; the message was not sent',
+        'The fork was created but could not be opened; the message was not sent'
+      );
+      if (forkId) {
+        this.forkNamedByFirstSend = { ConversationID: conversationId, ForkID: forkId };
+      }
+      return forkId ?? undefined;
+    } finally {
+      this.forkStartInFlight = false;
+      this.draftForkStart = null;
+    }
+  }
+
+  /** The fork row of a saved `MJ: Conversation Branches` entity. */
+  private forkRowOf(fork: MJConversationBranchEntity): ConversationBranchRow {
+    return {
+      ID: fork.ID,
+      ConversationID: fork.ConversationID,
+      ParentBranchID: fork.ParentBranchID,
+      ForkFromSequence: fork.ForkFromSequence,
+      Name: fork.Name,
+      Kind: fork.Kind,
+      SourceDetailID: fork.SourceDetailID,
+      UserID: fork.UserID,
+      User: fork.User,
+      __mj_CreatedAt: fork.__mj_CreatedAt,
+    };
+  }
+
+  /** Adds a fork row to the conversation's rows, so the scope of the fork resolves at once. */
+  private addForkRow(conversationId: string, row: ConversationBranchRow): void {
+    this.setBranchRows(conversationId, [...this.branches.filter(b => !UUIDsEqual(b.ID, row.ID)), row]);
+  }
+
+  /**
+   * Fork from here: opens a new fork that replaces the message (the draft view, {@link OpenDraftFork}).
+   * Nothing is created until the first send, which creates the fork through {@link ResolveComposerBranch};
+   * with no name, the fork is named from that first message. Only for a user message the current person
+   * wrote. Ignored while another start action runs and when the person may not fork ({@link CanFork}).
+   */
+  async OnForkRequested(message: MJConversationDetailEntity): Promise<void> {
+    if (!this.CanFork || this.forkStartInFlight || this.EffectiveReadOnly || !this.ConversationId) {
+      return;
+    }
+    if (message.Role !== 'User' || !message.UserID || !UUIDsEqual(message.UserID, this.CurrentUser?.ID)) {
+      return;
+    }
+    this.forkStartInFlight = true;
+    try {
+      await this.OpenDraftFork(message);
+    } finally {
+      this.forkStartInFlight = false;
+    }
+  }
+
+  /**
+   * Saves an edit as a fork: creates an Edit fork at the row before the edited message,
+   * opens it, then sends the edited text into it. The original message stays where it was. Ignored
+   * while another start action runs and when the person may not fork ({@link CanFork}); makes no fork
+   * while the composer cannot send.
+   */
+  async OnEditResendRequested(event: { Message: MJConversationDetailEntity; NewText: string }): Promise<void> {
+    if (!this.CanFork) {
+      return;
+    }
+    const conversationId = this.ConversationId;
+    if (this.forkStartInFlight || !conversationId) {
+      return;
+    }
+    const input = this.composerReadyForResend();
+    if (!input) {
+      return;
+    }
+    const failureText = 'Could not create a fork for the edited message';
+    this.forkStartInFlight = true;
+    try {
+      const forkPoint = await this.editForkPointOrNotify(event.Message, failureText);
+      if (forkPoint === undefined) {
+        return;
+      }
+      const forkId = await this.createForkAndOpen(conversationId, {
+        ConversationID: conversationId,
+        Kind: 'Edit',
+        ParentBranchID: forkPoint.ParentBranchID,
+        ForkFromSequence: forkPoint.ForkFromSequence,
+        SourceDetailID: event.Message.ID,
+      }, failureText);
+      if (!forkId) {
+        return;
+      }
+      const sent = await input.SendMessageWithText(event.NewText, undefined, { IsResend: true, TargetBranchID: forkId });
+      if (!sent) {
+        MJNotificationService.Instance.CreateSimpleNotification('The fork was created but the message was not sent', 'error', 3000);
+        return;
+      }
+      this.nameForkInBackground(conversationId, forkId, event.NewText);
+    } finally {
+      this.forkStartInFlight = false;
+    }
+  }
+
+  /**
+   * Regenerates an answer as a fork: creates a Regenerate fork at the user message the
+   * answer replied to, opens it, then runs the agent for that message again inside it. The first answer
+   * stays where it was. Ignored while another start action runs; makes no fork while the composer cannot
+   * send or when the user message is not in the loaded window. When the person may not fork
+   * ({@link CanFork}), reruns the latest answer's turn in place instead ({@link InPlaceTurn}).
+   */
+  async OnRegenerateRequested(aiMessage: MJConversationDetailEntity): Promise<void> {
+    if (!this.CanFork) {
+      const turn = this.InPlaceTurn;
+      if (!turn?.AnswerDetailID || !UUIDsEqual(turn.AnswerDetailID, aiMessage.ID)) {
+        return;
+      }
+      const userMessage = (this.messages ?? []).find(m => UUIDsEqual(m.ID, turn.UserDetailID));
+      if (!userMessage) {
+        MJNotificationService.Instance.CreateSimpleNotification('Could not find the message this reply answers', 'error', 3000);
+        return;
+      }
+      await this.rerunTurnInPlace(userMessage);
+      return;
+    }
+    const conversationId = this.ConversationId;
+    if (this.forkStartInFlight || !conversationId) {
+      return;
+    }
+    const input = this.composerReadyForResend();
+    if (!input) {
+      return;
+    }
+    const userMessage = this.findUserMessageBefore(aiMessage);
+    if (!userMessage) {
+      MJNotificationService.Instance.CreateSimpleNotification('Could not find the message this reply answers', 'error', 3000);
+      return;
+    }
+    this.forkStartInFlight = true;
+    try {
+      const forkPoint = ConversationEngine.RegenerateForkPoint(userMessage);
+      const forkId = await this.createForkAndOpen(conversationId, {
+        ConversationID: conversationId,
+        Kind: 'Regenerate',
+        ParentBranchID: forkPoint.ParentBranchID,
+        ForkFromSequence: forkPoint.ForkFromSequence,
+        SourceDetailID: aiMessage.ID,
+      }, 'Could not create a fork for the regenerated reply');
+      if (!forkId) {
+        return;
+      }
+      let rerun = false;
+      try {
+        rerun = await input.RerunAgentForMessage(userMessage, forkId);
+      } catch (error) {
+        console.error('Failed to regenerate the reply:', error);
+      }
+      if (!rerun) {
+        MJNotificationService.Instance.CreateSimpleNotification('The fork was created but the reply was not regenerated', 'error', 3000);
+      }
+    } finally {
+      this.forkStartInFlight = false;
+    }
+  }
+
+  /**
+   * The latest turn that in-place Edit and Regenerate may change: the window view's last own user message
+   * and its answer. Null while the person may fork, in a draft, and when a fork depends on the turn's
+   * answer rows. The same object until the rows, the window view, the fork rows or CanFork change.
+   */
+  public get InPlaceTurn(): LatestTurn | null {
+    const messages = this.messages ?? NO_DETAILS;
+    const view = this.WindowView;
+    const branches = UUIDsEqual(this.branchRowsConversationId, this.ConversationId) ? (this.branches ?? NO_BRANCHES) : NO_BRANCHES;
+    const canFork = this.CanFork;
+    const cache = this.inPlaceTurnCache;
+    if (cache && cache.Messages === messages && cache.View === view && cache.Branches === branches && cache.CanFork === canFork) {
+      return cache.Turn;
+    }
+    const turn = canFork ? null : this.unblockedLatestTurn(messages, view, branches);
+    this.inPlaceTurnCache = { Messages: messages, View: view, Branches: branches, CanFork: canFork, Turn: turn };
+    return turn;
+  }
+
+  /** The latest turn of the rows, or null when there is none or a fork depends on its answer rows. */
+  private unblockedLatestTurn(messages: MJConversationDetailEntity[], view: ConversationOpenView, branches: ReadonlyArray<ConversationBranchRow>): LatestTurn | null {
+    const turn = FindLatestTurn(messages, view);
+    const user = turn ? messages.find(m => UUIDsEqual(m.ID, turn.UserDetailID)) : undefined;
+    if (!turn || !user) {
+      return null;
+    }
+    return ForkDependsOnRows(user.BranchID ?? null, TurnRowsAfter(messages, user), branches) ? null : turn;
+  }
+
+  /** "Save and resend": the message item saved the new text of the latest user message; reruns its turn in place. */
+  async OnResendInPlaceRequested(userMessage: MJConversationDetailEntity): Promise<void> {
+    const turn = this.InPlaceTurn;
+    if (!turn || !UUIDsEqual(turn.UserDetailID, userMessage.ID)) {
+      return;
+    }
+    await this.rerunTurnInPlace(userMessage);
+  }
+
+  /**
+   * Runs the turn of `userMessage` again in place: reads the fork rows fresh and refuses when a fork
+   * depends on the turn's answer rows, hides those rows ({@link hideReplacedRows}), then reruns the agent
+   * for the user message on its own branch. Shows a notice for each failure.
+   */
+  private async rerunTurnInPlace(userMessage: MJConversationDetailEntity): Promise<void> {
+    const conversationId = this.ConversationId;
+    if (!conversationId || this.inPlaceRerunInFlight || this.forkStartInFlight || this.EffectiveReadOnly) {
+      return;
+    }
+    const input = this.composerReadyForResend();
+    if (!input) {
+      return;
+    }
+    const answerRows = TurnRowsAfter(this.messages ?? [], userMessage);
+    if (answerRows.some(r => r.Status === 'In-Progress')) {
+      MJNotificationService.Instance.CreateSimpleNotification('Wait for the current reply to finish', 'error', 3000);
+      return;
+    }
+    this.inPlaceRerunInFlight = true;
+    try {
+      let branches: ConversationBranchRow[];
+      try {
+        branches = await ConversationEngine.LoadBranchesFresh(conversationId, this.CurrentUser, this.ProviderToUse);
+      } catch (error) {
+        console.error(`Failed to load the forks of conversation ${conversationId} before a rerun:`, error);
+        MJNotificationService.Instance.CreateSimpleNotification('Could not check the forks of this conversation; nothing was changed', 'error', 3000);
+        return;
+      }
+      if (!this.isActiveConversation(conversationId)) {
+        return;
+      }
+      this.setBranchRows(conversationId, branches);
+      if (ForkDependsOnRows(userMessage.BranchID ?? null, answerRows, branches)) {
+        MJNotificationService.Instance.CreateSimpleNotification('A fork depends on this answer, so it cannot be replaced', 'error', 3000);
+        return;
+      }
+      if (!(await this.hideReplacedRows(answerRows))) {
+        MJNotificationService.Instance.CreateSimpleNotification('Could not replace the answer', 'error', 3000);
+        await this.reloadWindowForView();
+        return;
+      }
+      let rerun = false;
+      try {
+        rerun = await input.RerunAgentForMessage(userMessage, userMessage.BranchID ?? null);
+      } catch (error) {
+        console.error('Failed to rerun the turn:', error);
+      }
+      if (!rerun) {
+        MJNotificationService.Instance.CreateSimpleNotification('The reply was not regenerated', 'error', 3000);
+      }
+    } finally {
+      this.inPlaceRerunInFlight = false;
+    }
+  }
+
+  /**
+   * Marks each row replaced, one save at a time (parallel saves race on the server's transaction
+   * counter): `ReplacedAt` set and `HiddenToUser` true; the rows are kept for audit. Takes the saved rows
+   * off the screen. Stops at the first failed save, puts back that row's values and returns false.
+   */
+  private async hideReplacedRows(rows: MJConversationDetailEntity[]): Promise<boolean> {
+    const replacedAt = new Date();
+    const hidden: string[] = [];
+    let allSaved = true;
+    for (const row of rows) {
+      const before = { HiddenToUser: row.HiddenToUser, ReplacedAt: row.ReplacedAt };
+      row.HiddenToUser = true;
+      row.ReplacedAt = replacedAt;
+      if (await row.Save()) {
+        hidden.push(row.ID);
+        continue;
+      }
+      row.HiddenToUser = before.HiddenToUser;
+      row.ReplacedAt = before.ReplacedAt;
+      console.error(`Failed to replace ConversationDetail ${row.ID}: ${row.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+      allSaved = false;
+      break;
+    }
+    if (hidden.length > 0) {
+      for (const id of hidden) {
+        this.windowStore.RemoveDetail(id);
+      }
+      const gone = new Set(hidden.map(id => NormalizeUUID(id)));
+      this.messages = (this.messages ?? []).filter(m => !gone.has(NormalizeUUID(m.ID)));
+      this.cdr.detectChanges();
+    }
+    return allSaved;
+  }
+
+  /**
+   * The active composer when it can resend a message or rerun an agent now. Otherwise shows why
+   * and returns null: no composer is mounted, it is read-only, or it is still sending (an agent
+   * reply is running).
+   */
+  private composerReadyForResend(): MessageInputComponent | null {
+    const input = this.getActiveMessageInputComponent();
+    const problem = !input ? 'No composer is mounted for this conversation'
+      : input.ReadOnly ? 'This conversation is read-only'
+      : input.IsSending ? 'Wait for the current reply to finish'
+      : null;
+    if (problem) {
+      MJNotificationService.Instance.CreateSimpleNotification(problem, 'error', 3000);
+      return null;
+    }
+    return input ?? null;
+  }
+
+  /**
+   * Where an edit of `message`, or a fork that replaces it, starts; undefined after a notice: `Could not
+   * locate the message before this one` when the row before it is unknown, `failureText` when reading
+   * that row failed.
+   */
+  private async editForkPointOrNotify(message: MJConversationDetailEntity, failureText: string): Promise<ForkPoint | undefined> {
+    let forkPoint: ForkPoint | undefined;
+    try {
+      forkPoint = await this.resolveEditForkPoint(message);
+    } catch (error) {
+      console.error('Failed to read the message before the edited one:', error);
+      MJNotificationService.Instance.CreateSimpleNotification(failureText, 'error', 3000);
+      return undefined;
+    }
+    if (forkPoint === undefined) {
+      MJNotificationService.Instance.CreateSimpleNotification('Could not locate the message before this one', 'error', 3000);
+    }
+    return forkPoint;
+  }
+
+  /**
+   * Where an edit of `message`, or a fork that replaces it, starts: the row before it on the open path.
+   * Loads one older row when the window does not hold it. Undefined when it cannot be determined.
+   */
+  private async resolveEditForkPoint(message: MJConversationDetailEntity): Promise<ForkPoint | undefined> {
+    const snapshot = this.windowStore.GetSnapshot();
+    const inWindow = ConversationEngine.EditForkPoint(message, this.messages, snapshot.Cursor.HasMoreAbove);
+    if (inWindow !== undefined) {
+      return inWindow;
+    }
+    const older = await ConversationEngine.Instance.LoadDetailWindow(
+      { ConversationID: message.ConversationID, BeforeSequence: message.Sequence, PageSize: 1, RawOverread: 1, BranchID: this.OpenViewBranchId },
+      this.CurrentUser
+    );
+    if (older.Failed) {
+      return undefined;
+    }
+    const prev = older.Details[older.Details.length - 1];
+    return prev ? ConversationEngine.ForkPointFrom(prev) : { ParentBranchID: null, ForkFromSequence: null };
+  }
+
+  /** The nearest earlier User row in the loaded window; null when the window holds none. */
+  private findUserMessageBefore(aiMessage: MJConversationDetailEntity): MJConversationDetailEntity | null {
+    const sorted = [...this.messages].sort((a, b) => a.Sequence - b.Sequence);
+    const index = sorted.findIndex(m => UUIDsEqual(m.ID, aiMessage.ID));
+    for (let i = index - 1; i >= 0; i--) {
+      if (sorted[i].Role === 'User') {
+        return sorted[i];
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Loads the fork summaries of a conversation load. Keeps the earlier ones when the read fails, and
+   * drops a result when a newer read's result is already shown.
+   */
+  private async loadForkSummaries(conversationId: string, branches: ReadonlyArray<ConversationBranchRow>, loadToken: number): Promise<void> {
+    const sequence = ++this.forkSummaryReadSequence;
+    try {
+      const summaries = await ConversationEngine.LoadForkSummaries(conversationId, this.CurrentUser, this.ProviderToUse, branches);
+      if (sequence < this.forkSummaryShownSequence || !this.isActiveConversationLoad(conversationId, loadToken)) {
+        return;
+      }
+      this.forkSummaryShownSequence = sequence;
+      this.ForkSummaries = summaries;
+      if (summaries.length === 0) {
+        // The header Forks button goes away with the last fork, so the list closes too.
+        this.ShowForksPopover = false;
+      }
+      this.cdr.markForCheck();
+    } catch (error) {
+      console.error(`Failed to load the forks of conversation ${conversationId}:`, error);
+    }
+  }
+
+  /**
+   * Reads the active conversation's fork rows again, keeps them, then reloads the fork
+   * summaries. Keeps the earlier rows and the summaries when the rows cannot be read.
+   */
+  public async RefreshForkSummaries(): Promise<void> {
+    const conversationId = this.ConversationId;
+    if (!conversationId) {
+      return;
+    }
+    const branches = await this.loadBranchesOrNull(conversationId);
+    if (!branches || !this.isActiveConversation(conversationId)) {
+      return;
+    }
+    this.setBranchRows(conversationId, branches);
+    await this.loadForkSummaries(conversationId, branches, this.conversationLoadToken);
+  }
+
+  /**
+   * The chips of each message, from the fork summaries; the same map until the summaries, the window
+   * view, the fork's first own row or the avatar map change. In a fork's full view, that fork's own
+   * chip is left out (it would open the view already open), and its first own row shows the fork's
+   * alternatives: the original view of the message it replaced and the other forks placed there.
+   */
+  public get ForkChipMap(): ReadonlyMap<string, readonly MessageForkChip[]> {
+    const summaries = this.ForkSummaries ?? [];
+    const view = this.WindowView;
+    const avatarMap = this.UserAvatarMap;
+    const avatarVersion = this.userAvatarMapVersion;
+    const firstOwnId = this.firstOwnRowIdOf(view);
+    const cache = this.forkChipCache;
+    if (cache && cache.Summaries === summaries && cache.View === view && cache.FirstOwnID === firstOwnId
+      && cache.AvatarMap === avatarMap && cache.AvatarVersion === avatarVersion) {
+      return cache.Map;
+    }
+    const map = BuildViewForkChipMap(summaries, view, firstOwnId, p => this.forkChipAvatar(p), new Date(), id => this.forkLabelOf(id));
+    this.forkChipCache = { Summaries: summaries, View: view, FirstOwnID: firstOwnId, AvatarMap: avatarMap, AvatarVersion: avatarVersion, Map: map };
+    return map;
+  }
+
+  /** The first own row of a fork view when the loaded window reaches it (see {@link FirstOwnRowID}); null in Main and in a draft. */
+  private firstOwnRowIdOf(view: ConversationOpenView): string | null {
+    if (view.Kind !== 'Fork') {
+      return null;
+    }
+    const split = this.displayState().Split;
+    return FirstOwnRowID(split, split.Inherited.length === 0 && this.HasMoreMessagesAbove);
+  }
+
+  /** Records that {@link UserAvatarMap} was filled, so the chip map is built again. */
+  private markUserAvatarMapChanged(): void {
+    this.userAvatarMapVersion = (this.userAvatarMapVersion ?? 0) + 1;
+  }
+
+  /** A person's entry in {@link UserAvatarMap}; ids compared without regard to case. */
+  private knownUserAvatar(userId: string): {imageUrl: string | null; iconClass: string | null} | undefined {
+    const avatars = this.UserAvatarMap;
+    if (!avatars) {
+      return undefined;
+    }
+    const direct = avatars.get(userId);
+    if (direct) {
+      return direct;
+    }
+    for (const [id, avatar] of avatars) {
+      if (UUIDsEqual(id, userId)) {
+        return avatar;
+      }
+    }
+    return undefined;
+  }
+
+  /** The avatar of a fork participant: a person's image or icon when known, an agent's logo or icon. */
+  private forkChipAvatar(participant: ForkParticipant): ForkChipAvatar {
+    if (participant.Kind === 'User') {
+      const known = this.knownUserAvatar(participant.ID);
+      const label = participant.Name ?? 'Someone';
+      return { Kind: 'User', ID: participant.ID, Label: label, Initials: ForkInitials(label), ImageURL: known?.imageUrl ?? null, IconClass: known?.iconClass ?? null };
+    }
+    const agent = AIEngineBase.Instance?.Agents?.find(a => UUIDsEqual(a.ID, participant.ID));
+    const label = participant.Name ?? agent?.Name ?? 'Agent';
+    return { Kind: 'Agent', ID: participant.ID, Label: label, Initials: ForkInitials(label), ImageURL: agent?.LogoURL ?? null, IconClass: agent?.IconClass ?? null };
+  }
+
+  /** The view the loaded rows belong to; Main when none was set. */
+  public get WindowView(): ConversationOpenView {
+    return this.windowView ?? MAIN_OPEN_VIEW;
+  }
+
+  /**
+   * The rows the message list shows for the window view; the same array until the rows or the view
+   * change. Main shows every loaded row; a fork shows every inherited row, then its own rows; a draft
+   * shows the rows up to its anchor.
+   */
+  public get DisplayMessages(): MJConversationDetailEntity[] {
+    return this.displayState().Rows;
+  }
+
+  /** The loaded rows split for the window view, and the rows shown; rebuilt only when one of their inputs changes. */
+  private displayState(): { Split: ForkRows<MJConversationDetailEntity>; Rows: MJConversationDetailEntity[] } {
+    const messages = this.messages ?? [];
+    const view = this.WindowView;
+    const cache = this.displayCache;
+    if (cache && cache.Messages === messages && cache.View === view) {
+      return cache;
+    }
+    const split = SplitForkRows(messages, view);
+    const rows = view.Kind === 'Main' ? messages : [...split.Inherited, ...split.Own];
+    const next = { Messages: messages, View: view, Split: split, Rows: rows };
+    this.displayCache = next;
+    return next;
+  }
+
+  /**
+   * Puts `message` in place of the row with its id in the displayed rows and their split, keeping those
+   * arrays. They are copies of `messages`, so an entity replaced in place there is replaced here too.
+   */
+  private replaceDisplayedRow(message: MJConversationDetailEntity): void {
+    const cache = this.displayCache;
+    if (!cache || cache.Messages !== this.messages) {
+      return;
+    }
+    this.replaceRowIn(cache.Rows, message);
+    this.replaceRowIn(cache.Split.Inherited, message);
+    this.replaceRowIn(cache.Split.Own, message);
+  }
+
+  /** Puts `message` in place of the row with its id in `rows`; leaves `messages` itself alone. */
+  private replaceRowIn(rows: MJConversationDetailEntity[], message: MJConversationDetailEntity): void {
+    if (rows === this.messages) {
+      return;
+    }
+    const index = rows.findIndex(m => UUIDsEqual(m.ID, message.ID));
+    if (index >= 0) {
+      rows[index] = message;
+    }
+  }
+
+  /** True when older rows remain above the loaded window of the open view's path, in every view. */
+  public get ListHasMoreAbove(): boolean {
+    return this.HasMoreMessagesAbove;
+  }
+
+  /** The summary of the open fork; null in Main, in a draft, or before the summaries load. */
+  public get OpenForkSummary(): ForkSummary | null {
+    return this.forkSummaryOf(this.OpenView);
+  }
+
+  /** The summary of the fork a view shows; null for Main, a draft, or before the summaries load. */
+  private forkSummaryOf(view: ConversationOpenView): ForkSummary | null {
+    if (view.Kind !== 'Fork') {
+      return null;
+    }
+    return (this.ForkSummaries ?? []).find(s => UUIDsEqual(s.Branch.ID, view.BranchID)) ?? null;
+  }
+
+  /** The title of the open fork: its display name, "New fork" for a draft. */
+  public get OpenViewTitle(): string {
+    const view = this.OpenView;
+    if (view.Kind === 'DraftFork') {
+      return DRAFT_FORK_TITLE;
+    }
+    return view.Kind === 'Fork' ? this.forkLabelOf(view.BranchID) : 'Fork';
+  }
+
+  /** The kind of the open fork (a draft is a Fork). */
+  public get OpenViewKind(): ForkKind {
+    return this.OpenForkSummary?.Kind ?? 'Fork';
+  }
+
+  /** The kind icon of the open fork. */
+  public get OpenViewIcon(): string {
+    return ForkKindIcon(this.OpenViewKind);
+  }
+
+  /** How the message list draws the rows shown; null in Main. */
+  public get ForkLayout(): ForkViewLayout | null {
+    return this.layoutState().Layout;
+  }
+
+  /** The composer placeholder of a conversation's composer: "Message this fork" in a fork or draft of the active conversation. */
+  public ComposerPlaceholderFor(conversationId: string | null | undefined): string {
+    const active = !!conversationId && UUIDsEqual(conversationId, this.ConversationId);
+    if (active && this.OpenView.Kind !== 'Main') {
+      return FORK_COMPOSER_PLACEHOLDER;
+    }
+    if (active && this.SendSlotMode === 'send' && this.AllowStopRun !== false) {
+      const stoppedAgent = this.stoppedLastReplyAgent();
+      if (stoppedAgent !== undefined) {
+        return `Continue, or tell ${stoppedAgent ?? 'the agent'} what to do differently`;
+      }
+    }
+    return MAIN_COMPOSER_PLACEHOLDER;
+  }
+
+  /**
+   * The agent of the last shown message when it is a reply the user stopped (null when its name
+   * is unknown); undefined when the last message is anything else. Any message sent now resumes
+   * that run, so the placeholder says so.
+   */
+  private stoppedLastReplyAgent(): string | null | undefined {
+    const rows = this.DisplayMessages;
+    const last = rows[rows.length - 1];
+    if (!last) {
+      return undefined;
+    }
+    const run = this.AgentRunsByDetailId?.get(last.ID);
+    if (!run?.WasStoppedByUser) {
+      return undefined;
+    }
+    return run.Agent ?? last.Agent ?? this.assistantDisplayName ?? null;
+  }
+
+  /** The hint under the composer while a fork or draft window is shown; null in Main. */
+  public get ComposerHint(): string | null {
+    return this.layoutState().Hint;
+  }
+
+  /** The layout of the rows shown and the composer hint; rebuilt only when the rows, the window view or the summaries change. */
+  private layoutState(): { Layout: ForkViewLayout | null; Hint: string | null } {
+    const rows = this.DisplayMessages;
+    const view = this.WindowView;
+    const summaries = this.ForkSummaries ?? [];
+    const cache = this.layoutCache;
+    if (cache && cache.Rows === rows && cache.View === view && cache.Summaries === summaries) {
+      return cache;
+    }
+    const isMain = view.Kind === 'Main';
+    const next = {
+      Rows: rows,
+      View: view,
+      Summaries: summaries,
+      Layout: BuildForkViewLayout(rows, view, isMain ? null : this.forkMarkerText(view)),
+      Hint: isMain ? null : this.composerHintFor(view),
+    };
+    this.layoutCache = next;
+    return next;
+  }
+
+  /** The composer hint of a fork or draft view; reads the anchor row only when the summary has no anchor time. */
+  private composerHintFor(view: ConversationOpenView): string {
+    const anchorAt = this.forkSummaryOf(view)?.AnchorAt ?? this.anchorTimeOf(view);
+    return BuildForkComposerHint(anchorAt, d => this.formatForkTime(d));
+  }
+
+  /**
+   * The fork marker text of a fork or draft view. The "from" part names the author of the replaced
+   * message (the fork's SourceDetailID) when the fork has one, else the anchor's author.
+   */
+  private forkMarkerText(view: ConversationOpenView): string {
+    const format = (d: Date) => this.formatForkTime(d);
+    if (view.Kind === 'DraftFork') {
+      const sourceAuthor = view.SourceAuthorName ?? this.loadedAuthorOf(view.SourceDetailID);
+      return BuildForkMarkerText({ IsDraft: true, StarterName: null, AnchorAuthorName: sourceAuthor, StartedAt: null }, format);
+    }
+    const summary = this.forkSummaryOf(view);
+    const created = summary?.Branch.__mj_CreatedAt;
+    return BuildForkMarkerText({
+      IsDraft: false,
+      StarterName: summary?.StartedByName ?? null,
+      AnchorAuthorName: this.forkFromAuthorOf(view, summary),
+      StartedAt: created ? new Date(created) : null,
+    }, format);
+  }
+
+  /**
+   * The author a fork's marker names: with a source message, the summary's source author, else that row's
+   * author when it is loaded; with none, the summary's anchor author, else the loaded anchor row's.
+   */
+  private forkFromAuthorOf(view: ConversationOpenView, summary: ForkSummary | null): string | null {
+    const sourceId = summary?.Branch.SourceDetailID ?? this.forkRowOfView(view)?.SourceDetailID ?? null;
+    if (sourceId) {
+      return summary?.SourceAuthorName ?? this.loadedAuthorOf(sourceId);
+    }
+    return summary?.AnchorAuthorName ?? this.anchorAuthorOf(view);
+  }
+
+  /** The fork row of a fork view among this chat area's fork rows; null for another view or when it is not loaded. */
+  private forkRowOfView(view: ConversationOpenView): ConversationBranchRow | null {
+    if (view.Kind !== 'Fork') {
+      return null;
+    }
+    return (this.branches ?? []).find(b => UUIDsEqual(b.ID, view.BranchID)) ?? null;
+  }
+
+  /** The time of a view's anchor row; null when it is not loaded. */
+  private anchorTimeOf(view: ConversationOpenView): Date | null {
+    const anchor = this.anchorRowOf(view);
+    return anchor?.__mj_CreatedAt ? new Date(anchor.__mj_CreatedAt) : null;
+  }
+
+  /** The author of a view's anchor row; null when it is not loaded. */
+  private anchorAuthorOf(view: ConversationOpenView): string | null {
+    const anchor = this.anchorRowOf(view);
+    return anchor ? this.rowAuthorOf(anchor) : null;
+  }
+
+  /** The author of a loaded row; null when the row is not loaded. */
+  private loadedAuthorOf(detailId: string): string | null {
+    const row = (this.messages ?? []).find(m => UUIDsEqual(m.ID, detailId));
+    return row ? this.rowAuthorOf(row) : null;
+  }
+
+  /** The author of a row: the agent of an agent row, else the person. */
+  private rowAuthorOf(row: MJConversationDetailEntity): string | null {
+    return (row.AgentID ? row.Agent : row.User) ?? null;
+  }
+
+  /**
+   * The anchor of a view among the loaded rows: a draft's anchor row when it is loaded, else the view's
+   * last inherited row.
+   */
+  private anchorRowOf(view: ConversationOpenView): MJConversationDetailEntity | null {
+    const messages = this.messages ?? [];
+    const anchorId = view.Kind === 'DraftFork' ? view.AnchorDetailID : null;
+    const anchor = anchorId ? messages.find(m => UUIDsEqual(m.ID, anchorId)) : undefined;
+    if (anchor) {
+      return anchor;
+    }
+    const inherited = view === this.WindowView ? this.displayState().Split.Inherited : SplitForkRows(messages, view).Inherited;
+    return inherited.length > 0 ? inherited[inherited.length - 1] : null;
+  }
+
+  /** A short date and time for fork text, in the person's locale. */
+  private formatForkTime(d: Date): string {
+    return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  }
+
+  /** Refreshes the fork summaries once, shortly after a burst of fork rows. */
+  private scheduleForkSummaryRefresh(): void {
+    if (this.forkSummaryRefreshTimer) {
+      clearTimeout(this.forkSummaryRefreshTimer);
+    }
+    this.forkSummaryRefreshTimer = setTimeout(() => {
+      this.forkSummaryRefreshTimer = null;
+      void this.RefreshForkSummaries();
+    }, 400);
+  }
+
+  /**
+   * Refreshes the fork summaries soon when `row` is a fork row, then tells whether the row belongs
+   * on screen in the open view. A row written in another view (a turn started in Main while a fork
+   * is open) does not.
+   */
+  private acceptRowForOpenView(row: { BranchID?: string | null }): boolean {
+    if (row.BranchID != null) {
+      this.scheduleForkSummaryRefresh();
+    }
+    return IsRowInOpenView(this.OpenView, row);
+  }
+
+  /**
+   * Has the open artifact viewer load again in the open view's scope; it reads its `Scope` input
+   * only when it loads. Asks for the selected version (0 asks for the newest); a version that
+   * is not in the scope shows the newest one with a notice. Does nothing while the pane is closed.
+   */
+  private refreshArtifactViewerForScope(): void {
+    if (!this.ShowArtifactPanel || !this.SelectedArtifactId) {
+      return;
+    }
+    // Renders first, so the viewer's Scope input holds the new scope when it reloads.
+    this.cdr.detectChanges();
+    this.ArtifactViewerRefresh$.next({ artifactId: this.SelectedArtifactId, versionNumber: this.SelectedVersionNumber ?? 0 });
+  }
+
+  /**
+   * Loads the window of the open view into the store: the newest page of the view's path; older pages
+   * load as the person scrolls up. A draft's path is its parent's, and its first page ends at its
+   * anchor; a draft with no anchor inherits nothing, so its window is empty.
+   */
+  private loadWindowForOpenView(conversationId: string): Promise<void> {
+    const view = this.OpenView;
+    const branchId = this.OpenViewBranchId;
+    if (view.Kind !== 'DraftFork') {
+      return this.windowStore.LoadLatest(conversationId, this.CurrentUser, branchId);
+    }
+    if (view.ForkFromSequence == null) {
+      this.windowStore.Reset(conversationId, branchId);
+      return Promise.resolve();
+    }
+    return this.windowStore.LoadLatest(conversationId, this.CurrentUser, branchId, view.ForkFromSequence);
+  }
+
+  /**
+   * Reloads the window of the open view's path (see {@link loadWindowForOpenView}), then the fork
+   * rows, the open artifact viewer, the agent runs, artifacts and ratings, and the pins in the scope
+   * of the open view's path. The earlier fork rows stay when the rows cannot be read. The pin count
+   * and the loaded pins keep their earlier values until that read lands. Restarts the agent-run poll
+   * in the new scope. Stops when a newer view reload or conversation load starts; the newer load
+   * reads the window, fork rows and pins again.
+   *
+   * @returns true when the window and peripherals loaded on the open view's path; false when there
+   *   is no conversation, a newer load replaced this one, the window read failed, or the reload failed.
+   */
+  private async reloadWindowForView(): Promise<boolean> {
+    const conversationId = this.ConversationId;
+    if (!conversationId) {
+      return false;
+    }
+    const reloadToken = ++this.viewReloadToken;
+    const loadToken = this.conversationLoadToken;
+    const isCurrent = (): boolean =>
+      reloadToken === this.viewReloadToken && this.isActiveConversationLoad(conversationId, loadToken);
+    try {
+      const recorded = this.pinsDuringViewReload;
+      const pins = recorded && recorded.LoadToken === loadToken
+        ? recorded
+        : { LoadToken: loadToken, Count: this.windowStore.PinnedTotalCount, Details: [...this.windowStore.PinnedDetails] };
+      this.pinsDuringViewReload = pins;
+
+      await this.loadWindowForOpenView(conversationId);
+      if (!isCurrent()) {
+        return false;
+      }
+      if (this.pinsHydrated) {
+        this.windowStore.SetPinnedDetails(pins.Details);
+      }
+      this.windowStore.SetPinnedCount(pins.Count);
+
+      const branches = await this.loadBranchesOrNull(conversationId);
+      if (!isCurrent()) {
+        return false;
+      }
+      if (branches) {
+        this.setBranchRows(conversationId, branches);
+      }
+      this.applyWindowSnapshot();
+      this.refreshArtifactViewerForScope();
+      this.agentStateService.startPolling(this.CurrentUser, conversationId, this.openViewScope(conversationId));
+
+      this.lastLoadedConversationId = null;
+      await Promise.all([
+        this.loadPeripheralData(conversationId, this.windowStore.GetSnapshot()),
+        this.reloadPinsForScope(conversationId, loadToken)
+      ]);
+      if (!isCurrent()) {
+        return false;
+      }
+      this.cdr.detectChanges();
+      return !this.windowStore.LoadFailed;
+    } catch (error) {
+      console.error('Failed to reload the conversation for the open view:', error);
+      if (isCurrent()) {
+        MJNotificationService.Instance.CreateSimpleNotification('Could not load this view of the conversation', 'error', 3000);
+      }
+      return false;
+    } finally {
+      // The newest reload owns the recorded pins; it clears them however it ends.
+      if (reloadToken === this.viewReloadToken) {
+        this.pinsDuringViewReload = null;
+      }
+    }
+  }
+
+  /** Detail ids whose completion this instance has already applied. A live callback and the replay window can both deliver one finish. */
+  private handledCompletionIds?: Set<string>;
 
   /**
    * Handle message completion triggered by PubSub completion event
@@ -2528,6 +5942,15 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     expectedConversationId: string | null | undefined = message.ConversationID,
     loadToken?: number
   ): Promise<void> {
+    const completionId = message.ID ? NormalizeUUID(message.ID) : '';
+    if (completionId) {
+      this.handledCompletionIds ??= new Set();
+      if (this.handledCompletionIds.has(completionId)) {
+        return;
+      }
+      this.handledCompletionIds.add(completionId);
+    }
+    let finished = false;
     try {
       const isCurrent = () => this.isCurrentConversationContext(expectedConversationId, loadToken);
 
@@ -2544,7 +5967,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       }
 
       // Reload agent run to get final status, timestamps, and cost
-      const agentRun = this.agentRunsByDetailId.get(message.ID);
+      const agentRun = this.AgentRunsByDetailId.get(message.ID);
       if (agentRun?.ID) {
         await agentRun.Load(agentRun.ID);
         if (!isCurrent()) {
@@ -2574,7 +5997,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
       // Update inProgressMessageIds to include new delegated agents
       // This triggers callback registration via the setter in message-input
-      this.inProgressMessageIds = [...this.messages
+      this.InProgressMessageIds = [...this.messages
         .filter(m => m.Status === 'In-Progress')
         .map(m => m.ID)];
 
@@ -2599,19 +6022,28 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       this.cdr.detectChanges();
 
       LogStatusEx({message: `✅ Completion handled for message ${message.ID}`, verboseOnly: true});
+      finished = true;
     } catch (error) {
       console.error(`Error handling message completion for ${message.ID}:`, error);
       this.cdr.detectChanges();
+    } finally {
+      // A switch away mid-reload must not consume the completion. The next load still has the replay entry.
+      if (!finished && completionId) {
+        this.handledCompletionIds?.delete(completionId);
+      }
     }
   }
 
-  async onAgentResponse(event: {message: MJConversationDetailEntity, agentResult: any}): Promise<void> {
+  async OnAgentResponse(event: {message: MJConversationDetailEntity, agentResult: any}): Promise<void> {
     // Guard: ignore agent responses from background inputs for other conversations.
     // See onMessageSent() for the full explanation.
-    if (!UUIDsEqual(event.message.ConversationID, this.conversationId)) {
+    if (!UUIDsEqual(event.message.ConversationID, this.ConversationId)) {
       if (event.message.ConversationID) {
         this.resetComponentState(event.message.ConversationID);
       }
+      return;
+    }
+    if (!this.acceptRowForOpenView(event.message)) {
       return;
     }
 
@@ -2620,8 +6052,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.messages = [...this.messages, event.message];
 
     // Invalidate cache for this conversation since we have new messages
-    if (this.conversationId) {
-      this.resetComponentState(this.conversationId);
+    if (this.ConversationId) {
+      this.resetComponentState(this.ConversationId);
     }
 
     // Where the viewport goes when the agent responds
@@ -2655,6 +6087,11 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.cdr.detectChanges();
   }
 
+  /** @deprecated Use {@link OnAgentResponse}. */
+  async onAgentResponse(event: {message: MJConversationDetailEntity, agentResult: any}): Promise<void> {
+    return this.OnAgentResponse(event);
+  }
+
   /**
    * Reset component-level UI state so peripheral data reprocesses on next load.
    * Does NOT invalidate ConversationEngine cache — the engine is the single source of truth
@@ -2675,14 +6112,14 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   private async addAgentRunToMap(conversationId: string | null | undefined, conversationDetailId: string, agentRunId: string, forceRefresh: boolean = false): Promise<MJAIAgentRunEntityExtended> {
     try {
       // Always refresh if forced, or if not in map yet
-      if (forceRefresh || !this.agentRunsByDetailId.has(conversationDetailId)) {
+      if (forceRefresh || !this.AgentRunsByDetailId.has(conversationDetailId)) {
         const md = this.ProviderToUse;
-        const agentRun = await md.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', this.currentUser);
+        const agentRun = await md.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', this.CurrentUser);
         if (await agentRun.Load(agentRunId)) {
           if (!this.isActiveConversation(conversationId)) {
             return agentRun;
           }
-          this.agentRunsByDetailId.set(conversationDetailId, agentRun);
+          this.AgentRunsByDetailId.set(conversationDetailId, agentRun);
 
           // Also update ConversationEngine's cache for other consumers
           if (conversationId) {
@@ -2698,7 +6135,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         return agentRun;
       } 
       else {
-        return this.agentRunsByDetailId.get(conversationDetailId)!;
+        return this.AgentRunsByDetailId.get(conversationDetailId)!;
       }
     } catch (error) {
       console.error('Failed to load agent run for map:', error);
@@ -2719,7 +6156,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       const md = this.ProviderToUse;
 
       // Get the ConversationID for this detail
-      const detail = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', this.currentUser);
+      const detail = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', this.CurrentUser);
       if (!(await detail.Load(conversationDetailId))) {
         console.error('Failed to load conversation detail');
         return;
@@ -2733,7 +6170,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
       // Refresh the newest window page — picks up artifacts written by the just-finished run
       // without re-querying the whole conversation.
-      await this.windowStore.RefreshLatest(this.currentUser);
+      await this.windowStore.RefreshLatest(this.CurrentUser);
       if (!isCurrent()) {
         return;
       }
@@ -2746,16 +6183,34 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     }
   }
 
+  OpenProjectSelector(): void {
+    if (this.EffectiveReadOnly) {
+      return;
+    }
+    this.ShowProjectSelector = true;
+  }
+
+  /** @deprecated Use {@link OpenProjectSelector}. */
   openProjectSelector(): void {
-    this.showProjectSelector = true;
+    return this.OpenProjectSelector();
   }
 
+  ToggleMembersModal(): void {
+    this.ShowMembersModal = !this.ShowMembersModal;
+  }
+
+  /** @deprecated Use {@link ToggleMembersModal}. */
   toggleMembersModal(): void {
-    this.showMembersModal = !this.showMembersModal;
+    return this.ToggleMembersModal();
   }
 
+  ViewArtifacts(): void {
+    this.ShowArtifactsModal = true;
+  }
+
+  /** @deprecated Use {@link ViewArtifacts}. */
   viewArtifacts(): void {
-    this.showArtifactsModal = true;
+    return this.ViewArtifacts();
   }
 
   /**
@@ -2766,12 +6221,12 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    */
   private updateArtifactCountDisplay(): void {
     const uniqueArtifactIds = new Set<string>();
-    for (const artifactList of this.effectiveArtifactsMap.values()) {
+    for (const artifactList of this.EffectiveArtifactsMap.values()) {
       for (const info of artifactList) {
         uniqueArtifactIds.add(info.artifactId);
       }
     }
-    this.artifactCountDisplay = uniqueArtifactIds.size;
+    this.ArtifactCountDisplay = uniqueArtifactIds.size;
   }
 
   /**
@@ -2780,7 +6235,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    */
   private calculateUniqueArtifactCount(): number {
     const uniqueArtifactIds = new Set<string>();
-    for (const artifactList of this.artifactsByDetailId.values()) {
+    for (const artifactList of this.ArtifactsByDetailId.values()) {
       for (const info of artifactList) {
         uniqueArtifactIds.add(info.artifactId);
       }
@@ -2795,7 +6250,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    */
   private allArtifactRefs(): ArtifactVersionRef[] {
     const refs: ArtifactVersionRef[] = [];
-    for (const artifactList of this.artifactsByDetailId.values()) {
+    for (const artifactList of this.ArtifactsByDetailId.values()) {
       for (const info of artifactList) {
         refs.push({
           artifactId: info.artifactId,
@@ -2821,11 +6276,11 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    */
   private snapshotArtifactPanelBaseline(): ArtifactPanelBaseline {
     return {
-      versions: snapshotArtifactVersions(this.allArtifactRefs()),
-      conversationId: this.conversationId,
-      mapConversationId: this.lastLoadedConversationId,
-      mapGeneration: this.artifactMapGeneration,
-      selectionEpoch: this.artifactSelectionEpoch,
+      Versions: SnapshotArtifactVersions(this.allArtifactRefs()),
+      conversationId: this.ConversationId,
+      MapConversationId: this.lastLoadedConversationId,
+      MapGeneration: this.artifactMapGeneration,
+      SelectionEpoch: this.artifactSelectionEpoch,
     };
   }
 
@@ -2844,22 +6299,22 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     // The baseline is comparable only if the map was holding THIS conversation's artifacts when it
     // was taken, and nothing merged an older page in since.
     const baselineComparable =
-      baseline.mapConversationId != null &&
-      UUIDsEqual(baseline.mapConversationId, baseline.conversationId) &&
-      this.artifactMapGeneration === baseline.mapGeneration;
+      baseline.MapConversationId != null &&
+      UUIDsEqual(baseline.MapConversationId, baseline.conversationId) &&
+      this.artifactMapGeneration === baseline.MapGeneration;
 
-    const action = decideArtifactPanelAction({
-      panelOpen: this.showArtifactPanel,
-      selectedArtifactId: this.selectedArtifactId,
-      before: baseline.versions,
+    const action = DecideArtifactPanelAction({
+      panelOpen: this.ShowArtifactPanel,
+      selectedArtifactId: this.SelectedArtifactId,
+      before: baseline.Versions,
       after: this.allArtifactRefs(),
       baselineComparable,
-      userChangedSelection: this.artifactSelectionEpoch !== baseline.selectionEpoch,
+      userChangedSelection: this.artifactSelectionEpoch !== baseline.SelectionEpoch,
     });
 
     if (!baselineComparable && action.kind === 'none') {
       LogStatusEx({
-        message: `🎨 Skipping artifact panel decision: the before/after snapshots describe different artifact populations (map held ${baseline.mapConversationId ?? 'nothing'}, conversation was ${baseline.conversationId})`,
+        message: `🎨 Skipping artifact panel decision: the before/after snapshots describe different artifact populations (map held ${baseline.MapConversationId ?? 'nothing'}, conversation was ${baseline.conversationId})`,
         verboseOnly: true
       });
     }
@@ -2873,13 +6328,13 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   private async applyArtifactPanelAction(action: ArtifactPanelAction, conversationId: string | null | undefined): Promise<void> {
     switch (action.kind) {
       case 'open':
-        this.selectedArtifactId = action.artifactId;
-        this.selectedVersionNumber = action.versionNumber;
-        this.showArtifactPanel = true;
+        this.SelectedArtifactId = action.artifactId;
+        this.SelectedVersionNumber = action.versionNumber;
+        this.ShowArtifactPanel = true;
         await this.loadArtifactPermissions(action.artifactId, conversationId, action.artifactId);
         // The permission load is async: the user may have switched conversations or picked a
         // different artifact while it was in flight, so only narrate what is still on screen.
-        if (!this.isActiveConversation(conversationId) || !UUIDsEqual(this.selectedArtifactId, action.artifactId)) {
+        if (!this.isActiveConversation(conversationId) || !UUIDsEqual(this.SelectedArtifactId, action.artifactId)) {
           return;
         }
         LogStatusEx({
@@ -2894,7 +6349,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         // and that second load runs without a cancellation token, so it can also land after a newer
         // one. The subject path is the one to keep: it reloads the version list too, which a
         // brand-new version needs, and it carries a load token.
-        this.artifactViewerRefresh$.next({ artifactId: action.artifactId, versionNumber: action.versionNumber });
+        this.ArtifactViewerRefresh$.next({ artifactId: action.artifactId, versionNumber: action.versionNumber });
         return;
       case 'none':
         return;
@@ -2906,10 +6361,10 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * Combines user-visible and system artifacts when toggle is on
    * Uses caching to prevent infinite change detection loops
    */
-  public get effectiveArtifactsMap(): Map<string, LazyArtifactInfo[]> {
-    if (!this.showSystemArtifacts) {
+  public get EffectiveArtifactsMap(): Map<string, LazyArtifactInfo[]> {
+    if (!this.ShowSystemArtifacts) {
       // Only user-visible artifacts - no need to cache
-      return this.artifactsByDetailId;
+      return this.ArtifactsByDetailId;
     }
 
     // Return cached combined map if available
@@ -2921,12 +6376,12 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     const combined = new Map<string, LazyArtifactInfo[]>();
 
     // Add all user-visible artifacts
-    for (const [key, value] of this.artifactsByDetailId) {
+    for (const [key, value] of this.ArtifactsByDetailId) {
       combined.set(key, [...value]);
     }
 
     // Add system artifacts
-    for (const [key, value] of this.systemArtifactsByDetailId) {
+    for (const [key, value] of this.SystemArtifactsByDetailId) {
       if (combined.has(key)) {
         // Merge with existing artifacts for this detail
         combined.get(key)!.push(...value);
@@ -2940,23 +6395,38 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     return combined;
   }
 
+  /** @deprecated Use {@link EffectiveArtifactsMap}. */
+  public get effectiveArtifactsMap(): Map<string, LazyArtifactInfo[]> {
+    return this.EffectiveArtifactsMap;
+  }
+
   /**
    * Toggles system artifacts visibility
    * Clears the cache so the map will be rebuilt on next access
    */
-  public toggleSystemArtifacts(): void {
-    this.showSystemArtifacts = !this.showSystemArtifacts;
+  public ToggleSystemArtifacts(): void {
+    this.ShowSystemArtifacts = !this.ShowSystemArtifacts;
     this._combinedArtifactsMap = null; // Clear cache
     this.updateArtifactCountDisplay();
     this.cdr.detectChanges(); // Force update
+  }
+
+  /** @deprecated Use {@link ToggleSystemArtifacts}. */
+  public toggleSystemArtifacts(): void {
+    return this.ToggleSystemArtifacts();
   }
 
   /**
    * Check if there are any system artifacts in this conversation
    * Used to conditionally show/hide the "Show System" toggle button
    */
+  public get HasSystemArtifacts(): boolean {
+    return this.SystemArtifactsByDetailId.size > 0;
+  }
+
+  /** @deprecated Use {@link HasSystemArtifacts}. */
   public get hasSystemArtifacts(): boolean {
-    return this.systemArtifactsByDetailId.size > 0;
+    return this.HasSystemArtifacts;
   }
 
   /**
@@ -2965,7 +6435,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * Works with LazyArtifactInfo - uses display data without loading full entities
    * Respects showSystemArtifacts toggle
    */
-  getArtifactsArray(): Array<{
+  GetArtifactsArray(): Array<{
     artifactId: string;
     versionId: string;
     name: string;
@@ -2983,7 +6453,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
     // Group by artifactId, collecting all version details
     // Use effectiveArtifactsMap to respect showSystemArtifacts toggle
-    for (const artifactList of this.effectiveArtifactsMap.values()) {
+    for (const artifactList of this.EffectiveArtifactsMap.values()) {
       for (const info of artifactList) {
         const artifactId = info.artifactId;
         const versionId = info.artifactVersionId;
@@ -3021,82 +6491,134 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     }));
   }
 
-  toggleArtifactExpansion(artifactId: string, event: Event): void {
-    event.stopPropagation(); // Prevent opening artifact when clicking expand button
-    this.expandedArtifactId = this.expandedArtifactId === artifactId ? null : artifactId;
+  /** @deprecated Use {@link GetArtifactsArray}. */
+  getArtifactsArray(): Array<{
+    artifactId: string;
+    versionId: string;
+    name: string;
+    versionCount: number;
+    visibility: string;
+    versions: Array<{versionId: string; versionNumber: number}>
+  }> {
+    return this.GetArtifactsArray();
   }
 
-  async openArtifactFromModal(artifactId: string, versionNumber?: number): Promise<void> {
-    const conversationId = this.conversationId;
+  ToggleArtifactExpansion(artifactId: string, event: Event): void {
+    event.stopPropagation(); // Prevent opening artifact when clicking expand button
+    this.ExpandedArtifactId = this.ExpandedArtifactId === artifactId ? null : artifactId;
+  }
+
+  /** @deprecated Use {@link ToggleArtifactExpansion}. */
+  toggleArtifactExpansion(artifactId: string, event: Event): void {
+    return this.ToggleArtifactExpansion(artifactId, event);
+  }
+
+  async OpenArtifactFromModal(artifactId: string, versionNumber?: number): Promise<void> {
+    const conversationId = this.ConversationId;
     this.artifactSelectionEpoch++;
-    this.selectedArtifactId = artifactId;
-    this.selectedVersionNumber = versionNumber;
-    this.showArtifactPanel = true;
-    this.showArtifactsModal = false;
+    this.SelectedArtifactId = artifactId;
+    this.SelectedVersionNumber = versionNumber;
+    this.ShowArtifactPanel = true;
+    this.ShowArtifactsModal = false;
 
     // Load permissions for the selected artifact
     await this.loadArtifactPermissions(artifactId, conversationId, artifactId);
-    if (!this.isActiveConversation(conversationId) || !UUIDsEqual(this.selectedArtifactId, artifactId)) {
+    if (!this.isActiveConversation(conversationId) || !UUIDsEqual(this.SelectedArtifactId, artifactId)) {
       return;
     }
     this.cdr.detectChanges();
   }
 
-  exportConversation(): void {
-    if (this.conversation) {
-      this.showExportModal = true;
+  /** @deprecated Use {@link OpenArtifactFromModal}. */
+  async openArtifactFromModal(artifactId: string, versionNumber?: number): Promise<void> {
+    return this.OpenArtifactFromModal(artifactId, versionNumber);
+  }
+
+  ExportConversation(): void {
+    if (this.Conversation) {
+      this.ShowExportModal = true;
     }
   }
 
+  /** @deprecated Use {@link ExportConversation}. */
+  exportConversation(): void {
+    return this.ExportConversation();
+  }
+
+  OnExportModalCancelled(): void {
+    this.ShowExportModal = false;
+  }
+
+  /** @deprecated Use {@link OnExportModalCancelled}. */
   onExportModalCancelled(): void {
-    this.showExportModal = false;
+    return this.OnExportModalCancelled();
   }
 
+  OnExportModalComplete(): void {
+    this.ShowExportModal = false;
+  }
+
+  /** @deprecated Use {@link OnExportModalComplete}. */
   onExportModalComplete(): void {
-    this.showExportModal = false;
+    return this.OnExportModalComplete();
   }
 
-  async onProjectSelected(project: any): Promise<void> {
-    if (this.conversation && project) {
+  async OnProjectSelected(project: any): Promise<void> {
+    if (this.Conversation && project) {
       try {
         await this.engine.SaveConversation(
-          this.conversation.ID,
+          this.Conversation.ID,
           { ProjectID: project.ID },
-          this.currentUser
+          this.CurrentUser
         );
-        this.showProjectSelector = false;
+        this.ShowProjectSelector = false;
       } catch (error) {
         console.error('Failed to assign project:', error);
       }
-    } else if (this.conversation && !project) {
+    } else if (this.Conversation && !project) {
       // Remove project assignment
       try {
         await this.engine.SaveConversation(
-          this.conversation.ID,
+          this.Conversation.ID,
           { ProjectID: null },
-          this.currentUser
+          this.CurrentUser
         );
-        this.showProjectSelector = false;
+        this.ShowProjectSelector = false;
       } catch (error) {
         console.error('Failed to remove project:', error);
       }
     }
   }
 
-  shareConversation(): void {
-    if (!this.conversation) return;
-    this.shareContext = {
-      ResourceID: this.conversation.ID,
-      ResourceName: this.conversation.Name ?? 'Conversation',
-      OwnerUserID: this.conversation.UserID ?? null,
-      OwnerDisplayName: this.conversation.User ?? 'You',
-      CurrentUserID: this.currentUser?.ID ?? null
-    };
-    this.showShareModal = true;
+  /** @deprecated Use {@link OnProjectSelected}. */
+  async onProjectSelected(project: any): Promise<void> {
+    return this.OnProjectSelected(project);
   }
 
+  ShareConversation(): void {
+    if (!this.Conversation) return;
+    this.ShareContext = {
+      ResourceID: this.Conversation.ID,
+      ResourceName: this.Conversation.Name ?? 'Conversation',
+      OwnerUserID: this.Conversation.UserID ?? null,
+      OwnerDisplayName: this.Conversation.User ?? 'You',
+      CurrentUserID: this.CurrentUser?.ID ?? null
+    };
+    this.ShowShareModal = true;
+  }
+
+  /** @deprecated Use {@link ShareConversation}. */
+  shareConversation(): void {
+    return this.ShareConversation();
+  }
+
+  OnShareDialogResult(_result: { Action: 'save' | 'cancel' }): void {
+    this.ShowShareModal = false;
+  }
+
+  /** @deprecated Use {@link OnShareDialogResult}. */
   onShareDialogResult(_result: { Action: 'save' | 'cancel' }): void {
-    this.showShareModal = false;
+    return this.OnShareDialogResult(_result);
   }
 
   /**
@@ -3104,13 +6626,18 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * when the current user owns the conversation or when the share has no
    * recorded grantor (legacy share pre-dating `SharedByUserID`).
    */
-  public get sharedByBadge(): { display: string; fullTooltip: string } | null {
-    if (!this.conversation) return null;
-    const info = this.engine.GetSharedByInfo(this.conversation.ID);
+  public get SharedByBadge(): { display: string; fullTooltip: string } | null {
+    if (!this.Conversation) return null;
+    const info = this.engine.GetSharedByInfo(this.Conversation.ID);
     if (!info || !info.UserID) return null;
     const display = info.Email ?? info.Name ?? 'another user';
     const tooltip = info.Email && info.Name ? `${info.Name} <${info.Email}>` : display;
     return { display, fullTooltip: `Shared by ${tooltip}` };
+  }
+
+  /** @deprecated Use {@link SharedByBadge}. */
+  public get sharedByBadge(): { display: string; fullTooltip: string } | null {
+    return this.SharedByBadge;
   }
 
   /**
@@ -3118,69 +6645,83 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * (i.e., it was shared with them read-only). Gates the message input and
    * any other write-capable UI.
    */
-  public get isReadOnlyView(): boolean {
-    if (!this.conversation) return false;
-    const info = this.engine.GetSharedByInfo(this.conversation.ID);
+  public get IsReadOnlyView(): boolean {
+    if (!this.Conversation) return false;
+    const info = this.engine.GetSharedByInfo(this.Conversation.ID);
     return info?.Level === 'View';
+  }
+
+  /** @deprecated Use {@link IsReadOnlyView}. */
+  public get isReadOnlyView(): boolean {
+    return this.IsReadOnlyView;
+  }
+
+  /** Read-only for any reason: the host said so, or the conversation is shared with View access. */
+  public get EffectiveReadOnly(): boolean {
+    return this.ReadOnly || this.IsReadOnlyView;
+  }
+
+  /**
+   * True when this person may start forks in the open conversation: the host allows forking
+   * ({@link AllowForking}), the person holds `Conversations: Fork`, has not switched forking off in My
+   * Profile, and may write. When false, no fork action is offered and Edit and Regenerate change the
+   * latest turn in place.
+   */
+  public get CanFork(): boolean {
+    return this.AllowForking !== false && CanForkFrom({
+      HoldsAuthorization: UserHoldsAuthorization(this.CurrentUser, CONVERSATIONS_FORK_AUTHORIZATION, this.ProviderToUse),
+      SettingValue: this.forkingSettingValue(),
+      MayWrite: !this.EffectiveReadOnly,
+    });
+  }
+
+  /** The person's stored forking setting; undefined when there is none or the settings cannot be read. */
+  private forkingSettingValue(): string | undefined {
+    try {
+      return UserInfoEngine.Instance.GetSetting(CONVERSATIONS_FORKING_SETTING_KEY);
+    } catch {
+      return undefined;
+    }
   }
 
   /**
    * `true` when the current user is allowed to create new shares on this
-   * conversation. Only the conversation's owner — or a user with an existing
-   * Owner-level grant — may do so. Matches the server-side gate in
-   * {@link MJResourcePermissionEntityExtended.callerMayGrantShare}, so the UI
-   * doesn't offer an action the save would refuse.
+   * conversation: the owner, or a user with an Owner-level grant. Uses the same
+   * rule as the sidebar's Share action.
    */
+  public get CanShareConversation(): boolean {
+    if (!this.Conversation || !this.CurrentUser) return false;
+    return this.engine.CanShareConversation(this.Conversation, this.CurrentUser.ID);
+  }
+
+  /** @deprecated Use {@link CanShareConversation}. */
   public get canShareConversation(): boolean {
-    if (!this.conversation || !this.currentUser) return false;
-    if (this.conversation.UserID && this.conversation.UserID.toLowerCase() === this.currentUser.ID.toLowerCase()) {
-      return true;
-    }
-    const info = this.engine.GetSharedByInfo(this.conversation.ID);
-    return info?.Level === 'Owner';
+    return this.CanShareConversation;
   }
 
-  onReplyInThread(message: MJConversationDetailEntity): void {
-    // Open thread panel for this message - emit to parent
-    this.threadOpened.emit(message.ID);
-  }
-
-  onViewThread(message: MJConversationDetailEntity): void {
-    // Open thread panel for this message - emit to parent
-    this.threadOpened.emit(message.ID);
-  }
-
-  onLocalThreadClosed(): void {
-    // Close the thread panel - emit to parent
-    this.threadClosed.emit();
-  }
-
-  onThreadReplyAdded(reply: MJConversationDetailEntity): void {
-    // Optionally refresh the message list to update thread counts
-    // For now, we'll just log it
-    LogStatusEx({message: 'Thread reply added', verboseOnly: true, additionalArgs: [reply]});
-
-    // Reload messages to get updated thread counts
-    if (this.conversationId) {
-      const conversationId = this.conversationId;
-      const loadToken = ++this.conversationLoadToken;
-      void this.loadMessages(conversationId, loadToken);
-    }
-  }
-
-  onToggleAgentPanel(): void {
-    this.showAgentPanel = !this.showAgentPanel;
+  OnToggleAgentPanel(): void {
+    this.ShowAgentPanel = !this.ShowAgentPanel;
     // The agent panel component handles its own visibility
     // This could be used to toggle a modal or different view
   }
 
-  onAgentSelected(agentRun: MJAIAgentRunEntity): void {
+  /** @deprecated Use {@link OnToggleAgentPanel}. */
+  onToggleAgentPanel(): void {
+    return this.OnToggleAgentPanel();
+  }
+
+  OnAgentSelected(agentRun: MJAIAgentRunEntity): void {
     // When an agent is clicked in the indicator, could show details
     LogStatusEx({message: 'Agent selected', verboseOnly: true, additionalArgs: [agentRun.ID]});
     // Could open a modal or navigate to agent details
   }
 
-  onMessageEdited(message: MJConversationDetailEntity): void {
+  /** @deprecated Use {@link OnAgentSelected}. */
+  onAgentSelected(agentRun: MJAIAgentRunEntity): void {
+    return this.OnAgentSelected(agentRun);
+  }
+
+  OnMessageEdited(message: MJConversationDetailEntity): void {
     // Message was edited and saved, trigger change detection
     LogStatusEx({message: 'Message edited', verboseOnly: true, additionalArgs: [message.ID]});
     // The entity was mutated in place, so the transcript already shows the new text. Replace
@@ -3189,7 +6730,12 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.windowStore.ApplyLocalDetail(message);
   }
 
-  onMessagePinToggled(message: MJConversationDetailEntity): void {
+  /** @deprecated Use {@link OnMessageEdited}. */
+  onMessageEdited(message: MJConversationDetailEntity): void {
+    return this.OnMessageEdited(message);
+  }
+
+  OnMessagePinToggled(message: MJConversationDetailEntity): void {
     // The entity object is already mutated by .Save(), and the window holds that same object
     // reference, so the transcript reflects the change with no cache write.
     //
@@ -3204,21 +6750,26 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     if (this.pinsHydrated) {
       this.windowStore.ApplyLocalPin(message);
     } else {
-      this.windowStore.SetPinnedCount(this.pinnedMessageCount + (message.IsPinned ? 1 : -1));
+      this.windowStore.SetPinnedCount(this.PinnedMessageCount + (message.IsPinned ? 1 : -1));
     }
 
     // Auto-close the panel when the last pin is removed
-    if (this.showPinsPanel && this.pinnedMessageCount === 0) {
-      setTimeout(() => { this.showPinsPanel = false; this.cdr.detectChanges(); }, 600);
+    if (this.ShowPinsPanel && this.PinnedMessageCount === 0) {
+      setTimeout(() => { this.ShowPinsPanel = false; this.cdr.detectChanges(); }, 600);
     }
     this.cdr.detectChanges();
+  }
+
+  /** @deprecated Use {@link OnMessagePinToggled}. */
+  onMessagePinToggled(message: MJConversationDetailEntity): void {
+    return this.OnMessagePinToggled(message);
   }
 
   /**
    * Scrolls the message list to the target message and plays the beacon animation.
    * Called when the user clicks "Jump to message" in the pins panel.
    */
-  async onJumpToMessage(messageId: string): Promise<void> {
+  async OnJumpToMessage(messageId: string): Promise<void> {
     // Delegated to the list rather than queried here. A `[data-message-id]` lookup only finds
     // MOUNTED messages, and a pin is by definition often far above the viewport — exactly the
     // region the list unmounts into spacers — so this button silently did nothing for any pin
@@ -3242,31 +6793,101 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
     // The paging loop deliberately skipped the per-page peripheral rebuild — pay it once,
     // here, before asking the list for element positions.
-    await this.refreshAfterPaging(this.conversationId!);
+    await this.refreshAfterPaging(this.ConversationId!);
     if (this.messageListComponent?.ScrollToMessage(messageId)) {
       this.beaconMessage(messageId);
+    } else {
+      MJNotificationService.Instance.CreateSimpleNotification('Could not find that message in this conversation', 'info', 3000);
     }
   }
 
+  /** @deprecated Use {@link OnJumpToMessage}. */
+  async onJumpToMessage(messageId: string): Promise<void> {
+    return this.OnJumpToMessage(messageId);
+  }
+
   /**
-   * Pages older history until `messageId` falls inside the loaded window.
+   * Opens a message, such as a search hit, in the active conversation: waits for the
+   * conversation's load to end, opens the hit's fork (a Main hit opens Main) when it is not the
+   * open view, pages older history until the window holds `sequence`, then scrolls to the row and
+   * highlights it for 2 s.
    *
-   * Deterministic rather than heuristic: a pin carries its own `Sequence`, so the stop
+   * @param conversationId The conversation of the message. The caller activates it first.
+   * @param branchId The message's fork; null is Main. Compared without case.
+   * @param sequence The message's sequence in its conversation.
+   * @returns true when the row was found and scrolled to; false when the conversation is not the
+   *   active one, the view change was ignored or failed, or the row is not on the view's path.
+   */
+  public async OpenMessage(conversationId: string, branchId: string | null, sequence: number): Promise<boolean> {
+    if (!this.isActiveConversation(conversationId) || !(await this.waitForConversationLoad(conversationId))) {
+      return false;
+    }
+    const target: ConversationOpenView = branchId == null ? MAIN_OPEN_VIEW : { Kind: 'Fork', BranchID: branchId };
+    if (!SameOpenView(this.OpenView, target) && !(await this.changeOpenView(target))) {
+      return false;
+    }
+    if (!this.isActiveConversation(conversationId)) {
+      return false;
+    }
+    await this.loadUntilSequenceIsWindowed(sequence);
+    if (!this.isActiveConversation(conversationId)) {
+      return false;
+    }
+    await this.refreshAfterPaging(conversationId);
+    const row = this.messages.find(m => m.Sequence === sequence && UUIDsEqual(m.BranchID ?? null, branchId));
+    if (row) {
+      // The bottom-follow of the load that just ended must not scroll away from the row.
+      this.scrollToBottom = false;
+      this.bottomFollowSuppressedUntil = Date.now() + 1500;
+    }
+    if (!row || !this.messageListComponent?.ScrollToMessage(row.ID)) {
+      MJNotificationService.Instance.CreateSimpleNotification('Could not find that message in this conversation', 'info', 3000);
+      return false;
+    }
+    this.beaconMessage(row.ID, 'search-hit-highlight', 2000);
+    return true;
+  }
+
+  /**
+   * Waits until the load of `conversationId` has ended. False when another conversation
+   * becomes active first or the component is destroyed.
+   */
+  private async waitForConversationLoad(conversationId: string): Promise<boolean> {
+    while (this.isActiveConversation(conversationId) && !UUIDsEqual(this.readyConversationId, conversationId)) {
+      const ended = await firstValueFrom(
+        this.conversationLoadEnded$.pipe(map(() => true), takeUntil(this.destroy$)),
+        { defaultValue: false }
+      );
+      if (!ended) {
+        return false;
+      }
+    }
+    return this.isActiveConversation(conversationId);
+  }
+
+  /** Pages older history until the pinned message `messageId` falls inside the loaded window. */
+  private async loadUntilMessageIsWindowed(messageId: string): Promise<boolean> {
+    const target = this.PinnedMessages.find(p => UUIDsEqual(p.ID, messageId));
+    if (!target) {
+      return false;   // not a loaded pin — nothing tells us how far back to page
+    }
+    return this.loadUntilSequenceIsWindowed(target.Sequence);
+  }
+
+  /**
+   * Pages older history until the loaded window reaches back to `sequence`.
+   *
+   * Deterministic rather than heuristic: the target's `Sequence` is known, so the stop
    * condition is simply "the window now reaches at least that far back" — no equivalent of
    * the date jump's `NeedsOlder` probing is needed. Bounded by the same page cap, for the same
    * reason: an unbounded walk back is the thing windowing exists to avoid.
    */
-  private async loadUntilMessageIsWindowed(messageId: string): Promise<boolean> {
-    const target = this.pinnedMessages.find(p => UUIDsEqual(p.ID, messageId));
-    if (!target) {
-      return false;   // not a loaded pin — nothing tells us how far back to page
-    }
-
-    const conversationId = this.conversationId;
+  private async loadUntilSequenceIsWindowed(sequence: number): Promise<boolean> {
+    const conversationId = this.ConversationId;
     for (let page = 0; page < DATE_JUMP_MAX_PAGES; page++) {
       const snapshot = this.windowStore.GetSnapshot();
       const oldest = snapshot.Cursor.OldestSequence;
-      if (oldest !== null && oldest <= target.Sequence) {
+      if (oldest !== null && oldest <= sequence) {
         return true;                        // the window now covers it
       }
       if (!snapshot.Cursor.HasMoreAbove) {
@@ -3274,7 +6895,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       }
 
       // Store-level paging for the same reason as the date jump — the caller refreshes once.
-      await this.windowStore.LoadOlder(this.currentUser);
+      await this.windowStore.LoadOlder(this.CurrentUser);
       if (!this.isActiveConversation(conversationId)) {
         return false;                       // user switched away mid-jump
       }
@@ -3282,8 +6903,11 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     return false;                           // hit the page cap
   }
 
-  /** Flashes the beacon on a message once its scroll has settled. */
-  private beaconMessage(messageId: string): void {
+  /**
+   * Adds `cssClass` to a message for `durationMs` once its scroll has settled. Defaults to the
+   * pin beacon.
+   */
+  private beaconMessage(messageId: string, cssClass: string = 'pin-beacon', durationMs: number = 1500): void {
     // Re-queried rather than captured: the target may have been a spacer when the scroll
     // started and been remounted as a real bubble by the time it lands.
     setTimeout(() => {
@@ -3291,8 +6915,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       if (!el) {
         return;
       }
-      el.classList.add('pin-beacon');
-      setTimeout(() => el.classList.remove('pin-beacon'), 1500);
+      el.classList.add(cssClass);
+      setTimeout(() => el.classList.remove(cssClass), durationMs);
     }, 350);
   }
 
@@ -3300,13 +6924,16 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   /**
    * Unpins a message from the pins panel — saves to DB and patches the cache.
    */
-  async onUnpinFromPanel(message: MJConversationDetailEntity): Promise<void> {
+  async OnUnpinFromPanel(message: MJConversationDetailEntity): Promise<void> {
+    if (this.EffectiveReadOnly) {
+      return;
+    }
     const previous = message.IsPinned;
     message.IsPinned = false;
     this.cdr.detectChanges();
     try {
       await message.Save();
-      this.onMessagePinToggled(message);
+      this.OnMessagePinToggled(message);
     } catch (err) {
       console.error('Failed to unpin message from panel:', err);
       message.IsPinned = previous;
@@ -3314,11 +6941,19 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     }
   }
 
+  /** @deprecated Use {@link OnUnpinFromPanel}. */
+  async onUnpinFromPanel(message: MJConversationDetailEntity): Promise<void> {
+    return this.OnUnpinFromPanel(message);
+  }
+
   /**
    * Handle suggested response selection from user
    * Sends the selected response as a new user message WITHOUT modifying the visible input
    */
-  async onSuggestedResponseSelected(event: {text: string; customInput?: string}): Promise<void> {
+  async OnSuggestedResponseSelected(event: {text: string; customInput?: string}): Promise<void> {
+    if (this.EffectiveReadOnly) {
+      return;
+    }
     const messageText = event.customInput || event.text;
 
     // Get the active message input for the current conversation
@@ -3326,24 +6961,47 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     const activeInput = this.getActiveMessageInputComponent();
 
     // If we have an active conversation with message input available, use it
-    if (activeInput && !this.isNewConversation) {
+    if (activeInput && !this.IsNewConversation) {
       await activeInput.sendMessageWithText(messageText);
-    } else if (!this.conversation || this.isNewConversation) {
+    } else if (!this.Conversation || this.IsNewConversation) {
       // If no conversation or in new unsaved state, route through empty state handler
       // This will create the conversation and send the message
-      await this.onEmptyStateMessageSent({ text: messageText, attachments: [] });
+      await this.OnEmptyStateMessageSent({ text: messageText, attachments: [] });
     } else {
       console.error('MessageInputComponent not available and not in a valid state to create conversation');
     }
   }
 
-  async onDeleteMessage(message: MJConversationDetailEntity): Promise<void> {
-    if (!UUIDsEqual(this.conversation?.UserID, this.currentUser?.ID)) return;
+  /** @deprecated Use {@link OnSuggestedResponseSelected}. */
+  async onSuggestedResponseSelected(event: {text: string; customInput?: string}): Promise<void> {
+    return this.OnSuggestedResponseSelected(event);
+  }
 
-    // Find this message and all messages after it sorted by creation time
-    const sortedMessages = [...this.messages].sort((a, b) =>
-      new Date(a.__mj_CreatedAt!).getTime() - new Date(b.__mj_CreatedAt!).getTime()
-    );
+  async OnDeleteMessage(message: MJConversationDetailEntity): Promise<void> {
+    if (!UUIDsEqual(this.Conversation?.UserID, this.CurrentUser?.ID)) return;
+    const conversationId = this.ConversationId;
+    if (!conversationId) return;
+
+    // The delete cannot be undone, so the branch rows are read fresh: the list held since the
+    // transcript loaded is empty when that read failed and misses forks made in another session.
+    // When the rows cannot be read, nothing is deleted.
+    let branches: ConversationBranchRow[];
+    try {
+      branches = await ConversationEngine.LoadBranchesFresh(conversationId, this.CurrentUser, this.ProviderToUse);
+    } catch (error) {
+      console.error(`Failed to load branches for conversation ${conversationId} before a delete:`, error);
+      MJNotificationService.Instance.CreateSimpleNotification('Could not verify branches; the message was not deleted', 'error', 3000);
+      return;
+    }
+    if (!this.isActiveConversation(conversationId)) return;
+    this.setBranchRows(conversationId, branches);
+    if (IsForkPointOrEarlier(message.Sequence, branches)) {
+      MJNotificationService.Instance.CreateSimpleNotification('A fork depends on this message, so it cannot be deleted', 'error', 3000);
+      return;
+    }
+
+    // Find this message and all messages after it sorted by Sequence
+    const sortedMessages = [...this.messages].sort((a, b) => a.Sequence - b.Sequence);
     const targetIndex = sortedMessages.findIndex(m => UUIDsEqual(m.ID, message.ID));
     if (targetIndex === -1) return;
 
@@ -3366,7 +7024,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     const md = this.ProviderToUse;
     const loadResults = await Promise.all(
       toHide.map(async msg => {
-        const entity = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', this.currentUser);
+        const entity = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', this.CurrentUser);
         const loaded = await entity.Load(msg.ID);
         return loaded ? entity : null;
       })
@@ -3390,32 +7048,61 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       this.windowStore.RemoveDetail(id);
     }
     this.messages = this.messages.filter(m => !hideIds.has(m.ID));
-    this.resetComponentState(this.conversationId!);
+    this.resetComponentState(this.ConversationId!);
     this.cdr.detectChanges();
   }
 
+  /** @deprecated Use {@link OnDeleteMessage}. */
+  async onDeleteMessage(message: MJConversationDetailEntity): Promise<void> {
+    return this.OnDeleteMessage(message);
+  }
+
+  /** @deprecated Use {@link OnRegenerateRequested}. */
+  OnRetryMessage(message: MJConversationDetailEntity): void {
+    void this.OnRegenerateRequested(message);
+  }
+
+  /** @deprecated Use {@link OnRegenerateRequested}. */
   onRetryMessage(message: MJConversationDetailEntity): void {
-    // TODO: Implement retry logic
-    // This should find the parent user message and re-trigger the agent invocation
-    LogStatusEx({message: 'Retry requested for message', verboseOnly: true, additionalArgs: [message.ID]});
-    // For now, just log it - full implementation would require refactoring agent invocation
+    return this.OnRetryMessage(message);
+  }
+
+  /**
+   * Stop the agent run behind an in-progress AI reply. Uses the run already mapped to the
+   * reply when there is one; otherwise looks it up by the reply's detail id, since the run row
+   * appears a moment after the placeholder. The run's own completion event then flows through
+   * the normal path and the message leaves In-Progress on its own.
+   */
+  async OnStopMessage(message: MJConversationDetailEntity): Promise<void> {
+    const mappedRun = this.AgentRunsByDetailId.get(message.ID);
+    const stopped = mappedRun
+      ? await this.agentStateService.CancelAgent(mappedRun.ID)
+      : await this.agentStateService.CancelAgentForDetail(message.ID);
+    if (!stopped) {
+      MJNotificationService.Instance.CreateSimpleNotification(
+        'Could not stop the run. It may have already finished.',
+        'warning',
+        3000
+      );
+    }
+    this.AfterStopClicked.emit(new AfterStopClickedEventArgs(message.ID, mappedRun?.ID ?? null, stopped));
   }
 
   /**
    * Handle attachment click - opens the image viewer for images
    */
-  onAttachmentClicked(attachment: MessageAttachment): void {
+  OnAttachmentClicked(attachment: MessageAttachment): void {
     if (attachment.type === 'Image' && attachment.contentUrl) {
-      this.selectedImageUrl = attachment.contentUrl;
-      this.selectedImageAlt = attachment.fileName || 'Image attachment';
-      this.selectedImageFileName = attachment.fileName || 'image';
-      this.showImageViewer = true;
+      this.SelectedImageUrl = attachment.contentUrl;
+      this.SelectedImageAlt = attachment.fileName || 'Image attachment';
+      this.SelectedImageFileName = attachment.fileName || 'image';
+      this.ShowImageViewer = true;
       return;
     }
 
     // Artifact-backed attachments open in the artifact viewer panel.
     if (attachment.source === 'artifact' && attachment.artifactId) {
-      this.onArtifactClicked({
+      this.OnArtifactClicked({
         artifactId: attachment.artifactId,
         versionId: attachment.artifactVersionId
       });
@@ -3433,50 +7120,65 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     }
   }
 
+  /** @deprecated Use {@link OnAttachmentClicked}. */
+  onAttachmentClicked(attachment: MessageAttachment): void {
+    return this.OnAttachmentClicked(attachment);
+  }
+
   /**
    * Handle image viewer close
    */
+  OnImageViewerClosed(): void {
+    this.ShowImageViewer = false;
+    this.SelectedImageUrl = '';
+    this.SelectedImageAlt = '';
+    this.SelectedImageFileName = '';
+  }
+
+  /** @deprecated Use {@link OnImageViewerClosed}. */
   onImageViewerClosed(): void {
-    this.showImageViewer = false;
-    this.selectedImageUrl = '';
-    this.selectedImageAlt = '';
-    this.selectedImageFileName = '';
+    return this.OnImageViewerClosed();
   }
 
   /**
    * Handle upload state changes from message input component
    */
-  onUploadStateChanged(event: {isUploading: boolean; message: string}): void {
-    this.isUploadingAttachments = event.isUploading;
-    this.uploadingMessage = event.message;
+  OnUploadStateChanged(event: {isUploading: boolean; message: string}): void {
+    this.IsUploadingAttachments = event.isUploading;
+    this.UploadingMessage = event.message;
   }
 
-  async onArtifactClicked(data: {artifactId: string; versionId?: string}): Promise<void> {
-    const conversationId = this.conversationId;
+  /** @deprecated Use {@link OnUploadStateChanged}. */
+  onUploadStateChanged(event: {isUploading: boolean; message: string}): void {
+    return this.OnUploadStateChanged(event);
+  }
+
+  async OnArtifactClicked(data: {artifactId: string; versionId?: string}): Promise<void> {
+    const conversationId = this.ConversationId;
     this.artifactSelectionEpoch++;
-    this.selectedArtifactId = data.artifactId;
+    this.SelectedArtifactId = data.artifactId;
 
     // If versionId is provided, find the version number from display data (no lazy load needed)
     if (data.versionId) {
-      for (const artifactList of this.artifactsByDetailId.values()) {
+      for (const artifactList of this.ArtifactsByDetailId.values()) {
         for (const artifactInfo of artifactList) {
           if (artifactInfo.artifactVersionId === data.versionId) {
-            this.selectedVersionNumber = artifactInfo.versionNumber;
-            LogStatusEx({message: `📦 Opening artifact viewer for v${this.selectedVersionNumber}`, verboseOnly: true});
+            this.SelectedVersionNumber = artifactInfo.versionNumber;
+            LogStatusEx({message: `📦 Opening artifact viewer for v${this.SelectedVersionNumber}`, verboseOnly: true});
             break;
           }
         }
       }
     } else {
       // No specific version, let viewer default to latest
-      this.selectedVersionNumber = undefined;
+      this.SelectedVersionNumber = undefined;
     }
 
-    this.showArtifactPanel = true;
+    this.ShowArtifactPanel = true;
 
     // Load permissions for the selected artifact
     await this.loadArtifactPermissions(data.artifactId, conversationId, data.artifactId);
-    if (!this.isActiveConversation(conversationId) || !UUIDsEqual(this.selectedArtifactId, data.artifactId)) {
+    if (!this.isActiveConversation(conversationId) || !UUIDsEqual(this.SelectedArtifactId, data.artifactId)) {
       return;
     }
 
@@ -3486,7 +7188,12 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.cdr.detectChanges();
   }
 
-  async onArtifactCreated(data: {conversationId: string, conversationDetailId: string, artifactId: string; versionId: string; versionNumber: number; name: string}): Promise<void> {
+  /** @deprecated Use {@link OnArtifactClicked}. */
+  async onArtifactClicked(data: {artifactId: string; versionId?: string}): Promise<void> {
+    return this.OnArtifactClicked(data);
+  }
+
+  async OnArtifactCreated(data: {conversationId: string, conversationDetailId: string, artifactId: string; versionId: string; versionNumber: number; name: string}): Promise<void> {
     // Guard: ignore artifacts created by a background conversation's agent after a swap.
     // Without this, reloadArtifactsForMessage -> loadPeripheralData would CLEAR the active
     // conversation's artifact/agent-run/rating/attachment maps and rebuild them from the
@@ -3515,43 +7222,63 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.cdr.detectChanges();
   }
 
-  onCloseArtifactPanel(): void {
+  /** @deprecated Use {@link OnArtifactCreated}. */
+  async onArtifactCreated(data: {conversationId: string, conversationDetailId: string, artifactId: string; versionId: string; versionNumber: number; name: string}): Promise<void> {
+    return this.OnArtifactCreated(data);
+  }
+
+  OnCloseArtifactPanel(): void {
     this.artifactSelectionEpoch++;
-    this.showArtifactPanel = false;
-    this.selectedArtifactId = null;
+    this.ShowArtifactPanel = false;
+    this.SelectedArtifactId = null;
     // Clear permissions
-    this.canShareSelectedArtifact = false;
-    this.canEditSelectedArtifact = false;
+    this.CanShareSelectedArtifact = false;
+    this.CanEditSelectedArtifact = false;
     // Reset maximize state and width when closing so the next artifact opens at default size
     this.resetArtifactPaneSizing();
     this.cdr.detectChanges();
   }
 
-  toggleMaximizeArtifactPane(): void {
-    if (this.isArtifactPaneMaximized) {
+  /** @deprecated Use {@link OnCloseArtifactPanel}. */
+  onCloseArtifactPanel(): void {
+    return this.OnCloseArtifactPanel();
+  }
+
+  ToggleMaximizeArtifactPane(): void {
+    if (this.IsArtifactPaneMaximized) {
       // Restore to previous width
-      this.artifactPaneWidth = this.artifactPaneWidthBeforeMaximize;
-      this.isArtifactPaneMaximized = false;
+      this.ArtifactPaneWidth = this.artifactPaneWidthBeforeMaximize;
+      this.IsArtifactPaneMaximized = false;
     } else {
       // Maximize - store current width and set to 100%
-      this.artifactPaneWidthBeforeMaximize = this.artifactPaneWidth;
-      this.artifactPaneWidth = 100;
-      this.isArtifactPaneMaximized = true;
+      this.artifactPaneWidthBeforeMaximize = this.ArtifactPaneWidth;
+      this.ArtifactPaneWidth = 100;
+      this.IsArtifactPaneMaximized = true;
     }
   }
 
-  onSaveToCollectionRequested(event: {artifactId: string; excludedCollectionIds: string[]}): void {
-    this.collectionPickerArtifactId = event.artifactId;
-    this.collectionPickerExcludedIds = event.excludedCollectionIds;
-    // Snapshot version + name from the viewer so the picker's preview pane has real context
-    const viewer = this.artifactViewerComponent;
-    this.collectionPickerVersionId = viewer?.artifactVersion?.ID ?? null;
-    this.collectionPickerArtifactName = viewer?.displayName ?? '';
-    this.collectionPickerVersionNumber = viewer?.selectedVersionNumber ?? null;
-    this.showCollectionPicker = true;
+  /** @deprecated Use {@link ToggleMaximizeArtifactPane}. */
+  toggleMaximizeArtifactPane(): void {
+    return this.ToggleMaximizeArtifactPane();
   }
 
-  async onCollectionPickerCompleted(event: { successIds: string[]; failedIds: string[] }): Promise<void> {
+  OnSaveToCollectionRequested(event: {artifactId: string; excludedCollectionIds: string[]}): void {
+    this.CollectionPickerArtifactId = event.artifactId;
+    this.CollectionPickerExcludedIds = event.excludedCollectionIds;
+    // Snapshot version + name from the viewer so the picker's preview pane has real context
+    const viewer = this.artifactViewerComponent;
+    this.CollectionPickerVersionId = viewer?.artifactVersion?.ID ?? null;
+    this.CollectionPickerArtifactName = viewer?.displayName ?? '';
+    this.CollectionPickerVersionNumber = viewer?.selectedVersionNumber ?? null;
+    this.ShowCollectionPicker = true;
+  }
+
+  /** @deprecated Use {@link OnSaveToCollectionRequested}. */
+  onSaveToCollectionRequested(event: {artifactId: string; excludedCollectionIds: string[]}): void {
+    return this.OnSaveToCollectionRequested(event);
+  }
+
+  async OnCollectionPickerCompleted(event: { successIds: string[]; failedIds: string[] }): Promise<void> {
     // Refresh the viewer's bookmark / "already saved" state if anything actually wrote
     if (event.successIds.length > 0 && this.artifactViewerComponent) {
       await this.artifactViewerComponent.ReloadCollectionAssociations();
@@ -3568,17 +7295,27 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     }
   }
 
-  onCollectionPickerCancelled(): void {
+  /** @deprecated Use {@link OnCollectionPickerCompleted}. */
+  async onCollectionPickerCompleted(event: { successIds: string[]; failedIds: string[] }): Promise<void> {
+    return this.OnCollectionPickerCompleted(event);
+  }
+
+  OnCollectionPickerCancelled(): void {
     this.closeCollectionPicker();
   }
 
+  /** @deprecated Use {@link OnCollectionPickerCancelled}. */
+  onCollectionPickerCancelled(): void {
+    return this.OnCollectionPickerCancelled();
+  }
+
   private closeCollectionPicker(): void {
-    this.showCollectionPicker = false;
-    this.collectionPickerArtifactId = null;
-    this.collectionPickerExcludedIds = [];
-    this.collectionPickerVersionId = null;
-    this.collectionPickerArtifactName = '';
-    this.collectionPickerVersionNumber = null;
+    this.ShowCollectionPicker = false;
+    this.CollectionPickerArtifactId = null;
+    this.CollectionPickerExcludedIds = [];
+    this.CollectionPickerVersionId = null;
+    this.CollectionPickerArtifactName = '';
+    this.CollectionPickerVersionNumber = null;
     this.cdr.detectChanges();
   }
 
@@ -3586,8 +7323,13 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * Helper method to check if a conversation detail has an artifact
    * Used by message components to determine whether to show artifact card
    */
+  public ConversationDetailHasArtifact(conversationDetailId: string): boolean {
+    return this.ArtifactsByDetailId.has(conversationDetailId);
+  }
+
+  /** @deprecated Use {@link ConversationDetailHasArtifact}. */
   public conversationDetailHasArtifact(conversationDetailId: string): boolean {
-    return this.artifactsByDetailId.has(conversationDetailId);
+    return this.ConversationDetailHasArtifact(conversationDetailId);
   }
 
   /**
@@ -3595,11 +7337,16 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * Returns the LAST (most recent) artifact if multiple exist
    * Returns LazyArtifactInfo - caller can trigger lazy load if full entities needed
    */
-  public getArtifactInfo(conversationDetailId: string): LazyArtifactInfo | undefined {
-    const artifactList = this.artifactsByDetailId.get(conversationDetailId);
+  public GetArtifactInfo(conversationDetailId: string): LazyArtifactInfo | undefined {
+    const artifactList = this.ArtifactsByDetailId.get(conversationDetailId);
     return artifactList && artifactList.length > 0
       ? artifactList[artifactList.length - 1]
       : undefined;
+  }
+
+  /** @deprecated Use {@link GetArtifactInfo}. */
+  public getArtifactInfo(conversationDetailId: string): LazyArtifactInfo | undefined {
+    return this.GetArtifactInfo(conversationDetailId);
   }
 
   /**
@@ -3607,20 +7354,30 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * Use this when you need to display all artifacts (e.g., in a list)
    * Returns LazyArtifactInfo array - caller can trigger lazy load if full entities needed
    */
+  public GetAllArtifactsForDetail(conversationDetailId: string): LazyArtifactInfo[] {
+    return this.ArtifactsByDetailId.get(conversationDetailId) || [];
+  }
+
+  /** @deprecated Use {@link GetAllArtifactsForDetail}. */
   public getAllArtifactsForDetail(conversationDetailId: string): LazyArtifactInfo[] {
-    return this.artifactsByDetailId.get(conversationDetailId) || [];
+    return this.GetAllArtifactsForDetail(conversationDetailId);
   }
 
   /**
    * Resize handle methods for artifact pane
    */
-  onResizeStart(event: MouseEvent): void {
+  OnResizeStart(event: MouseEvent): void {
     this.isResizing = true;
     this.startX = event.clientX;
-    this.startWidth = this.artifactPaneWidth;
+    this.startWidth = this.ArtifactPaneWidth;
     event.preventDefault();
     document.body.style.cursor = 'col-resize';
     document.body.style.userSelect = 'none';
+  }
+
+  /** @deprecated Use {@link OnResizeStart}. */
+  onResizeStart(event: MouseEvent): void {
+    return this.OnResizeStart(event);
   }
 
   private onResizeMove(event: MouseEvent): void {
@@ -3633,7 +7390,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
     // Constrain between 20% and 70%
     newWidth = Math.max(20, Math.min(70, newWidth));
-    this.artifactPaneWidth = newWidth;
+    this.ArtifactPaneWidth = newWidth;
   }
 
   private onResizeEnd(event: MouseEvent): void {
@@ -3650,12 +7407,17 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   /**
    * Touch event handlers for mobile resize support
    */
-  onResizeTouchStart(event: TouchEvent): void {
+  OnResizeTouchStart(event: TouchEvent): void {
     this.isResizing = true;
     const touch = event.touches[0];
     this.startX = touch.clientX;
-    this.startWidth = this.artifactPaneWidth;
+    this.startWidth = this.ArtifactPaneWidth;
     event.preventDefault();
+  }
+
+  /** @deprecated Use {@link OnResizeTouchStart}. */
+  onResizeTouchStart(event: TouchEvent): void {
+    return this.OnResizeTouchStart(event);
   }
 
   private onResizeTouchMove(event: TouchEvent): void {
@@ -3668,7 +7430,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     let newWidth = this.startWidth + deltaPercent;
 
     newWidth = Math.max(20, Math.min(70, newWidth));
-    this.artifactPaneWidth = newWidth;
+    this.ArtifactPaneWidth = newWidth;
   }
 
   private onResizeTouchEnd(event: TouchEvent): void {
@@ -3687,7 +7449,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       if (saved) {
         const width = parseFloat(saved);
         if (!isNaN(width) && width >= 20 && width <= 70) {
-          this.artifactPaneWidth = width;
+          this.ArtifactPaneWidth = width;
         }
       }
     } catch (error) {
@@ -3697,23 +7459,28 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
   private saveArtifactPaneWidth(): void {
     try {
-      localStorage.setItem(this.ARTIFACT_PANE_WIDTH_KEY, this.artifactPaneWidth.toString());
+      localStorage.setItem(this.ARTIFACT_PANE_WIDTH_KEY, this.ArtifactPaneWidth.toString());
     } catch (error) {
       console.warn('Failed to save artifact pane width to localStorage:', error);
     }
   }
 
-  onConversationRenamed(event: {conversationId: string; name: string; description: string}): void {
+  OnConversationRenamed(event: {conversationId: string; name: string; description: string}): void {
     LogStatusEx({message: '🎉 Conversation renamed', verboseOnly: true, additionalArgs: [event]});
     // Pass the event up to workspace component for animation
-    this.conversationRenamed.emit(event);
+    this.ConversationRenamed.emit(event);
+  }
+
+  /** @deprecated Use {@link OnConversationRenamed}. */
+  onConversationRenamed(event: {conversationId: string; name: string; description: string}): void {
+    return this.OnConversationRenamed(event);
   }
 
   /**
    * Handle message sent from empty state component
    * Creates a new conversation and emits to parent to update selection
    */
-  async onEmptyStateMessageSent(event: {text: string; attachments: PendingAttachment[]}): Promise<void> {
+  async OnEmptyStateMessageSent(event: {text: string; attachments: PendingAttachment[]}): Promise<void> {
     // The new-conversation draft became a message — remove the 'new' entry and
     // reset its restore snapshot so the NEXT new-conversation composer starts clean.
     this.draftStore.ClearDraft(null);
@@ -3726,7 +7493,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     LogStatusEx({message: '📨 Empty state message received', verboseOnly: true, additionalArgs: [text, `${attachments?.length || 0} attachments`]});
 
     try {
-      this.isProcessing = true;
+      this.IsProcessing = true;
 
       // Create a new conversation using the engine. applicationScope +
       // applicationId let embedded surfaces (e.g. the Form Builder cockpit)
@@ -3741,33 +7508,33 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       // 'Global' so the save doesn't blow up. The conversation lands in
       // the main list — visible but not silently lost.
       const effectiveScope: 'Global' | 'Application' | 'Both' =
-        (this.applicationScope !== 'Global' && !this.applicationId)
+        (this.ApplicationScope !== 'Global' && !this.ApplicationId)
           ? 'Global'
-          : this.applicationScope;
+          : this.ApplicationScope;
       // Linked-record stamping — both columns must be populated together
       // or both null (DB CHECK constraint CK_Conversation_LinkBinding).
       // We only forward the pair when BOTH inputs are supplied; if the
       // host bound one but not the other, treat as misconfiguration and
       // skip the linkage rather than failing the save.
-      const hasLink = !!this.linkedEntityId && !!this.linkedRecordId;
+      const hasLink = !!this.LinkedEntityId && !!this.LinkedRecordId;
       const newConversation = await this.engine.CreateConversation(
         'New Conversation', // Temporary name - will be auto-named after first message
-        this.environmentId,
-        this.currentUser,
+        this.EnvironmentId,
+        this.CurrentUser,
         undefined,
         undefined,
         {
           applicationScope: effectiveScope,
-          applicationId: effectiveScope === 'Global' ? null : this.applicationId,
-          defaultAgentId: this.defaultAgentId,
-          linkedEntityId: hasLink ? this.linkedEntityId : null,
-          linkedRecordId: hasLink ? this.linkedRecordId : null,
+          applicationId: effectiveScope === 'Global' ? null : this.ApplicationId,
+          defaultAgentId: this.DefaultAgentId,
+          linkedEntityId: hasLink ? this.LinkedEntityId : null,
+          linkedRecordId: hasLink ? this.LinkedRecordId : null,
         }
       );
 
       if (!newConversation) {
         console.error('Failed to create new conversation');
-        this.isProcessing = false;
+        this.IsProcessing = false;
         return;
       }
 
@@ -3786,7 +7553,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       // creates the new message-input component
       const pendingMessage = text?.trim() || '';
       const pendingAttachments = attachments || [];
-      this.conversationCreated.emit({
+      this.ConversationCreated.emit({
         conversation: newConversation,
         pendingMessage,
         pendingAttachments
@@ -3795,13 +7562,23 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     } catch (error) {
       console.error('Error creating conversation from empty state:', error);
     } finally {
-      this.isProcessing = false;
+      this.IsProcessing = false;
     }
   }
 
-  onOpenEntityRecord(event: {entityName: string; compositeKey: CompositeKey}): void {
+  /** @deprecated Use {@link OnEmptyStateMessageSent}. */
+  async onEmptyStateMessageSent(event: {text: string; attachments: PendingAttachment[]}): Promise<void> {
+    return this.OnEmptyStateMessageSent(event);
+  }
+
+  OnOpenEntityRecord(event: {entityName: string; compositeKey: CompositeKey}): void {
     // Pass the event up to the parent component (workspace or explorer wrapper)
-    this.openEntityRecord.emit(event);
+    this.OpenEntityRecord.emit(event);
+  }
+
+  /** @deprecated Use {@link OnOpenEntityRecord}. */
+  onOpenEntityRecord(event: {entityName: string; compositeKey: CompositeKey}): void {
+    return this.OnOpenEntityRecord(event);
   }
 
   /** Record `open:resource` buttons → same openEntityRecord chain as agent-run links. */
@@ -3820,20 +7597,30 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       console.warn('open:resource: incomplete primary key', command.entityName, command);
       return;
     }
-    this.openEntityRecord.emit({ entityName: command.entityName, compositeKey });
+    this.OpenEntityRecord.emit({ entityName: command.entityName, compositeKey });
   }
 
-  onNavigationRequest(event: NavigationRequest): void {
+  OnNavigationRequest(event: NavigationRequest): void {
     // Pass the event up to the parent component for app-level navigation
     this.navigationRequest.emit(event);
   }
 
-  viewTestRun(testRunId: string): void {
+  /** @deprecated Use {@link OnNavigationRequest}. */
+  onNavigationRequest(event: NavigationRequest): void {
+    return this.OnNavigationRequest(event);
+  }
+
+  ViewTestRun(testRunId: string): void {
     // Open the test run record in the entity viewer
-    this.openEntityRecord.emit({
+    this.OpenEntityRecord.emit({
       entityName: 'MJ: Test Runs',
       compositeKey: CompositeKey.FromID(testRunId)
     });
+  }
+
+  /** @deprecated Use {@link ViewTestRun}. */
+  viewTestRun(testRunId: string): void {
+    return this.ViewTestRun(testRunId);
   }
 
   /**
@@ -3843,12 +7630,17 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * `openEntityRecord` chain every other chat record-open uses, so the Explorer
    * wrapper routes it through `NavigationService.OpenEntityRecord`.
    */
-  onRealtimeNavigateRequest(event: RealtimeNavigateRequest): void {
+  OnRealtimeNavigateRequest(event: RealtimeNavigateRequest): void {
     // The overlay can name any entity — resolve its key column(s) from metadata, not a hardcoded ID.
-    this.openEntityRecord.emit({
+    this.OpenEntityRecord.emit({
       entityName: event.EntityName,
       compositeKey: CompositeKey.FromURLSegment(this.ProviderToUse.EntityByName(event.EntityName), event.RecordID)
     });
+  }
+
+  /** @deprecated Use {@link OnRealtimeNavigateRequest}. */
+  onRealtimeNavigateRequest(event: RealtimeNavigateRequest): void {
+    return this.OnRealtimeNavigateRequest(event);
   }
 
   /**
@@ -3865,8 +7657,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     if (!created) {
       return;
     }
-    void this.engine.EnsureConversationLoaded(created, this.currentUser);
-    this.realtimeConversationReady.emit({ conversationId: created, select: false });
+    void this.engine.EnsureConversationLoaded(created, this.CurrentUser);
+    this.RealtimeConversationReady.emit({ conversationId: created, select: false });
   }
 
   /**
@@ -3888,7 +7680,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       return;
     }
     // Naming normally fired at the first utterance; this covers a silent call's default.
-    this.realtimeConversationReady.emit({ conversationId, select: true });
+    this.RealtimeConversationReady.emit({ conversationId, select: true });
   }
 
   /**
@@ -3899,12 +7691,12 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * agent-completion refresh path, and no-ops when no conversation is open.
    */
   private async reloadActiveConversationTimeline(): Promise<void> {
-    const conversationId = this.conversationId;
+    const conversationId = this.ConversationId;
     if (!conversationId) {
       return;
     }
     try {
-      await this.windowStore.RefreshLatest(this.currentUser);
+      await this.windowStore.RefreshLatest(this.CurrentUser);
       if (!this.isActiveConversation(conversationId)) {
         return;
       }
@@ -3984,18 +7776,31 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   /**
+   * True when the session review may offer "Start live session": not while a draft fork is open,
+   * the same rule as the composer's voice control (a session started there would run on the
+   * draft's parent path).
+   */
+  public get CanStartVoiceFromReview(): boolean {
+    return this.OpenView.Kind !== 'DraftFork';
+  }
+
+  /**
    * Review mode's "Start live session": RESUMES the reviewed session as a new live call
    * through the SAME start path the composer's mic uses, chaining `lastSessionId` so the
    * server restores saved channel states (e.g. the whiteboard) via `PriorChannelStatesJson`.
    * The start flips `Active$` synchronously, so clearing the review immediately after
-   * never unhosts the overlay mid-transition.
+   * never unhosts the overlay mid-transition. Starts nothing, and keeps the review, while
+   * {@link CanStartVoiceFromReview} is false.
    */
-  public async onReviewStartLive(request: RealtimeStartLiveRequest): Promise<void> {
+  public async OnReviewStartLive(request: RealtimeStartLiveRequest): Promise<void> {
+    if (!this.CanStartVoiceFromReview) {
+      return;
+    }
     const agentName = this.RealtimeReview?.AgentName ?? null;
     try {
       const start = this.RealtimeSession.StartRealtimeSession(
         request.TargetAgentId,
-        request.ConversationId ?? this.conversationId,
+        request.ConversationId ?? this.ConversationId,
         request.LastSessionId,
         agentName,
         null, // preferredModelId
@@ -4005,8 +7810,10 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         null, // recordingConsent
         null, // mediaCollectionId
         // App awareness — see message-input.startVoiceSession for the rationale.
-        this.applicationId,
-        this.appContext as AppContextSnapshot | null
+        this.ApplicationId,
+        this.AppContext as AppContextSnapshot | null,
+        // The channels this UI brings to its calls (the camera and screen share), on the fork the view targets.
+        { ...ConversationCallStartOptions(), ConversationBranchID: this.TargetBranchIdFor(request.ConversationId ?? this.ConversationId) }
       );
       this.RealtimeReview = null;
       await start;
@@ -4016,9 +7823,32 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     }
   }
 
+  /** @deprecated Use {@link OnReviewStartLive}. */
+  public async onReviewStartLive(request: RealtimeStartLiveRequest): Promise<void> {
+    return this.OnReviewStartLive(request);
+  }
+
   /** Review mode's Close: drop the review state (the overlay unhosts itself). */
-  public onReviewClosed(): void {
+  public OnReviewClosed(): void {
     this.ClearRealtimeSessionReview();
+  }
+
+  /** @deprecated Use {@link OnReviewClosed}. */
+  public onReviewClosed(): void {
+    return this.OnReviewClosed();
+  }
+
+  /**
+   * A message reports that its run has gone quiet (MJ #4222).
+   *
+   * The reconciliation triggers all fire on transport events — a socket retry, a tab regaining
+   * focus. This one fires on the symptom itself: a run that simply stopped reporting, with no event
+   * anywhere to notice it. Each pass covers every in-progress message, so the request goes through
+   * the runtime's coalescing trigger: quiet rows asking at about the same time share one pass.
+   */
+  OnLivenessCheckRequested(messageId: string): void {
+    LogStatusEx({ message: `🫀 Message ${messageId} reports no recent progress — reconciling`, verboseOnly: true });
+    ConversationsRuntime.Instance.Liveness.Trigger('message-liveness');
   }
 
   /**
@@ -4029,16 +7859,16 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    *
    * Usage: Hold Shift and click any AI message bubble. Open DevTools Console to see the dump.
    */
-  onDiagnosticRequested(messageId: string): void {
+  OnDiagnosticRequested(messageId: string): void {
     const streaming = this.streamingService.getDiagnosticSnapshot(messageId);
-    const agentRun = this.agentRunsByDetailId.get(messageId);
-    const isInProgress = this.inProgressMessageIds.includes(messageId);
+    const agentRun = this.AgentRunsByDetailId.get(messageId);
+    const isInProgress = this.InProgressMessageIds.includes(messageId);
 
     console.group(`%c[MJ Diagnostic Dump] Message ${messageId}`, 'color: #0076b6; font-weight: bold');
     console.log('Timestamp:', new Date().toISOString());
-    console.log('ConversationID:', this.conversationId);
+    console.log('ConversationID:', this.ConversationId);
     console.log('isInProgress (UI):', isInProgress);
-    console.log('All inProgressMessageIds:', [...this.inProgressMessageIds]);
+    console.log('All inProgressMessageIds:', [...this.InProgressMessageIds]);
     console.log('Streaming connection:', streaming.connectionStatus);
     console.log('Streaming callbacks registered:', streaming.callbackCount);
     if (streaming.recentCompletion) {
@@ -4052,34 +7882,54 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     console.groupEnd();
   }
 
-  onTestFeedbackMessage(message: MJConversationDetailEntity): void {
+  /** @deprecated Use {@link OnDiagnosticRequested}. */
+  onDiagnosticRequested(messageId: string): void {
+    return this.OnDiagnosticRequested(messageId);
+  }
+
+  OnTestFeedbackMessage(message: MJConversationDetailEntity): void {
     if (!message.TestRunID) {
       console.error('Cannot provide test feedback: message has no TestRunID');
       return;
     }
 
-    this.testFeedbackDialogData = {
+    this.TestFeedbackDialogData = {
       testRunId: message.TestRunID,
       conversationDetailId: message.ID,
-      currentUser: this.currentUser
+      currentUser: this.CurrentUser
     };
-    this.showTestFeedbackDialog = true;
+    this.ShowTestFeedbackDialog = true;
   }
 
-  onTestFeedbackDialogClosed(result: TestFeedbackDialogResult): void {
-    this.showTestFeedbackDialog = false;
-    this.testFeedbackDialogData = null;
+  /** @deprecated Use {@link OnTestFeedbackMessage}. */
+  onTestFeedbackMessage(message: MJConversationDetailEntity): void {
+    return this.OnTestFeedbackMessage(message);
+  }
+
+  OnTestFeedbackDialogClosed(result: TestFeedbackDialogResult): void {
+    this.ShowTestFeedbackDialog = false;
+    this.TestFeedbackDialogData = null;
     if (result.success) {
       console.log('Test feedback saved successfully:', result.feedbackId);
     }
   }
 
-  onTaskClicked(task: MJTaskEntity): void {
-    // Pass task click up to workspace to navigate to Tasks tab
-    this.taskClicked.emit(task);
+  /** @deprecated Use {@link OnTestFeedbackDialogClosed}. */
+  onTestFeedbackDialogClosed(result: TestFeedbackDialogResult): void {
+    return this.OnTestFeedbackDialogClosed(result);
   }
 
-  onNavigateToConversation(event: {conversationId: string; taskId: string}): void {
+  OnTaskClicked(task: MJTaskEntity): void {
+    // Pass task click up to workspace to navigate to Tasks tab
+    this.TaskClicked.emit(task);
+  }
+
+  /** @deprecated Use {@link OnTaskClicked}. */
+  onTaskClicked(task: MJTaskEntity): void {
+    return this.OnTaskClicked(task);
+  }
+
+  OnNavigateToConversation(event: {conversationId: string; taskId: string}): void {
     // Navigate to the conversation with the active task - emit to parent
     // Parent will update its selection state
     // For now, we can't navigate to a different conversation from within chat area
@@ -4087,12 +7937,22 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     console.log('Navigate to conversation requested:', event.conversationId);
   }
 
+  /** @deprecated Use {@link OnNavigateToConversation}. */
+  onNavigateToConversation(event: {conversationId: string; taskId: string}): void {
+    return this.OnNavigateToConversation(event);
+  }
+
   /**
    * Handle navigation request from artifact viewer Links tab
    */
-  onArtifactLinkNavigation(event: {type: 'conversation' | 'collection'; id: string}): void {
+  OnArtifactLinkNavigation(event: {type: 'conversation' | 'collection'; id: string}): void {
     LogStatusEx({message: '🔗 Chat area: Artifact link clicked', verboseOnly: true, additionalArgs: [event]});
-    this.artifactLinkClicked.emit(event);
+    this.ArtifactLinkClicked.emit(event);
+  }
+
+  /** @deprecated Use {@link OnArtifactLinkNavigation}. */
+  onArtifactLinkNavigation(event: {type: 'conversation' | 'collection'; id: string}): void {
+    return this.OnArtifactLinkNavigation(event);
   }
 
   /**
@@ -4101,32 +7961,32 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   private async loadArtifactPermissions(artifactId: string, expectedConversationId?: string | null, expectedSelectedArtifactId?: string | null): Promise<boolean> {
     const canApply = () => {
       const conversationOk = expectedConversationId === undefined || this.isActiveConversation(expectedConversationId);
-      const artifactOk = !expectedSelectedArtifactId || UUIDsEqual(this.selectedArtifactId, expectedSelectedArtifactId);
+      const artifactOk = !expectedSelectedArtifactId || UUIDsEqual(this.SelectedArtifactId, expectedSelectedArtifactId);
       return conversationOk && artifactOk;
     };
 
     // Guard against null/undefined
     if (!artifactId) {
       if (canApply()) {
-        this.canShareSelectedArtifact = false;
-        this.canEditSelectedArtifact = false;
+        this.CanShareSelectedArtifact = false;
+        this.CanEditSelectedArtifact = false;
       }
       return false;
     }
 
     try {
-      const permissions = await this.artifactPermissionService.getUserPermissions(artifactId, this.currentUser);
+      const permissions = await this.artifactPermissionService.getUserPermissions(artifactId, this.CurrentUser);
       if (!canApply()) {
         return false;
       }
-      this.canShareSelectedArtifact = permissions.canShare;
-      this.canEditSelectedArtifact = permissions.canEdit;
+      this.CanShareSelectedArtifact = permissions.canShare;
+      this.CanEditSelectedArtifact = permissions.canEdit;
       return true;
     } catch (error) {
       console.error('Failed to load artifact permissions:', error);
       if (canApply()) {
-        this.canShareSelectedArtifact = false;
-        this.canEditSelectedArtifact = false;
+        this.CanShareSelectedArtifact = false;
+        this.CanEditSelectedArtifact = false;
       }
       return false;
     }
@@ -4135,17 +7995,22 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   /**
    * Handle share request from artifact viewer
    */
-  async onArtifactShareRequested(artifactId: string): Promise<void> {
+  async OnArtifactShareRequested(artifactId: string): Promise<void> {
     // Load the artifact entity to pass to the modal
     const md = this.ProviderToUse;
     const artifact = await md.GetEntityObject<MJArtifactEntity>('MJ: Artifacts');
     await artifact.Load(artifactId);
 
     if (artifact) {
-      this.artifactToShare = artifact;
-      this.isArtifactShareModalOpen = true;
+      this.ArtifactToShare = artifact;
+      this.IsArtifactShareModalOpen = true;
       this.cdr.detectChanges();
     }
+  }
+
+  /** @deprecated Use {@link OnArtifactShareRequested}. */
+  async onArtifactShareRequested(artifactId: string): Promise<void> {
+    return this.OnArtifactShareRequested(artifactId);
   }
 
   /**
@@ -4169,8 +8034,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * to the prior conversation turn.
    */
   async OnAnalyzeArtifact(event: { artifactId: string; snapshot: DataSnapshot }): Promise<PendingAttachment | null> {
-    const conversationId = this.conversationId;
-    if (!conversationId || !this.currentUser) return null;
+    const conversationId = this.ConversationId;
+    if (!conversationId || !this.CurrentUser) return null;
 
     const messageInput = this.getActiveMessageInputComponent();
     const snapshotTitle = event.snapshot.title || 'Untitled Snapshot';
@@ -4178,8 +8043,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     try {
       const result = await this.analyzeArtifactService.CreateSnapshotArtifact({
         snapshot: event.snapshot,
-        currentUser: this.currentUser,
-        environmentId: this.environmentId,
+        currentUser: this.CurrentUser,
+        environmentId: this.EnvironmentId,
       });
       if (!this.isActiveConversation(conversationId)) {
         return null;
@@ -4242,9 +8107,9 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * than throwing. The user's conversation state isn't disrupted.
    */
   private async handleCaptureDataSnapshotCommand(command: CaptureDataSnapshotCommand): Promise<void> {
-    const conversationId = this.conversationId;
+    const conversationId = this.ConversationId;
     console.log('[client:capture-data-snapshot] Handler invoked', { command, conversationId });
-    if (!conversationId || !this.currentUser) {
+    if (!conversationId || !this.CurrentUser) {
       console.warn('[client:capture-data-snapshot] No active conversation/user; ignoring');
       return;
     }
@@ -4264,12 +8129,12 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       return;
     }
 
-    const panelAlreadyOpen = this.selectedArtifactId === artifactId && this.showArtifactPanel;
+    const panelAlreadyOpen = this.SelectedArtifactId === artifactId && this.ShowArtifactPanel;
     console.log(
       '[client:capture-data-snapshot] Panel state — currentSelectedId=' +
-        this.selectedArtifactId +
+        this.SelectedArtifactId +
         ' showPanel=' +
-        this.showArtifactPanel +
+        this.ShowArtifactPanel +
         ' panelAlreadyOpen=' +
         panelAlreadyOpen,
     );
@@ -4277,15 +8142,15 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     // Open the artifact panel so the viewer mounts (if it isn't already).
     if (!panelAlreadyOpen) {
       this.artifactSelectionEpoch++;
-      this.selectedArtifactId = artifactId;
-      this.selectedVersionNumber = undefined;
-      this.showArtifactPanel = true;
+      this.SelectedArtifactId = artifactId;
+      this.SelectedVersionNumber = undefined;
+      this.ShowArtifactPanel = true;
       try {
         await this.loadArtifactPermissions(artifactId, conversationId, artifactId);
       } catch {
         // Non-fatal — permissions are for UI affordances, not capture
       }
-      if (!this.isActiveConversation(conversationId) || !UUIDsEqual(this.selectedArtifactId, artifactId)) {
+      if (!this.isActiveConversation(conversationId) || !UUIDsEqual(this.SelectedArtifactId, artifactId)) {
         return;
       }
       this.cdr.detectChanges();
@@ -4297,7 +8162,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     // and query-backed / server-paged components need additional time to load
     // their rows (we now wait for rows, not just a registered table).
     const snapshot = await this.waitForViewerSnapshot(15000);
-    if (!this.isActiveConversation(conversationId) || !UUIDsEqual(this.selectedArtifactId, artifactId)) {
+    if (!this.isActiveConversation(conversationId) || !UUIDsEqual(this.SelectedArtifactId, artifactId)) {
       return;
     }
     if (!snapshot) {
@@ -4324,6 +8189,10 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     //   3. a generic re-prompt        — last resort if no user message found
     // OnAnalyzeArtifact prefilled messageText with 'Analyze "..." — '; we
     // overwrite that with the resolved followup before sending.
+    // Read-only (host flag or a View share) must not auto-send the follow-up.
+    if (this.EffectiveReadOnly) {
+      return;
+    }
     const messageInput = this.getActiveMessageInputComponent();
     if (messageInput) {
       let followup = command.followupMessage?.trim();
@@ -4441,19 +8310,19 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * first, then drop the filter here.
    */
   private async findMostRecentComponentArtifactId(): Promise<string | null> {
-    if (!this.conversationId || !this.currentUser) return null;
+    if (!this.ConversationId || !this.CurrentUser) return null;
     try {
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-      // Get all conversation detail IDs for this conversation, newest first.
+      // Get the conversation detail IDs on the open view's path, newest first.
       const detailsResult = await rv.RunView<MJConversationDetailEntity>(
         {
           EntityName: 'MJ: Conversation Details',
-          ExtraFilter: `ConversationID='${this.conversationId}'`,
+          ExtraFilter: ConversationEngine.ScopeFilter(this.openViewScope(this.ConversationId)),
           Fields: ['ID'],
           OrderBy: '__mj_CreatedAt DESC',
           ResultType: 'simple',
         },
-        this.currentUser,
+        this.CurrentUser,
       );
       if (!detailsResult.Success || !detailsResult.Results?.length) return null;
       const detailIds = detailsResult.Results.map((d) => `'${d.ID}'`).join(',');
@@ -4466,7 +8335,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
           OrderBy: '__mj_CreatedAt DESC',
           ResultType: 'simple',
         },
-        this.currentUser,
+        this.CurrentUser,
       );
       if (!junctionResult.Success || !junctionResult.Results?.length) return null;
 
@@ -4483,7 +8352,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
           Fields: ['ID', 'ArtifactID'],
           ResultType: 'simple',
         },
-        this.currentUser,
+        this.CurrentUser,
       );
       if (!versionsResult.Success || !versionsResult.Results?.length) return null;
 
@@ -4500,7 +8369,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
           ExtraFilter: `ID IN (${artifactFilter})`,
           ResultType: 'simple',
         },
-        this.currentUser,
+        this.CurrentUser,
       );
       if (!artifactsResult.Success || !artifactsResult.Results?.length) return null;
 
@@ -4532,28 +8401,38 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   /**
    * Handle close of artifact share modal
    */
-  onArtifactShareModalClose(): void {
-    this.isArtifactShareModalOpen = false;
-    this.artifactToShare = null;
+  OnArtifactShareModalClose(): void {
+    this.IsArtifactShareModalOpen = false;
+    this.ArtifactToShare = null;
     this.cdr.detectChanges();
+  }
+
+  /** @deprecated Use {@link OnArtifactShareModalClose}. */
+  onArtifactShareModalClose(): void {
+    return this.OnArtifactShareModalClose();
   }
 
   /**
    * Handle successful share - refresh permissions
    */
-  async onArtifactShared(): Promise<void> {
-    this.isArtifactShareModalOpen = false;
-    this.artifactToShare = null;
+  async OnArtifactShared(): Promise<void> {
+    this.IsArtifactShareModalOpen = false;
+    this.ArtifactToShare = null;
 
     // Refresh permissions for the active artifact
-    if (this.selectedArtifactId) {
-      await this.loadArtifactPermissions(this.selectedArtifactId);
+    if (this.SelectedArtifactId) {
+      await this.loadArtifactPermissions(this.SelectedArtifactId);
     }
     this.cdr.detectChanges();
   }
 
+  /** @deprecated Use {@link OnArtifactShared}. */
+  async onArtifactShared(): Promise<void> {
+    return this.OnArtifactShared();
+  }
+
   // Scroll functionality (pattern from skip-chat)
-  checkScroll(): void {
+  CheckScroll(): void {
     if (!this.scrollContainer) return;
 
     const element = this.scrollContainer.nativeElement;
@@ -4566,24 +8445,29 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     const newValue = !atBottom && hasScrollableContent;
 
     // Only update if value changed to prevent unnecessary change detection
-    if (this.showScrollToBottomIcon !== newValue) {
-      this.showScrollToBottomIcon = newValue;
+    if (this.ShowScrollToBottomIcon !== newValue) {
+      this.ShowScrollToBottomIcon = newValue;
       this.cdr.detectChanges();
     }
   }
 
-  scrollToBottomNow(retryCount: number = 0): void {
+  /** @deprecated Use {@link CheckScroll}. */
+  checkScroll(): void {
+    return this.CheckScroll();
+  }
+
+  ScrollToBottomNow(retryCount: number = 0): void {
     try {
       if (!this.scrollContainer) {
         if (retryCount < 10) {
-          setTimeout(() => this.scrollToBottomNow(retryCount + 1), 50);
+          setTimeout(() => this.ScrollToBottomNow(retryCount + 1), 50);
         }
         return;
       }
 
       const element = this.scrollContainer.nativeElement;
       if (element.scrollHeight === 0 && retryCount < 10) {
-        setTimeout(() => this.scrollToBottomNow(retryCount + 1), 50);
+        setTimeout(() => this.ScrollToBottomNow(retryCount + 1), 50);
       } else if (element.scrollHeight > 0) {
         element.scrollTop = element.scrollHeight;
       }
@@ -4592,11 +8476,21 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     }
   }
 
-  scrollToBottomAnimate(): void {
+  /** @deprecated Use {@link ScrollToBottomNow}. */
+  scrollToBottomNow(retryCount: number = 0): void {
+    return this.ScrollToBottomNow(retryCount);
+  }
+
+  ScrollToBottomAnimate(): void {
     if (this.scrollContainer) {
       const element = this.scrollContainer.nativeElement;
       element.scroll({ top: element.scrollHeight, behavior: 'smooth' });
     }
+  }
+
+  /** @deprecated Use {@link ScrollToBottomAnimate}. */
+  scrollToBottomAnimate(): void {
+    return this.ScrollToBottomAnimate();
   }
 
   /**
@@ -4622,19 +8516,32 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * a conversation from the composer sends the first message while the initial load is still
    * in flight.
    */
-  private followTranscript(change: 'load' | 'new' | 'update', message?: MJConversationDetailEntity): void {
+  private followTranscript(change: 'load' | 'new' | 'update' | 'stream', message?: MJConversationDetailEntity): void {
     if (change === 'load') {
       this.scrollToBottom = true;
       return;
     }
-    if (this.readReplyFromTop) {
+    if (change === 'stream') {
+      this.followStream();
+      return;
+    }
+    if (this.ReadReplyFromTop) {
       if (message?.Role === 'User' && message.ID && message.ID !== this.currentTurnStartMessageId) {
         this.currentTurnStartMessageId = message.ID;
+        this.streamAnchor = null;
+        this.streamPin = null;
       } else if (this.currentTurnStartMessageId && message?.Role === 'AI' && this.isSettled(message)) {
+        if (this.streamAnchor !== null) {
+          // The stream either pinned the turn's top or the reader took the viewport for this turn by
+          // scrolling during it. Either way completion must not land it again; keep the post-landing
+          // hold a normal landing gets so a status row right behind cannot yank the reader either.
+          this.bottomFollowSuppressedUntil = Date.now() + POST_LANDING_FOLLOW_HOLD_MS;
+          return;
+        }
         if (this.readerAtBottom) {
           this.pendingTurnStartMessageId = this.currentTurnStartMessageId;
           this.scrollToBottom = false;
-          this.bottomFollowSuppressedUntil = Date.now() + 1500;
+          this.bottomFollowSuppressedUntil = Date.now() + POST_LANDING_FOLLOW_HOLD_MS;
         }
         return;
       }
@@ -4655,12 +8562,70 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   /**
+   * Where the viewport goes on a streamed delta, in the same frame as the DOM change so growth and
+   * scroll paint together. Without ReadReplyFromTop, or for a turn this component never saw open
+   * (a reload mid-stream), a reader at the bottom is followed there. With it, the turn's top is
+   * pinned as high as the content allows on every frame: the question rises to the top as the
+   * reply grows beneath it, and once the reader scrolls away the pin is released for the turn.
+   */
+  private followStream(): void {
+    const turnId = this.ReadReplyFromTop ? this.currentTurnStartMessageId : null;
+    if (!turnId) {
+      if (this.readerAtBottom) {
+        this.ScrollToBottomNow();
+      }
+      return;
+    }
+    if (this.streamAnchor === 'declined') {
+      return;
+    }
+    const container = this.scrollContainer?.nativeElement as HTMLElement | undefined;
+    if (!container) {
+      return;
+    }
+    const pin = this.resolveStreamPin(turnId, container);
+    if (!pin) {
+      return;
+    }
+    if (this.streamAnchor === null) {
+      if (!this.readerAtBottom) {
+        this.streamAnchor = 'declined';
+        return;
+      }
+      this.cancelPendingLanding();
+    } else if (Math.abs(container.scrollTop - this.streamAnchor) > STREAM_ANCHOR_TOLERANCE_PX) {
+      this.streamAnchor = 'declined';
+      return;
+    }
+    const turnTop = this.offsetWithinScroller(pin.target, container) - pin.clearance;
+    container.scrollTop = Math.max(0, Math.min(turnTop, container.scrollHeight - container.clientHeight));
+    // Read the position back: the browser clamps and rounds, and the next frame compares against
+    // what it will actually read, not what was asked for.
+    this.streamAnchor = container.scrollTop;
+    this.scrollToBottom = false;
+    this.bottomFollowSuppressedUntil = Date.now() + POST_LANDING_FOLLOW_HOLD_MS;
+    // The pin moves the viewport without a scroll event once the turn's top is reached, so the
+    // at-bottom state and the jump-to-bottom affordance would otherwise go stale for the stream.
+    this.CheckScroll();
+  }
+
+  /** The stream pin's target and clearance for this turn, resolved once and kept while the node is in the DOM. */
+  private resolveStreamPin(turnId: string, container: HTMLElement): { target: HTMLElement; clearance: number } | null {
+    if (this.streamPin && this.streamPin.target.isConnected) {
+      return this.streamPin;
+    }
+    const target = this.messageListComponent?.FindTimelineElement(turnId) ?? null;
+    this.streamPin = target ? { target, clearance: this.turnTopClearance(container) } : null;
+    return this.streamPin;
+  }
+
+  /**
    * readReplyFromTop: once the reply has rendered, scrolls the turn so its first message
    * sits at the top of the pane — but only if the turn is taller than the pane. A turn that
    * fits is already fully on screen at the bottom, and moving it would be motion for nothing.
    */
   private scrollTurnToTop(messageId: string, attempt: number = 0): void {
-    if (!this.readReplyFromTop) {
+    if (!this.ReadReplyFromTop) {
       return;
     }
     const container = this.scrollContainer?.nativeElement as HTMLElement | undefined;
@@ -4677,14 +8642,14 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       return;
     }
     this.turnStartRetryHandle = null;
-    const turnTop = this.offsetWithinScroller(target) - this.turnTopClearance(container);
+    const turnTop = this.offsetWithinScroller(target, container) - this.turnTopClearance(container);
     const turnHeight = container.scrollHeight - turnTop; // the turn is the newest content
     if (turnHeight > container.clientHeight) {
       container.scroll({ top: turnTop, behavior: 'smooth' });
     } else {
-      this.scrollToBottomNow();
+      this.ScrollToBottomNow();
     }
-    this.checkScroll();
+    this.CheckScroll();
   }
 
   /**
@@ -4704,19 +8669,16 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   /** An element's top edge in the scroller's content coordinates — what scrollTop counts in. */
-  private offsetWithinScroller(el: HTMLElement): number {
-    const container = this.scrollContainer.nativeElement as HTMLElement;
+  private offsetWithinScroller(el: HTMLElement, container: HTMLElement): number {
     return el.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop;
   }
 
   private clearTurnTracking(): void {
     this.currentTurnStartMessageId = null;
-    this.pendingTurnStartMessageId = null;
+    this.streamAnchor = null;
+    this.streamPin = null;
     this.bottomFollowSuppressedUntil = 0;
-    if (this.turnStartRetryHandle) {
-      clearTimeout(this.turnStartRetryHandle);
-      this.turnStartRetryHandle = null;
-    }
+    this.cancelPendingLanding();
   }
 
   /**
@@ -4732,6 +8694,213 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    *    completed successfully, we detect the mismatch and correct it. This prevents
    *    the race condition where the client overwrites a server-completed record.
    */
+  /**
+   * Re-read the agent-run rows backing this conversation's in-progress messages, refreshing
+   * {@link AgentRunsByDetailId} in place.
+   *
+   * REQUIRED BEFORE ANY ON-DEMAND RECONCILE. {@link reconnectInProgressRuns} compares against
+   * the in-memory map and never reloads it; on the conversation-load path that is safe only
+   * because `loadPeripheralData` ran moments earlier off a fresh fetch. Invoked from a socket
+   * reconnect or a tab regaining focus there has been no such fetch, so the map still holds the
+   * stale `Running` status the outage froze it at — and the reconcile silently finds nothing to
+   * do, which is indistinguishable from working (MJ #4222).
+   *
+   * Deliberately narrow in rows: only the in-progress details, with `BypassCache` because the
+   * server wrote these rows through a different provider. Cheaper than
+   * `windowStore.RefreshLatest()`, and cheap enough to run on every trigger. Full entity rows are
+   * read, not a few fields: each row replaces the run object the message renders from and that the
+   * completion path reloads, so a partial row would blank the run's duration, tokens and cost.
+   */
+  private async refreshAgentRunsForInProgress(conversationId: string, loadToken: number): Promise<void> {
+    const inProgressIds = this.messages
+      .filter(m => m.Status === 'In-Progress' && m.Role === 'AI' && m.ID)
+      .map(m => m.ID);
+
+    if (inProgressIds.length === 0) {
+      return;
+    }
+
+    const quoted = inProgressIds.map(id => `'${id}'`).join(',');
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+    const result = await rv.RunView<MJAIAgentRunEntityExtended>({
+      EntityName: 'MJ: AI Agent Runs',
+      ExtraFilter: `ConversationDetailID IN (${quoted})`,
+      OrderBy: '__mj_CreatedAt DESC',
+      ResultType: 'entity_object',
+      BypassCache: true
+    }, this.currentUser);
+
+    if (!result.Success || !this.isActiveConversationLoad(conversationId, loadToken)) {
+      return;
+    }
+
+    // `OrderBy __mj_CreatedAt DESC` puts the newest run first, so the first row seen for a detail
+    // in THIS pass wins — a retried message must reconcile against its latest run, not its first.
+    // Tracked per pass rather than by consulting the map, which usually already holds a run from
+    // an earlier pass and is cleared only on conversation load.
+    const seenDetailIds = new Set<string>();
+    for (const run of result.Results || []) {
+      const detailId = run.ConversationDetailID;
+      if (!detailId || seenDetailIds.has(detailId)) {
+        continue;
+      }
+      seenDetailIds.add(detailId);
+      this.AgentRunsByDetailId.set(detailId, run);
+    }
+    // New map reference so OnPush children re-read it.
+    this.AgentRunsByDetailId = new Map(this.AgentRunsByDetailId);
+  }
+
+  /**
+   * Reconcile in-progress messages against durable server state, on demand.
+   *
+   * This is the recovery path for the case the five close-event-driven mechanisms all miss: a
+   * completion published while the client's transport was silently dead. Tier 0 makes the socket
+   * close; this is what recovers the event that was dropped while it was down.
+   *
+   * Only one pass runs at a time. A request that arrives during a pass shares it and schedules one
+   * follow-up pass, so every caller resolves after a pass that started after its request.
+   *
+   * @param reason What prompted it — carried only for logging.
+   */
+  public async ReconcileNow(reason: string): Promise<void> {
+    if (this.reconcileInFlight) {
+      this.reconcileRerunReason = reason;
+      return this.reconcileInFlight;
+    }
+    this.reconcileInFlight = this.runReconcilePasses(reason);
+    return this.reconcileInFlight;
+  }
+
+  /** Runs passes until no caller has asked for another. Clears the in-flight marker on exit. */
+  private async runReconcilePasses(reason: string): Promise<void> {
+    try {
+      let next: string | null = reason;
+      while (next) {
+        this.reconcileRerunReason = null;
+        await this.reconcileOnce(next);
+        next = this.reconcileRerunReason;
+      }
+    } finally {
+      this.reconcileInFlight = null;
+    }
+  }
+
+  /** One reconcile pass over the in-progress messages of the active conversation. */
+  private async reconcileOnce(reason: string): Promise<void> {
+    const conversationId = this.conversationId;
+    if (!conversationId || !this.currentUser) {
+      return;
+    }
+
+    // READ the token, never `++` it. `conversationLoadToken` is a CANCELLATION token: every
+    // in-flight conversation load checks it and bails when it changes, so incrementing here
+    // would abort a load already running rather than merely tagging this work.
+    const loadToken = this.conversationLoadToken;
+
+    LogStatusEx({ message: `🔁 Reconciling in-progress runs (${reason})`, verboseOnly: true });
+    try {
+      await this.refreshAgentRunsForInProgress(conversationId, loadToken);
+      if (!this.isActiveConversationLoad(conversationId, loadToken)) {
+        return;
+      }
+      await this.detectAndReconcileAgentRuns(conversationId, loadToken);
+    } catch (error) {
+      // Recovery is best-effort: a failed reconcile must never surface as a user-facing error,
+      // and the next trigger will try again.
+      console.error('[ConversationChatArea] Reconciliation failed:', error);
+    }
+  }
+
+  /**
+   * Ask the durable read model whether a message we still show as in-progress has in fact finished.
+   *
+   * The last gap in the recovery chain. Everything else here reads `MJ: AI Agent Runs` through the
+   * client's own provider; when that returns nothing the message simply waits. The tail query reads
+   * the same truth server-side from a cursor, reports the conversation detail's own status, and runs
+   * over HTTP — so it answers while the WebSocket is still down, which is the whole point.
+   *
+   * Completion is routed through the existing {@link handleMessageCompletion}, never written here:
+   * four writers already move a message out of In-Progress and a fifth would race them.
+   *
+   * @returns true when the message was completed from durable state.
+   */
+  private async tryRecoverFromTail(
+    message: MJConversationDetailEntity,
+    conversationId: string,
+    loadToken: number
+  ): Promise<boolean> {
+    const tail = ConversationsRuntime.Instance.Tail;
+    const result = await tail.Tail(message.ID);
+
+    if (!this.isActiveConversationLoad(conversationId, loadToken)) {
+      return false;
+    }
+    if (!result.Success) {
+      // An older server has no tail query, and a new client then gets a failure on every call.
+      // Decide from the run list instead, as the client did before the tail existed.
+      return this.recoverFromRunList(message, conversationId, loadToken);
+    }
+
+    // `IsInFlight` false means the server considers the run finished. A terminal `DetailStatus`
+    // with no run at all covers the case where the detail was completed by something other than an
+    // agent run. Either way the message must stop spinning.
+    const detailIsTerminal = result.DetailStatus === 'Complete' || result.DetailStatus === 'Error';
+    const runIsTerminal = result.RunID != null && !result.IsInFlight;
+
+    if (!runIsTerminal && !detailIsTerminal) {
+      return false;
+    }
+
+    // A terminal run beside a detail the server still reports as open is the orphan window, which
+    // the server-side reconciler closes after its grace period. `handleMessageCompletion` re-reads
+    // the detail rather than writing it, so completing here cannot settle the message; it would
+    // reload the whole conversation on every trigger and leave it spinning regardless. Keep the
+    // cursor and wait for the row to close.
+    if (!detailIsTerminal && result.DetailStatus === 'In-Progress') {
+      LogStatusEx({
+        message: `📼 Tail reports run ${result.RunID} finished but detail ${message.ID} is still open — leaving it to the reconciler`,
+        verboseOnly: true
+      });
+      return false;
+    }
+
+    LogStatusEx({
+      message: `📼 Tail reports message ${message.ID} finished (run ${result.RunID ?? 'none'}, status ${result.RunStatus ?? result.DetailStatus}) — completing`,
+      verboseOnly: true
+    });
+    await this.handleMessageCompletion(message, result.RunID ?? '', conversationId, loadToken);
+    // The message is terminal, so its cursor will never advance again.
+    tail.Forget(message.ID);
+    return true;
+  }
+
+  /**
+   * Complete a message from the run list alone. Used only when the tail call fails.
+   *
+   * Less precise than the tail: it cannot see the conversation detail's own status, so during the
+   * orphan window it reloads the message without settling it. That was the behavior before the
+   * tail existed, and it is better than leaving a finished message spinning.
+   *
+   * @returns true when the message was completed.
+   */
+  private async recoverFromRunList(
+    message: MJConversationDetailEntity,
+    conversationId: string,
+    loadToken: number
+  ): Promise<boolean> {
+    const run = this.AgentRunsByDetailId.get(message.ID);
+    if (!run || !RUN_LIST_TERMINAL_STATUSES.includes(run.Status)) {
+      return false;
+    }
+    LogStatusEx({
+      message: `📼 Tail unavailable; run ${run.ID} (${run.Status}) for message ${message.ID} is finished — completing from the run list`,
+      verboseOnly: true
+    });
+    await this.handleMessageCompletion(message, run.ID, conversationId, loadToken);
+    return true;
+  }
+
   private async detectAndReconcileAgentRuns(conversationId: string, loadToken: number): Promise<void> {
     if (!this.isActiveConversationLoad(conversationId, loadToken)) {
       return;
@@ -4757,24 +8926,23 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
     LogStatusEx({message: `🔄 Found ${inProgressMessages.length} in-progress messages, checking status...`, verboseOnly: true});
 
-    const completedStatuses = ['Completed', 'Failed', 'Error', 'Cancelled'];
-
     for (const message of inProgressMessages) {
-      const agentRun = this.agentRunsByDetailId.get(message.ID);
+      const agentRun = this.AgentRunsByDetailId.get(message.ID);
 
-      if (!agentRun) {
-        // No agent run yet — fire-and-forget may not have created it.
-        // Polling will pick this up once the server creates the run.
-        LogStatusEx({message: `⏳ No agent run found for in-progress message ${message.ID}, waiting for server...`, verboseOnly: true});
-        continue;
-      }
-
-      if (completedStatuses.includes(agentRun.Status)) {
-        // Agent completed during the WebSocket reconnection gap — handle now
-        LogStatusEx({message: `🔄 Agent run ${agentRun.ID} already completed (${agentRun.Status}) for message ${message.ID}, handling catch-up...`, verboseOnly: true});
-        await this.handleMessageCompletion(message, agentRun.ID, conversationId, loadToken);
-      } else {
-        LogStatusEx({message: `🔌 Agent run ${agentRun.ID} still ${agentRun.Status} for message ${message.ID}, WebSocket will receive updates`, verboseOnly: true});
+      // Ask durable state for every in-progress message, whatever the run map says. The run is not
+      // the only thing that decides a message: the tail reports the conversation detail's own
+      // status, which the run map does not carry at all. A finished run beside a detail that is
+      // still open is the orphan window, and completing from the run alone would reload the whole
+      // conversation on every trigger while the message kept spinning. The tail leaves that case
+      // to the server-side reconciler, and completes a detail that was closed by anything.
+      const recovered = await this.tryRecoverFromTail(message, conversationId, loadToken);
+      if (!recovered) {
+        LogStatusEx({
+          message: agentRun
+            ? `🔌 Agent run ${agentRun.ID} (${agentRun.Status}) for message ${message.ID}; durable state does not show the message finished`
+            : `⏳ No agent run found for in-progress message ${message.ID}, waiting for server...`,
+          verboseOnly: true
+        });
       }
     }
   }
@@ -4794,7 +8962,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     }
 
     for (const message of errorMessages) {
-      const agentRun = this.agentRunsByDetailId.get(message.ID);
+      const agentRun = this.AgentRunsByDetailId.get(message.ID);
       if (agentRun && agentRun.Status === 'Completed') {
         LogStatusEx({message: `🔧 Correcting stale error: message ${message.ID} shows Error but agent run ${agentRun.ID} completed successfully`, verboseOnly: true});
         await this.handleMessageCompletion(message, agentRun.ID, conversationId, loadToken);
@@ -4807,28 +8975,28 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * Opens the artifact and scrolls to the message containing it
    */
   private async handlePendingArtifactNavigation(): Promise<void> {
-    if (!this.pendingArtifactId) {
+    if (!this.PendingArtifactId) {
       return; // No pending navigation
     }
-    const pendingTargetConversationId = this.pendingArtifactConversationId ?? this.conversationId;
-    if (!this.pendingArtifactId || !this.isActiveConversation(pendingTargetConversationId)) {
+    const pendingTargetConversationId = this.PendingArtifactConversationId ?? this.ConversationId;
+    if (!this.PendingArtifactId || !this.isActiveConversation(pendingTargetConversationId)) {
       return;
     }
 
-    console.log('📦 Processing pending artifact navigation:', this.pendingArtifactId, 'v' + this.pendingArtifactVersionNumber);
+    console.log('📦 Processing pending artifact navigation:', this.PendingArtifactId, 'v' + this.PendingArtifactVersionNumber);
 
     // Capture values before emitting consumed event
-    const artifactIdToOpen = this.pendingArtifactId;
-    const versionNumberToOpen = this.pendingArtifactVersionNumber;
-    const conversationId = this.conversationId;
+    const artifactIdToOpen = this.PendingArtifactId;
+    const versionNumberToOpen = this.PendingArtifactVersionNumber;
+    const conversationId = this.ConversationId;
 
     // Notify parent that we consumed the pending artifact
-    this.pendingArtifactConsumed.emit();
+    this.PendingArtifactConsumed.emit();
 
     // Find the message containing this artifact version
     let messageIdWithArtifact: string | null = null;
 
-    for (const [detailId, artifactList] of this.artifactsByDetailId.entries()) {
+    for (const [detailId, artifactList] of this.ArtifactsByDetailId.entries()) {
       for (const artifactInfo of artifactList) {
         if (artifactInfo.artifactId === artifactIdToOpen) {
           // Found the artifact - check if version matches (if specified)
@@ -4849,13 +9017,13 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
     // Open the artifact panel
     this.artifactSelectionEpoch++;
-    this.selectedArtifactId = artifactIdToOpen;
-    this.selectedVersionNumber = versionNumberToOpen ?? undefined;
-    this.showArtifactPanel = true;
+    this.SelectedArtifactId = artifactIdToOpen;
+    this.SelectedVersionNumber = versionNumberToOpen ?? undefined;
+    this.ShowArtifactPanel = true;
 
     // Load permissions for the artifact
     await this.loadArtifactPermissions(artifactIdToOpen, conversationId, artifactIdToOpen);
-    if (!this.isActiveConversation(conversationId) || !UUIDsEqual(this.selectedArtifactId, artifactIdToOpen)) {
+    if (!this.isActiveConversation(conversationId) || !UUIDsEqual(this.SelectedArtifactId, artifactIdToOpen)) {
       return;
     }
     this.cdr.detectChanges();
@@ -4886,24 +9054,26 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   /**
    * Handle intent check started - show temporary "Analyzing intent..." message
    */
-  async onIntentCheckStarted(event: {conversationId: string}): Promise<void> {
+  async OnIntentCheckStarted(event: {conversationId: string}): Promise<void> {
     // Guard: ignore intent-check UI from a background conversation's input after a swap,
     // so the "Analyzing..." placeholder isn't injected into the displayed conversation.
     if (!this.isActiveConversation(event.conversationId)) {
       return;
     }
     const md = this.ProviderToUse;
-    const tempMessage = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', this.currentUser);
+    const tempMessage = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', this.CurrentUser);
 
     // Create a temporary message that looks like an AI response in-progress
     tempMessage.Message = '🔍 Analyzing your request to determine the best agent...';
     tempMessage.Role = 'AI';
     tempMessage.Status = 'In-Progress';
-    // Set created date using LoadFromData to bypass read-only protection
+    // Set created date using LoadFromData to bypass read-only protection. The open view's branch
+    // makes a fork view draw the row as one of the fork's own rows.
     tempMessage.LoadFromData({
       Message: tempMessage.Message,
       Role: tempMessage.Role,
       Status: tempMessage.Status,
+      BranchID: this.OpenViewBranchId,
       __mj_CreatedAt: new Date()
     });
     // No ID means it's temporary (won't be saved)
@@ -4914,10 +9084,15 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.cdr.detectChanges();
   }
 
+  /** @deprecated Use {@link OnIntentCheckStarted}. */
+  async onIntentCheckStarted(event: {conversationId: string}): Promise<void> {
+    return this.OnIntentCheckStarted(event);
+  }
+
   /**
    * Handle intent check completed - remove temporary message
    */
-  onIntentCheckCompleted(event: {conversationId: string}): void {
+  OnIntentCheckCompleted(event: {conversationId: string}): void {
     // Guard (symmetric with onIntentCheckStarted): ignore a background conversation's
     // intent-check completion after a swap. Without this, a late completion from the
     // conversation the user just left would remove the ACTIVE conversation's own
@@ -4931,5 +9106,10 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       this.intentCheckMessage = null;
       this.cdr.detectChanges();
     }
+  }
+
+  /** @deprecated Use {@link OnIntentCheckCompleted}. */
+  onIntentCheckCompleted(event: {conversationId: string}): void {
+    return this.OnIntentCheckCompleted(event);
   }
 }

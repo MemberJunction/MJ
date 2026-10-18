@@ -69,7 +69,7 @@ export class AutotagRSSFeed extends AutotagBase {
 
         for (const contentSource of contentSources) {
             try {
-                const items = await this.ProcessContentSource(contentSource);
+                const items = await this.processContentSource(contentSource);
                 contentItemsToProcess.push(...items);
             } catch (e) {
                 const msg = e instanceof Error ? e.message : String(e);
@@ -84,7 +84,7 @@ export class AutotagRSSFeed extends AutotagBase {
      * Process a single content source: parse the RSS feed, detect new/modified
      * items, fetch full article text, and create/update ContentItems.
      */
-    private async ProcessContentSource(contentSource: MJContentSourceEntity): Promise<MJContentItemEntity[]> {
+    private async processContentSource(contentSource: MJContentSourceEntity): Promise<MJContentItemEntity[]> {
         const contentSourceParams: ContentSourceParams = {
             contentSourceID: contentSource.ID,
             name: contentSource.Name ?? '',
@@ -103,7 +103,7 @@ export class AutotagRSSFeed extends AutotagBase {
         LogStatus(`[RSS] Parsed ${allRSSItems.length} items from "${contentSource.Name}"`);
 
         // Load existing content items for upsert by URL
-        const existingItems = await this.LoadExistingContentItems(contentSourceParams.contentSourceID);
+        const existingItems = await this.loadExistingContentItems(contentSourceParams.contentSourceID);
         LogStatus(`[RSS] ${existingItems.size} existing items for "${contentSource.Name}"`);
 
         const items: MJContentItemEntity[] = [];
@@ -111,7 +111,7 @@ export class AutotagRSSFeed extends AutotagBase {
             const rssItem = allRSSItems[idx];
             try {
                 LogStatus(`[RSS] Processing item ${idx + 1}/${allRSSItems.length}: "${rssItem.title?.substring(0, 60) ?? 'untitled'}"...`);
-                const item = await this.ProcessSingleFeedItem(rssItem, contentSourceParams, existingItems);
+                const item = await this.processSingleFeedItem(rssItem, contentSourceParams, existingItems);
                 if (item) {
                     items.push(item);
                     LogStatus(`[RSS] Item ${idx + 1} created/updated (text: ${item.Text?.length ?? 0} chars)`);
@@ -132,13 +132,13 @@ export class AutotagRSSFeed extends AutotagBase {
      * Process a single RSS feed item: fetch full article text, compute checksum,
      * create or update the ContentItem.
      */
-    private async ProcessSingleFeedItem(
+    private async processSingleFeedItem(
         rssItem: RSSItem,
         contentSourceParams: ContentSourceParams,
         existingItems: Map<string, MJContentItemEntity>
     ): Promise<MJContentItemEntity | null> {
         // Fetch full article text from the link URL
-        const articleText = await this.FetchArticleText(rssItem);
+        const articleText = await this.fetchArticleText(rssItem);
         if (!articleText || articleText.trim().length === 0) {
             return null;
         }
@@ -191,7 +191,7 @@ export class AutotagRSSFeed extends AutotagBase {
      * 2. Otherwise, follow the item's link URL and extract text with Cheerio
      * 3. Fall back to the RSS description if link fetching fails
      */
-    private async FetchArticleText(rssItem: RSSItem): Promise<string> {
+    private async fetchArticleText(rssItem: RSSItem): Promise<string> {
         // 1. Prefer inline content if it's substantial (> 200 chars after HTML stripping)
         if (rssItem.content && rssItem.content.trim().length > 200) {
             return rssItem.content; // Already HTML-parsed by parseRSSFeed
@@ -200,7 +200,7 @@ export class AutotagRSSFeed extends AutotagBase {
         // 2. Follow the link URL to get the full article
         if (rssItem.link) {
             try {
-                const fullText = await this.FetchAndParseWebPage(rssItem.link);
+                const fullText = await this.fetchAndParseWebPage(rssItem.link);
                 if (fullText && fullText.trim().length > 100) {
                     return fullText;
                 }
@@ -223,7 +223,7 @@ export class AutotagRSSFeed extends AutotagBase {
      * Fetch a web page and extract its main text content using Cheerio.
      * Strips navigation, headers, footers, scripts, and styles.
      */
-    private async FetchAndParseWebPage(url: string): Promise<string> {
+    private async fetchAndParseWebPage(url: string): Promise<string> {
         const response = await HttpGet<string>(url, {
             Timeout: 8000,
             ResponseType: 'text',
@@ -245,7 +245,7 @@ export class AutotagRSSFeed extends AutotagBase {
      * The content field is HTML-stripped via the engine's parseHTML.
      */
     public async ParseRSSFeed(url: string): Promise<RSSItem[]> {
-        if (!await this.UrlIsValid(url)) {
+        if (!await this.urlIsValid(url)) {
             LogError(`AutotagRSSFeed: invalid feed URL: ${url}`);
             return [];
         }
@@ -287,7 +287,7 @@ export class AutotagRSSFeed extends AutotagBase {
     /**
      * Check if a URL is reachable via HTTP HEAD request.
      */
-    private async UrlIsValid(url: string): Promise<boolean> {
+    private async urlIsValid(url: string): Promise<boolean> {
         try {
             // ThrowOnError off so a 3xx/4xx is reported by status rather than as a throw.
             const response = await HttpHead(url, { Timeout: 10000, ThrowOnError: false });
@@ -300,7 +300,7 @@ export class AutotagRSSFeed extends AutotagBase {
     /**
      * Load existing ContentItems for this source, keyed by lowercase URL for upsert.
      */
-    private async LoadExistingContentItems(contentSourceID: string): Promise<Map<string, MJContentItemEntity>> {
+    private async loadExistingContentItems(contentSourceID: string): Promise<Map<string, MJContentItemEntity>> {
         const rv = new RunView();
         const result = await rv.RunView<MJContentItemEntity>({
             EntityName: 'MJ: Content Items',

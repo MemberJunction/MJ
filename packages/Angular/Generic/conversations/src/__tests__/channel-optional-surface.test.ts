@@ -10,7 +10,7 @@
 import { describe, it, expect } from 'vitest';
 import type { Type } from '@angular/core';
 import { RealtimeToolDefinition } from '@memberjunction/ai';
-import { BaseRealtimeChannelClient } from '../lib/components/realtime/channels/base-realtime-channel-client';
+import { BaseRealtimeChannelClient } from '@memberjunction/realtime-runtime';
 
 /** A server-only channel: contributes tools + perception, but renders NO surface. */
 class ServerOnlyChannel extends BaseRealtimeChannelClient {
@@ -55,5 +55,14 @@ describe('BaseRealtimeChannelClient — optional client surface', () => {
     const ch = new SurfaceChannel();
     expect(ch.GetSurfaceComponent()).toBe(FakeSurface);
     expect(ch.HasSurface()).toBe(true);
+  });
+
+  it('ignores surface visibility by default, so a surface keeps running out of sight', () => {
+    const ch = new SurfaceChannel();
+    ch.BindSurface();
+    expect(() => {
+      ch.OnSurfaceVisibilityChange(false);
+      ch.OnSurfaceVisibilityChange(true);
+    }).not.toThrow();
   });
 });

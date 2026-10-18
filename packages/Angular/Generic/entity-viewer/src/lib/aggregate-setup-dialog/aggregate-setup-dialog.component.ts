@@ -304,7 +304,7 @@ export class AggregateSetupDialogComponent implements OnInit, OnChanges {
   /**
    * Set the setup mode
    */
-  setMode(mode: AggregateSetupMode): void {
+  SetMode(mode: AggregateSetupMode): void {
     this.Mode = mode;
 
     // If switching from smart mode with generated expression, populate advanced mode
@@ -315,16 +315,26 @@ export class AggregateSetupDialogComponent implements OnInit, OnChanges {
     this.cdr.detectChanges();
   }
 
+  /** @deprecated Use {@link SetMode}. */
+  setMode(mode: AggregateSetupMode): void {
+    return this.SetMode(mode);
+  }
+
   /**
    * Handle function button click - captures old value before changing
    * Called from template when user clicks a function button
    */
-  selectFunction(newFunction: AggregateFunctionType): void {
+  SelectFunction(newFunction: AggregateFunctionType): void {
     if (newFunction === this.SelectedFunction) return;
 
     const previousFunction = this.SelectedFunction;
     this.SelectedFunction = newFunction;
     this.onFunctionChange(previousFunction);
+  }
+
+  /** @deprecated Use {@link SelectFunction}. */
+  selectFunction(newFunction: AggregateFunctionType): void {
+    return this.SelectFunction(newFunction);
   }
 
   /**
@@ -334,10 +344,15 @@ export class AggregateSetupDialogComponent implements OnInit, OnChanges {
    */
   private _previousColumn: string = '';
 
-  onColumnSelected(newColumn: string): void {
+  OnColumnSelected(newColumn: string): void {
     const previousColumn = this._previousColumn;
     this._previousColumn = newColumn;
-    this.onColumnChange(previousColumn);
+    this.OnColumnChange(previousColumn);
+  }
+
+  /** @deprecated Use {@link OnColumnSelected}. */
+  onColumnSelected(newColumn: string): void {
+    return this.OnColumnSelected(newColumn);
   }
 
   /**
@@ -365,7 +380,7 @@ export class AggregateSetupDialogComponent implements OnInit, OnChanges {
   /**
    * Handle column selection change
    */
-  onColumnChange(previousColumn: string): void {
+  OnColumnChange(previousColumn: string): void {
     // Check if label matches what we would have auto-generated for the OLD column
     const shouldUpdateLabel = this.shouldAutoUpdateLabel(this.SelectedFunction, previousColumn);
 
@@ -375,6 +390,11 @@ export class AggregateSetupDialogComponent implements OnInit, OnChanges {
     }
 
     this.cdr.detectChanges();
+  }
+
+  /** @deprecated Use {@link OnColumnChange}. */
+  onColumnChange(previousColumn: string): void {
+    return this.OnColumnChange(previousColumn);
   }
 
   /**
@@ -427,17 +447,27 @@ export class AggregateSetupDialogComponent implements OnInit, OnChanges {
   /**
    * Select an icon
    */
-  selectIcon(icon: string): void {
+  SelectIcon(icon: string): void {
     this.Icon = icon;
     this.cdr.detectChanges();
+  }
+
+  /** @deprecated Use {@link SelectIcon}. */
+  selectIcon(icon: string): void {
+    return this.SelectIcon(icon);
   }
 
   /**
    * Clear the icon
    */
-  clearIcon(): void {
+  ClearIcon(): void {
     this.Icon = '';
     this.cdr.detectChanges();
+  }
+
+  /** @deprecated Use {@link ClearIcon}. */
+  clearIcon(): void {
+    return this.ClearIcon();
   }
 
   /**
@@ -514,7 +544,7 @@ export class AggregateSetupDialogComponent implements OnInit, OnChanges {
   /**
    * Save the aggregate
    */
-  onSave(): void {
+  OnSave(): void {
     if (!this.IsValid) return;
 
     const aggregate: ViewGridAggregate = {
@@ -534,7 +564,12 @@ export class AggregateSetupDialogComponent implements OnInit, OnChanges {
     }
 
     this.Save.emit(aggregate);
-    this.onClose();
+    this.OnClose();
+  }
+
+  /** @deprecated Use {@link OnSave}. */
+  onSave(): void {
+    return this.OnSave();
   }
 
   /**
@@ -557,14 +592,19 @@ export class AggregateSetupDialogComponent implements OnInit, OnChanges {
   /**
    * Close the dialog
    */
-  onClose(): void {
+  OnClose(): void {
     this.Close.emit();
+  }
+
+  /** @deprecated Use {@link OnClose}. */
+  onClose(): void {
+    return this.OnClose();
   }
 
   /**
    * Handle smart prompt generation (placeholder - actual AI call would be made by parent)
    */
-  onGenerateFromPrompt(): void {
+  OnGenerateFromPrompt(): void {
     if (!this.SmartPrompt.trim()) return;
 
     this.IsGenerating = true;
@@ -581,22 +621,37 @@ export class AggregateSetupDialogComponent implements OnInit, OnChanges {
     }, 500);
   }
 
+  /** @deprecated Use {@link OnGenerateFromPrompt}. */
+  onGenerateFromPrompt(): void {
+    return this.OnGenerateFromPrompt();
+  }
+
   /**
    * Clear the generated expression and allow editing prompt
    */
-  clearGeneratedExpression(): void {
+  ClearGeneratedExpression(): void {
     this.GeneratedExpression = '';
     this.cdr.detectChanges();
+  }
+
+  /** @deprecated Use {@link ClearGeneratedExpression}. */
+  clearGeneratedExpression(): void {
+    return this.ClearGeneratedExpression();
   }
 
   /**
    * Get display label for field dropdown showing "Name (DisplayName)" format
    * If DisplayName equals Name or is not set, just show Name
    */
-  getFieldDisplayLabel(field: EntityFieldInfo): string {
+  GetFieldDisplayLabel(field: EntityFieldInfo): string {
     if (field.DisplayName && field.DisplayName !== field.Name) {
       return `${field.Name} (${field.DisplayName})`;
     }
     return field.Name;
+  }
+
+  /** @deprecated Use {@link GetFieldDisplayLabel}. */
+  getFieldDisplayLabel(field: EntityFieldInfo): string {
+    return this.GetFieldDisplayLabel(field);
   }
 }

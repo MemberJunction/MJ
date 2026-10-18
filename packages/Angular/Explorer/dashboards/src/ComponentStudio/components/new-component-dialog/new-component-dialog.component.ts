@@ -20,7 +20,16 @@ export class NewComponentDialogComponent {
   @Input() Visible: boolean = false;
   @Output() Close = new EventEmitter<NewComponentResult | null>();
 
-  public form: FormGroup;
+  public Form: FormGroup;
+
+  /** @deprecated Use {@link Form}. */
+  public get form(): FormGroup {
+    return this.Form;
+  }
+  /** @deprecated Use {@link Form}. */
+  public set form(value: FormGroup) {
+    this.Form = value;
+  }
   public SelectedType: string = 'dashboard';
 
   public TypeOptions: TypeOption[] = [
@@ -34,7 +43,7 @@ export class NewComponentDialogComponent {
   private lastAutoFilledTitle: string = '';
 
   constructor(private fb: FormBuilder) {
-    this.form = this.fb.group({
+    this.Form = this.fb.group({
       name: ['', Validators.required],
       title: [''],
       description: ['']
@@ -42,8 +51,8 @@ export class NewComponentDialogComponent {
   }
 
   OnNameChange(): void {
-    const nameValue = this.form.get('name')?.value || '';
-    const titleControl = this.form.get('title');
+    const nameValue = this.Form.get('name')?.value || '';
+    const titleControl = this.Form.get('title');
     if (!titleControl) return;
 
     const currentTitle = titleControl.value || '';
@@ -58,12 +67,12 @@ export class NewComponentDialogComponent {
   }
 
   OnCreate(): void {
-    if (!this.form.valid) return;
+    if (!this.Form.valid) return;
 
     const result: NewComponentResult = {
-      name: this.form.get('name')?.value?.trim() || '',
-      title: this.form.get('title')?.value?.trim() || this.form.get('name')?.value?.trim() || '',
-      description: this.form.get('description')?.value?.trim() || '',
+      name: this.Form.get('name')?.value?.trim() || '',
+      title: this.Form.get('title')?.value?.trim() || this.Form.get('name')?.value?.trim() || '',
+      description: this.Form.get('description')?.value?.trim() || '',
       type: this.SelectedType
     };
 
@@ -77,7 +86,7 @@ export class NewComponentDialogComponent {
   }
 
   private resetForm(): void {
-    this.form.reset();
+    this.Form.reset();
     this.SelectedType = 'dashboard';
     this.lastAutoFilledTitle = '';
   }

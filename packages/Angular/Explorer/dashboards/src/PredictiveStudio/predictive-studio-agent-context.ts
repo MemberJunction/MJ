@@ -20,14 +20,19 @@
  * read-only boundary is restated on each door component; this module never mutates anything.
  */
 
-import { boundNameList } from '../shared/agent-tool-validation';
+import { BoundNameList } from '../shared/agent-tool-validation';
 
 /** Upper bound on names published in any PS context list field; a companion `*Count` is surfaced when truncated. */
 export const PS_AGENT_CONTEXT_NAME_LIST_CAP = 25;
 
 /** Cap a name list to {@link PS_AGENT_CONTEXT_NAME_LIST_CAP}. Pure; never mutates the input. */
+export function CapPSNames(names: readonly string[]): string[] {
+  return BoundNameList(names, PS_AGENT_CONTEXT_NAME_LIST_CAP);
+}
+
+/** @deprecated Use {@link CapPSNames}. */
 export function capPSNames(names: readonly string[]): string[] {
-  return boundNameList(names, PS_AGENT_CONTEXT_NAME_LIST_CAP);
+  return CapPSNames(names);
 }
 
 /** Minimal id+name descriptor the doors hand the resolver so it can match an agent reference. */
@@ -44,7 +49,7 @@ export interface PSNamedRecord {
  * {@link buildPSNotFoundError} then lists the contenders so the agent can disambiguate). Pure +
  * deterministic over the candidate list.
  */
-export function resolvePSRecord<T extends PSNamedRecord>(input: string, candidates: readonly T[]): T | null {
+export function ResolvePSRecord<T extends PSNamedRecord>(input: string, candidates: readonly T[]): T | null {
   const needle = (input ?? '').trim().toLowerCase();
   if (!needle) return null;
   const byId = candidates.find((c) => c.ID.toLowerCase() === needle);
@@ -55,11 +60,16 @@ export function resolvePSRecord<T extends PSNamedRecord>(input: string, candidat
   return contains.length === 1 ? contains[0] : null;
 }
 
+/** @deprecated Use {@link ResolvePSRecord}. */
+export function resolvePSRecord<T extends PSNamedRecord>(input: string, candidates: readonly T[]): T | null {
+  return ResolvePSRecord(input, candidates);
+}
+
 /**
  * Tolerant "not found" message so the agent can self-correct: when the input partially matches SEVERAL
  * candidates it becomes a "did you mean…" listing exactly those; otherwise it samples available names. Pure.
  */
-export function buildPSNotFoundError(input: string, candidates: readonly PSNamedRecord[], noun: string): string {
+export function BuildPSNotFoundError(input: string, candidates: readonly PSNamedRecord[], noun: string): string {
   const needle = (input ?? '').trim().toLowerCase();
   const contains = needle ? candidates.filter((c) => c.Name.toLowerCase().includes(needle)) : [];
   if (contains.length > 1) {
@@ -67,6 +77,11 @@ export function buildPSNotFoundError(input: string, candidates: readonly PSNamed
   }
   const sample = candidates.slice(0, 6).map((c) => c.Name).join(', ');
   return `No ${noun} matching "${input}" is available. Available ${noun}s include: ${sample || '(none)'}.`;
+}
+
+/** @deprecated Use {@link BuildPSNotFoundError}. */
+export function buildPSNotFoundError(input: string, candidates: readonly PSNamedRecord[], noun: string): string {
+  return BuildPSNotFoundError(input, candidates, noun);
 }
 
 // ============================================================================
@@ -109,13 +124,13 @@ export interface PredictionsAgentContextInput {
 }
 
 /** Build the Predictions door context: catalog counts + bounded names, and (in workspace) the selection + at-risk breakdown. */
-export function buildPredictionsAgentContext(input: PredictionsAgentContextInput): Record<string, unknown> {
+export function BuildPredictionsAgentContext(input: PredictionsAgentContextInput): Record<string, unknown> {
   const context: Record<string, unknown> = {
     View: input.View,
     PredictionCount: input.PredictionCount,
     ReadyPredictionCount: input.ReadyPredictionCount,
     ChatOpen: input.ChatOpen,
-    VisiblePredictionNames: capPSNames(input.VisiblePredictionNames),
+    VisiblePredictionNames: CapPSNames(input.VisiblePredictionNames),
   };
   if (input.VisiblePredictionNames.length > PS_AGENT_CONTEXT_NAME_LIST_CAP) {
     context['VisiblePredictionNameCount'] = input.VisiblePredictionNames.length;
@@ -132,10 +147,15 @@ export function buildPredictionsAgentContext(input: PredictionsAgentContextInput
       context['LowRiskCount'] = input.LowRiskCount ?? 0;
     }
     if (input.Drivers && input.Drivers.length > 0) {
-      context['Drivers'] = capPSNames(input.Drivers);
+      context['Drivers'] = CapPSNames(input.Drivers);
     }
   }
   return context;
+}
+
+/** @deprecated Use {@link BuildPredictionsAgentContext}. */
+export function buildPredictionsAgentContext(input: PredictionsAgentContextInput): Record<string, unknown> {
+  return BuildPredictionsAgentContext(input);
 }
 
 // ============================================================================
@@ -161,11 +181,11 @@ export interface StudioAgentContextInput {
 }
 
 /** Build the Studio door context: active section + section labels + the workbench's headline counts. */
-export function buildStudioAgentContext(input: StudioAgentContextInput): Record<string, unknown> {
+export function BuildStudioAgentContext(input: StudioAgentContextInput): Record<string, unknown> {
   return {
     ActiveSection: input.ActiveSection,
     ActiveSectionLabel: input.ActiveSectionLabel,
-    SectionLabels: capPSNames(input.SectionLabels),
+    SectionLabels: CapPSNames(input.SectionLabels),
     PublishedModelCount: input.PublishedModelCount,
     RunningSessionCount: input.RunningSessionCount,
     PipelineCount: input.PipelineCount,
@@ -174,6 +194,11 @@ export function buildStudioAgentContext(input: StudioAgentContextInput): Record<
     TrainingRunCount: input.TrainingRunCount,
     ChatOpen: input.ChatOpen,
   };
+}
+
+/** @deprecated Use {@link BuildStudioAgentContext}. */
+export function buildStudioAgentContext(input: StudioAgentContextInput): Record<string, unknown> {
+  return BuildStudioAgentContext(input);
 }
 
 // ============================================================================
@@ -196,14 +221,19 @@ export interface ModelsAgentContextInput {
 }
 
 /** Build the Models door context: active section + section labels + the lifecycle counts. */
-export function buildModelsAgentContext(input: ModelsAgentContextInput): Record<string, unknown> {
+export function BuildModelsAgentContext(input: ModelsAgentContextInput): Record<string, unknown> {
   return {
     ActiveSection: input.ActiveSection,
     ActiveSectionLabel: input.ActiveSectionLabel,
-    SectionLabels: capPSNames(input.SectionLabels),
+    SectionLabels: CapPSNames(input.SectionLabels),
     TotalModelCount: input.TotalModelCount,
     PublishedModelCount: input.PublishedModelCount,
     DraftModelCount: input.DraftModelCount,
     ProductionModelCount: input.ProductionModelCount,
   };
+}
+
+/** @deprecated Use {@link BuildModelsAgentContext}. */
+export function buildModelsAgentContext(input: ModelsAgentContextInput): Record<string, unknown> {
+  return BuildModelsAgentContext(input);
 }

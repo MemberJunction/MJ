@@ -10,7 +10,7 @@ import { MJTestEntity, MJTestSuiteEntity, MJTestTypeEntity } from '@memberjuncti
 import { UUIDsEqual } from '@memberjunction/global';
 import { ListFlags } from '../types';
 import { OutputFormatter } from '../utils/output-formatter';
-import { initializeMJProvider, closeMJProvider, getContextUser } from '../lib/mj-provider';
+import { InitializeMJProvider, CloseMJProvider, GetContextUser } from '../lib/mj-provider';
 import chalk from 'chalk';
 
 /**
@@ -23,14 +23,14 @@ export class ListCommand {
      * @param flags - Command flags
      * @param contextUser - Optional user context (will be fetched if not provided)
      */
-    async execute(flags: ListFlags, contextUser?: UserInfo): Promise<void> {
+    async Execute(flags: ListFlags, contextUser?: UserInfo): Promise<void> {
         try {
             // Initialize MJ provider (database connection and metadata)
-            await initializeMJProvider();
+            await InitializeMJProvider();
 
             // Get context user after initialization if not provided
             if (!contextUser) {
-                contextUser = await getContextUser();
+                contextUser = await GetContextUser();
             }
 
             const engine = TestEngine.Instance;
@@ -45,20 +45,25 @@ export class ListCommand {
             }
 
             // Clean up resources
-            await closeMJProvider();
+            await CloseMJProvider();
 
         } catch (error) {
             console.error(OutputFormatter.formatError('Failed to list tests', error as Error));
 
             // Clean up resources before exit
             try {
-                await closeMJProvider();
+                await CloseMJProvider();
             } catch {
                 // Ignore cleanup errors
             }
 
             process.exit(1);
         }
+    }
+
+    /** @deprecated Use {@link Execute}. */
+    async execute(flags: ListFlags, contextUser?: UserInfo): Promise<void> {
+        return this.Execute(flags, contextUser);
     }
 
     /**

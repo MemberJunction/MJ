@@ -10,6 +10,10 @@
  * transition, `StartedAt`/`CompletedAt`, the `TargetID` UUID guard, and the standard `OutputData` context
  * envelope (`success` / `durationMs` / `errorMessage`).
  *
+ * {@link ResolvePayloadAtStart}, {@link ApplyResolvedPayloadAtStart}, {@link ResolvePayloadAtEnd}, and
+ * {@link ApplyResolvedPayloadAtEnd} read a step's start or end payload back when the row stores a pointer
+ * (`PayloadAtStartSourceStepID` / `PayloadAtEndSourceStepID`) instead of a copy.
+ *
  * Extracted so external producers of agent-run steps — e.g. `@memberjunction/computer-use-engine`, which
  * nests a child `Prompt` step per controller/judge prompt under a goal's parent step — reuse the same
  * shape instead of copy-pasting it out of `BaseAgent`.
@@ -19,6 +23,7 @@
 
 import { BaseEntitySaveQueue } from '@memberjunction/core';
 import { MJAIAgentRunStepEntity } from '@memberjunction/core-entities';
+import { IndexByUUID, UUIDMap } from '@memberjunction/global';
 
 /** The `StepType` union of `MJ: AI Agent Run Steps` (mirrors the generated entity). */
 export type AgentRunStepType = MJAIAgentRunStepEntity['StepType'];
@@ -46,8 +51,18 @@ export interface InitAgentRunStepOptions {
     InputData?: string | null;
     /** Optional pre-serialized start payload JSON. */
     PayloadAtStart?: string | null;
+    /**
+     * Optional id of the step in the same run whose `PayloadAtEnd` is this step's start payload. When set,
+     * `PayloadAtStart` is normally null (see {@link ResolvePayloadAtStart}).
+     */
+    PayloadAtStartSourceStepID?: string | null;
     /** Optional pre-serialized end payload JSON. */
     PayloadAtEnd?: string | null;
+    /**
+     * Optional id of the step in the same run whose `PayloadAtEnd` is this step's end payload. When set,
+     * `PayloadAtEnd` is normally null (see {@link ResolvePayloadAtEnd}).
+     */
+    PayloadAtEndSourceStepID?: string | null;
 }
 
 /**
@@ -60,7 +75,7 @@ export interface InitAgentRunStepOptions {
  * @param step The new step entity to populate.
  * @param opts The started field values.
  */
-export function initAgentRunStep(step: MJAIAgentRunStepEntity, opts: InitAgentRunStepOptions): void {
+export function InitAgentRunStep(step: MJAIAgentRunStepEntity, opts: InitAgentRunStepOptions): void {
     step.AgentRunID = opts.AgentRunID;
     step.StepNumber = opts.StepNumber;
     step.StepType = opts.StepType;
@@ -78,9 +93,20 @@ export function initAgentRunStep(step: MJAIAgentRunStepEntity, opts: InitAgentRu
     if (opts.PayloadAtStart != null) {
         step.PayloadAtStart = opts.PayloadAtStart;
     }
+    if (opts.PayloadAtStartSourceStepID != null) {
+        step.PayloadAtStartSourceStepID = opts.PayloadAtStartSourceStepID;
+    }
     if (opts.PayloadAtEnd != null) {
         step.PayloadAtEnd = opts.PayloadAtEnd;
     }
+    if (opts.PayloadAtEndSourceStepID != null) {
+        step.PayloadAtEndSourceStepID = opts.PayloadAtEndSourceStepID;
+    }
+}
+
+/** @deprecated Use {@link InitAgentRunStep}. */
+export function initAgentRunStep(step: MJAIAgentRunStepEntity, opts: InitAgentRunStepOptions): void {
+    return InitAgentRunStep(step, opts);
 }
 
 /** Inputs for {@link finalizeAgentRunStep} — the "completion" field set of an agent run step. */
@@ -110,7 +136,7 @@ export interface FinalizeAgentRunStepOptions {
  * @param step The step entity to finalize (must already have `StartedAt` set, i.e. been init'd).
  * @param opts The completion values.
  */
-export function finalizeAgentRunStep(step: MJAIAgentRunStepEntity, opts: FinalizeAgentRunStepOptions): void {
+export function FinalizeAgentRunStep(step: MJAIAgentRunStepEntity, opts: FinalizeAgentRunStepOptions): void {
     const completedAt = opts.completedAt ?? new Date();
     step.Status = opts.success ? 'Completed' : 'Failed';
     step.CompletedAt = completedAt;
@@ -131,6 +157,101 @@ export function finalizeAgentRunStep(step: MJAIAgentRunStepEntity, opts: Finaliz
     }
 }
 
+/** @deprecated Use {@link FinalizeAgentRunStep}. */
+export function finalizeAgentRunStep(step: MJAIAgentRunStepEntity, opts: FinalizeAgentRunStepOptions): void {
+    return FinalizeAgentRunStep(step, opts);
+}
+
+/**
+ * Returns a step's start payload: the stored `PayloadAtStart` when present, otherwise the `PayloadAtEnd`
+ * of the step that `PayloadAtStartSourceStepID` points at, otherwise null. Pure; accepts entity objects
+ * or plain rows.
+ *
+ * @param step The step whose start payload to resolve.
+ * @param stepsById Steps of the same run, keyed by ID (see `IndexByUUID`).
+ * @returns The start payload JSON, or null when the step has none or its source step is not in the map.
+ */
+export function ResolvePayloadAtStart(
+    step: Pick<MJAIAgentRunStepEntity, 'PayloadAtStart' | 'PayloadAtStartSourceStepID'>,
+    stepsById: UUIDMap<Pick<MJAIAgentRunStepEntity, 'PayloadAtEnd'>>
+): string | null {
+    if (step.PayloadAtStart != null) {
+        return step.PayloadAtStart;
+    }
+    if (!step.PayloadAtStartSourceStepID) {
+        return null;
+    }
+    return stepsById.Get(step.PayloadAtStartSourceStepID)?.PayloadAtEnd ?? null;
+}
+
+/**
+ * Fills `PayloadAtStart` in place on each step whose start is null and whose `PayloadAtStartSourceStepID`
+ * resolves (see {@link ResolvePayloadAtStart}), so code that reads `PayloadAtStart` gets the start
+ * payload. Other steps are left as they are. Meant for readers that load all steps of one run; accepts
+ * entity objects or plain rows.
+ *
+ * @param steps All steps of one run. A pointer resolves only to a step in this array.
+ */
+export function ApplyResolvedPayloadAtStart<
+    T extends Pick<MJAIAgentRunStepEntity, 'ID' | 'PayloadAtStart' | 'PayloadAtStartSourceStepID' | 'PayloadAtEnd'>
+>(steps: T[]): void {
+    const stepsById = IndexByUUID(steps);
+    for (const step of steps) {
+        if (step.PayloadAtStart != null) {
+            continue;
+        }
+        const resolved = ResolvePayloadAtStart(step, stepsById);
+        if (resolved != null) {
+            step.PayloadAtStart = resolved;
+        }
+    }
+}
+
+/**
+ * Returns a step's end payload: the stored `PayloadAtEnd` when present, otherwise the `PayloadAtEnd`
+ * of the step that `PayloadAtEndSourceStepID` points at, otherwise null. Pure; accepts entity objects
+ * or plain rows.
+ *
+ * @param step The step whose end payload to resolve.
+ * @param stepsById Steps of the same run, keyed by ID (see `IndexByUUID`).
+ * @returns The end payload JSON, or null when the step has none or its source step is not in the map.
+ */
+export function ResolvePayloadAtEnd(
+    step: Pick<MJAIAgentRunStepEntity, 'PayloadAtEnd' | 'PayloadAtEndSourceStepID'>,
+    stepsById: UUIDMap<Pick<MJAIAgentRunStepEntity, 'PayloadAtEnd'>>
+): string | null {
+    if (step.PayloadAtEnd != null) {
+        return step.PayloadAtEnd;
+    }
+    if (!step.PayloadAtEndSourceStepID) {
+        return null;
+    }
+    return stepsById.Get(step.PayloadAtEndSourceStepID)?.PayloadAtEnd ?? null;
+}
+
+/**
+ * Fills `PayloadAtEnd` in place on each step whose end is null and whose `PayloadAtEndSourceStepID`
+ * resolves (see {@link ResolvePayloadAtEnd}), so code that reads `PayloadAtEnd` gets the end
+ * payload. Other steps are left as they are. Meant for readers that load all steps of one run; accepts
+ * entity objects or plain rows.
+ *
+ * @param steps All steps of one run. A pointer resolves only to a step in this array.
+ */
+export function ApplyResolvedPayloadAtEnd<
+    T extends Pick<MJAIAgentRunStepEntity, 'ID' | 'PayloadAtEnd' | 'PayloadAtEndSourceStepID'>
+>(steps: T[]): void {
+    const stepsById = IndexByUUID(steps);
+    for (const step of steps) {
+        if (step.PayloadAtEnd != null) {
+            continue;
+        }
+        const resolved = ResolvePayloadAtEnd(step, stepsById);
+        if (resolved != null) {
+            step.PayloadAtEnd = resolved;
+        }
+    }
+}
+
 /** Diagnostics returned by {@link AgentRunStepSaveQueue.Flush}. */
 export interface AgentRunStepFlushResult {
     /** Saves that rejected (threw) OR resolved `false`. */
@@ -140,6 +261,15 @@ export interface AgentRunStepFlushResult {
 }
 
 /**
+ * Prerequisite step(s) whose queued work must settle before a dependent step's INSERT runs.
+ * Accepts a single step (e.g., `parentStepEntity`) or an array of prerequisite steps
+ * (e.g., `[parentStepEntity, payloadAtStartSourceStep]`), with `undefined`/`null` entries ignored.
+ */
+export type AgentRunStepInsertPrerequisites =
+    | MJAIAgentRunStepEntity
+    | ReadonlyArray<MJAIAgentRunStepEntity | null | undefined>;
+
+/**
  * **Fire-and-forget save orchestration** for agent-run steps — a thin, typed façade over the shared
  * {@link BaseEntitySaveQueue} (`@memberjunction/core`). Keeps step writes OFF the hot loop so a run that
  * creates many steps (e.g. a goal-driven Computer Use loop with one prompt step per iteration) never pays
@@ -147,6 +277,10 @@ export interface AgentRunStepFlushResult {
  *
  * - {@link Insert} fires a step's "started" INSERT **without awaiting**; the step instance is the
  *   serialization key, so a later {@link QueueUpdate} chains *after* it (an UPDATE never races its INSERT).
+ * - {@link Insert} also accepts one or more prerequisite steps (such as `parentStep` for
+ *   `FK_AIAgentRunStep_ParentID` and an in-flight `payloadAtStartSource` step for
+ *   `FK_AIAgentRunStep_PayloadAtStartSourceStepID`) plus an optional `beforeInsert` guard that runs
+ *   after all prerequisites settle and immediately before `step.Save()` executes.
  * - {@link QueueUpdate} chains a **force-persisted** UPDATE (`IgnoreDirtyState`) after the step's INSERT.
  *   Its `applyMutation` runs INSIDE the post-INSERT task — after `finalizeSave`'s `init()` + `SetMany`
  *   reload — so it can't be reverted (the "step stuck at Running / null TargetLogID" bug is structurally
@@ -162,16 +296,77 @@ export class AgentRunStepSaveQueue {
      * Fires a step's "started" INSERT without awaiting (the caller continues immediately). The step's PK
      * must already be client-generated (`NewRecord`) so its id is valid before the INSERT lands.
      *
-     * @param parentStep When provided, the INSERT is chained **after** the parent step's pending INSERT
-     *   to satisfy the self-referencing `FK_AIAgentRunStep_ParentID` constraint. Without this, a child
-     *   step whose fire-and-forget INSERT races the parent's INSERT can hit an FK violation.
+     * @param step The newly created step entity to INSERT.
+     * @param prerequisites When provided, the INSERT is chained **after** all prerequisite steps' pending
+     *   work to satisfy self-referencing FK constraints (`FK_AIAgentRunStep_ParentID` and
+     *   `FK_AIAgentRunStep_PayloadAtStartSourceStepID`). Accepts either a single step or an array of steps.
+     * @param beforeInsert Optional callback invoked inside the queued INSERT task after all `prerequisites`
+     *   have settled and immediately before `step.Save()` runs. Useful for verifying that an in-flight
+     *   prerequisite step actually succeeded (`prereq.IsSaved`) and falling back (e.g., restoring inline
+     *   `PayloadAtStart` and clearing `PayloadAtStartSourceStepID`) if its INSERT failed.
      */
-    public Insert(step: MJAIAgentRunStepEntity, parentStep?: MJAIAgentRunStepEntity): void {
-        if (parentStep) {
-            this.queue.InsertAfter(step, parentStep);
-        } else {
+    public Insert(
+        step: MJAIAgentRunStepEntity,
+        prerequisites?: AgentRunStepInsertPrerequisites,
+        beforeInsert?: (step: MJAIAgentRunStepEntity) => void,
+    ): void {
+        const prereqList = this.normalizePrerequisites(step, prerequisites);
+
+        if (prereqList.length === 0 && !beforeInsert) {
             this.queue.Insert(step);
+            return;
         }
+        if (prereqList.length === 1 && !beforeInsert) {
+            this.queue.InsertAfter(step, prereqList[0]);
+            return;
+        }
+
+        // When multiple prerequisites or a `beforeInsert` hook are present, fan in all prerequisites onto a
+        // synthetic barrier key on the same serial queue, run `beforeInsert(step)` on the barrier's final hop
+        // (after every prerequisite has settled), and chain `step`'s real INSERT immediately after the barrier.
+        // This leaves `step.Save` untouched at all times.
+        let remainingBarrierHops = Math.max(1, prereqList.length);
+        const barrier = {
+            Save: async (): Promise<boolean> => {
+                remainingBarrierHops--;
+                if (remainingBarrierHops === 0) {
+                    beforeInsert?.(step);
+                }
+                return true;
+            },
+        } as unknown as MJAIAgentRunStepEntity;
+
+        if (prereqList.length === 0) {
+            this.queue.Insert(barrier);
+        } else {
+            for (const prereq of prereqList) {
+                this.queue.InsertAfter(barrier, prereq);
+            }
+        }
+        this.queue.InsertAfter(step, barrier);
+    }
+
+    /**
+     * Normalizes a single prerequisite or array of prerequisites into a deduplicated array of distinct
+     * step instances (excluding `null`, `undefined`, and `step` itself).
+     */
+    private normalizePrerequisites(
+        step: MJAIAgentRunStepEntity,
+        prerequisites?: AgentRunStepInsertPrerequisites,
+    ): MJAIAgentRunStepEntity[] {
+        if (!prerequisites) {
+            return [];
+        }
+        const rawList: ReadonlyArray<MJAIAgentRunStepEntity | null | undefined> = Array.isArray(prerequisites)
+            ? prerequisites
+            : [prerequisites as MJAIAgentRunStepEntity];
+        const unique = new Set<MJAIAgentRunStepEntity>();
+        for (const candidate of rawList) {
+            if (candidate && candidate !== step) {
+                unique.add(candidate);
+            }
+        }
+        return Array.from(unique);
     }
 
     /**

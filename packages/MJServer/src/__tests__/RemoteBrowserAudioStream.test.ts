@@ -72,7 +72,13 @@ vi.mock('@memberjunction/remote-browser-server', () => ({
 
 // Keep the AI imports (visual interpreter) inert — they aren't exercised by the audio path.
 vi.mock('@memberjunction/aiengine', () => ({ AIEngine: { Instance: { Config: vi.fn(), Prompts: [] } } }));
-vi.mock('@memberjunction/ai-prompts', () => ({ AIPromptRunner: class {} }));
+// Spread the real module, as for ai-core-plus below, so transitively-loaded modules resolve: runners such as
+// AIRerankerRunner (which extends BaseModelRunner), and RunDecisionResolver's AIDecisionRunner. Only
+// AIPromptRunner is overridden for the test.
+vi.mock('@memberjunction/ai-prompts', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@memberjunction/ai-prompts')>()),
+  AIPromptRunner: class {},
+}));
 // Spread the real module so transitively-loaded code (e.g. ArtifactToolManager → DataSnapshotToolLibrary,
 // which extends BaseArtifactToolLibrary) still resolves with its REAL base classes; only AIPromptParams is
 // overridden for the test. (Subsumes the narrower stub-two-exports approach — any other transitive export

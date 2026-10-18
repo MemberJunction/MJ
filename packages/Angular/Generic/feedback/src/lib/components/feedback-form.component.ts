@@ -1,7 +1,7 @@
 import { Component, OnInit, Input, Output, EventEmitter, Inject, ChangeDetectorRef } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { FeedbackSubmission, FeedbackResponse, FeedbackCategory, FeedbackSeverity, FeedbackEnvironment } from '../feedback.types';
-import { FeedbackConfig, FEEDBACK_CONFIG, FeedbackFieldConfig, mergeFieldConfig } from '../feedback.config';
+import { FeedbackConfig, FEEDBACK_CONFIG, FeedbackFieldConfig, MergeFieldConfig } from '../feedback.config';
 import { FeedbackService } from '../services/feedback.service';
 import { MJDialogComponent, MJDialogActionsComponent, MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
@@ -557,7 +557,7 @@ export class FeedbackFormComponent implements OnInit {
     private feedbackService: FeedbackService,
     private cdr: ChangeDetectorRef
   ) {
-    this.FieldConfig = mergeFieldConfig(config.fields);
+    this.FieldConfig = MergeFieldConfig(config.fields);
   }
 
   ngOnInit(): void {

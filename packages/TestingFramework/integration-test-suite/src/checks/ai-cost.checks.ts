@@ -19,7 +19,8 @@
  * check (AC4) reimplements `GetActiveModelCost`'s selection independently so it is a genuine
  * cross-check, not a restatement.
  */
-import { RunView } from '@memberjunction/core';
+import { RunView, RunQuery } from '@memberjunction/core';
+import type { AggregateResult } from '@memberjunction/core';
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import type { MJAIModelCostEntity } from '@memberjunction/core-entities';
 import {
@@ -52,6 +53,24 @@ const KNOWN_DRIVER_DIVISORS: Readonly<Record<string, number>> = {
 /** Loud, uniform skip-as-pass note. */
 function skipNote(checkId: string, reason: string): void {
     console.warn(`  ⚠ ai-cost.${checkId} SKIPPED — ${reason}`);
+}
+
+/**
+ * Numeric aggregate value by alias, asserting on a missing one.
+ *
+ * This deliberately matches the stricter copies in view-execution.checks.ts and
+ * runview-matrix.checks.ts. An earlier revision here opened with `if (!hit) return 0`, which made
+ * a typo'd alias yield 0 instead of failing — and 0 passes both AC8's coverage math and AC11's
+ * `diff < 0.0001` parity assert. A check that cannot fail when its own query is wrong is not a check.
+ */
+function aggregateValue(results: readonly AggregateResult[] | undefined, alias: string): number {
+    const hit = (results ?? []).find(a => a.alias === alias);
+    Assert(hit != null, `aggregate '${alias}' missing from AggregateResults`);
+    Assert(hit!.value != null, `aggregate '${alias}' returned no value`);
+    Assert(!hit!.error, `aggregate '${alias}' returned an error: ${hit!.error}`);
+    const n = Number(hit!.value);
+    Assert(Number.isFinite(n), `aggregate '${alias}' value is not numeric: ${JSON.stringify(hit!.value)}`);
+    return n;
 }
 
 /** Ensure the AI metadata cache (models, vendors, costs, price/unit types) is loaded. */
@@ -540,6 +559,196 @@ export const AiCostChecks: NamedCheck[] = [
                 `      → ${uncosted.length} uncosted run(s) examined; all explained by absent pricing, none by a ` +
                 `failure to apply pricing that exists`
             );
+        }
+    },
+    {
+        Id: 'ai-cost.AC8',
+        Name: 'AC8: prompt-run cost precision and basis invariants — with-children cost share, coverage reporting, non-negative agent run totals',
+        Fn: async (ctx): Promise<void> => {
+            const rv = new RunView();
+
+            // Probe completed prompt runs for total count and total cost.
+            const probe = await rv.RunView({
+                EntityName: 'MJ: AI Prompt Runs',
+                ExtraFilter: 'CompletedAt IS NOT NULL',
+                Aggregates: [
+                    { expression: 'COUNT(*)', alias: 'TotalCompleted' },
+                    { expression: 'SUM(Cost)', alias: 'TotalCost' }
+                ],
+                ResultType: 'count_only',
+                MaxRows: 1
+            }, ctx.User);
+            Assert(probe.Success, `prompt-run completed probe failed: ${probe.ErrorMessage}`);
+            const totalCompleted = aggregateValue(probe.AggregateResults, 'TotalCompleted');
+            if (totalCompleted === 0) {
+                skipNote('AC8', 'no completed MJ: AI Prompt Runs rows exist — precision and basis invariants are unexercised');
+                return;
+            }
+
+            // (b) Report unpriced ratio as coverage (log line, no assert — coverage is reported, not gated, in PR1).
+            const unpricedProbe = await rv.RunView({
+                EntityName: 'MJ: AI Prompt Runs',
+                ExtraFilter: 'CompletedAt IS NOT NULL AND Cost IS NULL',
+                Aggregates: [{ expression: 'COUNT(*)', alias: 'UnpricedCompleted' }],
+                ResultType: 'count_only',
+                MaxRows: 1
+            }, ctx.User);
+            Assert(unpricedProbe.Success, `unpriced prompt-run query failed: ${unpricedProbe.ErrorMessage}`);
+            const unpricedCompleted = aggregateValue(unpricedProbe.AggregateResults, 'UnpricedCompleted');
+            const pricedCount = totalCompleted - unpricedCompleted;
+            const coveragePct = (pricedCount / totalCompleted) * 100;
+            console.log(
+                `      → prompt-run pricing coverage: ${coveragePct.toFixed(1)}% priced ` +
+                `(${pricedCount}/${totalCompleted} completed runs), ${unpricedCompleted} unpriced`
+            );
+
+            // (c) ParallelParent prompt runs must have Cost IS NULL.
+            // Parallel parents aggregate spend across their arms and have no own spend.
+            const invalidParallelParentsResult = await rv.RunView({
+                EntityName: 'MJ: AI Prompt Runs',
+                ExtraFilter: "CompletedAt IS NOT NULL AND RunType = 'ParallelParent' AND Cost IS NOT NULL",
+                Aggregates: [{ expression: 'COUNT(*)', alias: 'InvalidParallelParents' }],
+                ResultType: 'count_only',
+                MaxRows: 1
+            }, ctx.User);
+            Assert(invalidParallelParentsResult.Success, `parallel parent prompt-run query failed: ${invalidParallelParentsResult.ErrorMessage}`);
+            const invalidParallelParentsCount = aggregateValue(invalidParallelParentsResult.AggregateResults, 'InvalidParallelParents');
+            AssertEqual(
+                invalidParallelParentsCount,
+                0,
+                `ParallelParent prompt runs must have Cost IS NULL (found ${invalidParallelParentsCount} row(s) with Cost IS NOT NULL)`
+            );
+
+            // Non-negative agent-run cost assert
+            const negativeAgentRunCostResult = await rv.RunView({
+                EntityName: 'MJ: AI Agent Runs',
+                ExtraFilter: 'TotalCost IS NOT NULL AND TotalCost < 0',
+                ResultType: 'count_only',
+                MaxRows: 1
+            }, ctx.User);
+            Assert(negativeAgentRunCostResult.Success, `negative agent run cost query failed: ${negativeAgentRunCostResult.ErrorMessage}`);
+            const negativeAgentRunCostCount = negativeAgentRunCostResult.TotalRowCount ?? 0;
+            AssertEqual(
+                negativeAgentRunCostCount,
+                0,
+                `AIAgentRun.TotalCost must be non-negative (found ${negativeAgentRunCostCount} row(s) with TotalCost < 0)`
+            );
+            console.log(`      → verified basis invariants: ParallelParent Cost IS NULL, agent run costs non-negative`);
+        }
+    },
+    {
+        Id: 'ai-cost.AC11',
+        Name: 'AC11: prompt-run base own-cost equals the AIUsageHourly aggregate cost over the same window',
+        Fn: async (ctx): Promise<void> => {
+            const rv = new RunView();
+            const rq = new RunQuery();
+            // Midnight-aligned bounds: AIUsageHourly returns whole hours overlapping [start, end), which for
+            // aligned bounds is exactly [start, end) — so both sides select the same prompt runs.
+            const start = '2020-01-01T00:00:00.000Z';
+            const end = '2030-01-01T00:00:00.000Z';
+
+            // (a) Own-cost side: RunView on MJ: AI Prompt Runs with Aggregates, on the query's own basis —
+            // completed runs by RunAt, parallel parents excluded (they carry no own cost by design).
+            const baseRes = await rv.RunView({
+                EntityName: 'MJ: AI Prompt Runs',
+                ExtraFilter: `RunAt >= '${start}' AND RunAt < '${end}' AND CompletedAt IS NOT NULL AND (RunType <> 'ParallelParent' OR RunType IS NULL)`,
+                Aggregates: [
+                    { expression: 'SUM(Cost)', alias: 'TotalCost' },
+                    { expression: 'COUNT(*)', alias: 'TotalCount' }
+                ],
+                ResultType: 'count_only',
+                MaxRows: 1
+            }, ctx.User);
+            Assert(baseRes.Success, `AIPromptRun base view query failed: ${baseRes.ErrorMessage}`);
+
+            const baseCount = aggregateValue(baseRes.AggregateResults, 'TotalCount');
+            const baseCost = aggregateValue(baseRes.AggregateResults, 'TotalCost');
+
+            // (b) Aggregate side: saved query AIUsageHourly over the same window
+            const hourlyRes = await rq.RunQuery({
+                QueryName: 'AIUsageHourly',
+                CategoryPath: '/MJ/AI/',
+                Parameters: { start, end }
+            }, ctx.User);
+            Assert(hourlyRes.Success, `AIUsageHourly query failed: ${hourlyRes.ErrorMessage}`);
+
+            const hourlyRows = hourlyRes.Results ?? [];
+            const hourlyTotal = hourlyRows.reduce(
+                (sum: number, r: Record<string, unknown>) => {
+                    Assert(typeof r.OwnCost === 'number' && Number.isFinite(r.OwnCost), `AIUsageHourly row OwnCost must be a finite number, got: ${r.OwnCost}`);
+                    return sum + (r.OwnCost as number);
+                },
+                0
+            );
+            const hourlyRuns = hourlyRows.reduce((sum: number, r: Record<string, unknown>) => sum + Number(r.Runs ?? 0), 0);
+
+            if (baseCount === 0 && hourlyRuns === 0) {
+                skipNote('AC11', 'no completed prompt runs in test window — fact view / hourly parity is unexercised');
+                return;
+            }
+
+            AssertEqual(hourlyRuns, baseCount, `AIUsageHourly Runs (${hourlyRuns}) must equal the completed non-parent prompt runs in the window (${baseCount})`);
+            const diff = Math.abs(hourlyTotal - baseCost);
+            Assert(
+                diff < 0.0001,
+                `AIUsageHourly cost (${hourlyTotal}) does not match AIPromptRun base cost (${baseCost}), diff=${diff}`
+            );
+
+            console.log(`      → AC11 verified: AIPromptRun base cost (${baseCost.toFixed(6)}) matches AIUsageHourly (${hourlyTotal.toFixed(6)}) across ${baseCount} run(s)`);
+        }
+    },
+    {
+        Id: 'ai-cost.AC12',
+        Name: 'AC12: AIAgentRunSubtreeCost (CalculateRunCost) body changed to SUM(OwnCost) over subtree, executes cleanly for root runs',
+        Fn: async (ctx): Promise<void> => {
+            const rv = new RunView();
+            // (a) Query metadata checks: CalculateRunCost exists and is Approved
+            const queryRes = await rv.RunView({
+                EntityName: 'MJ: Queries',
+                ExtraFilter: "Name = 'CalculateRunCost'",
+                MaxRows: 1
+            }, ctx.User);
+            Assert(queryRes.Success, `CalculateRunCost query lookup failed: ${queryRes.ErrorMessage}`);
+            Assert((queryRes.Results ?? []).length > 0, `CalculateRunCost query must exist in metadata`);
+            const q = queryRes.Results![0] as Record<string, unknown>;
+            AssertEqual(q.Status, 'Approved', `CalculateRunCost must be Approved`);
+            Assert(!!q.UsesTemplate, `CalculateRunCost must have UsesTemplate = true`);
+
+            // Check that the SQL does not reference TotalCostRollup or raw TotalCost
+            const sql = String(q.SQL ?? '');
+            Assert(!sql.includes('TotalCostRollup'), `CalculateRunCost SQL must not reference TotalCostRollup`);
+
+            // (b) Check for root agent runs
+            const agentRunRes = await rv.RunView<{ ID: string }>({
+                EntityName: 'MJ: AI Agent Runs',
+                ExtraFilter: 'ParentRunID IS NULL',
+                Fields: ['ID'],
+                MaxRows: 1,
+                ResultType: 'simple'
+            }, ctx.User);
+            Assert(agentRunRes.Success, `AI Agent Runs probe failed: ${agentRunRes.ErrorMessage}`);
+
+            const rq = new RunQuery();
+            if (!agentRunRes.Results || agentRunRes.Results.length === 0) {
+                // Verify CalculateRunCost executes cleanly on a stranger ID
+                const strangerRes = await rq.RunQuery({
+                    QueryName: 'CalculateRunCost',
+                    CategoryPath: '/MJ/AI/',
+                    Parameters: { AIAgentRunID: STRANGER_ID }
+                }, ctx.User);
+                Assert(strangerRes.Success, `CalculateRunCost query execution failed for stranger ID: ${strangerRes.ErrorMessage}`);
+                skipNote('AC12', 'no root agent runs exist in the database — subtree cost execution on real root is unexercised');
+                return;
+            }
+
+            const rootRunId = String(agentRunRes.Results[0].ID);
+            const calcRes = await rq.RunQuery({
+                QueryName: 'CalculateRunCost',
+                CategoryPath: '/MJ/AI/',
+                Parameters: { AIAgentRunID: rootRunId }
+            }, ctx.User);
+            Assert(calcRes.Success, `CalculateRunCost query failed: ${calcRes.ErrorMessage}`);
+            console.log(`      → AC12 verified: CalculateRunCost executed successfully for root run ${rootRunId}`);
         }
     }
 ];

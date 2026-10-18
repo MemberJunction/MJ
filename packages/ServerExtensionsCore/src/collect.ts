@@ -9,6 +9,7 @@
  * `dynamicPackages` is stripped from MJServer's Zod-parsed `configInfo`.
  */
 
+import { TrimTrailingSlashes } from '@memberjunction/global';
 import { ServerExtensionConfig } from './types.js';
 
 /** Named export Open App server packages use to publish their extension configs. */
@@ -30,6 +31,7 @@ function cloneConfig(config: ServerExtensionConfig): ServerExtensionConfig {
         DriverClass: config.DriverClass,
         RootPath: config.RootPath,
         Phase: config.Phase,
+        ...(config.OwnsCORS !== undefined ? { OwnsCORS: config.OwnsCORS } : {}),
         Settings: { ...(config.Settings ?? {}) },
     };
 }
@@ -43,7 +45,7 @@ function invalid(options: NormalizeServerExtensionOptions | undefined, message: 
  * Invalid entries are skipped (not thrown) so one bad Open App declaration
  * cannot take down server boot.
  */
-export function normalizeServerExtensionConfigs(
+export function NormalizeServerExtensionConfigs(
     raw: unknown,
     options?: NormalizeServerExtensionOptions
 ): ServerExtensionConfig[] {
@@ -74,7 +76,7 @@ export function normalizeServerExtensionConfigs(
             invalid(options, `serverExtensions[${i}] ('${driverClass}') missing RootPath${source}`);
             continue;
         }
-        const rootError = validateServerExtensionRootPath(rootPath);
+        const rootError = ValidateServerExtensionRootPath(rootPath);
         if (rootError) {
             invalid(options, `serverExtensions[${i}] ('${driverClass}') ${rootError}${source}`);
             continue;
@@ -95,6 +97,15 @@ export function normalizeServerExtensionConfigs(
                 invalid(options, `serverExtensions[${i}] ('${driverClass}') Phase must be 'pre-auth' or 'post-auth'${source}`);
             }
         }
+        let ownsCORS: boolean | undefined = undefined;
+        if (rec.OwnsCORS !== undefined) {
+            if (typeof rec.OwnsCORS === 'boolean') {
+                ownsCORS = rec.OwnsCORS;
+            } else {
+                // Fail toward MJServer's global CORS: a malformed flag must not strip CORS handling.
+                invalid(options, `serverExtensions[${i}] ('${driverClass}') OwnsCORS must be a boolean; ignoring it${source}`);
+            }
+        }
         const settings =
             rec.Settings != null && typeof rec.Settings === 'object' && !Array.isArray(rec.Settings)
                 ? { ...(rec.Settings as Record<string, unknown>) }
@@ -107,16 +118,25 @@ export function normalizeServerExtensionConfigs(
             DriverClass: driverClass,
             RootPath: rootPath,
             Phase: phase,
+            ...(ownsCORS !== undefined ? { OwnsCORS: ownsCORS } : {}),
             Settings: settings,
         });
     }
     return result;
 }
 
+/** @deprecated Use {@link NormalizeServerExtensionConfigs}. */
+export function normalizeServerExtensionConfigs(
+    raw: unknown,
+    options?: NormalizeServerExtensionOptions
+): ServerExtensionConfig[] {
+    return NormalizeServerExtensionConfigs(raw, options);
+}
+
 /**
  * Read `MJ_SERVER_EXTENSIONS` from an already-imported Open App server module.
  */
-export function extractServerExtensionsFromModule(
+export function ExtractServerExtensionsFromModule(
     mod: Record<string, unknown> | null | undefined,
     options?: NormalizeServerExtensionOptions
 ): ServerExtensionConfig[] {
@@ -126,13 +146,21 @@ export function extractServerExtensionsFromModule(
     if (!(MJ_SERVER_EXTENSIONS_EXPORT in mod)) {
         return [];
     }
-    return normalizeServerExtensionConfigs(mod[MJ_SERVER_EXTENSIONS_EXPORT], options);
+    return NormalizeServerExtensionConfigs(mod[MJ_SERVER_EXTENSIONS_EXPORT], options);
+}
+
+/** @deprecated Use {@link ExtractServerExtensionsFromModule}. */
+export function extractServerExtensionsFromModule(
+    mod: Record<string, unknown> | null | undefined,
+    options?: NormalizeServerExtensionOptions
+): ServerExtensionConfig[] {
+    return ExtractServerExtensionsFromModule(mod, options);
 }
 
 /**
  * Read `memberjunction.serverExtensions` from a parsed `package.json`.
  */
-export function extractServerExtensionsFromPackageJson(
+export function ExtractServerExtensionsFromPackageJson(
     pkgJson: unknown,
     options?: NormalizeServerExtensionOptions
 ): ServerExtensionConfig[] {
@@ -143,10 +171,18 @@ export function extractServerExtensionsFromPackageJson(
     if (memberjunction == null || typeof memberjunction !== 'object' || Array.isArray(memberjunction)) {
         return [];
     }
-    return normalizeServerExtensionConfigs(
+    return NormalizeServerExtensionConfigs(
         (memberjunction as Record<string, unknown>).serverExtensions,
         options
     );
+}
+
+/** @deprecated Use {@link ExtractServerExtensionsFromPackageJson}. */
+export function extractServerExtensionsFromPackageJson(
+    pkgJson: unknown,
+    options?: NormalizeServerExtensionOptions
+): ServerExtensionConfig[] {
+    return ExtractServerExtensionsFromPackageJson(pkgJson, options);
 }
 
 /**
@@ -154,13 +190,14 @@ export function extractServerExtensionsFromPackageJson(
  *
  * - Identity is `DriverClass`.
  * - Later discovered entries replace earlier ones (ClassFactory last-wins).
- * - Host overlay wins `Enabled` and `RootPath` when the host provides them;
+ * - Host overlay wins `Enabled` and `RootPath` when the host provides them; an `Enabled`
+ *   left unset inherits the discovered value, and a host-only entry without one is enabled;
  *   `Settings` is `{ ...discovered, ...host }`.
  * - Host-only DriverClasses append after discovered ones.
  * - A host `Enabled: false` entry is kept so the loader skips that DriverClass
  *   rather than falling back to the discovered one.
  */
-export function mergeServerExtensionConfigs(
+export function MergeServerExtensionConfigs(
     discovered: readonly ServerExtensionConfig[] | null | undefined,
     host: readonly ServerExtensionConfig[] | null | undefined
 ): ServerExtensionConfig[] {
@@ -189,20 +226,32 @@ export function mergeServerExtensionConfigs(
         }
         const existing = byClass.get(key);
         if (!existing) {
-            remember(key, cloneConfig({ ...entry, DriverClass: key }));
+            // A host entry may omit Enabled (the host schema no longer defaults it, so an overlay can
+            // inherit a published entry's value); a host-only entry has nothing to inherit — enabled.
+            remember(key, cloneConfig({ ...entry, DriverClass: key, Enabled: entry.Enabled ?? true }));
             continue;
         }
         const hostRoot = typeof entry.RootPath === 'string' ? entry.RootPath.trim() : '';
+        const ownsCORS = entry.OwnsCORS ?? existing.OwnsCORS;
         remember(key, {
-            Enabled: entry.Enabled ?? existing.Enabled,
+            Enabled: entry.Enabled ?? existing.Enabled ?? true,
             DriverClass: key,
             RootPath: hostRoot || existing.RootPath,
             Phase: entry.Phase ?? existing.Phase,
+            ...(ownsCORS !== undefined ? { OwnsCORS: ownsCORS } : {}),
             Settings: { ...(existing.Settings ?? {}), ...(entry.Settings ?? {}) },
         });
     }
 
     return order.map((key) => byClass.get(key)!);
+}
+
+/** @deprecated Use {@link MergeServerExtensionConfigs}. */
+export function mergeServerExtensionConfigs(
+    discovered: readonly ServerExtensionConfig[] | null | undefined,
+    host: readonly ServerExtensionConfig[] | null | undefined
+): ServerExtensionConfig[] {
+    return MergeServerExtensionConfigs(discovered, host);
 }
 
 /** Exact RootPaths that must never be claimed by an extension (they are the whole tree or a core endpoint). */
@@ -229,7 +278,7 @@ function normalizeRoot(rootPath: string): string {
     if (trimmed === '/') {
         return '/';
     }
-    return trimmed.replace(/\/+$/, '') || '/';
+    return TrimTrailingSlashes(trimmed) || '/';
 }
 
 /** Case-folded root for comparison. Express routing is case-insensitive by default. */
@@ -245,11 +294,11 @@ function foldRoot(rootPath: string): string {
  * and bidirectional: claiming a parent of a reserved prefix (`/telephony` vs `/telephony/twilio`)
  * is also a collision because Express prefix-matches the parent.
  *
- * `extraReservedRoots` is the running server's actual mounts (graphqlRootPath, widget, …)
+ * `extraReservedRoots` is the running server's actual core mounts (widget, media, …)
  * so this check cannot drift from `serve()`. Discovery-time normalize uses only the
  * static baseline; `prepareServerExtensionConfigs` passes the extras.
  */
-export function validateServerExtensionRootPath(
+export function ValidateServerExtensionRootPath(
     rootPath: string,
     extraReservedRoots?: readonly string[]
 ): string | null {
@@ -281,15 +330,23 @@ export function validateServerExtensionRootPath(
             continue;
         }
         seen.add(foldedPrefix);
-        if (serverExtensionRootsOverlap(raw, prefix)) {
+        if (ServerExtensionRootsOverlap(raw, prefix)) {
             return `RootPath '${raw}' collides with the reserved prefix '${normalizeRoot(prefix)}'`;
         }
     }
     return null;
 }
 
+/** @deprecated Use {@link ValidateServerExtensionRootPath}. */
+export function validateServerExtensionRootPath(
+    rootPath: string,
+    extraReservedRoots?: readonly string[]
+): string | null {
+    return ValidateServerExtensionRootPath(rootPath, extraReservedRoots);
+}
+
 /** True when two roots are equal or one is a nested path of the other (case-insensitive). */
-export function serverExtensionRootsOverlap(a: string, b: string): boolean {
+export function ServerExtensionRootsOverlap(a: string, b: string): boolean {
     const na = foldRoot(a);
     const nb = foldRoot(b);
     if (na === nb) {
@@ -298,14 +355,34 @@ export function serverExtensionRootsOverlap(a: string, b: string): boolean {
     return na.startsWith(`${nb}/`) || nb.startsWith(`${na}/`);
 }
 
+/** @deprecated Use {@link ServerExtensionRootsOverlap}. */
+export function serverExtensionRootsOverlap(a: string, b: string): boolean {
+    return ServerExtensionRootsOverlap(a, b);
+}
+
 export interface PrepareServerExtensionOptions extends NormalizeServerExtensionOptions {
     onOverlap?: (message: string) => void;
     /**
-     * Additional reserved roots from the running server (graphqlRootPath, WIDGET_MOUNT_PATH, …).
-     * Compared case-insensitively and bidirectionally (an extension at `/telephony` collides
-     * with a core mount at `/telephony/twilio`).
+     * Additional reserved roots from the running server (WIDGET_MOUNT_PATH, `/media`, …), relative to
+     * MJAPI's base path like every RootPath. Compared case-insensitively and bidirectionally (an extension at
+     * `/telephony` collides with a core mount at `/telephony/twilio`).
      */
     extraReservedRoots?: readonly string[];
+    /**
+     * MJAPI's base path (`MJAPI_BASE_PATH`, e.g. `/api`). Every RootPath is relative to it: the returned
+     * configs carry the composed mount path (`/api` + `/telephony/twilio`). Omitted or `/` leaves RootPaths
+     * unchanged.
+     */
+    apiRootPath?: string; // case-violation-ok-legacy-back-compat: matches this options type's existing camelCase members
+}
+
+/** Prefixes a validated, normalized RootPath with MJAPI's base path (`''` / `/` leaves it unchanged). */
+export function ComposeServerExtensionMountPath(apiRootPath: string | undefined, rootPath: string): string {
+    const prefix = TrimTrailingSlashes((apiRootPath ?? '').trim());
+    if (prefix && !prefix.startsWith('/')) {
+        throw new Error(`MJAPI base path must start with '/', got '${prefix}'`);
+    }
+    return `${prefix}${rootPath}`;
 }
 
 /**
@@ -313,24 +390,27 @@ export interface PrepareServerExtensionOptions extends NormalizeServerExtensionO
  * two *enabled* extensions claim overlapping paths. Disabled entries are kept so the
  * loader can skip them by DriverClass (host `Enabled: false` stays visible).
  */
-export function prepareServerExtensionConfigs(
+export function PrepareServerExtensionConfigs(
     configs: readonly ServerExtensionConfig[] | null | undefined,
     options?: PrepareServerExtensionOptions
 ): ServerExtensionConfig[] {
     const kept: ServerExtensionConfig[] = [];
     for (const entry of configs ?? []) {
-        const rootError = validateServerExtensionRootPath(entry.RootPath ?? '', options?.extraReservedRoots);
+        const rootError = ValidateServerExtensionRootPath(entry.RootPath ?? '', options?.extraReservedRoots);
         if (rootError) {
             invalid(options, `Dropping server extension '${entry.DriverClass}': ${rootError}`);
             continue;
         }
-        kept.push(cloneConfig({ ...entry, RootPath: normalizeRoot(entry.RootPath) }));
+        // Validated relative to the base path (as are the reserved roots), then composed: every RootPath
+        // shares one prefix, so relative overlap and composed overlap are the same test.
+        const mountPath = ComposeServerExtensionMountPath(options?.apiRootPath, normalizeRoot(entry.RootPath));
+        kept.push(cloneConfig({ ...entry, RootPath: mountPath }));
     }
 
     const enabled = kept.filter((c) => c.Enabled);
     for (let i = 0; i < enabled.length; i++) {
         for (let j = i + 1; j < enabled.length; j++) {
-            if (serverExtensionRootsOverlap(enabled[i].RootPath, enabled[j].RootPath)) {
+            if (ServerExtensionRootsOverlap(enabled[i].RootPath, enabled[j].RootPath)) {
                 options?.onOverlap?.(
                     `Enabled server extensions '${enabled[i].DriverClass}' (${enabled[i].RootPath}) and '${enabled[j].DriverClass}' (${enabled[j].RootPath}) have overlapping RootPaths`
                 );
@@ -340,12 +420,26 @@ export function prepareServerExtensionConfigs(
     return kept;
 }
 
+/** @deprecated Use {@link PrepareServerExtensionConfigs}. */
+export function prepareServerExtensionConfigs(
+    configs: readonly ServerExtensionConfig[] | null | undefined,
+    options?: PrepareServerExtensionOptions
+): ServerExtensionConfig[] {
+    return PrepareServerExtensionConfigs(configs, options);
+}
+
 /**
  * One-line inventory of a server-extension mount. All extension routes are installed
  * BEFORE MJServer's auth middleware — the operator must be able to see that at boot.
  */
-export function describeServerExtensionMount(config: ServerExtensionConfig): string {
+export function DescribeServerExtensionMount(config: ServerExtensionConfig): string {
     const state = config.Enabled ? 'enabled' : 'disabled';
     const phase = (config.Phase ?? 'pre-auth').toUpperCase();
-    return `${config.DriverClass} at ${config.RootPath} (${state}, ${phase}; host mj.config.cjs serverExtensions[] can set Enabled: false to suppress)`;
+    const cors = config.OwnsCORS === true ? ', owns CORS' : '';
+    return `${config.DriverClass} at ${config.RootPath} (${state}, ${phase}${cors}; host mj.config.cjs serverExtensions[] can set Enabled: false to suppress)`;
+}
+
+/** @deprecated Use {@link DescribeServerExtensionMount}. */
+export function describeServerExtensionMount(config: ServerExtensionConfig): string {
+    return DescribeServerExtensionMount(config);
 }

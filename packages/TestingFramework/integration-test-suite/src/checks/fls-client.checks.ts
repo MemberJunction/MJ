@@ -81,7 +81,7 @@ async function findUserId(ctx: IntegrationCheckContext, email: string): Promise<
  * (scopeCacheTTLMs, default 60s), so a freshly-granted `full_access` rule can be denied for
  * up to a minute after it is written. Bounded, so a genuinely unauthorized key still fails.
  */
-async function buildUserKeyProviderWithRetry(rawKey: string): Promise<IMetadataProvider> {
+export async function BuildUserKeyProviderWithRetry(rawKey: string): Promise<IMetadataProvider> {
     const deadline = Date.now() + 90_000;
     for (;;) {
         try {
@@ -250,12 +250,15 @@ async function tightenReaderEmail(ctx: IntegrationCheckContext): Promise<string>
     return rows.Results[0].ID;
 }
 
+/** The created-ID accumulators {@link MintFullAccessUserKey} appends to and {@link DeleteMintedUserKeys} sweeps. */
+export type MintedUserKeyIds = Pick<FlsClientFixture, 'CreatedKeyIds' | 'CreatedScopeRuleIds'>;
+
 /**
  * Mint a user API key over the wire and grant it `full_access` on '*' — scope enforcement
  * fails closed, so a key with no scope rules cannot even run a batched view. Records the key
  * (and its scope rule) for teardown; returns the raw key.
  */
-async function mintKey(ctx: IntegrationCheckContext, fx: FlsClientFixture, userId: string, label: string): Promise<string> {
+export async function MintFullAccessUserKey(ctx: IntegrationCheckContext, fx: MintedUserKeyIds, userId: string, label: string): Promise<string> {
     const engine = GetAPIKeyEngine();
     const created = await engine.CreateAPIKey({ UserId: userId, Label: label }, ctx.User);
     if (!created.Success || !created.RawKey || !created.APIKeyId) {
@@ -347,16 +350,16 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('fls-enforcement-client', {
         try {
             await enableOverWire(ctx, entity.ID);
             fx.ReaderEfpRowID = await tightenReaderEmail(ctx);
-            const readerKey = await mintKey(ctx, fx, readerId, 'IT92 FLS reader (mj-integration-test)');
-            const writerKey = await mintKey(ctx, fx, writerId, 'IT92 FLS writer (mj-integration-test)');
-            fx.ReaderProvider = await buildUserKeyProviderWithRetry(readerKey);
-            fx.WriterProvider = await buildUserKeyProviderWithRetry(writerKey);
+            const readerKey = await MintFullAccessUserKey(ctx, fx, readerId, 'IT92 FLS reader (mj-integration-test)');
+            const writerKey = await MintFullAccessUserKey(ctx, fx, writerId, 'IT92 FLS writer (mj-integration-test)');
+            fx.ReaderProvider = await BuildUserKeyProviderWithRetry(readerKey);
+            fx.WriterProvider = await BuildUserKeyProviderWithRetry(writerKey);
             if (multiId) {
                 // Readable, but neither updatable nor creatable — the write-denial shape.
                 fx.DenierEfpRowID = await setFieldRuleOverWire(
                     ctx, FLS_UPDATE_DENY_FIELD, FLS_DENIER_ROLE, { Read: 'Allow', Update: 'Deny', Create: 'Deny' });
-                const multiKey = await mintKey(ctx, fx, multiId, 'IT92 FLS multi (mj-integration-test)');
-                fx.MultiProvider = await buildUserKeyProviderWithRetry(multiKey);
+                const multiKey = await MintFullAccessUserKey(ctx, fx, multiId, 'IT92 FLS multi (mj-integration-test)');
+                fx.MultiProvider = await BuildUserKeyProviderWithRetry(multiKey);
             }
 
             // Phase 1: the reader key's scope rule is honored — any successful read proves it
@@ -454,27 +457,31 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('fls-enforcement-client', {
                 await ent.Save();
             }
         } catch { /* best-effort */ }
-        // Minted keys: scope rules and usage logs first (FKs), then the keys.
-        for (const ruleId of fx.CreatedScopeRuleIds) {
-            await ctx.Provider.GetEntityObject<MJAPIKeyScopeEntity>('MJ: API Key Scopes', ctx.User)
-                .then(async rule => { if (await rule.Load(ruleId)) { await rule.Delete(); } })
-                .catch(() => undefined);
-        }
-        for (const keyId of fx.CreatedKeyIds) {
-            const logs = await new RunView().RunView<MJAPIKeyUsageLogEntity>(
-                { EntityName: 'MJ: API Key Usage Logs', ExtraFilter: `APIKeyID = '${keyId}'`, ResultType: 'entity_object' }, ctx.User
-            ).catch(() => ({ Success: false, Results: [] as MJAPIKeyUsageLogEntity[] }));
-            if (logs.Success) {
-                for (const log of logs.Results) {
-                    await log.Delete().catch(() => undefined);
-                }
-            }
-            await ctx.Provider.GetEntityObject<MJAPIKeyEntity>('MJ: API Keys', ctx.User)
-                .then(async key => { if (await key.Load(keyId)) { await key.Delete(); } })
-                .catch(() => undefined);
-        }
+        await DeleteMintedUserKeys(ctx, fx);
     }
 });
+
+/** Best-effort teardown of keys minted by {@link MintFullAccessUserKey}: scope rules and usage logs first (FKs), then the keys. */
+export async function DeleteMintedUserKeys(ctx: IntegrationCheckContext, fx: MintedUserKeyIds): Promise<void> {
+    for (const ruleId of fx.CreatedScopeRuleIds) {
+        await ctx.Provider.GetEntityObject<MJAPIKeyScopeEntity>('MJ: API Key Scopes', ctx.User)
+            .then(async rule => { if (await rule.Load(ruleId)) { await rule.Delete(); } })
+            .catch(() => undefined);
+    }
+    for (const keyId of fx.CreatedKeyIds) {
+        const logs = await new RunView().RunView<MJAPIKeyUsageLogEntity>(
+            { EntityName: 'MJ: API Key Usage Logs', ExtraFilter: `APIKeyID = '${keyId}'`, ResultType: 'entity_object' }, ctx.User
+        ).catch(() => ({ Success: false, Results: [] as MJAPIKeyUsageLogEntity[] }));
+        if (logs.Success) {
+            for (const log of logs.Results) {
+                await log.Delete().catch(() => undefined);
+            }
+        }
+        await ctx.Provider.GetEntityObject<MJAPIKeyEntity>('MJ: API Keys', ctx.User)
+            .then(async key => { if (await key.Load(keyId)) { await key.Delete(); } })
+            .catch(() => undefined);
+    }
+}
 
 /** First company ID over the wire; creates a marker fixture company when the table is empty. */
 async function firstCompanyId(ctx: IntegrationCheckContext, fx: FlsClientFixture): Promise<string> {
@@ -503,7 +510,7 @@ async function firstCompanyId(ctx: IntegrationCheckContext, fx: FlsClientFixture
  * FC1 — the restricted WIRE identity's list results omit the denied column (3.1 over the
  * wire). Provisioning already proved propagation (Setup polls); this pins the steady state.
  */
-export async function CheckFc1_WireListStripsDeniedColumn(ctx: IntegrationCheckContext): Promise<void> {
+export async function CheckFc1WireListStripsDeniedColumn(ctx: IntegrationCheckContext): Promise<void> {
     if (!skipIfUnusable(ctx.FlsClientFixture, 'fls-enforcement-client.FC1')) return;
     const fx = ctx.FlsClientFixture!;
     const rows = await readEmployees(fx.ReaderProvider!);
@@ -516,11 +523,16 @@ export async function CheckFc1_WireListStripsDeniedColumn(ctx: IntegrationCheckC
     Assert(fixtureRow != null && 'FirstName' in fixtureRow, 'allowed columns must survive to the restricted wire identity');
 }
 
+/** @deprecated Use {@link CheckFc1WireListStripsDeniedColumn}. */
+export async function CheckFc1_WireListStripsDeniedColumn(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckFc1WireListStripsDeniedColumn(ctx);
+}
+
 /**
  * FC2 — the single-record GraphQL payload omits the denied field (3.8): a restricted user's
  * entity LOAD over the wire arrives without the denied column's value.
  */
-export async function CheckFc2_WireSingleRecordLoadStripped(ctx: IntegrationCheckContext): Promise<void> {
+export async function CheckFc2WireSingleRecordLoadStripped(ctx: IntegrationCheckContext): Promise<void> {
     if (!skipIfUnusable(ctx.FlsClientFixture, 'fls-enforcement-client.FC2')) return;
     const fx = ctx.FlsClientFixture!;
     const emp = await fx.ReaderProvider!.GetEntityObject<MJEmployeeEntity>(SEEDED_FLS_ENTITY);
@@ -539,8 +551,13 @@ export async function CheckFc2_WireSingleRecordLoadStripped(ctx: IntegrationChec
         `the denied ${FLS_READER_DENIED_FIELD} arrived in the single-record payload with a value ('${String(emailValue)}')`);
 }
 
+/** @deprecated Use {@link CheckFc2WireSingleRecordLoadStripped}. */
+export async function CheckFc2_WireSingleRecordLoadStripped(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckFc2WireSingleRecordLoadStripped(ctx);
+}
+
 /** FC3 — the unrestricted WIRE identity still receives the column, with its real value (3.2 over the wire). */
-export async function CheckFc3_WireUnrestrictedUserUnaffected(ctx: IntegrationCheckContext): Promise<void> {
+export async function CheckFc3WireUnrestrictedUserUnaffected(ctx: IntegrationCheckContext): Promise<void> {
     if (!skipIfUnusable(ctx.FlsClientFixture, 'fls-enforcement-client.FC3')) return;
     const fx = ctx.FlsClientFixture!;
     const rows = await readEmployees(fx.WriterProvider!);
@@ -551,8 +568,13 @@ export async function CheckFc3_WireUnrestrictedUserUnaffected(ctx: IntegrationCh
         `${FLS_READER_DENIED_FIELD} must reach the unrestricted wire identity with its real value (got '${String(email)}')`);
 }
 
+/** @deprecated Use {@link CheckFc3WireUnrestrictedUserUnaffected}. */
+export async function CheckFc3_WireUnrestrictedUserUnaffected(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckFc3WireUnrestrictedUserUnaffected(ctx);
+}
+
 /** FC4 — a caller-authored predicate on a denied field is rejected over the wire with the ambiguous message (3.4). */
-export async function CheckFc4_WirePredicateRejected(ctx: IntegrationCheckContext): Promise<void> {
+export async function CheckFc4WirePredicateRejected(ctx: IntegrationCheckContext): Promise<void> {
     if (!skipIfUnusable(ctx.FlsClientFixture, 'fls-enforcement-client.FC4')) return;
     const fx = ctx.FlsClientFixture!;
     let succeeded = false;
@@ -568,6 +590,11 @@ export async function CheckFc4_WirePredicateRejected(ctx: IntegrationCheckContex
     Assert(!succeeded, 'an ExtraFilter on a denied field must be rejected over the wire, not answered');
     Assert(message.includes(FieldSecurityDenialMessage(FLS_READER_DENIED_FIELD, SEEDED_FLS_ENTITY)),
         `the wire rejection must carry the ambiguous wording (got '${message}')`);
+}
+
+/** @deprecated Use {@link CheckFc4WirePredicateRejected}. */
+export async function CheckFc4_WirePredicateRejected(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckFc4WirePredicateRejected(ctx);
 }
 
 /**
@@ -586,7 +613,7 @@ export async function CheckFc4_WirePredicateRejected(ctx: IntegrationCheckContex
  * That is the only combination that can reach field-level create suppression at all — a
  * read-only identity is refused by the entity gate long before FLS is consulted.
  */
-export async function CheckFc5_WireCreateSuppressesDeniedField(ctx: IntegrationCheckContext): Promise<void> {
+export async function CheckFc5WireCreateSuppressesDeniedField(ctx: IntegrationCheckContext): Promise<void> {
     if (!skipIfUnusable(ctx.FlsClientFixture, 'fls-enforcement-client.FC5')) return;
     const fx = ctx.FlsClientFixture!;
     if (!fx.MultiProvider) {
@@ -620,6 +647,11 @@ export async function CheckFc5_WireCreateSuppressesDeniedField(ctx: IntegrationC
         `the create-denied value must be suppressed, not written (stored '${String(phone)}')`);
 }
 
+/** @deprecated Use {@link CheckFc5WireCreateSuppressesDeniedField}. */
+export async function CheckFc5_WireCreateSuppressesDeniedField(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckFc5WireCreateSuppressesDeniedField(ctx);
+}
+
 /**
  * FC6 — UPDATING a field the caller may read but not write is REJECTED over the wire, and the
  * rejection carries the EXPLICIT write wording rather than the ambiguous read wording
@@ -629,7 +661,7 @@ export async function CheckFc5_WireCreateSuppressesDeniedField(ctx: IntegrationC
  * missing permission discloses nothing they could not learn by attempting the save. Asserting
  * the ambiguous wording here would pin the wrong contract.
  */
-export async function CheckFc6_WireUpdateOfWriteDeniedFieldRejected(ctx: IntegrationCheckContext): Promise<void> {
+export async function CheckFc6WireUpdateOfWriteDeniedFieldRejected(ctx: IntegrationCheckContext): Promise<void> {
     if (!skipIfUnusable(ctx.FlsClientFixture, 'fls-enforcement-client.FC6')) return;
     const fx = ctx.FlsClientFixture!;
     if (!fx.MultiProvider || !fx.FixtureEmployeeID) {
@@ -665,14 +697,19 @@ export async function CheckFc6_WireUpdateOfWriteDeniedFieldRejected(ctx: Integra
         'a rejected save must leave the stored value unchanged');
 }
 
+/** @deprecated Use {@link CheckFc6WireUpdateOfWriteDeniedFieldRejected}. */
+export async function CheckFc6_WireUpdateOfWriteDeniedFieldRejected(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckFc6WireUpdateOfWriteDeniedFieldRejected(ctx);
+}
+
 /** The 'fls-enforcement-client' bundle (client transport, needs MJAPI + seeded fixtures). */
 export const FlsClientChecks: NamedCheck[] = [
-    { Id: 'fls-enforcement-client.FC1', Name: 'FC1: list results to the restricted wire identity omit the denied column', Fn: CheckFc1_WireListStripsDeniedColumn },
-    { Id: 'fls-enforcement-client.FC2', Name: 'FC2: the single-record GraphQL payload omits the denied field', Fn: CheckFc2_WireSingleRecordLoadStripped },
-    { Id: 'fls-enforcement-client.FC3', Name: 'FC3: the unrestricted wire identity still receives the column with its real value', Fn: CheckFc3_WireUnrestrictedUserUnaffected },
-    { Id: 'fls-enforcement-client.FC4', Name: 'FC4: a predicate on a denied field is rejected over the wire with the ambiguous message', Fn: CheckFc4_WirePredicateRejected },
-    { Id: 'fls-enforcement-client.FC5', Name: 'FC5: creating a record over the wire silently suppresses a create-denied field', Fn: CheckFc5_WireCreateSuppressesDeniedField },
-    { Id: 'fls-enforcement-client.FC6', Name: 'FC6: updating a write-denied field is rejected over the wire with the explicit wording', Fn: CheckFc6_WireUpdateOfWriteDeniedFieldRejected }
+    { Id: 'fls-enforcement-client.FC1', Name: 'FC1: list results to the restricted wire identity omit the denied column', Fn: CheckFc1WireListStripsDeniedColumn },
+    { Id: 'fls-enforcement-client.FC2', Name: 'FC2: the single-record GraphQL payload omits the denied field', Fn: CheckFc2WireSingleRecordLoadStripped },
+    { Id: 'fls-enforcement-client.FC3', Name: 'FC3: the unrestricted wire identity still receives the column with its real value', Fn: CheckFc3WireUnrestrictedUserUnaffected },
+    { Id: 'fls-enforcement-client.FC4', Name: 'FC4: a predicate on a denied field is rejected over the wire with the ambiguous message', Fn: CheckFc4WirePredicateRejected },
+    { Id: 'fls-enforcement-client.FC5', Name: 'FC5: creating a record over the wire silently suppresses a create-denied field', Fn: CheckFc5WireCreateSuppressesDeniedField },
+    { Id: 'fls-enforcement-client.FC6', Name: 'FC6: updating a write-denied field is rejected over the wire with the explicit wording', Fn: CheckFc6WireUpdateOfWriteDeniedFieldRejected }
 ];
 
 for (const check of FlsClientChecks) {

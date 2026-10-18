@@ -1,9 +1,10 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { renderComponentFixture, query, capture, StubEmptyStateComponent, StubLoadingComponent } from '@memberjunction/ng-test-utils';
 import { QueryDataGridComponent } from './query-data-grid.component';
 import { ExportService } from '@memberjunction/ng-export-service';
+import type { QueryGridColumnConfig } from './models/query-grid-types';
 
 /**
  * DOM coverage for <mj-query-data-grid> — the AG-Grid-backed query results grid (~4×). The grid body
@@ -78,4 +79,34 @@ describe('QueryDataGridComponent (DOM)', () => {
   it('renders the pagination footer when there are rows to page', () => {
     expect(query(render({ Data: ROWS(3), TotalRowCount: 50 }), '.pagination-stub')).not.toBeNull();
   });
+
+  describe('a SQL date column (a calendar day)', () => {
+    // Pinned west of Greenwich: the day arrives as UTC midnight, and at UTC a local-zone formatter
+    // lands on the right day by accident. The AG-Grid body is stubbed, so the cell formatter and the
+    // export column mapping are exercised directly.
+    const originalTZ = process.env.TZ;
+    beforeEach(() => { process.env.TZ = 'America/Chicago'; });
+    afterEach(() => { process.env.TZ = originalTZ; });
+
+    type GridInternals = {
+      formatCellValue(value: unknown, col: { sqlBaseType: string }): string;
+      getExportColumns(): Array<{ name: string; dataType?: string }>;
+    };
+    const internals = (fx: Fx) => fx.componentInstance as unknown as GridInternals;
+    const dateCol: QueryGridColumnConfig = {
+      field: 'PaymentDate', title: 'Payment Date', sqlBaseType: 'date', sqlFullType: 'date',
+      visible: true, sortable: true, resizable: true, reorderable: true, order: 0, isEntityLink: false,
+    };
+
+    it('formats the cell as the stored day', () => {
+      expect(internals(render()).formatCellValue('2026-10-01T00:00:00.000Z', dateCol)).toBe('Oct 1, 2026');
+    });
+
+    it('exports the column as a date-only column', () => {
+      const fx = render();
+      fx.componentInstance.Columns = [dateCol];
+      expect(internals(fx).getExportColumns()).toEqual([{ name: 'PaymentDate', displayName: 'Payment Date', dataType: 'dateonly' }]);
+    });
+  });
 });
+

@@ -12,7 +12,7 @@ import { OracleResult, ScoringWeights } from '../types';
  * @param weights - Scoring weights by oracle type
  * @returns Weighted score from 0.0 to 1.0
  */
-export function calculateWeightedScore(
+export function CalculateWeightedScore(
     oracleResults: OracleResult[],
     weights?: ScoringWeights
 ): number {
@@ -39,13 +39,21 @@ export function calculateWeightedScore(
     return totalWeight > 0 ? weightedSum / totalWeight : 0;
 }
 
+/** @deprecated Use {@link CalculateWeightedScore}. */
+export function calculateWeightedScore(
+    oracleResults: OracleResult[],
+    weights?: ScoringWeights
+): number {
+    return CalculateWeightedScore(oracleResults, weights);
+}
+
 /**
  * Calculate simple average score from oracle results.
  *
  * @param oracleResults - Results from oracle evaluations
  * @returns Average score from 0.0 to 1.0
  */
-export function calculateAverageScore(oracleResults: OracleResult[]): number {
+export function CalculateAverageScore(oracleResults: OracleResult[]): number {
     if (oracleResults.length === 0) {
         return 0;
     }
@@ -54,19 +62,29 @@ export function calculateAverageScore(oracleResults: OracleResult[]): number {
     return sum / oracleResults.length;
 }
 
+/** @deprecated Use {@link CalculateAverageScore}. */
+export function calculateAverageScore(oracleResults: OracleResult[]): number {
+    return CalculateAverageScore(oracleResults);
+}
+
 /**
  * Calculate pass rate from oracle results.
  *
  * @param oracleResults - Results from oracle evaluations
  * @returns Pass rate from 0.0 to 1.0
  */
-export function calculatePassRate(oracleResults: OracleResult[]): number {
+export function CalculatePassRate(oracleResults: OracleResult[]): number {
     if (oracleResults.length === 0) {
         return 0;
     }
 
     const passedCount = oracleResults.filter(r => r.passed).length;
     return passedCount / oracleResults.length;
+}
+
+/** @deprecated Use {@link CalculatePassRate}. */
+export function calculatePassRate(oracleResults: OracleResult[]): number {
+    return CalculatePassRate(oracleResults);
 }
 
 /**
@@ -77,12 +95,17 @@ export function calculatePassRate(oracleResults: OracleResult[]): number {
  * @param oracleResults - Results from oracle evaluations
  * @returns 'Passed' if all oracles passed, 'Failed' otherwise
  */
-export function determineTestStatus(oracleResults: OracleResult[]): 'Passed' | 'Failed' {
+export function DetermineTestStatus(oracleResults: OracleResult[]): 'Passed' | 'Failed' {
     if (oracleResults.length === 0) {
         return 'Failed';
     }
 
     return oracleResults.every(r => r.passed) ? 'Passed' : 'Failed';
+}
+
+/** @deprecated Use {@link DetermineTestStatus}. */
+export function determineTestStatus(oracleResults: OracleResult[]): 'Passed' | 'Failed' {
+    return DetermineTestStatus(oracleResults);
 }
 
 /**
@@ -91,7 +114,7 @@ export function determineTestStatus(oracleResults: OracleResult[]): 'Passed' | '
  * @param oracleResults - Results from oracle evaluations
  * @returns Map of oracle type to results
  */
-export function groupResultsByType(
+export function GroupResultsByType(
     oracleResults: OracleResult[]
 ): Map<string, OracleResult[]> {
     const grouped = new Map<string, OracleResult[]>();
@@ -105,13 +128,20 @@ export function groupResultsByType(
     return grouped;
 }
 
+/** @deprecated Use {@link GroupResultsByType}. */
+export function groupResultsByType(
+    oracleResults: OracleResult[]
+): Map<string, OracleResult[]> {
+    return GroupResultsByType(oracleResults);
+}
+
 /**
  * Calculate score distribution statistics.
  *
  * @param oracleResults - Results from oracle evaluations
  * @returns Score statistics
  */
-export function calculateScoreStatistics(oracleResults: OracleResult[]): {
+export function CalculateScoreStatistics(oracleResults: OracleResult[]): {
     min: number;
     max: number;
     mean: number;
@@ -138,13 +168,24 @@ export function calculateScoreStatistics(oracleResults: OracleResult[]): {
     return { min, max, mean, median, stdDev };
 }
 
+/** @deprecated Use {@link CalculateScoreStatistics}. */
+export function calculateScoreStatistics(oracleResults: OracleResult[]): {
+    min: number;
+    max: number;
+    mean: number;
+    median: number;
+    stdDev: number;
+} {
+    return CalculateScoreStatistics(oracleResults);
+}
+
 /**
  * Normalize scores to 0-1 range.
  *
  * @param oracleResults - Results from oracle evaluations
  * @returns Normalized results
  */
-export function normalizeScores(oracleResults: OracleResult[]): OracleResult[] {
+export function NormalizeScores(oracleResults: OracleResult[]): OracleResult[] {
     if (oracleResults.length === 0) {
         return [];
     }
@@ -163,4 +204,9 @@ export function normalizeScores(oracleResults: OracleResult[]): OracleResult[] {
         ...r,
         score: (r.score - min) / range
     }));
+}
+
+/** @deprecated Use {@link NormalizeScores}. */
+export function normalizeScores(oracleResults: OracleResult[]): OracleResult[] {
+    return NormalizeScores(oracleResults);
 }

@@ -21,8 +21,8 @@ import {
   OperateScopeMode,
   OperateOutputMode,
   OperateValueKind,
-  mapStateToCreateScoringInput,
-  describeOperateMappingError,
+  MapStateToCreateScoringInput,
+  DescribeOperateMappingError,
 } from './ps-operate-dialog.mapping';
 
 const RUN_RECORD_PROCESS_JOB_TYPE = 'Run Record Process';
@@ -52,7 +52,7 @@ const RUN_RECORD_PROCESS_JOB_TYPE = 'Run Record Process';
         <div class="ps-callout info op-target">
           <i class="fa-solid fa-table"></i>
           <div class="ps-small">
-            Scores <strong>{{ state.targetEntityName || '—' }}</strong> — the entity this model was trained on.
+            Scores <strong>{{ state.TargetEntityName || '—' }}</strong> — the entity this model was trained on.
           </div>
         </div>
 
@@ -60,23 +60,23 @@ const RUN_RECORD_PROCESS_JOB_TYPE = 'Run Record Process';
         <div class="ps-field">
           <label>Which records?</label>
           <div class="ps-seg" data-testid="ps-operate-scope">
-            <button [class.on]="state.scopeMode === 'all'" (click)="setScope('all')"><i class="fa-solid fa-globe"></i> Everyone</button>
-            <button [class.on]="state.scopeMode === 'view'" (click)="setScope('view')"><i class="fa-solid fa-table-list"></i> A saved view</button>
-            <button [class.on]="state.scopeMode === 'list'" (click)="setScope('list')"><i class="fa-solid fa-list-check"></i> A list</button>
+            <button [class.on]="state.ScopeMode === 'all'" (click)="setScope('all')"><i class="fa-solid fa-globe"></i> Everyone</button>
+            <button [class.on]="state.ScopeMode === 'view'" (click)="setScope('view')"><i class="fa-solid fa-table-list"></i> A saved view</button>
+            <button [class.on]="state.ScopeMode === 'list'" (click)="setScope('list')"><i class="fa-solid fa-list-check"></i> A list</button>
           </div>
-          @if (state.scopeMode === 'view') {
-            <select class="mj-input" data-testid="ps-operate-view" [value]="state.viewId || ''" (change)="state.viewId = $any($event.target).value">
+          @if (state.ScopeMode === 'view') {
+            <select class="mj-input" data-testid="ps-operate-view" [value]="state.ViewId || ''" (change)="state.ViewId = $any($event.target).value">
               <option value="" disabled>Choose a view…</option>
               @for (v of views; track v.ID) { <option [value]="v.ID">{{ v.Name }}</option> }
             </select>
-            @if (views.length === 0) { <div class="ps-small ps-muted op-hint">No saved views for {{ state.targetEntityName }} yet — pick Everyone or a list.</div> }
+            @if (views.length === 0) { <div class="ps-small ps-muted op-hint">No saved views for {{ state.TargetEntityName }} yet — pick Everyone or a list.</div> }
           }
-          @if (state.scopeMode === 'list') {
-            <select class="mj-input" data-testid="ps-operate-list" [value]="state.listId || ''" (change)="state.listId = $any($event.target).value">
+          @if (state.ScopeMode === 'list') {
+            <select class="mj-input" data-testid="ps-operate-list" [value]="state.ListId || ''" (change)="state.ListId = $any($event.target).value">
               <option value="" disabled>Choose a list…</option>
               @for (l of lists; track l.ID) { <option [value]="l.ID">{{ l.Name }}</option> }
             </select>
-            @if (lists.length === 0) { <div class="ps-small ps-muted op-hint">No lists for {{ state.targetEntityName }} yet — pick Everyone or a view.</div> }
+            @if (lists.length === 0) { <div class="ps-small ps-muted op-hint">No lists for {{ state.TargetEntityName }} yet — pick Everyone or a view.</div> }
           }
         </div>
 
@@ -84,18 +84,18 @@ const RUN_RECORD_PROCESS_JOB_TYPE = 'Run Record Process';
         <div class="ps-field">
           <label>Where do predictions go?</label>
           <div class="ps-seg" data-testid="ps-operate-output">
-            <button [class.on]="state.outputMode === 'generic'" (click)="state.outputMode = 'generic'"><i class="fa-solid fa-clock-rotate-left"></i> Run history only</button>
-            <button [class.on]="state.outputMode === 'writeback'" (click)="state.outputMode = 'writeback'"><i class="fa-solid fa-pen-to-square"></i> Write back to a column</button>
+            <button [class.on]="state.OutputMode === 'generic'" (click)="state.OutputMode = 'generic'"><i class="fa-solid fa-clock-rotate-left"></i> Run history only</button>
+            <button [class.on]="state.OutputMode === 'writeback'" (click)="state.OutputMode = 'writeback'"><i class="fa-solid fa-pen-to-square"></i> Write back to a column</button>
           </div>
-          @if (state.outputMode === 'writeback') {
+          @if (state.OutputMode === 'writeback') {
             <input class="mj-input" type="text" list="ps-operate-fields" data-testid="ps-operate-column"
-              placeholder="Column on {{ state.targetEntityName }} (e.g. RenewalProbability)"
-              [value]="state.outputField" (input)="state.outputField = $any($event.target).value" />
+              placeholder="Column on {{ state.TargetEntityName }} (e.g. RenewalProbability)"
+              [value]="state.OutputField" (input)="state.OutputField = $any($event.target).value" />
             <datalist id="ps-operate-fields">@for (f of entityFields; track f) { <option [value]="f"></option> }</datalist>
             @if (isClassification) {
               <div class="ps-seg sm" style="margin-top:8px">
-                <button [class.on]="state.valueKind === 'score'" (click)="state.valueKind = 'score'">Probability</button>
-                <button [class.on]="state.valueKind === 'class'" (click)="state.valueKind = 'class'">Predicted class</button>
+                <button [class.on]="state.ValueKind === 'score'" (click)="state.ValueKind = 'score'">Probability</button>
+                <button [class.on]="state.ValueKind === 'class'" (click)="state.ValueKind = 'class'">Predicted class</button>
               </div>
             }
           }
@@ -134,10 +134,28 @@ const RUN_RECORD_PROCESS_JOB_TYPE = 'Run Record Process';
 })
 export class PSOperateDialogComponent extends BaseAngularComponent {
   @Input() modelId = '';
-  @Input() modelLabel = '';
+  @Input() ModelLabel = '';
+
+  /** @deprecated Use {@link ModelLabel}. */
+  @Input() set modelLabel(value: PSOperateDialogComponent['ModelLabel']) {
+    this.ModelLabel = value;
+  }
+  /** @deprecated Use {@link ModelLabel}. */
+  get modelLabel(): PSOperateDialogComponent['ModelLabel'] {
+    return this.ModelLabel;
+  }
   @Input() engine!: PredictiveStudioEngine;
   @Input() provider: IMetadataProvider | null = null;
-  @Input() currentUser: UserInfo | null = null;
+  @Input() CurrentUser: UserInfo | null = null;
+
+  /** @deprecated Use {@link CurrentUser}. */
+  @Input() set currentUser(value: UserInfo | null) {
+    this.CurrentUser = value;
+  }
+  /** @deprecated Use {@link CurrentUser}. */
+  get currentUser(): UserInfo | null {
+    return this.CurrentUser;
+  }
 
   /** Opening the dialog (false → true) initializes the knobs + loads views/lists/fields for the model's entity. */
   @Input()
@@ -158,36 +176,126 @@ export class PSOperateDialogComponent extends BaseAngularComponent {
   private cdr = inject(ChangeDetectorRef);
   private notifications = inject(MJNotificationService);
 
-  public state: OperateModelState = this.blankState();
-  public views: MJUserViewEntity[] = [];
-  public lists: MJListEntity[] = [];
-  public entityFields: string[] = [];
-  public isClassification = false;
-  public busy = false;
-  public busyLabel = '';
+  public State: OperateModelState = this.blankState();
+
+  /** @deprecated Use {@link State}. */
+  public get state(): OperateModelState {
+    return this.State;
+  }
+  /** @deprecated Use {@link State}. */
+  public set state(value: OperateModelState) {
+    this.State = value;
+  }
+  public Views: MJUserViewEntity[] = [];
+
+  /** @deprecated Use {@link Views}. */
+  public get views(): MJUserViewEntity[] {
+    return this.Views;
+  }
+  /** @deprecated Use {@link Views}. */
+  public set views(value: MJUserViewEntity[]) {
+    this.Views = value;
+  }
+  public Lists: MJListEntity[] = [];
+
+  /** @deprecated Use {@link Lists}. */
+  public get lists(): MJListEntity[] {
+    return this.Lists;
+  }
+  /** @deprecated Use {@link Lists}. */
+  public set lists(value: MJListEntity[]) {
+    this.Lists = value;
+  }
+  public EntityFields: string[] = [];
+
+  /** @deprecated Use {@link EntityFields}. */
+  public get entityFields(): string[] {
+    return this.EntityFields;
+  }
+  /** @deprecated Use {@link EntityFields}. */
+  public set entityFields(value: string[]) {
+    this.EntityFields = value;
+  }
+  public IsClassification = false;
+
+  /** @deprecated Use {@link IsClassification}. */
+  public get isClassification() {
+    return this.IsClassification;
+  }
+  /** @deprecated Use {@link IsClassification}. */
+  public set isClassification(value) {
+    this.IsClassification = value;
+  }
+  public Busy = false;
+
+  /** @deprecated Use {@link Busy}. */
+  public get busy() {
+    return this.Busy;
+  }
+  /** @deprecated Use {@link Busy}. */
+  public set busy(value) {
+    this.Busy = value;
+  }
+  public BusyLabel = '';
+
+  /** @deprecated Use {@link BusyLabel}. */
+  public get busyLabel() {
+    return this.BusyLabel;
+  }
+  /** @deprecated Use {@link BusyLabel}. */
+  public set busyLabel(value) {
+    this.BusyLabel = value;
+  }
 
   // scheduling sub-dialog
-  public scheduleOpen = false;
-  public jobTypeId: string | null = null;
-  public schedConfig: string | null = null;
+  public ScheduleOpen = false;
+
+  /** @deprecated Use {@link ScheduleOpen}. */
+  public get scheduleOpen() {
+    return this.ScheduleOpen;
+  }
+  /** @deprecated Use {@link ScheduleOpen}. */
+  public set scheduleOpen(value) {
+    this.ScheduleOpen = value;
+  }
+  public JobTypeId: string | null = null;
+
+  /** @deprecated Use {@link JobTypeId}. */
+  public get jobTypeId(): string | null {
+    return this.JobTypeId;
+  }
+  /** @deprecated Use {@link JobTypeId}. */
+  public set jobTypeId(value: string | null) {
+    this.JobTypeId = value;
+  }
+  public SchedConfig: string | null = null;
+
+  /** @deprecated Use {@link SchedConfig}. */
+  public get schedConfig(): string | null {
+    return this.SchedConfig;
+  }
+  /** @deprecated Use {@link SchedConfig}. */
+  public set schedConfig(value: string | null) {
+    this.SchedConfig = value;
+  }
 
   // ---- init / load (DB-light: a couple of small scoped RunViews on open) ----
 
   private async init(): Promise<void> {
-    this.state = this.blankState();
-    this.views = [];
-    this.lists = [];
-    this.entityFields = [];
-    this.scheduleOpen = false;
+    this.State = this.blankState();
+    this.Views = [];
+    this.Lists = [];
+    this.EntityFields = [];
+    this.ScheduleOpen = false;
 
     const model = this.engine?.ModelByID(this.modelId);
-    this.isClassification = model?.ProblemType === 'classification';
+    this.IsClassification = model?.ProblemType === 'classification';
     const pipeline = model ? this.engine.Pipelines.find((p) => UUIDsEqual(p.ID, model.PipelineID)) : undefined;
     const entity = pipeline?.TargetEntityID
       ? this.ProviderToUse.Entities.find((e) => UUIDsEqual(e.ID, pipeline.TargetEntityID))
       : undefined;
-    this.state.targetEntityName = entity?.Name ?? '';
-    this.entityFields = (entity?.Fields ?? []).map((f) => f.Name).sort((a, b) => a.localeCompare(b));
+    this.State.TargetEntityName = entity?.Name ?? '';
+    this.EntityFields = (entity?.Fields ?? []).map((f) => f.Name).sort((a, b) => a.localeCompare(b));
 
     await Promise.all([this.loadViews(entity?.ID), this.loadLists(entity?.ID), this.resolveJobType()]);
     this.cdr.detectChanges();
@@ -200,7 +308,7 @@ export class PSOperateDialogComponent extends BaseAngularComponent {
       { EntityName: 'MJ: User Views', ExtraFilter: `EntityID='${entityId}'`, OrderBy: 'Name', ResultType: 'entity_object' },
       this.ProviderToUse.CurrentUser,
     );
-    this.views = r.Success ? (r.Results ?? []) : [];
+    this.Views = r.Success ? (r.Results ?? []) : [];
   }
 
   private async loadLists(entityId: string | undefined): Promise<void> {
@@ -210,7 +318,7 @@ export class PSOperateDialogComponent extends BaseAngularComponent {
       { EntityName: 'MJ: Lists', ExtraFilter: `EntityID='${entityId}'`, OrderBy: 'Name', ResultType: 'entity_object' },
       this.ProviderToUse.CurrentUser,
     );
-    this.lists = r.Success ? (r.Results ?? []) : [];
+    this.Lists = r.Success ? (r.Results ?? []) : [];
   }
 
   /** Resolve the "Run Record Process" scheduled-job-type id the generic scheduler dialog needs. */
@@ -220,48 +328,58 @@ export class PSOperateDialogComponent extends BaseAngularComponent {
       { EntityName: 'MJ: Scheduled Job Types', ExtraFilter: `Name='${RUN_RECORD_PROCESS_JOB_TYPE}'`, ResultType: 'entity_object' },
       this.ProviderToUse.CurrentUser,
     );
-    this.jobTypeId = r.Success ? (r.Results?.[0]?.ID ?? null) : null;
+    this.JobTypeId = r.Success ? (r.Results?.[0]?.ID ?? null) : null;
   }
 
+  public SetScope(mode: OperateScopeMode): void {
+    this.State.ScopeMode = mode;
+  }
+
+  /** @deprecated Use {@link SetScope}. */
   public setScope(mode: OperateScopeMode): void {
-    this.state.scopeMode = mode;
+    return this.SetScope(mode);
   }
 
   // ---- live summary ----
 
-  public get summary(): string {
-    const entity = this.state.targetEntityName || 'the entity';
+  public get Summary(): string {
+    const entity = this.State.TargetEntityName || 'the entity';
     const scope =
-      this.state.scopeMode === 'all'
+      this.State.ScopeMode === 'all'
         ? `every record in <strong>${entity}</strong>`
-        : this.state.scopeMode === 'view'
+        : this.State.ScopeMode === 'view'
           ? `the <strong>${this.viewName() ?? 'selected'}</strong> view of ${entity}`
           : `the <strong>${this.listName() ?? 'selected'}</strong> list of ${entity}`;
     const output =
-      this.state.outputMode === 'writeback'
-        ? this.state.outputField.trim()
-          ? `writes the ${this.state.valueKind === 'class' ? 'predicted class' : 'probability'} into <strong>${this.state.outputField.trim()}</strong>`
+      this.State.OutputMode === 'writeback'
+        ? this.State.OutputField.trim()
+          ? `writes the ${this.State.ValueKind === 'class' ? 'predicted class' : 'probability'} into <strong>${this.State.OutputField.trim()}</strong>`
           : `writes back to a column you choose`
         : `records predictions in the run history (no column written)`;
-    return `Scores ${scope} with <strong>${this.modelLabel}</strong> and ${output}.`;
+    return `Scores ${scope} with <strong>${this.ModelLabel}</strong> and ${output}.`;
+  }
+
+  /** @deprecated Use {@link Summary}. */
+  public get summary(): string {
+    return this.Summary;
   }
 
   private viewName(): string | null {
-    return this.views.find((v) => UUIDsEqual(v.ID, this.state.viewId ?? ''))?.Name ?? null;
+    return this.Views.find((v) => UUIDsEqual(v.ID, this.State.ViewId ?? ''))?.Name ?? null;
   }
   private listName(): string | null {
-    return this.lists.find((l) => UUIDsEqual(l.ID, this.state.listId ?? ''))?.Name ?? null;
+    return this.Lists.find((l) => UUIDsEqual(l.ID, this.State.ListId ?? ''))?.Name ?? null;
   }
 
   // ---- actions ----
 
   /** Create the scoring Record Process, then run it once immediately. */
-  public async onRunNow(): Promise<void> {
+  public async OnRunNow(): Promise<void> {
     const rpId = await this.createProcess('Creating + running…');
     if (!rpId) return;
     try {
       const run = new RecordProcessRunNowOperation();
-      const result = await run.Execute({ recordProcessID: rpId }, { provider: this.provider ?? undefined, user: this.currentUser ?? undefined });
+      const result = await run.Execute({ recordProcessID: rpId }, { provider: this.provider ?? undefined, user: this.CurrentUser ?? undefined });
       if (result.Success && result.Output) {
         this.notifications.CreateSimpleNotification(
           `Scored ${result.Output.success}/${result.Output.processed} record(s) — ${result.Output.status}.`,
@@ -275,29 +393,39 @@ export class PSOperateDialogComponent extends BaseAngularComponent {
     } catch (e) {
       this.notifications.CreateSimpleNotification(`Run error: ${this.msg(e)}`, 'error', 6000);
     } finally {
-      this.busy = false;
+      this.Busy = false;
       this.cdr.detectChanges();
     }
   }
 
+  /** @deprecated Use {@link OnRunNow}. */
+  public async onRunNow(): Promise<void> {
+    return this.OnRunNow();
+  }
+
   /** Create the scoring Record Process, then hand it to the generic scheduler dialog. */
-  public async onSchedule(): Promise<void> {
-    if (!this.jobTypeId) {
+  public async OnSchedule(): Promise<void> {
+    if (!this.JobTypeId) {
       this.notifications.CreateSimpleNotification('Scheduling is unavailable — the "Run Record Process" job type was not found.', 'error', 6000);
       return;
     }
     const rpId = await this.createProcess('Creating process…');
     if (!rpId) return;
-    this.busy = false;
-    this.schedConfig = JSON.stringify({ RecordProcessID: rpId });
-    this.scheduleOpen = true;
+    this.Busy = false;
+    this.SchedConfig = JSON.stringify({ RecordProcessID: rpId });
+    this.ScheduleOpen = true;
     this.cdr.detectChanges();
   }
 
-  public async onScheduleClose(result: ScheduledJobDialogResult): Promise<void> {
-    this.scheduleOpen = false;
+  /** @deprecated Use {@link OnSchedule}. */
+  public async onSchedule(): Promise<void> {
+    return this.OnSchedule();
+  }
+
+  public async OnScheduleClose(result: ScheduledJobDialogResult): Promise<void> {
+    this.ScheduleOpen = false;
     if (result?.Saved) {
-      this.notifications.CreateSimpleNotification(`Scheduled "${this.modelLabel}" to score on a recurring cadence.`, 'success', 5000);
+      this.notifications.CreateSimpleNotification(`Scheduled "${this.ModelLabel}" to score on a recurring cadence.`, 'success', 5000);
       await this.refreshAndClose();
     } else {
       // The on-demand Record Process still exists (it can be run or scheduled later) — just close.
@@ -306,8 +434,13 @@ export class PSOperateDialogComponent extends BaseAngularComponent {
     }
   }
 
+  /** @deprecated Use {@link OnScheduleClose}. */
+  public async onScheduleClose(result: ScheduledJobDialogResult): Promise<void> {
+    return this.OnScheduleClose(result);
+  }
+
   public onCancel(): void {
-    if (this.busy) return;
+    if (this.Busy) return;
     this.Close.emit({ changed: false });
   }
 
@@ -315,33 +448,33 @@ export class PSOperateDialogComponent extends BaseAngularComponent {
 
   /** Map knobs → input and create the scoring Record Process via the Remote Op. Returns its id, or null on failure. */
   private async createProcess(label: string): Promise<string | null> {
-    const mapped = mapStateToCreateScoringInput(this.state);
+    const mapped = MapStateToCreateScoringInput(this.State);
     if (!mapped.ok) {
-      this.notifications.CreateSimpleNotification(describeOperateMappingError(mapped.error), 'warning', 4000);
+      this.notifications.CreateSimpleNotification(DescribeOperateMappingError(mapped.error), 'warning', 4000);
       return null;
     }
-    this.busy = true;
-    this.busyLabel = label;
+    this.Busy = true;
+    this.BusyLabel = label;
     this.cdr.detectChanges();
     try {
       const op = new PredictiveStudioCreateScoringProcessOperation();
-      const result = await op.Execute(mapped.input, { provider: this.provider ?? undefined, user: this.currentUser ?? undefined });
+      const result = await op.Execute(mapped.input, { provider: this.provider ?? undefined, user: this.CurrentUser ?? undefined });
       if (result.Success && result.Output?.recordProcessId) {
         return result.Output.recordProcessId;
       }
       this.notifications.CreateSimpleNotification(result.ErrorMessage || 'Could not create the scoring process.', 'error', 6000);
-      this.busy = false;
+      this.Busy = false;
       return null;
     } catch (e) {
       this.notifications.CreateSimpleNotification(`Could not create the scoring process: ${this.msg(e)}`, 'error', 6000);
-      this.busy = false;
+      this.Busy = false;
       return null;
     }
   }
 
   private async refreshAndClose(): Promise<void> {
-    await this.engine.Config(true, this.currentUser ?? undefined, this.provider ?? undefined);
-    this.busy = false;
+    await this.engine.Config(true, this.CurrentUser ?? undefined, this.provider ?? undefined);
+    this.Busy = false;
     this.Close.emit({ changed: true });
   }
 
@@ -351,14 +484,14 @@ export class PSOperateDialogComponent extends BaseAngularComponent {
 
   private blankState(): OperateModelState {
     return {
-      modelId: this.modelId,
-      targetEntityName: '',
-      scopeMode: 'all',
-      viewId: null,
-      listId: null,
-      outputMode: 'generic',
-      outputField: '',
-      valueKind: 'score',
+      ModelId: this.modelId,
+      TargetEntityName: '',
+      ScopeMode: 'all',
+      ViewId: null,
+      ListId: null,
+      OutputMode: 'generic',
+      OutputField: '',
+      ValueKind: 'score',
     };
   }
 }

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { UserInfo, BaseEntity } from '@memberjunction/core';
 import type { MJMLModelScoringBindingEntity } from '@memberjunction/core-entities';
 
-import { upsertScoringBinding, recordScoringRun } from '../scoring-binding';
+import { UpsertScoringBinding, RecordScoringRun } from '../scoring-binding';
 import type { IEntityFactory } from '../../training';
 
 /**
@@ -72,7 +72,7 @@ class FakeEntityFactory implements IEntityFactory {
 describe('upsertScoringBinding — create', () => {
   it('creates a new OnDemand binding tying model → record process', async () => {
     const factory = new FakeEntityFactory();
-    const binding = (await upsertScoringBinding(
+    const binding = (await UpsertScoringBinding(
       {
         mlModelId: 'model-1',
         recordProcessId: 'rp-1',
@@ -94,13 +94,13 @@ describe('upsertScoringBinding — create', () => {
 
   it('defaults Mode to OnDemand when omitted', async () => {
     const factory = new FakeEntityFactory();
-    const binding = (await upsertScoringBinding({ mlModelId: 'm', recordProcessId: 'rp' }, factory)) as unknown as FakeBinding;
+    const binding = (await UpsertScoringBinding({ mlModelId: 'm', recordProcessId: 'rp' }, factory)) as unknown as FakeBinding;
     expect(binding.Mode).toBe('OnDemand');
   });
 
   it('supports the Scheduled mode for the scheduled scoring path', async () => {
     const factory = new FakeEntityFactory();
-    const binding = (await upsertScoringBinding({ mlModelId: 'm', recordProcessId: 'rp', mode: 'Scheduled' }, factory)) as unknown as FakeBinding;
+    const binding = (await UpsertScoringBinding({ mlModelId: 'm', recordProcessId: 'rp', mode: 'Scheduled' }, factory)) as unknown as FakeBinding;
     expect(binding.Mode).toBe('Scheduled');
   });
 });
@@ -108,7 +108,7 @@ describe('upsertScoringBinding — create', () => {
 describe('upsertScoringBinding — update', () => {
   it('loads the existing binding by id before updating', async () => {
     const factory = new FakeEntityFactory();
-    const binding = (await upsertScoringBinding(
+    const binding = (await UpsertScoringBinding(
       { bindingId: 'existing-7', mlModelId: 'm', recordProcessId: 'rp', lastRowCount: 42 },
       factory,
     )) as unknown as FakeBinding;
@@ -122,7 +122,7 @@ describe('upsertScoringBinding — update', () => {
       b.failNextSaveWith('FK violation on MLModelID');
       return b;
     });
-    await expect(upsertScoringBinding({ mlModelId: 'm', recordProcessId: 'rp' }, factory)).rejects.toThrow(/FK violation on MLModelID/);
+    await expect(UpsertScoringBinding({ mlModelId: 'm', recordProcessId: 'rp' }, factory)).rejects.toThrow(/FK violation on MLModelID/);
   });
 });
 
@@ -130,7 +130,7 @@ describe('recordScoringRun — monitoring stamp', () => {
   it('stamps LastScoredAt + LastRowCount after a run', async () => {
     const factory = new FakeEntityFactory();
     const before = Date.now();
-    const binding = (await recordScoringRun('b-1', { mlModelId: 'm', recordProcessId: 'rp', mode: 'Scheduled' }, 137, factory)) as unknown as FakeBinding;
+    const binding = (await RecordScoringRun('b-1', { mlModelId: 'm', recordProcessId: 'rp', mode: 'Scheduled' }, 137, factory)) as unknown as FakeBinding;
     expect(binding.LastRowCount).toBe(137);
     expect(binding.Mode).toBe('Scheduled');
     expect(binding.LastScoredAt).toBeInstanceOf(Date);

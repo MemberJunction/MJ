@@ -281,20 +281,47 @@ export type MCPServerAuthSettingsInfo = z.infer<typeof mcpServerAuthSettingsSche
 export type OAuthProxySettingsInfo = z.infer<typeof oauthProxySettingsSchema>;
 
 // Config will be loaded asynchronously - exports are populated by initConfig()
-export let configInfo: ConfigInfo;
-export let dbUsername: string;
-export let dbPassword: string;
-export let dbHost: string;
-export let dbDatabase: string;
-export let dbPort: number;
-export let dbTrustServerCertificate: string;
-export let dbInstanceName: string | undefined;
-export let mcpServerSettings: ConfigInfo['mcpServerSettings'];
-export let mj_core_schema: string;
-export let dbReadOnlyUsername: string | undefined;
-export let dbReadOnlyPassword: string | undefined;
+export let configInfo: ConfigInfo;  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
+export let DbUsername: string;
+export let DbPassword: string;
+export let DbHost: string;
+export let DbDatabase: string;
+export let DbPort: number;
+export let DbTrustServerCertificate: string;
+export let DbInstanceName: string | undefined;
+export let McpServerSettings: ConfigInfo['mcpServerSettings'];
+export let MJCoreSchema: string;
+export let DbReadOnlyUsername: string | undefined;
+export let DbReadOnlyPassword: string | undefined;
 /** OAuth authentication settings, resolved with defaults */
-export let mcpServerAuth: MCPServerAuthSettingsInfo;
+export let McpServerAuth: MCPServerAuthSettingsInfo;
+
+export {
+  /** @deprecated Use {@link DbUsername} instead. */
+  DbUsername as dbUsername,
+  /** @deprecated Use {@link DbPassword} instead. */
+  DbPassword as dbPassword,
+  /** @deprecated Use {@link DbHost} instead. */
+  DbHost as dbHost,
+  /** @deprecated Use {@link DbDatabase} instead. */
+  DbDatabase as dbDatabase,
+  /** @deprecated Use {@link DbPort} instead. */
+  DbPort as dbPort,
+  /** @deprecated Use {@link DbTrustServerCertificate} instead. */
+  DbTrustServerCertificate as dbTrustServerCertificate,
+  /** @deprecated Use {@link DbInstanceName} instead. */
+  DbInstanceName as dbInstanceName,
+  /** @deprecated Use {@link McpServerSettings} instead. */
+  McpServerSettings as mcpServerSettings,
+  /** @deprecated Use {@link MJCoreSchema} instead. */
+  MJCoreSchema as mj_core_schema,
+  /** @deprecated Use {@link DbReadOnlyUsername} instead. */
+  DbReadOnlyUsername as dbReadOnlyUsername,
+  /** @deprecated Use {@link DbReadOnlyPassword} instead. */
+  DbReadOnlyPassword as dbReadOnlyPassword,
+  /** @deprecated Use {@link McpServerAuth} instead. */
+  McpServerAuth as mcpServerAuth,
+};
 
 let _initialized = false;
 
@@ -305,7 +332,7 @@ let _initialized = false;
  * The dynamic import ensures dotenv has already populated process.env
  * before @memberjunction/server reads environment variables.
  */
-export async function initConfig(): Promise<ConfigInfo> {
+export async function InitConfig(): Promise<ConfigInfo> {
   if (_initialized) {
     return configInfo;
   }
@@ -327,23 +354,28 @@ export async function initConfig(): Promise<ConfigInfo> {
   }
 
   // Populate the exported variables
-  dbUsername = configInfo.dbUsername;
-  dbPassword = configInfo.dbPassword;
-  dbHost = configInfo.dbHost;
-  dbDatabase = configInfo.dbDatabase;
-  dbPort = configInfo.dbPort;
-  dbTrustServerCertificate = configInfo.dbTrustServerCertificate;
-  dbInstanceName = configInfo.dbInstanceName;
-  mcpServerSettings = configInfo.mcpServerSettings;
-  mj_core_schema = configInfo.mjCoreSchema;
-  dbReadOnlyUsername = configInfo.dbReadOnlyUsername;
-  dbReadOnlyPassword = configInfo.dbReadOnlyPassword;
+  DbUsername = configInfo.dbUsername;
+  DbPassword = configInfo.dbPassword;
+  DbHost = configInfo.dbHost;
+  DbDatabase = configInfo.dbDatabase;
+  DbPort = configInfo.dbPort;
+  DbTrustServerCertificate = configInfo.dbTrustServerCertificate;
+  DbInstanceName = configInfo.dbInstanceName;
+  McpServerSettings = configInfo.mcpServerSettings;
+  MJCoreSchema = configInfo.mjCoreSchema;
+  DbReadOnlyUsername = configInfo.dbReadOnlyUsername;
+  DbReadOnlyPassword = configInfo.dbReadOnlyPassword;
 
   // Resolve auth settings with defaults
-  mcpServerAuth = resolveAuthSettings(configInfo.mcpServerSettings?.auth, configInfo.mcpServerSettings?.port);
+  McpServerAuth = resolveAuthSettings(configInfo.mcpServerSettings?.auth, configInfo.mcpServerSettings?.port);
 
   _initialized = true;
   return configInfo;
+}
+
+/** @deprecated Use {@link InitConfig}. */
+export async function initConfig(): Promise<ConfigInfo> {
+  return InitConfig();
 }
 
 /** Minimum required length for JWT signing secret (32 bytes = 256 bits) */

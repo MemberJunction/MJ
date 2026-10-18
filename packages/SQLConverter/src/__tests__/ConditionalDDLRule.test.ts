@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { ConditionalDDLRule } from '../rules/ConditionalDDLRule.js';
-import { createConversionContext } from '../rules/types.js';
+import { CreateConversionContext } from '../rules/types.js';
 
 const rule = new ConditionalDDLRule();
-const context = createConversionContext('tsql', 'postgres');
+const context = CreateConversionContext('tsql', 'postgres');
 
 function convert(sql: string): string {
   return rule.PostProcess!(sql, sql, context);

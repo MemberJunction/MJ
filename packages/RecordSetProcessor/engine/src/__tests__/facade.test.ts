@@ -3,9 +3,10 @@
  * and the output-mapping write-back applier. No database — providers/entities are faked.
  */
 
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { CompositeKey, IMetadataProvider, UserInfo } from '@memberjunction/core';
-import { MJRecordProcessEntity } from '@memberjunction/core-entities';
+import { MJRecordProcessEntity, MJTagEntity, MJTaggedItemEntity } from '@memberjunction/core-entities';
+import { TagEngine } from '@memberjunction/tag-engine';
 import {
     ArraySource,
     FilterSource,
@@ -86,6 +87,82 @@ describe('RecordProcessExecutor.buildProcessor', () => {
     });
     it('throws when Infer work is missing its PromptID', () => {
         expect(() => exec.buildProcessor(rp({ WorkType: 'Infer' }))).toThrow(/PromptID/);
+    });
+    it('validates materialization targets when building InferProcessor with DataFeatureSpec', () => {
+        const testEntity = {
+            ID: 'ENT-1',
+            Name: 'Widgets',
+            Fields: [
+                { Name: 'ID', TSType: 'string', IsPrimaryKey: true, IsVirtual: false },
+                { Name: 'Score', Type: 'decimal', Precision: 5, Scale: 4, TSType: 'number', IsVirtual: false },
+            ],
+        };
+        const testProvider = {
+            EntityByID: (id: string) => (id === 'ENT-1' ? testEntity : undefined),
+            EntityByName: (name: string) => (name.toLowerCase() === 'widgets' ? testEntity : undefined),
+        } as unknown as IMetadataProvider;
+
+        // Valid spec with Min: 0, Max: 1
+        const validSpec = {
+            Name: 'Valid Pipeline',
+            Description: 'Valid',
+            PromptID: 'P1',
+            Context: { Fields: ['Name'] },
+            Outputs: [
+                {
+                    Ref: '$.score',
+                    Name: 'Score',
+                    Target: { Mode: 'field', EntityFieldName: 'Score' },
+                    Constraint: { Type: 'numeric', Min: 0, Max: 1, OnViolation: 'fail' },
+                },
+            ],
+            Caching: { Cacheable: false },
+        };
+        const proc = exec.buildProcessor(
+            rp({ WorkType: 'Infer', PromptID: 'P1', EntityID: 'ENT-1', Configuration: JSON.stringify(validSpec) }),
+            false,
+            testProvider
+        );
+        expect(proc).toBeInstanceOf(InferProcessor);
+
+        // Invalid spec with Max: 100 on decimal(5,4)
+        const invalidSpec = {
+            ...validSpec,
+            Outputs: [
+                {
+                    Ref: '$.score',
+                    Name: 'Score',
+                    Target: { Mode: 'field', EntityFieldName: 'Score' },
+                    Constraint: { Type: 'numeric', Min: 0, Max: 100, OnViolation: 'fail' },
+                },
+            ],
+        };
+        expect(() =>
+            exec.buildProcessor(
+                rp({ WorkType: 'Infer', PromptID: 'P1', EntityID: 'ENT-1', Configuration: JSON.stringify(invalidSpec) }),
+                false,
+                testProvider
+            )
+        ).toThrow(/invalid materialization targets.*arithmetic overflow/);
+
+        // Invalid spec targeting nonexistent field
+        const badFieldSpec = {
+            ...validSpec,
+            Outputs: [
+                {
+                    Ref: '$.score',
+                    Name: 'Score',
+                    Target: { Mode: 'field', EntityFieldName: 'NoSuchField' },
+                },
+            ],
+        };
+        expect(() =>
+            exec.buildProcessor(
+                rp({ WorkType: 'Infer', PromptID: 'P1', EntityID: 'ENT-1', Configuration: JSON.stringify(badFieldSpec) }),
+                false,
+                testProvider
+            )
+        ).toThrow(/invalid materialization targets.*does not exist/);
     });
     it('wraps an Infer processor with WriteBackProcessor when OutputMapping is set', () => {
         const proc = exec.buildProcessor(rp({
@@ -178,16 +255,24 @@ class FakeEntity {
     public saved = false;
     public readonly LatestResult = { CompleteMessage: '' };
     constructor(public readonly PrimaryKey: CompositeKey = CompositeKey.FromKeyValuePair('ID', 'child-1')) {}
+    public get FirstPrimaryKey(): { Value: unknown } | undefined {
+        const val = this.PrimaryKey?.KeyValuePairs?.[0]?.Value;
+        return val !== undefined ? { Value: val } : undefined;
+    }
+    public Get(field: string): unknown {
+        return this.sets[field] ?? (field === 'ID' ? this.PrimaryKey?.KeyValuePairs?.[0]?.Value : undefined);
+    }
     public async InnerLoad(): Promise<boolean> { return true; }
     public NewRecord(): boolean { return true; }
     public Set(field: string, value: unknown): void { this.sets[field] = value; }
     public async Save(): Promise<boolean> { this.saved = true; return true; }
 }
 
-function fakeProvider(childKey?: CompositeKey): { provider: IMetadataProvider; created: FakeEntity[] } {
+function fakeProvider(childKey?: CompositeKey, primaryKeys: Array<{ Name: string }> = [{ Name: 'ID' }]): { provider: IMetadataProvider; created: FakeEntity[] } {
     const created: FakeEntity[] = [];
     const provider = {
-        EntityByID: () => ({ Name: 'Customer', PrimaryKeys: [{ Name: 'ID' }], FirstPrimaryKey: { Name: 'ID' } }),
+        EntityByID: () => ({ Name: 'Customer', PrimaryKeys: primaryKeys, FirstPrimaryKey: primaryKeys[0] }),
+        EntityByName: (name: string) => ({ ID: 'ENT-' + name, Name: name, PrimaryKeys: [{ Name: 'ID' }] }),
         GetEntityObject: async () => { const e = new FakeEntity(childKey); created.push(e); return e; },
     } as unknown as IMetadataProvider;
     return { provider, created };
@@ -285,5 +370,807 @@ describe('applyOutputMapping', () => {
         expect(writeBack.dryRun).toBe(true);
         expect(writeBack.previewFields).toEqual({ Satisfaction: 'High' });
         expect(created.length).toBe(0);
+    });
+
+    it('updates fields on a composite-keyed record without throwing', async () => {
+        const compositeKey = CompositeKey.FromKeyValuePairs([
+            { FieldName: 'OrderID', Value: '100' },
+            { FieldName: 'LineNo', Value: 2 },
+        ]);
+        const { provider, created } = fakeProvider(compositeKey, [
+            { Name: 'OrderID' },
+            { Name: 'LineNo' },
+        ]);
+        const compositeRecord: RecordRef = {
+            EntityID: 'ENT-OrderDetail',
+            RecordID: 'OrderID|100||LineNo|2',
+            Record: {},
+        };
+        const out = await applyOutputMapping({
+            outputMapping: { fields: { Discount: '$.discount' } },
+            result: { discount: 0.15 },
+            record: compositeRecord,
+            contextUser: USER,
+            provider,
+        });
+        expect(out.updatedRecord).toBe(true);
+        expect(created[0].sets).toEqual({ Discount: 0.15 });
+        expect(created[0].saved).toBe(true);
+    });
+
+    it('maps $run provenance to fields and child records', async () => {
+        const { provider, created } = fakeProvider();
+        const out = await applyOutputMapping({
+            outputMapping: {
+                fields: {
+                    ProcessRunID: '$run.ProcessRunID',
+                    PromptVersion: '$run.PromptVersionHash',
+                },
+                childRecord: {
+                    entity: 'AuditLog',
+                    parentField: 'ParentID',
+                    map: {
+                        RunID: '$run.ProcessRunID',
+                        ExecutedAt: '$run.ExecutedAt',
+                    },
+                },
+            },
+            result: { dummy: 1 },
+            record,
+            contextUser: USER,
+            provider,
+            run: {
+                ProcessRunID: 'RUN-123',
+                PromptVersionHash: 'HASH-XYZ',
+                ExecutedAt: '2026-09-21T00:00:00.000Z',
+            },
+        });
+        expect(out.updatedRecord).toBe(true);
+        expect(created[0].sets).toEqual({
+            ProcessRunID: 'RUN-123',
+            PromptVersion: 'HASH-XYZ',
+        });
+        expect(created[1].sets).toEqual({
+            ParentID: 'c1',
+            RunID: 'RUN-123',
+            ExecutedAt: '2026-09-21T00:00:00.000Z',
+        });
+    });
+
+    it('supports childRecords with array fan-out', async () => {
+        const { provider, created } = fakeProvider();
+        const out = await applyOutputMapping({
+            outputMapping: {
+                childRecords: [
+                    {
+                        entity: 'OrderLine',
+                        parentField: 'OrderID',
+                        fanOutRef: '$.items',
+                        map: {
+                            Sku: '$.sku',
+                            Qty: '$.quantity',
+                            TotalScore: 'parent.overallScore',
+                            RunID: '$run.ProcessRunID',
+                        },
+                    },
+                ],
+            },
+            result: {
+                overallScore: 99,
+                items: [
+                    { sku: 'ITEM-1', quantity: 2 },
+                    { sku: 'ITEM-2', quantity: 5 },
+                ],
+            },
+            record,
+            contextUser: USER,
+            provider,
+            run: { ProcessRunID: 'RUN-456' },
+        });
+        expect(out.createdChildIDs?.length).toBe(2);
+        expect(created.length).toBe(2);
+        expect(created[0].sets).toEqual({
+            OrderID: 'c1',
+            Sku: 'ITEM-1',
+            Qty: 2,
+            TotalScore: 99,
+            RunID: 'RUN-456',
+        });
+        expect(created[1].sets).toEqual({
+            OrderID: 'c1',
+            Sku: 'ITEM-2',
+            Qty: 5,
+            TotalScore: 99,
+            RunID: 'RUN-456',
+        });
+    });
+
+    it('dry-run previews fan-out child records in previewChildren without saving', async () => {
+        const { provider, created } = fakeProvider();
+        const out = await applyOutputMapping({
+            outputMapping: {
+                childRecords: [
+                    {
+                        entity: 'OrderLine',
+                        parentField: 'OrderID',
+                        fanOutRef: '$.items',
+                        map: { Sku: '$.sku', Qty: '$.quantity' },
+                    },
+                ],
+            },
+            result: {
+                items: [
+                    { sku: 'ITEM-A', quantity: 1 },
+                    { sku: 'ITEM-B', quantity: 3 },
+                ],
+            },
+            record,
+            contextUser: USER,
+            provider,
+            dryRun: true,
+        });
+        expect(out.dryRun).toBe(true);
+        expect(out.createdChildIDs).toBeUndefined();
+        expect(created.length).toBe(0);
+        expect(out.previewChildren).toEqual([
+            { OrderID: 'c1', Sku: 'ITEM-A', Qty: 1 },
+            { OrderID: 'c1', Sku: 'ITEM-B', Qty: 3 },
+        ]);
+    });
+
+    it('previews tags in dry-run mode under constrained and auto-grow', async () => {
+        const mockResolveTag = vi.spyOn(TagEngine.Instance, 'ResolveTag').mockImplementation(async (text, _w, _mode, rootID) => {
+            if (text === 'Existing Tag') {
+                return { ID: 'tag-1', Name: 'Existing Tag', ParentID: rootID } as unknown as MJTagEntity;
+            }
+            if (text === 'Deep Tag') {
+                return { ID: 'tag-deep', Name: 'Deep Tag', ParentID: 'tag-1' } as unknown as MJTagEntity;
+            }
+            return null;
+        });
+        const mockGetTagByID = vi.spyOn(TagEngine.Instance, 'GetTagByID').mockImplementation((id: string) => {
+            if (id === 'tag-1') return { ID: 'tag-1', Name: 'Existing Tag', ParentID: 'root-1' } as unknown as MJTagEntity;
+            if (id === 'tag-deep') return { ID: 'tag-deep', Name: 'Deep Tag', ParentID: 'tag-1' } as unknown as MJTagEntity;
+            if (id === 'root-1') return { ID: 'root-1', Name: 'Root', ParentID: null } as unknown as MJTagEntity;
+            return undefined;
+        });
+        const mockConfig = vi.spyOn(TagEngine.Instance, 'Config').mockResolvedValue(undefined);
+
+        const { provider, created } = fakeProvider();
+        const out = await applyOutputMapping({
+            outputMapping: {
+                tags: [
+                    {
+                        ref: '$.tagNames',
+                        rootTagId: 'root-1',
+                        growth: 'auto-grow',
+                        maxDepth: 1,
+                    },
+                ],
+            },
+            result: { tagNames: ['Existing Tag', 'Deep Tag', 'Brand New Tag'] },
+            record,
+            contextUser: USER,
+            provider,
+            dryRun: true,
+        });
+
+        expect(out.dryRun).toBe(true);
+        expect(out.previewTags?.length).toBe(3);
+        // Existing Tag is matched at depth 1 (under root-1), so valid
+        expect(out.previewTags?.[0]).toEqual({
+            tagText: 'Existing Tag',
+            resolvedTagID: 'tag-1',
+            resolvedTagName: 'Existing Tag',
+            matched: true,
+            created: false,
+            rootTagID: 'root-1',
+            depth: 1,
+            error: undefined,
+        });
+        // Deep Tag is matched at depth 2 (under tag-1 -> root-1), so exceeds maxDepth 1
+        expect(out.previewTags?.[1].matched).toBe(true);
+        expect(out.previewTags?.[1].depth).toBe(2);
+        expect(out.previewTags?.[1].error).toMatch(/exceeds maxDepth/);
+        // Brand New Tag is not matched, so under auto-grow it would be created at depth 1
+        expect(out.previewTags?.[2]).toEqual({
+            tagText: 'Brand New Tag',
+            matched: false,
+            created: true,
+            rootTagID: 'root-1',
+            depth: 1,
+            error: undefined,
+        });
+        expect(created.length).toBe(0);
+        expect(mockResolveTag).toHaveBeenCalledWith(
+            'Existing Tag',
+            1.0,
+            'constrained',
+            'root-1',
+            0.8,
+            USER,
+            { dryRun: true }
+        );
+
+        mockResolveTag.mockRestore();
+        mockGetTagByID.mockRestore();
+        mockConfig.mockRestore();
+    });
+
+    it('creates TaggedItem records for resolved tags in non-dry-run mode', async () => {
+        const mockResolveTag = vi.spyOn(TagEngine.Instance, 'ResolveTag').mockResolvedValue({
+            ID: 'tag-resolved-1',
+            Name: 'Resolved Tag',
+            ParentID: 'root-1',
+        } as unknown as MJTagEntity);
+        const mockGetTagByID = vi.spyOn(TagEngine.Instance, 'GetTagByID').mockReturnValue({
+            ID: 'tag-resolved-1',
+            Name: 'Resolved Tag',
+            ParentID: 'root-1',
+        } as unknown as MJTagEntity);
+        const mockCreateTaggedItem = vi.spyOn(TagEngine.Instance, 'CreateTaggedItem').mockResolvedValue({
+            ID: 'tagged-item-1',
+            PrimaryKey: CompositeKey.FromKeyValuePair('ID', 'tagged-item-1'),
+        } as unknown as MJTaggedItemEntity);
+        const mockConfig = vi.spyOn(TagEngine.Instance, 'Config').mockResolvedValue(undefined);
+
+        const { provider } = fakeProvider();
+        const out = await applyOutputMapping({
+            outputMapping: {
+                tags: [
+                    {
+                        ref: '$.tag',
+                        rootTagId: 'root-1',
+                        growth: 'constrained',
+                    },
+                ],
+            },
+            result: { tag: 'Resolved Tag' },
+            record,
+            contextUser: USER,
+            provider,
+        });
+
+        expect(mockCreateTaggedItem).toHaveBeenCalledWith(
+            'tag-resolved-1',
+            'ENT-1',
+            'c1',
+            1.0,
+            USER
+        );
+        expect(out.createdTaggedItemIDs).toEqual(['tagged-item-1']);
+
+        mockResolveTag.mockRestore();
+        mockGetTagByID.mockRestore();
+        mockCreateTaggedItem.mockRestore();
+        mockConfig.mockRestore();
+    });
+
+    it('marks non-descendant tags as error in previewTags during dry-run', async () => {
+        const mockResolveTag = vi.spyOn(TagEngine.Instance, 'ResolveTag').mockResolvedValue({
+            ID: 'tag-unrelated',
+            Name: 'Unrelated Tag',
+            ParentID: 'other-root',
+        } as unknown as MJTagEntity);
+        const mockGetTagByID = vi.spyOn(TagEngine.Instance, 'GetTagByID').mockImplementation((id: string) => {
+            if (id === 'tag-unrelated') return { ID: 'tag-unrelated', Name: 'Unrelated Tag', ParentID: 'other-root' } as unknown as MJTagEntity;
+            if (id === 'other-root') return { ID: 'other-root', Name: 'Other Root', ParentID: null } as unknown as MJTagEntity;
+            return undefined;
+        });
+        const mockConfig = vi.spyOn(TagEngine.Instance, 'Config').mockResolvedValue(undefined);
+
+        const { provider } = fakeProvider();
+        const out = await applyOutputMapping({
+            outputMapping: {
+                tags: [
+                    {
+                        ref: '$.tag',
+                        rootTagId: 'root-1',
+                        growth: 'constrained',
+                    },
+                ],
+            },
+            result: { tag: 'Unrelated Tag' },
+            record,
+            contextUser: USER,
+            provider,
+            dryRun: true,
+        });
+
+        expect(out.previewTags?.length).toBe(1);
+        expect(out.previewTags?.[0].depth).toBe(-1);
+        expect(out.previewTags?.[0].error).toContain('is not a descendant of root tag');
+
+        mockResolveTag.mockRestore();
+        mockGetTagByID.mockRestore();
+        mockConfig.mockRestore();
+    });
+
+    it('throws when resolved tag is not a descendant of root tag in non-dry-run mode', async () => {
+        const mockResolveTag = vi.spyOn(TagEngine.Instance, 'ResolveTag').mockResolvedValue({
+            ID: 'tag-unrelated',
+            Name: 'Unrelated Tag',
+            ParentID: 'other-root',
+        } as unknown as MJTagEntity);
+        const mockGetTagByID = vi.spyOn(TagEngine.Instance, 'GetTagByID').mockImplementation((id: string) => {
+            if (id === 'tag-unrelated') return { ID: 'tag-unrelated', Name: 'Unrelated Tag', ParentID: 'other-root' } as unknown as MJTagEntity;
+            if (id === 'other-root') return { ID: 'other-root', Name: 'Other Root', ParentID: null } as unknown as MJTagEntity;
+            return undefined;
+        });
+        const mockConfig = vi.spyOn(TagEngine.Instance, 'Config').mockResolvedValue(undefined);
+
+        const { provider } = fakeProvider();
+        await expect(applyOutputMapping({
+            outputMapping: {
+                tags: [
+                    {
+                        ref: '$.tag',
+                        rootTagId: 'root-1',
+                        growth: 'constrained',
+                    },
+                ],
+            },
+            result: { tag: 'Unrelated Tag' },
+            record,
+            contextUser: USER,
+            provider,
+        })).rejects.toThrow(/is not a descendant of root tag/);
+
+        mockResolveTag.mockRestore();
+        mockGetTagByID.mockRestore();
+        mockConfig.mockRestore();
+    });
+
+    describe('foreign-key lookup resolution', () => {
+        function fakeFKProvider(opts?: {
+            fields?: Array<{ Name: string; RelatedEntity?: string; RelatedEntityID?: string }>;
+            runViewHandler?: (params: { EntityName: string; ExtraFilter?: string }) => Array<Record<string, unknown>>;
+            childKey?: CompositeKey;
+        }) {
+            const created: FakeEntity[] = [];
+            const provider = {
+                EntityByID: (id: string) => ({
+                    ID: id,
+                    Name: 'Person',
+                    PrimaryKeys: [{ Name: 'ID' }],
+                    FirstPrimaryKey: { Name: 'ID' },
+                    Fields: opts?.fields ?? [
+                        { Name: 'SeniorityLevelID', RelatedEntity: 'Seniority Levels' },
+                    ],
+                }),
+                EntityByName: (name: string) => ({
+                    ID: 'ENT-' + name,
+                    Name: name,
+                    PrimaryKeys: [{ Name: 'ID' }],
+                    FirstPrimaryKey: { Name: 'ID' },
+                }),
+                GetEntityObject: async () => {
+                    const e = new FakeEntity(opts?.childKey ?? CompositeKey.FromKeyValuePair('ID', 'new-created-id'));
+                    created.push(e);
+                    return e;
+                },
+                RunView: async (params: { EntityName: string; ExtraFilter?: string }) => {
+                    const results = opts?.runViewHandler ? opts.runViewHandler(params) : [];
+                    return { Success: true, Results: results, TotalRowCount: results.length };
+                },
+            } as unknown as IMetadataProvider;
+            return { provider, created };
+        }
+
+        it('resolves foreign key by looking up name and writing related ID', async () => {
+            const { provider, created } = fakeFKProvider({
+                runViewHandler: (params) => {
+                    expect(params.EntityName).toBe('Seniority Levels');
+                    expect(params.ExtraFilter).toBe("[Name] = 'Director'");
+                    return [{ ID: 'seniority-dir-uuid', Name: 'Director' }];
+                },
+            });
+
+            const out = await applyOutputMapping({
+                outputMapping: {
+                    fields: { SeniorityLevelID: '$.seniority' },
+                    fieldLookups: {
+                        SeniorityLevelID: {
+                            relatedEntity: 'Seniority Levels',
+                            matchField: 'Name',
+                            onLookupMiss: 'null',
+                        },
+                    },
+                },
+                result: { seniority: 'Director' },
+                record: { EntityID: 'ENT-Person', RecordID: 'p1', Record: {} },
+                contextUser: USER,
+                provider,
+            });
+
+            expect(out.updatedRecord).toBe(true);
+            expect(created[0].sets.SeniorityLevelID).toBe('seniority-dir-uuid');
+        });
+
+        it('passes through value without lookup when already a valid UUID', async () => {
+            let runViewCalled = false;
+            const validUUID = 'eb506b92-343c-434d-b21f-12cfecda3d3b';
+            const { provider, created } = fakeFKProvider({
+                runViewHandler: () => {
+                    runViewCalled = true;
+                    return [];
+                },
+            });
+
+            const out = await applyOutputMapping({
+                outputMapping: {
+                    fields: { SeniorityLevelID: '$.seniority' },
+                },
+                result: { seniority: validUUID },
+                record: { EntityID: 'ENT-Person', RecordID: 'p1', Record: {} },
+                contextUser: USER,
+                provider,
+            });
+
+            expect(runViewCalled).toBe(false);
+            expect(out.updatedRecord).toBe(true);
+            expect(created[0].sets.SeniorityLevelID).toBe(validUUID);
+        });
+
+        it('handles lookup miss with onLookupMiss=null by setting null', async () => {
+            const { provider, created } = fakeFKProvider({
+                runViewHandler: () => [], // 0 rows matched
+            });
+
+            const out = await applyOutputMapping({
+                outputMapping: {
+                    fields: { SeniorityLevelID: '$.seniority' },
+                    fieldLookups: {
+                        SeniorityLevelID: {
+                            onLookupMiss: 'null',
+                        },
+                    },
+                },
+                result: { seniority: 'NonExistentLevel' },
+                record: { EntityID: 'ENT-Person', RecordID: 'p1', Record: {} },
+                contextUser: USER,
+                provider,
+            });
+
+            expect(out.updatedRecord).toBe(true);
+            expect(created[0].sets.SeniorityLevelID).toBeNull();
+        });
+
+        it('handles lookup miss with onLookupMiss=fail by throwing an error', async () => {
+            const { provider } = fakeFKProvider({
+                runViewHandler: () => [], // 0 rows matched
+            });
+
+            await expect(applyOutputMapping({
+                outputMapping: {
+                    fields: { SeniorityLevelID: '$.seniority' },
+                    fieldLookups: {
+                        SeniorityLevelID: {
+                            onLookupMiss: 'fail',
+                        },
+                    },
+                },
+                result: { seniority: 'NonExistentLevel' },
+                record: { EntityID: 'ENT-Person', RecordID: 'p1', Record: {} },
+                contextUser: USER,
+                provider,
+            })).rejects.toThrow(/matched 0 rows \(OnLookupMiss=fail\)/);
+        });
+
+        it('handles lookup miss with onLookupMiss=create by creating related record', async () => {
+            const { provider, created } = fakeFKProvider({
+                runViewHandler: () => [], // 0 rows matched initially
+                childKey: CompositeKey.FromKeyValuePair('ID', 'new-created-level-id'),
+            });
+
+            const out = await applyOutputMapping({
+                outputMapping: {
+                    fields: { SeniorityLevelID: '$.seniority' },
+                    fieldLookups: {
+                        SeniorityLevelID: {
+                            onLookupMiss: 'create',
+                        },
+                    },
+                },
+                result: { seniority: 'Principal' },
+                record: { EntityID: 'ENT-Person', RecordID: 'p1', Record: {} },
+                contextUser: USER,
+                provider,
+            });
+
+            expect(out.updatedRecord).toBe(true);
+            // First created entity is the new Seniority Level created on the miss
+            expect(created[0].sets.Name).toBe('Principal');
+            expect(created[0].saved).toBe(true);
+            // Second created entity is the Person record being updated
+            expect(created[1].sets.SeniorityLevelID).toBe('new-created-level-id');
+        });
+
+        it('returns preview ID in dry-run mode when onLookupMiss=create', async () => {
+            const { provider, created } = fakeFKProvider({
+                runViewHandler: () => [],
+            });
+
+            const out = await applyOutputMapping({
+                outputMapping: {
+                    fields: { SeniorityLevelID: '$.seniority' },
+                    fieldLookups: {
+                        SeniorityLevelID: {
+                            onLookupMiss: 'create',
+                        },
+                    },
+                },
+                result: { seniority: 'Staff' },
+                record: { EntityID: 'ENT-Person', RecordID: 'p1', Record: {} },
+                contextUser: USER,
+                provider,
+                dryRun: true,
+            });
+
+            expect(out.dryRun).toBe(true);
+            expect(out.updatedRecord).toBe(false);
+            expect(created.length).toBe(0);
+            expect(out.previewFields?.SeniorityLevelID).toBe('preview-new-Seniority Levels-Staff');
+        });
+
+        it('auto-derives relatedEntity from metadata when fieldLookups omitted', async () => {
+            const { provider, created } = fakeFKProvider({
+                fields: [{ Name: 'SeniorityLevelID', RelatedEntity: 'Seniority Levels' }],
+                runViewHandler: (params) => {
+                    expect(params.EntityName).toBe('Seniority Levels');
+                    return [{ ID: 'auto-derived-guid', Name: 'Manager' }];
+                },
+            });
+
+            const out = await applyOutputMapping({
+                outputMapping: {
+                    fields: { SeniorityLevelID: '$.seniority' },
+                },
+                result: { seniority: 'Manager' },
+                record: { EntityID: 'ENT-Person', RecordID: 'p1', Record: {} },
+                contextUser: USER,
+                provider,
+            });
+
+            expect(out.updatedRecord).toBe(true);
+            expect(created[0].sets.SeniorityLevelID).toBe('auto-derived-guid');
+        });
+
+        it('escapes single quotes in model output using EscapeSQLString', async () => {
+            let capturedFilter = '';
+            const { provider, created } = fakeFKProvider({
+                runViewHandler: (params) => {
+                    capturedFilter = params.ExtraFilter ?? '';
+                    return [{ ID: 'level-vp-id', Name: "Vice President of O'Connor Division" }];
+                },
+            });
+
+            const out = await applyOutputMapping({
+                outputMapping: {
+                    fields: { SeniorityLevelID: '$.seniority' },
+                    fieldLookups: {
+                        SeniorityLevelID: {
+                            relatedEntity: 'Seniority Levels',
+                            matchField: 'Name',
+                        },
+                    },
+                },
+                result: { seniority: "Vice President of O'Connor Division" },
+                record: { EntityID: 'ENT-Person', RecordID: 'p1', Record: {} },
+                contextUser: USER,
+                provider,
+            });
+
+            expect(capturedFilter).toBe("[Name] = 'Vice President of O''Connor Division'");
+            expect(out.updatedRecord).toBe(true);
+            expect(created[0].sets.SeniorityLevelID).toBe('level-vp-id');
+        });
+
+        it('rejects unsafe matchField identifiers with special characters or SQL injection', async () => {
+            const { provider } = fakeFKProvider();
+
+            await expect(applyOutputMapping({
+                outputMapping: {
+                    fields: { SeniorityLevelID: '$.seniority' },
+                    fieldLookups: {
+                        SeniorityLevelID: {
+                            relatedEntity: 'Seniority Levels',
+                            matchField: 'Name; DROP TABLE Users--',
+                        },
+                    },
+                },
+                result: { seniority: 'Director' },
+                record: { EntityID: 'ENT-Person', RecordID: 'p1', Record: {} },
+                contextUser: USER,
+                provider,
+            })).rejects.toThrow(/invalid matchField identifier 'Name; DROP TABLE Users--'/);
+        });
+
+        it('handles empty or whitespace-only value by setting null (or throwing when onLookupMiss=fail)', async () => {
+            let runViewCalled = false;
+            const { provider, created } = fakeFKProvider({
+                runViewHandler: () => {
+                    runViewCalled = true;
+                    return [];
+                },
+            });
+
+            // Default onLookupMiss = null
+            const out = await applyOutputMapping({
+                outputMapping: {
+                    fields: { SeniorityLevelID: '$.seniority' },
+                    fieldLookups: { SeniorityLevelID: { onLookupMiss: 'null' } },
+                },
+                result: { seniority: '   ' },
+                record: { EntityID: 'ENT-Person', RecordID: 'p1', Record: {} },
+                contextUser: USER,
+                provider,
+            });
+
+            expect(runViewCalled).toBe(false);
+            expect(out.updatedRecord).toBe(true);
+            expect(created[0].sets.SeniorityLevelID).toBeNull();
+
+            // onLookupMiss = fail throws
+            await expect(applyOutputMapping({
+                outputMapping: {
+                    fields: { SeniorityLevelID: '$.seniority' },
+                    fieldLookups: { SeniorityLevelID: { onLookupMiss: 'fail' } },
+                },
+                result: { seniority: '' },
+                record: { EntityID: 'ENT-Person', RecordID: 'p1', Record: {} },
+                contextUser: USER,
+                provider,
+            })).rejects.toThrow(/value resolved to an empty string/);
+        });
+
+        it('handles non-string/number values by setting null (or throwing when onLookupMiss=fail)', async () => {
+            let runViewCalled = false;
+            const { provider, created } = fakeFKProvider({
+                runViewHandler: () => {
+                    runViewCalled = true;
+                    return [];
+                },
+            });
+
+            // Default onLookupMiss = null
+            const out = await applyOutputMapping({
+                outputMapping: {
+                    fields: { SeniorityLevelID: '$.seniority' },
+                    fieldLookups: { SeniorityLevelID: { onLookupMiss: 'null' } },
+                },
+                result: { seniority: { invalid: 'object' } },
+                record: { EntityID: 'ENT-Person', RecordID: 'p1', Record: {} },
+                contextUser: USER,
+                provider,
+            });
+
+            expect(runViewCalled).toBe(false);
+            expect(out.updatedRecord).toBe(true);
+            expect(created[0].sets.SeniorityLevelID).toBeNull();
+
+            // onLookupMiss = fail throws
+            await expect(applyOutputMapping({
+                outputMapping: {
+                    fields: { SeniorityLevelID: '$.seniority' },
+                    fieldLookups: { SeniorityLevelID: { onLookupMiss: 'fail' } },
+                },
+                result: { seniority: true },
+                record: { EntityID: 'ENT-Person', RecordID: 'p1', Record: {} },
+                contextUser: USER,
+                provider,
+            })).rejects.toThrow(/value is not a string or number/);
+        });
+
+        it('throws descriptive error when RunView provider is unavailable', async () => {
+            const { provider } = fakeFKProvider();
+            // Remove RunView capability from provider
+            (provider as Record<string, unknown>).RunView = undefined;
+
+            await expect(applyOutputMapping({
+                outputMapping: {
+                    fields: { SeniorityLevelID: '$.seniority' },
+                },
+                result: { seniority: 'Director' },
+                record: { EntityID: 'ENT-Person', RecordID: 'p1', Record: {} },
+                contextUser: USER,
+                provider,
+            })).rejects.toThrow(/RunView provider is unavailable/);
+        });
+
+        it('memoizes lookups in lookupCache across multiple calls without stringifying numbers or downgrading miss policy', async () => {
+            let runViewCallCount = 0;
+            const { provider, created } = fakeFKProvider({
+                runViewHandler: (params) => {
+                    runViewCallCount++;
+                    if (params.ExtraFilter?.includes('Director')) {
+                        return [{ ID: 'dir-uuid', Name: 'Director' }];
+                    }
+                    if (params.ExtraFilter?.includes('NumericLevel')) {
+                        return [{ ID: 42, Name: 'NumericLevel' }];
+                    }
+                    return []; // miss for others
+                },
+            });
+
+            const sharedCache = new Map<string, string | number>();
+
+            // First call for 'Director' -> hits RunView
+            const out1 = await applyOutputMapping({
+                outputMapping: { fields: { SeniorityLevelID: '$.seniority' } },
+                result: { seniority: 'Director' },
+                record: { EntityID: 'ENT-Person', RecordID: 'p1', Record: {} },
+                contextUser: USER,
+                provider,
+                lookupCache: sharedCache,
+            });
+            expect(runViewCallCount).toBe(1);
+            expect(created[0].sets.SeniorityLevelID).toBe('dir-uuid');
+
+            // Second call for 'Director' -> hits cache, RunView count unchanged
+            const out2 = await applyOutputMapping({
+                outputMapping: { fields: { SeniorityLevelID: '$.seniority' } },
+                result: { seniority: 'Director' },
+                record: { EntityID: 'ENT-Person', RecordID: 'p2', Record: {} },
+                contextUser: USER,
+                provider,
+                lookupCache: sharedCache,
+            });
+            expect(runViewCallCount).toBe(1);
+            expect(created[1].sets.SeniorityLevelID).toBe('dir-uuid');
+
+            // Numeric ID lookup retains number type (not stringified)
+            await applyOutputMapping({
+                outputMapping: { fields: { SeniorityLevelID: '$.seniority' } },
+                result: { seniority: 'NumericLevel' },
+                record: { EntityID: 'ENT-Person', RecordID: 'p3', Record: {} },
+                contextUser: USER,
+                provider,
+                lookupCache: sharedCache,
+            });
+            expect(runViewCallCount).toBe(2);
+            expect(created[2].sets.SeniorityLevelID).toBe(42);
+
+            // Second call for NumericLevel -> hits cache and still receives number 42
+            await applyOutputMapping({
+                outputMapping: { fields: { SeniorityLevelID: '$.seniority' } },
+                result: { seniority: 'NumericLevel' },
+                record: { EntityID: 'ENT-Person', RecordID: 'p4', Record: {} },
+                contextUser: USER,
+                provider,
+                lookupCache: sharedCache,
+            });
+            expect(runViewCallCount).toBe(2);
+            expect(created[3].sets.SeniorityLevelID).toBe(42);
+
+            // Third call for a miss 'Unknown' with onLookupMiss='null' -> does NOT cache null
+            await applyOutputMapping({
+                outputMapping: {
+                    fields: { SeniorityLevelID: '$.seniority' },
+                    fieldLookups: { SeniorityLevelID: { onLookupMiss: 'null' } },
+                },
+                result: { seniority: 'Unknown' },
+                record: { EntityID: 'ENT-Person', RecordID: 'p5', Record: {} },
+                contextUser: USER,
+                provider,
+                lookupCache: sharedCache,
+            });
+            expect(runViewCallCount).toBe(3);
+            expect(created[4].sets.SeniorityLevelID).toBeNull();
+
+            // Subsequent call for 'Unknown' with onLookupMiss='fail' must NOT be downgraded to null; it must fail!
+            await expect(applyOutputMapping({
+                outputMapping: {
+                    fields: { SeniorityLevelID: '$.seniority' },
+                    fieldLookups: { SeniorityLevelID: { onLookupMiss: 'fail' } },
+                },
+                result: { seniority: 'Unknown' },
+                record: { EntityID: 'ENT-Person', RecordID: 'p6', Record: {} },
+                contextUser: USER,
+                provider,
+                lookupCache: sharedCache,
+            })).rejects.toThrow(/matched 0 rows \(OnLookupMiss=fail\)/);
+            expect(runViewCallCount).toBe(4);
+        });
     });
 });

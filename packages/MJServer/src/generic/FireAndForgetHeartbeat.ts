@@ -1,9 +1,23 @@
 import { PubSubEngine } from 'type-graphql';
 import { LogError } from '@memberjunction/core';
-import { publishStatusUpdate } from './PushStatusResolver.js';
+import { PublishStatusUpdate } from './PushStatusResolver.js';
 
-/** Default cadence for fire-and-forget liveness pulses (5 minutes). */
-export const DEFAULT_PULSE_INTERVAL_MS = 5 * 60 * 1000;
+/**
+ * Default cadence for fire-and-forget liveness pulses (60 seconds).
+ *
+ * MATCHED PAIR — do not change alone. The client's inactivity window
+ * (`DEFAULT_IDLE_TIMEOUT_MS` in GraphQLDataProvider's fireAndForgetHelper) is sized at roughly
+ * 3x this value, so a healthy run always refreshes the timer well before it expires. Lengthening
+ * this without lengthening that window makes every quiet stretch of a long agent run look like a
+ * stall and trips reconciliation; shortening the window without shortening this does the same.
+ *
+ * WAS 5 MINUTES (MJ #4222). Paired with the old 12-minute window, a client whose transport had
+ * silently died waited 12 minutes to notice — on runs that typically finish in 20 seconds. The
+ * pulse is a few dozen bytes and exists only while an operation is actually running, so the
+ * added traffic is negligible: a 40-minute run now sends ~40 pulses instead of ~8, and the
+ * 20-second run that motivated the change still sends none.
+ */
+export const DEFAULT_PULSE_INTERVAL_MS = 60 * 1000;
 
 /** The `type` discriminator carried by liveness pulse messages. */
 export const HEARTBEAT_MESSAGE_TYPE = 'Heartbeat';
@@ -15,38 +29,38 @@ export const HEARTBEAT_MESSAGE_TYPE = 'Heartbeat';
  */
 export interface PulseStatus {
     /** Primary key of the persisted run record (AIAgentRun, TestRun, TestSuiteRun). */
-    runId?: string;
+    runId?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
     /** Current run status, e.g. 'Running'. */
-    status?: string;
+    status?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
     /** Optional human-readable current step for UI display. */
-    currentStep?: string;
+    currentStep?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
 }
 
 /** Handle returned by {@link startLivenessPulse}; call `stop()` when the work settles. */
 export interface LivenessPulseHandle {
-    stop(): void;
+    Stop(): void;
 }
 
 export interface LivenessPulseOptions {
     /** PubSub engine used to publish on the shared push-status topic. */
-    pubSub: PubSubEngine;
+    pubSub: PubSubEngine;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
     /** Session the client is subscribed on (used by the subscription filter). */
-    sessionId: string;
+    sessionId: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /**
      * Authenticated user the operation belongs to (B49). Stamped on every pulse so the
      * subscription filter binds delivery to identity, not just the client-chosen sessionId.
      */
-    ownerUserId: string;
+    ownerUserId: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
     /** Resolver label echoed in the message envelope (e.g. 'RunAIAgentResolver'). */
-    resolver: string;
+    resolver: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** Pulse cadence in ms. Defaults to {@link DEFAULT_PULSE_INTERVAL_MS}. */
-    intervalMs?: number;
+    intervalMs?: number;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
     /**
      * Optional cheap status reader invoked on each tick. Should read from an
      * in-memory ref, not the database. Errors are swallowed so a transient read
      * never kills the pulse loop.
      */
-    readStatus?: () => PulseStatus | undefined;
+    readStatus?: () => PulseStatus | undefined;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
 }
 
 /**
@@ -60,7 +74,7 @@ export interface LivenessPulseOptions {
  * (`{ message: JSON.stringify({ resolver, type, status, data }), sessionId }`),
  * so the client receives it through the same subscription with no special parsing.
  */
-export function startLivenessPulse(options: LivenessPulseOptions): LivenessPulseHandle {
+export function StartLivenessPulse(options: LivenessPulseOptions): LivenessPulseHandle {
     const { pubSub, sessionId, ownerUserId, resolver, readStatus } = options;
     const intervalMs = options.intervalMs ?? DEFAULT_PULSE_INTERVAL_MS;
 
@@ -73,7 +87,7 @@ export function startLivenessPulse(options: LivenessPulseOptions): LivenessPulse
             LogError(`[LivenessPulse:${resolver}] readStatus failed: ${(e as Error).message}`);
         }
 
-        publishStatusUpdate(pubSub, {
+        PublishStatusUpdate(pubSub, {
             sessionId,
             ownerUserId,
             message: JSON.stringify({
@@ -86,6 +100,11 @@ export function startLivenessPulse(options: LivenessPulseOptions): LivenessPulse
     }, intervalMs);
 
     return {
-        stop: () => clearInterval(timer),
+        Stop: () => clearInterval(timer),
     };
+}
+
+/** @deprecated Use {@link StartLivenessPulse}. */
+export function startLivenessPulse(options: LivenessPulseOptions): LivenessPulseHandle {
+    return StartLivenessPulse(options);
 }

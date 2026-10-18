@@ -174,7 +174,7 @@ const UNKNOWN_GATE_REASON =
  * @param model the model's metric JSON + problem type.
  * @returns the grade, plain copy, and the `canAct` gate (false for Poor or unmeasured models).
  */
-export function deriveTrustVerdict(model: TrustModelInput): TrustVerdict {
+export function DeriveTrustVerdict(model: TrustModelInput): TrustVerdict {
   const regression = isRegression(model.ProblemType);
   const metrics = bestMetrics(model);
 
@@ -225,11 +225,16 @@ export function deriveTrustVerdict(model: TrustModelInput): TrustVerdict {
   };
 }
 
+/** @deprecated Use {@link DeriveTrustVerdict}. */
+export function deriveTrustVerdict(model: TrustModelInput): TrustVerdict {
+  return DeriveTrustVerdict(model);
+}
+
 /**
  * Human-readable "checked against N members it had never seen" evidence line. Returns a generic
  * phrasing when no count is available (never fabricates a number).
  */
-export function trustEvidenceLine(opts?: TrustEvidenceOptions): string {
+export function TrustEvidenceLine(opts?: TrustEvidenceOptions): string {
   const noun = opts?.noun?.trim() || 'records';
   if (opts?.count != null && Number.isFinite(opts.count) && opts.count > 0) {
     return `Checked against ${Math.round(opts.count).toLocaleString()} past ${noun} it had never seen.`;
@@ -237,7 +242,17 @@ export function trustEvidenceLine(opts?: TrustEvidenceOptions): string {
   return `Checked against past ${noun} it had never seen.`;
 }
 
+/** @deprecated Use {@link TrustEvidenceLine}. */
+export function trustEvidenceLine(opts?: TrustEvidenceOptions): string {
+  return TrustEvidenceLine(opts);
+}
+
 /** The 0–5 "filled dots/stars" count for a grade, for compact visuals. */
-export function trustDots(grade: TrustGrade): number {
+export function TrustDots(grade: TrustGrade): number {
   return grade === 'Excellent' ? 5 : grade === 'Good' ? 4 : grade === 'Fair' ? 3 : 1;
+}
+
+/** @deprecated Use {@link TrustDots}. */
+export function trustDots(grade: TrustGrade): number {
+  return TrustDots(grade);
 }

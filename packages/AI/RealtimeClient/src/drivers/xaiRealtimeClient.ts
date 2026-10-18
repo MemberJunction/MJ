@@ -71,7 +71,7 @@ interface NativeWebSocketLike {
  * audio plane at 24 kHz → report `'listening'`.
  */
 @RegisterClass(BaseRealtimeClient, 'xai')
-export class xAIRealtimeClient extends OpenAIProtocolWebSocketRealtimeClient {
+export class xAIRealtimeClient extends OpenAIProtocolWebSocketRealtimeClient {  // case-violation-ok-legacy-back-compat: the vendor spells its own name "xAI"; this identifier is also the class-factory registration key
     /**
      * Whether the CURRENT user turn has already emitted a transcription. Grok streams input
      * transcription as repeated `.completed` events (each the full growing text), so the first emission

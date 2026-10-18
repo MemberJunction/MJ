@@ -17,9 +17,10 @@ import { RegisterClass } from '@memberjunction/global';
 import { LogError } from '@memberjunction/core';
 import { BaseAgent } from '@memberjunction/ai-agents';
 import type { ExecuteAgentParams, AgentConfiguration, BaseAgentNextStep, ArtifactDirective } from '@memberjunction/ai-core-plus';
-import type { ModelingPlanSpec, TrustGrade } from '@memberjunction/predictive-studio-core';
+import type { ModelingPlanSpec, TrustGrade, FeatureStepWarning } from '@memberjunction/predictive-studio-core';
 
-import { PredictiveStudioPipelineBuilder, type BuildPredictionResult } from './pipeline-builder';
+import { PredictiveStudioPipelineBuilder, type BuildPredictionResult, type MLLeaderboardEntryPayload } from './pipeline-builder';
+export type { MLLeaderboardEntryPayload };
 
 /** The compact, payload-safe outcome the builder writes back so the agent can narrate the result. */
 export interface PredictiveStudioBuildOutcome {
@@ -33,21 +34,10 @@ export interface PredictiveStudioBuildOutcome {
   heldReason: string | null;
   /** A clean error message when the build failed; else null. */
   errorMessage: string | null;
+  /** Structured warnings emitted during plan translation or training (e.g. dropped candidate features). */
+  warnings?: FeatureStepWarning[];
 }
 
-/** Leaderboard entry matching MLExperimentResultsSpec and ModelingPlanSpec. */
-export interface MLLeaderboardEntryPayload {
-  IterationID: string;
-  Metric: number;
-  ModelID?: string;
-  rank?: number;
-  algorithm?: string;
-  featureSet?: string;
-  score?: number | null;
-  cvScore?: number | null;
-  modelId?: string;
-  isWinner?: boolean;
-}
 
 /** Feature importance entry matching MLExperimentResultsSpec. */
 export interface MLFeatureImportancePayload {
@@ -88,7 +78,7 @@ export interface PredictiveStudioBuilderPayload extends ModelingPlanSpec {
 }
 
 /** Project the rich {@link BuildPredictionResult} into the compact, payload-safe outcome (pure → testable). */
-export function summarizeBuildResult(result: BuildPredictionResult): PredictiveStudioBuildOutcome {
+export function SummarizeBuildResult(result: BuildPredictionResult): PredictiveStudioBuildOutcome {
   return {
     success: result.success,
     pipelineId: result.pipelineId,
@@ -98,18 +88,35 @@ export function summarizeBuildResult(result: BuildPredictionResult): PredictiveS
     published: result.published,
     heldReason: result.heldReason,
     errorMessage: result.errorMessage,
+    warnings: result.warnings && result.warnings.length > 0 ? result.warnings : undefined,
   };
 }
 
+/** @deprecated Use {@link SummarizeBuildResult}. */
+export function summarizeBuildResult(result: BuildPredictionResult): PredictiveStudioBuildOutcome {
+  return SummarizeBuildResult(result);
+}
+
 /** A plain, user-facing sentence describing what the build did (for the agent's reasoning/message). */
+export function BuildOutcomeMessage(o: PredictiveStudioBuildOutcome): string {
+  const warningText = o.warnings && o.warnings.length > 0
+    ? ` Note: ${o.warnings.length} candidate feature(s) could not be mapped to pipeline steps (${o.warnings.map(w => `${w.FeatureName}: ${w.Reason}`).join('; ')}).`
+    : '';
+  if (!o.success) return `I couldn't build the prediction: ${o.errorMessage ?? 'unknown error'}.${warningText}`;
+  if (o.published) return `Done — I built and published your prediction (trust: ${o.trustGrade}). It's now in your Predictions.${warningText}`;
+  const heldMessage = o.heldReason
+    ? (o.heldReason.trim().endsWith('.') ? o.heldReason.trim() : `${o.heldReason.trim()}.`)
+    : 'it needs review before it can be published.';
+  return `I built and trained the prediction, but I'm holding it back: ${heldMessage}${warningText}`;
+}
+
+/** @deprecated Use {@link BuildOutcomeMessage}. */
 export function buildOutcomeMessage(o: PredictiveStudioBuildOutcome): string {
-  if (!o.success) return `I couldn't build the prediction: ${o.errorMessage ?? 'unknown error'}.`;
-  if (o.published) return `Done — I built and published your prediction (trust: ${o.trustGrade}). It's now in your Predictions.`;
-  return `I built and trained the prediction, but I'm holding it back: ${o.heldReason ?? 'it needs review before it can be published.'}`;
+  return BuildOutcomeMessage(o);
 }
 
 /** Parse raw feature importance off the trained MLModel entity. */
-export function parseFeatureImportance(raw: unknown): MLFeatureImportancePayload[] {
+export function ParseFeatureImportance(raw: unknown): MLFeatureImportancePayload[] {
   if (!raw) return [];
   try {
     const val = typeof raw === 'string' ? (JSON.parse(raw) as unknown) : raw;
@@ -135,7 +142,57 @@ export function parseFeatureImportance(raw: unknown): MLFeatureImportancePayload
   return [];
 }
 
+/** @deprecated Use {@link ParseFeatureImportance}. */
+export function parseFeatureImportance(raw: unknown): MLFeatureImportancePayload[] {
+  return ParseFeatureImportance(raw);
+}
+
 /** Generate a clean markdown results report for the ML Experiment Results artifact. */
+export function GenerateMarkdownReport(
+  name: string,
+  goal: string,
+  targetVar: string,
+  targetMetric: string,
+  score: number,
+  trustGrade: string,
+  oneLiner: string,
+  published: boolean,
+  features: MLFeatureImportancePayload[],
+  leaderboard?: MLLeaderboardEntryPayload[],
+): string {
+  const topFeatures = features.slice(0, 8).map((f) => `- **${f.feature}**: ${(f.importance * 100).toFixed(1)}% weight`).join('\n');
+
+  let leaderboardSection = '';
+  if (leaderboard && leaderboard.length > 0) {
+    const rows = leaderboard
+      .map(
+        (r) =>
+          `| ${r.rank ?? '—'} | ${r.algorithm ?? 'Candidate'} | ${r.score != null ? r.score.toFixed(3) : '—'} | ${r.isWinner ? '🏆 Winner (Selected)' : 'Evaluated'} |`,
+      )
+      .join('\n');
+    leaderboardSection = `\n## Tournament Leaderboard\n| Rank | Algorithm | Score (${targetMetric}) | Status |\n|---|---|---|---|\n${rows}\n`;
+  }
+
+  return `# Model Development Results: ${name}
+
+## Executive Summary
+${oneLiner}
+
+## Winning Model Performance
+- **Target Variable**: \`${targetVar}\`
+- **Primary Metric**: **${targetMetric}** = **${score.toFixed(3)}**
+- **Trust Grade**: **${trustGrade}** (${published ? 'Published to Catalog' : 'Held for Review'})
+${leaderboardSection}
+## Top Influential Features
+${topFeatures || '- Features analyzed from source entity.'}
+
+## Verification & Lineage
+- Trained with honest holdout evaluation to safeguard against out-of-sample error.
+- Fully registered in Predictive Studio Models catalog for scoring and deployment.
+`;
+}
+
+/** @deprecated Use {@link GenerateMarkdownReport}. */
 export function generateMarkdownReport(
   name: string,
   goal: string,
@@ -145,26 +202,10 @@ export function generateMarkdownReport(
   trustGrade: string,
   oneLiner: string,
   published: boolean,
-  features: MLFeatureImportancePayload[]
+  features: MLFeatureImportancePayload[],
+  leaderboard?: MLLeaderboardEntryPayload[],
 ): string {
-  const topFeatures = features.slice(0, 8).map((f) => `- **${f.feature}**: ${(f.importance * 100).toFixed(1)}% weight`).join('\n');
-  return `# Model Development Results: ${name}
-
-## Executive Summary
-${oneLiner}
-
-## Model Performance
-- **Target Variable**: \`${targetVar}\`
-- **Primary Metric**: **${targetMetric}** = **${score.toFixed(3)}**
-- **Trust Grade**: **${trustGrade}** (${published ? 'Published to Catalog' : 'Held for Review'})
-
-## Top Influential Features
-${topFeatures || '- Features analyzed from source entity.'}
-
-## Verification & Lineage
-- Trained with honest holdout evaluation to safeguard against out-of-sample error.
-- Fully registered in Predictive Studio Models catalog for scoring and deployment.
-`;
+  return GenerateMarkdownReport(name, goal, targetVar, targetMetric, score, trustGrade, oneLiner, published, features, leaderboard);
 }
 
 @RegisterClass(BaseAgent, 'PredictiveStudioPipelineBuilderAgent')
@@ -198,17 +239,18 @@ export class PredictiveStudioPipelineBuilderAgent extends BaseAgent {
       result = { success: false, published: false, leakageFlagged: false, heldReason: null, errorMessage };
     }
 
-    const outcome = summarizeBuildResult(result);
+    const outcome = SummarizeBuildResult(result);
     let newPayloadObj: PredictiveStudioBuilderPayload = { ...payload, BuildResult: outcome };
     let directive: ArtifactDirective | undefined;
 
     if (result.success) {
       const targetVar = payload.TargetDefinition?.TargetVariable ?? 'Target';
       const name = payload.Name || `${targetVar} Prediction`;
-      const targetMetric = payload.TargetDefinition?.SuccessMetric ?? 'AUC';
+      const isReg = payload.TargetDefinition?.ProblemType === 'regression';
+      const targetMetric = payload.TargetDefinition?.SuccessMetric ?? (isReg ? 'R²' : 'AUC');
       const scoreVal = result.trust?.headlineMetric?.value ?? 0.85;
 
-      let featureBars = parseFeatureImportance(result.model?.FeatureImportance);
+      let featureBars = ParseFeatureImportance(result.model?.FeatureImportance);
       if (featureBars.length === 0 && payload.CandidateFeatures && payload.CandidateFeatures.length > 0) {
         featureBars = payload.CandidateFeatures.slice(0, 10).map((f, idx) => ({
           feature: f.Name,
@@ -217,24 +259,27 @@ export class PredictiveStudioPipelineBuilderAgent extends BaseAgent {
       }
       featureBars.sort((a, b) => b.importance - a.importance);
 
-      const leaderboard: MLLeaderboardEntryPayload[] = [
-        {
-          IterationID: result.modelId ?? 'iteration-1',
-          Metric: scoreVal,
-          ModelID: result.modelId,
-          rank: 1,
-          algorithm: payload.ProposedExperiments?.[0]?.AlgorithmName ?? 'Winning Algorithm',
-          featureSet: 'Full Feature Set',
-          score: scoreVal,
-          cvScore: Number((scoreVal * 0.98).toFixed(3)),
-          modelId: result.modelId,
-          isWinner: true,
-        },
-      ];
+      const leaderboard: MLLeaderboardEntryPayload[] =
+        result.leaderboard && result.leaderboard.length > 0
+          ? result.leaderboard
+          : [
+              {
+                IterationID: result.modelId ?? 'iteration-1',
+                Metric: scoreVal,
+                ModelID: result.modelId,
+                rank: 1,
+                algorithm: payload.ProposedExperiments?.[0]?.AlgorithmName ?? 'Winning Algorithm',
+                featureSet: 'Full Feature Set',
+                score: scoreVal,
+                cvScore: Number((scoreVal * 0.98).toFixed(3)),
+                modelId: result.modelId,
+                isWinner: true,
+              },
+            ];
 
       const bestModelName = `${name} (v${result.model?.Version ?? 1})`;
-      const summaryText = result.trust?.oneLiner ?? buildOutcomeMessage(outcome);
-      const reportMarkdown = generateMarkdownReport(
+      const summaryText = result.trust?.oneLiner ?? BuildOutcomeMessage(outcome);
+      const reportMarkdown = GenerateMarkdownReport(
         name,
         payload.Goal || `Predict ${targetVar}`,
         targetVar,
@@ -244,6 +289,7 @@ export class PredictiveStudioPipelineBuilderAgent extends BaseAgent {
         summaryText,
         result.published,
         featureBars,
+        leaderboard,
       );
 
       newPayloadObj = {
@@ -271,7 +317,7 @@ export class PredictiveStudioPipelineBuilderAgent extends BaseAgent {
     }
 
     const newPayload = newPayloadObj as unknown as P;
-    const message = buildOutcomeMessage(outcome);
+    const message = BuildOutcomeMessage(outcome);
     return this.codeStep<P>('Success', newPayload, message, directive);
   }
 

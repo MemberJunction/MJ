@@ -20,9 +20,9 @@ import {
   TypeInfo,
   FieldTypeInfo,
   StandardTypes,
-  mapSQLTypeToJSType,
-  areTypesCompatible,
-  describeType
+  MapSQLTypeToJSType,
+  AreTypesCompatible,
+  DescribeType
 } from './type-context';
 
 /**
@@ -30,20 +30,20 @@ import {
  */
 export interface TypeInferenceResult {
   /** The type context with all inferred variable types */
-  typeContext: TypeContext;
+  TypeContext: TypeContext;
   /** Any type errors or warnings found during inference */
-  errors: TypeInferenceError[];
+  Errors: TypeInferenceError[];
 }
 
 /**
  * A type error or warning found during inference
  */
 export interface TypeInferenceError {
-  type: 'error' | 'warning';
-  message: string;
-  line: number;
-  column: number;
-  code?: string;
+  type: 'error' | 'warning';  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  message: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  line: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  column: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  code?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
 }
 
 /**
@@ -67,7 +67,7 @@ export class TypeInferenceEngine {
   /**
    * Analyze an AST and build type context
    */
-  async analyze(ast: t.File): Promise<TypeInferenceResult> {
+  async Analyze(ast: t.File): Promise<TypeInferenceResult> {
     this.errors = [];
 
     // First pass: collect all variable declarations and their types
@@ -75,23 +75,38 @@ export class TypeInferenceEngine {
 
     // Return the result
     return {
-      typeContext: this.typeContext,
-      errors: this.errors
+      TypeContext: this.typeContext,
+      Errors: this.errors
     };
+  }
+
+  /** @deprecated Use {@link Analyze}. */
+  async analyze(ast: t.File): Promise<TypeInferenceResult> {
+    return this.Analyze(ast);
   }
 
   /**
    * Get the type context after analysis
    */
-  getTypeContext(): TypeContext {
+  GetTypeContext(): TypeContext {
     return this.typeContext;
+  }
+
+  /** @deprecated Use {@link GetTypeContext}. */
+  getTypeContext(): TypeContext {
+    return this.GetTypeContext();
   }
 
   /**
    * Get type inference errors found during analysis
    */
-  getErrors(): TypeInferenceError[] {
+  GetErrors(): TypeInferenceError[] {
     return this.errors;
+  }
+
+  /** @deprecated Use {@link GetErrors}. */
+  getErrors(): TypeInferenceError[] {
+    return this.GetErrors();
   }
 
   /**
@@ -198,7 +213,7 @@ export class TypeInferenceEngine {
       const varName = node.id.name;
 
       if (node.init) {
-        const type = this.inferExpressionType(node.init, path);
+        const type = this.InferExpressionType(node.init, path);
         this.typeContext.setVariableType(varName, type);
       } else {
         // Declared but not initialized
@@ -221,7 +236,7 @@ export class TypeInferenceEngine {
 
     if (t.isIdentifier(node.left)) {
       const varName = node.left.name;
-      const type = this.inferExpressionType(node.right, path);
+      const type = this.InferExpressionType(node.right, path);
       this.typeContext.setVariableType(varName, type);
     }
   }
@@ -271,7 +286,7 @@ export class TypeInferenceEngine {
     if (!arrayIterMethods.includes(methodName) && !isReduce) return false;
 
     // Infer the type of the array being iterated
-    const arrayType = this.inferExpressionType(callee.object, path.parentPath ?? undefined);
+    const arrayType = this.InferExpressionType(callee.object, path.parentPath ?? undefined);
     if (arrayType.type !== 'array' || !arrayType.arrayElementType) return false;
 
     const elementType = arrayType.arrayElementType;
@@ -404,7 +419,7 @@ export class TypeInferenceEngine {
 
     // Arrow function with expression body: () => ({...})
     if (t.isExpression(body)) {
-      const returnType = this.inferExpressionType(body);
+      const returnType = this.InferExpressionType(body);
       this.functionReturnTypes.set(functionName, returnType);
       return;
     }
@@ -421,7 +436,7 @@ export class TypeInferenceEngine {
       // Fallback: Find the first return statement
       for (const stmt of body.body) {
         if (t.isReturnStatement(stmt) && stmt.argument) {
-          const inferredType = this.inferExpressionType(stmt.argument);
+          const inferredType = this.InferExpressionType(stmt.argument);
           this.functionReturnTypes.set(functionName, inferredType);
           return;
         }
@@ -534,7 +549,7 @@ export class TypeInferenceEngine {
    * Infer types from object destructuring
    */
   private inferDestructuringTypes(pattern: t.ObjectPattern, init: t.Expression, path: NodePath): void {
-    const sourceType = this.inferExpressionType(init, path);
+    const sourceType = this.InferExpressionType(init, path);
 
     for (const prop of pattern.properties) {
       if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
@@ -559,7 +574,7 @@ export class TypeInferenceEngine {
    * Infer types from array destructuring
    */
   private inferArrayDestructuringTypes(pattern: t.ArrayPattern, init: t.Expression, path: NodePath): void {
-    const sourceType = this.inferExpressionType(init, path);
+    const sourceType = this.InferExpressionType(init, path);
 
     // Detect useState pattern: const [state, setState] = useState(initialValue)
     const isUseState = t.isCallExpression(init) &&
@@ -594,7 +609,7 @@ export class TypeInferenceEngine {
   /**
    * Infer the type of an expression
    */
-  inferExpressionType(node: t.Expression | t.SpreadElement | t.JSXNamespacedName | t.ArgumentPlaceholder, path?: NodePath): TypeInfo {
+  InferExpressionType(node: t.Expression | t.SpreadElement | t.JSXNamespacedName | t.ArgumentPlaceholder, path?: NodePath): TypeInfo {
     // Literals - now track actual values for constant analysis
     if (t.isStringLiteral(node)) {
       return { ...StandardTypes.string, literalValue: node.value };
@@ -657,10 +672,10 @@ export class TypeInferenceEngine {
     // Conditional (ternary) expressions
     if (t.isConditionalExpression(node)) {
       // Return the type of the consequent (or alternate if different, return unknown)
-      const consequentType = this.inferExpressionType(node.consequent, path);
-      const alternateType = this.inferExpressionType(node.alternate, path);
+      const consequentType = this.InferExpressionType(node.consequent, path);
+      const alternateType = this.InferExpressionType(node.alternate, path);
 
-      if (areTypesCompatible(consequentType, alternateType)) {
+      if (AreTypesCompatible(consequentType, alternateType)) {
         return consequentType;
       }
       return StandardTypes.unknown;
@@ -671,15 +686,20 @@ export class TypeInferenceEngine {
       // For ||, the result is the first truthy value
       // For &&, the result is the first falsy or last value
       // For ??, the result is the first non-nullish value
-      return this.inferExpressionType(node.right, path);
+      return this.InferExpressionType(node.right, path);
     }
 
     // Await expressions
     if (t.isAwaitExpression(node)) {
-      return this.inferExpressionType(node.argument, path);
+      return this.InferExpressionType(node.argument, path);
     }
 
     return StandardTypes.unknown;
+  }
+
+  /** @deprecated Use {@link InferExpressionType}. */
+  inferExpressionType(node: t.Expression | t.SpreadElement | t.JSXNamespacedName | t.ArgumentPlaceholder, path?: NodePath): TypeInfo {
+    return this.InferExpressionType(node, path);
   }
 
   /**
@@ -693,7 +713,7 @@ export class TypeInferenceEngine {
     // Try to infer element type from first element
     const firstElement = node.elements[0];
     if (firstElement && !t.isSpreadElement(firstElement)) {
-      const elementType = this.inferExpressionType(firstElement, path);
+      const elementType = this.InferExpressionType(firstElement, path);
       return { type: 'array', arrayElementType: elementType };
     }
 
@@ -709,7 +729,7 @@ export class TypeInferenceEngine {
     for (const prop of node.properties) {
       // Handle spread elements: { ...otherObject, newProp: value }
       if (t.isSpreadElement(prop)) {
-        const spreadType = this.inferExpressionType(prop.argument, path);
+        const spreadType = this.InferExpressionType(prop.argument, path);
 
         // If spreading an object, merge its fields into our fields map
         if (spreadType.type === 'object' && spreadType.fields) {
@@ -724,7 +744,7 @@ export class TypeInferenceEngine {
       // Handle regular object properties
       else if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
         const propName = prop.key.name;
-        const propType = this.inferExpressionType(prop.value as t.Expression, path);
+        const propType = this.InferExpressionType(prop.value as t.Expression, path);
         fields.set(propName, {
           type: propType.type,
           fromMetadata: false,
@@ -761,7 +781,7 @@ export class TypeInferenceEngine {
 
           // Arrow function with expression body: useMemo(() => ({...}))
           if (t.isExpression(body)) {
-            return this.inferExpressionType(body, path);
+            return this.InferExpressionType(body, path);
           }
 
           // Arrow function with block body: useMemo(() => { return {...} })
@@ -769,7 +789,7 @@ export class TypeInferenceEngine {
             // Find return statement
             for (const stmt of body.body) {
               if (t.isReturnStatement(stmt) && stmt.argument) {
-                return this.inferExpressionType(stmt.argument, path);
+                return this.InferExpressionType(stmt.argument, path);
               }
             }
           }
@@ -785,7 +805,7 @@ export class TypeInferenceEngine {
       // array destructuring `const [state, setState] = useState(X)` propagates X's type to `state`
       if (functionName === 'useState') {
         if (node.arguments.length > 0) {
-          const initType = this.inferExpressionType(node.arguments[0], path);
+          const initType = this.InferExpressionType(node.arguments[0], path);
           // For null/undefined initializers, use unknown+nullable to avoid false positives
           // (the actual type will be set by setState calls later)
           if (initType.type === 'null' || initType.type === 'undefined') {
@@ -829,7 +849,7 @@ export class TypeInferenceEngine {
         node.callee.property.name === 'values' &&
         node.arguments.length === 1) {
 
-      const objectType = this.inferExpressionType(node.arguments[0], path);
+      const objectType = this.InferExpressionType(node.arguments[0], path);
       if (objectType.type === 'object' && objectType.objectValueType) {
         // Return array of the object's value type
         return {
@@ -847,7 +867,7 @@ export class TypeInferenceEngine {
       const arrayMethods = ['filter', 'map', 'slice', 'concat', 'flat', 'flatMap', 'sort', 'reverse'];
 
       if (arrayMethods.includes(methodName)) {
-        const arrayType = this.inferExpressionType(node.callee.object, path);
+        const arrayType = this.InferExpressionType(node.callee.object, path);
         if (arrayType.type === 'array') {
           // For map, the element type might change
           if (methodName === 'map') {
@@ -859,7 +879,7 @@ export class TypeInferenceEngine {
 
       // Array methods that return elements
       if (methodName === 'find') {
-        const arrayType = this.inferExpressionType(node.callee.object, path);
+        const arrayType = this.InferExpressionType(node.callee.object, path);
         if (arrayType.arrayElementType) {
           return { ...arrayType.arrayElementType, nullable: true };
         }
@@ -995,7 +1015,7 @@ export class TypeInferenceEngine {
       const extParam = param as { name: string; type?: string; isRequired?: boolean };
       if (extParam.type) {
         paramTypeMap.set(param.name.toLowerCase(), {
-          type: mapSQLTypeToJSType(extParam.type),
+          type: MapSQLTypeToJSType(extParam.type),
           sqlType: extParam.type,
           isRequired: extParam.isRequired === true
         });
@@ -1186,7 +1206,7 @@ export class TypeInferenceEngine {
    * Infer type for member expressions
    */
   private inferMemberExpressionType(node: t.MemberExpression | t.OptionalMemberExpression, path?: NodePath): TypeInfo {
-    const objectType = this.inferExpressionType(node.object, path);
+    const objectType = this.InferExpressionType(node.object, path);
 
     // Array index access
     if (node.computed && t.isNumericLiteral(node.property)) {
@@ -1266,8 +1286,8 @@ export class TypeInferenceEngine {
         return StandardTypes.unknown;
       }
 
-      const leftType = this.inferExpressionType(node.left, path);
-      const rightType = this.inferExpressionType(node.right, path);
+      const leftType = this.InferExpressionType(node.left, path);
+      const rightType = this.InferExpressionType(node.right, path);
 
       if (leftType.type === 'string' || rightType.type === 'string') {
         return StandardTypes.string;
@@ -1305,27 +1325,46 @@ export class TypeInferenceEngine {
   /**
    * Get inferred type for a variable by name
    */
-  getVariableType(name: string): TypeInfo | undefined {
+  GetVariableType(name: string): TypeInfo | undefined {
     return this.typeContext.getVariableType(name);
+  }
+
+  /** @deprecated Use {@link GetVariableType}. */
+  getVariableType(name: string): TypeInfo | undefined {
+    return this.GetVariableType(name);
   }
 
   /**
    * Check if an expression is a specific type
    */
-  isType(node: t.Expression, expectedType: string, path?: NodePath): boolean {
-    const actualType = this.inferExpressionType(node, path);
+  IsType(node: t.Expression, expectedType: string, path?: NodePath): boolean {
+    const actualType = this.InferExpressionType(node, path);
     return actualType.type === expectedType;
+  }
+
+  /** @deprecated Use {@link IsType}. */
+  isType(node: t.Expression, expectedType: string, path?: NodePath): boolean {
+    return this.IsType(node, expectedType, path);
   }
 }
 
 /**
  * Convenience function to analyze an AST and return type context
  */
-export async function analyzeTypes(
+export async function AnalyzeTypes(
   ast: t.File,
   componentSpec?: ComponentSpec,
   contextUser?: UserInfo
 ): Promise<TypeInferenceResult> {
   const engine = new TypeInferenceEngine(componentSpec, contextUser);
   return engine.analyze(ast);
+}
+
+/** @deprecated Use {@link AnalyzeTypes}. */
+export async function analyzeTypes(
+  ast: t.File,
+  componentSpec?: ComponentSpec,
+  contextUser?: UserInfo
+): Promise<TypeInferenceResult> {
+  return AnalyzeTypes(ast, componentSpec, contextUser);
 }

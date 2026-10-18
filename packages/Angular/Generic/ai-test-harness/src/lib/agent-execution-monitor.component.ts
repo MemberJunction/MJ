@@ -350,20 +350,110 @@ export interface ExecutionStats {
     `]
 })
 export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, AfterViewInit {
-    @Input() mode: ExecutionMonitorMode = 'historical';
-    @Input() agentRun: MJAIAgentRunEntityExtended | null = null; // For historical mode
-    @Input() liveSteps: MJAIAgentRunStepEntityExtended[] = []; // For live mode streaming
-    @Input() autoExpand: boolean = true; // Auto-expand nodes in live mode
-    @Input() runId: string | null = null; // ID of the run (agent or prompt)
-    @Input() runType: 'agent' | 'prompt' = 'agent'; // Type of run
+    @Input() Mode: ExecutionMonitorMode = 'historical';
+
+    /** @deprecated Use {@link Mode}. */
+    @Input() set mode(value: ExecutionMonitorMode) {
+      this.Mode = value;
+    }
+    /** @deprecated Use {@link Mode}. */
+    get mode(): ExecutionMonitorMode {
+      return this.Mode;
+    }
+    @Input() AgentRun: MJAIAgentRunEntityExtended | null = null;
+
+    /** @deprecated Use {@link AgentRun}. */
+    @Input() set agentRun(value: MJAIAgentRunEntityExtended | null) {
+      this.AgentRun = value;
+    }
+    /** @deprecated Use {@link AgentRun}. */
+    get agentRun(): MJAIAgentRunEntityExtended | null {
+      return this.AgentRun;
+    } // For historical mode
+    @Input() LiveSteps: MJAIAgentRunStepEntityExtended[] = [];
+
+    /** @deprecated Use {@link LiveSteps}. */
+    @Input() set liveSteps(value: MJAIAgentRunStepEntityExtended[]) {
+      this.LiveSteps = value;
+    }
+    /** @deprecated Use {@link LiveSteps}. */
+    get liveSteps(): MJAIAgentRunStepEntityExtended[] {
+      return this.LiveSteps;
+    } // For live mode streaming
+    @Input() AutoExpand: boolean = true;
+
+    /** @deprecated Use {@link AutoExpand}. */
+    @Input() set autoExpand(value: boolean) {
+      this.AutoExpand = value;
+    }
+    /** @deprecated Use {@link AutoExpand}. */
+    get autoExpand(): boolean {
+      return this.AutoExpand;
+    } // Auto-expand nodes in live mode
+    @Input() RunId: string | null = null;
+
+    /** @deprecated Use {@link RunId}. */
+    @Input() set runId(value: string | null) {
+      this.RunId = value;
+    }
+    /** @deprecated Use {@link RunId}. */
+    get runId(): string | null {
+      return this.RunId;
+    } // ID of the run (agent or prompt)
+    @Input() RunType: 'agent' | 'prompt' = 'agent';
+
+    /** @deprecated Use {@link RunType}. */
+    @Input() set runType(value: 'agent' | 'prompt') {
+      this.RunType = value;
+    }
+    /** @deprecated Use {@link RunType}. */
+    get runType(): 'agent' | 'prompt' {
+      return this.RunType;
+    } // Type of run
     
-    @Output() viewRunClick = new EventEmitter<{ runId: string; runType: 'agent' | 'prompt' }>();
+    @Output() ViewRunClick = new EventEmitter<{ runId: string; runType: 'agent' | 'prompt' }>();
+
+    /**
+     * @deprecated Use {@link ViewRunClick}.
+     *
+     * The same emitter under the old binding name, so a template still binding
+     * (viewRunClick) keeps working. Must stay AFTER ViewRunClick: class fields
+     * initialise in order, and the other way round this captures undefined.
+     */
+    @Output() viewRunClick = this.ViewRunClick;
     
-    @ViewChild('executionTreeContainer') executionTreeContainer!: ElementRef<HTMLDivElement>;
-    @ViewChild('executionNodesContainer', { read: ViewContainerRef }) executionNodesContainer!: ViewContainerRef;
+    @ViewChild('executionTreeContainer') ExecutionTreeContainer!: ElementRef<HTMLDivElement>;
+
+    /** @deprecated Use {@link ExecutionTreeContainer}. */
+    get executionTreeContainer(): ElementRef<HTMLDivElement> {
+      return this.ExecutionTreeContainer;
+    }
+    /** @deprecated Use {@link ExecutionTreeContainer}. */
+    set executionTreeContainer(value: ElementRef<HTMLDivElement>) {
+      this.ExecutionTreeContainer = value;
+    }
+    @ViewChild('executionNodesContainer', { read: ViewContainerRef }) ExecutionNodesContainer!: ViewContainerRef;
+
+    /** @deprecated Use {@link ExecutionNodesContainer}. */
+    get executionNodesContainer(): ViewContainerRef {
+      return this.ExecutionNodesContainer;
+    }
+    /** @deprecated Use {@link ExecutionNodesContainer}. */
+    set executionNodesContainer(value: ViewContainerRef) {
+      this.ExecutionNodesContainer = value;
+    }
     
     // Store the currently rendered steps for UI state management
-    currentStep: MJAIAgentRunStepEntityExtended | null = null;
+    CurrentStep: MJAIAgentRunStepEntityExtended | null = null;
+
+    /** @deprecated Use {@link CurrentStep}. */
+    get currentStep(): MJAIAgentRunStepEntityExtended | null {
+      return this.CurrentStep;
+    }
+    /** @deprecated Use {@link CurrentStep}. */
+    set currentStep(value: MJAIAgentRunStepEntityExtended | null) {
+      this.CurrentStep = value;
+    }
     
     // Track component references for dynamic components
     private nodeComponentMap = new Map<string, ComponentRef<ExecutionNodeComponent>>();
@@ -371,7 +461,7 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
     // UI state management - track expanded states separately from entities
     private expandedStates = new Map<string, boolean>();
     private detailsExpandedStates = new Map<string, boolean>();
-    stats: ExecutionStats = {
+    Stats: ExecutionStats = {
         totalSteps: 0,
         completedSteps: 0,
         failedSteps: 0,
@@ -380,6 +470,15 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
         stepsByType: {},
         totalPrompts: 0
     };
+
+    /** @deprecated Use {@link Stats}. */
+    get stats(): ExecutionStats {
+      return this.Stats;
+    }
+    /** @deprecated Use {@link Stats}. */
+    set stats(value: ExecutionStats) {
+      this.Stats = value;
+    }
     
     // User interaction tracking
     private userHasInteracted = false;
@@ -411,12 +510,12 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
             agentRunChanged: !!changes['agentRun'],
             liveStepsChanged: !!changes['liveSteps'],
             modeChanged: !!changes['mode'],
-            hasAgentRun: !!this.agentRun,
-            liveStepsCount: this.liveSteps?.length || 0
+            hasAgentRun: !!this.AgentRun,
+            liveStepsCount: this.LiveSteps?.length || 0
         });
         
         // Handle agent run changes (historical mode)
-        if (changes['agentRun'] && this.mode === 'historical') {
+        if (changes['agentRun'] && this.Mode === 'historical') {
             const oldRun = changes['agentRun'].previousValue;
             const newRun = changes['agentRun'].currentValue;
             
@@ -440,7 +539,7 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
                 this.expandedStates.clear();
                 this.detailsExpandedStates.clear();
                 this.clearNodeComponents();
-                this.currentStep = null;
+                this.CurrentStep = null;
             }
             
             // Always process the agent run data (will handle updates to existing run)
@@ -450,7 +549,7 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
         }
         
         // Handle live steps changes (live mode)
-        if (changes['liveSteps'] && this.mode === 'live') {
+        if (changes['liveSteps'] && this.Mode === 'live') {
             const oldSteps = changes['liveSteps'].previousValue;
             const newSteps = changes['liveSteps'].currentValue;
             
@@ -476,7 +575,7 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
             this.expandedStates.clear();
             this.detailsExpandedStates.clear();
             this.clearNodeComponents();
-            this.currentStep = null;
+            this.CurrentStep = null;
             
             // Stop live updates when switching away from live mode
             if (previousMode === 'live' && this.updateSubscription) {
@@ -485,7 +584,7 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
             }
             
             // Process data for the new mode
-            if (currentMode === 'historical' && this.agentRun) {
+            if (currentMode === 'historical' && this.AgentRun) {
                 this.processAgentRun();
             } else if (currentMode === 'live') {
                 this.setupLiveUpdates();
@@ -497,21 +596,21 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
         this.viewInitialized = true;
         
         console.log('🎯 View initialized, checking for pending data:', {
-            hasAgentRun: !!this.agentRun,
-            hasLiveSteps: this.liveSteps?.length > 0,
-            hasContainer: !!this.executionNodesContainer
+            hasAgentRun: !!this.AgentRun,
+            hasLiveSteps: this.LiveSteps?.length > 0,
+            hasContainer: !!this.ExecutionNodesContainer
         });
         
         // Initial setup for scroll behavior
-        if (this.mode === 'live') {
+        if (this.Mode === 'live') {
             this.checkIfUserAtBottom();
         }
         
         // If we have data waiting to be rendered, render it now
-        if (this.mode === 'historical' && this.agentRun && this.nodeComponentMap.size === 0) {
+        if (this.Mode === 'historical' && this.AgentRun && this.nodeComponentMap.size === 0) {
             console.log('⚡ Processing agent run after view init');
             this.processAgentRun();
-        } else if (this.mode === 'live' && this.liveSteps?.length > 0) {
+        } else if (this.Mode === 'live' && this.LiveSteps?.length > 0) {
             console.log('⚡ Processing live steps after view init');
             this.processLiveSteps();
         }
@@ -533,8 +632,8 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
     private clearNodeComponents(): void {
         this.nodeComponentMap.forEach(ref => ref.destroy());
         this.nodeComponentMap.clear();
-        if (this.executionNodesContainer) {
-            this.executionNodesContainer.clear();
+        if (this.ExecutionNodesContainer) {
+            this.ExecutionNodesContainer.clear();
         }
     }
     
@@ -543,17 +642,17 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
      */
     private processAgentRun(): void {
         console.log('⚙️ Processing agent run:', {
-            hasAgentRun: !!this.agentRun,
-            stepsCount: this.agentRun?.Steps?.length || 0,
+            hasAgentRun: !!this.AgentRun,
+            stepsCount: this.AgentRun?.Steps?.length || 0,
             viewInitialized: this.viewInitialized,
-            hasContainer: !!this.executionNodesContainer
+            hasContainer: !!this.ExecutionNodesContainer
         });
         
-        if (!this.agentRun || !this.viewInitialized || !this.executionNodesContainer) {
+        if (!this.AgentRun || !this.viewInitialized || !this.ExecutionNodesContainer) {
             console.warn('⚠️ Cannot process agent run:', {
-                agentRun: !this.agentRun ? 'missing' : 'present',
+                agentRun: !this.AgentRun ? 'missing' : 'present',
                 viewInitialized: this.viewInitialized ? 'yes' : 'no',
-                container: !this.executionNodesContainer ? 'missing' : 'present'
+                container: !this.ExecutionNodesContainer ? 'missing' : 'present'
             });
             return;
         }
@@ -562,10 +661,10 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
         this.clearNodeComponents();
         
         // Render the agent run steps
-        if (this.agentRun.Steps && this.agentRun.Steps.length > 0) {
-            console.log('🎨 Rendering', this.agentRun.Steps.length, 'steps');
-            this.renderSteps(this.agentRun.Steps, 0, []);
-            console.log('✅ Finished rendering, container now has', this.executionNodesContainer.length, 'components');
+        if (this.AgentRun.Steps && this.AgentRun.Steps.length > 0) {
+            console.log('🎨 Rendering', this.AgentRun.Steps.length, 'steps');
+            this.renderSteps(this.AgentRun.Steps, 0, []);
+            console.log('✅ Finished rendering, container now has', this.ExecutionNodesContainer.length, 'components');
         } else {
             console.warn('⚠️ No steps to render');
         }
@@ -582,17 +681,17 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
      */
     private processLiveSteps(): void {
         console.log('⚙️ Processing live steps:', {
-            stepsCount: this.liveSteps?.length || 0,
+            stepsCount: this.LiveSteps?.length || 0,
             viewInitialized: this.viewInitialized,
-            hasContainer: !!this.executionNodesContainer
+            hasContainer: !!this.ExecutionNodesContainer
         });
         
-        if (!this.liveSteps || !this.viewInitialized || !this.executionNodesContainer) {
+        if (!this.LiveSteps || !this.viewInitialized || !this.ExecutionNodesContainer) {
             return;
         }
         
         // Append new steps without clearing existing ones
-        this.appendNewLiveSteps(this.liveSteps);
+        this.appendNewLiveSteps(this.LiveSteps);
         
         // Trigger change detection after appending live steps
         this.cdr.detectChanges();
@@ -645,19 +744,19 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
         agentPath: string[]
     ): ComponentRef<ExecutionNodeComponent> {
         // Ensure container exists
-        if (!this.executionNodesContainer) {
+        if (!this.ExecutionNodesContainer) {
             console.error('❌ executionNodesContainer not available');
             throw new Error('executionNodesContainer ViewContainerRef not initialized');
         }
         
-        const componentRef = this.executionNodesContainer.createComponent(ExecutionNodeComponent);
+        const componentRef = this.ExecutionNodesContainer.createComponent(ExecutionNodeComponent);
         const instance = componentRef.instance;
         
         console.log('🔨 Creating component for step:', {
             stepId: step.ID,
             stepName: step.StepName,
             depth,
-            containerLength: this.executionNodesContainer.length,
+            containerLength: this.ExecutionNodesContainer.length,
             hostElement: componentRef.location.nativeElement
         });
         
@@ -671,7 +770,7 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
         // Subscribe to outputs
         instance.toggleNode.subscribe(() => this.toggleStepExpansion(step));
         instance.toggleDetails.subscribe(() => this.toggleStepDetails(step));
-        instance.userInteracted.subscribe(() => this.onUserInteraction());
+        instance.userInteracted.subscribe(() => this.OnUserInteraction());
         
         // Store reference
         this.nodeComponentMap.set(step.ID, componentRef);
@@ -884,12 +983,12 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
         console.log('⚡ Setting up live updates');
         
         // Process initial live steps if any
-        if (this.liveSteps && this.liveSteps.length > 0) {
-            this.appendNewLiveSteps(this.liveSteps);
+        if (this.LiveSteps && this.LiveSteps.length > 0) {
+            this.appendNewLiveSteps(this.LiveSteps);
         }
         
         // Set up interval to check for updates (if not already set up)
-        if (this.mode === 'live' && !this.updateSubscription) {
+        if (this.Mode === 'live' && !this.updateSubscription) {
             this.updateSubscription = interval(500)
                 .pipe(takeUntil(this.destroy$))
                 .subscribe(() => {
@@ -916,7 +1015,7 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
             }
         });
         
-        this.currentStep = runningStep;
+        this.CurrentStep = runningStep;
         this.cdr.markForCheck();
     }
     
@@ -974,7 +1073,7 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
      * Calculate execution statistics
      */
     private calculateStats(): void {
-        this.stats = {
+        this.Stats = {
             totalSteps: 0,
             completedSteps: 0,
             failedSteps: 0,
@@ -986,26 +1085,26 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
         };
         
         // Use token data from agent run if available
-        if (this.agentRun) {
-            this.stats.totalTokens = this.agentRun.TotalTokensUsed || 0;
-            this.stats.totalCost = this.agentRun.TotalCost || 0;
+        if (this.AgentRun) {
+            this.Stats.totalTokens = this.AgentRun.TotalTokensUsed || 0;
+            this.Stats.totalCost = this.AgentRun.TotalCost || 0;
             
             // Calculate duration
-            if (this.agentRun.StartedAt && this.agentRun.CompletedAt) {
-                this.stats.totalDuration = new Date(this.agentRun.CompletedAt).getTime() - 
-                                          new Date(this.agentRun.StartedAt).getTime();
+            if (this.AgentRun.StartedAt && this.AgentRun.CompletedAt) {
+                this.Stats.totalDuration = new Date(this.AgentRun.CompletedAt).getTime() - 
+                                          new Date(this.AgentRun.StartedAt).getTime();
             }
             
             // Count steps recursively
-            if (this.agentRun.Steps) {
-                this.countSteps(this.agentRun.Steps);
+            if (this.AgentRun.Steps) {
+                this.countSteps(this.AgentRun.Steps);
             }
         }
         
         console.log('📈 Stats calculated:', {
-            totalSteps: this.stats.totalSteps,
-            totalTokens: this.stats.totalTokens,
-            totalCost: this.stats.totalCost
+            totalSteps: this.Stats.totalSteps,
+            totalTokens: this.Stats.totalTokens,
+            totalCost: this.Stats.totalCost
         });
     }
     
@@ -1014,18 +1113,18 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
      */
     private countSteps(steps: MJAIAgentRunStepEntityExtended[]): void {
         for (const step of steps) {
-            this.stats.totalSteps++;
+            this.Stats.totalSteps++;
             
             // Map to display types for consistency
             const displayType = this.getStepTypeClass(step.StepType);
-            this.stats.stepsByType[displayType] = (this.stats.stepsByType[displayType] || 0) + 1;
+            this.Stats.stepsByType[displayType] = (this.Stats.stepsByType[displayType] || 0) + 1;
             
-            if (step.Status === 'Completed') this.stats.completedSteps++;
-            if (step.Status === 'Failed' || step.Status === 'Cancelled') this.stats.failedSteps++;
+            if (step.Status === 'Completed') this.Stats.completedSteps++;
+            if (step.Status === 'Failed' || step.Status === 'Cancelled') this.Stats.failedSteps++;
             
             // Count prompts
             if (step.StepType === 'Prompt') {
-                this.stats.totalPrompts++;
+                this.Stats.totalPrompts++;
             }
             
             // Recurse for sub-agents
@@ -1040,7 +1139,7 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
     /**
      * Handle scroll events
      */
-    onScroll(event: Event): void {
+    OnScroll(event: Event): void {
         if (this.isAutoScrolling) {
             // Ignore scroll events triggered by auto-scrolling
             return;
@@ -1063,13 +1162,23 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
         
         this.lastScrollPosition = element.scrollTop;
     }
+
+    /** @deprecated Use {@link OnScroll}. */
+    onScroll(event: Event): void {
+      return this.OnScroll(event);
+    }
     
     /**
      * Handle user clicks (interaction detection)
      */
-    onUserInteraction(): void {
+    OnUserInteraction(): void {
         // This is called when user clicks anywhere in the execution tree
         // The toggleNode method will set userHasInteracted for specific interactions
+    }
+
+    /** @deprecated Use {@link OnUserInteraction}. */
+    onUserInteraction(): void {
+      return this.OnUserInteraction();
     }
     
     /**
@@ -1084,9 +1193,9 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
      * Check if user is at bottom (for initial setup)
      */
     private checkIfUserAtBottom(): void {
-        if (!this.executionTreeContainer) return;
+        if (!this.ExecutionTreeContainer) return;
         
-        const element = this.executionTreeContainer.nativeElement;
+        const element = this.ExecutionTreeContainer.nativeElement;
         if (this.isScrolledToBottom(element)) {
             this.userHasScrolled = false;
         }
@@ -1096,11 +1205,11 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
      * Auto-scroll to bottom if user hasn't interacted
      */
     private autoScrollToBottom(): void {
-        if (!this.executionTreeContainer || this.userHasInteracted || this.userHasScrolled) {
+        if (!this.ExecutionTreeContainer || this.userHasInteracted || this.userHasScrolled) {
             return;
         }
         
-        const element = this.executionTreeContainer.nativeElement;
+        const element = this.ExecutionTreeContainer.nativeElement;
         this.isAutoScrolling = true;
         
         // Use smooth scrolling for better UX
@@ -1118,8 +1227,13 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
     /**
      * Format agent path for display
      */
-    formatAgentPath(path: string[]): string {
+    FormatAgentPath(path: string[]): string {
         return path.join(' → ');
+    }
+
+    /** @deprecated Use {@link FormatAgentPath}. */
+    formatAgentPath(path: string[]): string {
+      return this.FormatAgentPath(path);
     }
     
     /**
@@ -1136,14 +1250,19 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
     /**
      * Get step types for display
      */
+    GetStepTypes(): string[] {
+        return Object.keys(this.Stats.stepsByType).sort();
+    }
+
+    /** @deprecated Use {@link GetStepTypes}. */
     getStepTypes(): string[] {
-        return Object.keys(this.stats.stepsByType).sort();
+      return this.GetStepTypes();
     }
     
     /**
      * Pluralize step type based on count
      */
-    pluralizeStepType(type: string, count: number): string {
+    PluralizeStepType(type: string, count: number): string {
         if (count === 1) {
             return type;
         }
@@ -1159,11 +1278,16 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
                 return type + 's';
         }
     }
+
+    /** @deprecated Use {@link PluralizeStepType}. */
+    pluralizeStepType(type: string, count: number): string {
+      return this.PluralizeStepType(type, count);
+    }
     
     /**
      * Format markdown content for display
      */
-    formatMarkdown(markdown: string): string {
+    FormatMarkdown(markdown: string): string {
         // Basic markdown formatting
         // This is a simple implementation - you might want to use a proper markdown library
         let html = markdown;
@@ -1205,12 +1329,17 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
         
         return html;
     }
+
+    /** @deprecated Use {@link FormatMarkdown}. */
+    formatMarkdown(markdown: string): string {
+      return this.FormatMarkdown(markdown);
+    }
     
     /**
      * Append new live steps without re-rendering entire tree
      */
     private appendNewLiveSteps(newSteps: MJAIAgentRunStepEntityExtended[]): void {
-        if (!newSteps || newSteps.length === 0 || !this.viewInitialized || !this.executionNodesContainer) {
+        if (!newSteps || newSteps.length === 0 || !this.viewInitialized || !this.ExecutionNodesContainer) {
             return;
         }
         
@@ -1297,18 +1426,28 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
     /**
      * Check if execution is complete
      */
+    IsExecutionComplete(): boolean {
+        return this.Stats.completedSteps > 0 && 
+               this.Stats.completedSteps === this.Stats.totalSteps - this.Stats.failedSteps;
+    }
+
+    /** @deprecated Use {@link IsExecutionComplete}. */
     isExecutionComplete(): boolean {
-        return this.stats.completedSteps > 0 && 
-               this.stats.completedSteps === this.stats.totalSteps - this.stats.failedSteps;
+      return this.IsExecutionComplete();
     }
     
     /**
      * Handle view run button click
      */
-    onViewRunClick(): void {
-        if (this.agentRun) {
-            this.viewRunClick.emit({ runId: this.agentRun.ID, runType: 'agent' });
+    OnViewRunClick(): void {
+        if (this.AgentRun) {
+            this.ViewRunClick.emit({ runId: this.AgentRun.ID, runType: 'agent' });
         }
+    }
+
+    /** @deprecated Use {@link OnViewRunClick}. */
+    onViewRunClick(): void {
+      return this.OnViewRunClick();
     }
     
     
@@ -1343,8 +1482,8 @@ export class AgentExecutionMonitorComponent implements OnChanges, OnDestroy, Aft
      * Scroll the execution tree to the top
      */
     private scrollToTop(): void {
-        if (this.executionTreeContainer) {
-            const element = this.executionTreeContainer.nativeElement;
+        if (this.ExecutionTreeContainer) {
+            const element = this.ExecutionTreeContainer.nativeElement;
             element.scrollTo({
                 top: 0,
                 behavior: 'smooth'

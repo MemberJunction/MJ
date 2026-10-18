@@ -84,12 +84,21 @@ function failureData(error: unknown, dryRun: boolean): Record<string, unknown> |
 export class SyncPushPlugin extends BaseCLIPlugin {
   static description = 'Push local file changes to the database';
 
-  static examples = [
+  static Examples = [
     `<%= config.bin %> <%= command.id %>`,
     `<%= config.bin %> <%= command.id %> --dry-run`,
     `<%= config.bin %> <%= command.id %> --dir="ai-prompts"`,
     `<%= config.bin %> <%= command.id %> --ci --format=json`,
   ];
+
+  /** @deprecated Use {@link Examples}. */
+  static get examples() {
+    return this.Examples;
+  }
+  /** @deprecated Use {@link Examples}. */
+  static set examples(value) {
+    this.Examples = value;
+  }
 
   static flags = {
     dir: Flags.string({ description: 'Specific entity directory to push' }),
@@ -268,7 +277,7 @@ export class SyncPushPlugin extends BaseCLIPlugin {
     const success = result.errors === 0 && errors.length === 0;
 
     if (isText) {
-      this.renderPushTextSummary(formatter, result, flags['change-detail'], startTime, endTime);
+      this.renderPushTextSummary(formatter, result, flags['change-detail'], !!flags['dry-run'], startTime, endTime);
     }
 
     return {
@@ -312,10 +321,11 @@ export class SyncPushPlugin extends BaseCLIPlugin {
     formatter: InstanceType<(typeof import('../services/FormattingService'))['FormattingService']>,
     result: PushResult,
     changeDetail: boolean,
+    dryRun: boolean,
     startTime: number,
     endTime: number,
   ): void {
-    const recap = formatter.formatChangesRecap(result.changeLog);
+    const recap = formatter.FormatChangesRecap(result.changeLog, dryRun);
     if (recap) this.Host.Log('\n' + recap);
 
     if (changeDetail && result.changeLog.length > 0) {
@@ -323,7 +333,7 @@ export class SyncPushPlugin extends BaseCLIPlugin {
       const reportDir = result.sqlLogPath ? path.dirname(result.sqlLogPath) : process.cwd();
       const reportPath = path.join(reportDir, `MetadataSync_Changes_${stamp}.log`);
       try {
-        writeFileSync(reportPath, formatter.formatChangesReport(result.changeLog, new Date(endTime).toISOString()));
+        writeFileSync(reportPath, formatter.FormatChangesReport(result.changeLog, new Date(endTime).toISOString(), dryRun));
         this.Host.Log(`\n📄 Detailed change report: ${path.relative(process.cwd(), reportPath)}`);
       } catch (writeErr) {
         this.Host.Log(`\n⚠️  Could not write change report: ${writeErr instanceof Error ? writeErr.message : String(writeErr)}`, 'warn');
@@ -334,7 +344,7 @@ export class SyncPushPlugin extends BaseCLIPlugin {
     if (changed || this.Host.Verbose) {
       this.Host.Log(
         '\n' +
-          formatter.formatSyncSummary('push', {
+          formatter.FormatSyncSummary('push', {
             created: result.created,
             updated: result.updated,
             unchanged: result.unchanged,
@@ -343,7 +353,7 @@ export class SyncPushPlugin extends BaseCLIPlugin {
             deferred: result.deferred || 0,
             errors: result.errors,
             duration: endTime - startTime,
-          }),
+          }, dryRun),
       );
     }
 
@@ -353,10 +363,11 @@ export class SyncPushPlugin extends BaseCLIPlugin {
     }
 
     const extras = changed || this.Host.Verbose ? '' : ` · no changes · ${formatter.formatDuration(endTime - startTime)}`;
+    const label = dryRun ? 'Dry run' : 'Push';
     if (result.errors === 0) {
-      this.Host.Log(`\n✓ Push completed successfully${extras}`);
+      this.Host.Log(`\n✓ ${label} completed successfully${dryRun ? ' · nothing written' : ''}${extras}`);
     } else {
-      this.Host.Log('\n⚠️  Push completed with errors', 'warn');
+      this.Host.Log(`\n⚠️  ${label} completed with errors`, 'warn');
     }
     if (result.sqlLogPath) this.Host.Log(`\n📄 SQL log saved to: ${path.relative(process.cwd(), result.sqlLogPath)}`);
   }
@@ -367,7 +378,8 @@ export class SyncPushPlugin extends BaseCLIPlugin {
 
   private cancelled(startTime: number, message: string): MJCLIResult {
     if (this.Host.Format === 'text') this.Host.Log(`\n⚠️  ${message}`, 'warn');
-    return { success: true, command: 'sync:push', durationSeconds: (Date.now() - startTime) / 1000, warnings: [message] };
+    // `cancelled` tells callers nothing was written, so there is nothing for them to invalidate.
+    return { success: true, command: 'sync:push', durationSeconds: (Date.now() - startTime) / 1000, data: { cancelled: true }, warnings: [message] };
   }
 
   /**
@@ -395,11 +407,20 @@ export class SyncPushPlugin extends BaseCLIPlugin {
 export class SyncPullPlugin extends BaseCLIPlugin {
   static description = 'Pull metadata from database to local files';
 
-  static examples = [
+  static Examples = [
     `<%= config.bin %> <%= command.id %> --entity="MJ: AI Prompts"`,
     `<%= config.bin %> <%= command.id %> --entity="MJ: AI Agents" --merge-strategy=overwrite`,
     `<%= config.bin %> <%= command.id %> --entity="Templates" --dry-run --verbose`,
   ];
+
+  /** @deprecated Use {@link Examples}. */
+  static get examples() {
+    return this.Examples;
+  }
+  /** @deprecated Use {@link Examples}. */
+  static set examples(value) {
+    this.Examples = value;
+  }
 
   static flags = {
     entity: Flags.string({ description: 'Entity name to pull', required: true }),

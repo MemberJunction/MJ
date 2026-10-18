@@ -655,16 +655,18 @@ export function IsResizableKind(kind: WhiteboardItemKind): boolean {
  * The patch a COMMITTED resize gesture applies for an item kind, given the gesture's
  * final bounds:
  *  - full-box kinds (`shape`, `highlight`, `html`) commit X / Y / W / H;
- *  - content-driven-height kinds (`sticky`, `text`, `image`, `markdown`) commit
- *    X / Y / W only — their rendered height stays content-driven (markdown's optional
- *    `H` max-height cap is set by tools/agents, never by the drag gesture);
+ *  - `markdown` commits X / Y / W / H too: its `H` is a max-height cap (agents set one when
+ *    they add a panel), and content beyond it is clipped — so the user must be able to drag
+ *    the cap taller to reveal it, or shorter to compact the panel (the board applies `H`
+ *    only when a top / bottom handle moved, so a side handle never caps an uncapped panel);
+ *  - content-driven-height kinds (`sticky`, `text`, `image`) commit X / Y / W only;
  *  - non-resizable kinds (`ink`, `connector`) return `null` (nothing to commit).
  */
 export function BuildResizeCommitPatch(kind: WhiteboardItemKind, bounds: WhiteboardBounds): WhiteboardItemPatch | null {
-  if (kind === 'shape' || kind === 'highlight' || kind === 'html') {
+  if (kind === 'shape' || kind === 'highlight' || kind === 'html' || kind === 'markdown') {
     return { X: bounds.X, Y: bounds.Y, W: bounds.W, H: bounds.H };
   }
-  if (kind === 'sticky' || kind === 'text' || kind === 'image' || kind === 'markdown') {
+  if (kind === 'sticky' || kind === 'text' || kind === 'image') {
     return { X: bounds.X, Y: bounds.Y, W: bounds.W };
   }
   return null;
@@ -755,8 +757,8 @@ interface PageRecord {
  * {@link Changed$} as `'replace'` ops.
  */
 export class WhiteboardState {
-  private static readonly UndoMax = 100;
-  private static readonly JournalMax = 1000;
+  private static readonly undoMax = 100;
+  private static readonly journalMax = 1000;
 
   /**
    * The ordered page list. A fresh board has one page named "Page 1". Every item
@@ -1946,7 +1948,7 @@ export class WhiteboardState {
   /** Push the current scene onto the undo stack (bounded) and drop the redo branch. */
   protected pushUndo(): void {
     this.undoStack.push(this.snapshot());
-    if (this.undoStack.length > WhiteboardState.UndoMax) {
+    if (this.undoStack.length > WhiteboardState.undoMax) {
       this.undoStack.shift();
     }
     this.redoStack = [];
@@ -2010,8 +2012,8 @@ export class WhiteboardState {
   protected record(op: WhiteboardChangeOp, itemId: string, author: WhiteboardAuthor, summaryFragment: string): void {
     this.seq++;
     this.journal.push({ Seq: this.seq, Op: op, ItemID: itemId });
-    if (this.journal.length > WhiteboardState.JournalMax) {
-      const dropped = this.journal.splice(0, this.journal.length - WhiteboardState.JournalMax);
+    if (this.journal.length > WhiteboardState.journalMax) {
+      const dropped = this.journal.splice(0, this.journal.length - WhiteboardState.journalMax);
       this.journalTrimmedBeforeSeq = dropped[dropped.length - 1].Seq;
     }
     this.changed.next({ Op: op, ItemID: itemId, Author: author, SummaryFragment: summaryFragment, Seq: this.seq });

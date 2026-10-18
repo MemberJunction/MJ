@@ -1,0 +1,87 @@
+<div class="usage-explorer-container">
+    <div class="explorer-toolbar">
+        <div class="control-group">
+            <span class="control-label" id="ue-measure-label">Measure</span>
+            <mj-dropdown
+                AriaLabelledBy="ue-measure-label"
+                [Data]="MeasureOptions"
+                TextField="text"
+                ValueField="value"
+                [ValuePrimitive]="true"
+                [ngModel]="SelectedMeasure"
+                (ngModelChange)="OnMeasureChange($event)">
+            </mj-dropdown>
+        </div>
+
+        <div class="control-group">
+            <span class="control-label" id="ue-groupby-label">Group By</span>
+            <mj-dropdown
+                AriaLabelledBy="ue-groupby-label"
+                [Data]="DimensionOptions"
+                TextField="text"
+                ValueField="value"
+                [ValuePrimitive]="true"
+                [ngModel]="SelectedGroupBy"
+                (ngModelChange)="OnGroupByChange($event)">
+            </mj-dropdown>
+        </div>
+
+        <div class="control-group">
+            <span class="control-label" id="ue-split-label">Secondary Split</span>
+            <mj-dropdown
+                AriaLabelledBy="ue-split-label"
+                [Data]="SecondarySplitOptions"
+                TextField="text"
+                ValueField="value"
+                [ValuePrimitive]="true"
+                [ngModel]="SelectedSecondarySplit"
+                (ngModelChange)="OnSecondarySplitChange($event)">
+            </mj-dropdown>
+        </div>
+
+        <div class="control-group">
+            <span class="control-label" id="ue-grain-label">Grain</span>
+            <mj-dropdown
+                AriaLabelledBy="ue-grain-label"
+                [Data]="GrainOptions"
+                TextField="text"
+                ValueField="value"
+                [ValuePrimitive]="true"
+                [ngModel]="SelectedGrain"
+                (ngModelChange)="OnGrainChange($event)">
+            </mj-dropdown>
+        </div>
+
+        <div class="control-group control-group-toggle">
+            <button
+                mjButton
+                variant="secondary"
+                size="sm"
+                [toggleable]="true"
+                [(selected)]="ComparisonEnabled"
+                (selectedChange)="OnComparisonChange($event)">
+                <i class="fa-solid fa-code-compare"></i>
+                <span>Compare Previous</span>
+            </button>
+        </div>
+    </div>
+
+    <div class="pivot-wrapper">
+        <!-- The analytics shell's content area is sized by its content, so the default Height of
+             100% resolves to nothing and the grid collapsed to 0px. Give it a viewport-relative height. -->
+        <mj-query-pivot
+            Height="clamp(420px, 65vh, 900px)"
+            [Data]="PivotRows"
+            [DimensionColumns]="DimensionColumns"
+            [HiddenColumns]="HiddenColumns"
+            [ColumnLabels]="ColumnLabels"
+            [MeasureColumns]="MeasureColumns"
+            [TimeColumn]="TimeColumn"
+            [Grain]="SelectedGrain"
+            [ComparisonWindow]="ComparisonEnabled"
+            [ComparisonPeriodColumn]="'_period'"
+            [IsLoading]="IsLoading"
+            (RowActivated)="OnRowActivated($event)">
+        </mj-query-pivot>
+    </div>
+</div>

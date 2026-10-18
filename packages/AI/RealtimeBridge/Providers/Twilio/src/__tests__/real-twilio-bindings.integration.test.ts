@@ -17,7 +17,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { RealTwilioRestClient } from '../twilio-rest-client.js';
-import { buildConnectStreamTwiML } from '../real-twilio-bindings.js';
+import { BuildConnectStreamTwiML } from '../real-twilio-bindings.js';
 
 const env = process.env;
 const HAVE_CREDS = !!(env.TWILIO_TEST_ACCOUNT_SID && env.TWILIO_TEST_AUTH_TOKEN && env.TWILIO_TEST_FROM && env.TWILIO_TEST_TO);
@@ -33,7 +33,7 @@ describe.skipIf(!HAVE_CREDS)('RealTwilioRestClient (integration — live Twilio)
         const callSid = await rest.CreateCall({
             To: env.TWILIO_TEST_TO!,
             From: env.TWILIO_TEST_FROM!,
-            Twiml: buildConnectStreamTwiML(streamUrl),
+            Twiml: BuildConnectStreamTwiML(streamUrl),
         });
         expect(callSid).toMatch(/^CA[0-9a-f]{32}$/i);
 

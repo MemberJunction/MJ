@@ -289,6 +289,19 @@ mj-flow-agent-editor.mj-flow-agent-editor--fullscreen .mj-agent-editor {
   flex-direction: column;
 }
 
+/* Run-check banner: a bounded strip above the canvas, so a long list scrolls instead of pushing the flow away. */
+.mj-agent-editor-run-problems {
+  flex: 0 0 auto;
+  margin: 8px 8px 0;
+  max-height: 140px;
+  overflow-y: auto;
+}
+
+.mj-agent-editor-run-problems-list {
+  margin: 4px 0 0;
+  padding-inline-start: 1.25rem;
+}
+
 .mj-agent-editor-diagram {
   display: flex;
   flex: 1;

@@ -10,7 +10,7 @@ import { filter } from 'rxjs/operators';
 import { AngularAdapterService } from './angular-adapter.service';
 import { RuntimeContext, reactRootManager } from '@memberjunction/react-runtime';
 import { ReactDebugConfig } from '../config/react-debug.config';
-import { createAntdDropdownPositionHook } from '../hooks/antd-dropdown-position-hook';
+import { CreateAntdDropdownPositionHook } from '../hooks/antd-dropdown-position-hook';
 
 /**
  * Service to manage React and ReactDOM instances with proper lifecycle.
@@ -22,7 +22,16 @@ export class ReactBridgeService implements OnDestroy {
 
   // Track React readiness state
   private reactReadySubject = new BehaviorSubject<boolean>(false);
-  public reactReady$ = this.reactReadySubject.asObservable();
+  public ReactReady$ = this.reactReadySubject.asObservable();
+
+  /** @deprecated Use {@link ReactReady$}. */
+  public get reactReady$() {
+    return this.ReactReady$;
+  }
+  /** @deprecated Use {@link ReactReady$}. */
+  public set reactReady$(value) {
+    this.ReactReady$ = value;
+  }
 
   // Track if this is the first component trying to use React
   private firstComponentAttempted = false;
@@ -32,7 +41,16 @@ export class ReactBridgeService implements OnDestroy {
   private retryBaseDelay = 2000; // Base delay between bootstrap retries (ms)
 
   // Debug flag from project configuration
-  public debug: boolean = ReactDebugConfig.getDebugMode();
+  public Debug: boolean = ReactDebugConfig.getDebugMode();
+
+  /** @deprecated Use {@link Debug}. */
+  public get debug(): boolean {
+    return this.Debug;
+  }
+  /** @deprecated Use {@link Debug}. */
+  public set debug(value: boolean) {
+    this.Debug = value;
+  }
 
   // The current bootstrap attempt — shared between constructor and getReactContext()
   private bootstrapPromise: Promise<void> | null = null;
@@ -63,7 +81,7 @@ export class ReactBridgeService implements OnDestroy {
    * backoff if the CDN is unreachable or returns an error.
    */
   private async doBootstrapWithRetries(): Promise<void> {
-    console.log(`ReactBridgeService: Initializing React with debug mode = ${this.debug} (from ReactDebugConfig)`);
+    console.log(`ReactBridgeService: Initializing React with debug mode = ${this.Debug} (from ReactDebugConfig)`);
     let lastError: unknown;
 
     for (let attempt = 0; attempt <= this.maxBootstrapRetries; attempt++) {
@@ -76,7 +94,7 @@ export class ReactBridgeService implements OnDestroy {
           await new Promise(resolve => setTimeout(resolve, delay));
         }
 
-        await this.adapter.initialize(undefined, undefined, { debug: this.debug });
+        await this.adapter.initialize(undefined, undefined, { debug: this.Debug });
 
         // Validate that ReactDOM.createRoot is actually callable.
         // If CDN scripts loaded in the wrong order (ReactDOM before React),
@@ -87,9 +105,9 @@ export class ReactBridgeService implements OnDestroy {
         }
 
         // Register Angular-specific runtime hooks for library compatibility
-        reactRootManager.RegisterHook(createAntdDropdownPositionHook());
+        reactRootManager.RegisterHook(CreateAntdDropdownPositionHook());
 
-        if (this.debug) {
+        if (this.Debug) {
           console.log('React ecosystem pre-loaded successfully with DEVELOPMENT builds (detailed error messages)');
         } else {
           console.log('React ecosystem pre-loaded successfully with PRODUCTION builds (minified)');
@@ -111,7 +129,7 @@ export class ReactBridgeService implements OnDestroy {
    * If bootstrap succeeded but createRoot isn't usable (stale browser cache),
    * forces a re-bootstrap and retries.
    */
-  async waitForReactReady(): Promise<void> {
+  async WaitForReactReady(): Promise<void> {
     // If already ready, return immediately
     if (this.reactReadySubject.value) {
       return;
@@ -125,8 +143,13 @@ export class ReactBridgeService implements OnDestroy {
       await this.pollForReactReadyWithRetries();
     } else {
       // Subsequent components wait for the ready signal
-      await firstValueFrom(this.reactReady$.pipe(filter(ready => ready)));
+      await firstValueFrom(this.ReactReady$.pipe(filter(ready => ready)));
     }
+  }
+
+  /** @deprecated Use {@link WaitForReactReady}. */
+  async waitForReactReady(): Promise<void> {
+    return this.WaitForReactReady();
   }
 
   /**
@@ -156,7 +179,7 @@ export class ReactBridgeService implements OnDestroy {
       const ready = await this.pollForCreateRoot();
       if (ready) {
         this.reactReadySubject.next(true);
-        if (this.debug) {
+        if (this.Debug) {
           console.log(`React is fully ready after ${Date.now() - overallStart}ms (attempt ${attempt + 1})`);
         }
         return;
@@ -209,20 +232,30 @@ export class ReactBridgeService implements OnDestroy {
    * Awaits the bootstrap (with retries) rather than calling adapter.initialize() independently.
    * @returns React context with React, ReactDOM, Babel, and libraries
    */
-  async getReactContext(): Promise<RuntimeContext> {
+  async GetReactContext(): Promise<RuntimeContext> {
     await this.bootstrapWithRetries();
     return this.adapter.getRuntimeContext();
+  }
+
+  /** @deprecated Use {@link GetReactContext}. */
+  async getReactContext(): Promise<RuntimeContext> {
+    return this.GetReactContext();
   }
 
   /**
    * Get the current React context synchronously
    * @returns React context or null if not loaded
    */
-  getCurrentContext(): RuntimeContext | null {
+  GetCurrentContext(): RuntimeContext | null {
     if (!this.adapter.isInitialized()) {
       return null;
     }
     return this.adapter.getRuntimeContext();
+  }
+
+  /** @deprecated Use {@link GetCurrentContext}. */
+  getCurrentContext(): RuntimeContext | null {
+    return this.GetCurrentContext();
   }
 
   /**
@@ -230,8 +263,8 @@ export class ReactBridgeService implements OnDestroy {
    * @param container - DOM element to render into
    * @returns React root instance
    */
-  createRoot(container: HTMLElement): any {
-    const context = this.getCurrentContext();
+  CreateRoot(container: HTMLElement): any {
+    const context = this.GetCurrentContext();
     if (!context?.ReactDOM?.createRoot) {
       throw new Error('ReactDOM.createRoot not available');
     }
@@ -241,11 +274,16 @@ export class ReactBridgeService implements OnDestroy {
     return root;
   }
 
+  /** @deprecated Use {@link CreateRoot}. */
+  createRoot(container: HTMLElement): any {
+    return this.CreateRoot(container);
+  }
+
   /**
    * Unmount and clean up a React root
    * @param root - React root to unmount
    */
-  unmountRoot(root: any): void {
+  UnmountRoot(root: any): void {
     if (root && typeof root.unmount === 'function') {
       try {
         root.unmount();
@@ -256,14 +294,24 @@ export class ReactBridgeService implements OnDestroy {
     this.reactRoots.delete(root);
   }
 
+  /** @deprecated Use {@link UnmountRoot}. */
+  unmountRoot(root: any): void {
+    return this.UnmountRoot(root);
+  }
+
   /**
    * Transpile JSX code to JavaScript
    * @param code - JSX code to transpile
    * @param filename - Optional filename for error messages
    * @returns Transpiled JavaScript code
    */
-  transpileJSX(code: string, filename: string): string {
+  TranspileJSX(code: string, filename: string): string {
     return this.adapter.transpileJSX(code, filename);
+  }
+
+  /** @deprecated Use {@link TranspileJSX}. */
+  transpileJSX(code: string, filename: string): string {
+    return this.TranspileJSX(code, filename);
   }
 
   /**
@@ -295,15 +343,25 @@ export class ReactBridgeService implements OnDestroy {
    * Check if React is currently ready
    * @returns true if React is ready
    */
-  isReady(): boolean {
+  IsReady(): boolean {
     return this.reactReadySubject.value;
+  }
+
+  /** @deprecated Use {@link IsReady}. */
+  isReady(): boolean {
+    return this.IsReady();
   }
 
   /**
    * Get the number of active React roots
    * @returns Number of active roots
    */
-  getActiveRootsCount(): number {
+  GetActiveRootsCount(): number {
     return this.reactRoots.size;
+  }
+
+  /** @deprecated Use {@link GetActiveRootsCount}. */
+  getActiveRootsCount(): number {
+    return this.GetActiveRootsCount();
   }
 }

@@ -19,7 +19,7 @@ import {
 import type { RemoteOpResult } from '@memberjunction/core';
 import { MJDialogComponent, MJDialogActionsComponent, MJButtonDirective, MJProgressBarComponent, MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 import { BaseEntityActionRuntimeUX } from '../base-entity-action-runtime-ux';
-import { buildRecordProcessScope, displayValue } from '../scope';
+import { BuildRecordProcessScope, DisplayValue } from '../scope';
 
 /** The run summary the runner renders, mapped from the operation's typed output. */
 interface RunSummary {
@@ -282,7 +282,7 @@ export class RecordProcessRunnerUXComponent extends BaseEntityActionRuntimeUX {
 
     /** Renders a value for the diff table (delegates to the pure helper). */
     Display(value: unknown): string {
-        return displayValue(value);
+        return DisplayValue(value);
     }
 
     /**
@@ -342,7 +342,7 @@ export class RecordProcessRunnerUXComponent extends BaseEntityActionRuntimeUX {
 
     /** Builds the engine scope from the host-supplied context (delegates to the pure helper). */
     private buildScope(): RecordProcessScopeOverride {
-        return buildRecordProcessScope(this.Context);
+        return BuildRecordProcessScope(this.Context);
     }
 
     private recordProcessID(): string | undefined {

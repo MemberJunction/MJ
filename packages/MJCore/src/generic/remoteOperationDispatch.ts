@@ -23,7 +23,7 @@ import { UserInfo } from "./securityInfo";
  * @param fallbackUser - User to use when `options.user` is absent (typically the provider's `CurrentUser`).
  * @returns The operation result.
  */
-export async function dispatchRemoteOperationInProcess<TInput = unknown, TOutput = unknown>(
+export async function DispatchRemoteOperationInProcess<TInput = unknown, TOutput = unknown>(
     operationKey: string,
     input: TInput,
     options: RemoteOpInvokeOptions,
@@ -60,4 +60,15 @@ export async function dispatchRemoteOperationInProcess<TInput = unknown, TOutput
         handle: undefined,
     };
     return op.ExecuteServer(input, context);
+}
+
+/** @deprecated Use {@link DispatchRemoteOperationInProcess}. */
+export async function dispatchRemoteOperationInProcess<TInput = unknown, TOutput = unknown>(
+    operationKey: string,
+    input: TInput,
+    options: RemoteOpInvokeOptions,
+    provider: IMetadataProvider,
+    fallbackUser?: UserInfo,
+): Promise<RemoteOpResult<TOutput>> {
+    return DispatchRemoteOperationInProcess(operationKey, input, options, provider, fallbackUser);
 }

@@ -165,8 +165,8 @@ function makeEntity(opts: { ftx?: boolean; ftxFunction?: string; pkName?: string
     // touches FullTextSearchEnabled, FullTextSearchFunction, SchemaName,
     // FirstPrimaryKey?.Name, and Fields.
     const entity = Object.create(EntityInfo.prototype) as EntityInfo;
-    // Both `FirstPrimaryKey` and `Fields` are getters on EntityInfo (Fields → _Fields,
-    // FirstPrimaryKey → Fields.find(IsPrimaryKey)). We seed the private `_Fields` backing
+    // Both `FirstPrimaryKey` and `Fields` are getters on EntityInfo (Fields → _fields,
+    // FirstPrimaryKey → Fields.find(IsPrimaryKey)). We seed the private `_fields` backing
     // store with a synthetic PK plus the test fields, and the getters resolve naturally.
     // IncludeInUserSearchAPI defaults to null (falsy), so the per-field search loop skips the PK.
     const pkField = new EntityFieldInfo();
@@ -176,7 +176,7 @@ function makeEntity(opts: { ftx?: boolean; ftxFunction?: string; pkName?: string
         FullTextSearchEnabled: !!opts.ftx,
         FullTextSearchFunction: opts.ftxFunction ?? 'fnSearchTest',
         SchemaName: 'crm',
-        _Fields: [pkField, ...opts.fields],
+        _fields: [pkField, ...opts.fields],
     });
     return entity;
 }
@@ -407,6 +407,10 @@ describe('createViewUserSearchSQL — UserSearchParamFormatAPI still gets the fr
 
     it('still allows an ordinary term on a custom-format entity', () => {
         expect(provider.buildSQL(customFormatEntity(), '2026')).toBe(`(([Year]  = 2026))`);
+    });
+
+    it('says why it refuses a term that cannot be read as complete SQL tokens', () => {
+        expect(() => provider.buildSQL(customFormatEntity(), '[2026')).toThrow(/cannot be read as complete SQL tokens/);
     });
 
     it('a QUOTED custom format keeps working for terms with punctuation', () => {

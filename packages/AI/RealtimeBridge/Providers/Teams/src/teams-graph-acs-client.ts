@@ -102,7 +102,7 @@ export interface GraphCallsClientCredentials {
  * `optionalDependencies` entry keeps it in the dependency graph (CLAUDE rule 8, category 2 — optional peer
  * SDK loaded only when the Teams provider is configured).
  */
-export const defaultGraphModuleLoader: GraphModuleLoader = async (): Promise<GraphModuleLike> => {
+export const DefaultGraphModuleLoader: GraphModuleLoader = async (): Promise<GraphModuleLike> => {
     try {
         const mod: unknown = await import('@microsoft/microsoft-graph-client');
         const resolved = unwrapGraphModule(mod);
@@ -119,6 +119,9 @@ export const defaultGraphModuleLoader: GraphModuleLoader = async (): Promise<Gra
         );
     }
 };
+
+/** @deprecated Use {@link DefaultGraphModuleLoader}. */
+export const defaultGraphModuleLoader: GraphModuleLoader = DefaultGraphModuleLoader;
 
 /** Unwraps the Graph module from CJS/ESM interop (`module` or `module.default`). */
 function unwrapGraphModule(mod: unknown): unknown {
@@ -173,7 +176,7 @@ export class RealGraphCallsClient implements IGraphCallsLike {
      * @param credentials Resolved Graph credentials (bearer token + tenant/app ids).
      * @param loadModule The Graph module loader (defaults to the lazy dynamic import).
      */
-    constructor(credentials: GraphCallsClientCredentials, loadModule: GraphModuleLoader = defaultGraphModuleLoader) {
+    constructor(credentials: GraphCallsClientCredentials, loadModule: GraphModuleLoader = DefaultGraphModuleLoader) {
         this.credentials = credentials;
         this.loadModule = loadModule;
     }
@@ -181,9 +184,9 @@ export class RealGraphCallsClient implements IGraphCallsLike {
     /** @inheritdoc */
     public async CreateCall(request: GraphCreateCallRequest): Promise<GraphCreateCallResult> {
         const client = await this.ensureClient();
-        const body = buildGraphCallBody(request);
+        const body = BuildGraphCallBody(request);
         const response = await client.api('/communications/calls').post(body);
-        return readCreateCallResult(response);
+        return ReadCreateCallResult(response);
     }
 
     /** @inheritdoc */
@@ -196,7 +199,7 @@ export class RealGraphCallsClient implements IGraphCallsLike {
     public async GetParticipants(callId: string): Promise<GraphCallParticipant[]> {
         const client = await this.ensureClient();
         const response = await client.api(`/communications/calls/${encodeURIComponent(callId)}/participants`).get();
-        return readParticipantsCollection(response);
+        return ReadParticipantsCollection(response);
     }
 
     /** @inheritdoc */
@@ -274,7 +277,7 @@ export interface GraphCallPostBody {
  * **Pure** mapping of the bridge's {@link GraphCreateCallRequest} onto the Graph call POST body. Isolated so
  * the request shape unit-tests directly and the live client reuses it verbatim.
  */
-export function buildGraphCallBody(request: GraphCreateCallRequest): GraphCallPostBody {
+export function BuildGraphCallBody(request: GraphCreateCallRequest): GraphCallPostBody {
     return {
         '@odata.type': '#microsoft.graph.call',
         mediaConfig: { '@odata.type': '#microsoft.graph.appHostedMediaConfig' },
@@ -284,8 +287,13 @@ export function buildGraphCallBody(request: GraphCreateCallRequest): GraphCallPo
     };
 }
 
+/** @deprecated Use {@link BuildGraphCallBody}. */
+export function buildGraphCallBody(request: GraphCreateCallRequest): GraphCallPostBody {
+    return BuildGraphCallBody(request);
+}
+
 /** Reads the `{ id, myParticipantId }` of the created call out of the Graph response, without leaking SDK types. */
-export function readCreateCallResult(response: unknown): GraphCreateCallResult {
+export function ReadCreateCallResult(response: unknown): GraphCreateCallResult {
     const obj = asRecord(response);
     const callId = readString(obj?.id);
     if (!callId) {
@@ -295,18 +303,28 @@ export function readCreateCallResult(response: unknown): GraphCreateCallResult {
     return { CallId: callId, BotParticipantId: botParticipantId };
 }
 
+/** @deprecated Use {@link ReadCreateCallResult}. */
+export function readCreateCallResult(response: unknown): GraphCreateCallResult {
+    return ReadCreateCallResult(response);
+}
+
 /** Reads a Graph participants-collection response (`{ value: [...] }`) into {@link GraphCallParticipant}s. */
-export function readParticipantsCollection(response: unknown): GraphCallParticipant[] {
+export function ReadParticipantsCollection(response: unknown): GraphCallParticipant[] {
     const obj = asRecord(response);
     const value = obj?.value;
     if (!Array.isArray(value)) {
         return [];
     }
-    return value.map(readGraphParticipant);
+    return value.map(ReadGraphParticipant);
+}
+
+/** @deprecated Use {@link ReadParticipantsCollection}. */
+export function readParticipantsCollection(response: unknown): GraphCallParticipant[] {
+    return ReadParticipantsCollection(response);
 }
 
 /** Reads one Graph participant resource into the bridge's {@link GraphCallParticipant} shape. */
-export function readGraphParticipant(raw: unknown): GraphCallParticipant {
+export function ReadGraphParticipant(raw: unknown): GraphCallParticipant {
     const p = asRecord(raw);
     const info = asRecord(p?.info);
     const identity = asRecord(info?.identity);
@@ -320,6 +338,11 @@ export function readGraphParticipant(raw: unknown): GraphCallParticipant {
         // an application identity (the bot) from a `user` identity.
         isSelf: identity?.application != null && mediaStreams != null,
     };
+}
+
+/** @deprecated Use {@link ReadGraphParticipant}. */
+export function readGraphParticipant(raw: unknown): GraphCallParticipant {
+    return ReadGraphParticipant(raw);
 }
 
 /** Narrows an unknown value to a record, or `undefined`. */

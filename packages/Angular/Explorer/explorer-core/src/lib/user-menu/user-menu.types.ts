@@ -60,15 +60,25 @@ export type UserMenuElement = UserMenuItem | UserMenuDivider;
 /**
  * Type guard to check if element is a divider
  */
-export function isUserMenuDivider(element: UserMenuElement): element is UserMenuDivider {
+export function IsUserMenuDivider(element: UserMenuElement): element is UserMenuDivider {
     return 'type' in element && element.type === 'divider';
+}
+
+/** @deprecated Use {@link IsUserMenuDivider}. */
+export function isUserMenuDivider(element: UserMenuElement): element is UserMenuDivider {
+    return IsUserMenuDivider(element);
 }
 
 /**
  * Type guard to check if element is a menu item
  */
-export function isUserMenuItem(element: UserMenuElement): element is UserMenuItem {
+export function IsUserMenuItem(element: UserMenuElement): element is UserMenuItem {
     return !('type' in element);
+}
+
+/** @deprecated Use {@link IsUserMenuItem}. */
+export function isUserMenuItem(element: UserMenuElement): element is UserMenuItem {
+    return IsUserMenuItem(element);
 }
 
 /**

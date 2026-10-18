@@ -1,5 +1,5 @@
 import { Component, Input, ChangeDetectionStrategy } from '@angular/core';
-import { EvaluationPreferences, TestRunWithFeedback, getQualityColor } from '../../models/evaluation.types';
+import { EvaluationPreferences, TestRunWithFeedback, GetQualityColor } from '../../models/evaluation.types';
 
 /**
  * Display mode for the evaluation badge
@@ -335,20 +335,119 @@ export type EvaluationBadgeMode = 'compact' | 'expanded' | 'inline';
   `]
 })
 export class EvaluationBadgeComponent {
-  @Input() executionStatus: string = 'Completed';
-  @Input() originalStatus: string = 'Passed';
-  @Input() autoScore: number | null = null;
-  @Input() passedChecks: number | null = null;
-  @Input() failedChecks: number | null = null;
-  @Input() totalChecks: number | null = null;
-  @Input() humanRating: number | null = null;
-  @Input() humanIsCorrect: boolean | null = null;
-  @Input() hasHumanFeedback: boolean = false;
-  @Input() preferences: EvaluationPreferences | null = null;
-  @Input() mode: EvaluationBadgeMode = 'compact';
+  @Input() ExecutionStatus: string = 'Completed';
 
-  getExecIcon(): string {
-    switch (this.executionStatus) {
+  /** @deprecated Use {@link ExecutionStatus}. */
+  @Input() set executionStatus(value: string) {
+    this.ExecutionStatus = value;
+  }
+  /** @deprecated Use {@link ExecutionStatus}. */
+  get executionStatus(): string {
+    return this.ExecutionStatus;
+  }
+  @Input() OriginalStatus: string = 'Passed';
+
+  /** @deprecated Use {@link OriginalStatus}. */
+  @Input() set originalStatus(value: string) {
+    this.OriginalStatus = value;
+  }
+  /** @deprecated Use {@link OriginalStatus}. */
+  get originalStatus(): string {
+    return this.OriginalStatus;
+  }
+  @Input() AutoScore: number | null = null;
+
+  /** @deprecated Use {@link AutoScore}. */
+  @Input() set autoScore(value: number | null) {
+    this.AutoScore = value;
+  }
+  /** @deprecated Use {@link AutoScore}. */
+  get autoScore(): number | null {
+    return this.AutoScore;
+  }
+  @Input() PassedChecks: number | null = null;
+
+  /** @deprecated Use {@link PassedChecks}. */
+  @Input() set passedChecks(value: number | null) {
+    this.PassedChecks = value;
+  }
+  /** @deprecated Use {@link PassedChecks}. */
+  get passedChecks(): number | null {
+    return this.PassedChecks;
+  }
+  @Input() FailedChecks: number | null = null;
+
+  /** @deprecated Use {@link FailedChecks}. */
+  @Input() set failedChecks(value: number | null) {
+    this.FailedChecks = value;
+  }
+  /** @deprecated Use {@link FailedChecks}. */
+  get failedChecks(): number | null {
+    return this.FailedChecks;
+  }
+  @Input() TotalChecks: number | null = null;
+
+  /** @deprecated Use {@link TotalChecks}. */
+  @Input() set totalChecks(value: number | null) {
+    this.TotalChecks = value;
+  }
+  /** @deprecated Use {@link TotalChecks}. */
+  get totalChecks(): number | null {
+    return this.TotalChecks;
+  }
+  @Input() HumanRating: number | null = null;
+
+  /** @deprecated Use {@link HumanRating}. */
+  @Input() set humanRating(value: number | null) {
+    this.HumanRating = value;
+  }
+  /** @deprecated Use {@link HumanRating}. */
+  get humanRating(): number | null {
+    return this.HumanRating;
+  }
+  @Input() HumanIsCorrect: boolean | null = null;
+
+  /** @deprecated Use {@link HumanIsCorrect}. */
+  @Input() set humanIsCorrect(value: boolean | null) {
+    this.HumanIsCorrect = value;
+  }
+  /** @deprecated Use {@link HumanIsCorrect}. */
+  get humanIsCorrect(): boolean | null {
+    return this.HumanIsCorrect;
+  }
+  @Input() HasHumanFeedback: boolean = false;
+
+  /** @deprecated Use {@link HasHumanFeedback}. */
+  @Input() set hasHumanFeedback(value: boolean) {
+    this.HasHumanFeedback = value;
+  }
+  /** @deprecated Use {@link HasHumanFeedback}. */
+  get hasHumanFeedback(): boolean {
+    return this.HasHumanFeedback;
+  }
+  @Input() Preferences: EvaluationPreferences | null = null;
+
+  /** @deprecated Use {@link Preferences}. */
+  @Input() set preferences(value: EvaluationPreferences | null) {
+    this.Preferences = value;
+  }
+  /** @deprecated Use {@link Preferences}. */
+  get preferences(): EvaluationPreferences | null {
+    return this.Preferences;
+  }
+  @Input() Mode: EvaluationBadgeMode = 'compact';
+
+  /** @deprecated Use {@link Mode}. */
+  @Input() set mode(value: EvaluationBadgeMode) {
+    this.Mode = value;
+  }
+  /** @deprecated Use {@link Mode}. */
+  get mode(): EvaluationBadgeMode {
+    return this.Mode;
+  }
+
+  GetExecIcon(): string {
+    switch (this.ExecutionStatus) {
       case 'Completed':
       case 'Passed':
         return 'fa-solid fa-circle-check';
@@ -369,8 +468,13 @@ export class EvaluationBadgeComponent {
     }
   }
 
-  getExecClass(): string {
-    switch (this.executionStatus) {
+  /** @deprecated Use {@link GetExecIcon}. */
+  getExecIcon(): string {
+    return this.GetExecIcon();
+  }
+
+  GetExecClass(): string {
+    switch (this.ExecutionStatus) {
       case 'Completed':
       case 'Passed':
         return 'success';
@@ -391,76 +495,116 @@ export class EvaluationBadgeComponent {
     }
   }
 
-  getExecText(): string {
-    return this.originalStatus || this.executionStatus;
+  /** @deprecated Use {@link GetExecClass}. */
+  getExecClass(): string {
+    return this.GetExecClass();
   }
 
-  getHumanClass(): string {
-    if (this.humanRating == null) return '';
-    if (this.humanRating >= 8) return 'success';
-    if (this.humanRating >= 5) return 'warning';
+  GetExecText(): string {
+    return this.OriginalStatus || this.ExecutionStatus;
+  }
+
+  /** @deprecated Use {@link GetExecText}. */
+  getExecText(): string {
+    return this.GetExecText();
+  }
+
+  GetHumanClass(): string {
+    if (this.HumanRating == null) return '';
+    if (this.HumanRating >= 8) return 'success';
+    if (this.HumanRating >= 5) return 'warning';
     return 'danger';
   }
 
-  getAutoClass(): string {
-    if (this.autoScore == null) return '';
-    if (this.autoScore >= 0.8) return 'high';
-    if (this.autoScore >= 0.5) return '';
+  /** @deprecated Use {@link GetHumanClass}. */
+  getHumanClass(): string {
+    return this.GetHumanClass();
+  }
+
+  GetAutoClass(): string {
+    if (this.AutoScore == null) return '';
+    if (this.AutoScore >= 0.8) return 'high';
+    if (this.AutoScore >= 0.5) return '';
     return 'low';
   }
 
-  formatAutoScore(): string {
-    if (this.autoScore == null) return '—';
-    return `${Math.round(this.autoScore * 100)}%`;
+  /** @deprecated Use {@link GetAutoClass}. */
+  getAutoClass(): string {
+    return this.GetAutoClass();
   }
 
-  getRatingStars(): string {
-    if (this.humanRating == null) return '';
-    const filled = Math.round(this.humanRating / 2);
+  FormatAutoScore(): string {
+    if (this.AutoScore == null) return '—';
+    return `${Math.round(this.AutoScore * 100)}%`;
+  }
+
+  /** @deprecated Use {@link FormatAutoScore}. */
+  formatAutoScore(): string {
+    return this.FormatAutoScore();
+  }
+
+  GetRatingStars(): string {
+    if (this.HumanRating == null) return '';
+    const filled = Math.round(this.HumanRating / 2);
     const empty = 5 - filled;
     return '★'.repeat(filled) + '☆'.repeat(empty);
   }
 
-  getQualityColorClass(): string {
-    if (!this.preferences) return 'neutral';
+  /** @deprecated Use {@link GetRatingStars}. */
+  getRatingStars(): string {
+    return this.GetRatingStars();
+  }
+
+  GetQualityColorClass(): string {
+    if (!this.Preferences) return 'neutral';
 
     const run: TestRunWithFeedback = {
       id: '',
       testId: '',
       testName: '',
-      executionStatus: this.executionStatus as TestRunWithFeedback['executionStatus'],
-      originalStatus: this.originalStatus,
+      executionStatus: this.ExecutionStatus as TestRunWithFeedback['executionStatus'],
+      originalStatus: this.OriginalStatus,
       duration: 0,
       cost: 0,
       runDateTime: new Date(),
-      autoScore: this.autoScore,
-      passedChecks: this.passedChecks,
-      failedChecks: this.failedChecks,
-      totalChecks: this.totalChecks,
-      humanRating: this.humanRating,
-      humanIsCorrect: this.humanIsCorrect,
+      autoScore: this.AutoScore,
+      passedChecks: this.PassedChecks,
+      failedChecks: this.FailedChecks,
+      totalChecks: this.TotalChecks,
+      humanRating: this.HumanRating,
+      humanIsCorrect: this.HumanIsCorrect,
       humanComments: null,
-      hasHumanFeedback: this.hasHumanFeedback,
+      hasHumanFeedback: this.HasHumanFeedback,
       feedbackId: null,
       tags: [],
       targetType: null,
       targetLogID: null
     };
 
-    return getQualityColor(run, this.preferences);
+    return GetQualityColor(run, this.Preferences);
   }
 
-  getPrimaryValue(): string {
+  /** @deprecated Use {@link GetQualityColorClass}. */
+  getQualityColorClass(): string {
+    return this.GetQualityColorClass();
+  }
+
+  GetPrimaryValue(): string {
     // Priority: Human > Auto > Execution
-    if (this.preferences?.showHuman && this.hasHumanFeedback && this.humanRating != null) {
-      return `${this.humanRating}/10`;
+    if (this.Preferences?.showHuman && this.HasHumanFeedback && this.HumanRating != null) {
+      return `${this.HumanRating}/10`;
     }
-    if (this.preferences?.showAuto && this.autoScore != null) {
-      return this.formatAutoScore();
+    if (this.Preferences?.showAuto && this.AutoScore != null) {
+      return this.FormatAutoScore();
     }
-    if (this.preferences?.showExecution) {
-      return this.originalStatus;
+    if (this.Preferences?.showExecution) {
+      return this.OriginalStatus;
     }
     return '—';
+  }
+
+  /** @deprecated Use {@link GetPrimaryValue}. */
+  getPrimaryValue(): string {
+    return this.GetPrimaryValue();
   }
 }

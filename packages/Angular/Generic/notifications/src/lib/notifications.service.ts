@@ -78,7 +78,16 @@ export class MJNotificationService {
 
   private static isLoading$ = new BehaviorSubject<boolean>(false);
   private tabChange = new Subject();
-  tabChange$ = this.tabChange.asObservable();
+  TabChange$ = this.tabChange.asObservable();
+
+  /** @deprecated Use {@link TabChange$}. */
+  get tabChange$() {
+    return this.TabChange$;
+  }
+  /** @deprecated Use {@link TabChange$}. */
+  set tabChange$(value) {
+    this.TabChange$ = value;
+  }
 
   /**
    * Observable stream of the current user's notifications, derived from
@@ -89,7 +98,11 @@ export class MJNotificationService {
    */
   public static readonly Notifications$: Observable<MJUserNotificationEntity[]> =
     UserInfoEngine.Instance.UserNotifications$.pipe(
-      map(() => UserInfoEngine.Instance.UserNotifications),
+      // ...IfPermitted, not UserNotifications: a permission-constrained session (an external
+      // magic-link user) cannot read notifications, and the throwing getter errored this
+      // stream at shell boot — an uncaught PermissionConstrainedError that also terminated
+      // the shared replay for every later subscriber. Such users simply have no badge.
+      map(() => UserInfoEngine.Instance.UserNotificationsIfPermitted),
       shareReplay({ bufferSize: 1, refCount: false })
     );
 
@@ -235,10 +248,11 @@ export class MJNotificationService {
  
   /**
    * The current user's notifications, delegated to UserInfoEngine which owns the
-   * cache. Applies the per-user filter and newest-first sort on each access.
+   * cache. Applies the per-user filter and newest-first sort on each access. Empty
+   * (never a thrown PermissionConstrainedError) for a user who cannot read notifications.
    */
   public static get UserNotifications(): MJUserNotificationEntity[] {
-    return UserInfoEngine.Instance.UserNotifications;
+    return UserInfoEngine.Instance.UserNotificationsIfPermitted;
   }
 
   /**
@@ -258,14 +272,14 @@ export class MJNotificationService {
   /**
    * Instance method to access Notifications$ observable
    */
-  public get notifications$(): Observable<MJUserNotificationEntity[]> {
+  public get notifications$(): Observable<MJUserNotificationEntity[]> {  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
     return MJNotificationService.Notifications$;
   }
 
   /**
    * Instance method to access UnreadCount$ observable
    */
-  public get unreadCount$(): Observable<number> {
+  public get unreadCount$(): Observable<number> {  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
     return MJNotificationService.UnreadCount$;
   }
 

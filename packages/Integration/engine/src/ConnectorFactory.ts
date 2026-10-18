@@ -30,14 +30,14 @@ export class ConnectorFactory {
             );
         }
 
-        return ConnectorFactory.CreateConnectorInstance(className);
+        return ConnectorFactory.createConnectorInstance(className);
     }
 
     /**
      * Creates a connector instance via MJGlobal.ClassFactory.
      * First verifies a registration exists to avoid falling back to the abstract base class.
      */
-    private static CreateConnectorInstance(driverClass: string): BaseIntegrationConnector {
+    private static createConnectorInstance(driverClass: string): BaseIntegrationConnector {
         const registration = MJGlobal.Instance.ClassFactory.GetRegistration(
             BaseIntegrationConnector,
             driverClass

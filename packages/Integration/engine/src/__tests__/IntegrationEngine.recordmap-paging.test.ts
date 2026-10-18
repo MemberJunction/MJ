@@ -40,8 +40,8 @@ interface LoadResult { Rows: RecordMapRow[]; Complete: boolean; Error?: string }
 /** Invokes the private loader — the seam both callers depend on. */
 function loadAllRecordMaps(engine: IntegrationEngine, ci = 'ci-1', entity = 'entity-1'): Promise<LoadResult> {
     return (engine as unknown as {
-        LoadAllRecordMaps: (ci: string, entity: string, u: UserInfo) => Promise<LoadResult>;
-    }).LoadAllRecordMaps(ci, entity, contextUser);
+        loadAllRecordMaps: (ci: string, entity: string, u: UserInfo) => Promise<LoadResult>;
+    }).loadAllRecordMaps(ci, entity, contextUser);
 }
 
 function rows(count: number, offset = 0): RecordMapRow[] {

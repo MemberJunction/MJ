@@ -18,36 +18,36 @@ export type ObservedChannel = 'tool-call' | 'envelope' | 'text' | 'empty' | 'err
 
 /** A call, normalized across the two encodings so the same assertions run on both. */
 export interface ObservedCall {
-    name: string;
-    arguments: Record<string, unknown>;
+    name: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    arguments: Record<string, unknown>;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** How it arrived — a native tool call, or an action inside the JSON envelope. */
-    channel: 'tool-call' | 'envelope';
+    channel: 'tool-call' | 'envelope';  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 }
 
 /** Everything one request/response pair contributes to the scorecard. */
 export interface CellObservation {
-    driverSucceeded: boolean;
-    errorMessage: string | null;
-    finishReason: string | null;
+    driverSucceeded: boolean;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    errorMessage: string | null;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    FinishReason: string | null;
     /** Whether the driver downgraded a streaming request because tools were declared (§5.5). */
-    streamingSuppressedForTools: boolean;
+    StreamingSuppressedForTools: boolean;
 
-    textPresent: boolean;
-    textLength: number;
+    textPresent: boolean;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    TextLength: number;
 
-    nativeToolCallCount: number;
+    nativeToolCallCount: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** True when the turn carried BOTH text and native calls — legal everywhere, frequency varies. */
-    textAndCallsTogether: boolean;
+    TextAndCallsTogether: boolean;
     /** Every native call has a non-empty name, a declared name, and a plain object for arguments. */
-    nativeCallsWellFormed: boolean;
+    nativeCallsWellFormed: boolean;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** Names the model invented that were never declared. Empty is the expected case. */
-    undeclaredToolNames: string[];
+    UndeclaredToolNames: string[];
 
-    envelopeParsed: boolean | null;
-    envelopeValid: boolean | null;
+    envelopeParsed: boolean | null;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    envelopeValid: boolean | null;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 
-    channel: ObservedChannel;
-    observedCallNames: string[];
+    channel: ObservedChannel;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    ObservedCallNames: string[];
     /**
      * The arguments the model actually sent, per call, truncated for storage.
      *
@@ -56,24 +56,24 @@ export interface CellObservation {
      * distinguish "the model sent nothing" from "the model sent an object, because the schema said
      * the param was an object".
      */
-    observedArguments: Array<Record<string, unknown>>;
+    ObservedArguments: Array<Record<string, unknown>>;
     /** The decision matched the expectation — right calls, or correctly no call at all. */
-    decisionCorrect: boolean;
+    decisionCorrect: boolean;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** Share of argument matchers that passed, or `null` when none applied. */
-    argumentMatchRate: number | null;
+    argumentMatchRate: number | null;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 
     /**
      * Whether the provider honored the forcing semantics of the cell's mode, or `null` for the
      * modes that impose none (`no-tools`, `auto`). This is the §9.3 "forcing semantics" datum.
      */
-    toolChoiceHonored: boolean | null;
+    ToolChoiceHonored: boolean | null;
 
-    promptTokens: number | null;
-    completionTokens: number | null;
+    PromptTokens: number | null;
+    CompletionTokens: number | null;
 }
 
 /** Reads one argument through one matcher. Missing arguments always fail. */
-export function matchArgument(matcher: ArgumentMatcher, args: Record<string, unknown>): boolean {
+export function MatchArgument(matcher: ArgumentMatcher, args: Record<string, unknown>): boolean {
     const value = args[matcher.parameter];
     switch (matcher.kind) {
         case 'nonEmptyString':
@@ -87,18 +87,28 @@ export function matchArgument(matcher: ArgumentMatcher, args: Record<string, unk
     }
 }
 
+/** @deprecated Use {@link MatchArgument}. */
+export function matchArgument(matcher: ArgumentMatcher, args: Record<string, unknown>): boolean {
+    return MatchArgument(matcher, args);
+}
+
 /**
  * Strips the markdown fence models add even when told not to, so a fenced-but-otherwise-correct
  * envelope counts as parsed. Fencing is a formatting habit, not a decision error, and conflating
  * the two would inflate the malformed rate this matrix is meant to measure honestly.
  */
-export function stripJsonFence(text: string): string {
+export function StripJsonFence(text: string): string {
     const trimmed = text.trim();
     if (!trimmed.startsWith('```')) {
         return trimmed;
     }
     const withoutOpen = trimmed.replace(/^```[a-zA-Z]*\s*\n?/, '');
     return withoutOpen.replace(/\n?```\s*$/, '').trim();
+}
+
+/** @deprecated Use {@link StripJsonFence}. */
+export function stripJsonFence(text: string): string {
+    return StripJsonFence(text);
 }
 
 /** The subset of `LoopAgentResponse` the envelope probe asks for and this module reads back. */
@@ -112,13 +122,13 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 }
 
 /** Parses the envelope and says whether it satisfies the contract the loop branches on. */
-export function readEnvelope(text: string): { parsed: boolean; valid: boolean; envelope: ParsedEnvelope | null } {
+export function ReadEnvelope(text: string): { parsed: boolean; valid: boolean; envelope: ParsedEnvelope | null } {
     if (!text || text.trim().length === 0) {
         return { parsed: false, valid: false, envelope: null };
     }
     let candidate: unknown;
     try {
-        candidate = JSON.parse(stripJsonFence(text));
+        candidate = JSON.parse(StripJsonFence(text));
     } catch {
         return { parsed: false, valid: false, envelope: null };
     }
@@ -132,6 +142,11 @@ export function readEnvelope(text: string): { parsed: boolean; valid: boolean; e
     const nextStepTyped = typeof envelope.nextStep?.type === 'string';
     const valid = hasCompletion && (envelope.taskComplete === true || nextStepTyped);
     return { parsed: true, valid, envelope };
+}
+
+/** @deprecated Use {@link ReadEnvelope}. */
+export function readEnvelope(text: string): { parsed: boolean; valid: boolean; envelope: ParsedEnvelope | null } {
+    return ReadEnvelope(text);
 }
 
 /** Lifts `nextStep.actions` into the same shape as a native call so one comparison serves both. */
@@ -163,7 +178,7 @@ function nativeCallWellFormed(call: ChatToolCall, declaredNames: Set<string>): b
 }
 
 /** Scores observed calls against the expectation: right names in any order, then argument fidelity. */
-export function scoreCalls(expected: ExpectedToolCall[], observed: ObservedCall[]): { namesMatch: boolean; argumentMatchRate: number | null } {
+export function ScoreCalls(expected: ExpectedToolCall[], observed: ObservedCall[]): { namesMatch: boolean; argumentMatchRate: number | null } {
     const expectedNames = [...expected.map((e) => e.toolName)].sort();
     const observedNames = [...observed.map((o) => o.name)].sort();
     const namesMatch = expectedNames.length === observedNames.length && expectedNames.every((n, i) => n === observedNames[i]);
@@ -176,12 +191,17 @@ export function scoreCalls(expected: ExpectedToolCall[], observed: ObservedCall[
         const match = observed.find((o) => o.name === expectation.toolName);
         for (const matcher of expectation.arguments) {
             checked++;
-            if (match && matchArgument(matcher, match.arguments)) {
+            if (match && MatchArgument(matcher, match.arguments)) {
                 passed++;
             }
         }
     }
     return { namesMatch, argumentMatchRate: checked === 0 ? null : passed / checked };
+}
+
+/** @deprecated Use {@link ScoreCalls}. */
+export function scoreCalls(expected: ExpectedToolCall[], observed: ObservedCall[]): { namesMatch: boolean; argumentMatchRate: number | null } {
+    return ScoreCalls(expected, observed);
 }
 
 /**
@@ -190,7 +210,7 @@ export function scoreCalls(expected: ExpectedToolCall[], observed: ObservedCall[
  * `no-tools` and `auto` impose nothing, so they report `null` rather than a vacuous `true` — a
  * rate computed over cells that could not fail would be meaningless.
  */
-export function evaluateToolChoice(mode: ProbeToolMode, forcedToolName: string | undefined, calls: ChatToolCall[]): boolean | null {
+export function EvaluateToolChoice(mode: ProbeToolMode, forcedToolName: string | undefined, calls: ChatToolCall[]): boolean | null {
     switch (mode) {
         case 'none':
             return calls.length === 0;
@@ -204,6 +224,11 @@ export function evaluateToolChoice(mode: ProbeToolMode, forcedToolName: string |
         default:
             return null;
     }
+}
+
+/** @deprecated Use {@link EvaluateToolChoice}. */
+export function evaluateToolChoice(mode: ProbeToolMode, forcedToolName: string | undefined, calls: ChatToolCall[]): boolean | null {
+    return EvaluateToolChoice(mode, forcedToolName, calls);
 }
 
 /** Picks the channel the model actually answered through. */
@@ -237,12 +262,12 @@ function truncateArguments(args: Record<string, unknown>): Record<string, unknow
 /** The failed-call observation, so a provider error is a data point rather than a gap in the grid. */
 function failedObservation(errorMessage: string): CellObservation {
     return {
-        driverSucceeded: false, errorMessage, finishReason: null, streamingSuppressedForTools: false,
-        textPresent: false, textLength: 0,
-        nativeToolCallCount: 0, textAndCallsTogether: false, nativeCallsWellFormed: false, undeclaredToolNames: [],
+        driverSucceeded: false, errorMessage, FinishReason: null, StreamingSuppressedForTools: false,
+        textPresent: false, TextLength: 0,
+        nativeToolCallCount: 0, TextAndCallsTogether: false, nativeCallsWellFormed: false, UndeclaredToolNames: [],
         envelopeParsed: null, envelopeValid: null,
-        channel: 'error', observedCallNames: [], observedArguments: [], decisionCorrect: false, argumentMatchRate: null,
-        toolChoiceHonored: null, promptTokens: null, completionTokens: null
+        channel: 'error', ObservedCallNames: [], ObservedArguments: [], decisionCorrect: false, argumentMatchRate: null,
+        ToolChoiceHonored: null, PromptTokens: null, CompletionTokens: null
     };
 }
 
@@ -253,7 +278,7 @@ function failedObservation(errorMessage: string): CellObservation {
  * the same scenario with nothing declared — an undeclared-name check against the scenario's tool
  * list would then flag every envelope action as hallucinated.
  */
-export function observeChatResult(
+export function ObserveChatResult(
     result: ChatResult,
     scenario: ProbeScenario,
     mode: ProbeToolMode,
@@ -269,39 +294,49 @@ export function observeChatResult(
 
     const text = choice.message?.content ?? '';
     const nativeCalls = choice.message?.toolCalls ?? [];
-    const declaredNames = new Set(toolsDeclared ? scenario.tools.map((t) => t.name) : []);
+    const declaredNames = new Set(toolsDeclared ? scenario.Tools.map((t) => t.name) : []);
 
-    const envelope = scenario.expectation.envelopeRequested ? readEnvelope(text) : null;
+    const envelope = scenario.Expectation.EnvelopeRequested ? ReadEnvelope(text) : null;
     const envelopeCalls = envelopeActionsAsCalls(envelope?.envelope ?? null);
     // Native calls win: a model that emitted both has made its decision natively, and the envelope
     // is at most a narration of it.
     const observedCalls = nativeCalls.length > 0 ? nativeCallsAsObserved(nativeCalls) : envelopeCalls;
 
-    const expectation: ProbeExpectation = scenario.expectation;
-    const { namesMatch, argumentMatchRate } = scoreCalls(expectation.calls, observedCalls);
-    const decisionCorrect = expectation.toolCallWarranted ? namesMatch : observedCalls.length === 0;
+    const expectation: ProbeExpectation = scenario.Expectation;
+    const { namesMatch, argumentMatchRate } = ScoreCalls(expectation.calls, observedCalls);
+    const decisionCorrect = expectation.ToolCallWarranted ? namesMatch : observedCalls.length === 0;
 
     const textPresent = text.trim().length > 0;
     return {
         driverSucceeded: true,
         errorMessage: null,
-        finishReason: choice.finish_reason ?? null,
-        streamingSuppressedForTools: result.modelSpecificResponseDetails?.streamingSuppressedForTools === true,
+        FinishReason: choice.finish_reason ?? null,
+        StreamingSuppressedForTools: result.modelSpecificResponseDetails?.streamingSuppressedForTools === true,
         textPresent,
-        textLength: text.length,
+        TextLength: text.length,
         nativeToolCallCount: nativeCalls.length,
-        textAndCallsTogether: textPresent && nativeCalls.length > 0,
+        TextAndCallsTogether: textPresent && nativeCalls.length > 0,
         nativeCallsWellFormed: nativeCalls.every((c) => nativeCallWellFormed(c, declaredNames)),
-        undeclaredToolNames: nativeCalls.map((c) => c.name).filter((n) => !declaredNames.has(n)),
+        UndeclaredToolNames: nativeCalls.map((c) => c.name).filter((n) => !declaredNames.has(n)),
         envelopeParsed: envelope ? envelope.parsed : null,
         envelopeValid: envelope ? envelope.valid : null,
         channel: classifyChannel(nativeCalls.length, envelopeCalls.length, envelope?.parsed ?? false, textPresent),
-        observedCallNames: observedCalls.map((c) => c.name),
-        observedArguments: observedCalls.map((c) => truncateArguments(c.arguments)),
+        ObservedCallNames: observedCalls.map((c) => c.name),
+        ObservedArguments: observedCalls.map((c) => truncateArguments(c.arguments)),
         decisionCorrect,
         argumentMatchRate,
-        toolChoiceHonored: evaluateToolChoice(mode, scenario.forcedToolName, nativeCalls),
-        promptTokens: result.data?.usage?.promptTokens ?? null,
-        completionTokens: result.data?.usage?.completionTokens ?? null
+        ToolChoiceHonored: EvaluateToolChoice(mode, scenario.ForcedToolName, nativeCalls),
+        PromptTokens: result.data?.usage?.promptTokens ?? null,
+        CompletionTokens: result.data?.usage?.completionTokens ?? null
     };
+}
+
+/** @deprecated Use {@link ObserveChatResult}. */
+export function observeChatResult(
+    result: ChatResult,
+    scenario: ProbeScenario,
+    mode: ProbeToolMode,
+    toolsDeclared: boolean
+): CellObservation {
+    return ObserveChatResult(result, scenario, mode, toolsDeclared);
 }

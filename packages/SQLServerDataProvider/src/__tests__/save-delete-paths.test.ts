@@ -81,8 +81,8 @@ class SaveDeleteTestProvider extends SQLServerDataProvider {
   }
 
   /** Exposes the save SQL pair (executed fullSQL, logged simpleSQL) for the replay-guard tests. */
-  public async SaveSQLForTest(entity: BaseEntity, isNew: boolean, user: UserInfo) {
-    return this.GenerateSaveSQL(entity, isNew, user, new EntitySaveOptions());
+  public async SaveSQLForTest(entity: BaseEntity, isNew: boolean, user: UserInfo, options = new EntitySaveOptions()) {
+    return this.GenerateSaveSQL(entity, isNew, user, options);
   }
 }
 
@@ -242,7 +242,7 @@ describe('SQLServerDataProvider save path (real Save() → GenerateSaveSQL → m
     expect(sql).toContain('DECLARE @ResultChangesTable TABLE');
     expect(sql).toContain('[RecordID] nvarchar(750) NOT NULL'); // record-changes entity columns
     expect(sql).toContain('spCreateRecordChange_Internal');
-    expect(sql).toContain(`@EntityName='Widgets'`);
+    expect(sql).toContain(`@EntityName=N'Widgets'`);
     expect(sql).toContain(`@UserID='${TEST_USER.ID}'`);
     expect(sql).toContain(`@Type='Create'`);
 
@@ -309,16 +309,96 @@ describe('SQLServerDataProvider replay form of a create (Metadata_Sync recording
     expect(simpleSQL).not.toContain('spUpdateWidget');
   });
 
-  it('UPDATE: the logged simpleSQL is the plain spUpdate call, no guard', async () => {
+  it('UPDATE: the logged simpleSQL carries only the changed field + PK; the executed fullSQL still passes every column', async () => {
     const provider = makeProvider();
     const entity = makeSavedWidgetEntity(makeWidgetEntityInfo(), TEST_USER);
     entity.Set('Name', 'Renamed');
 
     const { fullSQL, simpleSQL } = await provider.SaveSQLForTest(entity, false, TEST_USER);
+    const sfx = extractSuffix(fullSQL, 'Name');
+
+    // Executed form unchanged: every SP parameter, including untouched ones
+    expect(fullSQL).toContain(`@Description=@Description${sfx}`);
+    expect(fullSQL).toContain(`@IsActive=@IsActive${sfx}`);
+    expect(fullSQL).toContain('@ExternalID_Clear=1');
+
+    // Logged form: spUpdate with the changed field and the key, same suffix, nothing else
+    expect(simpleSQL).toBe(
+      `DECLARE @Name${sfx} NVARCHAR(100),\n        @ID${sfx} UNIQUEIDENTIFIER\n\n` +
+        `SET @Name${sfx} = N'Renamed'\nSET @ID${sfx} = 'w-0001'\n\n` +
+        `EXEC [dbo].spUpdateWidget @Name=@Name${sfx},\n                @ID=@ID${sfx}`,
+    );
+    expect(simpleSQL).not.toContain('IF NOT EXISTS');
+  });
+
+  it('UPDATE: a field changed to NULL is logged with its _Clear companion; untouched NULLs are not', async () => {
+    const provider = makeProvider();
+    const entity = makeSavedWidgetEntity(makeWidgetEntityInfo(), TEST_USER);
+    entity.Set('Description', null);
+
+    const { simpleSQL } = await provider.SaveSQLForTest(entity, false, TEST_USER);
+
+    expect(simpleSQL).toContain('@Description=@Description');
+    expect(simpleSQL).toContain('@Description_Clear=1');
+    expect(simpleSQL).not.toContain('@Name=');
+    expect(simpleSQL).not.toContain('@ExternalID_Clear=1');
+  });
+
+  it('UPDATE that changed no proc parameter: logged as a comment, so a replay writes nothing', async () => {
+    const provider = makeProvider();
+    const entity = makeSavedWidgetEntity(makeWidgetEntityInfo(), TEST_USER);
+
+    const { fullSQL, simpleSQL } = await provider.SaveSQLForTest(entity, false, TEST_USER);
+
+    expect(fullSQL).toContain('EXEC [dbo].spUpdateWidget');
+    expect(simpleSQL).toMatch(/^-- Widgets \(.*w-0001.*\): saved with no field changes; nothing to replay$/);
+    expect(simpleSQL).not.toContain('EXEC');
+  });
+
+  it('forced UPDATE (IgnoreDirtyState, e.g. alwaysPush): logs the full row, which is what the caller asked to re-impose', async () => {
+    const provider = makeProvider();
+    const entity = makeSavedWidgetEntity(makeWidgetEntityInfo(), TEST_USER);
+    entity.Set('Name', 'Renamed');
+    const options = Object.assign(new EntitySaveOptions(), { IgnoreDirtyState: true });
+
+    const { fullSQL, simpleSQL } = await provider.SaveSQLForTest(entity, false, TEST_USER, options);
 
     expect(simpleSQL).toBe(fullSQL);
-    expect(simpleSQL).toContain('spUpdateWidget');
-    expect(simpleSQL).not.toContain('IF NOT EXISTS');
+    expect(simpleSQL).toContain('@Description=@Description');
+  });
+
+  it('UPDATE through a hand-written update proc (spUpdateGenerated off): logs the full row, since no ISNULL merge is promised', async () => {
+    const provider = makeProvider();
+    const info = makeWidgetEntityInfo();
+    info.spUpdateGenerated = false;
+    const entity = makeSavedWidgetEntity(info, TEST_USER);
+    entity.Set('Name', 'Renamed');
+
+    const { fullSQL, simpleSQL } = await provider.SaveSQLForTest(entity, false, TEST_USER);
+
+    expect(simpleSQL).toBe(fullSQL);
+    expect(simpleSQL).toContain('@Description=@Description');
+  });
+
+  it('UPDATE inside a TransactionGroup: the replay form reuses the save\'s suffix instead of allocating another ordinal', async () => {
+    const provider = makeProvider();
+    const group = new SQLServerTransactionGroup();
+    const first = makeSavedWidgetEntity(makeWidgetEntityInfo(), TEST_USER);
+    first.Set('Name', 'One');
+    first.TransactionGroup = group;
+    const second = makeSavedWidgetEntity(makeWidgetEntityInfo(), TEST_USER);
+    second.Set('Name', 'Two');
+    second.TransactionGroup = group;
+
+    const a = await provider.SaveSQLForTest(first, false, TEST_USER);
+    const b = await provider.SaveSQLForTest(second, false, TEST_USER);
+    const sfxA = extractSuffix(a.fullSQL, 'Name');
+    const sfxB = extractSuffix(b.fullSQL, 'Name');
+
+    // Same record twice in one group: the second gets _2 — not _3, which an extra allocation would give
+    expect(sfxB).toBe(`${sfxA}_2`);
+    expect(a.simpleSQL).toContain(`@Name${sfxA} NVARCHAR(100)`);
+    expect(b.simpleSQL).toContain(`@Name${sfxB} NVARCHAR(100)`);
   });
 
   it('CREATE without TrackRecordChanges: the guarded form still reaches the SQL logger as the fallback', async () => {
@@ -381,7 +461,7 @@ describe('SQLServerDataProvider delete path (real Delete() → GenerateDeleteSQL
     expect(sql).toContain(`EXEC [dbo].[spDeleteWidget] @ID='w-0001'`);
     expect(sql).toContain('spCreateRecordChange_Internal');
     expect(sql).toContain(`@Type='Delete'`);
-    expect(sql).toContain(`@EntityName='Widgets'`);
+    expect(sql).toContain(`@EntityName=N'Widgets'`);
     expect(sql).toContain('SELECT @ID AS [ID]'); // PK echoed back for delete validation
   });
 
@@ -545,3 +625,139 @@ describe('SQLServerDataProvider save-call variable suffix (loom #12 WP3)', () =>
     });
   });
 });
+
+describe('SQLServerDataProvider Record Change text is sent as Unicode (N\'…\') literals', () => {
+  // spCreateRecordChange_Internal declares @EntityName, @RecordID, @ChangesJSON, @ChangesDescription
+  // and @FullRecordJSON as NVARCHAR. A plain '…' literal is read in the database's code page first,
+  // so on a SQL_Latin1_General_CP1 database every character outside code page 1252 (emoji, CJK,
+  // Greek, Cyrillic, …) is stored in the audit row as '?'. The record itself saves correctly.
+  const UNICODE_NAME = 'Zoë 😀 日本 Ωμέγα';
+
+  beforeEach(() => {
+    mssqlState.Reset();
+  });
+
+  it('CREATE: every text argument of the record-change EXEC is an N literal and carries the text intact', async () => {
+    const provider = makeProvider();
+    provider.SetTestEntities([makeRecordChangesEntityInfo()]);
+    const entity = makeNewWidgetEntity(makeWidgetEntityInfo({ trackRecordChanges: true }), TEST_USER);
+    entity.Set('Name', UNICODE_NAME);
+    entity.Set('IsActive', true);
+    mssqlState.QueueResult({ rows: [{ ...savedWidgetRow(), Name: UNICODE_NAME }] });
+
+    await provider.Save(entity, TEST_USER, new EntitySaveOptions());
+
+    const sql = mssqlState.Queries[0].sql;
+    expect(sql).toContain(`@EntityName=N'Widgets'`);
+    expect(sql).toMatch(/@ChangesJSON=N'/);
+    expect(sql).toMatch(/@ChangesDescription=N'/);
+    expect(sql).toMatch(/@FullRecordJSON=N'[^']*Zoë 😀 日本 Ωμέγα/);
+    expect(sql).not.toMatch(/@(EntityName|ChangesJSON|ChangesDescription|FullRecordJSON)='/);
+  });
+
+  it('DELETE: the quoted RecordID and the JSON arguments are N literals', async () => {
+    const provider = makeProvider();
+    provider.SetTestEntities([makeRecordChangesEntityInfo()]);
+    const entity = makeSavedWidgetEntity(makeWidgetEntityInfo({ trackRecordChanges: true }), TEST_USER);
+    mssqlState.QueueResult({ rows: [{ ID: 'w-0001' }] });
+
+    await provider.Delete(entity, new EntityDeleteOptions(), TEST_USER);
+
+    const sql = mssqlState.Queries[0].sql;
+    expect(sql).toContain(`@EntityName=N'Widgets'`);
+    expect(sql).toMatch(/@RecordID=N'ID\|w-0001'/);
+    expect(sql).toMatch(/@ChangesJSON=N'/);
+    expect(sql).toMatch(/@ChangesDescription=N'/);
+    expect(sql).toMatch(/@FullRecordJSON=N'/);
+    expect(sql).not.toMatch(/@(EntityName|RecordID|ChangesJSON|ChangesDescription|FullRecordJSON)='/);
+  });
+
+  it('IS-A sibling propagation: the entity name, record id and change text are N literals', () => {
+    const provider = makeProvider();
+    const sibling = provider as unknown as {
+      BuildSiblingRecordChangeSQL: (varName: string, entityInfo: EntityInfo, changesJSON: string, changesDesc: string, pkValue: string, userId: string) => string;
+    };
+    const sql = sibling.BuildSiblingRecordChangeSQL('@_rc_prop_0', makeWidgetEntityInfo(), `{"Name":"${UNICODE_NAME}"}`, `Name changed to ${UNICODE_NAME}`, 'w-0001', TEST_USER.ID);
+
+    expect(sql).toContain(`@EntityName=N'Widgets'`);
+    expect(sql).toContain(`@RecordID=N'ID|w-0001'`);
+    expect(sql).toContain(`@ChangesJSON=N'{"Name":"${UNICODE_NAME}"}'`);
+    expect(sql).toContain(`@ChangesDescription=N'Name changed to ${UNICODE_NAME}'`);
+  });
+});
+
+describe("SQLServerDataProvider SaveReturnMode ('datestamps_only')", () => {
+  beforeEach(() => {
+    mssqlState.Reset();
+  });
+
+  it('declares @ResultTable with only PK + datestamps when EntityInfo.SaveReturnMode is datestamps_only and merges returned values onto entity state', async () => {
+    const provider = makeProvider();
+    provider.SetTestEntities([makeRecordChangesEntityInfo()]);
+    const entityInfo = makeWidgetEntityInfo({ trackRecordChanges: true, saveReturnMode: 'datestamps_only' });
+    const entity = makeNewWidgetEntity(entityInfo, TEST_USER);
+    entity.Set('ID', 'w-ds-01');
+    entity.Set('Name', 'High-Volume Step');
+    entity.Set('Description', 'Large JSON payload');
+    entity.Set('IsActive', true);
+
+    const createdAt = new Date('2026-04-17T10:00:00.000Z');
+    const updatedAt = new Date('2026-04-17T10:00:00.000Z');
+    mssqlState.QueueResult({
+      rows: [{ ID: 'w-ds-01', __mj_CreatedAt: createdAt, __mj_UpdatedAt: updatedAt }],
+    });
+
+    const result = await provider.Save(entity, TEST_USER, new EntitySaveOptions());
+
+    const sql = mssqlState.Queries[0].sql;
+    // @ResultTable contains ONLY ID, __mj_CreatedAt, __mj_UpdatedAt — NOT Name, Description, CategoryName
+    expect(sql).toContain('DECLARE @ResultTable TABLE');
+    expect(sql).toContain('[ID] uniqueidentifier NOT NULL');
+    expect(sql).toContain('[__mj_CreatedAt] datetimeoffset NOT NULL');
+    expect(sql).toContain('[__mj_UpdatedAt] datetimeoffset NOT NULL');
+    expect(sql).not.toContain('[Name] nvarchar(100) NOT NULL');
+    expect(sql).not.toContain('[CategoryName] nvarchar(100) NULL');
+    expect(sql).toContain('SELECT [ID], [__mj_CreatedAt], [__mj_UpdatedAt] FROM @ResultTable;');
+
+    // Returned row merges the DB's ID + datestamps onto the entity's in-memory fields
+    expect(result).toMatchObject({
+      ID: 'w-ds-01',
+      Name: 'High-Volume Step',
+      Description: 'Large JSON payload',
+      IsActive: true,
+      __mj_CreatedAt: createdAt,
+      __mj_UpdatedAt: updatedAt,
+    });
+  });
+
+  it('projects only PK + datestamps from @ResultTable when per-save options.SaveReturnMode is datestamps_only on a full entity', async () => {
+    const provider = makeProvider();
+    provider.SetTestEntities([makeRecordChangesEntityInfo()]);
+    const entityInfo = makeWidgetEntityInfo({ trackRecordChanges: true, saveReturnMode: 'full' });
+    const entity = makeSavedWidgetEntity(entityInfo, TEST_USER);
+    entity.Set('Name', 'Delta Updated Name');
+
+    const createdAt = new Date('2025-01-01T00:00:00.000Z');
+    const updatedAt = new Date('2026-04-17T11:30:00.000Z');
+    mssqlState.QueueResult({
+      rows: [{ ID: 'w-0001', __mj_CreatedAt: createdAt, __mj_UpdatedAt: updatedAt }],
+    });
+
+    const saveOpts = new EntitySaveOptions();
+    saveOpts.SaveReturnMode = 'datestamps_only';
+    const result = await provider.Save(entity, TEST_USER, saveOpts);
+
+    const sql = mssqlState.Queries[0].sql;
+    // The stored procedure returns all view columns so @ResultTable still declares all columns,
+    // while the final SELECT projects only [ID], [__mj_CreatedAt], [__mj_UpdatedAt] over the wire.
+    expect(sql).toContain('[Name] nvarchar(100) NOT NULL');
+    expect(sql).toContain('SELECT [ID], [__mj_CreatedAt], [__mj_UpdatedAt] FROM @ResultTable;');
+    expect(result).toMatchObject({
+      ID: 'w-0001',
+      Name: 'Delta Updated Name',
+      __mj_CreatedAt: createdAt,
+      __mj_UpdatedAt: updatedAt,
+    });
+  });
+});
+

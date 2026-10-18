@@ -24,7 +24,7 @@ import { BaseAction } from '@memberjunction/actions';
 import type { ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import type { ApolloAccount, ApolloContact, ApolloLabel } from '../generic/apollo-lists.types.js';
 import { ApolloRESTBaseAction } from './ApolloRESTBaseAction.js';
-import { LIST_NOT_FOUND_HINT, getParam, getParamRaw, parseStringArrayParam } from './params.js';
+import { LIST_NOT_FOUND_HINT, GetParam, GetParamRaw, ParseStringArrayParam } from './params.js';
 
 /** Apollo's per-page maximum, which is also the widest source page a move can see. */
 const MOVE_SOURCE_PER_PAGE = 100;
@@ -45,7 +45,7 @@ function parseMoveInputs(
     params: RunActionParams,
     idsParamName: string,
 ): { inputs: MoveInputs; error: null } | { inputs: null; error: ActionResultSimple } {
-    const idsParsed = parseStringArrayParam(getParamRaw(params, idsParamName), idsParamName);
+    const idsParsed = ParseStringArrayParam(GetParamRaw(params, idsParamName), idsParamName);
     if (idsParsed.error !== null) {
         return { inputs: null, error: { Success: false, Message: idsParsed.error, ResultCode: 'VALIDATION_ERROR' } };
     }
@@ -59,11 +59,11 @@ function parseMoveInputs(
             },
         };
     }
-    const fromList = getParam(params, 'FromList');
+    const fromList = GetParam(params, 'FromList');
     if (!fromList) {
         return { inputs: null, error: { Success: false, Message: 'Missing required field: FromList', ResultCode: 'MISSING_REQUIRED_FIELDS' } };
     }
-    const toList = getParam(params, 'ToList');
+    const toList = GetParam(params, 'ToList');
     if (!toList) {
         return { inputs: null, error: { Success: false, Message: 'Missing required field: ToList', ResultCode: 'MISSING_REQUIRED_FIELDS' } };
     }

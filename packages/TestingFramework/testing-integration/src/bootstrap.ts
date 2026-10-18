@@ -17,7 +17,7 @@
  * so both this module and the client bootstrap publish/read the same install.
  */
 import sql from 'mssql';
-import { LocalCacheManager, InMemoryLocalStorageProvider, Metadata, SetProvider } from '@memberjunction/core';
+import { LocalCacheManager, InMemoryLocalStorageProvider, Metadata, SetProvider, StartupManager } from '@memberjunction/core';
 import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { setupSQLServerClient, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
 import { DiscoverMJConfig, LoadDynamicPackages } from '@memberjunction/dynamic-packages';
@@ -26,10 +26,10 @@ import { InstrumentedLocalStorageProvider } from './instrumented-cache';
 import { LoadEnv, LoadDbConfig } from './config';
 import type { DbConfig } from './config';
 import {
-    assertOwnsProcess,
-    getActiveIntegrationBootstrap,
-    _setActiveStorage,
-    _setCurrentServerBootstrap,
+    AssertOwnsProcess,
+    GetActiveIntegrationBootstrap,
+    SetActiveStorage,
+    SetCurrentServerBootstrap,
     type IntegrationBootstrapContext,
     type BootstrapServerOptions
 } from './bootstrap-shared';
@@ -66,14 +66,14 @@ function resolveContextUser(email?: string): UserInfo {
 /** Process ID the integration bootstrap identifies itself with to the dynamic-package loader. */
 export const INTEGRATION_TESTS_PROCESS_ID = 'integration-tests';
 
-export async function bootstrapIntegrationServer(opts: BootstrapServerOptions = {}): Promise<IntegrationBootstrapContext> {
-    const existing = getActiveIntegrationBootstrap();
+export async function BootstrapIntegrationServer(opts: BootstrapServerOptions = {}): Promise<IntegrationBootstrapContext> {
+    const existing = GetActiveIntegrationBootstrap();
     if (existing) {
         return existing;
     }
     LoadEnv();
     // Fail fast on mis-host BEFORE reading config — never wedge instrumentation into a live cache.
-    assertOwnsProcess();
+    AssertOwnsProcess();
     const db = await LoadDbConfig();
 
     // Installed Open App server packages (mj.config.cjs dynamicPackages.server[]) register their
@@ -83,15 +83,23 @@ export async function bootstrapIntegrationServer(opts: BootstrapServerOptions = 
     await LoadDynamicPackages({ processId: INTEGRATION_TESTS_PROCESS_ID, tier: 'server', config: raw.config, configFilePath: raw.configFilePath });
 
     // FIRST-CALLER cache init — MUST precede any provider setup (load-bearing on both backends).
-    const storage = new InstrumentedLocalStorageProvider(new InMemoryLocalStorageProvider());
-    await LocalCacheManager.Instance.Initialize(storage, { verboseLogging: opts.VerboseCacheLogging ?? false });
-    _setActiveStorage(storage);
+    const storage = new InstrumentedLocalStorageProvider(opts.SharedStorage ?? new InMemoryLocalStorageProvider());
+    await LocalCacheManager.Instance.Initialize(storage, {
+        verboseLogging: opts.VerboseCacheLogging ?? false,
+        maxSizeBytes: 512 * 1024 * 1024
+    });
+    SetActiveStorage(storage);
 
     const ctx = db.Platform === 'postgresql'
         ? await setupPostgreSQLProvider(db, storage, opts)
         : await setupSqlServerProvider(db, storage, opts);
-    _setCurrentServerBootstrap(ctx);
+    SetCurrentServerBootstrap(ctx);
     return ctx;
+}
+
+/** @deprecated Use {@link BootstrapIntegrationServer}. */
+export async function bootstrapIntegrationServer(opts: BootstrapServerOptions = {}): Promise<IntegrationBootstrapContext> {
+    return BootstrapIntegrationServer(opts);
 }
 
 /** SQL Server provider setup — the locally-proven path (unchanged behavior). */
@@ -108,7 +116,11 @@ async function setupSqlServerProvider(
         options: { encrypt: false, trustServerCertificate: true }
     }).connect();
 
-    const provider = await setupSQLServerClient(new SQLServerProviderConfigData(pool, db.Schema));
+    const config = new SQLServerProviderConfigData(pool, db.Schema);
+    if (opts.SharedStorage) {
+        config.LocalStorageProvider = storage; // shared store from the first read
+    }
+    const provider = await setupSQLServerClient(config);
     await UserCache.Instance.Refresh(provider);
 
     const user = resolveContextUser(opts.ContextUserEmail);
@@ -137,9 +149,16 @@ async function setupPostgreSQLProvider(
         db.Schema,
         1 // checkRefreshIntervalSeconds > 0 → load metadata on Config
     );
+    if (opts.SharedStorage) {
+        pgConfig.LocalStorageProvider = storage; // shared store from the first read
+    }
     await provider.Config(pgConfig);
     SetProvider(provider as unknown as IMetadataProvider);
     await UserCache.Instance.Refresh(provider);
+    // setupSQLServerClient runs the startup engines itself; the PostgreSQL provider does not, so
+    // run them here as MJAPI does. Without this, engine-backed checks ran against unloaded engines.
+    const systemUser = UserCache.Instance.GetSystemUser() ?? UserCache.Instance.Users.find(u => u.IsActive && u.Type === 'Owner');
+    await StartupManager.Instance.Startup(false, systemUser, provider as unknown as IMetadataProvider);
 
     const user = resolveContextUser(opts.ContextUserEmail);
     return {

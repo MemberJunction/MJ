@@ -84,7 +84,7 @@ export interface TurboFailureVerdict {
  * }
  * ```
  */
-export function classifyTurboFailures(
+export function ClassifyTurboFailures(
   output: string,
   toleratedPatterns: readonly string[]
 ): TurboFailureVerdict {
@@ -119,4 +119,12 @@ export function classifyTurboFailures(
     ToleratedOnly:
       Attributable && FailedPackages.every((pkg) => toleratedPatterns.some((pattern) => pkg.includes(pattern))),
   };
+}
+
+/** @deprecated Use {@link ClassifyTurboFailures}. */
+export function classifyTurboFailures(
+  output: string,
+  toleratedPatterns: readonly string[]
+): TurboFailureVerdict {
+  return ClassifyTurboFailures(output, toleratedPatterns);
 }

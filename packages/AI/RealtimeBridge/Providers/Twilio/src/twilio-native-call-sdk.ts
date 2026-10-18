@@ -137,7 +137,7 @@ export interface TwilioNativeSdkConfig {
  * grab would leak neighbouring audio; this copies exactly the view's bytes. Defined locally because the
  * Twilio package has no shared coercion helper to reuse (unlike the Zoom package's RTMS binding).
  */
-export function toArrayBuffer(data: Uint8Array | ArrayBuffer): ArrayBuffer {
+export function ToArrayBuffer(data: Uint8Array | ArrayBuffer): ArrayBuffer {
     if (data instanceof ArrayBuffer) {
         return data.slice(0);
     }
@@ -146,13 +146,23 @@ export function toArrayBuffer(data: Uint8Array | ArrayBuffer): ArrayBuffer {
     return copy.buffer;
 }
 
+/** @deprecated Use {@link ToArrayBuffer}. */
+export function toArrayBuffer(data: Uint8Array | ArrayBuffer): ArrayBuffer {
+    return ToArrayBuffer(data);
+}
+
 /**
  * **Pure mapping** of one native inbound audio frame onto the raw PCM `ArrayBuffer` the telephony seam's
  * audio callback delivers. Copies the bytes (see {@link toArrayBuffer}). Isolated from I/O for direct
  * unit testing. (The telephony seam carries no per-speaker label — a 1:1 call has one remote party.)
  */
+export function MapNativeAudioFrame(frame: NativeCallAudioFrame): ArrayBuffer {
+    return ToArrayBuffer(frame.data);
+}
+
+/** @deprecated Use {@link MapNativeAudioFrame}. */
 export function mapNativeAudioFrame(frame: NativeCallAudioFrame): ArrayBuffer {
-    return toArrayBuffer(frame.data);
+    return MapNativeAudioFrame(frame);
 }
 
 /**
@@ -191,7 +201,7 @@ function unwrapDefault(mod: unknown): unknown {
  * VERIFY against the native Twilio adapter: the module's default/namespace interop + that it exposes
  * `createClient`.
  */
-export const defaultNativeLoader: NativeModuleLoader = async (specifier: string): Promise<NativeCallModule> => {
+export const DefaultNativeLoader: NativeModuleLoader = async (specifier: string): Promise<NativeCallModule> => {
     try {
         const mod: unknown = await import(/* @vite-ignore */ specifier);
         const resolved = unwrapDefault(mod);
@@ -208,6 +218,9 @@ export const defaultNativeLoader: NativeModuleLoader = async (specifier: string)
         );
     }
 };
+
+/** @deprecated Use {@link DefaultNativeLoader}. */
+export const defaultNativeLoader: NativeModuleLoader = DefaultNativeLoader;
 
 /**
  * A **real, two-way** {@link ITelephonyCallSdk} over the native Twilio Programmable Voice + Media Streams
@@ -247,7 +260,7 @@ export class TwilioNativeCallSdk implements ITelephonyCallSdk {
      * @param config Resolved credentials + stream URL + the native module specifier.
      * @param loadModule The native-adapter loader (defaults to the lazy specifier loader).
      */
-    constructor(config: TwilioNativeSdkConfig, loadModule: NativeModuleLoader = defaultNativeLoader) {
+    constructor(config: TwilioNativeSdkConfig, loadModule: NativeModuleLoader = DefaultNativeLoader) {
         this.config = config;
         this.loadModule = loadModule;
     }
@@ -322,7 +335,7 @@ export class TwilioNativeCallSdk implements ITelephonyCallSdk {
      */
     public onAudioFrame(cb: (pcm: ArrayBuffer) => void): void {
         this.audioHandler = cb;
-        this.client?.onAudioFrame((frame) => cb(mapNativeAudioFrame(frame)));
+        this.client?.onAudioFrame((frame) => cb(MapNativeAudioFrame(frame)));
     }
 
     // ── ITelephonyCallSdk — DTMF, transfer (real) ────────────────────────────────────
@@ -407,7 +420,7 @@ export class TwilioNativeCallSdk implements ITelephonyCallSdk {
         }
         if (this.audioHandler) {
             const cb = this.audioHandler;
-            client.onAudioFrame((frame) => cb(mapNativeAudioFrame(frame)));
+            client.onAudioFrame((frame) => cb(MapNativeAudioFrame(frame)));
         }
         if (this.dtmfHandler) {
             client.onDtmf(this.dtmfHandler);
@@ -435,9 +448,9 @@ export class TwilioNativeCallSdk implements ITelephonyCallSdk {
  * @returns A factory `(config) => TwilioNativeCallSdk`.
  */
 export function BindTwilioNativeCall(
-    loadModule: NativeModuleLoader = defaultNativeLoader,
+    loadModule: NativeModuleLoader = DefaultNativeLoader,
 ): (config?: Record<string, unknown>) => TwilioNativeCallSdk {
-    return (config?: Record<string, unknown>) => new TwilioNativeCallSdk(readNativeConfig(config), loadModule);
+    return (config?: Record<string, unknown>) => new TwilioNativeCallSdk(ReadNativeConfig(config), loadModule);
 }
 
 /**
@@ -446,7 +459,7 @@ export function BindTwilioNativeCall(
  * clean, partially-resolved object (and {@link TwilioNativeCallSdk} then throws a precise error if the
  * required specifier is absent) rather than a half-typed blob.
  */
-export function readNativeConfig(config?: Record<string, unknown>): TwilioNativeSdkConfig {
+export function ReadNativeConfig(config?: Record<string, unknown>): TwilioNativeSdkConfig {
     const cfg = config ?? {};
     return {
         AccountSid: readString(cfg.AccountSid),
@@ -456,6 +469,11 @@ export function readNativeConfig(config?: Record<string, unknown>): TwilioNative
         StreamUrl: readString(cfg.StreamUrl),
         NativeModuleSpecifier: readString(cfg.NativeModuleSpecifier),
     };
+}
+
+/** @deprecated Use {@link ReadNativeConfig}. */
+export function readNativeConfig(config?: Record<string, unknown>): TwilioNativeSdkConfig {
+    return ReadNativeConfig(config);
 }
 
 /** Reads a value as a non-empty string, or `undefined`. */

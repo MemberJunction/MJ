@@ -35,28 +35,49 @@ export const FORM_SLOT_CHAIN: FormPanelSlot[] = [
 export class FormSlotCoordinator {
     private readonly presentSlots = new Set<FormPanelSlot>();
     private readonly changes$ = new Subject<void>();
+    private readonly panelsChanged$ = new Subject<void>();
     /** Tracks synchronous re-entry depth into safeEmit so an emit storm
      *  caused by a future refactor surfaces loudly instead of freezing. */
     private emitDepth = 0;
 
     /** Slot host calls this on init. Idempotent — safe if invoked twice. */
-    public registerSlot(slot: FormPanelSlot): void {
+    public RegisterSlot(slot: FormPanelSlot): void {
         if (!this.presentSlots.has(slot)) {
             this.presentSlots.add(slot);
             this.safeEmit('registerSlot');
         }
     }
 
+    /** @deprecated Use {@link RegisterSlot}. */
+    public registerSlot(slot: FormPanelSlot): void {
+        return this.RegisterSlot(slot);
+    }
+
     /** Slot host calls this on destroy. */
-    public deregisterSlot(slot: FormPanelSlot): void {
+    public DeregisterSlot(slot: FormPanelSlot): void {
         if (this.presentSlots.has(slot)) {
             this.presentSlots.delete(slot);
             this.safeEmit('deregisterSlot');
         }
     }
 
-    public hasSlot(slot: FormPanelSlot): boolean {
+    /** @deprecated Use {@link DeregisterSlot}. */
+    public deregisterSlot(slot: FormPanelSlot): void {
+        return this.DeregisterSlot(slot);
+    }
+
+    public HasSlot(slot: FormPanelSlot): boolean {
         return this.presentSlots.has(slot);
+    }
+
+    /** @deprecated Use {@link HasSlot}. */
+    public hasSlot(slot: FormPanelSlot): boolean {
+        return this.HasSlot(slot);
+    }
+
+    /** Slots physically present in this form, in document order. */
+    public get PresentSlots(): FormPanelSlot[] {
+        return FORM_SLOT_CHAIN.filter((slot) => this.presentSlots.has(slot));
     }
 
     /**
@@ -68,7 +89,7 @@ export class FormSlotCoordinator {
      * present — the container guarantees `after-everything` exists, so this
      * should never happen in practice.
      */
-    public resolveSlot(preferred: FormPanelSlot): FormPanelSlot | null {
+    public ResolveSlot(preferred: FormPanelSlot): FormPanelSlot | null {
         const startIdx = FORM_SLOT_CHAIN.indexOf(preferred);
         if (startIdx === -1) return null;
         for (let i = startIdx; i < FORM_SLOT_CHAIN.length; i++) {
@@ -80,9 +101,33 @@ export class FormSlotCoordinator {
         return null;
     }
 
+    /** @deprecated Use {@link ResolveSlot}. */
+    public resolveSlot(preferred: FormPanelSlot): FormPanelSlot | null {
+        return this.ResolveSlot(preferred);
+    }
+
     /** RxJS stream that fires whenever a slot registers or deregisters. */
-    public get changes() {
+    public get Changes() {
         return this.changes$.asObservable();
+    }
+
+    /** @deprecated Use {@link Changes}. */
+    public get changes() {
+        return this.Changes;
+    }
+
+    /**
+     * Fires when the set of panels this form shows changed without any slot coming or going,
+     * for example when the user hides or shows a panel. The slot hosts resolve their panels
+     * again when it fires.
+     */
+    public get PanelsChanged() {
+        return this.panelsChanged$.asObservable();
+    }
+
+    /** Tells every slot host on this form to resolve its panels again. */
+    public NotifyPanelsChanged(): void {
+        this.panelsChanged$.next();
     }
 
     /**

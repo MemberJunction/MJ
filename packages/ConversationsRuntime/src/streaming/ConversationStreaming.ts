@@ -17,6 +17,7 @@
 
 import { BehaviorSubject, Subject, Subscription } from 'rxjs';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
+import { NormalizeUUID } from '@memberjunction/global';
 
 import { IConversationsRuntimeContext } from '../context/IConversationsRuntimeContext';
 
@@ -91,8 +92,30 @@ export type StreamingConnectionStatus = 'connected' | 'disconnected' | 'error' |
 /** How long late-arrival completion events remain replayable. */
 const RECENT_COMPLETION_TTL_MS = 5 * 60 * 1000;
 
-/** Reconnection delay after a subscription error or completion. */
+/**
+ * How long a run's or message's last-heard time is kept. Cleared on completion; this only bounds
+ * entries whose completion never arrived. Longer than any silence the UI still reports on.
+ */
+const RUN_ACTIVITY_TTL_MS = 15 * 60 * 1000;
+
+/** The `type` the server's liveness pulse carries. It names a run but has no progress text. */
+const HEARTBEAT_MESSAGE_TYPE = 'Heartbeat';
+
+/** Base reconnection delay after a subscription error or completion. Doubles per attempt. */
 const RECONNECTION_DELAY_MS = 5_000;
+
+/**
+ * Ceiling on the backoff, and the only bound on the retry rate. Retries never stop, so a
+ * permanently unreachable server settles at one attempt per minute per tab rather than the
+ * every-5s storm an uncapped base delay would produce.
+ */
+const MAX_RECONNECTION_DELAY_MS = 60_000;
+
+/**
+ * Up to this fraction is taken off each reconnection delay at random, so tabs that lost the same
+ * server do not all retry at the same moment. Only ever subtracted: the ceiling stays a ceiling.
+ */
+const RECONNECTION_JITTER_RATIO = 0.2;
 
 /**
  * Global streaming service that manages PubSub subscriptions for all conversations.
@@ -105,6 +128,8 @@ const RECONNECTION_DELAY_MS = 5_000;
  */
 export class ConversationStreaming {
     private pushStatusSubscription?: Subscription;
+    /** Watches the socket for a server acknowledgement, which clears the backoff. */
+    private socketStateSubscription?: Subscription;
     private readonly callbackRegistry = new Map<string, MessageProgressCallback[]>();
     /**
      * Per-message accumulation of streamed final-response deltas, keyed by
@@ -120,15 +145,39 @@ export class ConversationStreaming {
         string,
         { conversationDetailId: string; agentRunId: string; timestamp: Date }
     >();
+    /** Browser time (ms) of the last frame received for each agent run, keyed by normalized run ID. */
+    private readonly lastHeardAtByRunId = new Map<string, number>();
+    /** Browser time (ms) of the last frame that named each message, keyed by normalized detail ID. */
+    private readonly lastHeardAtByDetailId = new Map<string, number>();
     private readonly connectionStatus$ = new BehaviorSubject<StreamingConnectionStatus>('disconnected');
     private initialized = false;
     private reconnectionTimeout?: ReturnType<typeof setTimeout>;
+    /** Consecutive failed reconnects; drives the backoff. */
+    private reconnectionAttempts = 0;
+    /** True while recovering from a drop, so a successful re-subscribe can be told from first boot. */
+    private reconnecting = false;
+
+    /**
+     * Fires when the push-status subscription is re-established after having dropped — never on
+     * the first successful subscribe.
+     *
+     * Events published while the subscription was down are gone: the server's topic is an
+     * in-memory `PubSub` with no replay, and the client's `Subject` is explicitly unbuffered.
+     * A listener must therefore reconcile against durable state rather than assume the stream
+     * resumed seamlessly. Consumed by `ConversationLiveness` (MJ #4222).
+     */
+    public readonly StreamReconnected$ = new Subject<void>();
 
     /**
      * Observable for components to subscribe to completion events in real-time.
      * Emits enriched completion data once per agent finish.
      */
-    public readonly completionEvents$ = new Subject<CompletionEvent>();
+    public readonly CompletionEvents$ = new Subject<CompletionEvent>();
+
+    /** @deprecated Use {@link CompletionEvents$}. */
+    public get completionEvents$() {
+        return this.CompletionEvents$;
+    }
 
     /**
      * @param context Runtime context providing live access to the registered
@@ -142,15 +191,21 @@ export class ConversationStreaming {
      * times. Should be called once at app startup (e.g., the Angular widget calls
      * this when the workspace mounts).
      */
-    public initialize(): void {
+    public Initialize(): void {
         if (this.initialized) {
             return;
         }
 
         try {
             const dataProvider = GraphQLDataProvider.Instance;
+            this.watchSocketAcknowledgement(dataProvider);
             this.pushStatusSubscription = dataProvider.PushStatusUpdates().subscribe({
                 next: (status: unknown) => {
+                    // First frame on a new subscription is the only proof the transport actually
+                    // works. Subscribing succeeds against a dead socket — graphql-ws accepts the
+                    // request and returns an iterator that never yields — so this, not
+                    // Initialize() returning, is what clears the backoff.
+                    this.noteStreamAlive();
                     void this.handlePushStatusUpdate(status);
                 },
                 error: (error: unknown) => {
@@ -166,6 +221,19 @@ export class ConversationStreaming {
 
             this.initialized = true;
             this.connectionStatus$.next('connected');
+
+            if (this.reconnecting) {
+                // Ask for a reconcile: whatever the server published during the gap was dropped,
+                // and reconciliation reads durable state over HTTP, so it is worth doing even if
+                // this subscription turns out to be dead too.
+                //
+                // `reconnectionAttempts` is deliberately NOT cleared here. Re-subscribing proves
+                // nothing — the call returns normally against a black-holed socket — so clearing it
+                // here would reset the counter every cycle and pin the delay at its base value.
+                // Only a delivered frame clears it; see noteStreamAlive().
+                this.reconnecting = false;
+                this.StreamReconnected$.next();
+            }
         } catch (error) {
             console.error('[ConversationStreaming] Failed to initialize:', error);
             this.connectionStatus$.next('error');
@@ -173,21 +241,36 @@ export class ConversationStreaming {
         }
     }
 
+    /** @deprecated Use {@link Initialize}. */
+    public initialize(): void {
+        return this.Initialize();
+    }
+
     /** Current connection status as an observable. */
-    public getConnectionStatus$() {
+    public GetConnectionStatus$() {
         return this.connectionStatus$.asObservable();
     }
 
+    /** @deprecated Use {@link GetConnectionStatus$}. */
+    public getConnectionStatus$() {
+        return this.GetConnectionStatus$();
+    }
+
     /** Current connection status value (synchronous). */
-    public getConnectionStatus(): StreamingConnectionStatus {
+    public GetConnectionStatus(): StreamingConnectionStatus {
         return this.connectionStatus$.value;
+    }
+
+    /** @deprecated Use {@link GetConnectionStatus}. */
+    public getConnectionStatus(): StreamingConnectionStatus {
+        return this.GetConnectionStatus();
     }
 
     /**
      * Register a callback for a specific conversation detail (message). The callback
      * is invoked whenever progress updates arrive for that message.
      */
-    public registerMessageCallback(
+    public RegisterMessageCallback(
         conversationDetailId: string,
         callback: MessageProgressCallback
     ): void {
@@ -196,11 +279,19 @@ export class ConversationStreaming {
         this.callbackRegistry.set(conversationDetailId, existing);
     }
 
+    /** @deprecated Use {@link RegisterMessageCallback}. */
+    public registerMessageCallback(
+        conversationDetailId: string,
+        callback: MessageProgressCallback
+    ): void {
+        return this.RegisterMessageCallback(conversationDetailId, callback);
+    }
+
     /**
      * Unregister a callback for a specific conversation detail. When `callback` is
      * omitted, ALL callbacks for that message are removed.
      */
-    public unregisterMessageCallback(
+    public UnregisterMessageCallback(
         conversationDetailId: string,
         callback?: MessageProgressCallback
     ): void {
@@ -217,8 +308,16 @@ export class ConversationStreaming {
         }
     }
 
+    /** @deprecated Use {@link UnregisterMessageCallback}. */
+    public unregisterMessageCallback(
+        conversationDetailId: string,
+        callback?: MessageProgressCallback
+    ): void {
+        return this.UnregisterMessageCallback(conversationDetailId, callback);
+    }
+
     /** Total number of registered callbacks (diagnostic). */
-    public getRegisteredCallbackCount(): number {
+    public GetRegisteredCallbackCount(): number {
         let count = 0;
         for (const callbacks of this.callbackRegistry.values()) {
             count += callbacks.length;
@@ -226,30 +325,75 @@ export class ConversationStreaming {
         return count;
     }
 
+    /** @deprecated Use {@link GetRegisteredCallbackCount}. */
+    public getRegisteredCallbackCount(): number {
+        return this.GetRegisteredCallbackCount();
+    }
+
     /** Number of distinct messages currently being tracked (diagnostic). */
-    public getTrackedMessageCount(): number {
+    public GetTrackedMessageCount(): number {
         return this.callbackRegistry.size;
+    }
+
+    /** @deprecated Use {@link GetTrackedMessageCount}. */
+    public getTrackedMessageCount(): number {
+        return this.GetTrackedMessageCount();
     }
 
     /**
      * Replay a recently completed event so a late-mounting component can pick it up.
      * Returns `undefined` if no completion is in the 5-minute replay window.
      */
-    public getRecentCompletion(conversationDetailId: string): { agentRunId: string } | undefined {
+    public GetRecentCompletion(conversationDetailId: string): { agentRunId: string } | undefined {
         const completion = this.recentCompletions.get(conversationDetailId);
         return completion ? { agentRunId: completion.agentRunId } : undefined;
     }
 
+    /** @deprecated Use {@link GetRecentCompletion}. */
+    public getRecentCompletion(conversationDetailId: string): { agentRunId: string } | undefined {
+        return this.GetRecentCompletion(conversationDetailId);
+    }
+
+    /**
+     * Browser time (ms since epoch) at which the last push frame for this agent run arrived:
+     * progress, streamed content, or the server's liveness pulse.
+     *
+     * This is the reliable "still running" signal. The run object inside progress frames is the
+     * server's in-memory entity, whose timestamps do not move until the run ends.
+     *
+     * @returns `undefined` when nothing has been heard for the run, or it has completed.
+     */
+    public LastHeardFromRun(agentRunId: string): number | undefined {
+        return this.lastHeardAtByRunId.get(NormalizeUUID(agentRunId));
+    }
+
+    /**
+     * Browser time (ms since epoch) at which the last push frame that names this message arrived.
+     *
+     * Covers a row with no MJ agent run to look up, such as one written by a host's own turn
+     * handler that reports progress through the same publisher.
+     *
+     * @returns `undefined` when nothing has named the message, or it has completed.
+     */
+    public LastHeardForMessage(conversationDetailId: string): number | undefined {
+        return this.lastHeardAtByDetailId.get(NormalizeUUID(conversationDetailId));
+    }
+
     /** Clear a recent completion after the late-mounting component has handled it. */
-    public clearRecentCompletion(conversationDetailId: string): void {
+    public ClearRecentCompletion(conversationDetailId: string): void {
         this.recentCompletions.delete(conversationDetailId);
+    }
+
+    /** @deprecated Use {@link ClearRecentCompletion}. */
+    public clearRecentCompletion(conversationDetailId: string): void {
+        return this.ClearRecentCompletion(conversationDetailId);
     }
 
     /**
      * Diagnostic snapshot for a specific message — used by debugging tools to dump
      * live in-memory state.
      */
-    public getDiagnosticSnapshot(messageId: string): {
+    public GetDiagnosticSnapshot(messageId: string): {
         hasCallbacks: boolean;
         callbackCount: number;
         recentCompletion: { conversationDetailId: string; agentRunId: string; timestamp: Date } | undefined;
@@ -262,6 +406,16 @@ export class ConversationStreaming {
             recentCompletion: this.recentCompletions.get(messageId),
             connectionStatus: this.connectionStatus$.getValue(),
         };
+    }
+
+    /** @deprecated Use {@link GetDiagnosticSnapshot}. */
+    public getDiagnosticSnapshot(messageId: string): {
+        hasCallbacks: boolean;
+        callbackCount: number;
+        recentCompletion: { conversationDetailId: string; agentRunId: string; timestamp: Date } | undefined;
+        connectionStatus: StreamingConnectionStatus;
+    } {
+        return this.GetDiagnosticSnapshot(messageId);
     }
 
     /**
@@ -277,10 +431,14 @@ export class ConversationStreaming {
             this.pushStatusSubscription.unsubscribe();
             this.pushStatusSubscription = undefined;
         }
+        this.socketStateSubscription?.unsubscribe();
+        this.socketStateSubscription = undefined;
         this.callbackRegistry.clear();
         this.recentCompletions.clear();
         this.streamingAccumulator.clear();
-        this.completionEvents$.complete();
+        this.lastHeardAtByRunId.clear();
+        this.lastHeardAtByDetailId.clear();
+        this.CompletionEvents$.complete();
         this.connectionStatus$.complete();
         this.initialized = false;
     }
@@ -307,8 +465,14 @@ export class ConversationStreaming {
                     : (status as Record<string, unknown>);
 
             if (statusObj.resolver === 'TaskOrchestrator') {
+                this.noteActivity(statusObj);
                 await this.routeTaskProgress(statusObj);
             } else if (statusObj.resolver === 'RunAIAgentResolver') {
+                this.noteActivity(statusObj);
+                if (statusObj.type === HEARTBEAT_MESSAGE_TYPE) {
+                    // A pulse only proves the run is alive; it has nothing to route.
+                    return;
+                }
                 await this.routeAgentProgress(statusObj);
             }
         } catch (error) {
@@ -407,7 +571,7 @@ export class ConversationStreaming {
                         timestamp: new Date(),
                     });
 
-                    this.completionEvents$.next({
+                    this.CompletionEvents$.next({
                         conversationDetailId,
                         agentRunId,
                         success,
@@ -552,6 +716,33 @@ export class ConversationStreaming {
         }
     }
 
+    /**
+     * Record evidence that the transport is genuinely alive: a delivered frame, or the server's
+     * connection acknowledgement. Clears the reconnection backoff so the next outage starts from
+     * scratch. A bare re-subscribe is not evidence; it succeeds against a dead socket.
+     */
+    private noteStreamAlive(): void {
+        if (this.reconnectionAttempts !== 0) {
+            this.reconnectionAttempts = 0;
+        }
+    }
+
+    /**
+     * Clear the backoff whenever the socket reports `connected`. That state follows the server's
+     * connection acknowledgement, a real round trip, so a quiet but healthy stream does not start
+     * its next outage at the ceiling. Subscribes once for the life of the service.
+     */
+    private watchSocketAcknowledgement(dataProvider: GraphQLDataProvider): void {
+        if (this.socketStateSubscription || !dataProvider.SocketConnectivity$) {
+            return;
+        }
+        this.socketStateSubscription = dataProvider.SocketConnectivity$.subscribe((state) => {
+            if (state === 'connected') {
+                this.noteStreamAlive();
+            }
+        });
+    }
+
     /** Schedule a reconnection attempt after a connection error or completion. */
     private scheduleReconnection(): void {
         if (this.reconnectionTimeout) {
@@ -563,12 +754,23 @@ export class ConversationStreaming {
         // flow still delivers the correct final message), which also keeps
         // abandoned entries from lingering for the session.
         this.streamingAccumulator.clear();
+
+        // Exponential backoff with a ceiling, retried for as long as the page lives. Recovery has
+        // to be autonomous: no host calls Initialize() outside ngOnInit, so a stream that stopped
+        // retrying would stay stopped until a reload.
+        const capped = Math.min(
+            RECONNECTION_DELAY_MS * 2 ** this.reconnectionAttempts,
+            MAX_RECONNECTION_DELAY_MS
+        );
+        const delay = capped - Math.random() * capped * RECONNECTION_JITTER_RATIO;
+        this.reconnectionAttempts++;
+        this.reconnecting = true;
         this.connectionStatus$.next('reconnecting');
         this.reconnectionTimeout = setTimeout(() => {
-            console.log('[ConversationStreaming] Attempting to reconnect...');
+            console.log(`[ConversationStreaming] Attempting to reconnect (attempt ${this.reconnectionAttempts})...`);
             this.initialized = false;
-            this.initialize();
-        }, RECONNECTION_DELAY_MS);
+            this.Initialize();
+        }, delay);
     }
 
     /** Evict completions older than the replay window to bound memory. */
@@ -579,5 +781,47 @@ export class ConversationStreaming {
                 this.recentCompletions.delete(id);
             }
         }
+
+        const activityCutoff = Date.now() - RUN_ACTIVITY_TTL_MS;
+        for (const map of [this.lastHeardAtByRunId, this.lastHeardAtByDetailId]) {
+            for (const [id, heardAt] of map) {
+                if (heardAt < activityCutoff) {
+                    map.delete(id);
+                }
+            }
+        }
+    }
+
+    /**
+     * Record that a frame naming an agent run or a message arrived, or forget both when the frame
+     * completes them.
+     *
+     * Progress, streaming and completion frames name the run as `data.agentRunId`; the liveness
+     * pulse names it as `data.runId`. The message is `data.conversationDetailId`, or the
+     * `ConversationDetailID` of the run a progress frame carries.
+     */
+    private noteActivity(statusObj: Record<string, unknown>): void {
+        const data = statusObj.data as Record<string, unknown> | undefined;
+        if (!data) {
+            return;
+        }
+        const agentRun = data.agentRun as Record<string, unknown> | undefined;
+        const rawRunId = (data.agentRunId ?? data.runId) as string | undefined;
+        const rawDetailId = (data.conversationDetailId ?? agentRun?.ConversationDetailID) as string | undefined;
+        const isComplete = data.type === 'complete';
+
+        const record = (map: Map<string, number>, rawId: string | undefined): void => {
+            if (!rawId || rawId === 'unknown') {
+                return;
+            }
+            const id = NormalizeUUID(rawId);
+            if (isComplete) {
+                map.delete(id);
+            } else {
+                map.set(id, Date.now());
+            }
+        };
+        record(this.lastHeardAtByRunId, rawRunId);
+        record(this.lastHeardAtByDetailId, rawDetailId);
     }
 }

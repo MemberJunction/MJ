@@ -158,7 +158,7 @@ export class MJPostgresTranspiler {
    * cached, so this invalidates that cache to keep late additions honest rather than silently
    * ignored.
    */
-  addExtraBitColumns(columns: readonly BitColumnRef[]): void {
+  AddExtraBitColumns(columns: readonly BitColumnRef[]): void {
     if (columns.length === 0) return;
     const seen = new Map<string, BitColumnRef>();
     for (const c of [...this.extraBitColumns, ...columns]) seen.set(`${c[0]}\u0000${c[1]}`, c);
@@ -166,8 +166,13 @@ export class MJPostgresTranspiler {
     this.bitColsFile = undefined;
   }
 
+  /** @deprecated Use {@link AddExtraBitColumns}. */
+  addExtraBitColumns(columns: readonly BitColumnRef[]): void {
+    return this.AddExtraBitColumns(columns);
+  }
+
   /** Transpile T-SQL to PostgreSQL. Statements the dialect can't emit land in `unhandled`. */
-  async transpile(tsql: string): Promise<MJPostgresTranspileResult> {
+  async Transpile(tsql: string): Promise<MJPostgresTranspileResult> {
     const stdout = await this.runDialect([], tsql);
     const parsed = JSON.parse(stdout) as MJPostgresTranspileResult;
     if (!Array.isArray(parsed.sql) || !Array.isArray(parsed.unhandled)) {
@@ -176,12 +181,17 @@ export class MJPostgresTranspiler {
     return parsed;
   }
 
+  /** @deprecated Use {@link Transpile}. */
+  async transpile(tsql: string): Promise<MJPostgresTranspileResult> {
+    return this.Transpile(tsql);
+  }
+
   /**
    * Collect the BIT/BOOLEAN column registry (`Table.Column` pairs) declared in the
    * given SQL — used to build the cross-file registry from baselines before
    * transpiling individual migrations.
    */
-  async collectBitColumns(sql: string): Promise<BitColumnRef[]> {
+  async CollectBitColumns(sql: string): Promise<BitColumnRef[]> {
     const stdout = await this.runDialect(['--collect-bitcols'], sql);
     const parsed: unknown = JSON.parse(stdout);
     if (!Array.isArray(parsed) || !parsed.every(isBitColumnRef)) {
@@ -190,9 +200,19 @@ export class MJPostgresTranspiler {
     return parsed;
   }
 
+  /** @deprecated Use {@link CollectBitColumns}. */
+  async collectBitColumns(sql: string): Promise<BitColumnRef[]> {
+    return this.CollectBitColumns(sql);
+  }
+
   /** Verify the interpreter + sqlglot are available; throws with install guidance if not. */
-  async preflight(): Promise<void> {
+  async Preflight(): Promise<void> {
     await this.runDialect([], 'SELECT 1;');
+  }
+
+  /** @deprecated Use {@link Preflight}. */
+  async preflight(): Promise<void> {
+    return this.Preflight();
   }
 
   private runDialect(args: string[], stdin: string): Promise<string> {

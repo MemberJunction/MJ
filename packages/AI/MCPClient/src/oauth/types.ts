@@ -391,11 +391,11 @@ export class OAuthAuthorizationRequiredError extends Error {
     /** Error code for identification */
     public readonly code = 'OAUTH_AUTHORIZATION_REQUIRED';
     /** Authorization URL to open in browser */
-    public readonly authorizationUrl: string;
+    public readonly authorizationUrl: string;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
     /** State parameter for tracking */
-    public readonly stateParameter: string;
+    public readonly stateParameter: string;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
     /** When the authorization expires */
-    public readonly expiresAt: Date;
+    public readonly expiresAt: Date;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
     constructor(
         message: string,
@@ -418,13 +418,13 @@ export class OAuthReauthorizationRequiredError extends Error {
     /** Error code for identification */
     public readonly code = 'OAUTH_REAUTHORIZATION_REQUIRED';
     /** Reason for requiring re-authorization */
-    public readonly reason: string;
+    public readonly reason: string;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
     /** Original error that caused the failure */
-    public readonly originalError?: string;
+    public readonly originalError?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
     /** Authorization URL if a new flow was initiated */
-    public readonly authorizationUrl?: string;
+    public readonly authorizationUrl?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
     /** State parameter for tracking the authorization flow */
-    public readonly stateParameter?: string;
+    public readonly stateParameter?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     constructor(
         message: string,

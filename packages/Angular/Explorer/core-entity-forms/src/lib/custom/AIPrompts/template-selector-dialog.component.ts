@@ -10,24 +10,24 @@ import { UUIDsEqual } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 export interface TemplateSelectorConfig {
   /** Title for the dialog */
-  title: string;
+  Title: string;
   /** Whether to show the "Create New" option */
-  showCreateNew?: boolean;
+  ShowCreateNew?: boolean;
   /** Filter criteria for templates */
-  extraFilter?: string;
+  ExtraFilter?: string;
   /** Allow multiple selection */
-  multiSelect?: boolean;
+  MultiSelect?: boolean;
   /** Pre-selected template IDs */
-  selectedTemplateIds?: string[];
+  SelectedTemplateIds?: string[];
   /** Show only active templates */
-  showActiveOnly?: boolean;
+  ShowActiveOnly?: boolean;
 }
 
 export interface TemplateSelectorResult {
   /** Selected templates */
-  selectedTemplates: MJTemplateEntity[];
+  SelectedTemplates: MJTemplateEntity[];
   /** Whether user chose to create new */
-  createNew?: boolean;
+  createNew?: boolean;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
 }
 
 /**
@@ -44,25 +44,106 @@ export interface TemplateSelectorResult {
 export class TemplateSelectorDialogComponent extends BaseAngularComponent implements OnInit, OnDestroy {
   
   // Input configuration
-  config: TemplateSelectorConfig = { title: 'Select Template' };
+  config: TemplateSelectorConfig = { Title: 'Select Template' };
   
   // State management
   private destroy$ = new Subject<void>();
-  public result = new Subject<TemplateSelectorResult | null>();
+  public Result = new Subject<TemplateSelectorResult | null>();
+
+  /** @deprecated Use {@link Result}. */
+  public get result() {
+    return this.Result;
+  }
+  /** @deprecated Use {@link Result}. */
+  public set result(value) {
+    this.Result = value;
+  }
   
   // Data and UI state
-  isLoading$ = new BehaviorSubject<boolean>(false);
-  templates$ = new BehaviorSubject<MJTemplateEntity[]>([]);
-  filteredTemplates$ = new BehaviorSubject<MJTemplateEntity[]>([]);
-  categories$ = new BehaviorSubject<MJTemplateCategoryEntity[]>([]);
+  IsLoading$ = new BehaviorSubject<boolean>(false);
+
+  /** @deprecated Use {@link IsLoading$}. */
+  get isLoading$() {
+    return this.IsLoading$;
+  }
+  /** @deprecated Use {@link IsLoading$}. */
+  set isLoading$(value) {
+    this.IsLoading$ = value;
+  }
+  Templates$ = new BehaviorSubject<MJTemplateEntity[]>([]);
+
+  /** @deprecated Use {@link Templates$}. */
+  get templates$() {
+    return this.Templates$;
+  }
+  /** @deprecated Use {@link Templates$}. */
+  set templates$(value) {
+    this.Templates$ = value;
+  }
+  FilteredTemplates$ = new BehaviorSubject<MJTemplateEntity[]>([]);
+
+  /** @deprecated Use {@link FilteredTemplates$}. */
+  get filteredTemplates$() {
+    return this.FilteredTemplates$;
+  }
+  /** @deprecated Use {@link FilteredTemplates$}. */
+  set filteredTemplates$(value) {
+    this.FilteredTemplates$ = value;
+  }
+  Categories$ = new BehaviorSubject<MJTemplateCategoryEntity[]>([]);
+
+  /** @deprecated Use {@link Categories$}. */
+  get categories$() {
+    return this.Categories$;
+  }
+  /** @deprecated Use {@link Categories$}. */
+  set categories$(value) {
+    this.Categories$ = value;
+  }
   
   // Search and filtering
-  searchControl = new FormControl('');
-  selectedCategory: string | null = null;
-  selectedTemplates: Set<string> = new Set();
+  SearchControl = new FormControl('');
+
+  /** @deprecated Use {@link SearchControl}. */
+  get searchControl() {
+    return this.SearchControl;
+  }
+  /** @deprecated Use {@link SearchControl}. */
+  set searchControl(value) {
+    this.SearchControl = value;
+  }
+  SelectedCategory: string | null = null;
+
+  /** @deprecated Use {@link SelectedCategory}. */
+  get selectedCategory(): string | null {
+    return this.SelectedCategory;
+  }
+  /** @deprecated Use {@link SelectedCategory}. */
+  set selectedCategory(value: string | null) {
+    this.SelectedCategory = value;
+  }
+  SelectedTemplates: Set<string> = new Set();
+
+  /** @deprecated Use {@link SelectedTemplates}. */
+  get selectedTemplates(): Set<string> {
+    return this.SelectedTemplates;
+  }
+  /** @deprecated Use {@link SelectedTemplates}. */
+  set selectedTemplates(value: Set<string>) {
+    this.SelectedTemplates = value;
+  }
   
   // View mode
-  viewMode: 'grid' | 'list' = 'list';
+  ViewMode: 'grid' | 'list' = 'list';
+
+  /** @deprecated Use {@link ViewMode}. */
+  get viewMode(): 'grid' | 'list' {
+    return this.ViewMode;
+  }
+  /** @deprecated Use {@link ViewMode}. */
+  set viewMode(value: 'grid' | 'list') {
+    this.ViewMode = value;
+  }
 
   @Output() DialogClose = new EventEmitter<void>();
 
@@ -76,8 +157,8 @@ export class TemplateSelectorDialogComponent extends BaseAngularComponent implem
     this.loadData();
     
     // Initialize selected templates if provided
-    if (this.config.selectedTemplateIds) {
-      this.selectedTemplates = new Set(this.config.selectedTemplateIds);
+    if (this.config.SelectedTemplateIds) {
+      this.SelectedTemplates = new Set(this.config.SelectedTemplateIds);
     }
   }
 
@@ -87,7 +168,7 @@ export class TemplateSelectorDialogComponent extends BaseAngularComponent implem
   }
 
   private setupSearch() {
-    this.searchControl.valueChanges
+    this.SearchControl.valueChanges
       .pipe(
         debounceTime(300),
         distinctUntilChanged(),
@@ -99,7 +180,7 @@ export class TemplateSelectorDialogComponent extends BaseAngularComponent implem
   }
 
   private async loadData() {
-    this.isLoading$.next(true);
+    this.IsLoading$.next(true);
     
     try {
       // Load both templates and categories in parallel
@@ -115,7 +196,7 @@ export class TemplateSelectorDialogComponent extends BaseAngularComponent implem
         3000
       );
     } finally {
-      this.isLoading$.next(false);
+      this.IsLoading$.next(false);
     }
   }
 
@@ -125,11 +206,11 @@ export class TemplateSelectorDialogComponent extends BaseAngularComponent implem
       
       // Build filter
       let filter = '';
-      if (this.config.showActiveOnly !== false) {
+      if (this.config.ShowActiveOnly !== false) {
         filter = "IsActive = 1";
       }
-      if (this.config.extraFilter) {
-        filter += filter ? ` AND ${this.config.extraFilter}` : this.config.extraFilter;
+      if (this.config.ExtraFilter) {
+        filter += filter ? ` AND ${this.config.ExtraFilter}` : this.config.ExtraFilter;
       }
       
       const result = await rv.RunView<MJTemplateEntity>({
@@ -142,15 +223,15 @@ export class TemplateSelectorDialogComponent extends BaseAngularComponent implem
 
       if (result.Success) {
         const templates = result.Results || [];
-        this.templates$.next(templates);
-        this.filteredTemplates$.next(templates);
+        this.Templates$.next(templates);
+        this.FilteredTemplates$.next(templates);
       } else {
         throw new Error(result.ErrorMessage || 'Failed to load templates');
       }
     } catch (error) {
       console.error('Error loading templates:', error);
-      this.templates$.next([]);
-      this.filteredTemplates$.next([]);
+      this.Templates$.next([]);
+      this.FilteredTemplates$.next([]);
     }
   }
 
@@ -168,18 +249,18 @@ export class TemplateSelectorDialogComponent extends BaseAngularComponent implem
 
       if (result.Success) {
         const categories = result.Results || [];
-        this.categories$.next(categories);
+        this.Categories$.next(categories);
       } else {
         throw new Error(result.ErrorMessage || 'Failed to load categories');
       }
     } catch (error) {
       console.error('Error loading categories:', error);
-      this.categories$.next([]);
+      this.Categories$.next([]);
     }
   }
 
   private filterTemplates(searchTerm: string) {
-    const allTemplates = this.templates$.value;
+    const allTemplates = this.Templates$.value;
     let filtered = allTemplates;
     
     // Apply search filter
@@ -191,77 +272,122 @@ export class TemplateSelectorDialogComponent extends BaseAngularComponent implem
     }
     
     // Apply category filter
-    if (this.selectedCategory) {
+    if (this.SelectedCategory) {
       filtered = filtered.filter(template => 
-        UUIDsEqual(template.CategoryID, this.selectedCategory)
+        UUIDsEqual(template.CategoryID, this.SelectedCategory)
       );
     }
     
-    this.filteredTemplates$.next(filtered);
+    this.FilteredTemplates$.next(filtered);
   }
 
   // === Category Management ===
 
-  onCategoryChange(categoryId: string | null) {
-    this.selectedCategory = categoryId === '' ? null : categoryId;
-    this.filterTemplates(this.searchControl.value || '');
+  OnCategoryChange(categoryId: string | null) {
+    this.SelectedCategory = categoryId === '' ? null : categoryId;
+    this.filterTemplates(this.SearchControl.value || '');
   }
 
-  getCategoryDisplayName(categoryId: string): string {
-    const category = this.categories$.value.find(c => UUIDsEqual(c.ID, categoryId));
+  /** @deprecated Use {@link OnCategoryChange}. */
+  onCategoryChange(categoryId: string | null) {
+    return this.OnCategoryChange(categoryId);
+  }
+
+  GetCategoryDisplayName(categoryId: string): string {
+    const category = this.Categories$.value.find(c => UUIDsEqual(c.ID, categoryId));
     return category?.Name || 'Unknown Category';
+  }
+
+  /** @deprecated Use {@link GetCategoryDisplayName}. */
+  getCategoryDisplayName(categoryId: string): string {
+    return this.GetCategoryDisplayName(categoryId);
   }
 
   // === Selection Management ===
 
-  toggleTemplateSelection(template: MJTemplateEntity) {
-    if (this.config.multiSelect) {
-      if (this.selectedTemplates.has(template.ID)) {
-        this.selectedTemplates.delete(template.ID);
+  ToggleTemplateSelection(template: MJTemplateEntity) {
+    if (this.config.MultiSelect) {
+      if (this.SelectedTemplates.has(template.ID)) {
+        this.SelectedTemplates.delete(template.ID);
       } else {
-        this.selectedTemplates.add(template.ID);
+        this.SelectedTemplates.add(template.ID);
       }
     } else {
       // Single select - replace current selection
-      this.selectedTemplates.clear();
-      this.selectedTemplates.add(template.ID);
+      this.SelectedTemplates.clear();
+      this.SelectedTemplates.add(template.ID);
     }
   }
 
-  isTemplateSelected(template: MJTemplateEntity): boolean {
-    return this.selectedTemplates.has(template.ID);
+  /** @deprecated Use {@link ToggleTemplateSelection}. */
+  toggleTemplateSelection(template: MJTemplateEntity) {
+    return this.ToggleTemplateSelection(template);
   }
 
+  IsTemplateSelected(template: MJTemplateEntity): boolean {
+    return this.SelectedTemplates.has(template.ID);
+  }
+
+  /** @deprecated Use {@link IsTemplateSelected}. */
+  isTemplateSelected(template: MJTemplateEntity): boolean {
+    return this.IsTemplateSelected(template);
+  }
+
+  GetSelectedTemplateObjects(): MJTemplateEntity[] {
+    const allTemplates = this.Templates$.value;
+    return allTemplates.filter(template => this.SelectedTemplates.has(template.ID));
+  }
+
+  /** @deprecated Use {@link GetSelectedTemplateObjects}. */
   getSelectedTemplateObjects(): MJTemplateEntity[] {
-    const allTemplates = this.templates$.value;
-    return allTemplates.filter(template => this.selectedTemplates.has(template.ID));
+    return this.GetSelectedTemplateObjects();
   }
 
   // === UI Helpers ===
 
-  toggleViewMode() {
-    this.viewMode = this.viewMode === 'grid' ? 'list' : 'grid';
+  ToggleViewMode() {
+    this.ViewMode = this.ViewMode === 'grid' ? 'list' : 'grid';
   }
 
-  getTemplateStatusColor(template: MJTemplateEntity): string {
+  /** @deprecated Use {@link ToggleViewMode}. */
+  toggleViewMode() {
+    return this.ToggleViewMode();
+  }
+
+  GetTemplateStatusColor(template: MJTemplateEntity): string {
     if (!template.IsActive) return '#6c757d';
     if (template.DisabledAt && new Date(template.DisabledAt) <= new Date()) return '#dc3545';
     if (template.ActiveAt && new Date(template.ActiveAt) > new Date()) return '#ffc107';
     return '#28a745';
   }
 
-  getTemplateStatusText(template: MJTemplateEntity): string {
+  /** @deprecated Use {@link GetTemplateStatusColor}. */
+  getTemplateStatusColor(template: MJTemplateEntity): string {
+    return this.GetTemplateStatusColor(template);
+  }
+
+  GetTemplateStatusText(template: MJTemplateEntity): string {
     if (!template.IsActive) return 'Inactive';
     if (template.DisabledAt && new Date(template.DisabledAt) <= new Date()) return 'Disabled';
     if (template.ActiveAt && new Date(template.ActiveAt) > new Date()) return 'Scheduled';
     return 'Active';
   }
 
-  getTemplatePreview(template: MJTemplateEntity): string {
+  /** @deprecated Use {@link GetTemplateStatusText}. */
+  getTemplateStatusText(template: MJTemplateEntity): string {
+    return this.GetTemplateStatusText(template);
+  }
+
+  GetTemplatePreview(template: MJTemplateEntity): string {
     if (!template.Description) return 'No description available';
     return template.Description.length > 100 
       ? template.Description.substring(0, 100) + '...' 
       : template.Description;
+  }
+
+  /** @deprecated Use {@link GetTemplatePreview}. */
+  getTemplatePreview(template: MJTemplateEntity): string {
+    return this.GetTemplatePreview(template);
   }
 
   formatDate(date: Date | string | null): string {
@@ -272,8 +398,8 @@ export class TemplateSelectorDialogComponent extends BaseAngularComponent implem
 
   // === Dialog Actions ===
 
-  selectTemplates() {
-    const selectedTemplateObjects = this.getSelectedTemplateObjects();
+  SelectTemplates() {
+    const selectedTemplateObjects = this.GetSelectedTemplateObjects();
     
     if (selectedTemplateObjects.length === 0) {
       MJNotificationService.Instance.CreateSimpleNotification(
@@ -285,25 +411,35 @@ export class TemplateSelectorDialogComponent extends BaseAngularComponent implem
     }
 
     const result: TemplateSelectorResult = {
-      selectedTemplates: selectedTemplateObjects
+      SelectedTemplates: selectedTemplateObjects
     };
 
-    this.result.next(result);
+    this.Result.next(result);
     this.DialogClose.emit();
   }
 
-  createNew() {
+  /** @deprecated Use {@link SelectTemplates}. */
+  selectTemplates() {
+    return this.SelectTemplates();
+  }
+
+  CreateNew() {
     const result: TemplateSelectorResult = {
-      selectedTemplates: [],
+      SelectedTemplates: [],
       createNew: true
     };
 
-    this.result.next(result);
+    this.Result.next(result);
     this.DialogClose.emit();
   }
 
+  /** @deprecated Use {@link CreateNew}. */
+  createNew() {
+    return this.CreateNew();
+  }
+
   cancel() {
-    this.result.next(null);
+    this.Result.next(null);
     this.DialogClose.emit();
   }
 }

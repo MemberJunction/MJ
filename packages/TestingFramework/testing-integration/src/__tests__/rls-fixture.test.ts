@@ -6,7 +6,7 @@
 import { describe, it, expect } from 'vitest';
 import { LocalCacheManager } from '@memberjunction/core';
 import type { UserInfo, IMetadataProvider, EntityInfo, RunViewParams } from '@memberjunction/core';
-import { discoverRlsFixture } from '../rls-fixture';
+import { DiscoverRlsFixture } from '../rls-fixture';
 
 /** Build a mock UserInfo with just the fields discovery touches. */
 function user(id: string, email: string): UserInfo {
@@ -48,7 +48,7 @@ describe('discoverRlsFixture', () => {
         const users = [user('u1', 'a@x'), user('u2', 'b@x')];
         const provider = providerWith('AI Agent Runs', u => `UserID = '${u.ID}'`);
 
-        const fx = discoverRlsFixture(provider, users);
+        const fx = DiscoverRlsFixture(provider, users);
 
         expect(fx.Usable).toBe(true);
         expect(fx.EntityName).toBe('AI Agent Runs');
@@ -60,7 +60,7 @@ describe('discoverRlsFixture', () => {
         const users = [user('u1', 'a@x'), user('u2', 'b@x')];
         const provider = providerWith('AI Agent Runs', () => '');
 
-        const fx = discoverRlsFixture(provider, users);
+        const fx = DiscoverRlsFixture(provider, users);
 
         expect(fx.Usable).toBe(false);
         expect(fx.Reason).toMatch(/only RLS-exempt|no entity/i);
@@ -71,14 +71,14 @@ describe('discoverRlsFixture', () => {
         // Same constant clause for both → cannot prove cross-user fingerprint divergence.
         const provider = providerWith('Shared Entity', () => `TenantID = 'fixed'`);
 
-        const fx = discoverRlsFixture(provider, users);
+        const fx = DiscoverRlsFixture(provider, users);
 
         expect(fx.Usable).toBe(false);
     });
 
     it('is NOT usable with fewer than two distinct users', () => {
         const dup = user('u1', 'a@x');
-        const fx = discoverRlsFixture(providerWith('E', u => `UserID = '${u.ID}'`), [dup, dup]);
+        const fx = DiscoverRlsFixture(providerWith('E', u => `UserID = '${u.ID}'`), [dup, dup]);
 
         expect(fx.Usable).toBe(false);
         expect(fx.Reason).toMatch(/fewer than two distinct/i);
@@ -89,7 +89,7 @@ describe('discoverRlsFixture', () => {
         // The owner is exempt (empty clause); u1/u2 get distinct clauses.
         const provider = providerWith('AI Agent Runs', u => (u.ID === 'owner' ? '' : `UserID = '${u.ID}'`));
 
-        const fx = discoverRlsFixture(provider, users);
+        const fx = DiscoverRlsFixture(provider, users);
 
         expect(fx.Usable).toBe(true);
         expect([fx.UserA.ID, fx.UserB.ID].sort()).toEqual(['u1', 'u2']);
@@ -104,7 +104,7 @@ describe('discoverRlsFixture — extended fixture pieces (TokenFilter, LivePair)
             `UserID = '{{UserID}}'` // the token filter we expect discovery to pick
         ]);
 
-        const fx = discoverRlsFixture(provider, users);
+        const fx = DiscoverRlsFixture(provider, users);
 
         expect(fx.TokenFilter).toBeDefined();
         expect(fx.TokenFilter!.FilterText).toContain('{{UserID}}');
@@ -116,7 +116,7 @@ describe('discoverRlsFixture — extended fixture pieces (TokenFilter, LivePair)
         const users = [user('u1', 'a@x'), user('u2', 'b@x')];
         const provider = providerWithFilters('E', u => `UserID = '${u.ID}'`, [`TenantID = 'fixed'`]);
 
-        expect(discoverRlsFixture(provider, users).TokenFilter).toBeUndefined();
+        expect(DiscoverRlsFixture(provider, users).TokenFilter).toBeUndefined();
     });
 
     it('discovers a LivePair (first non-exempt user + entity) when a scoped user exists', () => {
@@ -124,7 +124,7 @@ describe('discoverRlsFixture — extended fixture pieces (TokenFilter, LivePair)
         // owner is exempt (empty clause); u1 gets a real clause on the entity.
         const provider = providerWith('AI Agent Runs', u => (u.ID === 'owner' ? '' : `UserID = '${u.ID}'`));
 
-        const fx = discoverRlsFixture(provider, users);
+        const fx = DiscoverRlsFixture(provider, users);
 
         expect(fx.LivePair).toBeDefined();
         expect(fx.LivePair!.User.ID).toBe('u1');
@@ -135,7 +135,7 @@ describe('discoverRlsFixture — extended fixture pieces (TokenFilter, LivePair)
         const users = [user('u1', 'a@x'), user('u2', 'b@x')];
         const provider = providerWith('E', () => '');
 
-        expect(discoverRlsFixture(provider, users).LivePair).toBeUndefined();
+        expect(DiscoverRlsFixture(provider, users).LivePair).toBeUndefined();
     });
 
     it('resolves the seeded RLS test users by email (case-insensitive) when present', () => {
@@ -145,7 +145,7 @@ describe('discoverRlsFixture — extended fixture pieces (TokenFilter, LivePair)
             user('c', 'it-nogrant@integration.test'),
             user('x', 'someone@else.test'),
         ];
-        const fx = discoverRlsFixture(providerWith('E', () => ''), users);
+        const fx = DiscoverRlsFixture(providerWith('E', () => ''), users);
 
         expect(fx.SeededScopedA?.ID).toBe('a');
         expect(fx.SeededScopedB?.ID).toBe('b');
@@ -154,7 +154,7 @@ describe('discoverRlsFixture — extended fixture pieces (TokenFilter, LivePair)
 
     it('leaves the seeded users undefined when the seed is absent', () => {
         const users = [user('u1', 'a@x'), user('u2', 'b@x')];
-        const fx = discoverRlsFixture(providerWith('E', () => ''), users);
+        const fx = DiscoverRlsFixture(providerWith('E', () => ''), users);
 
         expect(fx.SeededScopedA).toBeUndefined();
         expect(fx.SeededScopedB).toBeUndefined();

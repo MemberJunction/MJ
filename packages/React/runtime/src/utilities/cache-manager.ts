@@ -43,7 +43,7 @@ export class CacheManager<T = unknown> {
   /**
    * Set a value in the cache
    */
-  set(key: string, value: T, ttl?: number): void {
+  Set(key: string, value: T, ttl?: number): void {
     const size = this.estimateSize(value);
     const entry: CacheEntry<T> = {
       value,
@@ -83,22 +83,27 @@ export class CacheManager<T = unknown> {
       const timeout = ttl || this.options.defaultTTL;
       const timerId = setTimeout(() => {
         this.timers.delete(key);
-        this.delete(key);
+        this.Delete(key);
       }, timeout);
       this.timers.set(key, timerId);
     }
   }
 
+  /** @deprecated Use {@link Set}. */
+  set(key: string, value: T, ttl?: number): void {
+    return this.Set(key, value, ttl);
+  }
+
   /**
    * Get a value from the cache
    */
-  get(key: string): T | undefined {
+  Get(key: string): T | undefined {
     const entry = this.cache.get(key);
     if (!entry) return undefined;
 
     // Check if expired
     if (this.isExpired(entry)) {
-      this.delete(key);
+      this.Delete(key);
       return undefined;
     }
 
@@ -107,25 +112,35 @@ export class CacheManager<T = unknown> {
     return entry.value;
   }
 
+  /** @deprecated Use {@link Get}. */
+  get(key: string): T | undefined {
+    return this.Get(key);
+  }
+
   /**
    * Check if a key exists and is not expired
    */
-  has(key: string): boolean {
+  Has(key: string): boolean {
     const entry = this.cache.get(key);
     if (!entry) return false;
 
     if (this.isExpired(entry)) {
-      this.delete(key);
+      this.Delete(key);
       return false;
     }
 
     return true;
   }
 
+  /** @deprecated Use {@link Has}. */
+  has(key: string): boolean {
+    return this.Has(key);
+  }
+
   /**
    * Delete a key from the cache
    */
-  delete(key: string): boolean {
+  Delete(key: string): boolean {
     const timer = this.timers.get(key);
     if (timer !== undefined) {
       clearTimeout(timer);
@@ -139,10 +154,15 @@ export class CacheManager<T = unknown> {
     return false;
   }
 
+  /** @deprecated Use {@link Delete}. */
+  delete(key: string): boolean {
+    return this.Delete(key);
+  }
+
   /**
    * Clear all entries
    */
-  clear(): void {
+  Clear(): void {
     for (const timer of this.timers.values()) {
       clearTimeout(timer);
     }
@@ -151,10 +171,15 @@ export class CacheManager<T = unknown> {
     this.memoryUsage = 0;
   }
 
+  /** @deprecated Use {@link Clear}. */
+  clear(): void {
+    return this.Clear();
+  }
+
   /**
    * Get cache statistics
    */
-  getStats(): {
+  GetStats(): {
     size: number;
     memoryUsage: number;
     maxSize: number;
@@ -168,16 +193,26 @@ export class CacheManager<T = unknown> {
     };
   }
 
+  /** @deprecated Use {@link GetStats}. */
+  getStats(): {
+    size: number;
+    memoryUsage: number;
+    maxSize: number;
+    maxMemory: number;
+  } {
+    return this.GetStats();
+  }
+
   /**
    * Manually trigger cleanup
    */
-  cleanup(): number {
+  Cleanup(): number {
     let removed = 0;
     const now = Date.now();
 
     for (const [key, entry] of this.cache) {
       if (this.isExpired(entry, now)) {
-        this.delete(key);
+        this.Delete(key);
         removed++;
       }
     }
@@ -185,12 +220,22 @@ export class CacheManager<T = unknown> {
     return removed;
   }
 
+  /** @deprecated Use {@link Cleanup}. */
+  cleanup(): number {
+    return this.Cleanup();
+  }
+
   /**
    * Destroy the cache, cancel all entry timers, and stop the cleanup timer.
    */
-  destroy(): void {
+  Destroy(): void {
     this.stopCleanupTimer();
-    this.clear();
+    this.Clear();
+  }
+
+  /** @deprecated Use {@link Destroy}. */
+  destroy(): void {
+    return this.Destroy();
   }
 
   /**
@@ -217,7 +262,7 @@ export class CacheManager<T = unknown> {
     }
 
     if (lruKey) {
-      this.delete(lruKey);
+      this.Delete(lruKey);
     }
   }
 
@@ -232,7 +277,7 @@ export class CacheManager<T = unknown> {
     for (const [key, entry] of entries) {
       if (freedMemory >= requiredSize) break;
       freedMemory += entry.size || 0;
-      this.delete(key);
+      this.Delete(key);
     }
   }
 
@@ -259,7 +304,7 @@ export class CacheManager<T = unknown> {
    */
   private startCleanupTimer(): void {
     this.cleanupTimer = setInterval(() => {
-      this.cleanup();
+      this.Cleanup();
     }, this.options.cleanupInterval);
   }
 

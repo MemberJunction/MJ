@@ -14,7 +14,7 @@ import { UserCache } from '@memberjunction/generic-database-provider';
  * @returns The System UserInfo object from the cache
  * @throws Error if System user is not found in cache or doesn't have Developer role
  */
-export function getSystemUser(): UserInfo {
+export function GetSystemUser(): UserInfo {
   const sysUser = UserCache.Instance.UserByName("System", false);
   if (!sysUser) {
     throw new Error(
@@ -36,4 +36,9 @@ export function getSystemUser(): UserInfo {
   }
 
   return sysUser;
+}
+
+/** @deprecated Use {@link GetSystemUser}. */
+export function getSystemUser(): UserInfo {
+  return GetSystemUser();
 }

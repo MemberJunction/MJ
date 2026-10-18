@@ -7,7 +7,7 @@
  * @module @memberjunction/ai-agents
  */
 import { PipeValue } from './pipeline.types';
-import { parseJsonPath, evaluateJsonPath } from './jsonpath-eval';
+import { ParseJsonPath, EvaluateJsonPath } from './jsonpath-eval';
 
 /** Normalize a relative path to absolute JSONPath form. `$`/`$.x` pass through; `x.y` → `$.x.y`. */
 function toAbsolute(path: string): string {
@@ -22,18 +22,28 @@ function toAbsolute(path: string): string {
 }
 
 /** All values matching `path` within `value`. */
+export function GetValues(value: PipeValue, path: string): PipeValue[] {
+    return EvaluateJsonPath(ParseJsonPath(toAbsolute(path)), value) as PipeValue[];
+}
+
+/** @deprecated Use {@link GetValues}. */
 export function getValues(value: PipeValue, path: string): PipeValue[] {
-    return evaluateJsonPath(parseJsonPath(toAbsolute(path)), value) as PipeValue[];
+    return GetValues(value, path);
 }
 
 /** First value matching `path`, or undefined. Used by where/sort/template (single-valued contexts). */
-export function getValue(value: PipeValue, path: string): PipeValue | undefined {
-    const vs = getValues(value, path);
+export function GetValue(value: PipeValue, path: string): PipeValue | undefined {
+    const vs = GetValues(value, path);
     return vs.length > 0 ? vs[0] : undefined;
 }
 
+/** @deprecated Use {@link GetValue}. */
+export function getValue(value: PipeValue, path: string): PipeValue | undefined {
+    return GetValue(value, path);
+}
+
 /** Field names available on an object value (for field-listing error messages). */
-export function fieldNames(value: PipeValue): string[] {
+export function FieldNames(value: PipeValue): string[] {
     if (Array.isArray(value)) {
         // Surface the element fields — that's what `where`/`select` operate on.
         const first = value.find((v) => v !== null && typeof v === 'object' && !Array.isArray(v));
@@ -43,4 +53,9 @@ export function fieldNames(value: PipeValue): string[] {
         return Object.keys(value);
     }
     return [];
+}
+
+/** @deprecated Use {@link FieldNames}. */
+export function fieldNames(value: PipeValue): string[] {
+    return FieldNames(value);
 }

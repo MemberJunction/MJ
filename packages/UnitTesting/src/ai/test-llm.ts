@@ -18,7 +18,7 @@
  *   { kind: 'fail', error: new Error('Rate limit exceeded') },  // real ErrorAnalyzer errorInfo
  *   { kind: 'succeed', content: 'recovered' },
  * );
- * registerTestLLM(llm, ['AnthropicLLM', 'OpenAILLM']);          // real ClassFactory resolution
+ * RegisterTestLLM(llm, ['AnthropicLLM', 'OpenAILLM']);          // real ClassFactory resolution
  * // ... drive the code under test ...
  * expect(llm.CalledModels).toEqual(['api-claude', 'api-gpt']);
  * ```
@@ -27,6 +27,7 @@ import {
   BaseLLM,
   ChatParams,
   ChatResult,
+  CreateCancellationError,
   ModelUsage,
   type ClassifyParams,
   type ClassifyResult,
@@ -35,7 +36,7 @@ import {
   type SummarizeResult,
 } from '@memberjunction/ai';
 import { MJGlobal } from '@memberjunction/global';
-import { makeDriverFailureChatResult, makeModelUsage, makeSuccessChatResult } from './chat-result-factories';
+import { MakeDriverFailureChatResult, MakeModelUsage, MakeSuccessChatResult } from './chat-result-factories';
 
 /**
  * One scripted per-call outcome for {@link TestLLM.Script}.
@@ -50,6 +51,10 @@ import { makeDriverFailureChatResult, makeModelUsage, makeSuccessChatResult } fr
  *   for cases where the test controls `errorInfo` (including leaving it absent).
  * - `throw` — SDK-style failure: the returned promise rejects with `error`.
  * - `hang` — never settles; models a hung provider socket (timeout tests).
+ * - `hangUntilAborted` — waits like a real SDK call until the request's
+ *   `cancellationToken` aborts, then rejects with an `AbortError`, which
+ *   BaseLLM reports as a cancelled result. `onStart` runs when the call begins,
+ *   so a test can abort at a known moment.
  * - `stream` — streams `chunks` through the real BaseLLM streaming template
  *   method when the caller requested streaming; in a non-streaming call the
  *   chunks resolve joined as one successful result.
@@ -60,6 +65,7 @@ export type TestLLMOutcome =
   | { kind: 'failResult'; result: ChatResult }
   | { kind: 'throw'; error: Error; delayMS?: number }
   | { kind: 'hang' }
+  | { kind: 'hangUntilAborted'; onStart?: () => void }
   | { kind: 'stream'; chunks: string[]; usage?: ModelUsage; model?: string };
 
 const DEFAULT_OUTCOME: TestLLMOutcome = { kind: 'succeed', content: 'test response' };
@@ -196,8 +202,8 @@ export class TestLLM extends BaseLLM {
     return super.ChatCompletion(params);
   }
 
-  protected override async nonStreamingChatCompletion(_params: ChatParams): Promise<ChatResult> {
-    return this.executeOutcome(this.nextOutcome());
+  protected override async nonStreamingChatCompletion(params: ChatParams): Promise<ChatResult> {
+    return this.executeOutcome(this.nextOutcome(), params.cancellationToken);
   }
 
   public async ClassifyText(_params: ClassifyParams): Promise<ClassifyResult> {
@@ -212,7 +218,7 @@ export class TestLLM extends BaseLLM {
   // Streaming implementation (drives the REAL BaseLLM streaming template method)
   // ------------------------------------------------------------------
 
-  protected override async createStreamingRequest(_params: ChatParams): Promise<AsyncGenerator<string>> {
+  protected override async createStreamingRequest(params: ChatParams): Promise<AsyncGenerator<string>> {
     const outcome = this.nextOutcome();
     switch (outcome.kind) {
       case 'stream':
@@ -232,6 +238,10 @@ export class TestLLM extends BaseLLM {
         throw new Error(outcome.result.errorMessage ?? 'TestLLM: scripted failResult during streaming');
       case 'hang':
         return this.neverGenerator();
+      case 'hangUntilAborted':
+        outcome.onStart?.();
+        await this.untilAborted(params.cancellationToken);
+        return this.neverGenerator();
     }
   }
 
@@ -244,8 +254,8 @@ export class TestLLM extends BaseLLM {
     _lastChunk: string | null | undefined,
     _usage: ModelUsage | null | undefined,
   ): ChatResult {
-    return makeSuccessChatResult(accumulatedContent ?? '', {
-      usage: this.streamFinalUsage ?? makeModelUsage(),
+    return MakeSuccessChatResult(accumulatedContent ?? '', {
+      usage: this.streamFinalUsage ?? MakeModelUsage(),
       model: this.streamFinalModel,
     });
   }
@@ -261,18 +271,18 @@ export class TestLLM extends BaseLLM {
     return this.script.shift() ?? this.defaultOutcome;
   }
 
-  private async executeOutcome(outcome: TestLLMOutcome): Promise<ChatResult> {
+  private async executeOutcome(outcome: TestLLMOutcome, signal?: AbortSignal): Promise<ChatResult> {
     switch (outcome.kind) {
       case 'succeed':
         await this.wait(outcome.delayMS);
-        return makeSuccessChatResult(outcome.content, {
+        return MakeSuccessChatResult(outcome.content, {
           usage: outcome.usage,
           model: outcome.model,
           thinking: outcome.thinking,
         });
       case 'fail':
         await this.wait(outcome.delayMS);
-        return makeDriverFailureChatResult(outcome.error, this.constructor.name);
+        return MakeDriverFailureChatResult(outcome.error, this.constructor.name);
       case 'failResult':
         return outcome.result;
       case 'throw':
@@ -282,10 +292,25 @@ export class TestLLM extends BaseLLM {
         return new Promise<ChatResult>(() => {
           /* never settles — models a hung provider socket */
         });
+      case 'hangUntilAborted':
+        outcome.onStart?.();
+        return this.untilAborted(signal);
       case 'stream':
         // Non-streaming call against a stream outcome: resolve the joined chunks.
-        return makeSuccessChatResult(outcome.chunks.join(''), { usage: outcome.usage, model: outcome.model });
+        return MakeSuccessChatResult(outcome.chunks.join(''), { usage: outcome.usage, model: outcome.model });
     }
+  }
+
+  /** Settles only when the signal aborts, rejecting the way an SDK does: with an `AbortError`. */
+  private untilAborted(signal: AbortSignal | undefined): Promise<ChatResult> {
+    return new Promise<ChatResult>((_, reject) => {
+      const abort = () => reject(CreateCancellationError({ signal, message: 'TestLLM request was aborted' }));
+      if (signal?.aborted) {
+        abort();
+      } else {
+        signal?.addEventListener('abort', abort, { once: true });
+      }
+    });
   }
 
   private async wait(delayMS?: number): Promise<void> {
@@ -316,13 +341,25 @@ export class TestLLM extends BaseLLM {
  * instantiates.
  *
  * Registrations persist on the MJGlobal singleton and the ClassFactory has no
- * unregister API — pair with `resetMJSingletons()` from this package in
- * `beforeEach`/`afterEach` so each test gets a fresh factory (re-registering the
- * same DriverClass name without a reset logs a duplicate-registration warning,
- * though the newest registration still wins).
+ * unregister API. In unit tests, pair with `resetMJSingletons()` from this package in
+ * `beforeEach`/`afterEach` so each test gets a fresh factory. In a long-lived process
+ * that must keep its real providers (the integration suite runs every bundle in one
+ * process), call the returned `restore()` in a `finally` instead: it re-registers, above
+ * the TestLLM, whatever class each name resolved to before. A name that had no prior
+ * registration has nothing to restore and keeps resolving to the TestLLM. The TestLLM is
+ * registered at `priority` or above every registration the name already has, whichever is
+ * higher, so it also wins over a class an earlier `restore()` put back.
+ *
+ * @returns `restore` — hands every name back to its previous class.
  */
-export function registerTestLLM(llm: TestLLM, driverClass: string | string[], priority = 100): void {
+export function RegisterTestLLM(llm: TestLLM, driverClass: string | string[], priority = 100): () => void {
   const driverClasses = Array.isArray(driverClass) ? driverClass : [driverClass];
+  const factory = MJGlobal.Instance.ClassFactory;
+  const previous = driverClasses.flatMap((name) => {
+    const registration = factory.GetRegistration(BaseLLM, name);
+    return registration ? [{ name, registration }] : [];
+  });
+
   for (const name of driverClasses) {
     // The constructor's object-return makes the ClassFactory hand back the
     // shared scripted instance while still going through a real registration
@@ -333,6 +370,26 @@ export function registerTestLLM(llm: TestLLM, driverClass: string | string[], pr
         return llm;
       }
     }
-    MJGlobal.Instance.ClassFactory.Register(BaseLLM, TestLLMRegistrationHandle, name, priority);
+    // At least `priority`, and above everything registered for the name: an earlier restore()
+    // re-registered the production class above its TestLLM, and this registration must outrank it.
+    factory.Register(BaseLLM, TestLLMRegistrationHandle, name, Math.max(priority, highestPriority(name) + 1));
   }
+
+  return () => {
+    for (const { name, registration } of previous) {
+      // An explicit priority above everything registered wins resolution outright, and avoids
+      // the unrelated-class warning the auto-increment path emits.
+      factory.Register(BaseLLM, registration.SubClass, name, highestPriority(name) + 1);
+    }
+  };
+}
+
+/** The highest priority registered on BaseLLM for `name`, or 0 when it has none. */
+function highestPriority(name: string): number {
+  return Math.max(0, ...MJGlobal.Instance.ClassFactory.GetAllRegistrations(BaseLLM, name).map((r) => r.Priority));
+}
+
+/** @deprecated Use {@link RegisterTestLLM}. */
+export function registerTestLLM(llm: TestLLM, driverClass: string | string[], priority = 100): () => void {
+  return RegisterTestLLM(llm, driverClass, priority);
 }

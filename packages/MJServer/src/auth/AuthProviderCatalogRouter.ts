@@ -12,6 +12,7 @@ import { Router, type Request, type Response } from 'express';
 import { rateLimit } from 'express-rate-limit';
 import { LogError, type PublicAuthProviderCatalog } from '@memberjunction/core';
 import { AuthProviderEngine } from './AuthProviderEngine.js';
+import { EMPTY_PUBLIC_LOGIN_SCREEN, LoginScreenEngine } from './LoginScreenEngine.js';
 
 /** Mount path for the public catalog router. */
 export const AUTH_CATALOG_MOUNT_PATH = '/auth';
@@ -48,7 +49,7 @@ const CACHE_MAX_AGE_SECONDS = 60;
  * list so the browser falls back to its compiled `AUTH_TYPE` and the user can still sign in.
  * Returning 500 would take the login screen down for a problem the client can route around.
  */
-export function createAuthProviderCatalogRouter(): Router {
+export function CreateAuthProviderCatalogRouter(): Router {
   const router = Router();
 
   const limiter = rateLimit({
@@ -72,5 +73,35 @@ export function createAuthProviderCatalogRouter(): Router {
     }
   });
 
+  /**
+   * `GET /auth/login-screen`: the default theme's PUBLISHED sign-in page, logos and seeds, for the login
+   * screen to draw before anyone signs in. Its own rate-limit budget (a 429 must answer in this route's
+   * shape), the catalog's cache window, and the same failure rule: empty, never an error.
+   */
+  const loginScreenLimiter = rateLimit({
+    windowMs: DEFAULT_RATE_LIMIT_WINDOW_MS,
+    limit: DEFAULT_RATE_LIMIT_MAX,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    message: EMPTY_PUBLIC_LOGIN_SCREEN
+  });
+
+  router.get('/login-screen', loginScreenLimiter, (_req: Request, res: Response) => {
+    try {
+      const body = LoginScreenEngine.Instance.GetPublicLoginScreen();
+      res.set('Cache-Control', `public, max-age=${CACHE_MAX_AGE_SECONDS}`);
+      res.status(200).json(body);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      LogError(`[Auth] Failed to serve the public login screen: ${message}`);
+      res.status(200).json(EMPTY_PUBLIC_LOGIN_SCREEN);
+    }
+  });
+
   return router;
+}
+
+/** @deprecated Use {@link CreateAuthProviderCatalogRouter}. */
+export function createAuthProviderCatalogRouter(): Router {
+  return CreateAuthProviderCatalogRouter();
 }

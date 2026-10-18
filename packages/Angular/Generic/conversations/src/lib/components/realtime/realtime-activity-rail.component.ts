@@ -8,7 +8,7 @@ import { ArtifactsModule } from '@memberjunction/ng-artifacts';
 import {
   RealtimeSessionState, RealtimeDelegationCardVM, FriendlyStepLabel, FormatElapsed
 } from './realtime-session-state';
-import { ParsedDelegationArtifact } from '../../services/delegation-result-parser';
+import { ParsedDelegationArtifact } from '@memberjunction/realtime-runtime';
 import {
   ACTIVITY_SPLIT_DEFAULT_PERCENT, ACTIVITY_SPLIT_PREF_KEY,
   ClampActivitySplitPercent, ParseActivitySplitPercent, SerializeActivitySplitPercent
@@ -40,7 +40,7 @@ import {
 })
 export class RealtimeActivityRailComponent implements OnInit, OnDestroy {
   /** Maximum characters of the result preview in a done card. */
-  private static readonly PreviewMaxChars = 90;
+  private static readonly previewMaxChars = 90;
 
   /** Shared live-session state, owned by the overlay shell. */
   @Input({ required: true }) State!: RealtimeSessionState;
@@ -192,7 +192,7 @@ export class RealtimeActivityRailComponent implements OnInit, OnDestroy {
   /** One-line result preview for done items. */
   public Preview(card: RealtimeDelegationCardVM): string {
     const text = (card.Result || card.LatestMessage || '').replace(/\s+/g, ' ').trim();
-    const max = RealtimeActivityRailComponent.PreviewMaxChars;
+    const max = RealtimeActivityRailComponent.previewMaxChars;
     return text.length > max ? `${text.slice(0, max).trimEnd()}…` : text;
   }
 

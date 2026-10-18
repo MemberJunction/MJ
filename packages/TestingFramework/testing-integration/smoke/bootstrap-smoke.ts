@@ -13,14 +13,14 @@
  *
  * Exit codes mirror the existing suites: 0 pass / 1 fail / 2 bootstrap error.
  */
-import { bootstrapIntegrationServer, getActiveIntegrationStorage } from '../src/bootstrap';
+import { BootstrapIntegrationServer, getActiveIntegrationStorage } from '../src/bootstrap';
 import { IntegrationCheckRegistry } from '../src/check-registry';
 import { LoadTestingIntegration } from '../src/index';
 import type { IntegrationCheckContext } from '../src/check';
 
 async function main(): Promise<void> {
     LoadTestingIntegration();                          // ensure the self-test check is registered
-    const bootstrap = await bootstrapIntegrationServer({ VerboseCacheLogging: false });
+    const bootstrap = await BootstrapIntegrationServer({ VerboseCacheLogging: false });
     const storage = getActiveIntegrationStorage();
     if (!storage) {
         console.error('No active instrumented storage after bootstrap');

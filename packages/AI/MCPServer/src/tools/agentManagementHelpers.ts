@@ -22,16 +22,16 @@ export const DEFAULT_BUILDER_AGENTS: readonly string[] = ['ActionSmith', 'Codesm
  */
 export interface AgentManagementToolsOptions {
     /** Master switch for the whole group. Defaults to enabled. */
-    enabled?: boolean;
+    enabled?: boolean;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
     /** Overrides {@link DEFAULT_BUILDER_AGENTS}. Pass [] to expose no builder agents. */
-    builderAgents?: string[];
+    builderAgents?: string[];  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
 }
 
 /**
  * Validates a raw spec object for Create_Agent. Returns an error message, or
  * null when the spec is acceptable to hand to AgentSpecSync.
  */
-export function validateCreateSpec(spec: Partial<AgentSpec> | null | undefined): string | null {
+export function ValidateCreateSpec(spec: Partial<AgentSpec> | null | undefined): string | null {
     const baseError = validateSpecShape(spec);
     if (baseError) {
         return baseError;
@@ -42,11 +42,16 @@ export function validateCreateSpec(spec: Partial<AgentSpec> | null | undefined):
     return null;
 }
 
+/** @deprecated Use {@link ValidateCreateSpec}. */
+export function validateCreateSpec(spec: Partial<AgentSpec> | null | undefined): string | null {
+    return ValidateCreateSpec(spec);
+}
+
 /**
  * Validates a raw spec object for Update_Agent. Returns an error message, or
  * null when the spec is acceptable to hand to AgentSpecSync.
  */
-export function validateUpdateSpec(spec: Partial<AgentSpec> | null | undefined): string | null {
+export function ValidateUpdateSpec(spec: Partial<AgentSpec> | null | undefined): string | null {
     const baseError = validateSpecShape(spec);
     if (baseError) {
         return baseError;
@@ -55,6 +60,11 @@ export function validateUpdateSpec(spec: Partial<AgentSpec> | null | undefined):
         return 'Update_Agent specs must carry the ID of the agent to update. Use Get_Agent_Spec to fetch the current spec first.';
     }
     return null;
+}
+
+/** @deprecated Use {@link ValidateUpdateSpec}. */
+export function validateUpdateSpec(spec: Partial<AgentSpec> | null | undefined): string | null {
+    return ValidateUpdateSpec(spec);
 }
 
 /**
@@ -75,7 +85,7 @@ function validateSpecShape(spec: Partial<AgentSpec> | null | undefined): string 
  * Case-insensitive wildcard match used by the catalog tools.
  * Supports `*`, `prefix*`, `*suffix`, and `*contains*` patterns.
  */
-export function matchesNamePattern(name: string | null | undefined, pattern: string): boolean {
+export function MatchesNamePattern(name: string | null | undefined, pattern: string): boolean {
     if (pattern === '*') {
         return true;
     }
@@ -89,4 +99,9 @@ export function matchesNamePattern(name: string | null | undefined, pattern: str
         .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
         .replace(/\\\*/g, '.*');
     return new RegExp(`^${regexPattern}$`, 'i').test(name);
+}
+
+/** @deprecated Use {@link MatchesNamePattern}. */
+export function matchesNamePattern(name: string | null | undefined, pattern: string): boolean {
+    return MatchesNamePattern(name, pattern);
 }

@@ -54,8 +54,26 @@ export class ListInvitationsComponent extends BaseAngularComponent implements On
   /** Optional display name for the list — used in the empty-state copy. */
   @Input() ListName: string | null = null;
 
-  public activeTab: InvitationStatus = 'Pending';
-  public invitations: InvitationRow[] = [];
+  public ActiveTab: InvitationStatus = 'Pending';
+
+  /** @deprecated Use {@link ActiveTab}. */
+  public get activeTab(): InvitationStatus {
+    return this.ActiveTab;
+  }
+  /** @deprecated Use {@link ActiveTab}. */
+  public set activeTab(value: InvitationStatus) {
+    this.ActiveTab = value;
+  }
+  public Invitations: InvitationRow[] = [];
+
+  /** @deprecated Use {@link Invitations}. */
+  public get invitations(): InvitationRow[] {
+    return this.Invitations;
+  }
+  /** @deprecated Use {@link Invitations}. */
+  public set invitations(value: InvitationRow[]) {
+    this.Invitations = value;
+  }
 
   /**
    * Precomputed list of invitations matching the active tab, recomputed only when
@@ -64,15 +82,69 @@ export class ListInvitationsComponent extends BaseAngularComponent implements On
    * Bound directly as the @for source in the template, so a getter here would
    * allocate a fresh array (map + filter) every CD tick.
    */
-  public visibleInvitations: InvitationRow[] = [];
-  public loading = false;
+  public VisibleInvitations: InvitationRow[] = [];
+
+  /** @deprecated Use {@link VisibleInvitations}. */
+  public get visibleInvitations(): InvitationRow[] {
+    return this.VisibleInvitations;
+  }
+  /** @deprecated Use {@link VisibleInvitations}. */
+  public set visibleInvitations(value: InvitationRow[]) {
+    this.VisibleInvitations = value;
+  }
+  public Loading = false;
+
+  /** @deprecated Use {@link Loading}. */
+  public get loading() {
+    return this.Loading;
+  }
+  /** @deprecated Use {@link Loading}. */
+  public set loading(value) {
+    this.Loading = value;
+  }
   public errorMessage: string | null = null;
-  public submitting = false;
+  public Submitting = false;
+
+  /** @deprecated Use {@link Submitting}. */
+  public get submitting() {
+    return this.Submitting;
+  }
+  /** @deprecated Use {@link Submitting}. */
+  public set submitting(value) {
+    this.Submitting = value;
+  }
 
   // Send-new-invitation form
-  public newEmail = '';
-  public newRole: 'Editor' | 'Viewer' = 'Viewer';
-  public newTtlHours = 168; // 7 days default
+  public NewEmail = '';
+
+  /** @deprecated Use {@link NewEmail}. */
+  public get newEmail() {
+    return this.NewEmail;
+  }
+  /** @deprecated Use {@link NewEmail}. */
+  public set newEmail(value) {
+    this.NewEmail = value;
+  }
+  public NewRole: 'Editor' | 'Viewer' = 'Viewer';
+
+  /** @deprecated Use {@link NewRole}. */
+  public get newRole(): 'Editor' | 'Viewer' {
+    return this.NewRole;
+  }
+  /** @deprecated Use {@link NewRole}. */
+  public set newRole(value: 'Editor' | 'Viewer') {
+    this.NewRole = value;
+  }
+  public NewTtlHours = 168;
+
+  /** @deprecated Use {@link NewTtlHours}. */
+  public get newTtlHours() {
+    return this.NewTtlHours;
+  }
+  /** @deprecated Use {@link NewTtlHours}. */
+  public set newTtlHours(value) {
+    this.NewTtlHours = value;
+  } // 7 days default
 
   private initialized = false;
 
@@ -81,10 +153,15 @@ export class ListInvitationsComponent extends BaseAngularComponent implements On
     if (this._listId) await this.loadInvitations();
   }
 
-  public setTab(tab: InvitationStatus): void {
-    this.activeTab = tab;
+  public SetTab(tab: InvitationStatus): void {
+    this.ActiveTab = tab;
     this.recomputeVisibleInvitations();
     this.cdr.markForCheck();
+  }
+
+  /** @deprecated Use {@link SetTab}. */
+  public setTab(tab: InvitationStatus): void {
+    return this.SetTab(tab);
   }
 
   /**
@@ -98,18 +175,18 @@ export class ListInvitationsComponent extends BaseAngularComponent implements On
    */
   private recomputeVisibleInvitations(): void {
     const now = Date.now();
-    const hydrated = this.invitations.map<InvitationRow>((inv) =>
+    const hydrated = this.Invitations.map<InvitationRow>((inv) =>
       inv.Status === 'Pending' && inv.ExpiresAt.getTime() < now
         ? { ...inv, Status: 'Expired' }
         : inv,
     );
-    this.visibleInvitations = hydrated.filter((i) => i.Status === this.activeTab);
+    this.VisibleInvitations = hydrated.filter((i) => i.Status === this.ActiveTab);
   }
 
-  public countFor(status: InvitationStatus): number {
+  public CountFor(status: InvitationStatus): number {
     const now = Date.now();
     let count = 0;
-    for (const inv of this.invitations) {
+    for (const inv of this.Invitations) {
       const effective: InvitationStatus =
         inv.Status === 'Pending' && inv.ExpiresAt.getTime() < now ? 'Expired' : inv.Status;
       if (effective === status) count++;
@@ -117,7 +194,12 @@ export class ListInvitationsComponent extends BaseAngularComponent implements On
     return count;
   }
 
-  public formatExpiry(d: Date): string {
+  /** @deprecated Use {@link CountFor}. */
+  public countFor(status: InvitationStatus): number {
+    return this.CountFor(status);
+  }
+
+  public FormatExpiry(d: Date): string {
     const diff = d.getTime() - Date.now();
     if (diff < 0) return `expired ${d.toLocaleDateString()}`;
     const hours = Math.floor(diff / 3_600_000);
@@ -126,25 +208,35 @@ export class ListInvitationsComponent extends BaseAngularComponent implements On
     return `expires in ${days}d`;
   }
 
+  /** @deprecated Use {@link FormatExpiry}. */
+  public formatExpiry(d: Date): string {
+    return this.FormatExpiry(d);
+  }
+
+  public get CanSend(): boolean {
+    return !!this._listId && this.NewEmail.trim().length > 0 && this.NewEmail.includes('@') && !this.Submitting;
+  }
+
+  /** @deprecated Use {@link CanSend}. */
   public get canSend(): boolean {
-    return !!this._listId && this.newEmail.trim().length > 0 && this.newEmail.includes('@') && !this.submitting;
+    return this.CanSend;
   }
 
   public async SendInvitation(): Promise<void> {
-    if (!this.canSend || !this._listId) return;
-    this.submitting = true;
+    if (!this.CanSend || !this._listId) return;
+    this.Submitting = true;
     this.cdr.markForCheck();
     try {
       const provider = this.ProviderToUse as unknown as GraphQLDataProvider;
       const client = new GraphQLListsClient(provider);
       const result = await client.Invite({
         ListID: this._listId,
-        Email: this.newEmail.trim(),
-        Role: this.newRole,
-        TtlHours: this.newTtlHours,
+        Email: this.NewEmail.trim(),
+        Role: this.NewRole,
+        TtlHours: this.NewTtlHours,
       });
       if (result.Success) {
-        this.newEmail = '';
+        this.NewEmail = '';
         await this.loadInvitations();
       } else {
         this.errorMessage = `Failed to send: ${result.Message}`;
@@ -152,7 +244,7 @@ export class ListInvitationsComponent extends BaseAngularComponent implements On
     } catch (e) {
       this.errorMessage = e instanceof Error ? e.message : String(e);
     } finally {
-      this.submitting = false;
+      this.Submitting = false;
       this.cdr.markForCheck();
     }
   }
@@ -193,7 +285,7 @@ export class ListInvitationsComponent extends BaseAngularComponent implements On
 
   private async loadInvitations(): Promise<void> {
     if (!this._listId) return;
-    this.loading = true;
+    this.Loading = true;
     this.errorMessage = null;
     this.cdr.markForCheck();
     try {
@@ -206,11 +298,11 @@ export class ListInvitationsComponent extends BaseAngularComponent implements On
       });
       if (!result.Success) {
         this.errorMessage = result.ErrorMessage ?? 'Failed to load invitations';
-        this.invitations = [];
+        this.Invitations = [];
         this.recomputeVisibleInvitations();
         return;
       }
-      this.invitations = (result.Results ?? []).map((r) => ({
+      this.Invitations = (result.Results ?? []).map((r) => ({
         ID: String(r.ID),
         Email: String(r.Email),
         Role: r.Role as 'Editor' | 'Viewer',
@@ -222,10 +314,10 @@ export class ListInvitationsComponent extends BaseAngularComponent implements On
       this.recomputeVisibleInvitations();
     } catch (e) {
       this.errorMessage = e instanceof Error ? e.message : String(e);
-      this.invitations = [];
+      this.Invitations = [];
       this.recomputeVisibleInvitations();
     } finally {
-      this.loading = false;
+      this.Loading = false;
       this.cdr.markForCheck();
     }
   }

@@ -3,4 +3,7 @@ dotenv.config({ quiet: true });
 import env from 'env-var';
 
 
-export const ___serverPort = env.get('PORT').default('3999').asPortNumber();
+export const ServerPort = env.get('PORT').default('3999').asPortNumber();
+
+/** @deprecated Use {@link ServerPort}. */
+export const ___serverPort = ServerPort;

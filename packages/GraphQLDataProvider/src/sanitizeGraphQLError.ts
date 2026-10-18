@@ -138,9 +138,9 @@ export class SafeGraphQLError extends Error {
      * Members that are new here, rather than inherited from the upstream surface,
      * follow the MJ convention below.
      */
-    public readonly response?: { status?: number; errors?: SanitizedGraphQLErrorDetail[] };
+    public readonly response?: { status?: number; errors?: SanitizedGraphQLErrorDetail[] };  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
     /** Originating request, narrowed to the query document. See the note above on casing. */
-    public readonly request?: { query?: string };
+    public readonly request?: { query?: string };  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
     /** Error code from the first GraphQL error, e.g. `JWT_EXPIRED`. */
     public readonly Code?: string;
     /** Shape of the withheld variables — key names and value types, never values. */

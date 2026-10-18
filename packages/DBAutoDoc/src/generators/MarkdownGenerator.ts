@@ -8,7 +8,7 @@ export class MarkdownGenerator {
   /**
    * Generate markdown documentation
    */
-  public generate(state: DatabaseDocumentation): string {
+  public Generate(state: DatabaseDocumentation): string {
     const lines: string[] = [];
 
     // Header
@@ -253,6 +253,11 @@ export class MarkdownGenerator {
     }
 
     return lines.join('\n');
+  }
+
+  /** @deprecated Use {@link Generate}. */
+  public generate(state: DatabaseDocumentation): string {
+    return this.Generate(state);
   }
 
   /**

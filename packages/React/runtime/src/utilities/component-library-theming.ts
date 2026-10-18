@@ -19,7 +19,7 @@
  */
 
 import { ComponentStyles } from '@memberjunction/interactive-component-types';
-import { unwrapLibraryComponent } from './component-unwrapper';
+import { UnwrapLibraryComponent } from './component-unwrapper';
 
 /** Relative luminance (0 = black, 1 = white) of a hex or rgb()/rgba() color; 1 if unparseable. */
 function colorLuminance(color: string | undefined): number {
@@ -57,12 +57,12 @@ function radiusToNumber(radius: ComponentStyles['borders']['radius'] | undefined
  * module (used only to read its `theme` algorithm namespace). Unmapped tokens are
  * omitted so antd falls back to its own defaults.
  */
-export function buildAntdThemeConfig(
+export function BuildAntdThemeConfig(
   styles: Partial<ComponentStyles> | undefined,
   antdLib: unknown,
 ): Record<string, unknown> {
   const colors = (styles?.colors || {}) as Record<string, string | undefined>;
-  const themeNS = antdLib ? unwrapLibraryComponent(antdLib, 'theme') : undefined;
+  const themeNS = antdLib ? UnwrapLibraryComponent(antdLib, 'theme') : undefined;
   const isDark = colorLuminance(colors['background']) < 0.5;
 
   const token: Record<string, unknown> = {
@@ -94,6 +94,14 @@ export function buildAntdThemeConfig(
   return config;
 }
 
+/** @deprecated Use {@link BuildAntdThemeConfig}. */
+export function buildAntdThemeConfig(
+  styles: Partial<ComponentStyles> | undefined,
+  antdLib: unknown,
+): Record<string, unknown> {
+  return BuildAntdThemeConfig(styles, antdLib);
+}
+
 /**
  * Wraps a React element in loaded component libraries' theme providers so their
  * built-in components inherit the MJ theme (including dark mode). Currently themes
@@ -106,7 +114,7 @@ export function buildAntdThemeConfig(
  * this one (antd merges nested configs), so this is safe alongside component-level
  * theming.
  */
-export function wrapWithLibraryThemeProviders(
+export function WrapWithLibraryThemeProviders(
   React: { createElement: (type: unknown, props: unknown, ...children: unknown[]) => unknown },
   element: unknown,
   libraries: Record<string, unknown> | undefined,
@@ -115,13 +123,23 @@ export function wrapWithLibraryThemeProviders(
   const antdLib = libraries?.['antd'];
   if (!antdLib) return element;
 
-  const ConfigProvider = unwrapLibraryComponent(antdLib, 'ConfigProvider');
+  const ConfigProvider = UnwrapLibraryComponent(antdLib, 'ConfigProvider');
   if (!ConfigProvider) return element;
 
   try {
-    return React.createElement(ConfigProvider, { theme: buildAntdThemeConfig(styles, antdLib) }, element);
+    return React.createElement(ConfigProvider, { theme: BuildAntdThemeConfig(styles, antdLib) }, element);
   } catch {
     // Never let theming wrap break rendering — fall back to the unwrapped element.
     return element;
   }
+}
+
+/** @deprecated Use {@link WrapWithLibraryThemeProviders}. */
+export function wrapWithLibraryThemeProviders(
+  React: { createElement: (type: unknown, props: unknown, ...children: unknown[]) => unknown },
+  element: unknown,
+  libraries: Record<string, unknown> | undefined,
+  styles: Partial<ComponentStyles> | undefined,
+): unknown {
+  return WrapWithLibraryThemeProviders(React, element, libraries, styles);
 }

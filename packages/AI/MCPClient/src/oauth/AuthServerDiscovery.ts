@@ -60,7 +60,7 @@ export class AuthServerDiscovery {
      * @returns Authorization server metadata
      * @throws Error if metadata cannot be discovered
      */
-    public async getMetadata(
+    public async GetMetadata(
         issuerUrl: string,
         contextUser: UserInfo,
         options?: { cacheTTLMinutes?: number }
@@ -108,6 +108,15 @@ export class AuthServerDiscovery {
         return metadata;
     }
 
+    /** @deprecated Use {@link GetMetadata}. */
+    public async getMetadata(
+        issuerUrl: string,
+        contextUser: UserInfo,
+        options?: { cacheTTLMinutes?: number }
+    ): Promise<AuthServerMetadata> {
+        return this.GetMetadata(issuerUrl, contextUser, options);
+    }
+
     /**
      * Invalidates cached metadata for an issuer.
      *
@@ -117,7 +126,7 @@ export class AuthServerDiscovery {
      * @param issuerUrl - The authorization server's issuer URL
      * @param contextUser - User context for database operations
      */
-    public async invalidateCache(issuerUrl: string, contextUser: UserInfo): Promise<void> {
+    public async InvalidateCache(issuerUrl: string, contextUser: UserInfo): Promise<void> {
         const normalizedIssuer = issuerUrl.replace(/\/$/, '');
 
         // Remove from in-memory cache
@@ -129,6 +138,11 @@ export class AuthServerDiscovery {
         LogStatus(`[OAuth] Invalidated cached metadata for ${normalizedIssuer}`);
     }
 
+    /** @deprecated Use {@link InvalidateCache}. */
+    public async invalidateCache(issuerUrl: string, contextUser: UserInfo): Promise<void> {
+        return this.InvalidateCache(issuerUrl, contextUser);
+    }
+
     /**
      * Checks if an authorization server supports DCR.
      *
@@ -136,13 +150,18 @@ export class AuthServerDiscovery {
      * @param contextUser - User context for database operations
      * @returns true if DCR is supported
      */
-    public async supportsDCR(issuerUrl: string, contextUser: UserInfo): Promise<boolean> {
+    public async SupportsDCR(issuerUrl: string, contextUser: UserInfo): Promise<boolean> {
         try {
-            const metadata = await this.getMetadata(issuerUrl, contextUser);
+            const metadata = await this.GetMetadata(issuerUrl, contextUser);
             return !!metadata.registration_endpoint;
         } catch {
             return false;
         }
+    }
+
+    /** @deprecated Use {@link SupportsDCR}. */
+    public async supportsDCR(issuerUrl: string, contextUser: UserInfo): Promise<boolean> {
+        return this.SupportsDCR(issuerUrl, contextUser);
     }
 
     /**
@@ -152,9 +171,9 @@ export class AuthServerDiscovery {
      * @param contextUser - User context for database operations
      * @returns true if S256 PKCE is supported (or if not explicitly listed, assume supported)
      */
-    public async supportsPKCE(issuerUrl: string, contextUser: UserInfo): Promise<boolean> {
+    public async SupportsPKCE(issuerUrl: string, contextUser: UserInfo): Promise<boolean> {
         try {
-            const metadata = await this.getMetadata(issuerUrl, contextUser);
+            const metadata = await this.GetMetadata(issuerUrl, contextUser);
             // If code_challenge_methods_supported is not listed, many servers still support PKCE
             // If listed, check for S256
             if (!metadata.code_challenge_methods_supported) {
@@ -164,6 +183,11 @@ export class AuthServerDiscovery {
         } catch {
             return false;
         }
+    }
+
+    /** @deprecated Use {@link SupportsPKCE}. */
+    public async supportsPKCE(issuerUrl: string, contextUser: UserInfo): Promise<boolean> {
+        return this.SupportsPKCE(issuerUrl, contextUser);
     }
 
     /**

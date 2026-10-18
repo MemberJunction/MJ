@@ -1,7 +1,7 @@
 /**
  * @fileoverview Base class for SERVER-SIDE interactive-channel plugins — the server half of the
  * channel plugin registry (`MJ: AI Agent Channels.ServerPluginClass`), mirroring the client half
- * (`BaseRealtimeChannelClient` in `@memberjunction/ng-conversations`, resolved from the same
+ * (`BaseRealtimeChannelClient` in `@memberjunction/realtime-runtime`, resolved from the same
  * registry's `ClientPluginClass`).
  *
  * Lives beside {@link import('./baseRealtime').BaseRealtimeModel} because it is a server-side

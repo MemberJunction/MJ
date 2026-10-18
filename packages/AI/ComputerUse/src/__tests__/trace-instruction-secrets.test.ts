@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { recordTrace } from '../engine/trace.js';
+import { RecordTrace } from '../engine/trace.js';
 import { ComputerUseResult } from '../types/results.js';
 import { StepRecord, JudgeVerdict } from '../types/judge.js';
 import { ActionExecutionResult, ClickElementAction, InteractiveElement } from '../types/browser.js';
@@ -53,7 +53,7 @@ function completedResult(steps: StepRecord[]): ComputerUseResult {
 
 describe('recordTrace — secrets in the instruction', () => {
     it('tokenizes credentials the controller narrated into its reasoning', () => {
-        const trace = recordTrace({
+        const trace = RecordTrace({
             result: completedResult([loginStep()]),
             testId: 'T001',
             goal: 'Log in',
@@ -70,7 +70,7 @@ describe('recordTrace — secrets in the instruction', () => {
     });
 
     it('leaves the reasoning untouched when no variable values were supplied', () => {
-        const trace = recordTrace({
+        const trace = RecordTrace({
             result: completedResult([loginStep()]),
             testId: 'T001',
             goal: 'Log in',

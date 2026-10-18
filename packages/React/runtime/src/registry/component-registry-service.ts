@@ -14,7 +14,7 @@ import {
   RegistryComponentMetadata
 } from './registry-provider';
 import { UserInfo, Metadata, IMetadataProvider } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
+import { GetGlobalObjectStore, UUIDsEqual } from '@memberjunction/global';
 import { 
   MJComponentEntity, 
   MJComponentRegistryEntity,
@@ -59,7 +59,7 @@ export interface IComponentRegistryClient {
  * Service for managing component loading from registries with compilation caching
  */
 export class ComponentRegistryService {
-  private static instance: ComponentRegistryService | null = null;
+  private static readonly _globalStoreKey = '___SINGLETON__ComponentRegistryService';
   
   // Caches
   private compiledComponentCache = new Map<string, CachedCompiledComponent>();
@@ -97,30 +97,58 @@ export class ComponentRegistryService {
     this.debug = debug;
     this.graphQLClient = graphQLClient;
   }
+
+  /**
+   * Returns the initialized singleton instance from the Global Object Store, or undefined if not yet created.
+   */
+  public static get Instance(): ComponentRegistryService | undefined {
+    const g = GetGlobalObjectStore();
+    return g ? (g[ComponentRegistryService._globalStoreKey] as ComponentRegistryService | undefined) : undefined;
+  }
   
   /**
-   * Get or create the singleton instance
+   * Get or create the singleton instance, backed by the Global Object Store so bundler duplication
+   * across execution paths cannot split the cached registry.
    */
+  static GetInstance(
+    compiler: ComponentCompiler, 
+    context: RuntimeContext,
+    debug: boolean = false,
+    graphQLClient?: IComponentRegistryClient
+  ): ComponentRegistryService {
+    const g = GetGlobalObjectStore();
+    if (g) {
+      if (!g[ComponentRegistryService._globalStoreKey]) {
+        g[ComponentRegistryService._globalStoreKey] = new ComponentRegistryService(compiler, context, debug, graphQLClient);
+      }
+      return g[ComponentRegistryService._globalStoreKey] as ComponentRegistryService;
+    }
+    return new ComponentRegistryService(compiler, context, debug, graphQLClient);
+  }
+
+  /** @deprecated Use {@link GetInstance}. */
   static getInstance(
     compiler: ComponentCompiler, 
     context: RuntimeContext,
     debug: boolean = false,
     graphQLClient?: IComponentRegistryClient
   ): ComponentRegistryService {
-    if (!ComponentRegistryService.instance) {
-      ComponentRegistryService.instance = new ComponentRegistryService(compiler, context, debug, graphQLClient);
-    }
-    return ComponentRegistryService.instance;
+    return this.GetInstance(compiler, context, debug, graphQLClient);
   }
   
   /**
    * Set the GraphQL client for registry operations
    */
-  setGraphQLClient(client: IComponentRegistryClient): void {
+  SetGraphQLClient(client: IComponentRegistryClient): void {
     this.graphQLClient = client;
     if (this.debug) {
       console.log('✅ GraphQL client configured for component registry');
     }
+  }
+
+  /** @deprecated Use {@link SetGraphQLClient}. */
+  setGraphQLClient(client: IComponentRegistryClient): void {
+    return this.SetGraphQLClient(client);
   }
   
   /**
@@ -189,9 +217,14 @@ export class ComponentRegistryService {
   /**
    * Initialize the service with metadata
    */
-  async initialize(contextUser?: UserInfo): Promise<void> {
+  async Initialize(contextUser?: UserInfo): Promise<void> {
     // Initialize metadata engine
     await this.componentEngine.Config(false, contextUser);
+  }
+
+  /** @deprecated Use {@link Initialize}. */
+  async initialize(contextUser?: UserInfo): Promise<void> {
+    return this.Initialize(contextUser);
   }
   
   /**
@@ -225,12 +258,12 @@ export class ComponentRegistryService {
   /**
    * Get a compiled component, using cache if available
    */
-  async getCompiledComponent(
+  async GetCompiledComponent(
     componentId: string,
     referenceId?: string,
     contextUser?: UserInfo
   ): Promise<ComponentObject> {
-    await this.initialize(contextUser);
+    await this.Initialize(contextUser);
     
     // Find component in metadata via targeted query
     const component = await this.componentEngine.FindComponentByID(componentId, contextUser);
@@ -264,7 +297,7 @@ export class ComponentRegistryService {
     }
     
     // Get the component specification
-    const spec = await this.getComponentSpec(componentId, contextUser);
+    const spec = await this.GetComponentSpec(componentId, contextUser);
     
     // Compile the component
     // Load all libraries from metadata engine
@@ -327,12 +360,21 @@ export class ComponentRegistryService {
     // Call the factory function to get the ComponentObject
     return compiledComponentFactory(this.runtimeContext);
   }
+
+  /** @deprecated Use {@link GetCompiledComponent}. */
+  async getCompiledComponent(
+    componentId: string,
+    referenceId?: string,
+    contextUser?: UserInfo
+  ): Promise<ComponentObject> {
+    return this.GetCompiledComponent(componentId, referenceId, contextUser);
+  }
   
   /**
    * Get compiled component from external registry by registry name
    * This is used when spec.registry field is populated
    */
-  async getCompiledComponentFromRegistry(
+  async GetCompiledComponentFromRegistry(
     registryName: string,
     namespace: string,
     name: string,
@@ -340,7 +382,7 @@ export class ComponentRegistryService {
     referenceId?: string,
     contextUser?: UserInfo
   ): Promise<any> {
-    await this.initialize(contextUser);
+    await this.Initialize(contextUser);
     
     if (this.debug) {
       console.log(`🌐 [ComponentRegistryService] Fetching from external registry: ${registryName}/${namespace}/${name}@${version}`);
@@ -477,15 +519,27 @@ export class ComponentRegistryService {
       throw error;
     }
   }
+
+  /** @deprecated Use {@link GetCompiledComponentFromRegistry}. */
+  async getCompiledComponentFromRegistry(
+    registryName: string,
+    namespace: string,
+    name: string,
+    version: string,
+    referenceId?: string,
+    contextUser?: UserInfo
+  ): Promise<any> {
+    return this.GetCompiledComponentFromRegistry(registryName, namespace, name, version, referenceId, contextUser);
+  }
   
   /**
    * Get component specification from database or external registry
    */
-  async getComponentSpec(
+  async GetComponentSpec(
     componentId: string,
     contextUser?: UserInfo
   ): Promise<ComponentSpec> {
-    await this.initialize(contextUser);
+    await this.Initialize(contextUser);
     
     const component = await this.componentEngine.FindComponentByID(componentId, contextUser);
     if (!component) {
@@ -553,6 +607,14 @@ export class ComponentRegistryService {
     await this.cacheExternalComponent(componentId, spec, contextUser);
     
     return spec;
+  }
+
+  /** @deprecated Use {@link GetComponentSpec}. */
+  async getComponentSpec(
+    componentId: string,
+    contextUser?: UserInfo
+  ): Promise<ComponentSpec> {
+    return this.GetComponentSpec(componentId, contextUser);
   }
   
   /**
@@ -683,11 +745,11 @@ export class ComponentRegistryService {
   /**
    * Load component dependencies from database
    */
-  async loadDependencies(
+  async LoadDependencies(
     componentId: string,
     contextUser?: UserInfo
   ): Promise<ComponentDependencyInfo[]> {
-    await this.initialize(contextUser);
+    await this.Initialize(contextUser);
     
     // Get dependencies from metadata cache
     const dependencies = this.componentEngine.ComponentDependencies?.filter(
@@ -714,11 +776,19 @@ export class ComponentRegistryService {
     
     return result;
   }
+
+  /** @deprecated Use {@link LoadDependencies}. */
+  async loadDependencies(
+    componentId: string,
+    contextUser?: UserInfo
+  ): Promise<ComponentDependencyInfo[]> {
+    return this.LoadDependencies(componentId, contextUser);
+  }
   
   /**
    * Resolve full dependency tree for a component
    */
-  async resolveDependencyTree(
+  async ResolveDependencyTree(
     componentId: string,
     contextUser?: UserInfo,
     visited = new Set<string>()
@@ -731,7 +801,7 @@ export class ComponentRegistryService {
     }
     visited.add(componentId);
     
-    await this.initialize(contextUser);
+    await this.Initialize(contextUser);
     
     const component = await this.componentEngine.FindComponentByID(componentId, contextUser);
     if (!component) {
@@ -739,7 +809,7 @@ export class ComponentRegistryService {
     }
 
     // Get direct dependencies
-    const directDeps = await this.loadDependencies(componentId, contextUser);
+    const directDeps = await this.LoadDependencies(componentId, contextUser);
 
     // Recursively resolve each dependency
     const dependencies: DependencyTree[] = [];
@@ -747,7 +817,7 @@ export class ComponentRegistryService {
       const depComponent = await this.componentEngine.FindComponent(dep.name, dep.namespace, undefined, contextUser);
 
       if (depComponent) {
-        const subTree = await this.resolveDependencyTree(
+        const subTree = await this.ResolveDependencyTree(
           depComponent.ID,
           contextUser,
           visited
@@ -765,15 +835,24 @@ export class ComponentRegistryService {
       totalCount: dependencies.reduce((sum, d) => sum + (d.totalCount || 1), 1)
     };
   }
+
+  /** @deprecated Use {@link ResolveDependencyTree}. */
+  async resolveDependencyTree(
+    componentId: string,
+    contextUser?: UserInfo,
+    visited = new Set<string>()
+  ): Promise<DependencyTree> {
+    return this.ResolveDependencyTree(componentId, contextUser, visited);
+  }
   
   /**
    * Get components to load in dependency order
    */
-  async getComponentsToLoad(
+  async GetComponentsToLoad(
     rootComponentId: string,
     contextUser?: UserInfo
   ): Promise<string[]> {
-    const tree = await this.resolveDependencyTree(rootComponentId, contextUser);
+    const tree = await this.ResolveDependencyTree(rootComponentId, contextUser);
     
     // Flatten tree in dependency order (depth-first)
     const ordered: string[] = [];
@@ -789,6 +868,14 @@ export class ComponentRegistryService {
     
     return ordered;
   }
+
+  /** @deprecated Use {@link GetComponentsToLoad}. */
+  async getComponentsToLoad(
+    rootComponentId: string,
+    contextUser?: UserInfo
+  ): Promise<string[]> {
+    return this.GetComponentsToLoad(rootComponentId, contextUser);
+  }
   
   /**
    * Add a reference to a component
@@ -803,7 +890,7 @@ export class ComponentRegistryService {
   /**
    * Remove a reference to a component
    */
-  removeComponentReference(componentKey: string, referenceId: string): void {
+  RemoveComponentReference(componentKey: string, referenceId: string): void {
     const refs = this.componentReferences.get(componentKey);
     if (refs) {
       refs.delete(referenceId);
@@ -813,6 +900,11 @@ export class ComponentRegistryService {
         this.considerCacheEviction(componentKey);
       }
     }
+  }
+
+  /** @deprecated Use {@link RemoveComponentReference}. */
+  removeComponentReference(componentKey: string, referenceId: string): void {
+    return this.RemoveComponentReference(componentKey, referenceId);
   }
   
   /**
@@ -849,7 +941,7 @@ export class ComponentRegistryService {
   /**
    * Get cache statistics
    */
-  getCacheStats(): {
+  GetCacheStats(): {
     compiledComponents: number;
     totalUseCount: number;
     memoryEstimate: string;
@@ -865,11 +957,20 @@ export class ComponentRegistryService {
       memoryEstimate: `~${(this.compiledComponentCache.size * 50)}KB` // Rough estimate
     };
   }
+
+  /** @deprecated Use {@link GetCacheStats}. */
+  getCacheStats(): {
+    compiledComponents: number;
+    totalUseCount: number;
+    memoryEstimate: string;
+  } {
+    return this.GetCacheStats();
+  }
   
   /**
    * Clear all caches
    */
-  clearCache(): void {
+  ClearCache(): void {
     if (this.debug) {
       console.log('🧹 Clearing all component caches');
     }
@@ -877,25 +978,44 @@ export class ComponentRegistryService {
     this.componentReferences.clear();
   }
 
+  /** @deprecated Use {@link ClearCache}. */
+  clearCache(): void {
+    return this.ClearCache();
+  }
+
   /**
    * Force clear all compiled components
    * Used for Component Studio to ensure fresh loads
    */
-  forceClearAll(): void {
+  ForceClearAll(): void {
     this.compiledComponentCache.clear();
     this.componentReferences.clear();
     console.log('🧹 Component cache force cleared');
+  }
+
+  /** @deprecated Use {@link ForceClearAll}. */
+  forceClearAll(): void {
+    return this.ForceClearAll();
   }
 
   /**
    * Reset the singleton instance
    * Forces new instance creation on next access
    */
-  static reset(): void {
-    if (ComponentRegistryService.instance) {
-      ComponentRegistryService.instance.forceClearAll();
-      ComponentRegistryService.instance = null;
+  static Reset(): void {
+    const g = GetGlobalObjectStore();
+    const existing = g ? (g[ComponentRegistryService._globalStoreKey] as ComponentRegistryService | undefined) : undefined;
+    if (existing) {
+      existing.forceClearAll();
+      if (g) {
+        delete g[ComponentRegistryService._globalStoreKey];
+      }
     }
+  }
+
+  /** @deprecated Use {@link Reset}. */
+  static reset(): void {
+    return this.Reset();
   }
   
   /**

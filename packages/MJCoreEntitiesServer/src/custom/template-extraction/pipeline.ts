@@ -44,13 +44,13 @@ export async function RunTemplateExtractionPipeline(
     if (parseResult.parameters.length === 0) {
         return {
             parameters: [],
-            warnings: parseResult.warnings,
+            Warnings: parseResult.Warnings,
         };
     }
 
     // Filter out system variables for the enrichment step — they get standard descriptions
-    const userParams = parseResult.parameters.filter(p => !p.isSystemVariable);
-    const systemParams = parseResult.parameters.filter(p => p.isSystemVariable);
+    const userParams = parseResult.parameters.filter(p => !p.IsSystemVariable);
+    const systemParams = parseResult.parameters.filter(p => p.IsSystemVariable);
 
     // ── STAGE 2: ENRICH (best-effort, non-fatal) ──
     let enrichedDescriptions: Map<string, string> = new Map();
@@ -69,7 +69,7 @@ export async function RunTemplateExtractionPipeline(
 
     return {
         parameters: mergedParams,
-        warnings: parseResult.warnings,
+        Warnings: parseResult.Warnings,
     };
 }
 
@@ -77,8 +77,8 @@ export async function RunTemplateExtractionPipeline(
  * Result of the full extraction pipeline.
  */
 export interface TemplateExtractionResult {
-    parameters: MergedTemplateParameter[];
-    warnings: string[];
+    parameters: MergedTemplateParameter[];  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    Warnings: string[];
 }
 
 // ─── Stage 2: AI Enrichment ──────────────────────────────────────────────────
@@ -122,7 +122,7 @@ async function runAIEnrichment(
             name: p.name,
             type: p.type,
             isRequired: p.isRequired,
-            defaultValue: p.defaultValue,
+            defaultValue: p.DefaultValue,
             properties: summarizeProperties(p.properties),
         }));
 
@@ -141,8 +141,8 @@ async function runAIEnrichment(
 
         if (result.success && result.result?.parameters) {
             for (const enriched of result.result.parameters) {
-                if (enriched.name && enriched.description) {
-                    descriptions.set(enriched.name.toLowerCase(), enriched.description);
+                if (enriched.name && enriched.Description) {
+                    descriptions.set(enriched.name.toLowerCase(), enriched.Description);
                 }
             }
         }
@@ -166,7 +166,7 @@ function summarizeProperties(
         for (const p of items) {
             const fullPath = prefix ? `${prefix}.${p.name}` : p.name;
             result.push(fullPath);
-            walk(p.children, fullPath);
+            walk(p.Children, fullPath);
         }
     }
     walk(props, '');
@@ -188,9 +188,9 @@ function mergeResults(
         name: p.name,
         type: p.type,
         isRequired: p.isRequired,
-        defaultValue: p.defaultValue,
+        defaultValue: p.DefaultValue,
         description: aiDescriptions.get(p.name.toLowerCase()) ?? generateFallbackDescription(p),
-        isSystemVariable: p.isSystemVariable,
+        isSystemVariable: p.IsSystemVariable,
     }));
 }
 
@@ -198,13 +198,13 @@ function mergeResults(
  * Generate a basic fallback description when AI enrichment is unavailable.
  */
 function generateFallbackDescription(param: DeterministicParameter): string {
-    if (param.isSystemVariable) {
+    if (param.IsSystemVariable) {
         return generateSystemVarDescription(param.name);
     }
 
     const typeLabel = typeDescriptionMap[param.type] ?? 'value';
-    const filterHints = param.appliedFilters.length > 0
-        ? ` (formatted with: ${param.appliedFilters.join(', ')})`
+    const filterHints = param.AppliedFilters.length > 0
+        ? ` (formatted with: ${param.AppliedFilters.join(', ')})`
         : '';
 
     return `Template ${typeLabel} parameter '${param.name}'${filterHints}`;

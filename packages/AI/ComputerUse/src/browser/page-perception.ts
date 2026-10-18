@@ -41,31 +41,46 @@ interface PlaywrightAccessibilityNamespace {
 }
 
 /** Rendered text of `<body>`. '' when no page is open. */
-export async function getVisibleText(page: Page | null): Promise<string> {
+export async function GetVisibleText(page: Page | null): Promise<string> {
     if (!page) {
         return '';
     }
     return page.innerText('body');
 }
 
+/** @deprecated Use {@link GetVisibleText}. */
+export async function getVisibleText(page: Page | null): Promise<string> {
+    return GetVisibleText(page);
+}
+
 /** Current text selection (`window.getSelection()`). '' when no page or nothing selected. */
-export async function getSelectionText(page: Page | null): Promise<string> {
+export async function GetSelectionText(page: Page | null): Promise<string> {
     if (!page) {
         return '';
     }
     return page.evaluate(() => window.getSelection()?.toString() ?? '');
 }
 
+/** @deprecated Use {@link GetSelectionText}. */
+export async function getSelectionText(page: Page | null): Promise<string> {
+    return GetSelectionText(page);
+}
+
 /** Page title. '' when no page is open. */
-export async function getTitle(page: Page | null): Promise<string> {
+export async function GetTitle(page: Page | null): Promise<string> {
     if (!page) {
         return '';
     }
     return page.title();
 }
 
+/** @deprecated Use {@link GetTitle}. */
+export async function getTitle(page: Page | null): Promise<string> {
+    return GetTitle(page);
+}
+
 /** Wait until the page reaches the given load state. No-op when no page is open. */
-export async function waitForLoadState(
+export async function WaitForLoadState(
     page: Page | null,
     state: 'load' | 'domcontentloaded' | 'networkidle'
 ): Promise<void> {
@@ -73,6 +88,14 @@ export async function waitForLoadState(
         return;
     }
     await page.waitForLoadState(state);
+}
+
+/** @deprecated Use {@link WaitForLoadState}. */
+export async function waitForLoadState(
+    page: Page | null,
+    state: 'load' | 'domcontentloaded' | 'networkidle'
+): Promise<void> {
+    return WaitForLoadState(page, state);
 }
 
 /**
@@ -96,7 +119,7 @@ function mapAccessibilityNode(node: PlaywrightAXNode): AccessibilityNode {
  * Capture the page's accessibility tree mapped into our {@link AccessibilityNode}.
  * `null` when no page is open or Playwright produces no snapshot (blank page).
  */
-export async function getAccessibilitySnapshot(page: Page | null): Promise<AccessibilityNode | null> {
+export async function GetAccessibilitySnapshot(page: Page | null): Promise<AccessibilityNode | null> {
     if (!page) {
         return null;
     }
@@ -107,12 +130,17 @@ export async function getAccessibilitySnapshot(page: Page | null): Promise<Acces
     return root ? mapAccessibilityNode(root) : null;
 }
 
+/** @deprecated Use {@link GetAccessibilitySnapshot}. */
+export async function getAccessibilitySnapshot(page: Page | null): Promise<AccessibilityNode | null> {
+    return GetAccessibilitySnapshot(page);
+}
+
 /**
  * Introspect a single element via `page.locator(selector)`. Reports existence
  * (`count() > 0`), visibility, inner text, and bounding box. Never throws on a
  * missing element or invalid selector — returns `Exists:false` instead.
  */
-export async function queryElement(
+export async function QueryElement(
     page: Page | null,
     selector: string,
     actionTimeoutMs: number
@@ -156,4 +184,13 @@ export async function queryElement(
     }
 
     return info;
+}
+
+/** @deprecated Use {@link QueryElement}. */
+export async function queryElement(
+    page: Page | null,
+    selector: string,
+    actionTimeoutMs: number
+): Promise<ElementInfo> {
+    return QueryElement(page, selector, actionTimeoutMs);
 }

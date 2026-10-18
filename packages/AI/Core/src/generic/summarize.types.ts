@@ -4,17 +4,24 @@ import { ChatMessageContent, ChatMessageContentBlock, ChatParams } from "./chat.
 
 /**
  * Defined in order to have this type available for future use with additional properties beyond the BaseParams type.
+ *
+ * @deprecated Used only by the deprecated `BaseLLM.SummarizeText`. Will be removed in the
+ * next major version.
  */
 export class SummarizeParams extends ChatParams {
 }
 
+/**
+ * @deprecated Used only by the deprecated `BaseLLM.SummarizeText`. Will be removed in the
+ * next major version.
+ */
 export class SummarizeResult extends BaseResult {
-    public get text(): string {
+    public get text(): string {  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
         return this._text;
     }
     private _text: string;
 
-    summaryText: string
+    summaryText: string  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
     constructor (text: ChatMessageContent, summaryText: string, success: boolean, startTime: Date, endTime: Date) {
         super(success, startTime, endTime);
 

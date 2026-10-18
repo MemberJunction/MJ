@@ -12,7 +12,10 @@ import { describe, it, expect, vi } from 'vitest';
  */
 vi.mock('mssql', () => ({}));
 vi.mock('../Misc/status_logging', () => ({
-    logError: vi.fn(), logStatus: vi.fn(), logWarning: vi.fn(), startSpinner: vi.fn(), succeedSpinner: vi.fn(),
+    logError: vi.fn(), logStatus: vi.fn(), LogWarning: vi.fn(),
+    get logWarning() { return this.LogWarning; }, StartSpinner: vi.fn(),
+    get startSpinner() { return this.StartSpinner; }, SucceedSpinner: vi.fn(),
+    get succeedSpinner() { return this.SucceedSpinner; },
 }));
 
 import { EntityInfo, EntityFieldInfo } from '@memberjunction/core';
@@ -106,4 +109,50 @@ describe('SQLServerCodeGenProvider — composite primary keys are never truncate
             expect(sql).toContain('WHERE [ParentID] = @ID');
         });
     });
+
+    describe("SaveReturnMode ('datestamps_only' vs 'full')", () => {
+        const datestampFields: FieldInit[] = [
+            pkField('ID', 'uniqueidentifier', { DefaultValue: 'newsequentialid()' }),
+            dataField('InputData', true),
+            {
+                ID: 'f-created', Name: '__mj_CreatedAt', CodeName: '__mj_CreatedAt', Type: 'datetimeoffset', Length: 10,
+                IsPrimaryKey: false, AllowsNull: false, AllowUpdateAPI: false, IsVirtual: false, AutoIncrement: false, DefaultValue: 'getutcdate()',
+            },
+            {
+                ID: 'f-updated', Name: '__mj_UpdatedAt', CodeName: '__mj_UpdatedAt', Type: 'datetimeoffset', Length: 10,
+                IsPrimaryKey: false, AllowsNull: false, AllowUpdateAPI: false, IsVirtual: false, AutoIncrement: false, DefaultValue: 'getutcdate()',
+            },
+            {
+                ID: 'f-virtual', Name: 'AgentName', CodeName: 'AgentName', Type: 'nvarchar', Length: 100,
+                IsPrimaryKey: false, AllowsNull: true, AllowUpdateAPI: false, IsVirtual: true, AutoIncrement: false, DefaultValue: '',
+            },
+        ];
+
+        it('emits SELECT [ID], [__mj_CreatedAt], [__mj_UpdatedAt] FROM [schema].[BaseTable] in spCreate and spUpdate when SaveReturnMode is datestamps_only', () => {
+            const entity = createEntity(
+                { Configuration: JSON.stringify({ SaveReturnMode: 'datestamps_only' }) },
+                datestampFields,
+            );
+            const createSQL = provider.generateCRUDCreate(entity);
+            const updateSQL = provider.generateCRUDUpdate(entity);
+
+            expect(createSQL).toContain('SELECT [ID], [__mj_CreatedAt], [__mj_UpdatedAt] FROM [dbo].[TestEntity] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)');
+            expect(createSQL).not.toContain('vwTestEntities');
+
+            expect(updateSQL).toContain('SELECT TOP 0 [ID], [__mj_CreatedAt], [__mj_UpdatedAt] FROM [dbo].[TestEntity] WHERE 1=0');
+            expect(updateSQL).toContain('SELECT [ID], [__mj_CreatedAt], [__mj_UpdatedAt] FROM [dbo].[TestEntity] WHERE [ID] = @ID');
+            expect(updateSQL).not.toContain('vwTestEntities');
+        });
+
+        it('keeps SELECT * FROM [schema].[BaseView] in spCreate and spUpdate when SaveReturnMode is full (default)', () => {
+            const entity = createEntity({}, datestampFields);
+            const createSQL = provider.generateCRUDCreate(entity);
+            const updateSQL = provider.generateCRUDUpdate(entity);
+
+            expect(createSQL).toContain('SELECT * FROM [dbo].[vwTestEntities] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)');
+            expect(updateSQL).toContain('SELECT TOP 0 * FROM [dbo].[vwTestEntities] WHERE 1=0');
+            expect(updateSQL).toContain('[dbo].[vwTestEntities]');
+        });
+    });
 });
+

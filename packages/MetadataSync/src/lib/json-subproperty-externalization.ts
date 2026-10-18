@@ -21,9 +21,9 @@
 /** A sub-property externalization resolved against one field. */
 export interface SubPropertyExternalization {
     /** Property path within the field's JSON, e.g. `['ReplayScript']`. */
-    path: string[];
+    path: string[];  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** The `@file:` pattern to externalize to. */
-    pattern: string;
+    pattern: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 }
 
 /** Writes a value to a file and returns the `@file:` reference naming it. */
@@ -41,7 +41,7 @@ export type ExternalizeLeaf = (
  * only reads `Name` / `ID` / field placeholders off it to build the filename.
  */
 export interface FieldExternalizerLike {
-    externalizeField(
+    ExternalizeField(
         fieldName: string,
         fieldValue: unknown,
         pattern: string,
@@ -62,9 +62,14 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
  * path within that field. A name with no dot yields an empty path, which is how callers
  * tell a whole-field config (the existing behavior) from a sub-property one.
  */
-export function parseExternalizePath(configField: string): { field: string; path: string[] } {
+export function ParseExternalizePath(configField: string): { field: string; path: string[] } {
     const [field, ...path] = configField.split('.');
     return { field, path };
+}
+
+/** @deprecated Use {@link ParseExternalizePath}. */
+export function parseExternalizePath(configField: string): { field: string; path: string[] } {
+    return ParseExternalizePath(configField);
 }
 
 /**
@@ -72,7 +77,7 @@ export function parseExternalizePath(configField: string): { field: string; path
  * excluded so they continue down the original code path untouched, and the legacy
  * string-array config form yields nothing because it can only name whole fields.
  */
-export function findSubPropertyExternalizations(
+export function FindSubPropertyExternalizations(
     fieldName: string,
     externalizeConfig: unknown
 ): SubPropertyExternalization[] {
@@ -84,7 +89,7 @@ export function findSubPropertyExternalizations(
         if (!isPlainObject(entry) || typeof entry.field !== 'string' || typeof entry.pattern !== 'string') {
             continue;
         }
-        const { field, path } = parseExternalizePath(entry.field);
+        const { field, path } = ParseExternalizePath(entry.field);
         if (path.length > 0 && field === fieldName) {
             found.push({ path, pattern: entry.pattern });
         }
@@ -92,8 +97,16 @@ export function findSubPropertyExternalizations(
     return found;
 }
 
+/** @deprecated Use {@link FindSubPropertyExternalizations}. */
+export function findSubPropertyExternalizations(
+    fieldName: string,
+    externalizeConfig: unknown
+): SubPropertyExternalization[] {
+    return FindSubPropertyExternalizations(fieldName, externalizeConfig);
+}
+
 /** Read the value at `path`, or `undefined` if any step is missing or not an object. */
-export function getAtPath(value: unknown, path: string[]): unknown {
+export function GetAtPath(value: unknown, path: string[]): unknown {
     let cursor: unknown = value;
     for (const key of path) {
         if (!isPlainObject(cursor)) {
@@ -104,6 +117,11 @@ export function getAtPath(value: unknown, path: string[]): unknown {
     return cursor;
 }
 
+/** @deprecated Use {@link GetAtPath}. */
+export function getAtPath(value: unknown, path: string[]): unknown {
+    return GetAtPath(value, path);
+}
+
 /**
  * Bind a `FieldExternalizer` into the `ExternalizeLeaf` shape this module walks with.
  *
@@ -112,7 +130,7 @@ export function getAtPath(value: unknown, path: string[]): unknown {
  * would write the literal text `[object Object]`. Serializing first gives a diffable file
  * and a stable string for the unchanged-content comparison that skips redundant writes.
  */
-export function fieldExternalizerAdapter(
+export function FieldExternalizerAdapter(
     externalizer: FieldExternalizerLike,
     recordProperties: Record<string, unknown>,
     targetDir: string,
@@ -121,7 +139,7 @@ export function fieldExternalizerAdapter(
 ): ExternalizeLeaf {
     return async (value, pattern, existingRef, leafName) => {
         const serialized = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
-        return externalizer.externalizeField(
+        return externalizer.ExternalizeField(
             leafName ?? '',
             serialized,
             pattern,
@@ -132,6 +150,17 @@ export function fieldExternalizerAdapter(
             verbose
         );
     };
+}
+
+/** @deprecated Use {@link FieldExternalizerAdapter}. */
+export function fieldExternalizerAdapter(
+    externalizer: FieldExternalizerLike,
+    recordProperties: Record<string, unknown>,
+    targetDir: string,
+    mergeStrategy: string = 'merge',
+    verbose?: boolean
+): ExternalizeLeaf {
+    return FieldExternalizerAdapter(externalizer, recordProperties, targetDir, mergeStrategy, verbose);
 }
 
 /** A copy of `root` with `path` set to `leaf`. Untouched branches are shared, not cloned. */
@@ -175,7 +204,7 @@ function coerceToObject(value: unknown): Record<string, unknown> | null {
  *
  * Returns the input unchanged when nothing is configured or the value is not JSON.
  */
-export async function externalizeSubProperties(
+export async function ExternalizeSubProperties(
     fieldValue: unknown,
     configs: SubPropertyExternalization[],
     externalize: ExternalizeLeaf,
@@ -193,11 +222,11 @@ export async function externalizeSubProperties(
     let result = parsed;
 
     for (const { path, pattern } of configs) {
-        const leaf = getAtPath(result, path);
+        const leaf = GetAtPath(result, path);
         if (leaf === undefined || leaf === null) {
             continue;
         }
-        const existingRef = existing ? getAtPath(existing, path) : undefined;
+        const existingRef = existing ? GetAtPath(existing, path) : undefined;
         const reference = await externalize(
             leaf,
             pattern,
@@ -208,4 +237,14 @@ export async function externalizeSubProperties(
     }
 
     return result;
+}
+
+/** @deprecated Use {@link ExternalizeSubProperties}. */
+export async function externalizeSubProperties(
+    fieldValue: unknown,
+    configs: SubPropertyExternalization[],
+    externalize: ExternalizeLeaf,
+    existingFieldValue?: unknown
+): Promise<unknown> {
+    return ExternalizeSubProperties(fieldValue, configs, externalize, existingFieldValue);
 }

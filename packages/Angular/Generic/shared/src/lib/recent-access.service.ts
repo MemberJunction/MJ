@@ -2,8 +2,8 @@ import { Injectable } from '@angular/core';
 import { IMetadataProvider, Metadata, RunView, CompositeKey, LogError, EntityRecordNameInput } from '@memberjunction/core';
 import { GetGlobalObjectStore } from '@memberjunction/global';
 import { MJUserRecordLogEntity, UserInfoEngine } from '@memberjunction/core-entities';
-import { UUIDsEqual } from '@memberjunction/global';
 import { BehaviorSubject, Observable } from 'rxjs';
+import { ResourceTypeForEntity } from './recent-resource-type';
 
 /**
  * Represents a recently accessed resource
@@ -86,7 +86,7 @@ export class RecentAccessService {
    * @param recordId - The record ID (single value or CompositeKey string)
    * @param resourceType - The type of resource being accessed
    */
-  public async logAccess(
+  public async LogAccess(
     entityName: string,
     recordId: string | CompositeKey,
     resourceType: 'record' | 'view' | 'dashboard' | 'artifact' | 'report' = 'record'
@@ -96,6 +96,13 @@ export class RecentAccessService {
       const entityInfo = md.Entities.find(e => e.Name === entityName);
       if (!entityInfo) {
         console.warn(`RecentAccessService: Entity "${entityName}" not found in metadata`);
+        return;
+      }
+
+      // Skip logging when the current user's roles do not grant Create/Update on MJ: User Record Logs
+      const logEntityInfo = md.Entities.find(e => e.Name === 'MJ: User Record Logs');
+      const logPerms = logEntityInfo?.GetUserPermisions(md.CurrentUser);
+      if (logPerms && !logPerms.CanCreate && !logPerms.CanUpdate) {
         return;
       }
 
@@ -122,6 +129,9 @@ export class RecentAccessService {
       }
 
       if (existingResult.Results && existingResult.Results.length > 0) {
+        if (logPerms && !logPerms.CanUpdate) {
+          return;
+        }
         // Update existing entry
         const existing = existingResult.Results[0];
         existing.LatestAt = new Date();
@@ -129,9 +139,12 @@ export class RecentAccessService {
 
         const saveResult = await existing.Save();
         if (!saveResult) {
-          console.error('RecentAccessService: Failed to update log entry');
+          console.error('RecentAccessService: Failed to update log entry', existing.LatestResult?.CompleteMessage || '');
         }
       } else {
+        if (logPerms && !logPerms.CanCreate) {
+          return;
+        }
         // Create new entry
         const newLog = await md.GetEntityObject<MJUserRecordLogEntity>('MJ: User Record Logs', md.CurrentUser);
         newLog.UserID = md.CurrentUser.ID;
@@ -143,24 +156,33 @@ export class RecentAccessService {
 
         const saveResult = await newLog.Save();
         if (!saveResult) {
-          console.error('RecentAccessService: Failed to create log entry');
+          console.error('RecentAccessService: Failed to create log entry', newLog.LatestResult?.CompleteMessage || '');
         }
       }
 
       // Refresh the recent items list in background
-      this.refreshRecentItems();
+      this.RefreshRecentItems();
     } catch (error) {
       // Don't throw - this is non-critical functionality
       console.error('RecentAccessService: Error logging access', error);
     }
   }
 
+  /** @deprecated Use {@link LogAccess}. */
+  public async logAccess(
+    entityName: string,
+    recordId: string | CompositeKey,
+    resourceType: 'record' | 'view' | 'dashboard' | 'artifact' | 'report' = 'record'
+  ): Promise<void> {
+    return this.LogAccess(entityName, recordId, resourceType);
+  }
+
   /**
-   * Loads recent access items for the current user using UserInfoEngine (cached).
+   * Loads recent access items for the current user from `MJ: User Record Logs`.
    * @param maxItems - Maximum number of items to return (default 15)
    * @param forceRefresh - Force refresh even if already loaded
    */
-  public async loadRecentItems(maxItems: number = 15, forceRefresh: boolean = false): Promise<RecentAccessItem[]> {
+  public async LoadRecentItems(maxItems: number = 15, forceRefresh: boolean = false): Promise<RecentAccessItem[]> {
     if (this._isLoaded && !forceRefresh) {
       return this._recentItems$.value;
     }
@@ -170,13 +192,12 @@ export class RecentAccessService {
 
       const md = this.Provider;
 
-      // Get recent records, limited to maxItems (already ordered by LatestAt DESC in engine)
-      const userRecordLogs = UserInfoEngine.Instance.UserRecordLogs.slice(0, maxItems);
+      const userRecordLogs = await UserInfoEngine.Instance.LoadRecentRecordLogs(maxItems, md.CurrentUser, md);
 
       const items: RecentAccessItem[] = [];
 
       for (const log of userRecordLogs) {
-        const entityInfo = md.Entities.find(e => UUIDsEqual(e.ID, log.EntityID));
+        const entityInfo = md.EntityByID(log.EntityID);
         if (!entityInfo) continue;
 
         // Determine resource type based on entity name
@@ -208,11 +229,21 @@ export class RecentAccessService {
     }
   }
 
+  /** @deprecated Use {@link LoadRecentItems}. */
+  public async loadRecentItems(maxItems: number = 15, forceRefresh: boolean = false): Promise<RecentAccessItem[]> {
+    return this.LoadRecentItems(maxItems, forceRefresh);
+  }
+
   /**
    * Refresh recent items in background
    */
+  public async RefreshRecentItems(): Promise<void> {
+    await this.LoadRecentItems(15, true);
+  }
+
+  /** @deprecated Use {@link RefreshRecentItems}. */
   public async refreshRecentItems(): Promise<void> {
-    await this.loadRecentItems(15, true);
+    return this.RefreshRecentItems();
   }
 
   /**
@@ -282,29 +313,19 @@ export class RecentAccessService {
    * Determines the resource type based on entity name
    */
   private determineResourceType(entityName: string): 'record' | 'view' | 'dashboard' | 'artifact' | 'report' {
-    const normalizedName = entityName.toLowerCase();
-
-    if (normalizedName === 'user views') {
-      return 'view';
-    }
-    if (normalizedName === 'dashboards') {
-      return 'dashboard';
-    }
-    if (normalizedName === 'mj: conversation artifacts' || normalizedName === 'conversation artifacts') {
-      return 'artifact';
-    }
-    if (normalizedName === 'reports') {
-      return 'report';
-    }
-
-    return 'record';
+    return ResourceTypeForEntity(entityName);
   }
 
   /**
    * Clears the cached recent items (useful for logout)
    */
-  public clearCache(): void {
+  public ClearCache(): void {
     this._recentItems$.next([]);
     this._isLoaded = false;
+  }
+
+  /** @deprecated Use {@link ClearCache}. */
+  public clearCache(): void {
+    return this.ClearCache();
   }
 }

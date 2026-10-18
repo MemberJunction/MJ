@@ -81,6 +81,26 @@ export interface IMJChatHeaderActionsContext {
 }
 
 /**
+ * Template CONTEXT for the `composerExtra` slot — host UI rendered directly ABOVE the
+ * composer, wherever the chat area shows one: the conversation's composer, the
+ * new-conversation composer, and the built-in empty state's composer.
+ *
+ * Like `headerActions` this is a template-context shape, not a component contract: project
+ * an ad-hoc `<ng-template mjChatSlot="composerExtra" let-conversation let-busy="IsProcessing">`.
+ * Nothing renders in that spot when no template is projected, so the default layout is
+ * unchanged. Its keys are PascalCase, per MJ's naming rules for new public members; the older
+ * `headerActions` context keeps its camelCase keys.
+ */
+export interface IMJChatComposerExtraContext {
+    /** The active conversation (null before one exists). */
+    $implicit: MJConversationEntity | null;
+    /** The active conversation's ID (null before one exists). */
+    ConversationId: string | null;
+    /** True while an agent turn is in flight. */
+    IsProcessing: boolean;
+}
+
+/**
  * Contract for the `messageExtra` slot — per-message inline decoration rendered
  * within the message bubble, after the content.
  */

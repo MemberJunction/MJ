@@ -29,8 +29,13 @@ export type DupeDisplayMode = (typeof DUPE_DISPLAY_MODES)[number];
  * Cap an array of names to {@link DUPE_AGENT_CONTEXT_NAME_LIST_CAP} entries.
  * Pure + deterministic; never mutates the input.
  */
-export function capDupeNames(names: readonly string[]): string[] {
+export function CapDupeNames(names: readonly string[]): string[] {
     return names.slice(0, DUPE_AGENT_CONTEXT_NAME_LIST_CAP);
+}
+
+/** @deprecated Use {@link CapDupeNames}. */
+export function capDupeNames(names: readonly string[]): string[] {
+    return CapDupeNames(names);
 }
 
 /**
@@ -46,8 +51,8 @@ export interface DupeEntityDocCandidate {
 
 /** Outcome of {@link resolveEntityDoc}: the matched candidate, or a tolerant error. */
 export type DupeResolveResult<T> =
-    | { ok: true; value: T }
-    | { ok: false; error: string };
+    | { Ok: true; Value: T }
+    | { Ok: false; Error: string };
 
 /**
  * Resolve an agent-supplied entity-document reference to one of the available documents.
@@ -60,45 +65,58 @@ export type DupeResolveResult<T> =
  * Pure + deterministic over the supplied candidate list, so it's unit-testable in isolation.
  * Returns a tolerant "available documents" error on a miss (never throws).
  */
-export function resolveEntityDoc<T extends DupeEntityDocCandidate>(
+export function ResolveEntityDoc<T extends DupeEntityDocCandidate>(
     input: string,
     candidates: readonly T[],
 ): DupeResolveResult<T> {
     const needle = (input ?? '').trim().toLowerCase();
     if (!needle) {
-        return { ok: false, error: 'Provide an entity document ID, document name, or entity name.' };
+        return { Ok: false, Error: 'Provide an entity document ID, document name, or entity name.' };
     }
 
     const byId = candidates.find(c => c.ID.toLowerCase() === needle);
-    if (byId) return { ok: true, value: byId };
+    if (byId) return { Ok: true, Value: byId };
 
     const byDocName = candidates.find(c => c.Name.trim().toLowerCase() === needle);
-    if (byDocName) return { ok: true, value: byDocName };
+    if (byDocName) return { Ok: true, Value: byDocName };
 
     const byEntity = candidates.find(c => c.EntityName.trim().toLowerCase() === needle);
-    if (byEntity) return { ok: true, value: byEntity };
+    if (byEntity) return { Ok: true, Value: byEntity };
 
     const byPartial = candidates.find(
         c => c.Name.toLowerCase().includes(needle) || c.EntityName.toLowerCase().includes(needle),
     );
-    if (byPartial) return { ok: true, value: byPartial };
+    if (byPartial) return { Ok: true, Value: byPartial };
 
-    return { ok: false, error: buildDupeNotFoundError(input, candidates.map(c => c.Name)) };
+    return { Ok: false, Error: BuildDupeNotFoundError(input, candidates.map(c => c.Name)) };
+}
+
+/** @deprecated Use {@link ResolveEntityDoc}. */
+export function resolveEntityDoc<T extends DupeEntityDocCandidate>(
+    input: string,
+    candidates: readonly T[],
+): DupeResolveResult<T> {
+    return ResolveEntityDoc(input, candidates);
 }
 
 /**
  * Build a tolerant "not found" error that lists a bounded sample of the available names,
  * so the agent can recover by picking a real one. Pure + deterministic.
  */
-export function buildDupeNotFoundError(input: string, availableNames: readonly string[]): string {
+export function BuildDupeNotFoundError(input: string, availableNames: readonly string[]): string {
     if (availableNames.length === 0) {
         return `No match for "${input}". There are no entity documents loaded.`;
     }
-    const sample = capDupeNames(availableNames).join(', ');
+    const sample = CapDupeNames(availableNames).join(', ');
     const more = availableNames.length > DUPE_AGENT_CONTEXT_NAME_LIST_CAP
         ? ` (+${availableNames.length - DUPE_AGENT_CONTEXT_NAME_LIST_CAP} more)`
         : '';
     return `No entity document matches "${input}". Available: ${sample}${more}.`;
+}
+
+/** @deprecated Use {@link BuildDupeNotFoundError}. */
+export function buildDupeNotFoundError(input: string, availableNames: readonly string[]): string {
+    return BuildDupeNotFoundError(input, availableNames);
 }
 
 /**
@@ -107,19 +125,27 @@ export function buildDupeNotFoundError(input: string, availableNames: readonly s
  * Pure + deterministic; comparison is case-insensitive/trimmed and returns the canonical
  * (registered-case) entity name on success.
  */
-export function resolveEntityFilter(
+export function ResolveEntityFilter(
     input: string,
     entityNames: readonly string[],
 ): DupeResolveResult<string> {
     const needle = (input ?? '').trim().toLowerCase();
     if (!needle || needle === 'all') {
-        return { ok: true, value: '' }; // '' = no entity filter ("All")
+        return { Ok: true, Value: '' }; // '' = no entity filter ("All")
     }
     const exact = entityNames.find(n => n.trim().toLowerCase() === needle);
-    if (exact) return { ok: true, value: exact };
+    if (exact) return { Ok: true, Value: exact };
     const partial = entityNames.find(n => n.toLowerCase().includes(needle));
-    if (partial) return { ok: true, value: partial };
-    return { ok: false, error: buildDupeNotFoundError(input, entityNames) };
+    if (partial) return { Ok: true, Value: partial };
+    return { Ok: false, Error: BuildDupeNotFoundError(input, entityNames) };
+}
+
+/** @deprecated Use {@link ResolveEntityFilter}. */
+export function resolveEntityFilter(
+    input: string,
+    entityNames: readonly string[],
+): DupeResolveResult<string> {
+    return ResolveEntityFilter(input, entityNames);
 }
 
 /**
@@ -178,7 +204,7 @@ export interface DuplicateAgentContextInput {
  * Keeping this a pure function (no `this`) makes the context shape unit-testable and decouples
  * it from change-detection timing.
  */
-export function buildDuplicateAgentContext(input: DuplicateAgentContextInput): Record<string, unknown> {
+export function BuildDuplicateAgentContext(input: DuplicateAgentContextInput): Record<string, unknown> {
     const context: Record<string, unknown> = {
         DetectionStatus: input.IsDetecting ? 'running' : 'idle',
         DetectionProgress: input.DetectionProgress,
@@ -205,18 +231,23 @@ export function buildDuplicateAgentContext(input: DuplicateAgentContextInput): R
     if (input.DateTo) context['DateTo'] = input.DateTo;
 
     if (input.EntityNames.length > 0) {
-        context['AvailableEntities'] = capDupeNames(input.EntityNames);
+        context['AvailableEntities'] = CapDupeNames(input.EntityNames);
         if (input.EntityNames.length > DUPE_AGENT_CONTEXT_NAME_LIST_CAP) {
             context['AvailableEntityCount'] = input.EntityNames.length;
         }
     }
 
     if (input.EntityDocNames.length > 0) {
-        context['AvailableEntityDocuments'] = capDupeNames(input.EntityDocNames);
+        context['AvailableEntityDocuments'] = CapDupeNames(input.EntityDocNames);
         if (input.EntityDocNames.length > DUPE_AGENT_CONTEXT_NAME_LIST_CAP) {
             context['AvailableEntityDocumentCount'] = input.EntityDocNames.length;
         }
     }
 
     return context;
+}
+
+/** @deprecated Use {@link BuildDuplicateAgentContext}. */
+export function buildDuplicateAgentContext(input: DuplicateAgentContextInput): Record<string, unknown> {
+    return BuildDuplicateAgentContext(input);
 }

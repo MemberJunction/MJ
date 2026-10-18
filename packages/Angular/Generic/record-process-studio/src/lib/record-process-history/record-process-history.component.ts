@@ -10,7 +10,7 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { BaseEntity, BaseEntityEvent, RunView } from '@memberjunction/core';
 import { MJEvent, MJEventType, MJGlobal, NormalizeUUID } from '@memberjunction/global';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
-import { parseAppliedRunDetailChanges, displayRunValue, type RunDetailChange } from '../run-detail';
+import { ParseAppliedRunDetailChanges, DisplayRunValue, type RunDetailChange } from '../run-detail';
 
 interface RawRun {
     ID: string; RecordProcessID: string; EntityID: string; Status: string;
@@ -150,7 +150,7 @@ export class RecordProcessHistoryComponent extends BaseAngularComponent implemen
     private reloadTimer: ReturnType<typeof setTimeout> | null = null;
 
     async ngOnInit(): Promise<void> {
-        await this.reload();
+        await this.Reload();
         this.subscribeToRunChanges();
     }
 
@@ -189,11 +189,11 @@ export class RecordProcessHistoryComponent extends BaseAngularComponent implemen
         }
         this.reloadTimer = setTimeout(() => {
             this.reloadTimer = null;
-            void this.reload();
+            void this.Reload();
         }, 400);
     }
 
-    async reload(): Promise<void> {
+    async Reload(): Promise<void> {
         this.Loading = true; this.cdr.detectChanges();
         const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const filter = this.RecordProcessID ? `RecordProcessID='${this.RecordProcessID}'` : '';
@@ -218,7 +218,12 @@ export class RecordProcessHistoryComponent extends BaseAngularComponent implemen
         this.cdr.detectChanges();
     }
 
-    async openRun(run: RunRow): Promise<void> {
+    /** @deprecated Use {@link Reload}. */
+    async reload(): Promise<void> {
+        return this.Reload();
+    }
+
+    async OpenRun(run: RunRow): Promise<void> {
         this.OpenRunRow = run; this.Mode = 'detail'; this.DetailLoading = true; this.Details = []; this.cdr.detectChanges();
         const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const result = await rv.RunView<RawDetail>({
@@ -227,26 +232,46 @@ export class RecordProcessHistoryComponent extends BaseAngularComponent implemen
             ExtraFilter: `ProcessRunID='${run.ID}'`, OrderBy: 'Status, RecordID', MaxRows: 1000, ResultType: 'simple',
         });
         this.Details = (result.Success ? (result.Results ?? []) : []).map((d) => ({
-            RecordID: d.RecordID, Status: d.Status, Changes: parseAppliedRunDetailChanges(d.ResultPayload), ErrorMessage: d.ErrorMessage,
+            RecordID: d.RecordID, Status: d.Status, Changes: ParseAppliedRunDetailChanges(d.ResultPayload), ErrorMessage: d.ErrorMessage,
         }));
         this.DetailLoading = false;
         this.cdr.detectChanges();
     }
 
-    backToList(): void {
+    /** @deprecated Use {@link OpenRun}. */
+    async openRun(run: RunRow): Promise<void> {
+        return this.OpenRun(run);
+    }
+
+    BackToList(): void {
         this.Mode = 'list';
         this.OpenRunRow = null;
         this.cdr.detectChanges();
         if (this.pendingReload) {
             this.pendingReload = false;
-            void this.reload(); // a run changed while we were drilled into a detail — refresh now
+            void this.Reload(); // a run changed while we were drilled into a detail — refresh now
         }
     }
 
-    fmt(value?: string | Date): string {
+    /** @deprecated Use {@link BackToList}. */
+    backToList(): void {
+        return this.BackToList();
+    }
+
+    Fmt(value?: string | Date): string {
         if (!value) return '—';
         const d = value instanceof Date ? value : new Date(value);
         return isNaN(d.getTime()) ? String(value) : d.toLocaleString();
     }
-    disp(value: unknown): string { return displayRunValue(value); }
+
+    /** @deprecated Use {@link Fmt}. */
+    fmt(value?: string | Date): string {
+        return this.Fmt(value);
+    }
+    Disp(value: unknown): string { return DisplayRunValue(value); }
+
+    /** @deprecated Use {@link Disp}. */
+    disp(value: unknown): string {
+        return this.Disp(value);
+    }
 }

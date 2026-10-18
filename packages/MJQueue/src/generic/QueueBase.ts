@@ -4,10 +4,10 @@ import { UUIDsEqual, IShutdownable } from '@memberjunction/global';
 //import { MJQueueTaskEntity, MJQueueEntity } from 'mj_generatedentities';
 
 export class TaskResult {
-  success: boolean
-  userMessage: string
-  output: any
-  exception: any
+  success: boolean  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+  userMessage: string  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+  output: any  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+  exception: any  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 }
  
 

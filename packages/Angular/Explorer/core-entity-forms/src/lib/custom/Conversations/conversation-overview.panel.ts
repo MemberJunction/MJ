@@ -1,21 +1,24 @@
 import { Component, ChangeDetectionStrategy, OnInit, inject, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RunView } from '@memberjunction/core';
-import { RegisterClassEx } from '@memberjunction/global';
+import { IMetadataProvider, LogError, Metadata, RunView } from '@memberjunction/core';
+import { EscapeSQLString, RegisterClassEx } from '@memberjunction/global';
 import { BaseFormPanel } from '@memberjunction/ng-base-forms';
-import { MJConversationEntity } from '@memberjunction/core-entities';
+import { ConversationEngine, MJConversationDetailEntity, MJConversationEntity } from '@memberjunction/core-entities';
 
 interface ConversationDetailRow {
     ID: string;
-    Role: string;
+    Role: MJConversationDetailEntity['Role'];
     Message: string;
     CreatedAt: string;
 }
 
+/** Number of newest messages the Recent Turns card shows. */
+const RECENT_MESSAGE_COUNT = 4;
+
 @RegisterClassEx(BaseFormPanel, {
-    key: 'form-panel:Conversations:overview',
+    key: 'form-panel:MJ: Conversations:overview',
     metadata: {
-        entity: 'Conversations',
+        entity: 'MJ: Conversations',
         slot: 'before-fields',
         sortKey: 10,
     },
@@ -31,21 +34,30 @@ interface ConversationDetailRow {
             <div class="mj-overview-card">
                 <div class="mj-card-header">
                     <div class="mj-card-title"><i class="fa-solid fa-comments" style="color: var(--mj-brand-primary, #38bdf8);"></i> Turn Summary</div>
-                    <span class="mj-card-badge">{{ Messages.length }} Turns</span>
+                    @if (!LoadError) {
+                        <span class="mj-card-badge">{{ TotalMessageCount }} Turns</span>
+                    }
                 </div>
                 <div class="mj-card-body">
-                    <div class="mj-metric-row">
-                        <span class="mj-metric-label">Total Messages</span>
-                        <span class="mj-metric-val">{{ Messages.length }}</span>
-                    </div>
-                    <div class="mj-metric-row">
-                        <span class="mj-metric-label">User Prompts</span>
-                        <span class="mj-metric-val">{{ UserMessageCount }}</span>
-                    </div>
-                    <div class="mj-metric-row">
-                        <span class="mj-metric-label">Agent Responses</span>
-                        <span class="mj-metric-val">{{ AgentMessageCount }}</span>
-                    </div>
+                    @if (LoadError) {
+                        <span class="mj-load-error">{{ LoadError }}</span>
+                    } @else {
+                        <div class="mj-metric-row">
+                            <span class="mj-metric-label">Total Messages</span>
+                            <span class="mj-metric-val">{{ TotalMessageCount }}</span>
+                        </div>
+                        @if (ForkCount > 0) {
+                            <div class="mj-fork-note">plus {{ ForkCount }} {{ ForkCount === 1 ? 'fork' : 'forks' }}</div>
+                        }
+                        <div class="mj-metric-row">
+                            <span class="mj-metric-label">User Prompts</span>
+                            <span class="mj-metric-val">{{ UserMessageCount }}</span>
+                        </div>
+                        <div class="mj-metric-row">
+                            <span class="mj-metric-label">Agent Responses</span>
+                            <span class="mj-metric-val">{{ AgentMessageCount }}</span>
+                        </div>
+                    }
                 </div>
             </div>
 
@@ -56,7 +68,9 @@ interface ConversationDetailRow {
                     <span class="mj-card-badge">History</span>
                 </div>
                 <div class="mj-card-body">
-                    @if (Messages.length === 0) {
+                    @if (LoadError) {
+                        <span class="mj-load-error">{{ LoadError }}</span>
+                    } @else if (Messages.length === 0) {
                         <span style="font-size: 12px; color: var(--mj-text-muted);">No messages in this conversation yet.</span>
                     } @else {
                         @for (msg of RecentMessages; track msg.ID) {
@@ -64,7 +78,7 @@ interface ConversationDetailRow {
                                 <span class="mj-metric-label" style="text-overflow: ellipsis; overflow: hidden; white-space: nowrap; max-width: 200px;">
                                     <strong>{{ msg.Role }}:</strong> {{ msg.Message }}
                                 </span>
-                                <span class="mj-pill" [class.mj-pill-blue]="msg.Role === 'user'" [class.mj-pill-green]="msg.Role !== 'user'">
+                                <span class="mj-pill" [class.mj-pill-blue]="IsUserTurn(msg)" [class.mj-pill-green]="IsAgentTurn(msg)">
                                     {{ msg.Role }}
                                 </span>
                             </div>
@@ -126,7 +140,9 @@ interface ConversationDetailRow {
             font-size: 12px;
         }
         .mj-metric-label { color: var(--mj-text-secondary, #94a3b8); }
+        .mj-fork-note { font-size: 11px; color: var(--mj-text-muted); margin-top: -6px; }
         .mj-metric-val { font-weight: 600; color: var(--mj-text-primary, #f8fafc); font-family: monospace; }
+        .mj-load-error { font-size: 12px; color: var(--mj-status-error); }
         .mj-pill { font-size: 10.5px; font-weight: 700; padding: 2px 6px; border-radius: 4px; }
         .mj-pill-green { background: rgba(16, 185, 129, 0.15); color: #10b981; }
         .mj-pill-blue { background: rgba(56, 189, 248, 0.15); color: #38bdf8; }
@@ -134,42 +150,103 @@ interface ConversationDetailRow {
 })
 export class ConversationOverviewPanel extends BaseFormPanel<MJConversationEntity> implements OnInit {
     private cdr = inject(ChangeDetectorRef);
+    /** The newest messages in Main, newest first. */
     public Messages: ConversationDetailRow[] = [];
+    /** Messages in Main. */
+    public TotalMessageCount = 0;
+    /** User messages in Main. */
+    public UserMessageCount = 0;
+    /** AI messages in Main. */
+    public AgentMessageCount = 0;
+    /** Forks of the conversation. */
+    public ForkCount = 0;
+    /** Set when a read fails, so the cards show the failure instead of zero messages. */
+    public LoadError: string | null = null;
 
     public ngOnInit(): void {
-        this.LoadConversationMessages();
+        this.loadConversationMessages();
     }
 
-    public get UserMessageCount(): number {
-        return this.Messages.filter(m => m.Role?.toLowerCase() === 'user').length;
+    /** A turn the user sent. `Role` is stored as 'User', 'AI' or 'Error'. */
+    protected IsUserTurn(detail: ConversationDetailRow): boolean {
+        return detail.Role === 'User';
     }
 
-    public get AgentMessageCount(): number {
-        return this.Messages.filter(m => m.Role?.toLowerCase() !== 'user').length;
+    /** A turn an agent sent. An 'Error' turn is neither a user turn nor an agent turn. */
+    protected IsAgentTurn(detail: ConversationDetailRow): boolean {
+        return detail.Role === 'AI';
     }
 
     public get RecentMessages(): ConversationDetailRow[] {
-        return this.Messages.slice(0, 4);
+        return this.Messages.slice(0, RECENT_MESSAGE_COUNT);
     }
 
-    private async LoadConversationMessages(): Promise<void> {
+    /** The host form's provider, or the default provider when the panel has no host form. */
+    private get providerToUse(): IMetadataProvider {
+        return this.FormComponent?.ProviderToUse ?? Metadata.Provider; // global-provider-ok: BaseFormPanel has no Provider input; a panel without a host form uses the default provider
+    }
+
+    /**
+     * Loads the counts and newest messages in Main, and the conversation's fork count, in one
+     * batch. When a detail read fails, the cards show the failure.
+     */
+    private async loadConversationMessages(): Promise<void> {
         if (!this.Record?.ID) return;
+        const provider = this.providerToUse;
+        const scope = ConversationEngine.TrunkScope(this.Record.ID);
         try {
-            const rv = new RunView();
-            const res = await rv.RunView<ConversationDetailRow>({
-                EntityName: 'Conversation Details',
-                ExtraFilter: `ConversationID = '${this.Record.ID}'`,
-                Fields: ['ID', 'Role', 'Message', '__mj_CreatedAt'],
-                OrderBy: '__mj_CreatedAt DESC',
-                MaxRows: 50,
-                ResultType: 'simple'
-            });
-            if (res.Success && res.Results) {
-                this.Messages = res.Results;
-                this.cdr.markForCheck();
+            const rv = RunView.FromMetadataProvider(provider);
+            const [total, user, agent, recent, forks] = await rv.RunViews<ConversationDetailRow>([
+                {
+                    EntityName: 'MJ: Conversation Details',
+                    ExtraFilter: ConversationEngine.ScopeFilter(scope),
+                    ResultType: 'count_only',
+                },
+                {
+                    EntityName: 'MJ: Conversation Details',
+                    ExtraFilter: `${ConversationEngine.ScopeFilter(scope)} AND [Role]='User'`,
+                    ResultType: 'count_only',
+                },
+                {
+                    EntityName: 'MJ: Conversation Details',
+                    ExtraFilter: `${ConversationEngine.ScopeFilter(scope)} AND [Role]='AI'`,
+                    ResultType: 'count_only',
+                },
+                {
+                    EntityName: 'MJ: Conversation Details',
+                    ExtraFilter: ConversationEngine.ScopeFilter(scope),
+                    Fields: ['ID', 'Role', 'Message', '__mj_CreatedAt'],
+                    OrderBy: 'Sequence DESC',
+                    MaxRows: RECENT_MESSAGE_COUNT,
+                    ResultType: 'simple',
+                },
+                {
+                    EntityName: 'MJ: Conversation Branches',
+                    ExtraFilter: `ConversationID='${EscapeSQLString(this.Record.ID)}'`,
+                    ResultType: 'count_only',
+                },
+            ], provider.CurrentUser);
+            const detailReads = [total, user, agent, recent];
+            const failed = detailReads.findIndex(r => !r?.Success);
+            if (failed >= 0) {
+                this.showLoadError(detailReads[failed]?.ErrorMessage);
+            } else {
+                this.TotalMessageCount = total?.TotalRowCount ?? 0;
+                this.UserMessageCount = user?.TotalRowCount ?? 0;
+                this.AgentMessageCount = agent?.TotalRowCount ?? 0;
+                this.Messages = recent?.Results ?? [];
             }
+            this.ForkCount = forks?.Success ? forks.TotalRowCount : 0;
         } catch (e) {
-            console.error('Failed to load conversation details:', e);
+            const message = e instanceof Error ? e.message : String(e);
+            LogError(`Conversation overview: could not load the details of conversation ${this.Record.ID}: ${message}`);
+            this.showLoadError(message);
         }
+        this.cdr.markForCheck();
+    }
+
+    /** Shows a short "could not load" line, with the underlying message when there is one. */
+    private showLoadError(detail: string | undefined): void {
+        this.LoadError = detail ? `Could not load messages: ${detail}` : 'Could not load messages.';
     }
 }

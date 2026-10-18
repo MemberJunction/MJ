@@ -1,13 +1,49 @@
-# New-conversation navigation: from the Conversations home, open the composer
-# and confirm the new-conversation surface (agent rail + prompt) renders.
+# New-conversation surface: reachable from the Conversations home, and rendering the same welcome
+# and starter prompts MJ Explorer shows at its phone breakpoint.
+#
+# This screen used to have its own bespoke hero and its own plain composer — under copy telling the
+# user to "address a specific agent with @", which did nothing because the triggers lived only in
+# the chat thread's copy of the composer. Both are now the shared components, so this flow asserts
+# the SHARED content: if the two surfaces diverge again, this is what catches it.
 appId: org.memberjunction.mobile
 ---
 - launchApp
 - extendedWaitUntil:
-    visible: "Conversations"
+    visible: "Ask an agent anything, or pick up where you left off."
     timeout: 30000
+# The launch animation has to finish before a synthetic touch reaches a handler — without this the
+# tap reports success and nothing happens. Supported wait rather than a guessed sleep.
+- waitForAnimationToEnd:
+    timeout: 10000
 - tapOn: "New conversation"
-# The new-conversation screen shows the agent rail heading, which is unique to it.
+
+# The shared empty state — same greeting the web uses.
 - extendedWaitUntil:
-    visible: "Or talk to an agent"
+    visible: "Welcome to Conversations"
     timeout: 15000
+
+# The starter cards, which come from the same four prompts as the web.
+- assertVisible: "Search files"
+- assertVisible: "Research compiler"
+
+# The shared composer, advertising the triggers it actually has.
+- assertVisible: "Ask anything — your agent will route it…"
+
+# And the triggers work HERE, not just in the thread — the bug this screen shipped with.
+- tapOn: "Ask anything — your agent will route it…"
+- inputText: "@"
+- extendedWaitUntil:
+    visible: "Agents & people"
+    timeout: 15000
+
+# NOT asserted here: that Return inserts a newline rather than sending.
+#
+# `useHardwareKeyboard` infers "hardware" from whether a soft keyboard actually appeared, which is
+# right for a person — typing requires a keyboard — but wrong for automation: Maestro's Android text
+# input does not raise the IME, so the composer sees no keyboard, concludes hardware, and sends.
+# The assertion therefore passed on iOS and failed on Android for reasons that have nothing to do
+# with the behaviour under test.
+#
+# The Return-key precedence is covered exhaustively in src/__tests__/enter-key.test.ts (12 cases,
+# including the soft-keyboard branch). A flow that is green on one platform by luck is worse than
+# no flow.

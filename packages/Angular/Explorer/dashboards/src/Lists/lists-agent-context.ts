@@ -33,8 +33,13 @@ export const LISTS_AGENT_CONTEXT_NAME_LIST_CAP = 25;
  * @param names - the full list of names (caller owns de-duplication / ordering)
  * @returns the first N names, where N is the cap
  */
-export function capListNames(names: readonly string[]): string[] {
+export function CapListNames(names: readonly string[]): string[] {
     return names.slice(0, LISTS_AGENT_CONTEXT_NAME_LIST_CAP);
+}
+
+/** @deprecated Use {@link CapListNames}. */
+export function capListNames(names: readonly string[]): string[] {
+    return CapListNames(names);
 }
 
 /**
@@ -61,7 +66,7 @@ export interface NamedRecord {
  * @param input - whatever the agent passed (an ID or a list/category name)
  * @param candidates - the records available on this surface
  */
-export function resolveNamedRecord<T extends NamedRecord>(input: string, candidates: readonly T[]): T | null {
+export function ResolveNamedRecord<T extends NamedRecord>(input: string, candidates: readonly T[]): T | null {
     const needle = (input ?? '').trim().toLowerCase();
     if (!needle) {
         return null;
@@ -81,6 +86,11 @@ export function resolveNamedRecord<T extends NamedRecord>(input: string, candida
     return byContains ?? null;
 }
 
+/** @deprecated Use {@link ResolveNamedRecord}. */
+export function resolveNamedRecord<T extends NamedRecord>(input: string, candidates: readonly T[]): T | null {
+    return ResolveNamedRecord(input, candidates);
+}
+
 /**
  * Build a tolerant "not found" error message that lists a few of the available
  * names, so the agent can correct itself. Pure + deterministic.
@@ -89,9 +99,14 @@ export function resolveNamedRecord<T extends NamedRecord>(input: string, candida
  * @param candidates - the available records (their names are sampled)
  * @param noun - the kind of thing (e.g. "list", "category") for the message
  */
-export function buildNotFoundError(input: string, candidates: readonly NamedRecord[], noun: string): string {
+export function BuildNotFoundError(input: string, candidates: readonly NamedRecord[], noun: string): string {
     const sample = candidates.slice(0, 6).map(c => c.Name).join(', ');
     return `No ${noun} matching "${input}" is available. Available ${noun}s include: ${sample || '(none)'}.`;
+}
+
+/** @deprecated Use {@link BuildNotFoundError}. */
+export function buildNotFoundError(input: string, candidates: readonly NamedRecord[], noun: string): string {
+    return BuildNotFoundError(input, candidates, noun);
 }
 
 // ============================================================================
@@ -127,13 +142,13 @@ export interface ListBrowseAgentContextInput {
  * Bounds the visible-name list and surfaces a companion total when truncated,
  * and only includes the optional filter fields the surface actually supplies.
  */
-export function buildListBrowseAgentContext(input: ListBrowseAgentContextInput): Record<string, unknown> {
+export function BuildListBrowseAgentContext(input: ListBrowseAgentContextInput): Record<string, unknown> {
     const context: Record<string, unknown> = {
         SearchTerm: input.SearchTerm,
         ViewMode: input.ViewMode,
         AllListCount: input.AllListCount,
         FilteredListCount: input.FilteredListCount,
-        VisibleListNames: capListNames(input.VisibleListNames),
+        VisibleListNames: CapListNames(input.VisibleListNames),
     };
     if (input.VisibleListNames.length > LISTS_AGENT_CONTEXT_NAME_LIST_CAP) {
         context['VisibleListNameCount'] = input.VisibleListNames.length;
@@ -154,6 +169,11 @@ export function buildListBrowseAgentContext(input: ListBrowseAgentContextInput):
         context['ShowOnlyFavorites'] = input.ShowOnlyFavorites;
     }
     return context;
+}
+
+/** @deprecated Use {@link BuildListBrowseAgentContext}. */
+export function buildListBrowseAgentContext(input: ListBrowseAgentContextInput): Record<string, unknown> {
+    return BuildListBrowseAgentContext(input);
 }
 
 // ============================================================================
@@ -191,7 +211,7 @@ export interface ListCategoriesAgentContextInput {
  * the category tree (names / list counts / expanded), plus the names of the
  * groups currently expanded.
  */
-export function buildListCategoriesAgentContext(input: ListCategoriesAgentContextInput): Record<string, unknown> {
+export function BuildListCategoriesAgentContext(input: ListCategoriesAgentContextInput): Record<string, unknown> {
     const context: Record<string, unknown> = {
         SelectedCategoryId: input.SelectedCategoryId,
         SelectedCategoryName: input.SelectedCategoryName,
@@ -199,7 +219,7 @@ export function buildListCategoriesAgentContext(input: ListCategoriesAgentContex
         SelectedCategoryListCount: input.SelectedCategoryListCount,
     };
     if (input.SelectedCategoryListNames.length > 0) {
-        context['SelectedCategoryListNames'] = capListNames(input.SelectedCategoryListNames);
+        context['SelectedCategoryListNames'] = CapListNames(input.SelectedCategoryListNames);
         if (input.SelectedCategoryListNames.length > LISTS_AGENT_CONTEXT_NAME_LIST_CAP) {
             context['SelectedCategoryListNameCount'] = input.SelectedCategoryListNames.length;
         }
@@ -212,6 +232,11 @@ export function buildListCategoriesAgentContext(input: ListCategoriesAgentContex
         }
     }
     return context;
+}
+
+/** @deprecated Use {@link BuildListCategoriesAgentContext}. */
+export function buildListCategoriesAgentContext(input: ListCategoriesAgentContextInput): Record<string, unknown> {
+    return BuildListCategoriesAgentContext(input);
 }
 
 // ============================================================================
@@ -272,7 +297,7 @@ export interface ListOperationsAgentContextInput {
  * a preview of its records, and the last computed operation. All name lists are
  * bounded with companion counts when truncated.
  */
-export function buildListOperationsAgentContext(input: ListOperationsAgentContextInput): Record<string, unknown> {
+export function BuildListOperationsAgentContext(input: ListOperationsAgentContextInput): Record<string, unknown> {
     const context: Record<string, unknown> = {
         ListOperandCount: input.ListOperandCount,
         ViewOperandCount: input.ViewOperandCount,
@@ -288,7 +313,7 @@ export function buildListOperationsAgentContext(input: ListOperationsAgentContex
         context['Operands'] = input.Operands.slice(0, LISTS_AGENT_CONTEXT_NAME_LIST_CAP);
     }
     if (input.AvailableEntityNames.length > 0) {
-        context['AvailableEntityNames'] = capListNames(input.AvailableEntityNames);
+        context['AvailableEntityNames'] = CapListNames(input.AvailableEntityNames);
         if (input.AvailableEntityNames.length > LISTS_AGENT_CONTEXT_NAME_LIST_CAP) {
             context['AvailableEntityNameCount'] = input.AvailableEntityNames.length;
         }
@@ -300,7 +325,12 @@ export function buildListOperationsAgentContext(input: ListOperationsAgentContex
         }
     }
     if (input.PreviewRecordNames.length > 0) {
-        context['PreviewRecordNames'] = capListNames(input.PreviewRecordNames);
+        context['PreviewRecordNames'] = CapListNames(input.PreviewRecordNames);
     }
     return context;
+}
+
+/** @deprecated Use {@link BuildListOperationsAgentContext}. */
+export function buildListOperationsAgentContext(input: ListOperationsAgentContextInput): Record<string, unknown> {
+    return BuildListOperationsAgentContext(input);
 }

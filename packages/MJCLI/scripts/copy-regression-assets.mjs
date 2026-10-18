@@ -63,3 +63,22 @@ const repoRoot = path.resolve(pkgRoot, '..', '..');               // monorepo ro
     console.warn(`  [copy-regression-assets] init-templates source not found, skipped: ${srcDir}`);
   }
 }
+
+// ── 3. citizen-builder template → dist/init-templates/citizen-builder ───────
+// citizen-builder/ at the repo root is the source. The copy under src/init-templates/ is committed
+// (it is this package's build-cache key for the template, and what `mj agent init` reads when run
+// from source), and this step refreshes it but cannot commit it: CI's
+// .github/scripts/check-citizen-builder-template.mjs fails while it differs (`--write` syncs it).
+{
+  const srcDir = path.join(repoRoot, 'citizen-builder');
+  const destDir = path.join(pkgRoot, 'dist', 'init-templates', 'citizen-builder');
+  const srcInitDir = path.join(pkgRoot, 'src', 'init-templates', 'citizen-builder');
+  if (existsSync(srcDir)) {
+    cpSync(srcDir, destDir, { recursive: true });
+    cpSync(srcDir, srcInitDir, { recursive: true });
+    console.log(`[copy-regression-assets] bundled citizen-builder → ${path.relative(pkgRoot, destDir)}/`);
+  } else {
+    console.warn(`  [copy-regression-assets] citizen-builder source not found, skipped: ${srcDir}`);
+  }
+}
+

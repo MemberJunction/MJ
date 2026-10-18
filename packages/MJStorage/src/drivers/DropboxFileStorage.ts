@@ -18,7 +18,7 @@ import {
   StorageListResult,
   StorageObjectMetadata,
 } from '../generic/FileStorageBase';
-import { getProviderConfig } from '../config';
+import { GetProviderConfig } from '../config';
 
 import { StorageProviderConfig } from '../generic/FileStorageBase';
 
@@ -181,7 +181,7 @@ export class DropboxFileStorage extends FileStorageBase {
     super();
 
     // Try to get config from centralized configuration
-    const config = getProviderConfig('dropbox');
+    const config = GetProviderConfig('dropbox');
 
     // Dropbox auth can be via access token or refresh token
     const accessToken = config?.accessToken || env.get('STORAGE_DROPBOX_ACCESS_TOKEN').asString();

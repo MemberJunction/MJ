@@ -5,11 +5,11 @@ import { ListOperations } from '@memberjunction/lists';
 import type { ListSource, SetOpKind } from '@memberjunction/lists-base';
 
 import {
-  addOutputParam,
-  getBooleanParam,
-  getJsonParam,
-  getStringParam,
-  missingParam,
+  AddOutputParam,
+  GetBooleanParam,
+  GetJsonParam,
+  GetStringParam,
+  MissingParam,
 } from './_action-helpers';
 
 /**
@@ -39,8 +39,8 @@ import {
 @RegisterClass(BaseAction, 'Compose Lists')
 export class ComposeListsAction extends BaseAction {
   protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
-    const op = getStringParam(params, 'Op') as SetOpKind | undefined;
-    if (!op) return missingParam('Op');
+    const op = GetStringParam(params, 'Op') as SetOpKind | undefined;
+    if (!op) return MissingParam('Op');
     if (op !== 'union' && op !== 'intersection' && op !== 'difference') {
       return {
         Success: false,
@@ -49,7 +49,7 @@ export class ComposeListsAction extends BaseAction {
       };
     }
 
-    const inputs = getJsonParam<ListSource[]>(params, 'Inputs');
+    const inputs = GetJsonParam<ListSource[]>(params, 'Inputs');
     if (!inputs || !Array.isArray(inputs) || inputs.length < 2) {
       return {
         Success: false,
@@ -58,18 +58,18 @@ export class ComposeListsAction extends BaseAction {
       };
     }
 
-    const target = getJsonParam<ListSource>(params, 'Target');
-    const confirmDrops = getBooleanParam(params, 'ConfirmDrops', false);
+    const target = GetJsonParam<ListSource>(params, 'Target');
+    const confirmDrops = GetBooleanParam(params, 'ConfirmDrops', false);
 
     const ops = new ListOperations(params.ContextUser, params.Provider);
     const delta = await ops.ComputeSetOp(op, inputs, target);
 
     // Preview-only path: no commit. Surface the delta details as outputs.
-    addOutputParam(params, 'DeltaToken', delta.DeltaToken);
-    addOutputParam(params, 'Add', delta.Counts.Add);
-    addOutputParam(params, 'Remove', delta.Counts.Remove);
-    addOutputParam(params, 'Unchanged', delta.Counts.Unchanged);
-    addOutputParam(
+    AddOutputParam(params, 'DeltaToken', delta.DeltaToken);
+    AddOutputParam(params, 'Add', delta.Counts.Add);
+    AddOutputParam(params, 'Remove', delta.Counts.Remove);
+    AddOutputParam(params, 'Unchanged', delta.Counts.Unchanged);
+    AddOutputParam(
       params,
       'Warnings',
       delta.Warnings.map((w) => ({ Code: w.Code, Message: w.Message })),
@@ -87,9 +87,9 @@ export class ComposeListsAction extends BaseAction {
     // Target provided — commit via ApplyDelta. The drop-guard is enforced
     // server-side: if Remove>0 and ConfirmDrops=false, ApplyDelta rejects.
     const apply = await ops.ApplyDelta(delta, { ConfirmDrops: confirmDrops, DeltaToken: delta.DeltaToken });
-    addOutputParam(params, 'Added', apply.Counts?.Added);
-    addOutputParam(params, 'Removed', apply.Counts?.Removed);
-    addOutputParam(params, 'Failed', apply.Counts?.Failed);
+    AddOutputParam(params, 'Added', apply.Counts?.Added);
+    AddOutputParam(params, 'Removed', apply.Counts?.Removed);
+    AddOutputParam(params, 'Failed', apply.Counts?.Failed);
     return {
       Success: apply.Success,
       ResultCode: apply.ResultCode,

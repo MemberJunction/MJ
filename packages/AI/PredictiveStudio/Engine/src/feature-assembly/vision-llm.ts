@@ -95,12 +95,12 @@ export class VisionFeatureExtractor {
    *   from `step.Prompt` against `MJ: AI Prompts`); typed loosely so the engine
    *   doesn't depend on the entity class just to thread it through
    */
-  public async extract(
+  public async Extract(
     step: VisionLLMFeatureStep,
     record: SourceRow,
     promptEntity: AIPromptParams['prompt'],
   ): Promise<VisionExtractionResult> {
-    const imageRef = readImageRef(record, step.ImageColumn);
+    const imageRef = ReadImageRef(record, step.ImageColumn);
     if (imageRef === null) {
       // Graceful: no image for this row → null feature, no model call.
       return { value: null };
@@ -108,7 +108,16 @@ export class VisionFeatureExtractor {
 
     const params = this.buildPromptParams(step, imageRef, promptEntity);
     const runResult = await this.runner.ExecutePrompt<unknown>(params);
-    return { value: parseVisionOutput(runResult, step.Output) };
+    return { value: ParseVisionOutput(runResult, step.Output) };
+  }
+
+  /** @deprecated Use {@link Extract}. */
+  public async extract(
+    step: VisionLLMFeatureStep,
+    record: SourceRow,
+    promptEntity: AIPromptParams['prompt'],
+  ): Promise<VisionExtractionResult> {
+    return this.Extract(step, record, promptEntity);
   }
 
   /**
@@ -123,7 +132,7 @@ export class VisionFeatureExtractor {
     params.contextUser = this.contextUser;
     // The vision prompt template is the system turn; the image rides on a user turn.
     params.templateMessageRole = 'system';
-    params.conversationMessages = [buildVisionUserMessage(imageRef, step.Output, step.Prompt.InlinePrompt)];
+    params.conversationMessages = [BuildVisionUserMessage(imageRef, step.Output, step.Prompt.InlinePrompt)];
     if (step.ModelRef) {
       // Surface the model override to the prompt run via data (the runner's model
       // selection honors an explicit override key); pinned into model Lineage.
@@ -138,7 +147,7 @@ export class VisionFeatureExtractor {
  * column. Returns `null` for null/undefined/blank values so the caller can skip
  * the model call gracefully.
  */
-export function readImageRef(record: SourceRow, imageColumn: string): string | null {
+export function ReadImageRef(record: SourceRow, imageColumn: string): string | null {
   const raw = record[imageColumn];
   if (raw === null || raw === undefined) {
     return null;
@@ -148,19 +157,29 @@ export function readImageRef(record: SourceRow, imageColumn: string): string | n
   return trimmed.length === 0 ? null : trimmed;
 }
 
+/** @deprecated Use {@link ReadImageRef}. */
+export function readImageRef(record: SourceRow, imageColumn: string): string | null {
+  return ReadImageRef(record, imageColumn);
+}
+
 /**
  * Build the user-turn {@link ChatMessage} carrying the image as an `image_url`
  * multimodal content block plus a text block asking the model to emit the
  * structured output named by {@link VisionLLMOutput.FeatureName}.
  */
-export function buildVisionUserMessage(imageRef: string, output: VisionLLMOutput, inlinePrompt?: string): ChatMessage {
+export function BuildVisionUserMessage(imageRef: string, output: VisionLLMOutput, inlinePrompt?: string): ChatMessage {
   const blocks: ChatMessageContentBlock[] = [];
   if (inlinePrompt && inlinePrompt.trim().length > 0) {
     blocks.push({ type: 'text', content: inlinePrompt.trim() });
   }
-  blocks.push({ type: 'text', content: buildOutputInstruction(output) });
+  blocks.push({ type: 'text', content: BuildOutputInstruction(output) });
   blocks.push({ type: 'image_url', content: imageRef });
   return { role: 'user', content: blocks };
+}
+
+/** @deprecated Use {@link BuildVisionUserMessage}. */
+export function buildVisionUserMessage(imageRef: string, output: VisionLLMOutput, inlinePrompt?: string): ChatMessage {
+  return BuildVisionUserMessage(imageRef, output, inlinePrompt);
 }
 
 /**
@@ -168,7 +187,7 @@ export function buildVisionUserMessage(imageRef: string, output: VisionLLMOutput
  * output. For a closed category set, the allowed values are enumerated so the
  * model stays in-set.
  */
-export function buildOutputInstruction(output: VisionLLMOutput): string {
+export function BuildOutputInstruction(output: VisionLLMOutput): string {
   const base = `Analyze the image and respond with a JSON object containing a single key "${output.FeatureName}"`;
   if (output.Kind === 'scalar') {
     return `${base} whose value is a number.`;
@@ -179,13 +198,18 @@ export function buildOutputInstruction(output: VisionLLMOutput): string {
   return `${base} whose value is a short category label string.`;
 }
 
+/** @deprecated Use {@link BuildOutputInstruction}. */
+export function buildOutputInstruction(output: VisionLLMOutput): string {
+  return BuildOutputInstruction(output);
+}
+
 /**
  * Parse the runner's result into the feature cell value per the output contract.
  * Handles both a structured `result` object (preferred) and a raw JSON/text
  * `rawResult` fallback. Returns `null` on failure, an unsuccessful run, or an
  * out-of-set category.
  */
-export function parseVisionOutput(runResult: AIPromptRunResult<unknown>, output: VisionLLMOutput): string | number | null {
+export function ParseVisionOutput(runResult: AIPromptRunResult<unknown>, output: VisionLLMOutput): string | number | null {
   if (!runResult.success) {
     return null;
   }
@@ -194,6 +218,11 @@ export function parseVisionOutput(runResult: AIPromptRunResult<unknown>, output:
     return null;
   }
   return output.Kind === 'scalar' ? coerceScalar(raw) : coerceCategory(raw, output.AllowedCategories);
+}
+
+/** @deprecated Use {@link ParseVisionOutput}. */
+export function parseVisionOutput(runResult: AIPromptRunResult<unknown>, output: VisionLLMOutput): string | number | null {
+  return ParseVisionOutput(runResult, output);
 }
 
 /**

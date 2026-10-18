@@ -8,6 +8,16 @@ You are evaluating primary key candidates for a database table.
 {{ loop.index }}. Columns: {{ pk.columns | join(", ") }} (confidence: {{ pk.confidence }}%{% if pk.locked %}, LOCKED - do not modify{% endif %})
 {% endfor %}
 
+{% if existingIndexes and existingIndexes.length > 0 %}
+## Existing Indexes
+These indexes exist on this table in the database. Developers index the columns they join and filter on, so indexes are clues to keys even when no primary or foreign key is declared:
+{% for ix in existingIndexes %}
+- {{ ix }}
+{% endfor %}
+
+*A UNIQUE index or PRIMARY KEY on non-null columns is strong evidence of the primary key (or an alternate key). A non-unique index led by an ID- or code-like column often marks a foreign key. Indexes are evidence, not proof — weigh them with names, statistics and value overlap. "(expression)" is a computed key part.*
+{% endif %}
+
 ## All Database Tables (for context):
 {% for tbl in allTables %}
 - {{ tbl.schema }}.{{ tbl.name }}{% if tbl.pk %} (PK: {{ tbl.pk }}){% endif %}

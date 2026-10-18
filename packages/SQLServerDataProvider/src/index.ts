@@ -1,4 +1,4 @@
-export { setupSQLServerClient } from "./config";
+export { SetupSQLServerClient, setupSQLServerClient } from "./config";
 export { SQLServerDataProvider } from "./SQLServerDataProvider";
 export {
   ExecuteSQLOptions,

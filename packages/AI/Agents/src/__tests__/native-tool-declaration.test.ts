@@ -13,7 +13,7 @@ vi.mock('@memberjunction/aiengine', async (importOriginal) => {
 });
 import { BaseAgent } from '../base-agent';
 import { LoopAgentType } from '../agent-types/loop-agent-type';
-import { looksLikeLoopEnvelope } from '../native-tools/dual-channel';
+import { LooksLikeLoopEnvelope } from '../native-tools/dual-channel';
 import type { AIPromptParams, AIPromptRunResult, ExecuteAgentParams, MJAIAgentRunStepEntityExtended } from '@memberjunction/ai-core-plus';
 
 class Probe extends BaseAgent {
@@ -49,19 +49,19 @@ describe('applyNativeTools — agent-level opt-out (DeclareActionsAsNativeTools 
 
 describe('looksLikeLoopEnvelope', () => {
     it('recognises a Loop envelope by its top-level keys, fenced or not', () => {
-        expect(looksLikeLoopEnvelope('{"taskComplete":false,"nextStep":{"type":"Sub-Agent"}}')).toBe(true);
-        expect(looksLikeLoopEnvelope('```json\n{"taskComplete":true}\n```')).toBe(true);
-        expect(looksLikeLoopEnvelope('{"payloadChangeRequest":{"newElements":{}}}')).toBe(true);
+        expect(LooksLikeLoopEnvelope('{"taskComplete":false,"nextStep":{"type":"Sub-Agent"}}')).toBe(true);
+        expect(LooksLikeLoopEnvelope('```json\n{"taskComplete":true}\n```')).toBe(true);
+        expect(LooksLikeLoopEnvelope('{"payloadChangeRequest":{"newElements":{}}}')).toBe(true);
     });
     it('rejects prose, non-envelope JSON, arrays, and empty content', () => {
-        expect(looksLikeLoopEnvelope('Calling the tool now.')).toBe(false);
-        expect(looksLikeLoopEnvelope('{"foo":1}')).toBe(false);
-        expect(looksLikeLoopEnvelope('[1,2]')).toBe(false);
-        expect(looksLikeLoopEnvelope(null)).toBe(false);
-        expect(looksLikeLoopEnvelope('')).toBe(false);
+        expect(LooksLikeLoopEnvelope('Calling the tool now.')).toBe(false);
+        expect(LooksLikeLoopEnvelope('{"foo":1}')).toBe(false);
+        expect(LooksLikeLoopEnvelope('[1,2]')).toBe(false);
+        expect(LooksLikeLoopEnvelope(null)).toBe(false);
+        expect(LooksLikeLoopEnvelope('')).toBe(false);
     });
     it('reads text blocks when content arrives as an array', () => {
-        expect(looksLikeLoopEnvelope([{ type: 'text', content: '{"taskComplete":true}' }])).toBe(true);
+        expect(LooksLikeLoopEnvelope([{ type: 'text', content: '{"taskComplete":true}' }])).toBe(true);
     });
 });
 
@@ -108,15 +108,15 @@ describe('applyNativeTools — actions plus control tools', () => {
     it('declares actions, one tool per sub-agent, payload_change_request and ask_user, and names the control ones', () => {
         const promptParams = {} as AIPromptParams;
         new DeclaringProbe([anAction], [aSubAgent]).Apply(promptParams, agentParams);
-        expect(promptParams.tools?.map((t) => t.name)).toEqual(['run_ad_hoc_query', 'delegate_to_query_strategist', 'payload_change_request', 'ask_user']);
-        expect(promptParams.controlFlowToolNames).toEqual(['delegate_to_query_strategist', 'payload_change_request', 'ask_user']);
+        expect(promptParams.tools?.map((t) => t.name)).toEqual(['run_ad_hoc_query', 'delegate_to_query_strategist', 'payload_change_request', 'ask_user', 'complete_task']);
+        expect(promptParams.controlFlowToolNames).toEqual(['delegate_to_query_strategist', 'payload_change_request', 'ask_user', 'complete_task']);
         expect(promptParams.toolChoice).toBe('auto');
     });
 
     it('declares for an agent with sub-agents but no actions (pure orchestrator)', () => {
         const promptParams = {} as AIPromptParams;
         new DeclaringProbe([], [aSubAgent]).Apply(promptParams, agentParams);
-        expect(promptParams.tools?.map((t) => t.name)).toEqual(['delegate_to_query_strategist', 'payload_change_request', 'ask_user']);
+        expect(promptParams.tools?.map((t) => t.name)).toEqual(['delegate_to_query_strategist', 'payload_change_request', 'ask_user', 'complete_task']);
     });
 
     it('declares nothing for an agent with neither', () => {

@@ -9,7 +9,7 @@ import { DashboardShareAdapter } from './dashboard-share-adapter';
 
 /**
  * Public re-export kept for backward compatibility with existing call sites
- * ({@link DashboardBrowserResourceComponent}, `DashboardResource` wrapper).
+ * (the `DashboardResource` wrapper in `@memberjunction/ng-explorer-core`).
  * The new abstraction lives in `@memberjunction/ng-resource-permissions`.
  */
 export type ShareDialogResult = ResourceShareDialogResult & { Dashboard?: MJDashboardEntity };
@@ -53,19 +53,33 @@ export class DashboardShareDialogComponent extends BaseAngularComponent {
     @Output() Result = new EventEmitter<ShareDialogResult>();
 
     public context: ResourceShareContext | null = null;
-    public adapter = new DashboardShareAdapter();
+    public Adapter = new DashboardShareAdapter();
+
+    /** @deprecated Use {@link Adapter}. */
+    public get adapter() {
+        return this.Adapter;
+    }
+    /** @deprecated Use {@link Adapter}. */
+    public set adapter(value) {
+        this.Adapter = value;
+    }
 
     private _dashboard: MJDashboardEntity | null = null;
 
     constructor() {
         super();
-        this.adapter.Provider = this.ProviderToUse;
+        this.Adapter.Provider = this.ProviderToUse;
     }
 
-    onResult(result: ResourceShareDialogResult): void {
+    OnResult(result: ResourceShareDialogResult): void {
         this.Result.emit({
             Action: result.Action,
             Dashboard: result.Action === 'save' && this._dashboard ? this._dashboard : undefined
         });
+    }
+
+    /** @deprecated Use {@link OnResult}. */
+    onResult(result: ResourceShareDialogResult): void {
+        return this.OnResult(result);
     }
 }

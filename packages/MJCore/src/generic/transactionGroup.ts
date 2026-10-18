@@ -1,6 +1,7 @@
 import { Subject } from "rxjs";
 import { BaseEntity } from "./baseEntity";
 import { LogError, LogStatus } from "./logging";
+import { LocalCacheManager } from "./localCacheManager";
 
 /**
  * Internal class used by TransactionGroupBase and sub-classes to manage individual transactions
@@ -86,9 +87,9 @@ export class TransactionResult {
  * Used internally within the transaction group to manage the preprocessing of entities before a transaction is submitted
  */
 export class TransactionPreprocessingItem {
-    entity: BaseEntity;
-    complete: boolean = false;
-    completionPromise: Promise<void>;
+    entity: BaseEntity;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    complete: boolean = false;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    completionPromise: Promise<void>;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
     constructor(entity: BaseEntity, completionPromise: Promise<void>) {
         this.entity = entity;
@@ -228,7 +229,7 @@ export abstract class TransactionGroupBase {
      * @param results The transaction results (if applicable)
      * @param error Any error that occurred (if applicable)
      */
-    private NotifyTransactionStatus(success: boolean, results?: TransactionResult[], error?: any) {
+    private notifyTransactionStatus(success: boolean, results?: TransactionResult[], error?: any) {
         this.transactionNotifier.next({ success, results, error });
     }
 
@@ -342,14 +343,11 @@ export abstract class TransactionGroupBase {
                 // subclass handles the actual submit implementation whatever that does
                 let results: TransactionResult[] = await this.HandleSubmit();
 
-                // now we have the results back, so we can call the callback functions
-                for (let i = 0; i < results.length; i++) {
-                    await results[i].Transaction.CallBack(results[i].Result, results[i].Success);
-                }
-
                 // now, see if there are any false values for results[x].Success, if so, we have to return false
                 const overallSuccess = results.every(r => r.Success);
-                this.NotifyTransactionStatus(overallSuccess, results);
+
+                // now we have the results back, so we can call the callback functions and notify the group's entities
+                await this.completeSubmittedResults(results, overallSuccess);
 
                 this._status = overallSuccess ? 'Complete' : 'Failed';
                 return overallSuccess;
@@ -368,10 +366,67 @@ export abstract class TransactionGroupBase {
                 await this._pendingTransactions[i].CallBack(err, false);
             }
 
-            this.NotifyTransactionStatus(false, undefined, err);
+            this.notifyTransactionStatus(false, undefined, err);
             this._status = 'Failed';
             return false;
         }
+    }
+
+    /**
+     * Finishes a submitted group: calls each result's callback, then notifies subscribers of the
+     * outcome. Each entity in the group listens for that notification and finalizes there, which
+     * is when it raises its save or delete event.
+     *
+     * Both steps run inside an entity-event batch for every provider the group's entities save
+     * through, so the local cache applies the whole group to each cached result set once, rather
+     * than rewriting (and on a shared cache, republishing) each result set once per row. When the
+     * group did not fully succeed, or a callback throws, the batches close as failed and the
+     * affected result sets are invalidated instead of being given part of the group.
+     *
+     * A group submitted inside a provider transaction joins that transaction's open batch, which
+     * then applies when the transaction settles.
+     *
+     * `Submit()` waits for each batch to close, so its result now includes the cache maintenance
+     * (slot reads and writes, and any wait on a shared cache's cross-process lock) that per-row
+     * maintenance used to run without waiting. That is one wait per provider per group.
+     *
+     * Batches are keyed by provider, not by group. Any save raised for the same provider while the
+     * callbacks and notification run joins this group's batch, and is invalidated rather than
+     * applied if the group fails. In a browser every entity shares one provider, so an unrelated
+     * save in that window is affected. Invalidating is the safe direction: the slot reloads on its
+     * next read.
+     */
+    private async completeSubmittedResults(results: TransactionResult[], groupSucceeded: boolean): Promise<void> {
+        const cache = LocalCacheManager.Instance;
+        const owners = cache.IsInitialized ? this.entityProviders(results) : [];
+        for (const owner of owners) {
+            cache.BeginEntityEventBatch(owner);
+        }
+        let completed = false;
+        try {
+            for (const result of results) {
+                await result.Transaction.CallBack(result.Result, result.Success);
+            }
+            this.notifyTransactionStatus(groupSucceeded, results);
+            completed = true;
+        }
+        finally {
+            for (const owner of owners) {
+                await cache.EndEntityEventBatch(owner, groupSucceeded && completed);
+            }
+        }
+    }
+
+    /** The distinct providers the entities behind `results` save through. */
+    private entityProviders(results: TransactionResult[]): object[] {
+        const providers = new Set<object>();
+        for (const result of results) {
+            const provider = result.Transaction.BaseEntity?.ProviderToUse;
+            if (provider) {
+                providers.add(provider);
+            }
+        }
+        return [...providers];
     }
 
     /**

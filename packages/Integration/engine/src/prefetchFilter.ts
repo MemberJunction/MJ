@@ -35,9 +35,14 @@ export interface SqlQuoter {
  * PostgreSQL literals are already Unicode and it has no `N` prefix, hence the platform check
  * rather than an unconditional prefix.
  */
-export function quoteTextLiteral(value: string, q: SqlQuoter): string {
+export function QuoteTextLiteral(value: string, q: SqlQuoter): string {
     const quoted = q.QuoteStringLiteral(value);
     return q.PlatformKey === 'sqlserver' ? `N${quoted}` : quoted;
+}
+
+/** @deprecated Use {@link QuoteTextLiteral}. */
+export function quoteTextLiteral(value: string, q: SqlQuoter): string {
+    return QuoteTextLiteral(value, q);
 }
 
 /**
@@ -47,7 +52,7 @@ export function quoteTextLiteral(value: string, q: SqlQuoter): string {
  * @param q       the provider's dialect (identifier + string-literal quoting).
  * @returns a dialect-safe `ExtraFilter` string for the prefetch RunView.
  */
-export function buildContentHashPrefetchFilter(pkNames: string[], ids: string[], q: SqlQuoter): string {
+export function BuildContentHashPrefetchFilter(pkNames: string[], ids: string[], q: SqlQuoter): string {
     if (pkNames.length === 1) {
         // Single-PK fast path: WHERE [pk] IN (...).
         const inList = ids.map(id => q.QuoteStringLiteral(String(id))).join(',');
@@ -60,4 +65,9 @@ export function buildContentHashPrefetchFilter(pkNames: string[], ids: string[],
         return '(' + pkNames.map((name, i) =>
             `${q.QuoteIdentifier(name)} = ${q.QuoteStringLiteral(String(parts[i] ?? ''))}`).join(' AND ') + ')';
     }).join(' OR ');
+}
+
+/** @deprecated Use {@link BuildContentHashPrefetchFilter}. */
+export function buildContentHashPrefetchFilter(pkNames: string[], ids: string[], q: SqlQuoter): string {
+    return BuildContentHashPrefetchFilter(pkNames, ids, q);
 }

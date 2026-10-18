@@ -555,97 +555,228 @@ import { MJAIAgentRunStepEntityExtended } from '@memberjunction/ai-core-plus';
     `]
 })
 export class ExecutionNodeComponent {
-    @Input() step!: MJAIAgentRunStepEntityExtended;
-    @Input() depth: number = 0;
-    @Input() agentPath: string[] = [];
-    @Input() expanded: boolean = false;
-    @Input() detailsExpanded: boolean = false;
-    @Input() overrideDisplayStatus?: string; // Allow parent to override the displayed status
+    @Input() Step!: MJAIAgentRunStepEntityExtended;
+
+    /** @deprecated Use {@link Step}. */
+    @Input() set step(value: MJAIAgentRunStepEntityExtended) {
+      this.Step = value;
+    }
+    /** @deprecated Use {@link Step}. */
+    get step(): MJAIAgentRunStepEntityExtended {
+      return this.Step;
+    }
+    @Input() Depth: number = 0;
+
+    /** @deprecated Use {@link Depth}. */
+    @Input() set depth(value: number) {
+      this.Depth = value;
+    }
+    /** @deprecated Use {@link Depth}. */
+    get depth(): number {
+      return this.Depth;
+    }
+    @Input() AgentPath: string[] = [];
+
+    /** @deprecated Use {@link AgentPath}. */
+    @Input() set agentPath(value: string[]) {
+      this.AgentPath = value;
+    }
+    /** @deprecated Use {@link AgentPath}. */
+    get agentPath(): string[] {
+      return this.AgentPath;
+    }
+    @Input() Expanded: boolean = false;
+
+    /** @deprecated Use {@link Expanded}. */
+    @Input() set expanded(value: boolean) {
+      this.Expanded = value;
+    }
+    /** @deprecated Use {@link Expanded}. */
+    get expanded(): boolean {
+      return this.Expanded;
+    }
+    @Input() DetailsExpanded: boolean = false;
+
+    /** @deprecated Use {@link DetailsExpanded}. */
+    @Input() set detailsExpanded(value: boolean) {
+      this.DetailsExpanded = value;
+    }
+    /** @deprecated Use {@link DetailsExpanded}. */
+    get detailsExpanded(): boolean {
+      return this.DetailsExpanded;
+    }
+    @Input() OverrideDisplayStatus?: string;
+
+    /** @deprecated Use {@link OverrideDisplayStatus}. */
+    @Input() set overrideDisplayStatus(value: string | undefined) {
+      this.OverrideDisplayStatus = value;
+    }
+    /** @deprecated Use {@link OverrideDisplayStatus}. */
+    get overrideDisplayStatus(): string | undefined {
+      return this.OverrideDisplayStatus;
+    } // Allow parent to override the displayed status
     
-    @Output() toggleNode = new EventEmitter<void>();
-    @Output() toggleDetails = new EventEmitter<void>();
-    @Output() userInteracted = new EventEmitter<void>();
+    @Output() ToggleNode = new EventEmitter<void>();
+
+    /**
+     * @deprecated Use {@link ToggleNode}.
+     *
+     * The same emitter under the old binding name, so a template still binding
+     * (toggleNode) keeps working. Must stay AFTER ToggleNode: class fields
+     * initialise in order, and the other way round this captures undefined.
+     */
+    @Output() toggleNode = this.ToggleNode;
+    @Output() ToggleDetails = new EventEmitter<void>();
+
+    /**
+     * @deprecated Use {@link ToggleDetails}.
+     *
+     * The same emitter under the old binding name, so a template still binding
+     * (toggleDetails) keeps working. Must stay AFTER ToggleDetails: class fields
+     * initialise in order, and the other way round this captures undefined.
+     */
+    @Output() toggleDetails = this.ToggleDetails;
+    @Output() UserInteracted = new EventEmitter<void>();
+
+    /**
+     * @deprecated Use {@link UserInteracted}.
+     *
+     * The same emitter under the old binding name, so a template still binding
+     * (userInteracted) keeps working. Must stay AFTER UserInteracted: class fields
+     * initialise in order, and the other way round this captures undefined.
+     */
+    @Output() userInteracted = this.UserInteracted;
     
+    HasChildren(): boolean {
+        return this.Step.StepType === 'Sub-Agent' && 
+               !!this.Step.SubAgentRun?.Steps && 
+               this.Step.SubAgentRun.Steps.length > 0;
+    }
+
+    /** @deprecated Use {@link HasChildren}. */
     hasChildren(): boolean {
-        return this.step.StepType === 'Sub-Agent' && 
-               !!this.step.SubAgentRun?.Steps && 
-               this.step.SubAgentRun.Steps.length > 0;
+      return this.HasChildren();
     }
     
+    OnToggleChildren(event?: Event): void {
+        if (event) {
+            event.stopPropagation();
+        }
+        if (this.HasChildren()) {
+            this.ToggleNode.emit();
+            this.UserInteracted.emit();
+        }
+    }
+
+    /** @deprecated Use {@link OnToggleChildren}. */
     onToggleChildren(event?: Event): void {
+      return this.OnToggleChildren(event);
+    }
+    
+    OnToggleDetails(event?: Event): void {
         if (event) {
             event.stopPropagation();
         }
-        if (this.hasChildren()) {
-            this.toggleNode.emit();
-            this.userInteracted.emit();
+        if (this.HasNodeDetails()) {
+            this.ToggleDetails.emit();
+            this.UserInteracted.emit();
         }
     }
-    
+
+    /** @deprecated Use {@link OnToggleDetails}. */
     onToggleDetails(event?: Event): void {
-        if (event) {
-            event.stopPropagation();
-        }
-        if (this.hasNodeDetails()) {
-            this.toggleDetails.emit();
-            this.userInteracted.emit();
-        }
+      return this.OnToggleDetails(event);
     }
     
+    OnDoubleClick(): void {
+        if (this.HasChildren()) {
+            this.ToggleNode.emit();
+            this.UserInteracted.emit();
+        }
+    }
+
+    /** @deprecated Use {@link OnDoubleClick}. */
     onDoubleClick(): void {
-        if (this.hasChildren()) {
-            this.toggleNode.emit();
-            this.userInteracted.emit();
-        }
+      return this.OnDoubleClick();
     }
     
+    HasNodeDetails(): boolean {
+        return !!this.Step.InputData || 
+               !!this.Step.OutputData || 
+               !!this.Step.ErrorMessage || 
+               !!this.GetDetailsMarkdown() ||
+               this.IsNameTruncated();
+    }
+
+    /** @deprecated Use {@link HasNodeDetails}. */
     hasNodeDetails(): boolean {
-        return !!this.step.InputData || 
-               !!this.step.OutputData || 
-               !!this.step.ErrorMessage || 
-               !!this.getDetailsMarkdown() ||
-               this.isNameTruncated();
+      return this.HasNodeDetails();
     }
     
-    getTruncatedName(): string {
+    GetTruncatedName(): string {
         const maxLength = 120;
-        const name = this.getStepName();
+        const name = this.GetStepName();
         if (name.length <= maxLength) {
             return name;
         }
         return name.substring(0, maxLength) + '...';
     }
-    
-    isNameTruncated(): boolean {
-        return this.step.StepName.length > 120;
+
+    /** @deprecated Use {@link GetTruncatedName}. */
+    getTruncatedName(): string {
+      return this.GetTruncatedName();
     }
     
-    formatDuration(ms: number): string {
+    IsNameTruncated(): boolean {
+        return this.Step.StepName.length > 120;
+    }
+
+    /** @deprecated Use {@link IsNameTruncated}. */
+    isNameTruncated(): boolean {
+      return this.IsNameTruncated();
+    }
+    
+    FormatDuration(ms: number): string {
         if (ms < 1000) return `${ms}ms`;
         if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
         const minutes = Math.floor(ms / 60000);
         const seconds = Math.floor((ms % 60000) / 1000);
         return `${minutes}m ${seconds}s`;
     }
+
+    /** @deprecated Use {@link FormatDuration}. */
+    formatDuration(ms: number): string {
+      return this.FormatDuration(ms);
+    }
     
+    GetNodeTitle(): string {
+        if (this.Step.StepType === 'Sub-Agent' && this.GetAgentName()) {
+            return `Sub-agent: ${this.GetAgentName()}`;
+        }
+        if (this.Step.StepType === 'Actions' && this.GetActionName()) {
+            return `Action: ${this.GetActionName()}`;
+        }
+        return this.Step.StepType;
+    }
+
+    /** @deprecated Use {@link GetNodeTitle}. */
     getNodeTitle(): string {
-        if (this.step.StepType === 'Sub-Agent' && this.getAgentName()) {
-            return `Sub-agent: ${this.getAgentName()}`;
-        }
-        if (this.step.StepType === 'Actions' && this.getActionName()) {
-            return `Action: ${this.getActionName()}`;
-        }
-        return this.step.StepType;
+      return this.GetNodeTitle();
     }
     
     // Getter methods for step data
-    getStepName(): string {
+    GetStepName(): string {
         // Extract just the first line if the name contains markdown
-        const lines = this.step.StepName.split('\n');
+        const lines = this.Step.StepName.split('\n');
         return lines[0].trim();
     }
+
+    /** @deprecated Use {@link GetStepName}. */
+    getStepName(): string {
+      return this.GetStepName();
+    }
     
-    getStepTypeClass(): string {
+    GetStepTypeClass(): string {
         const typeMap: Record<string, string> = {
             'Validation': 'validation',
             'Prompt': 'prompt',
@@ -654,10 +785,15 @@ export class ExecutionNodeComponent {
             'Decision': 'decision',
             'Chat': 'chat'
         };
-        return typeMap[this.step.StepType] || 'prompt';
+        return typeMap[this.Step.StepType] || 'prompt';
+    }
+
+    /** @deprecated Use {@link GetStepTypeClass}. */
+    getStepTypeClass(): string {
+      return this.GetStepTypeClass();
     }
     
-    getStatusClass(): string {
+    GetStatusClass(): string {
         const statusMap: Record<string, string> = {
             'Pending': 'pending',
             'Running': 'running',
@@ -667,45 +803,70 @@ export class ExecutionNodeComponent {
             'Paused': 'pending'
         };
         // Use override if provided, otherwise use actual status
-        const status = this.overrideDisplayStatus || this.step.Status;
+        const status = this.OverrideDisplayStatus || this.Step.Status;
         return statusMap[status] || 'pending';
     }
+
+    /** @deprecated Use {@link GetStatusClass}. */
+    getStatusClass(): string {
+      return this.GetStatusClass();
+    }
     
+    GetDuration(): number {
+        if (!this.Step.StartedAt || !this.Step.CompletedAt) return 0;
+        return new Date(this.Step.CompletedAt).getTime() - new Date(this.Step.StartedAt).getTime();
+    }
+
+    /** @deprecated Use {@link GetDuration}. */
     getDuration(): number {
-        if (!this.step.StartedAt || !this.step.CompletedAt) return 0;
-        return new Date(this.step.CompletedAt).getTime() - new Date(this.step.StartedAt).getTime();
+      return this.GetDuration();
     }
     
-    getTokensUsed(): number | undefined {
+    GetTokensUsed(): number | undefined {
         // Check if this is a prompt step with token data
-        if (this.step.StepType === 'Prompt' && this.step.PromptRun) {
-            return this.step.PromptRun.TokensUsed || undefined;
+        if (this.Step.StepType === 'Prompt' && this.Step.PromptRun) {
+            return this.Step.PromptRun.TokensUsed || undefined;
         }
         return undefined;
     }
+
+    /** @deprecated Use {@link GetTokensUsed}. */
+    getTokensUsed(): number | undefined {
+      return this.GetTokensUsed();
+    }
     
-    getCost(): number | undefined {
+    GetCost(): number | undefined {
         // Check if this is a prompt step with cost data
-        if (this.step.StepType === 'Prompt' && this.step.PromptRun) {
-            return this.step.PromptRun.TotalCost || undefined;
+        if (this.Step.StepType === 'Prompt' && this.Step.PromptRun) {
+            return this.Step.PromptRun.TotalCost || undefined;
         }
         return undefined;
     }
+
+    /** @deprecated Use {@link GetCost}. */
+    getCost(): number | undefined {
+      return this.GetCost();
+    }
     
-    getDetailsMarkdown(): string | undefined {
+    GetDetailsMarkdown(): string | undefined {
         // Check if the step name contains markdown details after the first line
-        const lines = this.step.StepName.split('\n');
+        const lines = this.Step.StepName.split('\n');
         if (lines.length > 1) {
             return lines.slice(1).join('\n').trim();
         }
         return undefined;
     }
+
+    /** @deprecated Use {@link GetDetailsMarkdown}. */
+    getDetailsMarkdown(): string | undefined {
+      return this.GetDetailsMarkdown();
+    }
     
-    getInputPreview(): string | undefined {
-        if (!this.step.InputData) return undefined;
+    GetInputPreview(): string | undefined {
+        if (!this.Step.InputData) return undefined;
         
         try {
-            const parsed = JSON.parse(this.step.InputData);
+            const parsed = JSON.parse(this.Step.InputData);
             
             // Extract meaningful preview
             if (parsed.promptName) return `Prompt: ${parsed.promptName}`;
@@ -718,15 +879,20 @@ export class ExecutionNodeComponent {
             const str = JSON.stringify(parsed, null, 2);
             return str.length > 500 ? str.substring(0, 500) + '...' : str;
         } catch {
-            return typeof this.step.InputData === 'string' ? this.step.InputData : JSON.stringify(this.step.InputData);
+            return typeof this.Step.InputData === 'string' ? this.Step.InputData : JSON.stringify(this.Step.InputData);
         }
     }
+
+    /** @deprecated Use {@link GetInputPreview}. */
+    getInputPreview(): string | undefined {
+      return this.GetInputPreview();
+    }
     
-    getOutputPreview(): string | undefined {
-        if (!this.step.OutputData) return undefined;
+    GetOutputPreview(): string | undefined {
+        if (!this.Step.OutputData) return undefined;
         
         try {
-            const parsed = JSON.parse(this.step.OutputData);
+            const parsed = JSON.parse(this.Step.OutputData);
             
             // Show action results clearly
             if (parsed.actionResult) {
@@ -764,49 +930,79 @@ export class ExecutionNodeComponent {
             const str = JSON.stringify(parsed, null, 2);
             return str.length > 500 ? str.substring(0, 500) + '...' : str;
         } catch {
-            return typeof this.step.OutputData === 'string' ? this.step.OutputData : JSON.stringify(this.step.OutputData);
+            return typeof this.Step.OutputData === 'string' ? this.Step.OutputData : JSON.stringify(this.Step.OutputData);
         }
+    }
+
+    /** @deprecated Use {@link GetOutputPreview}. */
+    getOutputPreview(): string | undefined {
+      return this.GetOutputPreview();
     }
     
     // Methods to extract metadata from input/output data
-    getAgentName(): string | undefined {
-        if (this.step.StepType === 'Sub-Agent' && this.step.SubAgentRun) {
-            return this.step.SubAgentRun.Agent || undefined;
+    GetAgentName(): string | undefined {
+        if (this.Step.StepType === 'Sub-Agent' && this.Step.SubAgentRun) {
+            return this.Step.SubAgentRun.Agent || undefined;
         }
         return this.parseMetadata('subAgentName');
     }
+
+    /** @deprecated Use {@link GetAgentName}. */
+    getAgentName(): string | undefined {
+      return this.GetAgentName();
+    }
     
-    getAgentIconClass(): string | undefined {
+    GetAgentIconClass(): string | undefined {
         return this.parseMetadata('subAgentIconClass') || this.parseMetadata('agentIconClass');
     }
-    
-    getAgentLogoURL(): string | undefined {
-        return this.parseMetadata('subAgentLogoURL') || this.parseMetadata('agentLogoURL');
+
+    /** @deprecated Use {@link GetAgentIconClass}. */
+    getAgentIconClass(): string | undefined {
+      return this.GetAgentIconClass();
     }
     
-    getActionName(): string | undefined {
-        if (this.step.StepType === 'Actions' && this.step.ActionExecutionLog) {
-            return this.step.ActionExecutionLog.Action;
+    GetAgentLogoURL(): string | undefined {
+        return this.parseMetadata('subAgentLogoURL') || this.parseMetadata('agentLogoURL');
+    }
+
+    /** @deprecated Use {@link GetAgentLogoURL}. */
+    getAgentLogoURL(): string | undefined {
+      return this.GetAgentLogoURL();
+    }
+    
+    GetActionName(): string | undefined {
+        if (this.Step.StepType === 'Actions' && this.Step.ActionExecutionLog) {
+            return this.Step.ActionExecutionLog.Action;
         }
         return this.parseMetadata('actionName');
     }
+
+    /** @deprecated Use {@link GetActionName}. */
+    getActionName(): string | undefined {
+      return this.GetActionName();
+    }
     
-    getActionIconClass(): string | undefined {
+    GetActionIconClass(): string | undefined {
         return this.parseMetadata('actionIconClass');
+    }
+
+    /** @deprecated Use {@link GetActionIconClass}. */
+    getActionIconClass(): string | undefined {
+      return this.GetActionIconClass();
     }
     
     private parseMetadata(key: string): string | undefined {
-        if (!this.step.InputData) return undefined;
+        if (!this.Step.InputData) return undefined;
         
         try {
-            const parsed = JSON.parse(this.step.InputData);
+            const parsed = JSON.parse(this.Step.InputData);
             return parsed[key];
         } catch {
             return undefined;
         }
     }
     
-    formatMarkdown(markdown: string): string {
+    FormatMarkdown(markdown: string): string {
         // Basic markdown formatting
         let html = markdown;
         
@@ -842,5 +1038,10 @@ export class ExecutionNodeComponent {
         html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
         
         return html;
+    }
+
+    /** @deprecated Use {@link FormatMarkdown}. */
+    formatMarkdown(markdown: string): string {
+      return this.FormatMarkdown(markdown);
     }
 }

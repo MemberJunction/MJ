@@ -20,35 +20,134 @@ import {
 })
 export class ImageViewerComponent implements OnInit, OnDestroy {
   /** Image source URL (can be data URL or regular URL) */
-  @Input() imageUrl: string = '';
+  @Input() ImageUrl: string = '';
+
+  /** @deprecated Use {@link ImageUrl}. */
+  @Input() set imageUrl(value: string) {
+    this.ImageUrl = value;
+  }
+  /** @deprecated Use {@link ImageUrl}. */
+  get imageUrl(): string {
+    return this.ImageUrl;
+  }
 
   /** Image alt text */
-  @Input() alt: string = 'Image';
+  @Input() Alt: string = 'Image';
+
+  /** @deprecated Use {@link Alt}. */
+  @Input() set alt(value: string) {
+    this.Alt = value;
+  }
+  /** @deprecated Use {@link Alt}. */
+  get alt(): string {
+    return this.Alt;
+  }
 
   /** Image filename for download */
-  @Input() fileName: string = 'image';
+  @Input() FileName: string = 'image';
+
+  /** @deprecated Use {@link FileName}. */
+  @Input() set fileName(value: string) {
+    this.FileName = value;
+  }
+  /** @deprecated Use {@link FileName}. */
+  get fileName(): string {
+    return this.FileName;
+  }
 
   /** Whether the viewer is visible */
-  @Input() visible: boolean = false;
+  @Input() Visible: boolean = false;
+
+  /** @deprecated Use {@link Visible}. */
+  @Input() set visible(value: boolean) {
+    this.Visible = value;
+  }
+  /** @deprecated Use {@link Visible}. */
+  get visible(): boolean {
+    return this.Visible;
+  }
 
   /** Emits when the viewer should be closed */
-  @Output() closed = new EventEmitter<void>();
+  @Output() Closed = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link Closed}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (closed) keeps working. Must stay AFTER Closed: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() closed = this.Closed;
 
   // Zoom and pan state
-  public zoomLevel: number = 1;
-  public minZoom: number = 0.1;
-  public maxZoom: number = 5;
-  public translateX: number = 0;
-  public translateY: number = 0;
+  public ZoomLevel: number = 1;
+
+  /** @deprecated Use {@link ZoomLevel}. */
+  public get zoomLevel(): number {
+    return this.ZoomLevel;
+  }
+  /** @deprecated Use {@link ZoomLevel}. */
+  public set zoomLevel(value: number) {
+    this.ZoomLevel = value;
+  }
+  public MinZoom: number = 0.1;
+
+  /** @deprecated Use {@link MinZoom}. */
+  public get minZoom(): number {
+    return this.MinZoom;
+  }
+  /** @deprecated Use {@link MinZoom}. */
+  public set minZoom(value: number) {
+    this.MinZoom = value;
+  }
+  public MaxZoom: number = 5;
+
+  /** @deprecated Use {@link MaxZoom}. */
+  public get maxZoom(): number {
+    return this.MaxZoom;
+  }
+  /** @deprecated Use {@link MaxZoom}. */
+  public set maxZoom(value: number) {
+    this.MaxZoom = value;
+  }
+  public TranslateX: number = 0;
+
+  /** @deprecated Use {@link TranslateX}. */
+  public get translateX(): number {
+    return this.TranslateX;
+  }
+  /** @deprecated Use {@link TranslateX}. */
+  public set translateX(value: number) {
+    this.TranslateX = value;
+  }
+  public TranslateY: number = 0;
+
+  /** @deprecated Use {@link TranslateY}. */
+  public get translateY(): number {
+    return this.TranslateY;
+  }
+  /** @deprecated Use {@link TranslateY}. */
+  public set translateY(value: number) {
+    this.TranslateY = value;
+  }
 
   // Drag state
-  public isDragging: boolean = false;
+  public IsDragging: boolean = false;
+
+  /** @deprecated Use {@link IsDragging}. */
+  public get isDragging(): boolean {
+    return this.IsDragging;
+  }
+  /** @deprecated Use {@link IsDragging}. */
+  public set isDragging(value: boolean) {
+    this.IsDragging = value;
+  }
   private lastMouseX: number = 0;
   private lastMouseY: number = 0;
 
   ngOnInit(): void {
     // Lock body scroll when viewer is open
-    if (this.visible) {
+    if (this.Visible) {
       document.body.style.overflow = 'hidden';
     }
   }
@@ -63,7 +162,7 @@ export class ImageViewerComponent implements OnInit, OnDestroy {
    */
   @HostListener('document:keydown.escape')
   onEscapeKey(): void {
-    if (this.visible) {
+    if (this.Visible) {
       this.close();
     }
   }
@@ -73,7 +172,7 @@ export class ImageViewerComponent implements OnInit, OnDestroy {
    */
   @HostListener('wheel', ['$event'])
   onWheel(event: WheelEvent): void {
-    if (!this.visible) return;
+    if (!this.Visible) return;
     event.preventDefault();
 
     const delta = event.deltaY > 0 ? -0.1 : 0.1;
@@ -86,13 +185,13 @@ export class ImageViewerComponent implements OnInit, OnDestroy {
   close(): void {
     this.resetView();
     document.body.style.overflow = '';
-    this.closed.emit();
+    this.Closed.emit();
   }
 
   /**
    * Handle backdrop click
    */
-  onBackdropClick(event: MouseEvent): void {
+  OnBackdropClick(event: MouseEvent): void {
     // Only close if clicking directly on backdrop
     const target = event.target as HTMLElement;
     if (target.classList.contains('image-viewer-backdrop')) {
@@ -100,80 +199,110 @@ export class ImageViewerComponent implements OnInit, OnDestroy {
     }
   }
 
+  /** @deprecated Use {@link OnBackdropClick}. */
+  onBackdropClick(event: MouseEvent): void {
+    return this.OnBackdropClick(event);
+  }
+
   /**
    * Zoom in
    */
-  zoomIn(): void {
+  ZoomIn(): void {
     this.adjustZoom(0.25);
+  }
+
+  /** @deprecated Use {@link ZoomIn}. */
+  zoomIn(): void {
+    return this.ZoomIn();
   }
 
   /**
    * Zoom out
    */
-  zoomOut(): void {
+  ZoomOut(): void {
     this.adjustZoom(-0.25);
+  }
+
+  /** @deprecated Use {@link ZoomOut}. */
+  zoomOut(): void {
+    return this.ZoomOut();
   }
 
   /**
    * Reset to 100% zoom
    */
+  ResetZoom(): void {
+    this.ZoomLevel = 1;
+    this.TranslateX = 0;
+    this.TranslateY = 0;
+  }
+
+  /** @deprecated Use {@link ResetZoom}. */
   resetZoom(): void {
-    this.zoomLevel = 1;
-    this.translateX = 0;
-    this.translateY = 0;
+    return this.ResetZoom();
   }
 
   /**
    * Fit image to screen
    */
-  fitToScreen(): void {
+  FitToScreen(): void {
     // Reset position and set zoom to 1 (CSS will handle fitting)
     this.resetView();
+  }
+
+  /** @deprecated Use {@link FitToScreen}. */
+  fitToScreen(): void {
+    return this.FitToScreen();
   }
 
   /**
    * Reset view to initial state
    */
   private resetView(): void {
-    this.zoomLevel = 1;
-    this.translateX = 0;
-    this.translateY = 0;
+    this.ZoomLevel = 1;
+    this.TranslateX = 0;
+    this.TranslateY = 0;
   }
 
   /**
    * Adjust zoom level
    */
   private adjustZoom(delta: number, centerX?: number, centerY?: number): void {
-    const newZoom = Math.max(this.minZoom, Math.min(this.maxZoom, this.zoomLevel + delta));
+    const newZoom = Math.max(this.MinZoom, Math.min(this.MaxZoom, this.ZoomLevel + delta));
 
-    if (centerX !== undefined && centerY !== undefined && newZoom !== this.zoomLevel) {
+    if (centerX !== undefined && centerY !== undefined && newZoom !== this.ZoomLevel) {
       // Zoom towards mouse position
-      const factor = newZoom / this.zoomLevel;
+      const factor = newZoom / this.ZoomLevel;
       const imageContainer = document.querySelector('.image-container') as HTMLElement;
       if (imageContainer) {
         const rect = imageContainer.getBoundingClientRect();
-        const offsetX = centerX - rect.left - rect.width / 2 - this.translateX;
-        const offsetY = centerY - rect.top - rect.height / 2 - this.translateY;
+        const offsetX = centerX - rect.left - rect.width / 2 - this.TranslateX;
+        const offsetY = centerY - rect.top - rect.height / 2 - this.TranslateY;
 
-        this.translateX = this.translateX - offsetX * (factor - 1);
-        this.translateY = this.translateY - offsetY * (factor - 1);
+        this.TranslateX = this.TranslateX - offsetX * (factor - 1);
+        this.TranslateY = this.TranslateY - offsetY * (factor - 1);
       }
     }
 
-    this.zoomLevel = newZoom;
+    this.ZoomLevel = newZoom;
   }
 
   /**
    * Handle mouse down for dragging
    */
-  onMouseDown(event: MouseEvent): void {
+  OnMouseDown(event: MouseEvent): void {
     if (event.button !== 0) return; // Only left click
-    if (this.zoomLevel <= 1) return; // Only allow pan when zoomed in
+    if (this.ZoomLevel <= 1) return; // Only allow pan when zoomed in
 
-    this.isDragging = true;
+    this.IsDragging = true;
     this.lastMouseX = event.clientX;
     this.lastMouseY = event.clientY;
     event.preventDefault();
+  }
+
+  /** @deprecated Use {@link OnMouseDown}. */
+  onMouseDown(event: MouseEvent): void {
+    return this.OnMouseDown(event);
   }
 
   /**
@@ -181,13 +310,13 @@ export class ImageViewerComponent implements OnInit, OnDestroy {
    */
   @HostListener('document:mousemove', ['$event'])
   onMouseMove(event: MouseEvent): void {
-    if (!this.isDragging) return;
+    if (!this.IsDragging) return;
 
     const deltaX = event.clientX - this.lastMouseX;
     const deltaY = event.clientY - this.lastMouseY;
 
-    this.translateX += deltaX;
-    this.translateY += deltaY;
+    this.TranslateX += deltaX;
+    this.TranslateY += deltaY;
 
     this.lastMouseX = event.clientX;
     this.lastMouseY = event.clientY;
@@ -198,30 +327,45 @@ export class ImageViewerComponent implements OnInit, OnDestroy {
    */
   @HostListener('document:mouseup')
   onMouseUp(): void {
-    this.isDragging = false;
+    this.IsDragging = false;
   }
 
   /**
    * Download the image
    */
-  downloadImage(): void {
+  DownloadImage(): void {
     const link = document.createElement('a');
-    link.href = this.imageUrl;
-    link.download = this.fileName;
+    link.href = this.ImageUrl;
+    link.download = this.FileName;
     link.click();
+  }
+
+  /** @deprecated Use {@link DownloadImage}. */
+  downloadImage(): void {
+    return this.DownloadImage();
   }
 
   /**
    * Get current zoom percentage for display
    */
+  get ZoomPercentage(): string {
+    return Math.round(this.ZoomLevel * 100) + '%';
+  }
+
+  /** @deprecated Use {@link ZoomPercentage}. */
   get zoomPercentage(): string {
-    return Math.round(this.zoomLevel * 100) + '%';
+    return this.ZoomPercentage;
   }
 
   /**
    * Get transform style for image
    */
+  get ImageTransform(): string {
+    return `translate(${this.TranslateX}px, ${this.TranslateY}px) scale(${this.ZoomLevel})`;
+  }
+
+  /** @deprecated Use {@link ImageTransform}. */
   get imageTransform(): string {
-    return `translate(${this.translateX}px, ${this.translateY}px) scale(${this.zoomLevel})`;
+    return this.ImageTransform;
   }
 }

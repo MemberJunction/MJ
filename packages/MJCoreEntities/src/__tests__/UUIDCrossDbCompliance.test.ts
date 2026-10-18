@@ -89,7 +89,7 @@ describe('UUID Cross-Database Compliance', () => {
             const engine = MCPEngineClass.Instance;
 
             // Simulate data loaded from SQL Server (uppercase)
-            seedEngineCache(engine, '_Servers', [
+            seedEngineCache(engine, '_servers', [
                 { ID: UUID_UPPER, Name: 'Test Server' },
                 { ID: UUID_OTHER, Name: 'Other Server' },
             ]);
@@ -103,7 +103,7 @@ describe('UUID Cross-Database Compliance', () => {
         it('should find connection by ID regardless of UUID case', () => {
             const engine = MCPEngineClass.Instance;
 
-            seedEngineCache(engine, '_Connections', [
+            seedEngineCache(engine, '_connections', [
                 { ID: UUID_LOWER, Name: 'Test Connection' },
             ]);
 
@@ -116,7 +116,7 @@ describe('UUID Cross-Database Compliance', () => {
         it('should find tool by ID regardless of UUID case', () => {
             const engine = MCPEngineClass.Instance;
 
-            seedEngineCache(engine, '_Tools', [
+            seedEngineCache(engine, '_tools', [
                 { ID: UUID_UPPER, ToolName: 'Test Tool' },
             ]);
 

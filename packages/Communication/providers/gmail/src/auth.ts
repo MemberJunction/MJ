@@ -21,7 +21,7 @@ export const GmailClient = google.gmail({
 });
 
 // Helper function to get authenticated user information
-export async function getAuthenticatedUser() {
+export async function GetAuthenticatedUser() {
   try {
     // Get user profile to verify authentication
     const response = await GmailClient.users.getProfile({
@@ -33,4 +33,9 @@ export async function getAuthenticatedUser() {
     LogError('Error authenticating with Gmail API:', undefined, error);
     return null;
   }
+}
+
+/** @deprecated Use {@link GetAuthenticatedUser}. */
+export async function getAuthenticatedUser() {
+  return GetAuthenticatedUser();
 }

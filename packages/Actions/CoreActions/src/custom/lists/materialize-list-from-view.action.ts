@@ -5,10 +5,10 @@ import { ListOperations } from '@memberjunction/lists';
 import type { MaterializeOptions } from '@memberjunction/lists-base';
 
 import {
-  addOutputParam,
-  getBooleanParam,
-  getStringParam,
-  missingParam,
+  AddOutputParam,
+  GetBooleanParam,
+  GetStringParam,
+  MissingParam,
 } from './_action-helpers';
 
 /**
@@ -34,12 +34,12 @@ import {
 @RegisterClass(BaseAction, 'Materialize List From View')
 export class MaterializeListFromViewAction extends BaseAction {
   protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
-    const viewId = getStringParam(params, 'ViewID');
-    const listName = getStringParam(params, 'ListName');
-    if (!viewId) return missingParam('ViewID');
-    if (!listName) return missingParam('ListName');
+    const viewId = GetStringParam(params, 'ViewID');
+    const listName = GetStringParam(params, 'ListName');
+    if (!viewId) return MissingParam('ViewID');
+    if (!listName) return MissingParam('ListName');
 
-    const refreshMode = (getStringParam(params, 'RefreshMode') ?? 'Additive') as 'Additive' | 'Sync';
+    const refreshMode = (GetStringParam(params, 'RefreshMode') ?? 'Additive') as 'Additive' | 'Sync';
     if (refreshMode !== 'Additive' && refreshMode !== 'Sync') {
       return {
         Success: false,
@@ -50,19 +50,19 @@ export class MaterializeListFromViewAction extends BaseAction {
 
     const opts: MaterializeOptions = {
       ListName: listName,
-      CategoryId: getStringParam(params, 'CategoryID'),
-      Description: getStringParam(params, 'Description'),
-      RememberLineage: getBooleanParam(params, 'RememberLineage', true),
-      UseSnapshot: getBooleanParam(params, 'UseSnapshot', false),
+      CategoryId: GetStringParam(params, 'CategoryID'),
+      Description: GetStringParam(params, 'Description'),
+      RememberLineage: GetBooleanParam(params, 'RememberLineage', true),
+      UseSnapshot: GetBooleanParam(params, 'UseSnapshot', false),
       RefreshMode: refreshMode,
     };
 
     const ops = new ListOperations(params.ContextUser, params.Provider);
     const result = await ops.MaterializeFromView(viewId, opts);
 
-    addOutputParam(params, 'CreatedListID', result.CreatedListId);
-    addOutputParam(params, 'Added', result.Counts?.Added);
-    addOutputParam(params, 'Failed', result.Counts?.Failed);
+    AddOutputParam(params, 'CreatedListID', result.CreatedListId);
+    AddOutputParam(params, 'Added', result.Counts?.Added);
+    AddOutputParam(params, 'Failed', result.Counts?.Failed);
 
     return {
       Success: result.Success,
