@@ -67,6 +67,8 @@ export interface SeedContext {
   businessDomains?: string[];
   customInstructions?: string;
   industryContext?: string;
+  /** See SeedContextConfig.keyPassMaxChars. */
+  keyPassMaxChars?: number;
 }
 
 /**

@@ -6,6 +6,7 @@
 import { DatabaseDocumentation, AnalysisRun, SchemaDefinition, TableDefinition, ColumnDefinition, ValueListVerdict } from '../types/state.js';
 import { EnsureArray } from "../utils/ensureArray.js";
 import { BuildIndexHints, FormatIndexHint, IsUniquelyIndexed } from "../utils/index-hints.js";
+import { SeedContextExcerpt } from "../utils/seed-context.js";
 import { TableNode, BackpropagationTrigger, TableAnalysisContext, TableGroundTruthContext, EnumCandidateContext } from '../types/analysis.js';
 import { EnumCandidateGate } from '../discovery/EnumCandidateGate.js';
 import {
@@ -199,7 +200,7 @@ export class AnalysisEngine {
       const [schemaName, tableName] = tableKey.split('.');
       const table = this.stateManager.findTable(state, schemaName, tableName);
       const candidates = tablePKs.map(pk => ({ columns: pk.columnNames, confidence: pk.confidence, locked: pk.status === 'confirmed' }));
-      const context = { sourceSchema: schemaName, sourceTable: tableName, tableDescription: table?.description || '', allTables, candidates, existingIndexes: this.indexHintLines(table), seedContext: state.seedContext ?? this.config.seedContext };
+      const context = { sourceSchema: schemaName, sourceTable: tableName, tableDescription: table?.description || '', allTables, candidates, existingIndexes: this.indexHintLines(table), seedContext: state.seedContext ?? this.config.seedContext, seedExcerpt: SeedContextExcerpt(state.seedContext ?? this.config.seedContext, [tableName]) };
 
       const result = await this.promptEngine.executePrompt<import('../types/prompts.js').PKPruningProposal[]>(
         'pk-pruning-table', context,
@@ -222,7 +223,7 @@ export class AnalysisEngine {
     if (allProposals.length === 0) return { removed: 0, kept: allPKs.length };
 
     this.onProgress('PK pruning pass 2: holistic review', { proposals: allProposals.length, model: effectiveModel });
-    const holisticContext = { allTables, proposals: allProposals.map(p => ({ sourceSchema: p.sourceSchema, sourceTable: p.sourceTable, columns: p.columns, confidence: p.confidence, reasoning: p.reasoning })), seedContext: state.seedContext ?? this.config.seedContext };
+    const holisticContext = { allTables, proposals: allProposals.map(p => ({ sourceSchema: p.sourceSchema, sourceTable: p.sourceTable, columns: p.columns, confidence: p.confidence, reasoning: p.reasoning })), seedContext: state.seedContext ?? this.config.seedContext, seedExcerpt: SeedContextExcerpt(state.seedContext ?? this.config.seedContext, []) };
 
     const holisticResult = await this.promptEngine.executePrompt<import('../types/prompts.js').PKPruningProposal[]>(
       'pk-pruning-holistic', holisticContext,
@@ -347,7 +348,8 @@ export class AnalysisEngine {
         allTables,
         candidates,
         existingIndexes: this.indexHintLines(table),
-        seedContext: state.seedContext ?? this.config.seedContext
+        seedContext: state.seedContext ?? this.config.seedContext,
+        seedExcerpt: SeedContextExcerpt(state.seedContext ?? this.config.seedContext, [tableName])
       };
 
       const result = await this.promptEngine.executePrompt<import('../types/prompts.js').FKPruningProposal[]>(
@@ -414,7 +416,8 @@ export class AnalysisEngine {
         confidence: p.confidence,
         reasoning: p.reasoning
       })),
-      seedContext: state.seedContext ?? this.config.seedContext
+      seedContext: state.seedContext ?? this.config.seedContext,
+      seedExcerpt: SeedContextExcerpt(state.seedContext ?? this.config.seedContext, [])
     };
 
     const holisticResult = await this.promptEngine.executePrompt<import('../types/prompts.js').FKPruningFinalDecision[]>(

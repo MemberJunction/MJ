@@ -9,6 +9,7 @@ import { MJGlobal } from '@memberjunction/global';
 import { BaseAutoDocDriver } from '../drivers/BaseAutoDocDriver.js';
 import { ColumnStatsCache } from './ColumnStatsCache.js';
 import { BuildIndexHints, FormatIndexHint } from '../utils/index-hints.js';
+import { SeedContextExcerpt, SeedContextText } from '../utils/seed-context.js';
 import { SchemaDefinition } from '../types/state.js';
 import {
   PKCandidate,
@@ -27,7 +28,9 @@ export class LLMDiscoveryValidator {
     private config: RelationshipDiscoveryConfig,
     private aiConfig: AIConfig,
     private statsCache: ColumnStatsCache,
-    private schemas: SchemaDefinition[]
+    private schemas: SchemaDefinition[],
+    /** The operator's seed context; paragraphs naming the target table are added to the prompt. */
+    private seedContext?: SeedContextText
   ) {
     // Create LLM instance using MJ ClassFactory
     const llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(
@@ -528,6 +531,20 @@ export class LLMDiscoveryValidator {
     return reasons.join(', ');
   }
 
+  /** The operator's notes on the target table, as a prompt section, or an empty string when there are none. */
+  protected seedNotes(tableName: string): string {
+    const excerpt = SeedContextExcerpt(this.seedContext, [tableName]);
+    if (!excerpt) {
+      return '';
+    }
+    return `## Notes from the operator about this data
+Written by the person running the analysis. Treat them as evidence about how tables relate and which columns are keys; they do not override what the data and constraints show.
+
+${excerpt}
+
+`;
+  }
+
   /**
    * Build LLM validation prompt
    */
@@ -607,7 +624,7 @@ ${
     : 'None'
 }
 
-## Your Task:
+${this.seedNotes(context.TargetTable.table)}## Your Task:
 Analyze the statistical findings and provide validation:
 
 1. **Validate Primary Keys**: Are the PK candidates correct? Should any be removed?
