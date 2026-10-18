@@ -137,7 +137,7 @@ describe('VideoStudioSetupHealthServerOperation (VS-UX-3)', () => {
     };
 
     runnerStub = {
-      PreviewModelSelection: vi.fn(async (_prompt: MJAIPromptEntityExtended, configurationId?: string) => previewByConfig[configurationId ?? ''] ?? []),
+      PreviewModelSelection: vi.fn((_prompt: MJAIPromptEntityExtended, configurationId?: string) => previewByConfig[configurationId ?? ''] ?? []),
     };
 
     vi.spyOn(AIEngine, 'Instance', 'get').mockReturnValue({
@@ -266,6 +266,23 @@ describe('VideoStudioSetupHealthServerOperation (VS-UX-3)', () => {
         Message: "Using file storage account 'Studio GCS Bucket' (Category).",
       });
     });
+
+    it('reports Error with the real failure message when FileStorageEngineBase.Instance.Config rejects', async () => {
+      vi.spyOn(FileStorageEngineBase.Instance, 'Config').mockRejectedValue(new Error('storage load failed'));
+      const op = new TestableSetupHealthOperation(runnerStub);
+
+      const res = await op.ExecuteServer({}, makeServerContext());
+
+      expect(res.Success).toBe(true);
+      expect(res.Output?.Healthy).toBe(false);
+      const storage = res.Output?.Checks.find((c) => c.Key === 'Storage');
+      expect(storage).toEqual({
+        Key: 'Storage',
+        Status: 'Error',
+        Title: 'File Storage',
+        Message: 'storage load failed',
+      });
+    });
   });
 
   describe('Render check states', () => {
@@ -349,6 +366,45 @@ describe('VideoStudioSetupHealthServerOperation (VS-UX-3)', () => {
 
         await vi.advanceTimersByTimeAsync(4_000);
         expect(backgroundFinished).toBe(true);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('clamps RenderTimeoutMs to [1000, 30000] ms (1 ms times out at 1 s, 600000 ms times out at 30 s)', async () => {
+      vi.useFakeTimers();
+      try {
+        const neverResolvesDriver = new FakeRenderDriver();
+        vi.spyOn(neverResolvesDriver, 'Health').mockImplementation(() => new Promise(() => {}));
+        VideoRenderEngine.Instance.UseDriver(neverResolvesDriver);
+
+        const op = new TestableSetupHealthOperation(runnerStub);
+
+        let minSettled = false;
+        const minPromise = op.ExecuteServer({ RenderTimeoutMs: 1 }, makeServerContext()).then((r) => {
+          minSettled = true;
+          return r;
+        });
+        await vi.advanceTimersByTimeAsync(999);
+        expect(minSettled).toBe(false);
+        await vi.advanceTimersByTimeAsync(1);
+        const minRes = await minPromise;
+        expect(minRes.Output?.Checks.find((c) => c.Key === 'Render')?.Message).toBe(
+          "The render worker didn't answer in 1 s (driver LocalWorker).",
+        );
+
+        let maxSettled = false;
+        const maxPromise = op.ExecuteServer({ RenderTimeoutMs: 600_000 }, makeServerContext()).then((r) => {
+          maxSettled = true;
+          return r;
+        });
+        await vi.advanceTimersByTimeAsync(29_999);
+        expect(maxSettled).toBe(false);
+        await vi.advanceTimersByTimeAsync(1);
+        const maxRes = await maxPromise;
+        expect(maxRes.Output?.Checks.find((c) => c.Key === 'Render')?.Message).toBe(
+          "The render worker didn't answer in 30 s (driver LocalWorker).",
+        );
       } finally {
         vi.useRealTimers();
       }

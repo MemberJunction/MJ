@@ -516,5 +516,30 @@ describe('VideoStudioStudioResourceComponent DOM', () => {
     fixture.destroy();
     vi.restoreAllMocks();
   });
+
+  it('calls NotifyLoadComplete and renders the start form while VideoStudioSetupHealthOperation.Execute is still pending', async () => {
+    const { navStub, customProvider, setupHealthSpy } = setupStudioMocks();
+    setupHealthSpy.mockImplementation(() => new Promise(() => {}));
+    const notifyLoadCompleteSpy = vi.spyOn(
+      VideoStudioStudioResourceComponent.prototype as unknown as { NotifyLoadComplete: () => void },
+      'NotifyLoadComplete',
+    );
+
+    const fixture = renderComponentFixture(VideoStudioStudioResourceComponent, {
+      inputs: { Provider: customProvider },
+      imports: STUDIO_TEST_IMPORTS,
+      providers: [{ provide: NavigationService, useValue: navStub }],
+    });
+
+    await flushAsync();
+    fixture.detectChanges();
+
+    expect(notifyLoadCompleteSpy).toHaveBeenCalledTimes(1);
+    expect(query(fixture, '[data-testid="studio-start-form"]')).not.toBeNull();
+    expect(query(fixture, '[data-testid="vs-setup-health-loading"]')).not.toBeNull();
+
+    fixture.destroy();
+    vi.restoreAllMocks();
+  });
 });
 

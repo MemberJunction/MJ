@@ -665,33 +665,37 @@ describe('ParallelExecutionCoordinator — reuses base execution path (no drift)
 // ============================================================================
 
 describe('BaseModelRunner.PreviewModelSelection (VS-UX-3)', () => {
-  const m1 = makeModel('m-1', 'Claude Opus 5.5', { PowerRank: 30, CostRank: 30 });
-  const m2 = makeModel('m-2', 'Gemini 3.8 Pro', { PowerRank: 20, CostRank: 15 });
-  const m3 = makeModel('m-3', 'GPT-5', { PowerRank: 10, CostRank: 20 });
-
   beforeEach(() => {
-    vi.clearAllMocks();
-    resetEngineState();
-    engineState.models = [m1, m2, m3];
-    engineState.vendors = [
-      makeVendor('v-anth', 'Anthropic'),
-      makeVendor('v-google', 'Google'),
-      makeVendor('v-openai', 'OpenAI'),
-    ];
-    engineState.modelVendors = [
-      makeModelVendor('mv-1', 'm-1', 'v-anth', 'AnthropicLLM', 'claude-opus-5-5', 100),
-      makeModelVendor('mv-2', 'm-2', 'v-google', 'GeminiLLM', 'gemini-3-8-pro', 90),
-      makeModelVendor('mv-3', 'm-3', 'v-openai', 'OpenAILLM', 'gpt-5', 80),
-    ];
-    engineState.promptModels = [
-      makePromptModel('pm-1', 'p-1', 'm-1', 10, { VendorID: 'v-anth', ConfigurationID: 'cfg-std' }),
-      makePromptModel('pm-2', 'p-1', 'm-2', 5, { VendorID: 'v-google', ConfigurationID: 'cfg-std' }),
-      makePromptModel('pm-3', 'p-1', 'm-3', 1, { VendorID: 'v-openai', ConfigurationID: null }),
-    ];
+    vi.restoreAllMocks();
+    catalog = buildRealisticCatalog();
+    catalog.configurations = [{ ID: CONFIG.Standard, Name: 'Standard', ParentID: null }];
+    catalog.promptModels.push(
+      makePromptModel({
+        PromptID: 'prompt-1',
+        ModelID: MODEL.ClaudeOpus45,
+        VendorID: VENDOR.Anthropic,
+        ConfigurationID: CONFIG.Standard,
+        Priority: 10,
+      }),
+      makePromptModel({
+        PromptID: 'prompt-1',
+        ModelID: MODEL.Gemini3Flash,
+        VendorID: VENDOR.Google,
+        ConfigurationID: CONFIG.Standard,
+        Priority: 5,
+      }),
+      makePromptModel({
+        PromptID: 'prompt-1',
+        ModelID: MODEL.GPT5,
+        VendorID: VENDOR.OpenAI,
+        ConfigurationID: null,
+        Priority: 1,
+      }),
+    );
   });
 
   it('returns the exact candidate order from BuildModelVendorCandidates, flags HasCredentials per candidate, and makes no driver call', () => {
-    setEnvKeys({ AI_VENDOR_API_KEY__GEMINI_LLM: 'sk-google-key' });
+    loadCatalog(catalog, ['GeminiLLM']);
     const previewRunner = new AIPromptRunner();
     const classFactorySpy = vi.spyOn(MJGlobal.Instance.ClassFactory, 'CreateInstance');
     const execModelSpy = vi.spyOn(
@@ -701,37 +705,37 @@ describe('BaseModelRunner.PreviewModelSelection (VS-UX-3)', () => {
     const buildCandidates = (
       previewRunner as unknown as {
         BuildModelVendorCandidates: (
-          prompt: MJAIPromptEntityExtended,
+          prompt: unknown,
           explicitModelId?: string,
           configurationId?: string,
-        ) => Array<{ model: MJAIModelEntityExtended; vendor?: MJAIVendorEntity; driverClass: string }>;
+        ) => Array<{ model: { ID: string; Name: string }; vendorName: string; driverClass: string }>;
       }
     ).BuildModelVendorCandidates.bind(previewRunner);
 
-    const prompt = makePrompt({ SelectionStrategy: 'Specific', FailoverStrategy: 'SameModelDifferentVendor' });
-    const rawCandidates = buildCandidates(prompt, undefined, 'cfg-std');
-    const preview = previewRunner.PreviewModelSelection(prompt, 'cfg-std');
+    const prompt = makePrompt({ SelectionStrategy: 'Specific', RequireSpecificModels: true });
+    const rawCandidates = buildCandidates(prompt, undefined, CONFIG.Standard);
+    const preview = previewRunner.PreviewModelSelection(prompt as never, CONFIG.Standard);
 
     expect(preview.map((item) => item.ModelID)).toEqual(rawCandidates.map((c) => c.model.ID));
     expect(preview).toEqual([
       {
-        ModelID: 'm-1',
-        ModelName: 'Claude Opus 5.5',
-        VendorName: 'Anthropic',
+        ModelID: MODEL.ClaudeOpus45,
+        ModelName: rawCandidates[0].model.Name,
+        VendorName: rawCandidates[0].vendorName,
         DriverClass: 'AnthropicLLM',
         HasCredentials: false,
       },
       {
-        ModelID: 'm-2',
-        ModelName: 'Gemini 3.8 Pro',
-        VendorName: 'Google',
+        ModelID: MODEL.Gemini3Flash,
+        ModelName: rawCandidates[1].model.Name,
+        VendorName: rawCandidates[1].vendorName,
         DriverClass: 'GeminiLLM',
         HasCredentials: true,
       },
       {
-        ModelID: 'm-3',
-        ModelName: 'GPT-5',
-        VendorName: 'OpenAI',
+        ModelID: MODEL.GPT5,
+        ModelName: rawCandidates[2].model.Name,
+        VendorName: rawCandidates[2].vendorName,
         DriverClass: 'OpenAILLM',
         HasCredentials: false,
       },
@@ -741,33 +745,32 @@ describe('BaseModelRunner.PreviewModelSelection (VS-UX-3)', () => {
   });
 
   it('reflects platform credential bindings on the model or vendor without instantiating any LLM', () => {
-    engineState.credentialBindings = [
-      {
-        ID: 'cb-1',
-        BindingType: 'Vendor',
-        AIVendorID: 'v-anth',
-        AIModelVendorID: null,
-        AIPromptModelID: null,
-        Status: 'Active',
-        CredentialID: 'cred-anth',
-        Priority: 1,
-      },
-    ];
+    loadCatalog(catalog, []);
+    vi.spyOn(
+      h.engine as unknown as { HasCredentialBindings: (bindingType: string, targetId: string) => boolean },
+      'HasCredentialBindings',
+    ).mockImplementation((bindingType: string, targetId: string) => {
+      return bindingType === 'Vendor' && targetId === VENDOR.Anthropic;
+    });
+
     const previewRunner = new AIPromptRunner();
     const classFactorySpy = vi.spyOn(MJGlobal.Instance.ClassFactory, 'CreateInstance');
-    const prompt = makePrompt({ SelectionStrategy: 'Specific' });
+    const execModelSpy = vi.spyOn(
+      previewRunner as unknown as { executeModel: (...args: unknown[]) => unknown },
+      'executeModel',
+    );
+    const prompt = makePrompt({ SelectionStrategy: 'Specific', RequireSpecificModels: true });
 
-    const preview = previewRunner.PreviewModelSelection(prompt, 'cfg-std');
+    const preview = previewRunner.PreviewModelSelection(prompt as never, CONFIG.Standard);
 
     expect(preview[0]).toMatchObject({
-      ModelID: 'm-1',
-      ModelName: 'Claude Opus 5.5',
-      VendorName: 'Anthropic',
+      ModelID: MODEL.ClaudeOpus45,
       DriverClass: 'AnthropicLLM',
       HasCredentials: true,
     });
     expect(preview[1].HasCredentials).toBe(false);
+    expect(preview[2].HasCredentials).toBe(false);
     expect(classFactorySpy).not.toHaveBeenCalled();
+    expect(execModelSpy).not.toHaveBeenCalled();
   });
 });
-

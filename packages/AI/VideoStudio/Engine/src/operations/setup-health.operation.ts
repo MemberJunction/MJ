@@ -11,13 +11,11 @@
  *    `Video Studio - Orchestrator` prompt via `AIPromptRunner.PreviewModelSelection` without making any
  *    live model calls.
  */
-import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { RegisterClass } from '@memberjunction/global';
 import { BaseRemotableOperation, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import {
     FileStorageEngineBase,
     VideoStudioSetupHealthOperation,
-    type MJAIAgentConfigurationEntity,
-    type MJAIAgentEntity,
     type VideoStudioSetupHealthCheck,
     type VideoStudioSetupHealthCheckKey,
     type VideoStudioSetupHealthInput,
@@ -70,7 +68,7 @@ export interface SetupHealthPromptPreviewRunner {
     PreviewModelSelection(
         prompt: MJAIPromptEntityExtended,
         configurationId?: string,
-    ): ModelSelectionPreviewItem[] | Promise<ModelSelectionPreviewItem[]>;
+    ): ModelSelectionPreviewItem[];
 }
 
 /**
@@ -87,8 +85,8 @@ export class VideoStudioSetupHealthServerOperation extends VideoStudioSetupHealt
             if (!user) {
                 return false;
             }
-            await this.ensureAIEngineLoaded(user);
-            const agent = this.findVideoStudioAgent();
+            await AIEngine.Instance.Config(false, user);
+            const agent = AIEngine.Instance.GetAgentByName(VIDEO_STUDIO_AGENT_NAME);
             if (!agent?.ID) {
                 return false;
             }
@@ -108,10 +106,10 @@ export class VideoStudioSetupHealthServerOperation extends VideoStudioSetupHealt
         provider: IMetadataProvider,
         user: UserInfo,
     ): Promise<VideoStudioSetupHealthOutput> {
-        await this.ensureEnginesLoaded(user, provider);
+        await AIEngine.Instance.Config(false, user, provider);
 
         const storageCheck = await this.runCheckSafely('Storage', 'File Storage', () =>
-            this.checkStorage(),
+            this.checkStorage(user, provider),
         );
         const renderCheck = await this.runCheckSafely('Render', 'Render Worker', () =>
             this.checkRender(input),
@@ -137,35 +135,6 @@ export class VideoStudioSetupHealthServerOperation extends VideoStudioSetupHealt
         return new AIPromptRunner();
     }
 
-    private async ensureAIEngineLoaded(user?: UserInfo): Promise<void> {
-        const aiEngine = AIEngine.Instance as unknown as {
-            Loaded?: boolean;
-            Config?: (forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider) => Promise<void>;
-        };
-        if (!aiEngine.Loaded && typeof aiEngine.Config === 'function') {
-            await aiEngine.Config(false, user);
-        }
-    }
-
-    private async ensureEnginesLoaded(user?: UserInfo, provider?: IMetadataProvider): Promise<void> {
-        try {
-            await this.ensureAIEngineLoaded(user);
-        } catch {
-            // Individual checks will surface metadata lookup failures cleanly.
-        }
-        try {
-            const storageEngine = FileStorageEngineBase.Instance as unknown as {
-                Loaded?: boolean;
-                Config?: (forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider) => Promise<void>;
-            };
-            if (!storageEngine.Loaded && typeof storageEngine.Config === 'function') {
-                await storageEngine.Config(false, user, provider);
-            }
-        } catch {
-            // Storage check handles missing/unconfigured storage accounts.
-        }
-    }
-
     private async runCheckSafely(
         key: VideoStudioSetupHealthCheckKey,
         title: string,
@@ -183,37 +152,10 @@ export class VideoStudioSetupHealthServerOperation extends VideoStudioSetupHealt
         }
     }
 
-    private findVideoStudioAgent(): MJAIAgentEntity | undefined {
-        const engine = AIEngine.Instance as unknown as {
-            GetAgentByName?: (name: string) => MJAIAgentEntity | undefined;
-            Agents?: MJAIAgentEntity[];
-        };
-        if (typeof engine.GetAgentByName === 'function') {
-            const found = engine.GetAgentByName(VIDEO_STUDIO_AGENT_NAME);
-            if (found) {
-                return found;
-            }
-        }
-        return engine.Agents?.find((a) => a.Name?.trim() === VIDEO_STUDIO_AGENT_NAME);
-    }
+    private async checkStorage(user: UserInfo, provider: IMetadataProvider): Promise<VideoStudioSetupHealthCheck> {
+        await FileStorageEngineBase.Instance.Config(false, user, provider);
 
-    private resolveStorageAccountName(accountId: string): string {
-        const storageEngine = FileStorageEngineBase.Instance as unknown as {
-            GetAccountById?: (id: string) => { ID: string; Name?: string } | undefined;
-            Accounts?: Array<{ ID: string; Name?: string }>;
-        };
-        if (typeof storageEngine.GetAccountById === 'function') {
-            const account = storageEngine.GetAccountById(accountId);
-            if (account?.Name) {
-                return account.Name;
-            }
-        }
-        const matched = storageEngine.Accounts?.find((a) => UUIDsEqual(a.ID, accountId));
-        return matched?.Name || accountId;
-    }
-
-    private async checkStorage(): Promise<VideoStudioSetupHealthCheck> {
-        const agent = this.findVideoStudioAgent();
+        const agent = AIEngine.Instance.GetAgentByName(VIDEO_STUDIO_AGENT_NAME);
         if (!agent) {
             throw new Error(`Agent '${VIDEO_STUDIO_AGENT_NAME}' was not found in AI metadata.`);
         }
@@ -229,7 +171,7 @@ export class VideoStudioSetupHealthServerOperation extends VideoStudioSetupHealt
             };
         }
 
-        const accountName = this.resolveStorageAccountName(resolution.AccountID);
+        const accountName = FileStorageEngineBase.Instance.GetAccountById(resolution.AccountID)?.Name ?? resolution.AccountID;
         if (resolution.Source === 'Fallback' && resolution.Ambiguous) {
             return {
                 Key: 'Storage',
@@ -383,24 +325,8 @@ export class VideoStudioSetupHealthServerOperation extends VideoStudioSetupHealt
         };
     }
 
-    private getActivePresets(agentId: string): MJAIAgentConfigurationEntity[] {
-        const engine = AIEngine.Instance as unknown as {
-            GetAgentConfigurationPresets?: (
-                id: string,
-                activeOnly?: boolean,
-            ) => MJAIAgentConfigurationEntity[];
-            AgentConfigurations?: MJAIAgentConfigurationEntity[];
-        };
-        if (typeof engine.GetAgentConfigurationPresets === 'function') {
-            return engine.GetAgentConfigurationPresets(agentId, true);
-        }
-        return (engine.AgentConfigurations ?? []).filter(
-            (c) => UUIDsEqual(c.AgentID, agentId) && c.Status === 'Active',
-        );
-    }
-
     private async checkModels(): Promise<VideoStudioSetupHealthCheck> {
-        const agent = this.findVideoStudioAgent();
+        const agent = AIEngine.Instance.GetAgentByName(VIDEO_STUDIO_AGENT_NAME);
         if (!agent) {
             throw new Error(`Agent '${VIDEO_STUDIO_AGENT_NAME}' was not found in AI metadata.`);
         }
@@ -412,7 +338,7 @@ export class VideoStudioSetupHealthServerOperation extends VideoStudioSetupHealt
             throw new Error(`Prompt '${VIDEO_STUDIO_ORCHESTRATOR_PROMPT_NAME}' was not found in AI metadata.`);
         }
 
-        const activePresets = this.getActivePresets(agent.ID);
+        const activePresets = AIEngine.Instance.GetAgentConfigurationPresets(agent.ID, true);
         if (activePresets.length === 0) {
             throw new Error(`No active configuration presets found for agent '${VIDEO_STUDIO_AGENT_NAME}'.`);
         }
@@ -431,7 +357,7 @@ export class VideoStudioSetupHealthServerOperation extends VideoStudioSetupHealt
 
         for (const preset of activePresets) {
             const presetName = preset.Name?.trim() || preset.DisplayName?.trim() || 'Default';
-            const candidates = await runner.PreviewModelSelection(
+            const candidates = runner.PreviewModelSelection(
                 orchestratorPrompt,
                 preset.AIConfigurationID ?? undefined,
             );

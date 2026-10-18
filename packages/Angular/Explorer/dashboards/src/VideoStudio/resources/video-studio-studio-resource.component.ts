@@ -117,8 +117,9 @@ export class VideoStudioStudioResourceComponent
   async ngOnInit(): Promise<void> {
     super.ngOnInit();
     this.registerAgentClientTools();
+    void this.CheckSetupHealth();
     try {
-      await Promise.all([this.LoadStudioData(false), this.CheckSetupHealth()]);
+      await this.LoadStudioData(false);
     } finally {
       this.NotifyLoadComplete();
     }
