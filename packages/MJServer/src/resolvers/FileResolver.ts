@@ -47,10 +47,10 @@ import {
 import { CreateMJFileInput, MJFileResolver as FileResolverBase, MJFile_, UpdateMJFileInput } from '../generated/generated.js';
 import { FieldMapper } from '@memberjunction/graphql-dataprovider';
 import { GetReadOnlyProvider } from '../util.js';
-import { configInfo } from '../config.js';
 import { MediaAccessKeyManager } from '../rest/MediaAccessKeys.js';
 import { UploadTokenManager } from '../rest/UploadTokenManager.js';
 import { DeriveSidecarPath, ParsePeaksSidecar } from './peaksSidecar.js';
+import { ApiRoute } from '../apiRoot.js';
 
 @InputType()
 export class CreateUploadURLInput {
@@ -448,16 +448,6 @@ const SEARCH_ACCOUNT_REFUSED_MESSAGE = 'Access denied: you do not have access to
 @Resolver(MJFile_)
 export class FileResolver extends FileResolverBase {
   /**
-   * Resolves the server's public base URL the same way callbacks/magic-link do:
-   * `publicUrl` if configured (e.g. an ngrok URL), else `baseUrl:graphqlPort`. Trailing
-   * slash stripped so callers can append `/media/...`.
-   */
-  private resolvePublicBaseUrl(): string {
-    const base = configInfo.publicUrl || `${configInfo.baseUrl}:${configInfo.graphqlPort}${configInfo.graphqlRootPath || ''}`;
-    return base.replace(/\/+$/, '');
-  }
-
-  /**
    * Mints a short-lived signed media-access token for an `MJ: Files` record and returns the
    * authenticated streaming URL (`<publicBase>/media/<fileId>?token=<token>`). Permission-gated
    * IDENTICALLY to {@link GetFileContents}: the file is loaded under the CALLING USER's context, so
@@ -487,7 +477,7 @@ export class FileResolver extends FileResolverBase {
       // Access authorized — mint the capability token.
       const { Token, ExpiresAt } = MediaAccessKeyManager.Instance.Sign(fileId, contextUser.ID);
       const fileNameSuffix = fileEntity.Name ? `/${encodeURIComponent(fileEntity.Name)}` : '';
-      const url = `${this.resolvePublicBaseUrl()}/media/${encodeURIComponent(fileId)}${fileNameSuffix}?token=${encodeURIComponent(Token)}`;
+      const url = ApiRoute(`/media/${encodeURIComponent(fileId)}${fileNameSuffix}?token=${encodeURIComponent(Token)}`, { absolute: true });
 
       // Best-effort: surface precomputed waveform peaks from a peaks.json sidecar beside the file, so
       // the player renders the real waveform instantly without fetching/decoding the audio. Never
@@ -1061,7 +1051,7 @@ export class FileResolver extends FileResolverBase {
       return {
         Success: true,
         Token: mint.Token,
-        Url: '/media/upload-stage',
+        Url: ApiRoute('/media/upload-stage'),
       };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

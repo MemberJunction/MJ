@@ -11,7 +11,7 @@
  * @since 2.49.0
  */
 
-import { MJAIAgentTypeEntity,  MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity, MJAISkillEntity, MJEnvironmentEntityExtended, MJConversationSkillEntity, MJAIVendorEntity, ConversationEngine, type ConversationBranchRow } from '@memberjunction/core-entities';
+import { MJAIAgentTypeEntity,  MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity, MJAISkillEntity, MJEnvironmentEntityExtended, MJConversationSkillEntity, MJAIVendorEntity, MJAIPromptRunEntity, ConversationEngine, type ConversationBranchRow } from '@memberjunction/core-entities';
 import { BuildActionToolSet, FilterDeclarableActions, SanitizeToolName } from './native-tools/action-tool-builder';
 import { BuildNativeToolSet, COMPLETE_TASK_TOOL, SUB_AGENT_TOOL_PREFIX, type NativeToolBinding } from './native-tools/control-tools';
 import { BuildAssistantToolCallTurn, BuildToolResultTurn, CompactToolResultContent, type NativeToolResult } from './native-tools/tool-result-turns';
@@ -75,6 +75,7 @@ import {
     AIPromptRunResult,
     ChildPromptParam,
     ExecuteAgentParams,
+    AgentTreeBudget,
     AgentContextData,
     AgentConfiguration,
     AgentExecutionProgressCallback,
@@ -125,6 +126,8 @@ import {
     WithoutHostOnlyAgentRunDataKeys,
     WithAgentRunDataTrustApplied,
     StopContinuationMode,
+    AgentUserPolicyEngine,
+    type AgentPostRunCompactionConfig,
     type AIPromptExecutionScope,
     type AgentRunAudience
 } from '@memberjunction/ai-core-plus';
@@ -270,6 +273,12 @@ interface MemoryWriteSkip {
     Reason: string;
     /** What the model is told, before "the requested memories were NOT saved". */
     Told: string;
+}
+
+/** A message a Prompt step recorded in its InputData, with its serialized form at the time it was recorded. */
+interface RecordedPromptMessage {
+    Message: ChatMessage;
+    Serialized: string;
 }
 
 /**
@@ -664,6 +673,22 @@ export class BaseAgent {
      * @private
      */
     private _executeParams: ExecuteAgentParams | undefined;
+
+    /**
+     * Shared root-tree cumulative budget tracking object for the current execution tree.
+     * Initialized at the start of {@link Execute} (or inherited from `params.treeBudget`
+     * when running as a sub-agent) and forwarded to all child and related sub-agent runs.
+     * @protected
+     */
+    protected _treeBudget: AgentTreeBudget | undefined;
+
+    /**
+     * Gets the shared {@link AgentTreeBudget} tracking cumulative steps, tokens, cost,
+     * and elapsed wall-clock duration across the root agent and all descendant sub-agents.
+     */
+    public get TreeBudget(): AgentTreeBudget | undefined {
+        return this._treeBudget;
+    }
 
     /**
      * The agent configuration loaded for the current run — captured so the cross-turn
@@ -1619,6 +1644,14 @@ export class BaseAgent {
     private _scratchpadManager: ScratchpadManager = new ScratchpadManager();
 
     /**
+     * Protected accessor for the run's scratchpad manager.
+     * @protected
+     */
+    protected get scratchpadManager(): ScratchpadManager {
+        return this._scratchpadManager;
+    }
+
+    /**
      * Manages artifact tools for the current agent run.
      * Allows agents to explore input artifacts on demand.
      */
@@ -1805,10 +1838,11 @@ export class BaseAgent {
     private _promptTurnCount: number = 0;
 
     /**
-     * Tracks non-volatile ChatMessage instances already recorded in an earlier Prompt step's InputData
-     * during the current run so subsequent Prompt steps record only the per-turn message delta.
+     * The non-volatile stack the previous Prompt step of the current run recorded: each message's
+     * reference and its serialized form. A later Prompt step records only a delta when its stack
+     * extends this one append-only; otherwise it records the full stack.
      */
-    private _recordedPromptMessages: WeakSet<ChatMessage> | null = null;
+    private _lastRecordedPromptStack: RecordedPromptMessage[] | null = null;
 
     /**
      * Per-run config for structurally compressing inline action-result payloads.
@@ -2182,9 +2216,15 @@ export class BaseAgent {
     }
 
     public async Execute<C = any, R = any>(params: ExecuteAgentParams<C>): Promise<ExecuteAgentResult<R>> {
+        // Initialize or inherit the shared root-tree cumulative budget before any shallow clone of
+        // `params` occurs so that callers, parent agents, and child runs share one object reference.
+        this._treeBudget = undefined;
+        this.ensureTreeBudget(params);
+
         // Every run, whatever started it: the reserved data keys (scope, agent-type params) count only when the
         // caller set TrustReservedRunData. Everything below reads the cleaned params.
         params = this.withRunDataTrustApplied(params);
+        this.ensureTreeBudget(params);
 
         // Capture per-request provider for the duration of this execution so all entity
         // saves go through the isolated provider, never the global singleton's transaction.
@@ -2278,6 +2318,7 @@ export class BaseAgent {
             // Capture for lifecycle hooks that don't receive params (post-turn compaction
             // inside finalizeAgentRun reads conversationId / verbose / provider from here).
             this._executeParams = wrappedParams;
+            this.ensureTreeBudget(wrappedParams);
             this._agentConfig = undefined;
             this._lastModelSelectionInfo = undefined;
             this._lastVolatileStateMessage = undefined;
@@ -2345,7 +2386,7 @@ export class BaseAgent {
             // Report initialization progress
             wrappedParams.onProgress?.({
                 step: 'initialization',
-                message: this.formatHierarchicalMessage(`Initializing ${params.agent.Name} agent and preparing execution environment`),
+                message: this.buildInitializationProgressMessage(params),
                 metadata: {
                     stepCount: 0,
                     hierarchicalStep: this.buildHierarchicalStep(0, this._parentStepCounts)
@@ -2408,7 +2449,7 @@ export class BaseAgent {
             // Report validation progress
             wrappedParams.onProgress?.({
                 step: 'validation',
-                message: this.formatHierarchicalMessage('Validating agent configuration and loading prompts'),
+                message: this.formatHierarchicalMessage('Gathering context...'),
                 metadata: {
                     stepCount: 0,
                     hierarchicalStep: this.buildHierarchicalStep(0, this._parentStepCounts)
@@ -2549,7 +2590,7 @@ export class BaseAgent {
                     stepCount: executionResult.stepCount,
                     hierarchicalStep: this.buildHierarchicalStep(executionResult.stepCount, this._parentStepCounts)
                 },
-                message: this.formatHierarchicalMessage('Finalizing agent execution')
+                message: this.formatHierarchicalMessage('Wrapping up...')
             });
 
             // Finalize the agent run
@@ -3521,6 +3562,7 @@ export class BaseAgent {
                 data: params.data,
                 TrustReservedRunData: params.TrustReservedRunData, // the session's data, already vetted when it started
                 verbose: params.verbose,
+                treeBudget: this.ensureTreeBudget(params),
                 // Progress streams BOTH to the runner's narration consumer (request.OnProgress —
                 // it paces SendContextNote/RequestSpokenUpdate over the live socket) AND to any
                 // host-level onProgress the parent execution carries.
@@ -5882,12 +5924,12 @@ export class BaseAgent {
      * fragment belongs on this request:
      *
      * - `'trailing'` — the template carries the `<mj-runtime-state>` pointer, so the model is told where
-     *   the state lives. The Loop agent system prompt.
+     *   the state lives. The Loop and Flow agent system prompts.
      * - `'embedded'` — the template still renders the state blocks itself (an environment whose
-     *   TemplateContent has not synced the new Loop template, or the Flow template, which embeds the
+     *   TemplateContent has not synced the new system template, or a custom template that embeds the
      *   payload). Emitting the fragment would deliver the same state twice.
      * - `'unsupported'` — the template has neither. The Harness system prompt, or a custom prompt run
-     *   without the Loop system prompt. The model would receive an unexplained block.
+     *   without a system prompt carrying the pointer. The model would receive an unexplained block.
      * - `'unknown'` — no template text to inspect (no TemplateID, or the lookup failed). The caller
      *   fails OPEN here: a Loop agent losing its payload from the model's view is far worse than a
      *   non-Loop agent receiving an unexplained fragment, and in practice every agent type's system
@@ -7133,8 +7175,236 @@ export class BaseAgent {
                 reason: `Maximum validation retries of ${BaseAgent.MAX_VALIDATION_RETRIES} exceeded. The agent is unable to produce valid output after ${this._generalValidationRetryCount} validation failures.`
             };
         }
+
+        // Synchronize shared tree budget floor with the current agentRun's metrics (handles both
+        // multi-agent trees and direct guardrail invocations with pre-populated agentRun entities)
+        // and evaluate cumulative root-tree ceilings (maxTreeSteps, maxTreeTokens, maxTreeCost, maxTreeDurationMs).
+        const budget = this.ensureTreeBudget(params);
+        if (agentRun) {
+            const runStepsCount = Math.max(agentRun.Steps?.length ?? 0, agentRun.TotalPromptIterations ?? 0);
+            if (runStepsCount > budget.totalSteps) {
+                budget.totalSteps = runStepsCount;
+            }
+            if ((agentRun.TotalTokensUsed ?? 0) > budget.totalTokens) {
+                budget.totalTokens = agentRun.TotalTokensUsed ?? 0;
+            }
+            if ((agentRun.TotalCost ?? 0) > budget.totalCost) {
+                budget.totalCost = agentRun.TotalCost ?? 0;
+            }
+        }
+        const treeBudgetCheck = this.checkTreeBudgetLimit(params);
+        if (treeBudgetCheck.exceeded) {
+            return treeBudgetCheck;
+        }
         
         // No guardrails exceeded
+        return { exceeded: false };
+    }
+
+    /**
+     * Ensures that a shared {@link AgentTreeBudget} instance exists for the current execution tree
+     * and is attached to both `this._treeBudget` and `params.treeBudget`.
+     *
+     * - When `params.treeBudget` is already provided (for example, propagated by a parent agent
+     *   in {@link ExecuteSubAgent} or supplied directly by a caller), that exact object reference
+     *   is reused so all root, sequential child, and parallel child runs mutate the same shared
+     *   counters (`totalSteps`, `totalTokens`, `totalCost`, `startedAtMs`, `breachedReason`).
+     * - When `params.treeBudget` is absent (root run), a new {@link AgentTreeBudget} is created
+     *   and seeded with any top-level convenience ceilings (`maxTreeSteps`, `maxTreeTokens`,
+     *   `maxTreeCost`, `maxTreeDurationMs`) declared on `params`.
+     *
+     * @param params - Optional execution parameters for the current run.
+     * @returns The shared {@link AgentTreeBudget} instance for the execution tree.
+     * @protected
+     */
+    protected ensureTreeBudget(params?: ExecuteAgentParams): AgentTreeBudget {
+        const effectiveParams = params ?? this._executeParams;
+        let budget = effectiveParams?.treeBudget ?? this._treeBudget;
+        if (!budget) {
+            budget = {
+                maxTreeSteps: effectiveParams?.maxTreeSteps,
+                maxTreeTokens: effectiveParams?.maxTreeTokens,
+                maxTreeCost: effectiveParams?.maxTreeCost,
+                maxTreeDurationMs: effectiveParams?.maxTreeDurationMs,
+                totalSteps: 0,
+                totalTokens: 0,
+                totalCost: 0,
+                startedAtMs: Date.now()
+            };
+        } else if (effectiveParams) {
+            if (budget.maxTreeSteps === undefined && effectiveParams.maxTreeSteps !== undefined) {
+                budget.maxTreeSteps = effectiveParams.maxTreeSteps;
+            }
+            if (budget.maxTreeTokens === undefined && effectiveParams.maxTreeTokens !== undefined) {
+                budget.maxTreeTokens = effectiveParams.maxTreeTokens;
+            }
+            if (budget.maxTreeCost === undefined && effectiveParams.maxTreeCost !== undefined) {
+                budget.maxTreeCost = effectiveParams.maxTreeCost;
+            }
+            if (budget.maxTreeDurationMs === undefined && effectiveParams.maxTreeDurationMs !== undefined) {
+                budget.maxTreeDurationMs = effectiveParams.maxTreeDurationMs;
+            }
+        }
+
+        this._treeBudget = budget;
+        if (effectiveParams) {
+            effectiveParams.treeBudget = budget;
+        }
+        if (this._executeParams && this._executeParams !== effectiveParams) {
+            this._executeParams.treeBudget = budget;
+        }
+        return budget;
+    }
+
+    /**
+     * Accumulates token and cost usage from a completed prompt execution into the shared
+     * {@link AgentTreeBudget} for the execution tree.
+     *
+     * Prefers rollup figures on `promptRun` (`TokensUsedRollup` / `TokensPromptRollup` +
+     * `TokensCompletionRollup` and `TotalCost`) so hierarchical child prompts are counted,
+     * falling back to direct `promptRun` columns (`TokensUsed` / `TokensPrompt` + `TokensCompletion`
+     * and `Cost`) or the `AIPromptRunResult` summary fields when `promptRun` is not populated.
+     *
+     * @param promptRun - The persisted or in-memory `MJAIPromptRunEntity` from the prompt execution, if any.
+     * @param promptResult - Optional `AIPromptRunResult` carrying direct token/cost metrics.
+     * @param params - Optional execution parameters for the current run.
+     * @protected
+     */
+    protected recordPromptUsageInTreeBudget(
+        promptRun?: MJAIPromptRunEntity | null,
+        promptResult?: AIPromptRunResult<unknown>,
+        params?: ExecuteAgentParams
+    ): void {
+        const budget = this.ensureTreeBudget(params);
+
+        let tokensDelta = 0;
+        if (promptRun) {
+            if (promptRun.TokensUsedRollup != null && promptRun.TokensUsedRollup > 0) {
+                tokensDelta = promptRun.TokensUsedRollup;
+            } else if ((promptRun.TokensPromptRollup != null && promptRun.TokensPromptRollup > 0) ||
+                       (promptRun.TokensCompletionRollup != null && promptRun.TokensCompletionRollup > 0)) {
+                tokensDelta = (promptRun.TokensPromptRollup ?? 0) + (promptRun.TokensCompletionRollup ?? 0);
+            } else if (promptRun.TokensUsed != null && promptRun.TokensUsed > 0) {
+                tokensDelta = promptRun.TokensUsed;
+            } else if ((promptRun.TokensPrompt != null && promptRun.TokensPrompt > 0) ||
+                       (promptRun.TokensCompletion != null && promptRun.TokensCompletion > 0)) {
+                tokensDelta = (promptRun.TokensPrompt ?? 0) + (promptRun.TokensCompletion ?? 0);
+            }
+        }
+        if (tokensDelta === 0 && promptResult) {
+            if (promptResult.combinedTokensUsed != null && promptResult.combinedTokensUsed > 0) {
+                tokensDelta = promptResult.combinedTokensUsed;
+            } else if ((promptResult.combinedPromptTokens != null && promptResult.combinedPromptTokens > 0) ||
+                       (promptResult.combinedCompletionTokens != null && promptResult.combinedCompletionTokens > 0)) {
+                tokensDelta = (promptResult.combinedPromptTokens ?? 0) + (promptResult.combinedCompletionTokens ?? 0);
+            } else if (promptResult.tokensUsed != null && promptResult.tokensUsed > 0) {
+                tokensDelta = promptResult.tokensUsed;
+            } else if ((promptResult.promptTokens != null && promptResult.promptTokens > 0) ||
+                       (promptResult.completionTokens != null && promptResult.completionTokens > 0)) {
+                tokensDelta = (promptResult.promptTokens ?? 0) + (promptResult.completionTokens ?? 0);
+            }
+        }
+
+        let costDelta = 0;
+        if (promptRun) {
+            if (promptRun.TotalCost != null && promptRun.TotalCost > 0) {
+                costDelta = promptRun.TotalCost;
+            } else if (promptRun.Cost != null && promptRun.Cost > 0) {
+                costDelta = promptRun.Cost;
+            }
+        }
+        if (costDelta === 0 && promptResult) {
+            if (promptResult.combinedCost != null && promptResult.combinedCost > 0) {
+                costDelta = promptResult.combinedCost;
+            } else if (promptResult.cost != null && promptResult.cost > 0) {
+                costDelta = promptResult.cost;
+            }
+        }
+
+        budget.totalTokens += tokensDelta;
+        budget.totalCost += costDelta;
+    }
+
+    /**
+     * Evaluates whether any root-tree cumulative budget ceiling (`maxTreeSteps`, `maxTreeTokens`,
+     * `maxTreeCost`, `maxTreeDurationMs`) on the shared {@link AgentTreeBudget} has been reached
+     * or exceeded.
+     *
+     * When a ceiling is breached, sets `budget.breachedReason` with a descriptive diagnostic
+     * message so both the breaching agent and any ancestor agents in the call tree can terminate
+     * immediately with `step: 'Failed'` and `terminate: true`.
+     *
+     * @param params - Optional execution parameters for the current run.
+     * @returns Guardrail evaluation result indicating whether a tree budget limit was exceeded.
+     * @protected
+     */
+    protected checkTreeBudgetLimit(params?: ExecuteAgentParams): {
+        exceeded: boolean;
+        type?: 'cost' | 'tokens' | 'iterations' | 'time';
+        limit?: number;
+        current?: number;
+        reason?: string;
+    } {
+        const budget = this.ensureTreeBudget(params);
+
+        if (budget.maxTreeSteps != null && budget.totalSteps >= budget.maxTreeSteps) {
+            const reason = budget.breachedReason ?? `Agent tree step budget exceeded (${budget.totalSteps}/${budget.maxTreeSteps} total steps across tree)`;
+            budget.breachedReason = reason;
+            return {
+                exceeded: true,
+                type: 'iterations',
+                limit: budget.maxTreeSteps,
+                current: budget.totalSteps,
+                reason
+            };
+        }
+
+        if (budget.maxTreeTokens != null && budget.totalTokens >= budget.maxTreeTokens) {
+            const reason = budget.breachedReason ?? `Agent tree token budget exceeded (${budget.totalTokens}/${budget.maxTreeTokens} total tokens across tree)`;
+            budget.breachedReason = reason;
+            return {
+                exceeded: true,
+                type: 'tokens',
+                limit: budget.maxTreeTokens,
+                current: budget.totalTokens,
+                reason
+            };
+        }
+
+        if (budget.maxTreeCost != null && budget.totalCost >= budget.maxTreeCost) {
+            const reason = budget.breachedReason ?? `Agent tree cost budget exceeded ($${budget.totalCost.toFixed(4)}/$${budget.maxTreeCost.toFixed(4)} across tree)`;
+            budget.breachedReason = reason;
+            return {
+                exceeded: true,
+                type: 'cost',
+                limit: budget.maxTreeCost,
+                current: budget.totalCost,
+                reason
+            };
+        }
+
+        if (budget.maxTreeDurationMs != null) {
+            const elapsedMs = Date.now() - budget.startedAtMs;
+            if (elapsedMs >= budget.maxTreeDurationMs) {
+                const reason = budget.breachedReason ?? `Agent tree duration budget exceeded (${elapsedMs}ms/${budget.maxTreeDurationMs}ms across tree)`;
+                budget.breachedReason = reason;
+                return {
+                    exceeded: true,
+                    type: 'time',
+                    limit: budget.maxTreeDurationMs,
+                    current: elapsedMs,
+                    reason
+                };
+            }
+        }
+
+        if (budget.breachedReason) {
+            return {
+                exceeded: true,
+                reason: budget.breachedReason
+            };
+        }
+
         return { exceeded: false };
     }
 
@@ -8302,10 +8572,12 @@ The context is now within limits. Please retry your request with the recovered c
     /**
      * The stopped run's turns in the shape the loop builds, or null when they cannot be recovered.
      *
-     * The last prompt step recorded the run's whole message stack as it went into that prompt; the
-     * first prompt step recorded the stack the run started from (history plus this run's injections,
-     * which the new run adds for itself). The difference is the run's own turns. If the last prompt
-     * completed, its decision and the steps after it are rebuilt with the loop's own builders.
+     * The latest prompt step that recorded a full stack holds the run's whole message stack as it went
+     * into that prompt; the prompt steps after it recorded only the messages appended since (see
+     * {@link capturePromptStepMessages}). The first prompt step recorded the stack the run started from
+     * (history plus this run's injections, which the new run adds for itself). The difference is the
+     * run's own turns. If the last prompt completed, its decision and the steps after it are rebuilt
+     * with the loop's own builders.
      * @protected
      */
     protected buildResumedStoppedRunTurns(steps: StoppedRunStackStepRecord[], params: ExecuteAgentParams): AgentChatMessage[] | null {
@@ -8318,28 +8590,20 @@ The context is now within limits. Please retry your request with the recovered c
             return null;
         }
         const lastPrompt = prompts[prompts.length - 1];
-        let loopTurns: AgentChatMessage[] | null;
-        if (prompts.length > 1 && BaseAgent.isPromptStepDelta(lastPrompt)) {
-            loopTurns = [];
-            for (let i = 1; i < prompts.length; i++) {
-                const delta = BaseAgent.readPromptStepStack(prompts[i]);
-                if (!delta) {
-                    return null;
-                }
-                for (const m of delta) {
-                    if (m.metadata?.volatileState !== true) {
-                        loopTurns.push(m);
-                    }
-                }
-            }
-        } else {
-            loopTurns = BaseAgent.ExtractStoppedRunLoopTurns(
-                firstStack,
-                BaseAgent.readPromptStepStack(lastPrompt)
-            );
+        let fullAt = prompts.length - 1;
+        while (fullAt > 0 && BaseAgent.isPromptStepDelta(prompts[fullAt])) {
+            fullAt--;
         }
+        const loopTurns = BaseAgent.ExtractStoppedRunLoopTurns(firstStack, BaseAgent.readPromptStepStack(prompts[fullAt]));
         if (!loopTurns) {
             return null;
+        }
+        for (const prompt of prompts.slice(fullAt + 1)) {
+            const delta = BaseAgent.readPromptStepStack(prompt);
+            if (!delta) {
+                return null;
+            }
+            loopTurns.push(...delta.filter(m => m.metadata?.volatileState !== true));
         }
         const decision = lastPrompt.Status === 'Completed' ? BaseAgent.readPromptStepDecision(lastPrompt) : null;
         const tail = this.buildStoppedRunTail(decision, steps.filter(s => s.StepNumber > lastPrompt.StepNumber), params);
@@ -9893,6 +10157,9 @@ The context is now within limits. Please retry your request with the recovered c
             step.TargetLogID = result.promptRun.ID;
             step.PromptRun = result.promptRun; // transient related object (not a persisted field)
         }
+        if (result.promptRun) {
+            this.recordPromptUsageInTreeBudget(result.promptRun, undefined, this._executeParams);
+        }
     }
 
     /**
@@ -10253,8 +10520,12 @@ The context is now within limits. Please retry your request with the recovered c
             // The client tools and the app context (per-run, from extraData) — neither under an audience (callerContextSections).
             const { clientToolDetails, appContext } = this.callerContextSections(agent, extraData, withholding?.CallerContext === true);
 
+            const cachedUserPolicy = _contextUser?.ID
+                ? AgentUserPolicyEngine.Instance.GetCachedPolicy(agent.ID, _contextUser.ID)
+                : null;
+
             const contextData: AgentContextData = {
-                agentName: agent.Name,
+                agentName: cachedUserPolicy?.DisplayNameOverride?.trim() || agent.Name,
                 agentDescription: agent.Description,
                 parentAgentName: agent.Parent ? agent.Parent.trim() : "",
                 subAgentCount: subAgentCount,
@@ -10274,7 +10545,15 @@ The context is now within limits. Please retry your request with the recovered c
             // is built separately with proper merge precedence (schema < agent < runtime)
             const result: AgentContextData & Record<string, unknown> = {
                 ...contextData,
-                __agentTypePromptParams: agentTypePromptParams
+                __agentTypePromptParams: agentTypePromptParams,
+                ...(cachedUserPolicy
+                    ? {
+                          userPolicyContext: AgentUserPolicyEngine.Instance.BuildPromptPolicyContextBlock(
+                              cachedUserPolicy,
+                              _contextUser
+                          ),
+                      }
+                    : {}),
             };
 
             if (extraData) {
@@ -11516,6 +11795,12 @@ The context is now within limits. Please retry your request with the recovered c
             }
         }
 
+        // Enforce per-(Agent, User) action policy narrowing rules when a user policy is active
+        const policyBlocked = this.checkUserActionPolicy(params, action, actionEntity, contextUser ?? params.contextUser);
+        if (policyBlocked) {
+            return policyBlocked;
+        }
+
         // The run's audience, hydrated once per run — lazily here, since this method is also called outside
         // Execute (the pipeline executor, tests). An unusable audience refuses the call: nothing is dispatched.
         const audience = await this.audienceReadersFor(params);
@@ -11551,6 +11836,63 @@ The context is now within limits. Please retry your request with the recovered c
             });
             throw new Error(`Error executing actions: ${error.message}`);
         }
+    }
+
+    /**
+     * Checks per-(Agent, User) action policy narrowing rules (`MJ: AI Agent User Policies`)
+     * before dispatching an action. Returns a synthetic ActionResult when the action is denied,
+     * deferred outside a configured time window, or requires explicit user approval.
+     */
+    protected checkUserActionPolicy(
+        params: ExecuteAgentParams,
+        action: AgentAction,
+        actionEntity: MJActionEntityExtended,
+        contextUser?: UserInfo
+    ): ActionResult | null {
+        if (!contextUser?.ID || !params?.agent?.ID) {
+            return null;
+        }
+        const policy = AgentUserPolicyEngine.Instance.GetCachedPolicy(params.agent.ID, contextUser.ID);
+        if (!policy) {
+            return null;
+        }
+        const actionParamsRecord: Record<string, string | number | boolean | null | undefined> = {};
+        if (action.params) {
+            for (const [key, val] of Object.entries(action.params)) {
+                if (val == null || typeof val === 'string' || typeof val === 'number' || typeof val === 'boolean') {
+                    actionParamsRecord[key] = val as string | number | boolean | null | undefined;
+                } else {
+                    actionParamsRecord[key] = JSON.stringify(val);
+                }
+            }
+        }
+        const evaluation = AgentUserPolicyEngine.Instance.EvaluateActionExecution({
+            actionName: actionEntity.Name || action.name,
+            params: actionParamsRecord,
+            contextUser,
+            policy,
+        });
+        if (evaluation.verdict === 'Allow') {
+            return null;
+        }
+        const resultCode =
+            evaluation.verdict === 'Deny'
+                ? 'POLICY_DENIED'
+                : evaluation.verdict === 'DeferUntilNextWindow'
+                ? 'POLICY_DEFERRED_OUTSIDE_TIME_WINDOW'
+                : 'POLICY_APPROVAL_REQUIRED';
+        return {
+            Success: false,
+            ResultCode: resultCode,
+            Message: evaluation.reason,
+            Params: [],
+            RunParams: {
+                Action: actionEntity,
+                Params: this.toEngineActionParams(action),
+                ContextUser: contextUser,
+                Filters: [],
+            },
+        };
     }
 
     /**
@@ -11821,6 +12163,7 @@ The context is now within limits. Please retry your request with the recovered c
                 TrustReservedRunData: params.TrustReservedRunData, // the reserved keys left in data are the parent's, already vetted
                 context: subAgentContext, // use subAgentRequest.context if provided, otherwise params.context
                 verbose: params.verbose, // pass verbose flag to sub-agent
+                treeBudget: this.ensureTreeBudget(params), // propagate shared cumulative root-tree budget to sub-agent
                 actionChanges: subAgentActionChanges, // propagate filtered action changes to sub-agent
                 subAgentChanges: subAgentSubAgentChanges, // propagate filtered sub-agent changes to sub-agent
                 PrimaryScopeEntityName: params.PrimaryScopeEntityName, // propagate scope to sub-agent
@@ -12669,7 +13012,7 @@ The context is now within limits. Please retry your request with the recovered c
         
         // Reset prompt turn counter for this execution
         this._promptTurnCount = 0;
-        this._recordedPromptMessages = null;
+        this._lastRecordedPromptStack = null;
         this._heldDecisions = undefined;
 
         // Resolve action-result compression config for this run (default on; opt out via
@@ -13067,20 +13410,39 @@ The context is now within limits. Please retry your request with the recovered c
 
         // Fire-and-forget the 'started' INSERT — the agent flow never blocks on a step save. The queue
         // tracks the INSERT so every later UPDATE (queueStepSave) chains AFTER it commits.
-        // When the step has a parent, chain the INSERT AFTER the parent's INSERT to satisfy the
-        // self-referencing FK_AIAgentRunStep_ParentID constraint — without this, a child INSERT that
-        // races the parent INSERT hits an FK violation (especially under large-payload parent INSERTs).
-        // FK_AIAgentRunStep_PayloadAtStartSourceStepID needs no chaining: the payload source is always a
-        // step whose INSERT has already landed (see findPayloadAtStartSource).
+        // - When the step has a parent, chain the INSERT AFTER the parent's INSERT to satisfy the
+        //   self-referencing FK_AIAgentRunStep_ParentID constraint.
+        // - When the step points PayloadAtStartSourceStepID at a predecessor whose INSERT is still in
+        //   flight (!payloadAtStartSource.IsSaved), ALSO chain the INSERT after payloadAtStartSource to
+        //   satisfy FK_AIAgentRunStep_PayloadAtStartSourceStepID, with a beforeInsert guard that falls
+        //   back to inline PayloadAtStart if the source step's INSERT failed. When payloadAtStartSource
+        //   is already saved (IsSaved === true), do NOT chain behind it so this step's INSERT never waits
+        //   behind a subsequent UPDATE on payloadAtStartSource.
         const parentStepEntity = params.parentId && this._agentRun?.Steps
             ? this._agentRun.Steps.find(s => UUIDsEqual(s.ID, params.parentId))
             : undefined;
-        this._stepSaveQueue.Insert(stepEntity, parentStepEntity);
+        if (payloadAtStartSource && !payloadAtStartSource.IsSaved) {
+            this._stepSaveQueue.Insert(
+                stepEntity,
+                [parentStepEntity, payloadAtStartSource],
+                (s) => {
+                    if (!payloadAtStartSource.IsSaved) {
+                        s.PayloadAtStart = payloadAtStart;
+                        s.PayloadAtStartSourceStepID = null;
+                    }
+                }
+            );
+        } else {
+            this._stepSaveQueue.Insert(stepEntity, parentStepEntity);
+        }
 
         // Add the step to the agent run's Steps array
         if (this._agentRun) {
             this._agentRun.Steps.push(stepEntity);
         }
+
+        // Increment cumulative step count on the shared root-tree budget
+        this.ensureTreeBudget(this._executeParams).totalSteps += 1;
 
         return stepEntity;
     }
@@ -13091,9 +13453,23 @@ The context is now within limits. Please retry your request with the recovered c
      * is added to the run's `Steps`.
      *
      * The candidate is the latest step in the run that is not `Running` and has a `PayloadAtEnd` (or
-     * `PayloadAtEndSourceStepID`). Only that step is compared, and it is used only when its INSERT has
-     * landed (`IsSaved`). If that step itself points to an earlier step via `PayloadAtEndSourceStepID`,
-     * the pointer resolves in one hop to the step that actually holds the stored `PayloadAtEnd`.
+     * `PayloadAtEndSourceStepID`). Only that step is compared. If that step itself points to an earlier
+     * step via `PayloadAtEndSourceStepID`, the pointer resolves in one hop to the step that actually
+     * holds the stored `PayloadAtEnd`.
+     * - Running steps are skipped because their end can still change: parallel sub-agent siblings write
+     *   their own result as `PayloadAtEnd` when they finish, and a ForEach step writes its end after all
+     *   of its child steps.
+     * - Finished steps with no end (tool, compaction and finish-check steps) are skipped because they never
+     *   get one, and would hide the step that produced the payload.
+     * - If the matching candidate's INSERT is still in flight (`!step.IsSaved`), {@link createStepEntity}
+     *   chains the new step's INSERT after `step` on {@link _stepSaveQueue} (and falls back to storing inline
+     *   `PayloadAtStart` if the candidate's INSERT fails) so `FK_AIAgentRunStep_PayloadAtStartSourceStepID`
+     *   is always satisfied without sacrificing deduplication on fast back-to-back turns.
+     *
+     * Rule: a step's `PayloadAtEnd` must not change after a later step points at it, because readers take
+     * the pointing step's start payload from it. The comparison uses the in-memory end, so the saved end
+     * must match it: `finalizeStepEntity` re-applies the end after the INSERT lands, and an end set after
+     * `finalizeStepEntity` is saved with `queueStepSave`.
      *
      * @param serializedStart The new step's start payload, already serialized.
      * @returns The step to point at, or undefined when the start payload must be stored.
@@ -13128,19 +13504,36 @@ The context is now within limits. Please retry your request with the recovered c
                 startIdx = foundIdx - 1;
             }
         }
+        // When beforeStep is provided (findPayloadAtEndSource during finalizeStepEntity), the
+        // source step must already be IsSaved because finalizeStepEntity queues an UPDATE rather
+        // than an INSERT with prerequisite chaining. When beforeStep is omitted (findPayloadAtStartSource
+        // during createStepEntity), an in-flight source step is allowed because createStepEntity chains
+        // the new step's INSERT after the source step on _stepSaveQueue.
+        const requireSavedSource = beforeStep != null;
+        let candidateStep: MJAIAgentRunStepEntityExtended | undefined;
         for (let i = startIdx; i >= 0; i--) {
             const step = steps[i];
             if (step.Status !== 'Running' && (step.PayloadAtEnd != null || step.PayloadAtEndSourceStepID != null)) {
-                if (!step.IsSaved) {
-                    return undefined;
-                }
-                const source = step.PayloadAtEndSourceStepID
-                    ? steps.find(s => UUIDsEqual(s.ID, step.PayloadAtEndSourceStepID))
-                    : step;
-                return source && source.IsSaved && source.PayloadAtEnd === serializedPayload ? source : undefined;
+                candidateStep = step;
+                break;
             }
         }
-        return undefined;
+        if (!candidateStep) {
+            return undefined;
+        }
+        if (requireSavedSource && !candidateStep.IsSaved) {
+            return undefined;
+        }
+        const source = candidateStep.PayloadAtEndSourceStepID
+            ? steps.find(s => UUIDsEqual(s.ID, candidateStep.PayloadAtEndSourceStepID))
+            : candidateStep;
+        if (!source) {
+            return undefined;
+        }
+        if (requireSavedSource && !source.IsSaved) {
+            return undefined;
+        }
+        return source.PayloadAtEnd === serializedPayload ? source : undefined;
     }
 
     /**
@@ -13210,40 +13603,33 @@ The context is now within limits. Please retry your request with the recovered c
      * persisting volatile `<mj-runtime-state>` envelopes or repeating messages already
      * recorded in an earlier `Prompt` step of the current run.
      *
-     * - First `Prompt` step of the run: stores all non-volatile initial messages.
-     * - Subsequent `Prompt` steps of the run: stores only the newly appended non-volatile
-     *   messages since the previous `Prompt` step, tagged with `conversationMessagesDelta: true`.
+     * - When the non-volatile stack extends the previous Prompt step's recorded stack append-only (the
+     *   same messages, unchanged, at the same positions), only the appended messages are stored, tagged
+     *   with `conversationMessagesDelta: true`.
+     * - Otherwise (the first Prompt step of the run, or a message was replaced, removed or changed by
+     *   expiry, compaction or expansion) the full non-volatile stack is stored, with no delta flag.
+     *
+     * {@link buildResumedStoppedRunTurns} rebuilds the stack from the latest full stack plus the deltas after it.
      */
     private capturePromptStepMessages(
         messages: ChatMessage[] | undefined
     ): { conversationMessages: ChatMessage[]; conversationMessagesDelta?: true } {
-        if (!messages || messages.length === 0) {
-            if (this._recordedPromptMessages === null) {
-                this._recordedPromptMessages = new WeakSet<ChatMessage>();
-                return { conversationMessages: [] };
-            }
-            return { conversationMessages: [], conversationMessagesDelta: true };
+        const nonVolatile = (messages ?? []).filter(m => (m as AgentChatMessage)?.metadata?.volatileState !== true);
+        const recorded = nonVolatile.map(m => ({ Message: m, Serialized: JSON.stringify(m) }));
+        const previous = this._lastRecordedPromptStack;
+        this._lastRecordedPromptStack = recorded;
+        if (previous && BaseAgent.isAppendOnlyExtension(previous, recorded)) {
+            return { conversationMessages: nonVolatile.slice(previous.length), conversationMessagesDelta: true };
         }
+        return { conversationMessages: nonVolatile };
+    }
 
-        const nonVolatile = messages.filter(m => (m as AgentChatMessage)?.metadata?.volatileState !== true);
-
-        if (this._recordedPromptMessages === null) {
-            this._recordedPromptMessages = new WeakSet<ChatMessage>();
-            for (let i = 0; i < nonVolatile.length; i++) {
-                this._recordedPromptMessages.add(nonVolatile[i]);
-            }
-            return { conversationMessages: nonVolatile };
+    /** True when `current` starts with every message of `previous`, by reference and unchanged. @private */
+    private static isAppendOnlyExtension(previous: RecordedPromptMessage[], current: RecordedPromptMessage[]): boolean {
+        if (current.length < previous.length) {
+            return false;
         }
-
-        const delta: ChatMessage[] = [];
-        for (let i = 0; i < nonVolatile.length; i++) {
-            const msg = nonVolatile[i];
-            if (!this._recordedPromptMessages.has(msg)) {
-                this._recordedPromptMessages.add(msg);
-                delta.push(msg);
-            }
-        }
-        return { conversationMessages: delta, conversationMessagesDelta: true };
+        return previous.every((p, i) => current[i].Message === p.Message && current[i].Serialized === p.Serialized);
     }
 
     /**
@@ -13410,6 +13796,76 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
+     * Builds the user-oriented initialization progress message for an agent run.
+     *
+     * - Root agent (`_depth === 0`): `'Getting ready...'`
+     * - Direct sub-agent (`_depth === 1`): `'Starting <SubAgentName>...'`
+     * - Nested sub-agent (`_depth > 1`): `'<ParentBreadcrumb>: Starting <SubAgentName>...'`
+     *
+     * @protected
+     * @param {ExecuteAgentParams} params - Execution parameters for the current agent
+     * @returns {string} Formatted initialization progress message
+     */
+    protected buildInitializationProgressMessage(params: ExecuteAgentParams): string {
+        if (this._depth === 0) {
+            return 'Getting ready...';
+        }
+        const startPhrase = `Starting ${params.agent.Name}...`;
+        const parentBreadcrumb = this._agentHierarchy.slice(1, -1).join(' → ');
+        return parentBreadcrumb ? `${parentBreadcrumb}: ${startPhrase}` : startPhrase;
+    }
+
+    /**
+     * Builds a user-oriented progress message for a prompt execution step without
+     * exposing internal framework terminology ("initial prompt", "payload", "context")
+     * or duplicating the sub-agent name when prefixed by {@link formatHierarchicalMessage}.
+     *
+     * @protected
+     * @param {ExecuteAgentParams} params - Execution parameters for the current agent
+     * @param {BaseAgentNextStep | null} [previousDecision] - Previous step decision when re-prompting
+     * @returns {string} Base progress message (before `formatHierarchicalMessage` breadcrumb prefixing)
+     */
+    protected buildPromptProgressMessage(
+        params: ExecuteAgentParams,
+        previousDecision?: BaseAgentNextStep | null
+    ): string {
+        if (!previousDecision) {
+            return this._depth > 0
+                ? 'Thinking...'
+                : `${params.agent.Name} is thinking...`;
+        }
+
+        const retryReason = previousDecision.retryReason?.trim();
+        if (retryReason) {
+            if (retryReason === 'Payload change applied') {
+                return this._depth > 0
+                    ? 'Thinking through the next steps...'
+                    : `${params.agent.Name} is thinking through the next steps...`;
+            }
+            if (retryReason.startsWith('Context recovery')) {
+                return this._depth > 0
+                    ? 'Thinking...'
+                    : `${params.agent.Name} is thinking...`;
+            }
+            if (retryReason === 'Error while processing actions, retry') {
+                return 'Recovering from an error and trying another approach...';
+            }
+            return retryReason;
+        }
+
+        const retryInstructions = previousDecision.retryInstructions?.trim();
+        if (retryInstructions) {
+            return this._depth > 0
+                ? 'Reviewing batch results...'
+                : `${params.agent.Name} is reviewing batch results...`;
+        }
+
+        return this._depth > 0
+            ? 'Thinking through the next steps...'
+            : `${params.agent.Name} is thinking through the next steps...`;
+    }
+
+    /**
      * Trims a step name to what `AIAgentRunStep.StepName` can hold. Step names are built from free
      * text — a termination message quoting a provider's error, a tool name with its arguments, the
      * hierarchy breadcrumb in front of either — and one longer than the column made the whole row
@@ -13505,6 +13961,23 @@ The context is now within limits. Please retry your request with the recovered c
         previousDecision: BaseAgentNextStep<P> | null,
         stepCount: number = 0
     ): Promise<BaseAgentNextStep<P>> {
+        // Enforce cumulative root-tree budget limits before executing any non-terminal step
+        const currentPayload = (previousDecision?.newPayload ?? previousDecision?.previousPayload ?? params.payload) as P;
+        if (previousDecision?.step !== 'Chat' && previousDecision?.terminate !== true) {
+            const treeBudgetResult = this.checkTreeBudgetLimit(params);
+            if (treeBudgetResult.exceeded) {
+                this.logStatus(`⛔ Execution guardrail exceeded: ${treeBudgetResult.reason}`, false, params);
+                return {
+                    ...(previousDecision ?? {}),
+                    step: 'Failed',
+                    terminate: true,
+                    previousPayload: currentPayload,
+                    newPayload: currentPayload,
+                    message: treeBudgetResult.reason,
+                    errorMessage: treeBudgetResult.reason
+                };
+            }
+        }
         
         // Determine what to execute
         if (!previousDecision) {
@@ -13556,6 +14029,16 @@ The context is now within limits. Please retry your request with the recovered c
                 // so the run shows what was emitted even if the sub-agent then fails.
                 await this.recordFoldedTaskGraph(params, previousDecision);
                 const subAgentResult = await this.processSubAgentStep<P, P>(params, previousDecision!, undefined, undefined, stepCount);
+                if (this._treeBudget?.breachedReason) {
+                    const breachedReason = this._treeBudget.breachedReason;
+                    return {
+                        ...subAgentResult,
+                        step: 'Failed',
+                        terminate: true,
+                        message: breachedReason,
+                        errorMessage: breachedReason
+                    };
+                }
                 const afterSubAgent = (await this.finishAfterSubAgent<P>(params, previousDecision, subAgentResult)) ?? subAgentResult;
                 return this.selfCheckSuccess(params, afterSubAgent, afterSubAgent.newPayload ?? subAgentResult.newPayload);
             }
@@ -13783,9 +14266,7 @@ The context is now within limits. Please retry your request with the recovered c
         try {
             // Report prompt execution progress with context
             const isRetry = !!previousDecision;
-            const promptMessage = isRetry
-                ? `Running ${params.agent.Name} with context from ${previousDecision.retryReason || 'previous actions'}`
-                : `Running ${params.agent.Name}'s initial prompt...`;
+            const promptMessage = this.buildPromptProgressMessage(params, previousDecision);
 
             const hierarchicalStepToEmit = this.buildHierarchicalStep(stepCount + 1, this._parentStepCounts);
 
@@ -13856,6 +14337,7 @@ The context is now within limits. Please retry your request with the recovered c
             
             // Execute the prompt
             const promptResult = await this.executePrompt(promptParams);
+            this.recordPromptUsageInTreeBudget(promptResult.promptRun, promptResult, params);
 
             this.recordToolCallingInstrumentation(stepEntity, promptResult);
 
@@ -14683,6 +15165,9 @@ The context is now within limits. Please retry your request with the recovered c
                 step: subAgentResult.success ? 'Success' : 'Failed',
                 // Capture error message from sub-agent run for proper error propagation
                 errorMessage: subAgentResult.success ? undefined : (subAgentResult.agentRun?.ErrorMessage || 'Sub-agent failed with no error message'),
+                retryReason: subAgentResult.success
+                    ? `Reviewing results from ${subAgentRequest.name}`
+                    : `Handling error from ${subAgentRequest.name}`,
                 terminate: shouldTerminate,
                 previousPayload: previousDecision?.newPayload,
                 newPayload: mergedPayload,
@@ -15347,8 +15832,12 @@ The context is now within limits. Please retry your request with the recovered c
         const shouldTerminateParent = allExecutions.some(e =>
             e.request.terminateAfter === true
         );
+        const subAgentNames = allExecutions.map(e => e.request.name).join(', ');
         return {
             step: anyFailure ? 'Failed' : (shouldTerminateParent ? 'Success' : 'Retry'),
+            retryReason: anyFailure
+                ? `Reviewing results and errors from ${subAgentNames}`
+                : `Reviewing results from ${subAgentNames}`,
             terminate: shouldTerminateParent,
             newPayload: mergedPayload,
             previousPayload: previousDecision.newPayload
@@ -15642,6 +16131,9 @@ The context is now within limits. Please retry your request with the recovered c
                 step: subAgentResult.success ? 'Success' : 'Failed',
                 // Capture error message from sub-agent run for proper error propagation
                 errorMessage: subAgentResult.success ? undefined : (subAgentResult.agentRun?.ErrorMessage || 'Related sub-agent failed with no error message'),
+                retryReason: subAgentResult.success
+                    ? `Reviewing results from ${subAgentRequest.name}`
+                    : `Handling error from ${subAgentRequest.name}`,
                 terminate: shouldTerminate,
                 previousPayload: previousDecision?.newPayload,
                 newPayload: mergedPayload,
@@ -16304,6 +16796,8 @@ The context is now within limits. Please retry your request with the recovered c
             // After actions complete, we need to process the results
             // The retry step is used to re-execute the prompt with the action results
             // This allows the agent to analyze the results and determine what to do next
+            const failedNoun = failedActions.length === 1 ? 'action' : 'actions';
+            const completedNoun = actionSummaries.length === 1 ? 'action' : 'actions';
             return {
                 terminate: false,
                 step: 'Retry',
@@ -16311,8 +16805,8 @@ The context is now within limits. Please retry your request with the recovered c
                 newPayload: finalPayload, // Use the final payload after any post-processing
                 priorStepResult: actionSummaries,
                 retryReason: failedActions.length > 0
-                    ? `Processing results with ${failedActions.length} failed action(s): ${failedActions.map(a => a.actionName).join(', ')}`
-                    : `Analyzing results from ${actionSummaries.length} completed action(s) to formulate response`
+                    ? `Processing results with ${failedActions.length} failed ${failedNoun}: ${failedActions.map(a => a.actionName).join(', ')}`
+                    : `Analyzing results from ${actionSummaries.length} completed ${completedNoun}`
             };
         }
         catch (e) {
@@ -18585,16 +19079,42 @@ The context is now within limits. Please retry your request with the recovered c
     }
  
     /**
-     * Creates a failure result with proper tracking.
+     * Flushes any in-flight `MJAIPromptRunEntityExtended` saves queued on {@link _promptRunner}.
+     * Tolerates lightweight test doubles on `_promptRunner` that may only implement
+     * `WaitForPendingPromptRunSaves` or neither method.
+     *
+     * @private
+     */
+    private async flushPromptRunnerSaves(): Promise<void> {
+        const runner = this._promptRunner as {
+            FlushPendingSaves?: () => Promise<void>;
+            WaitForPendingPromptRunSaves?: () => Promise<void>;
+        } | undefined;
+        if (typeof runner?.FlushPendingSaves === 'function') {
+            await runner.FlushPendingSaves();
+        } else if (typeof runner?.WaitForPendingPromptRunSaves === 'function') {
+            await runner.WaitForPendingPromptRunSaves();
+        }
+    }
+
+    /**
+     * Creates a failure result with proper tracking, draining all queued step and prompt-run saves
+     * before persisting the failed run row so no orphan step or prompt-run writes remain in flight.
      *
      * @private
      */
     private async createFailureResult(errorMessage: string, contextUser?: UserInfo): Promise<ExecuteAgentResult> {
+        const [{ failures }] = await Promise.all([
+            this._stepSaveQueue.Flush(),
+            this.flushPromptRunnerSaves(),
+        ]);
         if (this._agentRun) {
             this._agentRun.Status = 'Failed';
             this._agentRun.CompletedAt = new Date();
             this._agentRun.Success = false;
-            this._agentRun.ErrorMessage = errorMessage;
+            this._agentRun.ErrorMessage = failures > 0
+                ? `${errorMessage}\n${failures} step record save(s) failed during this run; see logs for details.`
+                : errorMessage;
             
             // Calculate total tokens even for failed runs
             this.applyTokenStatsToRun(this._agentRun, this.calculateTokenStats());
@@ -18609,18 +19129,25 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
-     * Creates a cancelled result.
+     * Creates a cancelled result, draining all queued step and prompt-run saves before persisting
+     * the cancelled run row so no orphan step or prompt-run writes remain in flight.
      *
      * @private
      * @param {string} message - The cancellation message
      * @returns {Promise<ExecuteAgentResult>} The cancelled result
      */
     private async createCancelledResult(message: string, contextUser?: UserInfo): Promise<ExecuteAgentResult> {
+        const [{ failures }] = await Promise.all([
+            this._stepSaveQueue.Flush(),
+            this.flushPromptRunnerSaves(),
+        ]);
         if (this._agentRun) {
             this._agentRun.Status = 'Cancelled';
             this._agentRun.CompletedAt = new Date();
             this._agentRun.Success = false;
-            this._agentRun.ErrorMessage = message;
+            this._agentRun.ErrorMessage = failures > 0
+                ? `${message}\n${failures} step record save(s) failed during this run; see logs for details.`
+                : message;
             // Save() writes every column, so an in-memory null here would overwrite the reason the
             // Stop button wrote on the row. Record the reason the abort signal carried instead. The
             // signal is consulted first because most call sites pass a fixed message naming WHERE
@@ -18722,13 +19249,16 @@ The context is now within limits. Please retry your request with the recovered c
     /**
      * Finalizes the agent run with success.
      * 
-     * @private
+     * @protected
      */
-    private async finalizeAgentRun<P>(finalStep: BaseAgentNextStep, payload?: P, contextUser?: UserInfo): Promise<ExecuteAgentResult<P>> {
-        // Flush every pending step save (success OR failure) via the shared queue, which allSettles so a
-        // single failure doesn't shadow the rest and drains itself so a reused instance doesn't leak
-        // settled promises. Surface the failure count on the run for visibility.
-        const { failures } = await this._stepSaveQueue.Flush();
+    protected async finalizeAgentRun<P>(finalStep: BaseAgentNextStep, payload?: P, contextUser?: UserInfo): Promise<ExecuteAgentResult<P>> {
+        // Flush every pending step save AND prompt-run save (success OR failure) via their shared queues,
+        // which allSettle so a single failure doesn't shadow the rest and drain themselves so a reused
+        // instance doesn't leak settled promises. Surface the step failure count on the run for visibility.
+        const [{ failures }] = await Promise.all([
+            this._stepSaveQueue.Flush(),
+            this.flushPromptRunnerSaves(),
+        ]);
         if (failures > 0 && this._agentRun) {
             const note = `${failures} step record save(s) failed during this run; see logs for details.`;
             this._agentRun.ErrorMessage = this._agentRun.ErrorMessage
@@ -18821,6 +19351,22 @@ The context is now within limits. Please retry your request with the recovered c
             // completion event. Errors are contained — a failed pass leaves the conversation
             // untouched and simply re-triggers on a later turn.
             this.startPostTurnCompaction();
+
+            // Post-run conversation message pre-compaction, scratchpad pruning, and memory
+            // extraction (when ExecuteAgentParams.compactAfterRun is enabled). Runs AFTER
+            // _stepSaveQueue.Flush() and _agentRun.Save() inside a defensive try/catch so any
+            // error in post-run maintenance is logged gracefully without turning a successful
+            // agent run into a failure.
+            if (this._executeParams) {
+                try {
+                    await this.runPostRunCompaction(this._executeParams, this._agentRun);
+                } catch (compactionError) {
+                    LogError(
+                        `Post-run compaction error for agent run ${this._agentRun.ID} (contained): ` +
+                        `${compactionError instanceof Error ? compactionError.message : String(compactionError)}`
+                    );
+                }
+            }
         }
 
         // Also promote any media from the final step's promoteMediaOutputs
@@ -19376,10 +19922,15 @@ The context is now within limits. Please retry your request with the recovered c
             });
             if (outcome.PromptRun) {
                 stepEntity.PromptRun = outcome.PromptRun;
+                this.recordPromptUsageInTreeBudget(outcome.PromptRun, undefined, params);
             }
             if (phase === 'post-turn') {
-                // finalizeAgentRun's flush has already run — drain this step's INSERT now.
-                await this._stepSaveQueue.Flush();
+                // finalizeAgentRun's flush has already run — drain this step's INSERT and the summary
+                // prompt run's save now.
+                await Promise.all([
+                    this._stepSaveQueue.Flush(),
+                    this.flushPromptRunnerSaves(),
+                ]);
                 await this.topUpRunTokenTotalsAfterPostTurnCompaction(outcome, params.contextUser);
             }
         } catch (error) {
@@ -19448,6 +19999,257 @@ The context is now within limits. Please retry your request with the recovered c
         }
         messages.length = 0;
         messages.push(...retained);
+    }
+
+    /**
+     * Executes post-run conversation message pre-compaction, scratchpad pruning, and
+     * asynchronous memory extraction after an agent run completes (`finalizeAgentRun`).
+     *
+     * Shifting compaction and maintenance to the end of `finalizeAgentRun` removes
+     * compaction latency from the next user turn's critical path so subsequent turns
+     * start with a pre-compacted message window.
+     *
+     * ### Lifecycle Phases
+     * 1. **Configuration Resolution**: Reads `params.compactAfterRun` (`boolean | AgentPostRunCompactionConfig`).
+     *    When `undefined`, `false`, or `{ enabled: false }`, returns immediately as a no-op.
+     *    When `true`, applies defaults `{ enabled: true, messageCountThreshold: 20, extractMemories: true }`.
+     * 2. **Message Window Pre-Compaction**: When `params.conversationMessages.length >= messageCountThreshold`,
+     *    compacts older messages in `[1 .. length - preserveRecentCount - 1]` while preserving
+     *    the initial goal message (`index 0`) and the most recent messages intact. Delegates to
+     *    {@link compactMessage} (and {@link CompactToolResultContent} for native tool turns) so
+     *    behavior and expansion metadata (`wasCompacted`, `originalContent`, `canExpand`) are
+     *    100% consistent with mid-run message compaction.
+     * 3. **Scratchpad Pruning**: When `maxScratchpadNotes` is configured, prunes excess low-priority
+     *    scratchpad note lines (via {@link ScratchpadManager.PruneNotes}) and completed tasks
+     *    (via {@link ScratchpadManager.EnforceTaskLimit}) down to `maxScratchpadNotes`.
+     * 4. **Memory Extraction Trigger**: When `extractMemories !== false` and `agentRun.Success` is `true`,
+     *    triggers asynchronous note/example extraction via {@link triggerPostRunMemoryExtraction}.
+     *
+     * Every phase is wrapped in its own `try/catch` block so an error in one phase is logged
+     * via `LogError` without aborting the remaining phases or failing the completed agent run.
+     *
+     * @param params - The execution parameters for the completed agent run
+     * @param agentRun - The finalized `MJAIAgentRunEntityExtended` record
+     * @protected
+     */
+    protected async runPostRunCompaction(
+        params: ExecuteAgentParams,
+        agentRun: MJAIAgentRunEntityExtended
+    ): Promise<void> {
+        if (!params?.compactAfterRun) {
+            return;
+        }
+
+        const rawConfig: AgentPostRunCompactionConfig =
+            params.compactAfterRun === true
+                ? { enabled: true, messageCountThreshold: 20, extractMemories: true }
+                : params.compactAfterRun;
+
+        if (!rawConfig.enabled) {
+            return;
+        }
+
+        const messageCountThreshold = rawConfig.messageCountThreshold ?? 20;
+        const extractMemories = rawConfig.extractMemories ?? true;
+        const maxScratchpadNotes = rawConfig.maxScratchpadNotes;
+        if (params.onMessageLifecycle && !this._messageLifecycleCallback) {
+            this._messageLifecycleCallback = params.onMessageLifecycle;
+        }
+
+        // 1. Message Window Pre-Compaction
+        try {
+            const messages = params.conversationMessages;
+            if (Array.isArray(messages) && messages.length >= messageCountThreshold && messages.length >= 3) {
+                const totalMessages = messages.length;
+                const preserveRecentCount = totalMessages <= 3 ? 1 : (totalMessages < 9 ? 2 : 4);
+                const compactEndIndex = totalMessages - preserveRecentCount;
+                const preserveOriginal = params.messageExpirationOverride?.preserveOriginalContent !== false;
+                let compactedCount = 0;
+                let totalTokensSaved = 0;
+
+                for (let i = 1; i < compactEndIndex; i++) {
+                    const msg = messages[i] as AgentChatMessage;
+                    if (
+                        !msg ||
+                        msg.role === 'system' ||
+                        msg.metadata?.wasCompacted === true ||
+                        msg.metadata?.isConversationSummary === true ||
+                        msg.metadata?.volatileState === true
+                    ) {
+                        continue;
+                    }
+
+                    const originalContent = msg.content;
+                    const originalText = ReplaceMediaBlocksWithStubs(originalContent);
+                    const compactMode = msg.metadata?.compactMode
+                        || params.messageExpirationOverride?.compactMode
+                        || 'First N Chars';
+                    const compactLength = msg.metadata?.compactLength
+                        || params.messageExpirationOverride?.compactLength
+                        || 200;
+                    const compactPromptId = msg.metadata?.compactPromptId
+                        || params.messageExpirationOverride?.compactPromptId
+                        || '';
+
+                    if (msg.role === 'tool') {
+                        const compactedTurn = CompactToolResultContent(
+                            msg,
+                            (t) => (t.length > compactLength ? `${t.slice(0, compactLength)}… [compacted from ${t.length} chars]` : t)
+                        );
+                        const saved = Math.max(0, this.estimateTokens(originalContent) - this.estimateTokens(compactedTurn.content));
+                        messages[i] = {
+                            ...compactedTurn,
+                            metadata: {
+                                ...msg.metadata,
+                                wasCompacted: true,
+                                originalContent: preserveOriginal ? originalContent : undefined,
+                                originalLength: originalText.length,
+                                tokensSaved: saved,
+                                canExpand: preserveOriginal,
+                            },
+                        };
+                        totalTokensSaved += saved;
+                        compactedCount++;
+                        this.emitMessageLifecycleEvent({
+                            type: 'message-compacted',
+                            turn: 0,
+                            messageIndex: i,
+                            message: messages[i] as AgentChatMessage,
+                            reason: `Post-run compaction of tool turn (saved ${saved} tokens)`,
+                            tokensSaved: saved,
+                        });
+                        continue;
+                    }
+
+                    const compactedContent = await this.compactMessage(
+                        msg,
+                        {
+                            compactMode,
+                            compactLength,
+                            compactPromptId,
+                            originalLength: originalText.length,
+                        },
+                        params
+                    );
+
+                    const originalTokens = this.estimateTokens(originalContent);
+                    const compactedTokens = this.estimateTokens(compactedContent);
+                    const tokensSaved = Math.max(0, originalTokens - compactedTokens);
+
+                    messages[i] = {
+                        ...msg,
+                        content: compactedContent,
+                        metadata: {
+                            ...msg.metadata,
+                            wasCompacted: true,
+                            originalContent: preserveOriginal ? originalContent : undefined,
+                            originalLength: originalText.length,
+                            tokensSaved,
+                            canExpand: preserveOriginal,
+                        },
+                    };
+                    totalTokensSaved += tokensSaved;
+                    compactedCount++;
+
+                    this.emitMessageLifecycleEvent({
+                        type: 'message-compacted',
+                        turn: 0,
+                        messageIndex: i,
+                        message: messages[i] as AgentChatMessage,
+                        reason: `Post-run compaction using ${compactMode} (saved ${tokensSaved} tokens)`,
+                        tokensSaved,
+                    });
+                }
+
+                if (compactedCount > 0) {
+                    this.logStatus(
+                        `🗜️ [PostRunCompaction] Compacted ${compactedCount} older message(s) (saved ~${totalTokensSaved} tokens; preserved index 0 and last ${preserveRecentCount} message(s))`,
+                        true,
+                        params
+                    );
+                }
+            }
+        } catch (error) {
+            LogError(`Post-run message window compaction failed (contained): ${error instanceof Error ? error.message : String(error)}`);
+        }
+
+        // 2. Scratchpad Pruning
+        if (maxScratchpadNotes !== undefined && maxScratchpadNotes >= 0) {
+            try {
+                const prunedNotes = this._scratchpadManager.PruneNotes(maxScratchpadNotes);
+                const prunedTasks = this._scratchpadManager.EnforceTaskLimit(maxScratchpadNotes);
+                if (prunedNotes > 0 || prunedTasks > 0) {
+                    this.logStatus(
+                        `🧹 [PostRunCompaction] Pruned ${prunedNotes} scratchpad note line(s) and ${prunedTasks} completed task(s) (limit: ${maxScratchpadNotes})`,
+                        true,
+                        params
+                    );
+                }
+            } catch (error) {
+                LogError(`Post-run scratchpad pruning failed (contained): ${error instanceof Error ? error.message : String(error)}`);
+            }
+        }
+
+        // 3. Memory Extraction Trigger
+        if (extractMemories && agentRun?.Success) {
+            try {
+                await this.triggerPostRunMemoryExtraction(params, agentRun);
+            } catch (error) {
+                LogError(`Post-run memory extraction failed (contained): ${error instanceof Error ? error.message : String(error)}`);
+            }
+        }
+    }
+
+    /**
+     * Triggers asynchronous post-run note and example extraction via `MemoryManagerAgent`
+     * when the executing agent has memory injection (`InjectNotes` or `InjectExamples`) enabled.
+     *
+     * No-ops when the executing agent itself is the `MemoryManagerAgent` (preventing recursion)
+     * or when no active `MemoryManagerAgent` is registered in `AIEngine`.
+     *
+     * @param params - The execution parameters for the completed agent run
+     * @param agentRun - The finalized `MJAIAgentRunEntityExtended` record
+     * @protected
+     */
+    protected async triggerPostRunMemoryExtraction(
+        params: ExecuteAgentParams,
+        agentRun: MJAIAgentRunEntityExtended
+    ): Promise<void> {
+        const agent = params?.agent;
+        if (!agent || (!agent.InjectNotes && !agent.InjectExamples)) {
+            return;
+        }
+        if (agent.DriverClass === 'MemoryManagerAgent' || agent.Name === 'Memory Manager') {
+            return;
+        }
+
+        const allAgents = AIEngine.Instance?.Agents ?? [];
+        const memoryManagerEntity = allAgents.find(
+            a => a.Status === 'Active' && (a.DriverClass === 'MemoryManagerAgent' || a.Name === 'Memory Manager')
+        );
+        if (!memoryManagerEntity || !params.contextUser) {
+            return;
+        }
+
+        const driverKey = memoryManagerEntity.DriverClass || 'MemoryManagerAgent';
+        const memoryAgent = MJGlobal.Instance.ClassFactory.CreateInstance<BaseAgent>(BaseAgent, driverKey);
+        if (!memoryAgent) {
+            return;
+        }
+
+        void memoryAgent.Execute({
+            agent: memoryManagerEntity,
+            conversationMessages: [],
+            contextUser: params.contextUser,
+            provider: params.provider,
+            data: {
+                sourceAgentId: agent.ID,
+                sourceAgentRunId: agentRun.ID,
+                conversationId: params.conversationId,
+            },
+        }).catch(error => {
+            LogError(`Async post-run MemoryManager execution failed (contained): ${error instanceof Error ? error.message : String(error)}`);
+        });
     }
 
     /**

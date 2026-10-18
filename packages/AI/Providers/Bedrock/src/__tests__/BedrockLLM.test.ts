@@ -529,4 +529,225 @@ describe('BedrockLLM', () => {
       expect(mockSend.mock.calls[0][1]).toEqual({ abortSignal: controller.signal });
     });
   });
+
+  /* ---- Prompt Caching & Trailing Volatile State ---- */
+  describe('prompt caching and trailing volatile state', () => {
+    const mockAnthropicSuccess = () => {
+      mockSend.mockResolvedValueOnce({
+        body: new TextEncoder().encode(JSON.stringify({
+          content: [{ text: 'Cached response' }],
+          usage: {
+            input_tokens: 15,
+            output_tokens: 25,
+            cache_read_input_tokens: 800,
+            cache_creation_input_tokens: 50,
+          },
+        })),
+      });
+    };
+
+    it('should extract system messages and append cachePoint to system and last history message by default', async () => {
+      mockAnthropicSuccess();
+
+      const fn = (llm as unknown as Record<string, (...args: unknown[]) => Promise<unknown>>)['nonStreamingChatCompletion']
+        .bind(llm);
+      const result = await fn({
+        model: 'anthropic.claude-3-5-sonnet-20241022-v2:0',
+        messages: [
+          { role: 'system', content: 'Stable system instructions' },
+          { role: 'user', content: 'First question' },
+        ],
+      }) as Record<string, unknown>;
+
+      const sentBody = JSON.parse(mockSend.mock.calls[0][0].body as string);
+      expect(sentBody.system).toEqual([
+        { type: 'text', text: 'Stable system instructions' },
+        { cachePoint: { type: 'default' } },
+      ]);
+      expect(sentBody.messages).toEqual([
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'First question' },
+            { cachePoint: { type: 'default' } },
+          ],
+        },
+      ]);
+      expect(result.cacheInfo).toEqual({ cacheHit: true, cachedTokenCount: 800 });
+    });
+
+    it('should support cross-region inference profile model IDs (e.g. us.anthropic.claude-*)', async () => {
+      mockAnthropicSuccess();
+
+      const fn = (llm as unknown as Record<string, (...args: unknown[]) => Promise<unknown>>)['nonStreamingChatCompletion']
+        .bind(llm);
+      const result = await fn({
+        model: 'us.anthropic.claude-sonnet-4-20250514-v1:0',
+        messages: [
+          { role: 'system', content: 'System prompt' },
+          { role: 'user', content: 'Hello' },
+        ],
+      }) as Record<string, unknown>;
+
+      expect(result.success).toBe(true);
+      const sentBody = JSON.parse(mockSend.mock.calls[0][0].body as string);
+      expect(sentBody.system).toEqual([
+        { type: 'text', text: 'System prompt' },
+        { cachePoint: { type: 'default' } },
+      ]);
+    });
+
+    it('should omit cachePoint blocks when enableCaching is false', async () => {
+      mockAnthropicSuccess();
+
+      const fn = (llm as unknown as Record<string, (...args: unknown[]) => Promise<unknown>>)['nonStreamingChatCompletion']
+        .bind(llm);
+      await fn({
+        model: 'anthropic.claude-3-5-sonnet-20241022-v2:0',
+        enableCaching: false,
+        messages: [
+          { role: 'system', content: 'Stable system instructions' },
+          { role: 'user', content: 'First question' },
+        ],
+      });
+
+      const sentBody = JSON.parse(mockSend.mock.calls[0][0].body as string);
+      expect(sentBody.system).toEqual([
+        { type: 'text', text: 'Stable system instructions' },
+      ]);
+      expect(sentBody.messages).toEqual([
+        {
+          role: 'user',
+          content: [{ type: 'text', text: 'First question' }],
+        },
+      ]);
+    });
+
+    it('should place cachePoint on stable history head and leave trailing <mj-runtime-state> uncached (with assistant OK bridge turn when adjacent user roles occur)', async () => {
+      mockAnthropicSuccess();
+
+      const fn = (llm as unknown as Record<string, (...args: unknown[]) => Promise<unknown>>)['nonStreamingChatCompletion']
+        .bind(llm);
+      await fn({
+        model: 'anthropic.claude-3-5-sonnet-20241022-v2:0',
+        messages: [
+          { role: 'system', content: 'Stable LoopAgent system prompt' },
+          { role: 'user', content: 'Analyze the sales data' },
+          {
+            role: 'user',
+            content: '<mj-runtime-state>\n## Current Date/Time\n2026-04-16\n</mj-runtime-state>',
+            metadata: { volatileState: true },
+          },
+        ],
+      });
+
+      const sentBody = JSON.parse(mockSend.mock.calls[0][0].body as string);
+      // System has a cachePoint
+      expect(sentBody.system).toEqual([
+        { type: 'text', text: 'Stable LoopAgent system prompt' },
+        { cachePoint: { type: 'default' } },
+      ]);
+      // Messages:
+      // 0: stable user turn with cachePoint
+      // 1: assistant 'OK' bridge turn to preserve user/assistant alternation
+      // 2: trailing <mj-runtime-state> user turn WITHOUT cachePoint
+      expect(sentBody.messages).toEqual([
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'Analyze the sales data' },
+            { cachePoint: { type: 'default' } },
+          ],
+        },
+        {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'OK' }],
+        },
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: '<mj-runtime-state>\n## Current Date/Time\n2026-04-16\n</mj-runtime-state>' },
+          ],
+        },
+      ]);
+    });
+
+    it('should recognize <mj-runtime-state> via XML tag fallback even without metadata and not insert bridge turn when head ends with assistant', async () => {
+      mockAnthropicSuccess();
+
+      const fn = (llm as unknown as Record<string, (...args: unknown[]) => Promise<unknown>>)['nonStreamingChatCompletion']
+        .bind(llm);
+      await fn({
+        model: 'anthropic.claude-3-5-sonnet-20241022-v2:0',
+        messages: [
+          { role: 'user', content: 'Turn 1 user' },
+          { role: 'assistant', content: 'Turn 1 assistant' },
+          { role: 'user', content: '<mj-runtime-state>\n{"step":2}\n</mj-runtime-state>' },
+        ],
+      });
+
+      const sentBody = JSON.parse(mockSend.mock.calls[0][0].body as string);
+      expect(sentBody.messages).toEqual([
+        {
+          role: 'user',
+          content: [{ type: 'text', text: 'Turn 1 user' }],
+        },
+        {
+          role: 'assistant',
+          content: [
+            { type: 'text', text: 'Turn 1 assistant' },
+            { cachePoint: { type: 'default' } },
+          ],
+        },
+        {
+          role: 'user',
+          content: [{ type: 'text', text: '<mj-runtime-state>\n{"step":2}\n</mj-runtime-state>' }],
+        },
+      ]);
+    });
+
+    it('should preserve cachePoint on stable history head when trailing <mj-runtime-state> is followed by assistant prefill', async () => {
+      mockAnthropicSuccess();
+
+      const fn = (llm as unknown as Record<string, (...args: unknown[]) => Promise<unknown>>)['nonStreamingChatCompletion']
+        .bind(llm);
+      await fn({
+        model: 'anthropic.claude-3-5-sonnet-20241022-v2:0',
+        assistantPrefill: '{"taskComplete":',
+        messages: [
+          { role: 'user', content: 'Turn 1 user' },
+          { role: 'assistant', content: 'Turn 1 assistant' },
+          {
+            role: 'user',
+            content: '<mj-runtime-state>\n{"step":2}\n</mj-runtime-state>',
+            metadata: { volatileState: true },
+          },
+        ],
+      });
+
+      const sentBody = JSON.parse(mockSend.mock.calls[0][0].body as string);
+      expect(sentBody.messages).toEqual([
+        {
+          role: 'user',
+          content: [{ type: 'text', text: 'Turn 1 user' }],
+        },
+        {
+          role: 'assistant',
+          content: [
+            { type: 'text', text: 'Turn 1 assistant' },
+            { cachePoint: { type: 'default' } },
+          ],
+        },
+        {
+          role: 'user',
+          content: [{ type: 'text', text: '<mj-runtime-state>\n{"step":2}\n</mj-runtime-state>' }],
+        },
+        {
+          role: 'assistant',
+          content: '{"result":'.startsWith('{') ? '{"taskComplete":' : '',
+        },
+      ]);
+    });
+  });
 });
+

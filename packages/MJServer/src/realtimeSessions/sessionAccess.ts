@@ -115,11 +115,15 @@ export async function LoadSessionForAccess(
     if (!(await session.Load(agentSessionId))) {
         return null;
     }
-    return { Session: session, ConversationExternalID: await loadConversationExternalID(session, contextUser, provider) };
+    return { Session: session, ConversationExternalID: await LoadSessionConversationExternalID(session, contextUser, provider) };
 }
 
-/** Reads the session conversation's `ExternalID`; null when there is no conversation or it cannot be read. */
-async function loadConversationExternalID(
+/**
+ * Reads an already-loaded session's conversation `ExternalID` (the anonymous scope id) under `contextUser`;
+ * null when there is no conversation or it cannot be read (logged). For callers that loaded the session
+ * through another gate and only need the scope half of {@link AuthorizeSessionAccess}'s subject.
+ */
+export async function LoadSessionConversationExternalID(
     session: MJAIAgentSessionEntity,
     contextUser: UserInfo,
     provider: IMetadataProvider,

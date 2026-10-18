@@ -15,6 +15,7 @@ import {
     ParseEntityRelationshipConfiguration,
     ParseEntityFieldConfiguration,
     ReadRelationshipJoinFields,
+    type EntitySaveReturnMode,
     type IEntityConfiguration,
     type IEntityRelationshipConfiguration,
     type IEntityFieldConfiguration,
@@ -3258,6 +3259,34 @@ export class EntityInfo extends BaseInfo {
      */
     get CloneConfig(): IEntityCloneConfiguration | null {
         return this.ConfigurationObject?.Clone ?? null;
+    }
+
+    /**
+     * Controls which columns a save operation (`spCreate` / `spUpdate`) returns from the database
+     * for this entity. Defaults to `'full'` when `Configuration.SaveReturnMode` is omitted or not
+     * `'datestamps_only'`.
+     */
+    get SaveReturnMode(): EntitySaveReturnMode {
+        return this.ConfigurationObject?.SaveReturnMode === 'datestamps_only' ? 'datestamps_only' : 'full';
+    }
+
+    /**
+     * Returns the ordered list of base-table fields returned by a `'datestamps_only'` save:
+     * the entity's primary key field(s), followed by `__mj_CreatedAt` and `__mj_UpdatedAt`
+     * when those columns exist on the entity's base table.
+     */
+    get DatestampReturnFields(): EntityFieldInfo[] {
+        const result: EntityFieldInfo[] = [...this.PrimaryKeys];
+        const pkNames = new Set(result.map(k => k.Name.trim().toLowerCase()));
+        const createdAt = this.Fields.find(
+            f => !f.IsVirtual && f.IsCreatedAtField && !pkNames.has(f.Name.trim().toLowerCase()),
+        );
+        if (createdAt) result.push(createdAt);
+        const updatedAt = this.Fields.find(
+            f => !f.IsVirtual && f.IsUpdatedAtField && !pkNames.has(f.Name.trim().toLowerCase()),
+        );
+        if (updatedAt) result.push(updatedAt);
+        return result;
     }
 
     /**
