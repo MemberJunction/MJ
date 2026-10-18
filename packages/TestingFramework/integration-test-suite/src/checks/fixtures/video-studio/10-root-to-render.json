@@ -1,0 +1,12 @@
+{
+    "taskComplete": false,
+    "message": "Invoking Render to produce the MP4 video, poster frame, contact sheet, and captions.",
+    "nextStep": {
+        "type": "Sub-Agent",
+        "subAgent": {
+            "name": "Video Studio - Render",
+            "message": "Render the 16:9 MP4, poster PNG, contact sheet, and WebVTT captions.",
+            "terminateAfter": false
+        }
+    }
+}

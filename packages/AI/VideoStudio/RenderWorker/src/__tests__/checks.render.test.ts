@@ -1,3 +1,5 @@
+import { spawnSync } from 'node:child_process';
+import * as fssync from 'node:fs';
 import * as fs from 'node:fs/promises';
 import * as net from 'node:net';
 import * as os from 'node:os';
@@ -30,7 +32,31 @@ import {
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const GOLDEN_DIR = path.join(__dirname, 'fixtures', 'golden');
-const RUN_RENDER_TESTS = process.env.VIDEO_STUDIO_RENDER_TESTS === '1';
+
+function checkCanRunRealRenderTests(): boolean {
+    if (process.env.VIDEO_STUDIO_RENDER_TESTS !== '1') {
+        console.info(
+            '[checks.render.test] Skipping real-render suite: set VIDEO_STUDIO_RENDER_TESTS=1 to enable.',
+        );
+        return false;
+    }
+    const ffmpegRes = spawnSync('ffmpeg', ['-version'], { stdio: 'ignore' });
+    if (ffmpegRes.status !== 0) {
+        console.info(
+            '[checks.render.test] Skipping real-render suite: ffmpeg binary not found on PATH.',
+        );
+        return false;
+    }
+    if (process.env.CHROME_PATH && !fssync.existsSync(process.env.CHROME_PATH)) {
+        console.info(
+            `[checks.render.test] Skipping real-render suite: Chrome binary not found at CHROME_PATH (${process.env.CHROME_PATH}).`,
+        );
+        return false;
+    }
+    return true;
+}
+
+const RUN_RENDER_TESTS = checkCanRunRealRenderTests();
 
 const ONE_PIXEL_PNG_BASE64 =
     'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';

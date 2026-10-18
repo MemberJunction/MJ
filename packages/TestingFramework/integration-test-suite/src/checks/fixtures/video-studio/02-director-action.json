@@ -1,0 +1,32 @@
+{
+    "taskComplete": true,
+    "message": "Creative brief completed for autonomous Produce Video action.",
+    "payloadChangeRequest": {
+        "newElements": {
+            "Film": {
+                "OneSentence": "In Q3, platform architecture unified metadata and agent execution.",
+                "Audience": "Engineering and product leadership",
+                "Purpose": "Explain unified platform execution in a concise briefing",
+                "Language": "en-US"
+            },
+            "Assets": {
+                "Required": [],
+                "NeverInvent": [
+                    "Customer logos not provided in the brief",
+                    "Unaudited financial projections",
+                    "Portraits of real employees or customers"
+                ],
+                "Generate": []
+            },
+            "DataBindings": []
+        },
+        "updateElements": {
+            "Film": {
+                "DurationSeconds": 18,
+                "Formats": [
+                    "16:9"
+                ]
+            }
+        }
+    }
+}

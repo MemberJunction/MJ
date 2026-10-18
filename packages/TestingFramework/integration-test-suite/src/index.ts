@@ -134,3 +134,5 @@ export * from './checks/agent-handoff.checks';
 export * from './checks/video-data-snapshot.checks';
 export * from './checks/video-generation-cost.checks';
 export * from './checks/video-studio-handoff.checks';
+export * from './checks/video-studio-production.checks';
+export * from './checks/video-studio-live-smoke.checks';

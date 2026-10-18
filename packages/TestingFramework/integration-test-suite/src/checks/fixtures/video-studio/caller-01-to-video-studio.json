@@ -1,0 +1,23 @@
+{
+    "taskComplete": false,
+    "message": "Delegating dataset to Video Studio for a KPI Briefing video.",
+    "payloadChangeRequest": {
+        "newElements": {
+            "title": "Q3 Revenue Breakdown",
+            "columns": ["metric", "value"],
+            "rows": [
+                { "metric": "ARR", "value": 4200000 },
+                { "metric": "NDR", "value": 118 }
+            ]
+        }
+    },
+    "nextStep": {
+        "type": "Sub-Agent",
+        "subAgent": {
+            "name": "Video Studio",
+            "message": "Create a 16:9 KPI Briefing video from the caller dataset.",
+            "terminateAfter": false
+        }
+    }
+}
+

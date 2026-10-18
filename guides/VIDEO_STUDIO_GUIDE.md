@@ -644,8 +644,21 @@ Deterministic integration check bundles live in [`packages/TestingFramework/inte
 - **`IT135` (`video-data-snapshot`, checks `VDS1`–`VDS3` in [`video-data-snapshot.checks.ts`](../packages/TestingFramework/integration-test-suite/src/checks/video-data-snapshot.checks.ts)):** Verifies `ContextUser` Row-Level Security and entity-permission enforcement on `CaptureDataSnapshot` and `LoadDataSnapshotValues`.
 - **`IT136` (`video-generation-cost`, checks `VGC1`–`VGC2` in [`video-generation-cost.checks.ts`](../packages/TestingFramework/integration-test-suite/src/checks/video-generation-cost.checks.ts)):** Verifies `AIVideoRunner.RunGenerateVideo` carrier prompt run creation (`Default Generative Video` / `FLUX 3 Video`) and per-second cost calculation.
 - **`IT150` (`video-studio-handoff`, checks `VSH1`–`VSH3` in [`video-studio-handoff.checks.ts`](../packages/TestingFramework/integration-test-suite/src/checks/video-studio-handoff.checks.ts)):** Verifies `AIAgentPermissionHelper.IsDirectlyDiscoverable`, top-level `AgentRunner.FollowHandoffs` transfer to `Video Studio`, `ResolveConversationAgentPreset` preset resolution, and the continuity `ConversationDetail` row.
+- **`IT151` (`video-studio-production`, checks `VSP1`–`VSP5` in [`video-studio-production.checks.ts`](../packages/TestingFramework/integration-test-suite/src/checks/video-studio-production.checks.ts)):** Deterministic end-to-end production pipeline suite using ordered `TestLLM` reply scripts (`fixtures/video-studio/*.json`) and the shared fakes in [`video-studio-fakes.ts`](../packages/TestingFramework/integration-test-suite/src/checks/video-studio-fakes.ts) (`UseFakeRenderDriver` wrapping `FakeRenderDriver`, `RegisterFakeVideoGenerator`, `RegisterFakeTextToSpeech`, `RegisterFakeAPIKeys`, and `UseMemoryStorage` provisioning a runtime `MemoryFileStorage` account on `Content Creation`):
+  - `VSP1`: Direct `Topic Explainer` (`Draft`) run through Root → Director → Art Director → Storyboard → Pre-Production → Motion Engineer → Render → Critic → Delivered; verifies `MJ: Files` rows for `Output.Videos['16:9'].FileID`, `Output.PosterFileID`, and `Review.ContactSheets`, zero `InlineBase64`, zero MP4 bytes in `MJ: AI Agent Run Medias.InlineData`, and `FakeRenderDriver.RenderCallCount === 1`.
+  - `VSP2`: Related-agent `IT: VS Data Caller` → `Video Studio` (`KPI Briefing`) using a runtime copy of the shipped `Query Builder → Video Studio` relationship (`Video Studio Standard` preset, `DataSnapshot.Inline.caller.rows`, and `fileOutputs` propagation).
+  - `VSP3`: `ActionEngineServer.Instance.RunAction` on `Produce Video` (`PowerLevel: 'Draft'`), asserting `ArtifactID`, `ArtifactVersionID`, `VideoFileIDs['16:9']`, and `PosterFileID`.
+  - `VSP4`: Disclosed 4 s generated clip (`Provenance: 'Generated'`, carrier `PromptRunID` with cost, `Output.GenerationProvenance.TotalVideoSeconds === 4`, and `"AI-generated assets (1)"` in `Review.HumanReviewNotes`).
+  - `VSP5`: Pre-spend policy and budget guards (`NeverInvent` blocking `"our CEO speaking"` against `['real people']`, and `Draft`'s 20 s generated-video cap refusing a 25 s clip before any vendor submit or render call).
+- **`IT152` (`video-studio-live-smoke`, check `VSLS1` in [`video-studio-live-smoke.checks.ts`](../packages/TestingFramework/integration-test-suite/src/checks/video-studio-live-smoke.checks.ts)):** Opt-in `live-model` tier smoke test (`RequiresLiveModel: true`) that runs a real 15 s `Social Short` under `Draft` against the active render driver and real credentialed models (no generative video unless `VS_LIVE_GENERATION=1`), asserting `Status === 'Delivered'`, a real MP4 `FileID`, and duration within 1 s of the spec (self-skips loudly when render driver `Health()` is unhealthy or `PreviewModelSelection` finds no credentialed model).
 
-*Placeholder — the end-to-end deterministic production check bundle and live smoke test suite will be documented here once those suites land.*
+```bash
+# Run deterministic IT151 end-to-end production checks (no live LLM, Chromium, or vendor calls)
+MJ_INTEGRATION_TEST=1 node packages/MJCLI/bin/run.js test run --name "IT151 - Video Studio Production"
+
+# Run opt-in IT152 live smoke test (requires healthy render worker + real model credentials)
+MJ_INTEGRATION_TEST=1 node packages/MJCLI/bin/run.js test run --name "IT152 - Video Studio Live Smoke"
+```
 
 ---
 

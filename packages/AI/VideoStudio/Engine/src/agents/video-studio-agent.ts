@@ -1,6 +1,8 @@
 import { BaseAgent } from '@memberjunction/ai-agents';
+import { type ChatMessage } from '@memberjunction/ai';
 import {
     type AgentConfiguration,
+    type AgentSubAgentRequest,
     type BaseAgentNextStep,
     type ExecuteAgentParams,
     type ExecuteAgentResult,
@@ -78,13 +80,6 @@ const STAGE_PROGRESS_PERCENTAGE: Readonly<Record<string, number>> = {
     'Video Studio - Critic': 95,
 };
 
-function cloneSpec<T>(value: T): T {
-    if (value === undefined || value === null) {
-        return {} as T;
-    }
-    return JSON.parse(JSON.stringify(value)) as T;
-}
-
 function isValidInteractionMode(value: unknown): value is VideoInteractionMode {
     return (
         typeof value === 'string' &&
@@ -147,6 +142,34 @@ export class VideoStudioAgent extends BaseAgent {
     private _callerMode: VideoInteractionMode | null = null;
     private _startedWithBrief: boolean = false;
     private _initialRoundCount: number = 0;
+    private _lastSubAgentPayload: Partial<VideoGenerationSpec> | undefined;
+
+    protected override async ExecuteSubAgent<SC = any, SR = any>(
+        params: ExecuteAgentParams<SC>,
+        subAgentRequest: AgentSubAgentRequest<SC>,
+        subAgent: MJAIAgentEntityExtended,
+        stepEntity: MJAIAgentRunStepEntityExtended,
+        payload?: SR,
+        contextMessage?: ChatMessage,
+        stepCount: number = 0,
+    ): Promise<ExecuteAgentResult<SR>> {
+        this._lastSubAgentPayload = undefined;
+        const result = await super.ExecuteSubAgent(
+            params,
+            subAgentRequest,
+            subAgent,
+            stepEntity,
+            payload,
+            contextMessage,
+            stepCount,
+        );
+        if (result.success && result.payload && typeof result.payload === 'object') {
+            this._lastSubAgentPayload = structuredClone(
+                result.payload as unknown as Partial<VideoGenerationSpec>,
+            );
+        }
+        return result;
+    }
 
     protected override async validateAgent(
         agent: MJAIAgentEntityExtended,
@@ -235,6 +258,26 @@ export class VideoStudioAgent extends BaseAgent {
             if (canonicalStage) {
                 const candidatePayload = (result.newPayload ?? params.payload ?? {}) as Partial<VideoGenerationSpec>;
                 const stageSucceeded = result.step !== 'Failed';
+                if (
+                    stageSucceeded &&
+                    canonicalStage === 'Video Studio - Motion Engineer' &&
+                    this._lastSubAgentPayload?.Output?.Source
+                ) {
+                    candidatePayload.Output = {
+                        Videos: candidatePayload.Output?.Videos ?? {},
+                        RenderMetadata: candidatePayload.Output?.RenderMetadata ?? {
+                            Renderer: 'HyperFrames',
+                            RendererVersion: '',
+                            Seed: 0,
+                            Fps: 30,
+                            DurationByFormat: {},
+                            RenderedAt: '',
+                        },
+                        ...(candidatePayload.Output ?? {}),
+                        Source: structuredClone(this._lastSubAgentPayload.Output.Source),
+                    };
+                }
+                this._lastSubAgentPayload = undefined;
                 const updatedPayload = this.ApplyStageResult(
                     params,
                     canonicalStage,
@@ -266,8 +309,9 @@ export class VideoStudioAgent extends BaseAgent {
         stageSucceeded: boolean = true,
     ): Partial<VideoGenerationSpec> {
         const canonicalStage = resolveCanonicalStage(stageName) ?? stageName.trim();
-        const cloned = cloneSpec(payload ?? {});
+        const cloned = structuredClone(payload ?? {});
 
+        this.syncArchetypeId(cloned);
         this.syncDeliverableFormats(cloned);
         this.restoreCallerInteraction(cloned);
 
@@ -460,7 +504,7 @@ export class VideoStudioAgent extends BaseAgent {
         const stageName = resolveCanonicalStage(stageReq.name) ?? stageReq.name;
         const normalizedStage = normalizeStageKey(stageName);
 
-        const spec = cloneSpec((currentPayload ?? params.payload ?? {}) as Partial<VideoGenerationSpec>);
+        const spec = structuredClone((currentPayload ?? params.payload ?? {}) as Partial<VideoGenerationSpec>);
         this.syncDeliverableFormats(spec);
         this.restoreCallerInteraction(spec);
 
@@ -601,7 +645,7 @@ export class VideoStudioAgent extends BaseAgent {
             return baseResult;
         }
 
-        const spec = cloneSpec(
+        const spec = structuredClone(
             (baseResult.newPayload ?? currentPayload ?? params.payload ?? {}) as Partial<VideoGenerationSpec>,
         );
         this.syncDeliverableFormats(spec);
@@ -702,22 +746,40 @@ export class VideoStudioAgent extends BaseAgent {
             }
         }
 
+        const isSubAgentRun = Array.isArray(this.AgentHierarchy) && this.AgentHierarchy.length > 1;
+        if (isSubAgentRun) {
+            const videos = spec.Output?.Videos ?? {};
+            for (const [fmt, entry] of Object.entries(videos)) {
+                if (entry?.FileID && !this.FileOutputs.some((f) => f.fileId === entry.FileID)) {
+                    this.FileOutputs.push({
+                        fileName: `video-${fmt.replace(':', 'x')}.mp4`,
+                        mimeType: entry.MimeType ?? 'video/mp4',
+                        fileId: entry.FileID,
+                        sizeBytes: entry.FileSizeBytes,
+                        visibility: 'System Only',
+                    });
+                }
+            }
+        }
+
         const archetypeName = spec.Archetype?.Name?.trim() || 'Video Production';
         const oneSentence = spec.Film?.OneSentence ?? '';
-        const artifactDirective: BaseAgentNextStep<P>['artifactDirective'] = this._startedWithBrief
-            ? { behavior: 'version-source' }
-            : {
-                  behavior: 'create-new',
-                  name: `${archetypeName}: ${oneSentence}`.slice(0, 120),
-                  description: spec.Film?.Purpose,
-              };
+        const artifactDirective: BaseAgentNextStep<P>['artifactDirective'] = isSubAgentRun
+            ? undefined
+            : this._startedWithBrief
+              ? { behavior: 'version-source' }
+              : {
+                    behavior: 'create-new',
+                    name: `${archetypeName}: ${oneSentence}`.slice(0, 120),
+                    description: spec.Film?.Purpose,
+                };
 
         return {
             ...baseResult,
             step: 'Success',
             previousPayload: currentPayload,
             newPayload: spec as unknown as P,
-            artifactDirective,
+            ...(artifactDirective ? { artifactDirective } : {}),
         };
     }
 
@@ -735,7 +797,7 @@ export class VideoStudioAgent extends BaseAgent {
         settings: VideoStudioSettings,
     ): Partial<VideoGenerationSpec> {
         this.captureCallerMode(params);
-        const seeded = cloneSpec((params.payload ?? {}) as Partial<VideoGenerationSpec>);
+        const seeded = structuredClone((params.payload ?? {}) as Partial<VideoGenerationSpec>);
         this._startedWithBrief = Boolean(seeded.Film?.OneSentence?.trim());
 
         seeded.SpecVersion = VIDEO_STUDIO_SPEC_VERSION;
@@ -1173,6 +1235,24 @@ export class VideoStudioAgent extends BaseAgent {
         }
     }
 
+    private syncArchetypeId(spec: Partial<VideoGenerationSpec>): void {
+        const archetypeName = spec.Archetype?.Name?.trim();
+        if (!archetypeName || spec.Archetype?.ArchetypeID?.trim()) {
+            return;
+        }
+        try {
+            const matched = VideoStudioEngine.Instance.GetArchetypeByName(
+                archetypeName,
+                spec.CompanyID ?? null,
+            );
+            if (matched?.ID) {
+                spec.Archetype!.ArchetypeID = matched.ID;
+            }
+        } catch {
+            // Engine not initialized or lookup unavailable; leave ArchetypeID unset
+        }
+    }
+
     private syncDeliverableFormats(spec: Partial<VideoGenerationSpec>): void {
         const filmFormats = Array.isArray(spec.Film?.Formats) ? spec.Film.Formats : [];
         if (filmFormats.length === 0) {
@@ -1203,7 +1283,7 @@ export class VideoStudioAgent extends BaseAgent {
         stage: VideoGenerationSpec['Status'],
         effectiveMode: VideoInteractionMode = 'Autonomous',
     ): VideoGenerationSpec {
-        const cloned = cloneSpec(spec) as VideoGenerationSpec;
+        const cloned = structuredClone(spec) as VideoGenerationSpec;
         cloned.Status = stage;
         cloned.Interaction = {
             Mode: effectiveMode,

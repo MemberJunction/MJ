@@ -1057,6 +1057,7 @@ describe('VideoStudioAgent driver lifecycle', () => {
         expect(finalPayloadAfterStoryboard?.Review?.Gates.find((g) => g.Gate === 'G2')?.Notes).toBe('AwaitingApproval');
 
         // When a stage sub-agent fails (result.step === 'Failed'), executeNextStep does NOT clear downstream evidence
+        // and still updates AgentRun.FinalPayloadObject with the cleaned payload from ApplyStageResult
         const specBeforeFailedMotion = CreateDeliveredSpecFixture();
         const progressEvents: unknown[] = [];
         const failedStepParams = {
@@ -1077,6 +1078,9 @@ describe('VideoStudioAgent driver lifecycle', () => {
                 terminateAfter: false,
             },
         };
+        (agent as unknown as { _agentRun: Partial<MJAIAgentRunEntityExtended> })._agentRun = {
+            FinalPayloadObject: undefined,
+        };
         const failedResult = await agent.executeNextStep(
             failedStepParams,
             dummyConfig,
@@ -1087,7 +1091,94 @@ describe('VideoStudioAgent driver lifecycle', () => {
         expect(failedResult.newPayload?.Output?.Videos).toBeDefined();
         expect(failedResult.newPayload?.Output?.ContactSheetFileIDs).toBeDefined();
         expect(failedResult.newPayload?.Review?.Gates.find((g) => g.Gate === 'G3')?.Status).toBe('Passed');
+        expect(agent.AgentRun?.FinalPayloadObject).toEqual(failedResult.newPayload);
+        expect((agent.AgentRun?.FinalPayloadObject as Partial<VideoGenerationSpec>)?.Output?.Videos).toBeDefined();
         expect(progressEvents).toHaveLength(1);
+
+        // Cancelled run (abort token) on Motion Engineer also updates AgentRun.FinalPayloadObject with the cleaned payload
+        (agent as unknown as { _agentRun: Partial<MJAIAgentRunEntityExtended> })._agentRun = {
+            FinalPayloadObject: undefined,
+        };
+        const cancelledMotionOnDeliveredParams = {
+            payload: specBeforeFailedMotion,
+            cancellationToken: { aborted: true } as AbortSignal,
+            __mockNextStepResult: {
+                step: 'Failed',
+                terminate: true,
+                newPayload: specBeforeFailedMotion,
+            },
+        } as unknown as ExecuteAgentParams<Partial<VideoGenerationSpec>>;
+        const cancelledMotionOnDeliveredResult = await agent.executeNextStep(
+            cancelledMotionOnDeliveredParams,
+            dummyConfig,
+            previousSubAgentDecision,
+            1,
+        );
+        expect(cancelledMotionOnDeliveredResult.step).toBe('Failed');
+        expect(agent.AgentRun?.FinalPayloadObject).toEqual(cancelledMotionOnDeliveredResult.newPayload);
+        expect(
+            (agent.AgentRun?.FinalPayloadObject as Partial<VideoGenerationSpec>)?.Output?.Videos,
+        ).toBeDefined();
+
+        // After Storyboard cleared G2 approval and old render, both a Failed Motion Engineer stage and a cancelled run
+        // (abort token) leave AgentRun.FinalPayloadObject equal to the cleaned payload (no stale G2 approval, no old render)
+        const postStoryboardCandidate = structuredClone(storyboardStepResult.newPayload!);
+        // Simulate uncleaned gate state before ApplyStageResult so limiting FinalPayloadObject to stageSucceeded fails
+        postStoryboardCandidate.Review!.Gates = postStoryboardCandidate.Review!.Gates.map((g) =>
+            g.Gate === 'G2' ? { ...g, Status: 'Passed', Notes: 'ForgedUnapproved' } : g,
+        );
+        (agent as unknown as { _agentRun: Partial<MJAIAgentRunEntityExtended> })._agentRun = {
+            FinalPayloadObject: undefined,
+        };
+        const failedPostStoryboardMotion = await agent.executeNextStep(
+            {
+                payload: postStoryboardCandidate,
+                __mockNextStepResult: {
+                    step: 'Failed',
+                    terminate: true,
+                    newPayload: postStoryboardCandidate,
+                },
+            } as unknown as ExecuteAgentParams<Partial<VideoGenerationSpec>>,
+            dummyConfig,
+            previousSubAgentDecision,
+            2,
+        );
+        expect(failedPostStoryboardMotion.step).toBe('Failed');
+        expect(agent.AgentRun?.FinalPayloadObject).toEqual(failedPostStoryboardMotion.newPayload);
+        const finalAfterFailedPostStoryboard = agent.AgentRun?.FinalPayloadObject as Partial<VideoGenerationSpec>;
+        expect(finalAfterFailedPostStoryboard?.Output?.Videos).toBeUndefined();
+        expect(finalAfterFailedPostStoryboard?.Output?.Source).toBeUndefined();
+        expect(finalAfterFailedPostStoryboard?.Review?.Gates.find((g) => g.Gate === 'G2')?.Status).toBe('Pending');
+        expect(finalAfterFailedPostStoryboard?.Review?.Gates.find((g) => g.Gate === 'G2')?.Notes).toBe(
+            'AwaitingApproval',
+        );
+
+        (agent as unknown as { _agentRun: Partial<MJAIAgentRunEntityExtended> })._agentRun = {
+            FinalPayloadObject: undefined,
+        };
+        const cancelledPostStoryboardMotion = await agent.executeNextStep(
+            {
+                payload: postStoryboardCandidate,
+                cancellationToken: { aborted: true } as AbortSignal,
+                __mockNextStepResult: {
+                    step: 'Failed',
+                    terminate: true,
+                    newPayload: postStoryboardCandidate,
+                },
+            } as unknown as ExecuteAgentParams<Partial<VideoGenerationSpec>>,
+            dummyConfig,
+            previousSubAgentDecision,
+            2,
+        );
+        expect(cancelledPostStoryboardMotion.step).toBe('Failed');
+        expect(agent.AgentRun?.FinalPayloadObject).toEqual(cancelledPostStoryboardMotion.newPayload);
+        const finalAfterCancelledPostStoryboard = agent.AgentRun?.FinalPayloadObject as Partial<VideoGenerationSpec>;
+        expect(finalAfterCancelledPostStoryboard?.Output?.Videos).toBeUndefined();
+        expect(finalAfterCancelledPostStoryboard?.Output?.Source).toBeUndefined();
+        expect(finalAfterCancelledPostStoryboard?.Review?.Gates.find((g) => g.Gate === 'G2')?.Status).toBe('Pending');
+        expect(finalAfterCancelledPostStoryboard?.Review?.Gates.find((g) => g.Gate === 'G2')?.Notes).toBe(
+            'AwaitingApproval',
+        );
 
         // Narration-less storyboard fails G2 with MissingNarrationScript
         const narrationlessSpec = CreateDeliveredSpecFixture();
@@ -1650,6 +1741,32 @@ describe('VideoStudioAgent driver lifecycle', () => {
             TotalVideoSeconds: 6,
             TotalCost: 0.6,
         });
+
+        // Case D: Invoked as a sub-agent (AgentHierarchy.length > 1) -> populates FileOutputs and omits artifactDirective
+        const subAgentRunner = createAgent();
+        (subAgentRunner as unknown as { _hierarchy: string[] })._hierarchy = [
+            'Query Builder',
+            'Video Studio',
+        ];
+        await subAgentRunner.executeAgentInternal(freshInitParams, dummyConfig);
+        const subAgentDelivered = await subAgentRunner.validateSuccessNextStep(
+            freshInitParams,
+            { step: 'Success', terminate: true, newPayload: deliveredSpec },
+            deliveredSpec,
+            dummyRun,
+            dummyStep,
+        );
+        expect(subAgentDelivered.step).toBe('Success');
+        expect(subAgentDelivered.artifactDirective).toBeUndefined();
+        expect((subAgentRunner as unknown as { FileOutputs: Array<Record<string, unknown>> }).FileOutputs).toEqual([
+            {
+                fileName: 'video-16x9.mp4',
+                mimeType: 'video/mp4',
+                fileId: '77777777-7777-4777-8777-777777777771',
+                sizeBytes: 8_420_000,
+                visibility: 'System Only',
+            },
+        ]);
     });
 });
 

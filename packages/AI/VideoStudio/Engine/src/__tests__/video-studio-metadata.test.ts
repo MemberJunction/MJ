@@ -339,6 +339,11 @@ describe('Video Studio metadata pin (VS-AGT-1)', () => {
             expect(child!.fields.PayloadDownstreamPaths).toEqual(exp.Downstream);
             expect(child!.fields.PayloadUpstreamPaths).toEqual(exp.Upstream);
             expect(child!.fields.PayloadUpstreamPaths).not.toContain('Status');
+            const upstreamPaths = (child!.fields.PayloadUpstreamPaths as string[]) ?? [];
+            expect(
+                upstreamPaths.some((p) => p === 'Interaction' || p.startsWith('Interaction.')),
+                `Stage "${exp.Name}" must not include Interaction in PayloadUpstreamPaths`,
+            ).toBe(false);
 
             const childPrompts = child!.relatedEntities?.['MJ: AI Agent Prompts'] ?? [];
             if (exp.PromptID) {
@@ -373,6 +378,20 @@ describe('Video Studio metadata pin (VS-AGT-1)', () => {
                 SubAgentContextPaths: ['Film', 'Film.*', 'DataBindings', 'DataBindings.*'],
             },
         ]);
+    });
+
+    it('pins the mode-rule metadata invariant: root PayloadSelfWritePaths is [] and no stage agent PayloadUpstreamPaths includes Interaction', () => {
+        const root = agents[0];
+        expect(root.fields.PayloadSelfWritePaths).toEqual([]);
+        const children = root.relatedEntities?.['MJ: AI Agents'] ?? [];
+        expect(children).toHaveLength(7);
+        for (const child of children) {
+            const upstream = (child.fields.PayloadUpstreamPaths as string[]) ?? [];
+            expect(
+                upstream.some((p) => p === 'Interaction' || p.startsWith('Interaction.')),
+                `Stage "${String(child.fields.Name)}" must not include Interaction in PayloadUpstreamPaths`,
+            ).toBe(false);
+        }
     });
 
     it('verifies all 8 prompts, their model rows, @file: targets, {@include} targets, and template variables', () => {

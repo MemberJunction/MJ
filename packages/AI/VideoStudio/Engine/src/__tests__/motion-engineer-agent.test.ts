@@ -313,6 +313,7 @@ describe('VideoStudioMotionEngineerAgent (VS-AGT-4)', () => {
         // Prompt data assertions
         const promptData = capturedPromptParams[0].data as Record<string, unknown>;
         expect(promptData.format).toBe('16:9');
+        expect(promptData.assets).toBe('(none)');
         expect(promptData.issues).toBe(
             '[Layout] OVERFLOW_TEXT: Headline overflows right edge by 24px (index.html:14, intro)',
         );

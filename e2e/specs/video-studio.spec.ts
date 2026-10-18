@@ -290,11 +290,13 @@ test.describe('Video Studio — Studio & Copilot Iterate (VS-UX-2)', () => {
     await expect(detailPane).toContainText(/v2|version 2/i, { timeout: 60_000 });
 
     // Open the Share dialog and share with another user
-    const shareBtn = detailPane.getByTitle('Share');
+    const shareBtn = detailPane
+      .getByTestId('production-detail-viewer')
+      .getByTitle('Share', { exact: true });
     await expect(shareBtn).toBeVisible();
     await shareBtn.click();
 
-    const shareModal = page.locator('mj-artifact-share-modal');
+    const shareModal = page.getByRole('dialog', { name: /^Share: / });
     await expect(shareModal).toBeVisible({ timeout: 30_000 });
 
     const userPicker = shareModal.locator('mj-user-picker');
@@ -305,15 +307,18 @@ test.describe('Video Studio — Studio & Copilot Iterate (VS-UX-2)', () => {
 
     const firstUserResult = userPicker.locator('.user-search-item').first();
     await expect(firstUserResult).toBeVisible({ timeout: 30_000 });
+    const pickedUserName =
+      (await firstUserResult.locator('.user-name').textContent())?.trim() ?? '';
+    expect(pickedUserName.length).toBeGreaterThan(0);
     await firstUserResult.click();
 
     const addUserBtn = shareModal.getByRole('button', { name: /Add User/i });
     await expect(addUserBtn).toBeVisible();
     await addUserBtn.click();
 
-    await expect(
-      shareModal.locator('.permissions-list .permission-item').first(),
-    ).toBeVisible({ timeout: 30_000 });
+    await expect(shareModal.locator('.permissions-list')).toContainText(pickedUserName, {
+      timeout: 30_000,
+    });
 
     // Toggle dark and light theme and verify the workspace renders cleanly in both
     await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'));

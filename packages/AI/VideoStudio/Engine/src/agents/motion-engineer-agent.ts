@@ -5,7 +5,7 @@ import type {
     MJAIAgentRunEntityExtended,
     MJAIAgentRunStepEntityExtended,
 } from '@memberjunction/ai-core-plus';
-import type { UserInfo } from '@memberjunction/core';
+import { LogError, type UserInfo } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import type {
     CheckIssue,
@@ -74,7 +74,7 @@ function formatStagedAssets(spec: Partial<VideoGenerationSpec>): string {
             lines.push(`${line.Key} (Narration): ${stagedPath}`);
         }
     }
-    return lines.join('\n');
+    return lines.length > 0 ? lines.join('\n') : '(none)';
 }
 
 function mergeLintFixFiles(
@@ -132,6 +132,36 @@ export class VideoStudioMotionEngineerAgent extends VideoStudioAgentBase {
             params.payload ??
             {}) as Partial<VideoGenerationSpec>;
         const workingSpec = structuredClone(candidateSpec);
+        const changeReq = nextStep.payloadChangeRequest as
+            | {
+                  newElements?: Partial<VideoGenerationSpec>;
+                  updateElements?: Partial<VideoGenerationSpec>;
+                  replaceElements?: Partial<VideoGenerationSpec>;
+              }
+            | undefined;
+        const requestedSource =
+            changeReq?.replaceElements?.Output?.Source ??
+            changeReq?.updateElements?.Output?.Source ??
+            changeReq?.newElements?.Output?.Source;
+        if (requestedSource && typeof requestedSource === 'object') {
+            workingSpec.Output = {
+                ...(workingSpec.Output ?? {
+                    Videos: {},
+                    RenderMetadata: {
+                        Renderer: 'HyperFrames',
+                        RendererVersion: '',
+                        Seed: workingSpec.Render?.Seed ?? 0,
+                        Fps: workingSpec.Render?.Fps ?? 30,
+                        DurationByFormat: {},
+                        RenderedAt: '',
+                    },
+                }),
+                Source: {
+                    ...(workingSpec.Output?.Source ?? {}),
+                    ...structuredClone(requestedSource),
+                },
+            };
+        }
         const formats = ResolveDeliverableFormats(workingSpec);
 
         for (const fmt of formats) {
@@ -280,8 +310,8 @@ export class VideoStudioMotionEngineerAgent extends VideoStudioAgentBase {
             if (openCheckStep) {
                 try {
                     await this.finalizeStepEntity(openCheckStep, false, errorMessage);
-                } catch {
-                    // Ignore secondary step finalization errors
+                } catch (finalizeErr) {
+                    LogError(finalizeErr);
                 }
             }
             return {

@@ -8,143 +8,23 @@
  * (`it-video-generation-no-network`) and the ClassFactory override restores in Teardown.
  */
 import { RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
-import { EscapeSQLString, MJGlobal, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
-import {
-    AvatarInfo,
-    AvatarVideoParams,
-    BaseVideoGenerator,
-    ModelUsage,
-    VideoGenerationJob,
-    VideoGenerationParams,
-    VideoResult,
-    VideoTranslationParams,
-} from '@memberjunction/ai';
+import { ModelUsage } from '@memberjunction/ai';
 import { AIVideoRunner } from '@memberjunction/ai-prompts';
 import { Assert, AssertEqual, IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import type { IntegrationCheckContext, NamedCheck } from '@memberjunction/testing-integration';
 import { DeleteById, RequireRows } from './agent-live-shared';
+import {
+    CLIP_DURATION_SECONDS,
+    ONE_KB_CLIP,
+    RegisterFakeVideoGenerator,
+    ScriptedITVideoGenerator,
+} from './video-studio-fakes';
 
 const BUNDLE = 'video-generation-cost';
 const PLACEHOLDER_API_KEY = 'it-video-generation-no-network';
-const CLIP_DURATION_SECONDS = 6;
-const ONE_KB_CLIP = Buffer.alloc(1024, 0x42);
-
-interface ScriptedVideoOutcome {
-    JobID: string;
-    Usage?: ModelUsage;
-}
-
-class ScriptedITVideoGenerator extends BaseVideoGenerator {
-    private nextOutcome: ScriptedVideoOutcome | undefined;
-    private armed = true;
-
-    constructor(apiKey = '') {
-        super(apiKey);
-    }
-
-    public Arm(outcome: ScriptedVideoOutcome): void {
-        this.armed = true;
-        this.nextOutcome = outcome;
-    }
-
-    public Disarm(): void {
-        this.armed = false;
-        this.nextOutcome = undefined;
-    }
-
-    public override async GenerateVideo(_params: VideoGenerationParams): Promise<VideoGenerationJob> {
-        if (!this.armed || !this.nextOutcome) {
-            throw new Error(`The ${BUNDLE} scripted video driver is not armed`);
-        }
-        return {
-            JobID: this.nextOutcome.JobID,
-            Status: 'Pending',
-        };
-    }
-
-    public override async GetVideoGenerationStatus(
-        jobId: string,
-        _signal?: AbortSignal,
-    ): Promise<VideoGenerationJob> {
-        if (!this.armed || !this.nextOutcome) {
-            throw new Error(`The ${BUNDLE} scripted video driver is not armed`);
-        }
-        return {
-            JobID: jobId,
-            Status: 'Succeeded',
-            Video: {
-                Data: Buffer.from(ONE_KB_CLIP),
-                MimeType: 'video/mp4',
-                DurationSeconds: CLIP_DURATION_SECONDS,
-                Width: 1280,
-                Height: 720,
-            },
-            Provenance: { C2PA: true },
-            Usage: this.nextOutcome.Usage,
-        };
-    }
-
-    public async CreateAvatarVideo(_params: AvatarVideoParams): Promise<VideoResult> {
-        throw new Error('CreateAvatarVideo is not used in video-generation-cost');
-    }
-
-    public async CreateVideoTranslation(_params: VideoTranslationParams): Promise<VideoResult> {
-        throw new Error('CreateVideoTranslation is not used in video-generation-cost');
-    }
-
-    public async GetAvatars(): Promise<AvatarInfo[]> {
-        return [];
-    }
-
-    public async GetSupportedMethods(): Promise<string[]> {
-        return ['GenerateVideo', 'GetVideoGenerationStatus'];
-    }
-}
-
-function highestVideoPriority(driverClass: string): number {
-    return Math.max(
-        0,
-        ...MJGlobal.Instance.ClassFactory.GetAllRegistrations(BaseVideoGenerator, driverClass).map(
-            r => r.Priority,
-        ),
-    );
-}
-
-function registerScriptedVideoDriver(
-    driver: ScriptedITVideoGenerator,
-    driverClass: string,
-    priority = 100,
-): () => void {
-    const factory = MJGlobal.Instance.ClassFactory;
-    const previous = factory.GetRegistration(BaseVideoGenerator, driverClass);
-
-    class ScriptedVideoRegistrationHandle extends ScriptedITVideoGenerator {
-        constructor(apiKey?: string) {
-            super(apiKey);
-            return driver;
-        }
-    }
-
-    factory.Register(
-        BaseVideoGenerator,
-        ScriptedVideoRegistrationHandle,
-        driverClass,
-        Math.max(priority, highestVideoPriority(driverClass) + 1),
-    );
-
-    return () => {
-        if (previous) {
-            factory.Register(
-                BaseVideoGenerator,
-                previous.SubClass,
-                driverClass,
-                highestVideoPriority(driverClass) + 1,
-            );
-        }
-    };
-}
 
 interface VideoCostFixture {
     ModelID: string;
@@ -385,16 +265,15 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle(BUNDLE, {
             throw new Error(`'Seconds' usage type not found in AIEngineBase.Instance.UsageTypes.`);
         }
 
-        const driver = new ScriptedITVideoGenerator();
-        const restore = registerScriptedVideoDriver(driver, modelVendor.DriverClass);
+        const fakeVideo = RegisterFakeVideoGenerator(undefined, modelVendor.DriverClass);
 
         videoCostFixture = {
             ModelID: model.ID,
             VendorID: modelVendor.VendorID,
             DriverClass: modelVendor.DriverClass,
             SecondsUsageTypeID: secondsUsageType.ID,
-            Driver: driver,
-            Restore: restore,
+            Driver: fakeVideo.Driver,
+            Restore: fakeVideo.restore,
             PromptRunIDs: [],
         };
     },
@@ -404,7 +283,6 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle(BUNDLE, {
         if (!f) {
             return;
         }
-        f.Driver.Disarm();
         f.Restore();
         for (const id of f.PromptRunIDs) {
             await DeleteById('MJ: AI Prompt Runs', id, ctx.Provider, ctx.User).catch(err =>
