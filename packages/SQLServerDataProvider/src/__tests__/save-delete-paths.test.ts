@@ -589,7 +589,9 @@ describe('SQLServerDataProvider delete path (real Delete() → GenerateDeleteSQL
     const executed = mssqlState.Queries[0];
     expect(executed.inputs[0]).toEqual({ name: 'p$0', type: mssql.UniqueIdentifier(), value: 'w-0001' });
     expect(executed.sql.split('@p$0').length - 1).toBe(5);
-    expect(executed.sql).toContain('NOT EXISTS (SELECT 1 FROM [dbo].[vwWidgets] WHERE [ID]=@p$0)');
+    // "Deleted" requires that the row existed first: a key that was never there must not count as
+    // a successful delete or write a Delete record change
+    expect(executed.sql).toContain('@MJDeleteRowExisted = 1 AND NOT EXISTS (SELECT 1 FROM [dbo].[vwWidgets] WHERE [ID]=@p$0)');
     expect(executed.sql).toContain('SELECT CASE WHEN @MJDeleteRowDeleted = 1 THEN @p$0 END AS [ID]');
     // Rendered (literal) form, the shape a transaction group runs
     const sql = provider.LiteralSQL[0];
