@@ -829,6 +829,47 @@ export class NavigationService implements OnDestroy {
   }
 
   /**
+   * The tab a one-step "Back" goes to: the most recently accessed tab other
+   * than the active one, by the `lastAccessedAt` stamp every tab gets on
+   * create and on each activation. One step deep, like Alt-Tab.
+   * @param excludeTabId the caller's own tab — skipped too, so Back in a pane
+   *   that isn't the active tab never "goes back" to itself.
+   */
+  public GetPreviousTab(excludeTabId?: string): WorkspaceTab | undefined {
+    const config = this.workspaceManager.GetConfiguration();
+    if (!config) {
+      return undefined;
+    }
+    const activeTabId = this.workspaceManager.GetActiveTabId();
+    return config.tabs
+      .filter(t => t.id !== activeTabId && t.id !== excludeTabId)
+      .sort((a, b) => (b.lastAccessedAt || '').localeCompare(a.lastAccessedAt || ''))[0];
+  }
+
+  /**
+   * The origin crumb's Back button: go to the LAST PLACE the user was (see
+   * GetPreviousTab). The breadcrumb segments keep the "page as it was"
+   * restore (ReturnToRecordSource), which is also the fallback here when no
+   * other tab is open.
+   */
+  public async ReturnToPreviousTab(fallbackOrigin: RecordSourceContext | null, excludeTabId?: string): Promise<void> {
+    const previous = this.GetPreviousTab(excludeTabId);
+    if (previous) {
+      // Record tabs live in the records region regardless of app — no app
+      // flip. Otherwise set the app first, as the exact-tab path in
+      // ReturnToRecordSource does, so the nav doesn't render in two steps.
+      if (!IsRecordsTabConfiguration(previous.configuration)) {
+        await this.appManager.SetActiveApp(previous.applicationId);
+      }
+      this.workspaceManager.SetActiveTab(previous.id);
+      return;
+    }
+    if (fallbackOrigin) {
+      await this.ReturnToRecordSource(fallbackOrigin);
+    }
+  }
+
+  /**
    * Take the user back to where they were when a record was opened (the
    * origin crumb's click path). Fidelity ladder:
    * 1. The exact source tab, if it's still open — reactivate it with all its
