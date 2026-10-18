@@ -1,7 +1,7 @@
 import { Arg, Ctx, Field, InputType, Int, Mutation, ObjectType, registerEnumType } from 'type-graphql';
 import { AppContext } from '../types.js';
-import { CompositeKey, IMetadataProvider, KeyValuePair, LogError, Metadata, TransactionVariable, TransactionGroupBase, BaseEntity, EntityDeleteOptions, EntitySaveOptions } from '@memberjunction/core';
-import { SafeJSONParse } from '@memberjunction/global';
+import { CompositeKey, EntityInfo, IMetadataProvider, KeyValuePair, LogError, Metadata, TransactionVariable, TransactionGroupBase, BaseEntity, EntityDeleteOptions, EntitySaveOptions } from '@memberjunction/core';
+import { SafeJSONParse, ValuesEqual } from '@memberjunction/global';
 import { GetReadWriteProvider } from '../util.js';
 import { ResolverBase } from '../generic/ResolverBase.js';
 
@@ -319,7 +319,10 @@ export class TransactionResolver extends ResolverBase {
         }
 
         const sentRecord = sentValues as Record<string, unknown>;
-        const includeKeys = new Set<string>(['__mj_CreatedAt', '__mj_UpdatedAt']);
+        const includeKeys = new Set<string>([
+            EntityInfo.CreatedAtFieldName,
+            EntityInfo.UpdatedAtFieldName,
+        ]);
 
         for (const pk of entity.PrimaryKeys ?? []) {
             if (pk?.Name) {
@@ -340,17 +343,15 @@ export class TransactionResolver extends ResolverBase {
                      (Object.prototype.hasOwnProperty.call(sentRecord, f.Name) ||
                       Object.prototype.hasOwnProperty.call(sentRecord, f.CodeName))
             );
-            if (hasSentForeignKey) {
-                for (const f of entity.Fields) {
-                    if (f.EntityFieldInfo?.IsVirtual) {
-                        includeKeys.add(f.Name);
-                    }
+            for (const f of entity.Fields) {
+                if (f.EntityFieldInfo?.IsSpecialDateField || (hasSentForeignKey && f.EntityFieldInfo?.IsVirtual)) {
+                    includeKeys.add(f.Name);
                 }
             }
         }
         if (preSaveValues) {
             for (const key of Object.keys(fullDataObj)) {
-                if (!this.valuesEqual(fullDataObj[key], preSaveValues[key])) {
+                if (!ValuesEqual(fullDataObj[key], preSaveValues[key])) {
                     includeKeys.add(key);
                 }
             }
@@ -363,20 +364,6 @@ export class TransactionResolver extends ResolverBase {
             }
         }
         return JSON.stringify(deltaObj);
-    }
-
-    private valuesEqual(a: unknown, b: unknown): boolean {
-        if (a === b) return true;
-        if (a instanceof Date && b instanceof Date) {
-            return a.getTime() === b.getTime();
-        }
-        if (a instanceof Date && (typeof b === 'string' || typeof b === 'number')) {
-            return a.getTime() === new Date(b).getTime();
-        }
-        if (b instanceof Date && (typeof a === 'string' || typeof a === 'number')) {
-            return new Date(a).getTime() === b.getTime();
-        }
-        return false;
     }
 
 }

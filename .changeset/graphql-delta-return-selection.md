@@ -1,6 +1,10 @@
 ---
+"@memberjunction/global": patch
 "@memberjunction/graphql-dataprovider": patch
 "@memberjunction/server": patch
 ---
 
-Optimize GraphQL entity `Update` return selection sets in `GraphQLDataProvider.Save()` (and `TransactionGroupResolver.PrepareReturnValue`) to request and return only primary keys, dirty fields, `__mj_CreatedAt` / `__mj_UpdatedAt` timestamps, and virtual fields when a foreign key is modified, merging the delta response onto loaded entity fields before applying field-level security.
+perf(graphql-dataprovider,server): request and return delta-only fields on Update mutations and transaction groups
+
+- On `GraphQLDataProvider.Save()` `Update` (when `IgnoreDirtyState` is not set), narrow the GraphQL response selection set to primary keys, dirty fields, special date fields (`IsSpecialDateField`), and (when any foreign key field was dirtied) virtual fields, merging the delta response over `entity.GetAll()`.
+- On `TransactionResolver.ExecuteTransactionGroup()`, return delta-only `ResultsJSON` for `Update` items containing primary keys, sent fields, transaction variables, special date fields, and any fields whose post-save value changed from the pre-update DB snapshot (using `ValuesEqual` from `@memberjunction/global`).

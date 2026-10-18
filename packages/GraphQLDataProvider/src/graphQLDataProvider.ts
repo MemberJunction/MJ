@@ -2319,13 +2319,12 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     return false;
                 }
                 if (effectiveReturnMode === 'datestamps_only') {
-                    return f.IsPrimaryKey || f.Name === '__mj_CreatedAt' || f.Name === '__mj_UpdatedAt';
+                    return f.IsPrimaryKey || f.EntityFieldInfo.IsSpecialDateField;
                 }
                 if (filterToDirtyOnly) {
                     return (
                         f.IsPrimaryKey ||
-                        f.Name === '__mj_CreatedAt' ||
-                        f.Name === '__mj_UpdatedAt' ||
+                        f.EntityFieldInfo.IsSpecialDateField ||
                         this.isFieldDirtyOnChain(entity, f) ||
                         (hasDirtyForeignKey && Boolean(f.EntityFieldInfo.IsVirtual))
                     );
