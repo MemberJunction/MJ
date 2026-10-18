@@ -8,8 +8,9 @@
  * - `RegisterFakeTextToSpeech()` — registers a deterministic in-memory `BaseTextToSpeech` driver over
  *   TTS driver classes so `Pre-Production` narration synthesis and timeline fitting run with zero network
  *   calls under `CredentialScope: 'RuntimeOnly'`.
- * - `UseMemoryStorage(ctx)` — creates a storage account fixture via `storage.checks.ts` helpers,
- *   registers an in-memory `FileStorageBase` over `'AWS S3 Storage'` above every priority, and asserts
+ * - `UseMemoryStorage(ctx)` — creates an active test `MJ: File Storage Providers` row with a unique
+ *   `MJITMemoryStorage-<marker>` driver key, registers an in-memory `FileStorageBase` under that key
+ *   only, creates a storage account fixture on that provider via `storage.checks.ts`, and asserts
  *   `AIEngine.Instance.ResolveAgentStorageAccountID` for `Video Studio` resolves to the fixture account.
  */
 import {
@@ -38,6 +39,7 @@ import {
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIVideoRunner } from '@memberjunction/ai-prompts';
 import { BaseEntity } from '@memberjunction/core';
+import { MJFileStorageProviderEntity } from '@memberjunction/core-entities';
 import { CredentialEngine } from '@memberjunction/credentials';
 import { FilterByUUIDs, MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import {
@@ -807,19 +809,24 @@ async function deleteEntityQuietly(row: BaseEntity | null | undefined): Promise<
     await row.Delete().catch(() => undefined);
 }
 
+let memoryStorageCounter = 0;
+
 interface MemoryStorageHandle {
     AccountID: string;
     Driver: MemoryFileStorageDriver;
     Fixture: AccountFixture;
+    Provider: MJFileStorageProviderEntity;
+    DriverKey: string;
     restore: () => Promise<void>;
 }
 
 /**
- * Creates a temporary AWS S3 storage account fixture via `storage.checks.ts`, registers an
- * in-memory `FileStorageBase` over `'AWS S3 Storage'` above every priority, refreshes the
- * storage and credential caches, and asserts `AIEngine.Instance.ResolveAgentStorageAccountID`
- * and `AIEngine.Instance.ResolveAgentStorageAccount` for `Video Studio` resolve unambiguously to
- * the fixture account.
+ * Creates a temporary active `MJ: File Storage Providers` row with a unique test-only
+ * `ServerDriverKey` / `ClientDriverKey` (`MJITMemoryStorage-<marker>`), registers an in-memory
+ * `FileStorageBase` under that key only, creates a temporary storage account fixture on that
+ * provider via `CreateAccountFixture`, refreshes the storage and credential caches, and asserts
+ * `AIEngine.Instance.ResolveAgentStorageAccountID` and `AIEngine.Instance.ResolveAgentStorageAccount`
+ * for `Video Studio` resolve unambiguously (`Ambiguous: false`) to the fixture account.
  */
 export async function UseMemoryStorage(
     ctx: IntegrationCheckContext,
@@ -827,16 +834,31 @@ export async function UseMemoryStorage(
     const storageEngine = FileStorageEngine.Instance;
     await storageEngine.Config(false, ctx.User, ctx.Provider);
 
-    const s3Provider = storageEngine.Providers.find((p) => p.Name === 'AWS S3 Storage');
-    Assert(
-        s3Provider != null,
-        "UseMemoryStorage: canonical file storage provider 'AWS S3 Storage' is missing from FileStorageEngine.Providers",
+    const marker = `${Date.now().toString(36)}${(++memoryStorageCounter).toString(36)}`;
+    const driverKey = `MJITMemoryStorage-${marker}`;
+    const fixtureTag = '(mj-integration-test — safe to delete)';
+
+    const provider = await ctx.Provider.GetEntityObject<MJFileStorageProviderEntity>(
+        'MJ: File Storage Providers',
+        ctx.User,
     );
-    const serverDriverKey = s3Provider!.ServerDriverKey;
+    provider.NewRecord();
+    provider.Name = `${marker} ${fixtureTag}`;
+    provider.Description = `Integration-test memory storage provider ${marker} ${fixtureTag}`;
+    provider.ServerDriverKey = driverKey;
+    provider.ClientDriverKey = driverKey;
+    provider.Priority = 0;
+    provider.IsActive = true;
+    provider.SupportsSearch = false;
+    provider.RequiresOAuth = false;
+    if (!(await provider.Save())) {
+        throw new Error(
+            `UseMemoryStorage: failed to save test storage provider: ${provider.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+        );
+    }
 
     const memoryDriver = new MemoryFileStorageDriver();
     const factory = MJGlobal.Instance.ClassFactory;
-    const previousReg = factory.GetRegistration(FileStorageBase, serverDriverKey);
 
     class MemoryStorageRegistrationHandle extends MemoryFileStorageDriver {
         constructor() {
@@ -848,43 +870,31 @@ export async function UseMemoryStorage(
     factory.Register(
         FileStorageBase,
         MemoryStorageRegistrationHandle,
-        serverDriverKey,
-        Math.max(100, highestStoragePriority(serverDriverKey) + 1),
+        driverKey,
+        Math.max(100, highestStoragePriority(driverKey) + 1),
     );
 
-    const fixtureOrReason = await CreateAccountFixture(ctx, storageEngine);
-    if (typeof fixtureOrReason === 'string') {
-        if (previousReg) {
-            factory.Register(
-                FileStorageBase,
-                previousReg.SubClass,
-                serverDriverKey,
-                highestStoragePriority(serverDriverKey) + 1,
-            );
-        }
-        throw new Error(`UseMemoryStorage: failed to create storage account fixture: ${fixtureOrReason}`);
-    }
-
-    const fixture = fixtureOrReason;
+    let fixture: AccountFixture | null = null;
     const restore = async (): Promise<void> => {
         memoryDriver.Clear();
-        if (previousReg) {
-            factory.Register(
-                FileStorageBase,
-                previousReg.SubClass,
-                serverDriverKey,
-                highestStoragePriority(serverDriverKey) + 1,
-            );
+        if (fixture) {
+            for (const perm of fixture.Permissions) {
+                await deleteEntityQuietly(perm);
+            }
+            await deleteEntityQuietly(fixture.Account);
+            await deleteEntityQuietly(fixture.CreatedCredential);
         }
-        for (const perm of fixture.Permissions) {
-            await deleteEntityQuietly(perm);
-        }
-        await deleteEntityQuietly(fixture.Account);
-        await deleteEntityQuietly(fixture.CreatedCredential);
+        await deleteEntityQuietly(provider);
         await storageEngine.Config(true, ctx.User, ctx.Provider).catch(() => undefined);
     };
 
     try {
+        const fixtureOrReason = await CreateAccountFixture(ctx, storageEngine, provider);
+        if (typeof fixtureOrReason === 'string') {
+            throw new Error(`UseMemoryStorage: failed to create storage account fixture: ${fixtureOrReason}`);
+        }
+        fixture = fixtureOrReason;
+
         if (fixture.CreatedCredential) {
             await CredentialEngine.Instance.Config(true, ctx.User, ctx.Provider);
         }
@@ -913,7 +923,7 @@ export async function UseMemoryStorage(
             throw new Error(
                 `UseMemoryStorage: Video Studio resolved storage account '${resolvedAccountId ?? '(null)'}' ` +
                     `instead of fixture account '${fixture.Account.Name} (${fixture.Account.ID})'. ` +
-                    `Active accounts in FileStorageEngine: [${allAccounts || '(none)'}].`,
+                    `Accounts in FileStorageEngine: [${allAccounts || '(none)'}].`,
             );
         }
 
@@ -927,7 +937,7 @@ export async function UseMemoryStorage(
                 `UseMemoryStorage: ResolveAgentStorageAccount('${videoStudioAgent!.ID}') returned ` +
                     `AccountID='${resolvedInfo.AccountID ?? '(null)'}', Source='${resolvedInfo.Source}', Ambiguous=${resolvedInfo.Ambiguous} ` +
                     `instead of unambiguous fixture account '${fixture.Account.Name} (${fixture.Account.ID})'. ` +
-                    `Active accounts in FileStorageEngine: [${allAccounts || '(none)'}].`,
+                    `Accounts in FileStorageEngine: [${allAccounts || '(none)'}].`,
             );
         }
     } catch (err) {
@@ -939,6 +949,8 @@ export async function UseMemoryStorage(
         AccountID: fixture.Account.ID,
         Driver: memoryDriver,
         Fixture: fixture,
+        Provider: provider,
+        DriverKey: driverKey,
         restore,
     };
 }

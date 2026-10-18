@@ -1,11 +1,16 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { BaseImageGenerator, BaseVideoGenerator, GetAIAPIKeyGlobal } from '@memberjunction/ai';
+import { AIEngine } from '@memberjunction/aiengine';
+import { RunView } from '@memberjunction/core';
+import { CredentialEngine } from '@memberjunction/credentials';
 import { MJGlobal } from '@memberjunction/global';
+import { FileStorageBase, FileStorageEngine } from '@memberjunction/storage';
 import {
     RegisterFakeAPIKeys,
     RegisterFakeImageGenerator,
     RegisterFakeVideoGenerator,
     SCRIPTED_API_KEY,
+    UseMemoryStorage,
 } from '../checks/video-studio-fakes';
 
 describe('video-studio-fakes', () => {
@@ -61,6 +66,139 @@ describe('video-studio-fakes', () => {
             expect(fake.Driver.SubmitCount).toBe(1);
         } finally {
             fake.restore();
+        }
+    });
+
+    it('UseMemoryStorage registers the memory driver only under its test key and restore() deletes the provider after the account', async () => {
+        const s3Before = MJGlobal.Instance.ClassFactory.GetRegistration(
+            FileStorageBase,
+            'AWS S3 Storage',
+        );
+        const deleteOrder: string[] = [];
+
+        const providerEntity = {
+            ID: '00000000-0000-0000-0000-000000000101',
+            Name: '',
+            Description: '',
+            ServerDriverKey: '',
+            ClientDriverKey: '',
+            Priority: 0,
+            IsActive: false,
+            SupportsSearch: false,
+            RequiresOAuth: false,
+            NewRecord: vi.fn(),
+            Save: vi.fn(async () => true),
+            Delete: vi.fn(async () => {
+                deleteOrder.push('provider');
+                return true;
+            }),
+        };
+
+        const accountEntity = {
+            ID: '00000000-0000-0000-0000-000000000202',
+            Name: '',
+            ProviderID: '',
+            CredentialID: '',
+            IncludeInGlobalSearch: false,
+            NewRecord: vi.fn(),
+            Save: vi.fn(async () => true),
+            Delete: vi.fn(async () => {
+                deleteOrder.push('account');
+                return true;
+            }),
+        };
+
+        const credentialEntity = {
+            ID: '00000000-0000-0000-0000-000000000303',
+            Name: '',
+            CredentialTypeID: '',
+            Values: '',
+            NewRecord: vi.fn(),
+            Save: vi.fn(async () => true),
+            Delete: vi.fn(async () => {
+                deleteOrder.push('credential');
+                return true;
+            }),
+        };
+
+        vi.spyOn(RunView.prototype, 'RunView').mockImplementation(async (params) => {
+            if (params.EntityName === 'MJ: Credentials') {
+                return { Success: true, Results: [] } as never;
+            }
+            if (params.EntityName === 'MJ: Credential Types') {
+                return {
+                    Success: true,
+                    Results: [{ ID: '00000000-0000-0000-0000-000000000404' }],
+                } as never;
+            }
+            return { Success: true, Results: [] } as never;
+        });
+        vi.spyOn(FileStorageEngine.Instance, 'Config').mockResolvedValue(undefined);
+        vi.spyOn(CredentialEngine.Instance, 'Config').mockResolvedValue(undefined);
+        vi.spyOn(AIEngine.Instance, 'Config').mockResolvedValue(undefined);
+        vi.spyOn(AIEngine.Instance, 'Agents', 'get').mockReturnValue([
+            { ID: '00000000-0000-0000-0000-000000000505', Name: 'Video Studio' } as never,
+        ]);
+        vi.spyOn(AIEngine.Instance, 'ResolveAgentStorageAccountID').mockReturnValue(accountEntity.ID);
+        vi.spyOn(AIEngine.Instance, 'ResolveAgentStorageAccount').mockReturnValue({
+            AccountID: accountEntity.ID,
+            Source: 'Fallback',
+            Ambiguous: false,
+        });
+
+        const ctx = {
+            User: { ID: '00000000-0000-0000-0000-000000000999' },
+            Provider: {
+                GetEntityObject: vi.fn(async (entityName: string) => {
+                    if (entityName === 'MJ: File Storage Providers') {
+                        return providerEntity;
+                    }
+                    if (entityName === 'MJ: File Storage Accounts') {
+                        return accountEntity;
+                    }
+                    if (entityName === 'MJ: Credentials') {
+                        return credentialEntity;
+                    }
+                    throw new Error(`Unexpected entity '${entityName}'`);
+                }),
+            },
+        } as never;
+
+        try {
+            const handle = await UseMemoryStorage(ctx);
+
+            expect(providerEntity.IsActive).toBe(true);
+            expect(providerEntity.Name).toContain('mj-integration-test — safe to delete');
+            expect(providerEntity.Name.length).toBeLessThanOrEqual(50);
+            expect(providerEntity.Description).toContain('mj-integration-test — safe to delete');
+            expect(providerEntity.ServerDriverKey).toMatch(/^MJITMemoryStorage-/);
+            expect(providerEntity.ClientDriverKey).toBe(providerEntity.ServerDriverKey);
+            expect(accountEntity.ProviderID).toBe(providerEntity.ID);
+
+            const resolvedDriver = MJGlobal.Instance.ClassFactory.CreateInstance<FileStorageBase>(
+                FileStorageBase,
+                handle.DriverKey,
+            );
+            expect(resolvedDriver).toBe(handle.Driver);
+
+            const s3After = MJGlobal.Instance.ClassFactory.GetRegistration(
+                FileStorageBase,
+                'AWS S3 Storage',
+            );
+            expect(s3After).toBe(s3Before);
+
+            handle.Fixture.Permissions.push({
+                Delete: vi.fn(async () => {
+                    deleteOrder.push('permission');
+                    return true;
+                }),
+            } as never);
+
+            await handle.restore();
+
+            expect(deleteOrder).toEqual(['permission', 'account', 'credential', 'provider']);
+        } finally {
+            vi.restoreAllMocks();
         }
     });
 });

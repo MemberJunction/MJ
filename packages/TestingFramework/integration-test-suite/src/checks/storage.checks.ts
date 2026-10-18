@@ -180,8 +180,12 @@ export async function FixtureCredential(ctx: IntegrationCheckContext): Promise<{
     return { ID: credential.ID, Created: credential };
 }
 
-/** Creates ST8's fixture account on the AWS S3 provider, or returns why it could not. */
-export async function CreateAccountFixture(ctx: IntegrationCheckContext, engine: FileStorageEngine): Promise<AccountFixture | string> {
+/** Creates ST8's fixture account on the given provider (defaulting to the AWS S3 provider), or returns why it could not. */
+export async function CreateAccountFixture(
+    ctx: IntegrationCheckContext,
+    engine: FileStorageEngine,
+    provider?: MJFileStorageProviderEntity
+): Promise<AccountFixture | string> {
     const credential = await FixtureCredential(ctx);
     if (typeof credential === 'string') {
         return credential;
@@ -189,7 +193,7 @@ export async function CreateAccountFixture(ctx: IntegrationCheckContext, engine:
     const account = await ctx.Provider.GetEntityObject<MJFileStorageAccountEntity>('MJ: File Storage Accounts', ctx.User);
     account.NewRecord();
     account.Name = `mj-it-storage-acl-${Date.now()} ${FIXTURE_TAG}`;
-    account.ProviderID = requireProvider(engine, 'AWS S3 Storage').ID;
+    account.ProviderID = (provider ?? requireProvider(engine, 'AWS S3 Storage')).ID;
     account.CredentialID = credential.ID;
     account.IncludeInGlobalSearch = false;
     if (!(await account.Save())) {
