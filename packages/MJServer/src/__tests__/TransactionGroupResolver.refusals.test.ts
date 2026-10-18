@@ -319,4 +319,69 @@ describe('ExecuteTransactionGroup — rows refused server-side (issue #4309)', (
         expect(result.Success).toBe(true);
         expect(variablesAtSave).toEqual([2, 2]);
     });
+
+    it('returns delta-only ResultsJSON on Update (PK, client-sent fields, datestamps, and server-changed fields), omitting unchanged columns', async () => {
+        const preLoadedRow: Record<string, unknown> = {
+            ID: 'a0000000-0000-0000-0000-000000000099',
+            Name: 'Action One',
+            Description: 'Initial description',
+            DriverClass: 'OriginalDriver',
+            Category: 'Utilities',
+            __mj_CreatedAt: '2026-01-01T00:00:00.000Z',
+            __mj_UpdatedAt: '2026-02-01T00:00:00.000Z',
+        };
+        for (let i = 1; i <= 15; i++) {
+            preLoadedRow[`UnchangedField${i}`] = `Constant-${i}`;
+        }
+
+        class ServerMutatingEntity extends FakeEntity {
+            public override async Save(): Promise<boolean> {
+                const ok = await super.Save();
+                if (ok) {
+                    // Simulate server-side DB update refreshing __mj_UpdatedAt and a computed/trigger column
+                    this.SetMany({
+                        __mj_UpdatedAt: '2026-03-01T00:00:00.000Z',
+                        Category: 'Automation (Server Refreshed)',
+                    });
+                }
+                return ok;
+            }
+        }
+
+        const entity = new ServerMutatingEntity('MJ: Actions', {
+            accepts: true,
+            loadedValues: preLoadedRow,
+        });
+        const { context } = buildContext([entity]);
+        const input: TransactionInputType = {
+            Items: [
+                {
+                    EntityName: 'MJ: Actions',
+                    EntityObjectJSON: JSON.stringify({
+                        ID: 'a0000000-0000-0000-0000-000000000099',
+                        Description: 'Updated description',
+                    }),
+                    OperationType: TransactionOperationType.Update,
+                },
+            ],
+            Variables: [],
+        };
+
+        const result = await new TransactionResolver().ExecuteTransactionGroup(input, context);
+
+        expect(result.Success).toBe(true);
+        const returnedObj = JSON.parse(result.ResultsJSON[0]) as Record<string, unknown>;
+        expect(returnedObj).toEqual({
+            ID: 'a0000000-0000-0000-0000-000000000099',
+            Description: 'Updated description',
+            Category: 'Automation (Server Refreshed)',
+            __mj_CreatedAt: '2026-01-01T00:00:00.000Z',
+            __mj_UpdatedAt: '2026-03-01T00:00:00.000Z',
+        });
+        expect(returnedObj).not.toHaveProperty('Name');
+        expect(returnedObj).not.toHaveProperty('DriverClass');
+        for (let i = 1; i <= 15; i++) {
+            expect(returnedObj).not.toHaveProperty(`UnchangedField${i}`);
+        }
+    });
 });
