@@ -20,6 +20,7 @@
 import { DatabaseDocumentation, SchemaDefinition, TableDefinition, ColumnDefinition } from '../types/state.js';
 import { PKCandidate, FKCandidate } from '../types/discovery.js';
 import { DetectedOrganicKeysOutput, OrganicKeyConfig } from '../discovery/OrganicKeyTranslator.js';
+import { IsUniquelyIndexed } from '../utils/index-hints.js';
 
 export interface AdditionalSchemaInfoOptions {
   /** Only include AI-discovered keys, not keys already present in the database schema */
@@ -126,6 +127,7 @@ export class AdditionalSchemaInfoGenerator {
         }
 
         const tableInfo = this.buildTableInfo(
+          state,
           schema,
           table,
           discoveredPKs,
@@ -264,6 +266,7 @@ export class AdditionalSchemaInfoGenerator {
    * introspected and discovered keys, plus value-list fields.
    */
   private buildTableInfo(
+    state: DatabaseDocumentation,
     schema: SchemaDefinition,
     table: TableDefinition,
     discoveredPKs: PKCandidate[],
@@ -279,7 +282,7 @@ export class AdditionalSchemaInfoGenerator {
     // Source 1: Hard keys from introspection (skip if discoveredOnly)
     if (!discoveredOnly) {
       this.collectIntrospectedPKs(table, pks);
-      this.collectIntrospectedFKs(schema, table, fks);
+      this.collectIntrospectedFKs(state, schema, table, fks);
     }
 
     // Source 2: AI-discovered keys
@@ -360,8 +363,14 @@ export class AdditionalSchemaInfoGenerator {
 
   /**
    * Collect foreign key columns from introspected table definition.
+   *
+   * MJ models a foreign key as one column, so a composite key is written as one entry per column
+   * pair. Only a pair whose target is unique on its own is written: the other columns of a
+   * composite key usually point at columns that repeat in the target table (a join on them alone
+   * multiplies rows), so they are left out rather than guessed. Single-column keys are unchanged.
    */
   private collectIntrospectedFKs(
+    state: DatabaseDocumentation,
     schema: SchemaDefinition,
     table: TableDefinition,
     fks: SoftFKEntry[]
@@ -387,7 +396,17 @@ export class AdditionalSchemaInfoGenerator {
     }
 
     // From table-level dependsOn relationships
+    const columnsPerConstraint = new Map<string, number>();
     for (const dep of table.dependsOn) {
+      if (dep.constraintName) {
+        columnsPerConstraint.set(dep.constraintName, (columnsPerConstraint.get(dep.constraintName) ?? 0) + 1);
+      }
+    }
+    for (const dep of table.dependsOn) {
+      const isComposite = !!dep.constraintName && (columnsPerConstraint.get(dep.constraintName) ?? 0) > 1;
+      if (isComposite && !this.isUniqueOnItsOwn(state, dep.schema || schema.name, dep.table, dep.referencedColumn)) {
+        continue;
+      }
       const key = `${dep.column}->${dep.table}.${dep.referencedColumn}`;
       if (!existingKeys.has(key)) {
         existingKeys.add(key);
@@ -399,6 +418,23 @@ export class AdditionalSchemaInfoGenerator {
         });
       }
     }
+  }
+
+  /**
+   * Whether a column identifies one row of its table by itself: it is the table's only primary
+   * key column, or it has a unique, unfiltered single-column index. A target table that is not in
+   * the analysed state cannot be checked, so it counts as not unique.
+   */
+  private isUniqueOnItsOwn(state: DatabaseDocumentation, schemaName: string, tableName: string, columnName: string): boolean {
+    const target = state.schemas.find(s => s.name === schemaName)?.tables.find(t => t.name === tableName);
+    if (!target) {
+      return false;
+    }
+    const pkColumns = target.columns.filter(c => c.isPrimaryKey);
+    if (pkColumns.length === 1 && pkColumns[0].name.toLowerCase() === columnName.toLowerCase()) {
+      return true;
+    }
+    return IsUniquelyIndexed(target, columnName) === true;
   }
 
   /**
