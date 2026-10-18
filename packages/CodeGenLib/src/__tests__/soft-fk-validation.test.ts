@@ -182,6 +182,15 @@ describe('checkSoftFKTarget', () => {
       expect(gen.testTarget(priceFields, 'prc_key', true)).toMatchObject({ ResolvedName: 'prc_key', IsUnique: false, NotUniqueReason: 'it is one column of a 2-column primary key' });
    });
 
+   it('does not trust IsUnique on a column of a composite primary key', () => {
+      // seen live on SQL Server: both columns of a two-column PK carried IsUnique = 1
+      const flagged: SoftFKTargetField[] = [
+         { Name: 'PrcKey', IsPrimaryKey: true, IsUnique: true },
+         { Name: 'PrcPrdKey', IsPrimaryKey: true, IsUnique: true },
+      ];
+      expect(gen.testTarget(flagged, 'PrcKey', false)).toMatchObject({ IsUnique: false, NotUniqueReason: 'it is one column of a 2-column primary key' });
+   });
+
    it('matches case-sensitively on PostgreSQL and resolves the real name on SQL Server', () => {
       const fields: SoftFKTargetField[] = [{ Name: 'id', IsPrimaryKey: true, IsUnique: true }];
       expect(gen.testTarget(fields, 'ID', true).ResolvedName).toBeNull();

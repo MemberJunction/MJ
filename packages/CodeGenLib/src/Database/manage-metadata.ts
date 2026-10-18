@@ -4942,7 +4942,8 @@ export class ManageMetadataBase {
     * Checks a soft FK's target column against the related entity's fields. The name matches
     * case-sensitively on PostgreSQL, where `ID` and `id` are different identifiers, and
     * case-insensitively on SQL Server. A column of a multi-column primary key is not unique on its
-    * own, so a join on it alone can return several rows.
+    * own, so a join on it alone can return several rows. That is decided before `IsUnique` is read:
+    * on a live SQL Server run, both columns of a two-column primary key carried `IsUnique = 1`.
     */
    protected checkSoftFKTarget(relatedFields: SoftFKTargetField[], relatedField: string, caseSensitive: boolean): SoftFKTargetCheck {
       const target = relatedFields.find(f => caseSensitive ? f.Name === relatedField : f.Name.toLowerCase() === relatedField.toLowerCase());
@@ -4950,13 +4951,13 @@ export class ManageMetadataBase {
          return { ResolvedName: null, IsUnique: false };
       }
       const pkCount = relatedFields.filter(f => f.IsPrimaryKey).length;
-      if (target.IsUnique || (target.IsPrimaryKey && pkCount === 1)) {
+      if (target.IsPrimaryKey && pkCount > 1) {
+         return { ResolvedName: target.Name, IsUnique: false, NotUniqueReason: `it is one column of a ${pkCount}-column primary key` };
+      }
+      if (target.IsUnique || target.IsPrimaryKey) {
          return { ResolvedName: target.Name, IsUnique: true };
       }
-      const reason = target.IsPrimaryKey
-         ? `it is one column of a ${pkCount}-column primary key`
-         : 'it is neither a primary key nor unique';
-      return { ResolvedName: target.Name, IsUnique: false, NotUniqueReason: reason };
+      return { ResolvedName: target.Name, IsUnique: false, NotUniqueReason: 'it is neither a primary key nor unique' };
    }
 
    /**
