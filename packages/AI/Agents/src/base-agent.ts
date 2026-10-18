@@ -16806,7 +16806,7 @@ The context is now within limits. Please retry your request with the recovered c
                 priorStepResult: actionSummaries,
                 retryReason: failedActions.length > 0
                     ? `Processing results with ${failedActions.length} failed ${failedNoun}: ${failedActions.map(a => a.actionName).join(', ')}`
-                    : `Analyzing results from ${actionSummaries.length} completed ${completedNoun} to formulate response`
+                    : `Analyzing results from ${actionSummaries.length} completed ${completedNoun}`
             };
         }
         catch (e) {
