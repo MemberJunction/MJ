@@ -4585,7 +4585,7 @@ BEGIN
             )
     END
     -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [${flyway:defaultSchema}].[vwProcessRunDetails] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+    SELECT [ID], [__mj_CreatedAt], [__mj_UpdatedAt] FROM [${flyway:defaultSchema}].[ProcessRunDetail] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
 END
 GO
 REVOKE EXECUTE ON [${flyway:defaultSchema}].[spCreateProcessRunDetail] FROM [cdp_Developer]
@@ -4663,16 +4663,10 @@ BEGIN
     -- Check if the update was successful
     IF @@ROWCOUNT = 0
         -- Nothing was updated, return no rows, but column structure from base view intact, semantically correct this way.
-        SELECT TOP 0 * FROM [${flyway:defaultSchema}].[vwProcessRunDetails] WHERE 1=0
+        SELECT TOP 0 [ID], [__mj_CreatedAt], [__mj_UpdatedAt] FROM [${flyway:defaultSchema}].[ProcessRunDetail] WHERE 1=0
     ELSE
         -- Return the updated record so the caller can see the updated values and any calculated fields
-        SELECT
-                                        *
-                                    FROM
-                                        [${flyway:defaultSchema}].[vwProcessRunDetails]
-                                    WHERE
-                                        [ID] = @ID
-                                    
+        SELECT [ID], [__mj_CreatedAt], [__mj_UpdatedAt] FROM [${flyway:defaultSchema}].[ProcessRunDetail] WHERE [ID] = @ID
 END
 GO
 

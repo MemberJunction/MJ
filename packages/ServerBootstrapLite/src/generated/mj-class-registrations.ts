@@ -221,7 +221,7 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/core-entities (453 classes)
+// @memberjunction/core-entities (454 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -1841,11 +1841,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJRecommendationRunEntity,
     MJRecordChangeEntity,
     MJRecordChangeReplayRunEntity,
-    MJRecordCloneLogEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJRecordCloneLogEntity,
     MJRecordCloneLogItemEntity,
     MJRecordGeoCodeEntity,
     MJRecordLinkEntity,
@@ -2045,11 +2045,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     UpdateJotFormAction,
     UpdateSurveyMonkeyAction,
     UpdateTypeformAction,
-    WatchNewJotFormSubmissionsAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    WatchNewJotFormSubmissionsAction,
     WatchNewSurveyMonkeyResponsesAction,
     WatchNewTypeformResponsesAction,
     AttachTagsAction,
@@ -2249,12 +2249,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     PredictiveStudioCreateScoringProcessServerOperation,
     PredictiveStudioModelDevAgent,
     PredictiveStudioPipelineBuilderAgent,
-    PredictiveStudioPromoteModelAction,
-    PredictiveStudioPromoteModelServerOperation,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    PredictiveStudioPromoteModelAction,
     PredictiveStudioPromoteModelServerOperation,
     PredictiveStudioRunExperimentAction,
     PredictiveStudioRunFeaturePipelineServerOperation,
@@ -2454,22 +2453,18 @@ const CLASS_REGISTRATIONS_4: any[] = [
     ListMCPToolsAction,
     ListObjectsAction,
     ListStorageAccountsAction,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_5: any[] = [
     LoadAgentSpecAction,
     LoopAction,
     MCPToolAction,
     ManageMyCalendarEventAction,
     ManageMyEmailInboxAction,
     MaterializeListFromViewAction,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_5: any[] = [
     ModifyDocumentSectionAction,
     ModifyFormContributionAction,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_5: any[] = [
     ModifyInteractiveFormAction,
     MoveListMembersAction,
     MoveObjectAction,
@@ -2567,7 +2562,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1080;
+export const CLASS_REGISTRATIONS_COUNT = 1089;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

@@ -3204,6 +3204,22 @@
         [Form]="this"
         [FormContext]="formContext"
         [BadgeCount]="GetSectionRowCount('mJFeaturePipelineVersions')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Feature Pipeline Versions','ApprovedByUserID')"
+                [NewRecordValues]="NewRecordValues('MJ: Feature Pipeline Versions','ApprovedByUserID')"
+                [AllowLoad]="IsSectionExpanded('mJFeaturePipelineVersions')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJFeaturePipelineVersions', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <!-- AI Bridge Agent Identities Section -->
     <mj-collapsible-panel
         SectionKey="mJAIBridgeAgentIdentities"
@@ -3217,12 +3233,6 @@
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Feature Pipeline Versions','ApprovedByUserID')"
-                [NewRecordValues]="NewRecordValues('MJ: Feature Pipeline Versions','ApprovedByUserID')"
-                [AllowLoad]="IsSectionExpanded('mJFeaturePipelineVersions')"
-                [ShowToolbar]="true"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJFeaturePipelineVersions', $event.totalRowCount)"
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Bridge Agent Identities','UserID')"
                 [NewRecordValues]="NewRecordValues('MJ: AI Bridge Agent Identities','UserID')"
                 [AllowLoad]="IsSectionExpanded('mJAIBridgeAgentIdentities')"

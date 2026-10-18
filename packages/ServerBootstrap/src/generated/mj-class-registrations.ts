@@ -243,7 +243,7 @@ import {
     WorkOSProvider,
 } from '@memberjunction/auth-providers';
 
-// @memberjunction/core-entities (453 classes)
+// @memberjunction/core-entities (454 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -2110,11 +2110,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJQueryParameterEntity,
     MJQueryPermissionEntity,
     MJQuerySQLEntity,
-    MJQueueEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJQueueEntity,
     MJQueueTaskEntity,
     MJQueueTypeEntity,
     MJRSUPendingWorkEntity,
@@ -2314,11 +2314,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     ExportJotFormCSVAction,
     ExportSurveyMonkeyCSVAction,
     ExportTypeformCSVAction,
-    GetGoogleFormAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    GetGoogleFormAction,
     GetGoogleFormsStatisticsAction,
     GetJotFormAction,
     GetJotFormStatisticsAction,
@@ -2518,12 +2518,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     ElasticsearchSearchProvider,
     EntitySearchProvider,
     FullTextSearchProvider,
-    NoopReRanker,
-    OpenAIReRanker,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    NoopReRanker,
     OpenAIReRanker,
     OpenSearchSearchProvider,
     SearchScopePermissionResolver,
@@ -2723,14 +2722,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     WebSearchQueryServerOperation,
     APIRateLimiterAction,
     ActionSmithAgent,
-    ActivateFormContributionVersionAction,
-    ActivateInteractiveFormVersionAction,
-    AddDocumentContentAction,
-    AddRecordsToListAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    ActivateFormContributionVersionAction,
     ActivateInteractiveFormVersionAction,
     AddDocumentContentAction,
     AddRecordsToListAction,
@@ -2928,7 +2924,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1173;
+export const CLASS_REGISTRATIONS_COUNT = 1182;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
