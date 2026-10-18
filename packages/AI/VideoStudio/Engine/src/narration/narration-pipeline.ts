@@ -9,7 +9,7 @@
  * @module @memberjunction/video-studio
  */
 
-import { DeriveWordTimings, SpeechResult } from '@memberjunction/ai';
+import { type AIAPIKey, type AICredentialScope, DeriveWordTimings, SpeechResult } from '@memberjunction/ai';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { AITextToSpeechRunner } from '@memberjunction/ai-prompts';
 import { IMetadataProvider, UserInfo } from '@memberjunction/core';
@@ -57,6 +57,10 @@ export interface NarrationOptions {
     AgentRunID?: string;
     /** Optional cancellation signal forwarded to each TTS runner invocation. */
     CancellationToken?: AbortSignal;
+    /** Optional runtime API keys forwarded to `AITextToSpeechRunner`. */
+    APIKeys?: AIAPIKey[];
+    /** Optional credential resolution scope forwarded to `AITextToSpeechRunner`. */
+    CredentialScope?: AICredentialScope;
 }
 
 /**
@@ -244,6 +248,8 @@ async function synthesizeAndStoreLine(
         AgentID: options.AgentID,
         AgentRunID: options.AgentRunID,
         CancellationToken: options.CancellationToken,
+        APIKeys: options.APIKeys,
+        CredentialScope: options.CredentialScope,
     });
 
     if (!runResult.Success || !runResult.SpeechResult) {

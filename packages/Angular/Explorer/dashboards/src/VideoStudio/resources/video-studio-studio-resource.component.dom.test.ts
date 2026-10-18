@@ -343,7 +343,7 @@ describe('VideoStudioStudioResourceComponent DOM', () => {
     expect(instance.StartError).toBeNull();
     expect(query(fixture, '[data-testid="studio-start-error"]')).toBeNull();
 
-    // Restore real StartConversation (where agent is missing / chatArea is not mounted -> returns false) and verify StartError
+    // Restore real StartConversation (where agent is missing / chatArea is not mounted -> returns false) and verify StartError + Start re-enabled
     startConvSpy.mockRestore();
     startBtn!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     await flushAsync();
@@ -353,6 +353,40 @@ describe('VideoStudioStudioResourceComponent DOM', () => {
     const startErrorAlert = query(fixture, '[data-testid="studio-start-error"]');
     expect(startErrorAlert).not.toBeNull();
     expect(startErrorAlert!.textContent).toContain("The copilot isn't ready yet.");
+    expect(instance.IsStarting).toBe(false);
+    expect(instance.CanStartProduction).toBe(true);
+    expect(startBtn!.hasAttribute('disabled')).toBe(false);
+
+    // Also verify when chatArea exists and OnEmptyStateMessageSent runs, but conversation creation fails (ConversationId stays null -> StartConversation returns false)
+    instance.StartError = null;
+    copilotInstance.IsResolvingAgent = false;
+    copilotInstance.AgentMissing = false;
+    copilotInstance.VideoStudioAgentId = 'agent-vs-001';
+    const fakeChatArea = {
+      OnEmptyStateMessageSent: vi.fn().mockResolvedValue(undefined),
+    };
+    Object.defineProperty(copilotInstance, 'chatArea', {
+      get: () => fakeChatArea,
+      set: () => {
+        // prevent ViewChild query from clearing fakeChatArea in test
+      },
+      configurable: true,
+    });
+    fixture.detectChanges();
+
+    startBtn!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await flushAsync();
+    fixture.detectChanges();
+
+    expect(fakeChatArea.OnEmptyStateMessageSent).toHaveBeenCalledTimes(1);
+    expect(copilotInstance.ConversationId).toBeNull();
+    expect(instance.StartError).toBe("The copilot isn't ready yet.");
+    const failedCreateAlert = query(fixture, '[data-testid="studio-start-error"]');
+    expect(failedCreateAlert).not.toBeNull();
+    expect(failedCreateAlert!.textContent).toContain("The copilot isn't ready yet.");
+    expect(instance.IsStarting).toBe(false);
+    expect(instance.CanStartProduction).toBe(true);
+    expect(startBtn!.hasAttribute('disabled')).toBe(false);
 
     fixture.destroy();
     vi.restoreAllMocks();

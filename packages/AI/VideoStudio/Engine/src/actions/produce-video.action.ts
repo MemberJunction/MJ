@@ -66,6 +66,7 @@ export class ProduceVideoAction extends BaseAction {
             }
 
             const runner = new AgentRunner(params.Provider);
+            const apiKeys = this.resolveRuntimeAPIKeys(params);
             // Never set TrustReservedRunData: action inputs are caller- or model-authored.
             const runResult = await runner.RunAgent({
                 agent,
@@ -75,6 +76,7 @@ export class ProduceVideoAction extends BaseAction {
                 companyId: companyId ?? undefined,
                 contextUser: params.ContextUser,
                 provider: params.Provider,
+                ...(apiKeys ? { apiKeys } : {}),
                 CredentialScope: params.CredentialScope,
                 cancellationToken: params.AbortSignal,
                 ...this.callerRunBounds(params),
@@ -235,6 +237,44 @@ export class ProduceVideoAction extends BaseAction {
         this.setOutputParam(params, 'VideoFileIDs', videoFileIds);
         this.setOutputParam(params, 'PosterFileID', spec?.Output?.PosterFileID ?? null);
         this.setOutputParam(params, 'HumanReviewNotes', spec?.Review?.HumanReviewNotes ?? null);
+    }
+
+    private resolveRuntimeAPIKeys(params: RunActionParams): ExecuteAgentParams['apiKeys'] {
+        const resolver = params.RuntimeAPIKeyResolver;
+        if (!resolver) {
+            return undefined;
+        }
+        const driverClasses = new Set<string>([
+            'OpenAILLM',
+            'AzureLLM',
+            'OpenRouterLLM',
+            'AnthropicLLM',
+            'GeminiLLM',
+            'VertexLLM',
+            'CerebrasLLM',
+            'GroqLLM',
+            'ElevenLabsAudioGenerator',
+            'OpenAIAudioGenerator',
+            'BlackForestLabsVideoGenerator',
+            'GoogleVeoVideoGenerator',
+            'OpenAISoraVideoGenerator',
+            'RunwayVideoGenerator',
+            'LumaVideoGenerator',
+            'HeyGenVideoGenerator',
+        ]);
+        for (const mv of AIEngine.Instance.ModelVendors ?? []) {
+            if (mv.DriverClass) {
+                driverClasses.add(mv.DriverClass);
+            }
+        }
+        const keys: NonNullable<ExecuteAgentParams['apiKeys']> = [];
+        for (const driverClass of driverClasses) {
+            const apiKey = resolver(driverClass);
+            if (apiKey) {
+                keys.push({ driverClass, apiKey });
+            }
+        }
+        return keys.length > 0 ? keys : undefined;
     }
 
     private callerRunBounds(

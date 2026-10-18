@@ -140,7 +140,7 @@ async function refusalOf(call: () => Promise<unknown>): Promise<string | null> {
 }
 
 /** ST8's fixture: a storage account (and, when no credential existed to reuse, the credential it points at). */
-interface AccountFixture {
+export interface AccountFixture {
     Account: MJFileStorageAccountEntity;
     CreatedCredential: MJCredentialEntity | null;
     Permissions: MJFileStorageAccountPermissionEntity[];
@@ -150,7 +150,7 @@ interface AccountFixture {
  * The credential a fixture account points at: an existing one when the deployment has any (it is never decrypted —
  * no driver call succeeds in this bundle), else a fresh fixture credential. Null (with the reason) when neither works.
  */
-async function fixtureCredential(ctx: IntegrationCheckContext): Promise<{ ID: string; Created: MJCredentialEntity | null } | string> {
+export async function FixtureCredential(ctx: IntegrationCheckContext): Promise<{ ID: string; Created: MJCredentialEntity | null } | string> {
     const existing = await new RunView().RunView<{ ID: string }>(
         { EntityName: 'MJ: Credentials', Fields: ['ID'], MaxRows: 1, ResultType: 'simple' }, ctx.User);
     if (existing.Success && existing.Results.length > 0) {
@@ -181,8 +181,8 @@ async function fixtureCredential(ctx: IntegrationCheckContext): Promise<{ ID: st
 }
 
 /** Creates ST8's fixture account on the AWS S3 provider, or returns why it could not. */
-async function createAccountFixture(ctx: IntegrationCheckContext, engine: FileStorageEngine): Promise<AccountFixture | string> {
-    const credential = await fixtureCredential(ctx);
+export async function CreateAccountFixture(ctx: IntegrationCheckContext, engine: FileStorageEngine): Promise<AccountFixture | string> {
+    const credential = await FixtureCredential(ctx);
     if (typeof credential === 'string') {
         return credential;
     }
@@ -552,7 +552,7 @@ export const StorageChecks: NamedCheck[] = [
                 console.warn('  ⚠ storage.ST8 SKIPPED — the context user has no role to restrict the fixture account to');
                 return;
             }
-            const fixture = await createAccountFixture(ctx, engine);
+            const fixture = await CreateAccountFixture(ctx, engine);
             if (typeof fixture === 'string') {
                 console.warn(`  ⚠ storage.ST8 NOTE — SKIPPED, no fixture storage account could be created: ${fixture}`);
                 return;
@@ -583,7 +583,7 @@ export const StorageChecks: NamedCheck[] = [
                     : 'the File Storage core actions are not in the action catalog'}`);
                 return;
             }
-            const fixture = await createAccountFixture(ctx, engine);
+            const fixture = await CreateAccountFixture(ctx, engine);
             if (typeof fixture === 'string') {
                 console.warn(`  ⚠ storage.ST9 NOTE — SKIPPED, no fixture storage account could be created: ${fixture}`);
                 return;

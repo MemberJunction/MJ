@@ -1,0 +1,12 @@
+{
+    "taskComplete": false,
+    "message": "Invoking Storyboard to design the beat timeline, state machine, and narration script.",
+    "nextStep": {
+        "type": "Sub-Agent",
+        "subAgent": {
+            "name": "Video Studio - Storyboard",
+            "message": "Build the contiguous beat timeline, state list, and narration script.",
+            "terminateAfter": false
+        }
+    }
+}

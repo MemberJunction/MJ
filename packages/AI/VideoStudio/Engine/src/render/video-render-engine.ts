@@ -94,10 +94,13 @@ export class VideoRenderEngine extends BaseSingleton<VideoRenderEngine> implemen
     /**
      * Overrides the active `VideoRenderDriverBase` instance (used by tests with `FakeRenderDriver`
      * or custom host applications). Passing `null` clears the current driver so the next `Driver`
-     * access re-resolves from settings.
+     * access re-resolves from settings. Returns the previously installed driver (or `null` if none
+     * was active) so test harnesses can restore it on teardown.
      */
-    public UseDriver(driver: VideoRenderDriverBase | null): void {
+    public UseDriver(driver: VideoRenderDriverBase | null): VideoRenderDriverBase | null {
+        const previous = this.driver;
         this.driver = driver;
+        return previous;
     }
 
     /**

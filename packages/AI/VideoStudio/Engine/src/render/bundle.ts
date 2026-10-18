@@ -75,7 +75,10 @@ export function FrameSizeFor(
  * Resolves the target deliverable aspect formats for `spec`, falling back to `spec.Film.Formats`
  * and finally `['16:9']` when neither list is populated.
  */
-export function ResolveDeliverableFormats(spec: Partial<VideoGenerationSpec>): VideoFormat[] {
+export function ResolveDeliverableFormats(
+    spec: Partial<VideoGenerationSpec>,
+    fallback: ReadonlyArray<VideoFormat> = ['16:9'],
+): VideoFormat[] {
     if (
         Array.isArray(spec.Deliverables?.Formats) &&
         spec.Deliverables.Formats.length > 0
@@ -85,7 +88,7 @@ export function ResolveDeliverableFormats(spec: Partial<VideoGenerationSpec>): V
     if (Array.isArray(spec.Film?.Formats) && spec.Film.Formats.length > 0) {
         return [...spec.Film.Formats];
     }
-    return ['16:9'];
+    return [...fallback];
 }
 
 

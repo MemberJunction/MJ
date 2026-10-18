@@ -22,6 +22,7 @@ import {
     type VideoGenerationSpec,
     type VideoProductionStatus,
 } from '@memberjunction/video-studio-core';
+import { ResolveDeliverableFormats } from './render/bundle.js';
 import type { VideoStudioSettings } from './settings.js';
 
 /**
@@ -33,19 +34,6 @@ export interface GateEvaluationContext {
     BrandKitInScope?: boolean;
     EffectiveInteractionMode?: VideoGenerationSpec['Interaction']['Mode'];
     InitialRoundCount?: number;
-}
-
-/**
- * Resolves the effective deliverable formats from `Deliverables.Formats` (falling back to `Film.Formats`).
- */
-function getDeliverableFormats(spec: Partial<VideoGenerationSpec>): VideoFormat[] {
-    if (Array.isArray(spec.Deliverables?.Formats) && spec.Deliverables.Formats.length > 0) {
-        return [...spec.Deliverables.Formats];
-    }
-    if (Array.isArray(spec.Film?.Formats) && spec.Film.Formats.length > 0) {
-        return [...spec.Film.Formats];
-    }
-    return [];
 }
 
 const CANONICAL_STAGE_SUFFIXES = [
@@ -103,7 +91,7 @@ function evaluateGateG1(
     ) {
         failedBriefReasons.push('Film.DurationSeconds must be > 0');
     }
-    const formats = getDeliverableFormats(spec);
+    const formats = ResolveDeliverableFormats(spec, []);
     if (formats.length === 0) {
         failedBriefReasons.push('Film.Formats / Deliverables.Formats must be non-empty');
     }
@@ -260,7 +248,7 @@ function evaluateGateG2(
     existingG2: GateRecord | undefined,
     now: string,
 ): GateRecord {
-    const formats = getDeliverableFormats(spec);
+    const formats = ResolveDeliverableFormats(spec, []);
     const normalizedRender =
         spec.Render && spec.Render.Renderer === 'HyperFrames' && spec.Render.RendererVersion === ''
             ? { ...spec.Render, RendererVersion: '0.0.0' }
@@ -292,9 +280,7 @@ function evaluateGateG2(
         ...(normalizedDeliverables ? { Deliverables: normalizedDeliverables } : {}),
     } as VideoGenerationSpec;
 
-    const storyboardValidation = ValidateVideoGenerationSpec(candidateSpec, 'Storyboarded', {
-        MaxGeneratedVideoSeconds: ctx.Settings.MaxGeneratedVideoSeconds,
-    });
+    const storyboardValidation = ValidateVideoGenerationSpec(candidateSpec, 'Storyboarded');
 
     if (storyboardValidation.Errors.length > 0) {
         return {
@@ -331,7 +317,7 @@ function evaluateGateG3(
     existingG3: GateRecord | undefined,
     now: string,
 ): GateRecord {
-    const formats = getDeliverableFormats(spec);
+    const formats = ResolveDeliverableFormats(spec, []);
     const hasContactSheetsForAllFormats =
         formats.length > 0 &&
         formats.every((fmt) => {
@@ -387,7 +373,7 @@ function evaluateGateG4(
     existingG4: GateRecord | undefined,
     now: string,
 ): GateRecord {
-    const formats = getDeliverableFormats(spec);
+    const formats = ResolveDeliverableFormats(spec, []);
     const hasVideos = hasRenderedVideosForAllFormats(spec, formats);
     const hasCurrentRound = hasCriticRoundOnOrAfterRender(spec);
 
@@ -604,7 +590,7 @@ function evaluateGateG6(
     spec: Partial<VideoGenerationSpec>,
     now: string,
 ): GateRecord {
-    const formats = getDeliverableFormats(spec);
+    const formats = ResolveDeliverableFormats(spec, []);
     const missing: string[] = [];
 
     if (!hasRenderedVideosForAllFormats(spec, formats)) {
@@ -747,7 +733,7 @@ export function DeriveStatus(
         return 'Approved';
     }
 
-    const formats = getDeliverableFormats(safeSpec);
+    const formats = ResolveDeliverableFormats(safeSpec, []);
     const isComposed =
         formats.length > 0 &&
         formats.every((fmt) => hasCompositionFiles(safeSpec.Output?.Source?.[fmt]));
@@ -827,7 +813,7 @@ export function CheckStagePrerequisite(
             typeof safeSpec.Film?.DurationSeconds === 'number' &&
             Number.isFinite(safeSpec.Film.DurationSeconds) &&
             safeSpec.Film.DurationSeconds > 0 &&
-            getDeliverableFormats(safeSpec).length > 0;
+            ResolveDeliverableFormats(safeSpec, []).length > 0;
 
         if (!hasBriefFields || g1?.Status !== 'Passed') {
             return `G1 (Facts): ${g1?.Notes || 'brief fields (OneSentence, Audience, DurationSeconds, Formats) must be valid before running ' + stage}`;
@@ -898,7 +884,7 @@ export function CheckStagePrerequisite(
         if (g2?.Status !== 'Passed') {
             return `G2 (Plan): ${g2?.Notes || 'storyboard not approved yet'}`;
         }
-        const formats = getDeliverableFormats(safeSpec);
+        const formats = ResolveDeliverableFormats(safeSpec, []);
         const missingFormats = formats.filter((fmt) => !hasCompositionFiles(safeSpec.Output?.Source?.[fmt]));
         if (formats.length === 0 || missingFormats.length > 0) {
             return `G3 (Stills): Output.Source is missing composition files for format(s): ${missingFormats.join(', ') || 'none'}`;
@@ -907,7 +893,7 @@ export function CheckStagePrerequisite(
     }
 
     if (stage === 'Critic') {
-        const formats = getDeliverableFormats(safeSpec);
+        const formats = ResolveDeliverableFormats(safeSpec, []);
         if (g3?.Status !== 'Passed') {
             return `G3 (Stills): ${g3?.Notes || 'still-frame gate G3 must pass before running Critic'}`;
         }
@@ -1079,7 +1065,7 @@ export function DescribeStoryboardForApproval(spec: Partial<VideoGenerationSpec>
     const safeSpec = spec ?? {};
     const oneSentence = safeSpec.Film?.OneSentence ?? '(not specified)';
     const duration = safeSpec.Film?.DurationSeconds ?? 0;
-    const formats = getDeliverableFormats(safeSpec);
+    const formats = ResolveDeliverableFormats(safeSpec, []);
     const beats = Array.isArray(safeSpec.Beats) ? safeSpec.Beats : [];
     const script = Array.isArray(safeSpec.Audio?.Narration?.Script) ? safeSpec.Audio.Narration.Script : [];
     const genRequests = Array.isArray(safeSpec.Assets?.Generate) ? safeSpec.Assets.Generate : [];
@@ -1136,7 +1122,7 @@ export function DescribeStoryboardForApproval(spec: Partial<VideoGenerationSpec>
 export function DescribeStageProgress(stageName: string, spec: Partial<VideoGenerationSpec>): string {
     const safeSpec = spec ?? {};
     const stage = normalizeStageName(stageName);
-    const formats = getDeliverableFormats(safeSpec);
+    const formats = ResolveDeliverableFormats(safeSpec, []);
     const formatCount = formats.length;
     const formatLabel = `${formatCount} ${formatCount === 1 ? 'format' : 'formats'}`;
 
@@ -1197,7 +1183,7 @@ export function RequestRegeneration(
     assetKey: string,
     maxRegenerations: number,
 ): { Spec: Partial<VideoGenerationSpec>; Allowed: boolean } {
-    const cloned: Partial<VideoGenerationSpec> = JSON.parse(JSON.stringify(spec ?? {}));
+    const cloned: Partial<VideoGenerationSpec> = structuredClone(spec ?? {});
     const trimmedKey = typeof assetKey === 'string' ? assetKey.trim() : '';
     if (!trimmedKey || typeof maxRegenerations !== 'number' || maxRegenerations <= 0) {
         return { Spec: cloned, Allowed: false };

@@ -115,6 +115,7 @@ export class FakeRenderDriver extends VideoRenderDriverBase {
     private readonly scriptedIssues: CheckIssue[];
     private readonly scriptedHealth?: RenderHealth;
     private readonly isNetworkIsolated: boolean;
+    public RenderCallCount = 0;
     public ShutdownCallCount = 0;
 
     public constructor(options: FakeRenderDriverOptions = {}) {
@@ -133,6 +134,7 @@ export class FakeRenderDriver extends VideoRenderDriverBase {
         onProgress?: (progress: RenderProgress) => void,
         signal?: AbortSignal,
     ): Promise<RenderResult> {
+        this.RenderCallCount++;
         ThrowIfSignalAborted(signal);
 
         const checkResult = await this.Check(

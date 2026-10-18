@@ -1489,6 +1489,17 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT151 - Video Studio Production",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "C2B68102-C882-4CD3-99FD-920E19FA980E"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT103 - RunQuery Rendering over GraphQL",
             "Sequence": 72,
             "Status": "Active"
@@ -1820,6 +1831,17 @@
           },
           "primaryKey": {
             "ID": "B3816AC6-B2DA-43DD-A091-34A51B833CF0"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT152 - Video Studio Live Smoke",
+            "Sequence": 16,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "D2944155-33FC-4CCF-9225-DA59DE5A1A61"
           }
         }
       ]

@@ -157,13 +157,6 @@ interface PromptRunCostRow {
     TotalCost?: number | null;
 }
 
-function cloneSpec<T>(value: T): T {
-    if (value === undefined || value === null) {
-        return {} as T;
-    }
-    return JSON.parse(JSON.stringify(value)) as T;
-}
-
 function detectImageMimeType(bytes: Buffer, fallbackMime?: string | null): string {
     const cleaned = (fallbackMime ?? '').trim().toLowerCase().split(';')[0].trim();
     if (cleaned.startsWith('image/')) {
@@ -832,7 +825,7 @@ export async function GenerateRequestedAssets(
     spec: VideoGenerationSpec,
     ctx: GenerateRequestedAssetsContext,
 ): Promise<GenerateRequestedAssetsResult> {
-    const workingSpec = cloneSpec(spec);
+    const workingSpec = structuredClone(spec ?? ({} as VideoGenerationSpec));
     const requests = Array.isArray(workingSpec.Assets?.Generate)
         ? workingSpec.Assets.Generate
         : [];

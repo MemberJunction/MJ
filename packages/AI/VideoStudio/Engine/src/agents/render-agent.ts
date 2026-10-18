@@ -37,13 +37,6 @@ function formatMegabytesOneDecimal(bytes: number): string {
     return (bytes / (1024 * 1024)).toFixed(1);
 }
 
-function cloneSpec<T>(value: T): T {
-    if (value === undefined || value === null) {
-        return {} as T;
-    }
-    return JSON.parse(JSON.stringify(value)) as T;
-}
-
 /**
  * Formats a {@link CheckIssue} as `[Category] Code: Message @ File:Line` (omitting `@ File:Line` when absent).
  */
@@ -81,7 +74,7 @@ export class VideoStudioRenderAgent extends BaseAgent {
         _config: AgentConfiguration,
     ): Promise<{ finalStep: BaseAgentNextStep<P>; stepCount: number }> {
         const incomingPayload = (params.payload ?? ({} as P)) as unknown as VideoGenerationSpec;
-        const workingSpec = cloneSpec(incomingPayload);
+        const workingSpec = structuredClone(incomingPayload);
         const contextUser = params.contextUser as UserInfo;
         const storageAccountId = this.ResolvedStorageAccountId ?? undefined;
         const configId = params.configurationId ?? this.AgentRun?.ConfigurationID ?? null;

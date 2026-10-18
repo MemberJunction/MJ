@@ -199,7 +199,7 @@ describe('VSCopilotPanelComponent DOM tests', () => {
     expect(chatStub.PendingArtifactVersionNumber).toBeNull();
   });
 
-  it('StartConversation resets to a new conversation, awaits OnEmptyStateMessageSent on the chat area, and returns true', async () => {
+  it('StartConversation resets to a new conversation, awaits OnEmptyStateMessageSent on the chat area, and returns this.ConversationId !== null', async () => {
     component.ConversationId = 'conv-existing-1';
     fixture.detectChanges();
     await fixture.whenStable();
@@ -209,9 +209,15 @@ describe('VSCopilotPanelComponent DOM tests', () => {
     const chatStub = chatDebugEl.componentInstance as ConversationChatAreaStubComponent;
     let resolveSend!: () => void;
     chatStub.OnEmptyStateMessageSent.mockImplementation(
-      () =>
+      ({ text }: { text: string }) =>
         new Promise<void>((resolve) => {
-          resolveSend = resolve;
+          resolveSend = () => {
+            chatStub.ConversationCreated.emit({
+              conversation: { ID: 'conv-started-101', Name: 'New Production' } as unknown as MJConversationEntity,
+              pendingMessage: text,
+            });
+            resolve();
+          };
         }),
     );
     expect(component.ChatIsNewConversation).toBe(false);
@@ -239,6 +245,15 @@ describe('VSCopilotPanelComponent DOM tests', () => {
     const started = await startPromise;
     expect(settled).toBe(true);
     expect(started).toBe(true);
+    expect(component.ConversationId).toBe('conv-started-101');
+
+    // When conversation creation fails (OnEmptyStateMessageSent resolves without emitting ConversationCreated), StartConversation returns false
+    chatStub.OnEmptyStateMessageSent.mockImplementation(async () => {
+      // Conversation creation failed inside chatArea -> no ConversationCreated emitted
+    });
+    const failedStart = await component.StartConversation(firstMsg);
+    expect(failedStart).toBe(false);
+    expect(component.ConversationId).toBeNull();
   });
 
   it('ConversationId setter flips ChatIsNewConversation both ways when updated after initial render', async () => {

@@ -1,3 +1,5 @@
+import { spawnSync } from 'node:child_process';
+import * as fssync from 'node:fs';
 import * as fs from 'node:fs/promises';
 import * as net from 'node:net';
 import * as path from 'node:path';
@@ -13,7 +15,31 @@ import { RunLintGate, RunStillsJob, StageRenderBundle } from '../index.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const GOLDEN_FONT_PATH = path.join(__dirname, 'fixtures', 'golden', 'Roboto-Regular.ttf');
-const RUN_RENDER_TESTS = process.env.VIDEO_STUDIO_RENDER_TESTS === '1';
+
+function checkCanRunRealRenderTests(): boolean {
+    if (process.env.VIDEO_STUDIO_RENDER_TESTS !== '1') {
+        console.info(
+            '[chart-kit.render.test] Skipping real-render suite: set VIDEO_STUDIO_RENDER_TESTS=1 to enable.',
+        );
+        return false;
+    }
+    const ffmpegRes = spawnSync('ffmpeg', ['-version'], { stdio: 'ignore' });
+    if (ffmpegRes.status !== 0) {
+        console.info(
+            '[chart-kit.render.test] Skipping real-render suite: ffmpeg binary not found on PATH.',
+        );
+        return false;
+    }
+    if (process.env.CHROME_PATH && !fssync.existsSync(process.env.CHROME_PATH)) {
+        console.info(
+            `[chart-kit.render.test] Skipping real-render suite: Chrome binary not found at CHROME_PATH (${process.env.CHROME_PATH}).`,
+        );
+        return false;
+    }
+    return true;
+}
+
+const RUN_RENDER_TESTS = checkCanRunRealRenderTests();
 
 async function buildGalleryBundle(): Promise<RenderProjectBundle> {
     const fontBytes = await fs.readFile(GOLDEN_FONT_PATH);

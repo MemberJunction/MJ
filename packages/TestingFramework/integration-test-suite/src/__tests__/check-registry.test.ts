@@ -82,6 +82,8 @@ import { AgentHandoffChecks } from '../checks/agent-handoff.checks';
 import { VideoDataSnapshotChecks } from '../checks/video-data-snapshot.checks';
 import { VideoGenerationCostChecks } from '../checks/video-generation-cost.checks';
 import { VideoStudioHandoffChecks } from '../checks/video-studio-handoff.checks';
+import { VideoStudioProductionChecks } from '../checks/video-studio-production.checks';
+import { VideoStudioLiveSmokeChecks } from '../checks/video-studio-live-smoke.checks';
 
 const makeCheck = (id: string): NamedCheck => ({ Id: id, Name: id, Fn: async () => { /* pass */ } });
 
@@ -216,6 +218,8 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['video-data-snapshot', VideoDataSnapshotChecks, 3], // VDS1-VDS3 CaptureDataSnapshot + LoadDataSnapshotValues RLS and permission enforcement per contextUser (IT135)
         ['video-generation-cost', VideoGenerationCostChecks, 2], // VGC1-VGC2 AIVideoRunner.RunGenerateVideo server-calculated Per Second cost and driver-reported cost preservation (IT136)
         ['video-studio-handoff', VideoStudioHandoffChecks, 3], // VSH1-VSH3 top-level transfer to shipped Video Studio agent, preset resolution (Standard/High), and conversation continuity (IT150)
+        ['video-studio-production', VideoStudioProductionChecks, 5], // VSP1-VSP5 end-to-end Video Studio production pipeline with fakes (IT151)
+        ['video-studio-live-smoke', VideoStudioLiveSmokeChecks, 1], // VSLS1 live Draft 15s Social Short smoke test (IT152)
     ];
 
     for (const [prefix, checks, expectedCount] of bundles) {
@@ -386,6 +390,8 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'video-data-snapshot': 3,
         'video-generation-cost': 2,
         'video-studio-handoff': 3,
+        'video-studio-live-smoke': 1,
+        'video-studio-production': 5,
         'view-execution': 12,
         'view-security': 4,
         'work-queue-runtime': 19,
@@ -413,7 +419,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(127);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(129);
     });
 });
 
@@ -732,6 +738,7 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'shipped-agents-live.SA2',
         'shipped-agents-live.SA3',
         'shipped-agents-live.SA4',
+        'video-studio-live-smoke.VSLS1',
     ];
 
     it('the mutation-gated (RequiresMutation) set is exactly the pinned snapshot', () => {

@@ -89,13 +89,6 @@ interface StoredArtifactVersionMetadataRow {
     Name?: string | null;
 }
 
-function cloneSpec<T>(value: T): T {
-    if (value === undefined || value === null) {
-        return {} as T;
-    }
-    return JSON.parse(JSON.stringify(value)) as T;
-}
-
 function mapMimeToExtension(rawMime: string | null | undefined): string | undefined {
     const normalized = (rawMime ?? '').trim().toLowerCase().split(';')[0].trim();
     if (!normalized) {
@@ -336,7 +329,7 @@ export class VideoStudioPreProductionAgent extends BaseAgent {
         _config: AgentConfiguration,
     ): Promise<{ finalStep: BaseAgentNextStep<P>; stepCount: number }> {
         const incomingPayload = (params.payload ?? ({} as P)) as unknown as VideoGenerationSpec;
-        const workingSpec = cloneSpec(incomingPayload);
+        const workingSpec = structuredClone(incomingPayload);
         const contextUser = params.contextUser as UserInfo;
         const storageAccountId = this.ResolvedStorageAccountId ?? undefined;
 
@@ -552,6 +545,8 @@ export class VideoStudioPreProductionAgent extends BaseAgent {
                 AgentID: params.agent?.ID,
                 AgentRunID: this.AgentRun?.ID,
                 CancellationToken: params.cancellationToken,
+                APIKeys: params.apiKeys,
+                CredentialScope: params.CredentialScope,
             });
 
             const hasNarrationFailure = narrationResult.Issues.some(

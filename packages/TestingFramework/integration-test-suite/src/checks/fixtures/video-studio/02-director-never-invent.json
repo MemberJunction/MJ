@@ -1,0 +1,38 @@
+{
+    "taskComplete": true,
+    "message": "Creative brief completed with a generation request that violates NeverInvent.",
+    "payloadChangeRequest": {
+        "newElements": {
+            "Archetype": {
+                "Name": "Topic Explainer"
+            },
+            "Film": {
+                "OneSentence": "In Q3, platform architecture unified metadata and agent execution.",
+                "Audience": "Engineering and product leadership",
+                "Purpose": "Explain unified platform execution",
+                "DurationSeconds": 18,
+                "Formats": [
+                    "16:9"
+                ],
+                "Language": "en-US"
+            },
+            "Assets": {
+                "Required": [],
+                "NeverInvent": [
+                    "real people"
+                ],
+                "Generate": [
+                    {
+                        "Key": "prohibited_clip",
+                        "Kind": "Video",
+                        "Prompt": "our CEO speaking to real people in the office",
+                        "Purpose": "Opening b-roll",
+                        "Format": "16:9",
+                        "DurationSeconds": 4
+                    }
+                ]
+            },
+            "DataBindings": []
+        }
+    }
+}
