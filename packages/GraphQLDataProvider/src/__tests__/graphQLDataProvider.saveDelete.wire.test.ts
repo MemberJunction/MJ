@@ -186,7 +186,7 @@ describe('GraphQLDataProvider Save/Delete wire behavior', () => {
     });
 
     describe('Save — update', () => {
-        it('builds an Update mutation and includes ONLY the primary key and dirty writable fields in input', async () => {
+        it('builds an Update mutation and includes ONLY the primary key and dirty writable fields in input and delta selection set', async () => {
             const entity = loadedCustomer();
             entity.Set('Name', 'New Name');
             GraphQLWire.EnqueueResponse(saveResponse('UpdateCRMCustomer', { ID: 'CUST-0001', Name: 'New Name' }));
@@ -196,9 +196,12 @@ describe('GraphQLDataProvider Save/Delete wire behavior', () => {
             const doc = GraphQLWire.LastRequest.document;
             expect(doc).toContain('mutation UpdateCRMCustomer ($input: UpdateCRMCustomerInput!)');
             expect(doc).toContain('UpdateCRMCustomer(input: $input)');
-            // The response selection set still requests ALL readable fields so finalizeSave refreshes the full entity
-            for (const expected of ['ID', 'Name', 'First_Name', 'Tier', 'IsActive', 'Age', 'SignedUpAt', 'Photo', '_mj__CreatedAt', '_mj__UpdatedAt']) {
+            // Delta response selection set requests ONLY PK, dirty fields, and datestamps
+            for (const expected of ['ID', 'Name', '_mj__CreatedAt', '_mj__UpdatedAt']) {
                 expect(doc).toContain(expected);
+            }
+            for (const omitted of ['First_Name', 'Tier', 'IsActive', 'Age', 'SignedUpAt', 'Photo']) {
+                expect(doc).not.toContain(omitted);
             }
 
             const input = lastInputRecord();
@@ -259,7 +262,7 @@ describe('GraphQLDataProvider Save/Delete wire behavior', () => {
             expect(keys).not.toContain('_mj__UpdatedAt');
         });
 
-        it('20-field entity update: modifying 1 field sends ONLY PK + that 1 field in vars.input and OldValues___', async () => {
+        it('20-field entity update: modifying 1 field sends ONLY PK + that 1 field in vars.input, OldValues___, and selection set', async () => {
             const entityId = 'A1B2C3D4-0000-4000-8000-000000000020';
             const twentyFields = [
                 {
@@ -356,9 +359,16 @@ describe('GraphQLDataProvider Save/Delete wire behavior', () => {
 
             // Modify ONLY Description
             wideEntity.Set('Description', 'Updated description');
-            GraphQLWire.EnqueueResponse(saveResponse('UpdateCRMWideRecord', { ID: 'WIDE-001', Description: 'Updated description' }));
+            const newUpdatedAt = new Date('2026-03-01T00:00:00Z');
+            GraphQLWire.EnqueueResponse(
+                saveResponse('UpdateCRMWideRecord', {
+                    ID: 'WIDE-001',
+                    Description: 'Updated description',
+                    _mj__UpdatedAt: newUpdatedAt.toISOString(),
+                })
+            );
 
-            await provider.Save(wideEntity, user, new EntitySaveOptions());
+            const savedValues = (await provider.Save(wideEntity, user, new EntitySaveOptions())) as Record<string, unknown>;
 
             const input = lastInputRecord();
             expect(Object.keys(input).sort()).toEqual(['Description', 'ID', 'OldValues___']);
@@ -369,16 +379,212 @@ describe('GraphQLDataProvider Save/Delete wire behavior', () => {
                 { Key: 'Description', Value: 'Initial description' },
             ]);
 
-            // Selection set still requests all 20 readable fields
+            // Selection set requests ONLY PK (ID), dirty field (Description), and datestamp (_mj__UpdatedAt)
             const doc = GraphQLWire.LastRequest.document;
-            for (let i = 3; i <= 18; i++) {
-                expect(doc).toContain(`Field${i}`);
-            }
-            expect(doc).toContain('OwnerName');
+            expect(doc).toContain('ID');
+            expect(doc).toContain('Description');
             expect(doc).toContain('_mj__UpdatedAt');
+            for (let i = 3; i <= 18; i++) {
+                expect(doc).not.toContain(`Field${i}`);
+            }
+            expect(doc).not.toContain('OwnerName');
+
+            // And Save() merges the delta response onto wideEntity.GetAll() so all 17 clean loaded fields remain present
+            expect(savedValues['ID']).toBe('WIDE-001');
+            expect(savedValues['Description']).toBe('Updated description');
+            expect(savedValues['OwnerName']).toBe('Alice');
+            for (let i = 3; i <= 18; i++) {
+                expect(savedValues[`Field${i}`]).toBe(`Value-${i}`);
+            }
         });
 
-        it('sends all loaded writable fields in input and OldValues___ when options.IgnoreDirtyState is true', async () => {
+        it('includes virtual fields in the Update selection set when a foreign key field is dirty', async () => {
+            const entityId = 'A1B2C3D4-0000-4000-8000-000000000021';
+            const fkEntityInfo = new EntityInfo({
+                ID: entityId,
+                Name: 'Products',
+                BaseTable: 'Product',
+                BaseView: 'vwProducts',
+                SchemaName: 'CRM',
+                Status: 'Active',
+                EntityFields: [
+                    {
+                        ID: `EF-${entityId}-1`,
+                        EntityID: entityId,
+                        Name: 'ID',
+                        Type: 'uniqueidentifier',
+                        IsPrimaryKey: true,
+                        AllowsNull: false,
+                        AllowUpdateAPI: false,
+                        AutoIncrement: false,
+                        IsVirtual: false,
+                        Sequence: 1,
+                        Status: 'Active',
+                    },
+                    {
+                        ID: `EF-${entityId}-2`,
+                        EntityID: entityId,
+                        Name: 'Name',
+                        Type: 'nvarchar',
+                        AllowsNull: false,
+                        AllowUpdateAPI: true,
+                        AutoIncrement: false,
+                        IsVirtual: false,
+                        Sequence: 2,
+                        Status: 'Active',
+                    },
+                    {
+                        ID: `EF-${entityId}-3`,
+                        EntityID: entityId,
+                        Name: 'CategoryID',
+                        Type: 'uniqueidentifier',
+                        AllowsNull: true,
+                        AllowUpdateAPI: true,
+                        AutoIncrement: false,
+                        IsVirtual: false,
+                        RelatedEntityID: 'CAT-ENTITY-ID',
+                        Sequence: 3,
+                        Status: 'Active',
+                    },
+                    {
+                        ID: `EF-${entityId}-4`,
+                        EntityID: entityId,
+                        Name: 'Category',
+                        Type: 'nvarchar',
+                        AllowsNull: true,
+                        AllowUpdateAPI: false,
+                        AutoIncrement: false,
+                        IsVirtual: true,
+                        Sequence: 4,
+                        Status: 'Active',
+                    },
+                    {
+                        ID: `EF-${entityId}-5`,
+                        EntityID: entityId,
+                        Name: '__mj_UpdatedAt',
+                        Type: 'datetimeoffset',
+                        AllowsNull: false,
+                        AllowUpdateAPI: false,
+                        AutoIncrement: false,
+                        IsVirtual: false,
+                        Sequence: 5,
+                        Status: 'Active',
+                    },
+                ],
+            });
+            provider.RegisterTestEntity(fkEntityInfo);
+
+            const product = new TestCustomerEntity(fkEntityInfo, provider);
+            product.LoadFromData({
+                ID: 'PROD-1',
+                Name: 'Widget',
+                CategoryID: 'CAT-OLD',
+                Category: 'Hardware',
+                __mj_UpdatedAt: UPDATED_AT,
+            });
+
+            // Dirty the foreign key CategoryID
+            product.Set('CategoryID', 'CAT-NEW');
+            GraphQLWire.EnqueueResponse(
+                saveResponse('UpdateCRMProduct', {
+                    ID: 'PROD-1',
+                    CategoryID: 'CAT-NEW',
+                    Category: 'Electronics',
+                    _mj__UpdatedAt: UPDATED_AT.toISOString(),
+                })
+            );
+
+            const savedValues = (await provider.Save(product, user, new EntitySaveOptions())) as Record<string, unknown>;
+
+            const doc = GraphQLWire.LastRequest.document;
+            // Selection set includes PK, dirty FK (CategoryID), virtual joined display field (Category), and datestamp
+            expect(doc).toContain('ID');
+            expect(doc).toContain('CategoryID');
+            expect(doc).toContain('Category');
+            expect(doc).toContain('_mj__UpdatedAt');
+            // Clean scalar field Name is still omitted from the selection set
+            expect(doc).not.toContain('\n                    Name\n');
+
+            // Merged return values have refreshed Category AND preserved clean Name
+            expect(savedValues['CategoryID']).toBe('CAT-NEW');
+            expect(savedValues['Category']).toBe('Electronics');
+            expect(savedValues['Name']).toBe('Widget');
+        });
+
+        it('preserves NotLoaded === true on unloaded fields while keeping clean loaded fields NotLoaded === false after delta Update', async () => {
+            class PermissiveCustomerEntity extends TestCustomerEntity {
+                public override CheckPermissions(): boolean {
+                    return true;
+                }
+            }
+            const entity = new PermissiveCustomerEntity(BuildCustomerEntityInfo(), provider);
+            entity.ContextCurrentUser = user;
+            // Partial load: Photo and Age are omitted from the source, so they start NotLoaded === true
+            entity.LoadFromData({
+                ID: 'CUST-0001',
+                Name: 'Old Name',
+                'First Name': 'Ada',
+                Tier: 'Gold',
+                IsActive: true,
+                SignedUpAt: new Date(SIGNED_UP_AT_MS),
+                __mj_CreatedAt: CREATED_AT,
+                __mj_UpdatedAt: UPDATED_AT,
+            });
+            expect(entity.GetFieldByName('Photo').NotLoaded).toBe(true);
+            expect(entity.GetFieldByName('Age').NotLoaded).toBe(true);
+            expect(entity.GetFieldByName('Tier').NotLoaded).toBe(false);
+
+            entity.Set('Name', 'Updated Name');
+            GraphQLWire.EnqueueResponse(
+                saveResponse('UpdateCRMCustomer', {
+                    ID: 'CUST-0001',
+                    Name: 'Updated Name',
+                    _mj__CreatedAt: CREATED_AT.toISOString(),
+                    _mj__UpdatedAt: new Date('2026-03-01T00:00:00Z').toISOString(),
+                })
+            );
+
+            const saved = await entity.Save();
+            expect(saved).toBe(true);
+            expect(entity.Get('Name')).toBe('Updated Name');
+            expect(entity.Get('Tier')).toBe('Gold');
+            expect(entity.Get('First Name')).toBe('Ada');
+            expect(entity.GetFieldByName('Tier').NotLoaded).toBe(false);
+            expect(entity.GetFieldByName('First Name').NotLoaded).toBe(false);
+            expect(entity.GetFieldByName('Photo').NotLoaded).toBe(true);
+            expect(entity.GetFieldByName('Age').NotLoaded).toBe(true);
+        });
+
+        it('requests ONLY PK and datestamps when SaveReturnMode is datestamps_only', async () => {
+            const entity = loadedCustomer();
+            entity.Set('Name', 'Datestamps Only Update');
+            const newUpdatedAt = new Date('2026-03-05T00:00:00Z');
+            GraphQLWire.EnqueueResponse(
+                saveResponse('UpdateCRMCustomer', {
+                    ID: 'CUST-0001',
+                    _mj__CreatedAt: CREATED_AT.toISOString(),
+                    _mj__UpdatedAt: newUpdatedAt.toISOString(),
+                })
+            );
+
+            const options = new EntitySaveOptions();
+            options.SaveReturnMode = 'datestamps_only';
+            const savedValues = (await provider.Save(entity, user, options)) as Record<string, unknown>;
+
+            const doc = GraphQLWire.LastRequest.document;
+            expect(doc).toContain('ID');
+            expect(doc).toContain('_mj__CreatedAt');
+            expect(doc).toContain('_mj__UpdatedAt');
+            // Even the dirty field Name is omitted from the selection set in datestamps_only mode
+            expect(doc).not.toContain('\n                    Name\n');
+            expect(doc).not.toContain('Tier');
+
+            // Merged return values retain caller-set Name and clean Tier alongside updated timestamps
+            expect(savedValues['Name']).toBe('Datestamps Only Update');
+            expect(savedValues['Tier']).toBe('Gold');
+        });
+
+        it('sends all loaded writable fields in input and OldValues___ and requests all readable fields when options.IgnoreDirtyState is true', async () => {
             const entity = loadedCustomer();
             entity.Set('Name', 'New Name');
             GraphQLWire.EnqueueResponse(saveResponse('UpdateCRMCustomer', { ID: 'CUST-0001', Name: 'New Name' }));
@@ -386,6 +592,11 @@ describe('GraphQLDataProvider Save/Delete wire behavior', () => {
             const options = new EntitySaveOptions();
             options.IgnoreDirtyState = true;
             await provider.Save(entity, user, options);
+
+            const doc = GraphQLWire.LastRequest.document;
+            for (const expected of ['ID', 'Name', 'First_Name', 'Tier', 'IsActive', 'Age', 'SignedUpAt', 'Photo', '_mj__CreatedAt', '_mj__UpdatedAt']) {
+                expect(doc).toContain(expected);
+            }
 
             const input = lastInputRecord();
             expect(Object.keys(input).sort()).toEqual([
