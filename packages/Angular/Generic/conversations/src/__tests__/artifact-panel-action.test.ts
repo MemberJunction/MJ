@@ -4,6 +4,8 @@ import { Subject } from 'rxjs';
 import { DecideArtifactPanelAction, SnapshotArtifactVersions } from '../lib/utils/artifact-panel-action';
 import { ConversationChatAreaComponent } from '../lib/components/conversation/conversation-chat-area.component';
 import { MAIN_OPEN_VIEW } from '../lib/utils/conversation-forks';
+import { LazyArtifactInfo } from '../lib/models/lazy-artifact-info';
+import { UserInfo } from '@memberjunction/core';
 
 /**
  * #529: with the panel open on artifact A, a NEW artifact B must open (build), a bumped version
@@ -219,6 +221,33 @@ describe('ConversationChatAreaComponent artifact auto-open across resetComponent
     return { component, open };
   }
 
+  function makeLazyArtifact(params: {
+    conversationDetailId: string;
+    artifactId: string;
+    versionId: string;
+    versionNumber: number;
+    name: string;
+    type: string;
+    visibility: string;
+    direction: string;
+    versionCreatedAt?: string;
+  }): LazyArtifactInfo {
+    return new LazyArtifactInfo(
+      {
+        ConversationDetailID: params.conversationDetailId,
+        ArtifactID: params.artifactId,
+        ArtifactVersionID: params.versionId,
+        VersionNumber: params.versionNumber,
+        ArtifactName: params.name,
+        ArtifactType: params.type,
+        Visibility: params.visibility,
+        Direction: params.direction,
+        VersionCreatedAt: params.versionCreatedAt ?? '2026-10-18T12:00:00Z',
+      },
+      new UserInfo()
+    );
+  }
+
   it('auto-opens a newly created artifact on OnAgentResponse even after resetComponentState zeroes lastLoadedConversationId', async () => {
     const { component, open } = createChatAreaHarness('CONV-1');
 
@@ -244,7 +273,7 @@ describe('ConversationChatAreaComponent artifact auto-open across resetComponent
     // 3. Agent responds and reloadArtifactsForMessage populates the new artifact
     open['reloadArtifactsForMessage'] = vi.fn(async () => {
       component.ArtifactsByDetailId.set('DETAIL-2', [
-        {
+        makeLazyArtifact({
           conversationDetailId: 'DETAIL-2',
           artifactId: 'ART-NEW-1',
           versionId: 'VER-1',
@@ -253,8 +282,8 @@ describe('ConversationChatAreaComponent artifact auto-open across resetComponent
           type: 'Markdown',
           visibility: 'Always',
           direction: 'Output',
-          versionCreatedAt: new Date('2026-10-18T12:00:00Z'),
-        },
+          versionCreatedAt: '2026-10-18T12:00:00Z',
+        }),
       ]);
     });
 
@@ -295,7 +324,7 @@ describe('ConversationChatAreaComponent artifact auto-open across resetComponent
     // Agent finishes and emits ArtifactCreated
     open['reloadArtifactsForMessage'] = vi.fn(async () => {
       component.ArtifactsByDetailId.set('DETAIL-3', [
-        {
+        makeLazyArtifact({
           conversationDetailId: 'DETAIL-3',
           artifactId: 'ART-NEW-2',
           versionId: 'VER-1',
@@ -304,8 +333,8 @@ describe('ConversationChatAreaComponent artifact auto-open across resetComponent
           type: 'Component',
           visibility: 'Always',
           direction: 'Output',
-          versionCreatedAt: new Date('2026-10-18T12:05:00Z'),
-        },
+          versionCreatedAt: '2026-10-18T12:05:00Z',
+        }),
       ]);
     });
 
@@ -328,7 +357,7 @@ describe('ConversationChatAreaComponent artifact auto-open across resetComponent
 
     // Load CONV-1 with an artifact
     component.ArtifactsByDetailId.set('DETAIL-1', [
-      {
+      makeLazyArtifact({
         conversationDetailId: 'DETAIL-1',
         artifactId: 'ART-CONV-1',
         versionId: 'VER-1',
@@ -337,7 +366,7 @@ describe('ConversationChatAreaComponent artifact auto-open across resetComponent
         type: 'Markdown',
         visibility: 'Always',
         direction: 'Output',
-      },
+      }),
     ]);
     open['artifactMapConversationId'] = 'CONV-1';
 
@@ -348,7 +377,7 @@ describe('ConversationChatAreaComponent artifact auto-open across resetComponent
     // Now CONV-2's historical artifact arrives in the map
     component.ArtifactsByDetailId.clear();
     component.ArtifactsByDetailId.set('DETAIL-99', [
-      {
+      makeLazyArtifact({
         conversationDetailId: 'DETAIL-99',
         artifactId: 'ART-CONV-2-HISTORICAL',
         versionId: 'VER-99',
@@ -357,7 +386,7 @@ describe('ConversationChatAreaComponent artifact auto-open across resetComponent
         type: 'Markdown',
         visibility: 'Always',
         direction: 'Output',
-      },
+      }),
     ]);
     open['artifactMapConversationId'] = 'CONV-2';
 
