@@ -140,6 +140,7 @@ export class Introspector {
           isForeignKey: col.isForeignKey,
           checkConstraint: col.checkConstraint,
           defaultValue: col.defaultValue,
+          maxLength: col.maxLength,
           descriptionIterations: []
         }));
 

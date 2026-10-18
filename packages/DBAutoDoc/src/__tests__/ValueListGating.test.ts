@@ -1,4 +1,8 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+import { Introspector } from '../database/Database.js';
+import { BaseAutoDocDriver } from '../drivers/BaseAutoDocDriver.js';
+import { SQLServerDriver } from '../drivers/SQLServerDriver.js';
+import { AutoDocColumn, AutoDocSchema } from '../types/driver.js';
 import { EnumCandidateGate } from '../discovery/EnumCandidateGate.js';
 import { AdditionalSchemaInfoGenerator } from '../generators/AdditionalSchemaInfoGenerator.js';
 import { ColumnDefinition, ColumnStatistics, DatabaseDocumentation, TableDefinition, ValueListVerdict } from '../types/state.js';
@@ -151,5 +155,38 @@ describe('AnalysisEngine.persistEnumVerdicts', () => {
       columns: [column('Status', ['Active', 'Archived', 'Error'])] };
     engine.Persist(table, [result('Status', ['Active', 'Inactive', 'Archived'])]);
     expect(table.columns[0].valueListVerdict?.values).toEqual(['Active', 'Archived']);
+  });
+});
+
+describe('declared length (drivers report bare type names)', () => {
+  const gate = new EnumCandidateGate();
+
+  it('reads the length from maxLength when the type is a bare varchar', () => {
+    expect(gate.EvaluateColumn(column('Status', ['Active', 'Inactive', 'Pending'], { dataType: 'varchar', maxLength: 20 }), 1000)).not.toBeNull();
+    expect(gate.EvaluateColumn(column('Status', ['Active', 'Inactive', 'Pending'], { dataType: 'nvarchar', maxLength: 20 }), 1000)).not.toBeNull();
+  });
+
+  it('still rejects a bare varchar with no known length (unbounded) or one longer than the limit', () => {
+    expect(gate.EvaluateColumn(column('Status', ['Active', 'Inactive'], { dataType: 'varchar' }), 1000)).toBeNull();
+    expect(gate.EvaluateColumn(column('Status', ['Active', 'Inactive'], { dataType: 'nvarchar', maxLength: 500 }), 1000)).toBeNull();
+  });
+
+  it('Introspector keeps the driver\'s maxLength on the column', async () => {
+    const schemas: AutoDocSchema[] = [{ name: 'app', tables: [{ schemaName: 'app', tableName: 'customer', rowCount: 1, primaryKeys: [], foreignKeys: [],
+      columns: [{ name: 'cst_status', dataType: 'varchar', isNullable: false, isPrimaryKey: false, isForeignKey: false, maxLength: 20 }] }] }];
+    const driver = { getSchemas: async () => schemas } as Partial<BaseAutoDocDriver> as BaseAutoDocDriver;
+    const result = await new Introspector(driver).GetSchemas({}, {});
+    expect(result[0].tables[0].columns[0].maxLength).toBe(20);
+  });
+
+  it('SQL Server reports nchar/nvarchar length in characters, not bytes', async () => {
+    class ColumnsOnly extends SQLServerDriver {
+      public Columns(): Promise<AutoDocColumn[]> { return this.getColumns('dbo', 't'); }
+    }
+    const driver = new ColumnsOnly({ provider: 'sqlserver', host: 'x', database: 'x', user: 'u', password: 'p' });
+    const row = (column_name: string, data_type: string, max_length: number) =>
+      ({ column_name, data_type, max_length, is_nullable: true, precision: 0, scale: 0, is_primary_key: false, is_foreign_key: false });
+    vi.spyOn(driver, 'executeQuery').mockResolvedValue({ success: true, data: [row('a', 'nvarchar', 40), row('b', 'varchar', 40), row('c', 'nvarchar', -1), row('d', 'nchar', 10)] });
+    expect((await driver.Columns()).map(c => c.maxLength)).toEqual([20, 40, undefined, 5]);
   });
 });

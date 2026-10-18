@@ -112,7 +112,7 @@ export class EnumCandidateGate {
     tableRowCount: number
   ): EnumCandidateContext | null {
     if (!this.passesDataTypeGate(column.dataType)) return null;
-    if (!this.passesColumnLengthGate(column.dataType)) return null;
+    if (!this.passesColumnLengthGate(column)) return null;
     if (!this.passesNameExclusionGate(column.name)) return null;
     if (!this.passesKeyGate(column)) return null;
     if (!this.passesPatternGate(column.statistics)) return null;
@@ -134,7 +134,7 @@ export class EnumCandidateGate {
       totalRows: tableRowCount,
       cardinalityRatio: tableRowCount > 0 ? stats.distinctCount / tableRowCount : 1,
       dataType: column.dataType,
-      maxLength: this.parseDeclaredLength(column.dataType) ?? undefined,
+      maxLength: this.declaredLength(column) ?? undefined,
     };
   }
 
@@ -178,10 +178,15 @@ export class EnumCandidateGate {
   /**
    * Gate: declared column length must be ≤ maxColumnLength.
    * Unbounded text/varchar(max) is excluded.
+   *
+   * The drivers report the bare type name (`varchar`, `nvarchar`) with the length in
+   * `column.maxLength`, so the length comes from there when the type string carries none.
+   * Reading only the type string made every varchar/nvarchar column look unbounded, so no
+   * string column was ever a candidate.
    */
-  private passesColumnLengthGate(dataType: string): boolean {
-    const baseType = this.parseBaseType(dataType);
-    const length = this.parseDeclaredLength(dataType);
+  private passesColumnLengthGate(column: ColumnDefinition): boolean {
+    const baseType = this.parseBaseType(column.dataType);
+    const length = this.declaredLength(column);
 
     // Unbounded text type — exclude
     if (baseType === 'text' && length === null) return false;
@@ -256,6 +261,11 @@ export class EnumCandidateGate {
     // Remove parenthetical (length/precision)
     const base = dataType.replace(/\(.*\)/, '').trim().toLowerCase();
     return base;
+  }
+
+  /** The declared length: from the type string when it carries one, else from the driver's maxLength. */
+  private declaredLength(column: ColumnDefinition): number | null {
+    return this.parseDeclaredLength(column.dataType) ?? column.maxLength ?? null;
   }
 
   /**
