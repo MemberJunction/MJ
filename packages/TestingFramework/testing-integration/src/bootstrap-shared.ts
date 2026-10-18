@@ -199,7 +199,10 @@ export async function InstallInstrumentedCacheFirst(opts: { VerboseCacheLogging?
         return null;
     }
     const storage = new InstrumentedLocalStorageProvider(new InMemoryLocalStorageProvider());
-    await LocalCacheManager.Instance.Initialize(storage, { verboseLogging: opts.VerboseCacheLogging ?? false });
+    await LocalCacheManager.Instance.Initialize(storage, {
+        verboseLogging: opts.VerboseCacheLogging ?? false,
+        maxSizeBytes: 512 * 1024 * 1024
+    });
     activeStorage = storage;
     return storage;
 }

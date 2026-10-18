@@ -1,7 +1,7 @@
 import { Arg, Ctx, Field, InputType, Int, Mutation, ObjectType, registerEnumType } from 'type-graphql';
 import { AppContext } from '../types.js';
-import { CompositeKey, IMetadataProvider, KeyValuePair, LogError, Metadata, TransactionVariable, TransactionGroupBase, BaseEntity, EntityDeleteOptions, EntitySaveOptions } from '@memberjunction/core';
-import { SafeJSONParse } from '@memberjunction/global';
+import { CompositeKey, EntityInfo, IMetadataProvider, KeyValuePair, LogError, Metadata, TransactionVariable, TransactionGroupBase, BaseEntity, EntityDeleteOptions, EntitySaveOptions } from '@memberjunction/core';
+import { SafeJSONParse, ValuesEqual } from '@memberjunction/global';
 import { GetReadWriteProvider } from '../util.js';
 import { ResolverBase } from '../generic/ResolverBase.js';
 
@@ -142,6 +142,7 @@ export class TransactionResolver extends ResolverBase {
             // rows were all refused arrive at Submit() empty, take its legitimate "nothing to do"
             // branch, and report success for writes that never happened.
             const refusals: string[] = [];
+            const preUpdateValues = new Map<number, Record<string, unknown>>();
 
             // instantiate an entity object for every item first, so the group's variables are known
             // BEFORE any Save()/Delete() runs below: a 'Use' variable sets its field at Submit(), after
@@ -169,6 +170,11 @@ export class TransactionResolver extends ResolverBase {
                     case "Create":
                         if (item.OperationType === "Update") {
                             await entity.InnerLoad(pkey);
+                            if (typeof entity.GetDataObject === 'function') {
+                                preUpdateValues.set(index, await entity.GetDataObject());
+                            } else if (typeof entity.GetAll === 'function') {
+                                preUpdateValues.set(index, { ...(entity.GetAll() as Record<string, unknown>) });
+                            }
                         }
                         objectValues.push(itemValues);
                         entity.SetMany(itemValues, true);
@@ -215,17 +221,17 @@ export class TransactionResolver extends ResolverBase {
                     `TransactionResolver::ExecuteTransactionGroup --- ${refusals.length} of ${group.Items.length} ` +
                     `item(s) were refused, so the group was not submitted:\n${refusals.join('\n')}`
                 );
-                return await this.PrepareReturnValue(false, entityObjects, objectValues, group);
+                return await this.PrepareReturnValue(false, entityObjects, objectValues, group, preUpdateValues);
             }
 
             // after all that, we are ready to roll, so let's run the TG
             if (await tg.Submit()) {
                 // success!
-                return await this.PrepareReturnValue(true, entityObjects, objectValues, group);
+                return await this.PrepareReturnValue(true, entityObjects, objectValues, group, preUpdateValues);
             }
             else {
                 // failure, send back the results
-                return await this.PrepareReturnValue(false, entityObjects, objectValues, group);
+                return await this.PrepareReturnValue(false, entityObjects, objectValues, group, preUpdateValues);
             }
         } 
         catch (err) {
@@ -250,15 +256,32 @@ export class TransactionResolver extends ResolverBase {
         }
     }
 
-    protected async PrepareReturnValue(success: boolean, entityObjects: BaseEntity[], objectValues: any[], group: TransactionInputType): Promise<TransactionOutputType> {
+    protected async PrepareReturnValue(
+        success: boolean,
+        entityObjects: BaseEntity[],
+        objectValues: unknown[],
+        group: TransactionInputType,
+        preUpdateValues?: Map<number, Record<string, unknown>>
+    ): Promise<TransactionOutputType> {
         const jsonResults = [];
         for (let i = 0; i < group.Items.length; i++) {
             const item = group.Items[i];
-            if (item.OperationType==='Delete') {
+            if (item.OperationType === 'Delete') {
                 jsonResults.push(JSON.stringify(objectValues[i]));
             }
+            else if (item.OperationType === 'Update') {
+                jsonResults.push(
+                    await this.serializeUpdateReturnValue(
+                        entityObjects[i],
+                        objectValues[i],
+                        preUpdateValues?.get(i),
+                        group,
+                        i
+                    )
+                );
+            }
             else {
-                // create or update, return what is in the database
+                // create, return what is in the database
                 jsonResults.push(await entityObjects[i].GetDataObjectJSON());
             }
         }
@@ -269,6 +292,79 @@ export class TransactionResolver extends ResolverBase {
             ResultsJSON: jsonResults
         }
     }
- 
+
+    /**
+     * Serializes a delta return payload for an `Update` transaction group item containing:
+     * - Primary key fields
+     * - All keys sent by the client in `sentValues` (`objectValues[i]`)
+     * - Any `TransactionVariable` fields targeting this item
+     * - `__mj_CreatedAt` and `__mj_UpdatedAt`
+     * - Virtual fields when any foreign key field was in `sentValues`
+     * - Any field whose post-save value differs from its pre-update DB snapshot (`preSaveValues`),
+     *   capturing virtual fields, triggers, or server-side `BeforeSave()` mutations automatically
+     *   while omitting unchanged columns.
+     */
+    private async serializeUpdateReturnValue(
+        entity: BaseEntity,
+        sentValues: unknown,
+        preSaveValues: Record<string, unknown> | undefined,
+        group: TransactionInputType,
+        itemIndex: number
+    ): Promise<string> {
+        const fullDataObj: Record<string, unknown> | null = typeof entity.GetDataObject === 'function'
+            ? (await entity.GetDataObject() as Record<string, unknown>)
+            : SafeJSONParse<Record<string, unknown>>(await entity.GetDataObjectJSON());
+        if (!fullDataObj || typeof fullDataObj !== 'object' || !sentValues || typeof sentValues !== 'object') {
+            return await entity.GetDataObjectJSON();
+        }
+
+        const sentRecord = sentValues as Record<string, unknown>;
+        const includeKeys = new Set<string>([
+            EntityInfo.CreatedAtFieldName,
+            EntityInfo.UpdatedAtFieldName,
+        ]);
+
+        for (const pk of entity.PrimaryKeys ?? []) {
+            if (pk?.Name) {
+                includeKeys.add(pk.Name);
+            }
+        }
+        for (const key of Object.keys(sentRecord)) {
+            includeKeys.add(key);
+        }
+        for (const v of group.Variables ?? []) {
+            if (v.ItemIndex === itemIndex && v.FieldName) {
+                includeKeys.add(v.FieldName);
+            }
+        }
+        if (Array.isArray(entity.Fields)) {
+            const hasSentForeignKey = entity.Fields.some(
+                f => Boolean(f.EntityFieldInfo?.RelatedEntityID) &&
+                     (Object.prototype.hasOwnProperty.call(sentRecord, f.Name) ||
+                      Object.prototype.hasOwnProperty.call(sentRecord, f.CodeName))
+            );
+            for (const f of entity.Fields) {
+                if (f.EntityFieldInfo?.IsSpecialDateField || (hasSentForeignKey && f.EntityFieldInfo?.IsVirtual)) {
+                    includeKeys.add(f.Name);
+                }
+            }
+        }
+        if (preSaveValues) {
+            for (const key of Object.keys(fullDataObj)) {
+                if (!ValuesEqual(fullDataObj[key], preSaveValues[key])) {
+                    includeKeys.add(key);
+                }
+            }
+        }
+
+        const deltaObj: Record<string, unknown> = {};
+        for (const key of Object.keys(fullDataObj)) {
+            if (includeKeys.has(key)) {
+                deltaObj[key] = fullDataObj[key];
+            }
+        }
+        return JSON.stringify(deltaObj);
+    }
+
 }
  

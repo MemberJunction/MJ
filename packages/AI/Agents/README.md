@@ -443,6 +443,28 @@ const result = await runner.ExecuteAgent({
 });
 ```
 
+### With Post-Run Compaction, Scratchpad Pruning & Memory Extraction (`compactAfterRun`)
+
+Programmatic callers and multi-run workflows can opt into automatic post-run cleanup once an agent run settles via `ExecuteAgentParams.compactAfterRun`. When enabled (`true` or an `AgentPostRunCompactionConfig` object), `BaseAgent.finalizeAgentRun` executes a failure-isolated post-run compaction pass after pending step writes and the run record are saved:
+
+1. **Conversation Message Compaction** — When `params.conversationMessages.length >= messageCountThreshold` (default: `12`), older non-system messages (`[1 .. length - preserveRecentCount - 1]`) are compacted via `compactSingleMessage()` while preserving the initial user goal (`index 0`) and the most recent turns.
+2. **Scratchpad Pruning** — When the loop scratchpad contains more notes or completed tasks than `maxScratchpadNotes` (default: `20`), `ScratchpadManager.PruneNotes()` and `ScratchpadManager.EnforceTaskLimit()` prune the oldest low-priority note lines first (preserving `[HIGH]` / `[IMPORTANT]` / `[PINNED]` / `❗` / `⚠️` notes) and trim excess completed tasks.
+3. **Background Memory Extraction** — When `extractMemories !== false` and `agentRun.Success` is `true`, triggers background memory extraction (`triggerPostRunMemoryExtraction`) to harvest durable learnings from the completed run without blocking the caller.
+
+```typescript
+const result = await runner.ExecuteAgent({
+    agentId: 'my-agent-id',
+    conversationMessages: messages,
+    contextUser: currentUser,
+    compactAfterRun: {
+        enabled: true,
+        messageCountThreshold: 12,
+        extractMemories: true,
+        maxScratchpadNotes: 20
+    }
+});
+```
+
 ## Latency Optimizations & Concurrent Sub-Agent Execution
 
 To drastically reduce execution latency, the framework includes the following optimizations:
@@ -461,10 +483,10 @@ In-memory caching is integrated into `AIEngine.EmbedText` to bypass redundant lo
 `AgentDataPreloader.PreloadAgentData` resolves agent data sources concurrently with a bounded concurrency cap (default 10 in-flight at once) so a long list of sources can't saturate the DB connection pool.
 
 ### 3. Non-blocking Observability DB Logging
-Observability writes (`AIAgentRunStep` records) are completely non-blocking:
-* Step creation and finalization `.Save()` operations are queued immediately into `_pendingSaves` promises.
-* Sequenced queueing via `_stepSavePromises` chains saves on the *same* step ID to prevent database write races (e.g. executing a step `UPDATE` before its initial `INSERT` completes).
-* All pending logging writes are drained with `Promise.allSettled` inside `finalizeAgentRun()` and the queues are cleared, so a reused agent instance doesn't leak settled promises. Save failures (rejected promises OR `Save()===false`) are logged via `LogError` and a summary is folded into `agentRun.ErrorMessage` for visibility.
+Observability writes (`AIAgentRunStep` and `AIPromptRun` records) are non-blocking during step execution and settled at terminal boundaries:
+* **Per-entity and cross-step save chaining (`AgentRunStepSaveQueue`)**: Step creation (`createStepEntity`) and finalization (`finalizeStepEntity`) enqueue `INSERT` and `UPDATE` operations onto `_stepSaveQueue` without blocking the agent loop. Updates on a step are chained behind its initial `INSERT`, and child steps (`ParentID`) are chained behind their parent step's `INSERT`.
+* **In-flight `PayloadAtStartSourceStepID` FK ordering (`FK_AIAgentRunStep_PayloadAtStartSourceStep`)**: `findPayloadAtStartSource` matches the latest non-`Running` step with `PayloadAtEnd` even when that source step's initial `INSERT` is still in flight (`!sourceStep.IsSaved`), avoiding redundant multi-kilobyte `PayloadAtStart` clones on fast sequential steps. When the matched source step is not yet saved, `createStepEntity` chains the new step's `INSERT` after `[parentStepEntity, payloadAtStartSource]` and attaches a `beforeInsert` safety fallback that restores inline `PayloadAtStart` (and clears `PayloadAtStartSourceStepID = null`) if the source step's `INSERT` failed.
+* **Complete terminal settlement**: `_stepSaveQueue.Flush()` and `_promptRunner.FlushPendingSaves()` are awaited across all terminal paths — normal completion (`finalizeAgentRun`), failure (`createFailureResult`), cancellation (`createCancelledResult`), and post-turn conversation compaction (`recordCompactionRunStep`) — before the final `agentRun.Save()` executes, ensuring no orphaned or `Running` steps/prompt runs remain in Flight when `ExecuteAgent()` resolves. Save failures are logged via `LogError` and folded into `agentRun.ErrorMessage` for visibility.
 
 ### 4. Concurrent Sub-Agent Execution
 Loop agents can request multiple sub-agents to run in parallel by returning a `subAgents` array in their `nextStep` decision:
@@ -532,6 +554,36 @@ Long conversations no longer grow the agent's context without bound. Two coopera
 | Attempt budget | `ACTION_FAILURE_BUDGET` (5) consecutive failures, any arguments | Action disabled for the run |
 
 A success clears both counters. A blocked call returns a `CircuitBreakerActionResult` (carrying `Reason`) in ~0 ms without reaching the action engine, and the model receives a `[CRITICAL/ACTION_UNAVAILABLE | REPEATED_IDENTICAL_CALL | ATTEMPTS_EXHAUSTED]` directive as a user message (a `[WARNING/ACTION_FAILURE]` with an "attempt N of 5" counter otherwise). Argument identity is `normalizeActionParams` (three protected layers: outer → per-entry → recursive value). The pipeline registry and the ForEach / While operators pass `{ skipCircuitBreaker: true }` and bypass every rule, leaving the history untouched. Evidence and thresholds: [Performance and Cost Briefing §4](./docs/PROMPT_CACHE_PERFORMANCE_BRIEFING.md).
+
+## Root-Tree Cumulative Budget Guards (`AgentTreeBudget`)
+
+Per-agent entity guardrails (`MaxIterationsPerRun`, `MaxTokensPerRun`, `MaxCostPerRun`, `MaxTimePerRun`) bound each `AIAgentRun` in isolation, which cannot stop multiplicative fan-out when a parent agent delegates to sequential or parallel sub-agents (for example, a depth-3 tree where each agent stays under a 10-step limit can still execute hundreds of steps across the tree).
+
+`BaseAgent` enforces **root-tree cumulative budget guards** via a single shared `AgentTreeBudget` instance initialized at the root run and passed by object reference (`params.treeBudget`) to every child, related, parallel, and realtime-delegated sub-agent run:
+
+| Ceiling on `ExecuteAgentParams` / `AgentTreeBudget` | Shared Counter | Breach Message |
+|---|---|---|
+| `maxTreeSteps` | `totalSteps` (incremented on every `createStepEntity`) | `Agent tree step budget exceeded (${totalSteps}/${maxTreeSteps} total steps across tree)` |
+| `maxTreeTokens` | `totalTokens` (accumulated after every prompt, decision, and compaction run) | `Agent tree token budget exceeded (${totalTokens}/${maxTreeTokens} total tokens across tree)` |
+| `maxTreeCost` | `totalCost` (accumulated USD cost across all prompt runs in the tree) | `Agent tree cost budget exceeded ($${totalCost.toFixed(4)}/$${maxTreeCost.toFixed(4)} across tree)` |
+| `maxTreeDurationMs` | `Date.now() - startedAtMs` (wall-clock elapsed time since root run started) | `Agent tree duration budget exceeded (${elapsedMs}ms/${maxTreeDurationMs}ms across tree)` |
+
+When any ceiling is reached:
+1. `budget.breachedReason` is stamped on the shared `AgentTreeBudget` instance.
+2. `hasExceededAgentRunGuardrails()` and `executeNextStep()` immediately return a terminal `{ step: 'Failed', terminate: true }` decision with the breach reason.
+3. Any parent or parallel sibling sharing the `AgentTreeBudget` observes `breachedReason` as soon as its in-flight step settles and halts the tree cleanly.
+
+```typescript
+const result = await runner.RunAgent({
+    agent: orchestratorAgent,
+    conversationMessages: messages,
+    contextUser: currentUser,
+    maxTreeSteps: 25,
+    maxTreeTokens: 100_000,
+    maxTreeCost: 1.50,
+    maxTreeDurationMs: 120_000
+});
+```
 
 ## Documentation
 

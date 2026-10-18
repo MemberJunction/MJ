@@ -2101,6 +2101,44 @@ export function ToEpochMs(value: Date | string | number | null | undefined): num
 }
 
 /**
+ * Compares two values for equality, including cross-representation `Date` comparisons
+ * where one or both values may be `Date` instances, ISO date strings, or numeric epoch
+ * timestamps (e.g., comparing in-memory entity field values before and after database or
+ * JSON wire serialization).
+ *
+ * Returns `true` when:
+ * - `a === b` (strict identity for primitives and references)
+ * - Both `a` and `b` are `Date` instances with identical `.getTime()` epoch milliseconds
+ * - One side is a `Date` and the other is a `string` or `number` that parses to the same
+ *   epoch milliseconds as the `Date`
+ *
+ * @param a - First value to compare
+ * @param b - Second value to compare
+ * @returns `true` if the values are equal, `false` otherwise
+ *
+ * @example
+ * ```typescript
+ * ValuesEqual(42, 42); // true
+ * ValuesEqual(new Date('2026-08-01T00:00:00.000Z'), new Date('2026-08-01T00:00:00.000Z')); // true
+ * ValuesEqual(new Date('2026-08-01T00:00:00.000Z'), '2026-08-01T00:00:00.000Z'); // true
+ * ValuesEqual('a', 'b'); // false
+ * ```
+ */
+export function ValuesEqual(a: unknown, b: unknown): boolean {
+    if (a === b) return true;
+    if (a instanceof Date && b instanceof Date) {
+        return a.getTime() === b.getTime();
+    }
+    if (a instanceof Date && (typeof b === 'string' || typeof b === 'number')) {
+        return a.getTime() === new Date(b).getTime();
+    }
+    if (b instanceof Date && (typeof a === 'string' || typeof a === 'number')) {
+        return new Date(a).getTime() === b.getTime();
+    }
+    return false;
+}
+
+/**
  * Locale-independent total order on strings (UTF-16 code units). Use for every sort whose
  * result is EMITTED (generated code, SQL, file names, migration captures). Not for UI display —
  * users expect locale collation there. `localeCompare` without a locale argument follows the

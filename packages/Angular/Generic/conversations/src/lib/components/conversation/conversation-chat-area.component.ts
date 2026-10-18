@@ -389,6 +389,25 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   /**
+   * Host-level cap for starting conversation forks: Fork from here, and Edit or
+   * Regenerate as a fork. Defaults true (current behavior). Hosts with no forking
+   * experience set false; Edit and Regenerate then change the latest turn in place,
+   * as for a person without the `Conversations: Fork` authorization. UI only: deny
+   * that authorization to a role to stop the server creating forks as well.
+   */
+  @Input() AllowForking = true;
+
+  /**
+   * Host-level cap for stopping and continuing agent runs: the composer's Stop and Stop all, the
+   * Stop pill on an in-progress reply, the Continue button on a stopped reply, and the "Continue,
+   * or tell {agent} what to do differently" placeholder. Defaults true (current behavior). Hosts
+   * with no stop experience (a review surface, a space whose runs are managed elsewhere) set false
+   * without making the conversation read-only. UI only: a run stopped from another client still
+   * shows as stopped, and the next message still continues it.
+   */
+  @Input() public AllowStopRun = true;
+
+  /**
    * Whether the message list renders its built-in "No messages yet" filler
    * when a conversation has zero messages. Defaults true. Hosts that render
    * their own empty-state chrome around the chat area set false.
@@ -1279,13 +1298,6 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   @Output() afterToolInvoked = this.AfterToolInvoked;
 
   /** Cancelable — fired BEFORE a response form's submitted values are sent. */
-  /**
-   * Whether people may stop an in-progress agent run from its reply. Default true. A host can
-   * turn it off for a surface (a view-only review, a space whose runs are managed elsewhere)
-   * without making the conversation read-only.
-   */
-  @Input() public AllowStopRun = true;
-
   @Output() BeforeResponseFormSubmitted = new EventEmitter<BeforeResponseFormSubmittedEventArgs>();
 
   /**
@@ -5647,7 +5659,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     if (active && this.OpenView.Kind !== 'Main') {
       return FORK_COMPOSER_PLACEHOLDER;
     }
-    if (active && this.SendSlotMode === 'send') {
+    if (active && this.SendSlotMode === 'send' && this.AllowStopRun !== false) {
       const stoppedAgent = this.stoppedLastReplyAgent();
       if (stoppedAgent !== undefined) {
         return `Continue, or tell ${stoppedAgent ?? 'the agent'} what to do differently`;
@@ -6650,12 +6662,13 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   /**
-   * True when this person may start forks in the open conversation: holds `Conversations: Fork`, has not
-   * switched forking off in My Profile, and may write. When false, no fork action is offered and Edit and
-   * Regenerate change the latest turn in place.
+   * True when this person may start forks in the open conversation: the host allows forking
+   * ({@link AllowForking}), the person holds `Conversations: Fork`, has not switched forking off in My
+   * Profile, and may write. When false, no fork action is offered and Edit and Regenerate change the
+   * latest turn in place.
    */
   public get CanFork(): boolean {
-    return CanForkFrom({
+    return this.AllowForking !== false && CanForkFrom({
       HoldsAuthorization: UserHoldsAuthorization(this.CurrentUser, CONVERSATIONS_FORK_AUTHORIZATION, this.ProviderToUse),
       SettingValue: this.forkingSettingValue(),
       MayWrite: !this.EffectiveReadOnly,
