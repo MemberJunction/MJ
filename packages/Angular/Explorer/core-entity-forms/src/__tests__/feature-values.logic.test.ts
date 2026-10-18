@@ -44,11 +44,10 @@ describe('FeatureValuesPanelModel.HistoryValue', () => {
 });
 
 describe('FeatureValuesPanelModel.Latest', () => {
-    it('picks the newest valued row per pipeline+feature and skips valueless rows', () => {
+    it('picks the newest row per pipeline+feature', () => {
         const rows = [
             row({ ID: 'a', ValueNumeric: 1, ComputedAt: '2026-01-01T00:00:00Z' }),
             row({ ID: 'b', ValueNumeric: 2, ComputedAt: '2026-02-01T00:00:00Z' }),
-            row({ ID: 'c', ComputedAt: '2026-03-01T00:00:00Z' }),
             row({ ID: 'd', FeatureName: 'plan', ValueText: 'pro' }),
             row({ ID: 'e', RecordProcessID: 'p2', RecordProcess: 'Other', ValueNumeric: 9 }),
         ];
@@ -56,10 +55,38 @@ describe('FeatureValuesPanelModel.Latest', () => {
         expect(cards.map(c => c.RowID).sort()).toEqual(['b', 'd', 'e']);
         const b = cards.find(c => c.RowID === 'b')!;
         expect(b.DisplayValue).toBe('2');
+        expect(b.HasValue).toBe(true);
         expect(b.Pipeline).toBe('Churn Features');
         expect(b.PipelineVersion).toBe(1);
         expect(b.ComputedAt).toBeInstanceOf(Date);
         expect(new Set(cards.map(c => c.Key)).size).toBe(3);
+    });
+    it('lets a newer valueless row supersede an older value — the latest answer withheld it', () => {
+        // The exercise case: a bio once stated "2 years"; after it was edited the pipeline
+        // withheld YearsExperience on three later runs. Showing the stale 2 would be wrong.
+        const rows = [
+            row({ ID: 'old', ValueNumeric: 2, Confidence: 1, PipelineVersion: 1, ComputedAt: '2026-01-01T00:00:00Z', Reasoning: 'states 2 years' }),
+            row({ ID: 'withheld', Confidence: 0, PipelineVersion: 3, ComputedAt: '2026-03-01T00:00:00Z', Reasoning: 'no years stated' }),
+        ];
+        const cards = FeatureValuesPanelModel.Latest(rows);
+        expect(cards).toHaveLength(1);
+        expect(cards[0].RowID).toBe('withheld');
+        expect(cards[0].HasValue).toBe(false);
+        expect(cards[0].DisplayValue).toBe('no value');
+        expect(cards[0].PipelineVersion).toBe(3);
+        expect(cards[0].Confidence).toBe(0);
+        expect(cards[0].Reasoning).toBe('no years stated');
+        // The superseded value is still in the history.
+        expect(FeatureValuesPanelModel.History(rows, cards[0]).map(r => r.ID)).toEqual(['old']);
+    });
+    it('keeps a newer value over an older valueless row', () => {
+        const rows = [
+            row({ ID: 'withheld', ComputedAt: '2026-01-01T00:00:00Z' }),
+            row({ ID: 'valued', ValueText: 'gouda', ComputedAt: '2026-02-01T00:00:00Z' }),
+        ];
+        const cards = FeatureValuesPanelModel.Latest(rows);
+        expect(cards.map(c => c.RowID)).toEqual(['valued']);
+        expect(cards[0].HasValue).toBe(true);
     });
     it('returns no cards for no rows', () => {
         expect(FeatureValuesPanelModel.Latest([])).toEqual([]);

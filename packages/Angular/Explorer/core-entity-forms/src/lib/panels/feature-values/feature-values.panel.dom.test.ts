@@ -149,6 +149,22 @@ describe('FeatureValuesPanel (DOM)', () => {
     expect(items.map((i) => i.textContent?.trim())).toEqual(['no value']);
   });
 
+  it('shows a latest withheld answer as a muted "no value" card, with the older value in its history', async () => {
+    stubRunView([
+      fv({ ID: 'old', ValueNumeric: 2, PipelineVersion: 1, ComputedAt: '2026-01-01T00:00:00Z' }),
+      fv({ ID: 'withheld', Confidence: 0, PipelineVersion: 3, ComputedAt: '2026-03-01T00:00:00Z', Reasoning: 'no years stated' }),
+    ]);
+    const fixture = await render(saved);
+    const value = query(fixture, '.fvp-row .fvp-value') as HTMLElement;
+    expect(value.textContent?.trim()).toBe('no value');
+    expect(value.classList.contains('fvp-value--none')).toBe(true);
+    (query(fixture, '.fvp-toggle') as HTMLButtonElement).click();
+    fixture.detectChanges(false);
+    expect(query(fixture, '.fvp-reasoning')?.textContent).toContain('no years stated');
+    const items = queryAll(fixture, '.fvp-history-item .fvp-value');
+    expect(items.map((i) => i.textContent?.trim())).toEqual(['2']);
+  });
+
   it('drops an earlier load that answers after a later one', async () => {
     const answers: Array<(rows: FeatureValueRow[]) => void> = [];
     vi.spyOn(RunView.prototype, 'RunView').mockImplementation((() => new Promise<RunViewResult>((resolve) => {

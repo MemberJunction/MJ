@@ -1,6 +1,8 @@
 <!--
   Entity-agnostic Feature Values panel (read-only). Renders NOTHING unless at
-  least one pipeline has materialized a feature value for this record.
+  least one pipeline has answered for this record. A latest answer that withheld
+  the value reads "no value" — it supersedes any older value rather than letting
+  that value stand as if it were current.
 -->
 @if (Cards.length > 0) {
   <mj-collapsible-panel
@@ -31,7 +33,7 @@
         @for (card of Cards; track card.Key) {
           <tr class="fvp-row">
             <td class="fvp-feature">{{ card.FeatureName }}</td>
-            <td class="fvp-value">{{ card.DisplayValue }}</td>
+            <td class="fvp-value" [class.fvp-value--none]="!card.HasValue">{{ card.DisplayValue }}</td>
             <td>{{ card.Pipeline }}@if (card.PipelineVersion != null) { <span class="fvp-muted"> v{{ card.PipelineVersion }}</span> }</td>
             <td>{{ card.Source }}@if (card.Confidence != null) { <span class="fvp-muted"> ({{ card.Confidence }})</span> }</td>
             <td class="fvp-muted">{{ card.ComputedAt ? (card.ComputedAt | date: 'yyyy-MM-dd HH:mm') : '' }}</td>

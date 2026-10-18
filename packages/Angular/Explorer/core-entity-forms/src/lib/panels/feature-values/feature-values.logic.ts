@@ -29,7 +29,10 @@ export interface FeatureValueCard {
     Pipeline: string;
     RecordProcessID: string;
     FeatureName: string;
+    /** The value to show; "no value" when the pipeline's latest answer withheld or cleared the value. */
     DisplayValue: string;
+    /** False when the latest row is valueless (an abstention or a cleared value). */
+    HasValue: boolean;
     Source: string;
     Confidence: number | null;
     PipelineVersion: number | null;
@@ -75,7 +78,7 @@ export class FeatureValuesPanelModel {
         return '';
     }
 
-    /** A history row's display value; "no value" for a valueless row (an abstention or a cleared value). */
+    /** A row's display value; "no value" for a valueless row (an abstention or a cleared value). */
     public static HistoryValue(row: FeatureValueRow): string {
         return FeatureValuesPanelModel.hasValue(row) ? FeatureValuesPanelModel.DisplayValue(row) : 'no value';
     }
@@ -85,11 +88,16 @@ export class FeatureValuesPanelModel {
             || (row.ValueJSON != null && row.ValueJSON !== '') || row.ValueText != null;
     }
 
-    /** Newest valued row per (RecordProcessID, FeatureName); valueless rows are skipped. */
+    /**
+     * Newest row per (RecordProcessID, FeatureName), valued or not. A valueless row is the
+     * pipeline's latest answer too — it withheld (below its confidence floor, or the input no
+     * longer states the fact) or a person cleared the value — so it supersedes an older value
+     * rather than letting that value stand as if it were current. The card then reads
+     * "no value" and carries the row's reasoning and confidence.
+     */
     public static Latest(rows: FeatureValueRow[]): FeatureValueCard[] {
         const best = new Map<string, FeatureValueRow>();
         for (const row of rows) {
-            if (!FeatureValuesPanelModel.hasValue(row)) continue;
             const key = keyOf(row.RecordProcessID, row.FeatureName);
             const current = best.get(key);
             if (!current || time(row) > time(current)) best.set(key, row);
@@ -99,7 +107,8 @@ export class FeatureValuesPanelModel {
             Pipeline: row.RecordProcess ?? '',
             RecordProcessID: row.RecordProcessID,
             FeatureName: row.FeatureName,
-            DisplayValue: FeatureValuesPanelModel.DisplayValue(row),
+            DisplayValue: FeatureValuesPanelModel.HistoryValue(row),
+            HasValue: FeatureValuesPanelModel.hasValue(row),
             Source: row.Source,
             Confidence: row.Confidence,
             PipelineVersion: row.PipelineVersion,

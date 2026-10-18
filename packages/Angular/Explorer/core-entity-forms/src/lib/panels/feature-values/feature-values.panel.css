@@ -31,6 +31,13 @@
     font-weight: 400;
 }
 
+/* The latest answer withheld or cleared the value: read as absence, not as a value. */
+.fvp-value--none {
+    color: var(--mj-text-secondary);
+    font-weight: 400;
+    font-style: italic;
+}
+
 .fvp-toggle {
     background: transparent;
     border: 0;

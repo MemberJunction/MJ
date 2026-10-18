@@ -130,8 +130,9 @@ In the pipeline builder, choose the target mode `Feature value only (no write-ba
   (value, `Source='Pipeline'`, confidence, reasoning, pipeline version). A target-less output is stored there and nowhere else:
   nothing is written to the entity, and the Human-value guard does not apply. A pipeline whose outputs are all
   target-less still reports `Upserted` or `Unchanged` per record from those Feature Values.
-- **Visible:** the Feature Values panel on every record form (latest value per pipeline and feature, with Source,
-  Confidence, version, Computed, Reasoning and history), and the Bulk Operations dry-run dialog.
+- **Visible:** the Feature Values panel on every record form (the latest answer per pipeline and feature, with Source,
+  Confidence, version, Computed, Reasoning and history; a latest answer that withheld the value reads "no value" and
+  supersedes any older value), and the Bulk Operations dry-run dialog.
 - **Validator rules:** `ValidateSpec` accepts an output without `Target` but reports an error for the two constraints
   that need a field to resolve:
   - an `enum` constraint with `FromFieldMetadata: true` and no field target: list `Constraint.Values` or give the output a field target;
