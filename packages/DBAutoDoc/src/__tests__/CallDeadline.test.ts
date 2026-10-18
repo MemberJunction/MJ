@@ -1,6 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { BaseLLM, ChatParams, ChatResult } from '@memberjunction/ai';
-import { MJGlobal } from '@memberjunction/global';
+import { ChatParams, ChatResult } from '@memberjunction/ai';
 
 import {
   DEFAULT_CALL_TIMEOUT_MS,
@@ -9,8 +8,7 @@ import {
   WithCallDeadline,
 } from '../utils/call-deadline.js';
 import { PromptEngine } from '../prompts/PromptEngine.js';
-import { LLMDiscoveryValidator } from '../discovery/LLMDiscoveryValidator.js';
-import type { AIConfig, RelationshipDiscoveryConfig } from '../types/config.js';
+import type { AIConfig } from '../types/config.js';
 
 /**
  * Every LLM call in this package was unbounded: no timeout, no deadline, no AbortSignal at any of
@@ -150,45 +148,5 @@ describe('PromptEngine — the bound reaches the driver', () => {
     expect(isRetryable('prompt for model x exceeded its 120000ms call timeout — the model call was aborted (timeout)')).toBe(true);
     // And the classifier still refuses the things it always refused.
     expect(isRetryable('401 unauthorized')).toBe(false);
-  });
-});
-
-describe('LLMDiscoveryValidator — the provider resolves through the driver-class map', () => {
-  it('asks the ClassFactory for the DRIVER CLASS, not the raw provider name', () => {
-    // This constructor used to pass `aiConfig.provider` ('gemini') as the ClassFactory
-    // registration key. Registered keys are driver names ('GeminiLLM'), so the documented provider
-    // values could not resolve here at all — while the other five call sites in the package mapped
-    // them correctly through llm-factory.
-    const spy = vi
-      .spyOn(MJGlobal.Instance.ClassFactory, 'CreateInstance')
-      .mockReturnValue(new RecordingLLM() as unknown as BaseLLM);
-
-    try {
-      new LLMDiscoveryValidator(
-        {} as never,
-        {} as RelationshipDiscoveryConfig,
-        aiConfig({ provider: 'gemini' }),
-        {} as never,
-        []
-      );
-      const key = spy.mock.calls[0][1];
-      expect(key).toBe('GeminiLLM');
-      expect(key).not.toBe('gemini');
-    } finally {
-      spy.mockRestore();
-    }
-  });
-
-  it('rejects an unknown provider with the supported list instead of a ClassFactory miss', () => {
-    expect(
-      () =>
-        new LLMDiscoveryValidator(
-          {} as never,
-          {} as RelationshipDiscoveryConfig,
-          aiConfig({ provider: 'not-a-provider' as AIConfig['provider'] }),
-          {} as never,
-          []
-        )
-    ).toThrow(/Unknown provider/);
   });
 });

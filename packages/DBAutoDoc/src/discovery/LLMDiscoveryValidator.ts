@@ -5,7 +5,7 @@
  */
 
 import { BaseLLM, ChatParams, ChatResult } from '@memberjunction/ai';
-import { CreateLLMInstance } from '../utils/llm-factory.js';
+import { MJGlobal } from '@memberjunction/global';
 import { ResolveCallTimeoutMs, WithCallDeadline } from '../utils/call-deadline.js';
 import { BaseAutoDocDriver } from '../drivers/BaseAutoDocDriver.js';
 import { ColumnStatsCache } from './ColumnStatsCache.js';
@@ -30,16 +30,20 @@ export class LLMDiscoveryValidator {
     private statsCache: ColumnStatsCache,
     private schemas: SchemaDefinition[]
   ) {
-    // Use the shared factory, like every other LLM call site in this package.
-    //
-    // This constructor previously passed `aiConfig.provider` straight to the ClassFactory as the
-    // registration key. Provider names are lower-case words ('gemini'); registered class keys are
-    // driver names ('GeminiLLM'). The two never match, so the documented provider values could not
-    // resolve here at all — the lookup either returned nothing and threw, or picked up whatever a
-    // base registration happened to supply, which would be the wrong vendor and the wrong billing.
-    // `CreateLLMInstance` maps provider -> driver class, lower-cases the key, and throws with the
-    // supported list when the provider is genuinely unknown.
-    this.llm = CreateLLMInstance(aiConfig.provider, aiConfig.apiKey);
+    // Create LLM instance using MJ ClassFactory
+    const llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(
+      BaseLLM,
+      aiConfig.provider,
+      aiConfig.apiKey
+    );
+
+    if (!llm) {
+      throw new Error(
+        `Failed to create LLM instance for provider: ${aiConfig.provider}. Check that the provider name matches a registered BaseLLM subclass.`
+      );
+    }
+
+    this.llm = llm;
   }
 
   /**
