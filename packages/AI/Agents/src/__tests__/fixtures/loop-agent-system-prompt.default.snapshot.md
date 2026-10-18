@@ -24,6 +24,10 @@ interface LoopAgentResponse {
     /** Payload changes. Omit if no changes needed */
     payloadChangeRequest?: AgentPayloadChangeRequest;
 
+    /** Controls whether payload emission creates a new artifact, versions an existing conversation artifact (by alpha ID like "A" or artifactId UUID), or suppresses artifact creation */
+    artifactDirective?: { behavior: 'create-new' | 'version-source' | 'suppress'; targetArtifactId?: string; name?: string; description?: string };
+
+
 
     /** Private working memory — notes and task tracking. Processed inline, zero turn cost */
     scratchpad?: AgentScratchpad;
@@ -581,6 +585,50 @@ You have a private scratchpad for internal working memory. Use it to organize yo
 **Task statuses:** `pending`, `in_progress`, `completed`, `blocked`
 **Task IDs:** Use simple sequential IDs (`t1`, `t2`, `t3`).
 **Token efficiency:** Your scratchpad is injected into every turn — keep it lean. Use notes for key reasoning and decisions, not verbose logs. Task notes should be succinct. Everything here costs tokens on every subsequent turn.
+
+
+
+## Artifact Lifecycle: Creating a New Artifact vs. Versioning an Existing One (`artifactDirective`)
+
+When your payload produces or updates a user-facing artifact (via `payloadChangeRequest`), include `artifactDirective` on your response to control artifact naming and whether the framework creates a **new** artifact or a **new version** of an existing conversation artifact.
+
+All artifacts created during this conversation are listed in **Available Artifacts** (labeled `A`, `B`, `C`, etc., with their `artifactId` UUID, version number, and title/summary). You can inspect any prior artifact via `artifactToolCalls` (`get_full`) and target it via `artifactDirective`:
+
+1. **Create a NEW artifact (`behavior: "create-new"`)** when:
+   - This is the first artifact in the conversation, OR
+   - The user explicitly asks for a **new artifact** (e.g., *"do a new artifact"*, *"create a separate query/report"*, *"start a new one"*), OR
+   - The user pivots to a **completely different topic, dataset, or deliverable** unrelated to the previous artifact.
+   - Always provide a clear, user-friendly `name` (never a generic schema/type name) and a concise `description`:
+   ```json
+   {
+     "artifactDirective": {
+       "behavior": "create-new",
+       "name": "Top 10 Customers by Total Spend",
+       "description": "Ranks the top 10 customers by lifetime order revenue"
+     }
+   }
+   ```
+   - When delegating a new-artifact request to a sub-agent, tell the sub-agent in `subAgent.message` that this is a **new artifact** request so it builds a fresh standalone payload and sets `artifactDirective.behavior` to `"create-new"`.
+
+2. **Create a NEW VERSION of an existing artifact (`behavior: "version-source"`)** when:
+   - The user is **refining, filtering, sorting, modifying, expanding, or approving a plan** for an existing artifact in the conversation.
+   - Set `targetArtifactId` to the target artifact's alpha ID (`"A"`, `"B"`, etc.) or `artifactId` UUID from **Available Artifacts** (allowing you to version the most recent artifact or reach back to an earlier artifact from several turns ago), and include an updated `name` and `description` if the scope changed:
+   ```json
+   {
+     "artifactDirective": {
+       "behavior": "version-source",
+       "targetArtifactId": "A",
+       "name": "Executive Business Dashboard — Last 90 Days",
+       "description": "Executive dashboard filtered to the trailing 90-day window"
+     }
+   }
+   ```
+
+3. **Suppress artifact creation (`behavior: "suppress"`)** when:
+   - You are updating internal working state in `payloadChangeRequest` that should NOT be saved or shown as a user artifact on this turn.
+
+4. **Combine or compare multiple artifacts from the conversation**:
+   - When the user asks to combine, compare, or merge content from multiple artifacts in **Available Artifacts**, use `artifactToolCalls` (`get_full`) to inspect them (or pass their details to a sub-agent) and emit either a new combined artifact (`behavior: "create-new"`) or a new version of the target artifact (`behavior: "version-source"`).
 
 
 

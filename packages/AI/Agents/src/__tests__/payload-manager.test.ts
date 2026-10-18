@@ -369,6 +369,27 @@ describe('PayloadManager', () => {
             // No warning about reasoning being stray
             expect(result.warnings.every(w => !w.includes('reasoning'))).toBe(true);
         });
+
+        it('should unwrap LLM wrapper aliases like setFields into newElements/updateElements', () => {
+            const result = pm.applyAgentChangeRequest(
+                {} as Record<string, unknown>,
+                {
+                    setFields: {
+                        name: 'Migration Sequence Validator',
+                        description: 'Validates EntityField sequence numbers',
+                        skillMd: '---\nname: migration-sequence-validator\n---',
+                    },
+                } as Record<string, unknown>,
+                {
+                    allowedPaths: ['name', 'description', 'skillMd', 'scripts', 'references', 'assets'],
+                },
+            );
+            expect(result.result.name).toBe('Migration Sequence Validator');
+            expect(result.result.description).toBe('Validates EntityField sequence numbers');
+            expect(result.result.skillMd).toContain('migration-sequence-validator');
+            expect('setFields' in result.result).toBe(false);
+            expect(result.blockedOperations ?? []).toHaveLength(0);
+        });
     });
 
     // ════════════════════════════════════════════════════════════════════

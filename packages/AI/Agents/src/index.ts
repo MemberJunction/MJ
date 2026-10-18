@@ -58,6 +58,7 @@ export * from './AgentDataPreloader';
 export * from './agent-context-injector';
 export * from './agent-memory-context-builder';
 export * from './agent-pre-execution-rag';
+export * from './agent-audience';
 export * from './memory-manager-agent';
 export * from './memory-note-gate';
 export * from './query-builder-agent';
@@ -97,6 +98,8 @@ export * from './realtime/realtime-channel-server-data-context';
 export * from './realtime/agent-media-library';
 export * from './realtime/realtime-recording-capture';
 export * from './realtime/realtime-recording-store';
+export * from './realtime/realtime-recording-ledger';
+export * from './realtime/realtime-recording-opus-assembly';
 
 // Re-export from ai-reranker for backward compatibility
 export {

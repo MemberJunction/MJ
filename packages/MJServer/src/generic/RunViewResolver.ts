@@ -1212,12 +1212,29 @@ export class RunViewResolver extends ResolverBase {
     @Ctx() { providers, userPayload }: AppContext
   ): Promise<RunViewsWithCacheCheckOutput> {
     try {
+      // Same scope as RunViews: this is the transport RunViews uses for a CacheLocal batch.
+      await this.CheckAPIKeyScopeAuthorization('view:batch', '*', userPayload);
       const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
 
       // Cast provider to SQLServerDataProvider to access RunViewsWithCacheCheck method
       const sqlProvider = provider as unknown as SQLServerDataProvider;
       if (!sqlProvider.RunViewsWithCacheCheck) {
         throw new Error('Provider does not support RunViewsWithCacheCheck');
+      }
+
+      // SECURITY: same GraphQL-boundary clause screen as RunViews, before the provider runs.
+      const user = this.GetUserFromPayload(userPayload);
+      for (const item of input) {
+        this.screenClientViewClauses(
+          {
+            extraFilter: item.params.ExtraFilter,
+            orderBy: item.params.OrderBy,
+            userSearchString: item.params.UserSearchString,
+            overrideExcludeFilter: item.params.OverrideExcludeFilter,
+          },
+          provider,
+          user,
+        );
       }
 
       // Convert GraphQL input types to core types

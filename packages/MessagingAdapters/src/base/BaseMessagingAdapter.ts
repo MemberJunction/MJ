@@ -1213,7 +1213,7 @@ export abstract class BaseMessagingAdapter {
      *
      * Mirrors MJ Explorer's approach: the data model itself tells us what's user-facing.
      * `agentRun.Message` is the field agents explicitly set for the user. Everything
-     * else (payload, FinalPayload, step outputs) is internal agent state.
+     * else (structured payloads, step outputs) is internal agent state.
      *
      * We do NOT mine payloads for content — that approach requires hardcoding
      * agent-specific payload shapes and inevitably leaks internal LLM state
@@ -1226,7 +1226,7 @@ export abstract class BaseMessagingAdapter {
      *
      * Fallback chain (only when Message is absent or is raw JSON):
      * 1. `agentRun.Message` — the primary human-readable field (skipped if JSON)
-     * 2. `agentRun.Result` — simple string result (skipped if JSON)
+     * 2. `agentRun.FinalPayload` (`Result` on older rows) — simple string payload (skipped if JSON)
      * 3. Generic fallback message
      */
     private extractResponseText(result: ExecuteAgentResult): string {
@@ -1243,11 +1243,11 @@ export abstract class BaseMessagingAdapter {
             // Message is JSON — skip it, fall through to friendlier alternatives
         }
 
-        // Fallback: agentRun.Result as a simple string
-        const runResult = result.agentRun?.Result;
-        if (runResult && typeof runResult === 'string' && runResult.trim()) {
-            if (!this.looksLikeJSON(runResult)) {
-                return runResult;
+        // Fallback: the run payload as a simple string (Result on older rows)
+        const runPayload = result.agentRun?.FinalPayload ?? result.agentRun?.Result;
+        if (runPayload && typeof runPayload === 'string' && runPayload.trim()) {
+            if (!this.looksLikeJSON(runPayload)) {
+                return runPayload;
             }
         }
 
