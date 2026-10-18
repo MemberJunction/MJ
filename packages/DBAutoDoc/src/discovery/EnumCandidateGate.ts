@@ -48,8 +48,19 @@ const DEFAULT_CONFIG: EnumGateConfig = {
     /Description$/i,
     /Comment$/i,
     /Address/i,
+    // MJ's own system columns: their domain is defined by MJ, not by whatever a sample holds.
+    /^__mj_/i,
+    // Audit columns naming who wrote the row (e.g. CreatedBy, cst_add_user): a list of users, not a closed set.
+    /(^|_)(add|change|changed|create|created|modify|modified|update|updated|delete|deleted|insert|inserted)_?(user|usr|by|login)$/i,
   ],
 };
+
+/** Value shapes that make a column a poor closed list even when its cardinality is low. */
+const VALUE_SHAPES_NOT_ENUM: RegExp[] = [
+  /^(19|20)\d{2}$/, // years
+  /^\{?[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\}?$/i, // GUIDs
+  /^\d{4}-\d{2}-\d{2}([ T].*)?$/, // ISO dates and timestamps
+];
 
 /** Set of data-type base names eligible for enum detection (string types) */
 const STRING_TYPES = new Set([
@@ -114,6 +125,7 @@ export class EnumCandidateGate {
 
     const values = this.extractValues(stats);
     if (values.length < 2) return null;
+    if (!this.passesValueShapeGate(values)) return null;
 
     return {
       columnName: column.name,
@@ -124,6 +136,24 @@ export class EnumCandidateGate {
       dataType: column.dataType,
       maxLength: this.parseDeclaredLength(column.dataType) ?? undefined,
     };
+  }
+
+  /**
+   * Checks an LLM value-list verdict against the data. The verdict counts only for a column that
+   * passes every gate here, and its values are cut down to the ones observed in that column, so a
+   * value the model invented never reaches the output. Returns the values to keep, or null when
+   * the verdict should be dropped (not a candidate, or fewer than two observed values remain).
+   */
+  public FilterVerdictValues(
+    column: ColumnDefinition,
+    tableRowCount: number,
+    verdictValues: string[]
+  ): string[] | null {
+    const candidate = this.EvaluateColumn(column, tableRowCount);
+    if (!candidate) return null;
+    const observed = new Set(candidate.values);
+    const kept = verdictValues.filter(v => observed.has(v));
+    return kept.length >= 2 ? kept : null;
   }
 
   /** @deprecated Use {@link EvaluateColumn}. */
@@ -183,6 +213,14 @@ export class EnumCandidateGate {
   private passesPatternGate(stats: ColumnStatistics | undefined): boolean {
     if (!stats?.dataPattern) return true;
     return !EXCLUDED_PATTERNS.has(stats.dataPattern);
+  }
+
+  /**
+   * Gate: the observed values must not all be years, GUIDs or dates. A year column grows every
+   * year, and GUIDs and dates are keys or timestamps, so none of them is a closed set.
+   */
+  private passesValueShapeGate(values: string[]): boolean {
+    return !VALUE_SHAPES_NOT_ENUM.some(shape => values.every(v => shape.test(v)));
   }
 
   /**

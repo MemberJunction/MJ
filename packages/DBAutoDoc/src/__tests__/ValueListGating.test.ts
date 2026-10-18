@@ -1,0 +1,155 @@
+import { describe, it, expect } from 'vitest';
+import { EnumCandidateGate } from '../discovery/EnumCandidateGate.js';
+import { AdditionalSchemaInfoGenerator } from '../generators/AdditionalSchemaInfoGenerator.js';
+import { ColumnDefinition, ColumnStatistics, DatabaseDocumentation, TableDefinition, ValueListVerdict } from '../types/state.js';
+import { AnalysisEngine } from '../core/AnalysisEngine.js';
+import { ColumnDescriptionPromptResult } from '../types/prompts.js';
+import { DBAutoDocConfig } from '../types/config.js';
+import { PromptEngine } from '../prompts/PromptEngine.js';
+import { StateManager } from '../state/StateManager.js';
+import { IterationTracker } from '../state/IterationTracker.js';
+
+/**
+ * #4537: value lists were emitted as closed lists on columns that should not have one (MJ's
+ * __mj_* columns, audit user columns, years, GUIDs), sometimes with values the column never held.
+ * The prompt asked for verdicts only on enum candidates, but nothing enforced it.
+ */
+
+function observed(values: string[], totalRows = 1000): ColumnStatistics {
+  return {
+    totalRows,
+    distinctCount: values.length,
+    uniquenessRatio: values.length / totalRows,
+    nullCount: 0,
+    nullPercentage: 0,
+    sampleValues: values,
+    valueDistribution: values.map(value => ({ value, frequency: Math.floor(totalRows / values.length) })),
+  };
+}
+
+function column(name: string, values: string[] | null, extra: Partial<ColumnDefinition> = {}): ColumnDefinition {
+  return {
+    name,
+    dataType: 'nvarchar(40)',
+    isNullable: true,
+    isPrimaryKey: false,
+    isForeignKey: false,
+    descriptionIterations: [],
+    statistics: values ? observed(values) : undefined,
+    ...extra,
+  };
+}
+
+function verdict(values: string[], type: 'List' | 'ListOrUserEntry' = 'List'): ValueListVerdict {
+  return { isEnum: true, type, confidence: 0.95, values, reasoning: 'r', source: 'llm', decidedAt: '2026-10-18T00:00:00Z' };
+}
+
+describe('EnumCandidateGate exclusions', () => {
+  const gate = new EnumCandidateGate();
+
+  it.each([
+    ['__mj_integration_SyncStatus', ['Active', 'Pending', 'Error']],
+    ['cst_add_user', ['jsmith', 'adoe', 'bkim']],
+    ['CreatedBy', ['jsmith', 'adoe', 'bkim']],
+    ['mbr_change_user', ['jsmith', 'adoe']],
+  ])('excludes %s by name', (name, values) => {
+    expect(gate.EvaluateColumn(column(name, values), 1000)).toBeNull();
+  });
+
+  it.each([
+    ['years', ['2022', '2024', '2025', '2026']],
+    ['GUIDs', ['6f1c2a3b-0d4e-4f5a-9b8c-7d6e5f4a3b2c', 'a0b1c2d3-e4f5-4a6b-8c7d-9e0f1a2b3c4d']],
+    ['dates', ['2024-01-01', '2025-06-30']],
+  ])('excludes a column whose values are all %s', (_label, values) => {
+    expect(gate.EvaluateColumn(column('dues_year', values), 1000)).toBeNull();
+  });
+
+  it('still accepts an ordinary status column', () => {
+    expect(gate.EvaluateColumn(column('Status', ['Active', 'Inactive', 'Pending']), 1000)?.values).toEqual(['Active', 'Inactive', 'Pending']);
+  });
+
+  it('does not exclude a column only some of whose values look like years', () => {
+    expect(gate.EvaluateColumn(column('Tier', ['2024', 'Gold', 'Silver']), 1000)).not.toBeNull();
+  });
+});
+
+describe('EnumCandidateGate.FilterVerdictValues', () => {
+  const gate = new EnumCandidateGate();
+
+  it('drops values the column never held', () => {
+    expect(gate.FilterVerdictValues(column('Status', ['Active', 'Archived', 'Error']), 1000, ['Active', 'Inactive', 'Pending', 'Error'])).toEqual(['Active', 'Error']);
+  });
+
+  it('rejects the verdict when fewer than two observed values remain', () => {
+    expect(gate.FilterVerdictValues(column('Status', ['Active', 'Archived', 'Error']), 1000, ['Active', 'Inactive', 'Pending'])).toBeNull();
+  });
+
+  it('rejects a verdict on a column that is not a candidate', () => {
+    expect(gate.FilterVerdictValues(column('Notes', ['a', 'b']), 1000, ['a', 'b'])).toBeNull();
+    expect(gate.FilterVerdictValues(column('Status', null), 1000, ['Active', 'Inactive'])).toBeNull();
+  });
+});
+
+describe('AdditionalSchemaInfoGenerator value lists', () => {
+  function emitted(columns: ColumnDefinition[]) {
+    const state: DatabaseDocumentation = {
+      version: '1.0.0',
+      summary: { createdAt: '', lastModified: '', totalIterations: 0, totalPromptsRun: 0, totalInputTokens: 0, totalOutputTokens: 0, totalTokens: 0, estimatedCost: 0, totalSchemas: 1, totalTables: 1, totalColumns: columns.length },
+      database: { name: 'T', server: 'x', analyzedAt: '' },
+      phases: { descriptionGeneration: [] },
+      schemas: [{ name: 'app', descriptionIterations: [], tables: [{ name: 'Member', rowCount: 1000, columns, dependsOn: [], dependents: [], descriptionIterations: [] }] }],
+    };
+    const out = JSON.parse(new AdditionalSchemaInfoGenerator().generate(state)) as Record<string, Array<{ Fields?: Array<{ FieldName: string; ValueListType: string; PossibleValues: string[] }> }>>;
+    return out.app?.[0]?.Fields ?? [];
+  }
+
+  it('emits a list inferred from data as ListOrUserEntry, with only observed values', () => {
+    const fields = emitted([column('Status', ['Active', 'Archived'], { valueListVerdict: verdict(['Active', 'Archived', 'Pending']) })]);
+    expect(fields).toEqual([expect.objectContaining({ FieldName: 'Status', ValueListType: 'ListOrUserEntry', PossibleValues: ['Active', 'Archived'] })]);
+  });
+
+  it('keeps a closed List when a CHECK constraint backs the column', () => {
+    const fields = emitted([column('Status', ['Active', 'Archived'], { checkConstraint: "Status IN ('Active','Archived')", valueListVerdict: verdict(['Active', 'Archived']) })]);
+    expect(fields[0].ValueListType).toBe('List');
+  });
+
+  it('does not export a verdict stored in an older state file on a column the gate now rejects', () => {
+    expect(emitted([column('__mj_integration_SyncStatus', ['Active', 'Pending'], { valueListVerdict: verdict(['Active', 'Pending']) })])).toEqual([]);
+    expect(emitted([column('dues_year', ['2024', '2025'], { valueListVerdict: verdict(['2024', '2025']) })])).toEqual([]);
+  });
+
+  it('exports a user-approved verdict as approved', () => {
+    const fields = emitted([column('Region', null, { userApproved: true, valueListVerdict: verdict(['East', 'West']) })]);
+    expect(fields).toEqual([expect.objectContaining({ FieldName: 'Region', ValueListType: 'List', PossibleValues: ['East', 'West'] })]);
+  });
+});
+
+describe('AnalysisEngine.persistEnumVerdicts', () => {
+  class TestableEngine extends AnalysisEngine {
+    public Persist(table: TableDefinition, results: ColumnDescriptionPromptResult[]): void {
+      this.persistEnumVerdicts(table, results, 'test-model');
+    }
+  }
+  const config = {
+    analysis: { backpropagation: { maxDepth: 1 }, convergence: { maxIterations: 1, stabilityWindow: 1, confidenceThreshold: 0.8 } },
+  } as DBAutoDocConfig;
+  const engine = new TestableEngine(config, { setGuardrailCheck: () => undefined } as Partial<PromptEngine> as PromptEngine, {} as StateManager, {} as IterationTracker);
+
+  function result(columnName: string, values: string[]): ColumnDescriptionPromptResult {
+    return { columnName, description: 'd', reasoning: 'r', valueList: { isEnum: true, type: 'List', confidence: 0.95, values, reasoning: 'r' } };
+  }
+
+  it('drops a verdict the model returned for a column that is not an enum candidate', () => {
+    const table: TableDefinition = { name: 'Member', rowCount: 1000, dependsOn: [], dependents: [], descriptionIterations: [],
+      columns: [column('cst_add_user', ['jsmith', 'adoe', 'bkim'])] };
+    engine.Persist(table, [result('cst_add_user', ['jsmith', 'adoe', 'bkim'])]);
+    expect(table.columns[0].valueListVerdict).toBeUndefined();
+  });
+
+  it('keeps only the observed values of a candidate column', () => {
+    const table: TableDefinition = { name: 'Member', rowCount: 1000, dependsOn: [], dependents: [], descriptionIterations: [],
+      columns: [column('Status', ['Active', 'Archived', 'Error'])] };
+    engine.Persist(table, [result('Status', ['Active', 'Inactive', 'Archived'])]);
+    expect(table.columns[0].valueListVerdict?.values).toEqual(['Active', 'Archived']);
+  });
+});
