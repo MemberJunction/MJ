@@ -104,11 +104,17 @@ export async function GenerateConversationName(options: GenerateNameOptions): Pr
         }));
 
     const timeoutMs = options.TimeoutMs ?? 30000;
+    let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
     const timeoutPromise = new Promise<never>((_, reject) => {
-      setTimeout(() => reject(new Error(`Conversation naming timed out after ${Math.round(timeoutMs / 1000)} seconds`)), timeoutMs);
+      timeoutHandle = setTimeout(() => reject(new Error(`Conversation naming timed out after ${Math.round(timeoutMs / 1000)} seconds`)), timeoutMs);
     });
 
-    const result = await Promise.race([run(prompt.ID, options.MessageText), timeoutPromise]);
+    let result: Awaited<ReturnType<NamePromptRunner>>;
+    try {
+      result = await Promise.race([run(prompt.ID, options.MessageText), timeoutPromise]);
+    } finally {
+      clearTimeout(timeoutHandle);
+    }
     if (!result || !result.success || (!result.parsedResult && !result.output)) {
       return null;
     }

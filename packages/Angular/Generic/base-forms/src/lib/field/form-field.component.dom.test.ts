@@ -1073,3 +1073,19 @@ describe('MjFormFieldComponent — reporting edits to the form', () => {
     expect(edits).toEqual([]);
   });
 });
+
+describe('MjFormFieldComponent — deprecated and disabled fields', () => {
+  it('hides a Deprecated field and does not read its value via Record.Get()', () => {
+    const record = makeWidget();
+    const fieldInfo = record.EntityInfo.Fields.find(f => f.Name === 'Description')!;
+    Object.defineProperty(fieldInfo, 'Status', { value: 'Deprecated', configurable: true });
+    const getSpy = vi.spyOn(record, 'Get');
+
+    const f = render({ Record: record, FieldName: 'Description', Type: 'textbox' });
+    expect(f.componentInstance.IsFieldDeprecatedOrDisabled).toBe(true);
+    expect(f.componentInstance.ShouldHideField).toBe(true);
+    expect(query(f, '.mj-forms-field')).toBeNull();
+    expect(getSpy).not.toHaveBeenCalledWith('Description');
+  });
+});
+
