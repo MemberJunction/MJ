@@ -2792,4 +2792,31 @@ describe('ConversationEngine', () => {
             expect(input.map((c) => c.ID)).toEqual(['old', 'new']);
         });
     });
+
+    describe('SaveConversation optimistic emission (NG0100 prevention)', () => {
+        it('emits Conversations$ synchronously when mutating the cached entity before Save() resolves', async () => {
+            let resolveSave!: (ok: boolean) => void;
+            const conv = createMockConversation({ ID: 'c1', Name: 'New Conversation' });
+            (conv as Record<string, unknown>)['Save'] = vi.fn().mockImplementation(
+                () => new Promise<boolean>((resolve) => { resolveSave = resolve; }),
+            );
+            runViewResultQueue.push({ Success: true, Results: [conv] });
+            await engine.LoadConversations('env-1', contextUser);
+
+            const namesSeenOnEmit: string[] = [];
+            const sub = engine.Conversations$.subscribe((list) => {
+                if (list[0]) namesSeenOnEmit.push(list[0].Name ?? '');
+            });
+            namesSeenOnEmit.length = 0; // ignore BehaviorSubject initial replay
+
+            const savePromise = engine.SaveConversation('c1', { Name: 'Renamed Title' }, contextUser);
+            // Synchronously (before await savePromise resolves), Conversations$ must have emitted the new Name
+            expect(namesSeenOnEmit).toEqual(['Renamed Title']);
+
+            resolveSave(true);
+            await savePromise;
+            sub.unsubscribe();
+        });
+    });
 });
+

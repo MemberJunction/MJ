@@ -584,6 +584,8 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     }, 100);
   }
 
+  private renameAnimationTimeout: ReturnType<typeof setTimeout> | null = null;
+
   ngOnDestroy() {
     super.ngOnDestroy();
     this.bridge.NotifyWorkspaceActive(false);
@@ -591,6 +593,10 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     // Clear any pending save timeout
     if (this.saveSettingsTimeout) {
       clearTimeout(this.saveSettingsTimeout);
+    }
+    if (this.renameAnimationTimeout) {
+      clearTimeout(this.renameAnimationTimeout);
+      this.renameAnimationTimeout = null;
     }
 
     // Clean up resize event listeners
@@ -638,6 +644,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     if (conversation) {
       this.SelectedConversation = conversation;
       this.updateTabTitle();
+      this.cdr.detectChanges();
     }
     // If not in cache, the chat area component will handle loading it
   }
@@ -1240,6 +1247,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     if (this.IsMobileView || !this.IsSidebarPinned) {
       this.CollapseSidebar();
     }
+    this.cdr.detectChanges();
   }
 
   /** @deprecated Use {@link OnNewConversationRequested}. */
@@ -1265,6 +1273,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     this.bridge.SetActiveFromWorkspace(event.conversation.ID);
     this.updateUrl();
     this.updateTabTitle();
+    this.cdr.detectChanges();
   }
 
   /** @deprecated Use {@link OnConversationCreated}. */
@@ -1288,9 +1297,17 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
       this.NotifyDisplayNameChanged(event.name);
     }
 
+    this.cdr.detectChanges();
+
+    if (this.renameAnimationTimeout) {
+      clearTimeout(this.renameAnimationTimeout);
+    }
+
     // Clear the animation trigger after it completes
-    setTimeout(() => {
+    this.renameAnimationTimeout = setTimeout(() => {
+      this.renameAnimationTimeout = null;
       this.RenamedConversationId = null;
+      this.cdr.detectChanges();
     }, 1500);
   }
 
@@ -1308,6 +1325,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     this.PendingArtifactVersionNumber = null;
     // Update URL to remove artifact params
     this.updateUrl();
+    this.cdr.detectChanges();
   }
 
   /** @deprecated Use {@link OnPendingArtifactConsumed}. */
@@ -1321,6 +1339,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
   OnPendingMessageConsumed(): void {
     this.PendingMessageToSend = null;
     this.PendingAttachmentsToSend = null;
+    this.cdr.detectChanges();
   }
 
   /** @deprecated Use {@link OnPendingMessageConsumed}. */
