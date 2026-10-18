@@ -860,8 +860,11 @@ export class PostgreSQLDriver extends BaseAutoDocDriver {
   /**
    * Test value overlap between source and target columns.
    *
-   * The distinct values are taken in a subquery and randomised outside it: PostgreSQL rejects
-   * `SELECT DISTINCT … ORDER BY RANDOM()` because the sort expression is not in the select list.
+   * The sample is a plain `DISTINCT … LIMIT`, like the SQL Server driver's `DISTINCT TOP n`.
+   * `ORDER BY RANDOM()` on a `SELECT DISTINCT` is not valid PostgreSQL (the sort expression is not
+   * in the select list), and randomising in an outer query would sort every distinct value before
+   * the LIMIT applies, once per FK candidate. The sample is biased by physical order, which is
+   * acceptable for a containment question: do these values exist in the parent at all.
    * Both sides are compared as text so a key stored as text can be checked against a uuid (or other
    * typed) column, which `text = uuid` would otherwise refuse.
    */
@@ -878,13 +881,9 @@ export class PostgreSQLDriver extends BaseAutoDocDriver {
 
       const query = `
         WITH source_sample AS (
-          SELECT value
-          FROM (
-            SELECT DISTINCT ${this.escapeIdentifier(sourceColumn)}::text as value
-            FROM ${this.escapeIdentifier(sourceSchema)}.${this.escapeIdentifier(sourceTableName)}
-            WHERE ${this.escapeIdentifier(sourceColumn)} IS NOT NULL
-          ) distinct_source
-          ORDER BY RANDOM()
+          SELECT DISTINCT ${this.escapeIdentifier(sourceColumn)}::text as value
+          FROM ${this.escapeIdentifier(sourceSchema)}.${this.escapeIdentifier(sourceTableName)}
+          WHERE ${this.escapeIdentifier(sourceColumn)} IS NOT NULL
           LIMIT ${sampleSize}
         ),
         target_values AS (

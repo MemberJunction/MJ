@@ -6,7 +6,8 @@ import { AutoDocQueryResult } from '../types/driver.js';
  * PostgreSQLDriver.testValueOverlap feeds GATE 6 in FKDetector, which rejects any FK candidate under
  * 75% overlap. The query used to put ORDER BY RANDOM() on a SELECT DISTINCT, which PostgreSQL
  * rejects ("for SELECT DISTINCT, ORDER BY expressions must appear in select list"). The error came
- * back as 0% overlap, so every statistical FK candidate was rejected on PostgreSQL.
+ * back as 0% overlap, so every statistical FK candidate was rejected on PostgreSQL. The sample is now
+ * a plain DISTINCT … LIMIT, as on SQL Server.
  */
 
 type OverlapRow = { total_source: string; matching_count: string };
@@ -24,15 +25,14 @@ function driverReturning(result: AutoDocQueryResult<OverlapRow>): { driver: Post
 afterEach(() => vi.restoreAllMocks());
 
 describe('PostgreSQLDriver.testValueOverlap', () => {
-  it('randomises outside the DISTINCT, so PostgreSQL accepts the statement', async () => {
+  it('samples with a plain DISTINCT … LIMIT, which PostgreSQL accepts', async () => {
     const { driver, queries } = driverReturning({ success: true, data: [{ total_source: '10', matching_count: '10' }] });
     await driver.testValueOverlap('app.child', 'parent_id', 'app.parent', 'id', 500);
 
     const sql = queries[0].replace(/\s+/g, ' ');
-    // The DISTINCT select is closed before ORDER BY RANDOM() applies.
-    expect(sql).toMatch(/SELECT DISTINCT "parent_id"::text as value FROM "app"\."child" WHERE "parent_id" IS NOT NULL \) distinct_source ORDER BY RANDOM\(\) LIMIT 500/);
-    // No ORDER BY inside the scope of a SELECT DISTINCT.
-    expect(sql).not.toMatch(/SELECT DISTINCT[^()]*ORDER BY/);
+    expect(sql).toMatch(/SELECT DISTINCT "parent_id"::text as value FROM "app"\."child" WHERE "parent_id" IS NOT NULL LIMIT 500/);
+    // No ORDER BY at all: on a SELECT DISTINCT it is invalid, and in an outer query it sorts every distinct value.
+    expect(sql).not.toMatch(/ORDER BY/i);
   });
 
   it('compares both sides as text, so a text column can be checked against a uuid key', async () => {
