@@ -1,5 +1,5 @@
 -- =============================================================================
--- MemberJunction Core (__mj) — SaveReturnMode = datestamps_only Stored Procedures
+-- MemberJunction Core (${flyway:defaultSchema}) — SaveReturnMode = datestamps_only Stored Procedures
 -- =============================================================================
 --
 -- PURPOSE:
@@ -7,7 +7,7 @@
 --   spCreate* and spUpdate* stored procedures and their GRANT EXECUTE permissions)
 --   produced after syncing "Configuration": { "SaveReturnMode": "datestamps_only" }
 --   via `mj sync push` on write-heavy / append-heavy logging, telemetry,
---   execution trace, and webhook/sync delivery entities in schema [__mj].
+--   execution trace, and webhook/sync delivery entities in schema [${flyway:defaultSchema}].
 --
 -- WHY NO ENTITY METADATA UPDATE STATEMENT IS IN THIS FILE:
 --   Per MemberJunction metadata and migration conventions, the declarative
