@@ -66,6 +66,24 @@ describe('composite foreign keys in additionalSchemaInfo', () => {
     expect(emittedFKs([table('line', lineColumns, compositeFK())])).toEqual([]);
   });
 
+  it('skips the same pairs when the analysis passes also marked the composite columns as foreign keys', () => {
+    // The live run that found this: the LLM pass stamps foreignKeyReferences on each column of the
+    // declared composite FK, so the column-level path wrote the non-unique pairs back.
+    const price = table('price', [col('prc_key', true), col('prc_prd_key'), col('prc_prd_ptp_key')]);
+    const stamped = (name: string, referencedColumn: string, refTable = 'price'): ColumnDefinition =>
+      ({ ...col(name), isForeignKey: true, foreignKeyReferences: { schema: 'app', table: refTable, column: name, referencedColumn } });
+    const line = table('line', [col('id', true), stamped('a_key', 'prc_key'), stamped('a_prd_key', 'prc_prd_key'), stamped('a_ptp_key', 'prc_prd_ptp_key')], compositeFK());
+    expect(emittedFKs([line, price])).toEqual(['a_key->price.prc_key']);
+  });
+
+  it('keeps a column-level FK from a composite column to a different, real target', () => {
+    const price = table('price', [col('prc_key', true), col('prc_prd_key'), col('prc_prd_ptp_key')]);
+    const product = table('product', [col('prd_key', true)]);
+    const toProduct: ColumnDefinition = { ...col('a_prd_key'), isForeignKey: true, foreignKeyReferences: { schema: 'app', table: 'product', column: 'a_prd_key', referencedColumn: 'prd_key' } };
+    const line = table('line', [col('id', true), col('a_key'), toProduct, col('a_ptp_key')], compositeFK());
+    expect(emittedFKs([line, price, product]).sort()).toEqual(['a_key->price.prc_key', 'a_prd_key->product.prd_key']);
+  });
+
   it('leaves single-column foreign keys alone', () => {
     const dependsOn: ForeignKeyReference[] = [{ schema: 'app', table: 'price', column: 'a_prd_key', referencedColumn: 'prc_prd_key', constraintName: 'fk_single' }];
     expect(emittedFKs([table('line', lineColumns, dependsOn)])).toEqual(['a_prd_key->price.prc_prd_key']);

@@ -377,11 +377,28 @@ export class AdditionalSchemaInfoGenerator {
   ): void {
     const existingKeys = new Set(fks.map(f => `${f.FieldName}->${f.RelatedTable}.${f.RelatedField}`));
 
+    // Column pairs of a composite constraint whose target is not unique on its own. They are
+    // skipped on both paths below: the analysis passes also mark a composite constraint's columns
+    // as foreign keys, so the column-level path would otherwise write the same pairs back.
+    const columnsPerConstraint = new Map<string, number>();
+    for (const dep of table.dependsOn) {
+      if (dep.constraintName) {
+        columnsPerConstraint.set(dep.constraintName, (columnsPerConstraint.get(dep.constraintName) ?? 0) + 1);
+      }
+    }
+    const nonUniqueCompositePairs = new Set(
+      table.dependsOn
+        .filter(dep => !!dep.constraintName && (columnsPerConstraint.get(dep.constraintName) ?? 0) > 1)
+        .filter(dep => !this.isUniqueOnItsOwn(state, dep.schema || schema.name, dep.table, dep.referencedColumn))
+        .map(dep => `${dep.column}->${dep.table}.${dep.referencedColumn}`)
+    );
+
     // From column-level foreignKeyReferences
     for (const col of table.columns) {
       if (col.isForeignKey && col.foreignKeyReferences) {
         const ref = col.foreignKeyReferences;
         const key = `${col.name}->${ref.table}.${ref.referencedColumn}`;
+        if (nonUniqueCompositePairs.has(key)) continue;
         if (!existingKeys.has(key)) {
           existingKeys.add(key);
           fks.push({
@@ -396,18 +413,9 @@ export class AdditionalSchemaInfoGenerator {
     }
 
     // From table-level dependsOn relationships
-    const columnsPerConstraint = new Map<string, number>();
     for (const dep of table.dependsOn) {
-      if (dep.constraintName) {
-        columnsPerConstraint.set(dep.constraintName, (columnsPerConstraint.get(dep.constraintName) ?? 0) + 1);
-      }
-    }
-    for (const dep of table.dependsOn) {
-      const isComposite = !!dep.constraintName && (columnsPerConstraint.get(dep.constraintName) ?? 0) > 1;
-      if (isComposite && !this.isUniqueOnItsOwn(state, dep.schema || schema.name, dep.table, dep.referencedColumn)) {
-        continue;
-      }
       const key = `${dep.column}->${dep.table}.${dep.referencedColumn}`;
+      if (nonUniqueCompositePairs.has(key)) continue;
       if (!existingKeys.has(key)) {
         existingKeys.add(key);
         fks.push({
