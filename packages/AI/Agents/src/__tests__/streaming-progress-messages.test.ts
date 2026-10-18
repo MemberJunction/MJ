@@ -70,11 +70,11 @@ describe('BaseAgent streaming progress message formatting', () => {
             const decision: BaseAgentNextStep = {
                 step: 'Retry',
                 terminate: false,
-                retryReason: 'Analyzing results from 1 completed action to formulate response',
+                retryReason: 'Analyzing results from 1 completed action',
             };
 
             expect(agent.testFormatHierarchicalPromptMessage(params, decision)).toBe(
-                'Analyzing results from 1 completed action to formulate response'
+                'Analyzing results from 1 completed action'
             );
         });
 
