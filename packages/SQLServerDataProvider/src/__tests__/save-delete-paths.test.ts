@@ -1169,4 +1169,3 @@ describe("SQLServerDataProvider SaveReturnMode ('datestamps_only')", () => {
     });
   });
 });
-
