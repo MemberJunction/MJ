@@ -13,6 +13,7 @@ import {
     ReadRelationshipWhenEmpty,
     ResolveContributionShowCount,
     ResolveContributionWhenEmpty,
+    ResolveEntitySaveReturnMode,
     RELATED_ROLE_SCORE,
     ResolveFormLayout,
     ResolveRelatedFormRoles,
@@ -20,6 +21,7 @@ import {
     type FormWhenEmpty,
     type RelatedFormRoleCandidate,
 } from '../generic/entityConfiguration';
+import { EntityInfo } from '../generic/entityInfo';
 
 const COMMON = 'MJ_BizApps_Common';
 const ORDERS = 'MJ_BizApps_Orders';
@@ -545,3 +547,56 @@ describe('ResolveContributionWhenEmpty / ResolveContributionShowCount', () => {
         expect(ResolveContributionShowCount(undefined, null)).toBe(true);
     });
 });
+
+describe('ResolveEntitySaveReturnMode & EntityInfo.SaveReturnMode / DatestampReturnFields', () => {
+    it('defaults to full when Configuration is null, empty, or omits SaveReturnMode', () => {
+        expect(ResolveEntitySaveReturnMode(null)).toBe('full');
+        expect(ResolveEntitySaveReturnMode(undefined)).toBe('full');
+        expect(ResolveEntitySaveReturnMode('')).toBe('full');
+        expect(ResolveEntitySaveReturnMode({})).toBe('full');
+        expect(ResolveEntitySaveReturnMode('{"SaveReturnMode":"full"}')).toBe('full');
+        expect(ResolveEntitySaveReturnMode('{"SaveReturnMode":"invalid"}')).toBe('full');
+    });
+
+    it('resolves datestamps_only from both JSON string and parsed object', () => {
+        expect(ResolveEntitySaveReturnMode('{"SaveReturnMode":"datestamps_only"}')).toBe('datestamps_only');
+        expect(ResolveEntitySaveReturnMode({ SaveReturnMode: 'datestamps_only' })).toBe('datestamps_only');
+    });
+
+    it('exposes SaveReturnMode and DatestampReturnFields on EntityInfo', () => {
+        const defaultEntity = new EntityInfo({
+            ID: 'e-default',
+            Name: 'Default Entity',
+            SchemaName: '__mj',
+            BaseTable: 'DefaultEntity',
+            BaseView: 'vwDefaultEntities',
+            EntityFields: [
+                { ID: 'f1', EntityID: 'e-default', Name: 'ID', Type: 'uniqueidentifier', IsPrimaryKey: true, IsVirtual: false },
+                { ID: 'f2', EntityID: 'e-default', Name: 'Name', Type: 'nvarchar', IsPrimaryKey: false, IsVirtual: false },
+                { ID: 'f3', EntityID: 'e-default', Name: '__mj_CreatedAt', Type: 'datetimeoffset', IsPrimaryKey: false, IsVirtual: false },
+                { ID: 'f4', EntityID: 'e-default', Name: '__mj_UpdatedAt', Type: 'datetimeoffset', IsPrimaryKey: false, IsVirtual: false },
+                { ID: 'f5', EntityID: 'e-default', Name: 'VirtualLabel', Type: 'nvarchar', IsPrimaryKey: false, IsVirtual: true },
+            ],
+        });
+        expect(defaultEntity.SaveReturnMode).toBe('full');
+        expect(defaultEntity.DatestampReturnFields.map((f) => f.Name)).toEqual(['ID', '__mj_CreatedAt', '__mj_UpdatedAt']);
+
+        const datestampsEntity = new EntityInfo({
+            ID: 'e-ds',
+            Name: 'Datestamps Entity',
+            SchemaName: '__mj',
+            BaseTable: 'DatestampsEntity',
+            BaseView: 'vwDatestampsEntities',
+            Configuration: JSON.stringify({ SaveReturnMode: 'datestamps_only' }),
+            EntityFields: [
+                { ID: 'f1', EntityID: 'e-ds', Name: 'ID', Type: 'uniqueidentifier', IsPrimaryKey: true, IsVirtual: false },
+                { ID: 'f2', EntityID: 'e-ds', Name: 'Payload', Type: 'nvarchar', IsPrimaryKey: false, IsVirtual: false },
+                { ID: 'f3', EntityID: 'e-ds', Name: '__mj_CreatedAt', Type: 'datetimeoffset', IsPrimaryKey: false, IsVirtual: false },
+                { ID: 'f4', EntityID: 'e-ds', Name: '__mj_UpdatedAt', Type: 'datetimeoffset', IsPrimaryKey: false, IsVirtual: false },
+            ],
+        });
+        expect(datestampsEntity.SaveReturnMode).toBe('datestamps_only');
+        expect(datestampsEntity.DatestampReturnFields.map((f) => f.Name)).toEqual(['ID', '__mj_CreatedAt', '__mj_UpdatedAt']);
+    });
+});
+

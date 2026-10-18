@@ -2929,10 +2929,13 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * @param fieldNames - Field names as a caller supplied them, e.g. `RunViewParams.Fields`.
      */
     protected static NamesAnyBinaryField(entity: EntityInfo, fieldNames: readonly string[] | null | undefined): boolean {
-        if (!fieldNames || fieldNames.length === 0) return false;
-        const binaryNames = new Set(entity.Fields.filter(f => f.IsBinaryFieldType).map(f => f.Name.toLowerCase()));
-        if (binaryNames.size === 0) return false;
-        return fieldNames.some(name => typeof name === 'string' && binaryNames.has(name.trim().toLowerCase()));
+        if (!fieldNames || fieldNames.length === 0 || !entity.HasBinaryFields) return false;
+        const binaryFields = entity.BinaryFields;
+        return fieldNames.some(name => {
+            if (typeof name !== 'string') return false;
+            const lower = name.trim().toLowerCase();
+            return binaryFields.some(bf => bf.Name.toLowerCase() === lower);
+        });
     }
 
     /**

@@ -1,4 +1,5 @@
 import { ConversationEngine, type ConversationScope } from '@memberjunction/core-entities';
+import { GetGlobalObjectStore } from '@memberjunction/global';
 import { SnapshotFromRows, type RubricAnswer, type RubricNodeSnapshot, type RubricScoreResult, type RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 import type { EvaluationAgentRunner } from './AgentRubricEvaluator.js';
 import { ShapeContent, type RubricSubjectContent } from './content.js';
@@ -129,12 +130,21 @@ const unsetEvaluations: RubricEvaluationStore = {
 };
 
 export class RubricEngine {
-    private static singleton: RubricEngine | undefined;
+    private static readonly _globalStoreKey = '___SINGLETON__RubricEngine';
 
-    /** The process-wide engine. Constructing another engine does not rebind this one. */
+    /**
+     * The process-wide engine, backed by the Global Object Store so bundler duplication
+     * across execution paths cannot split it. Constructing another engine does not rebind this one.
+     */
     public static get Instance(): RubricEngine {
-        if (!RubricEngine.singleton) RubricEngine.singleton = new RubricEngine();
-        return RubricEngine.singleton;
+        const g = GetGlobalObjectStore();
+        if (g) {
+            if (!g[RubricEngine._globalStoreKey]) {
+                g[RubricEngine._globalStoreKey] = new RubricEngine();
+            }
+            return g[RubricEngine._globalStoreKey] as RubricEngine;
+        }
+        return new RubricEngine();
     }
 
     /**

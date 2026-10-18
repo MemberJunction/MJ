@@ -1,0 +1,391 @@
+[
+  {
+    "fields": {
+      "Name": "Chief of Staff",
+      "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Assistant",
+      "Description": "Personal, always-on Chief of Staff agent (one per user) that coordinates across organizational workstreams, tracks quarterly priorities and OKRs (Tasks & TaskCheckIns), monitors blocking Issues, writes executive briefings, manages approvals under narrowed per-user policies (MJ: AI Agent User Policies), schedules its own wake cycles via the 3-Tier Wake Gate on MJ: User Routines, and follows up across chat, email, and voice/telephony.",
+      "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+      "Status": "Active",
+      "AcceptsSkills": "All",
+      "SkillActivationMode": "Auto",
+      "ExecutionOrder": 0,
+      "ModelSelectionMode": "Agent",
+      "SearchScopeAccess": "All",
+      "ArtifactCreationMode": "Always",
+      "ExposeAsAction": true,
+      "IconClass": "fa-solid fa-user-tie",
+      "InjectNotes": true,
+      "MaxNotesToInject": 15,
+      "NoteInjectionStrategy": "Relevant",
+      "InjectExamples": true,
+      "MaxExamplesToInject": 5,
+      "ExampleInjectionStrategy": "Semantic",
+      "AgentTypePromptParams": {
+        "includeForEachDocs": true,
+        "includeWhileDocs": false,
+        "includeVariableRefsDocs": true,
+        "includeScratchpadDocs": true,
+        "includeMessageExpansionDocs": true,
+        "enableTaskGraphs": true
+      },
+      "RerankerConfiguration": {
+        "enabled": true,
+        "rerankerModelId": "@lookup:MJ: AI Models.Name=rerank-v3.5",
+        "retrievalMultiplier": 3,
+        "minRelevanceThreshold": 0.5,
+        "fallbackOnError": true
+      },
+      "TypeConfiguration": {
+        "realtime": {
+          "directActions": {
+            "enabled": true,
+            "timeoutMs": 10000,
+            "actionNames": [
+              "Get Record",
+              "Scoped Search",
+              "Schedule Next Agent Wake",
+              "Configure Agent User Policy",
+              "Verify My Communication Capabilities",
+              "Get My Calendar Events and Availability",
+              "Manage My Calendar Event",
+              "Manage My Email Inbox and Drafts",
+              "Chief of Staff Inter-Agent Request",
+              "Prepare Chief of Staff Outbound Call",
+              "Query Scheduled Jobs",
+              "Web Search"
+            ]
+          }
+        }
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Agent Modalities": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Text",
+            "Direction": "Input",
+            "IsAllowed": true
+          },
+          "primaryKey": {
+            "ID": "C05A8E01-4C11-4E8A-9B01-1A2B3C4D5E01"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Text",
+            "Direction": "Output",
+            "IsAllowed": true
+          },
+          "primaryKey": {
+            "ID": "C05A8E01-4C11-4E8A-9B01-1A2B3C4D5E02"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+            "Direction": "Input",
+            "IsAllowed": true
+          },
+          "primaryKey": {
+            "ID": "C05A8E01-4C11-4E8A-9B01-1A2B3C4D5E03"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+            "Direction": "Output",
+            "IsAllowed": true
+          },
+          "primaryKey": {
+            "ID": "C05A8E01-4C11-4E8A-9B01-1A2B3C4D5E04"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Image",
+            "Direction": "Input",
+            "IsAllowed": true
+          },
+          "primaryKey": {
+            "ID": "C05A8E01-4C11-4E8A-9B01-1A2B3C4D5E05"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Image",
+            "Direction": "Output",
+            "IsAllowed": true
+          },
+          "primaryKey": {
+            "ID": "C05A8E01-4C11-4E8A-9B01-1A2B3C4D5E06"
+          }
+        }
+      ],
+      "MJ: AI Agent Prompts": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "PromptID": "@lookup:MJ: AI Prompts.Name=Chief of Staff - System Prompt",
+            "ExecutionOrder": 0,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "C05A8E01-4C11-4E8A-9B01-1A2B3C4D5E10"
+          }
+        }
+      ],
+      "MJ: AI Agent Actions": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Schedule Next Agent Wake",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "C05A8E01-4C11-4E8A-9B01-1A2B3C4D5E21"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Configure Agent User Policy",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "C05A8E01-4C11-4E8A-9B01-1A2B3C4D5E22"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Chief of Staff Inter-Agent Request",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "C05A8E01-4C11-4E8A-9B01-1A2B3C4D5E23"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Prepare Chief of Staff Outbound Call",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "C05A8E01-4C11-4E8A-9B01-1A2B3C4D5E24"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Get Record",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "C05A8E01-4C11-4E8A-9B01-1A2B3C4D5E25"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Create Record",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "C05A8E01-4C11-4E8A-9B01-1A2B3C4D5E26"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Update Record",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "C05A8E01-4C11-4E8A-9B01-1A2B3C4D5E27"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Delete Record",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "C05A8E01-4C11-4E8A-9B01-1A2B3C4D5E28"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Find Candidate Agents",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "C05A8E01-4C11-4E8A-9B01-1A2B3C4D5E29"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Scoped Search",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "C05A8E01-4C11-4E8A-9B01-1A2B3C4D5E30"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Run Ad-hoc Query",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "C05A8E01-4C11-4E8A-9B01-1A2B3C4D5E31"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Web Search",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "C05A8E01-4C11-4E8A-9B01-1A2B3C4D5E32"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Create Mermaid Diagram",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "C05A8E01-4C11-4E8A-9B01-1A2B3C4D5E33"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Verify My Communication Capabilities",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "C05A8E01-4C11-4E8A-9B01-1A2B3C4D5E34"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Get My Calendar Events and Availability",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "C05A8E01-4C11-4E8A-9B01-1A2B3C4D5E35"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Manage My Calendar Event",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "C05A8E01-4C11-4E8A-9B01-1A2B3C4D5E36"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Manage My Email Inbox and Drafts",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "C05A8E01-4C11-4E8A-9B01-1A2B3C4D5E37"
+          }
+        }
+      ],
+      "MJ: AI Agent Configurations": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "Name": "Draft",
+            "DisplayName": "Draft",
+            "Description": "Fast/Lower Quality",
+            "AIConfigurationID": "@lookup:MJ: AI Configurations.Name=Fast",
+            "IsDefault": false,
+            "Priority": 1,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "C05A8E01-4C11-4E8A-9B01-1A2B3C4D5E40"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "Name": "Standard",
+            "DisplayName": "Standard",
+            "Description": "Balanced Quality/Speed",
+            "AIConfigurationID": "@lookup:MJ: AI Configurations.Name=Standard",
+            "IsDefault": true,
+            "Priority": 2,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "C05A8E01-4C11-4E8A-9B01-1A2B3C4D5E41"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "Name": "High",
+            "DisplayName": "High",
+            "Description": "Highest Quality/Slower",
+            "AIConfigurationID": "@lookup:MJ: AI Configurations.Name=High Power",
+            "IsDefault": false,
+            "Priority": 3,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "C05A8E01-4C11-4E8A-9B01-1A2B3C4D5E42"
+          }
+        }
+      ],
+      "MJ: AI Agent Client Tools": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ClientToolDefinitionID": "@lookup:MJ: AI Client Tool Definitions.Name=NavigateToApp",
+            "IsRequired": false,
+            "Priority": 0
+          },
+          "primaryKey": {
+            "ID": "C05A8E01-4C11-4E8A-9B01-1A2B3C4D5E51"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ClientToolDefinitionID": "@lookup:MJ: AI Client Tool Definitions.Name=NavigateToRecord",
+            "IsRequired": false,
+            "Priority": 1
+          },
+          "primaryKey": {
+            "ID": "C05A8E01-4C11-4E8A-9B01-1A2B3C4D5E52"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "C05A8E01-4C11-4E8A-9B01-1A2B3C4D5E00"
+    }
+  }
+]
