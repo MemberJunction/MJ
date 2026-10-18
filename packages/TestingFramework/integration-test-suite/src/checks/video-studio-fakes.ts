@@ -33,7 +33,7 @@ import { AIEngine } from '@memberjunction/aiengine';
 import { AIVideoRunner } from '@memberjunction/ai-prompts';
 import { BaseEntity } from '@memberjunction/core';
 import { CredentialEngine } from '@memberjunction/credentials';
-import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
+import { FilterByUUIDs, MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import {
     CreatePreAuthUploadUrlPayload,
     FileSearchOptions,
@@ -267,14 +267,14 @@ export function RegisterFakeVideoGenerator(
             const bindings = AIEngine.Instance.PromptModels.filter((pm) =>
                 UUIDsEqual(pm.PromptID, prompt.ID),
             );
-            for (const b of bindings) {
-                const vendors = AIEngine.Instance.ModelVendors.filter(
-                    (mv) => UUIDsEqual(mv.ModelID, b.ModelID) && mv.DriverClass,
-                );
-                for (const v of vendors) {
-                    if (v.DriverClass) {
-                        classes.add(v.DriverClass);
-                    }
+            const vendors = FilterByUUIDs(
+                AIEngine.Instance.ModelVendors,
+                bindings.map((b) => b.ModelID),
+                (mv) => mv.ModelID,
+            );
+            for (const v of vendors) {
+                if (v.DriverClass) {
+                    classes.add(v.DriverClass);
                 }
             }
         }
