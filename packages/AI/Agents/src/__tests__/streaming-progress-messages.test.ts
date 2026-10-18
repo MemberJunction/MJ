@@ -12,6 +12,10 @@ class ProgressMessageTestAgent extends BaseAgent {
         Reflect.set(this, '_agentHierarchy', hierarchy);
     }
 
+    public testBuildInitializationProgressMessage(params: ExecuteAgentParams): string {
+        return this.buildInitializationProgressMessage(params);
+    }
+
     public testBuildPromptProgressMessage(
         params: ExecuteAgentParams,
         previousDecision?: BaseAgentNextStep | null
@@ -40,6 +44,14 @@ function createParams(agentName: string): ExecuteAgentParams {
 
 describe('BaseAgent streaming progress message formatting', () => {
     describe('Root agent (_depth === 0)', () => {
+        it('emits "Getting ready..." on initialization', () => {
+            const agent = new ProgressMessageTestAgent();
+            agent.setHierarchyForTest(0, ['Sage']);
+            const params = createParams('Sage');
+
+            expect(agent.testBuildInitializationProgressMessage(params)).toBe('Getting ready...');
+        });
+
         it('uses user-friendly "thinking" phrasing with the root agent name on initial turn', () => {
             const agent = new ProgressMessageTestAgent();
             agent.setHierarchyForTest(0, ['Sage']);
@@ -131,6 +143,21 @@ describe('BaseAgent streaming progress message formatting', () => {
     });
 
     describe('Sub-agent (_depth > 0)', () => {
+        it('emits "Starting <SubAgentName>..." on direct sub-agent initialization and includes parent breadcrumb when nested', () => {
+            const agent = new ProgressMessageTestAgent();
+            agent.setHierarchyForTest(1, ['Sage', 'Query Strategist']);
+            const params = createParams('Query Strategist');
+
+            expect(agent.testBuildInitializationProgressMessage(params)).toBe(
+                'Starting Query Strategist...'
+            );
+
+            agent.setHierarchyForTest(2, ['Sage', 'Query Builder', 'Query Strategist']);
+            expect(agent.testBuildInitializationProgressMessage(params)).toBe(
+                'Query Builder: Starting Query Strategist...'
+            );
+        });
+
         it('emits "<SubAgent>: Thinking..." without repeating the sub-agent name on initial turn', () => {
             const agent = new ProgressMessageTestAgent();
             agent.setHierarchyForTest(1, ['Sage', 'Query Strategist']);

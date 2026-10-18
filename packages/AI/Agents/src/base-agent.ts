@@ -2383,13 +2383,10 @@ export class BaseAgent {
                 return startingValidationResult;
             }
 
-            // Report initialization progress (user-oriented message; formatHierarchicalMessage prefixes breadcrumb for sub-agents)
-            const initMessage = this._depth > 0
-                ? 'Starting up...'
-                : 'Getting ready...';
+            // Report initialization progress
             wrappedParams.onProgress?.({
                 step: 'initialization',
-                message: this.formatHierarchicalMessage(initMessage),
+                message: this.buildInitializationProgressMessage(params),
                 metadata: {
                     stepCount: 0,
                     hierarchicalStep: this.buildHierarchicalStep(0, this._parentStepCounts)
@@ -13796,6 +13793,26 @@ The context is now within limits. Please retry your request with the recovered c
             return breadcrumb ? `${breadcrumb}: ${baseMessage}` : baseMessage;
         }
         return baseMessage;
+    }
+
+    /**
+     * Builds the user-oriented initialization progress message for an agent run.
+     *
+     * - Root agent (`_depth === 0`): `'Getting ready...'`
+     * - Direct sub-agent (`_depth === 1`): `'Starting <SubAgentName>...'`
+     * - Nested sub-agent (`_depth > 1`): `'<ParentBreadcrumb>: Starting <SubAgentName>...'`
+     *
+     * @protected
+     * @param {ExecuteAgentParams} params - Execution parameters for the current agent
+     * @returns {string} Formatted initialization progress message
+     */
+    protected buildInitializationProgressMessage(params: ExecuteAgentParams): string {
+        if (this._depth === 0) {
+            return 'Getting ready...';
+        }
+        const startPhrase = `Starting ${params.agent.Name}...`;
+        const parentBreadcrumb = this._agentHierarchy.slice(1, -1).join(' → ');
+        return parentBreadcrumb ? `${parentBreadcrumb}: ${startPhrase}` : startPhrase;
     }
 
     /**
