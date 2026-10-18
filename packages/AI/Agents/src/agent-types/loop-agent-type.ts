@@ -191,6 +191,12 @@ export class LoopAgentType extends BaseAgentType {
             return;
         }
 
+        // Backward-compatibility normalization: if a prompt or model emits the legacy v1 flat
+        // `"agentName": "..."` field on a task node without `kind` / `configuration`, normalize it
+        // in place to the v2 `kind: "Agent"` + `configuration: { agentName }` shape before running
+        // ValidateTaskGraphSpec so single-agent and multi-agent delegations do not needlessly fail.
+        this.normalizeLegacyTaskNodes(spec);
+
         // The same validator the server runs at submission (D16), so a graph that passes here
         // cannot fail a different check later. Every failure is reported at once — a model fixing a
         // malformed graph should not discover the problems one round-trip at a time.
@@ -227,6 +233,34 @@ export class LoopAgentType extends BaseAgentType {
             // run forensics show why a graph did not reach the dispatcher, and Save as Workflow
             // (D17) can attach to the single-node case — the shape a user is most likely to promote.
             retVal.taskGraph = { spec, folded: true, foldReason: fold.reason };
+        }
+    }
+
+    /**
+     * Normalizes legacy v1 flat `agentName` task nodes into the v2 `{ kind: 'Agent', configuration: { agentName } }`
+     * shape in place before validation.
+     */
+    private normalizeLegacyTaskNodes(spec: TaskGraphSpec): void {
+        if (!spec || !Array.isArray(spec.tasks)) {
+            return;
+        }
+        for (const rawNode of spec.tasks) {
+            if (!rawNode || typeof rawNode !== 'object') {
+                continue;
+            }
+            const record = rawNode as unknown as Record<string, unknown>;
+            const legacyAgentName = typeof record.agentName === 'string' ? record.agentName.trim() : '';
+            if (!record.kind && legacyAgentName.length > 0) {
+                record.kind = 'Agent';
+                if (!record.configuration || typeof record.configuration !== 'object') {
+                    record.configuration = { agentName: legacyAgentName };
+                } else {
+                    const configRecord = record.configuration as Record<string, unknown>;
+                    if (typeof configRecord.agentName !== 'string' || configRecord.agentName.trim().length === 0) {
+                        configRecord.agentName = legacyAgentName;
+                    }
+                }
+            }
         }
     }
 

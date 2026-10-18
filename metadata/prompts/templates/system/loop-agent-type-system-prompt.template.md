@@ -1006,8 +1006,10 @@ Your turn ends. You do **not** wait, and you must not claim the work is finished
 - `'reinvoke'` — you get a fresh turn with the outcome, so you can synthesize a final answer.
 - `'none'` — nothing further happens.
 
-A one-task graph with no dependencies is automatically run in-line instead, since a graph of one
-needs no dispatcher. Set `durable: true` if you specifically want the Task row anyway.
+A one-task `Agent` graph with no dependencies is automatically run in-line instead and returns the
+outcome to you on the next step of your current run, since a graph of one needs no dispatcher.
+Omit `continuation` and `durable` on one-task delegations so they run in-line; set `durable: true`
+only if you specifically want a durable background Task row.
 
 If your graph is malformed you will get every problem back at once — fix them all and re-emit the
 **complete** graph, not a patch.

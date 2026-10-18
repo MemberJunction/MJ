@@ -1104,8 +1104,36 @@ export class AgentRunner {
 
         // Check agent's ArtifactCreationMode
         await AIEngine.Instance.Config(false, contextUser);
-        const agent = AIEngine.Instance.Agents.find(a => UUIDsEqual(a.ID, agentRun.AgentID));
-        const creationMode = agent?.ArtifactCreationMode;
+        let agent = AIEngine.Instance.Agents.find(a => UUIDsEqual(a.ID, agentRun.AgentID));
+        let creationMode = agent?.ArtifactCreationMode;
+
+        // When an orchestrator with ArtifactCreationMode='Never' or 'System Only' (or no
+        // DefaultArtifactTypeID, such as Sage) delegates a folded single-node task graph (or
+        // sub-agent step) to a specialist agent (such as Query Builder or Research Agent) that
+        // DOES produce user-visible artifacts, resolve the artifact creation mode and
+        // DefaultArtifactTypeID from the last completed Sub-Agent step's specialist agent so
+        // the specialist's deliverable artifact is persisted with the specialist's
+        // DefaultArtifactTypeID and visibility.
+        if ((creationMode === 'Never' || creationMode === 'System Only' || !agent?.DefaultArtifactTypeID) && agentRun?.Steps?.length) {
+            for (let i = agentRun.Steps.length - 1; i >= 0; i--) {
+                const step = agentRun.Steps[i];
+                if (step.StepType === 'Sub-Agent' && step.Success) {
+                    const subAgentId = step.TargetID || step.SubAgentRun?.AgentID;
+                    const delegatedAgent = subAgentId
+                        ? AIEngine.Instance.Agents.find(a => UUIDsEqual(a.ID, subAgentId))
+                        : undefined;
+                    if (
+                        delegatedAgent &&
+                        delegatedAgent.ArtifactCreationMode !== 'Never' &&
+                        (delegatedAgent.DefaultArtifactTypeID != null || delegatedAgent.ArtifactCreationMode === 'Always')
+                    ) {
+                        agent = delegatedAgent;
+                        creationMode = delegatedAgent.ArtifactCreationMode;
+                        break;
+                    }
+                }
+            }
+        }
 
         if (creationMode === 'Never') {
             LogStatus(`Skipping artifact creation - agent "${agent?.Name}" has ArtifactCreationMode='Never'`);

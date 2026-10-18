@@ -216,5 +216,29 @@ describe('LoopAgentType — the Tasks primitive', () => {
             // which is itself the signal that it went to the dispatcher.
             expect(result.taskGraph?.foldReason).toBeUndefined();
         });
+
+        it('normalizes legacy v1 flat agentName task nodes into Spec v2 kind="Agent" + configuration.agentName and folds single-node delegations', async () => {
+            const legacySingle = {
+                workflowName: 'Delegate to Query Builder',
+                reasoning: 'User wants a SQL query',
+                tasks: [
+                    {
+                        tempId: 'task1',
+                        name: 'Build Query',
+                        description: 'Write a SQL query for order revenue by status',
+                        agentName: 'Query Builder',
+                        dependsOn: [],
+                        inputPayload: { request: 'order revenue by status' },
+                    },
+                ],
+            };
+            const result = await agent.DetermineNextStep(emit(legacySingle), paramsWith(true), {}, {});
+            expect(result.step).toBe('Sub-Agent');
+            expect(result.subAgent?.name).toBe('Query Builder');
+            expect(result.taskGraph?.folded).toBe(true);
+            expect(result.taskGraph?.spec.tasks[0]?.kind).toBe('Agent');
+            expect(result.taskGraph?.spec.tasks[0]?.configuration).toEqual({ agentName: 'Query Builder' });
+        });
     });
 });
+

@@ -55,7 +55,10 @@ When a user needs specialized work done, find the right agent and delegate with 
                     "tempId": "task1",
                     "name": "Research Companies",
                     "description": "Query database for company information",
-                    "agentName": "Research Agent",
+                    "kind": "Agent",
+                    "configuration": {
+                        "agentName": "Research Agent"
+                    },
                     "dependsOn": [],
                     "inputPayload": {
                         "query": "companies in AI sector"
@@ -70,11 +73,12 @@ When a user needs specialized work done, find the right agent and delegate with 
 **Task Graph Fields:**
 - **workflowName**: Brief name for the workflow
 - **reasoning**: Why you're delegating and to whom
-- **tasks**: Array with a single task for standard delegation
+- **tasks**: Array with a single task for standard delegation (do NOT set `continuation` or `durable: true` on single-task delegations so the framework runs the specialist in-line during the current turn)
 - **tempId**: Use "task1"
 - **name**: Short task name (shows in UI)
 - **description**: What the agent will do — be specific and include full context from the user's request
-- **agentName**: Which agent executes this task (must match an available agent)
+- **kind**: `"Agent"` for delegating to an agent
+- **configuration**: `{ "agentName": "<Exact Agent Name>" }` (must match an available agent)
 - **dependsOn**: Empty array for single-task delegation
 - **inputPayload**: Data passed to the agent
 
@@ -185,7 +189,10 @@ You have TWO search capabilities. Use the right one:
         "tempId": "task1",
         "name": "Task Name",
         "description": "What the agent will do",
-        "agentName": "Agent Name",
+        "kind": "Agent",
+        "configuration": {
+          "agentName": "Agent Name"
+        },
         "dependsOn": [],
         "inputPayload": {}
       }]

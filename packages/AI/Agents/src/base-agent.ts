@@ -1196,6 +1196,15 @@ export class BaseAgent {
     private _resolvedStorageAccountId: string | null = null;
 
     /**
+     * Most recent artifactDirective returned by a child or related sub-agent during this run.
+     * Preserved as a fallback in {@link finalizeAgentRun} when an orchestrator (e.g. Sage) wraps
+     * up a delegated sub-agent's response on the subsequent turn without re-emitting its own
+     * artifactDirective.
+     * @private
+     */
+    private _lastSubAgentArtifactDirective: ArtifactDirective | undefined = undefined;
+
+    /**
      * The resolved FileStorageAccount ID for this agent run. Set during Execute()
      * via the hierarchical resolution chain (Runtime → Agent → Category → Type → fallback).
      * Included in the ExecuteAgentResult so AgentRunner can route file artifact uploads.
@@ -2424,6 +2433,7 @@ export class BaseAgent {
             this._effectiveActions = [];
             this._dynamicActionLimits = {};
             this._mediaOutputs = [];
+            this._lastSubAgentArtifactDirective = undefined;
             this._messageLifecycleCallback = params.onMessageLifecycle;
             this._catalogNarrowing = undefined;
             this._openingRequest = OpeningRequestText(params.conversationMessages);
@@ -6068,9 +6078,21 @@ export class BaseAgent {
         promptResult: AIPromptRunResult,
         currentPayload: P
     ): Promise<BaseAgentNextStep<P>> {
-        // Let the agent type determine the next step
+        // Let the agent type determine the next step. Pass the merged agent-type prompt params
+        // (schema defaults -> agent.AgentTypePromptParams -> runtime override) without mutating
+        // the caller's ExecuteAgentParams or params.data object.
         this.logStatus(`🎯 Agent type '${agentType.Name}' determining next step`, true, params);
-        const nextStep = await this.AgentTypeInstance.DetermineNextStep<P>(promptResult, params, currentPayload, this.AgentTypeState, this._nativeToolBindings);
+        const paramsForAgentType: ExecuteAgentParams =
+            this._agentTypePromptParams && params?.data?.__agentTypePromptParams === undefined
+                ? {
+                      ...params,
+                      data: {
+                          ...(params.data ?? {}),
+                          __agentTypePromptParams: this._agentTypePromptParams,
+                      },
+                  }
+                : params;
+        const nextStep = await this.AgentTypeInstance.DetermineNextStep<P>(promptResult, paramsForAgentType, currentPayload, this.AgentTypeState, this._nativeToolBindings);
         return nextStep;
     }
 
@@ -6196,6 +6218,7 @@ export class BaseAgent {
         currentStep: MJAIAgentRunStepEntityExtended
     ): Promise<BaseAgentNextStep<P>> {
         const curAgentSubAgents = this.getEffectiveSubAgentsForValidation(params.agent.ID);
+        const allowFoldedTaskGraphTarget = nextStep.taskGraph?.folded === true;
 
         // Collect requested sub-agents. Prefer plural `subAgents` (parallel fan-out);
         // fall back to singular `subAgent` for the classic single-sub-agent next step.
@@ -6219,7 +6242,14 @@ export class BaseAgent {
         // Validate each requested sub-agent: existence + MaxExecutionsPerRun
         for (const req of requested) {
             const name = req?.name;
-            const subAgent = curAgentSubAgents.find(a => a.Name.trim().toLowerCase() === name?.trim().toLowerCase());
+            const normalizedName = name?.trim().toLowerCase();
+            const subAgent =
+                curAgentSubAgents.find(a => a.Name.trim().toLowerCase() === normalizedName) ??
+                (allowFoldedTaskGraphTarget && normalizedName
+                    ? AIEngine.Instance.Agents.find(
+                          a => a.Status === 'Active' && a.Name.trim().toLowerCase() === normalizedName
+                      )
+                    : undefined);
 
             if (!name || !subAgent) {
                 this.logError(`Sub-agent '${name}' not found or not active for agent '${params.agent.Name}'`, {
@@ -12712,7 +12742,7 @@ The context is now within limits. Please retry your request with the recovered c
      * @private
      */
     protected resolveActionResultCrush(params: ExecuteAgentParams): ActionResultCrushConfig | undefined {
-        const agentTypePromptParams = params.data?.__agentTypePromptParams as Record<string, unknown> | undefined;
+        const agentTypePromptParams = (params.data?.__agentTypePromptParams ?? this._agentTypePromptParams) as Record<string, unknown> | undefined;
         if (agentTypePromptParams?.crushActionResults === false) {
             return undefined;
         }
@@ -15208,7 +15238,9 @@ The context is now within limits. Please retry your request with the recovered c
                 this._agentRun.FinalPayloadObject = mergedPayload;
             }
             
-            if (!previousDecision?.artifactDirective && !shouldTerminate) {
+            if (previousDecision?.taskGraph?.folded === true && subAgentResult.artifactDirective) {
+                this._lastSubAgentArtifactDirective = subAgentResult.artifactDirective;
+            } else if (!previousDecision?.artifactDirective && !shouldTerminate) {
                 this.warnIfDiscardingSubAgentArtifactDirective(subAgentResult, subAgentRequest.name);
             }
             return {
@@ -15295,7 +15327,7 @@ The context is now within limits. Please retry your request with the recovered c
             };
         }
 
-        const resolved = this.resolveSubAgentByName(params, name);
+        const resolved = this.resolveSubAgentByName(params, name, previousDecision.taskGraph?.folded === true);
         if (resolved?.relationship) {
             return await this.executeRelatedSubAgentStep<SC, SR>(
                 params,
@@ -15355,7 +15387,8 @@ The context is now within limits. Please retry your request with the recovered c
      */
     protected resolveSubAgentByName(
         params: ExecuteAgentParams,
-        name: string
+        name: string,
+        allowAnyActiveAgent: boolean = false
     ): { subAgentEntity: MJAIAgentEntityExtended; relationship?: MJAIAgentRelationshipEntity } | undefined {
         const normalized = name.trim().toLowerCase();
         const childAgent = AIEngine.Instance.Agents.find(a =>
@@ -15390,6 +15423,18 @@ The context is now within limits. Please retry your request with the recovered c
         );
         if (effectiveAgent) {
             return { subAgentEntity: effectiveAgent };
+        }
+        // 4) Single-node constant-folded task graphs (D9): an orchestrator (e.g. Sage) may discover
+        // any active peer agent via Find Candidate Agents and delegate a 1-node Tasks graph to it.
+        // LoopAgentType folds that 1-node graph into an in-run Sub-Agent step (`taskGraph.folded === true`),
+        // so allow resolving any active agent in AIEngine.Instance.Agents.
+        if (allowAnyActiveAgent) {
+            const anyActiveAgent = AIEngine.Instance.Agents.find(a =>
+                a.Status === 'Active' && a.Name.trim().toLowerCase() === normalized
+            );
+            if (anyActiveAgent) {
+                return { subAgentEntity: anyActiveAgent };
+            }
         }
         return undefined;
     }
@@ -19421,7 +19466,7 @@ The context is now within limits. Please retry your request with the recovered c
 
         // Resolve manifest alpha IDs (e.g. "A", "B") or version IDs in artifactDirective.targetArtifactId
         // to the underlying MJ: Artifacts record UUID before returning.
-        let resolvedArtifactDirective = finalStep.artifactDirective;
+        let resolvedArtifactDirective = finalStep.artifactDirective ?? this._lastSubAgentArtifactDirective;
         if (resolvedArtifactDirective?.targetArtifactId) {
             const resolvedUuid = this._artifactToolManager.ResolveArtifactUuid(resolvedArtifactDirective.targetArtifactId);
             if (resolvedUuid) {
