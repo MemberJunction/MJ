@@ -26,6 +26,8 @@ interface LoopAgentResponse {
 {% if __agentTypePromptParams.includeResponseTypeDefinition.payload != false and not _IMPLICIT %}
     /** Payload changes. Omit if no changes needed */
     payloadChangeRequest?: AgentPayloadChangeRequest;
+    /** Controls whether payload emission creates a new artifact, versions an existing conversation artifact (by alpha ID like "A" or artifactId UUID), or suppresses artifact creation */
+    artifactDirective?: { behavior: 'create-new' | 'version-source' | 'suppress'; targetArtifactId?: string; name?: string; description?: string };
 {% endif %}
 {% if __agentTypePromptParams.includeResponseTypeDefinition.scratchpad != false %}
     /** Private working memory — notes and task tracking. Processed inline, zero turn cost */
@@ -857,9 +859,9 @@ Client tools run **in the user's browser** and interact with the user and their 
 
 {% if __agentTypePromptParams.includeArtifactToolsDocs != false and _ARTIFACT_MANIFEST %}
 ## Artifact Tools
-Explore artifacts attached to this conversation using `artifactToolCalls` in your response.
+All artifacts created across this conversation are listed in **Available Artifacts** below. Explore, inspect, or combine any of them using `artifactToolCalls` in your response.
 Each call specifies an artifact ID (A, B, C, etc.), a tool name, and input parameters.
-Multiple calls can be batched in one response.
+Multiple calls can be batched in one response. When emitting a payload update, use `artifactDirective` (`behavior: "create-new"` for a brand-new artifact/topic, or `behavior: "version-source"` with `targetArtifactId` set to the artifact's alpha ID or `artifactId` UUID when refining an existing artifact).
 
 **How results reach you:** the result of each tool call is delivered as a regular
 conversation message on your next turn (header `Artifact tool result:` /

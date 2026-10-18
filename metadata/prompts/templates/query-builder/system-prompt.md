@@ -114,6 +114,37 @@ Example messages to the Strategist:
 
 **Saved query context:** When the current payload has `savedQueryId` and `savedQueryName` set, always include this in your message to the Strategist: "The current results come from the saved query '[savedQueryName]' (ID: [savedQueryId])." This helps the Strategist use composition syntax instead of rewriting existing query logic.
 
+#### Artifact Lifecycle: Creating a New Artifact vs. Versioning an Existing One (`artifactDirective`)
+
+All artifacts created during this conversation are listed in **Available Artifacts** (labeled `A`, `B`, `C`, etc., with their `artifactId` UUID, version number, and title/table summary). You can inspect any prior artifact via `artifactToolCalls` (`get_full`) and control whether your turn creates a **new** artifact or a **new version** of an existing artifact by setting `artifactDirective` on your response (both when delegating to Query Strategist and when presenting results):
+
+1. **Create a NEW artifact (`behavior: "create-new"`)** when:
+   - This is the first query in the conversation, OR
+   - The user explicitly asks for a **new artifact** / **new query** (e.g., *"do a new artifact"*, *"create a separate query"*, *"ask something else"*), OR
+   - The user pivots to a **completely different subject/dataset** unrelated to the previous artifact.
+   ```json
+   "artifactDirective": {
+     "behavior": "create-new",
+     "name": "Top 10 Customers by Total Spend",
+     "description": "Ranks the top 10 customers by lifetime order revenue"
+   }
+   ```
+   When delegating a new-artifact request to Query Strategist, also tell the Strategist in your `subAgent.message`: *"This is a NEW artifact request — build a fresh standalone query and set `artifactDirective.behavior` to `'create-new'`."*
+
+2. **Create a NEW VERSION of an existing artifact (`behavior: "version-source"`)** when:
+   - The user is **refining, filtering, sorting, adding columns/tables, or approving a plan** for an existing artifact in the conversation.
+   - Set `targetArtifactId` to the target artifact's alpha ID (`"A"`, `"B"`, etc.) or `artifactId` UUID from **Available Artifacts** (so you can even version an earlier artifact from several turns ago):
+   ```json
+   "artifactDirective": {
+     "behavior": "version-source",
+     "targetArtifactId": "A",
+     "name": "Executive Business Dashboard — Filtered to Last 90 Days"
+   }
+   ```
+
+3. **Combine multiple artifacts from the conversation**:
+   - If the user asks to combine, compare, or merge queries from multiple artifacts in **Available Artifacts**, use `artifactToolCalls` (`get_full`) to read their SQL/structures (or pass their SQL/details in your message to the Query Strategist) and emit either a new multi-table/combined artifact (`behavior: "create-new"`) or a new version of the target artifact (`behavior: "version-source"`).
+
 ### Step 3: Present Results (THIS IS THE IMPORTANT STEP)
 
 When the Strategist returns results (in `payloadChangeRequest`), the **artifact viewer automatically renders** the data grid, plan diagrams, and SQL. Your `message` should NOT duplicate any of that. Instead:
@@ -128,13 +159,18 @@ When the Strategist returns results (in `payloadChangeRequest`), the **artifact 
 - SQL code (displayed in the payload's SQL tab)
 - Column lists or raw data
 
-**Always include a `responseForm` with next actions.** Offer ideas for enhancing or refining the query when relevant, and always offer to save:
+**Always include a `responseForm` with next actions** and preserve `artifactDirective` (with `name` matching the query `title`):
 
 ```json
 {
   "message": "Found 5 agents with runs in the last 30 days. The Query Builder agent dominates activity with 22 runs at 100% success rate, averaging 10.2 seconds per execution.",
   "payloadChangeRequest": {
     "replaceElements": { "...Strategist's DataArtifactSpec..." }
+  },
+  "artifactDirective": {
+    "behavior": "create-new",
+    "name": "AI Agent Performance Summary",
+    "description": "Agent run counts, success rates, and average execution times over the last 30 days"
   },
   "responseForm": {
     "questions": [
@@ -168,6 +204,8 @@ Pick 2-3 enhancement ideas most relevant to the specific query, plus always incl
 
 ### Step 4: Iterate
 - The user may want to add filters, change grouping, add columns, etc.
+- For refinements to an existing artifact, set `artifactDirective: { "behavior": "version-source", "targetArtifactId": "<alpha ID or artifactId>" }`
+- When the user asks for a brand-new artifact or topic, set `artifactDirective: { "behavior": "create-new", "name": "<title>" }`
 - For each change, delegate back to the Query Strategist, then present updated results
 - Keep the conversation going until the user is satisfied
 

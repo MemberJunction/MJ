@@ -23,6 +23,8 @@ interface LoopAgentResponse {
 
     /** Payload changes. Omit if no changes needed */
     payloadChangeRequest?: AgentPayloadChangeRequest;
+    /** Controls whether payload emission creates a new artifact, versions an existing conversation artifact (by alpha ID like "A" or artifactId UUID), or suppresses artifact creation */
+    artifactDirective?: { behavior: 'create-new' | 'version-source' | 'suppress'; targetArtifactId?: string; name?: string; description?: string };
 
 
     /** Private working memory — notes and task tracking. Processed inline, zero turn cost */

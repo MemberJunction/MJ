@@ -272,6 +272,14 @@ Skipping formatting or comments is not optional — well-presented SQL is part o
 
 Return your response in this exact structure (note: the DataArtifactSpec goes inside `payloadChangeRequest.replaceElements`).
 
+**CRITICAL — `artifactDirective` (New Artifact vs. Version Existing Artifact):**
+- Always include `"artifactDirective"` alongside `payloadChangeRequest` so the artifact header displays a meaningful title and description and versions the right artifact:
+  - **New artifact / new query topic**: `"artifactDirective": { "behavior": "create-new", "name": "<same as title>", "description": "<1-sentence summary of what the query shows>" }`
+  - **Refining or executing an approved plan for an existing artifact**: `"artifactDirective": { "behavior": "version-source", "targetArtifactId": "<alpha ID like 'A' or artifactId UUID from Available Artifacts>", "name": "<same as title>", "description": "<1-sentence summary>" }`
+- **Single-Table vs. Multi-Table Cleanliness**:
+  - When returning a **single-table** query, only emit `source`, `title`, `plan`, `columns`, `rows`, and `metadata` (never include `tables`, `computations`, or `interpretation` from an earlier multi-table turn).
+  - When returning a **multi-table** dashboard, only emit `title`, `plan`, `interpretation`, `computations`, and `tables` (never include root-level `columns` or `rows`).
+
 **CRITICAL — String Formatting (line breaks):**
 - `plan`, `metadata.sql`, and every other multi-line string value MUST contain line breaks, written as **standard JSON `\n` escape sequences**. They decode to real line breaks when your response is parsed.
 - **Every markdown heading, list item, blank line, and Mermaid statement needs its own `\n`.** Running them together (e.g., `"## OverviewThis query..."` or `"```mermaidflowchart TD..."`) destroys the rendering — headings don't render, lists collapse, and Mermaid diagrams fail to draw entirely.
@@ -289,6 +297,11 @@ For simple queries that produce one result set, use the flat format with root-le
 {
   "taskComplete": false,
   "message": "Queried agent runs for the last 30 days. Found 5 agents with varying activity levels.",
+  "artifactDirective": {
+    "behavior": "create-new",
+    "name": "Descriptive Title of What This Query Shows",
+    "description": "Counts runs per agent so administrators can see which agents are busiest."
+  },
   "payloadChangeRequest": {
     "replaceElements": {
       "source": "query",

@@ -2386,7 +2386,7 @@ export class BaseAgent {
             // Report initialization progress
             wrappedParams.onProgress?.({
                 step: 'initialization',
-                message: this.formatHierarchicalMessage(`Initializing ${params.agent.Name} agent and preparing execution environment`),
+                message: this.buildInitializationProgressMessage(params),
                 metadata: {
                     stepCount: 0,
                     hierarchicalStep: this.buildHierarchicalStep(0, this._parentStepCounts)
@@ -2449,7 +2449,7 @@ export class BaseAgent {
             // Report validation progress
             wrappedParams.onProgress?.({
                 step: 'validation',
-                message: this.formatHierarchicalMessage('Validating agent configuration and loading prompts'),
+                message: this.formatHierarchicalMessage('Gathering context...'),
                 metadata: {
                     stepCount: 0,
                     hierarchicalStep: this.buildHierarchicalStep(0, this._parentStepCounts)
@@ -2590,7 +2590,7 @@ export class BaseAgent {
                     stepCount: executionResult.stepCount,
                     hierarchicalStep: this.buildHierarchicalStep(executionResult.stepCount, this._parentStepCounts)
                 },
-                message: this.formatHierarchicalMessage('Finalizing agent execution')
+                message: this.formatHierarchicalMessage('Wrapping up...')
             });
 
             // Finalize the agent run
@@ -13796,6 +13796,76 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
+     * Builds the user-oriented initialization progress message for an agent run.
+     *
+     * - Root agent (`_depth === 0`): `'Getting ready...'`
+     * - Direct sub-agent (`_depth === 1`): `'Starting <SubAgentName>...'`
+     * - Nested sub-agent (`_depth > 1`): `'<ParentBreadcrumb>: Starting <SubAgentName>...'`
+     *
+     * @protected
+     * @param {ExecuteAgentParams} params - Execution parameters for the current agent
+     * @returns {string} Formatted initialization progress message
+     */
+    protected buildInitializationProgressMessage(params: ExecuteAgentParams): string {
+        if (this._depth === 0) {
+            return 'Getting ready...';
+        }
+        const startPhrase = `Starting ${params.agent.Name}...`;
+        const parentBreadcrumb = this._agentHierarchy.slice(1, -1).join(' → ');
+        return parentBreadcrumb ? `${parentBreadcrumb}: ${startPhrase}` : startPhrase;
+    }
+
+    /**
+     * Builds a user-oriented progress message for a prompt execution step without
+     * exposing internal framework terminology ("initial prompt", "payload", "context")
+     * or duplicating the sub-agent name when prefixed by {@link formatHierarchicalMessage}.
+     *
+     * @protected
+     * @param {ExecuteAgentParams} params - Execution parameters for the current agent
+     * @param {BaseAgentNextStep | null} [previousDecision] - Previous step decision when re-prompting
+     * @returns {string} Base progress message (before `formatHierarchicalMessage` breadcrumb prefixing)
+     */
+    protected buildPromptProgressMessage(
+        params: ExecuteAgentParams,
+        previousDecision?: BaseAgentNextStep | null
+    ): string {
+        if (!previousDecision) {
+            return this._depth > 0
+                ? 'Thinking...'
+                : `${params.agent.Name} is thinking...`;
+        }
+
+        const retryReason = previousDecision.retryReason?.trim();
+        if (retryReason) {
+            if (retryReason === 'Payload change applied') {
+                return this._depth > 0
+                    ? 'Thinking through the next steps...'
+                    : `${params.agent.Name} is thinking through the next steps...`;
+            }
+            if (retryReason.startsWith('Context recovery')) {
+                return this._depth > 0
+                    ? 'Thinking...'
+                    : `${params.agent.Name} is thinking...`;
+            }
+            if (retryReason === 'Error while processing actions, retry') {
+                return 'Recovering from an error and trying another approach...';
+            }
+            return retryReason;
+        }
+
+        const retryInstructions = previousDecision.retryInstructions?.trim();
+        if (retryInstructions) {
+            return this._depth > 0
+                ? 'Reviewing batch results...'
+                : `${params.agent.Name} is reviewing batch results...`;
+        }
+
+        return this._depth > 0
+            ? 'Thinking through the next steps...'
+            : `${params.agent.Name} is thinking through the next steps...`;
+    }
+
+    /**
      * Trims a step name to what `AIAgentRunStep.StepName` can hold. Step names are built from free
      * text — a termination message quoting a provider's error, a tool name with its arguments, the
      * hierarchy breadcrumb in front of either — and one longer than the column made the whole row
@@ -14196,9 +14266,7 @@ The context is now within limits. Please retry your request with the recovered c
         try {
             // Report prompt execution progress with context
             const isRetry = !!previousDecision;
-            const promptMessage = isRetry
-                ? `Running ${params.agent.Name} with context from ${previousDecision.retryReason || 'previous actions'}`
-                : `Running ${params.agent.Name}'s initial prompt...`;
+            const promptMessage = this.buildPromptProgressMessage(params, previousDecision);
 
             const hierarchicalStepToEmit = this.buildHierarchicalStep(stepCount + 1, this._parentStepCounts);
 
@@ -14373,7 +14441,12 @@ The context is now within limits. Please retry your request with the recovered c
             const initialNextStep = await this.determineNextStep<P>(params, config.agentType, promptResult, payload);
             
             // Apply payload changes if provided
-            let finalPayload = payload; // Start with current payload
+            let finalPayload = (initialNextStep.artifactDirective?.behavior === 'create-new'
+                && !initialNextStep.payloadChangeRequest
+                && initialNextStep.step === 'Sub-Agent'
+                && this._promptTurnCount <= 1)
+                ? ({} as P)
+                : payload; // Start with current payload
             let currentStepPayloadChangeResult = undefined;
             if (initialNextStep.payloadChangeRequest) {
                 // Parse the allowed paths if configured
@@ -14381,9 +14454,17 @@ The context is now within limits. Please retry your request with the recovered c
                     ? JSON.parse(params.agent.PayloadSelfWritePaths) 
                     : this.getDefaultPayloadSelfWritePaths();
 
+                // When creating a brand-new artifact on the first turn (where payload is inherited from a
+                // prior conversation run) or when replaceElements is used with behavior='create-new',
+                // apply against a clean empty object so keys from the previous artifact cannot bleed in.
+                const basePayload = (initialNextStep.artifactDirective?.behavior === 'create-new'
+                    && (this._promptTurnCount <= 1 || Boolean(initialNextStep.payloadChangeRequest.replaceElements)))
+                    ? ({} as P)
+                    : payload;
+
                 // Apply the changes to the payload with operation control
                 const changeResult = this._payloadManager.applyAgentChangeRequest(
-                    payload,
+                    basePayload,
                     initialNextStep.payloadChangeRequest,
                     {
                         validateChanges: true,
@@ -14871,10 +14952,17 @@ The context is now within limits. Please retry your request with the recovered c
                     );
                 }
                 
+                // When either the parent or a terminal child sub-agent declared behavior='create-new',
+                // merge the child's result against a clean empty object so prior-turn keys never bleed in.
+                const mergeTargetPayload = (previousDecision?.artifactDirective?.behavior === 'create-new'
+                    || (subAgentRequest.terminateAfter && subAgentResult.artifactDirective?.behavior === 'create-new'))
+                    ? ({} as SR)
+                    : previousDecision.newPayload;
+
                 // Merge upstream changes back into parent payload
                 const mergeResult = this._payloadManager.mergeUpstreamPayload(
                     subAgentRequest.name,
-                    previousDecision.newPayload,
+                    mergeTargetPayload,
                     resultPayloadForMerge,
                     upstreamPaths,
                     params.verbose === true || IsVerboseLoggingEnabled()
@@ -15038,9 +15126,8 @@ The context is now within limits. Please retry your request with the recovered c
                     newPayload: mergedPayload, // Preserve sub-agent payload changes
                     responseForm: subAgentResult.responseForm,
                     actionableCommands: subAgentResult.actionableCommands,
-                    automaticCommands: subAgentResult.automaticCommands
-                    // artifactDirective is deliberately NOT carried across the parent/child
-                    // boundary — see warnIfDiscardingSubAgentArtifactDirective.
+                    automaticCommands: subAgentResult.automaticCommands,
+                    artifactDirective: previousDecision?.artifactDirective ?? subAgentResult.artifactDirective
                 };
 
                 // Validate through parent's ChatHandlingOption (if configured)
@@ -15091,22 +15178,25 @@ The context is now within limits. Please retry your request with the recovered c
                 this._agentRun.FinalPayloadObject = mergedPayload;
             }
             
-            this.warnIfDiscardingSubAgentArtifactDirective(subAgentResult, subAgentRequest.name);
+            if (!previousDecision?.artifactDirective && !shouldTerminate) {
+                this.warnIfDiscardingSubAgentArtifactDirective(subAgentResult, subAgentRequest.name);
+            }
             return {
                 ...subAgentResult,
                 step: subAgentResult.success ? 'Success' : 'Failed',
                 // Capture error message from sub-agent run for proper error propagation
                 errorMessage: subAgentResult.success ? undefined : (subAgentResult.agentRun?.ErrorMessage || 'Sub-agent failed with no error message'),
+                retryReason: subAgentResult.success
+                    ? `Reviewing results from ${subAgentRequest.name}`
+                    : `Handling error from ${subAgentRequest.name}`,
                 terminate: shouldTerminate,
                 previousPayload: previousDecision?.newPayload,
                 newPayload: mergedPayload,
-                // An artifact directive describes the payload of the agent that ISSUED it. What the
-                // parent returns here is `mergedPayload` — its own payload with the child's changes
-                // folded in — so letting the spread above carry the child's directive through would
-                // persist the PARENT's payload onto an artifact the CHILD named, silently and with no
-                // way for the parent to opt out. Dropped explicitly, which also matches the Chat
-                // mapping in this method and `executeChatStep`: neither ever carried it.
-                artifactDirective: undefined
+                // Preserve the parent's own directive on this Sub-Agent step, or when the sub-agent
+                // terminates the parent run directly (shouldTerminate=true), carry the terminal
+                // sub-agent's directive if the parent did not specify one.
+                artifactDirective: previousDecision?.artifactDirective
+                    ?? (shouldTerminate ? subAgentResult.artifactDirective : undefined)
             };            
         } catch (error) {
             // Preserve payload on error
@@ -15761,8 +15851,12 @@ The context is now within limits. Please retry your request with the recovered c
         const shouldTerminateParent = allExecutions.some(e =>
             e.request.terminateAfter === true
         );
+        const subAgentNames = allExecutions.map(e => e.request.name).join(', ');
         return {
             step: anyFailure ? 'Failed' : (shouldTerminateParent ? 'Success' : 'Retry'),
+            retryReason: anyFailure
+                ? `Reviewing results and errors from ${subAgentNames}`
+                : `Reviewing results from ${subAgentNames}`,
             terminate: shouldTerminateParent,
             newPayload: mergedPayload,
             previousPayload: previousDecision.newPayload
@@ -15995,9 +16089,8 @@ The context is now within limits. Please retry your request with the recovered c
                     newPayload: mergedPayload, // Preserve sub-agent payload changes
                     responseForm: subAgentResult.responseForm,
                     actionableCommands: subAgentResult.actionableCommands,
-                    automaticCommands: subAgentResult.automaticCommands
-                    // artifactDirective is deliberately NOT carried across the parent/child
-                    // boundary — see warnIfDiscardingSubAgentArtifactDirective.
+                    automaticCommands: subAgentResult.automaticCommands,
+                    artifactDirective: previousDecision?.artifactDirective ?? subAgentResult.artifactDirective
                 };
 
                 // Validate through parent's ChatHandlingOption (if configured)
@@ -16050,22 +16143,22 @@ The context is now within limits. Please retry your request with the recovered c
                 this._agentRun.FinalPayloadObject = mergedPayload;
             }
 
-            this.warnIfDiscardingSubAgentArtifactDirective(subAgentResult, subAgentRequest.name);
+            if (!previousDecision?.artifactDirective && !shouldTerminate) {
+                this.warnIfDiscardingSubAgentArtifactDirective(subAgentResult, subAgentRequest.name);
+            }
             return {
                 ...subAgentResult,
                 step: subAgentResult.success ? 'Success' : 'Failed',
                 // Capture error message from sub-agent run for proper error propagation
                 errorMessage: subAgentResult.success ? undefined : (subAgentResult.agentRun?.ErrorMessage || 'Related sub-agent failed with no error message'),
+                retryReason: subAgentResult.success
+                    ? `Reviewing results from ${subAgentRequest.name}`
+                    : `Handling error from ${subAgentRequest.name}`,
                 terminate: shouldTerminate,
                 previousPayload: previousDecision?.newPayload,
                 newPayload: mergedPayload,
-                // An artifact directive describes the payload of the agent that ISSUED it. What the
-                // parent returns here is `mergedPayload` — its own payload with the child's changes
-                // folded in — so letting the spread above carry the child's directive through would
-                // persist the PARENT's payload onto an artifact the CHILD named, silently and with no
-                // way for the parent to opt out. Dropped explicitly, which also matches the Chat
-                // mapping in this method and `executeChatStep`: neither ever carried it.
-                artifactDirective: undefined
+                artifactDirective: previousDecision?.artifactDirective
+                    ?? (shouldTerminate ? subAgentResult.artifactDirective : undefined)
             };
         } catch (error) {
             // Preserve payload on error
@@ -16718,6 +16811,8 @@ The context is now within limits. Please retry your request with the recovered c
             // After actions complete, we need to process the results
             // The retry step is used to re-execute the prompt with the action results
             // This allows the agent to analyze the results and determine what to do next
+            const failedNoun = failedActions.length === 1 ? 'action' : 'actions';
+            const completedNoun = actionSummaries.length === 1 ? 'action' : 'actions';
             return {
                 terminate: false,
                 step: 'Retry',
@@ -16725,8 +16820,8 @@ The context is now within limits. Please retry your request with the recovered c
                 newPayload: finalPayload, // Use the final payload after any post-processing
                 priorStepResult: actionSummaries,
                 retryReason: failedActions.length > 0
-                    ? `Processing results with ${failedActions.length} failed action(s): ${failedActions.map(a => a.actionName).join(', ')}`
-                    : `Analyzing results from ${actionSummaries.length} completed action(s) to formulate response`
+                    ? `Processing results with ${failedActions.length} failed ${failedNoun}: ${failedActions.map(a => a.actionName).join(', ')}`
+                    : `Analyzing results from ${actionSummaries.length} completed ${completedNoun}`
             };
         }
         catch (e) {
@@ -19294,6 +19389,19 @@ The context is now within limits. Please retry your request with the recovered c
             this.PromoteMediaOutputs(finalStep.promoteMediaOutputs);
         }
 
+        // Resolve manifest alpha IDs (e.g. "A", "B") or version IDs in artifactDirective.targetArtifactId
+        // to the underlying MJ: Artifacts record UUID before returning.
+        let resolvedArtifactDirective = finalStep.artifactDirective;
+        if (resolvedArtifactDirective?.targetArtifactId) {
+            const resolvedUuid = this._artifactToolManager.ResolveArtifactUuid(resolvedArtifactDirective.targetArtifactId);
+            if (resolvedUuid) {
+                resolvedArtifactDirective = {
+                    ...resolvedArtifactDirective,
+                    targetArtifactId: resolvedUuid
+                };
+            }
+        }
+
         // Return unified media outputs — all items are persisted by AgentRunner.
         // Sub-agents pass their mediaOutputs to parent for merging and placeholder resolution.
         return {
@@ -19303,7 +19411,7 @@ The context is now within limits. Please retry your request with the recovered c
             responseForm: finalStep.responseForm,
             actionableCommands: resolvedActionableCommands,
             automaticCommands: finalStep.automaticCommands,
-            artifactDirective: finalStep.artifactDirective,
+            artifactDirective: resolvedArtifactDirective,
             memoryContext: this._injectedMemory.notes.length > 0 || this._injectedMemory.examples.length > 0
                 ? this._injectedMemory
                 : undefined,
