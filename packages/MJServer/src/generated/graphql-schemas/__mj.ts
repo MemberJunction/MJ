@@ -9659,6 +9659,10 @@ export class MJAIAgentUserPolicy_ {
     @MaxLength(20)
     MessagingChannelMode?: string;
         
+    @Field({nullable: true, description: "Calendar channel permission level: Disabled, ReadOnly (check events & free/busy only), ProposeWithApproval (create/modify events or send invites only with explicit user approval), or Autonomous."}) 
+    @MaxLength(30)
+    CalendarChannelMode?: string;
+        
     @Field(() => Boolean, {nullable: true, description: "Whether this user's agent may send or respond to structured coordination requests from other users' Chief of Staff agents."}) 
     AllowInterAgentCoordination?: boolean;
         
@@ -9688,10 +9692,6 @@ export class MJAIAgentUserPolicy_ {
         
     @Field() 
     _mj__UpdatedAt: Date;
-        
-    @Field({nullable: true, description: "Calendar channel permission level: Disabled, ReadOnly (check events & free/busy only), ProposeWithApproval (create/modify events or send invites only with explicit user approval), or Autonomous."}) 
-    @MaxLength(30)
-    CalendarChannelMode?: string;
         
     @Field({nullable: true}) 
     @MaxLength(255)
@@ -9754,6 +9754,9 @@ export class CreateMJAIAgentUserPolicyInput {
     @Field({ nullable: true })
     MessagingChannelMode?: string;
 
+    @Field({ nullable: true })
+    CalendarChannelMode?: string;
+
     @Field(() => Boolean, { nullable: true })
     AllowInterAgentCoordination?: boolean;
 
@@ -9777,9 +9780,6 @@ export class CreateMJAIAgentUserPolicyInput {
 
     @Field({ nullable: true })
     InstructionsOverride: string | null;
-
-    @Field({ nullable: true })
-    CalendarChannelMode?: string;
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
@@ -9830,6 +9830,9 @@ export class UpdateMJAIAgentUserPolicyInput {
     @Field({ nullable: true })
     MessagingChannelMode?: string;
 
+    @Field({ nullable: true })
+    CalendarChannelMode?: string;
+
     @Field(() => Boolean, { nullable: true })
     AllowInterAgentCoordination?: boolean;
 
@@ -9853,9 +9856,6 @@ export class UpdateMJAIAgentUserPolicyInput {
 
     @Field({ nullable: true })
     InstructionsOverride?: string | null;
-
-    @Field({ nullable: true })
-    CalendarChannelMode?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
