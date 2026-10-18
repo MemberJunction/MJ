@@ -32,7 +32,9 @@ vi.mock('../EncryptionEngine', () => ({
             IsEncrypted: vi.fn().mockReturnValue(false),
             ValidateKeyMaterial: vi.fn().mockResolvedValue(undefined),
             EncryptWithLookup: vi.fn().mockResolvedValue('$ENC$re-encrypted'),
-            ClearCaches: vi.fn()
+            ClearCaches: vi.fn(),
+            ClearAllCaches: vi.fn().mockResolvedValue(undefined),
+            GetRegisteredEncryptedStores: vi.fn().mockReturnValue([])
         }
     }
 }));

@@ -68,6 +68,29 @@ describe('PayloadSizeGuard & BaseAgent byte-ceiling containment', () => {
             expect(smallEval.limitBytes).toBe(16 * 1024 * 1024);
         });
 
+        it('measures a payload too large for V8 to serialize as Infinity, so the ceiling fails closed', () => {
+            // JSON.stringify throws RangeError ('Invalid string length') past V8's maximum string
+            // length — exactly the runaway payload the guard exists to stop.
+            const unserializable = { toJSON(): never { throw new RangeError('Invalid string length'); } };
+            expect(PayloadSizeGuard.MeasureBytes(unserializable)).toBe(Number.POSITIVE_INFINITY);
+
+            const verdict = PayloadSizeGuard.Evaluate(unserializable, DEFAULT_ABSOLUTE_MAX_PAYLOAD_BYTES);
+            expect(verdict.exceeded).toBe(true);
+            expect(verdict.reason).toContain('more than V8 can serialize');
+            expect(verdict.reason).not.toContain('Infinity');
+        });
+
+        it('measures a circular payload as 0 instead of throwing', () => {
+            const circular: Record<string, unknown> = { name: 'loop' };
+            circular.self = circular;
+            expect(PayloadSizeGuard.MeasureBytes(circular)).toBe(0);
+        });
+
+        it('trips on every payload when the limit is 0, matching the cost and token guardrails', () => {
+            expect(PayloadSizeGuard.Evaluate(null, 0).exceeded).toBe(true);
+            expect(PayloadSizeGuard.Evaluate({ a: 1 }, 0).exceeded).toBe(true);
+        });
+
         it('trips when serialized payload reaches or exceeds limitBytes', () => {
             const largePayload = { data: 'x'.repeat(2048) };
             const verdict = PayloadSizeGuard.Evaluate(largePayload, 1024);

@@ -160,6 +160,32 @@ export abstract class EncryptionKeySourceBase {
     abstract GetKey(lookupValue: string, keyVersion?: string): Promise<Buffer>;
 
     /**
+     * Retrieves key material for a version OLDER than the key's current one.
+     *
+     * `EncryptionEngine.Decrypt` calls this when a ciphertext envelope names a key version that is
+     * no longer current: the key was rotated after the value was written and the value was not
+     * re-encrypted. Rotation replaces the key's lookup value, so `currentLookupValue` is the
+     * lookup value as it stands now, not the one the value was written under.
+     *
+     * This is a separate method rather than `GetKey(currentLookupValue, keyVersion)` because the
+     * two are indistinguishable to a source that keeps one secret per name: a key configured as
+     * `MJ_KEY_V2` at version 1 and a key rotated to `MJ_KEY_V2` asked for version 1 make the same
+     * `GetKey` call, and only the second should resolve to `MJ_KEY`.
+     *
+     * The default asks for that version under the current lookup value, which suits stores that
+     * version a single secret natively. Sources that keep each version under its own name
+     * override it to derive that name.
+     *
+     * @param currentLookupValue - The key's lookup value as it stands now
+     * @param keyVersion - The older version named in the ciphertext envelope
+     * @returns Promise resolving to raw key bytes for that version
+     * @throws Error if the version's key material cannot be found
+     */
+    async GetHistoricalKey(currentLookupValue: string, keyVersion: string): Promise<Buffer> {
+        return this.GetKey(currentLookupValue, keyVersion);
+    }
+
+    /**
      * Checks if a key exists without retrieving it.
      *
      * Used for validation before operations that would fail on missing keys.

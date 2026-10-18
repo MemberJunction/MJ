@@ -5,8 +5,10 @@
  * an agent action or prompt step returns or accumulates an unbounded JSON payload.
  *
  * @module @memberjunction/ai-agents
- * @since 5.29.0
+ * @since 6.2.0
  */
+
+import { LogError } from '@memberjunction/core';
 
 /**
  * System-wide default ceiling on serialized agent payload size (16 MiB).
@@ -26,7 +28,10 @@ export interface PayloadSizeGuardResult {
     type?: 'payload';
     /** Configured byte ceiling that was evaluated. */
     limitBytes: number;
-    /** Measured UTF-8 byte length of the serialized payload. */
+    /**
+     * Measured UTF-8 byte length of the serialized payload. `Infinity` when the payload is too
+     * large for V8 to serialize at all.
+     */
     currentBytes: number;
     /** Human-readable diagnostic message when `exceeded` is true. */
     reason?: string;
@@ -41,9 +46,13 @@ export class PayloadSizeGuard {
      * Measures the UTF-8 byte size of an arbitrary payload value.
      *
      * Strings are measured directly via `Buffer.byteLength(value, 'utf8')`;
-     * objects and arrays are serialized via `JSON.stringify` first. Circular
-     * references fall back to a safe structural string representation so a
-     * guardrail check never throws during error handling.
+     * objects and arrays are serialized via `JSON.stringify` first.
+     *
+     * A guardrail must not fail open on the very payloads it exists to stop, so a payload too
+     * large for V8 to serialize (`RangeError: Invalid string length`) measures as `Infinity` and
+     * trips every ceiling. A payload that cannot be serialized for any other reason (a circular
+     * reference, a `BigInt`) is logged and measures as 0: its size is unknown, and it will fail
+     * loudly at the next persistence step anyway.
      */
     public static MeasureBytes<TPayload>(payload: TPayload): number {
         if (payload === null || payload === undefined) {
@@ -61,8 +70,12 @@ export class PayloadSizeGuard {
                 return 0;
             }
             return Buffer.byteLength(serialized, 'utf8');
-        } catch {
-            // Circular structure fallback: estimate using Object keys count
+        } catch (error) {
+            if (error instanceof RangeError) {
+                return Number.POSITIVE_INFINITY;
+            }
+            const message = error instanceof Error ? error.message : String(error);
+            LogError(`PayloadSizeGuard: payload could not be serialized to measure its size, so the payload byte ceiling was not applied to it: ${message}`);
             return 0;
         }
     }
@@ -71,11 +84,9 @@ export class PayloadSizeGuard {
      * Evaluates whether `payload` exceeds `limitBytes` (defaults to
      * {@link DEFAULT_ABSOLUTE_MAX_PAYLOAD_BYTES}).
      *
-     * Consistent with `MaxCostPerRun` and `MaxTokensPerRun` semantics in
-     * `BaseAgent.hasExceededAgentRunGuardrails`:
-     * - When `limitBytes` is explicitly `0`, any non-negative byte size (`>= 0`)
-     *   trips the guardrail immediately.
-     * - For positive limits, `currentBytes >= limitBytes` trips when `currentBytes > 0`.
+     * The ceiling trips when `currentBytes >= limitBytes`, the same comparison
+     * `BaseAgent.hasExceededAgentRunGuardrails` uses for `MaxCostPerRun` and `MaxTokensPerRun`.
+     * A limit of `0` therefore trips on every payload, including an empty one.
      */
     public static Evaluate<TPayload>(
         payload: TPayload,
@@ -83,13 +94,12 @@ export class PayloadSizeGuard {
         scopeLabel: 'run' | 'tree' = 'run'
     ): PayloadSizeGuardResult {
         const currentBytes = PayloadSizeGuard.MeasureBytes(payload);
-        const breached = limitBytes <= 0 ? currentBytes >= limitBytes : currentBytes >= limitBytes;
 
-        if (breached) {
+        if (currentBytes >= limitBytes) {
             const reason =
                 scopeLabel === 'tree'
                     ? `Agent tree payload byte budget exceeded (${PayloadSizeGuard.FormatBytes(currentBytes)}/${PayloadSizeGuard.FormatBytes(limitBytes)} peak payload across tree)`
-                    : `Maximum payload size limit of ${PayloadSizeGuard.FormatBytes(limitBytes)} (${limitBytes} bytes) exceeded. Current payload size: ${PayloadSizeGuard.FormatBytes(currentBytes)} (${currentBytes} bytes).`;
+                    : `Maximum payload size limit of ${PayloadSizeGuard.FormatBytes(limitBytes)} (${limitBytes} bytes) exceeded. Current payload size: ${PayloadSizeGuard.FormatBytes(currentBytes)}${Number.isFinite(currentBytes) ? ` (${currentBytes} bytes)` : ''}.`;
             return {
                 exceeded: true,
                 type: 'payload',
@@ -110,6 +120,9 @@ export class PayloadSizeGuard {
      * Formats a byte count into a concise human-readable string (`B`, `KiB`, `MiB`).
      */
     public static FormatBytes(bytes: number): string {
+        if (!Number.isFinite(bytes)) {
+            return 'more than V8 can serialize';
+        }
         if (bytes < 1024) {
             return `${bytes} B`;
         }

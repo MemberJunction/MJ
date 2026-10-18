@@ -2,6 +2,7 @@ import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import * as crypto from 'crypto';
 import { EncryptionEngine } from '../EncryptionEngine';
 import { EnvVarKeySource } from '../providers/EnvVarKeySource';
+import { RotateEncryptionKeyAction } from '../actions/RotateEncryptionKeyAction';
 
 const TEST_KEY_ID = '550e8400-e29b-41d4-a716-446655440000';
 const KEY_V1_BYTES = crypto.randomBytes(32);
@@ -144,10 +145,73 @@ describe('Encryption envelope versioning & out-of-band store governance', () => 
             // 4. Verify v2 ciphertext decrypts using MJ_ROTATION_TEST_KEY_V2
             expect(await engine.Decrypt(rotatedV2Ciphertext)).toBe('rotated-record-v2');
 
-            // 5. Verify historical v1 ciphertext (and legacy unversioned v1 ciphertext) in an
-            // unrotated out-of-band store STILL decrypts using MJ_ROTATION_TEST_KEY!
+            // 5. Verify historical v1 ciphertext in an unrotated out-of-band store STILL decrypts
+            // using MJ_ROTATION_TEST_KEY.
             expect(await engine.Decrypt(v1Ciphertext)).toBe('credential-secret-v1');
+
+            // 6. A legacy unversioned envelope carries no version, so it resolves against the
+            // CURRENT version and cannot be recovered after rotation unless it was re-encrypted.
             expect(engine.ParseEncryptedValue(legacyUnversionedV1).keyVersion).toBeUndefined();
+            await expect(engine.Decrypt(legacyUnversionedV1)).rejects.toThrow();
+        });
+
+        it('keeps reading a suffixed lookup value at its current version even when the bare sibling exists', async () => {
+            // A key configured as MJ_ROTATION_TEST_KEY_V2 that is still at version 1, alongside an
+            // unrelated MJ_ROTATION_TEST_KEY: it must encrypt and decrypt with the _V2 material.
+            vi.spyOn(engine, 'Loaded', 'get').mockReturnValue(true);
+            vi.spyOn(engine, 'GetKeyConfiguration').mockImplementation(() => ({
+                key: {
+                    ID: TEST_KEY_ID,
+                    Name: 'Suffixed Key At Version 1',
+                    KeyVersion: '1',
+                    Marker: '$ENC$',
+                    KeyLookupValue: 'MJ_ROTATION_TEST_KEY_V2',
+                    Status: 'Active',
+                    IsActive: true,
+                } as ReturnType<typeof engine.GetKeyConfiguration> extends { key: infer K } | undefined ? K : never,
+                algorithm: {
+                    ID: 'alg-1',
+                    Name: 'AES-256-GCM',
+                    NodeCryptoName: 'aes-256-gcm',
+                    KeyLengthBits: 256,
+                    IVLengthBytes: 12,
+                    IsAEAD: true,
+                    IsActive: true,
+                } as ReturnType<typeof engine.GetKeyConfiguration> extends { algorithm: infer A } | undefined ? A : never,
+                source: {
+                    ID: 'src-1',
+                    Name: 'Environment Variable',
+                    DriverClass: 'EnvVarKeySource',
+                    IsActive: true,
+                } as ReturnType<typeof engine.GetKeyConfiguration> extends { source: infer S } | undefined ? S : never,
+            }));
+
+            const envSource = new EnvVarKeySource();
+            await envSource.Initialize();
+            (engine as unknown as { _keySourceCache: Map<string, EnvVarKeySource> })._keySourceCache.set(
+                'EnvVarKeySource',
+                envSource
+            );
+
+            const ciphertext = await engine.Encrypt('suffixed-key-secret', TEST_KEY_ID);
+            const parts = engine.ParseEncryptedValue(ciphertext);
+            expect(parts.keyVersion).toBe('1');
+
+            // Decipher by hand with the _V2 bytes to prove which material was used.
+            const decipher = crypto.createDecipheriv(
+                'aes-256-gcm',
+                Uint8Array.from(KEY_V2_BYTES),
+                Uint8Array.from(Buffer.from(parts.iv, 'base64')),
+                { authTagLength: 16 }
+            );
+            decipher.setAuthTag(Uint8Array.from(Buffer.from(parts.authTag!, 'base64')));
+            const plaintext = Buffer.concat([
+                decipher.update(Uint8Array.from(Buffer.from(parts.ciphertext, 'base64'))),
+                decipher.final()
+            ] as unknown as Uint8Array[]).toString('utf8');
+            expect(plaintext).toBe('suffixed-key-secret');
+
+            expect(await engine.Decrypt(ciphertext)).toBe('suffixed-key-secret');
         });
     });
 
@@ -182,7 +246,6 @@ describe('Encryption envelope versioning & out-of-band store governance', () => 
         });
 
         it('RotateEncryptionKeyAction rotates registered stores with rotate callbacks and reports skipped stores', async () => {
-            const { RotateEncryptionKeyAction } = await import('../actions/RotateEncryptionKeyAction');
             let currentKeyVersion = '1';
             let currentLookupValue = 'MJ_ROTATION_TEST_KEY';
 
@@ -298,6 +361,84 @@ describe('Encryption envelope versioning & out-of-band store governance', () => 
             // Verify skipped store's historical :1 envelope STILL decrypts cleanly!
             expect(engine.ParseEncryptedValue(unrotatedVaultSecret).keyVersion).toBe('1');
             expect(await engine.Decrypt(unrotatedVaultSecret)).toBe('historical-vault-secret-v1');
+        });
+
+        it('RotateEncryptionKeyAction refuses a new lookup value that cannot be resolved at the new version, before touching data or metadata', async () => {
+            // Only the bare MJ_ROTATION_TEST_NEW exists. Re-encrypting at version 2 resolves
+            // MJ_ROTATION_TEST_NEW_V2, so validating the bare name alone would let the rotation
+            // start, fail on every value, and still move the key's metadata to version 2.
+            process.env.MJ_ROTATION_TEST_NEW = crypto.randomBytes(32).toString('base64');
+
+            vi.spyOn(engine, 'Loaded', 'get').mockReturnValue(true);
+            vi.spyOn(engine, 'GetKeyConfiguration').mockImplementation(() => ({
+                key: {
+                    ID: TEST_KEY_ID,
+                    Name: 'Rotation Test Key',
+                    KeyVersion: '1',
+                    Marker: '$ENC$',
+                    KeyLookupValue: 'MJ_ROTATION_TEST_KEY',
+                    Status: 'Active',
+                    IsActive: true,
+                } as ReturnType<typeof engine.GetKeyConfiguration> extends { key: infer K } | undefined ? K : never,
+                algorithm: {
+                    ID: 'alg-1',
+                    Name: 'AES-256-GCM',
+                    NodeCryptoName: 'aes-256-gcm',
+                    KeyLengthBits: 256,
+                    IVLengthBytes: 12,
+                    IsAEAD: true,
+                    IsActive: true,
+                } as ReturnType<typeof engine.GetKeyConfiguration> extends { algorithm: infer A } | undefined ? A : never,
+                source: {
+                    ID: 'src-1',
+                    Name: 'Environment Variable',
+                    DriverClass: 'EnvVarKeySource',
+                    IsActive: true,
+                } as ReturnType<typeof engine.GetKeyConfiguration> extends { source: infer S } | undefined ? S : never,
+            }));
+
+            const envSource = new EnvVarKeySource();
+            await envSource.Initialize();
+            (engine as unknown as { _keySourceCache: Map<string, EnvVarKeySource> })._keySourceCache.set(
+                'EnvVarKeySource',
+                envSource
+            );
+
+            const storeRotate = vi.fn().mockResolvedValue(0);
+            engine.RegisterEncryptedStore({ storeName: 'WebhookSigningSecrets', encryptionKeyId: TEST_KEY_ID, rotate: storeRotate });
+
+            const keyEntityStub = {
+                ID: TEST_KEY_ID,
+                KeyVersion: '1',
+                KeyLookupValue: 'MJ_ROTATION_TEST_KEY',
+                Status: 'Active',
+                Save: vi.fn().mockResolvedValue(true),
+            };
+            const mockProvider = {
+                Entities: [],
+                EntityByName: () => undefined,
+                RunView: vi.fn().mockImplementation(async (params: { EntityName: string }) =>
+                    params.EntityName === 'MJ: Encryption Keys'
+                        ? { Success: true, Results: [keyEntityStub] }
+                        : { Success: true, Results: [] }
+                ),
+            };
+
+            const action = new RotateEncryptionKeyAction();
+            const result = await action.Run({
+                Params: [
+                    { Name: 'EncryptionKeyID', Value: TEST_KEY_ID, Type: 'Input' as const },
+                    { Name: 'NewKeyLookupValue', Value: 'MJ_ROTATION_TEST_NEW', Type: 'Input' as const },
+                ],
+                ContextUser: undefined,
+                Provider: mockProvider as unknown as Parameters<typeof action.Run>[0]['Provider'],
+            } as Parameters<typeof action.Run>[0]);
+
+            expect(result.Success).toBe(false);
+            expect(result.Message).toContain('MJ_ROTATION_TEST_NEW_V2');
+            expect(storeRotate).not.toHaveBeenCalled();
+            expect(keyEntityStub.KeyVersion).toBe('1');
+            expect(keyEntityStub.KeyLookupValue).toBe('MJ_ROTATION_TEST_KEY');
         });
     });
 });

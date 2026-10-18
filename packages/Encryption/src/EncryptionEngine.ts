@@ -53,7 +53,7 @@
  */
 
 import * as crypto from 'crypto';
-import { MJGlobal, ENCRYPTION_MARKER, IsValueEncrypted } from '@memberjunction/global';
+import { MJGlobal, ENCRYPTION_MARKER, IsValueEncrypted, UUIDsEqual } from '@memberjunction/global';
 import { BaseSingleton } from '@memberjunction/global';
 import { IMetadataProvider, LogError, Metadata, UserInfo } from '@memberjunction/core';
 import { EncryptionEngineBase, EncryptionKeyConfiguration } from '@memberjunction/core-entities';
@@ -388,17 +388,16 @@ export class EncryptionEngine extends BaseSingleton<EncryptionEngine> {
         // Get key configuration from cached metadata
         const keyConfig = this.buildKeyConfiguration(parsed.keyId);
 
-        // When the ciphertext envelope carries an explicit keyVersion, resolve key material
-        // for that version so historical ciphertexts remain decryptable after key rotation.
-        const effectiveKeyConfig: KeyConfiguration = parsed.keyVersion
-            ? { ...keyConfig, keyVersion: parsed.keyVersion }
-            : keyConfig;
-
-        // Get key material
-        const keyMaterial = await this.getKeyMaterial(effectiveKeyConfig);
+        // An envelope naming a version that is no longer current was written before the key was
+        // rotated and never re-encrypted. Its material is resolved from the current lookup value
+        // through the source's historical lookup. Unversioned (pre-6.2) envelopes have nothing to
+        // go on and use the current version.
+        const keyMaterial = parsed.keyVersion && parsed.keyVersion !== keyConfig.keyVersion
+            ? await this.getHistoricalKeyMaterial(keyConfig, parsed.keyVersion)
+            : await this.getKeyMaterial(keyConfig);
 
         // Perform decryption
-        return this.performDecryption(parsed, effectiveKeyConfig, keyMaterial);
+        return this.performDecryption(parsed, keyConfig, keyMaterial);
     }
 
     /**
@@ -501,13 +500,16 @@ export class EncryptionEngine extends BaseSingleton<EncryptionEngine> {
      * @param lookupValue - The key source lookup value to validate
      * @param encryptionKeyId - The key ID (to get source configuration)
      * @param contextUser - User context for database access
+     * @param keyVersion - Optional key version to resolve the lookup value at. Rotation passes
+     *   the version it is rotating into, so the material validated is the material it will use.
      *
      * @throws Error if the key material cannot be accessed or is invalid
      */
     async ValidateKeyMaterial(
         lookupValue: string,
         encryptionKeyId: string,
-        contextUser?: UserInfo
+        contextUser?: UserInfo,
+        keyVersion?: string
     ): Promise<void> {
         if (!lookupValue || typeof lookupValue !== 'string') {
             throw new Error(
@@ -526,7 +528,7 @@ export class EncryptionEngine extends BaseSingleton<EncryptionEngine> {
         const source = await this.getOrCreateKeySource(keyConfig.source.driverClass);
 
         // Try to retrieve the key from the new lookup value
-        const keyMaterial = await source.GetKey(lookupValue);
+        const keyMaterial = await source.GetKey(lookupValue, keyVersion);
 
         // Validate key length matches algorithm requirements
         const expectedBytes = keyConfig.algorithm.keyLengthBits / 8;
@@ -613,9 +615,8 @@ export class EncryptionEngine extends BaseSingleton<EncryptionEngine> {
         if (!encryptionKeyId) {
             return all;
         }
-        const normalizedTarget = encryptionKeyId.toLowerCase();
         return all.filter(
-            s => !s.encryptionKeyId || s.encryptionKeyId.toLowerCase() === normalizedTarget
+            s => !s.encryptionKeyId || UUIDsEqual(s.encryptionKeyId, encryptionKeyId)
         );
     }
 
@@ -897,14 +898,9 @@ export class EncryptionEngine extends BaseSingleton<EncryptionEngine> {
         const cacheKey = `${config.keyId}:${config.keyVersion}`;
 
         // Check cache
-        const cached = this._keyMaterialCache.get(cacheKey);
-        if (cached && cached.expiry > new Date()) {
-            return cached.value;
-        }
-
-        // Zero the stale buffer before replacing it
+        const cached = this.readCachedKeyMaterial(cacheKey);
         if (cached) {
-            this.zeroBuffer(cached.value);
+            return cached;
         }
 
         // Get or create the key source
@@ -935,12 +931,70 @@ export class EncryptionEngine extends BaseSingleton<EncryptionEngine> {
         this.validateKeyLength(keyMaterial, config);
 
         // Cache it
+        this.cacheKeyMaterial(cacheKey, keyMaterial);
+
+        return keyMaterial;
+    }
+
+    /**
+     * Gets key material for a version older than the key's current one, from cache or source.
+     *
+     * Cached under its own key so it can never be served as a current-version lookup.
+     *
+     * @private
+     */
+    private async getHistoricalKeyMaterial(config: KeyConfiguration, keyVersion: string): Promise<Buffer> {
+        const cacheKey = `${config.keyId}:${keyVersion}:historical`;
+        const cached = this.readCachedKeyMaterial(cacheKey);
+        if (cached) {
+            return cached;
+        }
+
+        const source = await this.getOrCreateKeySource(config.source.driverClass);
+        let keyMaterial: Buffer;
+        try {
+            keyMaterial = await source.GetHistoricalKey(config.source.lookupValue, keyVersion);
+        } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            throw new Error(
+                `Cannot decrypt a value written under version ${keyVersion} of encryption key ${config.keyId}; ` +
+                `the key is now at version ${config.keyVersion}. Key material for every version that stored ` +
+                `values still reference must stay available in the key source. ${message}`
+            );
+        }
+
+        this.validateKeyLength(keyMaterial, config);
+        this.cacheKeyMaterial(cacheKey, keyMaterial);
+        return keyMaterial;
+    }
+
+    /**
+     * Returns unexpired cached key material, zeroing an expired buffer before it is replaced.
+     *
+     * @private
+     */
+    private readCachedKeyMaterial(cacheKey: string): Buffer | null {
+        const cached = this._keyMaterialCache.get(cacheKey);
+        if (!cached) {
+            return null;
+        }
+        if (cached.expiry > new Date()) {
+            return cached.value;
+        }
+        this.zeroBuffer(cached.value);
+        return null;
+    }
+
+    /**
+     * Caches key material for the configured TTL.
+     *
+     * @private
+     */
+    private cacheKeyMaterial(cacheKey: string, keyMaterial: Buffer): void {
         this._keyMaterialCache.set(cacheKey, {
             value: keyMaterial,
             expiry: new Date(Date.now() + this._keyMaterialCacheTtlMs)
         });
-
-        return keyMaterial;
     }
 
     /**

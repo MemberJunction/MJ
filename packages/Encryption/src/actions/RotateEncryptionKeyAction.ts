@@ -172,12 +172,7 @@ export class RotateEncryptionKeyAction {
         let totalRecordsProcessed = 0;
 
         try {
-            // Step 1: Validate the new key is accessible
-            LogStatus(`Validating new key material at lookup value: ${newKeyLookupValue}`);
-            await engine.ValidateKeyMaterial(newKeyLookupValue, encryptionKeyId, contextUser);
-            LogStatus('New key material validated successfully');
-
-            // Step 2: Load the encryption key record
+            // Step 1: Load the encryption key record
             const keyResult = await rv.RunView({
                 EntityName: 'MJ: Encryption Keys',
                 ExtraFilter: `ID = '${encryptionKeyId}'`,
@@ -197,6 +192,13 @@ export class RotateEncryptionKeyAction {
             const originalVersion = encryptionKey.KeyVersion || '1';
             const parsedOriginalVersion = parseInt(originalVersion, 10);
             const newVersion = String(Number.isNaN(parsedOriginalVersion) ? 2 : parsedOriginalVersion + 1);
+
+            // Step 2: Validate the new key at the version it becomes. Re-encryption resolves the
+            // material at (newKeyLookupValue, newVersion), so validating the bare lookup value would
+            // pass a key that every re-encryption below then fails to find.
+            LogStatus(`Validating new key material at lookup value: ${newKeyLookupValue} (version ${newVersion})`);
+            await engine.ValidateKeyMaterial(newKeyLookupValue, encryptionKeyId, contextUser, newVersion);
+            LogStatus('New key material validated successfully');
 
             // Step 3: Set key status to 'Rotating'
             encryptionKey.Status = 'Rotating';
@@ -325,10 +327,7 @@ export class RotateEncryptionKeyAction {
             }
 
             // Step 5b: Process registered out-of-band encrypted secret stores (e.g. CredentialEngine)
-            const registeredStores =
-                typeof engine.GetRegisteredEncryptedStores === 'function'
-                    ? engine.GetRegisteredEncryptedStores(encryptionKeyId)
-                    : [];
+            const registeredStores = engine.GetRegisteredEncryptedStores(encryptionKeyId);
 
             for (const store of registeredStores) {
                 if (!store.rotate) {
@@ -383,10 +382,15 @@ export class RotateEncryptionKeyAction {
                 };
             }
 
-            // Step 7: Clear encryption engine caches to use new key and refresh metadata
-            engine.ClearCaches();
-            if (typeof engine.ClearAllCaches === 'function') {
+            // Step 7: Clear cached key material and reload key metadata so this process uses the
+            // new version at once. The rotation is already committed here, so a failed reload is
+            // logged rather than reported as a failed rotation; the key's save event refreshes the
+            // metadata cache anyway.
+            try {
                 await engine.ClearAllCaches();
+            } catch (refreshError) {
+                const msg = refreshError instanceof Error ? refreshError.message : String(refreshError);
+                LogError(`Key rotation for ${encryptionKeyId} completed, but reloading encryption key metadata failed: ${msg}`);
             }
 
             LogStatus(`Key rotation completed. Processed ${totalRecordsProcessed} records across ${fieldsProcessed.length} fields.`);

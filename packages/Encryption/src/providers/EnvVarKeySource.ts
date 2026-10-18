@@ -47,6 +47,7 @@
 import { RegisterClass } from '@memberjunction/global';
 import { EncryptionKeySourceBase } from '../EncryptionKeySourceBase';
 import { KeyValidationResult } from '../interfaces';
+import { ResolveCurrentVersionKeyName, ResolveHistoricalVersionKeyName } from './version-suffixed-key-names';
 
 /**
  * Encryption key source that retrieves keys from environment variables.
@@ -216,6 +217,23 @@ export class EnvVarKeySource extends EncryptionKeySourceBase {
     }
 
     /**
+     * Retrieves an OLDER key version from the key's current environment variable name.
+     *
+     * Rotation stores the new version's own variable as the lookup value (`MJ_KEY_V3`), so the
+     * older version is the sibling variable: `MJ_KEY_V2` for version 2, `MJ_KEY` for version 1.
+     * A lookup value without a version suffix falls back to {@link GetKey} at that version
+     * (`MJ_KEY` at version 2 → `MJ_KEY_V2`).
+     */
+    override async GetHistoricalKey(currentLookupValue: string, keyVersion: string): Promise<Buffer> {
+        const historicalName = ResolveHistoricalVersionKeyName(
+            currentLookupValue,
+            keyVersion,
+            name => process.env[name] !== undefined
+        );
+        return historicalName ? this.GetKey(historicalName) : this.GetKey(currentLookupValue, keyVersion);
+    }
+
+    /**
      * Validates that the encryption key in the specified environment variable is accessible and usable.
      *
      * Checks: env var exists, is non-empty, contains valid base64, and (if specified) has correct length.
@@ -305,32 +323,7 @@ export class EnvVarKeySource extends EncryptionKeySourceBase {
      * @private
      */
     private buildEnvVarName(baseName: string, keyVersion?: string): string {
-        const versionMatch = /^(.+)_V(\d+)$/i.exec(baseName);
-        if (versionMatch) {
-            const rootName = versionMatch[1];
-            const embeddedVersion = versionMatch[2];
-            if (!keyVersion || keyVersion === embeddedVersion) {
-                return baseName;
-            }
-            if (keyVersion === '1') {
-                if (process.env[rootName] !== undefined) {
-                    return rootName;
-                }
-                if (process.env[`${rootName}_V1`] !== undefined) {
-                    return `${rootName}_V1`;
-                }
-                return baseName;
-            }
-            return `${rootName}_V${keyVersion}`;
-        }
-
-        // No version or version '1' = use base name
-        if (!keyVersion || keyVersion === '1') {
-            return baseName;
-        }
-
-        // For other versions, append _V{version}
-        return `${baseName}_V${keyVersion}`;
+        return ResolveCurrentVersionKeyName(baseName, keyVersion, '_V');
     }
 
     /**

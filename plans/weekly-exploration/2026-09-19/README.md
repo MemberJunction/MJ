@@ -56,7 +56,7 @@ started in [`../README.md`](../README.md).
      in `@memberjunction/ai-core-plus`, plus standalone `<mj-ai-confidence-badge>` and
      `<mj-ai-explanation-panel>` components in `@memberjunction/ng-ui-components`.
    - **Stripped out:** `ConsequentialDecisionDisclosure` statutory legal-boilerplate wrapper and
-     lossy float conversion of coarse grades (`TrustGrade` stays on `scale: 'grade'` with `rawLabel`
+     lossy float conversion of coarse grades (`TrustGrade` stays on `scale: 'grade'` with `rawScale`
      intact and no fabricated probability score).
 
 ## Format

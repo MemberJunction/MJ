@@ -51,6 +51,7 @@
 import { RegisterClass } from '@memberjunction/global';
 import { EncryptionKeySourceBase } from '../EncryptionKeySourceBase';
 import { KeyValidationResult } from '../interfaces';
+import { ResolveCurrentVersionKeyName, ResolveHistoricalVersionKeyName } from './version-suffixed-key-names';
 import { cosmiconfigSync } from 'cosmiconfig';
 
 // Type for cosmiconfig result
@@ -302,6 +303,23 @@ export class ConfigFileKeySource extends EncryptionKeySourceBase {
     }
 
     /**
+     * Retrieves an OLDER key version from the key's current config-file key name.
+     *
+     * Rotation stores the new version's own key name as the lookup value (`pii_key_v3`), so the
+     * older version is the sibling entry: `pii_key_v2` for version 2, `pii_key` for version 1.
+     * A lookup value without a version suffix falls back to {@link GetKey} at that version
+     * (`pii_key` at version 2 → `pii_key_v2`).
+     */
+    override async GetHistoricalKey(currentLookupValue: string, keyVersion: string): Promise<Buffer> {
+        const historicalName = ResolveHistoricalVersionKeyName(
+            currentLookupValue,
+            keyVersion,
+            name => this._loadedConfig?.[name] !== undefined
+        );
+        return historicalName ? this.GetKey(historicalName) : this.GetKey(currentLookupValue, keyVersion);
+    }
+
+    /**
      * Validates that the encryption key in the config file is accessible and usable.
      *
      * Checks: config loaded, key exists, valid base64, and (if specified) correct length.
@@ -395,32 +413,7 @@ export class ConfigFileKeySource extends EncryptionKeySourceBase {
      * @private
      */
     private buildKeyName(baseName: string, keyVersion?: string): string {
-        const versionMatch = /^(.+)_v(\d+)$/i.exec(baseName);
-        if (versionMatch) {
-            const rootName = versionMatch[1];
-            const embeddedVersion = versionMatch[2];
-            if (!keyVersion || keyVersion === embeddedVersion) {
-                return baseName;
-            }
-            if (keyVersion === '1') {
-                if (this._loadedConfig?.[rootName] !== undefined) {
-                    return rootName;
-                }
-                if (this._loadedConfig?.[`${rootName}_v1`] !== undefined) {
-                    return `${rootName}_v1`;
-                }
-                return baseName;
-            }
-            return `${rootName}_v${keyVersion}`;
-        }
-
-        // No version or version '1' = use base name
-        if (!keyVersion || keyVersion === '1') {
-            return baseName;
-        }
-
-        // For other versions, append _v{version} (lowercase for config files)
-        return `${baseName}_v${keyVersion}`;
+        return ResolveCurrentVersionKeyName(baseName, keyVersion, '_v');
     }
 
     /**

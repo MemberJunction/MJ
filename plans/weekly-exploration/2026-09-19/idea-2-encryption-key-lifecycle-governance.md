@@ -30,11 +30,16 @@ Previously (**#4580**):
   1. **Compact versioned (default emitted):** `$ENC$<keyId>:<keyVersion>$<algorithm>$<iv>$<ciphertext>[$<authTag>]`
   2. **Legacy unversioned (v1 backward-compatible):** `$ENC$<keyId>$<algorithm>$<iv>$<ciphertext>[$<authTag>]`
   3. **Explicit `$v<version>$` segment:** `$ENC$<keyId>$v<keyVersion>$<algorithm>$<iv>$<ciphertext>[$<authTag>]`
-- `Decrypt` extracts `parsed.keyVersion` (falling back to `config.keyVersion` for legacy unversioned
-  envelopes) and passes it to `getKeyMaterial(config, effectiveVersion)`.
-- `EnvVarKeySource` and `ConfigFileKeySource` resolve version-suffixed keys (`<LOOKUP>_V<N>` /
-  `<lookup>_v<N>`) with graceful fallback to the base lookup name when `version === '1'` or when the
-  key was rotated by pointing `KeyLookupValue` directly at a versioned secret name.
+- `Decrypt` reads `parsed.keyVersion`. An envelope at the key's current version (or a legacy
+  unversioned one) uses the current key material; an envelope at any other version calls the new
+  `EncryptionKeySourceBase.GetHistoricalKey(currentLookupValue, keyVersion)`.
+- `EnvVarKeySource` and `ConfigFileKeySource` override `GetHistoricalKey` to find an older version
+  from the current lookup value's suffix (`<LOOKUP>_V3` → `<LOOKUP>_V2`, or `<LOOKUP>` for
+  version 1). Their current-version lookup is unchanged except that a lookup value already naming
+  its version (`<LOOKUP>_V2` at version 2, as rotation leaves it) is used as-is.
+- `RotateEncryptionKeyAction` validates the new lookup value at the version it rotates into before
+  touching any data. Legacy unversioned values that rotation does not re-encrypt are NOT covered:
+  they have no version to look up.
 
 ### 2. Out-of-Band Encrypted Store Registry (`EncryptedStoreRegistration`)
 
@@ -42,28 +47,26 @@ Previously (**#4580**):
   `ClearRegisteredEncryptedStores` to `EncryptionEngine`:
   ```typescript
   EncryptionEngine.Instance.RegisterEncryptedStore({
-      Name: 'AuditArchivePayloads',
-      KeyID: encryptionKeyId,
-      Description: 'Encrypted JSON snapshots in custom archive storage',
-      RotateKey: async (params, contextUser) => {
-          // Re-encrypt records using params.DecryptOldValue and params.EncryptNewValue
+      storeName: 'AuditArchivePayloads',
+      encryptionKeyId,
+      rotate: async (context) => {
+          // For each stored value: value = await context.reEncrypt(value);
           return rotatedCount;
       }
   });
   ```
-- `RotateEncryptionKeyAction` enumerates `GetRegisteredEncryptedStores(params. EncryptionKeyID)`
-  inside the same rotation workflow after declared `EntityField` columns, invoking `RotateKey` when
-  provided and logging an explicit retention warning if a store is registered as advisory-only (no
-  `RotateKey` callback).
+- `RotateEncryptionKeyAction` enumerates `GetRegisteredEncryptedStores(encryptionKeyId)`
+  inside the same rotation workflow after declared `EntityField` columns, invoking `rotate` when
+  provided and reporting a store registered without one in `RotateKeyResult.skippedStores`.
 
 ## Stripped-Out / Descoped Items (and Why)
 
 1. **DB-Wide Arbitrary Column Scans for Unregistered `$ENC$` Values (Stripped Out):**
    Scanning every `NVARCHAR`/`VARCHAR` column across every table in a production database to hunt
    for unregistered `$ENC$` prefixes causes full table scans and severe lock/IO contention. With
-   self-describing versioned envelopes (`$ENC$<keyId>:<keyVersion>$...`), even an unregistered
-   hand-encrypted value remains decryptable after key rotation as long as the historical key version
-   remains in the key source, and out-of-band stores that want active re-encryption during rotation
+   self-describing versioned envelopes (`$ENC$<keyId>:<keyVersion>$...`), an unregistered
+   hand-encrypted value written after this change remains decryptable after key rotation as long as
+   the historical key version remains in the key source, and out-of-band stores that want active re-encryption during rotation
    register explicitly via `RegisterEncryptedStore`.
 
 ## Mockup
