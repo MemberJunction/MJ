@@ -81,7 +81,8 @@ const SETTLE_MS = Number(process.env.AGENT_SETTLE_MS ?? 1500);
 const CURRENT_DIR = typeof __dirname !== 'undefined'
     ? __dirname
     : path.dirname(fileURLToPath(import.meta.url));
-const FIXTURES_DIR = path.join(CURRENT_DIR, 'fixtures', 'video-studio');
+// tsc does not copy JSON fixtures to dist, and the package is private and repo-local.
+const FIXTURES_DIR = path.resolve(CURRENT_DIR, '..', '..', 'src', 'checks', 'fixtures', 'video-studio');
 
 const CHAT_DRIVER_CLASSES: readonly string[] = [
     'OpenAILLM',
