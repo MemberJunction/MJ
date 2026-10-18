@@ -154,19 +154,6 @@ export const VideoStudioLiveSmokeChecks: NamedCheck[] = [
                 imageFake?.restore();
             }
 
-            if (!allowLiveGen) {
-                AssertEqual(
-                    videoFake!.Driver.SubmitCount,
-                    0,
-                    'VSLS1: Video generator SubmitCount must be 0 when VS_LIVE_GENERATION !== "1"',
-                );
-                AssertEqual(
-                    imageFake!.Driver.SubmitCount,
-                    0,
-                    'VSLS1: Image generator SubmitCount must be 0 when VS_LIVE_GENERATION !== "1"',
-                );
-            }
-
             if (result.agentRun?.ID) {
                 liveSmokeFixture.RootRunIDs.push(result.agentRun.ID);
             }
@@ -203,6 +190,19 @@ export const VideoStudioLiveSmokeChecks: NamedCheck[] = [
                         }
                     }
                 }
+            }
+
+            if (!allowLiveGen) {
+                AssertEqual(
+                    videoFake!.Driver.SubmitCount,
+                    0,
+                    'VSLS1: Video generator SubmitCount must be 0 when VS_LIVE_GENERATION !== "1"',
+                );
+                AssertEqual(
+                    imageFake!.Driver.SubmitCount,
+                    0,
+                    'VSLS1: Image generator SubmitCount must be 0 when VS_LIVE_GENERATION !== "1"',
+                );
             }
 
             AssertEqual(result.success, true, `VSLS1: Live Video Studio run failed: ${result.agentRun?.ErrorMessage ?? 'unknown'}`);

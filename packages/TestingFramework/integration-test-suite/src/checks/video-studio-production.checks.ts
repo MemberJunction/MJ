@@ -38,7 +38,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { RunView } from '@memberjunction/core';
-import { EscapeSQLString, UUIDsEqual, UUIDSet } from '@memberjunction/global';
+import { EscapeSQLString, UUIDMap, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { AIVideoRunner } from '@memberjunction/ai-prompts';
@@ -589,10 +589,10 @@ export const VideoStudioProductionChecks: NamedCheck[] = [
                 const quotedStageIds = stageAgentIds.map((id) => `'${EscapeSQLString(id)}'`).join(',');
                 filterParts.push(`(AgentID IN (${quotedStageIds}) AND __mj_CreatedAt >= '${vsp3StartIso}')`);
             }
-            const actionPrRes = await rv.RunView<{ ID: string; ModelID: string | null }>({
+            const actionPrRes = await rv.RunView<{ ID: string; ModelID: string | null; VendorID: string | null }>({
                 EntityName: 'MJ: AI Prompt Runs',
                 ExtraFilter: filterParts.join(' OR '),
-                Fields: ['ID', 'ModelID'],
+                Fields: ['ID', 'ModelID', 'VendorID'],
                 ResultType: 'simple',
                 BypassCache: true,
             }, ctx.User);
@@ -601,16 +601,24 @@ export const VideoStudioProductionChecks: NamedCheck[] = [
                 `VSP3: Expected at least 13 prompt runs in action agent run tree, got ${actionPrRes.Results.length}`,
             );
             const allowedUpper = new Set(f.AllowedDriverClasses.map((d) => d.trim().toUpperCase()));
-            const allowedModelIds = new UUIDSet(
-                AIEngine.Instance.ModelVendors
-                    .filter((mv) => allowedUpper.has((mv.DriverClass ?? '').trim().toUpperCase()))
-                    .map((mv) => mv.ModelID),
-            );
+            const allowedVendorsByModel = new UUIDMap<UUIDSet>();
+            for (const mv of AIEngine.Instance.ModelVendors) {
+                if (!allowedUpper.has((mv.DriverClass ?? '').trim().toUpperCase())) {
+                    continue;
+                }
+                let vendorSet = allowedVendorsByModel.Get(mv.ModelID);
+                if (!vendorSet) {
+                    vendorSet = new UUIDSet();
+                    allowedVendorsByModel.Set(mv.ModelID, vendorSet);
+                }
+                vendorSet.Add(mv.VendorID);
+            }
             for (const pr of actionPrRes.Results) {
                 Assert(Boolean(pr.ModelID), `VSP3: PromptRun ${pr.ID} must have a ModelID`);
+                Assert(Boolean(pr.VendorID), `VSP3: PromptRun ${pr.ID} must have a VendorID`);
                 Assert(
-                    allowedModelIds.Has(pr.ModelID!),
-                    `VSP3: PromptRun ${pr.ID} ModelID ${pr.ModelID} must be served by a registered fake driver`,
+                    allowedVendorsByModel.Get(pr.ModelID)?.Has(pr.VendorID) === true,
+                    `VSP3: PromptRun ${pr.ID} (ModelID ${pr.ModelID}, VendorID ${pr.VendorID}) must be served by a registered fake driver`,
                 );
             }
             AssertEqual(f.Render.Driver.RenderCallCount, 1, 'VSP3: FakeRenderDriver RenderCallCount');
@@ -1066,15 +1074,12 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle(BUNDLE, {
             await DeleteMatching(ctx.Provider, ctx.User, 'MJ: Artifacts', `ID='${EscapeSQLString(artifactId)}'`);
         }
 
-        // 5. Delete any created MJ: Files rows (by FileIDs, fixture AccountID, or in-memory ProviderKey) before restoring storage
+        // 5. Delete any created MJ: Files rows (by FileIDs or in-memory ProviderKey) before restoring storage
         const fileFilters: string[] = [];
         const uniqueFiles = [...new Set(f.FileIDs)];
         if (uniqueFiles.length > 0) {
             const quotedFiles = uniqueFiles.map((id) => `'${EscapeSQLString(id)}'`).join(',');
             fileFilters.push(`ID IN (${quotedFiles})`);
-        }
-        if (f.Storage?.AccountID) {
-            fileFilters.push(`AccountID='${EscapeSQLString(f.Storage.AccountID)}'`);
         }
         const storageKeys = f.Storage?.Driver.Keys ?? [];
         if (storageKeys.length > 0) {

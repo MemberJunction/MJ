@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { BaseImageGenerator, GetAIAPIKeyGlobal } from '@memberjunction/ai';
+import { BaseImageGenerator, BaseVideoGenerator, GetAIAPIKeyGlobal } from '@memberjunction/ai';
 import { MJGlobal } from '@memberjunction/global';
 import {
     RegisterFakeAPIKeys,
     RegisterFakeImageGenerator,
+    RegisterFakeVideoGenerator,
     SCRIPTED_API_KEY,
 } from '../checks/video-studio-fakes';
 
@@ -38,6 +39,25 @@ describe('video-studio-fakes', () => {
             await expect(instance!.GenerateImage({ prompt: 'test' })).rejects.toThrow(
                 'The scripted image driver is not armed',
             );
+            expect(fake.Driver.SubmitCount).toBe(1);
+        } finally {
+            fake.restore();
+        }
+    });
+
+    it('RegisterFakeVideoGenerator increments SubmitCount and rejects when GenerateVideo is called while unarmed', async () => {
+        const fake = RegisterFakeVideoGenerator();
+        try {
+            const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseVideoGenerator>(
+                BaseVideoGenerator,
+                'GoogleVeoVideoGenerator',
+                SCRIPTED_API_KEY,
+            );
+            expect(instance).toBe(fake.Driver);
+            expect(fake.Driver.SubmitCount).toBe(0);
+            await expect(
+                instance!.GenerateVideo({ Prompt: 'test clip', DurationSeconds: 4 }),
+            ).rejects.toThrow('The scripted video driver is not armed');
             expect(fake.Driver.SubmitCount).toBe(1);
         } finally {
             fake.restore();

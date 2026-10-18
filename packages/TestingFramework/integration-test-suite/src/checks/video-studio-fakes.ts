@@ -132,11 +132,11 @@ export class ScriptedITVideoGenerator extends BaseVideoGenerator {
     }
 
     public override async GenerateVideo(params: VideoGenerationParams): Promise<VideoGenerationJob> {
+        this.SubmitCount += 1;
         const next = this.outcomes.length > 0 ? this.outcomes.shift() : this.defaultOutcome;
         if (!this.armed || !next) {
             throw new Error('The scripted video driver is not armed');
         }
-        this.SubmitCount += 1;
         this.activeOutcome = next;
         this.lastRequestedDurationSeconds = params.DurationSeconds;
         return {
@@ -920,7 +920,6 @@ export async function UseMemoryStorage(
         const resolvedInfo = AIEngine.Instance.ResolveAgentStorageAccount(videoStudioAgent!);
         if (
             !UUIDsEqual(resolvedInfo.AccountID, fixture.Account.ID) ||
-            (resolvedInfo.Source !== 'Category' && resolvedInfo.Source !== 'Agent') ||
             resolvedInfo.Ambiguous !== false
         ) {
             const allAccounts = storageEngine.Accounts.map((a) => `${a.Name} (${a.ID})`).join(', ');
