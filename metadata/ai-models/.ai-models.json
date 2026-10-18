@@ -28627,7 +28627,15 @@
       "SpeedRank": 9,
       "CostRank": 5,
       "InheritTypeModalities": true,
-      "PriorVersionID": "@lookup:MJ: AI Models.Name=Gemini 3.1 Pro"
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=Gemini 3.1 Pro",
+      "ModelConfiguration": {
+        "LLM": {
+          "SupportsNativeToolCalling": true,
+          "DefaultToNativeToolCalling": false,
+          "NativeControlFlow": "implicit",
+          "NativeToolResults": true
+        }
+      }
     },
     "relatedEntities": {
       "MJ: AI Model Vendors": [
