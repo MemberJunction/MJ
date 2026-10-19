@@ -7,7 +7,8 @@ import { AutoDocQueryResult } from '../types/driver.js';
  * constraint_column_usage on the constraint name. Neither view says which source column pairs with
  * which referenced column, so a 3-column composite FK came back as 9 pairs (#4531). Joining
  * constraint_column_usage on the source schema also dropped every cross-schema FK. The driver now
- * reads pg_constraint and pairs conkey[i] with confkey[i].
+ * reads pg_constraint and pairs conkey[i] with confkey[i], skipping the internal per-partition clones
+ * of a foreign key into a partitioned table.
  */
 
 type Row = Record<string, string | number | boolean | null>;
@@ -47,6 +48,13 @@ describe('PostgreSQLDriver foreign keys', () => {
     const fkQuery = queries.find(q => q.includes('pg_constraint'))!;
     expect(fkQuery).toContain('UNNEST(con.conkey, con.confkey) WITH ORDINALITY');
     expect(fkQuery).not.toContain('constraint_column_usage');
+  });
+
+  it('skips the per-partition clones of a foreign key into a partitioned table', async () => {
+    const { driver, queries } = driverWithForeignKeys([]);
+    await driver.getSchemas({}, {});
+
+    expect(queries.find(q => q.includes('pg_constraint'))).toContain('(con.conparentid = 0 OR NOT rc.relispartition)');
   });
 
   it('keeps the referenced schema of a cross-schema FK', async () => {

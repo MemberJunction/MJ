@@ -556,6 +556,9 @@ export class PostgreSQLDriver extends BaseAutoDocDriver {
     // say which referenced column pairs with which source column, so joining it to key_column_usage
     // turns an N-column composite key into N x N pairs. Its table_schema is also the referenced
     // table's schema, so joining it on the source schema dropped every cross-schema foreign key.
+    // A foreign key into a partitioned table also has an internal clone (conparentid <> 0) aimed at
+    // each partition, which would read as extra FKs; those are skipped. A partition of a referencing
+    // partitioned table keeps its inherited FK, which is also a clone but targets the parent table.
     const query = `
       SELECT
         a.attname AS column_name,
@@ -572,6 +575,7 @@ export class PostgreSQLDriver extends BaseAutoDocDriver {
       JOIN pg_catalog.pg_attribute a ON a.attrelid = con.conrelid AND a.attnum = cols.attnum
       JOIN pg_catalog.pg_attribute ra ON ra.attrelid = con.confrelid AND ra.attnum = cols.ref_attnum
       WHERE con.contype = 'f'
+        AND (con.conparentid = 0 OR NOT rc.relispartition)
         AND n.nspname = $1
         AND c.relname = $2
       ORDER BY con.conname, cols.position
