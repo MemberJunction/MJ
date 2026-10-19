@@ -70,6 +70,11 @@ Releasing the held onset (after the cross-review and the gauntlet):
   become the next real turn's start. A barge-in onset, which began during the assistant turn, is
   not superseded by that turn's final: it stays the first onset if the user pauses and resumes.
 - An empty final user transcript (a VAD false positive) releases the held onset at once.
+  xAI passes an empty transcription through as a plain final for this, as the OpenAI base does.
+- A typed turn (`SendText`) neither takes nor clears the held onset: it has no speech onset, and a
+  spoken transcript may still be pending.
+- A user turn that relays its own onset while no turn has captured a start also drops the
+  recording-start seed (0), so a later unmeasured turn relays null.
 
 ### Task 3: Verify
 

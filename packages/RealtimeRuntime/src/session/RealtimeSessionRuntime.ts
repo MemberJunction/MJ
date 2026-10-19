@@ -2196,7 +2196,7 @@ export class RealtimeSessionRuntime {
     }
     client.SendText(trimmed);
     // Relay as a user turn — same path spoken input uses (caption + persisted transcript).
-    void this.onUserTranscript(trimmed);
+    void this.onUserTranscript(trimmed, 'typed');
   }
 
   /**
@@ -4349,8 +4349,13 @@ export class RealtimeSessionRuntime {
     this.appendCaption({ Role: role, Text: text });
   }
 
-  /** Finalizes the user turn: push a caption + relay the final transcript. */
-  private async onUserTranscript(transcript: string): Promise<void> {
+  /**
+   * Finalizes the user turn: push a caption + relay the final transcript.
+   *
+   * @param source `'typed'` for a {@link SendText} turn: it has no speech onset, so it neither takes
+   *   nor clears the held one (a spoken transcript may still be pending for it).
+   */
+  private async onUserTranscript(transcript: string, source: 'speech' | 'typed' = 'speech'): Promise<void> {
     if (transcript.trim().length === 0) {
       return;
     }
@@ -4359,7 +4364,7 @@ export class RealtimeSessionRuntime {
       this.firstUserTranscript = transcript;
     }
     this.appendCaption({ Role: 'User', Text: transcript });
-    await this.relayTranscript('user', transcript);
+    await this.relayTranscript('user', transcript, false, source);
   }
 
   // ── Tool calling ───────────────────────────────────────────────────────────
@@ -4741,15 +4746,22 @@ export class RealtimeSessionRuntime {
    * @param replacesPrevious CORRECTION semantics: the server updates the session's most
    *   recent persisted turn of this role IN PLACE instead of appending (e.g. ElevenLabs'
    *   post-barge-in `agent_response_correction`).
+   * @param source `'typed'` for a user turn sent with {@link SendText}: it does not read or clear
+   *   {@link userSpeechStartMs}, which belongs to the user's speech.
    */
-  private async relayTranscript(role: 'user' | 'assistant', text: string, replacesPrevious: boolean = false): Promise<void> {
+  private async relayTranscript(
+    role: 'user' | 'assistant',
+    text: string,
+    replacesPrevious: boolean = false,
+    source: 'speech' | 'typed' = 'speech',
+  ): Promise<void> {
     if (!this.agentSessionId) {
       return;
     }
     // Every final user transcript closes the signalled onset — a correction too, since it ends the
     // same utterance — so a later onset (an xAI mid-sentence resume) can't leak into the next turn.
     let userSpeechStartMs: number | null = null;
-    if (role === 'user') {
+    if (role === 'user' && source === 'speech') {
       userSpeechStartMs = this.userSpeechStartMs;
       this.releaseUserSpeechStart();
     }
@@ -4764,6 +4776,11 @@ export class RealtimeSessionRuntime {
       // A user turn with a signalled onset. Leave the shared slot alone: the user transcript
       // arrives asynchronously, so it may already hold the in-flight assistant reply's start.
       utteranceStartMs = userSpeechStartMs;
+      if (!this.turnAudioStartCaptured) {
+        // No turn has captured a start, so the slot holds only the recording-start seed (0). This
+        // user turn was the first turn; drop the seed so a later unmeasured turn relays null, not 0.
+        this.currentTurnStartMs = null;
+      }
     } else if (opensTurn) {
       utteranceStartMs = this.currentTurnStartMs;
       // This turn is finalized — arm the NEXT turn to re-stamp its start from its own first

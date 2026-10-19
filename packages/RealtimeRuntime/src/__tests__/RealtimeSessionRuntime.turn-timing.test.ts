@@ -34,6 +34,10 @@ class FakeFinalOnlyClient extends BaseRealtimeClient {
     public SpeechStart(): void {
         this.emitUserSpeechStart();
     }
+    /** The call is live, so the runtime accepts typed turns ({@link RealtimeSessionRuntime.SendText}). */
+    public GoLive(): void {
+        this.emitStateChange('listening');
+    }
 }
 
 interface RelayedTurn {
@@ -302,5 +306,55 @@ describe('RealtimeSessionRuntime per-turn timing: the user speech start keeps it
         await vi.waitFor(() => expect(provider.Relayed).toHaveLength(2));
 
         expect(provider.Relayed[1]).toEqual({ role: 'user', utteranceStartMs: 20000, utteranceEndMs: 24000 });
+    });
+
+    it('does not leave the recording-start 0 for a later unmeasured turn when the user speaks first', async () => {
+        const { provider, client, advanceTo } = await startRecorded();
+
+        advanceTo(2000);
+        client.SpeechStart();
+        advanceTo(4000);
+        client.Emit({ Role: 'User', Text: 'Hello', IsFinal: true, Kind: 'normal' });
+        advanceTo(37122);
+        client.Emit({ Role: 'User', Text: 'Are you there?', IsFinal: true, Kind: 'normal' }); // no signalled onset
+        await vi.waitFor(() => expect(provider.Relayed).toHaveLength(2));
+
+        expect(provider.Relayed[0]).toEqual({ role: 'user', utteranceStartMs: 2000, utteranceEndMs: 4000 });
+        expect(provider.Relayed[1]).toEqual({ role: 'user', utteranceStartMs: null, utteranceEndMs: 37122 });
+    });
+
+    it('does not give a typed turn the onset of a superseded VAD false positive', async () => {
+        const { runtime, provider, client, advanceTo } = await startRecorded();
+        client.GoLive();
+        speakAssistantTurn(client, advanceTo);
+
+        advanceTo(8400);
+        client.SpeechStart(); // a cough no transcript ever claims
+        advanceTo(9000);
+        client.Emit({ Role: 'Assistant', Text: 'Sure', IsFinal: false, Kind: 'normal' });
+        advanceTo(12000);
+        client.Emit({ Role: 'Assistant', Text: 'Sure, let us start', IsFinal: true, Kind: 'normal' });
+        advanceTo(30000);
+        runtime.SendText('I would like to apply');
+        await vi.waitFor(() => expect(provider.Relayed).toHaveLength(3));
+
+        expect(provider.Relayed[2]).toEqual({ role: 'user', utteranceStartMs: null, utteranceEndMs: 30000 });
+    });
+
+    it('leaves a held onset for the spoken transcript when the user types in between', async () => {
+        const { runtime, provider, client, advanceTo } = await startRecorded();
+        client.GoLive();
+        speakAssistantTurn(client, advanceTo);
+
+        advanceTo(8400);
+        client.SpeechStart();
+        advanceTo(9000);
+        runtime.SendText('Typed note');
+        advanceTo(11000);
+        client.Emit({ Role: 'User', Text: 'I would like to apply', IsFinal: true, Kind: 'normal' });
+        await vi.waitFor(() => expect(provider.Relayed).toHaveLength(3));
+
+        expect(provider.Relayed[1].utteranceStartMs).not.toBe(8400);
+        expect(provider.Relayed[2]).toEqual({ role: 'user', utteranceStartMs: 8400, utteranceEndMs: 11000 });
     });
 });
