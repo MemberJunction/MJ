@@ -31,12 +31,10 @@ vi.mock('@memberjunction/ai-core-plus', () => ({
 }));
 vi.mock('@memberjunction/ai', () => ({ ChatMessageRole: { user: 'user' } }));
 
-const runAgent = vi.fn().mockResolvedValue({
-    success: true,
-    payload: { queryName: 'Top Users', sql: 'SELECT TOP 10 * FROM Users' },
-    agentRun: { ID: 'step-run-1', Message: 'Built Top Users query' },
-});
-const processAgentArtifacts = vi.fn().mockResolvedValue(undefined);
+const { runAgent, processAgentArtifacts } = vi.hoisted(() => ({
+    runAgent: vi.fn(),
+    processAgentArtifacts: vi.fn(),
+}));
 vi.mock('@memberjunction/ai-agents', () => ({
     AgentRunner: class {
         RunAgent = runAgent;
@@ -48,7 +46,15 @@ import { TaskGraphAgentRunner } from '../services/TaskGraphAgentRunner';
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
 
 describe('TaskGraphAgentRunner', () => {
-    beforeEach(() => vi.clearAllMocks());
+    beforeEach(() => {
+        vi.clearAllMocks();
+        runAgent.mockResolvedValue({
+            success: true,
+            payload: { queryName: 'Top Users', sql: 'SELECT TOP 10 * FROM Users' },
+            agentRun: { ID: 'step-run-1', Message: 'Built Top Users query' },
+        });
+        processAgentArtifacts.mockResolvedValue(undefined);
+    });
 
     it('resolves ConversationDetailID from the submitting parent run and persists specialist agent artifacts', async () => {
         const provider = {

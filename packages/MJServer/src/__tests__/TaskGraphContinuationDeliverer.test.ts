@@ -12,13 +12,17 @@
 import 'reflect-metadata';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+const { fromMetadataProvider, runAgent, processAgentArtifacts } = vi.hoisted(() => ({
+    fromMetadataProvider: vi.fn(),
+    runAgent: vi.fn(),
+    processAgentArtifacts: vi.fn(),
+}));
+
 vi.mock('@memberjunction/core', () => ({
     LogError: vi.fn(),
     LogStatus: vi.fn(),
     RunView: {
-        FromMetadataProvider: vi.fn().mockReturnValue({
-            RunView: vi.fn().mockResolvedValue({ Success: false, Results: [] }),
-        }),
+        FromMetadataProvider: fromMetadataProvider,
     },
 }));
 
@@ -37,12 +41,6 @@ vi.mock('@memberjunction/core-entities', () => ({
 vi.mock('@memberjunction/ai-core-plus', () => ({ MJAIAgentEntityExtended: class {} }));
 vi.mock('@memberjunction/ai', () => ({ ChatMessageRole: { user: 'user' } }));
 
-const runAgent = vi.fn().mockResolvedValue({
-    success: true,
-    payload: 'Synthesized workflow outcome',
-    agentRun: { ID: 'cont-run-1', Message: 'Synthesized workflow outcome' },
-});
-const processAgentArtifacts = vi.fn().mockResolvedValue(undefined);
 vi.mock('@memberjunction/ai-agents', () => ({
     AgentRunner: class {
         RunAgent = runAgent;
@@ -107,7 +105,18 @@ const params = (over: Partial<TaskContinuationParams> = {}): TaskContinuationPar
     ...over,
 });
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+    vi.clearAllMocks();
+    fromMetadataProvider.mockReturnValue({
+        RunView: vi.fn().mockResolvedValue({ Success: false, Results: [] }),
+    });
+    runAgent.mockResolvedValue({
+        success: true,
+        payload: 'Synthesized workflow outcome',
+        agentRun: { ID: 'cont-run-1', Message: 'Synthesized workflow outcome' },
+    });
+    processAgentArtifacts.mockResolvedValue(undefined);
+});
 
 describe('posting the outcome', () => {
     it('writes an AI-role message into the graph\'s conversation and broadcasts completion via pubSub', async () => {
