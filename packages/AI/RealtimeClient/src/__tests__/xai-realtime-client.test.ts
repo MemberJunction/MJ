@@ -667,6 +667,15 @@ describe('xAIRealtimeClient', () => {
             expect(states.at(-1)).toBe('listening');
         });
 
+        it('invokes the OnUserSpeechStart handler on input_audio_buffer.speech_started', () => {
+            let count = 0;
+            client.OnUserSpeechStart(() => { count++; });
+            client.Emit({ type: 'input_audio_buffer.speech_started' });
+            expect(count).toBe(1);
+            client.Emit({ type: 'input_audio_buffer.speech_started' });
+            expect(count).toBe(2);
+        });
+
         it('should NOT surface speech_started while idle (user simply taking their turn)', () => {
             const { interruptions } = collect(client);
             client.Emit({ type: 'input_audio_buffer.speech_started' });
