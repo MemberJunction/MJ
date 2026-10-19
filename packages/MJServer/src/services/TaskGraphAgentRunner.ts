@@ -13,6 +13,7 @@
  * @module @memberjunction/server
  */
 import { AgentRunner } from '@memberjunction/ai-agents';
+import { AIEngine } from '@memberjunction/aiengine';
 import { ChatMessageRole } from '@memberjunction/ai';
 import { LogError, type UserInfo } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
@@ -32,6 +33,16 @@ export class TaskGraphAgentRunner implements TaskAgentRunner {
 
             const parentRun = await this.loadSubmittingRun(params);
             const actingUser = this.resolveActingUser(parentRun?.UserID, params.ContextUser);
+            const engineLoaded = (AIEngine.Instance?.Agents?.length ?? 0) > 0;
+            if (engineLoaded && actingUser && typeof AIEngine.Instance.CanUserRunAgent === 'function') {
+                const permitted = await AIEngine.Instance.CanUserRunAgent(agent.ID, actingUser);
+                if (!permitted) {
+                    return {
+                        Success: false,
+                        ErrorMessage: `User does not have permission to run agent "${agent.Name}".`,
+                    };
+                }
+            }
             const conversationDetailId =
                 parentRun?.ConversationDetailID ?? (await this.resolveTaskConversationDetailID(params)) ?? undefined;
 

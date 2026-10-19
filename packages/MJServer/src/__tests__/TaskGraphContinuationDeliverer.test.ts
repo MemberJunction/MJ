@@ -525,5 +525,60 @@ describe('Reinvoke — on the fork of the message that started the graph', () =>
         const sqlOccurrences = sentContent.split('SELECT YEAR(OrderDate) AS OrderYear').length - 1;
         expect(sqlOccurrences).toBe(1);
     });
+
+    it('walks up ParentRunID so a sub-agent (Workflow Planner) submission reinvokes the root conversation agent (Sage) as the conversation owner', async () => {
+        const subAgentRun = {
+            ID: 'subagent-planner-run',
+            AgentID: 'workflow-planner-agent-id',
+            ParentRunID: 'root-sage-run',
+            UserID: null as string | null,
+            Load: vi.fn().mockResolvedValue(true),
+        };
+        const rootSageRun = {
+            ID: 'root-sage-run',
+            AgentID: 'sage-agent-id',
+            ParentRunID: null as string | null,
+            UserID: 'owner-user-99',
+            Load: vi.fn().mockResolvedValue(true),
+        };
+        const sageAgent = {
+            ID: 'sage-agent-id',
+            Name: 'Sage',
+            Load: vi.fn().mockResolvedValue(true),
+        };
+        const detail = detailRow();
+        let runCallCount = 0;
+        const detailUsers: Array<UserInfo | undefined> = [];
+
+        const provider = {
+            GetEntityObject: vi.fn().mockImplementation(async (name: string, user?: UserInfo) => {
+                if (name === 'MJ: AI Agent Runs') {
+                    runCallCount++;
+                    return runCallCount === 1 ? subAgentRun : rootSageRun;
+                }
+                if (name === 'MJ: AI Agents') {
+                    return sageAgent;
+                }
+                detailUsers.push(user);
+                return detail;
+            }),
+        };
+
+        const deliverer = new TaskGraphContinuationDeliverer(
+            { CreateProvider: vi.fn().mockResolvedValue(provider) } as never,
+            { ID: 'system-user' } as UserInfo,
+        );
+
+        await deliverer.Reinvoke(params({ SubmittedByAgentRunID: 'subagent-planner-run' }));
+
+        expect(subAgentRun.Load).toHaveBeenCalledWith('subagent-planner-run');
+        expect(rootSageRun.Load).toHaveBeenCalledWith('root-sage-run');
+        expect(sageAgent.Load).toHaveBeenCalledWith('sage-agent-id');
+        expect(runAgent).toHaveBeenCalledTimes(1);
+        expect(runAgent.mock.calls[0][0].agent.ID).toBe('sage-agent-id');
+        expect(runAgent.mock.calls[0][0].contextUser.ID).toBe('owner-user-99');
+        expect(detailUsers[0]?.ID).toBe('owner-user-99');
+    });
 });
+
 

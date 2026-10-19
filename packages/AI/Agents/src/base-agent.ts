@@ -129,7 +129,10 @@ import {
     AgentUserPolicyEngine,
     type AgentPostRunCompactionConfig,
     type AIPromptExecutionScope,
-    type AgentRunAudience
+    type AgentRunAudience,
+    ConfigOf,
+    type TaskGraphSpec,
+    type TaskGraphSpecNode
 } from '@memberjunction/ai-core-plus';
 import {
     MJActionEntityExtended, ActionResult, ActionParam, AIDirective, RuntimeAPIKeyResolver, RunActionParams, AUDIENCE_UNSUPPORTED_RESULT_CODE,
@@ -6164,11 +6167,12 @@ export class BaseAgent {
                 // Client tools are valid - execution handled by executeClientToolsStep
                 return nextStep;
             // Type assertion required because 'Tasks' is not part of the BaseAgentNextStep step
-            // union (submit-and-detach — the terminal step it produces is 'Success'). The graph was
-            // already validated against TaskGraphSpec by the agent type, so there is nothing left
-            // to check here; submission is handled by executeTasksStep.
+            // union (submit-and-detach — the terminal step it produces is 'Success'). Pre-flight
+            // validation checks that all referenced agents and actions exist and are runnable by
+            // the context user so hallucinations or inaccessible targets convert to a self-correcting
+            // Retry step instead of hard-failing the run in executeTasksStep.
             case 'Tasks' as typeof nextStep.step:
-                return nextStep;
+                return this.validateTasksNextStep<P>(params, nextStep, currentPayload, agentRun, currentStep);
             default:
                 // if we get here, the next step is not recognized, we can return a retry step
                 this.logError(`Invalid next step '${nextStep.step}' for agent '${params.agent.Name}'`, {
@@ -6239,19 +6243,27 @@ export class BaseAgent {
             };
         }
 
-        // Validate each requested sub-agent: existence + MaxExecutionsPerRun
+        // Validate each requested sub-agent: existence + user run permission + MaxExecutionsPerRun
         for (const req of requested) {
             const name = req?.name;
             const normalizedName = name?.trim().toLowerCase();
-            const subAgent =
-                curAgentSubAgents.find(a => a.Name.trim().toLowerCase() === normalizedName) ??
-                (allowFoldedTaskGraphTarget && normalizedName
+            const directSubAgent = curAgentSubAgents.find(a => a.Name.trim().toLowerCase() === normalizedName);
+            const catalogSubAgent =
+                !directSubAgent && allowFoldedTaskGraphTarget && normalizedName
                     ? AIEngine.Instance.Agents.find(
                           a => a.Status === 'Active' && a.Name.trim().toLowerCase() === normalizedName
                       )
-                    : undefined);
+                    : undefined;
+            const subAgent = directSubAgent ?? catalogSubAgent;
+            const hasRunPermission =
+                subAgent && catalogSubAgent && params.contextUser
+                    ? await AIAgentPermissionHelper.HasPermission(subAgent.ID, params.contextUser, 'run')
+                    : true;
 
-            if (!name || !subAgent) {
+            if (!name || !subAgent || !hasRunPermission) {
+                const availableHint = allowFoldedTaskGraphTarget
+                    ? this.buildAvailableRunnableAgentsHint(params.contextUser)
+                    : '';
                 this.logError(`Sub-agent '${name}' not found or not active for agent '${params.agent.Name}'`, {
                     agent: params.agent,
                     category: 'SubAgentExecution'
@@ -6262,7 +6274,7 @@ export class BaseAgent {
                 return {
                     step: 'Retry',
                     terminate: false,
-                    errorMessage: `Sub-agent '${name}' not found or not active`
+                    errorMessage: `Sub-agent '${name}' not found or not active${availableHint}`
                 };
             }
 
@@ -6292,6 +6304,128 @@ export class BaseAgent {
 
         // All requested sub-agents are valid
         return nextStep;
+    }
+
+    /**
+     * Builds a compact hint listing the current user's permitted runnable agents when a
+     * task-graph or folded sub-agent step references an unknown or inaccessible agent name.
+     */
+    protected buildAvailableRunnableAgentsHint(contextUser?: UserInfo): string {
+        const engine = AIEngine.Instance;
+        if (typeof engine.GetUserRunnableAgentDirectory === 'function') {
+            const runnable = engine.GetUserRunnableAgentDirectory(contextUser);
+            if (runnable.length > 0) {
+                const names = runnable.slice(0, 25).map(a => a.Name).join(', ');
+                return `. Available runnable agents: ${names}`;
+            }
+        }
+        return '';
+    }
+
+    /**
+     * Validates a `'Tasks'` next step before `executeTasksStep` submits the graph.
+     *
+     * Verifies that every referenced `Agent` (including `ForEach`/`While` loop sub-agents) is
+     * active and runnable by `params.contextUser`, and that every referenced `Action` is active.
+     * When an agent or action name is unknown or inaccessible, converts the step to a self-correcting
+     * `Retry` with the user's permitted runnable agent list instead of letting `TaskGraphService.Submit`
+     * terminate the entire agent run as `Failed`. Never reveals whether an invalid agent name was
+     * nonexistent versus restricted by permissions.
+     */
+    protected async validateTasksNextStep<P>(
+        params: ExecuteAgentParams,
+        nextStep: BaseAgentNextStep<P>,
+        _currentPayload: P,
+        _agentRun: MJAIAgentRunEntityExtended,
+        _currentStep: MJAIAgentRunStepEntityExtended
+    ): Promise<BaseAgentNextStep<P>> {
+        const spec: TaskGraphSpec | undefined = nextStep.taskGraph?.spec;
+        if (!spec || !Array.isArray(spec.tasks) || spec.tasks.length === 0) {
+            return nextStep;
+        }
+
+        const extractNodeAgentNames = (node: TaskGraphSpecNode): string[] => {
+            const loopOp = ConfigOf(node, 'ForEach') ?? ConfigOf(node, 'While');
+            return [ConfigOf(node, 'Agent')?.agentName, loopOp?.subAgent?.name].filter(
+                (n): n is string => typeof n === 'string' && n.trim().length > 0
+            );
+        };
+        const extractNodeActionNames = (node: TaskGraphSpecNode): string[] => {
+            const loopOp = ConfigOf(node, 'ForEach') ?? ConfigOf(node, 'While');
+            return [ConfigOf(node, 'Action')?.actionName, loopOp?.action?.name].filter(
+                (n): n is string => typeof n === 'string' && n.trim().length > 0
+            );
+        };
+
+        const referencedAgents = [...new Set(spec.tasks.flatMap(extractNodeAgentNames))];
+        const referencedActions = [...new Set(spec.tasks.flatMap(extractNodeActionNames))];
+
+        const invalidAgents: string[] = [];
+        const allAgents = AIEngine.Instance?.Agents ?? [];
+        if (referencedAgents.length > 0 && allAgents.length > 0) {
+            for (const agentName of referencedAgents) {
+                const normalized = agentName.trim().toLowerCase();
+                const matched = allAgents.find(
+                    a => a.Status === 'Active' && a.Name?.trim().toLowerCase() === normalized
+                );
+                const permitted = matched
+                    ? params.contextUser
+                        ? await AIAgentPermissionHelper.HasPermission(matched.ID, params.contextUser, 'run')
+                        : true
+                    : false;
+                if (!matched || !permitted) {
+                    invalidAgents.push(agentName);
+                }
+            }
+        }
+
+        const invalidActions: string[] = [];
+        const allActions = ActionEngineServer.Instance?.Actions ?? [];
+        if (referencedActions.length > 0 && allActions.length > 0) {
+            for (const actionName of referencedActions) {
+                const normalized = actionName.trim().toLowerCase();
+                const matched = allActions.find(
+                    act => act.Status === 'Active' && act.Name?.trim().toLowerCase() === normalized
+                );
+                if (!matched) {
+                    invalidActions.push(actionName);
+                }
+            }
+        }
+
+        if (invalidAgents.length === 0 && invalidActions.length === 0) {
+            return nextStep;
+        }
+
+        const errorParts: string[] = [];
+        if (invalidAgents.length > 0) {
+            const availableHint = this.buildAvailableRunnableAgentsHint(params.contextUser);
+            errorParts.push(
+                `Task graph "${spec.workflowName}" references unknown or inaccessible agent(s): ${invalidAgents.join(', ')}. ` +
+                `Use only exact agent names from the Available Agents for Task Graph & Sub-Agent Delegation list ` +
+                `(or discovered via "Find Candidate Agents")${availableHint}.`
+            );
+        }
+        if (invalidActions.length > 0) {
+            errorParts.push(
+                `Task graph "${spec.workflowName}" references unknown or inactive action(s): ${invalidActions.join(', ')}. ` +
+                `Use "Find Candidate Actions" first to discover exact action names.`
+            );
+        }
+
+        const errorMessage = errorParts.join(' ');
+        this.logError(errorMessage, {
+            agent: params.agent,
+            category: 'NextStepValidation'
+        });
+        if (nextStep.step !== 'Retry') {
+            this._generalValidationRetryCount++;
+        }
+        return {
+            step: 'Retry',
+            terminate: false,
+            errorMessage
+        };
     }
 
     /**
@@ -7023,7 +7157,7 @@ export class BaseAgent {
         step: BaseAgentNextStep<P>,
         payload: P,
     ): Promise<BaseAgentNextStep<P>> {
-        if (step.step !== 'Success' || !this._agentRun) return step;
+        if (step.step !== 'Success' || !this._agentRun || this._awaitingWorkflowTaskID) return step;
         const checked = await this.applySelfCheck(params, step, this._agentRun, payload);
         return checked ?? step;
     }
@@ -10582,12 +10716,30 @@ The context is now within limits. Please retry your request with the recovered c
                 ? AgentUserPolicyEngine.Instance.GetCachedPolicy(agent.ID, _contextUser.ID)
                 : null;
 
+            const runnableAgentDirectory =
+                typeof engine.GetUserRunnableAgentDirectory === 'function'
+                    ? engine.GetUserRunnableAgentDirectory(_contextUser)
+                    : [];
+            const maxPreloadedAgents = 25;
+            const visibleRunnableAgents = runnableAgentDirectory.slice(0, maxPreloadedAgents);
+            const availableAgentLines = visibleRunnableAgents.map(a =>
+                a.Description ? `- **${a.Name}**: ${a.Description}` : `- **${a.Name}**`
+            );
+            if (runnableAgentDirectory.length > maxPreloadedAgents) {
+                availableAgentLines.push(
+                    `*(Showing ${maxPreloadedAgents} of ${runnableAgentDirectory.length} runnable agents — use "Find Candidate Agents" to search the full catalog)*`
+                );
+            }
+            const availableAgentDetails = availableAgentLines.join('\n');
+
             const contextData: AgentContextData = {
                 agentName: cachedUserPolicy?.DisplayNameOverride?.trim() || agent.Name,
                 agentDescription: agent.Description,
                 parentAgentName: agent.Parent ? agent.Parent.trim() : "",
                 subAgentCount: subAgentCount,
                 subAgentDetails: subAgentDetails,
+                availableAgentCount: runnableAgentDirectory.length,
+                availableAgentDetails: availableAgentDetails,
                 actionCount: activeActions.length,
                 actionDetails: actionDetails,
                 clientToolDetails: clientToolDetails,
@@ -12228,6 +12380,7 @@ The context is now within limits. Please retry your request with the recovered c
                 PrimaryScopeRecordID: params.PrimaryScopeRecordID,
                 companyId: params.companyId,
                 SecondaryScopes: params.SecondaryScopes,
+                conversationDetailId: params.conversationDetailId, // propagate conversationDetailId so sub-agent task graphs attach to the chat message
                 onAgentRunCreated: async (agentRunId: string) => {
                     stepEntity.TargetLogID = agentRunId;
                     // Re-apply post-INSERT: this callback can fire while the step's INSERT is still in flight,
@@ -12664,6 +12817,10 @@ The context is now within limits. Please retry your request with the recovered c
             lines.push(`**Error:** ${result.agentRun.ErrorMessage}`);
         }
 
+        if (result.agentRun?.Message?.trim()) {
+            lines.push(`**Message:**\n${result.agentRun.Message.trim()}`);
+        }
+
         // Payload — the actual result data the parent agent cares about.
         // Not truncated by default — the expiration/compaction lifecycle handles
         // context window management. Truncating here permanently discards data
@@ -13072,6 +13229,7 @@ The context is now within limits. Please retry your request with the recovered c
         this._promptTurnCount = 0;
         this._lastRecordedPromptStack = null;
         this._heldDecisions = undefined;
+        this._awaitingWorkflowTaskID = null;
 
         // Resolve action-result compression config for this run (default on; opt out via
         // crushActionResults: false in the agent-type prompt params).
@@ -15142,8 +15300,9 @@ The context is now within limits. Please retry your request with the recovered c
                 this.logStatus(`📄 Collected ${subAgentResult.fileOutputs.length} file output(s) from sub-agent '${subAgentRequest.name}'`, true);
             }
 
-            // Determine if we should terminate after sub-agent
-            const shouldTerminate = subAgentRequest.terminateAfter;
+            // Determine if we should terminate after sub-agent (including when the sub-agent parked on a durable workflow)
+            const subAgentParkedOnWorkflow = subAgentResult.agentRun?.Status === 'Paused';
+            const shouldTerminate = subAgentRequest.terminateAfter || subAgentParkedOnWorkflow;
             
             // Prepare output data
             const outputData = {
@@ -15193,6 +15352,29 @@ The context is now within limits. Please retry your request with the recovered c
                 // Validate through parent's ChatHandlingOption (if configured)
                 // This ensures parent agents can override child Chat steps
                 return await this.validateChatNextStep(params, chatStep, mergedPayload, this._agentRun!, stepEntity!);
+            }
+
+            // When a sub-agent (e.g. Workflow Planner) submits a durable task graph, its run parks
+            // with Status === 'Paused'. Propagate the parked state to the parent run and terminate
+            // immediately with the sub-agent's workflow launch message so the parent orchestrator
+            // does not continue looping or re-invoking the sub-agent while the workflow runs.
+            if (subAgentParkedOnWorkflow) {
+                this._awaitingWorkflowTaskID = this.extractSubAgentWorkflowTaskID(subAgentResult.agentRun);
+                if (this._agentRun) {
+                    this._agentRun.FinalPayloadObject = mergedPayload;
+                }
+                return {
+                    ...subAgentResult,
+                    step: 'Success',
+                    terminate: true,
+                    message: subAgentResult.agentRun?.Message || null,
+                    previousPayload: previousDecision?.newPayload,
+                    newPayload: mergedPayload,
+                    responseForm: subAgentResult.responseForm,
+                    actionableCommands: subAgentResult.actionableCommands,
+                    automaticCommands: subAgentResult.automaticCommands,
+                    artifactDirective: previousDecision?.artifactDirective ?? subAgentResult.artifactDirective
+                };
             }
             
             // Add user message with the sub-agent results using markdown format
@@ -15282,6 +15464,32 @@ The context is now within limits. Please retry your request with the recovered c
                 newPayload: payload
             };
         }
+    }
+
+    /**
+     * Extracts the workflow root task ID (`parentTaskID`) from a sub-agent run that parked on a
+     * durable task graph (`Status === 'Paused'`), falling back to the sub-agent run ID so the
+     * parent run's `_awaitingWorkflowTaskID` is guaranteed non-null when parking.
+     *
+     * @protected
+     */
+    protected extractSubAgentWorkflowTaskID(subAgentRun: MJAIAgentRunEntityExtended | undefined): string {
+        if (subAgentRun?.Steps) {
+            for (let i = subAgentRun.Steps.length - 1; i >= 0; i--) {
+                const rawOutput = subAgentRun.Steps[i]?.OutputData;
+                if (!rawOutput) continue;
+                try {
+                    const parsed = JSON.parse(rawOutput) as Record<string, unknown>;
+                    const candidate = parsed.parentTaskID ?? parsed.parentTaskId;
+                    if (typeof candidate === 'string' && candidate.length > 0) {
+                        return candidate;
+                    }
+                } catch {
+                    // Ignore non-JSON step output
+                }
+            }
+        }
+        return subAgentRun?.ID || 'sub-agent-workflow';
     }
 
     /**
@@ -16120,8 +16328,9 @@ The context is now within limits. Please retry your request with the recovered c
                 }
             }
 
-            // Check if we should terminate after this sub-agent
-            const shouldTerminate = subAgentRequest.terminateAfter === true;
+            // Check if we should terminate after this sub-agent (including when the sub-agent parked on a durable workflow)
+            const subAgentParkedOnWorkflow = subAgentResult.agentRun?.Status === 'Paused';
+            const shouldTerminate = subAgentRequest.terminateAfter === true || subAgentParkedOnWorkflow;
 
             // Prepare output data
             const outputData = {
@@ -16171,6 +16380,28 @@ The context is now within limits. Please retry your request with the recovered c
                 // Validate through parent's ChatHandlingOption (if configured)
                 // This ensures parent agents can override child Chat steps
                 return await this.validateChatNextStep(params, chatStep, mergedPayload, this._agentRun!, stepEntity!);
+            }
+
+            // When a related sub-agent submits a durable task graph, its run parks with Status === 'Paused'.
+            // Propagate the parked state to the parent run and terminate immediately with the sub-agent's
+            // workflow launch message instead of continuing the parent loop.
+            if (subAgentParkedOnWorkflow) {
+                this._awaitingWorkflowTaskID = this.extractSubAgentWorkflowTaskID(subAgentResult.agentRun);
+                if (this._agentRun) {
+                    this._agentRun.FinalPayloadObject = mergedPayload;
+                }
+                return {
+                    ...subAgentResult,
+                    step: 'Success',
+                    terminate: true,
+                    message: subAgentResult.agentRun?.Message || null,
+                    previousPayload: previousDecision?.newPayload,
+                    newPayload: mergedPayload,
+                    responseForm: subAgentResult.responseForm,
+                    actionableCommands: subAgentResult.actionableCommands,
+                    automaticCommands: subAgentResult.automaticCommands,
+                    artifactDirective: previousDecision?.artifactDirective ?? subAgentResult.artifactDirective
+                };
             }
 
             // Add sub-agent result to conversation as user message using markdown format

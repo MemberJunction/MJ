@@ -166,19 +166,36 @@ export class TaskGraphContinuationDeliverer implements TaskContinuationDeliverer
                 return;
             }
 
+            // When a sub-agent (e.g., Workflow Planner) submitted the workflow on behalf of a parent
+            // conversation agent (e.g., Sage), walk up `ParentRunID` so the root conversation agent
+            // synthesizes the final response to the user.
+            let targetRun = priorRun;
+            const initialRunId = (priorRun.ID || params.SubmittedByAgentRunID).toLowerCase();
+            const visitedRunIDs = new Set<string>([initialRunId]);
+            while (targetRun.ParentRunID && !visitedRunIDs.has(targetRun.ParentRunID.toLowerCase()) && visitedRunIDs.size < 10) {
+                visitedRunIDs.add(targetRun.ParentRunID.toLowerCase());
+                const parentRun = await provider.GetEntityObject<MJAIAgentRunEntity>('MJ: AI Agent Runs', this.contextUser);
+                if (await parentRun.Load(targetRun.ParentRunID)) {
+                    targetRun = parentRun;
+                } else {
+                    break;
+                }
+            }
+
             const agent = await provider.GetEntityObject<MJAIAgentEntityExtended>('MJ: AI Agents', this.contextUser);
-            if (!(await agent.Load(priorRun.AgentID))) {
-                LogError(`[TaskGraphContinuationDeliverer] Agent ${priorRun.AgentID} could not be loaded — posting "${params.WorkflowName}" instead.`);
+            if (!(await agent.Load(targetRun.AgentID))) {
+                LogError(`[TaskGraphContinuationDeliverer] Agent ${targetRun.AgentID} could not be loaded — posting "${params.WorkflowName}" instead.`);
                 await this.PostMessage(params);
                 return;
             }
 
             // Run on the fork of the message that started the graph, as PostMessage posts into it:
             // RunAgent derives the conversation from the detail, but not the fork.
+            const runUserId = targetRun.UserID || priorRun.UserID;
             const origin = params.ConversationDetailID
-                ? await this.resolveOrigin(params.ConversationDetailID, provider, priorRun.UserID)
+                ? await this.resolveOrigin(params.ConversationDetailID, provider, runUserId)
                 : null;
-            const ownerUserId = priorRun.UserID || origin?.OwnerUserID || this.contextUser.ID;
+            const ownerUserId = runUserId || origin?.OwnerUserID || this.contextUser.ID;
             const actingUser = this.resolveActingUser(ownerUserId);
 
             // Adaptive delivery:
@@ -382,13 +399,25 @@ export class TaskGraphContinuationDeliverer implements TaskContinuationDeliverer
         OriginDetail: MJConversationDetailEntity;
         IsLatest: boolean;
     } | null> {
-        const detail = await provider.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', this.contextUser);
+        const initialUser = this.resolveActingUser(fallbackOwnerUserId);
+        let detail = await provider.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', initialUser);
         if (!(await detail.Load(conversationDetailID))) {
             return null;
         }
         let ownerUserId = fallbackOwnerUserId || detail.UserID || null;
         if (!ownerUserId && detail.ConversationID) {
             ownerUserId = await this.lookupConversationOwnerId(detail.ConversationID, provider);
+        }
+        const resolvedOwnerUserId = ownerUserId || this.contextUser.ID;
+        const actingUser = this.resolveActingUser(resolvedOwnerUserId);
+        // `MJConversationDetailEntityExtended.Save()` refuses writes when the entity's context user
+        // is not the conversation owner (`this.contextUser` is the server system user). Re-bind
+        // `OriginDetail` to `actingUser` whenever `ownerUserId` was discovered after loading `detail`.
+        if (actingUser.ID !== initialUser.ID) {
+            const writableDetail = await provider.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', actingUser);
+            if (await writableDetail.Load(conversationDetailID)) {
+                detail = writableDetail;
+            }
         }
         const branchId = detail.BranchID ?? null;
         const isLatest = detail.ConversationID
@@ -397,7 +426,7 @@ export class TaskGraphContinuationDeliverer implements TaskContinuationDeliverer
         return {
             ConversationID: detail.ConversationID,
             BranchID: branchId,
-            OwnerUserID: ownerUserId || this.contextUser.ID,
+            OwnerUserID: resolvedOwnerUserId,
             OriginDetail: detail,
             IsLatest: isLatest,
         };

@@ -985,14 +985,13 @@ graph ends your turn — you cannot read its output before replying.
 - The graph must be **acyclic**. A cycle can never execute, because nothing would ever become
   eligible to start, so it is rejected outright.
 - Every task declares a `kind` and a matching `configuration`:
-  - `kind: 'Agent'` → `configuration: { agentName }` — must name a real agent
+  - `kind: 'Agent'` → `configuration: { agentName }` — must match an existing agent's exact name (verified from your preloaded sub-agents or `Find Candidate Agents`; never guess or invent an agent name)
   - `kind: 'Action'` → `configuration: { actionName }` — must name a real action
   - `kind: 'Human'` → `configuration: {}` — a step a person completes
   - `kind: 'Prompt'` → `configuration: { promptName }`
   The pairing is the whole assignment; there is no separate flag to set.
-- An edge can be conditional: `dependsOn: [{ tempId: 'analyze', condition: 'severity === "high"' }]`
-  runs the step only when the expression holds. Use it for "only if" work rather than inventing a
-  branching step.
+- An edge can be conditional: `dependsOn: [{ tempId: 'analyze', condition: 'output.severity === "high"' }]`
+  runs the step only when the expression holds against the upstream task's output (`output.<field>`, `status`, `succeeded`, `failed`, `errorMessage`). Use it for "only if" work rather than inventing a branching step. Note: `Query Builder` returns `{ query, rows, columns, metadata: { rowCount, executionTimeMs, sql } }`, so row-count conditions on a `Query Builder` step must use `output.metadata.rowCount > 0` (or `output.rows.length > 0`), never `output.resultCount` or `output.rowCount`.
 - Put structured inputs in `inputPayload`. Describe intent in `description` — that is what the
   assigned agent reads.
 - Maximum 50 tasks per graph.
