@@ -12,6 +12,7 @@
 
 import { BaseEmbeddings } from '@memberjunction/ai';
 import { MJGlobal } from '@memberjunction/global';
+import { ResolveCallTimeoutMs, WithCallDeadline } from '../utils/call-deadline.js';
 
 /** Provider names that map to a registered `BaseEmbeddings` driver class. */
 export type EmbeddingProviderName = 'openai' | 'gemini' | 'mistral' | 'azure' | 'bedrock' | 'ollama' | 'local';
@@ -23,6 +24,11 @@ export interface EmbeddingProviderConfig {
     Dimensions?: number;
     BatchSize?: number;
     Endpoint?: string;
+    /**
+     * Wall-clock ceiling on each embedding batch, in ms: `AIConfig.callTimeoutMs`, resolved the
+     * same way (absent = the 120s default, 0 = unbounded).
+     */
+    CallTimeoutMs?: number;
 }
 
 export interface EmbeddingProvider {
@@ -78,9 +84,11 @@ class MJEmbeddingProvider implements EmbeddingProvider {
     private readonly embeddings: BaseEmbeddings;
     private readonly model: string;
     private readonly batchSize: number;
+    private readonly callTimeoutMs: number;
 
     constructor(config: EmbeddingProviderConfig, driverClass: string) {
         this.provider = config.provider;
+        this.callTimeoutMs = ResolveCallTimeoutMs(config.CallTimeoutMs);
         this.model = config.model || PROVIDER_DEFAULT_MODEL[config.provider] || '';
         this.batchSize = config.BatchSize ?? 100;
 
@@ -110,7 +118,14 @@ class MJEmbeddingProvider implements EmbeddingProvider {
     }
 
     private async embedBatch(texts: string[]): Promise<Float32Array[]> {
-        const result = await this.embeddings.EmbedTexts({ texts, model: this.model });
+        // Bounded like the LLM calls: a stalled embedding request otherwise parks the organic-key
+        // pass after every normalization call has been paid for. With the bound disabled no token is
+        // passed, so the request is exactly what it was before.
+        const result = await WithCallDeadline(
+            this.callTimeoutMs,
+            `embedding batch of ${texts.length} via ${this.provider}`,
+            (signal) => this.embeddings.EmbedTexts({ texts, model: this.model, ...(signal ? { CancellationToken: signal } : {}) }),
+        );
         const vectors = result?.vectors;
         if (!vectors || vectors.length !== texts.length) {
             throw new Error(

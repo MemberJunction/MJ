@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { BaseEmbeddings } from '@memberjunction/ai';
+import { BaseEmbeddings, BaseLLM } from '@memberjunction/ai';
 import { MJGlobal } from '@memberjunction/global';
 
 import { DefaultEmbeddingProviderFor } from '../discovery/embedding-provider-default.js';
-import { ResolveEmbeddingProvider } from '../discovery/SemanticPhase.js';
+import { ResolveEmbeddingProvider, RunSemanticPhase } from '../discovery/SemanticPhase.js';
+import type { DatabaseDocumentation } from '../types/state.js';
 import type { AIConfig, OrganicKeyDetectionConfig } from '../types/config.js';
 
 /**
@@ -78,7 +79,7 @@ describe('the semantic phase actually uses that default', () => {
   });
 
   /** Reports which driver class the ClassFactory was asked for, without building a real driver. */
-  function driverClassFor(aiProvider: AIConfig['provider'], config: OrganicKeyDetectionConfig = {}): string {
+  function driverClassFor(aiProvider: AIConfig['provider'], config: OrganicKeyDetectionConfig = { enabled: true }): string {
     const spy = vi.spyOn(MJGlobal.Instance.ClassFactory, 'CreateInstance').mockReturnValue({
       EmbedTexts: async () => ({ vectors: [] }),
     } as unknown as BaseEmbeddings);
@@ -95,10 +96,39 @@ describe('the semantic phase actually uses that default', () => {
 
   it('still honours an explicit choice over the inferred one', () => {
     // An operator who has set up a separate embedding vendor must keep getting it.
-    expect(driverClassFor('gemini', { embedding: { provider: 'local' } })).toBe('LocalEmbedding');
+    expect(driverClassFor('gemini', { enabled: true, embedding: { provider: 'local' } })).toBe('LocalEmbedding');
   });
 
   it('refuses rather than guessing when the LLM vendor has no embedding driver', () => {
     expect(() => driverClassFor('anthropic')).toThrow(/embedding\.provider/);
+  });
+
+  it('refuses before any normalization call is paid for, not after', async () => {
+    // The refusal used to come after normalizeAll: with an anthropic key, 40 tables meant 40 paid
+    // normalization calls and then this error. A configuration the pass cannot get past must fail
+    // before it spends anything.
+    let llmCalls = 0;
+    vi.spyOn(MJGlobal.Instance.ClassFactory, 'CreateInstance').mockReturnValue({
+      ChatCompletion: async () => {
+        llmCalls++;
+        return { success: false, errorMessage: 'not expected', data: { choices: [], usage: {} } };
+      },
+    } as unknown as BaseLLM);
+    const column = (name: string) => ({
+      name,
+      dataType: 'nvarchar',
+      description: 'contact email',
+      isPrimaryKey: false,
+      isForeignKey: false,
+      statistics: { distinctCount: 900, uniquenessRatio: 0.9, totalRows: 1000, sampleValues: [] },
+    });
+    const state = {
+      schemas: [{ name: 'crm', tables: Array.from({ length: 6 }, (_, i) => ({ name: `t${i}`, columns: [column('email')] })) }],
+    } as unknown as DatabaseDocumentation;
+
+    await expect(
+      RunSemanticPhase(state, { enabled: true }, { provider: 'anthropic', model: 'm', apiKey: 'k' } as AIConfig),
+    ).rejects.toThrow(/embedding\.provider/);
+    expect(llmCalls).toBe(0);
   });
 });

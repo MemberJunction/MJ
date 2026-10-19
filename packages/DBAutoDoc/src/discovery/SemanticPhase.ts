@@ -141,6 +141,11 @@ export async function RunSemanticPhase(
         return emptyResult(candidates.length);
     }
 
+    // Resolve the embedding provider BEFORE the paid normalization calls. A vendor with no
+    // embedding driver, or a driver package that is not registered, is a configuration error the
+    // pass cannot get past, so it has to fail here rather than after every table was normalized.
+    const embedProvider = ResolveEmbeddingProvider(config, aiConfig);
+
     // ─── 2. Normalize to business space (LLM per-table) ──────────────────────
     progress('semantic: normalizing column descriptions to business space');
     const tableInputs = groupColumnsByTable(state, candidates);
@@ -174,7 +179,6 @@ export async function RunSemanticPhase(
     }
 
     // ─── 3. Embed the normalized descriptions ────────────────────────────────
-    const embedProvider = ResolveEmbeddingProvider(config, aiConfig);
     progress(`semantic: embedding ${normResult.Normalized.length} descriptions via ${embedProvider.name}`);
     const texts = normResult.Normalized.map((n) => buildEmbeddingText(n));
     const embeddings = await embedProvider.embed(texts);
@@ -516,6 +520,7 @@ export function ResolveEmbeddingProvider(
         Dimensions: cfg.dimensions,
         BatchSize: cfg.batchSize,
         Endpoint: cfg.endpoint,
+        CallTimeoutMs: aiConfig.callTimeoutMs,
     });
     return {
         name: `${provider}:${cfg.model ?? 'default'}`,
