@@ -460,4 +460,29 @@ describe('RealtimeWhiteboardHostComponent (DOM)', () => {
       expect(focusButton(f)).toBeNull();
     });
   });
+
+  // ── Tag → wb-tag-<slug> on the item wrapper (LXP P14.1) ─────────────────────────────
+  describe('item Tag as a wrapper class', () => {
+    it('a tagged sticky carries wb-tag-<slug> beside its kind classes; an untagged one carries no wb-tag-*', () => {
+      const state = new WhiteboardState();
+      const tagged = state.AddItem({ Kind: 'sticky', X: 10, Y: 20, Text: 'fill me', Tag: 'Slot' }, 'agent')!;
+      const plain = state.AddItem({ Kind: 'sticky', X: 200, Y: 20, Text: 'hello' }, 'user')!;
+      const f = render(null, state);
+      const wrappers = Array.from(f.nativeElement.querySelectorAll('.bi.sticky')) as HTMLElement[];
+      const taggedEl = wrappers.find((w) => w.textContent?.includes('fill me'));
+      const plainEl = wrappers.find((w) => w.textContent?.includes('hello'));
+      expect(taggedEl?.classList.contains('wb-tag-slot')).toBe(true);
+      expect(taggedEl?.classList.contains('sticky--sage')).toBe(true); // the kind/author classes survive
+      expect(Array.from(plainEl?.classList ?? []).some((c) => c.startsWith('wb-tag-'))).toBe(false);
+      void tagged; void plain;
+    });
+
+    it('a tagged shape box carries the class too (static-class wrappers were converted to [class] bindings)', () => {
+      const state = new WhiteboardState();
+      state.AddItem({ Kind: 'shape', Shape: 'rect', X: 0, Y: 0, W: 120, H: 40, Label: 'Head', Tag: 'heading' }, 'agent');
+      const f = render(null, state);
+      const box = f.nativeElement.querySelector('.bi.shape-box') as HTMLElement | null;
+      expect(box?.classList.contains('wb-tag-heading')).toBe(true);
+    });
+  });
 });

@@ -72,6 +72,32 @@ export interface WhiteboardItemBase {
   Author: WhiteboardAuthor;
   /** Render order (higher renders on top). Assigned by the engine. */
   Z: number;
+  /**
+   * Optional free-form role tag (`'slot'`, `'heading'`, `'step-done'`). It carries no behavior:
+   * the board lands it on the item's wrapper as a `wb-tag-<slug>` class (see
+   * {@link WhiteboardTagClass}) so a host restyling the board from outside can tell two ROLES of
+   * one kind apart — a shape used as a section head vs an empty "fill this in" slot — which the
+   * DOM could not distinguish before (CSS cannot select on label text). Persisted with the item;
+   * the agent's scene view carries it as `tag`.
+   */
+  Tag?: string;
+}
+
+/** Longest tag the slug keeps — anything past it is noise in a class name. */
+export const WHITEBOARD_TAG_MAX_CHARS = 32;
+
+/**
+ * The wrapper class for an item's {@link WhiteboardItemBase.Tag}: `wb-tag-<slug>`, where the slug
+ * is lower-cased, every run of characters outside `a-z0-9` becomes one dash, leading/trailing
+ * dashes are dropped and the result is capped at {@link WHITEBOARD_TAG_MAX_CHARS}. An empty or
+ * whitespace-only tag yields `''` (no class), so templates can append the result unconditionally.
+ */
+export function WhiteboardTagClass(tag: string | undefined | null): string {
+  if (!tag) {
+    return '';
+  }
+  const slug = tag.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, WHITEBOARD_TAG_MAX_CHARS).replace(/-+$/g, '');
+  return slug ? `wb-tag-${slug}` : '';
 }
 
 /** A sticky note. */
@@ -227,6 +253,8 @@ export type WhiteboardItemInput = DistributiveOmit<WhiteboardItem, 'ID' | 'Z' | 
 
 /** Patchable fields for {@link WhiteboardState.UpdateItem} (kind/identity fields excluded). */
 export interface WhiteboardItemPatch {
+  /** Re-tag the item (see {@link WhiteboardItemBase.Tag}); `''` clears it. */
+  Tag?: string;
   X?: number;
   Y?: number;
   W?: number;
@@ -579,6 +607,8 @@ export interface WhiteboardCompactItem {
   fontFamily?: WhiteboardFontFamily;
   bold?: boolean;
   color?: string;
+  /** The item's role tag, when set (see {@link WhiteboardItemBase.Tag}). */
+  tag?: string;
 }
 
 /**
@@ -2096,6 +2126,9 @@ export class WhiteboardState {
         }
         c.text = clip(item.Html, 200);
         break;
+    }
+    if (item.Tag) {
+      c.tag = item.Tag;
     }
     return c;
   }

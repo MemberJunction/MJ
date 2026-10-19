@@ -122,6 +122,7 @@ const RAW_WHITEBOARD_TOOL_DEFINITIONS: WhiteboardToolDefinition[] = [
         y: { type: 'number', description: 'Top position in board coordinates. Omit to auto-place near existing content.' },
         fontSize: { type: 'number', enum: [...WHITEBOARD_FONT_SIZES], description: 'Optional note font size in px (curated steps).' }
       },
+        tag: { type: 'string', description: 'Optional role tag for the host\'s styling (e.g. "slot", "heading", "step-done"). Lands on the item as a wb-tag-<slug> class; no behavior.' },
       required: ['text']
     }
   },
@@ -139,6 +140,7 @@ const RAW_WHITEBOARD_TOOL_DEFINITIONS: WhiteboardToolDefinition[] = [
         w: { type: 'number', description: 'Width in px. Defaults to 172.' },
         h: { type: 'number', description: 'Height in px. Defaults to 56.' }
       },
+        tag: { type: 'string', description: 'Optional role tag for the host\'s styling (e.g. "slot", "heading", "step-done"). Lands on the item as a wb-tag-<slug> class; no behavior.' },
       required: ['label']
     }
   },
@@ -156,6 +158,7 @@ const RAW_WHITEBOARD_TOOL_DEFINITIONS: WhiteboardToolDefinition[] = [
         fontFamily: { type: 'string', enum: ['sans', 'serif', 'mono'], description: 'Optional font family. Defaults to sans.' },
         bold: { type: 'boolean', description: 'Optional bold weight. Labels render bold by default.' }
       },
+        tag: { type: 'string', description: 'Optional role tag for the host\'s styling (e.g. "slot", "heading", "step-done"). Lands on the item as a wb-tag-<slug> class; no behavior.' },
       required: ['text']
     }
   },
@@ -171,6 +174,7 @@ const RAW_WHITEBOARD_TOOL_DEFINITIONS: WhiteboardToolDefinition[] = [
         w: { type: 'number', description: 'Panel width in px (160-800). Defaults to 280.' },
         h: { type: 'number', description: 'Optional max height in px (80-800); content beyond it is clipped. Omit for content-driven height.' }
       },
+        tag: { type: 'string', description: 'Optional role tag for the host\'s styling (e.g. "slot", "heading", "step-done"). Lands on the item as a wb-tag-<slug> class; no behavior.' },
       required: ['markdown']
     }
   },
@@ -187,6 +191,7 @@ const RAW_WHITEBOARD_TOOL_DEFINITIONS: WhiteboardToolDefinition[] = [
         w: { type: 'number', description: 'Widget width in px (200-960). Defaults to 360.' },
         h: { type: 'number', description: 'Widget height in px (120-800). Defaults to 240.' }
       },
+        tag: { type: 'string', description: 'Optional role tag for the host\'s styling (e.g. "slot", "heading", "step-done"). Lands on the item as a wb-tag-<slug> class; no behavior.' },
       required: ['html']
     }
   },
@@ -342,6 +347,12 @@ function ok(itemId: string | undefined, summary: string): string {
 function fail(error: string): string {
   const result: WhiteboardToolResult = { success: false, error };
   return JSON.stringify(result);
+}
+
+/** The optional `tag` arg of every Add* tool as an item patch fragment — `{}` when absent or blank. */
+function tagPatch(args: Record<string, unknown>): { Tag?: string } {
+  const tag = asString(args['tag'])?.trim();
+  return tag ? { Tag: tag } : {};
 }
 
 function asString(value: unknown): string | undefined {
@@ -519,7 +530,7 @@ function addNote(state: WhiteboardState, args: Record<string, unknown>): string 
   const x = asNumber(args['x']) ?? place.X;
   const y = asNumber(args['y']) ?? place.Y;
   const item = state.RunBatch(() =>
-    state.AddItem({ Kind: 'sticky', X: x, Y: y, Text: text, Rotation: 1.2, ...style.patch }, 'agent'));
+    state.AddItem({ Kind: 'sticky', X: x, Y: y, Text: text, Rotation: 1.2, ...style.patch, ...tagPatch(args) }, 'agent'));
   if (!item) {
     return fail('The host application canceled this operation.');
   }
@@ -542,7 +553,7 @@ function addShape(state: WhiteboardState, args: Record<string, unknown>): string
   const w = asNumber(args['w']) ?? 172;
   const h = asNumber(args['h']) ?? 56;
   const item = state.RunBatch(() =>
-    state.AddItem({ Kind: 'shape', Shape: shape, X: x, Y: y, W: w, H: h, Label: label, Sub: asString(args['sub']) }, 'agent'));
+    state.AddItem({ Kind: 'shape', Shape: shape, X: x, Y: y, W: w, H: h, Label: label, Sub: asString(args['sub']), ...tagPatch(args) }, 'agent'));
   if (!item) {
     return fail('The host application canceled this operation.');
   }
@@ -563,7 +574,7 @@ function addText(state: WhiteboardState, args: Record<string, unknown>): string 
   const y = asNumber(args['y']) ?? place.Y;
   const wRaw = asNumber(args['w']);
   const w = wRaw !== undefined ? Math.min(800, Math.max(60, Math.round(wRaw))) : undefined;
-  const item = state.RunBatch(() => state.AddItem({ Kind: 'text', X: x, Y: y, Text: text, ...(w !== undefined ? { W: w } : {}), ...style.patch }, 'agent'));
+  const item = state.RunBatch(() => state.AddItem({ Kind: 'text', X: x, Y: y, Text: text, ...(w !== undefined ? { W: w } : {}), ...style.patch, ...tagPatch(args) }, 'agent'));
   if (!item) {
     return fail('The host application canceled this operation.');
   }
@@ -593,7 +604,7 @@ function addMarkdown(state: WhiteboardState, args: Record<string, unknown>): str
   const w = clampedNumber(args['w'], 160, 800, 280) as number;
   const h = clampedNumber(args['h'], 80, 800, undefined);
   const item = state.RunBatch(() =>
-    state.AddItem({ Kind: 'markdown', X: x, Y: y, W: w, ...(h !== undefined ? { H: h } : {}), Markdown: markdown }, 'agent'));
+    state.AddItem({ Kind: 'markdown', X: x, Y: y, W: w, ...(h !== undefined ? { H: h } : {}), Markdown: markdown, ...tagPatch(args) }, 'agent'));
   if (!item) {
     return fail('The host application canceled this operation.');
   }
@@ -615,7 +626,7 @@ function addHtml(state: WhiteboardState, args: Record<string, unknown>): string 
   const w = clampedNumber(args['w'], 200, 960, 360) as number;
   const h = clampedNumber(args['h'], 120, 800, 240) as number;
   const item = state.RunBatch(() =>
-    state.AddItem({ Kind: 'html', X: x, Y: y, W: w, H: h, Html: html, Title: title }, 'agent'));
+    state.AddItem({ Kind: 'html', X: x, Y: y, W: w, H: h, Html: html, Title: title, ...tagPatch(args) }, 'agent'));
   if (!item) {
     return fail('The host application canceled this operation.');
   }
