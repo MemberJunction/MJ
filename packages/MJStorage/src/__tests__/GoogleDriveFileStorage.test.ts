@@ -106,11 +106,47 @@ describe('PutObject streams the payload (#3847 defect 2)', () => {
 });
 
 describe('Shared Drive support (#3847 defect 3)', () => {
-  it('a driveId configures the navigation root — a Shared Drive id doubles as its root folder id', async () => {
+  it('a driveID configures the navigation root — a Shared Drive id doubles as its root folder id', async () => {
     const driver = new GoogleDriveFileStorage();
     (driver as unknown as { _drive: unknown })._drive = { files: { list: vi.fn(async () => ({ data: { files: [] } })) } };
-    await driver.initialize({ accountId: 'a1', accountName: 'Drive', driveId: 'shared-drive-9' });
+    await driver.initialize({ accountId: 'a1', accountName: 'Drive', driveID: 'shared-drive-9' });
     expect((driver as unknown as { _rootFolderId?: string })._rootFolderId).toBe('shared-drive-9');
+  });
+
+  it("a credential naming a different Shared Drive replaces the server's drive as the root", async () => {
+    // With STORAGE_GDRIVE_DRIVE_ID=A on the server, the constructor roots at A. A per-account record
+    // naming drive B must navigate B — keeping root A would browse another tenant's drive.
+    vi.stubEnv('STORAGE_GDRIVE_DRIVE_ID', 'server-drive-A');
+    try {
+      const driver = new GoogleDriveFileStorage();
+      (driver as unknown as { _drive: unknown })._drive = { files: {} };
+      expect((driver as unknown as { _rootFolderId?: string })._rootFolderId).toBe('server-drive-A');
+      await driver.initialize({ accountId: 'a1', accountName: 'Drive', driveID: 'account-drive-B' });
+      expect((driver as unknown as { _rootFolderId?: string })._rootFolderId).toBe('account-drive-B');
+      expect((driver as unknown as { _driveId?: string })._driveId).toBe('account-drive-B');
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("a server root folder does not survive a credential's Shared Drive either", async () => {
+    vi.stubEnv('STORAGE_GDRIVE_ROOT_FOLDER_ID', 'folder-in-drive-A');
+    try {
+      const driver = new GoogleDriveFileStorage();
+      (driver as unknown as { _drive: unknown })._drive = { files: {} };
+      await driver.initialize({ accountId: 'a1', accountName: 'Drive', driveID: 'account-drive-B' });
+      expect((driver as unknown as { _rootFolderId?: string })._rootFolderId).toBe('account-drive-B');
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("an explicit rootFolderID in the credential wins over its driveID", async () => {
+    const driver = new GoogleDriveFileStorage();
+    (driver as unknown as { _drive: unknown })._drive = { files: {} };
+    await driver.initialize({ accountId: 'a1', accountName: 'Drive', driveID: 'drive-B', rootFolderID: 'folder-in-B' });
+    expect((driver as unknown as { _rootFolderId?: string })._rootFolderId).toBe('folder-in-B');
+    expect((driver as unknown as { _driveId?: string })._driveId).toBe('drive-B');
   });
 
   it('every request carries supportsAllDrives by default — the client is built with it', () => {
@@ -122,5 +158,63 @@ describe('Shared Drive support (#3847 defect 3)', () => {
       buildDrive(auth: unknown): { context: { _options: { params?: Record<string, unknown> } } };
     }).buildDrive(undefined);
     expect(drive.context._options.params).toEqual({ supportsAllDrives: true, includeItemsFromAllDrives: true });
+  });
+});
+
+describe('IsConfigured counts a service-account client (#3847)', () => {
+  // Search indexing (StorageSearchProvider) and content autotagging (AutotagCloudStorage) skip an
+  // account whose driver reports IsConfigured false, so a working service account must count.
+  it('is true for a client built from service-account credentials, with no OAuth fields', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      const driver = new GoogleDriveFileStorage();
+      await driver.initialize({
+        accountId: 'a1',
+        accountName: 'Drive',
+        credentialsJSON: JSON.stringify({ client_email: 'svc@example.iam.gserviceaccount.com', private_key: 'not-a-real-key' }),
+      });
+      expect(driver.IsConfigured).toBe(true);
+      expect(errorSpy).not.toHaveBeenCalled();
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
+
+  it('is false, and says why, when there is no client and no OAuth credentials', () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      const driver = new GoogleDriveFileStorage();
+      expect(driver.IsConfigured).toBe(false);
+      expect(errorSpy).toHaveBeenCalledOnce();
+      expect(String(errorSpy.mock.calls[0][0])).toContain('STORAGE_GDRIVE_KEY_FILE');
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
+});
+
+describe("initialize() says when a credential falls back to the server's client", () => {
+  it('warns, naming the account, when the record carries no auth material', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      const driver = new GoogleDriveFileStorage();
+      (driver as unknown as { _drive: unknown })._drive = { files: {} };
+      await driver.initialize({ accountId: 'a1', accountName: 'Marketing Drive' });
+      expect(warnSpy).toHaveBeenCalledOnce();
+      expect(String(warnSpy.mock.calls[0][0])).toContain('Marketing Drive');
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
+  it('does not warn when the record authenticates on its own', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      const driver = new GoogleDriveFileStorage();
+      await driver.initialize({ accountId: 'a1', accountName: 'Drive', clientID: 'id', clientSecret: 'secret', refreshToken: 'token' });
+      expect(warnSpy).not.toHaveBeenCalled();
+    } finally {
+      warnSpy.mockRestore();
+    }
   });
 });

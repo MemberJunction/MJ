@@ -65,7 +65,7 @@ const storageProvidersSchema = z.object({
       redirectURI: z.string().optional(),
       rootFolderID: z.string().optional(),
       // Shared Drive id (#3847) — the only place a service account can write (no personal quota)
-      driveId: z.string().optional(),
+      driveID: z.string().optional(),
     })
     .optional(),
 
@@ -181,7 +181,7 @@ export function GetStorageConfig(): StorageConfig {
           refreshToken: result.config.googleDriveRefreshToken || process.env.STORAGE_GOOGLE_DRIVE_REFRESH_TOKEN,
           redirectURI: result.config.googleDriveRedirectURI || process.env.STORAGE_GOOGLE_DRIVE_REDIRECT_URI,
           rootFolderID: result.config.googleDriveRootFolderID || process.env.STORAGE_GDRIVE_ROOT_FOLDER_ID,
-          driveId: result.config.googleDriveDriveID || process.env.STORAGE_GDRIVE_DRIVE_ID,
+          driveID: result.config.googleDriveDriveID || process.env.STORAGE_GDRIVE_DRIVE_ID,
         },
         dropbox: {
           accessToken: result.config.dropboxAccessToken || process.env.STORAGE_DROPBOX_ACCESS_TOKEN,

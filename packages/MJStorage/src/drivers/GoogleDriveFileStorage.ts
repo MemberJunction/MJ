@@ -42,16 +42,16 @@ interface GoogleDriveConfig extends StorageProviderConfig {
    */
   keyFile?: string;
   /** Service-account credentials JSON (object or string), mirroring `STORAGE_GDRIVE_CREDENTIALS_JSON`. */
-  credentialsJSON?: string | Record<string, unknown>;
+  credentialsJSON?: string | ServiceAccountCredentials;
   /** Optional root folder ID to restrict operations */
   rootFolderID?: string;
   /**
    * Shared Drive id (#3847). Service accounts have NO personal storage quota — Google's own 403
    * says to use a Shared Drive — so without this, service-account auth could never upload at all.
    * When set it also becomes the default navigation root, since a Shared Drive's id doubles as
-   * its root folder id.
+   * its root folder id. Spelled `driveID` like `rootFolderID`, `clientID` and SharePoint's `driveID`.
    */
-  driveId?: string;
+  driveID?: string;
 }
 
 /**
@@ -161,11 +161,14 @@ export function describeGoogleApiError(error: unknown): string {
  * folders and files with hierarchical paths, which makes some operations more natural
  * while others (like pre-authenticated upload URLs) are not directly supported.
  *
- * It requires one of the following environment variables to be set:
+ * It authenticates with one of the following, from environment variables or a credential record:
  * - STORAGE_GDRIVE_KEY_FILE: Path to a service account key file with Drive permissions
  * - STORAGE_GDRIVE_CREDENTIALS_JSON: A JSON object containing service account credentials
+ * - STORAGE_GOOGLE_DRIVE_CLIENT_ID, _CLIENT_SECRET and _REFRESH_TOKEN: OAuth2
  *
  * Optionally, you can set:
+ * - STORAGE_GDRIVE_DRIVE_ID: Shared Drive ID. Required for a service account to upload, since a
+ *   service account has no storage quota of its own; also becomes the default root.
  * - STORAGE_GDRIVE_ROOT_FOLDER_ID: ID of a folder to use as the root (for isolation)
  *
  * @example
@@ -267,13 +270,15 @@ export class GoogleDriveFileStorage extends FileStorageBase {
 
     // Optionally set a root folder ID to restrict operations. A configured Shared Drive id is the
     // default root — a Shared Drive's id doubles as its root folder id (#3847).
-    this._driveId = config?.driveId || env.get('STORAGE_GDRIVE_DRIVE_ID').asString();
+    this._driveId = config?.driveID || env.get('STORAGE_GDRIVE_DRIVE_ID').asString();
     this._rootFolderId = config?.rootFolderID || env.get('STORAGE_GDRIVE_ROOT_FOLDER_ID').asString() || this._driveId;
   }
 
   /**
    * Checks if Google Drive provider is properly configured.
-   * Returns true if all required OAuth credentials are present.
+   * Returns true when a Drive client exists (service account via key file or credentials JSON, or
+   * OAuth2) or all OAuth2 credentials are present. Search indexing and content autotagging skip an
+   * account that reports false, so a working service-account client must count (#3847).
    * Logs detailed error messages if configuration is incomplete.
    */
   public get IsConfigured(): boolean {
@@ -281,7 +286,7 @@ export class GoogleDriveFileStorage extends FileStorageBase {
     const hasClientSecret = !!this._clientSecret;
     const hasRefreshToken = !!this._refreshToken;
 
-    const isConfigured = hasClientID && hasClientSecret && hasRefreshToken;
+    const isConfigured = !!this._drive || (hasClientID && hasClientSecret && hasRefreshToken);
 
     if (!isConfigured) {
       const missing: string[] = [];
@@ -292,7 +297,9 @@ export class GoogleDriveFileStorage extends FileStorageBase {
       console.error(
         `❌ Google Drive provider not configured. Missing: ${missing.join(', ')}\n\n` +
         `Configuration Options:\n\n` +
-        `Option 1: Environment Variables\n` +
+        `Service account: set STORAGE_GDRIVE_KEY_FILE or STORAGE_GDRIVE_CREDENTIALS_JSON, plus\n` +
+        `STORAGE_GDRIVE_DRIVE_ID for a Shared Drive (a service account has no storage of its own).\n\n` +
+        `Option 1: Environment Variables (OAuth2)\n` +
         `  export STORAGE_GDRIVE_CLIENT_ID="..."\n` +
         `  export STORAGE_GDRIVE_CLIENT_SECRET="..."\n` +
         `  export STORAGE_GDRIVE_REFRESH_TOKEN="..."\n` +
@@ -348,14 +355,17 @@ export class GoogleDriveFileStorage extends FileStorageBase {
     this._clientSecret = config.clientSecret || this._clientSecret;
     this._refreshToken = config.refreshToken || this._refreshToken;
 
-    // Update root folder ID / Shared Drive if provided
-    if (config.driveId) {
-      this._driveId = config.driveId;
+    // Update root folder ID / Shared Drive if provided. A credential record's location replaces the
+    // server-wide one from env: a record naming Shared Drive B must navigate B even when
+    // STORAGE_GDRIVE_DRIVE_ID or STORAGE_GDRIVE_ROOT_FOLDER_ID points somewhere else, since a root
+    // folder in drive A means nothing in drive B. An explicit rootFolderID in the record still wins.
+    if (config.driveID) {
+      this._driveId = config.driveID;
     }
     if (config.rootFolderID) {
       this._rootFolderId = config.rootFolderID;
-    } else if (config.driveId && !this._rootFolderId) {
-      this._rootFolderId = config.driveId;
+    } else if (config.driveID) {
+      this._rootFolderId = config.driveID;
     }
 
     // Reinitialize the client, mirroring the constructor's THREE auth methods (#3847). Before
@@ -372,7 +382,7 @@ export class GoogleDriveFileStorage extends FileStorageBase {
     }
     if (config.credentialsJSON) {
       const creds: ServiceAccountCredentials =
-        typeof config.credentialsJSON === 'string' ? JSON.parse(config.credentialsJSON) : (config.credentialsJSON as unknown as ServiceAccountCredentials);
+        typeof config.credentialsJSON === 'string' ? JSON.parse(config.credentialsJSON) : config.credentialsJSON;
       const auth = new google.auth.JWT({
         email: creds.client_email,
         key: creds.private_key,
@@ -396,6 +406,11 @@ export class GoogleDriveFileStorage extends FileStorageBase {
         'Google Drive storage requires one of: keyFile, credentialsJSON, or clientID+clientSecret+refreshToken.'
       );
     }
+    console.warn(
+      `Google Drive account "${config.accountName ?? config.accountId ?? 'unnamed'}": the credential carries no keyFile, ` +
+      `credentialsJSON or clientID+clientSecret+refreshToken, so it uses the server's Google Drive client from ` +
+      `environment configuration. If the record was meant to authenticate on its own, check its key names.`
+    );
   }
 
   /**
