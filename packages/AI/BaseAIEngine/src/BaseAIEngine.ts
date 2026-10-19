@@ -1238,7 +1238,8 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             return cached;
         }
 
-        const userRoleIds = user.UserRoles?.map(ur => ur.RoleID) || [];
+        // A set, built once: each agent's permission rows are checked against the user's roles.
+        const userRoleIds = new UUIDSet(user.UserRoles?.map(ur => ur.RoleID) ?? []);
         const summaries: UserRunnableAgentSummary[] = [];
 
         for (const agent of agents) {
@@ -1282,7 +1283,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         agent: MJAIAgentEntityExtended,
         allPermissions: MJAIAgentPermissionEntity[],
         user: UserInfo,
-        userRoleIds: string[]
+        userRoleIds: UUIDSet
     ): boolean {
         if (UUIDsEqual(agent.OwnerUserID, user.ID)) {
             return true;
@@ -1293,7 +1294,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             return true;
         }
         const matching = agentPerms.filter(
-            p => UUIDsEqual(p.UserID, user.ID) || (p.RoleID != null && userRoleIds.some(rid => UUIDsEqual(rid, p.RoleID)))
+            p => UUIDsEqual(p.UserID, user.ID) || (p.RoleID != null && userRoleIds.Has(p.RoleID))
         );
         return matching.some(p => p.CanDelete === true || p.CanEdit === true || p.CanRun === true);
     }
