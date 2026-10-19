@@ -124,6 +124,17 @@ export interface EffectiveAgentPersona {
     SpeakingStyle: string | null;
 }
 
+/**
+ * Compact summary entry for a directly discoverable, user-runnable AI agent.
+ * Cached per user on AIEngineBase so orchestrator prompts and task-graph validators
+ * can access a user's permitted agent directory in O(1) without recomputing permissions.
+ */
+export interface UserRunnableAgentSummary {
+    ID: string;
+    Name: string;
+    Description: string;
+}
+
 // Default fallback values when no metadata is configured
 const DEFAULT_MAX_SIZE_BYTES = 20 * 1024 * 1024; // 20MB
 const DEFAULT_MAX_COUNT_PER_MESSAGE = 10;
@@ -218,6 +229,16 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * Key: configurationId, Value: array of MJAIConfigurationEntity from child to root
      */
     private _configurationChainCache: Map<string, MJAIConfigurationEntity[]> = new Map();
+
+    /**
+     * Per-user cache of directly discoverable, active, user-runnable agent summaries.
+     * Key: normalized user ID. Invalidated whenever agents or agent permissions change.
+     */
+    private _userRunnableAgentDirectoryCache: Map<string, UserRunnableAgentSummary[]> = new Map();
+    private _userRunnableAgentsRef: MJAIAgentEntityExtended[] | null = null;
+    private _userRunnableAgentsLen = -1;
+    private _userRunnablePermissionsRef: MJAIAgentPermissionEntity[] | null = null;
+    private _userRunnablePermissionsLen = -1;
 
     /**
      * Memoized ID of the "Inference Provider" vendor-type definition. `undefined` means
@@ -601,8 +622,13 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     }
 
     protected override async AdditionalLoading(contextUser?: UserInfo): Promise<void> {
-        // Clear the configuration chain cache when data is reloaded
+        // Clear the configuration chain cache and user runnable agent directory cache when data is reloaded
         this._configurationChainCache.clear();
+        this._userRunnableAgentDirectoryCache.clear();
+        this._userRunnableAgentsRef = null;
+        this._userRunnableAgentsLen = -1;
+        this._userRunnablePermissionsRef = null;
+        this._userRunnablePermissionsLen = -1;
 
         // Invalidate memoized vendor-type IDs and lazily-built lookup indexes so they
         // rebuild against the freshly-loaded arrays. (See field declarations above.)
@@ -1178,6 +1204,114 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         if (!agentId) return undefined!;
         this.ensureAgentsIndex();
         return this._agentsByID!.get(NormalizeUUID(agentId))!;
+    }
+
+    /**
+     * Returns the cached, permission-filtered list of directly discoverable, active agents
+     * that `user` is permitted to run, sorted alphabetically by name with compact 1-line descriptions.
+     *
+     * Computed once per user and cached in memory on `AIEngineBase` until agents or agent permissions change.
+     */
+    public GetUserRunnableAgentDirectory(user: UserInfo | undefined): UserRunnableAgentSummary[] {
+        if (!user) {
+            return [];
+        }
+
+        const agents = this._agents;
+        const permissions = this._agentPermissions;
+        if (
+            agents !== this._userRunnableAgentsRef ||
+            agents.length !== this._userRunnableAgentsLen ||
+            permissions !== this._userRunnablePermissionsRef ||
+            permissions.length !== this._userRunnablePermissionsLen
+        ) {
+            this._userRunnableAgentDirectoryCache.clear();
+            this._userRunnableAgentsRef = agents;
+            this._userRunnableAgentsLen = agents.length;
+            this._userRunnablePermissionsRef = permissions;
+            this._userRunnablePermissionsLen = permissions.length;
+        }
+
+        const cacheKey = user.ID ? NormalizeUUID(user.ID) : '__anonymous__';
+        const cached = this._userRunnableAgentDirectoryCache.get(cacheKey);
+        if (cached) {
+            return cached;
+        }
+
+        const userRoleIds = user.UserRoles?.map(ur => ur.RoleID) || [];
+        const summaries: UserRunnableAgentSummary[] = [];
+
+        for (const agent of agents) {
+            if (agent.Status !== 'Active') {
+                continue;
+            }
+            if (!AIAgentPermissionHelper.IsDirectlyDiscoverable(agent)) {
+                continue;
+            }
+            if (!this.canUserRunAgentSync(agent, permissions, user, userRoleIds)) {
+                continue;
+            }
+            summaries.push({
+                ID: agent.ID,
+                Name: (agent.Name ?? '').trim(),
+                Description: this.summarizeAgentDescription(agent.Description),
+            });
+        }
+
+        summaries.sort((a, b) => a.Name.localeCompare(b.Name));
+        this._userRunnableAgentDirectoryCache.set(cacheKey, summaries);
+        return summaries;
+    }
+
+    /**
+     * Clears the cached per-user runnable agent directory (for a specific user ID or all users).
+     */
+    public ClearUserRunnableAgentDirectoryCache(userId?: string): void {
+        if (userId) {
+            this._userRunnableAgentDirectoryCache.delete(NormalizeUUID(userId));
+        } else {
+            this._userRunnableAgentDirectoryCache.clear();
+        }
+    }
+
+    /**
+     * Synchronous permission check using already-loaded `_agentPermissions` metadata.
+     * Mirrors `AIAgentPermissionHelper.GetEffectivePermissions` without async `Config()` overhead.
+     */
+    private canUserRunAgentSync(
+        agent: MJAIAgentEntityExtended,
+        allPermissions: MJAIAgentPermissionEntity[],
+        user: UserInfo,
+        userRoleIds: string[]
+    ): boolean {
+        if (UUIDsEqual(agent.OwnerUserID, user.ID)) {
+            return true;
+        }
+        const agentPerms = allPermissions.filter(p => UUIDsEqual(p.AgentID, agent.ID));
+        if (agentPerms.length === 0) {
+            // Open by default when no permission rows are configured on the agent
+            return true;
+        }
+        const matching = agentPerms.filter(
+            p => UUIDsEqual(p.UserID, user.ID) || (p.RoleID != null && userRoleIds.some(rid => UUIDsEqual(rid, p.RoleID)))
+        );
+        return matching.some(p => p.CanDelete === true || p.CanEdit === true || p.CanRun === true);
+    }
+
+    private summarizeAgentDescription(rawDescription: string | null | undefined): string {
+        if (!rawDescription) {
+            return 'No description available';
+        }
+        const firstLine = rawDescription.split(/\r?\n/).find(l => l.trim().length > 0) ?? '';
+        const singleLine = firstLine.replace(/\s+/g, ' ').trim();
+        if (!singleLine) {
+            return 'No description available';
+        }
+        const maxLen = 140;
+        if (singleLine.length <= maxLen) {
+            return singleLine;
+        }
+        return `${singleLine.slice(0, maxLen - 3).trimEnd()}...`;
     }
 
     public get AgentActions(): MJAIAgentActionEntity[] {
