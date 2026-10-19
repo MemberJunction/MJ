@@ -29,7 +29,7 @@ import {
   AfterResponseFormSubmittedEventArgs,
   BeforeStopClickedEventArgs,
 } from '../../events/chat-events';
-import { ExcludeByUUIDs, UUIDsEqual } from '@memberjunction/global';
+import { ExcludeByUUIDs, UUIDsEqual, UUIDSet } from '@memberjunction/global';
 import { Subscription } from 'rxjs';
 import { ConversationsRuntime } from '@memberjunction/conversations-runtime';
 import { BadgeTextForAttachment } from '../../util/attachment-badge';
@@ -2665,8 +2665,9 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     if (!tasks || tasks.length <= 1) {
       return null;
     }
+    const parentIdsWithChildren = new UUIDSet(tasks.map((child) => child.ParentID));
     const parentCandidate = tasks.find(
-      (t) => !t.ParentID && tasks.some((child) => child.ParentID != null && UUIDsEqual(child.ParentID, t.ID))
+      (t) => !t.ParentID && parentIdsWithChildren.Has(t.ID)
     );
     if (parentCandidate) {
       return parentCandidate;

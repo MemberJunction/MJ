@@ -18,7 +18,7 @@ import { MJTaskEntity, MJTaskDependencyEntity } from '@memberjunction/core-entit
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { ConversationsRuntime } from '@memberjunction/conversations-runtime';
-import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, ExcludeByUUIDs, IndexByUUID, UUIDsEqual, UUIDSet } from '@memberjunction/global';
 import { Subscription } from 'rxjs';
 
 /**
@@ -607,7 +607,7 @@ export interface WorkflowCommandCenterKPIs {
                     <button
                       type="button"
                       class="cc-drawer-step-tab"
-                      [class.active]="InspectedStep?.Task?.ID === s.Task.ID"
+                      [class.active]="IsStepInspected(s.Task)"
                       (click)="SelectInspectorStep(s)">
                       <span class="cc-tab-num">{{ s.StepNumber }}</span>
                       <span class="cc-tab-label">{{ s.Task.Name }}</span>
@@ -2480,6 +2480,16 @@ export class TasksFullViewComponent extends BaseAngularComponent implements OnIn
       buckets.set(rootKey, list);
     }
 
+    const depsByTaskId = new Map<string, MJTaskDependencyEntity[]>();
+    for (const dep of this.TaskDependencies) {
+      if (dep?.TaskID) {
+        const key = dep.TaskID.toLowerCase();
+        const existing = depsByTaskId.get(key) ?? [];
+        existing.push(dep);
+        depsByTaskId.set(key, existing);
+      }
+    }
+
     const groups: WorkflowGroupViewModel[] = [];
     const agentUsageMap = new Map<string, { id: string; name: string; count: number }>();
 
@@ -2488,7 +2498,7 @@ export class TasksFullViewComponent extends BaseAngularComponent implements OnIn
         bucket.find(t => t.ID.toLowerCase() === rootKey) ??
         bucket.find(t => !t.ParentID) ??
         bucket[0];
-      const childSteps = bucket.filter(t => !UUIDsEqual(t.ID, parentTask.ID));
+      const childSteps = ExcludeByUUIDs(bucket, [parentTask.ID]);
       const rawSteps = childSteps.length > 0 ? childSteps : [parentTask];
 
       // Sort steps chronologically by StartedAt / __mj_CreatedAt
@@ -2545,7 +2555,7 @@ export class TasksFullViewComponent extends BaseAngularComponent implements OnIn
         const startOffsetSec = Math.max(0, Math.round((stepStartMs - workflowStartMs) / 1000));
 
         // Resolve dependencies for this step
-        const stepDeps = this.TaskDependencies.filter(d => UUIDsEqual(d.TaskID, stepTask.ID));
+        const stepDeps = stepTask.ID ? (depsByTaskId.get(stepTask.ID.toLowerCase()) ?? []) : [];
         const dependsOnNames: string[] = [];
         const dependsOnTaskIds: string[] = [];
         for (const dep of stepDeps) {
@@ -2646,17 +2656,17 @@ export class TasksFullViewComponent extends BaseAngularComponent implements OnIn
     this.WorkflowGroups = groups;
     this.AvailableAgents = Array.from(agentUsageMap.values()).sort((a, b) => b.count - a.count);
     this.computeCommandCenterKPIs(groups);
-    this.applyWorkflowFilters();
+    this.ApplyWorkflowFilters();
 
     // Refresh open inspector drawer if active
     if (this.ActiveTaskId) {
       this.selectTaskById(this.ActiveTaskId, false);
     } else if (this.InspectedGroup) {
-      const updatedGroup = groups.find(g => UUIDsEqual(g.RootTaskId, this.InspectedGroup!.RootTaskId)) ?? null;
+      const updatedGroup = IndexByUUID(groups, g => g.RootTaskId).Get(this.InspectedGroup.RootTaskId) ?? null;
       this.InspectedGroup = updatedGroup;
       if (updatedGroup && this.InspectedStep) {
         this.InspectedStep =
-          updatedGroup.Steps.find(s => UUIDsEqual(s.Task.ID, this.InspectedStep!.Task.ID)) ??
+          IndexByUUID(updatedGroup.Steps, s => s.Task.ID).Get(this.InspectedStep.Task.ID) ??
           updatedGroup.Steps[0] ??
           null;
       }
@@ -2688,15 +2698,15 @@ export class TasksFullViewComponent extends BaseAngularComponent implements OnIn
     };
   }
 
-  public applyWorkflowFilters(): void {
+  public ApplyWorkflowFilters(): void {
     const q = this.SearchQuery.trim().toLowerCase();
     this.FilteredWorkflowGroups = this.WorkflowGroups.filter(group => {
       if (this.StatusFilter !== 'all' && group.NormalizedCategory !== this.StatusFilter) {
         return false;
       }
       if (this.SelectedAgentFilter !== 'all') {
-        const matchesAgent = group.Steps.some(s => UUIDsEqual(s.AgentID, this.SelectedAgentFilter));
-        if (!matchesAgent) return false;
+        const stepAgentIds = new UUIDSet(group.Steps.map(s => s.AgentID));
+        if (!stepAgentIds.Has(this.SelectedAgentFilter)) return false;
       }
       if (q) {
         const titleMatch = group.Title.toLowerCase().includes(q);
@@ -2713,34 +2723,39 @@ export class TasksFullViewComponent extends BaseAngularComponent implements OnIn
     });
   }
 
+  /** @deprecated Use {@link ApplyWorkflowFilters}. */
+  public applyWorkflowFilters(): void {
+    this.ApplyWorkflowFilters();
+  }
+
   public SetCommandViewMode(mode: WorkflowCommandCenterViewMode): void {
     this.CommandViewMode = mode;
   }
 
   public SetStatusFilter(filter: WorkflowStatusFilter): void {
     this.StatusFilter = filter;
-    this.applyWorkflowFilters();
+    this.ApplyWorkflowFilters();
   }
 
   public SetAgentFilter(agentId: string): void {
     this.SelectedAgentFilter = agentId;
-    this.applyWorkflowFilters();
+    this.ApplyWorkflowFilters();
   }
 
   public OnFilterCriteriaChanged(): void {
-    this.applyWorkflowFilters();
+    this.ApplyWorkflowFilters();
   }
 
   public ClearSearch(): void {
     this.SearchQuery = '';
-    this.applyWorkflowFilters();
+    this.ApplyWorkflowFilters();
   }
 
   public ResetAllFilters(): void {
     this.SearchQuery = '';
     this.StatusFilter = 'all';
     this.SelectedAgentFilter = 'all';
-    this.applyWorkflowFilters();
+    this.ApplyWorkflowFilters();
   }
 
   public CountByCategory(category: 'active' | 'completed' | 'failed'): number {
@@ -2793,7 +2808,7 @@ export class TasksFullViewComponent extends BaseAngularComponent implements OnIn
         }
         return;
       }
-      const stepMatch = group.Steps.find(s => UUIDsEqual(s.Task.ID, taskId));
+      const stepMatch = IndexByUUID(group.Steps, s => s.Task.ID).Get(taskId);
       if (stepMatch) {
         this.InspectedGroup = group;
         this.InspectedStep = stepMatch;

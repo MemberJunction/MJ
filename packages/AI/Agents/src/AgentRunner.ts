@@ -12,7 +12,7 @@
 
 import { createHash } from 'crypto';
 import { BaseEntity, LogError, LogStatusEx, IsVerboseLoggingEnabled, LogStatus, Metadata, RunView, RunQuery, UserInfo, IMetadataProvider, DatabaseProviderBase, ProviderType } from '@memberjunction/core';
-import { MJGlobal, UUIDsEqual, IsValidUUID, EscapeSQLString } from '@memberjunction/global';
+import { MJGlobal, UUIDsEqual, IsValidUUID, EscapeSQLString, IndexByUUID } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
 import {
     ExecuteAgentResult, ExecuteAgentParams, MediaOutput, FileOutputRef, InputArtifact, ArtifactDirective, ResolvePromptRunUserID,
@@ -1104,7 +1104,8 @@ export class AgentRunner {
 
         // Check agent's ArtifactCreationMode
         await AIEngine.Instance.Config(false, contextUser);
-        let agent = AIEngine.Instance.Agents.find(a => UUIDsEqual(a.ID, agentRun.AgentID));
+        const agentsById = IndexByUUID(AIEngine.Instance.Agents);
+        let agent = agentsById.Get(agentRun.AgentID);
         let creationMode = agent?.ArtifactCreationMode;
 
         // When an orchestrator with ArtifactCreationMode='Never' or 'System Only' (or no
@@ -1120,7 +1121,7 @@ export class AgentRunner {
                 if (step.StepType === 'Sub-Agent' && step.Success) {
                     const subAgentId = step.TargetID || step.SubAgentRun?.AgentID;
                     const delegatedAgent = subAgentId
-                        ? AIEngine.Instance.Agents.find(a => UUIDsEqual(a.ID, subAgentId))
+                        ? agentsById.Get(subAgentId)
                         : undefined;
                     if (
                         delegatedAgent &&
