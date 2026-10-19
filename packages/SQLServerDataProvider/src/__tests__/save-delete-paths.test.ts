@@ -940,7 +940,7 @@ describe('SQLServerDataProvider Record Change text is sent as Unicode (N\'…\')
     expect(sql).toContain(`@ChangesDescription=N'Name changed to ${UNICODE_NAME}'`);
   });
 
-  it('exposes literalSQL and simpleSQL as lazy memoized getters on GenerateSaveSQL', async () => {
+  it('exposes literalSQL and simpleSQL as lazy memoized getters on GenerateSaveSQL, and returns literalSQL from public GetSaveSQL', async () => {
     const provider = makeProvider();
     const entity = makeNewWidgetEntity(makeWidgetEntityInfo(), TEST_USER);
     entity.Set('Name', 'Lazy Check');
@@ -956,6 +956,10 @@ describe('SQLServerDataProvider Record Change text is sent as Unicode (N\'…\')
     expect(saveSQL.simpleSQL).toBe(saveSQL.simpleSQL);
     expect(saveSQL.literalSQL).toContain("N'Lazy Check'");
     expect(saveSQL.simpleSQL).toContain("N'Lazy Check'");
+
+    const standaloneSQL = await provider.GetSaveSQL(entity, true, 'spCreateWidget', TEST_USER);
+    expect(standaloneSQL).toContain("N'Lazy Check'");
+    expect(standaloneSQL).not.toContain('@p$0');
   });
 
   it('populates extraData.overlappingChangeData.changesJSON with the diff JSON (not fullRecordJSON) on tracked updates', async () => {

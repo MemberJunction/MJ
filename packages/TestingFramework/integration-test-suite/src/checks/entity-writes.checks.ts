@@ -26,11 +26,15 @@
  *                instantiated the higher-priority server subclass.
  *   - EW10       Record Change text keeps characters outside the database code page: emoji, CJK and
  *                Greek survive in ChangesJSON, FullRecordJSON and ChangesDescription.
- *   - EW11       Typed save parameters: decimal, bigint, datetime, int, bit and Unicode text round-trip
+ *   - EW11       SaveReturnMode='datestamps_only' preserves in-memory fields while refreshing PK +
+ *                __mj_CreatedAt / __mj_UpdatedAt.
+ *   - EW12       Delta-only Save() preserves untouched fields, merges non-overlapping concurrent
+ *                edits, and detects overlapping field edits.
+ *   - EW13       Typed save parameters: decimal, bigint, datetime, int, bit and Unicode text round-trip
  *                with the conversions the literal batch always applied (a decimal is rounded by
- *                SQL Server from its exact text, never through a double).
+ *                the database from its exact text, never through a double).
  *
- * MUTATION TIER: EW1/EW2/EW3/EW5/EW6/EW7/EW9/EW10/EW11 write to the database and therefore carry
+ * MUTATION TIER: EW1/EW2/EW3/EW5/EW6/EW7/EW9/EW10/EW11/EW12/EW13 write to the database and therefore carry
  * `RequiresMutation: true` (they run only under RUN_MUTATION_TESTS=1). EW4 and EW8 are read-only —
  * EW8's saves are rejected during validation, before any INSERT is attempted.
  *
@@ -772,7 +776,8 @@ export const EntityWritesChecks: NamedCheck[] = [
                 await search.Delete();
             }
 
-            // datetime keeps SQL Server's 1/300 s rounding: .999 becomes the next second.
+            // SQL Server `datetime` keeps its 1/300 s rounding (.999 becomes the next second);
+            // PostgreSQL's `TIMESTAMPTZ` column preserves microsecond precision (.999 stays .999).
             const entityRows = await runRows<{ ID: string }>({
                 EntityName: 'MJ: Entities', Fields: ['ID'], MaxRows: 1, ResultType: 'simple'
             }, ctx.User, 'entity lookup for the List FK');
@@ -790,9 +795,9 @@ export const EntityWritesChecks: NamedCheck[] = [
             const invitation = await ctx.Provider.GetEntityObject<MJListInvitationEntity>('MJ: List Invitations', ctx.User);
             invitation.NewRecord();
             invitation.ListID = list.ID;
-            invitation.Email = 'ew11@mj-integration-test.invalid';
+            invitation.Email = 'ew13@mj-integration-test.invalid';
             invitation.Role = 'Viewer';
-            invitation.Token = `${f.Prefix}-ew11-token`;
+            invitation.Token = `${f.Prefix}-ew13-token`;
             invitation.ExpiresAt = new Date('2030-06-15T12:00:00.999Z');
             invitation.CreatedByUserID = ctx.User.ID;
             invitation.Status = 'Pending';
@@ -800,7 +805,15 @@ export const EntityWritesChecks: NamedCheck[] = [
             try {
                 const reloaded = await ctx.Provider.GetEntityObject<MJListInvitationEntity>('MJ: List Invitations', ctx.User);
                 Assert(await reloaded.Load(invitation.ID), `EW13 reloading invitation ${invitation.ID} failed`);
-                AssertEqual(reloaded.ExpiresAt?.toISOString(), '2030-06-15T12:00:01.000Z', 'datetime rounds .999 to the next second, as SQL Server does');
+                const isPostgres = ctx.Provider instanceof ProviderBase && ctx.Provider.PlatformKey === 'postgresql';
+                const expectedIso = isPostgres ? '2030-06-15T12:00:00.999Z' : '2030-06-15T12:00:01.000Z';
+                AssertEqual(
+                    reloaded.ExpiresAt?.toISOString(),
+                    expectedIso,
+                    isPostgres
+                        ? 'TIMESTAMPTZ preserves millisecond precision on PostgreSQL'
+                        : 'datetime rounds .999 to the next second, as SQL Server does',
+                );
             } finally {
                 await invitation.Delete();
             }

@@ -45,8 +45,8 @@ const STATEMENT_TOKEN = /@p\$(\d+)(?![\w$#@])|(@\w+)\$(?![\w$#@])/g;
  * replaced by that parameter's literal and each variable gets `variableSuffix` back.
  */
 export function RenderSaveSQL(executedSQL: string, parameters: readonly SQLServerSaveParameter[], variableSuffix: string): string {
-  return executedSQL.replace(STATEMENT_TOKEN, (_match: string, index: string | undefined, variable: string | undefined) =>
-    index !== undefined ? parameters[Number(index)].Literal : `${variable}${variableSuffix}`,
+  return executedSQL.replace(STATEMENT_TOKEN, (match: string, index: string | undefined, variable: string | undefined) =>
+    index !== undefined ? (parameters[Number(index)]?.Literal ?? match) : `${variable}${variableSuffix}`,
   );
 }
 
@@ -98,8 +98,9 @@ export function SaveParameterFromLiteral(field: EntityFieldInfo, literal: string
     return { Type: SaveParameterType(field), Value: QuotedLiteralText(literal) };
   }
   if (EXACT_NUMERIC_TYPES.has(name)) {
+    const asNumber = finiteNumberFromLiteral(field, literal);
     // An exponent makes the literal a float (`1e-07`), so that one is sent as a float.
-    return /e/i.test(literal) ? { Type: sql.Float(), Value: Number(literal) } : { Type: SaveParameterType(field), Value: literal };
+    return /e/i.test(literal) ? { Type: sql.Float(), Value: asNumber } : { Type: SaveParameterType(field), Value: literal };
   }
   if (SENT_AS_LITERAL_TEXT.has(name)) {
     const value = literal.startsWith("'") || literal.startsWith("N'") ? QuotedLiteralText(literal) : literal;
@@ -109,9 +110,7 @@ export function SaveParameterFromLiteral(field: EntityFieldInfo, literal: string
     case EntityFieldTSType.Boolean:
       return { Type: SaveParameterType(field), Value: literal === '1' };
     case EntityFieldTSType.Number:
-      return { Type: SaveParameterType(field), Value: name === 'bigint' ? bigintFromLiteral(literal) : finiteNumberFromLiteral(field, literal) };
-    case EntityFieldTSType.Date:
-      return { Type: SaveParameterType(field), Value: new Date(QuotedLiteralText(literal)) };
+      return { Type: SaveParameterType(field), Value: name === 'bigint' ? bigintFromLiteral(field, literal) : finiteNumberFromLiteral(field, literal) };
     default:
       return { Type: SaveParameterType(field), Value: QuotedLiteralText(literal) };
   }
@@ -131,8 +130,8 @@ function finiteNumberFromLiteral(field: EntityFieldInfo, literal: string): numbe
 }
 
 /** A bigint literal as a BigInt; a fraction is truncated toward zero, as SQL Server converts it. */
-function bigintFromLiteral(literal: string): bigint {
-  return /^-?\d+$/.test(literal) ? BigInt(literal) : BigInt(Math.trunc(Number(literal)));
+function bigintFromLiteral(field: EntityFieldInfo, literal: string): bigint {
+  return /^-?\d+$/.test(literal) ? BigInt(literal) : BigInt(Math.trunc(finiteNumberFromLiteral(field, literal)));
 }
 
 /** The text a `'…'` or `N'…'` literal stores: the quotes removed and each `''` read as one quote. */
@@ -202,10 +201,12 @@ function refuseInlineLiteralType(field: EntityFieldInfo): void {
 
 /**
  * Types the driver cannot send as a parameter (`xml` and the CLR types are "not implemented" in
- * tedious), or that it does not know. Their value is sent as `nvarchar(max)` text so Unicode is
- * preserved while the typed SET converts it as before.
+ * tedious), or that it does not know (`sysname` is an alias for `nvarchar(128)` that SQLServerDialect
+ * does not list in `_stringTypeNames`, so `field.TSType` defaults to `Number`). Their value is sent
+ * as text (`nvarchar(128)` for `sysname`, `nvarchar(max)` for the rest) so Unicode is preserved
+ * while the typed SET converts it as before.
  */
-const SENT_AS_LITERAL_TEXT = new Set(['xml', 'hierarchyid', 'geography', 'geometry', 'json', 'vector']);
+const SENT_AS_LITERAL_TEXT = new Set(['xml', 'hierarchyid', 'geography', 'geometry', 'json', 'vector', 'sysname']);
 
 /** Server-generated types that a save never writes. */
 const NEVER_WRITTEN = new Set(['timestamp', 'rowversion']);

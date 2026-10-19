@@ -146,9 +146,12 @@ describe('SaveParameterFromLiteral', () => {
 
   // Number('') and Number(' ') are 0, and Number('abc') is NaN, which binds as NULL. Saving either
   // would store a value nobody wrote; the literal batch failed on these, so the save still fails.
-  it.each(['', ' ', 'abc', 'NaN', 'Infinity'])('refuses a number literal that is not a finite number (%j)', (literal) => {
+  it.each(['', ' ', 'abc', 'true', 'NaN', 'Infinity'])('refuses a number literal that is not a finite number (%j)', (literal) => {
     expect(() => SaveParameterFromLiteral(field('int', 4, 'Quantity'), literal)).toThrow('Field "Quantity"');
     expect(() => SaveParameterFromLiteral(field('float', 8, 'Ratio'), literal)).toThrow('Field "Ratio"');
+    expect(() => SaveParameterFromLiteral(field('bigint', 8, 'TotalCount'), literal)).toThrow('Field "TotalCount"');
+    expect(() => SaveParameterFromLiteral(field('decimal', 9, 'Amount'), literal)).toThrow('Field "Amount"');
+    expect(() => SaveParameterFromLiteral(field('money', 8, 'Price'), literal)).toThrow('Field "Price"');
   });
 
   it('keeps every digit of a bigint and truncates a fraction toward zero, as SQL Server converts it', () => {
@@ -200,6 +203,12 @@ describe('SaveParameterFromLiteral', () => {
     const guid = '82DFF26B-2ABB-4A69-8718-1FE550B60816';
     expect(SaveParameterFromLiteral(field('uniqueidentifier'), `'${guid}'`)).toEqual({ Type: sql.UniqueIdentifier(), Value: guid });
   });
+
+  it('binds sysname as nvarchar(128) text rather than coercing to Number/NaN', () => {
+    expect(SaveParameterFromLiteral(field('sysname', 256), "N'dbo'")).toEqual({ Type: sql.NVarChar(128), Value: 'dbo' });
+    expect(SaveParameterFromLiteral(field('sysname', 256), "'vwWidgets'")).toEqual({ Type: sql.NVarChar(128), Value: 'vwWidgets' });
+    expect(SaveParameterFromLiteral(field('sysname', 256), 'spCreateWidget')).toEqual({ Type: sql.NVarChar(128), Value: 'spCreateWidget' });
+  });
 });
 
 describe('QuotedLiteralText', () => {
@@ -244,6 +253,10 @@ describe('RenderSaveSQL', () => {
   it('leaves variables without the executed suffix alone (@ResultTable, @ID)', () => {
     const sqlText = 'DECLARE @ID NVARCHAR(MAX);\nINSERT INTO @ResultTable EXEC x;\nSELECT @ID = 1';
     expect(RenderSaveSQL(sqlText, [], '_x')).toBe(sqlText);
+  });
+
+  it('leaves an out-of-range @p$n token intact rather than throwing when an inline literal mentions one', () => {
+    expect(RenderSaveSQL("SET @Variant$ = N'contains @p$99'", [], '_x')).toBe("SET @Variant_x = N'contains @p$99'");
   });
 
   it('uses a suffix a field CodeName can never end in', () => {

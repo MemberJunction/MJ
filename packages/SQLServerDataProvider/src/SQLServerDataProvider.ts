@@ -1187,9 +1187,11 @@ export class SQLServerDataProvider
     // SQLServerTransactionGroup-batched saves regenerate per-item SQL when
     // transaction variables get rebound. `_spName` is preserved for back-compat
     // with that caller; the dialect-driven pipeline derives it from entity
-    // metadata via `GetCreateUpdateSPName`.
+    // metadata via `GetCreateUpdateSPName`. Outside a TransactionGroup,
+    // `fullSQL` holds `@p$0` parameter placeholders, so return `literalSQL`
+    // for standalone callers.
     const result = await this.GenerateSaveSQL(entity, bNewRecord, user);
-    return result.fullSQL;
+    return result.literalSQL ?? result.fullSQL;
   }
 
   /**
