@@ -4,6 +4,16 @@
   "defaults": {
     "Status": "Pending"
   },
+  "collections": {
+    "Parameters": {
+      "matchOn": [
+        "Name"
+      ],
+      "declaredWhere": {
+        "DetectionMethod": "Manual"
+      }
+    }
+  },
   "pull": {
     "createNewFileIfNotFound": true,
     "newFileName": ".queries.json",
@@ -22,12 +32,6 @@
       "CategoryID": {
         "entity": "MJ: Query Categories",
         "field": "ID"
-      }
-    },
-    "relatedEntities": {
-      "MJ: Query Parameters": {
-        "entity": "MJ: Query Parameters",
-        "foreignKey": "QueryID"
       }
     }
   }

@@ -674,6 +674,47 @@ MetadataSync natively supports three composition axes directly within `RecordDat
 - **`embeds`**: 1:1 peer record embeds keyed by foreign key field name (e.g. `ShipToAddressID`). Peer records are ensured and assigned before parent entity save.
 - **`extension`**: 1:1 IsA subtype extensions (e.g. `Event Order Lines` extending `Order Lines`). Leaf fields only (parent fields in leaf extensions are rejected during validation). Resolved automatically via prospective subtype resolution (`EnsureISAChild()`).
 
+#### Natural-key collections (`matchOn`, `declaredWhere`)
+Some collections hold rows the server creates for itself next to rows you declare. A query's `Parameters` are the case in this repo: saving a query infers its parameters from the SQL. An inferred row has an id your metadata cannot know, so a primary-key match never finds it. Push then creates a second row, which fails on the child's unique constraint.
+
+`matchOn` names the child's natural key, so a declared item adopts the existing row and updates it in place. `declaredWhere` tells pull which rows were declared:
+
+```json
+{
+  "entity": "MJ: Queries",
+  "collections": {
+    "Parameters": {
+      "matchOn": ["Name"],
+      "declaredWhere": { "DetectionMethod": "Manual" }
+    }
+  }
+}
+```
+
+- **Push**: an item without a matching `primaryKey` is matched on every `matchOn` field, compared case-insensitively. Reference values (`@lookup:`, `@parent:`, `@owner:` …) are resolved before the comparison. An item missing any `matchOn` field is matched by primary key only.
+- **Pull**: items are written without `primaryKey` and without the join field, since the collection stamps the owner's foreign key. They are sorted by the `matchOn` fields. With `declaredWhere`, only items whose fields equal every given value are written. The server keeps deriving the rest, so they never become authored JSON.
+- **No default**: `matchOn` is opt-in. A collection without it matches by primary key only, and every repo that declares such a collection must set it.
+
+Declared items omit `primaryKey` and the join field:
+
+```json
+"collections": {
+  "Parameters": [
+    { "fields": { "Name": "maxDepth", "Type": "number", "DetectionMethod": "Manual", "Description": "Maximum tree depth" } }
+  ]
+}
+```
+
+**Un-declaring a query parameter.** In the default `upsert` mode, removing an item from the JSON leaves the row in the database, still `'Manual'` with the values you authored. To hand the parameter back to extraction:
+
+1. Replace the item with a delete directive, then push:
+   ```json
+   { "fields": { "Name": "maxDepth" }, "deleteRecord": { "delete": true } }
+   ```
+2. Remove the directive from the JSON after the push. If you leave it, a later push deletes the row extraction re-creates.
+
+Extraction runs only when a query is created or its SQL changes. The parameter is therefore missing until the query's SQL next changes, and that save restores the inferred (`'AI'`) row. Nothing reverts an un-mentioned `'Manual'` row to `'AI'` automatically.
+
 
 ### Primary Key Handling
 The tool automatically detects primary key fields from entity metadata:
