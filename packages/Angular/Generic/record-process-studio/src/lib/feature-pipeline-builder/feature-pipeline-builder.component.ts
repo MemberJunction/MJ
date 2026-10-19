@@ -1360,6 +1360,7 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
         return this.UpdateOutputProp(index, prop, event);
     }
 
+    /** @deprecated Use {@link UpdateOutputProp}. */
     public onOutputPropertyChange(index: number, prop: 'Name' | 'Ref', event: Event): void {
         return this.UpdateOutputProp(index, prop, event);
     }

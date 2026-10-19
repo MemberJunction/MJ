@@ -2,7 +2,7 @@
  * Pure logic for the generic Feature Values panel. No Angular imports so it is
  * unit-testable in isolation.
  */
-import { SafeJSONParse } from '@memberjunction/global';
+import { SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import type { MJFeatureValueEntity } from '@memberjunction/core-entities';
 
 /** One row of the `MJ: Feature Values` view as returned by a simple RunView. */
@@ -125,7 +125,7 @@ export class FeatureValuesPanelModel {
     /** Other rows for the card's pipeline+feature, newest first, excluding the card's own row. */
     public static History(rows: FeatureValueRow[], card: FeatureValueCard): FeatureValueRow[] {
         return rows
-            .filter(r => r.ID !== card.RowID && keyOf(r.RecordProcessID, r.FeatureName) === card.Key)
+            .filter(r => !UUIDsEqual(r.ID, card.RowID) && keyOf(r.RecordProcessID, r.FeatureName) === card.Key)
             .sort((a, b) => time(b) - time(a));
     }
 }
