@@ -3297,13 +3297,32 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         if (message && conversationId) {
           await this.handleMessageCompletion(message, event.agentRunId, conversationId);
         } else if (conversationId) {
-          // The completion is for a message we do not currently hold — it belongs to another
-          // conversation, or to one scrolled out of the loaded window. Previously this event was
-          // simply dropped, and for the scrolled-out case nothing else ever picked it up: the
-          // `recentCompletions` replay only fires on conversation OPEN. Reconciling reads durable
-          // state for every in-progress message we do hold, which repairs it if it is ours and
-          // costs one narrow query if it is not.
-          await this.ReconcileNow('completion-for-unloaded-message');
+          // A completion for an unloaded ConversationDetailID may be a server-created workflow
+          // continuation reply (from TaskGraphContinuationDeliverer) in the active conversation,
+          // or a scrolled-out message. Reload the active window first so new continuation messages
+          // and their artifacts appear immediately in real time without leaving the chat.
+          const artifactBaseline = this.snapshotArtifactPanelBaseline();
+          await this.reloadMessagesForActiveConversation();
+          const newlyLoaded = event.conversationDetailId
+            ? this.messages.find(m => UUIDsEqual(m.ID, event.conversationDetailId))
+            : undefined;
+          if (newlyLoaded) {
+            await this.reloadArtifactsForMessage(newlyLoaded.ID, conversationId);
+            // Also refresh artifacts on any preceding AI messages that may have received task-step artifacts
+            const aiMessages = this.messages.filter(m => m.Role === 'AI');
+            for (const aiMsg of aiMessages.slice(-3)) {
+              if (!UUIDsEqual(aiMsg.ID, newlyLoaded.ID)) {
+                await this.reloadArtifactsForMessage(aiMsg.ID, conversationId);
+              }
+            }
+            this.resetComponentState(conversationId);
+            await this.decideAndApplyArtifactPanel(artifactBaseline, conversationId);
+            this.messages = [...this.messages];
+            this.followTranscript('new');
+            this.cdr.detectChanges();
+          } else {
+            await this.ReconcileNow('completion-for-unloaded-message');
+          }
         }
       });
 

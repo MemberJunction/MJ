@@ -198,6 +198,121 @@
           </div>
         }
 
+        <!-- Inline Workflow Execution Card — visible directly in the message body whenever workflow steps exist -->
+        @if (WorkflowSteps.length > 0) {
+          <div class="workflow-execution-card" [class]="'workflow-status-' + WorkflowStatus.toLowerCase()">
+            <div class="workflow-card-header">
+              <div class="workflow-header-left">
+                <div class="workflow-status-icon">
+                  @if (WorkflowStatus === 'Running') {
+                    <i class="fa-solid fa-circle-notch fa-spin"></i>
+                  } @else if (WorkflowStatus === 'Complete') {
+                    <i class="fa-solid fa-circle-check"></i>
+                  } @else if (WorkflowStatus === 'Failed') {
+                    <i class="fa-solid fa-circle-exclamation"></i>
+                  } @else {
+                    <i class="fa-solid fa-ban"></i>
+                  }
+                </div>
+                <div class="workflow-title-group">
+                  <div class="workflow-title-row">
+                    <span class="workflow-title">{{ WorkflowTitle }}</span>
+                    <span class="workflow-badge" [class]="'badge-' + WorkflowStatus.toLowerCase()">
+                      @if (WorkflowStatus === 'Running') {
+                        Running
+                      } @else if (WorkflowStatus === 'Complete') {
+                        Completed
+                      } @else {
+                        {{ WorkflowStatus }}
+                      }
+                    </span>
+                  </div>
+                  <div class="workflow-subtitle">
+                    <span>{{ WorkflowCompletedStepCount }} of {{ WorkflowSteps.length }} {{ WorkflowSteps.length === 1 ? 'step' : 'steps' }} complete</span>
+                    <span class="workflow-dot">·</span>
+                    <span>{{ WorkflowProgressPercent }}%</span>
+                  </div>
+                </div>
+              </div>
+              <div class="workflow-header-right">
+                <span class="workflow-duration-pill" title="Workflow execution time">
+                  <i class="fa-regular fa-clock"></i>
+                  <span>{{ WorkflowDurationDisplay }}</span>
+                </span>
+              </div>
+            </div>
+
+            <div class="workflow-progress-track" role="progressbar"
+                 [attr.aria-valuenow]="WorkflowProgressPercent" aria-valuemin="0" aria-valuemax="100">
+              <div class="workflow-progress-fill"
+                   [class.is-running]="WorkflowStatus === 'Running'"
+                   [style.width.%]="WorkflowProgressPercent"></div>
+            </div>
+
+            <div class="workflow-steps-pipeline">
+              @for (step of WorkflowSteps; track step.ID; let idx = $index; let isLast = $last) {
+                <div class="workflow-step-item"
+                     [class]="'step-status-' + (step.Status || 'Pending').toLowerCase().replace(' ', '-')"
+                     [class.is-expanded]="IsWorkflowStepExpanded(step.ID)">
+                  <div class="workflow-step-rail">
+                    <div class="workflow-step-node">
+                      @if (step.Status === 'In Progress') {
+                        <i class="fa-solid fa-spinner fa-spin"></i>
+                      } @else if (step.Status === 'Complete') {
+                        <i class="fa-solid fa-check"></i>
+                      } @else if (step.Status === 'Failed') {
+                        <i class="fa-solid fa-xmark"></i>
+                      } @else {
+                        <span class="step-index-num">{{ idx + 1 }}</span>
+                      }
+                    </div>
+                    @if (!isLast) {
+                      <div class="workflow-step-connector" [class.is-complete]="step.Status === 'Complete'"></div>
+                    }
+                  </div>
+
+                  <div class="workflow-step-content" (click)="ToggleWorkflowStepExpand(step.ID)">
+                    <div class="workflow-step-main-row">
+                      <div class="workflow-step-identity">
+                        <span class="workflow-step-name">{{ step.Name }}</span>
+                        @if (step.Agent) {
+                          <span class="workflow-step-agent-chip">
+                            <i class="fa-solid fa-robot"></i>
+                            <span>{{ step.Agent }}</span>
+                          </span>
+                        }
+                      </div>
+                      <div class="workflow-step-meta">
+                        @if (FormatWorkflowStepDuration(step); as stepDur) {
+                          <span class="workflow-step-duration">{{ stepDur }}</span>
+                        }
+                        @if (step.AgentRunID) {
+                          <button type="button"
+                                  class="workflow-step-run-btn"
+                                  (click)="OpenWorkflowStepAgentRun(step, $event)"
+                                  title="Open AI Agent Run record">
+                            <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                          </button>
+                        }
+                        @if (GetWorkflowStepSummary(step)) {
+                          <i class="fa-solid fa-chevron-down workflow-step-chevron"
+                             [class.rotated]="IsWorkflowStepExpanded(step.ID)"></i>
+                        }
+                      </div>
+                    </div>
+
+                    @if (IsWorkflowStepExpanded(step.ID) && GetWorkflowStepSummary(step); as summaryText) {
+                      <div class="workflow-step-details">
+                        {{ summaryText }}
+                      </div>
+                    }
+                  </div>
+                </div>
+              }
+            </div>
+          </div>
+        }
+
         <!-- Artifact Message Cards — one per distinct artifact on this message -->
         @for (a of displayArtifacts; track a.artifact.ID) {
           <div class="artifact-wrapper" [class.system-artifact]="a.artifact.Visibility === 'System Only'">
@@ -466,14 +581,14 @@
           }
 
           <!-- Tasks Section -->
-          @if (detailTasks.length > 0) {
+          @if (WorkflowSteps.length > 0) {
             <div class="agent-details-tasks">
               <div class="tasks-section-header">
                 <i class="fas fa-tasks"></i>
-                <span>Associated Tasks ({{ detailTasks.length }})</span>
+                <span>Associated Tasks ({{ WorkflowSteps.length }})</span>
               </div>
               <div class="tasks-list">
-                @for (task of detailTasks; track task) {
+                @for (task of WorkflowSteps; track task.ID) {
                   <mj-task-widget
                     [task]="task"
                     [compact]="false"

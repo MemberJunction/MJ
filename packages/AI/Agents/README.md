@@ -163,6 +163,13 @@ When an artifact-producing Loop agent finishes a turn (`taskComplete: true`), it
 
 See the [Artifact Tools & Output Lifecycle Guide](./docs/ARTIFACT_TOOLS_GUIDE.md#output-artifact-lifecycle-artifactdirective--_artifacts_enabled-prompt-gating).
 
+##### Single-Node Task Graph Folding (`foldSingleTaskStep`) vs. Multi-Step Durable Workflows
+
+When a Loop agent (such as `Sage`) emits `nextStep.type: 'Tasks'`, `LoopAgentType.foldSingleTaskStep` inspects the `taskGraph`:
+
+- **Single-node task graphs (1 task of kind `'Agent'` or `'Action'`)**: Automatically fold inline into a standard in-process `'Sub-Agents'` or `'Actions'` step — even when `taskGraph.continuation === 'reinvoke'` is specified (`terminateAfter: false` so the parent Loop agent gets another turn to synthesize the specialist's output). This avoids durable task-graph dispatch overhead for 1-step specialist delegations (e.g., `Query Builder`, `Visualization Agent`) and keeps live sub-agent streaming in the active chat turn.
+- **Multi-node task graphs (2+ tasks with `dependsOn` / `payloadMapping` or non-trivial scheduling)**: Dispatch as durable `MJ: Tasks` rows through [`@memberjunction/task-graph`](../../TaskGraph/README.md), broadcasting real-time step transitions via `TaskGraphFrameBroadcaster` and delivering synthesized continuation replies and artifacts back to the conversation via `TaskGraphContinuationDeliverer`.
+
 #### FlowAgentType
 
 Step-based agent that follows a predefined flow graph — steps with explicit conditional paths between them. Best for deterministic workflows where the execution path is known in advance.

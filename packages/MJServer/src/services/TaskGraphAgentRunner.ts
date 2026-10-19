@@ -14,7 +14,10 @@
  */
 import { AgentRunner } from '@memberjunction/ai-agents';
 import { ChatMessageRole } from '@memberjunction/ai';
-import { LogError } from '@memberjunction/core';
+import { LogError, type UserInfo } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
+import { UserCache } from '@memberjunction/generic-database-provider';
+import { MJTaskEntity } from '@memberjunction/core-entities';
 import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended } from '@memberjunction/ai-core-plus';
 import type { AgentExecutionProgressCallback } from '@memberjunction/ai-core-plus';
 import type { TaskAgentRunner, TaskAgentRunParams, TaskAgentRunResult } from '@memberjunction/task-graph';
@@ -27,14 +30,22 @@ export class TaskGraphAgentRunner implements TaskAgentRunner {
                 return { Success: false, ErrorMessage: `Agent ${params.AgentID} could not be loaded.` };
             }
 
-            const result = await new AgentRunner().RunAgent({
+            const parentRun = await this.loadSubmittingRun(params);
+            const actingUser = this.resolveActingUser(parentRun?.UserID, params.ContextUser);
+            const conversationDetailId =
+                parentRun?.ConversationDetailID ?? (await this.resolveTaskConversationDetailID(params)) ?? undefined;
+
+            const runner = new AgentRunner(params.Provider);
+            const result = await runner.RunAgent({
                 agent,
+                provider: params.Provider,
                 conversationMessages: [{ role: ChatMessageRole.user, content: this.buildPrompt(params) }],
-                contextUser: params.ContextUser,
+                contextUser: actingUser,
+                conversationId: parentRun?.ConversationID ?? undefined,
                 // Inherited from the graph, so a graph this run goes on to emit is one hop deeper
                 // rather than starting the chain over. Without it MAX_REINVOKE_DEPTH never fires.
                 continuationDepth: params.ContinuationDepth ?? 0,
-                parentRun: await this.loadSubmittingRun(params),
+                parentRun,
                 // The bridge from the agent's own progress stream up to graph-level observers: the
                 // dispatcher turns these into rate-limited `NodeProgress` frames, which is how a
                 // running Agent step shows "what it is doing right now" on the workflow canvas.
@@ -42,6 +53,29 @@ export class TaskGraphAgentRunner implements TaskAgentRunner {
             });
 
             const success = result?.success === true;
+            if (
+                success &&
+                result?.payload != null &&
+                conversationDetailId &&
+                result.artifactDirective?.behavior !== 'suppress' &&
+                typeof runner.ProcessAgentArtifacts === 'function'
+            ) {
+                try {
+                    await runner.ProcessAgentArtifacts(
+                        result,
+                        conversationDetailId,
+                        undefined,
+                        actingUser,
+                        params.Provider,
+                    );
+                } catch (artifactErr) {
+                    LogError(
+                        `[TaskGraphAgentRunner] Task ${params.TaskID}: artifact persistence failed (non-fatal): ` +
+                        `${artifactErr instanceof Error ? artifactErr.message : String(artifactErr)}`,
+                    );
+                }
+            }
+
             return {
                 Success: success,
                 Output: this.extractOutput(result),
@@ -52,6 +86,48 @@ export class TaskGraphAgentRunner implements TaskAgentRunner {
             const message = e instanceof Error ? e.message : String(e);
             LogError(`[TaskGraphAgentRunner] Task ${params.TaskID} failed: ${message}`);
             return { Success: false, ErrorMessage: message };
+        }
+    }
+
+    private resolveActingUser(ownerUserId: string | null | undefined, fallback: UserInfo): UserInfo {
+        if (!ownerUserId) {
+            return fallback;
+        }
+        try {
+            const users = UserCache.Instance?.Users ?? UserCache.Users ?? [];
+            const matched = users.find((u) => UUIDsEqual(u.ID, ownerUserId));
+            if (matched) {
+                return matched;
+            }
+        } catch {
+            // Fall back to params.ContextUser when UserCache is not initialized.
+        }
+        return fallback;
+    }
+
+    /**
+     * Resolves the originating `ConversationDetailID` from the step task row or its parent workflow
+     * task row when the submitting agent run did not carry one directly.
+     */
+    private async resolveTaskConversationDetailID(params: TaskAgentRunParams): Promise<string | null> {
+        if (!params.TaskID) return null;
+        try {
+            const task = await params.Provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', params.ContextUser);
+            if (!(await task.Load(params.TaskID))) {
+                return null;
+            }
+            if (task.ConversationDetailID) {
+                return task.ConversationDetailID;
+            }
+            if (task.ParentID) {
+                const parentTask = await params.Provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', params.ContextUser);
+                if (await parentTask.Load(task.ParentID)) {
+                    return parentTask.ConversationDetailID ?? null;
+                }
+            }
+            return null;
+        } catch {
+            return null;
         }
     }
 

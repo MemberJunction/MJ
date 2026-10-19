@@ -280,10 +280,10 @@ export class LoopAgentType extends BaseAgentType {
         // action, a prompt, a loop — has no in-run equivalent and must reach the dispatcher.
         if (node.kind !== 'Agent') return { folded: false, reason: `the single node is a ${node.kind} step, which has no in-run equivalent` };
         if (spec.durable === true) return { folded: false, reason: 'the graph requested durable execution' };
-        if (spec.continuation && spec.continuation !== 'message') {
-            return { folded: false, reason: `continuation is '${spec.continuation}', not the default` };
+        if (spec.continuation && spec.continuation !== 'message' && spec.continuation !== 'reinvoke') {
+            return { folded: false, reason: `continuation is '${spec.continuation}', not foldable in-run` };
         }
-        return { folded: true, reason: 'single agent node, no dependencies, default continuation' };
+        return { folded: true, reason: 'single agent node, no dependencies, foldable continuation' };
     }
 
 

@@ -30,6 +30,7 @@ import {
   BeforeStopClickedEventArgs,
 } from '../../events/chat-events';
 import { ExcludeByUUIDs, UUIDsEqual } from '@memberjunction/global';
+import { Subscription } from 'rxjs';
 import { ConversationsRuntime } from '@memberjunction/conversations-runtime';
 import { BadgeTextForAttachment } from '../../util/attachment-badge';
 import { EMPTY_FORK_CHIPS, ForkChipAriaLabel, ForkChipIcon, ForkChipOpenRequestOf, type ForkChipOpenRequest, type MessageForkChip } from '../../utils/conversation-forks';
@@ -851,6 +852,12 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     this.DetailTasks = value;
   }
   private tasksLoaded: boolean = false;
+  private _tasksLoadInFlight: boolean = false;
+  private _tasksReloadQueued: boolean = false;
+  private _taskGraphSub: Subscription | null = null;
+  private _taskPollCounter: number = 0;
+  public WorkflowElapsedFormatted: string = '0:00';
+  public ExpandedWorkflowStepIds = new Set<string>();
 
   // Memoization for mention parsing to prevent repeated parsing on change detection
   private _cachedDisplayMessage: string = '';
@@ -883,14 +890,45 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     // matching the pre-PR-2 behavior of the previous hardcoded check.
     void this.agentService.getConversationManagerAgent();
 
+    // Auto-load associated workflow tasks for AI messages so the inline workflow
+    // execution card renders immediately without requiring the user to open the gear icon.
+    if (this.IsAIMessage && this.message?.ID) {
+      void this.loadTasks();
+      this.subscribeToTaskGraphEvents();
+    }
+
     // Execute automatic commands if present
     await this.executeAutomaticCommands();
   }
 
+  private subscribeToTaskGraphEvents(): void {
+    if (this._taskGraphSub) {
+      return;
+    }
+    this._taskGraphSub = ConversationsRuntime.Instance.Streaming.TaskGraphEvents$.subscribe((evt) => {
+      if (!this.IsAIMessage || !this.message?.ID) {
+        return;
+      }
+      const matchesMessage = evt.conversationDetailId && UUIDsEqual(evt.conversationDetailId, this.message.ID);
+      const matchesTask =
+        this.DetailTasks.length > 0 &&
+        this.DetailTasks.some(
+          (t) =>
+            (evt.ParentTaskID && (UUIDsEqual(t.ID, evt.ParentTaskID) || UUIDsEqual(t.ParentID, evt.ParentTaskID))) ||
+            (evt.TaskID && UUIDsEqual(t.ID, evt.TaskID))
+        );
+      if (matchesMessage || matchesTask || (this.DetailTasks.length === 0 && this.IsLastMessageInConversation)) {
+        void this.loadTasks();
+      }
+    });
+  }
+
   ngOnChanges(_changes: SimpleChanges) {
-    // No longer need to manage timer for agentRun changes
-    // Parent's 1-second timer + agentRunDuration getter handles all agent run timing
-    // Component's timer only runs for temporary messages (handled in ngAfterViewInit)
+    // Reload tasks if message ID is present on an AI message and hasn't loaded yet
+    if (this.IsAIMessage && this.message?.ID && !this.tasksLoaded) {
+      void this.loadTasks();
+      this.subscribeToTaskGraphEvents();
+    }
   }
 
   /**
@@ -907,7 +945,13 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
     // Check if status changed from non-Complete to Complete
     if (this._previousMessageStatus !== 'Complete' && currentStatus === 'Complete') {
-      this.stopElapsedTimeUpdater();
+      // When an AI turn finishes, check if it submitted a durable task graph for this message
+      if (this.IsAIMessage && this.message.ID) {
+        void this.loadTasks();
+      }
+      if (!this.HasActiveWorkflowTasks) {
+        this.stopElapsedTimeUpdater();
+      }
 
       // Force immediate synchronous change detection for dynamically created components
       // markForCheck() only schedules a check which may not run for dynamic components
@@ -935,15 +979,16 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     // Nothing in flight means nothing to watch — restart the clock so a run that begins later is
     // measured from when it began, not from when this component was created.
     const inFlight = this.isLivenessInFlight();
+    const needsTimer = inFlight || this.HasActiveWorkflowTasks;
     this.refreshLivenessState();
 
     // Re-arm the elapsed timer here, not only in ngAfterViewInit. A message that becomes
     // in-progress AFTER the view initialised — the common case, since the row is rendered before
     // the agent starts — otherwise never got an interval, so its pill never ticked and its liveness
     // state was never recomputed on a schedule.
-    if (inFlight && this._elapsedTimeInterval === null) {
+    if (needsTimer && this._elapsedTimeInterval === null) {
       this.startElapsedTimeUpdater();
-    } else if (!inFlight) {
+    } else if (!needsTimer) {
       this.stopElapsedTimeUpdater();
     }
   }
@@ -1076,6 +1121,10 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   ngOnDestroy() {
     this.stopElapsedTimeUpdater();
     this.clearStopRetryTimer();
+    if (this._taskGraphSub) {
+      this._taskGraphSub.unsubscribe();
+      this._taskGraphSub = null;
+    }
   }
 
   /**
@@ -1131,14 +1180,11 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   }
 
   /**
-   * Starts the elapsed time updater interval for temporary messages only
-   * For agent runs with IDs, the parent's timer + agentRunDuration getter handles updates
-   * Updates every second for temporary messages that use _elapsedTimeFormatted
+   * Starts the elapsed time updater interval for temporary messages, active agent runs,
+   * and active durable workflow task graphs.
    */
   private startElapsedTimeUpdater(): void {
-    // Start timer for temporary messages (in-progress, no ID) OR active agent runs
-    // Both need periodic updates to _elapsedTimeFormatted / _agentRunDurationFormatted
-    if (this.IsInProgressAIMessage || this.IsAgentRunActive) {
+    if (this.IsInProgressAIMessage || this.IsAgentRunActive || this.HasActiveWorkflowTasks) {
       // Initial update
       this.updateTimers();
       this.cdRef.markForCheck();
@@ -1168,6 +1214,18 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    * Called every second by the interval timer
    */
   private updateTimers(): void {
+    const currentStatus = this.message?.Status;
+    this._stableIsInProgressAIMessage = this.IsAIMessage && currentStatus === 'In-Progress';
+    this._stableDisplayMessage = this.computeDisplayMessage();
+    this._messageClasses = this.buildMessageClasses();
+
+    if (this._previousMessageStatus !== 'Complete' && currentStatus === 'Complete') {
+      this._previousMessageStatus = 'Complete';
+      if (this.IsAIMessage && this.message?.ID) {
+        void this.loadTasks();
+      }
+    }
+
     // Update temporary message elapsed time
     if (this.IsInProgressAIMessage) {
       this.ElapsedTimeFormatted = this.formatElapsedTime(this.ElapsedTimeSinceLoad);
@@ -1181,12 +1239,21 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       this.AgentRunDurationFormatted = this.formatDurationFromMs(diffMs);
     }
 
+    // Update active workflow elapsed timer and poll task rows every 3s for real-time status updates
+    if (this.HasActiveWorkflowTasks) {
+      this.WorkflowElapsedFormatted = this.computeWorkflowElapsedFormatted();
+      this._taskPollCounter = (this._taskPollCounter + 1) % 3;
+      if (this._taskPollCounter === 0) {
+        void this.loadTasks();
+      }
+    }
+
     // Silence only grows with time, so it has to be re-evaluated on the clock rather than on
     // change detection. This is the only path that runs while the transport is dead.
     this.refreshLivenessState();
 
     // The tick stops itself: change detection does not reliably reach this row once it finishes.
-    if (!this.isLivenessInFlight()) {
+    if (!this.isLivenessInFlight() && !this.HasActiveWorkflowTasks && !this._tasksLoadInFlight) {
       this.stopElapsedTimeUpdater();
     }
   }
@@ -2547,18 +2614,24 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    * Load tasks associated with this conversation detail
    */
   private async loadTasks(): Promise<void> {
-    if (!this.message?.ID) {
+    if (!this.message?.ID || !this.CurrentUser) {
+      return;
+    }
+    if (this._tasksLoadInFlight) {
+      this._tasksReloadQueued = true;
       return;
     }
 
+    this._tasksLoadInFlight = true;
     try {
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView<MJTaskEntity>(
         {
           EntityName: 'MJ: Tasks',
           ExtraFilter: `ConversationDetailID='${this.message.ID}'`,
-          OrderBy: '__mj_CreatedAt DESC',
-          ResultType: 'entity_object'
+          OrderBy: '__mj_CreatedAt ASC',
+          ResultType: 'entity_object',
+          BypassCache: true
         },
         this.CurrentUser
       );
@@ -2566,10 +2639,206 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       if (result.Success) {
         this.DetailTasks = result.Results || [];
         this.tasksLoaded = true;
+        this.WorkflowElapsedFormatted = this.computeWorkflowElapsedFormatted();
+        if (this.HasActiveWorkflowTasks && this._elapsedTimeInterval === null) {
+          this.startElapsedTimeUpdater();
+        }
+        this.cdRef?.detectChanges();
       }
     } catch (error) {
       console.error('Failed to load tasks for conversation detail:', error);
+    } finally {
+      this._tasksLoadInFlight = false;
+      if (this._tasksReloadQueued) {
+        this._tasksReloadQueued = false;
+        void this.loadTasks();
+      }
     }
+  }
+
+  /**
+   * Returns the parent workflow container task when `DetailTasks` contains a parent-child hierarchy.
+   * Prevents rendering the container parent task as a duplicate step card alongside its child steps.
+   */
+  public get WorkflowParentTask(): MJTaskEntity | null {
+    const tasks = this.DetailTasks;
+    if (!tasks || tasks.length <= 1) {
+      return null;
+    }
+    const parentCandidate = tasks.find(
+      (t) => !t.ParentID && tasks.some((child) => child.ParentID != null && UUIDsEqual(child.ParentID, t.ID))
+    );
+    if (parentCandidate) {
+      return parentCandidate;
+    }
+    const unagentedRoot = tasks.find((t) => !t.ParentID && !t.AgentID);
+    return unagentedRoot ?? null;
+  }
+
+  /**
+   * Ordered executable workflow steps for this message (excluding the container parent row).
+   */
+  public get WorkflowSteps(): MJTaskEntity[] {
+    const tasks = this.DetailTasks;
+    if (!tasks || tasks.length === 0) {
+      return [];
+    }
+    const parent = this.WorkflowParentTask;
+    const steps = parent
+      ? tasks.filter((t) => !UUIDsEqual(t.ID, parent.ID))
+      : [...tasks];
+    return steps.sort((a, b) => {
+      const aTime = a.__mj_CreatedAt ? new Date(a.__mj_CreatedAt).getTime() : 0;
+      const bTime = b.__mj_CreatedAt ? new Date(b.__mj_CreatedAt).getTime() : 0;
+      return aTime - bTime;
+    });
+  }
+
+  /** Title shown in the inline Workflow Execution Card header. */
+  public get WorkflowTitle(): string {
+    if (this.WorkflowParentTask?.Name) {
+      return this.WorkflowParentTask.Name;
+    }
+    if (this.WorkflowSteps.length === 1) {
+      return this.WorkflowSteps[0].Name || 'Agent Task';
+    }
+    return 'Agent Workflow';
+  }
+
+  /** Aggregate status of the workflow ('Running' | 'Complete' | 'Failed' | 'Cancelled'). */
+  public get WorkflowStatus(): 'Running' | 'Complete' | 'Failed' | 'Cancelled' {
+    const steps = this.WorkflowSteps;
+    if (steps.length === 0) {
+      return 'Complete';
+    }
+    if (steps.some((s) => s.Status === 'Failed')) {
+      return 'Failed';
+    }
+    if (steps.some((s) => s.Status === 'In Progress' || s.Status === 'Pending' || s.Status === 'Deferred')) {
+      return 'Running';
+    }
+    if (steps.every((s) => s.Status === 'Cancelled')) {
+      return 'Cancelled';
+    }
+    return 'Complete';
+  }
+
+  /** Whether any workflow step is still pending or actively executing. */
+  public get HasActiveWorkflowTasks(): boolean {
+    return this.WorkflowSteps.length > 0 && this.WorkflowStatus === 'Running';
+  }
+
+  /** Number of completed workflow steps. */
+  public get WorkflowCompletedStepCount(): number {
+    return this.WorkflowSteps.filter((s) => s.Status === 'Complete').length;
+  }
+
+  /** Overall completion percentage (0-100) across all workflow steps. */
+  public get WorkflowProgressPercent(): number {
+    const steps = this.WorkflowSteps;
+    if (steps.length === 0) {
+      return 0;
+    }
+    let sum = 0;
+    for (const step of steps) {
+      if (step.Status === 'Complete') {
+        sum += 100;
+      } else if (step.Status === 'In Progress') {
+        sum += Math.max(15, Math.min(95, step.PercentComplete || 50));
+      }
+    }
+    return Math.round(sum / steps.length);
+  }
+
+  /** Formatted total duration for the workflow execution card. */
+  public get WorkflowDurationDisplay(): string {
+    if (this.HasActiveWorkflowTasks) {
+      return this.WorkflowElapsedFormatted;
+    }
+    return this.computeWorkflowElapsedFormatted();
+  }
+
+  private computeWorkflowElapsedFormatted(): string {
+    const tasks = this.DetailTasks;
+    if (tasks.length === 0) {
+      return '0:00';
+    }
+    const startTimes = tasks
+      .map((t) => (t.StartedAt ? new Date(t.StartedAt).getTime() : t.__mj_CreatedAt ? new Date(t.__mj_CreatedAt).getTime() : NaN))
+      .filter((n) => !Number.isNaN(n));
+    if (startTimes.length === 0) {
+      return '0:00';
+    }
+    const earliest = Math.min(...startTimes);
+    if (this.HasActiveWorkflowTasks) {
+      return this.formatDurationFromMs(Math.max(0, Date.now() - earliest));
+    }
+    const endTimes = tasks
+      .map((t) => (t.CompletedAt ? new Date(t.CompletedAt).getTime() : t.__mj_UpdatedAt ? new Date(t.__mj_UpdatedAt).getTime() : NaN))
+      .filter((n) => !Number.isNaN(n));
+    const latest = endTimes.length > 0 ? Math.max(...endTimes) : Date.now();
+    return this.formatDurationFromMs(Math.max(1000, latest - earliest));
+  }
+
+  public ToggleWorkflowStepExpand(stepId: string): void {
+    if (this.ExpandedWorkflowStepIds.has(stepId)) {
+      this.ExpandedWorkflowStepIds.delete(stepId);
+    } else {
+      this.ExpandedWorkflowStepIds.add(stepId);
+    }
+    this.cdRef.detectChanges();
+  }
+
+  public IsWorkflowStepExpanded(stepId: string): boolean {
+    return this.ExpandedWorkflowStepIds.has(stepId);
+  }
+
+  public FormatWorkflowStepDuration(step: MJTaskEntity): string | null {
+    const startRaw = step.StartedAt || step.__mj_CreatedAt;
+    if (!startRaw) {
+      return null;
+    }
+    const startMs = new Date(startRaw).getTime();
+    if (Number.isNaN(startMs)) {
+      return null;
+    }
+    if (step.Status === 'In Progress') {
+      return this.formatDurationFromMs(Math.max(0, Date.now() - startMs));
+    }
+    if (step.Status === 'Pending') {
+      return 'Queued';
+    }
+    const endRaw = step.CompletedAt || step.__mj_UpdatedAt;
+    if (!endRaw) {
+      return null;
+    }
+    const endMs = new Date(endRaw).getTime();
+    if (Number.isNaN(endMs) || endMs < startMs) {
+      return null;
+    }
+    return this.formatDurationFromMs(Math.max(1000, endMs - startMs));
+  }
+
+  public GetWorkflowStepSummary(step: MJTaskEntity): string | null {
+    const desc = step.Description || '';
+    const outputMarker = desc.indexOf('--- Output ---');
+    if (outputMarker !== -1) {
+      const rawOutput = desc.slice(outputMarker + '--- Output ---'.length).trim();
+      if (rawOutput.length > 0) {
+        return rawOutput.length > 360 ? rawOutput.slice(0, 360) + '…' : rawOutput;
+      }
+    }
+    const cleanDesc = desc.trim();
+    return cleanDesc.length > 0 ? cleanDesc : null;
+  }
+
+  public OpenWorkflowStepAgentRun(step: MJTaskEntity, event: MouseEvent): void {
+    event.stopPropagation();
+    if (!step.AgentRunID) {
+      return;
+    }
+    const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: step.AgentRunID }]);
+    this.OpenEntityRecord.emit({ entityName: 'MJ: AI Agent Runs', compositeKey });
   }
 
   /**
