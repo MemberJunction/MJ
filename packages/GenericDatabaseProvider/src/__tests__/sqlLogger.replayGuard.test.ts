@@ -45,9 +45,9 @@ async function recordOne(query: string, fallback: string | undefined, descriptio
     defaultSchemaName: '__mj',
     retainEmptyLogFiles: true,
   });
-  await session.initialize();
-  await session.logSqlStatement(query, undefined, description, true, fallback);
-  await session.dispose();
+  await session.Initialize();
+  await session.LogSqlStatement(query, undefined, description, true, fallback);
+  await session.Dispose();
   return fs.readFileSync(file, 'utf8');
 }
 

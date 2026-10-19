@@ -1312,6 +1312,10 @@ SQL logging captures all database operations during push commands for creating m
 | `formatAsMigration` | boolean | false | Format as Flyway migration files |
 | `filterPatterns` | string[] | undefined | Patterns to filter SQL statements |
 | `filterType` | "exclude" or "include" | "exclude" | How to apply filter patterns |
+| `variableBatchThreshold` | number | 200 | `mj sync watch` only: how many `DECLARE @…` variables accumulate before a `GO` is emitted. `0` = one `GO` per statement. `mj sync push` does not read it and emits one `GO` per statement |
+| `maxFileSize` | number | 94371840 (90 MiB) | Largest a single SQL log file may get, in bytes. A capture that would exceed it is split on statement boundaries into `<name>.part001.sql`, `<name>.part002.sql`, …; one that fits stays a single file at the original name. `0` turns splitting off |
+
+**Committing a split capture as migrations:** give each part its own version (e.g. a distinct timestamp per file). Parts that share one version token are rejected as duplicate versions.
 
 **Filter Pattern Types:**
 - **Regex patterns**: Start with `/` and optionally end with flags (e.g., `/spCreate.*Run/i`)

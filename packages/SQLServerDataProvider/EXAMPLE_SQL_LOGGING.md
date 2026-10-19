@@ -9,17 +9,17 @@ import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
 
 // Create a SQL logging session
 const provider = new SQLServerDataProvider(/* config */);
-const session = await provider.createSqlLogger('./logs/operations.sql');
+const session = await provider.CreateSqlLogger('./logs/operations.sql');
 
 try {
   // All SQL operations will now be logged to the file
   await provider.ExecuteSQL('INSERT INTO Entity (Name) VALUES (?)', ['Test Entity']);
   await provider.ExecuteSQL('UPDATE Entity SET Status = ? WHERE ID = ?', ['Active', '123']);
   
-  console.log(`Logged ${session.statementCount} SQL statements`);
+  console.log(`Logged ${session.StatementCount} SQL statements`);
 } finally {
   // Always dispose the session to stop logging and close the file
-  await session.dispose();
+  await session.Dispose();
 }
 ```
 
@@ -27,7 +27,7 @@ try {
 
 ```typescript
 // Create a session with migration formatting
-const session = await provider.createSqlLogger('./migrations/V001__entity_updates.sql', {
+const session = await provider.CreateSqlLogger('./migrations/V001__entity_updates.sql', {
   formatAsMigration: true,
   description: 'Adding new entities and fields from MetadataSync'
 });
@@ -37,7 +37,7 @@ try {
   await provider.ExecuteSQL('INSERT INTO [myschema].[Entity] (Name) VALUES (?)', ['New Entity']);
   // Becomes: INSERT INTO [${flyway:defaultSchema}].[Entity] (Name) VALUES ('New Entity');
 } finally {
-  await session.dispose();
+  await session.Dispose();
 }
 ```
 
@@ -53,7 +53,7 @@ export class MetadataSync {
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const logPath = `./logs/metadata-sync-${timestamp}.sql`;
     
-    const session = await this.provider.createSqlLogger(logPath, {
+    const session = await this.provider.CreateSqlLogger(logPath, {
       formatAsMigration: true,
       description: `MetadataSync push operation - ${entities.length} entities`
     });
@@ -66,14 +66,14 @@ export class MetadataSync {
         await this.pushEntity(entity);
       }
       
-      console.log(`✅ MetadataSync completed. ${session.statementCount} SQL statements logged.`);
+      console.log(`✅ MetadataSync completed. ${session.StatementCount} SQL statements logged.`);
       console.log(`📄 Migration file ready: ${logPath}`);
       
     } catch (error) {
-      console.error(`❌ MetadataSync failed after ${session.statementCount} statements`);
+      console.error(`❌ MetadataSync failed after ${session.StatementCount} statements`);
       throw error;
     } finally {
-      await session.dispose();
+      await session.Dispose();
     }
   }
   
@@ -102,12 +102,12 @@ export class MetadataSync {
 
 ```typescript
 // Log only core stored procedure calls, filtering out record change metadata wrapper
-const session = await provider.createSqlLogger('./logs/core-operations.sql', {
+const session = await provider.CreateSqlLogger('./logs/core-operations.sql', {
   logRecordChangeMetadata: false // Default is false
 });
 
 // Create another session that logs everything
-const fullSession = await provider.createSqlLogger('./logs/full-operations.sql', {
+const fullSession = await provider.CreateSqlLogger('./logs/full-operations.sql', {
   logRecordChangeMetadata: true // Log complete SQL with metadata
 });
 
@@ -123,8 +123,8 @@ try {
   // session logs: EXEC [myschema].[spDeleteCustomer] @ID='123'
   // fullSession logs: Full SQL with record change tracking
 } finally {
-  await session.dispose();
-  await fullSession.dispose();
+  await session.Dispose();
+  await fullSession.Dispose();
 }
 ```
 
@@ -132,15 +132,15 @@ try {
 
 ```typescript
 // By default, empty log files are automatically deleted
-const session = await provider.createSqlLogger('./logs/operations.sql', {
+const session = await provider.CreateSqlLogger('./logs/operations.sql', {
   statementTypes: 'mutations' // Only log data changes
 });
 
 // If no mutations occur, the file will be deleted on dispose
-await session.dispose(); // File deleted if no statements were logged
+await session.Dispose(); // File deleted if no statements were logged
 
 // To retain empty log files, set retainEmptyLogFiles to true
-const persistentSession = await provider.createSqlLogger('./logs/audit.sql', {
+const persistentSession = await provider.CreateSqlLogger('./logs/audit.sql', {
   retainEmptyLogFiles: true // Keep file even if empty
 });
 ```
@@ -149,7 +149,7 @@ const persistentSession = await provider.createSqlLogger('./logs/audit.sql', {
 
 ```typescript
 // Transaction groups are automatically logged
-const session = await provider.createSqlLogger('./logs/transaction-group.sql', {
+const session = await provider.CreateSqlLogger('./logs/transaction-group.sql', {
   logRecordChangeMetadata: false
 });
 
@@ -174,8 +174,8 @@ await transactionGroup.Submit();
 
 ```typescript
 // Multiple developers can log simultaneously
-const session1 = await provider.createSqlLogger('./logs/user1-operations.sql');
-const session2 = await provider.createSqlLogger('./logs/user2-operations.sql');
+const session1 = await provider.CreateSqlLogger('./logs/user1-operations.sql');
+const session2 = await provider.CreateSqlLogger('./logs/user2-operations.sql');
 
 // Each session captures only the operations from its thread
 // Operations will be logged to both files appropriately
@@ -196,7 +196,7 @@ await provider.ExecuteSQL(
 
 ```typescript
 // Check what logging sessions are currently active
-const activeSessions = provider.getActiveSqlLoggingSessions();
+const activeSessions = provider.GetActiveSqlLoggingSessions();
 console.log(`Active logging sessions: ${activeSessions.length}`);
 
 activeSessions.forEach(session => {
@@ -204,7 +204,7 @@ activeSessions.forEach(session => {
 });
 
 // Cleanup all sessions (useful for shutdown)
-await provider.disposeAllSqlLoggingSessions();
+await provider.DisposeAllSqlLoggingSessions();
 ```
 
 ## Generated Log File Format
@@ -313,24 +313,24 @@ The filtering is handled transparently per logger:
 - **Memory Efficient**: Uses file streams, not in-memory buffering
 - **Multiple Sessions**: Supports multiple concurrent logging sessions without interference
 - **Automatic Cleanup**: Session disposal automatically closes files and cleans up resources
-- **Accurate Counts**: `session.statementCount` reflects actual emitted statements after filtering
+- **Accurate Counts**: `session.StatementCount` reflects actual emitted statements after filtering
 - **Empty File Cleanup**: Empty log files are automatically deleted unless `retainEmptyLogFiles: true`
 - **Transaction Group Support**: SQL executed within transaction groups is automatically logged
 
 ## Error Handling
 
 ```typescript
-const session = await provider.createSqlLogger('./logs/operations.sql');
+const session = await provider.CreateSqlLogger('./logs/operations.sql');
 
 try {
   // If SQL execution fails, the statement is still logged (helps with debugging)
   await provider.ExecuteSQL('INVALID SQL SYNTAX');
 } catch (error) {
   // Session still contains the failed statement for debugging
-  console.log(`Error after ${session.statementCount} statements: ${error.message}`);
+  console.log(`Error after ${session.StatementCount} statements: ${error.message}`);
 } finally {
   // Always dispose, even on errors
-  await session.dispose();
+  await session.Dispose();
 }
 ```
 

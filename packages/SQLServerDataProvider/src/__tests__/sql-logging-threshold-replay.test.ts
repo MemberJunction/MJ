@@ -67,7 +67,7 @@ class LoggingTestProvider extends SQLServerDataProvider {
     if (ignoreLogging || !this.Session) {
       return;
     }
-    await this.Session.logSqlStatement(query, parameters, description, isMutation, simpleSQLFallback);
+    await this.Session.LogSqlStatement(query, parameters, description, isMutation, simpleSQLFallback);
   }
 
   protected override async HandleEntityActions(_entity: BaseEntity, _baseType: 'save' | 'delete' | 'validate', _before: boolean): Promise<never[]> {
@@ -104,7 +104,7 @@ describe('SQL logging capture of the same record saved twice (threshold mode)', 
       statementTypes: 'mutations',
       ...options,
     });
-    await provider.Session.initialize();
+    await provider.Session.Initialize();
 
     const first = makeSavedWidgetEntity(info, TEST_USER);
     const second = makeSavedWidgetEntity(info, TEST_USER);
@@ -116,7 +116,7 @@ describe('SQL logging capture of the same record saved twice (threshold mode)', 
     expect(await provider.Save(first, TEST_USER, new EntitySaveOptions())).toBeTruthy();
     expect(await provider.Save(second, TEST_USER, new EntitySaveOptions())).toBeTruthy();
 
-    await provider.Session.dispose();
+    await provider.Session.Dispose();
     return fs.readFileSync(file, 'utf8');
   }
 

@@ -74,6 +74,41 @@ export interface SqlLoggingOptions {
    * Note: If filterPatterns is empty/undefined, all SQL is logged regardless of filterType.
    */
   filterType?: 'include' | 'exclude';
+
+  /**
+   * Maximum size, in bytes, of a single generated SQL log file. When set to a positive
+   * value and the session's output would exceed it, the logger rotates to a new part file
+   * at a safe statement boundary, so no single file exceeds the limit. This exists so a
+   * very large capture (e.g. a full metadata-sync push) can be committed under host file-size
+   * limits such as GitHub's 100 MiB cap.
+   *
+   * Behavior:
+   * - Splitting occurs ONLY when the content actually exceeds the limit. A session whose
+   *   output fits under the limit produces exactly one file at the original path
+   *   (fully backward compatible — no part suffix).
+   * - Rotation happens strictly BETWEEN complete statements — a statement is never torn
+   *   across files — and each part is a self-contained, individually-runnable migration
+   *   (its own header/footer, and per-part batch-separator counting reset so a `GO` batch
+   *   never spans a file boundary).
+   * - When splitting triggers, every part (including the first) is named by inserting
+   *   `.partNNN` before the extension of the original path (e.g. `push.sql` → `push.part001.sql`,
+   *   `push.part002.sql`, ...). Enumerate all produced files via {@link SqlLoggingSession.FilePaths}.
+   * - A single statement larger than `maxFileSize` cannot be split; it is written whole to
+   *   its own part (which then exceeds the limit). This is unavoidable and does not loop.
+   * - The splitting unit is one logged statement block. A block that uses a variable DECLAREd
+   *   by an EARLIER block would break if a rotation fell between them, so a caller that enables
+   *   splitting must log self-contained blocks. Every MetadataSync save is one: the save
+   *   preamble and its `EXEC` are built into one string and logged in one call.
+   * - To commit the parts as versioned migrations, give each part its OWN version token (e.g.
+   *   distinct timestamps). Parts that share one — `V<ts>__Name.part001.sql`,
+   *   `V<ts>__Name.part002.sql` — are rejected by the migration runner as duplicate versions.
+   * - The logger does not delete part files an earlier session left at the same base path, so
+   *   reusing a path can leave stale higher-numbered parts on disk. MetadataSync timestamps every
+   *   capture's filename for that reason; a direct caller should do the same.
+   *
+   * Undefined or 0 disables splitting (default).
+   */
+  maxFileSize?: number;
 }
 
 /**
@@ -81,15 +116,26 @@ export interface SqlLoggingOptions {
  */
 export interface SqlLoggingSession {
   /** Unique session ID */
-  readonly id: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
-  /** File path where SQL is being logged */
-  readonly filePath: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  readonly Id: string;
+  /**
+   * File path where SQL is being logged. Once {@link SqlLoggingOptions.maxFileSize} splitting
+   * triggers, this is the FIRST part (`*.part001.sql`): the original path no longer exists then.
+   * Use {@link FilePaths} to get every part.
+   */
+  readonly FilePath: string;
+  /**
+   * Every file path produced by this session, in order. When size-based splitting did not
+   * trigger this is a single-element array (`[FilePath]`); when the session rotated across
+   * multiple parts it lists each part file. Read after logging completes (before or after
+   * `Dispose()` — the list is final once the last statement is written).
+   */
+  readonly FilePaths: string[];
   /** Session start time */
-  readonly startTime: Date;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  readonly StartTime: Date;
   /** Number of statements logged so far */
-  readonly statementCount: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  readonly StatementCount: number;
   /** Configuration options for this session */
-  readonly options: SqlLoggingOptions;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  readonly Options: SqlLoggingOptions;
   /** Dispose method to stop logging and clean up resources */
-  dispose(): Promise<void>;
+  Dispose(): Promise<void>;
 }
