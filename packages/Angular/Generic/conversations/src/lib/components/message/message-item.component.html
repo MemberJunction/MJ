@@ -41,8 +41,8 @@
         <span
           class="time-pill"
           [class.in-progress]="isInProgressAIMessage"
-          [class.active]="!isInProgressAIMessage && isAgentRunActive"
-          [class.complete]="!isInProgressAIMessage && !isAgentRunActive && messageStatus === 'Complete' && !IsStoppedRun"
+          [class.active]="!isInProgressAIMessage && (isAgentRunActive || HasActiveWorkflowTasks)"
+          [class.complete]="!isInProgressAIMessage && !isAgentRunActive && !HasActiveWorkflowTasks && messageStatus === 'Complete' && !IsStoppedRun"
           [class.stopped]="IsStoppedRun && messageStatus !== 'Error'"
           [class.failed]="messageStatus === 'Error'"
           [class.checking]="LivenessState === 'checking'"
@@ -339,16 +339,74 @@
           </div>
         }
 
-        <!-- Artifact Message Cards — one per distinct artifact on this message -->
-        @for (a of displayArtifacts; track a.artifact.ID) {
-          <div class="artifact-wrapper" [class.system-artifact]="a.artifact.Visibility === 'System Only'">
-            <mj-artifact-message-card
-              [artifactId]="a.artifact.ID"
-              [artifact]="a.artifact"
-              [artifactVersion]="a.version"
-              [currentUser]="currentUser"
-              (actionPerformed)="onArtifactActionPerformed($event)">
-            </mj-artifact-message-card>
+        <!-- Artifact Message Cards — single card when 1, or Supporting Step Outputs grid + Final Deliverable when > 1 -->
+        @if (displayArtifacts.length === 1) {
+          @for (a of displayArtifacts; track a.artifact.ID) {
+            <div class="artifact-wrapper" [class.system-artifact]="a.artifact.Visibility === 'System Only'">
+              <mj-artifact-message-card
+                [artifactId]="a.artifact.ID"
+                [artifact]="a.artifact"
+                [artifactVersion]="a.version"
+                [currentUser]="currentUser"
+                (actionPerformed)="onArtifactActionPerformed($event)">
+              </mj-artifact-message-card>
+            </div>
+          }
+        } @else if (displayArtifacts.length > 1) {
+          <div class="multi-artifact-showcase">
+            <div class="multi-artifact-supporting-section" [class.is-collapsed]="!IsSupportingArtifactsExpanded">
+              <button
+                type="button"
+                class="supporting-artifacts-header"
+                (click)="ToggleSupportingArtifacts($event)"
+                [attr.aria-expanded]="IsSupportingArtifactsExpanded">
+                <span class="supporting-header-left">
+                  <i class="fa-solid fa-layer-group supporting-header-icon" aria-hidden="true"></i>
+                  <span class="supporting-header-title">Supporting Data &amp; Step Outputs</span>
+                  <span class="supporting-header-count">{{ SupportingArtifacts.length }}</span>
+                </span>
+                <span class="supporting-header-right">
+                  <span class="supporting-toggle-hint">{{ IsSupportingArtifactsExpanded ? 'Collapse' : 'Expand' }}</span>
+                  <i class="fa-solid fa-chevron-down supporting-chevron" [class.rotated]="IsSupportingArtifactsExpanded" aria-hidden="true"></i>
+                </span>
+              </button>
+
+              @if (IsSupportingArtifactsExpanded) {
+                <div class="supporting-artifacts-grid">
+                  @for (a of SupportingArtifacts; track a.artifact.ID; let stepIdx = $index) {
+                    <div class="artifact-wrapper supporting-artifact-cell" [class.system-artifact]="a.artifact.Visibility === 'System Only'">
+                      <span class="supporting-step-badge" [title]="'Step output #' + (stepIdx + 1)">#{{ stepIdx + 1 }}</span>
+                      <mj-artifact-message-card
+                        [artifactId]="a.artifact.ID"
+                        [artifact]="a.artifact"
+                        [artifactVersion]="a.version"
+                        [currentUser]="currentUser"
+                        (actionPerformed)="onArtifactActionPerformed($event)">
+                      </mj-artifact-message-card>
+                    </div>
+                  }
+                </div>
+              }
+            </div>
+
+            @if (PrimaryArtifact; as primary) {
+              <div class="multi-artifact-primary-section">
+                <div class="primary-artifact-header">
+                  <i class="fa-solid fa-star primary-header-icon" aria-hidden="true"></i>
+                  <span class="primary-header-title">Final Deliverable</span>
+                  <span class="primary-step-badge">#{{ displayArtifacts.length }}</span>
+                </div>
+                <div class="artifact-wrapper primary-artifact-card" [class.system-artifact]="primary.artifact.Visibility === 'System Only'">
+                  <mj-artifact-message-card
+                    [artifactId]="primary.artifact.ID"
+                    [artifact]="primary.artifact"
+                    [artifactVersion]="primary.version"
+                    [currentUser]="currentUser"
+                    (actionPerformed)="onArtifactActionPerformed($event)">
+                  </mj-artifact-message-card>
+                </div>
+              </div>
+            }
           </div>
         }
 

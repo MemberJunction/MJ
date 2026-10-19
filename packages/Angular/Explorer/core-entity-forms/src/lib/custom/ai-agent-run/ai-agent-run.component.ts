@@ -8,7 +8,10 @@ import {
     MJAIAgentEntityExtended,
     WalkAgentRunTree,
     type AgentRunTreeNode,
+    type TaskGraphSpec,
+    type WorkflowSpec,
 } from '@memberjunction/ai-core-plus';
+import { WorkflowSaveOperation } from '@memberjunction/core-entities';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { MJGlobal, MJEvent, MJEventType, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { SharedService, NavigationService } from '@memberjunction/ng-shared';
@@ -718,6 +721,58 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
   /** @deprecated Use {@link CopyToClipboard}. */
   async copyToClipboard(text: string) {
     return this.CopyToClipboard(text);
+  }
+
+  /** True while a workflow is being saved via `WorkflowSaveOperation`. */
+  public SavingWorkflow = false;
+
+  /**
+   * Persists the selected `TaskGraph` step's `TaskGraphSpec` as a Draft Flow Agent workflow
+   * via `WorkflowSaveOperation` and opens the resulting `MJ: AI Agents` record.
+   */
+  public async OnSaveAsWorkflowRequested(spec: TaskGraphSpec): Promise<void> {
+    if (!spec || this.SavingWorkflow) {
+      return;
+    }
+    this.SavingWorkflow = true;
+    try {
+      const name =
+        spec.workflowName?.trim() ||
+        this.SelectedTimelineItem?.title?.trim() ||
+        (this.Agent?.Name ? `${this.Agent.Name} Workflow` : 'Saved Workflow');
+      const workflowSpec: WorkflowSpec = {
+        name,
+        description: `Saved from AI Agent Run ${this.record?.ID ?? ''}`.trim(),
+        status: 'Draft',
+        graph: { ...spec, workflowName: name },
+        triggers: [],
+      };
+      const op = new WorkflowSaveOperation();
+      const result = await op.Execute(
+        { spec: workflowSpec },
+        { provider: this.ProviderToUse, user: this.ProviderToUse.CurrentUser },
+      );
+      const output = result.Output;
+      if (!result.Success || !output?.success || !output.agentID) {
+        SharedService.Instance.CreateSimpleNotification(
+          output?.errorMessage ?? result.ErrorMessage ?? 'Could not save workflow.',
+          'error',
+          5000,
+        );
+        return;
+      }
+      SharedService.Instance.CreateSimpleNotification(
+        `Saved workflow "${name}". Opening Flow Agent record…`,
+        'success',
+        3500,
+      );
+      this.navigationService.OpenEntityRecord('MJ: AI Agents', CompositeKey.FromID(output.agentID));
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      SharedService.Instance.CreateSimpleNotification(`Failed to save workflow: ${msg}`, 'error', 5000);
+    } finally {
+      this.SavingWorkflow = false;
+    }
   }
   
   /**

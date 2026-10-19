@@ -373,14 +373,20 @@ export interface ConversationDetailParsed extends MJConversationDetailEntityType
 export function ParseConversationDetailComplete(
     queryResult: ConversationDetailComplete
 ): ConversationDetailParsed {
+    const rawArtifacts = queryResult.ArtifactsJSON
+        ? JSON.parse(queryResult.ArtifactsJSON) as ArtifactJSON[]
+        : [];
+    const artifacts = rawArtifacts.slice().sort((a, b) => {
+        const aTime = ToEpochMs(a.VersionCreatedAt) ?? ToEpochMs(a.__mj_CreatedAt) ?? 0;
+        const bTime = ToEpochMs(b.VersionCreatedAt) ?? ToEpochMs(b.__mj_CreatedAt) ?? 0;
+        return aTime - bTime;
+    });
     return {
         ...queryResult,
         agentRuns: queryResult.AgentRunsJSON
             ? JSON.parse(queryResult.AgentRunsJSON) as AgentRunJSON[]
             : [],
-        artifacts: queryResult.ArtifactsJSON
-            ? JSON.parse(queryResult.ArtifactsJSON) as ArtifactJSON[]
-            : [],
+        artifacts,
         ratings: queryResult.RatingsJSON
             ? JSON.parse(queryResult.RatingsJSON) as RatingJSON[]
             : []
@@ -2327,6 +2333,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             {
                 EntityName: 'MJ: Conversation Detail Artifacts',
                 ExtraFilter: `${byDetail} AND Direction='Output'`,
+                OrderBy: '__mj_CreatedAt ASC',
                 ResultType: 'simple'
             }
         ], contextUser);
@@ -2412,6 +2419,14 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             const list = byDetailId.get(junction.ConversationDetailID) ?? [];
             list.push(mergeArtifactJSON(junction, version, artifact));
             byDetailId.set(junction.ConversationDetailID, list);
+        }
+        for (const [detailId, list] of byDetailId) {
+            list.sort((a, b) => {
+                const aTime = ToEpochMs(a.VersionCreatedAt) ?? ToEpochMs(a.__mj_CreatedAt) ?? 0;
+                const bTime = ToEpochMs(b.VersionCreatedAt) ?? ToEpochMs(b.__mj_CreatedAt) ?? 0;
+                return aTime - bTime;
+            });
+            byDetailId.set(detailId, list);
         }
         return byDetailId;
     }
