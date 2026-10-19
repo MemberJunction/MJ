@@ -32,7 +32,7 @@ interface FormDouble { ProviderToUse: { CurrentUser: Pick<UserInfo, 'ID'> } }
 const fv = (over: Partial<FeatureValueRow>): FeatureValueRow => ({
   ID: 'r', RecordProcessID: 'p1', RecordProcess: 'Churn Features', FeatureName: 'tenure',
   ValueText: null, ValueNumeric: null, ValueBoolean: null, ValueDate: null, ValueJSON: null,
-  Source: 'Computed', Confidence: null, PipelineVersion: 2, ComputedAt: '2026-02-01T00:00:00Z',
+  Source: 'Pipeline', Confidence: null, PipelineVersion: 2, ComputedAt: '2026-02-01T00:00:00Z',
   Reasoning: null, ProcessRunID: null, ...over,
 });
 

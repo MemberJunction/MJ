@@ -5,7 +5,7 @@ function row(over: Partial<FeatureValueRow>): FeatureValueRow {
     return {
         ID: 'r1', RecordProcessID: 'p1', RecordProcess: 'Churn Features', FeatureName: 'tenure',
         ValueText: null, ValueNumeric: null, ValueBoolean: null, ValueDate: null, ValueJSON: null,
-        Source: 'Computed', Confidence: null, PipelineVersion: 1, ComputedAt: '2026-01-01T00:00:00Z',
+        Source: 'Pipeline', Confidence: null, PipelineVersion: 1, ComputedAt: '2026-01-01T00:00:00Z',
         Reasoning: null, ProcessRunID: 'run1', ...over,
     };
 }
