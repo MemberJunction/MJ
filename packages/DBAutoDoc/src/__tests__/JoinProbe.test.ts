@@ -6,7 +6,7 @@ import {
     StampFor,
     DEFAULT_KEY_VERIFICATION,
 } from '../discovery/JoinProbe.js';
-import { BaseAutoDocDriver, DriverProbeOutcome } from '../drivers/BaseAutoDocDriver.js';
+import { BaseAutoDocDriver, DriverProbeOutcome, ProbeNormalizationPair } from '../drivers/BaseAutoDocDriver.js';
 import { DescribeProbeFailure, SanitizeErrorText, ExtractSqlState } from '../drivers/probeErrors.js';
 
 /**
@@ -20,6 +20,7 @@ interface ProbeOnlyDriver {
         parent: { Schema: string; Table: string; Column: string },
         sampleSize: number,
         timeoutMs: number,
+        normalization?: ProbeNormalizationPair,
     ): Promise<DriverProbeOutcome>;
 }
 
@@ -28,6 +29,7 @@ interface ProbeCall {
     parent: string;
     sampleSize: number;
     timeoutMs: number;
+    normalization?: ProbeNormalizationPair;
 }
 
 function fakeDriver(
@@ -35,12 +37,13 @@ function fakeDriver(
 ): { driver: BaseAutoDocDriver; calls: ProbeCall[] } {
     const calls: ProbeCall[] = [];
     const impl: ProbeOnlyDriver = {
-        ProbeJoinContainment: async (child, parent, sampleSize, timeoutMs) => {
+        ProbeJoinContainment: async (child, parent, sampleSize, timeoutMs, normalization) => {
             const call: ProbeCall = {
                 child: `${child.Schema}.${child.Table}.${child.Column}`,
                 parent: `${parent.Schema}.${parent.Table}.${parent.Column}`,
                 sampleSize,
                 timeoutMs,
+                normalization,
             };
             calls.push(call);
             return respond(call);
@@ -160,6 +163,54 @@ describe('KeyVerifier — the bound', () => {
 
         expect(calls.length).toBe(1);
         expect(v.Budget.ProbesUsed).toBe(1);
+    });
+
+    it('passes each side\'s normalization through to the driver', async () => {
+        const { driver, calls } = fakeDriver(() => ({ Ok: true, SampledValues: 5, MatchedValues: 5 }));
+        const v = new KeyVerifier(driver);
+        await v.Verify({ ...edge('s.t.email', 's.p.email'), Normalization: { Child: 'LowerCaseTrim', Parent: 'Trim' } });
+
+        expect(calls[0].normalization).toEqual({ Child: 'LowerCaseTrim', Parent: 'Trim' });
+    });
+
+    it('compares exactly on both sides when the candidate names no normalization, as a foreign key does', async () => {
+        const { driver, calls } = fakeDriver(() => ({ Ok: true, SampledValues: 5, MatchedValues: 5 }));
+        const v = new KeyVerifier(driver);
+        await v.Verify(edge('s.t.c', 's.p.k'));
+
+        expect(calls[0].normalization).toEqual({ Child: 'ExactMatch', Parent: 'ExactMatch' });
+    });
+
+    it('does not run a Custom normalization: Unprobed, and no probe spent', async () => {
+        // The expression is model-written SQL. Comparing raw values instead would measure a
+        // different join than the one the key runs, and refute keys like a phone number
+        // stored with dashes on one side and digits on the other.
+        const { driver, calls } = fakeDriver(() => ({ Ok: true, SampledValues: 1000, MatchedValues: 0 }));
+        const v = new KeyVerifier(driver);
+        const r = await v.Verify({ ...edge('s.t.phone', 's.p.phone'), Normalization: { Child: 'Custom', Parent: 'ExactMatch' } });
+
+        expect(r.Status).toBe('Unprobed');
+        expect(r.Reason).toContain('custom normalization');
+        expect(calls.length).toBe(0);
+        expect(v.Budget.ProbesUsed).toBe(0);
+    });
+
+    it('caches an edge per normalization, so a case-insensitive probe does not reuse an exact one', async () => {
+        const { driver, calls } = fakeDriver(() => ({ Ok: true, SampledValues: 10, MatchedValues: 9 }));
+        const v = new KeyVerifier(driver);
+        await v.Verify(edge('s.t.c', 's.p.k'));
+        await v.Verify({ ...edge('s.t.c', 's.p.k'), Normalization: { Child: 'LowerCaseTrim', Parent: 'LowerCaseTrim' } });
+
+        expect(calls.length).toBe(2);
+    });
+
+    it('an edge spelled out as exact on both sides shares the cache with one that names no normalization', async () => {
+        const { driver, calls } = fakeDriver(() => ({ Ok: true, SampledValues: 10, MatchedValues: 9 }));
+        const v = new KeyVerifier(driver);
+        await v.Verify(edge('s.t.c', 's.p.k'));
+        await v.Verify({ ...edge('s.t.c', 's.p.k'), Normalization: { Child: 'ExactMatch', Parent: 'ExactMatch' } });
+
+        expect(calls.length).toBe(1);
     });
 
     it('probes nothing when disabled, and calls the result Unprobed rather than Verified', async () => {

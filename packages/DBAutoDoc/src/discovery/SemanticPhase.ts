@@ -73,14 +73,6 @@ const NON_VALUEMATCHABLE_TYPES = /(binary|blob|image|varbinary|xml|geography|geo
  * floor an operator arrived at by post-filtering a real run's output.
  */
 const MIN_DISTINCT_FOR_KEY = 50;
-/**
- * Minimum distinct/total ratio for a column to be identity-bearing. Default 0.02.
- *
- * Raised from 0.001. At 0.001 a column needs only one distinct value per thousand
- * rows to qualify, which every status, type and category column in a large table
- * clears comfortably.
- */
-const MIN_UNIQUENESS_RATIO = 0.02;
 
 // ─── Embedding-input sample caps ─────────────────────────────────────────────
 /** At most this many sample values are appended to a column's embedding text. */
@@ -320,7 +312,6 @@ function prefilter(state: DatabaseDocumentation, config: OrganicKeyDetectionConf
                 if (AUDIT_COLUMN_PATTERN.test(col.name)) continue;
                 if (col.statistics) {
                     const distinct = col.statistics.distinctCount ?? 0;
-                    const ratio = col.statistics.uniquenessRatio ?? 0;
                     // Drop low-cardinality / categorical columns.
                     //
                     // This was `distinct < MIN && ratio < MIN` — a conjunction, so a
@@ -334,9 +325,15 @@ function prefilter(state: DatabaseDocumentation, config: OrganicKeyDetectionConf
                     //     ratio=0.0014 (fails at the old floor) but distinct=33
                     //     (passes at the old floor of 10), so it is KEPT.
                     //
-                    // Both are categorical. A column must clear BOTH floors to count as
-                    // identity-bearing, so the correct operator is OR on the drop.
-                    if (distinct < MIN_DISTINCT_FOR_KEY || ratio < MIN_UNIQUENESS_RATIO) continue;
+                    // Both are categorical, and both have too few distinct values to identify
+                    // anything, so the distinct floor alone drops them.
+                    //
+                    // The uniqueness ratio is not a gate. It is distinct over ALL rows, so it
+                    // reads low for exactly the columns organic keys need as spokes: an
+                    // attendance table with 40,000 members over 2.5M rows has a ratio of 0.016
+                    // on its member_email column, which repeats because each member has many
+                    // rows, not because it is a category.
+                    if (distinct < MIN_DISTINCT_FOR_KEY) continue;
                 }
                 out.push({
                     schema: schema.name,
@@ -533,7 +530,7 @@ function resolveEmbeddingProvider(
  * The selectivity gate is the cheapest and highest-volume filter in the pipeline and is
  * worth pinning directly rather than through a run that needs an LLM and an embedder.
  */
-export const TestHooks = { prefilter, MIN_DISTINCT_FOR_KEY, MIN_UNIQUENESS_RATIO };
+export const TestHooks = { prefilter, MIN_DISTINCT_FOR_KEY };
 
 function emptyResult(columnsInScope: number): SemanticPhaseResult {
     return {

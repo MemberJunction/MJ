@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { compose } from '../discovery/Composer.js';
 import { KeyVerifier } from '../discovery/JoinProbe.js';
-import { BaseAutoDocDriver, DriverProbeOutcome } from '../drivers/BaseAutoDocDriver.js';
-import { OrganicKeyCluster, OrganicKeyClusterMember } from '../types/organic-keys.js';
+import { BaseAutoDocDriver, DriverProbeOutcome, ProbeNormalizationPair } from '../drivers/BaseAutoDocDriver.js';
+import { OrganicKeyCluster, OrganicKeyClusterMember, OrganicKeyNormalizationStrategy } from '../types/organic-keys.js';
 
 interface ProbeOnlyDriver {
     ProbeJoinContainment(
@@ -10,6 +10,7 @@ interface ProbeOnlyDriver {
         parent: { Schema: string; Table: string; Column: string },
         sampleSize: number,
         timeoutMs: number,
+        normalization?: ProbeNormalizationPair,
     ): Promise<DriverProbeOutcome>;
 }
 
@@ -17,16 +18,18 @@ interface ProbeOnlyDriver {
 function driverFor(
     byChild: Record<string, DriverProbeOutcome>,
     fallback: DriverProbeOutcome = { Ok: true, SampledValues: 100, MatchedValues: 100 },
-): { driver: BaseAutoDocDriver; probed: string[] } {
+): { driver: BaseAutoDocDriver; probed: string[]; normalizations: Array<ProbeNormalizationPair | undefined> } {
     const probed: string[] = [];
+    const normalizations: Array<ProbeNormalizationPair | undefined> = [];
     const impl: ProbeOnlyDriver = {
-        ProbeJoinContainment: async (child) => {
+        ProbeJoinContainment: async (child, _parent, _sampleSize, _timeoutMs, normalization) => {
             const key = `${child.Schema}.${child.Table}.${child.Column}`;
             probed.push(key);
+            normalizations.push(normalization);
             return byChild[key] ?? fallback;
         },
     };
-    return { driver: impl as unknown as BaseAutoDocDriver, probed };
+    return { driver: impl as unknown as BaseAutoDocDriver, probed, normalizations };
 }
 
 function member(schema: string, table: string, column: string, isPrimaryKey = false): OrganicKeyClusterMember {
@@ -110,6 +113,42 @@ describe('compose — value-overlap gate on emit (MJC-75, MJC-79)', () => {
         expect(r.DroppedMembers).toBe(0);
         expect(r.Verification[0].Results[0].status).toBe('Unprobed');
         expect(r.Verification[0].Results[0].reason).toContain('not comparable');
+    });
+
+    it('probes each member with its match-time normalization, falling back to the cluster\'s', async () => {
+        // An email key matched with LowerCaseTrim must not be measured case-sensitively:
+        // on PostgreSQL a mixed-case hub against a lower-cased spoke measured 0 of 1000
+        // and the key was dropped.
+        const withNorm = (m: OrganicKeyClusterMember, n: OrganicKeyNormalizationStrategy): OrganicKeyClusterMember =>
+            ({ ...m, normalizationStrategy: n });
+        const c: OrganicKeyCluster = {
+            ...cluster('cluster_n', 'email_address', [
+                withNorm(member('crm', 'member', 'email', true), 'Trim'),
+                member('events', 'registration', 'email'),
+            ]),
+            normalization: 'LowerCaseTrim',
+        };
+        const { driver, normalizations } = driverFor({});
+        await compose([c], [], new KeyVerifier(driver));
+
+        expect(normalizations).toEqual([{ Child: 'LowerCaseTrim', Parent: 'Trim' }]);
+    });
+
+    it('KEEPS a member whose key needs a Custom normalization, as Unprobed', async () => {
+        const c: OrganicKeyCluster = {
+            ...cluster('cluster_c', 'phone_number', [
+                member('crm', 'phone_owner', 'phone', true),
+                member('events', 'call_log', 'phone'),
+            ]),
+            normalization: 'Custom',
+            customNormalizationExpression: "REPLACE({{FieldName}}, '-', '')",
+        };
+        const { driver, probed } = driverFor({}, MATCHES_NOTHING);
+        const r = await compose([c], [], new KeyVerifier(driver));
+
+        expect(probed).toEqual([]);
+        expect(r.Emitted).toBe(1);
+        expect(r.Verification[0].Results[0].status).toBe('Unprobed');
     });
 
     it('probes against a PK anchor when the cluster has one, N-1 times not N²', async () => {

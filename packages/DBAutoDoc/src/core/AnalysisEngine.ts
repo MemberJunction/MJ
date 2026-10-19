@@ -1598,16 +1598,6 @@ export class AnalysisEngine {
         continue;
       }
 
-      if (existingPK && existingPK.status !== 'confirmed') {
-        // PK exists but isn't confirmed — LLM suggesting it's an FK is evidence
-        // that the PK detection was wrong. Reject the PK.
-        existingPK.status = 'rejected';
-        feedback.affectedCandidates.push(`PK:${schemaName}.${tableName}.${columnName}`);
-        const column = this.findColumnInState(state, schemaName, tableName, columnName);
-        if (column) column.isPrimaryKey = false;
-        console.log(`[AnalysisEngine] FK from LLM: ${schemaName}.${tableName}.${columnName} -> ${referencesSchema}.${referencesTable}, rejecting unconfirmed PK`);
-      }
-
       // ── Verify the proposed join before anything is confirmed ────────────────
       //
       // This is the gate that was missing. The statistical path (FKDetector) probes
@@ -1632,7 +1622,9 @@ export class AnalysisEngine {
       if (probe.Status === 'Refuted') {
         // Measured, not assumed: the probe ran and the join matches (near) nothing.
         // Dropping it here is the only place it can be dropped — once the column is
-        // stamped, the introspected-FK path emits it with no gate to fail.
+        // stamped, the introspected-FK path emits it with no gate to fail. It runs
+        // before the PK block below, so a refuted proposal is not evidence against a
+        // PK candidate either.
         console.log(`[AnalysisEngine] Rejecting LLM FK — probe refuted: ${schemaName}.${tableName}.${columnName} -> ${referencesSchema}.${referencesTable}.${referencesColumn} (${probe.Reason})`);
         this.onProgress(
           `Rejected LLM-proposed FK ${schemaName}.${tableName}.${columnName} → ${referencesTable}.${referencesColumn}: ${probe.Reason}`,
@@ -1646,6 +1638,16 @@ export class AnalysisEngine {
       // total key loss with no signal. It proceeds STAMPED, so a consumer can tell a
       // checked key from an unchecked one.
       const verificationStamp = StampFor('LLM', probe);
+
+      if (existingPK && existingPK.status !== 'confirmed') {
+        // PK exists but isn't confirmed — LLM suggesting it's an FK is evidence
+        // that the PK detection was wrong. Reject the PK.
+        existingPK.status = 'rejected';
+        feedback.affectedCandidates.push(`PK:${schemaName}.${tableName}.${columnName}`);
+        const column = this.findColumnInState(state, schemaName, tableName, columnName);
+        if (column) column.isPrimaryKey = false;
+        console.log(`[AnalysisEngine] FK from LLM: ${schemaName}.${tableName}.${columnName} -> ${referencesSchema}.${referencesTable}, rejecting unconfirmed PK`);
+      }
 
       // Check if we already have this FK - boost confidence
       const existingFK = discoveryPhase.discovered.foreignKeys.find(fk =>

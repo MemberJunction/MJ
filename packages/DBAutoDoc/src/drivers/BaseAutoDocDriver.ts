@@ -42,6 +42,21 @@ export type DriverProbeOutcome =
     };
 
 /**
+ * How a probe compares values: the same comparison the emitted key will use at match time.
+ *
+ * A subset of the organic-key normalization strategies. `Custom` is deliberately absent: its
+ * expression is model-written SQL, so a probe does not execute it, and a candidate that needs
+ * it is reported as Unprobed before it reaches a driver.
+ */
+export type ProbeNormalization = 'ExactMatch' | 'Trim' | 'LowerCaseTrim';
+
+/** The normalization applied to each side of a probe. Both default to `ExactMatch`. */
+export interface ProbeNormalizationPair {
+  Child: ProbeNormalization;
+  Parent: ProbeNormalization;
+}
+
+/**
  * Abstract base class for database drivers
  * All provider-specific implementations must extend this class
  */
@@ -244,12 +259,17 @@ export abstract class BaseAutoDocDriver {
    * Unlike {@link testValueOverlap}, a failure is reported as `{ ok: false, reason }`
    * rather than as zero overlap, so a caller can tell a join that matches nothing
    * from a join it was unable to evaluate. Implementations must not throw.
+   *
+   * `normalization` is applied to each side before comparing, so a key whose runtime
+   * match lower-cases or trims its values is measured the same way. Omitted means
+   * `ExactMatch` on both sides.
    */
   public abstract ProbeJoinContainment(
     child: { Schema: string; Table: string; Column: string },
     parent: { Schema: string; Table: string; Column: string },
     sampleSize: number,
-    timeoutMs: number
+    timeoutMs: number,
+    normalization?: ProbeNormalizationPair
   ): Promise<DriverProbeOutcome>;
 
   /**

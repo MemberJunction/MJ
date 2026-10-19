@@ -13,7 +13,7 @@
  * table-PK noise out of view without losing the underlying candidates.
  */
 
-import { OrganicKeyCluster, OrganicKeyClusterMember, memberColumns } from '../types/organic-keys.js';
+import { OrganicKeyCluster, OrganicKeyClusterMember, OrganicKeyNormalizationStrategy, memberColumns } from '../types/organic-keys.js';
 import {
     DetectedOrganicKeysOutput,
     TransitiveSpokeInput,
@@ -88,7 +88,9 @@ export async function Compose(
     //
     // Each member is probed against ONE anchor rather than against every other
     // member: N-1 probes per cluster instead of N², and it tests the cluster's actual
-    // claim, since sharing a value space is transitive through the anchor. The anchor
+    // claim, since sharing a value space is transitive through the anchor. Both sides
+    // are normalized as the emitted key will normalize them, so an email key matched
+    // with LowerCaseTrim is not refuted for differing in case. The anchor
     // is a PK member when the cluster has one (a PK is the canonical, unique value
     // space), otherwise the first member.
     const { clusters: annotated, verification, droppedMembers } =
@@ -163,6 +165,14 @@ function pickAnchorMember(members: OrganicKeyClusterMember[]): OrganicKeyCluster
 }
 
 /**
+ * The strategy a member's values are compared with at match time: its own, else the
+ * cluster's. The same fallback the translator writes into the emitted key.
+ */
+function matchNormalization(m: OrganicKeyClusterMember, cluster: OrganicKeyCluster): OrganicKeyNormalizationStrategy {
+    return m.normalizationStrategy ?? cluster.normalization;
+}
+
+/**
  * Drop cluster members whose values do not overlap the anchor's, and drop any cluster
  * left with fewer than two members or spanning fewer than two tables.
  *
@@ -207,6 +217,10 @@ async function verifyClusters(
             const probe = await verifier.Verify({
                 Child: { Schema: member.schema, Table: member.table, Column: member.column },
                 Parent: { Schema: anchorMember.schema, Table: anchorMember.table, Column: anchorMember.column },
+                Normalization: {
+                    Child: matchNormalization(member, cluster),
+                    Parent: matchNormalization(anchorMember, cluster),
+                },
             });
             results.push({ member: memberLabel(member), status: probe.Status, reason: probe.Reason });
             if (probe.Status === 'Refuted') {

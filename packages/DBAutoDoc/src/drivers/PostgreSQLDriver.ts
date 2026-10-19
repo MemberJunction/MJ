@@ -5,7 +5,7 @@
 
 import { Pool, PoolClient, PoolConfig } from 'pg';
 import { RegisterClass } from '@memberjunction/global';
-import { BaseAutoDocDriver, DriverProbeOutcome } from './BaseAutoDocDriver.js';
+import { BaseAutoDocDriver, DriverProbeOutcome, ProbeNormalization, ProbeNormalizationPair } from './BaseAutoDocDriver.js';
 import { DescribeProbeFailure, ExtractSqlState } from './probeErrors.js';
 import { POSTGRESQL_INDEX_QUERY, PostgreSQLIndexRow, MapPostgreSQLIndexRows } from './IndexCatalog.js';
 import {
@@ -936,12 +936,17 @@ export class PostgreSQLDriver extends BaseAutoDocDriver {
    *  - **`statement_timeout`** is set on a dedicated client and reset in `finally`,
    *    so a slow probe is abandoned server-side instead of stalling the run, and
    *    the setting never leaks back into the pool.
+   *
+   * Each side is normalized as the key will be at match time (see {@link probeValueExpression}).
+   * PostgreSQL compares text case-sensitively, so without this an email key normalized with
+   * `LowerCaseTrim` measures 0% whenever one side stores mixed case.
    */
   public async ProbeJoinContainment(
     child: { Schema: string; Table: string; Column: string },
     parent: { Schema: string; Table: string; Column: string },
     sampleSize: number,
-    timeoutMs: number
+    timeoutMs: number,
+    normalization: ProbeNormalizationPair = { Child: 'ExactMatch', Parent: 'ExactMatch' }
   ): Promise<DriverProbeOutcome> {
     let client: PoolClient | null = null;
     try {
@@ -957,13 +962,13 @@ export class PostgreSQLDriver extends BaseAutoDocDriver {
       const parentCol = this.escapeIdentifier(parent.Column);
       const query = `
         WITH child_sample AS (
-          SELECT DISTINCT ${childCol}::text AS v
+          SELECT DISTINCT ${this.probeValueExpression(childCol, normalization.Child)} AS v
           FROM ${this.escapeIdentifier(child.Schema)}.${this.escapeIdentifier(child.Table)}
           WHERE ${childCol} IS NOT NULL
           LIMIT ${Math.max(1, Math.floor(sampleSize))}
         ),
         parent_values AS (
-          SELECT DISTINCT ${parentCol}::text AS v
+          SELECT DISTINCT ${this.probeValueExpression(parentCol, normalization.Parent)} AS v
           FROM ${this.escapeIdentifier(parent.Schema)}.${this.escapeIdentifier(parent.Table)}
           WHERE ${parentCol} IS NOT NULL
         )
@@ -995,6 +1000,19 @@ export class PostgreSQLDriver extends BaseAutoDocDriver {
         }
         client.release();
       }
+    }
+  }
+
+  /** A probe side's value as text, with the key's match-time normalization applied. */
+  private probeValueExpression(column: string, normalization: ProbeNormalization): string {
+    const asText = `${column}::text`;
+    switch (normalization) {
+      case 'LowerCaseTrim':
+        return `lower(btrim(${asText}))`;
+      case 'Trim':
+        return `btrim(${asText})`;
+      case 'ExactMatch':
+        return asText;
     }
   }
 

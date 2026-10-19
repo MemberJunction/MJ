@@ -3,7 +3,7 @@ import { TestHooks } from '../discovery/SemanticPhase.js';
 import { DatabaseDocumentation } from '../types/state.js';
 import { OrganicKeyDetectionConfig } from '../types/config.js';
 
-const { prefilter, MIN_DISTINCT_FOR_KEY, MIN_UNIQUENESS_RATIO } = TestHooks;
+const { prefilter, MIN_DISTINCT_FOR_KEY } = TestHooks;
 
 interface ColSpec {
     name: string;
@@ -92,7 +92,7 @@ describe('selectivity prefilter — the conjunction bug (MJC-74)', () => {
         expect(keptColumns(state)).toEqual([]);
     });
 
-    it('keeps a genuinely identity-bearing column that clears both floors', () => {
+    it('keeps a genuinely identity-bearing column', () => {
         // 41,115 distinct over 41,115 rows: ratio 1.0. A real key must survive — a gate
         // that drops everything is not an improvement over a gate that drops nothing.
         const state = stateWith([
@@ -105,34 +105,50 @@ describe('selectivity prefilter — the conjunction bug (MJC-74)', () => {
         expect(keptColumns(state)).toEqual(['cust_id']);
     });
 
-    it('requires BOTH floors, not either', () => {
+    it('drops on the distinct floor, whatever the ratio', () => {
         const state = stateWith([
             {
                 schema: 's',
                 table: 't',
                 columns: [
-                    // distinct ok (60 >= 50), ratio too low (0.006) -> dropped
-                    { name: 'high_distinct_low_ratio', distinctCount: 60, totalRows: 10000 },
-                    // ratio ok (0.5), distinct too low (5 < 50) -> dropped
+                    // ratio high (0.5), distinct too low (5 < 50) -> dropped
                     { name: 'high_ratio_low_distinct', distinctCount: 5, totalRows: 10 },
-                    // both ok -> kept
+                    // distinct ok (60 >= 50), ratio low (0.006) -> kept; the normalizer's
+                    // isUsefulOrganicKey judgement and the join probe decide the rest
+                    { name: 'high_distinct_low_ratio', distinctCount: 60, totalRows: 10000 },
                     { name: 'real_key', distinctCount: 900, totalRows: 1000 },
                 ],
             },
         ]);
-        expect(keptColumns(state)).toEqual(['real_key']);
+        expect(keptColumns(state)).toEqual(['high_distinct_low_ratio', 'real_key']);
     });
 
-    it('the raised thresholds are the documented ones', () => {
+    it('keeps a spoke column on a large activity table, whose values repeat per member', () => {
+        // 40,000 members over 2.5M attendance rows: ratio 0.016. The column repeats because
+        // each member has many rows, not because it is a category. A 2% ratio floor dropped
+        // it, and with it the busiest spokes organic keys exist to find.
+        const state = stateWith([
+            {
+                schema: 'events',
+                table: 'attendance',
+                columns: [
+                    { name: 'member_email', distinctCount: 40000, totalRows: 2500000 },
+                    { name: 'status', distinctCount: 4, totalRows: 2500000 },
+                ],
+            },
+        ]);
+        expect(keptColumns(state)).toEqual(['member_email']);
+    });
+
+    it('the raised threshold is the documented one', () => {
         expect(MIN_DISTINCT_FOR_KEY).toBe(50);
-        expect(MIN_UNIQUENESS_RATIO).toBe(0.02);
     });
 
-    it('a column exactly on both floors is kept, not dropped', () => {
+    it('a column exactly on the floor is kept, not dropped', () => {
         const state = stateWith([
             { schema: 's', table: 't', columns: [{ name: 'edge', distinctCount: 50, totalRows: 2500 }] },
         ]);
-        // 50 distinct, ratio exactly 0.02 — the comparison is `<`, so the boundary is inclusive.
+        // 50 distinct — the comparison is `<`, so the boundary is inclusive.
         expect(keptColumns(state)).toEqual(['edge']);
     });
 

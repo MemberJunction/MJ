@@ -8,6 +8,7 @@ import { PromptEngine } from '../prompts/PromptEngine.js';
 import { StateManager } from '../state/StateManager.js';
 import { IterationTracker } from '../state/IterationTracker.js';
 import { ForeignKeyPromptResult } from '../types/prompts.js';
+import { PKCandidate } from '../types/discovery.js';
 import { AdditionalSchemaInfoGenerator } from '../generators/AdditionalSchemaInfoGenerator.js';
 
 /**
@@ -322,5 +323,61 @@ describe('AnalysisEngine — an LLM-proposed FK is probed before it is confirmed
         ]);
 
         expect(state.phases.keyDetection?.discovered.foreignKeys).toEqual([]);
+    });
+});
+
+describe('AnalysisEngine — an LLM-proposed FK and an unconfirmed PK on the same column', () => {
+    /** acgi.address.cust_id is an unconfirmed PK candidate, and the LLM proposes it as an FK. */
+    function stateWithPKCandidate(): DatabaseDocumentation {
+        const state = acgiState();
+        const address = state.schemas[0].tables.find((t) => t.name === 'address');
+        const custId = address?.columns.find((c) => c.name === 'cust_id');
+        if (custId) custId.isPrimaryKey = true;
+        state.phases.keyDetection?.discovered.primaryKeys.push({
+            schemaName: 'acgi',
+            tableName: 'address',
+            columnNames: ['cust_id'],
+            confidence: 70,
+            discoveredInIteration: 1,
+            validatedByLLM: false,
+            status: 'candidate',
+        } as unknown as PKCandidate);
+        return state;
+    }
+
+    function custIdState(state: DatabaseDocumentation): { pkStatus: string | undefined; isPrimaryKey: boolean | undefined } {
+        const address = state.schemas[0].tables.find((t) => t.name === 'address');
+        return {
+            pkStatus: state.phases.keyDetection?.discovered.primaryKeys[0]?.status,
+            isPrimaryKey: address?.columns.find((c) => c.name === 'cust_id')?.isPrimaryKey,
+        };
+    }
+
+    it('a refuted FK leaves the PK candidate alone', async () => {
+        // The PK-rejection block used to run before the probe, so a proposal the probe then
+        // refuted at 0 of 1000 had already demoted the PK it contradicted.
+        const state = stateWithPKCandidate();
+        const { driver } = driverFor({ 'acgi.customer.record_key': MATCHES_NOTHING });
+        const { sink } = engineWith(new KeyVerifier(driver));
+
+        await sink.processFKInsightsFromLLM(state, 'acgi', 'address', [
+            insight('cust_id', 'customer', 'record_key'),
+        ]);
+
+        expect(custIdState(state)).toEqual({ pkStatus: 'candidate', isPrimaryKey: true });
+        expect(state.phases.keyDetection?.discovered.foreignKeys).toEqual([]);
+    });
+
+    it('a verified FK still rejects the unconfirmed PK, as before', async () => {
+        const state = stateWithPKCandidate();
+        const { driver } = driverFor({});
+        const { sink } = engineWith(new KeyVerifier(driver));
+
+        await sink.processFKInsightsFromLLM(state, 'acgi', 'address', [
+            insight('cust_id', 'customer', 'record_key'),
+        ]);
+
+        expect(custIdState(state)).toEqual({ pkStatus: 'rejected', isPrimaryKey: false });
+        expect(state.phases.keyDetection?.discovered.foreignKeys.length).toBe(1);
     });
 });

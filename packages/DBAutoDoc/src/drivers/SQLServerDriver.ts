@@ -5,7 +5,7 @@
 
 import sql from 'mssql';
 import { RegisterClass } from '@memberjunction/global';
-import { BaseAutoDocDriver, DriverProbeOutcome } from './BaseAutoDocDriver.js';
+import { BaseAutoDocDriver, DriverProbeOutcome, ProbeNormalization, ProbeNormalizationPair } from './BaseAutoDocDriver.js';
 import { DescribeProbeFailure, ExtractSqlState } from './probeErrors.js';
 import { BuildSQLServerIndexQuery, SQLServerIndexRow, MapSQLServerIndexRows } from './IndexCatalog.js';
 import {
@@ -884,12 +884,15 @@ export class SQLServerDriver extends BaseAutoDocDriver {
    * differs from PostgreSQL's and would make the same schema probe differently on
    * the two engines. `LOCK_TIMEOUT` plus a query-level `OPTION (MAXDOP 1)` keep one
    * probe from becoming the run's dominant cost.
+   *
+   * Each side is normalized as the key will be at match time (see {@link probeValueExpression}).
    */
   public async ProbeJoinContainment(
     child: { Schema: string; Table: string; Column: string },
     parent: { Schema: string; Table: string; Column: string },
     sampleSize: number,
-    timeoutMs: number
+    timeoutMs: number,
+    normalization: ProbeNormalizationPair = { Child: 'ExactMatch', Parent: 'ExactMatch' }
   ): Promise<DriverProbeOutcome> {
     try {
       if (!this.pool) {
@@ -905,12 +908,12 @@ export class SQLServerDriver extends BaseAutoDocDriver {
         SET LOCK_TIMEOUT ${Math.max(1, Math.floor(timeoutMs))};
         WITH ChildSample AS (
           SELECT DISTINCT TOP ${Math.max(1, Math.floor(sampleSize))}
-            CAST(${childCol} AS NVARCHAR(4000)) AS v
+            ${this.probeValueExpression(childCol, normalization.Child)} AS v
           FROM ${this.escapeIdentifier(child.Schema)}.${this.escapeIdentifier(child.Table)}
           WHERE ${childCol} IS NOT NULL
         ),
         ParentValues AS (
-          SELECT DISTINCT CAST(${parentCol} AS NVARCHAR(4000)) AS v
+          SELECT DISTINCT ${this.probeValueExpression(parentCol, normalization.Parent)} AS v
           FROM ${this.escapeIdentifier(parent.Schema)}.${this.escapeIdentifier(parent.Table)}
           WHERE ${parentCol} IS NOT NULL
         )
@@ -946,6 +949,22 @@ export class SQLServerDriver extends BaseAutoDocDriver {
       };
     } catch (error) {
       return { Ok: false, Reason: DescribeProbeFailure(error), Code: ExtractSqlState(error) };
+    }
+  }
+
+  /**
+   * A probe side's value as `NVARCHAR(4000)`, with the key's match-time normalization applied.
+   * `LTRIM(RTRIM())` rather than `TRIM()`, which needs SQL Server 2017.
+   */
+  private probeValueExpression(column: string, normalization: ProbeNormalization): string {
+    const asText = `CAST(${column} AS NVARCHAR(4000))`;
+    switch (normalization) {
+      case 'LowerCaseTrim':
+        return `LOWER(LTRIM(RTRIM(${asText})))`;
+      case 'Trim':
+        return `LTRIM(RTRIM(${asText}))`;
+      case 'ExactMatch':
+        return asText;
     }
   }
 

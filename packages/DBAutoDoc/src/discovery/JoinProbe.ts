@@ -56,7 +56,8 @@
  * out of ignorance, and it never claims a verification it did not perform.
  */
 
-import { BaseAutoDocDriver, DriverProbeOutcome } from '../drivers/BaseAutoDocDriver.js';
+import { BaseAutoDocDriver, DriverProbeOutcome, ProbeNormalizationPair } from '../drivers/BaseAutoDocDriver.js';
+import { OrganicKeyNormalizationStrategy } from '../types/organic-keys.js';
 import { KeyProvenance, KeyVerificationStamp, KeyVerificationStatus } from '../types/discovery.js';
 import { KeyVerificationConfig } from '../types/config.js';
 
@@ -93,6 +94,13 @@ export interface ColumnRef {
 export interface KeyCandidate {
     Child: ColumnRef;
     Parent: ColumnRef;
+    /**
+     * How each side's values are compared at match time. Omitted means exact on both
+     * sides, which is right for a foreign key. An organic key passes its members'
+     * strategies, so a key matched case-insensitively is not measured case-sensitively.
+     * `Custom` is never probed: the result is Unprobed.
+     */
+    Normalization?: { Child: OrganicKeyNormalizationStrategy; Parent: OrganicKeyNormalizationStrategy };
 }
 
 /** Resolved defaults for {@link KeyVerificationConfig}. */
@@ -126,7 +134,12 @@ function refRefersToSame(a: ColumnRef, b: ColumnRef): boolean {
 /** Stable cache key for an edge, so the same candidate is never probed twice in a run. */
 export function CandidateKey(c: KeyCandidate): string {
     const f = (r: ColumnRef) => `${r.Schema}.${r.Table}.${r.Column}`.toLowerCase();
-    return `${f(c.Child)}->${f(c.Parent)}`;
+    const edgeKey = `${f(c.Child)}->${f(c.Parent)}`;
+    // Exact on both sides is the same probe whether or not the candidate spelled it out, so
+    // an organic edge and an FK edge over the same columns share one measurement.
+    const n = c.Normalization;
+    const exact = !n || (n.Child === 'ExactMatch' && n.Parent === 'ExactMatch');
+    return exact ? edgeKey : `${edgeKey}|${n.Child}/${n.Parent}`;
 }
 
 /**
@@ -205,6 +218,12 @@ export class KeyVerifier {
         if (refRefersToSame(candidate.Child, candidate.Parent)) {
             return unprobed('child and parent are the same column', probedAt);
         }
+        const normalization = probeNormalizationFor(candidate);
+        if (!normalization) {
+            // The expression is model-written SQL; the probe does not execute it, and a raw
+            // comparison would measure a different join than the one that will run.
+            return unprobed('custom normalization expression is not probed', probedAt);
+        }
         if (this.probesUsed >= this.cfg.maxProbes) {
             return unprobed(
                 `probe budget exhausted (${this.cfg.maxProbes} probes used); candidate not verified`,
@@ -218,6 +237,7 @@ export class KeyVerifier {
             candidate.Parent,
             this.cfg.sampleSize,
             this.cfg.probeTimeoutMs,
+            normalization,
         );
 
         if (outcome.Ok !== true) {
@@ -271,6 +291,17 @@ export function StampFor(
         SampledRows: result.Containment ? result.Containment.SampledValues : null,
         VerificationNote: result.Reason,
     };
+}
+
+/**
+ * The driver-side normalization for a candidate, or null when either side needs a `Custom`
+ * expression the probe will not run.
+ */
+function probeNormalizationFor(candidate: KeyCandidate): ProbeNormalizationPair | null {
+    const n = candidate.Normalization;
+    if (!n) return { Child: 'ExactMatch', Parent: 'ExactMatch' };
+    if (n.Child === 'Custom' || n.Parent === 'Custom') return null;
+    return { Child: n.Child, Parent: n.Parent };
 }
 
 function unprobed(reason: string, probedAt: string): JoinProbeResult {
