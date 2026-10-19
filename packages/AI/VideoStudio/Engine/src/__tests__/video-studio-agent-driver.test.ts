@@ -1917,7 +1917,35 @@ describe('VideoStudioAgent driver lifecycle', () => {
         });
         expect(mockVideoStudioEngineInstance.GetArchetypeByName).not.toHaveBeenCalled();
     });
+
+    it('(18) restores stripped format keys (e.g. LayoutNotes: {"16": ...}) in ApplyStageResult so G2 passes', () => {
+        const agent = createAgent();
+        const spec = CreateDeliveredSpecFixture();
+        spec.Interaction.Mode = 'Autonomous';
+        spec.Film.Formats = ['16:9'];
+        spec.Deliverables.Formats = ['16:9'];
+        spec.Beats = spec.Beats.map((beat) => ({
+            ...beat,
+            LayoutNotes: {
+                '16': beat.LayoutNotes['16:9'] ?? 'Centered metric layout',
+            } as unknown as Record<'16:9' | '9:16' | '1:1', string>,
+        }));
+
+        const params = {
+            payload: spec,
+            conversationMessages: [],
+        } as unknown as ExecuteAgentParams<Partial<VideoGenerationSpec>>;
+
+        const afterStoryboard = agent.ApplyStageResult(params, 'Video Studio - Storyboard', spec);
+        for (const beat of afterStoryboard.Beats ?? []) {
+            expect(beat.LayoutNotes['16:9']).toBeDefined();
+            expect((beat.LayoutNotes as Record<string, unknown>)['16']).toBeUndefined();
+        }
+        const g2 = afterStoryboard.Review?.Gates.find((g) => g.Gate === 'G2');
+        expect(g2?.Status).toBe('Passed');
+    });
 });
+
 
 
 

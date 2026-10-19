@@ -24,6 +24,7 @@ import {
 import { EscapeSQLString, RegisterClass, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import {
     BuildGenerationProvenanceSummary,
+    RestoreStrippedFormatKeys,
     ValidateVideoGenerationSpec,
     VIDEO_INTERACTION_MODES,
     VIDEO_STUDIO_SPEC_VERSION,
@@ -312,6 +313,9 @@ export class VideoStudioAgent extends BaseAgent {
     ): Partial<VideoGenerationSpec> {
         const canonicalStage = resolveCanonicalStage(stageName) ?? stageName.trim();
         const cloned = structuredClone(payload ?? {});
+
+        // INTERIM: JSONValidator.CleanValidationSyntax strips ':' from keys (plan-notes 38)
+        RestoreStrippedFormatKeys(cloned);
 
         this.syncArchetypeId(cloned);
         this.syncDeliverableFormats(cloned);

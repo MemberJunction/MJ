@@ -719,9 +719,6 @@ export const VideoStudioProductionChecks: NamedCheck[] = [
             const actionResult = await ActionEngineServer.Instance.RunAction(params);
             await settle(SETTLE_MS);
 
-            AssertEqual(actionResult.Success, true, `VSP3: Produce Video action failed: ${actionResult.Message ?? 'unknown'}`);
-            AssertEqual(actionResult.ResultCode, 'SUCCESS', 'VSP3: Produce Video ResultCode');
-
             const getOut = (name: string): unknown =>
                 params.Params.find((p) => p.Name === name)?.Value;
 
@@ -740,6 +737,9 @@ export const VideoStudioProductionChecks: NamedCheck[] = [
             if (artifactVersionId) {
                 f.ArtifactVersionIDs.push(artifactVersionId);
             }
+
+            AssertEqual(actionResult.Success, true, `VSP3: Produce Video action failed: ${actionResult.Message ?? 'unknown'}`);
+            AssertEqual(actionResult.ResultCode, 'SUCCESS', 'VSP3: Produce Video ResultCode');
 
             Assert(Boolean(agentRunId), 'VSP3: AgentRunID output param must be populated');
             Assert(Boolean(artifactId), 'VSP3: ArtifactID output param must be populated');

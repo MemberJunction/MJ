@@ -1358,3 +1358,75 @@ function validateOutputSection(
     }
 }
 
+// INTERIM: JSONValidator.CleanValidationSyntax strips ':' from keys (plan-notes 38)
+const STRIPPED_FORMAT_KEY_PAIRS: ReadonlyArray<readonly [string, VideoFormat]> = [
+    ['16', '16:9'],
+    ['9', '9:16'],
+    ['1', '1:1'],
+];
+
+function restoreFormatKeyMap<M>(record: M): M {
+    if (!record || typeof record !== 'object') {
+        return record;
+    }
+    let target: Record<string, unknown>;
+    if (Array.isArray(record)) {
+        target = {};
+        for (const key of Object.keys(record)) {
+            const val = (record as unknown as Record<string, unknown>)[key];
+            if (val !== undefined) {
+                target[key] = val;
+            }
+        }
+    } else {
+        target = record as unknown as Record<string, unknown>;
+    }
+    for (const [strippedKey, fullKey] of STRIPPED_FORMAT_KEY_PAIRS) {
+        if (Object.prototype.hasOwnProperty.call(target, strippedKey)) {
+            if (!Object.prototype.hasOwnProperty.call(target, fullKey) || target[fullKey] === undefined) {
+                target[fullKey] = target[strippedKey];
+                delete target[strippedKey];
+            }
+        }
+    }
+    return target as unknown as M;
+}
+
+/**
+ * Restores format keys (`'16:9'`, `'9:16'`, `'1:1'`) whose `:<aspect>` suffix was stripped by
+ * `JSONValidator.CleanValidationSyntax` (`'16'` -> `'16:9'`, `'9'` -> `'9:16'`, `'1'` -> `'1:1'`).
+ * Also normalizes sparse arrays created when `PayloadManager.mergeUpstreamPayload` sets numeric
+ * stripped keys (`'16'`, `'9'`, `'1'`) via lodash `_.set`.
+ * Renames a stripped key only when the corresponding full format key is absent, covering
+ * `Style.Typography[].SizeByFormat`, `Beats[].LayoutNotes`, and `Output.Source`.
+ */
+// INTERIM: JSONValidator.CleanValidationSyntax strips ':' from keys (plan-notes 38)
+export function RestoreStrippedFormatKeys<T extends Partial<VideoGenerationSpec>>(spec: T): T {
+    if (!spec || typeof spec !== 'object') {
+        return spec;
+    }
+
+    if (Array.isArray(spec.Style?.Typography)) {
+        for (const typo of spec.Style.Typography) {
+            if (typo && typeof typo === 'object' && typo.SizeByFormat) {
+                typo.SizeByFormat = restoreFormatKeyMap(typo.SizeByFormat);
+            }
+        }
+    }
+
+    if (Array.isArray(spec.Beats)) {
+        for (const beat of spec.Beats) {
+            if (beat && typeof beat === 'object' && beat.LayoutNotes) {
+                beat.LayoutNotes = restoreFormatKeyMap(beat.LayoutNotes);
+            }
+        }
+    }
+
+    if (spec.Output && typeof spec.Output === 'object' && spec.Output.Source) {
+        spec.Output.Source = restoreFormatKeyMap(spec.Output.Source);
+    }
+
+    return spec;
+}
+
+

@@ -7,10 +7,11 @@ import type {
 } from '@memberjunction/ai-core-plus';
 import { LogError, type UserInfo } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
-import type {
-    CheckIssue,
-    VideoFormat,
-    VideoGenerationSpec,
+import {
+    RestoreStrippedFormatKeys,
+    type CheckIssue,
+    type VideoFormat,
+    type VideoGenerationSpec,
 } from '@memberjunction/video-studio-core';
 import { LoadDataSnapshotValues } from '../data/data-snapshot.js';
 import {
@@ -145,6 +146,29 @@ export class VideoStudioMotionEngineerAgent extends VideoStudioAgentBase {
             changeReq?.updateElements?.Output?.Source ??
             changeReq?.newElements?.Output?.Source;
         if (requestedSource && typeof requestedSource === 'object') {
+            // INTERIM: JSONValidator.CleanValidationSyntax strips ':' from keys (plan-notes 38)
+            const clonedRequested = structuredClone(requestedSource) as Record<string, unknown>;
+            const rawRequestedKeys = Object.keys(clonedRequested);
+            RestoreStrippedFormatKeys({
+                Output: {
+                    Videos: {},
+                    RenderMetadata: {
+                        Renderer: 'HyperFrames',
+                        RendererVersion: '',
+                        Seed: 0,
+                        Fps: 30,
+                        DurationByFormat: {},
+                        RenderedAt: '',
+                    },
+                    Source: clonedRequested as NonNullable<VideoGenerationSpec['Output']>['Source'],
+                },
+            });
+            const existingSource: Record<string, unknown> = { ...(workingSpec.Output?.Source ?? {}) };
+            for (const key of rawRequestedKeys) {
+                if (!Object.prototype.hasOwnProperty.call(clonedRequested, key)) {
+                    delete existingSource[key];
+                }
+            }
             workingSpec.Output = {
                 ...(workingSpec.Output ?? {
                     Videos: {},
@@ -158,11 +182,13 @@ export class VideoStudioMotionEngineerAgent extends VideoStudioAgentBase {
                     },
                 }),
                 Source: {
-                    ...(workingSpec.Output?.Source ?? {}),
-                    ...structuredClone(requestedSource),
-                },
+                    ...existingSource,
+                    ...clonedRequested,
+                } as NonNullable<VideoGenerationSpec['Output']>['Source'],
             };
         }
+        // INTERIM: JSONValidator.CleanValidationSyntax strips ':' from keys (plan-notes 38)
+        RestoreStrippedFormatKeys(workingSpec);
         const formats = ResolveDeliverableFormats(workingSpec);
 
         for (const fmt of formats) {
