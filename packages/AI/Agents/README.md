@@ -153,6 +153,16 @@ An agent can ask a fast decision model typed questions in six places on its own.
 
 Set it in an agent's `AgentTypePromptParams` (`{"decisionsEnabled": true, "finishIfMode": "shadow"}`) or for one run in `data.__agentTypePromptParams`. Uses someone placed explicitly do not read it: a Flow or task-graph Decision step, the Run Decision action, and other direct callers of `AgentDecisionService`. See the [Decision Models guide](./docs/loop-agent-decisions.md).
 
+##### Output Artifact Lifecycle (`artifactDirective`) & `_ARTIFACTS_ENABLED` Gating
+
+When an artifact-producing Loop agent finishes a turn (`taskComplete: true`), it controls whether its final payload creates a new artifact, versions an existing artifact in the conversation, or suppresses artifact creation via `artifactDirective: { behavior: 'create-new' | 'version-source' | 'suppress', targetArtifactId?, name?, description? }`:
+
+- **Default-on per-agent gating (`_ARTIFACTS_ENABLED`)**: `BaseAgent.isArtifactSupportEnabled(agent)` returns `true` unless `AIAgent.ArtifactCreationMode` is `'Never'` or `'System Only'`. The Loop Agent system prompt (`{% if _ARTIFACTS_ENABLED != false %}`) and `<mj-runtime-state>` automatically omit all `artifactDirective` instructions and the `_CONVERSATION_ARTIFACTS` catalog for non-artifact agents (such as `Sage` and `Knowledge Agent`), while enabling them by default for artifact-producing agents (`Query Builder`, `SkillSmith`, `Codesmith`, `Research Agent`, etc.).
+- **Full-conversation artifact targeting (`targetArtifactId`)**: `AgentRunner` loads the conversation's prior output artifacts into `_CONVERSATION_ARTIFACTS` so the agent can version any earlier artifact by `targetArtifactId` (not just the immediately preceding turn's artifact).
+- **Clean payload reset on `create-new`**: When `artifactDirective.behavior === 'create-new'` and the current payload is still the unmodified inherited payload from the prior conversation turn (`payload === params.payload`, even after read-only action steps) or `replaceElements` is used, `BaseAgent.executePromptStep` applies `payloadChangeRequest` against a fresh `{}` object so fields from a prior artifact never bleed into the new artifact.
+
+See the [Artifact Tools & Output Lifecycle Guide](./docs/ARTIFACT_TOOLS_GUIDE.md#output-artifact-lifecycle-artifactdirective--_artifacts_enabled-prompt-gating).
+
 #### FlowAgentType
 
 Step-based agent that follows a predefined flow graph — steps with explicit conditional paths between them. Best for deterministic workflows where the execution path is known in advance.
@@ -255,7 +265,8 @@ The browser-side driver layer lives in [`@memberjunction/ai-realtime-client`](..
 Manages data flow through agent execution:
 
 - Stores key-value data accessible across all steps and sub-agents
-- Supports typed payload changes requested by the LLM
+- Supports typed payload changes requested by the LLM (`newElements`, `updateElements`, `replaceElements`, `removeElements`)
+- Auto-corrects LLM output shape errors (`autoCorrectStrayKeys`), moving stray sibling keys into `newElements`/`updateElements` and automatically unwrapping common LLM wrapper aliases (`setFields`, `setElements`, `createElements`, `addElements`, `modifyElements`, `patchElements`, `updates`, `fields`, `set`, `add`) when the wrapper key does not exist on the payload and is not in `allowedPaths`
 - Validates and applies changes through PayloadChangeAnalyzer
 - Provides feedback to the LLM about successful/failed changes via PayloadFeedbackManager
 
@@ -592,6 +603,7 @@ Detailed guides are available in the [`docs/`](./docs/) directory:
 | Guide | Description |
 |---|---|
 | [Actions Guide](./docs/actions-guide.md) | Action discovery, execution, result lifecycle, expiration/compaction, context recovery |
+| [Artifact Tools & Output Lifecycle Guide](./docs/ARTIFACT_TOOLS_GUIDE.md) | Inbound artifact routing (`Inline` vs `ToolsOnly`), tool libraries, output `artifactDirective` lifecycle (`create-new`, `version-source`, `suppress`), `_ARTIFACTS_ENABLED` prompt gating, full-conversation artifact targeting, and `ArtifactType.ExtractRules` |
 | [Decision Models](./docs/loop-agent-decisions.md) | The `decisionsEnabled` master switch, then each automatic use: inline decisions, finishIf gates, discovery, the payload change check, catalog narrowing, the Memory Manager note gate |
 | [Prompt-Cache Performance and Cost Briefing](./docs/PROMPT_CACHE_PERFORMANCE_BRIEFING.md) | Before/after cached share and cost per model and topology for the trailing runtime-state layout; the action circuit breaker's before/after; what to re-measure |
 | [Agent Prompt Caching Guide](../../../guides/AGENT_PROMPT_CACHING_GUIDE.md) | Repo-level guide: the trailing-state layout, the `PrefixPromptCache` flag from the model catalog, the Anthropic breakpoint seam, specialization placement, the circuit breaker |
@@ -600,7 +612,7 @@ Detailed guides are available in the [`docs/`](./docs/) directory:
 | [Human-in-the-Loop](./docs/HUMAN_IN_THE_LOOP.md) | Feedback requests, assignment strategies, request lifecycle |
 | [Agent Memory Scoping](./docs/AGENT_MEMORY_SCOPING.md) | Multi-tenant memory (notes/examples) with UserScope support |
 | [Iterative Operations](./docs/guide-to-iterative-operations-in-agents.md) | ForEach and While loop patterns, parallel execution |
-| [State Management](./docs/state-management.md) | Payload management, agent type state |
+| [State Management](./docs/state-management.md) | Payload management, agent type state, stray-key & wrapper-alias recovery |
 | [Expression Context (PRD)](./docs/prd-expression-context-phase1.md) | Expression evaluation in agent contexts |
 | [Agent Profiles (Proposal)](./docs/agent-profiles-proposal.md) | Proposed agent profile system |
 | [Code Refactoring Notes](./docs/code-refactoring.md) | Internal refactoring notes |

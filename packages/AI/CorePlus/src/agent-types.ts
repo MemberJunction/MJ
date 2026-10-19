@@ -1029,6 +1029,14 @@ export interface InputArtifact {
     name: string;
     typeName: string;
     content: string | Buffer;
+    /** Optional MJ: Artifacts record ID (UUID) when backed by a persisted artifact. */
+    artifactId?: string;
+    /** Optional MJ: Artifact Versions record ID (UUID) when backed by a persisted artifact version. */
+    versionId?: string;
+    /** Optional 1-based version number on the parent artifact (e.g., 1, 2, 3). */
+    versionNumber?: number;
+    /** Optional human-readable description of the artifact or version. */
+    description?: string;
     /** MIME type of the artifact content (e.g., 'application/pdf').
      *  Populated for file-backed artifacts from ArtifactVersion.MimeType. */
     mimeType?: string;
