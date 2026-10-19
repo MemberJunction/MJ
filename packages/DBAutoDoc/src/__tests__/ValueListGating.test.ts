@@ -1,14 +1,14 @@
 import { describe, it, expect, vi } from 'vitest';
-import { Introspector } from '../database/Database.js';
+import { Introspector, DataSampler } from '../database/Database.js';
 import { BaseAutoDocDriver } from '../drivers/BaseAutoDocDriver.js';
 import { SQLServerDriver } from '../drivers/SQLServerDriver.js';
-import { AutoDocColumn, AutoDocSchema } from '../types/driver.js';
+import { AutoDocColumn, AutoDocColumnStatistics, AutoDocSchema } from '../types/driver.js';
 import { EnumCandidateGate } from '../discovery/EnumCandidateGate.js';
 import { AdditionalSchemaInfoGenerator } from '../generators/AdditionalSchemaInfoGenerator.js';
 import { ColumnDefinition, ColumnStatistics, DatabaseDocumentation, TableDefinition, ValueListVerdict } from '../types/state.js';
 import { AnalysisEngine } from '../core/AnalysisEngine.js';
 import { ColumnDescriptionPromptResult } from '../types/prompts.js';
-import { DBAutoDocConfig } from '../types/config.js';
+import { AnalysisConfig, DBAutoDocConfig } from '../types/config.js';
 import { PromptEngine } from '../prompts/PromptEngine.js';
 import { StateManager } from '../state/StateManager.js';
 import { IterationTracker } from '../state/IterationTracker.js';
@@ -112,9 +112,16 @@ describe('AdditionalSchemaInfoGenerator value lists', () => {
     expect(fields).toEqual([expect.objectContaining({ FieldName: 'Status', ValueListType: 'ListOrUserEntry', PossibleValues: ['Active', 'Archived'] })]);
   });
 
-  it('keeps a closed List when a CHECK constraint backs the column', () => {
-    const fields = emitted([column('Status', ['Active', 'Archived'], { checkConstraint: "Status IN ('Active','Archived')", valueListVerdict: verdict(['Active', 'Archived']) })]);
-    expect(fields[0].ValueListType).toBe('List');
+  it('emits ListOrUserEntry on a column whose CHECK is not a value list', () => {
+    // CHECK (Status <> '') allows any non-empty status; a closed list of the observed ones would reject valid rows.
+    const fields = emitted([column('Status', ['Active', 'Archived'], { checkConstraint: "([Status]<>'')", valueListVerdict: verdict(['Active', 'Archived']) })]);
+    expect(fields[0].ValueListType).toBe('ListOrUserEntry');
+  });
+
+  it('emits ListOrUserEntry on a value-list CHECK too, leaving the closed list to CodeGen', () => {
+    // Trimmed to observed values, a closed list would drop 'Urgent', which the CHECK allows.
+    const fields = emitted([column('Priority', ['Low', 'High'], { checkConstraint: "([Priority]='Urgent' OR [Priority]='High' OR [Priority]='Low')", valueListVerdict: verdict(['Low', 'High', 'Urgent']) })]);
+    expect(fields).toEqual([expect.objectContaining({ FieldName: 'Priority', ValueListType: 'ListOrUserEntry', PossibleValues: ['High', 'Low'] })]);
   });
 
   it('does not export a verdict stored in an older state file on a column the gate now rejects', () => {
@@ -188,5 +195,35 @@ describe('declared length (drivers report bare type names)', () => {
       ({ column_name, data_type, max_length, is_nullable: true, precision: 0, scale: 0, is_primary_key: false, is_foreign_key: false });
     vi.spyOn(driver, 'executeQuery').mockResolvedValue({ success: true, data: [row('a', 'nvarchar', 40), row('b', 'varchar', 40), row('c', 'nvarchar', -1), row('d', 'nchar', 10)] });
     expect((await driver.Columns()).map(c => c.maxLength)).toEqual([20, 40, undefined, 5]);
+  });
+});
+
+describe('DataSampler keeps the value distribution', () => {
+  // 1,000 rows: Active 900, Closed 90, Suspended 8, Archived 2. A 20-row random sample rarely shows the last two.
+  const stats: AutoDocColumnStatistics = {
+    totalRows: 1000, distinctCount: 4, uniquenessRatio: 0.004, nullCount: 0, nullPercentage: 0,
+    sampleValues: ['Active', 'Active', 'Closed', 'Active'],
+    valueDistribution: [
+      { value: 'Active', frequency: 900, percentage: 90 },
+      { value: 'Closed', frequency: 90, percentage: 9 },
+      { value: 'Suspended', frequency: 8, percentage: 0.8 },
+      { value: 'Archived', frequency: 2, percentage: 0.2 },
+    ],
+  };
+
+  async function sampled(): Promise<ColumnDefinition> {
+    const driver = { getColumnStatistics: async () => stats } as Partial<BaseAutoDocDriver> as BaseAutoDocDriver;
+    const col = column('status', null);
+    await new DataSampler(driver, { cardinalityThreshold: 20, sampleSize: 20 } as AnalysisConfig).AnalyzeTable('app', 'ticket', [col]);
+    return col;
+  }
+
+  it('copies every distinct value onto the column statistics', async () => {
+    expect((await sampled()).statistics?.valueDistribution?.map(v => v.value)).toEqual(['Active', 'Closed', 'Suspended', 'Archived']);
+  });
+
+  it('so the gate keeps a rare value the sample missed', async () => {
+    const kept = new EnumCandidateGate().FilterVerdictValues(await sampled(), 1000, ['Active', 'Closed', 'Suspended', 'Archived']);
+    expect(kept).toEqual(['Active', 'Closed', 'Suspended', 'Archived']);
   });
 });

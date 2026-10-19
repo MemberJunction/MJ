@@ -320,9 +320,11 @@ export class AdditionalSchemaInfoGenerator {
    * Unless a user approved the column, the verdict must also pass the enum candidate gate against
    * the column's statistics, and only values observed in the column are kept. That way, a state
    * file written before the gate existed does not export `__mj_*`, audit, year or GUID lists, or
-   * invented values. A list is closed (`List`) only when a CHECK constraint backs it or a user
-   * approved it; a list inferred from sampled data is `ListOrUserEntry`, since a sample cannot
-   * show that no other value exists.
+   * invented values. A list is closed (`List`) only when a user approved it; a list inferred from
+   * data is `ListOrUserEntry`, since the data cannot show that no other value is allowed. That holds
+   * for a column with a CHECK constraint too: CodeGen builds the closed list from a value-list
+   * CHECK itself, and a CHECK that is not a value list (e.g. `Status <> ''`) allows values the
+   * data does not hold.
    */
   private collectValueListFields(
     table: TableDefinition,
@@ -347,7 +349,7 @@ export class AdditionalSchemaInfoGenerator {
 
       fields.push({
         FieldName: col.name,
-        ValueListType: col.checkConstraint || col.userApproved ? verdict.type : 'ListOrUserEntry',
+        ValueListType: col.userApproved ? verdict.type : 'ListOrUserEntry',
         PossibleValues: sortedValues,
         Description: col.description ?? undefined,
         Confidence: Math.round(verdict.confidence * 100),
