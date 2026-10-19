@@ -247,6 +247,10 @@
                   </div>
                   <div class="workflow-subtitle">
                     <span>{{ WorkflowCompletedStepCount }} of {{ WorkflowSteps.length }} {{ WorkflowSteps.length === 1 ? 'step' : 'steps' }} complete</span>
+                    @if (WorkflowSkippedStepCount > 0) {
+                      <span class="workflow-dot">·</span>
+                      <span class="workflow-skipped-count">{{ WorkflowSkippedStepCount }} skipped (conditional)</span>
+                    }
                     <span class="workflow-dot">·</span>
                     <span>{{ WorkflowProgressPercent }}%</span>
                   </div>
@@ -280,6 +284,10 @@
                         <i class="fa-solid fa-check"></i>
                       } @else if (step.Status === 'Failed') {
                         <i class="fa-solid fa-xmark"></i>
+                      } @else if (step.Status === 'Skipped') {
+                        <i class="fa-solid fa-forward-step" title="Skipped (conditional prerequisite not met)"></i>
+                      } @else if (step.Status === 'Cancelled') {
+                        <i class="fa-solid fa-ban"></i>
                       } @else {
                         <span class="step-index-num">{{ idx + 1 }}</span>
                       }
@@ -302,7 +310,7 @@
                       </div>
                       <div class="workflow-step-meta">
                         @if (FormatWorkflowStepDuration(step); as stepDur) {
-                          <span class="workflow-step-duration">{{ stepDur }}</span>
+                          <span class="workflow-step-duration" [class.is-skipped]="step.Status === 'Skipped'">{{ stepDur }}</span>
                         }
                         @if (step.AgentRunID) {
                           <button type="button"

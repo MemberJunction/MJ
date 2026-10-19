@@ -168,4 +168,54 @@ describe('TaskGraphAgentRunner', () => {
         expect(outcome.ErrorMessage).toContain('User does not have permission to run agent "Restricted Agent"');
         expect(runAgent).not.toHaveBeenCalled();
     });
+
+    it('includes task Name and Description in prompt and preserves agentRun.Message when object payload lacks message/summary', async () => {
+        runAgent.mockResolvedValue({
+            success: true,
+            payload: {},
+            agentRun: {
+                ID: 'fb-run-1',
+                Message: 'Which entity would you like me to customize a form for?',
+                FinalStep: 'Chat',
+            },
+        });
+        const provider = {
+            GetEntityObject: vi.fn().mockImplementation(async (entityName: string) => {
+                if (entityName === 'MJ: AI Agents') {
+                    return { ID: 'qb-agent', Name: 'Form Builder', Load: vi.fn().mockResolvedValue(true) };
+                }
+                if (entityName === 'MJ: Tasks') {
+                    return {
+                        ID: 'task-fb-1',
+                        Name: 'Customize Orders Form',
+                        Description: 'Add a collapsible Customer Details section to the Orders form.',
+                        ConversationDetailID: 'detail-fb-1',
+                        ParentID: null,
+                        Load: vi.fn().mockResolvedValue(true),
+                    };
+                }
+                return { Load: vi.fn().mockResolvedValue(false) };
+            }),
+        } as unknown as IMetadataProvider;
+
+        const runner = new TaskGraphAgentRunner();
+        const outcome = await runner.RunAgentForTask({
+            TaskID: 'task-fb-1',
+            AgentID: 'qb-agent',
+            SubmittingAgentRunID: null,
+            InputPayload: { entityName: 'Orders' },
+            DependencyOutputs: new Map(),
+            Provider: provider,
+            ContextUser: { ID: 'user-1' } as UserInfo,
+        });
+
+        expect(outcome.Success).toBe(true);
+        const promptSent = runAgent.mock.calls[0][0].conversationMessages[0].content as string;
+        expect(promptSent).toContain('## Task: Customize Orders Form');
+        expect(promptSent).toContain('Add a collapsible Customer Details section to the Orders form.');
+        expect(outcome.Output).toEqual({
+            message: 'Which entity would you like me to customize a form for?',
+            finalStep: 'Chat',
+        });
+    });
 });

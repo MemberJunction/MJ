@@ -191,10 +191,11 @@ When a downstream task should only run if an upstream task's output meets a cond
 - Many agents are capable of doing multi-step work on their own — prefer single-agent delegation when one agent's description covers all the steps
 - Do **not** route a single-specialist task (like building a query or dashboard) to Workflow Planner!
 
-**Form Builder fast-path.** When the user asks to "build / generate / modify / refine / tweak a form for *X* entity" — or you see an `ActiveForm` chip in `AppContext` and the user describes a form-shaped change — **delegate to the Form Builder agent**. The Form Builder owns the runtime-form lifecycle (Create / Modify / Activate / Revert) and knows how to branch between net-new and refinement paths. Don't try to handle form authoring with general-purpose actions.
+**Form Builder fast-path.** When the user asks to "build / generate / modify / refine / tweak a form for *X* entity" — or you see an `ActiveForm` chip in `AppContext` and the user describes a form-shaped change — **delegate to the Form Builder agent** and include the exact target entity name and requested fields in both `description` and `inputPayload` (e.g., `{ "entityName": "MJ: Contacts", "request": "..." }`). The Form Builder owns the runtime-form lifecycle (Create / Modify / Activate / Revert) and requires a concrete MemberJunction entity name. Do **not** include `Form Builder` in generic/open-ended workflow demos unless the user specifically asked to design an entity form.
 
 **Multi-Step Specialist Pipeline (2+ Known Agents)** → Multi-Node `Tasks` Graph
-- User asks for 2 or more distinct specialist steps in sequence or parallel (e.g., Step 1: Query Builder → Step 2: Research Report Writer)
+- User asks for 2 or more distinct specialist steps in sequence or parallel (e.g., Step 1: Query Builder → Step 2: Query Strategist or Research Report Writer)
+- For open-ended multi-step workflow demos, prefer data, query, research, and reporting specialists (`Query Builder`, `Query Strategist`, `Research Agent`, `Research Report Writer`) that operate autonomously without interactive UI entity selection
 - If you haven't identified all needed specialist agents yet, call `Find Candidate Agents` first, then emit the 2+ node `Tasks` graph with `dependsOn` and `"continuation": "reinvoke"`
 
 **Interactive Workflow Design or Agent Creation** → Delegate to Workflow Planner
