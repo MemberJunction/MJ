@@ -2232,7 +2232,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * The composer's status line: who is working, or what is being stopped. Null with nothing in
    * flight. It is information, not a control, so it shows whenever a reply is in flight, whether
    * or not the viewer may stop it (a read-only viewer, or a host with {@link AllowStopRun} off);
-   * only the send slot is gated.
+   * only the send slot is gated. The stopping text likewise reads the stopping state itself, not
+   * the slot's mode.
    */
   public get StatusText(): string | null {
     const count = this.InFlightCount;
@@ -2240,7 +2241,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       return null;
     }
     const agent = this.inFlightAgentName();
-    if (this.SendSlotMode === 'stopping') {
+    if (this.isAnyStopping()) {
       return count > 1 ? `Stopping ${count} runs…` : `Stopping ${agent ?? 'the run'}…`;
     }
     return count > 1 ? `${count} agents working` : `${agent ?? 'The agent'} is working`;
@@ -2248,7 +2249,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
   /** The elapsed time after the status line, for a single run that is working (not one being stopped). */
   public get StatusElapsed(): string | null {
-    return this.InFlightCount === 1 && this.SendSlotMode !== 'stopping' ? this.SendSlotElapsed : null;
+    return this.InFlightCount === 1 && !this.isAnyStopping() ? this.SendSlotElapsed : null;
   }
 
   /**

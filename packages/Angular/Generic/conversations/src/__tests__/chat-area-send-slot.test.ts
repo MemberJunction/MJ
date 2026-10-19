@@ -81,6 +81,14 @@ describe('ConversationChatArea — the send slot as the stop control', () => {
     expect(two.component.StatusElapsed).toBeNull();
   });
 
+  it('the stopping text reads the stopping state, not the slot: a viewer whose slot is Send still sees it', () => {
+    const readOnly = createHarness({ readOnly: true });
+    readOnly.component.StoppingDetailIds.add('a1');
+    expect(readOnly.component.SendSlotMode).toBe('send');
+    expect(readOnly.component.StatusText).toBe('Stopping Sage…');
+    expect(readOnly.component.StatusElapsed).toBeNull();
+  });
+
   it('with one run: Stop, named for the agent, with a status line and the elapsed time', () => {
     const h = createHarness();
     expect(h.component.SendSlotMode).toBe('stop');
@@ -125,6 +133,7 @@ describe('ConversationChatArea — the send slot as the stop control', () => {
     await h.component.OnComposerStopClicked();
     expect(h.component.SendSlotMode).toBe('stopping');
     expect(h.component.StatusText).toBe('Stopping Sage…');
+    expect(h.component.StatusElapsed).toBeNull();
     h.component.InProgressMessageIds = [];
     expect(h.component.SendSlotMode).toBe('send');
     expect(h.component.StoppingDetailIds.size).toBe(0);
