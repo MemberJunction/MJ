@@ -21,7 +21,6 @@ import {
     ActionRecordProcessor,
     AgentRecordProcessor,
     FieldRulesProcessor,
-    InferProcessor,
     RecordProcessExecutor,
     WriteBackProcessor,
     ApplyOutputMapping,
@@ -77,29 +76,31 @@ describe('RecordProcessExecutor.buildSource', () => {
 
 describe('RecordProcessExecutor dry-run sample', () => {
     afterEach(() => vi.restoreAllMocks());
-    it('caps an Infer dry run at 25 records unless a scope is given', async () => {
+    it('caps a dry run at processor.DefaultDryRunSampleSize records unless a scope is given', async () => {
         const process = vi.spyOn(RecordSetProcessor.Instance, 'Process').mockResolvedValue({ Status: 'Completed', Total: 0, Processed: 0, Success: 0, Error: 0, Skipped: 0 });
         const exec = new RecordProcessExecutor();
-        vi.spyOn(exec, 'BuildProcessor').mockReturnValue({ ProcessRecord: async () => ({ Status: 'Succeeded' as const }) });
+        vi.spyOn(exec, 'BuildProcessor').mockReturnValue({
+            DefaultDryRunSampleSize: 25,
+            ProcessRecord: async () => ({ Status: 'Succeeded' as const }),
+        });
         vi.spyOn(exec, 'BuildSource').mockReturnValue(new ArraySource([], 'ENT-1'));
         const infer = rp({ WorkType: 'Infer', ScopeType: 'Filter' });
-        await exec.Run(infer, { contextUser: USER, provider: providerWithEntity(), dryRun: true });
-        expect(process.mock.calls[0][0].maxRecords).toBe(25);
-        await exec.Run(infer, { contextUser: USER, provider: providerWithEntity(), dryRun: true, scope: { Kind: 'records', RecordIDs: ['a'] } });
-        expect(process.mock.calls[1][0].maxRecords).toBeUndefined();
-        await exec.Run(infer, { contextUser: USER, provider: providerWithEntity(), dryRun: false });
-        expect(process.mock.calls[2][0].maxRecords).toBeUndefined();
+        await exec.Run(infer, { ContextUser: USER, Provider: providerWithEntity(), DryRun: true });
+        expect(process.mock.calls[0][0].MaxRecords).toBe(25);
+        await exec.Run(infer, { ContextUser: USER, Provider: providerWithEntity(), DryRun: true, Scope: { Kind: 'records', RecordIDs: ['a'] } });
+        expect(process.mock.calls[1][0].MaxRecords).toBeUndefined();
+        await exec.Run(infer, { ContextUser: USER, Provider: providerWithEntity(), DryRun: false });
+        expect(process.mock.calls[2][0].MaxRecords).toBeUndefined();
     });
 
-    it('fails an Infer run on any failed record, and leaves other work types to the breaker', async () => {
+    it('threads the RecordProcessID and processor to RecordSetProcessor.Process', async () => {
         const process = vi.spyOn(RecordSetProcessor.Instance, 'Process').mockResolvedValue({ Status: 'Completed', Total: 0, Processed: 0, Success: 0, Error: 0, Skipped: 0 });
         const exec = new RecordProcessExecutor();
-        vi.spyOn(exec, 'BuildProcessor').mockReturnValue({ ProcessRecord: async () => ({ Status: 'Succeeded' as const }) });
+        const inferProc: IRecordProcessor = { FailRunOnRecordError: true, ProcessRecord: async () => ({ Status: 'Succeeded' as const }) };
+        vi.spyOn(exec, 'BuildProcessor').mockReturnValue(inferProc);
         vi.spyOn(exec, 'BuildSource').mockReturnValue(new ArraySource([], 'ENT-1'));
-        await exec.Run(rp({ WorkType: 'Infer', ScopeType: 'Filter' }), { contextUser: USER, provider: providerWithEntity() });
-        await exec.Run(rp({ WorkType: 'Action', ScopeType: 'Filter' }), { contextUser: USER, provider: providerWithEntity() });
-        expect(process.mock.calls[0][0]).toMatchObject({ FeaturePipeline: true, recordProcessID: 'RP-1' });
-        expect(process.mock.calls[1][0].FeaturePipeline).toBe(false);
+        await exec.Run(rp({ WorkType: 'Infer', ScopeType: 'Filter' }), { ContextUser: USER, Provider: providerWithEntity() });
+        expect(process.mock.calls[0][0]).toMatchObject({ RecordProcessID: 'RP-1', Processor: inferProc });
     });
 });
 
@@ -112,15 +113,16 @@ describe('RecordProcessExecutor watermark skip', () => {
         vi.spyOn(exec, 'BuildSource').mockReturnValue(new ArraySource([], 'ENT-1'));
         const watermarked = rp({ WorkType: 'Infer', ScopeType: 'Filter', SkipUnchanged: true, WatermarkStrategy: 'UpdatedAt' });
         const lastRunAt = new Date('2026-10-01T00:00:00Z');
-        await exec.Run(watermarked, { contextUser: USER, provider: providerWithEntity(), lastRunAt });
-        expect(process.mock.calls[0][0]).toMatchObject({ skipUnchanged: true, lastRunAt });
-        await exec.Run(watermarked, { contextUser: USER, provider: providerWithEntity(), SkipUnchanged: false });
-        expect(process.mock.calls[1][0]).toMatchObject({ skipUnchanged: false, lastRunAt: undefined });
+        await exec.Run(watermarked, { ContextUser: USER, Provider: providerWithEntity(), LastRunAt: lastRunAt });
+        expect(process.mock.calls[0][0]).toMatchObject({ SkipUnchanged: true, LastRunAt: lastRunAt });
+        await exec.Run(watermarked, { ContextUser: USER, Provider: providerWithEntity(), SkipUnchanged: false });
+        expect(process.mock.calls[1][0]).toMatchObject({ SkipUnchanged: false, LastRunAt: undefined });
     });
 });
 
 describe('RecordProcessExecutor.buildProcessor', () => {
     const exec = new RecordProcessExecutor();
+    afterEach(() => RecordProcessorRegistry.Instance.Unregister('Infer'));
 
     it('builds an ActionRecordProcessor for WorkType=Action', () => {
         expect(exec.buildProcessor(rp({ WorkType: 'Action', ActionID: 'A1' }))).toBeInstanceOf(ActionRecordProcessor);
@@ -128,89 +130,24 @@ describe('RecordProcessExecutor.buildProcessor', () => {
     it('builds an AgentRecordProcessor for WorkType=Agent', () => {
         expect(exec.buildProcessor(rp({ WorkType: 'Agent', AgentID: 'AG1' }))).toBeInstanceOf(AgentRecordProcessor);
     });
-    it('builds an InferProcessor for WorkType=Infer', () => {
-        expect(exec.buildProcessor(rp({ WorkType: 'Infer', PromptID: 'P1' }))).toBeInstanceOf(InferProcessor);
-    });
-    it('throws when Infer work is missing its PromptID', () => {
-        expect(() => exec.buildProcessor(rp({ WorkType: 'Infer' }))).toThrow(/PromptID/);
-    });
-    it('validates materialization targets when building InferProcessor with DataFeatureSpec', () => {
-        const testEntity = {
-            ID: 'ENT-1',
-            Name: 'Widgets',
-            Fields: [
-                { Name: 'ID', TSType: 'string', IsPrimaryKey: true, IsVirtual: false },
-                { Name: 'Score', Type: 'decimal', Precision: 5, Scale: 4, TSType: 'number', IsVirtual: false },
-            ],
-        };
-        const testProvider = {
-            EntityByID: (id: string) => (id === 'ENT-1' ? testEntity : undefined),
-            EntityByName: (name: string) => (name.toLowerCase() === 'widgets' ? testEntity : undefined),
-        } as unknown as IMetadataProvider;
-
-        // Valid spec with Min: 0, Max: 1
-        const validSpec = {
-            Name: 'Valid Pipeline',
-            Description: 'Valid',
-            PromptID: 'P1',
-            Context: { Fields: ['Name'] },
-            Outputs: [
-                {
-                    Ref: '$.score',
-                    Name: 'Score',
-                    Target: { Mode: 'field', EntityFieldName: 'Score' },
-                    Constraint: { Type: 'numeric', Min: 0, Max: 1, OnViolation: 'fail' },
-                },
-            ],
-            Caching: { Cacheable: false },
-        };
-        const proc = exec.buildProcessor(
-            rp({ WorkType: 'Infer', PromptID: 'P1', EntityID: 'ENT-1', Configuration: JSON.stringify(validSpec) }),
-            false,
-            testProvider
-        );
-        expect(proc).toBeInstanceOf(InferProcessor);
-
-        // Invalid spec with Max: 100 on decimal(5,4)
-        const invalidSpec = {
-            ...validSpec,
-            Outputs: [
-                {
-                    Ref: '$.score',
-                    Name: 'Score',
-                    Target: { Mode: 'field', EntityFieldName: 'Score' },
-                    Constraint: { Type: 'numeric', Min: 0, Max: 100, OnViolation: 'fail' },
-                },
-            ],
-        };
-        expect(() =>
-            exec.buildProcessor(
-                rp({ WorkType: 'Infer', PromptID: 'P1', EntityID: 'ENT-1', Configuration: JSON.stringify(invalidSpec) }),
-                false,
-                testProvider
-            )
-        ).toThrow(/invalid materialization targets.*arithmetic overflow/);
-
-        // Invalid spec targeting nonexistent field
-        const badFieldSpec = {
-            ...validSpec,
-            Outputs: [
-                {
-                    Ref: '$.score',
-                    Name: 'Score',
-                    Target: { Mode: 'field', EntityFieldName: 'NoSuchField' },
-                },
-            ],
-        };
-        expect(() =>
-            exec.buildProcessor(
-                rp({ WorkType: 'Infer', PromptID: 'P1', EntityID: 'ENT-1', Configuration: JSON.stringify(badFieldSpec) }),
-                false,
-                testProvider
-            )
-        ).toThrow(/invalid materialization targets.*does not exist/);
+    it('resolves WorkType=Infer from RecordProcessorRegistry and passes Provider in the build context', () => {
+        let seenProvider: IMetadataProvider | undefined;
+        class FakeRegisteredInfer implements IRecordProcessor {
+            async ProcessRecord() { return { Status: 'Succeeded' as const }; }
+        }
+        RecordProcessorRegistry.Instance.Register('Infer', (ctx) => {
+            seenProvider = ctx.Provider;
+            return new FakeRegisteredInfer();
+        });
+        const p = providerWithEntity();
+        const proc = exec.buildProcessor(rp({ WorkType: 'Infer', PromptID: 'P1' }), false, p);
+        expect(proc).toBeInstanceOf(FakeRegisteredInfer);
+        expect(seenProvider).toBe(p);
     });
     it('wraps an Infer processor with WriteBackProcessor when OutputMapping is set', () => {
+        RecordProcessorRegistry.Instance.Register('Infer', () => ({
+            ProcessRecord: async () => ({ Status: 'Succeeded' as const }),
+        }));
         const proc = exec.buildProcessor(rp({
             WorkType: 'Infer', PromptID: 'P1',
             OutputMapping: JSON.stringify({ fields: { S: '$.s' } }),
@@ -411,7 +348,7 @@ describe('ApplyOutputMapping', () => {
             ProcessRecord: async () => ({ Status: 'Succeeded', ResultPayload: { satisfaction: 'High' } }),
         };
         const proc = new WriteBackProcessor(inner, { fields: { Satisfaction: '$.satisfaction' } }, true);
-        const result = await proc.ProcessRecord(record, { contextUser: USER, provider });
+        const result = await proc.ProcessRecord(record, { ContextUser: USER, Provider: provider });
         expect(result.Status).toBe('Succeeded');
         // The write-back payload carries the dry-run preview; the record was loaded to compare its fields, never saved.
         const writeBack = (result.ResultPayload as WriteBackRunPayload).writeBack;
@@ -426,7 +363,7 @@ describe('ApplyOutputMapping', () => {
             ProcessRecord: async () => ({ Status: 'Succeeded', ResultPayload: { satisfaction: 'High' } }),
         };
         const proc = new WriteBackProcessor(inner, { fields: { Satisfaction: '$.satisfaction' } });
-        const result = await proc.ProcessRecord(record, { contextUser: USER, provider, DryRun: true });
+        const result = await proc.ProcessRecord(record, { ContextUser: USER, Provider: provider, DryRun: true });
         const writeBack = (result.ResultPayload as WriteBackRunPayload).writeBack;
         expect(writeBack?.dryRun).toBe(true);
         expect(writeBack?.previewFields).toEqual({ Satisfaction: 'High' });

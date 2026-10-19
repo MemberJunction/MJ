@@ -8,10 +8,8 @@
  */
 
 import { BaseSingleton } from '@memberjunction/global';
-import { IMetadataProvider, LogError, Metadata, UserInfo } from '@memberjunction/core';
+import { IMetadataProvider, LogError, Metadata } from '@memberjunction/core';
 import {
-    FeaturePipelineRunPin,
-    FeaturePipelineRunResult,
     IProcessRunTracker,
     ProcessCursor,
     ProcessRunMeta,
@@ -52,43 +50,42 @@ export class RecordSetProcessor extends BaseSingleton<RecordSetProcessor> {
      *
      * @param options - The source, processor, tracker, and execution knobs for this run.
      * @returns The run summary plus the persisted run ID (when a persisting tracker was used).
-     * @throws Error when `FeaturePipeline` is set without `recordProcessID` (the run result could not be attributed).
      */
     public async Process(options: RecordSetProcessOptions): Promise<ProcessRunResult> {
-        if (options.FeaturePipeline && !options.recordProcessID) {
-            throw new Error('A Feature Pipeline run (FeaturePipeline: true) needs recordProcessID.');
-        }
-        const { source, processor, contextUser } = options;
-        const provider: IMetadataProvider = options.provider ?? Metadata.Provider;
-        const tracker: IProcessRunTracker = options.tracker ?? new GenericProcessRunTracker();
-        const batchSize = options.batchSize ?? DEFAULT_BATCH_SIZE;
-        const maxConcurrency = Math.max(1, options.maxConcurrency ?? 1);
-        const errorThreshold = options.errorThresholdPercent ?? DEFAULT_ERROR_THRESHOLD;
-        const delayMs = options.delayBetweenBatchesMs ?? 0;
-        const shouldResume = options.resume ?? true;
-        const rateLimiter = options.rateLimit
-            ? new RateLimiter({ RequestsPerMinute: options.rateLimit.requestsPerMinute, TokensPerMinute: options.rateLimit.tokensPerMinute })
+        const { Source: source, Processor: processor, ContextUser: contextUser } = options;
+        const provider: IMetadataProvider = options.Provider ?? Metadata.Provider;
+        const tracker: IProcessRunTracker = options.Tracker ?? new GenericProcessRunTracker();
+        const batchSize = options.BatchSize ?? DEFAULT_BATCH_SIZE;
+        const maxConcurrency = Math.max(1, options.MaxConcurrency ?? 1);
+        const errorThreshold = options.ErrorThresholdPercent ?? DEFAULT_ERROR_THRESHOLD;
+        const delayMs = options.DelayBetweenBatchesMs ?? 0;
+        const shouldResume = options.Resume ?? true;
+        const rateLimiter = options.RateLimit
+            ? new RateLimiter({ RequestsPerMinute: options.RateLimit.RequestsPerMinute, TokensPerMinute: options.RateLimit.TokensPerMinute })
             : undefined;
 
         const descriptor = source.Describe();
         const meta: ProcessRunMeta = {
-            RecordProcessID: options.recordProcessID,
-            ScheduledJobRunID: options.scheduledJobRunID,
-            EntityID: options.entityID ?? descriptor.EntityID,
-            TriggeredBy: options.triggeredBy ?? 'Manual',
+            RecordProcessID: options.RecordProcessID,
+            ScheduledJobRunID: options.ScheduledJobRunID,
+            EntityID: options.EntityID ?? descriptor.EntityID,
+            TriggeredBy: options.TriggeredBy ?? 'Manual',
             SourceType: descriptor.SourceType,
             SourceID: descriptor.SourceID,
             SourceFilter: descriptor.SourceFilter,
             BatchSize: batchSize,
-            Configuration: options.configuration,
-            DryRun: options.dryRun,
+            Configuration: options.Configuration,
+            DryRun: options.DryRun,
         };
 
         const handle = await tracker.BeginRun(meta, contextUser, provider);
         const counts: RunCounts = { Processed: 0, Success: 0, Error: 0, Skipped: 0 };
         const tally: RunTally = {
-            WatermarkSkipped: 0, Upserted: 0, Unchanged: 0, Previewed: 0, RejectedInvalid: 0, BelowConfidence: 0, HumanValuesPreserved: 0, Pin: null,
+            WatermarkSkipped: 0,
+            RejectedInvalid: 0,
         };
+        const collectedResults: RecordResult[] | undefined =
+            typeof processor.BuildRunSummary === 'function' ? [] : undefined;
         let cursor = shouldResume ? await tracker.LoadResumeCursor(handle, contextUser, provider) : undefined;
         let total: number | null = null;
         let status: ProcessRunStatusValue = 'Running';
@@ -100,12 +97,12 @@ export class RecordSetProcessor extends BaseSingleton<RecordSetProcessor> {
             // front with one clear message rather than failing every record into the circuit breaker.
             if (processor.Preflight) {
                 await processor.Preflight({
-                    contextUser,
-                    provider,
-                    processRunID: handle.ProcessRunID,
-                    recordProcessID: options.recordProcessID,
-                    entityID: meta.EntityID,
-                    DryRun: options.dryRun === true,
+                    ContextUser: contextUser,
+                    Provider: provider,
+                    ProcessRunID: handle.ProcessRunID,
+                    RecordProcessID: options.RecordProcessID,
+                    EntityID: meta.EntityID,
+                    DryRun: options.DryRun === true,
                     TriggeredBy: meta.TriggeredBy,
                 });
             }
@@ -114,6 +111,7 @@ export class RecordSetProcessor extends BaseSingleton<RecordSetProcessor> {
                 batchSize, maxConcurrency, errorThreshold, delayMs, rateLimiter,
                 counts,
                 tally,
+                collectedResults,
                 getCursor: () => cursor,
                 setCursor: (c) => { cursor = c; },
                 getTotal: () => total,
@@ -127,14 +125,20 @@ export class RecordSetProcessor extends BaseSingleton<RecordSetProcessor> {
         }
 
         const attempted = this.attemptedOf(counts, tally);
-        if (options.FeaturePipeline && status === 'Completed' && counts.Error > 0) {
-            // a Feature Pipeline run is Completed only when every attempted record was written; succeeded records keep theirs
+        if (options.Processor.FailRunOnRecordError && status === 'Completed' && counts.Error > 0) {
             status = 'Failed';
             errorMessage = `${counts.Error} of ${attempted} attempted records failed (${tally.RejectedInvalid} rejected by output constraints)`;
         }
-        const featurePipeline = options.recordProcessID && options.FeaturePipeline
-            ? this.featurePipelineResult(options.recordProcessID, counts, tally, status, processor, options.dryRun === true)
-            : undefined;
+        const processorSummary =
+            typeof options.Processor.BuildRunSummary === 'function' && collectedResults
+                ? options.Processor.BuildRunSummary({
+                      RecordProcessID: options.RecordProcessID,
+                      Counts: counts,
+                      Status: status,
+                      DryRun: options.DryRun === true,
+                      Results: collectedResults,
+                  })
+                : undefined;
 
         const summary: ProcessRunSummary = {
             Status: status,
@@ -146,7 +150,8 @@ export class RecordSetProcessor extends BaseSingleton<RecordSetProcessor> {
             StartTime: startTime,
             EndTime: new Date(),
             ErrorMessage: errorMessage,
-            FeaturePipeline: featurePipeline,
+            ...(processorSummary?.ResultSummary !== undefined ? { ResultSummary: processorSummary.ResultSummary } : {}),
+            ...(processorSummary?.WouldRefuse !== undefined ? { WouldRefuse: processorSummary.WouldRefuse } : {}),
         };
         await tracker.CompleteRun(handle, summary, contextUser, provider);
         return { ...summary, ProcessRunID: handle.ProcessRunID };
@@ -155,7 +160,7 @@ export class RecordSetProcessor extends BaseSingleton<RecordSetProcessor> {
     /** The core batch loop. Returns the terminal status. */
     private async runBatchLoop(ctx: BatchLoopContext): Promise<ProcessRunStatusValue> {
         const { options, source, batchSize, counts } = ctx;
-        const { contextUser } = options;
+        const contextUser = options.ContextUser;
 
         // eslint-disable-next-line no-constant-condition
         while (true) {
@@ -169,8 +174,8 @@ export class RecordSetProcessor extends BaseSingleton<RecordSetProcessor> {
 
             // Honor a hard record cap by trimming the batch.
             let records = batch.Records;
-            if (options.maxRecords != null) {
-                const remaining = options.maxRecords - counts.Processed;
+            if (options.MaxRecords != null) {
+                const remaining = options.MaxRecords - counts.Processed;
                 if (remaining <= 0) {
                     return 'Completed';
                 }
@@ -185,7 +190,7 @@ export class RecordSetProcessor extends BaseSingleton<RecordSetProcessor> {
 
             await this.processBatch(records, ctx);
 
-            options.onProgress?.({ ...counts, Total: ctx.getTotal() });
+            options.OnProgress?.({ ...counts, Total: ctx.getTotal() });
 
             // Checkpoint + pause/cancel handshake.
             ctx.setCursor(batch.NextCursor);
@@ -195,10 +200,10 @@ export class RecordSetProcessor extends BaseSingleton<RecordSetProcessor> {
             }
 
             // Budget gate.
-            if (options.onAfterBatch) {
-                const verdict = await this.safeAfterBatch(options.onAfterBatch, records, counts.Processed);
-                if (verdict && !verdict.continue) {
-                    ctx.setErrorMessage(verdict.reason ? `Auto-paused: ${verdict.reason}` : 'Auto-paused: budget exceeded');
+            if (options.OnAfterBatch) {
+                const verdict = await this.safeAfterBatch(options.OnAfterBatch, records, counts.Processed);
+                if (verdict && !verdict.Continue) {
+                    ctx.setErrorMessage(verdict.Reason ? `Auto-paused: ${verdict.Reason}` : 'Auto-paused: budget exceeded');
                     return 'Paused';
                 }
             }
@@ -226,58 +231,60 @@ export class RecordSetProcessor extends BaseSingleton<RecordSetProcessor> {
     private async processBatch(records: RecordRef[], ctx: BatchLoopContext): Promise<void> {
         const { options, counts } = ctx;
         const recordContext: RecordProcessorContext = {
-            contextUser: options.contextUser,
-            provider: ctx.provider,
-            processRunID: ctx.handle.ProcessRunID,
-            recordProcessID: options.recordProcessID,
-            entityID: options.entityID,
-            overwriteHumanValues: options.overwriteHumanValues,
-            DryRun: options.dryRun === true,
+            ContextUser: options.ContextUser,
+            Provider: ctx.provider,
+            ProcessRunID: ctx.handle.ProcessRunID,
+            RecordProcessID: options.RecordProcessID,
+            EntityID: options.EntityID,
+            OverwriteHumanValues: options.OverwriteHumanValues,
+            DryRun: options.DryRun === true,
             TriggeredBy: ctx.triggeredBy,
         };
 
-        // P1-7b Watermark check: batch-evaluate unchanged records when skipUnchanged is active (a real run without it
+        // P1-7b Watermark check: batch-evaluate unchanged records when SkipUnchanged is active (a real run without it
         // still reads basis hashes, so its watermarks record what was processed)
         let watermarkDecisions: Map<string, WatermarkDecision> | undefined;
         if (this.readsWatermarks(options)) {
             try {
                 let writeBackFields: string[] | undefined;
-                const procWithWriteBack = options.processor as { getWriteBackFields?: () => string[]; OutputMapping?: OutputMappingConfig };
-                if (typeof procWithWriteBack.getWriteBackFields === 'function') {
+                const procWithWriteBack = options.Processor as { GetWriteBackFields?: () => string[]; getWriteBackFields?: () => string[]; OutputMapping?: OutputMappingConfig };
+                if (typeof procWithWriteBack.GetWriteBackFields === 'function') {
+                    writeBackFields = procWithWriteBack.GetWriteBackFields();
+                } else if (typeof procWithWriteBack.getWriteBackFields === 'function') {
                     writeBackFields = procWithWriteBack.getWriteBackFields();
                 } else if (procWithWriteBack.OutputMapping?.fields) {
                     writeBackFields = Object.keys(procWithWriteBack.OutputMapping.fields);
                 }
 
                 watermarkDecisions = await WatermarkService.Instance.CheckBatchWatermarks({
-                    recordProcessID: options.recordProcessID,
-                    entityID: options.entityID,
-                    records,
-                    strategy: options.watermarkStrategy ?? 'Checksum',
-                    skipUnchanged: options.skipUnchanged,
-                    lastRunAt: options.lastRunAt,
-                    processor: options.processor,
-                    contextUser: options.contextUser,
-                    provider: ctx.provider,
-                    processRunID: ctx.handle.ProcessRunID,
-                    maxConcurrency: ctx.maxConcurrency,
-                    excludeFields: writeBackFields,
-                    overwriteHumanValues: options.overwriteHumanValues === true,
+                    RecordProcessID: options.RecordProcessID,
+                    EntityID: options.EntityID,
+                    Records: records,
+                    Strategy: options.WatermarkStrategy ?? 'Checksum',
+                    SkipUnchanged: options.SkipUnchanged,
+                    LastRunAt: options.LastRunAt,
+                    Processor: options.Processor,
+                    ContextUser: options.ContextUser,
+                    Provider: ctx.provider,
+                    ProcessRunID: ctx.handle.ProcessRunID,
+                    MaxConcurrency: ctx.maxConcurrency,
+                    ExcludeFields: writeBackFields,
+                    OverwriteHumanValues: options.OverwriteHumanValues === true,
                 });
             } catch (e) {
                 LogError(`RecordSetProcessor: Watermark check failed (proceeding without skipping): ${e instanceof Error ? e.message : String(e)}`);
             }
         }
 
-        const skippedRecords = records.filter((r) => watermarkDecisions?.get(r.RecordID)?.shouldSkip);
-        const eligibleRecords = records.filter((r) => !watermarkDecisions?.get(r.RecordID)?.shouldSkip);
+        const skippedRecords = records.filter((r) => watermarkDecisions?.get(r.RecordID)?.ShouldSkip);
+        const eligibleRecords = records.filter((r) => !watermarkDecisions?.get(r.RecordID)?.ShouldSkip);
 
         for (const record of skippedRecords) {
             counts.Processed++;
             counts.Skipped++;
             ctx.tally.WatermarkSkipped++;
             const skipResult: RecordResult = { Status: 'Skipped', DurationMs: 0 };
-            await ctx.tracker.RecordResult(ctx.handle, record, skipResult, options.contextUser, ctx.provider);
+            await ctx.tracker.RecordResult(ctx.handle, record, skipResult, options.ContextUser, ctx.provider);
         }
 
         if (eligibleRecords.length === 0) {
@@ -285,11 +292,11 @@ export class RecordSetProcessor extends BaseSingleton<RecordSetProcessor> {
         }
 
         // P1-7c Two-phase batch execution seam (e.g. InferProcessor dedup across distinct keys)
-        if (typeof options.processor.ProcessBatch === 'function') {
+        if (typeof options.Processor.ProcessBatch === 'function') {
             const batchStarted = Date.now();
             let batchResults: Map<string, RecordResult>;
             try {
-                const rawBatchResults = await options.processor.ProcessBatch(eligibleRecords, recordContext);
+                const rawBatchResults = await options.Processor.ProcessBatch(eligibleRecords, recordContext);
                 if (rawBatchResults instanceof Map) {
                     batchResults = rawBatchResults;
                 } else if (Array.isArray(rawBatchResults)) {
@@ -321,16 +328,16 @@ export class RecordSetProcessor extends BaseSingleton<RecordSetProcessor> {
                 if (result.Status === 'Succeeded') {
                     counts.Success++;
                     const decision = watermarkDecisions?.get(record.RecordID);
-                    if (!options.dryRun && decision?.basisHash && options.recordProcessID && options.entityID) {
+                    if (!options.DryRun && decision?.BasisHash && options.RecordProcessID && options.EntityID) {
                         try {
                             await WatermarkService.Instance.UpdateWatermark({
-                                recordProcessID: options.recordProcessID,
-                                entityID: options.entityID,
-                                recordID: record.RecordID,
-                                basisHash: decision.basisHash,
-                                existingWatermark: decision.existingWatermark,
-                                contextUser: options.contextUser,
-                                provider: ctx.provider,
+                                RecordProcessID: options.RecordProcessID,
+                                EntityID: options.EntityID,
+                                RecordID: record.RecordID,
+                                BasisHash: decision.BasisHash,
+                                ExistingWatermark: decision.ExistingWatermark,
+                                ContextUser: options.ContextUser,
+                                Provider: ctx.provider,
                             });
                         } catch (e) {
                             LogError(`RecordSetProcessor: Failed to update watermark for record '${record.RecordID}': ${e instanceof Error ? e.message : String(e)}`);
@@ -342,7 +349,8 @@ export class RecordSetProcessor extends BaseSingleton<RecordSetProcessor> {
                     counts.Error++;
                 }
                 this.tallyRecord(result, ctx.tally);
-                await ctx.tracker.RecordResult(ctx.handle, record, result, options.contextUser, ctx.provider);
+                ctx.collectedResults?.push(result);
+                await ctx.tracker.RecordResult(ctx.handle, record, result, options.ContextUser, ctx.provider);
             }
             return;
         }
@@ -352,7 +360,7 @@ export class RecordSetProcessor extends BaseSingleton<RecordSetProcessor> {
             const started = Date.now();
             let result: RecordResult;
             try {
-                result = await options.processor.ProcessRecord(record, recordContext);
+                result = await options.Processor.ProcessRecord(record, recordContext);
             } catch (e) {
                 result = { Status: 'Failed', ErrorMessage: e instanceof Error ? e.message : String(e) };
             }
@@ -362,17 +370,17 @@ export class RecordSetProcessor extends BaseSingleton<RecordSetProcessor> {
             counts.Processed++;
             if (result.Status === 'Succeeded') {
                 counts.Success++;
-                // Upsert watermark on success (if not dryRun and basisHash exists)
-                if (!options.dryRun && decision?.basisHash && options.recordProcessID && options.entityID) {
+                // Upsert watermark on success (if not DryRun and BasisHash exists)
+                if (!options.DryRun && decision?.BasisHash && options.RecordProcessID && options.EntityID) {
                     try {
                         await WatermarkService.Instance.UpdateWatermark({
-                            recordProcessID: options.recordProcessID,
-                            entityID: options.entityID,
-                            recordID: record.RecordID,
-                            basisHash: decision.basisHash,
-                            existingWatermark: decision.existingWatermark,
-                            contextUser: options.contextUser,
-                            provider: ctx.provider,
+                            RecordProcessID: options.RecordProcessID,
+                            EntityID: options.EntityID,
+                            RecordID: record.RecordID,
+                            BasisHash: decision.BasisHash,
+                            ExistingWatermark: decision.ExistingWatermark,
+                            ContextUser: options.ContextUser,
+                            Provider: ctx.provider,
                         });
                     } catch (e) {
                         LogError(`RecordSetProcessor: Failed to update watermark for record '${record.RecordID}': ${e instanceof Error ? e.message : String(e)}`);
@@ -384,7 +392,8 @@ export class RecordSetProcessor extends BaseSingleton<RecordSetProcessor> {
                 counts.Error++;
             }
             this.tallyRecord(result, ctx.tally);
-            await ctx.tracker.RecordResult(ctx.handle, record, result, options.contextUser, ctx.provider);
+            ctx.collectedResults?.push(result);
+            await ctx.tracker.RecordResult(ctx.handle, record, result, options.ContextUser, ctx.provider);
         };
 
         await this.runWithConcurrency(eligibleRecords, ctx.maxConcurrency, worker);
@@ -394,11 +403,11 @@ export class RecordSetProcessor extends BaseSingleton<RecordSetProcessor> {
      * Whether a batch's watermarks are read: a run that skips unchanged records, or a real run that does not (its
      * succeeded records' watermarks are refreshed). A dry run without skipping writes no watermark.
      */
-    private readsWatermarks(options: RecordSetProcessOptions): options is RecordSetProcessOptions & { recordProcessID: string; entityID: string } {
-        if (!options.recordProcessID || !options.entityID) {
+    private readsWatermarks(options: RecordSetProcessOptions): options is RecordSetProcessOptions & { RecordProcessID: string; EntityID: string } {
+        if (!options.RecordProcessID || !options.EntityID) {
             return false;
         }
-        return options.skipUnchanged === true || options.dryRun !== true;
+        return options.SkipUnchanged === true || options.DryRun !== true;
     }
 
     /** Records the processor was handed: every processed record except those skipped on their watermark. */
@@ -406,43 +415,11 @@ export class RecordSetProcessor extends BaseSingleton<RecordSetProcessor> {
         return counts.Processed - tally.WatermarkSkipped;
     }
 
-    /** Adds one record's outcome to the run's Feature Pipeline tally; a refused fidelity on any record wins. */
+    /** Adds one record's outcome to the run's tally. */
     private tallyRecord(result: RecordResult, tally: RunTally): void {
-        if (result.Status === 'Succeeded') {
-            if (result.DryRun === true) {
-                // A dry run writes nothing: count it as previewed, never as a write
-                tally.Previewed++;
-            } else if (result.Outcome === 'Unchanged') {
-                tally.Unchanged++;
-            } else {
-                tally.Upserted++;
-            }
-        } else if (result.Status === 'Failed' && result.FailureKind === 'RejectedInvalid') {
+        if (result.Status === 'Failed' && result.FailureKind === 'RejectedInvalid') {
             tally.RejectedInvalid++;
         }
-        if (result.Status === 'Succeeded' && (result.BelowConfidenceOutputs?.length || 0) > 0) {
-            tally.BelowConfidence++;
-        }
-        tally.HumanValuesPreserved += result.HumanValuesPreserved || 0;
-        tally.Pin ||= result.PipelinePin || null;
-    }
-
-    /**
-     * The run's FeaturePipelineRunResult from its counts and tally. The pin is the records' pin, else the processor's
-     * run-level pin, so a run whose records were all skipped still names the pin it ran under. A dry run also carries
-     * the processor's run-level refusal, when the real run would be refused.
-     */
-    private featurePipelineResult(recordProcessID: string, counts: RunCounts, tally: RunTally,
-        status: ProcessRunStatusValue, processor: RecordSetProcessOptions['processor'], dryRun: boolean): FeaturePipelineRunResult {
-        const wouldRefuse = dryRun ? processor.CurrentRunRefusal?.() || null : null;
-        return {
-            ...(wouldRefuse ? { WouldRefuse: wouldRefuse } : {}),
-            RecordProcessID: recordProcessID, Pin: tally.Pin || processor.CurrentRunPin?.() || null,
-            Attempted: this.attemptedOf(counts, tally), Upserted: tally.Upserted, Unchanged: tally.Unchanged, Previewed: tally.Previewed,
-            RejectedInvalid: tally.RejectedInvalid, BelowConfidence: tally.BelowConfidence,
-            Failed: counts.Error - tally.RejectedInvalid, Skipped: counts.Skipped,
-            HumanValuesPreserved: tally.HumanValuesPreserved, Status: status === 'Completed' ? 'completed' : 'failed',
-        };
     }
 
     /** Runs `worker` over `items` with at most `limit` in flight at once. */
@@ -465,14 +442,14 @@ export class RecordSetProcessor extends BaseSingleton<RecordSetProcessor> {
 
     /** Invokes the budget-gate hook, treating a thrown hook as non-fatal (continue). */
     private async safeAfterBatch(
-        hook: NonNullable<RecordSetProcessOptions['onAfterBatch']>,
+        hook: NonNullable<RecordSetProcessOptions['OnAfterBatch']>,
         records: RecordRef[],
         processed: number,
-    ): Promise<{ continue: boolean; reason?: string } | null> {
+    ): Promise<{ Continue: boolean; Reason?: string } | null> {
         try {
             return await hook(records, processed);
         } catch (e) {
-            LogError(`RecordSetProcessor: onAfterBatch hook threw (continuing): ${e instanceof Error ? e.message : String(e)}`);
+            LogError(`RecordSetProcessor: OnAfterBatch hook threw (continuing): ${e instanceof Error ? e.message : String(e)}`);
             return null;
         }
     }
@@ -485,8 +462,8 @@ export class RecordSetProcessor extends BaseSingleton<RecordSetProcessor> {
 /** Internal mutable context threaded through the batch loop. */
 interface BatchLoopContext {
     options: RecordSetProcessOptions;
-    source: RecordSetProcessOptions['source'];
-    processor: RecordSetProcessOptions['processor'];
+    source: RecordSetProcessOptions['Source'];
+    processor: RecordSetProcessOptions['Processor'];
     tracker: IProcessRunTracker;
     handle: RunHandle;
     provider: IMetadataProvider;
@@ -498,8 +475,8 @@ interface BatchLoopContext {
     delayMs: number;
     rateLimiter?: RateLimiter;
     counts: RunCounts;
-    /** The run's tally, kept for every run; its Feature Pipeline counts are reported for runs with `FeaturePipeline`. */
     tally: RunTally;
+    collectedResults?: RecordResult[];
     getCursor: () => ProcessCursor | undefined;
     setCursor: (c: ProcessCursor) => void;
     getTotal: () => number | null;
@@ -507,16 +484,9 @@ interface BatchLoopContext {
     setErrorMessage: (m: string) => void;
 }
 
-/** What a run counts beyond {@link RunCounts}: its watermark skips (for the breaker) and its {@link FeaturePipelineRunResult} counts. */
+/** What a run counts beyond {@link RunCounts}: its watermark skips (for the breaker) and rejected-invalid failures. */
 interface RunTally {
     /** Records skipped on their watermark without being handed to the processor (not attempted). */
     WatermarkSkipped: number;
-    Upserted: number;
-    Unchanged: number;
-    Previewed: number;
     RejectedInvalid: number;
-    /** Records with outputs withheld below their confidence floor. */
-    BelowConfidence: number;
-    HumanValuesPreserved: number;
-    Pin: FeaturePipelineRunPin | null;
 }

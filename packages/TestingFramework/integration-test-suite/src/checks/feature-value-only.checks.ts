@@ -8,8 +8,9 @@ import { RunView } from '@memberjunction/core';
 import type { MJFeatureValueEntity, MJProcessRunDetailEntity, MJRecordProcessEntity } from '@memberjunction/core-entities';
 import { EscapeSQLString, UUIDMap, UUIDsEqual } from '@memberjunction/global';
 import { ValidateSpec, type DataFeatureSpec, type SpecValidationIssue } from '@memberjunction/feature-pipelines';
+import '@memberjunction/feature-pipelines-engine';
 import { RecordProcessExecutor } from '@memberjunction/record-set-processor';
-import type { FeatureValuePreview, ProcessRunResult } from '@memberjunction/record-set-processor-base';
+import type { ProcessRunResult, WriteBackValuePreview } from '@memberjunction/record-set-processor-base';
 import {
     Assert, AssertDeepEqual, AssertEqual, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck,
 } from '@memberjunction/testing-integration';
@@ -24,7 +25,7 @@ type DetailRow = Pick<MJProcessRunDetailEntity, 'RecordID' | 'Status' | 'ResultP
 
 /** The slice of a detail's `ResultPayload` the checks read. */
 interface DetailPayload {
-    writeBack?: { previewFeatureValues?: FeatureValuePreview[] };
+    writeBack?: { previewValues?: WriteBackValuePreview[] };
 }
 
 /** The Feature Value columns the checks compare. */
@@ -145,8 +146,8 @@ class FeatureValueOnlyBundle {
     /** Runs the pipeline through the executor over the three records (so write-back wraps the processor). */
     public static async Run(ctx: IntegrationCheckContext, dryRun: boolean): Promise<ProcessRunResult> {
         const r = await new RecordProcessExecutor().RunByID(F.Require(ctx).RecordProcessID, {
-            contextUser: ctx.User, provider: ctx.Provider, triggeredBy: 'OnDemand', dryRun, SkipUnchanged: false,
-            scope: { Kind: 'records', RecordIDs: FeatureValueOnlyBundle.Records.map((x) => x.ID) },
+            ContextUser: ctx.User, Provider: ctx.Provider, TriggeredBy: 'OnDemand', DryRun: dryRun, SkipUnchanged: false,
+            Scope: { Kind: 'records', RecordIDs: FeatureValueOnlyBundle.Records.map((x) => x.ID) },
         });
         AssertEqual(r.Status, 'Completed', `status (${r.ErrorMessage || 'no error'})`);
         return r;
@@ -165,9 +166,9 @@ class FeatureValueOnlyBundle {
     }
 
     /** The detail's dry-run preview, by feature name. */
-    public static Previews(detail: DetailRow): Map<string, FeatureValuePreview> {
+    public static Previews(detail: DetailRow): Map<string, WriteBackValuePreview> {
         const payload: DetailPayload = detail.ResultPayload ? JSON.parse(detail.ResultPayload) as DetailPayload : {};
-        return new Map((payload.writeBack?.previewFeatureValues || []).map((p) => [p.FeatureName, p]));
+        return new Map((payload.writeBack?.previewValues || []).map((p) => [p.Name, p]));
     }
 
     /** The pipeline's stored Feature Values, read past the cache. */

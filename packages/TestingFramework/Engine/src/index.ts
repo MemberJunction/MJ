@@ -18,9 +18,6 @@ export * from './drivers/DecisionEvalDriver';
 export * from './drivers/PinnedDecisionRunner';
 export * from './drivers/RubricCalibrationTestDriver';
 export * from './drivers/calibration';
-export * from './drivers/golden-set-scoring';
-export * from './drivers/golden-label-quality';
-export * from './drivers/FeaturePipelineGoldenSetDriver';
 
 // Oracle interface and implementations
 export * from './oracles/IOracle';

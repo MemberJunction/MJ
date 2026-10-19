@@ -13,4 +13,3 @@ export * from './EvaluateSampledAgentRunsDriver';
 export * from './RecordProcessScheduledJobDriver';
 export * from './MaterializationRefreshScheduledJobDriver';
 export * from './UserRoutineDispatcherDriver';
-export * from './FeaturePipelineVersionStewardDriver';

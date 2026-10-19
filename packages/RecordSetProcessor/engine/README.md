@@ -12,9 +12,9 @@ pluggable seams defined in [`@memberjunction/record-set-processor-base`](../base
 - **Rate limiting** (optional, token-bucket with a sliding window)
 - **Error-rate circuit breaker** — auto-fails a run when the error rate of the records it attempted exceeds a
   threshold (records skipped on their watermark are left out)
-- **Feature Pipeline runs** (`FeaturePipeline`, set by `RecordProcessExecutor` for Infer work) — the run ends `Failed`
-  when any record failed, and its `FeaturePipelineRunResult` (counts, pin) is persisted as the
-  run's `ResultSummary`
+- **Strict record-error runs** (`Processor.FailRunOnRecordError = true`) — the run ends `Failed`
+  when any record failed, and when the processor implements `BuildRunSummary` its `ResultSummary` (and `WouldRefuse` on a
+  dry run) is persisted on `MJ: Process Runs`
 - **Skipping unchanged records** (`skipUnchanged`, by `Checksum` or `UpdatedAt`) — unless the run overwrites human
   values. A real `Checksum` run that does not skip (e.g. a version backfill) still writes the watermark of each
   succeeded record whose processor computes a basis hash (Infer), so the next skipping run skips it
@@ -49,12 +49,6 @@ console.log(`${result.Status}: ${result.Success}/${result.Processed} ok, run ${r
 By default the engine persists to `MJ: Process Runs` / `MJ: Process Run Details` via
 `GenericProcessRunTracker`. Pass `tracker: new NoOpTracker()` for fire-and-forget single-record work,
 or your own `IProcessRunTracker` to persist into domain-specific tables.
-
-## Feature Pipeline results
-
-`InferProcessor` (WorkType `Infer`) upserts each record's Feature Values on their key (see
-`@memberjunction/feature-pipelines`). Its `RecordResult` carries `Outcome` (`Unchanged` or `Upserted`),
-`PipelineVersion`, and `Warnings` (non-fatal problems of a succeeded record, stored in `MJ: Process Run Details.Warnings`).
 
 ## Output-mapping write-back
 

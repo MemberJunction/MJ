@@ -8,10 +8,9 @@
 
 import { BaseEntity, CompositeKey, DatabaseProviderBase, type EntityFieldInfo, EntityFieldTSType, type EntityInfo, IMetadataProvider, type IRunViewProvider, LogStatus, RunInEntityTransaction, RunView, UserInfo, LogError } from '@memberjunction/core';
 import { EscapeSQLString, NormalizeUUID, ResolveMappingRef, UUIDSet, UUIDsEqual } from '@memberjunction/global';
-import type { RecordProcessorContext, RecordRef, RecordResult, TagWriteBackPreview, WriteBackResult } from '@memberjunction/record-set-processor-base';
+import { MetadataProviderCapabilities, type RecordProcessorContext, type RecordRef, type RecordResult, type TagWriteBackPreview, type WriteBackResult } from '@memberjunction/record-set-processor-base';
 import { TagEngine, TaxonomyMode } from '@memberjunction/tag-engine';
 import type { MJTagEntity } from '@memberjunction/core-entities';
-import { MetadataProviderCapabilities } from '@memberjunction/feature-pipelines';
 
 /** Provenance information about the executing process run, passed down to write-back and mapped via `$run.*`. */
 export interface RunProvenance {

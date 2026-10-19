@@ -1049,6 +1049,70 @@ importers:
         specifier: ^4.0.18
         version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
 
+  packages/AI/Knowledge/FeaturePipelinesEngine:
+    dependencies:
+      '@memberjunction/actions':
+        specifier: 6.2.0-edge.4
+        version: link:../../../Actions/Engine
+      '@memberjunction/actions-base':
+        specifier: 6.2.0-edge.4
+        version: link:../../../Actions/Base
+      '@memberjunction/ai':
+        specifier: 6.2.0-edge.4
+        version: link:../../Core
+      '@memberjunction/ai-core-plus':
+        specifier: 6.2.0-edge.4
+        version: link:../../CorePlus
+      '@memberjunction/ai-prompts':
+        specifier: 6.2.0-edge.4
+        version: link:../../Prompts
+      '@memberjunction/aiengine':
+        specifier: 6.2.0-edge.4
+        version: link:../../Engine
+      '@memberjunction/core':
+        specifier: 6.2.0-edge.4
+        version: link:../../../MJCore
+      '@memberjunction/core-entities':
+        specifier: 6.2.0-edge.4
+        version: link:../../../MJCoreEntities
+      '@memberjunction/entity-documents':
+        specifier: 6.2.0-edge.4
+        version: link:../../EntityDocuments
+      '@memberjunction/feature-pipelines':
+        specifier: 6.2.0-edge.4
+        version: link:../FeaturePipelines
+      '@memberjunction/global':
+        specifier: 6.2.0-edge.4
+        version: link:../../../MJGlobal
+      '@memberjunction/record-set-processor':
+        specifier: 6.2.0-edge.4
+        version: link:../../../RecordSetProcessor/engine
+      '@memberjunction/record-set-processor-base':
+        specifier: 6.2.0-edge.4
+        version: link:../../../RecordSetProcessor/base
+      '@memberjunction/templates':
+        specifier: 6.2.0-edge.4
+        version: link:../../../Templates/engine
+      '@memberjunction/testing-engine':
+        specifier: 6.2.0-edge.4
+        version: link:../../../TestingFramework/Engine
+      '@memberjunction/testing-engine-base':
+        specifier: 6.2.0-edge.4
+        version: link:../../../TestingFramework/EngineBase
+    devDependencies:
+      '@memberjunction/unit-testing':
+        specifier: 6.2.0-edge.4
+        version: link:../../../UnitTesting
+      '@types/node':
+        specifier: 24.10.11
+        version: 24.10.11
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.0.18
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+
   packages/AI/Knowledge/Pipeline:
     dependencies:
       '@memberjunction/ai':
@@ -4838,6 +4902,9 @@ importers:
       '@memberjunction/export-engine':
         specifier: 6.2.0-edge.4
         version: link:../../../MJExportEngine
+      '@memberjunction/feature-pipelines':
+        specifier: 6.2.0-edge.4
+        version: link:../../../AI/Knowledge/FeaturePipelines
       '@memberjunction/global':
         specifier: 6.2.0-edge.4
         version: link:../../../MJGlobal
@@ -14527,12 +14594,6 @@ importers:
       '@memberjunction/core-entities':
         specifier: 6.2.0-edge.4
         version: link:../../MJCoreEntities
-      '@memberjunction/entity-documents':
-        specifier: 6.2.0-edge.4
-        version: link:../../AI/EntityDocuments
-      '@memberjunction/feature-pipelines':
-        specifier: 6.2.0-edge.4
-        version: link:../../AI/Knowledge/FeaturePipelines
       '@memberjunction/field-rules-transforms':
         specifier: 6.2.0-edge.4
         version: link:../../FieldRulesTransforms
@@ -14870,9 +14931,6 @@ importers:
       '@memberjunction/core-entities':
         specifier: 6.2.0-edge.4
         version: link:../../MJCoreEntities
-      '@memberjunction/feature-pipelines':
-        specifier: 6.2.0-edge.4
-        version: link:../../AI/Knowledge/FeaturePipelines
       '@memberjunction/global':
         specifier: 6.2.0-edge.4
         version: link:../../MJGlobal
@@ -14909,9 +14967,6 @@ importers:
       '@memberjunction/templates':
         specifier: 6.2.0-edge.4
         version: link:../../Templates/engine
-      '@memberjunction/testing-engine':
-        specifier: 6.2.0-edge.4
-        version: link:../../TestingFramework/Engine
       cron-parser:
         specifier: ^4.9.0
         version: 4.9.0
@@ -15315,6 +15370,9 @@ importers:
       '@memberjunction/feature-pipelines':
         specifier: 6.2.0-edge.4
         version: link:../AI/Knowledge/FeaturePipelines
+      '@memberjunction/feature-pipelines-engine':
+        specifier: 6.2.0-edge.4
+        version: link:../AI/Knowledge/FeaturePipelinesEngine
       '@memberjunction/generic-database-provider':
         specifier: 6.2.0-edge.4
         version: link:../GenericDatabaseProvider
@@ -15625,6 +15683,9 @@ importers:
       '@memberjunction/feature-pipelines':
         specifier: 6.2.0-edge.4
         version: link:../AI/Knowledge/FeaturePipelines
+      '@memberjunction/feature-pipelines-engine':
+        specifier: 6.2.0-edge.4
+        version: link:../AI/Knowledge/FeaturePipelinesEngine
       '@memberjunction/generic-database-provider':
         specifier: 6.2.0-edge.4
         version: link:../GenericDatabaseProvider
@@ -16020,21 +16081,12 @@ importers:
       '@memberjunction/credentials':
         specifier: 6.2.0-edge.4
         version: link:../../Credentials/Engine
-      '@memberjunction/feature-pipelines':
-        specifier: 6.2.0-edge.4
-        version: link:../../AI/Knowledge/FeaturePipelines
       '@memberjunction/global':
         specifier: 6.2.0-edge.4
         version: link:../../MJGlobal
       '@memberjunction/interactive-component-types':
         specifier: 6.2.0-edge.4
         version: link:../../InteractiveComponents
-      '@memberjunction/record-set-processor':
-        specifier: 6.2.0-edge.4
-        version: link:../../RecordSetProcessor/engine
-      '@memberjunction/record-set-processor-base':
-        specifier: 6.2.0-edge.4
-        version: link:../../RecordSetProcessor/base
       '@memberjunction/rubrics':
         specifier: 6.2.0-edge.4
         version: link:../../Rubrics/Engine
@@ -16054,9 +16106,6 @@ importers:
         specifier: ^3.25.0
         version: 3.25.76
     devDependencies:
-      '@memberjunction/unit-testing':
-        specifier: 6.2.0-edge.4
-        version: link:../../UnitTesting
       '@types/debug':
         specifier: ^4.1.12
         version: 4.1.12
@@ -16211,6 +16260,9 @@ importers:
       '@memberjunction/feature-pipelines':
         specifier: 6.2.0-edge.4
         version: link:../../AI/Knowledge/FeaturePipelines
+      '@memberjunction/feature-pipelines-engine':
+        specifier: 6.2.0-edge.4
+        version: link:../../AI/Knowledge/FeaturePipelinesEngine
       '@memberjunction/generic-database-provider':
         specifier: 6.2.0-edge.4
         version: link:../../GenericDatabaseProvider

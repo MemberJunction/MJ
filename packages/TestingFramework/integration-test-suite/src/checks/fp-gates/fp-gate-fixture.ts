@@ -13,10 +13,11 @@ import { KnowledgeHubMetadataEngine } from '@memberjunction/core-entities';
 import type { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
 import { EscapeSQLString, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
-import { FeaturePipelinePin, type DataFeatureSpec } from '@memberjunction/feature-pipelines';
+import { FeaturePipelinePin, type DataFeatureSpec, type FeaturePipelineRunResult } from '@memberjunction/feature-pipelines';
+import '@memberjunction/feature-pipelines-engine';
+import type { FeaturePipelineGoldenSetInput, GoldenCase } from '@memberjunction/feature-pipelines-engine';
 import { RecordProcessExecutor } from '@memberjunction/record-set-processor';
-import type { FeaturePipelineRunResult, ProcessRunResult, TriggeredByValue } from '@memberjunction/record-set-processor-base';
-import type { FeaturePipelineGoldenSetInput, GoldenCase } from '@memberjunction/testing-engine';
+import type { ProcessRunResult, TriggeredByValue } from '@memberjunction/record-set-processor-base';
 import { Settle, type FeaturePipelineGateFixture, type IntegrationCheckContext } from '@memberjunction/testing-integration';
 import { FeaturePipelineGateStubTable, type StubAnswer } from './feature-pipeline-gate-stub-driver';
 import { FORCED_INVALID, GOLDEN_TITLES, NON_EXISTENT_FUNCTION_ID } from './golden-titles';
@@ -370,8 +371,8 @@ export class FeaturePipelineGateFixtures {
     public static async Run(ctx: IntegrationCheckContext, opts: FixtureRunOptions = {}): Promise<ProcessRunResult> {
         const fx = FeaturePipelineGateFixtures.Require(ctx);
         return new RecordProcessExecutor().RunByID(opts.RecordProcessID || fx.RecordProcessID, {
-            contextUser: ctx.User, provider: ctx.Provider, triggeredBy: opts.Trigger || 'OnDemand', dryRun: opts.DryRun,
-            SkipUnchanged: opts.SkipUnchanged, scope: { Kind: 'records', RecordIDs: opts.Records || Array.from(fx.Inputs.keys()) },
+            ContextUser: ctx.User, Provider: ctx.Provider, TriggeredBy: opts.Trigger || 'OnDemand', DryRun: opts.DryRun,
+            SkipUnchanged: opts.SkipUnchanged, Scope: { Kind: 'records', RecordIDs: opts.Records || Array.from(fx.Inputs.keys()) },
         });
     }
 

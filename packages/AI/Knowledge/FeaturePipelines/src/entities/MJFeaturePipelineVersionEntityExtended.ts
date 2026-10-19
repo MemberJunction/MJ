@@ -5,7 +5,7 @@
  */
 import { BaseEntity } from '@memberjunction/core';
 import { MJFeaturePipelineVersionEntity } from '@memberjunction/core-entities';
-import { IsPlainObject, RegisterClass, ValidationErrorInfo, ValidationErrorType, type ValidationResult } from '@memberjunction/global';
+import { IsPlainObject, RegisterClass, SafeJSONParse, ValidationErrorInfo, ValidationErrorType, type ValidationResult } from '@memberjunction/global';
 
 /** The fields the activation check reads. */
 export type VersionActivationFields = Pick<MJFeaturePipelineVersionEntity, 'Version' | 'Status' | 'Gated' | 'Threshold' | 'ResultValue' | 'GoldenSetTestRunID' | 'ResultDetails'>;
@@ -77,15 +77,8 @@ export class MJFeaturePipelineVersionEntityExtended extends MJFeaturePipelineVer
         if (!details) {
             return null;
         }
-        try {
-            const parsed: unknown = JSON.parse(details);
-            return IsPlainObject(parsed) ? parsed : null;
-        } catch (e) {
-            if (e instanceof SyntaxError) {
-                return null;
-            }
-            throw e;
-        }
+        const parsed: unknown = SafeJSONParse<Record<string, unknown>>(details);
+        return IsPlainObject(parsed) ? parsed : null;
     }
 
     /** Whether a stored list entry is a well-formed {@link RequiredCaseFailure}. */

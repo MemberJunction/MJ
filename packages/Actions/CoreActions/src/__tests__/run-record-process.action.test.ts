@@ -36,18 +36,18 @@ describe('RunRecordProcessAction: OverwriteHumanValues', () => {
     it('keeps human values when the param is absent', async () => {
         const result = await new TestableRunRecordProcess().Run(paramsWith([]));
         expect(result.Success).toBe(true);
-        expect(runByID.mock.calls[0][1].overwriteHumanValues).toBe(false);
+        expect(runByID.mock.calls[0][1].OverwriteHumanValues).toBe(false);
     });
 
     it('overwrites them when the param is true (any case, as a string or a boolean)', async () => {
         await new TestableRunRecordProcess().Run(paramsWith([{ Name: 'OverwriteHumanValues', Type: 'Input', Value: 'true' }]));
         await new TestableRunRecordProcess().Run(paramsWith([{ Name: 'overwritehumanvalues', Type: 'Input', Value: true }]));
-        expect(runByID.mock.calls.map((c) => c[1].overwriteHumanValues)).toEqual([true, true]);
+        expect(runByID.mock.calls.map((c) => c[1].OverwriteHumanValues)).toEqual([true, true]);
     });
 
     it('passes the caller\'s provider', async () => {
         const params = paramsWith([]);
         await new TestableRunRecordProcess().Run(params);
-        expect(runByID.mock.calls[0][1].provider).toBe(params.Provider);
+        expect(runByID.mock.calls[0][1].Provider).toBe(params.Provider);
     });
 });

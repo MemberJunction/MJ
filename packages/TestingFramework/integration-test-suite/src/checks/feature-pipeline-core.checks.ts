@@ -9,13 +9,23 @@
  * everything the bundle created.
  */
 import { RunView } from '@memberjunction/core';
-import type { MJFeaturePipelineVersionEntity, MJFeatureValueCacheEntity, MJRecordProcessEntity } from '@memberjunction/core-entities';
+import type { MJActionEntity, MJFeaturePipelineVersionEntity, MJFeatureValueCacheEntity, MJRecordProcessEntity } from '@memberjunction/core-entities';
+import { BaseAction } from '@memberjunction/actions';
+import { RunActionParams } from '@memberjunction/actions-base';
 import type { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
-import { EscapeSQLString, ExcludeByUUIDs, UUIDsEqual } from '@memberjunction/global';
-import type { DataFeatureSpec } from '@memberjunction/feature-pipelines';
-import { InferProcessor, RecordSetProcessor } from '@memberjunction/record-set-processor';
-import { ArraySource, type ProcessRunResult, type RecordRef, type TriggeredByValue } from '@memberjunction/record-set-processor-base';
+import { EscapeSQLString, ExcludeByUUIDs, MJGlobal, UUIDsEqual } from '@memberjunction/global';
+import { FeaturePipelineVersionService, type DataFeatureSpec } from '@memberjunction/feature-pipelines';
+import {
+    FeaturePipelineGoldenSetDriver,
+    FeaturePipelineVersionSteward,
+    InferProcessor,
+    StewardFeaturePipelineVersionAction,
+    type StewardFeaturePipelineActionContext,
+} from '@memberjunction/feature-pipelines-engine';
+import { ActionRecordProcessor, RecordProcessExecutor, RecordSetProcessor } from '@memberjunction/record-set-processor';
+import { ArraySource, RecordProcessorRegistry, type ProcessRunResult, type RecordRef, type TriggeredByValue } from '@memberjunction/record-set-processor-base';
+import { BaseTestDriver } from '@memberjunction/testing-engine';
 import {
     Assert, AssertDeepEqual, AssertEqual, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck,
 } from '@memberjunction/testing-integration';
@@ -103,10 +113,10 @@ class FeaturePipelineCoreBundle {
         const rp = await ctx.Provider.GetEntityObject<MJRecordProcessEntity>('MJ: Record Processes', ctx.User);
         Assert(await rp.Load(fx.RecordProcessID), 'load the bundle pipeline');
         return RecordSetProcessor.Instance.Process({
-            source: new ArraySource(refs, fx.EntityID), processor: InferProcessor.FromRecordProcess(rp, ctx.Provider),
-            contextUser: ctx.User, provider: ctx.Provider, recordProcessID: fx.RecordProcessID, entityID: fx.EntityID,
-            triggeredBy: opts.Trigger || 'OnDemand', dryRun: opts.DryRun, FeaturePipeline: true,
-            skipUnchanged: opts.SkipUnchanged === true, watermarkStrategy: 'Checksum', batchSize: 100,
+            Source: new ArraySource(refs, fx.EntityID), Processor: InferProcessor.FromRecordProcess(rp, ctx.Provider),
+            ContextUser: ctx.User, Provider: ctx.Provider, RecordProcessID: fx.RecordProcessID, EntityID: fx.EntityID,
+            TriggeredBy: opts.Trigger || 'OnDemand', DryRun: opts.DryRun,
+            SkipUnchanged: opts.SkipUnchanged === true, WatermarkStrategy: 'Checksum', BatchSize: 100,
         });
     }
 
@@ -267,6 +277,78 @@ export const FeaturePipelineCoreChecks: NamedCheck[] = [
             } finally {
                 stub().Fallback = B.FALLBACK_ANSWER;
             }
+        },
+    },
+    {
+        Id: 'feature-pipeline-core.FP8', Name: 'FP8 RecordProcessorRegistry resolves Infer and RecordProcessExecutor.BuildProcessor executes it', RequiresMutation: true,
+        Fn: async (ctx) => {
+            AssertEqual(RecordProcessorRegistry.Instance.Has('Infer'), true, 'RecordProcessorRegistry has Infer');
+            const fx = F.Require(ctx);
+            const rp = await ctx.Provider.GetEntityObject<MJRecordProcessEntity>('MJ: Record Processes', ctx.User);
+            Assert(await rp.Load(fx.RecordProcessID), 'load the bundle pipeline');
+            const processor = new RecordProcessExecutor().BuildProcessor(rp, false, ctx.Provider);
+            const r = await RecordSetProcessor.Instance.Process({
+                Source: new ArraySource([B.Ref(ctx, 'fp8', 'Epsilon')], fx.EntityID),
+                Processor: processor,
+                ContextUser: ctx.User,
+                Provider: ctx.Provider,
+                RecordProcessID: fx.RecordProcessID,
+                EntityID: fx.EntityID,
+                TriggeredBy: 'OnDemand',
+                WatermarkStrategy: 'Checksum',
+                BatchSize: 100,
+            });
+            AssertEqual(r.Status, 'Completed', `status (${r.ErrorMessage || 'no error'})`);
+            AssertEqual(r.Success, 1, 'one record processed through the registry-built Infer processor');
+            AssertEqual((await F.Summary(ctx, r.ProcessRunID)).Attempted, 1, 'ResultSummary recorded Attempted = 1');
+        },
+    },
+    {
+        Id: 'feature-pipeline-core.FP9', Name: 'FP9 FeaturePipelineVersionSteward.StewardPipelineByID and StewardFeaturePipelineVersionAction steward the bundle pipeline', RequiresMutation: true,
+        Fn: async (ctx) => {
+            const fx = F.Require(ctx);
+            let active = (await B.Versions(ctx)).find((v) => v.Status === 'Active');
+            if (!active) {
+                AssertEqual((await B.Run(ctx, [B.Ref(ctx, 1, 'Alpha')])).Status, 'Completed', 'initial run');
+                active = (await B.Versions(ctx)).find((v) => v.Status === 'Active');
+            }
+            Assert(!!active, 'expected an active pipeline version');
+            await FeaturePipelineVersionService.Instance.MarkBackfilled(fx.RecordProcessID, active!.Version, ctx.User, ctx.Provider);
+
+            const outcomes = await FeaturePipelineVersionSteward.Instance.StewardPipelineByID(fx.RecordProcessID, {
+                ContextUser: ctx.User,
+                Provider: ctx.Provider,
+            });
+            AssertDeepEqual(outcomes, [{
+                RecordProcessID: fx.RecordProcessID,
+                Name: B.NAME,
+                Version: active!.Version,
+                Action: 'none',
+                Detail: 'nothing to do',
+            }], 'StewardPipelineByID outcomes');
+
+            const registeredAction = MJGlobal.Instance.ClassFactory.CreateInstance<BaseAction>(BaseAction, 'Steward Feature Pipeline Version');
+            Assert(registeredAction instanceof StewardFeaturePipelineVersionAction, 'ClassFactory resolves StewardFeaturePipelineVersionAction');
+            const action = registeredAction instanceof StewardFeaturePipelineVersionAction
+                ? registeredAction
+                : new StewardFeaturePipelineVersionAction();
+            const params = new RunActionParams<StewardFeaturePipelineActionContext>();
+            params.Action = await ctx.Provider.GetEntityObject<MJActionEntity>('MJ: Actions', ctx.User);
+            params.ContextUser = ctx.User;
+            params.Filters = [];
+            params.Params = ActionRecordProcessor.BuildActionParams(
+                { RecordProcessID: 'recordId' },
+                { EntityID: fx.EntityID, RecordID: fx.RecordProcessID, Record: { ID: fx.RecordProcessID } },
+            );
+            params.Context = { Provider: ctx.Provider };
+            const res = await action.Run(params);
+            AssertEqual(res.Success, true, `StewardFeaturePipelineVersionAction Success (${res.Message || 'no message'})`);
+            AssertEqual(res.ResultCode, 'SUCCESS', 'StewardFeaturePipelineVersionAction ResultCode');
+            AssertEqual(params.Params.find((p) => p.Name === 'LastAction')?.Value, 'none', 'LastAction output param');
+            AssertEqual(params.Params.find((p) => p.Name === 'Version')?.Value, active!.Version, 'Version output param');
+
+            const driver = MJGlobal.Instance.ClassFactory.CreateInstance<BaseTestDriver>(BaseTestDriver, 'FeaturePipelineGoldenSetDriver');
+            Assert(driver instanceof FeaturePipelineGoldenSetDriver, 'ClassFactory resolves FeaturePipelineGoldenSetDriver');
         },
     },
 ];

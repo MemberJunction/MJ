@@ -58,18 +58,18 @@ export class PredictiveStudioRunFeaturePipelineServerOperation extends Predictiv
     }
 
     const result = await this.runner().RunByID(input.featurePipelineID, {
-      contextUser: user,
-      provider,
-      triggeredBy: 'OnDemand',
-      singleRecordID: input.singleRecordID,
-      dryRun: input.dryRun,
-      overwriteHumanValues: input.overwriteHumanValues === true,
+      ContextUser: user,
+      Provider: provider,
+      TriggeredBy: 'OnDemand',
+      SingleRecordID: input.singleRecordID,
+      DryRun: input.dryRun,
+      OverwriteHumanValues: input.overwriteHumanValues === true,
       // The wire scope shape IS the substrate's RecordProcessScopeOverride (both are
       // the CodeGen-emitted `{ Kind: 'records' | 'view' | 'list' | 'filter'; … }`).
-      scope: input.scope as RecordProcessScopeOverride | undefined,
+      Scope: input.scope as RecordProcessScopeOverride | undefined,
       // Forward the executor's per-batch progress as typed RemoteOpProgress so an
       // attached caller's onProgress (and the over-the-wire channel) sees live progress.
-      onProgress: (p) =>
+      OnProgress: (p) =>
         context.emitProgress({
           OperationKey: this.OperationKey,
           Processed: p.Processed,
@@ -99,7 +99,7 @@ export class PredictiveStudioRunFeaturePipelineServerOperation extends Predictiv
       skipped: result.Skipped,
       error: result.Error,
       errorMessage: result.ErrorMessage,
-      ...(result.FeaturePipeline?.WouldRefuse ? { wouldRefuse: result.FeaturePipeline.WouldRefuse } : {}),
+      ...(result.WouldRefuse ? { wouldRefuse: result.WouldRefuse } : {}),
     };
   }
 

@@ -9,8 +9,7 @@ import { type MJAIPromptModelEntity, type MJFeatureValueCacheEntity, type MJFeat
 import type { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
 import { EscapeSQLString, UUIDSet, UUIDsEqual } from '@memberjunction/global';
-import { PromptTemplateContent } from '@memberjunction/feature-pipelines';
-import type { FeaturePipelineRunPin } from '@memberjunction/record-set-processor-base';
+import { PromptTemplateContent, type FeaturePipelineRunPin } from '@memberjunction/feature-pipelines';
 import { Assert, AssertEqual, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration';
 import { FeaturePipelineGateFixtures as F } from './fp-gates/fp-gate-fixture';
 import { FeaturePipelineGateStubTable } from './fp-gates/feature-pipeline-gate-stub-driver';

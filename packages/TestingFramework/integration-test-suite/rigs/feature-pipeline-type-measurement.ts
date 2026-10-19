@@ -184,7 +184,7 @@ class LiveMeasurementBackend implements MeasurementBackend {
         const processor = CreateMeasurementProcessor(type, spec);
         const entityID = this.entity().ID;
         // No recordProcessID or processRunID: nothing about this run is recorded as a pipeline run.
-        const context: RecordProcessorContext = { contextUser: this.ctx.user, provider: this.ctx.provider, entityID };
+        const context: RecordProcessorContext = { ContextUser: this.ctx.user, Provider: this.ctx.provider, EntityID: entityID };
         return { ProcessBatch: (ids) => processor.ProcessBatch(ids.map((id) => this.recordRef(entityID, id)), context) };
     }
 

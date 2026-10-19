@@ -29,7 +29,7 @@ class MockFacade implements IFeaturePipelineRunner {
     this.LastID = recordProcessID;
     this.LastOptions = options;
     // Drive a progress emission so the forwarding path is exercised.
-    options.onProgress?.({ Processed: 5, Success: 4, Error: 0, Skipped: 1, Total: 10 } as ProgressInfo);
+    options.OnProgress?.({ Processed: 5, Success: 4, Error: 0, Skipped: 1, Total: 10 } as ProgressInfo);
     return this.result;
   }
 }
@@ -86,11 +86,11 @@ describe('PredictiveStudioRunFeaturePipelineServerOperation — happy path', () 
 
     expect(facade.CallCount).toBe(1);
     expect(facade.LastID).toBe('fp-1');
-    expect(facade.LastOptions?.triggeredBy).toBe('OnDemand');
-    expect(facade.LastOptions?.dryRun).toBe(true);
-    expect(facade.LastOptions?.scope).toEqual({ Kind: 'view', ViewID: 'v9' });
-    expect(facade.LastOptions?.contextUser).toBe(ctx.user);
-    expect(facade.LastOptions?.provider).toBe(ctx.provider);
+    expect(facade.LastOptions?.TriggeredBy).toBe('OnDemand');
+    expect(facade.LastOptions?.DryRun).toBe(true);
+    expect(facade.LastOptions?.Scope).toEqual({ Kind: 'view', ViewID: 'v9' });
+    expect(facade.LastOptions?.ContextUser).toBe(ctx.user);
+    expect(facade.LastOptions?.Provider).toBe(ctx.provider);
 
     expect(result.Success).toBe(true);
     expect(result.Output).toEqual({
@@ -102,7 +102,7 @@ describe('PredictiveStudioRunFeaturePipelineServerOperation — happy path', () 
       error: 1,
       errorMessage: undefined,
     });
-    // The substrate's onProgress was forwarded as typed RemoteOpProgress.
+    // The substrate's OnProgress was forwarded as typed RemoteOpProgress.
     expect(ctx.Progress.length).toBeGreaterThanOrEqual(1);
     expect(ctx.Progress[0].Processed).toBe(5);
     expect(ctx.Progress[0].Total).toBe(10);
@@ -114,9 +114,9 @@ describe('PredictiveStudioRunFeaturePipelineServerOperation — human values', (
     const facade = new MockFacade(fakeRunResult());
     const op = new TestableRunFeatureOp(facade);
     await op.ExecuteServer({ featurePipelineID: 'fp-1' }, new CapturingContext());
-    expect(facade.LastOptions?.overwriteHumanValues).toBe(false);
+    expect(facade.LastOptions?.OverwriteHumanValues).toBe(false);
     await op.ExecuteServer({ featurePipelineID: 'fp-1', overwriteHumanValues: true }, new CapturingContext());
-    expect(facade.LastOptions?.overwriteHumanValues).toBe(true);
+    expect(facade.LastOptions?.OverwriteHumanValues).toBe(true);
   });
 });
 
@@ -146,10 +146,7 @@ describe('PredictiveStudioRunFeaturePipelineServerOperation — validation/error
 
   it('returns why a real run would be refused for a dry run whose version is not activated, and nothing otherwise', async () => {
     const refusal = 'Feature Pipeline version v6 is not activated';
-    const facade = new MockFacade(fakeRunResult({
-      FeaturePipeline: { RecordProcessID: 'fp-1', Pin: null, Attempted: 1, Upserted: 0, Unchanged: 0, Previewed: 1,
-        RejectedInvalid: 0, BelowConfidence: 0, Failed: 0, Skipped: 0, HumanValuesPreserved: 0, Status: 'completed', WouldRefuse: refusal },
-    }));
+    const facade = new MockFacade(fakeRunResult({ WouldRefuse: refusal }));
     const result = await new TestableRunFeatureOp(facade).ExecuteServer({ featurePipelineID: 'fp-1', dryRun: true }, new CapturingContext());
     expect(result.Output?.wouldRefuse).toBe(refusal);
 

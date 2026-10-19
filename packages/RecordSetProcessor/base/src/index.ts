@@ -5,7 +5,7 @@
  */
 
 export * from './types';
-export * from './feature-pipeline-run-results';
+export * from './metadata-provider-capabilities';
 export * from './interfaces';
 export * from './sources';
 export * from './registry';

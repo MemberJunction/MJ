@@ -137,8 +137,8 @@ export class GenericProcessRunTracker implements IProcessRunTracker {
         if (summary.ErrorMessage) {
             run.ErrorMessage = summary.ErrorMessage;
         }
-        if (summary.FeaturePipeline) {
-            run.ResultSummary = JSON.stringify(summary.FeaturePipeline);
+        if (summary.ResultSummary !== undefined) {
+            run.ResultSummary = JSON.stringify(summary.ResultSummary);
         }
         const saved = await run.Save();
         if (!saved) {

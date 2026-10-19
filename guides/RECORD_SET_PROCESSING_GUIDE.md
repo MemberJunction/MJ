@@ -129,7 +129,7 @@ A **Record Process** (`MJ: Record Processes`) is a saved operation. Its columns 
 | `ScheduleEnabled` + `CronExpression` + `Timezone` | trigger on a schedule |
 | `OnDemandEnabled` | runnable from the UI / API |
 | `BatchSize` / `MaxConcurrency` | substrate knobs |
-| `SkipUnchanged` + `WatermarkStrategy` | skip a record whose input is unchanged since it was last processed (`Checksum`, the default, or `UpdatedAt`), unless the run overwrites human values. A real `Checksum` run without `SkipUnchanged` (such as a Feature Pipeline version backfill) skips nothing but writes the watermark of each record whose processor computes a basis hash (`Infer`) |
+| `SkipUnchanged` + `WatermarkStrategy` | skip a record whose input is unchanged since it was last processed (`Checksum`, the default, or `UpdatedAt`), unless the run overwrites human values. A real `Checksum` run without `SkipUnchanged` (such as a version backfill) skips nothing but writes the watermark of each record whose processor computes a basis hash (`Infer`) |
 
 The **`RecordProcessExecutor`** facade turns a row into a substrate run:
 
@@ -232,24 +232,6 @@ await new RecordProcessExecutor().RunByID(id, { contextUser, dryRun: true,  scop
 await new RecordProcessExecutor().RunByID(id, { contextUser, dryRun: false, scope });
 ```
 
-### Infer (Feature Pipeline) dry runs
-
-An `Infer` dry run writes nothing (no Dedup Cache entry, Feature Value, watermark, target or child row) but still calls
-the model, so its `MJ: AI Prompt Runs` are recorded and cost what a real run of those records would.
-
-- Without a scope or a single record it previews at most **25** records (`DryRunSampleSize` overrides it).
-- A record whose real write would fail is reported `Failed` with the write-back's reason (`PreviewErrors`).
-- It reports, in `WouldRefuse`, why a real run would be refused (a version that has not passed its golden set), and
-  never registers or activates a version. `RecordProcess.RunNow` / `PredictiveStudio.RunFeaturePipeline` return it as
-  `wouldRefuse`; the Bulk Operations dialog then offers no Apply.
-- Each record's `previewFields` / `previewChildren` / `previewTags` hold only what the real write would change, so the
-  dialog's change count is what the following real run writes. Outputs withheld below their confidence floor are listed
-  in `withheldFields` (and `withheldKeptFields` when the column does not allow null) and `withheldChildEntities`.
-- An output with no `Target` ("Feature value only") writes nothing to the record; its dry-run result is
-  `previewFeatureValues` (`FeatureName`, `Previous`, `Proposed`), listing the Feature Values a real run would store.
-  The dialog shows one `<Feature> (feature value)` row per item, counted as a change like any other row; a record
-  with no such rows counts as unchanged.
-
 ---
 
 ## 7. Triggers — three ways a Record Process runs
@@ -318,10 +300,9 @@ graph LR
 - The **run header** tracks status (`Running → Completed / Failed / Paused / Cancelled`), the counts
   (`Processed / Success / Error / Skipped`), the `DryRun` flag, the resume cursor (`LastProcessedOffset` /
   `LastProcessedKey`), and `CancellationRequested`.
-- For a Feature Pipeline (every `Infer` Record Process), `ResultSummary` holds the `FeaturePipelineRunResult` JSON:
-  the pin the run used and the tallies `Attempted`, `Upserted`, `Unchanged`, `Previewed`,
-  `RejectedInvalid`, `BelowConfidence`, `Failed`, `Skipped`, `HumanValuesPreserved`. **A Feature Pipeline run with any
-  failed or rejected record ends `Failed`**; other work types keep their status rules.
+- When a processor implements `BuildRunSummary`, `ResultSummary` holds its JSON summary (and `WouldRefuse` on a dry run
+  when a real run would be refused). Processors that set `FailRunOnRecordError = true` mark the run `Failed` whenever
+  any record failed or was rejected by output constraints; other work types keep their status rules.
 - Each **detail** is one terminal record outcome plus its `ResultPayload` (for FieldRules, the field diff that
   was — or would be — applied). Details are written **fire-and-forget** by the tracker's `BaseEntitySaveQueue`
   and flushed before the run finalizes.

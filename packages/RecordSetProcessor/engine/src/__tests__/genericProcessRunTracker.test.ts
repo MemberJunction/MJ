@@ -54,9 +54,9 @@ describe('GenericProcessRunTracker.CompleteRun', () => {
         await new GenericProcessRunTracker().CompleteRun(runHandle, summary, user);
     };
 
-    it('persists a Feature Pipeline run result as the run\'s ResultSummary JSON', async () => {
+    it('persists a processor run result summary as the run\'s ResultSummary JSON', async () => {
         const run: RunDouble = { ID: 'run-1', ResultSummary: null, Save: vi.fn().mockResolvedValue(true) };
-        await complete(run, { ...counts, Status: 'Completed', FeaturePipeline: result });
+        await complete(run, { ...counts, Status: 'Completed', ResultSummary: result });
         expect(JSON.parse(run.ResultSummary || '{}')).toEqual(result);
     });
 

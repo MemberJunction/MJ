@@ -64,7 +64,7 @@ describe('AgentRecordProcessor', () => {
 });
 
 describe('WriteBackProcessor — run-level Preflight forwarding', () => {
-    const ctx = { contextUser: {} as never, provider: {} as never };
+    const ctx = { ContextUser: {} as never, Provider: {} as never };
 
     it('forwards Preflight to the wrapped processor so its refusal reaches the engine', async () => {
         const inner = {
@@ -83,7 +83,7 @@ describe('WriteBackProcessor — run-level Preflight forwarding', () => {
 });
 
 describe('WriteBackProcessor.ProcessBatch — inner result shapes', () => {
-    const ctx = { contextUser: {} as never, provider: {} as never };
+    const ctx = { ContextUser: {} as never, Provider: {} as never };
     const recordsIn: RecordRef[] = [
         { EntityID: 'E', RecordID: 'a' },
         { EntityID: 'E', RecordID: 'b' },
@@ -132,7 +132,7 @@ describe('FieldRulesProcessor on a dry run', () => {
         const provider = new EntitiesOnlyProvider([widgets]);
         vi.spyOn(provider, 'GetEntityObject').mockResolvedValue(new LoadedWidget(widgets));
         const processor = new FieldRulesProcessor({ RuleSet: { Rules: [] } });
-        const result = await processor.ProcessRecord({ EntityID: 'E', RecordID: 'w1' }, { contextUser: new UserInfo(), provider, DryRun: true });
+        const result = await processor.ProcessRecord({ EntityID: 'E', RecordID: 'w1' }, { ContextUser: new UserInfo(), Provider: provider, DryRun: true });
         expect(result.Status).toBe('Succeeded');
         expect(apply.mock.calls[0][2]).toEqual({ DryRun: true });
     });

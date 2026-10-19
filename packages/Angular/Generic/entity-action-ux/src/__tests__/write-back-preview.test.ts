@@ -10,27 +10,27 @@ function previewOf(overrides: Partial<WriteBackResult>): WriteBackResult {
 }
 
 describe('WriteBackPreviewModel.Build', () => {
-    it('lists a previewed feature value as a change', () => {
-        const rows = WriteBackPreviewModel.Build('r1', previewOf({ previewFeatureValues: [
-            { FeatureName: 'YearsInTrade', Previous: null, Proposed: 7 },
-            { FeatureName: 'Specialty', Previous: 'alpine', Proposed: 'chèvre' },
+    it('lists a previewed value as a change using Label when present or Name when absent', () => {
+        const rows = WriteBackPreviewModel.Build('r1', previewOf({ previewValues: [
+            { Name: 'YearsInTrade', Label: 'YearsInTrade (feature value)', Previous: null, Proposed: 7 },
+            { Name: 'Specialty', Previous: 'alpine', Proposed: 'chèvre' },
         ] }));
 
         expect(rows.Changes).toEqual([
             { Field: 'YearsInTrade (feature value)', OldValue: null, NewValue: 7, Applied: true, Changed: true, IsAddition: true },
-            { Field: 'Specialty (feature value)', OldValue: 'alpine', NewValue: 'chèvre', Applied: true, Changed: true, IsAddition: false },
+            { Field: 'Specialty', OldValue: 'alpine', NewValue: 'chèvre', Applied: true, Changed: true, IsAddition: false },
         ]);
     });
 
     it('treats an undefined Previous as an addition, as a null one', () => {
-        const rows = WriteBackPreviewModel.Build('r1', previewOf({ previewFeatureValues: [{ FeatureName: 'Score', Previous: undefined, Proposed: 0.75 }] }));
+        const rows = WriteBackPreviewModel.Build('r1', previewOf({ previewValues: [{ Name: 'Score', Label: 'Score (feature value)', Previous: undefined, Proposed: 0.75 }] }));
 
         expect(rows.Changes).toEqual([{ Field: 'Score (feature value)', OldValue: undefined, NewValue: 0.75, Applied: true, Changed: true, IsAddition: true }]);
     });
 
-    it('lists field rows before feature-value rows', () => {
+    it('lists field rows before previewed value rows', () => {
         const rows = WriteBackPreviewModel.Build('r1', previewOf({
-            previewFeatureValues: [{ FeatureName: 'Score', Previous: 0.5, Proposed: 0.75 }],
+            previewValues: [{ Name: 'Score', Label: 'Score (feature value)', Previous: 0.5, Proposed: 0.75 }],
             previewFields: { Tier: 'Gold' },
         }));
 

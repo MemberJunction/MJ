@@ -1340,13 +1340,27 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
     }
 
     public UpdateOutputProp(index: number, prop: 'Name' | 'Ref', event: Event): void {
+        if (!this.spec?.Outputs || index < 0 || index >= this.spec.Outputs.length) return;
+        const output = this.spec.Outputs[index];
         const val = (event.target as HTMLInputElement).value;
-        this.spec.Outputs[index][prop] = val;
+        if (prop === 'Name') {
+            const prevName = output.Name;
+            output.Name = val;
+            if (!output.Ref || output.Ref === `$.${prevName}`) {
+                output.Ref = `$.${val}`;
+            }
+        } else if (prop === 'Ref') {
+            output.Ref = val;
+        }
         this.emitChanges();
     }
 
     /** @deprecated Use {@link UpdateOutputProp}. */
     public updateOutputProp(index: number, prop: 'Name' | 'Ref', event: Event): void {
+        return this.UpdateOutputProp(index, prop, event);
+    }
+
+    public onOutputPropertyChange(index: number, prop: 'Name' | 'Ref', event: Event): void {
         return this.UpdateOutputProp(index, prop, event);
     }
 

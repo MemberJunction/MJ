@@ -4,7 +4,7 @@
  * @module @memberjunction/ng-entity-action-ux
  */
 import { UUIDsEqual } from '@memberjunction/global';
-import type { FeatureValuePreview, TagWriteBackPreview, WriteBackResult } from '@memberjunction/record-set-processor-base';
+import type { TagWriteBackPreview, WriteBackResult, WriteBackValuePreview } from '@memberjunction/record-set-processor-base';
 import { DisplayValue } from './scope';
 
 /** One change the preview shows: a field's old and new value, or a value, row or tag the write stores. */
@@ -39,7 +39,7 @@ export class WriteBackPreviewModel {
             ...Object.entries(writeBack.previewFields || {}).map(([field, value]) => WriteBackPreviewModel.addition(field, value)),
             ...(writeBack.previewChildren || []).map((values) => WriteBackPreviewModel.childChange(recordID, values)),
             ...(writeBack.previewTags || []).flatMap((t) => WriteBackPreviewModel.tagChange(t)),
-            ...(writeBack.previewFeatureValues || []).map(WriteBackPreviewModel.featureValueChange),
+            ...(writeBack.previewValues || []).map(WriteBackPreviewModel.valueChange),
         ];
         return { Changes: changes, Errors: [], Withheld: WriteBackPreviewModel.WithheldLines(writeBack) };
     }
@@ -70,10 +70,10 @@ export class WriteBackPreviewModel {
         return tag.created ? [WriteBackPreviewModel.addition('Tag', `${tag.tagText} (new tag)`)] : [];
     }
 
-    /** A feature value an output with no write target would store: its previous value and the proposed one (no previous value is an addition). */
-    private static featureValueChange(p: FeatureValuePreview): PreviewChange {
+    /** A processor-deferred value an output with no write target would store: its previous value and the proposed one (no previous value is an addition). */
+    private static valueChange(p: WriteBackValuePreview): PreviewChange {
         return {
-            Field: `${p.FeatureName} (feature value)`,
+            Field: p.Label || p.Name,
             OldValue: p.Previous,
             NewValue: p.Proposed,
             Applied: true,

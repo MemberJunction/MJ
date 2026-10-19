@@ -26,7 +26,7 @@ describe('RecordProcessScheduledJobDriver', () => {
         const result = await new RecordProcessScheduledJobDriver().Execute(context);
         expect(result.Success).toBe(true);
         expect(runByID.mock.calls[0][0]).toBe('rp-1');
-        expect(runByID.mock.calls[0][1].provider).toBe(provider);
-        expect(runByID.mock.calls[0][1].scheduledJobRunID).toBe('job-run-1');
+        expect(runByID.mock.calls[0][1].Provider).toBe(provider);
+        expect(runByID.mock.calls[0][1].ScheduledJobRunID).toBe('job-run-1');
     });
 });

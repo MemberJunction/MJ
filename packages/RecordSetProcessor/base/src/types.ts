@@ -52,7 +52,7 @@ export type TriggeredByValue = 'OnChange' | 'Schedule' | 'OnDemand' | 'Manual';
 /** The kind of record-set source. Mirrors the `MJ: Process Runs.SourceType` value list. */
 export type SourceTypeValue = 'View' | 'List' | 'Filter' | 'Array' | 'Keyset' | 'SingleRecord';
 
-/** Whether a Feature Pipeline record changed anything (mirrors `FeatureValueWriteResult` in `@memberjunction/feature-pipelines`). */
+/** Whether a record write changed anything. */
 export type RecordWriteOutcome = 'Upserted' | 'Unchanged';
 
 /** Why a record failed, when the run counts it apart: an output broke its value constraint. */
@@ -68,7 +68,7 @@ export interface RecordResult {
     ErrorMessage?: string;
     /** Set when the answer was rejected (see {@link RecordFailureKind}): the run counts it apart from other failures. */
     FailureKind?: RecordFailureKind;
-    /** Feature Pipelines: the outputs answered below their confidence floor and withheld. */
+    /** The outputs answered below their confidence floor and withheld. */
     BelowConfidenceOutputs?: string[];
     /** Non-fatal problems with this record's processing (e.g. its cache entry could not be stored). */
     Warnings?: string[];
@@ -84,7 +84,7 @@ export interface RecordResult {
     AIPromptRunID?: string;
     /**
      * The `MJ: AI Prompts` row behind `AIPromptRunID` and `PromptVersionHash`, when it is not the Record
-     * Process's own prompt (a Decision pipeline's escalated record is answered by its LLM pipeline's prompt).
+     * Process's own prompt (an escalated record is answered by its target prompt).
      * Absent means the process's own prompt.
      */
     PromptID?: string;
@@ -94,46 +94,11 @@ export interface RecordResult {
     FeatureValueCacheID?: string;
     /** Per-output confidence scores keyed by output Name: the driver's own, else the answer's at each ConfidenceRef. */
     Confidence?: Record<string, number>;
-    /** Feature Pipelines: whether this record's values and write-back changed anything. Absent on a dry run. */
+    /** Whether this record's values and write-back changed anything. Absent on a dry run. */
     Outcome?: RecordWriteOutcome;
-    /** Feature Pipelines: true when a dry run computed the record (nothing written, no `Outcome`). */
+    /** True when a dry run computed the record (nothing written, no `Outcome`). */
     DryRun?: boolean;
-    PipelineVersion?: number | null;
     HumanValuesPreserved?: number;
-    /** Feature Pipelines: the pin the record was computed under; the run result reports it. */
-    PipelinePin?: FeaturePipelineRunPin;
-}
-
-/** The pin a Feature Pipeline run computed under: its pipeline version and the Feature Value key hashes. */
-export interface FeaturePipelineRunPin {
-    PipelineVersion: number | null;
-    PromptVersionHash: string | null;
-    AIModelID: string | null;
-    ParametersHash: string | null;
-}
-
-/** Result of one Feature Pipeline run; persisted as `MJ: Process Runs.ResultSummary`. */
-export interface FeaturePipelineRunResult {
-    RecordProcessID: string;
-    /** The run's pin: the first record's, else the processor's run-level pin (a run whose records were all skipped). */
-    Pin: FeaturePipelineRunPin | null;
-    /** Records the run handed to the processor: every processed record except those skipped on their watermark. */
-    Attempted: number;
-    Upserted: number;
-    Unchanged: number;
-    /** Records a dry run computed: it writes nothing, so they are neither Upserted nor Unchanged. */
-    Previewed: number;
-    /** Records whose output failed its constraints (counted apart from {@link Failed}). */
-    RejectedInvalid: number;
-    /** Records with outputs withheld below their confidence floor (also counted as Upserted, Unchanged or Previewed). */
-    BelowConfidence: number;
-    Failed: number;
-    Skipped: number;
-    HumanValuesPreserved: number;
-    /** `completed` only when the run completed with no failed record; else `failed`. */
-    Status: 'completed' | 'failed';
-    /** A dry run only: why a real run would be refused (e.g. its Feature Pipeline version is not activated). */
-    WouldRefuse?: string;
 }
 
 /** Running tallies for a process run. */
@@ -148,7 +113,7 @@ export interface RunCounts {
     Skipped: number;
 }
 
-/** Progress snapshot emitted to a run's `onProgress` callback. */
+/** Progress snapshot emitted to a run's `OnProgress` callback. */
 export interface ProgressInfo extends RunCounts {
     /** Known total record count, or null when the total is not known up-front. */
     Total: number | null;
@@ -168,8 +133,10 @@ export interface ProcessRunSummary extends RunCounts {
     EndTime?: Date;
     /** Run-level error message when `Status` is `Failed`. */
     ErrorMessage?: string;
-    /** A Feature Pipeline run's result (runs with `FeaturePipeline`); the default tracker persists it as `ResultSummary`. */
-    FeaturePipeline?: FeaturePipelineRunResult;
+    /** Optional processor-specific run summary persisted as JSON in `MJ: Process Runs.ResultSummary`. */
+    ResultSummary?: unknown;
+    /** On a dry run, why a real run would be refused (e.g. a prerequisite or version gate is not met). */
+    WouldRefuse?: string;
 }
 
 /** Result returned by `RecordSetProcessor.Process()` — a run summary plus the persisted run ID. */
@@ -206,9 +173,9 @@ export interface WriteBackResult {
     /** IDs of human-owned child rows the result also proposed and that were left untouched. */
     preservedHumanChildIDs?: string[];
     preservedHumanFields?: string[];
-    /** Fields whose Human value a run that overwrites human values retired (the field is the pipeline's again). */
+    /** Fields whose Human value a run that overwrites human values retired (the field is the processor's again). */
     retiredHumanFields?: string[];
-    /** Mapped fields whose answer was withheld below its confidence floor: cleared where the pipeline wrote the value. */
+    /** Mapped fields whose answer was withheld below its confidence floor: cleared where the processor wrote the value. */
     withheldFields?: string[];
     withheldKeptFields?: string[];
     withheldChildEntities?: string[];
@@ -226,16 +193,15 @@ export interface WriteBackResult {
     previewTags?: TagWriteBackPreview[];
     /** On a dry run: what the real write would fail on. Absent when the real write would go through. */
     previewErrors?: string[];
-    /** On a dry run: the Feature Values the pipeline's outputs with no write target would store. Absent when none would change. */
-    previewFeatureValues?: FeatureValuePreview[];
+    /** On a dry run: processor-deferred record values (e.g. unmapped outputs) that would be stored. Absent when none would change. */
+    previewValues?: WriteBackValuePreview[];
 }
 
-/** On a dry run, a Feature Value an output with no write target would store: the record's latest stored value and the run's answer. */
-export interface FeatureValuePreview {
-    FeatureName: string;
-    /** The record's latest stored Pipeline value of the feature (a Human value is not consulted); null when it has none. `unknown`: a Feature Value is of any output type. */
+/** On a dry run, a processor-deferred value that would be stored: its name/label, previous stored value, and proposed value. */
+export interface WriteBackValuePreview {
+    Name: string;
+    Label?: string;
     Previous: unknown;
-    /** The value the run would store. `unknown`: a Feature Value is of any output type. */
     Proposed: unknown;
 }
 

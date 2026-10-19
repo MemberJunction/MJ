@@ -38,37 +38,37 @@ describe('WatermarkService', () => {
         (RunView as unknown as { mockResults: unknown[] }).mockResults = [];
     });
 
-    it('returns shouldSkip: false when skipUnchanged is false or strategy is None', async () => {
+    it('returns ShouldSkip: false when SkipUnchanged is false or Strategy is None', async () => {
         const records: RecordRef[] = [
             { EntityID: entityID, RecordID: 'rec-1', Record: { Name: 'Alice' } },
             { EntityID: entityID, RecordID: 'rec-2', Record: { Name: 'Bob' } },
         ];
 
         const decisionsNone = await WatermarkService.Instance.CheckBatchWatermarks({
-            recordProcessID,
-            entityID,
-            records,
-            strategy: 'None',
-            skipUnchanged: true,
-            contextUser: mockUser,
-            provider,
+            RecordProcessID: recordProcessID,
+            EntityID: entityID,
+            Records: records,
+            Strategy: 'None',
+            SkipUnchanged: true,
+            ContextUser: mockUser,
+            Provider: provider,
         });
 
-        expect(decisionsNone.get('rec-1')?.shouldSkip).toBe(false);
-        expect(decisionsNone.get('rec-2')?.shouldSkip).toBe(false);
+        expect(decisionsNone.get('rec-1')?.ShouldSkip).toBe(false);
+        expect(decisionsNone.get('rec-2')?.ShouldSkip).toBe(false);
 
         const decisionsDisabled = await WatermarkService.Instance.CheckBatchWatermarks({
-            recordProcessID,
-            entityID,
-            records,
-            strategy: 'Checksum',
-            skipUnchanged: false,
-            contextUser: mockUser,
-            provider,
+            RecordProcessID: recordProcessID,
+            EntityID: entityID,
+            Records: records,
+            Strategy: 'Checksum',
+            SkipUnchanged: false,
+            ContextUser: mockUser,
+            Provider: provider,
         });
 
-        expect(decisionsDisabled.get('rec-1')?.shouldSkip).toBe(false);
-        expect(decisionsDisabled.get('rec-2')?.shouldSkip).toBe(false);
+        expect(decisionsDisabled.get('rec-1')?.ShouldSkip).toBe(false);
+        expect(decisionsDisabled.get('rec-2')?.ShouldSkip).toBe(false);
     });
 
     it('evaluates UpdatedAt strategy correctly based on timestamp comparison', async () => {
@@ -101,20 +101,20 @@ describe('WatermarkService', () => {
         ];
 
         const decisions = await WatermarkService.Instance.CheckBatchWatermarks({
-            recordProcessID,
-            entityID,
-            records,
-            strategy: 'UpdatedAt',
-            skipUnchanged: true,
-            lastRunAt,
-            contextUser: mockUser,
-            provider,
+            RecordProcessID: recordProcessID,
+            EntityID: entityID,
+            Records: records,
+            Strategy: 'UpdatedAt',
+            SkipUnchanged: true,
+            LastRunAt: lastRunAt,
+            ContextUser: mockUser,
+            Provider: provider,
         });
 
-        expect(decisions.get('rec-old')?.shouldSkip).toBe(true);
-        expect(decisions.get('rec-equal')?.shouldSkip).toBe(false);
-        expect(decisions.get('rec-new')?.shouldSkip).toBe(false);
-        expect(decisions.get('rec-no-time')?.shouldSkip).toBe(false);
+        expect(decisions.get('rec-old')?.ShouldSkip).toBe(true);
+        expect(decisions.get('rec-equal')?.ShouldSkip).toBe(false);
+        expect(decisions.get('rec-new')?.ShouldSkip).toBe(false);
+        expect(decisions.get('rec-no-time')?.ShouldSkip).toBe(false);
     });
 
     it('evaluates Checksum strategy: skips unchanged row and processes changed row', async () => {
@@ -130,15 +130,15 @@ describe('WatermarkService', () => {
         };
 
         // Compute what hash rec-1 and rec-2 produce
-        const expectedHashRec1 = await WatermarkService.Instance.computeRecordBasisHash(
+        const expectedHashRec1 = await WatermarkService.Instance.ComputeRecordBasisHash(
             recordUnchanged,
             undefined,
-            { contextUser: mockUser, provider: {} as unknown as IMetadataProvider }
+            { ContextUser: mockUser, Provider: {} as unknown as IMetadataProvider }
         );
-        const expectedHashRec2 = await WatermarkService.Instance.computeRecordBasisHash(
+        const expectedHashRec2 = await WatermarkService.Instance.ComputeRecordBasisHash(
             recordChanged,
             undefined,
-            { contextUser: mockUser, provider: {} as unknown as IMetadataProvider }
+            { ContextUser: mockUser, Provider: {} as unknown as IMetadataProvider }
         );
         expect(expectedHashRec1).toBeDefined();
         expect(expectedHashRec2).toBeDefined();
@@ -161,25 +161,25 @@ describe('WatermarkService', () => {
         ];
 
         const decisions = await WatermarkService.Instance.CheckBatchWatermarks({
-            recordProcessID,
-            entityID,
-            records: [recordUnchanged, recordChanged],
-            strategy: 'Checksum',
-            skipUnchanged: true,
-            contextUser: mockUser,
-            provider,
+            RecordProcessID: recordProcessID,
+            EntityID: entityID,
+            Records: [recordUnchanged, recordChanged],
+            Strategy: 'Checksum',
+            SkipUnchanged: true,
+            ContextUser: mockUser,
+            Provider: provider,
         });
 
-        expect(decisions.get('rec-1')?.shouldSkip).toBe(true);
-        expect(decisions.get('rec-1')?.basisHash).toBe(expectedHashRec1);
+        expect(decisions.get('rec-1')?.ShouldSkip).toBe(true);
+        expect(decisions.get('rec-1')?.BasisHash).toBe(expectedHashRec1);
 
-        expect(decisions.get('rec-2')?.shouldSkip).toBe(false);
-        expect(decisions.get('rec-2')?.basisHash).not.toBe('stale-hash-from-old-run');
+        expect(decisions.get('rec-2')?.ShouldSkip).toBe(false);
+        expect(decisions.get('rec-2')?.BasisHash).not.toBe('stale-hash-from-old-run');
     });
 
     it('finds a watermark the database returns with an upper-case UUID for a record scoped with a lower-case one', async () => {
         const scoped: RecordRef = { EntityID: entityID, RecordID: '5a5a0001-0000-4000-8000-000000000015', Record: { ID: '5a5a0001-0000-4000-8000-000000000015', Title: 'x' } };
-        const hash = await WatermarkService.Instance.computeRecordBasisHash(scoped, undefined, { contextUser: mockUser, provider: new EntitiesOnlyProvider([]) });
+        const hash = await WatermarkService.Instance.ComputeRecordBasisHash(scoped, undefined, { ContextUser: mockUser, Provider: new EntitiesOnlyProvider([]) });
         expect(hash).toBeTruthy();
         const row: Pick<MJRecordProcessWatermarkEntity, 'RecordProcessID' | 'EntityID' | 'RecordID' | 'Hash'> = {
             RecordProcessID: recordProcessID, EntityID: entityID, RecordID: '5A5A0001-0000-4000-8000-000000000015', Hash: hash || '',
@@ -189,9 +189,9 @@ describe('WatermarkService', () => {
         };
         vi.spyOn(RunView.prototype, 'RunView').mockResolvedValue(loaded);
         const decisions = await WatermarkService.Instance.CheckBatchWatermarks({
-            recordProcessID, entityID, records: [scoped], strategy: 'Checksum', skipUnchanged: true, contextUser: mockUser, provider,
+            RecordProcessID: recordProcessID, EntityID: entityID, Records: [scoped], Strategy: 'Checksum', SkipUnchanged: true, ContextUser: mockUser, Provider: provider,
         });
-        expect(decisions.get(scoped.RecordID)?.shouldSkip).toBe(true);
+        expect(decisions.get(scoped.RecordID)?.ShouldSkip).toBe(true);
     });
 
     it('delegates basis hash computation to processor.ComputeBasisHash if supported', async () => {
@@ -217,41 +217,40 @@ describe('WatermarkService', () => {
         ];
 
         const decisions = await WatermarkService.Instance.CheckBatchWatermarks({
-            recordProcessID,
-            entityID,
-            records: [record],
-            strategy: 'Checksum',
-            skipUnchanged: true,
-            processor: mockProcessor,
-            contextUser: mockUser,
-            provider,
+            RecordProcessID: recordProcessID,
+            EntityID: entityID,
+            Records: [record],
+            Strategy: 'Checksum',
+            SkipUnchanged: true,
+            Processor: mockProcessor,
+            ContextUser: mockUser,
+            Provider: provider,
         });
 
         expect(mockProcessor.ComputeBasisHash).toHaveBeenCalledWith(
             record,
-            expect.objectContaining({ contextUser: mockUser })
+            expect.objectContaining({ ContextUser: mockUser })
         );
-        expect(decisions.get('rec-1')?.shouldSkip).toBe(true);
-        expect(decisions.get('rec-1')?.basisHash).toBe(customHash);
+        expect(decisions.get('rec-1')?.ShouldSkip).toBe(true);
+        expect(decisions.get('rec-1')?.BasisHash).toBe(customHash);
     });
 
     it('hands the processor the run\'s pipeline and entity when it computes a basis hash', async () => {
         const mockProcessor = { ProcessRecord: vi.fn(), ComputeBasisHash: vi.fn().mockResolvedValue('h') };
         const record: RecordRef = { EntityID: entityID, RecordID: 'rec-1', Record: { Title: 'Nurse' } };
-        const base = { recordProcessID, entityID, records: [record], strategy: 'Checksum' as const, skipUnchanged: true, processor: mockProcessor, contextUser: mockUser, provider };
+        const base = { RecordProcessID: recordProcessID, EntityID: entityID, Records: [record], Strategy: 'Checksum' as const, SkipUnchanged: true, Processor: mockProcessor, ContextUser: mockUser, Provider: provider };
         await WatermarkService.Instance.CheckBatchWatermarks(base);
-        expect(mockProcessor.ComputeBasisHash.mock.calls[0][1]).toMatchObject({ recordProcessID, entityID });
+        expect(mockProcessor.ComputeBasisHash.mock.calls[0][1]).toMatchObject({ RecordProcessID: recordProcessID, EntityID: entityID });
     });
 
     it('integrates with RecordSetProcessor: skips unchanged records without calling processor', async () => {
         const customHash = 'hash-match-123';
         const mockProcessor: IRecordProcessor = {
             ProcessRecord: vi.fn().mockResolvedValue({ Status: 'Succeeded', ResultPayload: { ok: true } } as RecordResult),
+            ComputeBasisHash: vi
+                .fn()
+                .mockImplementation(async (r: RecordRef) => (r.RecordID === 'rec-skip' ? customHash : 'hash-new')),
         };
-        // Augment with ComputeBasisHash
-        (mockProcessor as unknown as { ComputeBasisHash: (r: RecordRef) => Promise<string> }).ComputeBasisHash = vi
-            .fn()
-            .mockImplementation(async (r: RecordRef) => (r.RecordID === 'rec-skip' ? customHash : 'hash-new'));
 
         (RunView as unknown as { mockResults: unknown[] }).mockResults = [
             {
@@ -270,14 +269,14 @@ describe('WatermarkService', () => {
 
         const source = new ArraySource(records, entityID);
         const result = await RecordSetProcessor.Instance.Process({
-            source,
-            processor: mockProcessor,
-            tracker: new NoOpTracker(),
-            contextUser: mockUser,
-            recordProcessID,
-            entityID,
-            skipUnchanged: true,
-            watermarkStrategy: 'Checksum',
+            Source: source,
+            Processor: mockProcessor,
+            Tracker: new NoOpTracker(),
+            ContextUser: mockUser,
+            RecordProcessID: recordProcessID,
+            EntityID: entityID,
+            SkipUnchanged: true,
+            WatermarkStrategy: 'Checksum',
         });
 
         expect(result.Status).toBe('Completed');
@@ -325,11 +324,11 @@ describe('WatermarkService: a run that overwrites human values', () => {
 
     it('processes every unchanged record, keeping each hash so its watermark is refreshed', async () => {
         const processor = hashingProcessor();
-        const params = { recordProcessID, entityID, records: [kept, other], strategy: 'Checksum' as const, skipUnchanged: true, processor, contextUser: user, provider };
-        expect((await WatermarkService.Instance.CheckBatchWatermarks(params)).get('rec-kept')?.shouldSkip).toBe(true);
-        const decisions = await WatermarkService.Instance.CheckBatchWatermarks({ ...params, overwriteHumanValues: true });
-        expect(decisions.get('rec-kept')).toMatchObject({ shouldSkip: false, basisHash: 'hash-rec-kept' });
-        expect(decisions.get('rec-other')).toMatchObject({ shouldSkip: false, basisHash: 'hash-rec-other' });
+        const params = { RecordProcessID: recordProcessID, EntityID: entityID, Records: [kept, other], Strategy: 'Checksum' as const, SkipUnchanged: true, Processor: processor, ContextUser: user, Provider: provider };
+        expect((await WatermarkService.Instance.CheckBatchWatermarks(params)).get('rec-kept')?.ShouldSkip).toBe(true);
+        const decisions = await WatermarkService.Instance.CheckBatchWatermarks({ ...params, OverwriteHumanValues: true });
+        expect(decisions.get('rec-kept')).toMatchObject({ ShouldSkip: false, BasisHash: 'hash-rec-kept' });
+        expect(decisions.get('rec-other')).toMatchObject({ ShouldSkip: false, BasisHash: 'hash-rec-other' });
     });
 
     it('integrates with RecordSetProcessor: the unchanged record is processed and its watermark refreshed', async () => {
@@ -337,8 +336,8 @@ describe('WatermarkService: a run that overwrites human values', () => {
         serve(stored);
         const processor = hashingProcessor();
         const result = await RecordSetProcessor.Instance.Process({
-            source: new ArraySource([kept], entityID), processor, tracker: new NoOpTracker(), contextUser: user,
-            recordProcessID, entityID, skipUnchanged: true, watermarkStrategy: 'Checksum', overwriteHumanValues: true,
+            Source: new ArraySource([kept], entityID), Processor: processor, Tracker: new NoOpTracker(), ContextUser: user,
+            RecordProcessID: recordProcessID, EntityID: entityID, SkipUnchanged: true, WatermarkStrategy: 'Checksum', OverwriteHumanValues: true,
         });
         expect(result.Skipped).toBe(0);
         expect(result.Success).toBe(1);
@@ -388,15 +387,15 @@ describe('RecordSetProcessor: a real run that does not skip refreshes its waterm
 
     function run(processor: IRecordProcessor, extra: { skipUnchanged?: boolean; dryRun?: boolean; watermarkStrategy?: 'Checksum' | 'UpdatedAt' } = {}) {
         return RecordSetProcessor.Instance.Process({
-            source: new ArraySource(records, entityID), processor, tracker: new NoOpTracker(), contextUser: user,
-            recordProcessID, entityID, skipUnchanged: extra.skipUnchanged === true, dryRun: extra.dryRun,
-            watermarkStrategy: extra.watermarkStrategy || 'Checksum',
+            Source: new ArraySource(records, entityID), Processor: processor, Tracker: new NoOpTracker(), ContextUser: user,
+            RecordProcessID: recordProcessID, EntityID: entityID, SkipUnchanged: extra.skipUnchanged === true, DryRun: extra.dryRun,
+            WatermarkStrategy: extra.watermarkStrategy || 'Checksum',
         });
     }
 
     /** The record IDs whose watermark was written, with the hash each was written with. */
     function written(): Array<[string, string]> {
-        return writes.mock.calls.map(([p]): [string, string] => [p.recordID, p.basisHash]);
+        return writes.mock.calls.map(([p]): [string, string] => [p.RecordID, p.BasisHash]);
     }
 
     beforeEach(() => {
@@ -410,7 +409,7 @@ describe('RecordSetProcessor: a real run that does not skip refreshes its waterm
             return { Success: true, Results: rows, RowCount: rows.length, TotalRowCount: rows.length, ExecutionTime: 0, ErrorMessage: '' };
         });
         writes = vi.spyOn(WatermarkService.Instance, 'UpdateWatermark').mockImplementation(async (p) => {
-            store.set(p.recordID, { RecordID: p.recordID, Hash: p.basisHash });
+            store.set(p.RecordID, { RecordID: p.RecordID, Hash: p.BasisHash });
         });
     });
     afterEach(() => vi.restoreAllMocks());
@@ -428,8 +427,8 @@ describe('RecordSetProcessor: a real run that does not skip refreshes its waterm
             ['rec-fresh', 'hash-rec-fresh'], ['rec-matched', 'hash-rec-matched'], ['rec-stale', 'hash-rec-stale'],
         ]);
         expect(reads).toHaveBeenCalledTimes(1);
-        const stored = writes.mock.calls.find(([p]) => p.recordID === 'rec-stale');
-        expect(stored?.[0].existingWatermark).toMatchObject({ RecordID: 'rec-stale' });
+        const stored = writes.mock.calls.find(([p]) => p.RecordID === 'rec-stale');
+        expect(stored?.[0].ExistingWatermark).toMatchObject({ RecordID: 'rec-stale' });
     });
 
     it('still processes a record whose watermark matches: only a SkipUnchanged run decides to skip', async () => {

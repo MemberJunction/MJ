@@ -7,9 +7,8 @@
  */
 import type { MJRecordProcessEntity } from '@memberjunction/core-entities';
 import { GetValueAtPath, NormalizeUUID } from '@memberjunction/global';
-import { InferProcessor } from '@memberjunction/record-set-processor';
+import { FeaturePipelineGoldenSetDriver, InferProcessor } from '@memberjunction/feature-pipelines-engine';
 import type { RecordProcessorContext, RecordRef, RecordResult } from '@memberjunction/record-set-processor-base';
-import { FeaturePipelineGoldenSetDriver } from '@memberjunction/testing-engine';
 import { Assert, AssertEqual, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration';
 import { JOB_TITLE_RP_ID } from './fp-gates/fp-gate-fixture';
 import { ALL_GOLDEN_TITLES, type GoldenTitle } from './fp-gates/golden-titles';
@@ -39,7 +38,7 @@ export class JobTitleConsistency {
         Assert(await rp.Load(JOB_TITLE_RP_ID), 'the job-title pipeline is installed (bizapps-common)');
         const processor = InferProcessor.FromRecordProcess(rp, ctx.Provider);
         const context: RecordProcessorContext = {
-            contextUser: ctx.User, provider: ctx.Provider, recordProcessID: rp.ID, entityID: rp.EntityID,
+            ContextUser: ctx.User, Provider: ctx.Provider, RecordProcessID: rp.ID, EntityID: rp.EntityID,
             DryRun: true, BypassCache: true, TriggeredBy: 'Manual',
         };
         // The run-level gate a real run goes through: a dry run is never refused, but an unresolvable prompt is.

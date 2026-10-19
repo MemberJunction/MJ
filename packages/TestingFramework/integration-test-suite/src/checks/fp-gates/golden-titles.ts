@@ -10,7 +10,7 @@
  * bizapps-common's files, so the gates carry this copy; the `fp-gate-c2-1` bundle diffs it against the installed
  * golden-set test whenever it runs ({@link GoldenTitleCopy.Differences}), so the two cannot drift silently.
  */
-import type { GoldenCase } from '@memberjunction/testing-engine';
+import type { GoldenCase } from '@memberjunction/feature-pipelines-engine';
 
 /** One golden title with its labels per output; the first label is the primary, the rest are accepted alternates. */
 export interface GoldenTitle {

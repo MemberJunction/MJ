@@ -19,6 +19,6 @@ export * from './spec/escalation-target.js';
 export * from './spec/feature-value-key.js';
 export * from './entities/MJRecordProcessEntityExtended.js';
 export * from './entities/MJFeaturePipelineVersionEntityExtended.js';
-export * from './providers/metadata-provider-capabilities.js';
 export * from './versions/FeaturePipelineVersionService.js';
+export * from './versions/feature-pipeline-run-results.js';
 export * from './templates/PromptTemplateContent.js';

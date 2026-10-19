@@ -2,6 +2,8 @@
  * Pure logic for the generic Feature Values panel. No Angular imports so it is
  * unit-testable in isolation.
  */
+import { SafeJSONParse } from '@memberjunction/global';
+import type { MJFeatureValueEntity } from '@memberjunction/core-entities';
 
 /** One row of the `MJ: Feature Values` view as returned by a simple RunView. */
 export interface FeatureValueRow {
@@ -15,7 +17,7 @@ export interface FeatureValueRow {
     ValueBoolean: boolean | number | string | null;
     ValueDate: string | Date | null;
     ValueJSON: string | null;
-    Source: string;
+    Source: MJFeatureValueEntity['Source'];
     Confidence: number | null;
     PipelineVersion: number | null;
     ComputedAt: string | Date | null;
@@ -33,7 +35,7 @@ export interface FeatureValueCard {
     DisplayValue: string;
     /** False when the latest row is valueless (an abstention or a cleared value). */
     HasValue: boolean;
-    Source: string;
+    Source: MJFeatureValueEntity['Source'];
     Confidence: number | null;
     PipelineVersion: number | null;
     ComputedAt: Date | null;
@@ -73,11 +75,8 @@ export class FeatureValuesPanelModel {
             return d ? d.toISOString().slice(0, 10) : String(row.ValueDate);
         }
         if (!isNullish(row.ValueJSON) && row.ValueJSON !== '') {
-            try {
-                return JSON.stringify(JSON.parse(row.ValueJSON));
-            } catch {
-                return row.ValueJSON;
-            }
+            const parsed = SafeJSONParse<unknown>(row.ValueJSON);
+            return parsed !== null ? JSON.stringify(parsed) : row.ValueJSON;
         }
         if (!isNullish(row.ValueText)) return row.ValueText;
         return '';

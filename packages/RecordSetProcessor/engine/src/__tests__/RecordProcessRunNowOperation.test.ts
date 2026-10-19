@@ -20,20 +20,19 @@ describe('RecordProcess.RunNow: the human-value switch', () => {
         const op = new RecordProcessRunNowServerOperation();
         const ctx = new StubContext();
         await op.ExecuteServer({ recordProcessID: 'rp-1' }, ctx);
-        expect(runByID.mock.calls[0][1].overwriteHumanValues).toBe(false);
-        expect(runByID.mock.calls[0][1].provider).toBe(ctx.provider);
+        expect(runByID.mock.calls[0][1].OverwriteHumanValues).toBe(false);
+        expect(runByID.mock.calls[0][1].Provider).toBe(ctx.provider);
         await op.ExecuteServer({ recordProcessID: 'rp-1', overwriteHumanValues: true }, ctx);
-        expect(runByID.mock.calls[1][1].overwriteHumanValues).toBe(true);
+        expect(runByID.mock.calls[1][1].OverwriteHumanValues).toBe(true);
     });
 });
 
 describe('RecordProcess.RunNow: a dry run that a real run would be refused', () => {
-    it('returns why the real run would be refused, from the run\'s Feature Pipeline result', async () => {
-        const refusal = 'Feature Pipeline version v6 is not activated';
+    it('returns why the real run would be refused, from the run\'s WouldRefuse result', async () => {
+        const refusal = 'Processor version v6 is not activated';
         const dry: ProcessRunResult = {
             ProcessRunID: 'run-2', Status: 'Completed', Total: 1, Processed: 1, Success: 1, Error: 0, Skipped: 0,
-            FeaturePipeline: { RecordProcessID: 'rp-1', Pin: null, Attempted: 1, Upserted: 0, Unchanged: 0, Previewed: 1,
-                RejectedInvalid: 0, BelowConfidence: 0, Failed: 0, Skipped: 0, HumanValuesPreserved: 0, Status: 'completed', WouldRefuse: refusal },
+            WouldRefuse: refusal,
         };
         vi.spyOn(RecordProcessExecutor.prototype, 'RunByID').mockResolvedValue(dry);
         const out = await new RecordProcessRunNowServerOperation().ExecuteServer({ recordProcessID: 'rp-1', dryRun: true }, new StubContext());

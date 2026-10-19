@@ -7,8 +7,8 @@
 
 import { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import {
-    FeaturePipelineRunPin,
     ProcessCursor,
+    ProcessRunStatusValue,
     ProcessRunSummary,
     ProgressInfo,
     RecordBatch,
@@ -54,23 +54,32 @@ export interface IRecordSetSource {
 /** Per-record execution context handed to an {@link IRecordProcessor}. */
 export interface RecordProcessorContext {
     /** The acting user. */
-    contextUser: UserInfo;
+    ContextUser: UserInfo;
     /** The owning provider — use this for data access (never `new Metadata()`), per the multi-provider rule. */
-    provider: IMetadataProvider;
+    Provider: IMetadataProvider;
     /** ID of the current process run, when one is being tracked. */
-    processRunID?: string;
+    ProcessRunID?: string;
     /** ID of the originating Record Process definition, when applicable. */
-    recordProcessID?: string;
+    RecordProcessID?: string;
     /** Target entity ID, when applicable. */
-    entityID?: string;
+    EntityID?: string;
     /** When true, write-back overwrites values a person entered and retires their Human values (default false). */
-    overwriteHumanValues?: boolean;
+    OverwriteHumanValues?: boolean;
     /** Compute-only run: Infer, FieldRules and write-back persist nothing; Action and Agent work runs for real. */
     DryRun?: boolean;
     /** What triggered the run (the version gate treats scheduled and on-demand runs differently). */
     TriggeredBy?: TriggeredByValue;
     /** Skip Dedup Cache lookups (golden-set and consistency evaluations measure the model, not the cache). */
     BypassCache?: boolean;
+}
+
+/** Run-level summary context passed to {@link IRecordProcessor.BuildRunSummary} when a run completes. */
+export interface ProcessorRunSummaryContext {
+    RecordProcessID?: string;
+    Counts: RunCounts;
+    Status: ProcessRunStatusValue;
+    DryRun: boolean;
+    Results: ReadonlyArray<RecordResult>;
 }
 
 /**
@@ -112,11 +121,20 @@ export interface IRecordProcessor {
      */
     Preflight?(context: RecordProcessorContext): Promise<void>;
 
-    /** Optional: the pin a Feature Pipeline processor runs under once resolved, else null (a run of skipped records reports it). */
-    CurrentRunPin?(): FeaturePipelineRunPin | null;
+    /** Optional hook to compute a custom basis hash for watermark change detection. */
+    ComputeBasisHash?(record: RecordRef, context: RecordProcessorContext): Promise<string | undefined>;
 
-    /** Optional, Feature Pipelines: on a dry run, why a real run would be refused (e.g. its version is not activated), else null. */
-    CurrentRunRefusal?(): string | null;
+    /** Optional default dry-run sample cap for this processor when none is explicitly configured. */
+    DefaultDryRunSampleSize?: number;
+
+    /** When true, a run that completed with one or more failed records ends with status `Failed`. */
+    FailRunOnRecordError?: boolean;
+
+    /** Optional hook to enrich output mapping configuration and report whether the processor has unmapped writes. */
+    PrepareOutputMapping?(mapping: Record<string, unknown> | undefined): { OutputMapping?: Record<string, unknown>; HasUnmappedWrites?: boolean };
+
+    /** Optional hook to build a processor-specific run summary (and dry-run refusal reason) at the end of a run. */
+    BuildRunSummary?(context: ProcessorRunSummaryContext): { ResultSummary?: unknown; WouldRefuse?: string };
 }
 
 /** Opaque handle returned by a tracker's `BeginRun`, threaded back through the other tracker calls. */
@@ -184,64 +202,59 @@ export interface IProcessRunTracker {
 /** Options for a single `RecordSetProcessor.Process()` invocation. */
 export interface RecordSetProcessOptions {
     /** The record-set source to iterate. */
-    source: IRecordSetSource;
+    Source: IRecordSetSource;
     /** The per-record processor (executor). */
-    processor: IRecordProcessor;
+    Processor: IRecordProcessor;
     /** Persistence tracker (defaults to `GenericProcessRunTracker` in the engine). */
-    tracker?: IProcessRunTracker;
+    Tracker?: IProcessRunTracker;
     /** The acting user (required). */
-    contextUser: UserInfo;
+    ContextUser: UserInfo;
     /** The owning provider; defaults to the active provider when omitted. */
-    provider?: IMetadataProvider;
+    Provider?: IMetadataProvider;
     /** Optional FK to the originating Record Process definition. */
-    recordProcessID?: string;
+    RecordProcessID?: string;
     /** Optional FK to the owning `ScheduledJobRun` when launched by the scheduler. */
-    scheduledJobRunID?: string;
+    ScheduledJobRunID?: string;
     /** Optional target entity ID (otherwise derived from the source). */
-    entityID?: string;
+    EntityID?: string;
     /** What triggered the run (default `Manual`). */
-    triggeredBy?: TriggeredByValue;
+    TriggeredBy?: TriggeredByValue;
     /** Records per batch (default 100). */
-    batchSize?: number;
+    BatchSize?: number;
     /** Maximum records processed concurrently within a batch (default 1). */
-    maxConcurrency?: number;
+    MaxConcurrency?: number;
     /** Error-rate circuit breaker threshold, as a percentage (default 20). */
-    errorThresholdPercent?: number;
+    ErrorThresholdPercent?: number;
     /** Delay between batches in milliseconds (default 0). */
-    delayBetweenBatchesMs?: number;
+    DelayBetweenBatchesMs?: number;
     /** Optional rate-limit applied once per batch before processing. */
-    rateLimit?: { requestsPerMinute?: number; tokensPerMinute?: number };
+    RateLimit?: { RequestsPerMinute?: number; TokensPerMinute?: number };
     /** Whether to resume from a prior checkpoint when one exists (default true). */
-    resume?: boolean;
+    Resume?: boolean;
     /** Hard cap on the number of records processed this run. */
-    maxRecords?: number;
+    MaxRecords?: number;
     /** Progress callback invoked after each batch. */
-    onProgress?: (progress: ProgressInfo) => void;
+    OnProgress?: (progress: ProgressInfo) => void;
     /**
-     * Budget-gate hook invoked after each batch. Return `{ continue: false, reason }` to pause the
+     * Budget-gate hook invoked after each batch. Return `{ Continue: false, Reason }` to pause the
      * run (e.g. when a per-run cost/item budget is exhausted).
      */
-    onAfterBatch?: (batch: RecordRef[], processed: number) => Promise<{ continue: boolean; reason?: string } | null>;
+    OnAfterBatch?: (batch: RecordRef[], processed: number) => Promise<{ Continue: boolean; Reason?: string } | null>;
     /** JSON-serializable snapshot of configuration, persisted on the run header. */
-    configuration?: unknown;
+    Configuration?: unknown;
     /** True when this is a dry-run (compute-only) pass — recorded on the run header so history can distinguish previews from real applies. */
-    dryRun?: boolean;
+    DryRun?: boolean;
     /** Whether to skip unchanged records (default false). */
-    skipUnchanged?: boolean;
+    SkipUnchanged?: boolean;
     /** How unchanged records are detected: Checksum, UpdatedAt, or None (default 'Checksum'). */
-    watermarkStrategy?: WatermarkStrategyValue;
+    WatermarkStrategy?: WatermarkStrategyValue;
     /** Timestamp of the last run, used for 'UpdatedAt' strategy. */
-    lastRunAt?: Date | null;
+    LastRunAt?: Date | null;
     /** Overwrite values a person entered (default false); such a run skips no record on its watermark. */
-    overwriteHumanValues?: boolean;
-    /**
-     * A Feature Pipeline (Infer) run: it ends `Failed` when any record failed, and the summary carries a
-     * `FeaturePipelineRunResult`. Requires `recordProcessID`.
-     */
-    FeaturePipeline?: boolean;
+    OverwriteHumanValues?: boolean;
 }
 
-/** Strategy used to detect unchanged records when skipUnchanged is enabled. */
+/** Strategy used to detect unchanged records when SkipUnchanged is enabled. */
 export type WatermarkStrategyValue = 'Checksum' | 'UpdatedAt' | 'None';
 
 // Re-export the progress/summary value types most consumers need alongside the seams.

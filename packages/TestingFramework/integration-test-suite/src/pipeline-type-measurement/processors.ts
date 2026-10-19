@@ -16,7 +16,7 @@
  * This is the one module of the measurement that loads MJ code at runtime (`InferProcessor`); the rest
  * stay pure so they can be tested without it.
  */
-import { InferProcessor } from '@memberjunction/record-set-processor';
+import { InferProcessor } from '@memberjunction/feature-pipelines-engine';
 import type { RecordProcessorContext, RecordRef } from '@memberjunction/record-set-processor-base';
 import type { MeasuredPipelineType, MeasurementOutput, MeasurementSpec } from './types';
 

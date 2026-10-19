@@ -34,16 +34,16 @@ export class RecordProcessRunNowServerOperation extends RecordProcessRunNowOpera
             throw new Error('recordProcessID is required');
         }
         const result = await new RecordProcessExecutor().RunByID(input.recordProcessID, {
-            contextUser: user,
-            provider,
-            triggeredBy: 'OnDemand',
-            singleRecordID: input.singleRecordID,
-            dryRun: input.dryRun,
-            scope: input.scope,
-            overwriteHumanValues: input.overwriteHumanValues === true,
+            ContextUser: user,
+            Provider: provider,
+            TriggeredBy: 'OnDemand',
+            SingleRecordID: input.singleRecordID,
+            DryRun: input.dryRun,
+            Scope: input.scope,
+            OverwriteHumanValues: input.overwriteHumanValues === true,
             // RO-3: forward the executor's per-batch progress as typed RemoteOpProgress, so an `attached`
             // caller's onProgress (and, over the wire, the progress channel) sees live run progress.
-            onProgress: (p) =>
+            OnProgress: (p) =>
                 context.emitProgress({
                     OperationKey: this.OperationKey,
                     Processed: p.Processed,
@@ -61,7 +61,7 @@ export class RecordProcessRunNowServerOperation extends RecordProcessRunNowOpera
             error: result.Error,
             skipped: result.Skipped,
             errorMessage: result.ErrorMessage,
-            ...(result.FeaturePipeline?.WouldRefuse ? { wouldRefuse: result.FeaturePipeline.WouldRefuse } : {}),
+            ...(result.WouldRefuse ? { wouldRefuse: result.WouldRefuse } : {}),
         };
     }
 }

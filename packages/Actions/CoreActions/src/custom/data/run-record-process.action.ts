@@ -55,12 +55,12 @@ export class RunRecordProcessAction extends BaseAction {
             const overwriteHumanValues = this.getBooleanParam(params, 'overwritehumanvalues', false);
 
             const result = await new RecordProcessExecutor().RunByID(recordProcessID, {
-                contextUser: params.ContextUser,
-                provider: params.Provider || Metadata.Provider, // global-provider-ok: the RunActionParams.Provider contract's documented fallback
-                scope,
-                dryRun,
-                overwriteHumanValues,
-                triggeredBy: 'OnDemand',
+                ContextUser: params.ContextUser,
+                Provider: params.Provider || Metadata.Provider, // global-provider-ok: the RunActionParams.Provider contract's documented fallback
+                Scope: scope,
+                DryRun: dryRun,
+                OverwriteHumanValues: overwriteHumanValues,
+                TriggeredBy: 'OnDemand',
             });
 
             this.pushOutput(params, 'ProcessRunID', result.ProcessRunID);

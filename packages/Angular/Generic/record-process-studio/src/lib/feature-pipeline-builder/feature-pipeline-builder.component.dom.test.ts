@@ -1378,4 +1378,41 @@ describe('FeaturePipelineBuilderComponent (feature value only target)', () => {
     expect((f.nativeElement as Element).textContent).not.toContain(FV_ONLY_TEXT);
     expect(savedSpec(record)?.Outputs[0].Target?.Mode).toBe('field');
   });
+
+  it('onOutputPropertyChange updates Name and Ref and ignores out-of-bounds indices', () => {
+    const record = makeRecord({
+      PipelineType: 'LLM',
+      Outputs: [
+        {
+          Name: 'ChurnRisk',
+          Ref: '$.ChurnRisk',
+          Target: { Mode: 'field', EntityFieldName: 'Rating' },
+        },
+      ],
+    });
+    const f = render(record);
+    const builder = f.componentInstance;
+
+    // Updates Name and auto-updates matching $.prevName Ref
+    builder.onOutputPropertyChange(0, 'Name', eventWithValue('Sentiment', 'input'));
+    expect(builder.spec.Outputs[0].Name).toBe('Sentiment');
+    expect(builder.spec.Outputs[0].Ref).toBe('$.Sentiment');
+
+    // Updates Ref explicitly
+    builder.onOutputPropertyChange(0, 'Ref', eventWithValue('$.customRef', 'input'));
+    expect(builder.spec.Outputs[0].Ref).toBe('$.customRef');
+
+    // Changing Name when Ref is custom preserves custom Ref
+    builder.onOutputPropertyChange(0, 'Name', eventWithValue('FinalScore', 'input'));
+    expect(builder.spec.Outputs[0].Name).toBe('FinalScore');
+    expect(builder.spec.Outputs[0].Ref).toBe('$.customRef');
+
+    // Ignores out-of-bounds indices
+    builder.onOutputPropertyChange(-1, 'Name', eventWithValue('Ignored', 'input'));
+    builder.onOutputPropertyChange(5, 'Ref', eventWithValue('$.Ignored', 'input'));
+    expect(builder.spec.Outputs).toHaveLength(1);
+    expect(builder.spec.Outputs[0].Name).toBe('FinalScore');
+    expect(builder.spec.Outputs[0].Ref).toBe('$.customRef');
+  });
 });
+

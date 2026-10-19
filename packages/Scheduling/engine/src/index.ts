@@ -9,6 +9,5 @@ export * from './CronExpressionHelper';
 export * from './MissedRunPolicy';
 export * from './NotificationManager';
 export * from './UserRoutineProcessor';
-export * from './FeaturePipelineVersionSteward';
 export * from './WakeGateEvaluator';
 export * from './drivers';

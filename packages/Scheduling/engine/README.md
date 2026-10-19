@@ -139,7 +139,6 @@ Abstract base class for all job drivers. Provides:
 | `UserRoutineDispatcherDriver` | User Routine Dispatcher | Dispatches due user routines |
 | `AgentRunSweepScheduledJobDriver` | Agent Run Sweep | Force-fails agent runs orphaned by a dead process |
 | `ActionLogRetentionScheduledJobDriver` | Action Log Retention | Purges expired `MJ: Action Execution Logs` rows, bounded per run |
-| `FeaturePipelineVersionStewardDriver` | Feature Pipeline Version Steward | Runs the golden-set evaluation and the one backfill of each changed Feature Pipeline version (shipped Active, every 15 minutes); each decision is recorded in the run's `Details.Outcomes` |
 
 #### Action Log Retention
 

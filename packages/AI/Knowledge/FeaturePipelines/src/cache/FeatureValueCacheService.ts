@@ -688,7 +688,7 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
     }
 
     /** A plain decimal number: no hex, Infinity or NaN. */
-    private static readonly plainNumber = /^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/;
+    private static readonly plainNumber = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/;
     /** A string that starts as an ISO calendar date. */
     private static readonly isoDatePrefix = /^\d{4}-\d{2}-\d{2}/;
 

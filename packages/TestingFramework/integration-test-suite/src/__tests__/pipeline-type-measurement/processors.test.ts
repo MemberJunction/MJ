@@ -7,7 +7,7 @@
  * it), on the spec `BuildMeasurementSpecs` builds, with a plain record: no database, no model.
  */
 import { describe, expect, it } from 'vitest';
-import { InferProcessor } from '@memberjunction/record-set-processor';
+import { InferProcessor } from '@memberjunction/feature-pipelines-engine';
 import type { RecordRef } from '@memberjunction/record-set-processor-base';
 import {
     AddValueDescriptions, CreateMeasurementProcessor, DescribeConstraintBlock, OutputValueDescriptions, VALUE_DESCRIPTIONS_KEY, ValueDescribingInferProcessor,

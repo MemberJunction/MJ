@@ -26,8 +26,6 @@
     "@memberjunction/aiengine": "6.2.0-edge.4",
     "@memberjunction/core": "6.2.0-edge.4",
     "@memberjunction/core-entities": "6.2.0-edge.4",
-    "@memberjunction/entity-documents": "6.2.0-edge.4",
-    "@memberjunction/feature-pipelines": "6.2.0-edge.4",
     "@memberjunction/field-rules-transforms": "6.2.0-edge.4",
     "@memberjunction/global": "6.2.0-edge.4",
     "@memberjunction/record-set-processor-base": "6.2.0-edge.4",

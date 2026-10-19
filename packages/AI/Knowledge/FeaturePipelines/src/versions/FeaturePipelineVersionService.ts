@@ -6,11 +6,10 @@
 import { BaseSingleton, EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 import { DatabaseProviderBase, RunInEntityTransaction, RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import type { MJFeaturePipelineVersionEntity, MJFeatureValueEntity, MJProcessRunEntity } from '@memberjunction/core-entities';
-import { RecordIDs } from '@memberjunction/record-set-processor-base';
+import { MetadataProviderCapabilities, RecordIDs } from '@memberjunction/record-set-processor-base';
 import { FeaturePipelinePin, type FeaturePipelinePinData } from '../spec/feature-value-key.js';
 import type { DataFeatureActivation, DataFeatureUnattended } from '../spec/data-feature-spec.js';
 import { MJFeaturePipelineVersionEntityExtended, type VersionActivationFields } from '../entities/MJFeaturePipelineVersionEntityExtended.js';
-import { MetadataProviderCapabilities } from '../providers/metadata-provider-capabilities.js';
 
 /** A run may not write under its pipeline version; the message says what to do. */
 export class FeaturePipelineVersionRefusedError extends Error {

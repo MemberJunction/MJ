@@ -12,11 +12,11 @@ import { EscapeSQLString, SafeJSONParse, UUIDsEqual } from '@memberjunction/glob
 import type { DataFeatureSpec } from '@memberjunction/feature-pipelines';
 import {
     GoldenLabelQualityCheck,
-    TestEngine,
     type FeaturePipelineGoldenSetConfig,
     type FeaturePipelineGoldenSetInput,
     type LabelerIdentity,
-} from '@memberjunction/testing-engine';
+} from '@memberjunction/feature-pipelines-engine';
+import { TestEngine } from '@memberjunction/testing-engine';
 import { Assert, AssertEqual, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration';
 import { FeaturePipelineGateFixtures as F, FIXTURE_NAME_PREFIX } from './fp-gates/fp-gate-fixture';
 import { FeaturePipelineGateStubTable } from './fp-gates/feature-pipeline-gate-stub-driver';

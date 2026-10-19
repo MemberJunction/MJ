@@ -7,7 +7,7 @@ import {
 } from '@memberjunction/core';
 import { SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import { MJRecordProcessEntity, MJProcessRunEntity } from '@memberjunction/core-entities';
-import { FeaturePipelineRunResults, type FeaturePipelineRunResult } from '@memberjunction/record-set-processor-base';
+import { FeaturePipelineRunResults, type FeaturePipelineRunResult } from '@memberjunction/feature-pipelines';
 import type { Observable } from 'rxjs';
 
 /**

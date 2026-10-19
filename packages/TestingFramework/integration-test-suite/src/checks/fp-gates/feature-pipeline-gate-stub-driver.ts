@@ -7,7 +7,7 @@
  * Feature Pipeline Type row whose `DriverClass` is `FeaturePipelineGateStubDriver` selects it.
  */
 import { BaseSingleton, GetValueAtPath, RegisterClass } from '@memberjunction/global';
-import { BaseFeaturePipelineDriver, type FeaturePipelineComputeRequest, type FeaturePipelineComputeResult } from '@memberjunction/record-set-processor';
+import { BaseFeaturePipelineDriver, type FeaturePipelineComputeRequest, type FeaturePipelineComputeResult } from '@memberjunction/feature-pipelines-engine';
 import { FeatureValueKey, LLM_FEATURE_PIPELINE_CAPABILITIES, type FeaturePipelineDriverCapabilities } from '@memberjunction/feature-pipelines';
 
 /**

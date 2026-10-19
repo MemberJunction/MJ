@@ -643,20 +643,23 @@ of a feature for a record is the row with the newest `ComputedAt`.
 **Human values.** `Source` is `Pipeline` or `Human` (a value a person entered on the target record). Write-back never
 overwrites a `Human` value unless the run sets `overwriteHumanValues`; `HumanValuesPreserved` counts the ones it kept.
 
-**Versions.** Each distinct pin (prompt version hash, primary model, parameters hash, spec hash) is the next numbered
-`MJ: Feature Pipeline Versions` row: Candidate, Active, Retired or Refused.
-
+- **Versions.** Each distinct pin (prompt version hash, primary model, parameters hash, spec hash) is the next numbered
+  `MJ: Feature Pipeline Versions` row: Candidate, Active, Retired or Refused.
 - Without an `Activation` block, an on-demand or manual run activates a changed pin; a scheduled or on-change run of a
   changed pipeline is refused until then, so a prompt edit never silently changes what an unattended job writes.
 - With `Activation` (`GoldenSetTestID`, `Metric: 'accuracy'`, `Threshold`), a version runs only when its golden-set
   result meets the threshold; a failing result marks it Refused. Dry runs report this (`WouldRefuse`) and never
   register or activate.
-- The **Feature Pipeline Version Steward** scheduled job (shipped Active, every 15 minutes) evaluates a gated
-  pipeline's unevaluated version and runs the one backfill of a changed version (the records whose latest value is
-  under another version or none), recording each decision in the job run's `Details.Outcomes`. A pipeline opts out
-  per step with `Unattended: { AutoEvaluate: false }` / `{ AutoBackfill: false }`.
+- The **Feature Pipeline Version Steward** (`FeaturePipelineVersionSteward` in `@memberjunction/feature-pipelines-engine`,
+  exposed as the **`Steward Feature Pipeline Version`** Action and run per pipeline by the **`Feature Pipeline Version Steward`**
+  `MJ: Record Processes` row of `WorkType: 'Action'` over `WorkType='Infer' AND Status='Active'`, dispatched every 15 minutes
+  by `RecordProcessScheduledJobDriver`) evaluates a gated pipeline's unevaluated version and runs the one backfill of a
+  changed version (the records whose latest value is under another version or none), returning each decision in
+  `Outcomes` / `Version` / `LastAction` / `Detail`. A pipeline opts out per step with
+  `Unattended: { AutoEvaluate: false }` / `{ AutoBackfill: false }`.
 
-**Golden sets.** A `Feature Pipeline Golden Set` test scores a pipeline's answers against labelled cases. Model-made
+**Golden sets.** A `Feature Pipeline Golden Set` test (`FeaturePipelineGoldenSetDriver`, `GoldenSetScorer`, and
+`GoldenLabelQualityCheck` in `@memberjunction/feature-pipelines-engine`) scores a pipeline's answers against labelled cases. Model-made
 labels carry a stored **label-quality record**: two labelers from two vendors label every case under the same guide,
 each must agree with the existing labels at a Wilson 95% lower bound of at least 0.70, one adjudicates the other's
 disagreements, and at most 5 of 52 cases may be excluded. The record is tied to the cases by hash, and the driver
@@ -677,6 +680,29 @@ The floor is part of the spec hash, so changing it is a new version.
 **The record as the user turn.** An LLM pipeline that sets `Context.RecordAsUserMessage: true` sends the template as
 the system turn and the record's context fields, as one JSON object, as the user turn, so a field value cannot pose as
 an instruction.
+
+### Feature Pipeline dry runs and run results
+
+An `Infer` (`InferProcessor` in `@memberjunction/feature-pipelines-engine`, registered into `RecordProcessorRegistry` by
+`FeaturePipelineStartup` / `RegisterInferRecordProcessor()`) dry run writes nothing (no Dedup Cache entry, Feature Value, watermark, target or child
+row) but still calls the model, so its `MJ: AI Prompt Runs` are recorded and cost what a real run of those records would.
+
+- Without a scope or a single record it previews at most **25** records (`DryRunSampleSize` overrides it).
+- A record whose real write would fail is reported `Failed` with the write-back's reason (`PreviewErrors`).
+- It reports, in `WouldRefuse` (via `InferProcessor.BuildRunSummary`), why a real run would be refused (a version that has
+  not passed its golden set), and never registers or activates a version. `RecordProcess.RunNow` /
+  `PredictiveStudio.RunFeaturePipeline` return it as `wouldRefuse`; the Bulk Operations dialog then offers no Apply.
+- Each record's `previewFields` / `previewChildren` / `previewTags` hold only what the real write would change, so the
+  dialog's change count is what the following real run writes. Outputs withheld below their confidence floor are listed
+  in `withheldFields` (and `withheldKeptFields` when the column does not allow null) and `withheldChildEntities`.
+- An output with no `Target` ("Feature value only") writes nothing to the record; its dry-run result is
+  `previewFeatureValues` (`FeatureName`, `Previous`, `Proposed`), listing the Feature Values a real run would store.
+  The dialog shows one `<Feature> (feature value)` row per item, counted as a change like any other row; a record
+  with no such rows counts as unchanged.
+- On every Feature Pipeline run, `MJ: Process Runs.ResultSummary` holds the `FeaturePipelineRunResult` JSON built by
+  `FeaturePipelineRunResults.Build`: the pin the run used and the tallies `Attempted`, `Upserted`, `Unchanged`,
+  `Previewed`, `RejectedInvalid`, `BelowConfidence`, `Failed`, `Skipped`, `HumanValuesPreserved`. Because `InferProcessor`
+  sets `FailRunOnRecordError = true`, **a Feature Pipeline run with any failed or rejected record ends `Failed`**.
 
 ---
 

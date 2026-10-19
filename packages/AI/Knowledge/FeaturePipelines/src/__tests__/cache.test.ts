@@ -621,5 +621,12 @@ describe('FeatureValueCacheService', () => {
         it('keeps the JavaScript-type mapping with no constraint', () => {
             expect(T('0.75')).toMatchObject({ ValueText: '0.75', ValueNumeric: null });
         });
+        it('rejects long digit strings with trailing non-numeric characters without polynomial backtracking', () => {
+            const start = Date.now();
+            const result = T('1'.repeat(5000) + 'a', 'numeric');
+            expect(Date.now() - start).toBeLessThan(100);
+            expect(result.ValueNumeric).toBeNull();
+            expect(result.ValueText).toBe('1'.repeat(5000) + 'a');
+        });
     });
 });

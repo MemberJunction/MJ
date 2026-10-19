@@ -6,15 +6,14 @@
  */
 
 import { type IMetadataProvider, LogError } from '@memberjunction/core';
-import type { RecordFeatureValuesOutcome } from '@memberjunction/feature-pipelines';
 import {
-    FeaturePipelineRunPin,
-    FeatureValuePreview,
     IRecordProcessor,
+    ProcessorRunSummaryContext,
     RecordProcessorContext,
     RecordRef,
     RecordResult,
     WriteBackRunPayload,
+    WriteBackValuePreview,
 } from '@memberjunction/record-set-processor-base';
 import { OutputMappingConfig, RunProvenance, ApplyOutputMapping, type HumanValueGuardSource, type WithheldTargetSource } from '../writeBack';
 
@@ -24,14 +23,20 @@ interface BeforeWriteBackHook {
     beforeWriteBack(outputMapping: OutputMappingConfig | undefined, result: unknown, record: RecordRef, context: RecordProcessorContext): Promise<void>;
 }
 
-/** A processor whose per-record values commit with the record's write-back (InferProcessor's Feature Values). */
-export interface DeferredFeatureValueSource {
-    /** From now on, queue the per-record Feature Value writes instead of saving them. */
-    DeferFeatureValuesToWriteBack(): void;
+/** Counts of deferred record values written inside a write-back transaction. */
+export interface DeferredRecordWriteOutcome {
+    Upserted: number;
+    Unchanged: number;
+}
+
+/** A processor whose per-record values commit with the record's write-back (e.g. InferProcessor's Feature Values). */
+export interface DeferredRecordWriteSource {
+    /** From now on, queue the per-record writes instead of saving them immediately. */
+    DeferRecordWritesToWriteBack(): void;
     /** Saves a record's queued writes on the write-back unit's provider; null when none were queued. */
-    WriteDeferredFeatureValues(recordID: string, provider: IMetadataProvider): Promise<RecordFeatureValuesOutcome | null>;
+    WriteDeferredRecordValues(recordID: string, provider: IMetadataProvider): Promise<DeferredRecordWriteOutcome | null>;
     /** Drops a record's queued writes (its result failed, so it gets no write-back). */
-    DiscardDeferredFeatureValues(recordID: string): void;
+    DiscardDeferredRecordValues(recordID: string): void;
 }
 
 /** Wraps a processor and applies output-mapping write-back to each successful result. */
@@ -51,8 +56,8 @@ export class WriteBackProcessor implements IRecordProcessor {
         private readonly dryRun: boolean = false,
         private readonly run?: RunProvenance,
     ) {
-        if (WriteBackProcessor.defersFeatureValues(inner)) {
-            inner.DeferFeatureValuesToWriteBack();
+        if (WriteBackProcessor.defersRecordWrites(inner)) {
+            inner.DeferRecordWritesToWriteBack();
         }
     }
 
@@ -60,6 +65,14 @@ export class WriteBackProcessor implements IRecordProcessor {
 
     public get OutputMapping(): OutputMappingConfig {
         return this.outputMapping;
+    }
+
+    public get DefaultDryRunSampleSize(): number | undefined {
+        return this.inner.DefaultDryRunSampleSize;
+    }
+
+    public get FailRunOnRecordError(): boolean | undefined {
+        return this.inner.FailRunOnRecordError;
     }
 
     public GetWriteBackFields(): string[] {
@@ -71,21 +84,26 @@ export class WriteBackProcessor implements IRecordProcessor {
         return this.GetWriteBackFields();
     }
 
+    /** Whether the wrapped processor exposes a custom basis hash calculator. */
+    public CanComputeBasisHash(): boolean {
+        return typeof this.inner.ComputeBasisHash === 'function';
+    }
+
+    /** Forwards output mapping preparation to the wrapped processor, when it declares one. */
+    public PrepareOutputMapping(mapping: Record<string, unknown> | undefined): { OutputMapping?: Record<string, unknown>; HasUnmappedWrites?: boolean } {
+        return this.inner.PrepareOutputMapping ? this.inner.PrepareOutputMapping(mapping) : { OutputMapping: mapping };
+    }
+
+    /** Forwards run summary building to the wrapped processor, when it declares one. */
+    public BuildRunSummary(context: ProcessorRunSummaryContext): { ResultSummary?: unknown; WouldRefuse?: string } {
+        return this.inner.BuildRunSummary ? this.inner.BuildRunSummary(context) : {};
+    }
+
     /** Forwards the run-level readiness check to the wrapped processor, when it declares one. */
     public async Preflight(context: RecordProcessorContext): Promise<void> {
         if (this.inner.Preflight) {
             await this.inner.Preflight(context);
         }
-    }
-
-    /** Forwards the run-level pin of the wrapped processor, when it reports one. */
-    public CurrentRunPin(): FeaturePipelineRunPin | null {
-        return this.inner.CurrentRunPin ? this.inner.CurrentRunPin() : null;
-    }
-
-    /** Forwards the dry-run refusal of the wrapped processor, when it reports one. */
-    public CurrentRunRefusal(): string | null {
-        return this.inner.CurrentRunRefusal ? this.inner.CurrentRunRefusal() : null;
     }
 
     public async ProcessRecord(record: RecordRef, context: RecordProcessorContext): Promise<RecordResult> {
@@ -115,8 +133,8 @@ export class WriteBackProcessor implements IRecordProcessor {
 
     /** A record whose write-back is over or will not run: the inner processor's queued values for it are dropped. */
     protected WithoutWriteBack(record: RecordRef, result: RecordResult): RecordResult {
-        if (WriteBackProcessor.defersFeatureValues(this.inner)) {
-            this.inner.DiscardDeferredFeatureValues(record.RecordID);
+        if (WriteBackProcessor.defersRecordWrites(this.inner)) {
+            this.inner.DiscardDeferredRecordValues(record.RecordID);
         }
         return result;
     }
@@ -125,7 +143,7 @@ export class WriteBackProcessor implements IRecordProcessor {
     protected RunProvenanceFor(result: RecordResult, context: RecordProcessorContext): RunProvenance {
         return {
             ...this.run,
-            ProcessRunID: context.processRunID ?? this.run?.ProcessRunID,
+            ProcessRunID: context.ProcessRunID ?? this.run?.ProcessRunID,
             PromptID: result.PromptID ?? this.run?.PromptID,
             AIPromptRunID: result.AIPromptRunID ?? this.run?.AIPromptRunID,
             PromptVersionHash: result.PromptVersionHash ?? this.run?.PromptVersionHash,
@@ -136,29 +154,29 @@ export class WriteBackProcessor implements IRecordProcessor {
 
     /**
      * Applies the OutputMapping to one successful result, with the human-value guard and the run's overwrite switch;
-     * the inner processor's deferred Feature Values are written first inside the write-back's unit. The outcome is
+     * the inner processor's deferred record values are written first inside the write-back's unit. The outcome is
      * `Upserted` when anything changed, else `Unchanged`. A dry run carries `DryRun: true` and no `Outcome`, and fails
      * when its preview found what the real write would fail on.
      */
     protected async ApplyWriteBack(record: RecordRef, result: RecordResult, context: RecordProcessorContext, run: RunProvenance): Promise<RecordResult> {
         const dry = this.dryRun || context.DryRun === true;
         const guard = WriteBackProcessor.supportsHumanValueGuard(this.inner) ? this.inner.CreateHumanValueGuard(record, context) : undefined;
-        let featureValues: RecordFeatureValuesOutcome | null = null;
+        let deferredValues: DeferredRecordWriteOutcome | null = null;
         const inner = this.inner;
-        const unitWork = WriteBackProcessor.defersFeatureValues(inner)
-            ? async (unitProvider: IMetadataProvider) => { featureValues = await inner.WriteDeferredFeatureValues(record.RecordID, unitProvider); }
+        const unitWork = WriteBackProcessor.defersRecordWrites(inner)
+            ? async (unitProvider: IMetadataProvider) => { deferredValues = await inner.WriteDeferredRecordValues(record.RecordID, unitProvider); }
             : undefined;
         // The targets the result withheld (outputs below their confidence floor) are left as they are
         const withheld = WriteBackProcessor.supportsWithheldTargets(inner) ? inner.WithheldWriteBackTargets(result) : undefined;
         const writeBack = await ApplyOutputMapping({
-            outputMapping: this.outputMapping, result: result.ResultPayload, record, contextUser: context.contextUser,
-            provider: context.provider, dryRun: dry, run, lookupCache: this._lookupCache,
-            humanGuard: guard, overwriteHumanValues: context.overwriteHumanValues === true, unitWork, withheld,
+            outputMapping: this.outputMapping, result: result.ResultPayload, record, contextUser: context.ContextUser,
+            provider: context.Provider, dryRun: dry, run, lookupCache: this._lookupCache,
+            humanGuard: guard, overwriteHumanValues: context.OverwriteHumanValues === true, unitWork, withheld,
         });
-        if (dry && WriteBackProcessor.supportsFeatureValuePreview(inner)) {
-            const preview = inner.PreviewFeatureValues(record.RecordID);
+        if (dry && WriteBackProcessor.supportsRecordValuePreview(inner)) {
+            const preview = inner.PreviewRecordValues(record.RecordID);
             if (preview.length > 0) {
-                writeBack.previewFeatureValues = preview;
+                writeBack.previewValues = preview;
             }
         }
         const payload: WriteBackRunPayload = { output: result.ResultPayload, writeBack };
@@ -174,7 +192,7 @@ export class WriteBackProcessor implements IRecordProcessor {
         }
         return {
             ...result, ResultPayload: payload,
-            Outcome: WriteBackProcessor.OutcomeOf(writeBack.changed, featureValues, result), HumanValuesPreserved: preserved,
+            Outcome: WriteBackProcessor.OutcomeOf(writeBack.changed, deferredValues, result), HumanValuesPreserved: preserved,
         };
     }
 
@@ -185,16 +203,16 @@ export class WriteBackProcessor implements IRecordProcessor {
     }
 
     /** The record's outcome after write-back: see {@link ApplyWriteBack}; the inner outcome when neither wrote anything. */
-    protected static OutcomeOf(changed: boolean, featureValues: RecordFeatureValuesOutcome | null, result: RecordResult): RecordResult['Outcome'] {
-        if (changed || (featureValues !== null && featureValues.Upserted > 0)) {
+    protected static OutcomeOf(changed: boolean, deferredValues: DeferredRecordWriteOutcome | null, result: RecordResult): RecordResult['Outcome'] {
+        if (changed || (deferredValues !== null && deferredValues.Upserted > 0)) {
             return 'Upserted';
         }
-        return featureValues !== null && featureValues.Unchanged > 0 ? 'Unchanged' : result.Outcome;
+        return deferredValues !== null && deferredValues.Unchanged > 0 ? 'Unchanged' : result.Outcome;
     }
 
     /** Whether a processor defers per-record values to its write-back (a capability check, not a class check). */
-    private static defersFeatureValues(p: IRecordProcessor): p is IRecordProcessor & DeferredFeatureValueSource {
-        return 'DeferFeatureValuesToWriteBack' in p && typeof p.DeferFeatureValuesToWriteBack === 'function';
+    private static defersRecordWrites(p: IRecordProcessor): p is IRecordProcessor & DeferredRecordWriteSource {
+        return 'DeferRecordWritesToWriteBack' in p && typeof p.DeferRecordWritesToWriteBack === 'function';
     }
 
     /** Whether a processor has the `beforeWriteBack` hook (InferProcessor and its extensions). */
@@ -207,9 +225,9 @@ export class WriteBackProcessor implements IRecordProcessor {
         return 'WithheldWriteBackTargets' in p && typeof p.WithheldWriteBackTargets === 'function';
     }
 
-    /** Whether a processor can preview, on a dry run, the Feature Values of its outputs with no write target. */
-    private static supportsFeatureValuePreview(p: IRecordProcessor): p is IRecordProcessor & { PreviewFeatureValues(recordID: string): FeatureValuePreview[] } {
-        return 'PreviewFeatureValues' in p && typeof p.PreviewFeatureValues === 'function';
+    /** Whether a processor can preview, on a dry run, its deferred record values. */
+    private static supportsRecordValuePreview(p: IRecordProcessor): p is IRecordProcessor & { PreviewRecordValues(recordID: string): WriteBackValuePreview[] } {
+        return 'PreviewRecordValues' in p && typeof p.PreviewRecordValues === 'function';
     }
 
     /** Whether a processor can say which target values a person entered (a capability check, not a class check). */
@@ -221,8 +239,8 @@ export class WriteBackProcessor implements IRecordProcessor {
      * Delegates basis hash computation to the inner processor if supported.
      */
     public async ComputeBasisHash(record: RecordRef, context: RecordProcessorContext): Promise<string | undefined> {
-        if ('ComputeBasisHash' in this.inner && typeof (this.inner as { ComputeBasisHash?: unknown }).ComputeBasisHash === 'function') {
-            return (this.inner as { ComputeBasisHash: (r: RecordRef, ctx: RecordProcessorContext) => Promise<string | undefined> }).ComputeBasisHash(record, context);
+        if (typeof this.inner.ComputeBasisHash === 'function') {
+            return this.inner.ComputeBasisHash(record, context);
         }
         return undefined;
     }
@@ -232,8 +250,8 @@ export class WriteBackProcessor implements IRecordProcessor {
      * output mapping write-back to each successful result.
      */
     public async ProcessBatch(records: RecordRef[], context: RecordProcessorContext): Promise<Map<string, RecordResult>> {
-        if ('ProcessBatch' in this.inner && typeof (this.inner as { ProcessBatch?: unknown }).ProcessBatch === 'function') {
-            const rawResults = await (this.inner as { ProcessBatch: (recs: RecordRef[], ctx: RecordProcessorContext) => Promise<Map<string, RecordResult> | RecordResult[]> }).ProcessBatch(records, context);
+        if (typeof this.inner.ProcessBatch === 'function') {
+            const rawResults = await this.inner.ProcessBatch(records, context);
             const innerResults = this.toResultMap(records, rawResults);
             const outResults = new Map<string, RecordResult>();
 

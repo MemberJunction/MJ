@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { MJRecordProcessEntity, MJProcessRunEntity } from '@memberjunction/core-entities';
-import type { FeaturePipelineRunResult } from '@memberjunction/record-set-processor-base';
+import type { FeaturePipelineRunResult } from '@memberjunction/feature-pipelines';
 import {
   FeaturePipelineEngine,
   FEATURE_PIPELINE_CATEGORY_NAME,

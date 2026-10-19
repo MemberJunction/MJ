@@ -22,7 +22,6 @@
     "@memberjunction/ai-agents": "6.2.0-edge.4",
     "@memberjunction/ai-core-plus": "6.2.0-edge.4",
     "@memberjunction/ai-prompts": "6.2.0-edge.4",
-    "@memberjunction/feature-pipelines": "6.2.0-edge.4",
     "@memberjunction/materialization": "6.2.0-edge.4",
     "@memberjunction/core": "6.2.0-edge.4",
     "@memberjunction/core-entities": "6.2.0-edge.4",
@@ -37,7 +36,6 @@
     "@memberjunction/sqlserver-dataprovider": "6.2.0-edge.4",
     "@memberjunction/task-graph": "6.2.0-edge.4",
     "@memberjunction/templates": "6.2.0-edge.4",
-    "@memberjunction/testing-engine": "6.2.0-edge.4",
     "cron-parser": "^4.9.0",
     "rxjs": "^7.8.2",
     "uuid": "^13.0.0"

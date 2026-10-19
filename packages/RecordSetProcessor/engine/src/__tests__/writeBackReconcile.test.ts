@@ -680,7 +680,7 @@ describe('dry-run preview reports what the real write would fail on', () => {
         const d = new PreviewDbProvider([PJF(), PEOPLE, JOB_FUNCTIONS], {});
         const inner = { ProcessRecord: async () => ({ Status: 'Succeeded' as const, ResultPayload: { Functions: [{ JobFunctionID: MISSING_ID, Sequence: 1 }] } }) };
         const wrapped = new WriteBackProcessor(inner, childOnly, true);
-        const r = await wrapped.ProcessRecord(record, { contextUser: USER, provider: d, DryRun: true });
+        const r = await wrapped.ProcessRecord(record, { ContextUser: USER, Provider: d, DryRun: true });
         expect(r.Status).toBe('Failed');
         expect(r.ErrorMessage).toContain('Dry run: the real write would fail:');
         expect(r.ErrorMessage).toContain(MISSING_ID);
@@ -689,7 +689,7 @@ describe('dry-run preview reports what the real write would fail on', () => {
     it('fails the record of a real-run processor on a dry-run context whose preview found a failing write', async () => {
         const d = new PreviewDbProvider([PJF(), PEOPLE, JOB_FUNCTIONS], {});
         const inner = { ProcessRecord: async () => ({ Status: 'Succeeded' as const, ResultPayload: { Functions: [{ JobFunctionID: MISSING_ID, Sequence: 1 }] } }) };
-        const r = await new WriteBackProcessor(inner, childOnly, false).ProcessRecord(record, { contextUser: USER, provider: d, DryRun: true });
+        const r = await new WriteBackProcessor(inner, childOnly, false).ProcessRecord(record, { ContextUser: USER, Provider: d, DryRun: true });
         expect(r.Status).toBe('Failed');
         expect(r.ErrorMessage).toContain(MISSING_ID);
         expect(r.DryRun).toBe(true);
@@ -700,7 +700,7 @@ describe('dry-run preview reports what the real write would fail on', () => {
     it('reports a passing preview of a dry-run context as a dry run: Succeeded, DryRun, no Outcome', async () => {
         const d = new PreviewDbProvider([PJF(), PEOPLE, JOB_FUNCTIONS], { JobFunction: [{ ID: JOB_FUNCTION_ID }] });
         const inner = { ProcessRecord: async () => ({ Status: 'Succeeded' as const, Outcome: 'Upserted' as const, ResultPayload: { Functions: [{ JobFunctionID: JOB_FUNCTION_ID, Sequence: 1 }] } }) };
-        const r = await new WriteBackProcessor(inner, childOnly, false).ProcessRecord(record, { contextUser: USER, provider: d, DryRun: true });
+        const r = await new WriteBackProcessor(inner, childOnly, false).ProcessRecord(record, { ContextUser: USER, Provider: d, DryRun: true });
         expect(r).toMatchObject({ Status: 'Succeeded', DryRun: true });
         expect(r.Outcome).toBeUndefined();
     });
@@ -710,7 +710,7 @@ describe('dry-run preview — the other checks a real write would fail', () => {
     it('reports nothing, and the dry-run record succeeds, when every written value exists', async () => {
         const d = new PreviewDbProvider([PJF(), PEOPLE, JOB_FUNCTIONS, LEVELS], { JobFunction: [{ ID: JOB_FUNCTION_ID }], SeniorityLevel: [{ ID: result.SeniorityLevel }] });
         const inner = { ProcessRecord: async () => ({ Status: 'Succeeded' as const, ResultPayload: { ...result, Functions: [result.Functions[0]] } }) };
-        const r = await new WriteBackProcessor(inner, mapping, true).ProcessRecord(record, { contextUser: USER, provider: d });
+        const r = await new WriteBackProcessor(inner, mapping, true).ProcessRecord(record, { ContextUser: USER, Provider: d });
         expect(r.Status).toBe('Succeeded');
         expect(writeBackOf(r).previewErrors).toBeUndefined();
         expect(d.RelatedReads).toHaveLength(2); // one read per related entity: job functions, seniority levels

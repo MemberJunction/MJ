@@ -15,7 +15,7 @@ import { BaseLLM, ChatMessageRole, ChatParams, GetAIAPIKey, ModelUsage, type Cha
 import '@memberjunction/ai-gemini';
 import '@memberjunction/ai-openai';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
-import { GoldenLabelQualityCheck, type GoldenCase, type LabelerAnswer, type LabelerIdentity, type LabelledCase } from '@memberjunction/testing-engine';
+import { GoldenLabelQualityCheck, type GoldenCase, type LabelerAnswer, type LabelerIdentity, type LabelledCase } from '@memberjunction/feature-pipelines-engine';
 import { BootstrapIntegrationServer, type IntegrationBootstrapContext } from '@memberjunction/testing-integration';
 
 /** The pipeline outputs every labeler answers, in the order the golden set stores them. */
