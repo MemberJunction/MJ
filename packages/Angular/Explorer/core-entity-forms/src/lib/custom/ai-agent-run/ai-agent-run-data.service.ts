@@ -1,6 +1,7 @@
 import { BehaviorSubject, Observable } from 'rxjs';
 import { IMetadataProvider, Metadata, RunView } from '@memberjunction/core';
 import { MJAIAgentRunEntity, MJAIAgentRunStepEntity, MJActionExecutionLogEntity, MJAIPromptRunEntity } from '@memberjunction/core-entities';
+import { ApplyResolvedPayloadAtStart, ApplyResolvedPayloadAtEnd } from '@memberjunction/ai-core-plus';
 import { SortAgentRunStepsByExecutionOrder } from './agent-run-step-order';
 
 export interface AgentRunData {
@@ -172,6 +173,9 @@ export class AIAgentRunDataHelper {
     }
     
     const steps = SortAgentRunStepsByExecutionOrder(stepsResult.Results as MJAIAgentRunStepEntity[] || []);
+    // Fill PayloadAtEnd and PayloadAtStart on steps that point at an earlier step's PayloadAtEnd.
+    ApplyResolvedPayloadAtEnd(steps);
+    ApplyResolvedPayloadAtStart(steps);
     
     // Build filters for batch loading
     const actionLogIds = steps
@@ -283,6 +287,9 @@ export class AIAgentRunDataHelper {
     }
     
     const steps = SortAgentRunStepsByExecutionOrder(stepsResult.Results);
+    // Fill PayloadAtEnd and PayloadAtStart on steps that point at an earlier step's PayloadAtEnd.
+    ApplyResolvedPayloadAtEnd(steps);
+    ApplyResolvedPayloadAtStart(steps);
     
     // Get prompt run IDs
     const promptRunIds = steps

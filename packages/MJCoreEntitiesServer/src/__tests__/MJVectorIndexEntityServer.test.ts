@@ -78,6 +78,17 @@ vi.mock('@memberjunction/core-entities', () => {
 
 vi.mock('@memberjunction/ai-vectordb', () => ({ VectorDBBase: class {}, IndexModelMetricEnum: {} }));
 vi.mock('@memberjunction/ai', () => ({ GetAIAPIKey: () => 'test-api-key' }));
+// The width probe: one embedding call with the index's model. Defaults to a failed call, so tests that
+// do not care about the width get the documented fallback; the probe tests set a real vector.
+const runEmbeddingMock = vi.fn();
+vi.mock('@memberjunction/ai-prompts', () => ({
+    AIEmbeddingRunner: class {
+        public async RunEmbedding(...args: unknown[]): Promise<unknown> {
+            return runEmbeddingMock(...args);
+        }
+    },
+}));
+
 // The delete path resolves the provider-side name through the engine's one rule (ExternalID, else Name).
 vi.mock('@memberjunction/ai-engine-base', () => ({
     AIEngineBase: {
@@ -124,6 +135,7 @@ describe('MJVectorIndexEntityServer.Save', () => {
         createInstanceMock.mockReset().mockReturnValue(fakeVectorDB);
         runViewMock.mockReset().mockResolvedValue({ Success: true, Results: [{ Name: 'Pinecone', ClassKey: 'PineconeDatabase' }] });
         createIndexMock.mockReset();
+        runEmbeddingMock.mockReset().mockResolvedValue({ Success: false, Vectors: [], ErrorMessage: 'no credentials (test default)' });
         superSaveMock.mockReset();
         logErrorMock.mockReset();
         logStatusMock.mockReset();
@@ -225,6 +237,106 @@ describe('MJVectorIndexEntityServer.Save', () => {
         expect(createIndexMock.mock.calls[0][0]).toMatchObject({ id: index.Name });
         expect(index.ExternalID).toBe(index.Name);
         expect(logStatusMock.mock.calls.some(call => String(call[0]).includes('sanitized'))).toBe(false);
+    });
+
+    describe('embedding width (#4988)', () => {
+        const MODEL_ID = 'M0000000-0000-0000-0000-000000000384';
+
+        function probeAnswers(width: number): void {
+            runEmbeddingMock.mockResolvedValue({ Success: true, Vectors: [new Array<number>(width).fill(0.1)], ModelName: 'local-384', ErrorMessage: null });
+        }
+
+        it('creates the provider index at the width the model actually produces, and writes it back', async () => {
+            probeAnswers(384);
+            createIndexMock.mockResolvedValue({ success: true, data: {} });
+            const index = makeNewIndex();
+            index.EmbeddingModelID = MODEL_ID;
+
+            await index.Save();
+            await vi.waitFor(() => expect(superSaveMock).toHaveBeenCalledTimes(2));
+
+            expect(createIndexMock.mock.calls[0][0]).toMatchObject({ dimension: 384 });
+            expect(index.Dimensions).toBe(384);
+        });
+
+        it('probes with the index\'s own model pinned, as the user who saved, without writing a run row', async () => {
+            probeAnswers(384);
+            createIndexMock.mockResolvedValue({ success: true, data: {} });
+            const index = makeNewIndex();
+            index.EmbeddingModelID = MODEL_ID;
+
+            await index.Save();
+            await vi.waitFor(() => expect(createIndexMock).toHaveBeenCalledTimes(1));
+
+            expect(runEmbeddingMock).toHaveBeenCalledTimes(1);
+            expect(runEmbeddingMock.mock.calls[0][0]).toMatchObject({
+                ModelID: MODEL_ID,
+                ContextUser: index.ContextCurrentUser,
+                SkipRunRecord: true,
+            });
+            expect((runEmbeddingMock.mock.calls[0][0] as { Texts: string[] }).Texts).toHaveLength(1);
+        });
+
+        it('does not probe when the record already states its width', async () => {
+            probeAnswers(384);
+            createIndexMock.mockResolvedValue({ success: true, data: {} });
+            const index = makeNewIndex();
+            index.EmbeddingModelID = MODEL_ID;
+            index.Dimensions = 3072;
+
+            await index.Save();
+            await vi.waitFor(() => expect(createIndexMock).toHaveBeenCalledTimes(1));
+
+            expect(runEmbeddingMock).not.toHaveBeenCalled();
+            expect(createIndexMock.mock.calls[0][0]).toMatchObject({ dimension: 3072 });
+        });
+
+        it('falls back to the default width, and says so, when the probe fails', async () => {
+            runEmbeddingMock.mockResolvedValue({ Success: false, Vectors: [], ErrorMessage: 'No Embeddings model has credentials available' });
+            createIndexMock.mockResolvedValue({ success: true, data: {} });
+            const index = makeNewIndex();
+            index.EmbeddingModelID = MODEL_ID;
+
+            await index.Save();
+            await vi.waitFor(() => expect(createIndexMock).toHaveBeenCalledTimes(1));
+
+            expect(createIndexMock.mock.calls[0][0]).toMatchObject({ dimension: MJVectorIndexEntityServer.DEFAULT_DIMENSIONS });
+            expect(logged(/No Embeddings model has credentials/)).toBe(true);
+            expect(logged(/fallback/)).toBe(true);
+        });
+
+        it('falls back when the probe throws or hangs, without blocking the create', async () => {
+            vi.useFakeTimers();
+            runEmbeddingMock.mockReturnValue(new Promise(() => undefined));
+            createIndexMock.mockResolvedValue({ success: true, data: {} });
+            const index = makeNewIndex();
+            index.EmbeddingModelID = MODEL_ID;
+
+            await index.Save();
+            await flushMicrotasks();
+            expect(createIndexMock).not.toHaveBeenCalled();
+
+            await vi.advanceTimersByTimeAsync(MJVectorIndexEntityServer.DIMENSION_PROBE_TIMEOUT_MS + 1);
+            await flushMicrotasks();
+
+            expect(createIndexMock).toHaveBeenCalledTimes(1);
+            expect(createIndexMock.mock.calls[0][0]).toMatchObject({ dimension: MJVectorIndexEntityServer.DEFAULT_DIMENSIONS });
+            expect(logged(/timed out/)).toBe(true);
+        });
+
+        it('skips the probe and falls back when the record names no embedding model', async () => {
+            probeAnswers(384);
+            createIndexMock.mockResolvedValue({ success: true, data: {} });
+            const index = makeNewIndex();
+            index.EmbeddingModelID = null;
+
+            await index.Save();
+            await vi.waitFor(() => expect(createIndexMock).toHaveBeenCalledTimes(1));
+
+            expect(runEmbeddingMock).not.toHaveBeenCalled();
+            expect(createIndexMock.mock.calls[0][0]).toMatchObject({ dimension: MJVectorIndexEntityServer.DEFAULT_DIMENSIONS });
+            expect(logged(/no EmbeddingModelID/)).toBe(true);
+        });
     });
 
     it('leaves the provider alone when saving a record that already exists', async () => {

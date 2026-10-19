@@ -2072,9 +2072,13 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     // ratings and attachments.
     this.applyArtifactsToInstance(instance, message.ID, ref.changeDetectorRef);
 
-    // Status change requires explicit markForCheck on the OnPush dynamic child.
+    // Status or in-place entity mutations (e.g. message.Load() in handleMessageCompletion)
+    // require explicit detectChanges on the dynamically created MessageItemComponent child.
     if (previousMessage && previousMessage.Status !== message.Status) {
       ref.changeDetectorRef.markForCheck();
+    }
+    if (!this.isViewDestroyed(ref.changeDetectorRef)) {
+      ref.changeDetectorRef.detectChanges();
     }
   }
 

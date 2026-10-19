@@ -613,9 +613,22 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     return claimed.includes(this.FieldName);
   }
 
+  /**
+   * Whether the field metadata is marked `Deprecated` or `Disabled`.
+   *
+   * Accessing a deprecated or disabled field via `BaseEntity.Get()` emits a runtime
+   * console warning (or throws for disabled fields), so `ShouldHideField` and the
+   * template short-circuit before reading `Value`.
+   */
+  get IsFieldDeprecatedOrDisabled(): boolean {
+    const status = this.FieldInfo?.Status;
+    return status === 'Deprecated' || status === 'Disabled';
+  }
+
   /** Whether this field should be hidden (empty in read-only mode) */
   get ShouldHideField(): boolean {
     if (this.IsClaimedByContribution) return true;
+    if (this.IsFieldDeprecatedOrDisabled) return true;
     // A read-denied field is always hidden. This must run before Value is touched: the
     // template's own @if guards rendering behind IsFieldReadableByUser, but programmatic
     // callers (MjCollapsiblePanelComponent.hasRenderableContent sweeps ShouldHideField to

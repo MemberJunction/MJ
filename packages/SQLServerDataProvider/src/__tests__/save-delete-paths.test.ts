@@ -26,6 +26,7 @@ import { SQLServerTransactionGroup } from '../SQLServerTransactionGroup';
 import { mssqlState, MockConnectionPool } from './helpers/mock-mssql';
 import {
   TEST_USER,
+  TestEntity,
   makeWidgetEntityInfo,
   makeRecordChangesEntityInfo,
   makeSavedWidgetEntity,
@@ -242,7 +243,7 @@ describe('SQLServerDataProvider save path (real Save() → GenerateSaveSQL → m
     expect(sql).toContain('DECLARE @ResultChangesTable TABLE');
     expect(sql).toContain('[RecordID] nvarchar(750) NOT NULL'); // record-changes entity columns
     expect(sql).toContain('spCreateRecordChange_Internal');
-    expect(sql).toContain(`@EntityName='Widgets'`);
+    expect(sql).toContain(`@EntityName=N'Widgets'`);
     expect(sql).toContain(`@UserID='${TEST_USER.ID}'`);
     expect(sql).toContain(`@Type='Create'`);
 
@@ -461,8 +462,68 @@ describe('SQLServerDataProvider delete path (real Delete() → GenerateDeleteSQL
     expect(sql).toContain(`EXEC [dbo].[spDeleteWidget] @ID='w-0001'`);
     expect(sql).toContain('spCreateRecordChange_Internal');
     expect(sql).toContain(`@Type='Delete'`);
-    expect(sql).toContain(`@EntityName='Widgets'`);
+    expect(sql).toContain(`@EntityName=N'Widgets'`);
     expect(sql).toContain('SELECT @ID AS [ID]'); // PK echoed back for delete validation
+  });
+
+  it('with TrackRecordChanges + CascadeDeletes: runs the proc uncaptured, so cascaded spUpdate rows cannot break an @ResultTable capture', async () => {
+    const provider = makeProvider();
+    provider.SetTestEntities([makeRecordChangesEntityInfo()]);
+    const entity = makeSavedWidgetEntity(makeWidgetEntityInfo({ trackRecordChanges: true, cascadeDeletes: true }), TEST_USER);
+    // Real shape: our key first, a cascaded spUpdate full row, the proc's own echo, our key last
+    mssqlState.QueueResult({
+      recordsets: [[{ ID: 'w-0001' }], [{ ID: 'child-1', Name: 'Child', ParentID: null }], [{ ID: 'w-0001' }], [{ ID: 'w-0001' }]],
+    });
+
+    const deleted = await provider.Delete(entity, new EntityDeleteOptions(), TEST_USER);
+
+    expect(deleted).toBe(true);
+    const sql = mssqlState.Queries[0].sql;
+    expect(sql).not.toContain('INSERT INTO @ResultTable');
+    const rowGone = `NOT EXISTS (SELECT 1 FROM [dbo].[vwWidgets] WHERE [ID]='w-0001')`;
+    const exec = `EXEC [dbo].[spDeleteWidget] @ID='w-0001'`;
+    const firstKey = `SELECT CASE WHEN @MJDeleteRowExisted = 1 THEN 'w-0001' END AS [ID]`;
+    const lastKey = `SELECT CASE WHEN @MJDeleteRowDeleted = 1 THEN 'w-0001' END AS [ID]`;
+    expect(sql).toContain(rowGone);
+    expect(sql).toContain(`@Type='Delete'`);
+    // Order: key for transaction groups (first result set) → proc → record change only if the row is gone → key last
+    expect(sql.indexOf(firstKey)).toBeGreaterThan(-1);
+    expect(sql.indexOf(firstKey)).toBeLessThan(sql.indexOf(exec));
+    expect(sql.indexOf(exec)).toBeLessThan(sql.indexOf(rowGone));
+    expect(sql.indexOf(rowGone)).toBeLessThan(sql.indexOf('spCreateRecordChange_Internal'));
+    expect(sql.trim().endsWith(lastKey)).toBe(true);
+    // Runtime logins have no SELECT on base tables, so neither existence check may read one
+    expect(sql).not.toContain('[dbo].[Widget]');
+  });
+
+  it('with TrackRecordChanges + CascadeDeletes: escapes a quote in a string key in every place the key is inlined', async () => {
+    const provider = makeProvider();
+    provider.SetTestEntities([makeRecordChangesEntityInfo()]);
+    const entity = new TestEntity(makeWidgetEntityInfo({ trackRecordChanges: true, cascadeDeletes: true }));
+    entity.ContextCurrentUser = TEST_USER;
+    entity.SetMany({ ...savedWidgetRow(), ID: "w'0001" }, false, true, true);
+    mssqlState.QueueResult({ recordsets: [[{ ID: "w'0001" }], [{ ID: "w'0001" }]] });
+
+    const deleted = await provider.Delete(entity, new EntityDeleteOptions(), TEST_USER);
+
+    expect(deleted).toBe(true);
+    const sql = mssqlState.Queries[0].sql;
+    expect(sql).toContain(`EXEC [dbo].[spDeleteWidget] @ID='w''0001'`);
+    expect(sql).toContain(`WHERE [ID]='w''0001'`);
+    expect(sql).toContain(`THEN 'w''0001' END AS [ID]`);
+    expect(sql).not.toMatch(/[^']'w'0001/);
+  });
+
+  it('with TrackRecordChanges + CascadeDeletes: returns false when the row was not deleted (NULL key)', async () => {
+    const provider = makeProvider();
+    provider.SetTestEntities([makeRecordChangesEntityInfo()]);
+    const entity = makeSavedWidgetEntity(makeWidgetEntityInfo({ trackRecordChanges: true, cascadeDeletes: true }), TEST_USER);
+    mssqlState.QueueResult({ recordsets: [[{ ID: null }], [{ ID: null }]] });
+
+    const deleted = await provider.Delete(entity, new EntityDeleteOptions(), TEST_USER);
+
+    expect(deleted).toBe(false);
+    expect(entity.LatestResult?.Message).toContain('ID=w-0001 not found');
   });
 
   it('returns false when the proc echoes a different PK (delete validation)', async () => {
@@ -498,6 +559,53 @@ describe('SQLServerDataProvider delete path (real Delete() → GenerateDeleteSQL
     const deleted = await provider.Delete(entity, new EntityDeleteOptions(), TEST_USER);
 
     expect(deleted).toBe(true);
+  });
+});
+
+describe('SQLServerDataProvider delete inside a TransactionGroup (result callback validates the key)', () => {
+  let previousProvider: IMetadataProvider | undefined;
+  beforeEach(() => {
+    mssqlState.Reset();
+    previousProvider = Metadata.Provider;
+  });
+  afterEach(() => {
+    Metadata.Provider = previousProvider as IMetadataProvider;
+  });
+
+  async function deleteInGroup(info: EntityInfo, recordsets: Record<string, unknown>[][]): Promise<BaseEntity> {
+    const provider = makeProvider();
+    provider.SetTestEntities([info, makeRecordChangesEntityInfo()]);
+    Metadata.Provider = provider as unknown as IMetadataProvider;
+    const group = new SQLServerTransactionGroup();
+    const entity = makeSavedWidgetEntity(info, TEST_USER);
+    entity.TransactionGroup = group;
+    expect(await provider.Delete(entity, new EntityDeleteOptions(), TEST_USER)).toBe(true); // queued, not run
+    mssqlState.QueueResult({ recordsets });
+    expect(await group.Submit()).toBe(true);
+    return entity;
+  }
+
+  it('CascadeDeletes: succeeds when the first result set carries the key', async () => {
+    const info = makeWidgetEntityInfo({ trackRecordChanges: true, cascadeDeletes: true });
+    const entity = await deleteInGroup(info, [[{ ID: 'w-0001' }], [{ ID: 'child-1', Name: 'Child', ParentID: null }], [{ ID: 'w-0001' }]]);
+
+    expect(mssqlState.Queries[0].sql).toContain('@MJDeleteRowExisted');
+    expect(entity.LatestResult?.Success).toBe(true);
+  });
+
+  it('CascadeDeletes: fails when the row did not exist (NULL key), instead of reporting success', async () => {
+    const info = makeWidgetEntityInfo({ trackRecordChanges: true, cascadeDeletes: true });
+    const entity = await deleteInGroup(info, [[{ ID: null }], [{ ID: null }]]);
+
+    expect(entity.LatestResult?.Success).toBe(false);
+    expect(entity.LatestResult?.Message).toContain('ID=w-0001 not found');
+  });
+
+  it('fails when the proc echoes a different key', async () => {
+    const entity = await deleteInGroup(makeWidgetEntityInfo(), [[{ ID: 'some-other-record' }]]);
+
+    expect(entity.LatestResult?.Success).toBe(false);
+    expect(entity.LatestResult?.Message).toContain('ID=w-0001 not found');
   });
 });
 
@@ -625,3 +733,139 @@ describe('SQLServerDataProvider save-call variable suffix (loom #12 WP3)', () =>
     });
   });
 });
+
+describe('SQLServerDataProvider Record Change text is sent as Unicode (N\'…\') literals', () => {
+  // spCreateRecordChange_Internal declares @EntityName, @RecordID, @ChangesJSON, @ChangesDescription
+  // and @FullRecordJSON as NVARCHAR. A plain '…' literal is read in the database's code page first,
+  // so on a SQL_Latin1_General_CP1 database every character outside code page 1252 (emoji, CJK,
+  // Greek, Cyrillic, …) is stored in the audit row as '?'. The record itself saves correctly.
+  const UNICODE_NAME = 'Zoë 😀 日本 Ωμέγα';
+
+  beforeEach(() => {
+    mssqlState.Reset();
+  });
+
+  it('CREATE: every text argument of the record-change EXEC is an N literal and carries the text intact', async () => {
+    const provider = makeProvider();
+    provider.SetTestEntities([makeRecordChangesEntityInfo()]);
+    const entity = makeNewWidgetEntity(makeWidgetEntityInfo({ trackRecordChanges: true }), TEST_USER);
+    entity.Set('Name', UNICODE_NAME);
+    entity.Set('IsActive', true);
+    mssqlState.QueueResult({ rows: [{ ...savedWidgetRow(), Name: UNICODE_NAME }] });
+
+    await provider.Save(entity, TEST_USER, new EntitySaveOptions());
+
+    const sql = mssqlState.Queries[0].sql;
+    expect(sql).toContain(`@EntityName=N'Widgets'`);
+    expect(sql).toMatch(/@ChangesJSON=N'/);
+    expect(sql).toMatch(/@ChangesDescription=N'/);
+    expect(sql).toMatch(/@FullRecordJSON=N'[^']*Zoë 😀 日本 Ωμέγα/);
+    expect(sql).not.toMatch(/@(EntityName|ChangesJSON|ChangesDescription|FullRecordJSON)='/);
+  });
+
+  it('DELETE: the quoted RecordID and the JSON arguments are N literals', async () => {
+    const provider = makeProvider();
+    provider.SetTestEntities([makeRecordChangesEntityInfo()]);
+    const entity = makeSavedWidgetEntity(makeWidgetEntityInfo({ trackRecordChanges: true }), TEST_USER);
+    mssqlState.QueueResult({ rows: [{ ID: 'w-0001' }] });
+
+    await provider.Delete(entity, new EntityDeleteOptions(), TEST_USER);
+
+    const sql = mssqlState.Queries[0].sql;
+    expect(sql).toContain(`@EntityName=N'Widgets'`);
+    expect(sql).toMatch(/@RecordID=N'ID\|w-0001'/);
+    expect(sql).toMatch(/@ChangesJSON=N'/);
+    expect(sql).toMatch(/@ChangesDescription=N'/);
+    expect(sql).toMatch(/@FullRecordJSON=N'/);
+    expect(sql).not.toMatch(/@(EntityName|RecordID|ChangesJSON|ChangesDescription|FullRecordJSON)='/);
+  });
+
+  it('IS-A sibling propagation: the entity name, record id and change text are N literals', () => {
+    const provider = makeProvider();
+    const sibling = provider as unknown as {
+      BuildSiblingRecordChangeSQL: (varName: string, entityInfo: EntityInfo, changesJSON: string, changesDesc: string, pkValue: string, userId: string) => string;
+    };
+    const sql = sibling.BuildSiblingRecordChangeSQL('@_rc_prop_0', makeWidgetEntityInfo(), `{"Name":"${UNICODE_NAME}"}`, `Name changed to ${UNICODE_NAME}`, 'w-0001', TEST_USER.ID);
+
+    expect(sql).toContain(`@EntityName=N'Widgets'`);
+    expect(sql).toContain(`@RecordID=N'ID|w-0001'`);
+    expect(sql).toContain(`@ChangesJSON=N'{"Name":"${UNICODE_NAME}"}'`);
+    expect(sql).toContain(`@ChangesDescription=N'Name changed to ${UNICODE_NAME}'`);
+  });
+});
+
+describe("SQLServerDataProvider SaveReturnMode ('datestamps_only')", () => {
+  beforeEach(() => {
+    mssqlState.Reset();
+  });
+
+  it('declares @ResultTable with only PK + datestamps when EntityInfo.SaveReturnMode is datestamps_only and merges returned values onto entity state', async () => {
+    const provider = makeProvider();
+    provider.SetTestEntities([makeRecordChangesEntityInfo()]);
+    const entityInfo = makeWidgetEntityInfo({ trackRecordChanges: true, saveReturnMode: 'datestamps_only' });
+    const entity = makeNewWidgetEntity(entityInfo, TEST_USER);
+    entity.Set('ID', 'w-ds-01');
+    entity.Set('Name', 'High-Volume Step');
+    entity.Set('Description', 'Large JSON payload');
+    entity.Set('IsActive', true);
+
+    const createdAt = new Date('2026-04-17T10:00:00.000Z');
+    const updatedAt = new Date('2026-04-17T10:00:00.000Z');
+    mssqlState.QueueResult({
+      rows: [{ ID: 'w-ds-01', __mj_CreatedAt: createdAt, __mj_UpdatedAt: updatedAt }],
+    });
+
+    const result = await provider.Save(entity, TEST_USER, new EntitySaveOptions());
+
+    const sql = mssqlState.Queries[0].sql;
+    // @ResultTable contains ONLY ID, __mj_CreatedAt, __mj_UpdatedAt — NOT Name, Description, CategoryName
+    expect(sql).toContain('DECLARE @ResultTable TABLE');
+    expect(sql).toContain('[ID] uniqueidentifier NOT NULL');
+    expect(sql).toContain('[__mj_CreatedAt] datetimeoffset NOT NULL');
+    expect(sql).toContain('[__mj_UpdatedAt] datetimeoffset NOT NULL');
+    expect(sql).not.toContain('[Name] nvarchar(100) NOT NULL');
+    expect(sql).not.toContain('[CategoryName] nvarchar(100) NULL');
+    expect(sql).toContain('SELECT [ID], [__mj_CreatedAt], [__mj_UpdatedAt] FROM @ResultTable;');
+
+    // Returned row merges the DB's ID + datestamps onto the entity's in-memory fields
+    expect(result).toMatchObject({
+      ID: 'w-ds-01',
+      Name: 'High-Volume Step',
+      Description: 'Large JSON payload',
+      IsActive: true,
+      __mj_CreatedAt: createdAt,
+      __mj_UpdatedAt: updatedAt,
+    });
+  });
+
+  it('projects only PK + datestamps from @ResultTable when per-save options.SaveReturnMode is datestamps_only on a full entity', async () => {
+    const provider = makeProvider();
+    provider.SetTestEntities([makeRecordChangesEntityInfo()]);
+    const entityInfo = makeWidgetEntityInfo({ trackRecordChanges: true, saveReturnMode: 'full' });
+    const entity = makeSavedWidgetEntity(entityInfo, TEST_USER);
+    entity.Set('Name', 'Delta Updated Name');
+
+    const createdAt = new Date('2025-01-01T00:00:00.000Z');
+    const updatedAt = new Date('2026-04-17T11:30:00.000Z');
+    mssqlState.QueueResult({
+      rows: [{ ID: 'w-0001', __mj_CreatedAt: createdAt, __mj_UpdatedAt: updatedAt }],
+    });
+
+    const saveOpts = new EntitySaveOptions();
+    saveOpts.SaveReturnMode = 'datestamps_only';
+    const result = await provider.Save(entity, TEST_USER, saveOpts);
+
+    const sql = mssqlState.Queries[0].sql;
+    // The stored procedure returns all view columns so @ResultTable still declares all columns,
+    // while the final SELECT projects only [ID], [__mj_CreatedAt], [__mj_UpdatedAt] over the wire.
+    expect(sql).toContain('[Name] nvarchar(100) NOT NULL');
+    expect(sql).toContain('SELECT [ID], [__mj_CreatedAt], [__mj_UpdatedAt] FROM @ResultTable;');
+    expect(result).toMatchObject({
+      ID: 'w-0001',
+      Name: 'Delta Updated Name',
+      __mj_CreatedAt: createdAt,
+      __mj_UpdatedAt: updatedAt,
+    });
+  });
+});
+

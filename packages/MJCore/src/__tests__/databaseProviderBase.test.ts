@@ -35,6 +35,11 @@ class TestSQLServerProvider extends DatabaseProviderBase {
         return this.ValidateUserProvidedSQLClause(clause);
     }
 
+    /** Test-only passthrough — BuildAggregateSQL is protected on the base class. */
+    public TestBuildAggregateSQL(expressions: string[], entityInfo: EntityInfo) {
+        return this.BuildAggregateSQL(expressions.map(expression => ({ expression })), entityInfo, entityInfo.SchemaName, entityInfo.BaseView, '');
+    }
+
     // RLS test hooks
     public checkRecordRLSResult = true;
     public checkCreateRLSResult = true;
@@ -92,6 +97,16 @@ class TestPostgreSQLProvider extends DatabaseProviderBase {
     async RollbackTransaction(): Promise<void> {}
     protected async InternalExecuteQueryFromSpec(_spec: QueryExecutionSpec, _contextUser?: UserInfo): Promise<RunQueryResult> {
         throw new Error('Not supported.');
+    }
+
+    /** Test-only passthrough — ValidateUserProvidedSQLClause is protected on the base class. */
+    public TestValidateUserProvidedSQLClause(clause: string): boolean {
+        return this.ValidateUserProvidedSQLClause(clause);
+    }
+
+    /** Test-only passthrough — BuildAggregateSQL is protected on the base class. */
+    public TestBuildAggregateSQL(expressions: string[], entityInfo: EntityInfo) {
+        return this.BuildAggregateSQL(expressions.map(expression => ({ expression })), entityInfo, entityInfo.SchemaName, entityInfo.BaseView, '');
     }
 }
 
@@ -473,6 +488,71 @@ describe('DatabaseProviderBase', () => {
             });
         });
 
+        /**
+         * A quote inside a T-SQL `[…]` identifier, or a quote a PostgreSQL `E'…'` or `$$…$$`
+         * string treats as text, opens no literal. A screen that reads it as one hides the `;` and
+         * the statement after it. Each payload runs a harmless `SELECT 1` on the database it targets.
+         */
+        describe('rejects payloads hidden by identifiers, dialect strings and literal adjacency', () => {
+            it('rejects a stacked statement hidden behind a bracket identifier containing a quote', () => {
+                expect(provider.TestValidateUserProvidedSQLClause("Name = [a'] ; SELECT 1 ; SELECT [b']")).toBe(false);
+            });
+
+            it('rejects a stacked statement that closes the view filter, hidden behind bracket identifiers', () => {
+                const clause = "1 = (SELECT 1 AS [a'])) ; SELECT 1 ; SELECT * FROM __mj.vwUserViews WHERE (1 = (SELECT 1 AS [b'])";
+                expect(provider.TestValidateUserProvidedSQLClause(clause)).toBe(false);
+            });
+
+            it('rejects a denied keyword written directly after a literal', () => {
+                // SQL Server ends N'x' at the quote, so UNION starts a new token.
+                expect(provider.TestValidateUserProvidedSQLClause("Name = N'x'UNION SELECT 1")).toBe(false);
+            });
+
+            it('rejects a stacked statement hidden behind a PostgreSQL E-string escaped quote', () => {
+                const pg = new TestPostgreSQLProvider();
+                expect(pg.TestValidateUserProvidedSQLClause("Name = E'\\'' ; SELECT 1 ; --'")).toBe(false);
+            });
+
+            it('rejects a stacked statement hidden behind a PostgreSQL dollar-quoted string', () => {
+                const pg = new TestPostgreSQLProvider();
+                expect(pg.TestValidateUserProvidedSQLClause("Name = $$'$$ ; SELECT 1 ; --'")).toBe(false);
+            });
+
+            it.each([
+                ['UNION', 'ID = ¥1UNION SELECT 1'],
+                ['EXEC', 'ID = £1EXEC sp_who'],
+            ])('rejects %s written directly after a currency-prefixed number on SQL Server', (_label, clause) => {
+                // SQL Server reads ¥1 and £1 as money literals, so the keyword after them is a separate token.
+                expect(provider.TestValidateUserProvidedSQLClause(clause)).toBe(false);
+            });
+        });
+
+        describe("reads the clause with the provider's dialect", () => {
+            it.each([
+                ['a bracket identifier that contains a quote', "[Customer's Name] = 'x'"],
+                ['a keyword inside a bracket identifier', '[Delete Flag] = 1'],
+                ['a keyword inside a double-quoted identifier', '"Update" = 1'],
+            ])('accepts %s on SQL Server', (_label, clause) => {
+                expect(provider.TestValidateUserProvidedSQLClause(clause)).toBe(true);
+            });
+
+            it('rejects an extended stored procedure name even when it is quoted', () => {
+                expect(provider.TestValidateUserProvidedSQLClause('[xp_cmdshell] = 1')).toBe(false);
+            });
+
+            it.each([
+                ['an E string with an escaped quote', "Name = E'it\\'s'"],
+                ['a dollar-quoted string that contains a quote', "Name = $$it's$$"],
+                ['a backslash in a plain literal', "Path = 'C:\\temp\\'"],
+            ])('accepts %s on PostgreSQL', (_label, clause) => {
+                expect(new TestPostgreSQLProvider().TestValidateUserProvidedSQLClause(clause)).toBe(true);
+            });
+
+            it('treats a bracket as code on PostgreSQL, so it cannot hide a statement', () => {
+                expect(new TestPostgreSQLProvider().TestValidateUserProvidedSQLClause('Tags[1] = 1 ; SELECT 1')).toBe(false);
+            });
+        });
+
         it('is linear-time on a long unterminated literal (no catastrophic backtracking)', () => {
             const clause = `Name = '${'a'.repeat(50000)}`;
             const start = Date.now();
@@ -480,4 +560,192 @@ describe('DatabaseProviderBase', () => {
             expect(Date.now() - start).toBeLessThan(1000);
         });
     });
+
+    describe("BuildAggregateSQL reads aggregate expressions with the provider's dialect", () => {
+        const entity = () => new EntityInfo({
+            ID: 'agg-entity', Name: 'Agg Entity', SchemaName: '__mj', BaseTable: 'AggEntity', BaseView: 'vwAggEntities',
+            EntityFields: [{ ID: 'agg-field', EntityID: 'agg-entity', Name: 'Amount', Type: 'decimal' }],
+        });
+
+        it('accepts a bracket identifier that contains a quote on SQL Server', () => {
+            const result = sqlServer.TestBuildAggregateSQL(["SUM([Customer's Total])"], entity());
+            expect(result.validationErrors).toEqual([]);
+            expect(result.aggregateSQL).toContain("SUM([Customer's Total])");
+        });
+
+        it('accepts an E string with an escaped quote on PostgreSQL', () => {
+            const result = pgProvider.TestBuildAggregateSQL(["STRING_AGG(Name, E'\\'')"], entity());
+            expect(result.validationErrors).toEqual([]);
+        });
+
+        it('rejects a stacked statement hidden behind bracket identifiers', () => {
+            const result = sqlServer.TestBuildAggregateSQL(["COUNT(*) AS [a'] ; SELECT 1 ; SELECT COUNT(*) AS [b'], COUNT(*)"], entity());
+            expect(result.aggregateSQL).toBeNull();
+            expect(result.validationErrors).toHaveLength(1);
+        });
+    });
+
+    describe("SaveReturnMode ('datestamps_only' vs 'full')", () => {
+        const mockUser = new UserInfo(null, { ID: 'u-1', Name: 'Test' });
+
+        it('merges returned PK and datestamps onto entity.GetAll() when SaveReturnMode is datestamps_only', async () => {
+            const createdAt = new Date('2026-04-17T00:00:00.000Z');
+            const updatedAt = new Date('2026-04-17T00:01:00.000Z');
+            vi.spyOn(sqlServer, 'ExecuteSQL').mockResolvedValue([
+                { ID: 'db-generated-id', __mj_CreatedAt: createdAt, __mj_UpdatedAt: updatedAt } as never,
+            ]);
+
+            const entityInfo = new EntityInfo({
+                ID: 'e-step',
+                Name: 'MJ: AI Agent Run Steps',
+                SchemaName: '__mj',
+                BaseTable: 'AIAgentRunStep',
+                BaseView: 'vwAIAgentRunSteps',
+                AllowCreateAPI: true,
+                AllowUpdateAPI: true,
+                TrackRecordChanges: false,
+                Configuration: JSON.stringify({ SaveReturnMode: 'datestamps_only' }),
+                EntityFields: [
+                    { ID: 'f1', EntityID: 'e-step', Name: 'ID', CodeName: 'ID', Type: 'uniqueidentifier', IsPrimaryKey: true, IsVirtual: false },
+                    { ID: 'f2', EntityID: 'e-step', Name: 'InputData', CodeName: 'InputData', Type: 'nvarchar', IsPrimaryKey: false, IsVirtual: false },
+                    { ID: 'f3', EntityID: 'e-step', Name: 'Status', CodeName: 'Status', Type: 'nvarchar', IsPrimaryKey: false, IsVirtual: false },
+                    { ID: 'f4', EntityID: 'e-step', Name: '__mj_CreatedAt', CodeName: '__mj_CreatedAt', Type: 'datetimeoffset', IsPrimaryKey: false, IsVirtual: false },
+                    { ID: 'f5', EntityID: 'e-step', Name: '__mj_UpdatedAt', CodeName: '__mj_UpdatedAt', Type: 'datetimeoffset', IsPrimaryKey: false, IsVirtual: false },
+                ],
+            });
+
+            const mockEntity = {
+                EntityInfo: entityInfo,
+                IsSaved: false,
+                Dirty: true,
+                Fields: [],
+                ResultHistory: [],
+                RegisterResultHistoryEntry: vi.fn(),
+                PrimaryKeys: [{ Name: 'ID', Value: 'caller-id' }],
+                TransactionGroup: null,
+                RegisterTransactionPreprocessing: vi.fn(),
+                GetAll: () => ({ ID: 'caller-id', InputData: '{"large":"payload"}', Status: 'Running' }),
+                Get: () => 'caller-id',
+                RaiseReadyForTransaction: vi.fn(),
+            } as unknown as BaseEntity;
+
+            const savedRow = await sqlServer.Save(mockEntity, mockUser, new EntitySaveOptions());
+            expect(savedRow).toEqual({
+                ID: 'db-generated-id',
+                InputData: '{"large":"payload"}',
+                Status: 'Running',
+                __mj_CreatedAt: createdAt,
+                __mj_UpdatedAt: updatedAt,
+            });
+        });
+
+        it('supports per-save EntitySaveOptions.SaveReturnMode override on a default (full) entity', async () => {
+            const createdAt = new Date('2026-04-17T02:00:00.000Z');
+            const updatedAt = new Date('2026-04-17T02:05:00.000Z');
+            vi.spyOn(sqlServer, 'ExecuteSQL').mockResolvedValue([
+                { ID: 'row-123', __mj_CreatedAt: createdAt, __mj_UpdatedAt: updatedAt } as never,
+            ]);
+
+            const entityInfo = new EntityInfo({
+                ID: 'e-full',
+                Name: 'Regular Entity',
+                SchemaName: '__mj',
+                BaseTable: 'RegularEntity',
+                BaseView: 'vwRegularEntities',
+                AllowCreateAPI: true,
+                AllowUpdateAPI: true,
+                TrackRecordChanges: false,
+                EntityFields: [
+                    { ID: 'f1', EntityID: 'e-full', Name: 'ID', CodeName: 'ID', Type: 'uniqueidentifier', IsPrimaryKey: true, IsVirtual: false },
+                    { ID: 'f2', EntityID: 'e-full', Name: 'Title', CodeName: 'Title', Type: 'nvarchar', IsPrimaryKey: false, IsVirtual: false },
+                    { ID: 'f3', EntityID: 'e-full', Name: '__mj_CreatedAt', CodeName: '__mj_CreatedAt', Type: 'datetimeoffset', IsPrimaryKey: false, IsVirtual: false },
+                    { ID: 'f4', EntityID: 'e-full', Name: '__mj_UpdatedAt', CodeName: '__mj_UpdatedAt', Type: 'datetimeoffset', IsPrimaryKey: false, IsVirtual: false },
+                ],
+            });
+
+            const mockEntity = {
+                EntityInfo: entityInfo,
+                IsSaved: true,
+                Dirty: true,
+                Fields: [],
+                ResultHistory: [],
+                RegisterResultHistoryEntry: vi.fn(),
+                PrimaryKeys: [{ Name: 'ID', Value: 'row-123' }],
+                TransactionGroup: null,
+                RegisterTransactionPreprocessing: vi.fn(),
+                GetAll: () => ({ ID: 'row-123', Title: 'Updated In Memory' }),
+                Get: () => 'row-123',
+                RaiseReadyForTransaction: vi.fn(),
+            } as unknown as BaseEntity;
+
+            const opts = new EntitySaveOptions();
+            opts.SaveReturnMode = 'datestamps_only';
+            const savedRow = await sqlServer.Save(mockEntity, mockUser, opts);
+            expect(savedRow).toEqual({
+                ID: 'row-123',
+                Title: 'Updated In Memory',
+                __mj_CreatedAt: createdAt,
+                __mj_UpdatedAt: updatedAt,
+            });
+        });
+
+        it('snapshots entity.GetAll() before awaiting ExecuteSQL so concurrent in-flight mutations are not falsely returned as saved', async () => {
+            const createdAt = new Date('2026-04-17T03:00:00.000Z');
+            const updatedAt = new Date('2026-04-17T03:00:00.000Z');
+            let currentStatus = 'Running';
+            let currentResult: string | null = null;
+
+            vi.spyOn(sqlServer, 'ExecuteSQL').mockImplementation(async () => {
+                // Simulate BaseEntitySaveQueue / caller mutating the entity in memory while the initial INSERT is in flight
+                currentStatus = 'Completed';
+                currentResult = '{"answer":42}';
+                return [{ ID: 'prompt-run-1', __mj_CreatedAt: createdAt, __mj_UpdatedAt: updatedAt } as never];
+            });
+
+            const entityInfo = new EntityInfo({
+                ID: 'e-pr',
+                Name: 'MJ: AI Prompt Runs',
+                SchemaName: '__mj',
+                BaseTable: 'AIPromptRun',
+                BaseView: 'vwAIPromptRuns',
+                AllowCreateAPI: true,
+                AllowUpdateAPI: true,
+                TrackRecordChanges: false,
+                Configuration: JSON.stringify({ SaveReturnMode: 'datestamps_only' }),
+                EntityFields: [
+                    { ID: 'f1', EntityID: 'e-pr', Name: 'ID', CodeName: 'ID', Type: 'uniqueidentifier', IsPrimaryKey: true, IsVirtual: false },
+                    { ID: 'f2', EntityID: 'e-pr', Name: 'Status', CodeName: 'Status', Type: 'nvarchar', IsPrimaryKey: false, IsVirtual: false },
+                    { ID: 'f3', EntityID: 'e-pr', Name: 'Result', CodeName: 'Result', Type: 'nvarchar', IsPrimaryKey: false, IsVirtual: false },
+                    { ID: 'f4', EntityID: 'e-pr', Name: '__mj_CreatedAt', CodeName: '__mj_CreatedAt', Type: 'datetimeoffset', IsPrimaryKey: false, IsVirtual: false },
+                    { ID: 'f5', EntityID: 'e-pr', Name: '__mj_UpdatedAt', CodeName: '__mj_UpdatedAt', Type: 'datetimeoffset', IsPrimaryKey: false, IsVirtual: false },
+                ],
+            });
+
+            const mockEntity = {
+                EntityInfo: entityInfo,
+                IsSaved: false,
+                Dirty: true,
+                Fields: [],
+                ResultHistory: [],
+                RegisterResultHistoryEntry: vi.fn(),
+                PrimaryKeys: [{ Name: 'ID', Value: 'prompt-run-1' }],
+                TransactionGroup: null,
+                RegisterTransactionPreprocessing: vi.fn(),
+                GetAll: () => ({ ID: 'prompt-run-1', Status: currentStatus, Result: currentResult }),
+                Get: () => 'prompt-run-1',
+                RaiseReadyForTransaction: vi.fn(),
+            } as unknown as BaseEntity;
+
+            const savedRow = await sqlServer.Save(mockEntity, mockUser, new EntitySaveOptions());
+            // Must reflect the pre-ExecuteSQL snapshot ('Running', null), NOT the in-flight mutation ('Completed', '{"answer":42}')
+            expect(savedRow).toEqual({
+                ID: 'prompt-run-1',
+                Status: 'Running',
+                Result: null,
+                __mj_CreatedAt: createdAt,
+                __mj_UpdatedAt: updatedAt,
+            });
+        });
+    });
 });
+
