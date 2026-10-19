@@ -84,6 +84,7 @@ MemberJunction uses a comprehensive CSS custom property (design token) system de
 | `--mj-logo-mark-inverse` | Logo icon for dark backgrounds |
 | `--mj-logo-wordmark` | Full logo with text |
 | `--mj-logo-color` | Loading spinner fill color |
+| `--mj-loading-mark` | Optional image for `<mj-loading>`; unset in MJ (inline mark + fill), a brand theme sets it to show its own mark |
 
 ## Common Hex → Token Mappings
 

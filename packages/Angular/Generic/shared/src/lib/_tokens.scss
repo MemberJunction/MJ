@@ -326,6 +326,9 @@
   /* Header mark geometry. */
   --mj-logo-width: 32px;
   --mj-logo-height: 18px;
+  /* --mj-loading-mark is deliberately NOT set here. When a brand theme sets it (an image url),
+     <mj-loading> renders that image inside its animated wrapper instead of the inline MJ mark.
+     Left unset, MJ keeps the inline mark and its --mj-logo-color / seasonal fills. */
 
   /* ========================================
      TYPOGRAPHY
