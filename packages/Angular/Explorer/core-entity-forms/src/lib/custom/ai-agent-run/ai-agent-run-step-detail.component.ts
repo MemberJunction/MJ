@@ -35,6 +35,8 @@ export class AIAgentRunStepDetailComponent {
   }
   /** The provider the host is on, so the run view reads through the right one. */
   @Input() Provider: IMetadataProvider | null = null;
+  /** True while the host is persisting the workflow via WorkflowSaveOperation. */
+  @Input() SavingWorkflow = false;
   @Output() ClosePanel = new EventEmitter<void>();
 
   /**
