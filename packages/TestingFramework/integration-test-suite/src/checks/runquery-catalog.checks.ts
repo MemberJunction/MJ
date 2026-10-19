@@ -210,8 +210,22 @@ export function DeriveSafeValue(param: MJQueryParameterEntity, refEntity: Entity
             return ['00000000-0000-0000-0000-000000000000'];
         }
         case 'string':
-        default:
+        default: {
+            if (sample !== '' && sample.toLowerCase() !== 'example') {
+                return sample;
+            }
+            const lowerName = param.Name.trim().toLowerCase();
+            if (lowerName.endsWith('id')) {
+                return '00000000-0000-0000-0000-000000000000';
+            }
+            if (/(date|period(start|end)|since|before|after)$/.test(lowerName)) {
+                return '2024-01-01';
+            }
+            if (/(only|^(is|has)[a-z])/.test(lowerName)) {
+                return '0';
+            }
             return sample !== '' ? sample : 'mj-integration-test';
+        }
     }
 }
 
