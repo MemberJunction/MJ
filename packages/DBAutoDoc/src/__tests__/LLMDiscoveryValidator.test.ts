@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { RegisterClass } from '@memberjunction/global';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { RegisterClass, MJGlobal } from '@memberjunction/global';
 import { BaseLLM, ChatParams, ChatResult, ClassifyResult, SummarizeResult, ModelUsage } from '@memberjunction/ai';
 import { LLMDiscoveryValidator } from '../discovery/LLMDiscoveryValidator';
 import { ColumnStatsCache } from '../discovery/ColumnStatsCache';
@@ -65,7 +65,15 @@ describe('CreateLLMInstance', () => {
     expect(CreateLLMInstance('gemini', 'k')).toBeInstanceOf(FakeGeminiLLM);
   });
 
-  it('fails loudly for a provider whose driver is not registered, instead of returning a bare BaseLLM', () => {
-    expect(() => CreateLLMInstance('mistral', 'k')).toThrow(/Failed to create LLM instance for provider: mistral/);
+  it('fails loudly when the ClassFactory falls back to a bare BaseLLM, instead of returning it', () => {
+    // Simulate a provider whose driver isn't registered: the ClassFactory hands back the base class itself.
+    // Stubbed rather than relying on a real unregistered provider, since which drivers load depends on the build.
+    const bare = Object.create(BaseLLM.prototype) as BaseLLM;
+    const spy = vi.spyOn(MJGlobal.Instance.ClassFactory, 'CreateInstance').mockReturnValueOnce(bare);
+    try {
+      expect(() => CreateLLMInstance('mistral', 'k')).toThrow(/Failed to create LLM instance for provider: mistral/);
+    } finally {
+      spy.mockRestore();
+    }
   });
 });
