@@ -22,4 +22,10 @@ describe('the room whiteboard surface', () => {
   it('styles only its own host, leaving the board host its layout', () => {
     expect(selectors()).toEqual([':host']);
   });
+
+  it('turns the board host\'s Focus toggle off: the room has no stage to move the board to', () => {
+    const template = SOURCE.slice(SOURCE.indexOf('template: `'), SOURCE.indexOf('styles: ['));
+    expect(template).toMatch(/\[ShowFocusToggle\]="false"/);
+    expect(template).not.toMatch(/\(FocusModeChange\)/);
+  });
 });

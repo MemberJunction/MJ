@@ -75,10 +75,24 @@ export interface SeedContext {
  * Phases describe HOW deliverables were generated (process history)
  */
 export interface AnalysisPhases {
+  dataSampling?: DataSamplingPhase; // Table data sampling (statistics and sample values); absent on states older than this field
   keyDetection?: RelationshipDiscoveryPhase; // Primary key and foreign key detection
   descriptionGeneration: AnalysisRun[]; // Table and column description analysis
   queryGeneration?: QueryGenerationPhase; // Metadata about query generation process
   organicKeyDetection?: OrganicKeyDetectionPhase; // Optional organic-key cluster detection (runs after description + PK/FK)
+}
+
+/**
+ * Data sampling phase metadata. `skipped` is honoured by a later resume (the run opted out, so a
+ * resume does not start the pass); `partial` means the pass was interrupted and a resume finishes it.
+ */
+export interface DataSamplingPhase {
+  status: 'completed' | 'partial' | 'skipped';
+  startedAt: string;
+  completedAt?: string;
+  /** Tables sampled by the runs that produced this state, cumulative across resumes. */
+  sampledTables: number;
+  totalTables: number;
 }
 
 /**

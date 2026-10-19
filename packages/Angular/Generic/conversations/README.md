@@ -121,6 +121,7 @@ Embedding products (white-labeled end-user apps, embedded widgets) can pare the 
 | `allowPlanMode` | The composer's Plan Mode toggle button |
 | `allowRealtime` | The composer's real-time voice (co-agent) launcher button |
 | `AllowForking` | Starting forks: Fork from here, and Edit or Regenerate as a fork. When `false`, Edit and Regenerate change the latest turn in place, as without the `Conversations: Fork` authorization. UI only; deny that authorization to a role to block forks on the server too |
+| `AllowStopRun` | Stopping and continuing agent runs: the composer's Stop and Stop all, the Stop pill on an in-progress reply, the Continue button on a stopped reply, and the "Continue, or tell {agent} what to do differently" placeholder. UI only: a run stopped from another client still shows as stopped, and the next message still continues it |
 | `showEmptyFill` | The message list's built-in "No messages yet" filler |
 | `showLoadingState` | The centered loading spinner (loading still short-circuits rendering, so hiding it does not flash the empty state) |
 | `showAgentPicker` | The agent picker |
@@ -529,6 +530,15 @@ never writes into the engine's detail cache.
 
 Paging is measured in **display items**, not database rows: a realtime session collapses many
 rows into one timeline card, and a session is never split across pages.
+
+### Post-Turn Artifact Panel Auto-Open, Refresh & Switch (`decidePostTurnArtifactPanelAction`)
+
+When an agent turn completes in `ConversationChatAreaComponent`, the component captures the pre-turn set of non-system output `ArtifactID`s (`captureVisibleArtifactIdBaseline`) before the server turn runs and evaluates `decidePostTurnArtifactPanelAction` once the newly created/versioned artifacts for that turn are loaded:
+
+- **Panel Closed + Brand-New Artifact (`action: 'open-new'`)**: Automatically opens the right-hand Artifact Panel when the completed turn created an `ArtifactID` that did not exist in the pre-turn baseline (preserving the intentional behavior that versioning an *already-existing* artifact while the user has closed the panel does not force it back open).
+- **Panel Open + Currently Viewed Artifact Versioned (`action: 'refresh-current'`)**: Increments `artifactViewerRefreshTrigger` and updates `activeVersionNumber` in place so the open viewer immediately reflects the new version (e.g., `v1` → `v2`).
+- **Panel Open + Different Artifact Created or Versioned (`action: 'switch-artifact'`)**: Automatically switches the open Artifact Panel to display the newly created or newly versioned artifact (`activeArtifactId`, `activeVersionNumber`).
+- **Reconnected In-Flight Runs**: When reconnecting to an already-running turn on conversation open (`reconnectToInFlightAgentRuns`), the pre-turn baseline excludes any output artifacts attached to the in-progress message itself so a newly produced artifact still auto-opens when the reconnected turn finishes.
 
 ### MJ Entity Integration
 

@@ -1639,10 +1639,12 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     console.log('✨ Workspace received rename event:', event);
     // Trigger animation in sidebar by setting the ID
     this.RenamedConversationId = event.conversationId;
+    this.cdr.detectChanges();
 
     // Clear after animation completes (1500ms)
     setTimeout(() => {
       this.RenamedConversationId = null;
+      this.cdr.detectChanges();
     }, 1500);
   }
 

@@ -88,6 +88,12 @@ export class MJUserViewEntityServer extends MJUserViewEntityExtended  {
     private screenStoredClause(result: ValidationResult, field: string, clause: string, label: string, entityInfo?: EntityInfo): void {
         if (!clause.trim()) return;
         const provider = this.ProviderToUse;
+        // When MJUserViewEntityServer is resolved in a mixed-tier process (e.g. CLI test runner)
+        // against a Network provider (GraphQLDataProvider), defer SQL AST screening to MJServer's
+        // Database provider when the GraphQL mutation executes on the server.
+        if (provider && (provider as { ProviderType?: string }).ProviderType === 'Network') {
+            return;
+        }
         try {
             if (!IsClientClauseScreeningProvider(provider)) {
                 throw new Error(`Invalid ${label}: the data provider cannot screen client SQL`);

@@ -398,6 +398,16 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   @Input() AllowForking = true;
 
   /**
+   * Host-level cap for stopping and continuing agent runs: the composer's Stop and Stop all, the
+   * Stop pill on an in-progress reply, the Continue button on a stopped reply, and the "Continue,
+   * or tell {agent} what to do differently" placeholder. Defaults true (current behavior). Hosts
+   * with no stop experience (a review surface, a space whose runs are managed elsewhere) set false
+   * without making the conversation read-only. UI only: a run stopped from another client still
+   * shows as stopped, and the next message still continues it.
+   */
+  @Input() public AllowStopRun = true;
+
+  /**
    * Whether the message list renders its built-in "No messages yet" filler
    * when a conversation has zero messages. Defaults true. Hosts that render
    * their own empty-state chrome around the chat area set false.
@@ -1288,13 +1298,6 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   @Output() afterToolInvoked = this.AfterToolInvoked;
 
   /** Cancelable — fired BEFORE a response form's submitted values are sent. */
-  /**
-   * Whether people may stop an in-progress agent run from its reply. Default true. A host can
-   * turn it off for a surface (a view-only review, a space whose runs are managed elsewhere)
-   * without making the conversation read-only.
-   */
-  @Input() public AllowStopRun = true;
-
   @Output() BeforeResponseFormSubmitted = new EventEmitter<BeforeResponseFormSubmittedEventArgs>();
 
   /**
@@ -1733,6 +1736,14 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   /** Gap kept between the pane's top edge and the turn's first message. */
   private static readonly TURN_TOP_GAP_PX = 16;
   private lastLoadedConversationId: string | null = null; // Track which conversation's peripheral data was loaded
+  /**
+   * The conversation whose artifacts are currently held in {@link ArtifactsByDetailId}.
+   * Unlike {@link lastLoadedConversationId} (which {@link resetComponentState} zeroes on every
+   * message send / agent response to force {@link loadPeripheralData} to re-run), this stays set
+   * to the owning conversation until {@link ArtifactsByDetailId} is actually cleared or rebuilt
+   * for another conversation.
+   */
+  private artifactMapConversationId: string | null = null;
   private currentlyLoadingConversationId: string | null = null; // Track which conversation is currently being loaded
   private conversationLoadToken = 0; // Monotonic token to discard stale async conversation loads
   /** The conversation whose load has ended; null while a load runs and before the first one. */
@@ -3576,6 +3587,9 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
     if (conversationId) {
       this.currentlyLoadingConversationId = conversationId;
+      if ((this.ArtifactsByDetailId?.size ?? 0) === 0 && this.artifactMapConversationId === null) {
+        this.artifactMapConversationId = conversationId;
+      }
 
       if (!this.messageInputMetadataCache.has(conversationId)) {
         this.messageInputMetadataCache.set(conversationId, {
@@ -3635,9 +3649,12 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     } else {
       // No active conversation - show empty state
       this.messages = [];
+      this.ArtifactsByDetailId?.clear();
+      this.SystemArtifactsByDetailId?.clear();
       this.IsLoadingConversation = false;
       this.currentlyLoadingConversationId = null;
       this.lastLoadedConversationId = null;
+      this.artifactMapConversationId = null;
       this.agentStateService.stopPolling();
       this.conversationLoadEnded$?.next();
     }
@@ -4045,6 +4062,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       for (const [detailId, artifacts] of cacheEntry.ArtifactsByDetailId) {
         this.applyArtifactsForDetail(detailId, artifacts);
       }
+      this.artifactMapConversationId = conversationId;
 
       // Copy ratings from engine cache
       for (const [detailId, ratings] of cacheEntry.RatingsByDetailId) {
@@ -4093,6 +4111,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     } catch (error) {
       console.error('Failed to process peripheral data:', error);
       this.lastLoadedConversationId = null;
+      this.artifactMapConversationId = null;
     }
   }
 
@@ -5656,7 +5675,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     if (active && this.OpenView.Kind !== 'Main') {
       return FORK_COMPOSER_PLACEHOLDER;
     }
-    if (active && this.SendSlotMode === 'send') {
+    if (active && this.SendSlotMode === 'send' && this.AllowStopRun !== false) {
       const stoppedAgent = this.stoppedLastReplyAgent();
       if (stoppedAgent !== undefined) {
         return `Continue, or tell ${stoppedAgent ?? 'the agent'} what to do differently`;
@@ -6275,7 +6294,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     return {
       Versions: SnapshotArtifactVersions(this.allArtifactRefs()),
       conversationId: this.ConversationId,
-      MapConversationId: this.lastLoadedConversationId,
+      MapConversationId: this.artifactMapConversationId ?? this.lastLoadedConversationId,
       MapGeneration: this.artifactMapGeneration,
       SelectionEpoch: this.artifactSelectionEpoch,
     };

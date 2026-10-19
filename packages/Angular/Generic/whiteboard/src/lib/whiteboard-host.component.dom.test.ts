@@ -430,4 +430,34 @@ describe('RealtimeWhiteboardHostComponent (DOM)', () => {
       expect(rwState.ElementCount).toBe(1);
     });
   });
+
+  // ── ShowFocusToggle: chrome a host can turn off (LXP P12) ─────────────────────────
+  describe('ShowFocusToggle', () => {
+    /** The header's "Move to stage" / "Back to tab" control, or null when it is not rendered. */
+    const focusButton = (f: Fix): HTMLButtonElement | null =>
+      (Array.from(f.nativeElement.querySelectorAll('button.head-btn')) as HTMLButtonElement[])
+        .find((b) => /Move to stage|Back to tab/.test(b.textContent ?? '')) ?? null;
+
+    it('renders the Focus toggle by default (MJ\'s own overlay services FocusModeChange)', () => {
+      expect(focusButton(render())).not.toBeNull();
+    });
+
+    it('a host that cannot service FocusModeChange hides the toggle instead of shipping a dead button', () => {
+      const f = renderComponentFixture(RealtimeWhiteboardHostComponent, {
+        inputs: { State: new WhiteboardState(), ShowFocusToggle: false },
+      });
+      expect(focusButton(f)).toBeNull();
+      // Only the Focus toggle goes: the rest of the header chrome is untouched.
+      expect(f.nativeElement.querySelector('button.head-btn--more')).not.toBeNull();
+    });
+
+    it('with the toggle hidden, the stage state the host reports still lands (no button is not no feature)', () => {
+      const f = renderComponentFixture(RealtimeWhiteboardHostComponent, {
+        inputs: { State: new WhiteboardState(), ShowFocusToggle: false },
+      });
+      f.componentInstance.SetOnStage(true);
+      expect(f.componentInstance.FocusMode).toBe(true);
+      expect(focusButton(f)).toBeNull();
+    });
+  });
 });
