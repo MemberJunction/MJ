@@ -144,6 +144,16 @@ describe('MjFormFieldComponent (DOM)', () => {
       expect(text(f, '.mj-forms-field-value')).toBe('Gadget');
     });
 
+    it('marks a label-less field so its value takes the whole row, not the label column', () => {
+      const f = render({ Record: makeWidget(), FieldName: 'Name', Type: 'textbox', ShowLabel: false });
+      expect(hasClass(f, '.mj-forms-field', 'mj-forms-field--no-label')).toBe(true);
+    });
+
+    it('keeps the two-column layout when the label shows', () => {
+      const f = render({ Record: makeWidget(), FieldName: 'Name', Type: 'textbox' });
+      expect(hasClass(f, '.mj-forms-field', 'mj-forms-field--no-label')).toBe(false);
+    });
+
     it('hides a named field from FormContext even while the form is editing', () => {
       const f = render({
         Record: makeWidget(),
@@ -281,6 +291,13 @@ describe('MjFormFieldComponent (DOM)', () => {
   });
 
   describe('edit mode', () => {
+    it('marks a label-less field in edit mode too, so its input takes the whole row', () => {
+      const f = render({ Record: makeWidget(), FieldName: 'Name', Type: 'textbox', EditMode: true, ShowLabel: false });
+      expect(query(f, '.mj-forms-field-label')).toBeNull();
+      expect(hasClass(f, '.mj-forms-field', 'mj-forms-field--no-label')).toBe(true);
+      expect(query(f, 'input.mj-forms-field-input')).not.toBeNull();
+    });
+
     it('renders a text input for textbox and typing emits ValueChange with Old/New values and writes through to the record', () => {
       const record = makeWidget();
       const f = render({ Record: record, FieldName: 'Name', Type: 'textbox', EditMode: true });
