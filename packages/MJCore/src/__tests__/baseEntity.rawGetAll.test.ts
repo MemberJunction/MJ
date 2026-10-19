@@ -46,6 +46,8 @@ const ENTITY_DATA = {
         fieldData('Priority', 'int', 4, { Length: 4, DefaultValue: '5' }),
         fieldData('DueAt', 'datetime2', 5, { Length: 8 }),
         fieldData('Code', 'nchar', 6, { Length: 10 }),
+        fieldData('Stage', 'nvarchar', 7, { Length: 100, DefaultValue: 'Draft', AllowsNull: false }),
+        fieldData('Due Date', 'datetime2', 8, { Length: 8 }),
     ],
     EntityPermissions: STANDALONE_ENTITY_DATA.EntityPermissions.map(p => ({ ...p, EntityID: ENTITY_ID })),
 };
@@ -172,5 +174,118 @@ describe('EntityField skipDefaultValue', () => {
         const statusInfo = entityInfo.FieldByName('Status')!;
         expect(new EntityField(statusInfo, undefined, true).Value).toBeNull();
         expect(new EntityField(statusInfo).Value).toBe('Pending');
+    });
+});
+
+describe('fields a hydration source omitted hold nothing', () => {
+    it('a reload that omits a field clears the previous record\'s value', async () => {
+        const e = await loadedAndHydrated(FULL_ROW);
+        await e.LoadFromData({ ID: PK, Name: 'Second row' });
+        const status = e.GetFieldByName('Status')!;
+        expect(status.NotLoaded).toBe(true);
+        expect(e.Get('Status')).toBeNull();
+        expect(status.Dirty).toBe(false);
+    });
+
+    it('Hydrate() leaves an omitted field empty instead of holding its default', () => {
+        const e = new MJTestEntity(entityInfo);
+        e.Hydrate({ ID: PK, Name: 'Hydrated' });
+        expect(e.GetFieldByName('Status')!.NotLoaded).toBe(true);
+        expect(e.Get('Status')).toBeNull();
+    });
+
+    it('MarkNotLoaded() on its own keeps the in-memory value (a save leaving a field out of the update)', async () => {
+        const e = await loadedAndHydrated(FULL_ROW);
+        const status = e.GetFieldByName('Status')!;
+        status.MarkNotLoaded();
+        expect(status.NotLoaded).toBe(true);
+        expect(status.Value).toBe('Shipped');
+    });
+});
+
+describe('an explicit write onto a not-loaded field', () => {
+    it('is dirty and fails validation when it writes null to a NOT NULL field that has a default', async () => {
+        const e = await loaded({ ID: PK, Name: 'No stage' });
+        e.Set('Stage', null);
+        const stage = e.GetFieldByName('Stage')!;
+        expect(stage.NotLoaded).toBe(false);
+        expect(stage.Dirty).toBe(true);
+        expect(stage.Validate().Success).toBe(false);
+    });
+
+    it('is dirty even when it writes null to a nullable field, so the write reaches the save', async () => {
+        const e = await loaded({ ID: PK, Name: 'No status' });
+        e.Set('Status', null);
+        expect(e.GetFieldByName('Status')!.Dirty).toBe(true);
+        expect(e.Dirty).toBe(true);
+    });
+
+    it('stops being dirty once the old value is reset, as after a save', async () => {
+        const e = await loaded({ ID: PK, Name: 'No status' });
+        e.Set('Status', null);
+        const status = e.GetFieldByName('Status')!;
+        status.ResetOldValue();
+        expect(status.Dirty).toBe(false);
+    });
+
+    it('stops being dirty when the field is not-loaded again', async () => {
+        const e = await loaded({ ID: PK, Name: 'No status' });
+        e.Set('Status', 'Typed');
+        const status = e.GetFieldByName('Status')!;
+        status.MarkNotLoaded();
+        expect(status.Dirty).toBe(false);
+    });
+
+    it('is undone by Revert(), which puts the field back to not-loaded', async () => {
+        const e = await loaded({ ID: PK, Name: 'No status' });
+        e.Set('Status', 'Typed');
+        expect(e.Revert()).toBe(true);
+        const status = e.GetFieldByName('Status')!;
+        expect(status.NotLoaded).toBe(true);
+        expect(status.Value).toBeNull();
+        expect(e.Dirty).toBe(false);
+    });
+
+    it('Revert() leaves fields that were never loaded not-loaded', async () => {
+        const e = await loaded({ ID: PK, Name: 'Original' });
+        e.Set('Name', 'Edited');
+        e.Revert();
+        expect(e.Get('Name')).toBe('Original');
+        expect(e.GetFieldByName('Status')!.NotLoaded).toBe(true);
+        expect(e.Dirty).toBe(false);
+    });
+
+    it('survives a GetState / RestoreState round trip', async () => {
+        const e = await loaded({ ID: PK, Name: 'No status' });
+        e.Set('Status', null);
+        const status = e.GetFieldByName('Status')!;
+        const state = status.GetState();
+        status.ResetOldValue();
+        expect(status.Dirty).toBe(false);
+        status.RestoreState(state);
+        expect(status.Dirty).toBe(true);
+    });
+});
+
+describe('a raw-mode row keyed by a field\'s CodeName', () => {
+    // "Due Date" has the CodeName "Due_Date". Hydration accepts either key, as SetMany does.
+    const row = { ID: PK, Name: 'By CodeName', Due_Date: '2026-01-02T03:04:05.000Z' };
+
+    it('reads through Get() and GetAll() before hydration', async () => {
+        const e = await loaded(row);
+        expect(e.Get('Due Date')).toEqual(new Date('2026-01-02T03:04:05.000Z'));
+        expect(e.GetAll()['Due Date']).toEqual(new Date('2026-01-02T03:04:05.000Z'));
+        expect(isHydrated(e)).toBe(false);
+    });
+
+    it('loads into the field when hydrated, which is not marked not-loaded', async () => {
+        const e = await loadedAndHydrated(row);
+        const due = e.GetFieldByName('Due Date')!;
+        expect(due.NotLoaded).toBe(false);
+        expect(due.Value).toEqual(new Date('2026-01-02T03:04:05.000Z'));
+    });
+
+    it('gives the same GetAll() before and after hydration', async () => {
+        expect((await loaded(row)).GetAll()).toEqual((await loadedAndHydrated(row)).GetAll());
     });
 });

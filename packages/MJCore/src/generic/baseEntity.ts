@@ -51,6 +51,8 @@ export interface EntityFieldState {
     NotLoaded: boolean;
     /** Whether the field has had no set since it was created or re-armed. */
     NeverSet: boolean;
+    /** Whether the field was explicitly set after being not-loaded. See {@link EntityField.Dirty}. */
+    WrittenAfterNotLoaded?: boolean;
 }
 
 /**
@@ -85,6 +87,13 @@ export class EntityField {
     private _value: any;
     private _neverSet: boolean = true;
     private _notLoaded: boolean = false;
+    /**
+     * True once the field is explicitly set after being not-loaded: a write onto a value the record
+     * never loaded. The field is then dirty whatever it was set to — even null, which equals its
+     * cleared old value — so the write reaches the save, and Validate treats it as an existing
+     * record's value. Cleared when the old value is reset (load, save) or the field is not-loaded again.
+     */
+    private _writtenAfterNotLoaded: boolean = false;
 
     /**
      * True when the source this entity was hydrated from OMITTED this field's key — most
@@ -114,6 +123,19 @@ export class EntityField {
      */
     public MarkNotLoaded(): void {
         this._notLoaded = true;
+        this._writtenAfterNotLoaded = false;
+    }
+
+    /**
+     * Framework-internal, for the hydration paths: the source omitted this field, so it is
+     * not-loaded AND holds nothing. Unlike {@link MarkNotLoaded}, which only flags the field and keeps
+     * its in-memory value, this drops a default or a previous record's value that would otherwise
+     * read back through Get() as if it had been loaded.
+     */
+    public ClearAsNotLoaded(): void {
+        this._value = null;
+        this._oldValue = null;
+        this.MarkNotLoaded();
     }
 
     private _createSuppressed: boolean = false;
@@ -239,6 +261,9 @@ export class EntityField {
             // this field.
             const wasNotLoaded = this._notLoaded;
             this._notLoaded = false;
+            if (wasNotLoaded) {
+                this._writtenAfterNotLoaded = true;
+            }
 
             // in the below, we set the OldValue, but only if (a) we have never set the value before, or (b) the value or the old value is not null - which means that we are in a record setup scenario
             if (this._neverSet && !wasNotLoaded &&
@@ -268,6 +293,8 @@ export class EntityField {
     get Dirty(): boolean {
         if (this.ReadOnly || this._notLoaded)
             return false
+        else if (this._writtenAfterNotLoaded)
+            return true // a write onto a value the record never loaded must reach the save, even null
         else {
             const oldNull = this._oldValue === null || this.OldValue === undefined || Number.isNaN(this.OldValue); // check for NaN because sometimes we have old values that are NaN and we need to account for that
             const curNull = this.Value === null || this.Value === undefined || Number.isNaN(this.Value);
@@ -427,7 +454,7 @@ export class EntityField {
                 }
                 else {
                     // we do have a default value, but our current value is null. If we are in an EXISTING record, this is an error, check the OldValue to determine this
-                    if (this._oldValue !== null && this._oldValue !== undefined) {
+                    if ((this._oldValue !== null && this._oldValue !== undefined) || this._writtenAfterNotLoaded) {
                         result.Success = false;
                         result.Errors.push(new ValidationErrorInfo(ef.Name, `${ef.DisplayNameOrName} cannot be null`, null));
                     }
@@ -560,6 +587,24 @@ export class EntityField {
      */
     public ResetOldValue() {
         this._oldValue = this.Value;
+        this._writtenAfterNotLoaded = false;
+    }
+
+    /**
+     * Framework-internal, for {@link BaseEntity.Revert}: puts the field back to its last loaded or
+     * saved state. A not-loaded field has nothing to revert and stays not-loaded; a field written
+     * after being not-loaded goes back to not-loaded, so the revert neither turns an unloaded field
+     * into "loaded" data a later update would write, nor leaves the write's dirty flag behind.
+     */
+    public RevertToOldValue(): void {
+        if (this._notLoaded) {
+            return;
+        }
+        if (this._writtenAfterNotLoaded) {
+            this.ClearAsNotLoaded();
+            return;
+        }
+        this.Value = this.OldValue;
     }
 
     /**
@@ -574,7 +619,13 @@ export class EntityField {
      * back can put them back with {@link RestoreState}.
      */
     public GetState(): EntityFieldState {
-        return { Value: this._value, OldValue: this._oldValue, NotLoaded: this._notLoaded, NeverSet: this._neverSet };
+        return {
+            Value: this._value,
+            OldValue: this._oldValue,
+            NotLoaded: this._notLoaded,
+            NeverSet: this._neverSet,
+            WrittenAfterNotLoaded: this._writtenAfterNotLoaded,
+        };
     }
 
     /**
@@ -586,6 +637,7 @@ export class EntityField {
         this._oldValue = state.OldValue;
         this._notLoaded = state.NotLoaded;
         this._neverSet = state.NeverSet;
+        this._writtenAfterNotLoaded = state.WrittenAfterNotLoaded ?? false;
     }
 
     /**
@@ -4181,6 +4233,16 @@ export abstract class BaseEntity<T = unknown> {
      * @param FieldName
      * @returns
      */
+    /**
+     * A raw-mode row's value for a field: under its Name, or else its CodeName. Hydration accepts
+     * both keys (as SetMany does), so every raw-mode read must too, or a CodeName-keyed row reads
+     * back empty. `undefined` means the row omitted the field.
+     */
+    private rawValueFor(raw: Record<string, unknown>, field: EntityFieldInfo): unknown {
+        const byName = raw[field.Name];
+        return byName !== undefined || field.CodeName === field.Name ? byName : raw[field.CodeName];
+    }
+
     /** Records a value derived from `_raw` so later reads skip the conversion. See {@link _rawConverted}. */
     private memoizeRawConversion(fieldName: string, value: unknown): void {
         (this._rawConverted ??= new Map<string, unknown>()).set(fieldName, value);
@@ -4211,12 +4273,13 @@ export abstract class BaseEntity<T = unknown> {
         // hydration. Cache data uses exact SQL column names so no case-insensitive scan needed.
         if (!this._fieldsHydrated && this._raw) {
             let value = this._raw[FieldName];
-            if (value === undefined) return null;
             // Conversions mirror the hydrated path, and memoize into `_rawConverted` rather than
             // back into `_raw` — the row may be shared, frozen cache state. Fields needing no
             // conversion (the vast majority) never touch the memo at all, so the fast path stays
             // a single property read.
             const fi = this._entityInfo?.FieldByName(FieldName);
+            if (value === undefined && fi) value = this.rawValueFor(this._raw, fi);
+            if (value === undefined) return null;
             if (fi?.TSType === EntityFieldTSType.Date && (typeof value === 'string' || typeof value === 'number')) {
                 const memo = this._rawConverted?.get(FieldName);
                 if (memo !== undefined) return memo;
@@ -4376,7 +4439,7 @@ export abstract class BaseEntity<T = unknown> {
             if (!onlyDirtyFields) {
                 for (const ef of this.EntityInfo.Fields) {
                     const name = ef.Name;
-                    const rawVal = this._raw[name];
+                    const rawVal = this.rawValueFor(this._raw, ef);
                     // Key absence in _raw means NotLoaded (D-3 decision): omit from serialized output
                     if (rawVal === undefined) continue;
                     let val: unknown;
@@ -4661,14 +4724,14 @@ export abstract class BaseEntity<T = unknown> {
             const raw = this._raw;
             for (let i = 0; i < this._fields.length; i++) {
                 const field = this._fields[i];
-                const value = raw[field.Name];
+                const value = this.rawValueFor(raw, field.EntityFieldInfo);
                 if (value !== undefined) {
                     if (field.EntityFieldInfo.TSType === EntityFieldTSType.Date && (typeof value === 'string' || typeof value === 'number')) {
                         field.Value = new Date(value);
                     } else {
                         field.Value = value;
                     }
-                } else if (raw[field.CodeName] === undefined) {
+                } else {
                     field.MarkNotLoaded();
                 }
             }
@@ -4691,7 +4754,9 @@ export abstract class BaseEntity<T = unknown> {
         if (!source || typeof source !== 'object') return;
         for (const field of this.Fields) {
             if (source[field.Name] === undefined && source[field.CodeName] === undefined) {
-                field.MarkNotLoaded();
+                // Cleared, not just flagged: otherwise a default from construction, or the previous
+                // record's value on a reload, reads back through Get() as if it had been loaded.
+                field.ClearAsNotLoaded();
             }
         }
     }
@@ -5744,7 +5809,7 @@ export abstract class BaseEntity<T = unknown> {
         this.discardJSONFieldObjects(); // unconditional: an un-flushed edit through a stale reference must go too
         if (this.Dirty) {
             for (let field of this.Fields) {
-                field.Value = field.OldValue;
+                field.RevertToOldValue();
             }
             // IS-A composition: revert parent entity chain as well
             if (this._parentEntity) {
@@ -5987,7 +6052,7 @@ export abstract class BaseEntity<T = unknown> {
             const pks = this.EntityInfo?.PrimaryKeys ?? [];
             let allPksPresent = pks.length > 0;
             for (const pkInfo of pks) {
-                const v = this._raw[pkInfo.Name];
+                const v = this.rawValueFor(this._raw, pkInfo);
                 if (v === null || v === undefined) {
                     allPksPresent = false;
                     break;

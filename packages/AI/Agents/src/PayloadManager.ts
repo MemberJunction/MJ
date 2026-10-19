@@ -953,16 +953,18 @@ export class PayloadManager {
         }
         if (pathPattern.includes('**')) {
             const regexStr = pathPattern
+                .replace(/\\/g, '\\\\')
                 .replace(/\./g, '\\.')
                 .replace(/\*\*/g, '.*')
                 .replace(/\*/g, '[^.]+');
             compiled = new RegExp(`^${regexStr}$`);
         } else if (pathPattern.endsWith('.*')) {
             const basePath = pathPattern.slice(0, -2);
-            const escapedBase = basePath.replace(/\./g, '\\.');
+            const escapedBase = basePath.replace(/\\/g, '\\\\').replace(/\./g, '\\.');
             compiled = new RegExp(`^${escapedBase}(\\..*)?$`);
         } else {
             const regexStr = pathPattern
+                .replace(/\\/g, '\\\\')
                 .replace(/\./g, '\\.')
                 .replace(/\*/g, '[^.]+')
                 .replace(/\[(\*|\d+)\]/g, '\\[(\\*|\\d+)\\]');
@@ -1120,10 +1122,6 @@ export class PayloadManager {
     private _defaultDiffer = new DeepDiffer();
     private _pathPatternRegexCache = new Map<string, RegExp>();
 
-    /**
-     * Fast deep-clone for JSON-like payload trees (plain objects, arrays, primitives),
-     * falling back to lodash `_.cloneDeep` for exotic instances (Date, Map, Set, etc.).
-     */
     /** True for an object literal or `Object.create(null)` object: not an array, Date or class instance. */
     private isPlainObject(value: unknown): value is Record<string, unknown> {
         if (value === null || typeof value !== 'object' || Array.isArray(value)) {
@@ -1133,6 +1131,10 @@ export class PayloadManager {
         return proto === Object.prototype || proto === null;
     }
 
+    /**
+     * Fast deep-clone for JSON-like payload trees (plain objects, arrays, primitives),
+     * falling back to lodash `_.cloneDeep` for exotic instances (Date, Map, Set, etc.).
+     */
     private fastCloneDeep<T>(value: T): T {
         if (value === null || typeof value !== 'object') {
             return value;
@@ -1146,8 +1148,7 @@ export class PayloadManager {
             }
             return copy as unknown as T;
         }
-        const proto = Object.getPrototypeOf(value);
-        if (proto === Object.prototype || proto === null) {
+        if (this.isPlainObject(value)) {
             const copy: Record<string, unknown> = {};
             const keys = Object.keys(value);
             for (let i = 0; i < keys.length; i++) {

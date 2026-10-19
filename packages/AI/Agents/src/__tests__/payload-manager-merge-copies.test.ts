@@ -118,4 +118,12 @@ describe('PayloadManager.MergeUpstreamPayload copies', () => {
         const narrower = pm.MergeUpstreamPayload<Record<string, unknown>>('Sub', {}, sub, ['analysis.*'], false);
         expect(narrower.result).not.toHaveProperty('results');
     });
+
+    it('matches a backslash in a path pattern literally, not as a regex escape', () => {
+        // Unescaped, the pattern's "\\d" would become the regex digit class and match "a5".
+        const sub = { 'a\\d': 'literal', a5: 'digit' };
+        const { result } = pm.MergeUpstreamPayload<Record<string, unknown>>('Sub', {}, sub, ['a\\d'], false);
+        expect(result).toHaveProperty(['a\\d'], 'literal');
+        expect(result).not.toHaveProperty('a5');
+    });
 });
