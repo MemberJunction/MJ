@@ -54,6 +54,15 @@
 - [ ] Step 3: repro file PASS; `pnpm test` in the package PASS; build PASS.
 - [ ] Step 4: commit.
 
+### Ruling after the whole-branch review (supersedes Task 2's subscription)
+
+Routing the user's speech onset through the shared `currentTurnStartMs` slot let it claim the
+assistant turn's start: OpenAI user transcripts arrive asynchronously, often after the assistant's
+interims or final. The onset now lands in its own slot, `userSpeechStartMs` (first onset kept,
+cleared by every final user transcript and on lifecycle resets); a user final with a signalled
+onset relays it and leaves the shared slot alone. Tests: the `user speech start keeps its own slot`
+block in the turn-timing test file. Two Angular test fakes also gained `OnUserSpeechStart`.
+
 ### Task 3: Verify
 
 - [ ] Both packages: `pnpm test`, build, lint (eslint on changed files).
