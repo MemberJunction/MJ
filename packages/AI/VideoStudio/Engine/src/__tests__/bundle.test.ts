@@ -526,6 +526,58 @@ describe('bundle.ts (VS-AGT-3)', () => {
         expect(checkReq.RequiredFinalFrameText).toEqual(['Data as of 2026-04-17']);
     });
 
+    it('BuildRenderBundle returns empty DataSnapshot when DataBindings is empty (no snapshot or empty AsOf) and rejects when a binding is present with empty AsOf', async () => {
+        vi.spyOn(storageModule, 'ReadStoredFile').mockImplementation(async (fileId: string) =>
+            Buffer.from(`content:${fileId}`, 'utf8'),
+        );
+        vi.spyOn(storageModule, 'ReadStoredFileWithType').mockImplementation(
+            async (fileId: string) => ({
+                Bytes: Buffer.from(`content:${fileId}`, 'utf8'),
+            }),
+        );
+
+        // 1. No bindings and no DataSnapshot -> DataSnapshot: {}
+        const noBindingsNoSnapshot = makeMinimalSpec();
+        noBindingsNoSnapshot.DataBindings = [];
+        delete (noBindingsNoSnapshot as { DataSnapshot?: unknown }).DataSnapshot;
+
+        const bundle1 = await BuildRenderBundle(noBindingsNoSnapshot, '16:9', {
+            ContextUser: mockUser,
+            Values: {},
+        });
+        expect(bundle1.DataSnapshot).toEqual({});
+
+        // 2. No bindings and AsOf: '' -> DataSnapshot: {}
+        const noBindingsEmptyAsOf = makeMinimalSpec();
+        noBindingsEmptyAsOf.DataBindings = [];
+        noBindingsEmptyAsOf.DataSnapshot = {
+            AsOf: '',
+            Sources: [],
+            Inline: { arr_total: 42400000 },
+        };
+
+        const bundle2 = await BuildRenderBundle(noBindingsEmptyAsOf, '16:9', {
+            ContextUser: mockUser,
+            Values: { arr_total: 42400000 },
+        });
+        expect(bundle2.DataSnapshot).toEqual({});
+
+        // 3. One binding and AsOf: '' -> rejects
+        const oneBindingEmptyAsOf = makeMinimalSpec();
+        oneBindingEmptyAsOf.DataSnapshot = {
+            AsOf: '',
+            Sources: ['Inline:revenue'],
+            Inline: { revenue: 12500000 },
+        };
+
+        await expect(
+            BuildRenderBundle(oneBindingEmptyAsOf, '16:9', {
+                ContextUser: mockUser,
+                Values: { revenue: 12500000 },
+            }),
+        ).rejects.toThrow(/non-empty/);
+    });
+
     it('CheckProductionRules catches missing PromptRunID, generated video total > MaxGeneratedVideoSeconds, missing AudioFileID, and unstaged Music.AssetKey', () => {
         const spec = makeMinimalSpec();
         spec.Assets.Approved.push(

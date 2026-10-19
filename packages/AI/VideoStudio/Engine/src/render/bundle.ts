@@ -32,8 +32,9 @@ export interface BuildRenderBundleContext {
     ContextUser: UserInfo;
     Provider?: IMetadataProvider;
     /**
-     * Optional pre-loaded data snapshot values. When omitted and `spec.DataSnapshot`
-     * is present, `BuildRenderBundle` loads the values via {@link LoadDataSnapshotValues}.
+     * Optional pre-loaded data snapshot values. Used when `spec.DataBindings` is non-empty;
+     * when omitted and `spec.DataSnapshot` is present, `BuildRenderBundle` loads the values
+     * via {@link LoadDataSnapshotValues}.
      */
     Values?: Record<string, unknown>;
 }
@@ -323,7 +324,7 @@ function buildFontsCss(spec: VideoGenerationSpec, approvedAssets: readonly Video
  * Assembles a self-contained {@link RenderProjectBundle} for `format` without mutating `spec`:
  * - Collects `Output.Source[format].Files`
  * - Stages every approved asset with a `StagedPath` + every narration line with an `AudioFileID`
- * - Builds `DataSnapshot` via {@link BuildRenderDataSnapshot}
+ * - Builds `DataSnapshot` via {@link BuildRenderDataSnapshot} when `spec.DataBindings` is non-empty (otherwise `{}`)
  * - Sets `Seed` from `spec.Render.Seed` (default `1`)
  * - Injects `mj/chart-kit.js` via {@link WithChartKit} and `mj/fonts.css` with one `@font-face` per staged `Font` asset
  */
@@ -379,14 +380,16 @@ export async function BuildRenderBundle(
     }
 
     let dataSnapshot: Record<string, unknown> = {};
-    if (ctx.Values !== undefined) {
-        dataSnapshot = BuildRenderDataSnapshot(ctx.Values, spec.DataSnapshot?.AsOf);
-    } else if (spec.DataSnapshot) {
-        const loadedValues = await LoadDataSnapshotValues(spec.DataSnapshot, {
-            ContextUser: ctx.ContextUser,
-            Provider: ctx.Provider,
-        });
-        dataSnapshot = BuildRenderDataSnapshot(loadedValues, spec.DataSnapshot.AsOf);
+    if (Array.isArray(spec.DataBindings) && spec.DataBindings.length > 0) {
+        if (ctx.Values !== undefined) {
+            dataSnapshot = BuildRenderDataSnapshot(ctx.Values, spec.DataSnapshot?.AsOf);
+        } else if (spec.DataSnapshot) {
+            const loadedValues = await LoadDataSnapshotValues(spec.DataSnapshot, {
+                ContextUser: ctx.ContextUser,
+                Provider: ctx.Provider,
+            });
+            dataSnapshot = BuildRenderDataSnapshot(loadedValues, spec.DataSnapshot.AsOf);
+        }
     }
 
     const seed = typeof spec.Render?.Seed === 'number' ? spec.Render.Seed : 1;

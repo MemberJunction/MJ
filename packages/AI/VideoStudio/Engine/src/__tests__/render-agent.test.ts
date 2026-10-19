@@ -762,5 +762,20 @@ describe('VideoStudioRenderAgent (VS-AGT-3)', () => {
         expect(renderStep?.errorMessage).toContain('3.0 MB');
         expect(renderStep?.errorMessage).toContain('2.0 MB');
     });
+
+    it('reaches Success when DataSnapshot is absent and DataBindings is empty', async () => {
+        const fakeDriver = new FakeRenderDriver();
+        VideoRenderEngine.Instance.UseDriver(fakeDriver);
+
+        const { execute } = createRenderAgentHarness();
+        const spec = makeDualFormatSpec();
+        spec.DataBindings = [];
+        delete (spec as { DataSnapshot?: unknown }).DataSnapshot;
+
+        const result = await execute(spec);
+
+        expect(result.finalStep.step).toBe('Success');
+        expect(result.finalStep.newPayload.Output?.Videos['16:9']?.FileID).toBeDefined();
+    });
 });
 
