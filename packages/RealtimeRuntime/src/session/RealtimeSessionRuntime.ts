@@ -1061,6 +1061,13 @@ export class RealtimeSessionRuntime {
    */
   private userSpeechStartMs: number | null = null;
   /**
+   * `true` once an assistant turn has finalized while {@link userSpeechStartMs} was held. The held
+   * onset may still be claimed by a late user transcript (OpenAI transcribes asynchronously), but
+   * the NEXT onset replaces it: an onset no transcript ever claimed (a VAD false positive, an empty
+   * or failed transcription) must not become the start of the next real user turn.
+   */
+  private userSpeechStartSuperseded = false;
+  /**
    * Wall-anchor of the SESSION clock (#3832): `performance.now()` at the moment the call went
    * live, or `null` before any call has. Read only through {@link nowTurnOffsetMs}.
    */
@@ -2345,6 +2352,7 @@ export class RealtimeSessionRuntime {
       this.currentTurnStartMs = recorder.IsRecording ? 0 : null;
       this.turnAudioStartCaptured = false;
       this.userSpeechStartMs = null;
+      this.userSpeechStartSuperseded = false;
       if (this.recorder) {
         // WebRTC drivers (OpenAI): the agent's track usually lands AFTER Connect() resolves, so
         // `remoteStream` above is null here and this handler attaches it later. PCM-playback
@@ -2850,6 +2858,7 @@ export class RealtimeSessionRuntime {
     this.currentTurnStartMs = null;
     this.turnAudioStartCaptured = false;
     this.userSpeechStartMs = null;
+    this.userSpeechStartSuperseded = false;
     if (!recorder || !pipeline) {
       this.recorder = null;
       this.recordingShards = null;
@@ -4276,10 +4285,11 @@ export class RealtimeSessionRuntime {
   /**
    * Stamps {@link userSpeechStartMs} when the client signals that the user began to speak. Keeps
    * the FIRST onset since the last final user transcript: the VAD fires again after a
-   * mid-sentence pause, and that second onset is not where the utterance began.
+   * mid-sentence pause, and that second onset is not where the utterance began. An onset an
+   * assistant turn has since superseded ({@link userSpeechStartSuperseded}) is replaced instead.
    */
   private markUserSpeechStart(): void {
-    if (this.userSpeechStartMs !== null) {
+    if (this.userSpeechStartMs !== null && !this.userSpeechStartSuperseded) {
       return;
     }
     const offset = this.nowTurnOffsetMs();
@@ -4287,6 +4297,7 @@ export class RealtimeSessionRuntime {
       return;
     }
     this.userSpeechStartMs = offset;
+    this.userSpeechStartSuperseded = false;
   }
 
   /**
@@ -4727,6 +4738,7 @@ export class RealtimeSessionRuntime {
     if (role === 'user') {
       userSpeechStartMs = this.userSpeechStartMs;
       this.userSpeechStartMs = null;
+      this.userSpeechStartSuperseded = false;
     }
     // Per-turn timing against whichever clock the session is on (#3832): the recorder's when one
     // runs, else the session clock. `utteranceStartMs` is where this turn's audio actually began.
@@ -4746,6 +4758,11 @@ export class RealtimeSessionRuntime {
       // next start. `null` means "not yet captured" and is relayed as-is if nothing stamps it.
       this.currentTurnStartMs = null;
       this.turnAudioStartCaptured = false;
+      if (role === 'assistant') {
+        // The floor moved on: a still-held onset may yet be claimed by a late user transcript,
+        // but the next onset replaces it (see userSpeechStartSuperseded).
+        this.userSpeechStartSuperseded = true;
+      }
     }
     try {
       const mutation = `
@@ -5349,6 +5366,7 @@ export class RealtimeSessionRuntime {
     this.currentTurnStartMs = null;
     this.turnAudioStartCaptured = false;
     this.userSpeechStartMs = null;
+    this.userSpeechStartSuperseded = false;
     this.usedChannelNames.clear();
     this.microphoneMuted = false;
   }

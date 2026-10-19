@@ -210,6 +210,25 @@ describe('RealtimeSessionRuntime per-turn timing: the user speech start keeps it
         expect(provider.Relayed[1]).toEqual({ role: 'assistant', utteranceStartMs: 9000, utteranceEndMs: 12000 });
     });
 
+    it('does not carry a VAD false positive onset into the next real user turn', async () => {
+        const { provider, client, advanceTo } = await startRecorded();
+        speakAssistantTurn(client, advanceTo);
+
+        advanceTo(8400);
+        client.SpeechStart(); // a cough: the provider sends an empty transcript, so nothing is relayed
+        advanceTo(9000);
+        client.Emit({ Role: 'Assistant', Text: 'Sure', IsFinal: false, Kind: 'normal' });
+        advanceTo(12000);
+        client.Emit({ Role: 'Assistant', Text: 'Sure, let us start', IsFinal: true, Kind: 'normal' });
+        advanceTo(30000);
+        client.SpeechStart(); // the user really speaks
+        advanceTo(32000);
+        client.Emit({ Role: 'User', Text: 'I would like to apply', IsFinal: true, Kind: 'normal' });
+        await vi.waitFor(() => expect(provider.Relayed).toHaveLength(3));
+
+        expect(provider.Relayed[2]).toEqual({ role: 'user', utteranceStartMs: 30000, utteranceEndMs: 32000 });
+    });
+
     it('clears the user speech start on a continuation (replacesPrevious) so the next turn stamps its own', async () => {
         const { provider, client, advanceTo } = await startRecorded();
         speakAssistantTurn(client, advanceTo);
