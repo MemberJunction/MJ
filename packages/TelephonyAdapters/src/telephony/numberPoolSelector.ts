@@ -15,6 +15,7 @@
  * @module @memberjunction/telephony-adapters
  */
 
+import { randomInt } from 'node:crypto';
 import { IMetadataProvider, LogError, RunView, UserInfo } from '@memberjunction/core';
 import { BaseSingleton, EscapeSQLString } from '@memberjunction/global';
 import type { MJNumberPoolEntity, MJPhoneNumberEntity, MJInteractionEntity } from '@memberjunction/core-entities';
@@ -198,7 +199,7 @@ export class NumberPoolSelector extends BaseSingleton<NumberPoolSelector> {
 
         switch (pool.SelectionRule) {
             case 'Random':
-                return candidates[Math.floor(Math.random() * candidates.length)];
+                return candidates[randomInt(candidates.length)];
 
             case 'LocalPresence': {
                 if (toNumber) {

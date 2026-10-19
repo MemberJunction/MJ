@@ -152,7 +152,7 @@ export class GraphQLConsoleComponent extends BaseResourceComponent implements On
         super();
     }
 
-    public ngOnInit(): void {
+    public override ngOnInit(): void {
         super.ngOnInit();
         this.loadFromStorage();
         try {
@@ -162,7 +162,7 @@ export class GraphQLConsoleComponent extends BaseResourceComponent implements On
         this.NotifyLoadComplete();
     }
 
-    public ngOnDestroy(): void {
+    public override ngOnDestroy(): void {
         super.ngOnDestroy();
         this.saveToStorage();
         this.detachResizeListeners();

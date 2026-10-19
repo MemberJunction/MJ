@@ -151,4 +151,106 @@ describe('AgentRunStepSaveQueue', () => {
         // The UPDATE force-persists the reverted 'Running' — the exact "stuck at Running" symptom.
         expect(persisted).toEqual(['Running', 'Running']);
     });
+
+    it('Insert(step, [prereqA, prereqB]) waits for ALL prerequisites to settle and calls step.Save exactly once', async () => {
+        const q = new AgentRunStepSaveQueue();
+        const order: string[] = [];
+        let releaseA!: () => void;
+        let releaseB!: () => void;
+        const gateA = new Promise<void>((resolve) => { releaseA = resolve; });
+        const gateB = new Promise<void>((resolve) => { releaseB = resolve; });
+
+        const prereqA = {
+            ID: 'parent-step',
+            Save: vi.fn(async () => {
+                await gateA;
+                order.push('prereqA');
+                return true;
+            }),
+        } as unknown as MJAIAgentRunStepEntity;
+
+        const prereqB = {
+            ID: 'source-step',
+            Save: vi.fn(async () => {
+                await gateB;
+                order.push('prereqB');
+                return true;
+            }),
+        } as unknown as MJAIAgentRunStepEntity;
+
+        const child = {
+            ID: 'child-step',
+            Save: vi.fn(async () => {
+                order.push('child');
+                return true;
+            }),
+        } as unknown as MJAIAgentRunStepEntity;
+
+        q.Insert(prereqA);
+        q.Insert(prereqB);
+        q.Insert(child, [prereqA, prereqB]);
+
+        // Release A first; child must still wait for B.
+        releaseA();
+        await new Promise((r) => setTimeout(r, 10));
+        expect(order).toEqual(['prereqA']);
+        expect(child.Save).not.toHaveBeenCalled();
+
+        // Release B; child now runs once.
+        releaseB();
+        const result = await q.Flush();
+        expect(result.failures).toBe(0);
+        expect(order).toEqual(['prereqA', 'prereqB', 'child']);
+        expect(child.Save).toHaveBeenCalledTimes(1);
+    });
+
+    it('Insert(step, prereqs, beforeInsert) invokes beforeInsert after prerequisite settlement so a failed source step falls back cleanly', async () => {
+        const q = new AgentRunStepSaveQueue();
+        let releaseSource!: () => void;
+        const sourceGate = new Promise<void>((resolve) => { releaseSource = resolve; });
+
+        const sourceStep = {
+            ID: 'source-step',
+            IsSaved: false,
+            LatestResult: { CompleteMessage: 'source insert failed' },
+            Save: vi.fn(async () => {
+                await sourceGate;
+                // Simulate failed DB INSERT: IsSaved remains false
+                return false;
+            }),
+        } as unknown as MJAIAgentRunStepEntity & { IsSaved: boolean };
+
+        let persistedPayloadAtStart: string | null = null;
+        let persistedSourceStepId: string | null = null;
+        const dependentStep = {
+            ID: 'dependent-step',
+            PayloadAtStart: null as string | null,
+            PayloadAtStartSourceStepID: 'source-step' as string | null,
+            Save: vi.fn(async () => {
+                persistedPayloadAtStart = dependentStep.PayloadAtStart;
+                persistedSourceStepId = dependentStep.PayloadAtStartSourceStepID;
+                return true;
+            }),
+        } as unknown as MJAIAgentRunStepEntity & {
+            PayloadAtStart: string | null;
+            PayloadAtStartSourceStepID: string | null;
+        };
+
+        q.Insert(sourceStep);
+        q.Insert(dependentStep, [sourceStep], (s) => {
+            if (!sourceStep.IsSaved) {
+                s.PayloadAtStart = '{"fallback":true}';
+                s.PayloadAtStartSourceStepID = null;
+            }
+        });
+
+        releaseSource();
+        const flushResult = await q.Flush();
+
+        expect(flushResult.failures).toBe(1); // sourceStep failed, dependentStep succeeded
+        expect(persistedPayloadAtStart).toBe('{"fallback":true}');
+        expect(persistedSourceStepId).toBeNull();
+        expect(dependentStep.Save).toHaveBeenCalledTimes(1);
+    });
 });
+

@@ -1,0 +1,75 @@
+[
+  {
+    "_comments": [
+      "Binds JSONType metadata to EntityAccessRules and ActionPolicyRules on MJ: AI Agent User Policies",
+      "so CodeGen emits typed EntityAccessRulesObject and ActionPolicyRulesObject accessors.",
+      "Follows the 4-step workflow in migrations/CLAUDE.md: mj migrate -> mj codegen --skipfiles ->",
+      "mj sync push -> mj codegen --skipdb."
+    ],
+    "fields": {
+      "Name": "MJ: AI Agent User Policies"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "JSONType": "IAgentUserEntityAccessRule",
+            "JSONTypeIsArray": true,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IAgentUserEntityAccessRule.ts"
+          },
+          "_comments": [
+            "EntityAccessRules field — array of per-entity CRUD, RLS, FLS, and time-window narrowing rules"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Agent User Policies&Name=EntityAccessRules"
+          }
+        },
+        {
+          "fields": {
+            "JSONType": "IAgentUserActionPolicyRule",
+            "JSONTypeIsArray": true,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IAgentUserActionPolicyRule.ts"
+          },
+          "_comments": [
+            "ActionPolicyRules field — array of per-action Allow/RequireApproval/Deny, expression, and time-window rules"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Agent User Policies&Name=ActionPolicyRules"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: AI Agent User Policies"
+    }
+  },
+  {
+    "_comments": [
+      "Binds JSONType metadata to WakeConfiguration on MJ: User Routines so CodeGen emits a typed",
+      "WakeConfigurationObject accessor conforming to IRoutineWakeConfiguration."
+    ],
+    "fields": {
+      "Name": "MJ: User Routines"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "JSONType": "IRoutineWakeConfiguration",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IRoutineWakeConfiguration.ts"
+          },
+          "_comments": [
+            "WakeConfiguration field — watchedEntities and 3-tier wake gate configuration for autonomous routines"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: User Routines&Name=WakeConfiguration"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: User Routines"
+    }
+  }
+]

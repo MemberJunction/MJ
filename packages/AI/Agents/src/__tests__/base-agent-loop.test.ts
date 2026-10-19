@@ -662,10 +662,11 @@ describe('BaseAgent.Execute — full loop: prompt → actions → prompt → fin
         const [, prompt1, actionStep, prompt2] = harness.steps;
         expect(JSON.parse(prompt1.PayloadAtStart ?? 'null')).toEqual(initialPayload);
         expect(JSON.parse(prompt1.PayloadAtEnd ?? 'null')).toEqual(afterStep1);
-        // The action step starts from prompt 1's end, so it stores a pointer to prompt 1 instead of a copy
+        // The action step starts from prompt 1's end and leaves the payload unchanged, so both its start and end store a pointer to prompt 1 instead of a copy
         expect(actionStep.PayloadAtStart).toBeNull();
         expect(actionStep.PayloadAtStartSourceStepID).toBe(prompt1.ID);
-        expect(JSON.parse(actionStep.PayloadAtEnd ?? 'null')).toEqual(afterStep1);
+        expect(actionStep.PayloadAtEnd).toBeNull();
+        expect(actionStep.PayloadAtEndSourceStepID).toBe(prompt1.ID);
         expect(JSON.parse(prompt2.PayloadAtEnd ?? 'null')).toEqual(finalPayload);
 
         // The final run payload is the LAST step's payload

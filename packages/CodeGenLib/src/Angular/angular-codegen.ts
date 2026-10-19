@@ -888,6 +888,7 @@ ${indentedFormHTML}
        */
       protected isFieldRenderedInForm(entity: EntityInfo, field: EntityFieldInfo): boolean {
           if (!field.IncludeInGeneratedForm) return false;
+          if (field.Status === 'Deprecated' || field.Status === 'Disabled') return false;
           if (field.Name.toLowerCase() === 'id') return false;
           if (field.IsVirtual && this.isVirtualNameFieldForFK(entity, field)) return false;
           if (field.IsBinaryFieldType) return false;

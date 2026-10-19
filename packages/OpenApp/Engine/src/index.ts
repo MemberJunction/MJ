@@ -135,3 +135,26 @@ export {
 } from './install/entity-teardown.js';
 export type { FkEdge, TeardownPlanItem, TeardownPlan } from './install/entity-teardown.js';
 export { ExtractApplicationIds, extractApplicationIds } from './install/migration-application-ids.js';
+
+// OpenApp scaffolder & Schema Consistency CI template (MC1-MC4 + FK index coverage)
+export {
+    ScaffoldOpenApp,
+    scaffoldOpenApp,
+    GenerateSchemaConsistencyWorkflow,
+    GenerateSchemaConsistencyScript,
+    ExpectedForeignKeyIndexName,
+    StripSqlCommentsAndStrings,
+    ScanMigrationForeignKeyIndexes,
+    SCHEMA_CONSISTENCY_WORKFLOW_PATH,
+    SCHEMA_CONSISTENCY_SCRIPT_PATH,
+} from './scaffold/app-scaffolder.js';
+export type {
+    SchemaConsistencyTemplateOptions,
+    AppScaffoldOptions,
+    ScaffoldedFile,
+    AppScaffoldResult,
+    MigrationSqlInput,
+    DeclaredForeignKeyColumn,
+    MissingForeignKeyIndex,
+    ForeignKeyIndexScanResult,
+} from './scaffold/app-scaffolder.js';
