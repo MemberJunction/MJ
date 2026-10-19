@@ -528,7 +528,7 @@ export class EntityField {
         }
     }
 
-    constructor(fieldInfo: EntityFieldInfo, Value?: any) {
+    constructor(fieldInfo: EntityFieldInfo, Value?: unknown, skipDefaultValue: boolean = false) {
         // NOTE: constructing an EntityField for a deprecated/disabled field is always allowed — the
         // column is physically part of the entity and the instance must exist. Active-status is
         // asserted only when code accesses the field by name via BaseEntity.Get/Set/SetMany, never
@@ -537,7 +537,7 @@ export class EntityField {
         if (Value) {
             this.Value = Value;
         }
-        else if (fieldInfo.DefaultValue) {
+        else if (!skipDefaultValue && fieldInfo.DefaultValue) {
             const parsed = typeof fieldInfo.GetParsedDefaultValue === 'function'
                 ? fieldInfo.GetParsedDefaultValue()
                 : EntityFieldInfo.ParseDefaultValue(fieldInfo);
@@ -4371,21 +4371,46 @@ export abstract class BaseEntity<T = unknown> {
      * @returns
      */
     public GetAll(oldValues: boolean = false, onlyDirtyFields: boolean = false): any {
-        let obj = {};
-        for (let field of this.Fields) {
-            // NotLoaded fields are OMITTED (D-3 decision): their in-memory state is a
-            // construction artifact, and serializing it would launder a default/null into
-            // something downstream code treats as data — the exact masquerade the flag exists
-            // to prevent. Key-absence also propagates the flag naturally: hydrating another
-            // entity from this output re-marks the same fields not-loaded.
-            if (field.NotLoaded) continue;
-            if (!onlyDirtyFields || (onlyDirtyFields && field.Dirty)) {
-                // Reads field.Value directly — serialization is framework-internal, so it does not
-                // (and must not) assert active status. No suppression toggle needed: the assertion no
-                // longer lives on EntityField.Value (it moved to BaseEntity.Get/Set/SetMany).
-                obj[field.Name] = oldValues ? field.OldValue : field.Value;
-                if (field.EntityFieldInfo.TSType == EntityFieldTSType.Date && obj[field.Name] && !(obj[field.Name] instanceof Date)) {
-                    obj[field.Name] = new Date(obj[field.Name]); // a timestamp, convert to JS Date Object
+        let obj: Record<string, unknown> = {};
+        if (!this._fieldsHydrated && this._raw !== null) {
+            if (!onlyDirtyFields) {
+                for (const ef of this.EntityInfo.Fields) {
+                    const name = ef.Name;
+                    const rawVal = this._raw[name];
+                    // Key absence in _raw means NotLoaded (D-3 decision): omit from serialized output
+                    if (rawVal === undefined) continue;
+                    let val: unknown;
+                    const memo = this._rawConverted?.get(name);
+                    if (memo !== undefined) {
+                        val = memo;
+                    } else if (ef.TSType === EntityFieldTSType.Date && (typeof rawVal === 'string' || typeof rawVal === 'number')) {
+                        val = new Date(rawVal);
+                        this.memoizeRawConversion(name, val);
+                    } else if (typeof rawVal === 'string' && ef.FixedWidthColumn) {
+                        val = trimTrailingSpaces(rawVal);
+                        this.memoizeRawConversion(name, val);
+                    } else {
+                        val = rawVal;
+                    }
+                    obj[name] = val;
+                }
+            }
+        } else {
+            for (let field of this.Fields) {
+                // NotLoaded fields are OMITTED (D-3 decision): their in-memory state is a
+                // construction artifact, and serializing it would launder a default/null into
+                // something downstream code treats as data — the exact masquerade the flag exists
+                // to prevent. Key-absence also propagates the flag naturally: hydrating another
+                // entity from this output re-marks the same fields not-loaded.
+                if (field.NotLoaded) continue;
+                if (!onlyDirtyFields || (onlyDirtyFields && field.Dirty)) {
+                    // Reads field.Value directly — serialization is framework-internal, so it does not
+                    // (and must not) assert active status. No suppression toggle needed: the assertion no
+                    // longer lives on EntityField.Value (it moved to BaseEntity.Get/Set/SetMany).
+                    obj[field.Name] = oldValues ? field.OldValue : field.Value;
+                    if (field.EntityFieldInfo.TSType == EntityFieldTSType.Date && obj[field.Name] && !(obj[field.Name] instanceof Date)) {
+                        obj[field.Name] = new Date(obj[field.Name] as string | number); // a timestamp, convert to JS Date Object
+                    }
                 }
             }
         }
@@ -4610,6 +4635,7 @@ export abstract class BaseEntity<T = unknown> {
         const hasCustomEntityFieldRegistrations =
             MJGlobal.Instance.ClassFactory.GetAllRegistrations(EntityField).length > 0;
         const entityFields = this.EntityInfo.Fields;
+        const skipDefaultValue = this._raw !== null;
         if (hasCustomEntityFieldRegistrations) {
             const prefix = this.EntityInfo.Name + '.';
             for (let i = 0; i < entityFields.length; i++) {
@@ -4617,13 +4643,15 @@ export abstract class BaseEntity<T = unknown> {
                 const newField = MJGlobal.Instance.ClassFactory.CreateInstance<EntityField>(
                     EntityField,
                     prefix + rawField.Name,
-                    rawField
+                    rawField,
+                    undefined,
+                    skipDefaultValue
                 );
                 this._fields.push(newField);
             }
         } else {
             for (let i = 0; i < entityFields.length; i++) {
-                this._fields.push(new EntityField(entityFields[i]));
+                this._fields.push(new EntityField(entityFields[i], undefined, skipDefaultValue));
             }
         }
 
