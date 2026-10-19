@@ -1041,15 +1041,25 @@ export class RealtimeSessionRuntime {
   /**
    * Recording-relative ms offset at which the IN-FLIGHT (not-yet-finalized) turn's audio
    * actually BEGAN — captured the moment that turn's audio/text starts flowing (its first
-   * interim transcript, or the client's user-speech-start event), NOT inherited from the
-   * previous turn's end. `null` before the first turn / between turns (until the next turn's
-   * audio starts), and it stays `null` for a turn whose start was never measured. Sent as
-   * `utteranceStartMs` on the turn's final transcript AS-IS — `null` is relayed as `null`,
-   * never replaced with 0 — so per-turn timing lines up with the recording even when a
-   * tool-call / silence gap sits between turns (the inherit-previous-end model mis-stamped
-   * the post-gap turn at the pre-gap offset). See {@link markTurnAudioStart}.
+   * interim transcript), NOT inherited from the previous turn's end. `null` before the first
+   * turn / between turns (until the next turn's audio starts), and it stays `null` for a turn
+   * whose start was never measured. Sent as `utteranceStartMs` on the turn's final transcript
+   * AS-IS — `null` is relayed as `null`, never replaced with 0 — so per-turn timing lines up
+   * with the recording even when a tool-call / silence gap sits between turns (the
+   * inherit-previous-end model mis-stamped the post-gap turn at the pre-gap offset). See
+   * {@link markTurnAudioStart}. A user speech onset signalled by the client does NOT land here;
+   * it has its own slot, {@link userSpeechStartMs}.
    */
   private currentTurnStartMs: number | null = null;
+  /**
+   * Recording-relative ms offset of the first user speech onset the client signalled
+   * (`OnUserSpeechStart`) since the last final user transcript, or `null` when none was signalled.
+   * It has its own slot, apart from {@link currentTurnStartMs}, so a user onset never claims the
+   * assistant turn's start: OpenAI user transcripts arrive asynchronously, often after the
+   * assistant's interims (or its final) for the reply have already flowed. See
+   * {@link markUserSpeechStart}.
+   */
+  private userSpeechStartMs: number | null = null;
   /**
    * Wall-anchor of the SESSION clock (#3832): `performance.now()` at the moment the call went
    * live, or `null` before any call has. Read only through {@link nowTurnOffsetMs}.
@@ -2334,6 +2344,7 @@ export class RealtimeSessionRuntime {
       // turn one's cue wherever the clocks happen to differ.
       this.currentTurnStartMs = recorder.IsRecording ? 0 : null;
       this.turnAudioStartCaptured = false;
+      this.userSpeechStartMs = null;
       if (this.recorder) {
         // WebRTC drivers (OpenAI): the agent's track usually lands AFTER Connect() resolves, so
         // `remoteStream` above is null here and this handler attaches it later. PCM-playback
@@ -2838,6 +2849,7 @@ export class RealtimeSessionRuntime {
     const pipeline = this.recordingShards;
     this.currentTurnStartMs = null;
     this.turnAudioStartCaptured = false;
+    this.userSpeechStartMs = null;
     if (!recorder || !pipeline) {
       this.recorder = null;
       this.recordingShards = null;
@@ -4062,9 +4074,10 @@ export class RealtimeSessionRuntime {
       this.cancelPendingNarration();
     });
     // The provider VAD saw the user start speaking. Final-only user-transcript drivers (OpenAI,
-    // HuggingFace, xAI) emit no interim, so this is their only real turn start; markTurnAudioStart's
-    // once-per-turn guard keeps the first onset when VAD fires again after a pause.
-    client.OnUserSpeechStart(() => this.markTurnAudioStart('normal'));
+    // HuggingFace, xAI) emit no user interim, so this is their only real user-turn start. It goes
+    // to its own slot, not the shared turn slot: the user transcript arrives asynchronously, so the
+    // assistant's reply may already be streaming and must keep its own start.
+    client.OnUserSpeechStart(() => this.markUserSpeechStart());
     client.OnRemoteVideo((video: MediaVideoSource) => this.onAgentVideo(client, video));
   }
 
@@ -4244,10 +4257,9 @@ export class RealtimeSessionRuntime {
    *   claim the next real turn's start slot.
    *
    * Stamped on a turn's first interim transcript (all drivers for the assistant — the post-tool-gap
-   * assistant answer — and user-interim drivers like Gemini/AssemblyAI) or on the client's
-   * user-speech-start event (OpenAI-protocol drivers, whose user transcripts are final-only). A
-   * final-only user turn with neither signal (ElevenLabs) keeps `null`, which
-   * {@link relayTranscript} sends as-is.
+   * assistant answer — and user-interim drivers like Gemini/AssemblyAI). Final-only user turns
+   * (OpenAI-protocol drivers) take their start from {@link markUserSpeechStart}'s own slot
+   * instead; one with no speech-start signal either (ElevenLabs) relays `null` as-is.
    */
   private markTurnAudioStart(kind: 'normal' | 'narration'): void {
     if (this.turnAudioStartCaptured || kind === 'narration') {
@@ -4259,6 +4271,22 @@ export class RealtimeSessionRuntime {
     }
     this.currentTurnStartMs = offset;
     this.turnAudioStartCaptured = true;
+  }
+
+  /**
+   * Stamps {@link userSpeechStartMs} when the client signals that the user began to speak. Keeps
+   * the FIRST onset since the last final user transcript: the VAD fires again after a
+   * mid-sentence pause, and that second onset is not where the utterance began.
+   */
+  private markUserSpeechStart(): void {
+    if (this.userSpeechStartMs !== null) {
+      return;
+    }
+    const offset = this.nowTurnOffsetMs();
+    if (offset === null) {
+      return;
+    }
+    this.userSpeechStartMs = offset;
   }
 
   /**
@@ -4669,18 +4697,21 @@ export class RealtimeSessionRuntime {
    * Relays a final transcript turn to MJ via `RelayRealtimeTranscript`.
    *
    * When the session is being recorded, per-turn timing rides along: `utteranceEndMs` is the
-   * recording-relative offset at finalization, and `utteranceStartMs` is the offset captured by
-   * {@link markTurnAudioStart} when THIS turn's audio actually began (its first interim, or the
-   * client's user-speech-start event) — NOT
-   * inherited from the previous turn's end. That distinction is the timing fix: when a tool-call
-   * / silence gap sits between turns, the post-gap turn's audio starts much later, so inheriting
-   * the prior turn's end stamped the cue ~gap-length too early. Both are omitted (left `null`)
-   * when the session isn't being recorded. `utteranceStartMs` is also `null` when no start was
-   * measured for this turn; it is never replaced with a placeholder 0.
+   * recording-relative offset at finalization, and `utteranceStartMs` is where THIS turn's audio
+   * actually began — NOT inherited from the previous turn's end. For a user turn whose onset the
+   * client signalled, that is {@link userSpeechStartMs}; otherwise it is the offset captured by
+   * {@link markTurnAudioStart} on the turn's first interim. That distinction is the timing fix:
+   * when a tool-call / silence gap sits between turns, the post-gap turn's audio starts much
+   * later, so inheriting the prior turn's end stamped the cue ~gap-length too early. Both are
+   * omitted (left `null`) when the session isn't being recorded. `utteranceStartMs` is also
+   * `null` when no start was measured for this turn; it is never replaced with a placeholder 0.
    *
    * A correction (`replacesPrevious`) doesn't open a new turn, so it carries no start and doesn't
    * reset the per-turn start guard. After a normal finalization the guard is cleared so the NEXT
-   * turn re-stamps its start from where ITS audio begins.
+   * turn re-stamps its start from where ITS audio begins — except for a user turn that used its
+   * own speech-start slot, which leaves the shared slot alone (it may hold the in-flight
+   * assistant turn's start). Every final user transcript, corrections included, clears the
+   * speech-start slot.
    *
    * @param replacesPrevious CORRECTION semantics: the server updates the session's most
    *   recent persisted turn of this role IN PLACE instead of appending (e.g. ElevenLabs'
@@ -4690,15 +4721,26 @@ export class RealtimeSessionRuntime {
     if (!this.agentSessionId) {
       return;
     }
+    // Every final user transcript closes the signalled onset — a correction too, since it ends the
+    // same utterance — so a later onset (an xAI mid-sentence resume) can't leak into the next turn.
+    let userSpeechStartMs: number | null = null;
+    if (role === 'user') {
+      userSpeechStartMs = this.userSpeechStartMs;
+      this.userSpeechStartMs = null;
+    }
     // Per-turn timing against whichever clock the session is on (#3832): the recorder's when one
-    // runs, else the session clock. `utteranceStartMs` is where this turn's audio actually began
-    // (captured by markTurnAudioStart on the first interim or the user-speech-start event). It is
-    // null when no start was measured for this turn (a final-only driver with no speech-start
-    // signal, or a barge-in where the assistant turn still held the once-per-turn guard), so the
-    // server stores NULL rather than a placeholder 0.
+    // runs, else the session clock. `utteranceStartMs` is where this turn's audio actually began.
+    // It is null when no start was measured for this turn (a final-only driver with no speech-start
+    // signal), so the server stores NULL rather than a placeholder 0.
     const utteranceEndMs = this.nowTurnOffsetMs();
-    const utteranceStartMs = utteranceEndMs !== null && !replacesPrevious ? this.currentTurnStartMs : null;
-    if (utteranceEndMs !== null && !replacesPrevious) {
+    const opensTurn = utteranceEndMs !== null && !replacesPrevious;
+    let utteranceStartMs: number | null = null;
+    if (opensTurn && userSpeechStartMs !== null) {
+      // A user turn with a signalled onset. Leave the shared slot alone: the user transcript
+      // arrives asynchronously, so it may already hold the in-flight assistant reply's start.
+      utteranceStartMs = userSpeechStartMs;
+    } else if (opensTurn) {
+      utteranceStartMs = this.currentTurnStartMs;
       // This turn is finalized — arm the NEXT turn to re-stamp its start from its own first
       // interim (handles a tool-call gap before the next turn). Stop inheriting this end as the
       // next start. `null` means "not yet captured" and is relayed as-is if nothing stamps it.
@@ -5306,6 +5348,7 @@ export class RealtimeSessionRuntime {
     this.recordingStartedAtIso = null;
     this.currentTurnStartMs = null;
     this.turnAudioStartCaptured = false;
+    this.userSpeechStartMs = null;
     this.usedChannelNames.clear();
     this.microphoneMuted = false;
   }

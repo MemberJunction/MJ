@@ -149,3 +149,104 @@ describe('RealtimeSessionRuntime per-turn timing for final-only user transcripts
         expect(provider.Relayed[1].utteranceStartMs).toBe(8400);
     });
 });
+
+describe('RealtimeSessionRuntime per-turn timing: the user speech start keeps its own slot (MJ#5483)', () => {
+    beforeEach(() => {
+        vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    });
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    it('does not give the user onset to the assistant turn when the user transcript arrives after the assistant final', async () => {
+        const { provider, client, advanceTo } = await startRecorded();
+        speakAssistantTurn(client, advanceTo);
+
+        advanceTo(8400);
+        client.SpeechStart();
+        advanceTo(9000);
+        client.Emit({ Role: 'Assistant', Text: 'Sure', IsFinal: false, Kind: 'normal' });
+        advanceTo(12000);
+        client.Emit({ Role: 'Assistant', Text: 'Sure, let us start', IsFinal: true, Kind: 'normal' });
+        advanceTo(13000);
+        client.Emit({ Role: 'User', Text: 'I would like to apply', IsFinal: true, Kind: 'normal' });
+        await vi.waitFor(() => expect(provider.Relayed).toHaveLength(3));
+
+        expect(provider.Relayed[1]).toEqual({ role: 'assistant', utteranceStartMs: 9000, utteranceEndMs: 12000 });
+        expect(provider.Relayed[2]).toEqual({ role: 'user', utteranceStartMs: 8400, utteranceEndMs: 13000 });
+    });
+
+    it('keeps both starts when the user transcript arrives during the assistant reply', async () => {
+        const { provider, client, advanceTo } = await startRecorded();
+        speakAssistantTurn(client, advanceTo);
+
+        advanceTo(8400);
+        client.SpeechStart();
+        advanceTo(9000);
+        client.Emit({ Role: 'Assistant', Text: 'Sure', IsFinal: false, Kind: 'normal' });
+        advanceTo(9500);
+        client.Emit({ Role: 'User', Text: 'I would like to apply', IsFinal: true, Kind: 'normal' });
+        advanceTo(12000);
+        client.Emit({ Role: 'Assistant', Text: 'Sure, let us start', IsFinal: true, Kind: 'normal' });
+        await vi.waitFor(() => expect(provider.Relayed).toHaveLength(3));
+
+        expect(provider.Relayed[1]).toEqual({ role: 'user', utteranceStartMs: 8400, utteranceEndMs: 9500 });
+        expect(provider.Relayed[2]).toEqual({ role: 'assistant', utteranceStartMs: 9000, utteranceEndMs: 12000 });
+    });
+
+    it('does not move the assistant start for a VAD false positive with no user transcript', async () => {
+        const { provider, client, advanceTo } = await startRecorded();
+        speakAssistantTurn(client, advanceTo);
+
+        advanceTo(8400);
+        client.SpeechStart();
+        advanceTo(9000);
+        client.Emit({ Role: 'Assistant', Text: 'Sure', IsFinal: false, Kind: 'normal' });
+        advanceTo(12000);
+        client.Emit({ Role: 'Assistant', Text: 'Sure, let us start', IsFinal: true, Kind: 'normal' });
+        await vi.waitFor(() => expect(provider.Relayed).toHaveLength(2));
+
+        expect(provider.Relayed[1]).toEqual({ role: 'assistant', utteranceStartMs: 9000, utteranceEndMs: 12000 });
+    });
+
+    it('clears the user speech start on a continuation (replacesPrevious) so the next turn stamps its own', async () => {
+        const { provider, client, advanceTo } = await startRecorded();
+        speakAssistantTurn(client, advanceTo);
+
+        advanceTo(8000);
+        client.SpeechStart();
+        advanceTo(10000);
+        client.Emit({ Role: 'User', Text: 'I would like', IsFinal: true, Kind: 'normal' });
+        advanceTo(11000);
+        client.SpeechStart();
+        advanceTo(12000);
+        client.Emit({ Role: 'User', Text: 'I would like to apply', IsFinal: true, Kind: 'normal', ReplacesPrevious: true });
+        advanceTo(20000);
+        client.SpeechStart();
+        advanceTo(25000);
+        client.Emit({ Role: 'User', Text: 'For the nurse role', IsFinal: true, Kind: 'normal' });
+        await vi.waitFor(() => expect(provider.Relayed).toHaveLength(4));
+
+        expect(provider.Relayed[1]).toEqual({ role: 'user', utteranceStartMs: 8000, utteranceEndMs: 10000 });
+        expect(provider.Relayed[2]).toEqual({ role: 'user', utteranceStartMs: null, utteranceEndMs: 12000 });
+        expect(provider.Relayed[3]).toEqual({ role: 'user', utteranceStartMs: 20000, utteranceEndMs: 25000 });
+    });
+
+    it('keeps each start on a barge-in that cuts the assistant off', async () => {
+        const { provider, client, advanceTo } = await startRecorded();
+
+        advanceTo(1351);
+        client.Emit({ Role: 'Assistant', Text: 'Hello', IsFinal: false, Kind: 'normal' });
+        advanceTo(3000);
+        client.SpeechStart();
+        advanceTo(5690);
+        client.Emit({ Role: 'Assistant', Text: 'Hello there', IsFinal: true, Kind: 'normal' });
+        advanceTo(8000);
+        client.Emit({ Role: 'User', Text: 'Sorry, one question', IsFinal: true, Kind: 'normal' });
+        await vi.waitFor(() => expect(provider.Relayed).toHaveLength(2));
+
+        expect(provider.Relayed[0]).toEqual({ role: 'assistant', utteranceStartMs: 1351, utteranceEndMs: 5690 });
+        expect(provider.Relayed[1]).toEqual({ role: 'user', utteranceStartMs: 3000, utteranceEndMs: 8000 });
+    });
+});
