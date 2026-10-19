@@ -19,6 +19,8 @@ When a run throws after its Archive Run row exists (for example a bad FieldConfi
 
 `ArchiveRunResult` has a new optional `StorageMode` field, set once the configuration loads. The Archive Data and Run All Active Archives actions say "Purged" instead of "Archived" for Purge runs, and the run viewer shows "purged" on Purge run cards and a "Purged" label in the run drawer.
 
-`ArchiveProcessor.ProcessEntity` now takes the generated `MJArchiveConfigurationEntityEntity` and `MJArchiveConfigurationEntity` classes and a nullable `ArchiveStorageManager`.
+`ArchiveProcessor.ProcessEntity` now takes the generated `MJArchiveConfigurationEntityEntity`, `MJArchiveConfigurationEntity` and `MJArchiveRunEntity` classes and a nullable `ArchiveStorageManager`, and the engine reads those records through their typed properties instead of `.Get()`.
+
+With Archive Runs now named by their configuration, `MJ: Archive Run Details.ArchiveRun` holds the configuration name instead of the run's start time. Its display name changes from "Archive Run Timestamp" to "Archive Run" (through metadata, with `AutoUpdateDisplayName` turned off so CodeGen keeps it).
 
 The PostgreSQL counterpart of the migration is generated at release time.

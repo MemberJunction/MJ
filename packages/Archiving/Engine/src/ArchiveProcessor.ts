@@ -3,7 +3,7 @@ import { BaseArchiveDriver } from './BaseArchiveDriver';
 import { ResolveArchiveDriver } from './ArchiveDriverResolver';
 import { ArchiveStorageManager } from './ArchiveStorageManager';
 import { ArchiveFieldConfiguration, ArchiveRecordContext, ArchiveStorageMode, IsPurgeStorageMode } from './types';
-import type { MJArchiveConfigurationEntity, MJArchiveConfigurationEntityEntity } from '@memberjunction/core-entities';
+import type { MJArchiveConfigurationEntity, MJArchiveConfigurationEntityEntity, MJArchiveRunEntity } from '@memberjunction/core-entities';
 
 /**
  * Result of processing a single entity within an archive run.
@@ -50,14 +50,14 @@ export class ArchiveProcessor {
     public async ProcessEntity(
         configEntity: MJArchiveConfigurationEntityEntity,
         config: MJArchiveConfigurationEntity,
-        archiveRun: BaseEntity,
+        archiveRun: MJArchiveRunEntity,
         storageManager: ArchiveStorageManager | null,
         contextUser: UserInfo
     ): Promise<EntityProcessingResult> {
-        const entityName = configEntity.Get('Entity') as string;
-        const driverClassName = configEntity.Get('DriverClass') as string | null;
+        const entityName = configEntity.Entity;
+        const driverClassName = configEntity.DriverClass;
         const batchSize = this.getBatchSize(configEntity, config);
-        const basePath = (config.Get('RootPath') as string) ?? '';
+        const basePath = config.RootPath ?? '';
 
         LogStatus(`ArchiveProcessor: Starting processing for entity "${entityName}" (batch size: ${batchSize})`);
 
@@ -85,10 +85,10 @@ export class ArchiveProcessor {
      * Parses the FieldConfiguration JSON column from the ArchiveConfigurationEntity record.
      * The FieldConfiguration column is NVARCHAR(MAX) storing JSON conforming to ArchiveFieldConfiguration.
      */
-    private parseFieldConfiguration(configEntity: BaseEntity): ArchiveFieldConfiguration {
-        const fieldConfigJson = configEntity.Get('FieldConfiguration') as string;
+    private parseFieldConfiguration(configEntity: MJArchiveConfigurationEntityEntity): ArchiveFieldConfiguration {
+        const fieldConfigJson = configEntity.FieldConfiguration;
         if (!fieldConfigJson) {
-            throw new Error(`ArchiveConfigurationEntity ${configEntity.Get('ID')} has no FieldConfiguration`);
+            throw new Error(`ArchiveConfigurationEntity ${configEntity.ID} has no FieldConfiguration`);
         }
 
         try {
@@ -97,7 +97,7 @@ export class ArchiveProcessor {
             return parsed;
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
-            throw new Error(`Invalid FieldConfiguration JSON on ArchiveConfigurationEntity ${configEntity.Get('ID')}: ${message}`);
+            throw new Error(`Invalid FieldConfiguration JSON on ArchiveConfigurationEntity ${configEntity.ID}: ${message}`);
         }
     }
 
@@ -180,9 +180,9 @@ export class ArchiveProcessor {
     /**
      * Determines the batch size from the entity config or parent config defaults.
      */
-    private getBatchSize(configEntity: BaseEntity, config: BaseEntity): number {
-        const entityBatchSize = configEntity.Get('BatchSize') as number | null;
-        const defaultBatchSize = config.Get('DefaultBatchSize') as number | null;
+    private getBatchSize(configEntity: MJArchiveConfigurationEntityEntity, config: MJArchiveConfigurationEntity): number {
+        const entityBatchSize = configEntity.BatchSize;
+        const defaultBatchSize = config.DefaultBatchSize;
         return entityBatchSize ?? defaultBatchSize ?? 100;
     }
 
@@ -196,7 +196,7 @@ export class ArchiveProcessor {
         fieldConfig: ArchiveFieldConfiguration,
         configEntity: MJArchiveConfigurationEntityEntity,
         config: MJArchiveConfigurationEntity,
-        archiveRun: BaseEntity,
+        archiveRun: MJArchiveRunEntity,
         storageManager: ArchiveStorageManager | null,
         basePath: string,
         batchSize: number,
@@ -228,7 +228,7 @@ export class ArchiveProcessor {
         fieldConfig: ArchiveFieldConfiguration,
         configEntity: MJArchiveConfigurationEntityEntity,
         config: MJArchiveConfigurationEntity,
-        archiveRun: BaseEntity,
+        archiveRun: MJArchiveRunEntity,
         storageManager: ArchiveStorageManager | null,
         basePath: string,
         contextUser: UserInfo
@@ -264,7 +264,7 @@ export class ArchiveProcessor {
         fieldConfig: ArchiveFieldConfiguration,
         configEntity: MJArchiveConfigurationEntityEntity,
         config: MJArchiveConfigurationEntity,
-        archiveRun: BaseEntity,
+        archiveRun: MJArchiveRunEntity,
         storageManager: ArchiveStorageManager | null,
         basePath: string,
         contextUser: UserInfo
@@ -310,7 +310,7 @@ export class ArchiveProcessor {
      * Creates an ArchiveRunDetail record to log the result of archiving a single record.
      */
     private async logArchiveRunDetail(
-        archiveRun: BaseEntity,
+        archiveRun: MJArchiveRunEntity,
         record: BaseEntity,
         archiveResult: { Success: boolean; StoragePath: string | null; BytesArchived: number; ErrorMessage?: string; Skipped?: boolean },
         contextUser: UserInfo
@@ -319,7 +319,7 @@ export class ArchiveProcessor {
             const md = this.Provider;
             const detail = await md.GetEntityObject('MJ: Archive Run Details', contextUser);
 
-            detail.Set('ArchiveRunID', archiveRun.Get('ID'));
+            detail.Set('ArchiveRunID', archiveRun.ID);
             detail.Set('EntityID', record.EntityInfo.ID);
             detail.Set('RecordID', record.PrimaryKey.Values());
             detail.Set('Status', archiveResult.Success ? 'Success' : 'Failed');

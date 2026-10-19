@@ -85,12 +85,12 @@ export class ArchiveEngine extends BaseSingleton<ArchiveEngine> {
                 return this.buildFailureResult('', `ArchiveConfiguration not found: ${configId}`);
             }
 
-            const isActive = config.Get('IsActive') as boolean;
+            const isActive = config.IsActive;
             if (!isActive) {
                 return this.buildFailureResult('', `ArchiveConfiguration "${config.Name}" is not active. Set IsActive to true before running.`, config.StorageMode);
             }
 
-            const status = config.Get('Status') as string;
+            const status = config.Status;
             if (status === 'Running') {
                 return this.buildFailureResult('', `ArchiveConfiguration "${config.Name}" is already running. Wait for the current run to complete.`, config.StorageMode);
             }
@@ -215,7 +215,7 @@ export class ArchiveEngine extends BaseSingleton<ArchiveEngine> {
      * Updates the ArchiveRun record with final totals and completion status.
      */
     private async finalizeArchiveRun(
-        archiveRun: BaseEntity,
+        archiveRun: MJArchiveRunEntity,
         totals: AggregatedTotals,
         contextUser: UserInfo
     ): Promise<void> {
@@ -229,7 +229,7 @@ export class ArchiveEngine extends BaseSingleton<ArchiveEngine> {
 
         const saved = await archiveRun.Save();
         if (!saved) {
-            LogError(`Failed to finalize ArchiveRun ${archiveRun.Get('ID')}: ${archiveRun.LatestResult?.Message ?? 'Unknown error'}`);
+            LogError(`Failed to finalize ArchiveRun ${archiveRun.ID}: ${archiveRun.LatestResult?.Message ?? 'Unknown error'}`);
         }
     }
 
@@ -271,8 +271,8 @@ export class ArchiveEngine extends BaseSingleton<ArchiveEngine> {
     /**
      * Initializes the ArchiveStorageManager from the configuration's storage account.
      */
-    private async initializeStorage(config: BaseEntity, contextUser: UserInfo): Promise<ArchiveStorageManager> {
-        const storageAccountId = config.Get('StorageAccountID') as string;
+    private async initializeStorage(config: MJArchiveConfigurationEntity, contextUser: UserInfo): Promise<ArchiveStorageManager> {
+        const storageAccountId = config.StorageAccountID;
         if (!storageAccountId) {
             throw new Error('ArchiveConfiguration has no StorageAccountID configured');
         }
@@ -293,7 +293,7 @@ export class ArchiveEngine extends BaseSingleton<ArchiveEngine> {
     private async processAllEntities(
         configEntities: MJArchiveConfigurationEntityEntity[],
         config: MJArchiveConfigurationEntity,
-        archiveRun: BaseEntity,
+        archiveRun: MJArchiveRunEntity,
         storageManager: ArchiveStorageManager | null,
         totals: AggregatedTotals,
         contextUser: UserInfo
@@ -309,7 +309,7 @@ export class ArchiveEngine extends BaseSingleton<ArchiveEngine> {
             totals.Skipped += entityResult.Skipped;
             totals.Bytes += entityResult.Bytes;
 
-            const entityName = configEntity.Get('Entity') as string;
+            const entityName = configEntity.Entity;
             LogStatus(
                 `ArchiveEngine: Entity "${entityName}" complete - ` +
                 `archived: ${entityResult.Archived}, failed: ${entityResult.Failed}, ` +

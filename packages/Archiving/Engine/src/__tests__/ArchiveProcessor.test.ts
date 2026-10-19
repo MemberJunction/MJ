@@ -3,7 +3,7 @@ import type { BaseEntity, UserInfo, RunView } from '@memberjunction/core';
 import type { ArchiveFieldConfiguration, ArchiveRecordContext } from '../types';
 import type { ArchiveStorageManager } from '../ArchiveStorageManager';
 import type { FileStorageBase } from '@memberjunction/storage';
-import type { MJArchiveConfigurationEntity, MJArchiveConfigurationEntityEntity } from '@memberjunction/core-entities';
+import type { MJArchiveConfigurationEntity, MJArchiveConfigurationEntityEntity, MJArchiveRunEntity } from '@memberjunction/core-entities';
 
 // ---- Mocks ----
 
@@ -80,6 +80,11 @@ interface MockBaseEntity {
     FilterExpression?: string | null;
     DefaultRetentionDays?: number;
     StorageMode?: 'Store' | 'Purge';
+    DriverClass?: string | null;
+    FieldConfiguration?: string;
+    BatchSize?: number | null;
+    RootPath?: string;
+    DefaultBatchSize?: number;
 }
 
 function createMockPrimaryKey(id: string) {
@@ -121,7 +126,7 @@ function createMockConfigEntity(fieldConfigJson: string, overrides?: Partial<Moc
             default: return null;
         }
     });
-    return entity;
+    return readTypedFieldsThroughGet(entity, ['Entity', 'DriverClass', 'FieldConfiguration', 'BatchSize'], overrides);
 }
 
 function createMockConfig(overrides?: Partial<MockBaseEntity>): MockBaseEntity {
@@ -134,8 +139,36 @@ function createMockConfig(overrides?: Partial<MockBaseEntity>): MockBaseEntity {
             default: return null;
         }
     });
-    return config;
+    return readTypedFieldsThroughGet(config, ['RootPath', 'DefaultBatchSize'], overrides);
 }
+
+/**
+ * Generated entity getters read through `Get`, so the mock's typed fields do the same: a test that
+ * stubs `Get` for a field sees the value through the property as well. An override, or a later
+ * assignment, wins over `Get`.
+ */
+function readTypedFieldsThroughGet(
+    entity: MockBaseEntity,
+    fields: ReadonlyArray<keyof MockBaseEntity>,
+    overrides?: Partial<MockBaseEntity>
+): MockBaseEntity {
+    for (const field of fields) {
+        if (overrides && field in overrides) continue;
+        let assigned = false;
+        let value = entity[field];
+        Object.defineProperty(entity, field, {
+            get: () => (assigned ? value : entity.Get(field) ?? value),
+            set: (next: MockBaseEntity[typeof field]) => {
+                assigned = true;
+                value = next;
+            },
+            configurable: true,
+            enumerable: true,
+        });
+    }
+    return entity;
+}
+
 
 function createMockStorageManager(): { Driver: MockStorageDriver } {
     return {
@@ -200,7 +233,7 @@ describe('ArchiveProcessor', () => {
             const result = await processor.ProcessEntity(
                 configEntity as unknown as MJArchiveConfigurationEntityEntity,
                 config as unknown as MJArchiveConfigurationEntity,
-                archiveRun as unknown as BaseEntity,
+                archiveRun as unknown as MJArchiveRunEntity,
                 storageManager as unknown as ArchiveStorageManager,
                 contextUser
             );
@@ -225,7 +258,7 @@ describe('ArchiveProcessor', () => {
             const result = await processor.ProcessEntity(
                 configEntity as unknown as MJArchiveConfigurationEntityEntity,
                 config as unknown as MJArchiveConfigurationEntity,
-                archiveRun as unknown as BaseEntity,
+                archiveRun as unknown as MJArchiveRunEntity,
                 storageManager as unknown as ArchiveStorageManager,
                 contextUser
             );
@@ -253,7 +286,7 @@ describe('ArchiveProcessor', () => {
             const result = await processor.ProcessEntity(
                 configEntity as unknown as MJArchiveConfigurationEntityEntity,
                 config as unknown as MJArchiveConfigurationEntity,
-                archiveRun as unknown as BaseEntity,
+                archiveRun as unknown as MJArchiveRunEntity,
                 storageManager as unknown as ArchiveStorageManager,
                 contextUser
             );
@@ -274,7 +307,7 @@ describe('ArchiveProcessor', () => {
             const result = await processor.ProcessEntity(
                 configEntity as unknown as MJArchiveConfigurationEntityEntity,
                 config as unknown as MJArchiveConfigurationEntity,
-                archiveRun as unknown as BaseEntity,
+                archiveRun as unknown as MJArchiveRunEntity,
                 storageManager as unknown as ArchiveStorageManager,
                 contextUser
             );
@@ -317,7 +350,7 @@ describe('ArchiveProcessor', () => {
             const result = await processor.ProcessEntity(
                 configEntity as unknown as MJArchiveConfigurationEntityEntity,
                 config as unknown as MJArchiveConfigurationEntity,
-                archiveRun as unknown as BaseEntity,
+                archiveRun as unknown as MJArchiveRunEntity,
                 storageManager as unknown as ArchiveStorageManager,
                 contextUser
             );
@@ -369,7 +402,7 @@ describe('ArchiveProcessor', () => {
             const result = await processor.ProcessEntity(
                 configEntity as unknown as MJArchiveConfigurationEntityEntity,
                 config as unknown as MJArchiveConfigurationEntity,
-                archiveRun as unknown as BaseEntity,
+                archiveRun as unknown as MJArchiveRunEntity,
                 storageManager as unknown as ArchiveStorageManager,
                 contextUser
             );
@@ -395,7 +428,7 @@ describe('ArchiveProcessor', () => {
             const result = await processor.ProcessEntity(
                 configEntity as unknown as MJArchiveConfigurationEntityEntity,
                 config as unknown as MJArchiveConfigurationEntity,
-                archiveRun as unknown as BaseEntity,
+                archiveRun as unknown as MJArchiveRunEntity,
                 storageManager as unknown as ArchiveStorageManager,
                 contextUser
             );
@@ -427,7 +460,7 @@ describe('ArchiveProcessor', () => {
             await expect(processor.ProcessEntity(
                 configEntity as unknown as MJArchiveConfigurationEntityEntity,
                 config as unknown as MJArchiveConfigurationEntity,
-                archiveRun as unknown as BaseEntity,
+                archiveRun as unknown as MJArchiveRunEntity,
                 storageManager as unknown as ArchiveStorageManager,
                 contextUser
             )).rejects.toThrow('Archive driver "NonExistentDriver" is not registered');
@@ -447,7 +480,7 @@ describe('ArchiveProcessor', () => {
                 processor.ProcessEntity(
                     configEntity as unknown as MJArchiveConfigurationEntityEntity,
                     config as unknown as MJArchiveConfigurationEntity,
-                    archiveRun as unknown as BaseEntity,
+                    archiveRun as unknown as MJArchiveRunEntity,
                     storageManager as unknown as ArchiveStorageManager,
                     contextUser
                 )
@@ -472,7 +505,7 @@ describe('ArchiveProcessor', () => {
                 processor.ProcessEntity(
                     configEntity as unknown as MJArchiveConfigurationEntityEntity,
                     config as unknown as MJArchiveConfigurationEntity,
-                    archiveRun as unknown as BaseEntity,
+                    archiveRun as unknown as MJArchiveRunEntity,
                     storageManager as unknown as ArchiveStorageManager,
                     contextUser
                 )
@@ -491,7 +524,7 @@ describe('ArchiveProcessor', () => {
                 processor.ProcessEntity(
                     configEntity as unknown as MJArchiveConfigurationEntityEntity,
                     config as unknown as MJArchiveConfigurationEntity,
-                    archiveRun as unknown as BaseEntity,
+                    archiveRun as unknown as MJArchiveRunEntity,
                     storageManager as unknown as ArchiveStorageManager,
                     contextUser
                 )
@@ -511,7 +544,7 @@ describe('ArchiveProcessor', () => {
                 processor.ProcessEntity(
                     configEntity as unknown as MJArchiveConfigurationEntityEntity,
                     config as unknown as MJArchiveConfigurationEntity,
-                    archiveRun as unknown as BaseEntity,
+                    archiveRun as unknown as MJArchiveRunEntity,
                     storageManager as unknown as ArchiveStorageManager,
                     contextUser
                 )
@@ -530,7 +563,7 @@ describe('ArchiveProcessor', () => {
                 processor.ProcessEntity(
                     configEntity as unknown as MJArchiveConfigurationEntityEntity,
                     config as unknown as MJArchiveConfigurationEntity,
-                    archiveRun as unknown as BaseEntity,
+                    archiveRun as unknown as MJArchiveRunEntity,
                     storageManager as unknown as ArchiveStorageManager,
                     contextUser
                 )
@@ -554,7 +587,7 @@ describe('ArchiveProcessor', () => {
             await processor.ProcessEntity(
                 configEntity as unknown as MJArchiveConfigurationEntityEntity,
                 config as unknown as MJArchiveConfigurationEntity,
-                createMockEntity({ ID: 'run-1' }) as unknown as BaseEntity,
+                createMockEntity({ ID: 'run-1' }) as unknown as MJArchiveRunEntity,
                 createMockStorageManager() as unknown as ArchiveStorageManager,
                 { ID: 'user-1' } as unknown as UserInfo
             );
@@ -618,7 +651,7 @@ describe('ArchiveProcessor', () => {
             await processor.ProcessEntity(
                 createMockConfigEntity(validFieldConfigJson) as unknown as MJArchiveConfigurationEntityEntity,
                 createMockConfig({ StorageMode: storageMode }) as unknown as MJArchiveConfigurationEntity,
-                createMockEntity({ ID: 'run-1' }) as unknown as BaseEntity,
+                createMockEntity({ ID: 'run-1' }) as unknown as MJArchiveRunEntity,
                 storageManager as unknown as ArchiveStorageManager | null,
                 { ID: 'user-1' } as unknown as UserInfo
             );

@@ -28,10 +28,12 @@ interface MockBaseEntity {
     FailedRecords?: number;
     SkippedRecords?: number;
     TotalBytesArchived?: number;
+    IsActive?: boolean;
+    StorageAccountID?: string | null;
 }
 
 function createMockEntity(overrides?: Partial<MockBaseEntity>): MockBaseEntity {
-    return {
+    const entity: MockBaseEntity = {
         ID: 'entity-1',
         EntityInfo: { Name: 'Test Entity', ID: 'entity-id-1' },
         PrimaryKey: { KeyValuePairs: [{ FieldName: 'ID', Value: 'entity-1' }] },
@@ -43,6 +45,34 @@ function createMockEntity(overrides?: Partial<MockBaseEntity>): MockBaseEntity {
         InnerLoad: vi.fn().mockResolvedValue(true),
         ...overrides,
     };
+    return readTypedFieldsThroughGet(entity, ['ID', 'IsActive', 'Status', 'StorageAccountID', 'Entity'], overrides);
+}
+
+/**
+ * Generated entity getters read through `Get`, so the mock's typed fields do the same: a test that
+ * stubs `Get` for a field sees the value through the property as well. An override, or a later
+ * assignment, wins over `Get`.
+ */
+function readTypedFieldsThroughGet(
+    entity: MockBaseEntity,
+    fields: ReadonlyArray<keyof MockBaseEntity>,
+    overrides?: Partial<MockBaseEntity>
+): MockBaseEntity {
+    for (const field of fields) {
+        if (overrides && field in overrides) continue;
+        let assigned = false;
+        let value = entity[field];
+        Object.defineProperty(entity, field, {
+            get: () => (assigned ? value : entity.Get(field) ?? value),
+            set: (next: MockBaseEntity[typeof field]) => {
+                assigned = true;
+                value = next;
+            },
+            configurable: true,
+            enumerable: true,
+        });
+    }
+    return entity;
 }
 
 // Track what RunView returns for different entity queries
