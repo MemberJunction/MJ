@@ -243,7 +243,7 @@ export class TaskGraphContinuationDeliverer implements TaskContinuationDeliverer
                     role: ChatMessageRole.user,
                     content:
                         `${renderedContinuationMessage}\n\n` +
-                        `Please synthesize ALL completed workflow steps above into a clear, direct, comprehensive final response for the user (covering every step's findings, SQL queries, data tables, strategic analysis, and report summaries).`,
+                        `Please synthesize ALL workflow steps above into a clear, direct, comprehensive final response for the user (covering every completed step's findings, SQL queries, data tables, strategic analysis, and report summaries, and briefly explaining any conditional steps that were skipped because their prerequisite condition was not met).`,
                 }],
                 // Prevent the continuation synthesis turn from auto-hydrating an unrelated artifact
                 // from an earlier conversation turn into payload.
@@ -570,23 +570,41 @@ export class TaskGraphContinuationDeliverer implements TaskContinuationDeliverer
                 },
                 this.contextUser,
             );
-            if (!res.Success || !res.Results || res.Results.length === 0) {
-                return params;
-            }
             const outputById = new Map<string, string>();
-            for (const row of res.Results) {
-                if (row.ID && row.OutputPayload) {
-                    outputById.set(row.ID.toLowerCase(), row.OutputPayload);
+            const nameById = new Map<string, string>();
+            for (const row of res.Results ?? []) {
+                if (row.ID) {
+                    const lower = row.ID.toLowerCase();
+                    if (row.Name) {
+                        nameById.set(lower, row.Name);
+                    }
+                    if (row.OutputPayload) {
+                        outputById.set(lower, row.OutputPayload);
+                    }
                 }
             }
-            if (outputById.size === 0) {
+            for (const t of params.Tasks) {
+                if (t.TaskID && t.Name && !nameById.has(t.TaskID.toLowerCase())) {
+                    nameById.set(t.TaskID.toLowerCase(), t.Name);
+                }
+            }
+
+            const skippedReasonById = await this.resolveSkippedTaskReasons(params, rv, nameById);
+            if (outputById.size === 0 && skippedReasonById.size === 0) {
                 return params;
             }
             const seenUpstreamKeyValues = new Map<string, string>();
             return {
                 ...params,
                 Tasks: params.Tasks.map((task) => {
-                    const rawOutput = outputById.get(task.TaskID.toLowerCase());
+                    const lowerId = task.TaskID.toLowerCase();
+                    if (task.Status === 'Skipped' && !task.Summary) {
+                        const skipReason = skippedReasonById.get(lowerId);
+                        if (skipReason) {
+                            return { ...task, Summary: skipReason };
+                        }
+                    }
+                    const rawOutput = outputById.get(lowerId);
                     if (!rawOutput) {
                         return task;
                     }
@@ -602,6 +620,87 @@ export class TaskGraphContinuationDeliverer implements TaskContinuationDeliverer
         } catch {
             return params;
         }
+    }
+
+    /**
+     * Resolves a human-readable explanation for each `Skipped` task in `params.Tasks` by inspecting
+     * its `MJ: Task Dependencies` (`Condition` and upstream prerequisite status).
+     */
+    private async resolveSkippedTaskReasons(
+        params: TaskContinuationParams,
+        rv: RunView,
+        nameById: Map<string, string>,
+    ): Promise<Map<string, string>> {
+        const reasons = new Map<string, string>();
+        const skippedTasks = params.Tasks.filter((t) => t.Status === 'Skipped' && Boolean(t.TaskID));
+        if (skippedTasks.length === 0) {
+            return reasons;
+        }
+        try {
+            const quotedIds = skippedTasks
+                .map((t) => `'${t.TaskID.replace(/'/g, "''")}'`)
+                .join(',');
+            const depRes = await rv.RunView<{
+                TaskID: string;
+                DependsOnTaskID: string;
+                Condition: string | null;
+            }>(
+                {
+                    EntityName: 'MJ: Task Dependencies',
+                    ExtraFilter: `TaskID IN (${quotedIds})`,
+                    Fields: ['TaskID', 'DependsOnTaskID', 'Condition'],
+                    ResultType: 'simple',
+                    BypassCache: true,
+                },
+                this.contextUser,
+            );
+            const statusById = new Map<string, string>();
+            for (const t of params.Tasks) {
+                if (t.TaskID) {
+                    statusById.set(t.TaskID.toLowerCase(), t.Status);
+                }
+            }
+            const depsByTask = new Map<string, Array<{ DependsOnTaskID: string; Condition: string | null }>>();
+            for (const dep of depRes.Results ?? []) {
+                if (!dep.TaskID) continue;
+                const key = dep.TaskID.toLowerCase();
+                const list = depsByTask.get(key) ?? [];
+                list.push(dep);
+                depsByTask.set(key, list);
+            }
+            for (const skipped of skippedTasks) {
+                const lower = skipped.TaskID.toLowerCase();
+                const deps = depsByTask.get(lower) ?? [];
+                const parts: string[] = [];
+                for (const dep of deps) {
+                    const prereqKey = dep.DependsOnTaskID?.toLowerCase() ?? '';
+                    const prereqName = nameById.get(prereqKey);
+                    const prereqStatus = statusById.get(prereqKey);
+                    if (dep.Condition && dep.Condition.trim()) {
+                        parts.push(
+                            prereqName
+                                ? `branch condition \`${dep.Condition.trim()}\` on "${prereqName}" evaluated to false`
+                                : `branch condition \`${dep.Condition.trim()}\` evaluated to false`,
+                        );
+                    } else if (prereqStatus === 'Skipped' || prereqStatus === 'Failed') {
+                        parts.push(
+                            prereqName
+                                ? `prerequisite "${prereqName}" was ${prereqStatus}`
+                                : `prerequisite task was ${prereqStatus}`,
+                        );
+                    }
+                }
+                reasons.set(
+                    lower,
+                    parts.length > 0
+                        ? parts.join('; ')
+                        : 'prerequisite branch condition evaluated to false',
+                );
+            }
+        } catch {
+            // Optional dependency lookup; return empty map on failure.
+        }
+        return reasons;
     }
 
     /**
@@ -772,6 +871,7 @@ export class TaskGraphContinuationDeliverer implements TaskContinuationDeliverer
             case 'Complete': return '✅';
             case 'Failed': return '❌';
             case 'Cancelled': return '⊘';
+            case 'Skipped': return '⏭️';
             default: return '•';
         }
     }
