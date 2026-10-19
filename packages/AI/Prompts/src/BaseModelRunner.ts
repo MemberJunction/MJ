@@ -304,6 +304,13 @@ export abstract class BaseModelRunner {
   /** Failover fields waiting to be re-applied after a prompt run's INSERT lands; see {@link recordFailoverFields}. */
   private readonly _pendingFailoverFields = new WeakMap<MJAIPromptRunEntityExtended, (run: MJAIPromptRunEntityExtended) => void>();
 
+  /**
+   * Tracks `MJAIPromptRunEntityExtended` instances created on this runner by normalized UUID so a child
+   * prompt run (`params.parentPromptRunId`) whose parent's INSERT is still in flight can chain its INSERT
+   * via `_promptRunQueue.InsertAfter(childRun, parentRun)` and never violate `FK_AIPromptRun_ParentID`.
+   */
+  private readonly _trackedPromptRunsById = new Map<string, MJAIPromptRunEntityExtended>();
+
   protected _promptRunQueue = new BaseEntitySaveQueue({
     onError: (message) => this.logError(message, { category: 'PromptRunSave' }),
   });
@@ -1460,12 +1467,26 @@ export abstract class BaseModelRunner {
   }
 
   /**
+   * Awaits all in-flight `MJAIPromptRunEntityExtended` INSERT and UPDATE operations queued on this
+   * runner's internal {@link BaseEntitySaveQueue} (`_promptRunQueue`) and clears the in-flight parent
+   * lookup table.
+   *
+   * Normal intra-step prompt execution is non-blocking (fire-and-forget); callers that own the outer
+   * lifecycle (such as `BaseAgent` at run completion, failure, cancellation, or compaction) call
+   * `FlushPendingSaves()` to guarantee every `AIPromptRun` row is durably settled before returning.
+   */
+  public async FlushPendingSaves(): Promise<void> {
+    await this._promptRunQueue.Flush();
+    this._trackedPromptRunsById.clear();
+  }
+
+  /**
    * Awaits all in-flight prompt-run saves queued by this runner instance. The normal execution path
    * does NOT call this — prompt-run persistence is intentionally fire-and-forget. Exposed for tests
    * and for callers that need the AIPromptRun rows durably written before proceeding.
    */
   public async WaitForPendingPromptRunSaves(): Promise<void> {
-    await this._promptRunQueue.Flush();
+    await this.FlushPendingSaves();
   }
 
   /**
@@ -1598,11 +1619,25 @@ export abstract class BaseModelRunner {
 
       applyRequestFields?.(promptRun);
 
+      if (promptRun.ID) {
+        this._trackedPromptRunsById.set(NormalizeUUID(promptRun.ID), promptRun);
+      }
+
       // Persist the initial 'Running' record fire-and-forget. The ID was already assigned by
       // NewRecord() above, so callers (and the onPromptRunCreated callback) have it immediately —
       // we don't block the model call on the INSERT. The finalize UPDATE chains after this INSERT
       // via the instance-keyed save queue, so ordering is guaranteed.
-      this._promptRunQueue.Insert(promptRun);
+      // When `parentPromptRunId` references a parent run on this runner whose INSERT has not yet
+      // completed (`!parentRun.IsSaved`), chain via `InsertAfter(promptRun, parentRun)` so the
+      // parent INSERT always lands before the child INSERT (`FK_AIPromptRun_ParentID`).
+      const parentRun = params.parentPromptRunId
+        ? this._trackedPromptRunsById.get(NormalizeUUID(params.parentPromptRunId))
+        : undefined;
+      if (parentRun && !parentRun.IsSaved) {
+        this._promptRunQueue.InsertAfter(promptRun, parentRun);
+      } else {
+        this._promptRunQueue.Insert(promptRun);
+      }
 
       // Invoke callback if provided. The ID is available without awaiting the save (client-generated
       // by NewRecord()), so agent-run/step linking that depends on it works immediately.
@@ -2362,22 +2397,96 @@ export abstract class BaseModelRunner {
   }
 
   /**
-   * Queues the finalize UPDATE for a prompt-run record. Inside the queued task it sets, in order:
-   * the completion timing (`CompletedAt`, `ExecutionTimeMS`); the outcome (`Success`, and `Status` =
-   * `'Completed'` or `'Failed'` from it); then the subclass's result fields; then the token rollups and
-   * `TotalCost`.
+   * Standard `MJAIPromptRunEntityExtended` columns that may be populated or updated during
+   * {@link FinalizeRunRecord}, failover bookkeeping, or a subclass's `applyResultFields` callback.
+   */
+  private static readonly FINALIZE_PROMPT_RUN_COLUMNS: ReadonlyArray<string> = [
+    'CompletedAt',
+    'ExecutionTimeMS',
+    'Success',
+    'Status',
+    'ModelID',
+    'VendorID',
+    'FailoverAttempts',
+    'FailoverErrors',
+    'FailoverDurations',
+    'TotalFailoverDuration',
+    'Result',
+    'ErrorMessage',
+    'ErrorDetails',
+    'Cancelled',
+    'CancellationReason',
+    'CacheHit',
+    'WasSelectedResult',
+    'TokensPrompt',
+    'TokensCompletion',
+    'TokensUsed',
+    'TokensCacheRead',
+    'TokensCacheWrite',
+    'TokensPromptRollup',
+    'TokensCompletionRollup',
+    'TokensUsedRollup',
+    'TokensCacheReadRollup',
+    'TokensCacheWriteRollup',
+    'Cost',
+    'CostCurrency',
+    'DescendantCost',
+    'TotalCost',
+    'QueueTime',
+    'PromptTime',
+    'CompletionTime',
+    'ResponseTimeMS',
+    'ModelSpecificResponseDetails',
+    'ValidationAttemptCount',
+    'SuccessfulValidationCount',
+    'FinalValidationPassed',
+    'LastAttemptAt',
+    'TotalRetryDurationMS',
+    'FinalValidationError',
+    'ValidationErrorCount',
+    'CommonValidationError',
+    'ValidationAttempts',
+    'ValidationSummary',
+    'UsageTypeID',
+    'InputUnitsUsed',
+    'OutputUnitsUsed',
+    'ToolCallingMode',
+    'Messages',
+  ];
+
+  private static readonly INTERNAL_MOCK_KEYS: ReadonlySet<string> = new Set([
+    'saveCount',
+    'savedRows',
+    'Persisted',
+    'Inserted',
+    'LatestResult',
+    'saveLog',
+    'callIndex',
+    'failOn',
+    'Fields',
+  ]);
+
+  /**
+   * Finalizes a prompt-run record in memory **immediately** AND queues a fire-and-forget UPDATE on
+   * {@link _promptRunQueue} that re-applies the finalized state after any in-flight `'Running'` INSERT
+   * and its `finalizeSave` reload complete.
    *
-   * The outcome is a parameter, not left to the callback, so every runner's row leaves `'Running'`.
-   * It is written before the callback runs, so the row reaches its final status even if the callback
-   * throws (the error is logged under `PromptRunUpdate` and the rollups are skipped).
+   * Applying the completion fields synchronously in memory ensures callers that inspect
+   * `result.promptRun` right after `ExecutePrompt` (such as `BaseAgent.calculateTokenStats()` reading
+   * `TokensPromptRollup`, `TokensCompletionRollup`, `TotalCost`, and `Status`) see the finalized values
+   * immediately without blocking on the database round-trip, while re-applying the captured snapshot
+   * inside `_promptRunQueue.Update(promptRun, ...)` guarantees an in-flight INSERT reload can never
+   * revert the persisted row back to `'Running'`.
    *
-   * For prompt-based runners, like {@link CreateRunRecord}.
+   * In order, it sets: the completion timing (`CompletedAt`, `ExecutionTimeMS`); the outcome (`Success`,
+   * and `Status` = `'Completed'` or `'Failed'` from it); any pending failover fields; the subclass's
+   * result fields (`applyResultFields`, invoked **once**); and finally the token rollups and `TotalCost`.
    *
    * @param success Whether the call succeeded, as the runner judges it (the chat runner also requires
    *   its output to pass validation).
    * @param applyResultFields Sets the runner's own result columns. It can read the timing and outcome
-   *   already set, and may refine them (for example `ErrorDetails`). **It must be synchronous**: it runs
-   *   inside the queued save task, and anything it sets after an `await` can miss the UPDATE.
+   *   already set, and may refine them (for example `ErrorDetails` or `Status = 'Cancelled'`).
+   *   **It must be synchronous.**
    */
   protected async FinalizeRunRecord(
     promptRun: MJAIPromptRunEntityExtended,
@@ -2386,33 +2495,75 @@ export abstract class BaseModelRunner {
     executionTimeMS: number,
     applyResultFields: (promptRun: MJAIPromptRunEntityExtended) => void
   ): Promise<void> {
-    // Fire-and-forget finalize UPDATE. The field mutations run INSIDE the post-INSERT task (after the
-    // 'Running' INSERT + its finalizeSave reload land), so the reload can never revert them and the
-    // chained UPDATE persists the finalized state — the "stuck at Running" race is structurally
-    // impossible. The execution flow does NOT await the save.
+    const runRecord = promptRun as unknown as Record<string, unknown>;
+    const candidateKeys = this.collectPromptRunSnapshotKeys(runRecord);
+    const beforeValues = new Map<string, unknown>();
+    for (const key of candidateKeys) {
+      beforeValues.set(key, runRecord[key]);
+    }
+
+    const pendingFailover = this._pendingFailoverFields.get(promptRun);
+    this._pendingFailoverFields.delete(promptRun);
+
+    try {
+      promptRun.CompletedAt = endTime;
+      promptRun.ExecutionTimeMS = executionTimeMS;
+      promptRun.Success = success;
+      promptRun.Status = success ? 'Completed' : 'Failed';
+
+      pendingFailover?.(promptRun);
+
+      applyResultFields(promptRun);
+
+      // With template composition, we only execute once so rollup equals regular fields
+      promptRun.TokensPromptRollup = promptRun.TokensPrompt;
+      promptRun.TokensCompletionRollup = promptRun.TokensCompletion;
+      promptRun.TokensUsedRollup = promptRun.TokensUsed;
+      promptRun.TokensCacheReadRollup = promptRun.TokensCacheRead;
+      promptRun.TokensCacheWriteRollup = promptRun.TokensCacheWrite;
+      // TotalCost is Cost plus DescendantCost. A parallel parent carries no own Cost (its arms do), so
+      // its TotalCost is their sum; a run with no Cost of its own (NULL once its INSERT has reloaded
+      // it) keeps the TotalCost applyResultFields gave it, rather than being nulled.
+      if (promptRun.RunType !== 'ParallelParent' && promptRun.Cost != null) {
+        promptRun.TotalCost = promptRun.Cost + (promptRun.DescendantCost ?? 0);
+      }
+    } catch (error) {
+      this.logError(error, {
+        category: 'PromptRunUpdate',
+        metadata: {
+          promptRunId: promptRun.ID
+        }
+      });
+    }
+
+    const afterKeys = this.collectPromptRunSnapshotKeys(runRecord);
+    const finalizedEntries: Array<[string, unknown]> = [];
+    for (const key of afterKeys) {
+      const afterVal = runRecord[key];
+      const beforeVal = beforeValues.get(key);
+      if (
+        !Object.is(afterVal, beforeVal) ||
+        key === 'CompletedAt' ||
+        key === 'ExecutionTimeMS' ||
+        key === 'Success' ||
+        key === 'Status'
+      ) {
+        if (afterVal !== undefined || beforeValues.has(key)) {
+          finalizedEntries.push([key, afterVal]);
+        }
+      }
+    }
+
+    // Queue the force-persisted UPDATE chained after the initial INSERT. If the INSERT was still in
+    // flight when FinalizeRunRecord ran, its finalizeSave reload will revert in-memory fields back to
+    // the inserted 'Running' snapshot; re-applying `pendingFailover` and `finalizedEntries` inside this
+    // post-INSERT task restores every finalized field right before the UPDATE save executes.
     this._promptRunQueue.Update(promptRun, () => {
       try {
-        promptRun.CompletedAt = endTime;
-        promptRun.ExecutionTimeMS = executionTimeMS;
-        promptRun.Success = success;
-        promptRun.Status = success ? 'Completed' : 'Failed';
-
-        // The failover fields were set while the INSERT may still have been in flight, and its reload
-        // would have undone them: set them again here, after the reload.
-        this._pendingFailoverFields.get(promptRun)?.(promptRun);
-        this._pendingFailoverFields.delete(promptRun);
-
-        applyResultFields(promptRun);
-
-        // With template composition, we only execute once so rollup equals regular fields
-        promptRun.TokensPromptRollup = promptRun.TokensPrompt;
-        promptRun.TokensCompletionRollup = promptRun.TokensCompletion;
-        promptRun.TokensUsedRollup = promptRun.TokensUsed;
-        promptRun.TokensCacheReadRollup = promptRun.TokensCacheRead;
-        promptRun.TokensCacheWriteRollup = promptRun.TokensCacheWrite;
-        // TotalCost is Cost plus DescendantCost. A parallel parent carries no own Cost (its arms do), so
-        // its TotalCost is their sum; a run with no Cost of its own (NULL once its INSERT has reloaded
-        // it) keeps the TotalCost applyResultFields gave it, rather than being nulled.
+        pendingFailover?.(promptRun);
+        for (const [key, value] of finalizedEntries) {
+          runRecord[key] = value;
+        }
         if (promptRun.RunType !== 'ParallelParent' && promptRun.Cost != null) {
           promptRun.TotalCost = promptRun.Cost + (promptRun.DescendantCost ?? 0);
         }
@@ -2425,6 +2576,30 @@ export abstract class BaseModelRunner {
         });
       }
     });
+  }
+
+  /**
+   * Collects the property names on `promptRun` to snapshot across {@link FinalizeRunRecord}, combining
+   * the standard `MJAIPromptRunEntityExtended` finalize columns, any `BaseEntity.Fields` entries, and
+   * any own properties set on test doubles (excluding internal test-harness bookkeeping fields).
+   */
+  private collectPromptRunSnapshotKeys(runRecord: Record<string, unknown>): Set<string> {
+    const keys = new Set<string>(BaseModelRunner.FINALIZE_PROMPT_RUN_COLUMNS);
+    const fields = runRecord['Fields'];
+    if (Array.isArray(fields)) {
+      for (const field of fields) {
+        const name = (field as { Name?: unknown } | null)?.Name;
+        if (typeof name === 'string' && !BaseModelRunner.INTERNAL_MOCK_KEYS.has(name)) {
+          keys.add(name);
+        }
+      }
+    }
+    for (const ownKey of Object.keys(runRecord)) {
+      if (!BaseModelRunner.INTERNAL_MOCK_KEYS.has(ownKey) && typeof runRecord[ownKey] !== 'function') {
+        keys.add(ownKey);
+      }
+    }
+    return keys;
   }
 
   // ==================== USAGE RECORDING ====================

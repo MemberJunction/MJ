@@ -2270,15 +2270,17 @@ export class RealtimeClientSessionService {
         // CancelRealtimeSessionTool mutation) can abort it mid-flight. The registry controller's
         // signal is combined with any caller-supplied signal — either source cancels the run.
         const controller = this.registerInFlightDelegation(input.AgentSessionID, input.Call.CallID);
+        const combined = this.combineSignals(controller.signal, input.AbortSignal);
         const effectiveInput: ExecuteRelayedToolInput = {
             ...input,
-            AbortSignal: input.AbortSignal ? this.combineSignals(controller.signal, input.AbortSignal) : controller.signal
+            AbortSignal: combined.Signal
         };
         try {
             const broker = this.buildToolBroker(effectiveInput, contextUser, provider);
             const result = await broker.ExecuteToolCall(effectiveInput.Call);
             return { ResultJson: result.ResultJson, Success: result.Success, PausedRunID: result.PausedRunID, Artifacts: result.Artifacts };
         } finally {
+            combined.Dispose();
             this.unregisterInFlightDelegation(input.AgentSessionID, input.Call.CallID, controller);
         }
     }
@@ -3678,24 +3680,29 @@ export class RealtimeClientSessionService {
         const requestText = this.parseDelegateRequestText(request.Arguments);
         const parentRun = await this.loadParentRun(input.ParentRunID, contextUser, provider);
         const runner = new AgentRunner(provider);
-        return runner.RunAgent({
-            agent: target,
-            conversationMessages: [{ role: 'user', content: requestText }],
-            contextUser,
-            // Attribution and context-memory scope follow the PERSON, not the executing principal —
-            // see `ExecuteRelayedToolInput.AttributionUserID`. Undefined ⇒ base-agent falls back to
-            // `contextUser.ID`, preserving today's behavior for every non-elevated caller.
-            userId: input.AttributionUserID,
-            provider,
-            cancellationToken: this.combineSignals(request.AbortSignal, input.AbortSignal),
-            parentRun: parentRun ?? undefined,
-            agentSessionID: input.AgentSessionID,
-            sessionID: input.BrowserSessionID,
-            data: input.AppContext ? { appContext: input.AppContext } : undefined,
-            onProgress: input.OnProgress,
-            lastRunId: input.ResumeRunID,
-            autoPopulateLastRunPayload: input.ResumeRunID ? true : undefined
-        });
+        const combined = this.combineSignals(request.AbortSignal, input.AbortSignal);
+        try {
+            return await runner.RunAgent({
+                agent: target,
+                conversationMessages: [{ role: 'user', content: requestText }],
+                contextUser,
+                // Attribution and context-memory scope follow the PERSON, not the executing principal —
+                // see `ExecuteRelayedToolInput.AttributionUserID`. Undefined ⇒ base-agent falls back to
+                // `contextUser.ID`, preserving today's behavior for every non-elevated caller.
+                userId: input.AttributionUserID,
+                provider,
+                cancellationToken: combined.Signal,
+                parentRun: parentRun ?? undefined,
+                agentSessionID: input.AgentSessionID,
+                sessionID: input.BrowserSessionID,
+                data: input.AppContext ? { appContext: input.AppContext } : undefined,
+                onProgress: input.OnProgress,
+                lastRunId: input.ResumeRunID,
+                autoPopulateLastRunPayload: input.ResumeRunID ? true : undefined
+            });
+        } finally {
+            combined.Dispose();
+        }
     }
 
     /**
@@ -4121,26 +4128,34 @@ export class RealtimeClientSessionService {
 
     /**
      * Combines the broker's per-call abort signal with an optional caller-supplied signal so either
-     * source can cancel the delegated run. Returns the broker signal alone when no caller signal is
-     * present (the common case), avoiding an unnecessary controller.
+     * source can cancel the delegated run, paired with a `Dispose` callback that removes the
+     * forwarding listeners when the call finishes so a long-lived caller signal does not retain one
+     * closure per relayed tool call. Short-circuits when no distinct caller signal is present.
      *
      * @param brokerSignal The broker-owned per-call abort signal (always present).
-     * @param callerSignal An optional caller signal (e.g. a request-scoped barge-in).
-     * @returns A single abort signal that fires when either source aborts.
+     * @param callerSignal An optional caller signal (e.g. a request-scoped or session-scoped barge-in).
+     * @returns The combined abort signal and a disposer that removes its forwarding listeners.
      */
-    private combineSignals(brokerSignal: AbortSignal, callerSignal?: AbortSignal): AbortSignal {
-        if (!callerSignal) {
-            return brokerSignal;
+    private combineSignals(
+        brokerSignal: AbortSignal,
+        callerSignal?: AbortSignal
+    ): { Signal: AbortSignal; Dispose: () => void } {
+        if (!callerSignal || callerSignal === brokerSignal) {
+            return { Signal: brokerSignal, Dispose: () => undefined };
         }
         const controller = new AbortController();
         const abort = () => controller.abort();
         if (brokerSignal.aborted || callerSignal.aborted) {
             controller.abort();
-        } else {
-            brokerSignal.addEventListener('abort', abort, { once: true });
-            callerSignal.addEventListener('abort', abort, { once: true });
+            return { Signal: controller.signal, Dispose: () => undefined };
         }
-        return controller.signal;
+        brokerSignal.addEventListener('abort', abort, { once: true });
+        callerSignal.addEventListener('abort', abort, { once: true });
+        const dispose = () => {
+            brokerSignal.removeEventListener('abort', abort);
+            callerSignal.removeEventListener('abort', abort);
+        };
+        return { Signal: controller.signal, Dispose: dispose };
     }
 
     /**

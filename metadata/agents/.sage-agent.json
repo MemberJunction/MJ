@@ -36,6 +36,10 @@
       },
       "TypeConfiguration": {
         "realtime": {
+          "video": {
+            "enabled": true,
+            "avatarId": "Ben"
+          },
           "directActions": {
             "enabled": true,
             "timeoutMs": 8000,
@@ -979,8 +983,8 @@
       "ID": "3AB78346-897F-4238-AA6A-F10A131CC691"
     },
     "sync": {
-      "lastModified": "2026-09-21T02:45:37.105Z",
-      "checksum": "4fe54fe156517a51154e5277e2ccf1eec0b5a875bca4d52d7b6d66bb0d3a9b00"
+      "lastModified": "2026-10-18T13:09:46.268Z",
+      "checksum": "cbe4237db70e69afbd5c52b260d8773f8cf73b9148bc70fcfa55d525671b74d5"
     }
   }
 ]

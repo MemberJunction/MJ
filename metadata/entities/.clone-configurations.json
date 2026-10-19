@@ -9,7 +9,8 @@
         "Clone": {
           "NotCloneable": true,
           "NotCloneableReason": "Clone audit logs cannot be cloned."
-        }
+        },
+        "SaveReturnMode": "datestamps_only"
       }
     },
     "primaryKey": {
@@ -30,7 +31,8 @@
         "Clone": {
           "NotCloneable": true,
           "NotCloneableReason": "Clone audit log items cannot be cloned."
-        }
+        },
+        "SaveReturnMode": "datestamps_only"
       }
     },
     "primaryKey": {
@@ -680,7 +682,8 @@
           "Enabled": false,
           "NotCloneable": true,
           "NotCloneableReason": "Runtime execution history"
-        }
+        },
+        "SaveReturnMode": "datestamps_only"
       }
     },
     "primaryKey": {
@@ -993,7 +996,8 @@
           "Enabled": false,
           "NotCloneable": true,
           "NotCloneableReason": "Runtime execution logs"
-        }
+        },
+        "SaveReturnMode": "datestamps_only"
       }
     },
     "primaryKey": {
@@ -1015,7 +1019,8 @@
           "Enabled": false,
           "NotCloneable": true,
           "NotCloneableReason": "Runtime execution history"
-        }
+        },
+        "SaveReturnMode": "datestamps_only"
       }
     },
     "primaryKey": {
@@ -1892,12 +1897,14 @@
     ],
     "fields": {
       "Name": "MJ: Process Run Details",
+      "TrackRecordChanges": false,
       "Configuration": {
         "Clone": {
           "Enabled": false,
           "NotCloneable": true,
           "NotCloneableReason": "Runtime execution history"
-        }
+        },
+        "SaveReturnMode": "datestamps_only"
       }
     },
     "primaryKey": {
@@ -2115,7 +2122,8 @@
           "Enabled": false,
           "NotCloneable": true,
           "NotCloneableReason": "Immutable audit history"
-        }
+        },
+        "SaveReturnMode": "datestamps_only"
       }
     },
     "primaryKey": {
@@ -2137,7 +2145,8 @@
           "Enabled": false,
           "NotCloneable": true,
           "NotCloneableReason": "Immutable audit history"
-        }
+        },
+        "SaveReturnMode": "datestamps_only"
       }
     },
     "primaryKey": {
@@ -2159,7 +2168,8 @@
           "Enabled": false,
           "NotCloneable": true,
           "NotCloneableReason": "Immutable diagnostic history"
-        }
+        },
+        "SaveReturnMode": "datestamps_only"
       }
     },
     "primaryKey": {
@@ -2181,7 +2191,8 @@
           "Enabled": false,
           "NotCloneable": true,
           "NotCloneableReason": "Immutable audit history"
-        }
+        },
+        "SaveReturnMode": "datestamps_only"
       }
     },
     "primaryKey": {

@@ -1645,14 +1645,29 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             }
         }
 
+        const previousValues: Record<string, unknown> = {};
+        for (const key of Object.keys(updates)) {
+            previousValues[key] = (conversation as unknown as Record<string, unknown>)[key];
+        }
+
         this.mergeDataOntoRecord(conversation, updates);
+        // Emit immediately after mutating the shared cached entity so Angular subscribers
+        // (e.g. ConversationListComponent) run change detection synchronously rather than
+        // seeing an uncommitted mutation during the async Save() round-trip (NG0100).
+        this._conversations$.next([...this._conversations$.value]);
 
         this._selfMutating = true;
         try {
             const saved = await conversation.Save();
             if (!saved) {
+                this.mergeDataOntoRecord(conversation, previousValues as Partial<MJConversationEntity>);
+                this._conversations$.next([...this._conversations$.value]);
                 throw new Error(conversation.LatestResult?.Message || 'Failed to update conversation');
             }
+        } catch (err) {
+            this.mergeDataOntoRecord(conversation, previousValues as Partial<MJConversationEntity>);
+            this._conversations$.next([...this._conversations$.value]);
+            throw err;
         } finally {
             this._selfMutating = false;
         }

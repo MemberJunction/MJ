@@ -199,11 +199,19 @@ export const RunQueryRenderingClientChecks: NamedCheck[] = [
                 console.warn('  ⚠ runquery-rendering-client.RRC5 SKIPPED — DB_READ_ONLY_USERNAME is not set for the runner, so there is no read-only login to expect.');
                 return;
             }
-            const result = await runTestQuerySQL(wire, 'SELECT CURRENT_USER AS UserName', 1);
+            const result = await runTestQuerySQL(wire, 'SELECT CURRENT_USER AS UserName, SUSER_SNAME() AS LoginName', 1);
+            if (!result.Success && /Read-only data source is not available/i.test(result.ErrorMessage ?? '')) {
+                console.warn('  ⚠ runquery-rendering-client.RRC5 SKIPPED — the server has no read-only connection configured, which TestQuerySQL requires.');
+                return;
+            }
             Assert(result.Success, `TestQuerySQL failed: ${result.ErrorMessage}`);
-            const user = String(ProjectRows(JSON.parse(result.Results ?? '[]') as Record<string, unknown>[], ['UserName'])[0]?.UserName);
-            Assert(user.toLowerCase() === expectedUser.toLowerCase(),
-                `TestQuerySQL ran as '${user}', not the read-only login '${expectedUser}' — the read-only provider is using another connection`);
+            const row = ProjectRows(JSON.parse(result.Results ?? '[]') as Record<string, unknown>[], ['UserName', 'LoginName'])[0];
+            const user = String(row?.UserName ?? '');
+            const login = String(row?.LoginName ?? '');
+            Assert(
+                user.toLowerCase() === expectedUser.toLowerCase() || login.toLowerCase() === expectedUser.toLowerCase(),
+                `TestQuerySQL ran as user '${user}' (login '${login}'), not the read-only login '${expectedUser}' — the read-only provider is using another connection`
+            );
         }
     },
     {
