@@ -1383,10 +1383,10 @@ function restoreFormatKeyMap<M>(record: M): M {
     }
     for (const [strippedKey, fullKey] of STRIPPED_FORMAT_KEY_PAIRS) {
         if (Object.prototype.hasOwnProperty.call(target, strippedKey)) {
-            if (!Object.prototype.hasOwnProperty.call(target, fullKey) || target[fullKey] === undefined) {
+            if (target[strippedKey] !== undefined) {
                 target[fullKey] = target[strippedKey];
-                delete target[strippedKey];
             }
+            delete target[strippedKey];
         }
     }
     return target as unknown as M;
@@ -1397,7 +1397,8 @@ function restoreFormatKeyMap<M>(record: M): M {
  * `JSONValidator.CleanValidationSyntax` (`'16'` -> `'16:9'`, `'9'` -> `'9:16'`, `'1'` -> `'1:1'`).
  * Also normalizes sparse arrays created when `PayloadManager.mergeUpstreamPayload` sets numeric
  * stripped keys (`'16'`, `'9'`, `'1'`) via lodash `_.set`.
- * Renames a stripped key only when the corresponding full format key is absent, covering
+ * A stripped key is always the newest model value, so it moves onto the full format key
+ * (overwriting any existing value there) and removes the stripped key, covering
  * `Style.Typography[].SizeByFormat`, `Beats[].LayoutNotes`, and `Output.Source`.
  */
 // INTERIM: JSONValidator.CleanValidationSyntax strips ':' from keys (plan-notes 38)

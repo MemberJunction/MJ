@@ -468,6 +468,38 @@ function formatRunDiagnostic(
     return parts.length > 0 ? ` (${parts.join('; ')})` : '';
 }
 
+const STEP_DIAGNOSTIC_FIELDS: string[] = [
+    'StepName',
+    'StepNumber',
+    'StepType',
+    'Status',
+    'ErrorMessage',
+    'FinalPayloadValidationResult',
+    'FinalPayloadValidationMessages',
+    'InputData',
+    'OutputData',
+];
+
+async function loadChildStepDiagnostic(
+    rv: RunView,
+    childRunId: string,
+    user: IntegrationCheckContext['User'],
+    defaultAgent: string = 'Video Studio',
+): Promise<StepDiagnostic | null> {
+    const stepsRes = await rv.RunView<StepDiagnosticInput>({
+        EntityName: 'MJ: AI Agent Run Steps',
+        ExtraFilter: `AgentRunID='${EscapeSQLString(childRunId)}'`,
+        OrderBy: 'StepNumber',
+        Fields: STEP_DIAGNOSTIC_FIELDS,
+        ResultType: 'simple',
+        BypassCache: true,
+    }, user);
+    if (!stepsRes.Success || !stepsRes.Results?.length) {
+        return null;
+    }
+    return FirstFailedOrRetryStep(stepsRes.Results, defaultAgent);
+}
+
 export const VideoStudioProductionChecks: NamedCheck[] = [
     {
         Id: `${BUNDLE}.VSP1`,
@@ -604,31 +636,48 @@ export const VideoStudioProductionChecks: NamedCheck[] = [
                 f.RootRunIDs.push(result.agentRun.ID);
             }
 
-            const vsp2Diag = formatRunDiagnostic(result.agentRun, 'IT: VS Data Caller');
+            // Inspect the child Video Studio run row before asserting caller success so child diagnostics are included on failure
+            const rv = RunView.FromMetadataProvider(ctx.Provider);
+            const childRunsRes = result.agentRun?.ID
+                ? await rv.RunView<{
+                      ID: string;
+                      ConfigurationID: string | null;
+                      FinalPayload: string | null;
+                  }>({
+                      EntityName: 'MJ: AI Agent Runs',
+                      ExtraFilter: `ParentRunID='${EscapeSQLString(result.agentRun.ID)}' AND AgentID='${EscapeSQLString(f.VideoStudioAgent.ID)}'`,
+                      Fields: ['ID', 'ConfigurationID', 'FinalPayload'],
+                      ResultType: 'simple',
+                      BypassCache: true,
+                  }, ctx.User)
+                : undefined;
+
+            let vsp2Diag = formatRunDiagnostic(result.agentRun, 'IT: VS Data Caller');
+            if (!result.success && childRunsRes?.Success && childRunsRes.Results[0]?.ID) {
+                const childStepDiag = await loadChildStepDiagnostic(
+                    rv,
+                    childRunsRes.Results[0].ID,
+                    ctx.User,
+                    'Video Studio',
+                );
+                if (childStepDiag) {
+                    const formattedChild = `child [${childStepDiag.agent} :: ${childStepDiag.stepName}: ${childStepDiag.message}]`;
+                    vsp2Diag = vsp2Diag
+                        ? `${vsp2Diag.slice(0, -1)}; ${formattedChild})`
+                        : ` (${formattedChild})`;
+                }
+            }
             AssertEqual(
                 result.success,
                 true,
                 `VSP2: Caller RunAgent failed: ${result.agentRun?.ErrorMessage ?? 'unknown'}${vsp2Diag}`,
             );
 
-            // Inspect the child Video Studio run row
-            const rv = RunView.FromMetadataProvider(ctx.Provider);
-            const childRunsRes = await rv.RunView<{
-                ID: string;
-                ConfigurationID: string | null;
-                FinalPayload: string | null;
-            }>({
-                EntityName: 'MJ: AI Agent Runs',
-                ExtraFilter: `ParentRunID='${EscapeSQLString(result.agentRun!.ID)}' AND AgentID='${EscapeSQLString(f.VideoStudioAgent.ID)}'`,
-                Fields: ['ID', 'ConfigurationID', 'FinalPayload'],
-                ResultType: 'simple',
-                BypassCache: true,
-            }, ctx.User);
             Assert(
-                childRunsRes.Success && childRunsRes.Results.length === 1,
+                Boolean(childRunsRes?.Success && childRunsRes.Results.length === 1),
                 'VSP2: Child Video Studio agent run must exist under caller run',
             );
-            const childRun = childRunsRes.Results[0];
+            const childRun = childRunsRes!.Results[0];
             Assert(
                 Boolean(standardPreset?.AIConfigurationID),
                 'VSP2: Video Studio Standard preset must define AIConfigurationID in metadata',
@@ -738,7 +787,35 @@ export const VideoStudioProductionChecks: NamedCheck[] = [
                 f.ArtifactVersionIDs.push(artifactVersionId);
             }
 
-            AssertEqual(actionResult.Success, true, `VSP3: Produce Video action failed: ${actionResult.Message ?? 'unknown'}`);
+            const rv = RunView.FromMetadataProvider(ctx.Provider);
+            let vsp3Diag = '';
+            if (!actionResult.Success && agentRunId) {
+                const actionRunRes = await rv.RunView<{ ID: string }>({
+                    EntityName: 'MJ: AI Agent Runs',
+                    ExtraFilter: `ID='${EscapeSQLString(agentRunId)}'`,
+                    Fields: ['ID'],
+                    ResultType: 'simple',
+                    BypassCache: true,
+                }, ctx.User);
+                const runIdToInspect = actionRunRes.Success && actionRunRes.Results[0]?.ID
+                    ? actionRunRes.Results[0].ID
+                    : agentRunId;
+                const childStepDiag = await loadChildStepDiagnostic(
+                    rv,
+                    runIdToInspect,
+                    ctx.User,
+                    'Video Studio',
+                );
+                if (childStepDiag) {
+                    vsp3Diag = ` (child [${childStepDiag.agent} :: ${childStepDiag.stepName}: ${childStepDiag.message}])`;
+                }
+            }
+
+            AssertEqual(
+                actionResult.Success,
+                true,
+                `VSP3: Produce Video action failed: ${actionResult.Message ?? 'unknown'}${vsp3Diag}`,
+            );
             AssertEqual(actionResult.ResultCode, 'SUCCESS', 'VSP3: Produce Video ResultCode');
 
             Assert(Boolean(agentRunId), 'VSP3: AgentRunID output param must be populated');
@@ -747,7 +824,6 @@ export const VideoStudioProductionChecks: NamedCheck[] = [
             Assert(Boolean(videoFileIds?.['16:9']), 'VSP3: VideoFileIDs["16:9"] output param must be populated');
             Assert(Boolean(posterFileId), 'VSP3: PosterFileID output param must be populated');
 
-            const rv = RunView.FromMetadataProvider(ctx.Provider);
             const artRes = await rv.RunView<{ ID: string; Type: string }>({
                 EntityName: 'MJ: Artifacts',
                 ExtraFilter: `ID='${EscapeSQLString(artifactId!)}'`,

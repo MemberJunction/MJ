@@ -27,7 +27,7 @@
                     {
                         "Key": "hero_broll",
                         "Kind": "Video",
-                        "Prompt": "Abstract geometric data particles flowing on dark navy canvas, no text, no people",
+                        "Prompt": "Abstract geometric data particles flowing on a dark navy canvas, clean ambient motion",
                         "Purpose": "Opening background texture",
                         "Format": "16:9",
                         "DurationSeconds": 4

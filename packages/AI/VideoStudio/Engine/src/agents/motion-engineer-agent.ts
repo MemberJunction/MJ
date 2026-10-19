@@ -145,11 +145,14 @@ export class VideoStudioMotionEngineerAgent extends VideoStudioAgentBase {
             changeReq?.replaceElements?.Output?.Source ??
             changeReq?.updateElements?.Output?.Source ??
             changeReq?.newElements?.Output?.Source;
+        // INTERIM: JSONValidator.CleanValidationSyntax strips ':' from keys (plan-notes 38)
+        RestoreStrippedFormatKeys(workingSpec);
         if (requestedSource && typeof requestedSource === 'object') {
             // INTERIM: JSONValidator.CleanValidationSyntax strips ':' from keys (plan-notes 38)
-            const clonedRequested = structuredClone(requestedSource) as Record<string, unknown>;
-            const rawRequestedKeys = Object.keys(clonedRequested);
-            RestoreStrippedFormatKeys({
+            const clonedRequested = structuredClone(requestedSource) as NonNullable<
+                VideoGenerationSpec['Output']
+            >['Source'];
+            const restoredSpec = RestoreStrippedFormatKeys({
                 Output: {
                     Videos: {},
                     RenderMetadata: {
@@ -160,15 +163,9 @@ export class VideoStudioMotionEngineerAgent extends VideoStudioAgentBase {
                         DurationByFormat: {},
                         RenderedAt: '',
                     },
-                    Source: clonedRequested as NonNullable<VideoGenerationSpec['Output']>['Source'],
+                    Source: clonedRequested,
                 },
             });
-            const existingSource: Record<string, unknown> = { ...(workingSpec.Output?.Source ?? {}) };
-            for (const key of rawRequestedKeys) {
-                if (!Object.prototype.hasOwnProperty.call(clonedRequested, key)) {
-                    delete existingSource[key];
-                }
-            }
             workingSpec.Output = {
                 ...(workingSpec.Output ?? {
                     Videos: {},
@@ -182,13 +179,11 @@ export class VideoStudioMotionEngineerAgent extends VideoStudioAgentBase {
                     },
                 }),
                 Source: {
-                    ...existingSource,
-                    ...clonedRequested,
-                } as NonNullable<VideoGenerationSpec['Output']>['Source'],
+                    ...(workingSpec.Output?.Source ?? {}),
+                    ...(restoredSpec.Output?.Source ?? {}),
+                },
             };
         }
-        // INTERIM: JSONValidator.CleanValidationSyntax strips ':' from keys (plan-notes 38)
-        RestoreStrippedFormatKeys(workingSpec);
         const formats = ResolveDeliverableFormats(workingSpec);
 
         for (const fmt of formats) {
@@ -207,6 +202,10 @@ export class VideoStudioMotionEngineerAgent extends VideoStudioAgentBase {
                     retryInstructions: msg,
                     errorMessage: msg,
                 };
+            }
+            // INTERIM: PayloadManager.MergeUpstreamPayload drops empty arrays (plan-notes 39)
+            if (sourceEntry && !Array.isArray(sourceEntry.AssetKeys)) {
+                sourceEntry.AssetKeys = [];
             }
         }
 

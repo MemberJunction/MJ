@@ -1191,7 +1191,7 @@ describe('RestoreStrippedFormatKeys', () => {
         expect(restored.Output!.Source!['1:1']?.Files['index.html']).toBe('<html>1x1</html>');
     });
 
-    it('leaves full keys alone when only full keys exist or when both stripped and full keys exist, and leaves unrelated keys untouched', () => {
+    it('lets a stripped key overwrite an existing full key (stripped key wins) while leaving full-only and unrelated keys untouched', () => {
         const spec = makeStoryboardedSpec();
         spec.Style.Typography[0].SizeByFormat = {
             '16:9': '64px-full',
@@ -1209,14 +1209,12 @@ describe('RestoreStrippedFormatKeys', () => {
         RestoreStrippedFormatKeys(spec);
 
         expect(spec.Style.Typography[0].SizeByFormat).toEqual({
-            '16:9': '64px-full',
-            '16': '64px-stripped',
+            '16:9': '64px-stripped',
             '9:16': '52px-only-full',
             other: 'untouched',
         });
         expect(spec.Beats[0].LayoutNotes).toEqual({
-            '16:9': 'Full landscape note',
-            '16': 'Stripped landscape note',
+            '16:9': 'Stripped landscape note',
             '1:1': 'Full square note',
             custom: 'untouched-note',
         });

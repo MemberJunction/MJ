@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { JSONValidator } from '@memberjunction/global';
 
 // ─── Hoisted mocks (following FormBuilder/core/src/__tests__/form-builder-designer-agent.test.ts) ───
 
@@ -1094,6 +1095,66 @@ describe('VideoStudioMotionEngineerAgent (VS-AGT-4)', () => {
         expect(outcome.newPayload?.Output?.Source?.['16:9']?.Files?.['index.html']).toBe(
             authoredSource['16:9']!.Files['index.html'],
         );
+    });
+
+    it('restores format keys stripped by real JSONValidator.CleanValidationSyntax on payloadChangeRequest and newPayload', async () => {
+        const agent = new VideoStudioMotionEngineerAgent() as unknown as TestableMotionEngineerAgent;
+        const validSpec = makeSpec(['16:9']);
+        const authoredHtml = validSpec.Output!.Source!['16:9']!.Files['index.html'];
+
+        // Run the raw change request through the real JSONValidator.CleanValidationSyntax
+        // (which strips ':9' from '16:9' -> '16')
+        const rawChangeRequest = {
+            newElements: {
+                Output: {
+                    Source: {
+                        '16:9': {
+                            Format: '16:9',
+                            EntryFile: 'index.html',
+                            AssetKeys: [],
+                            Files: {
+                                'index.html': authoredHtml,
+                            },
+                        },
+                    },
+                },
+            },
+        };
+        const cleanedChangeRequest = new JSONValidator().CleanValidationSyntax<typeof rawChangeRequest>(
+            rawChangeRequest,
+        );
+        expect(Object.keys(cleanedChangeRequest.newElements.Output.Source)).toEqual(['16']);
+
+        // Simulate newPayload after BaseAgent.validateSuccessNextStep ran ApplyAgentChangeRequest
+        // on the cleaned change request (stripped format key '16' and corrupted dotted 'index.html' -> { index: {} })
+        const corruptedSpec = makeSpec(['16:9']);
+        corruptedSpec.Output!.Source = {
+            '16': {
+                Format: '16:9',
+                EntryFile: 'index.html',
+                AssetKeys: [],
+                Files: {
+                    index: {},
+                },
+            },
+        } as unknown as NonNullable<VideoGenerationSpec['Output']>['Source'];
+
+        const outcome = await agent.validateSuccessNextStep(
+            { contextUser: MOCK_USER } as ExecuteAgentParams,
+            {
+                step: 'Success',
+                terminate: true,
+                newPayload: corruptedSpec,
+                payloadChangeRequest: cleanedChangeRequest,
+            } as unknown as BaseAgentNextStep<VideoGenerationSpec>,
+            corruptedSpec,
+            {} as MJAIAgentRunEntityExtended,
+            {} as MJAIAgentRunStepEntityExtended,
+        );
+
+        expect(outcome.step).toBe('Success');
+        expect(Object.keys(outcome.newPayload?.Output?.Source ?? {})).toEqual(['16:9']);
+        expect(outcome.newPayload?.Output?.Source?.['16:9']?.Files?.['index.html']).toBe(authoredHtml);
     });
 });
 

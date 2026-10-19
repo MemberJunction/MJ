@@ -316,6 +316,8 @@ export class VideoStudioAgent extends BaseAgent {
 
         // INTERIM: JSONValidator.CleanValidationSyntax strips ':' from keys (plan-notes 38)
         RestoreStrippedFormatKeys(cloned);
+        // INTERIM: PayloadManager.MergeUpstreamPayload drops empty arrays (plan-notes 39)
+        this.restoreDroppedEmptyArrays(cloned);
 
         this.syncArchetypeId(cloned);
         this.syncDeliverableFormats(cloned);
@@ -1238,6 +1240,156 @@ export class VideoStudioAgent extends BaseAgent {
         } else if (decision === 'Reject') {
             awaitingGate.Status = 'Pending';
             delete awaitingGate.Notes;
+        }
+    }
+
+    // INTERIM: PayloadManager.MergeUpstreamPayload drops empty arrays (plan-notes 39)
+    private restoreDroppedEmptyArrays(spec: Partial<VideoGenerationSpec>): void {
+        if (spec.Film && typeof spec.Film === 'object') {
+            if (!Array.isArray(spec.Film.Formats)) {
+                spec.Film.Formats = [];
+            }
+            if (!Array.isArray(spec.DataBindings)) {
+                spec.DataBindings = [];
+            }
+        }
+
+        if (spec.Assets && typeof spec.Assets === 'object') {
+            if (!Array.isArray(spec.Assets.Approved)) {
+                spec.Assets.Approved = [];
+            }
+            if (!Array.isArray(spec.Assets.Required)) {
+                spec.Assets.Required = [];
+            }
+            if (!Array.isArray(spec.Assets.NeverInvent)) {
+                spec.Assets.NeverInvent = [];
+            }
+            for (const asset of spec.Assets.Approved) {
+                if (
+                    asset?.Generation &&
+                    typeof asset.Generation === 'object' &&
+                    !Array.isArray(asset.Generation.ReferenceKeys)
+                ) {
+                    asset.Generation.ReferenceKeys = [];
+                }
+            }
+            if (Array.isArray(spec.Assets.Generate)) {
+                for (const req of spec.Assets.Generate) {
+                    if (req && typeof req === 'object' && !Array.isArray(req.ReferenceKeys)) {
+                        req.ReferenceKeys = [];
+                    }
+                }
+            }
+        }
+
+        if (spec.Style && typeof spec.Style === 'object') {
+            if (!Array.isArray(spec.Style.Palette)) {
+                spec.Style.Palette = [];
+            }
+            if (!Array.isArray(spec.Style.Typography)) {
+                spec.Style.Typography = [];
+            }
+            if (!Array.isArray(spec.Style.MotionRules)) {
+                spec.Style.MotionRules = [];
+            }
+            if (!Array.isArray(spec.Style.Keep)) {
+                spec.Style.Keep = [];
+            }
+            if (!Array.isArray(spec.Style.Avoid)) {
+                spec.Style.Avoid = [];
+            }
+            if (!Array.isArray(spec.Style.References)) {
+                spec.Style.References = [];
+            }
+            for (const ref of spec.Style.References) {
+                if (ref && typeof ref === 'object' && !Array.isArray(ref.DoNotCopy)) {
+                    ref.DoNotCopy = [];
+                }
+            }
+        }
+
+        if (Array.isArray(spec.Beats)) {
+            for (const beat of spec.Beats) {
+                if (beat && typeof beat === 'object') {
+                    if (!Array.isArray(beat.OnScreenText)) {
+                        beat.OnScreenText = [];
+                    }
+                    if (!Array.isArray(beat.DataRefs)) {
+                        beat.DataRefs = [];
+                    }
+                    if (!Array.isArray(beat.AssetRefs)) {
+                        beat.AssetRefs = [];
+                    }
+                }
+            }
+        }
+
+        if (spec.DataSnapshot && typeof spec.DataSnapshot === 'object') {
+            if (!Array.isArray(spec.DataSnapshot.Sources)) {
+                spec.DataSnapshot.Sources = [];
+            }
+        }
+
+        if (spec.Audio && typeof spec.Audio === 'object') {
+            if (!Array.isArray(spec.Audio.Cues)) {
+                spec.Audio.Cues = [];
+            }
+            if (
+                spec.Audio.Narration &&
+                typeof spec.Audio.Narration === 'object' &&
+                !Array.isArray(spec.Audio.Narration.Script)
+            ) {
+                spec.Audio.Narration.Script = [];
+            }
+        }
+
+        if (spec.Deliverables && typeof spec.Deliverables === 'object') {
+            if (!Array.isArray(spec.Deliverables.Formats)) {
+                spec.Deliverables.Formats = [];
+            }
+        }
+
+        if (spec.Review && typeof spec.Review === 'object') {
+            if (!Array.isArray(spec.Review.Gates)) {
+                spec.Review.Gates = [];
+            }
+            for (const gate of spec.Review.Gates) {
+                if (gate && typeof gate === 'object' && !Array.isArray(gate.EvidenceRefs)) {
+                    gate.EvidenceRefs = [];
+                }
+            }
+            if (!Array.isArray(spec.Review.Rounds)) {
+                spec.Review.Rounds = [];
+            }
+            for (const round of spec.Review.Rounds) {
+                if (round && typeof round === 'object' && !Array.isArray(round.Defects)) {
+                    round.Defects = [];
+                }
+            }
+            if (
+                spec.Review.Scores &&
+                typeof spec.Review.Scores === 'object' &&
+                !Array.isArray(spec.Review.Scores.Criteria)
+            ) {
+                spec.Review.Scores.Criteria = [];
+            }
+        }
+
+        if (spec.Output && typeof spec.Output === 'object') {
+            if (spec.Output.Source && typeof spec.Output.Source === 'object') {
+                for (const entry of Object.values(spec.Output.Source)) {
+                    if (entry && typeof entry === 'object' && !Array.isArray(entry.AssetKeys)) {
+                        entry.AssetKeys = [];
+                    }
+                }
+            }
+            if (
+                spec.Output.GenerationProvenance &&
+                typeof spec.Output.GenerationProvenance === 'object' &&
+                !Array.isArray(spec.Output.GenerationProvenance.Assets)
+            ) {
+                spec.Output.GenerationProvenance.Assets = [];
+            }
         }
     }
 

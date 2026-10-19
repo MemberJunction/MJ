@@ -147,9 +147,13 @@ const {
     };
 });
 
-vi.mock('@memberjunction/ai-agents', () => ({
-    BaseAgent: MockBaseAgent,
-}));
+vi.mock('@memberjunction/ai-agents', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/ai-agents')>();
+    return {
+        ...actual,
+        BaseAgent: MockBaseAgent,
+    };
+});
 
 vi.mock('@memberjunction/aiengine', () => ({
     AIEngine: {
@@ -179,7 +183,9 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
     };
 });
 
+import { PayloadManager } from '@memberjunction/ai-agents';
 import { VideoStudioAgent } from '../agents/video-studio-agent.js';
+import { FitBeatsToNarration } from '../narration/narration-timeline.js';
 import { CreateDeliveredSpecFixture } from './fixtures/delivered-spec.fixture.js';
 
 type TestableVideoStudioAgent = VideoStudioAgent & {
@@ -1943,6 +1949,66 @@ describe('VideoStudioAgent driver lifecycle', () => {
         }
         const g2 = afterStoryboard.Review?.Gates.find((g) => g.Gate === 'G2');
         expect(g2?.Status).toBe('Passed');
+    });
+
+    it('(19) restores empty arrays dropped by real PayloadManager.MergeUpstreamPayload so FitBeatsToNarration (cloneBeat) does not throw', () => {
+        const agent = createAgent();
+        const parentSpec = CreateDeliveredSpecFixture();
+        delete (parentSpec as Partial<VideoGenerationSpec>).Beats;
+        delete (parentSpec as Partial<VideoGenerationSpec>).Audio;
+
+        const storyboardSpec = CreateDeliveredSpecFixture();
+        storyboardSpec.Beats = storyboardSpec.Beats.map((beat) => ({
+            ...beat,
+            DataRefs: [],
+            AssetRefs: [],
+        }));
+        storyboardSpec.Audio = {
+            ...storyboardSpec.Audio,
+            Cues: [],
+        };
+
+        // Run real PayloadManager.MergeUpstreamPayload with Storyboard's upstream paths
+        const merged = new PayloadManager().MergeUpstreamPayload(
+            'Video Studio - Storyboard',
+            parentSpec as Partial<VideoGenerationSpec>,
+            storyboardSpec as Partial<VideoGenerationSpec>,
+            ['Beats', 'Beats.*', 'StateList', 'StateList.*', 'Audio', 'Audio.*'],
+        );
+
+        // Verify real MergeUpstreamPayload dropped empty DataRefs/AssetRefs/Cues arrays
+        expect(merged.result.Beats?.[0]?.DataRefs).toBeUndefined();
+        expect(merged.result.Beats?.[0]?.AssetRefs).toBeUndefined();
+        expect(merged.result.Audio?.Cues).toBeUndefined();
+        expect(() =>
+            FitBeatsToNarration(
+                merged.result.Beats ?? [],
+                merged.result.Audio?.Narration?.Script ?? [],
+            ),
+        ).toThrow();
+
+        const params = {
+            payload: merged.result,
+            conversationMessages: [],
+        } as unknown as ExecuteAgentParams<Partial<VideoGenerationSpec>>;
+
+        const repaired = agent.ApplyStageResult(params, 'Video Studio - Storyboard', merged.result);
+        for (const beat of repaired.Beats ?? []) {
+            expect(beat.OnScreenText).toBeInstanceOf(Array);
+            expect(beat.DataRefs).toEqual([]);
+            expect(beat.AssetRefs).toEqual([]);
+        }
+        expect(repaired.Audio?.Cues).toEqual([]);
+
+        const fitted = FitBeatsToNarration(
+            repaired.Beats ?? [],
+            repaired.Audio?.Narration?.Script ?? [],
+        );
+        expect(fitted.Beats).toHaveLength(storyboardSpec.Beats.length);
+        for (const beat of fitted.Beats) {
+            expect(beat.DataRefs).toEqual([]);
+            expect(beat.AssetRefs).toEqual([]);
+        }
     });
 });
 
