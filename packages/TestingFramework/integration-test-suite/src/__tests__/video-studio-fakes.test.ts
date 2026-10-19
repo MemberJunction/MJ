@@ -248,9 +248,9 @@ describe('video-studio-fakes', () => {
         });
 
         expect(result).toEqual({
-            stepName: 'Prompt - Step 3',
-            agent: 'Video Studio',
-            message:
+            StepName: 'Prompt - Step 3',
+            Agent: 'Video Studio',
+            Message:
                 'Cannot advance to "Video Studio - Art Director": Mandatory Gate G1 (Brief Gate) FAILED',
         });
     });

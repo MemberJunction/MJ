@@ -301,9 +301,9 @@ export interface RunDiagnosticInput {
 }
 
 export interface StepDiagnostic {
-    stepName: string;
-    agent: string;
-    message: string;
+    StepName: string;
+    Agent: string;
+    Message: string;
 }
 
 function parseJsonObject(raw: unknown): Record<string, unknown> | undefined {
@@ -360,7 +360,7 @@ function resolveStepAgentName(
 
 /**
  * Returns the first step of a run with a non-empty error or a `Retry` rewrite:
- * `{ stepName, agent, message }`, or `null` when every step succeeded without retry/error.
+ * `{ StepName, Agent, Message }`, or `null` when every step succeeded without retry/error.
  */
 export function FirstFailedOrRetryStep(
     runOrSteps: RunDiagnosticInput | ReadonlyArray<StepDiagnosticInput> | null | undefined,
@@ -424,11 +424,11 @@ export function FirstFailedOrRetryStep(
             step.FinalPayloadValidationResult === 'Fail';
 
         if (isRetryRewrite || hasError) {
-            const stepName =
+            const StepName =
                 step.StepName?.trim() ||
                 (step.StepNumber != null ? `Step ${step.StepNumber}` : step.StepType ?? 'unknown');
-            const agent = resolveStepAgentName(step, run, defaultAgent);
-            const message =
+            const Agent = resolveStepAgentName(step, run, defaultAgent);
+            const Message =
                 nextStepError ||
                 nextStepRetryInstructions ||
                 stepError ||
@@ -436,7 +436,7 @@ export function FirstFailedOrRetryStep(
                 subAgentFailedMsg ||
                 nextStepMessage ||
                 (isRetryRewrite ? 'Retry rewrite' : `Status=${step.Status ?? 'Failed'}`);
-            return { stepName, agent, message };
+            return { StepName, Agent, Message };
         }
     }
     return null;
@@ -452,7 +452,7 @@ function formatRunDiagnostic(
     const parts: string[] = [];
     const primary = FirstFailedOrRetryStep(run, defaultAgent);
     if (primary) {
-        parts.push(`[${primary.agent} :: ${primary.stepName}: ${primary.message}]`);
+        parts.push(`[${primary.Agent} :: ${primary.StepName}: ${primary.Message}]`);
     }
     for (const step of run.Steps ?? []) {
         if (step.SubAgentRun) {
@@ -461,7 +461,7 @@ function formatRunDiagnostic(
                 step.StepName?.trim() || 'Video Studio',
             );
             if (childDiag) {
-                parts.push(`child [${childDiag.agent} :: ${childDiag.stepName}: ${childDiag.message}]`);
+                parts.push(`child [${childDiag.Agent} :: ${childDiag.StepName}: ${childDiag.Message}]`);
             }
         }
     }
@@ -496,9 +496,9 @@ async function loadChildStepDiagnostic(
     }, user);
     if (!stepsRes.Success) {
         return {
-            stepName: 'RunView(MJ: AI Agent Run Steps)',
-            agent: defaultAgent,
-            message: `step lookup failed: ${stepsRes.ErrorMessage}`,
+            StepName: 'RunView(MJ: AI Agent Run Steps)',
+            Agent: defaultAgent,
+            Message: `step lookup failed: ${stepsRes.ErrorMessage}`,
         };
     }
     if (!stepsRes.Results?.length) {
@@ -668,7 +668,7 @@ export const VideoStudioProductionChecks: NamedCheck[] = [
                     'Video Studio',
                 );
                 if (childStepDiag) {
-                    const formattedChild = `child [${childStepDiag.agent} :: ${childStepDiag.stepName}: ${childStepDiag.message}]`;
+                    const formattedChild = `child [${childStepDiag.Agent} :: ${childStepDiag.StepName}: ${childStepDiag.Message}]`;
                     vsp2Diag = vsp2Diag
                         ? `${vsp2Diag.slice(0, -1)}; ${formattedChild})`
                         : ` (${formattedChild})`;
@@ -804,7 +804,7 @@ export const VideoStudioProductionChecks: NamedCheck[] = [
                     'Video Studio',
                 );
                 if (childStepDiag) {
-                    vsp3Diag = ` (child [${childStepDiag.agent} :: ${childStepDiag.stepName}: ${childStepDiag.message}])`;
+                    vsp3Diag = ` (child [${childStepDiag.Agent} :: ${childStepDiag.StepName}: ${childStepDiag.Message}])`;
                 }
             }
 
