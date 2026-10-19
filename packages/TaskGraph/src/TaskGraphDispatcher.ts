@@ -4303,7 +4303,7 @@ export class TaskGraphDispatcher implements IShutdownable {
             // own bookkeeping is owed either way — but announcing it would message a conversation
             // about a workflow the user stopped, and for `reinvoke` would start a fresh billed turn
             // for the agent they cancelled.
-            const cancelled = run.Status === 'Cancelled';
+            let cancelled = run.Status === 'Cancelled';
             const settledFor = parent.CompletedAt ? Date.now() - parent.CompletedAt.getTime() : 0;
             if (!IsSubmittingRunReady(run.Status, settledFor)) {
                 // Still `Running` and inside the grace: `finalizeAgentRun` has not parked it yet.
@@ -4321,6 +4321,26 @@ export class TaskGraphDispatcher implements IShutdownable {
                     `likely died. Settling and delivering the graph anyway; the run needs separate attention.`,
                 );
             }
+
+            // When a sub-agent submitted the graph on behalf of a parent run, check that any
+            // ancestor runs in the ParentRunID chain have also parked before settling.
+            let currentParentRunID = run.ParentRunID;
+            const visitedReadinessIDs = new Set<string>([(run.ID || meta.submittedByAgentRunID).toLowerCase()]);
+            while (currentParentRunID && !visitedReadinessIDs.has(currentParentRunID.toLowerCase()) && visitedReadinessIDs.size < 10) {
+                visitedReadinessIDs.add(currentParentRunID.toLowerCase());
+                const ancestorRun = await provider.GetEntityObject<MJAIAgentRunEntity>('MJ: AI Agent Runs', this.contextUser);
+                if (!(await ancestorRun.Load(currentParentRunID))) {
+                    break;
+                }
+                if (ancestorRun.Status === 'Cancelled') {
+                    cancelled = true;
+                }
+                if (!IsSubmittingRunReady(ancestorRun.Status, settledFor)) {
+                    return { Verdict: 'defer', SubmitterCancelled: cancelled };
+                }
+                currentParentRunID = ancestorRun.ParentRunID;
+            }
+
             return { Verdict: 'ready', SubmitterCancelled: cancelled };
         } catch (e) {
             LogError(`[TaskGraphDispatcher] Could not check the run waiting on graph ${parent.ID}: ${e instanceof Error ? e.message : String(e)}`);
@@ -4364,38 +4384,60 @@ export class TaskGraphDispatcher implements IShutdownable {
                 LogError(`[TaskGraphDispatcher] Could not load run ${meta.submittedByAgentRunID} to settle it against graph ${parent.ID}.`);
                 return 'defer';
             }
-            if (run.Status !== 'Paused') return 'done';
 
-            // The workflow's outcome becomes the run's outcome. A graph that ended any way other than
-            // Complete did not do what the run started it to do, and a run reporting success over it
-            // would be the same untruth in a different place.
             const succeeded = graphStatus === 'Complete';
-            // COLUMN-SCOPED AND GUARDED ON `Paused` (C4), for the same reason every parent write has
-            // been since Round 1: a full-row save carries a stale snapshot of a row another instance
-            // may have moved, and the predicate makes the transition once-only rather than
-            // last-write-wins.
-            const settled = await this.claims.TrySettleRun(
-                provider, run.ID, succeeded,
-                succeeded ? null : `The workflow "${parent.Name}" ended ${graphStatus}.`,
-                this.contextUser,
-            );
-            if (!settled) {
-                // Left parked rather than forced. A run stuck at Paused is visibly unfinished, which
-                // is a state someone can investigate; a run flipped to Completed by a write that did
-                // not land would be the same lie this whole change removes.
-                // Rowcount 0 is either "a peer settled it first" — fine, and the status read above
-                // would have caught the common case — or a write that did not land. Deferring covers
-                // both: a peer's settle makes the next pass's `Paused` check return `done`.
-                LogError(
-                    `[TaskGraphDispatcher] Could not settle run ${run.ID} against graph ${parent.ID}; ` +
-                    `it is no longer Paused or the write did not land. Retrying next pass.`,
+            const failureMessage = succeeded ? null : `The workflow "${parent.Name}" ended ${graphStatus}.`;
+
+            if (run.Status === 'Paused') {
+                // COLUMN-SCOPED AND GUARDED ON `Paused` (C4), for the same reason every parent write has
+                // been since Round 1: a full-row save carries a stale snapshot of a row another instance
+                // may have moved, and the predicate makes the transition once-only rather than
+                // last-write-wins.
+                const settled = await this.claims.TrySettleRun(
+                    provider, run.ID, succeeded,
+                    failureMessage,
+                    this.contextUser,
                 );
-                return 'defer';
+                if (!settled) {
+                    LogError(
+                        `[TaskGraphDispatcher] Could not settle run ${run.ID} against graph ${parent.ID}; ` +
+                        `it is no longer Paused or the write did not land. Retrying next pass.`,
+                    );
+                    return 'defer';
+                }
+                LogStatus(
+                    `[TaskGraphDispatcher] Run ${run.ID} settled ${succeeded ? 'Completed' : 'Failed'} — ` +
+                    `workflow "${parent.Name}" ended ${graphStatus}.`,
+                );
             }
-            LogStatus(
-                `[TaskGraphDispatcher] Run ${run.ID} settled ${succeeded ? 'Completed' : 'Failed'} — ` +
-                `workflow "${parent.Name}" ended ${graphStatus}.`,
-            );
+
+            // When a sub-agent (e.g. Workflow Planner) submitted the graph on behalf of a parent
+            // conversation agent (e.g. Sage), BaseAgent parks the parent run as `Paused` as well.
+            // Walk up `ParentRunID` and settle any ancestor runs parked in `Paused`.
+            let currentParentRunID = run.ParentRunID;
+            const visitedSettleIDs = new Set<string>([(run.ID || meta.submittedByAgentRunID).toLowerCase()]);
+            while (currentParentRunID && !visitedSettleIDs.has(currentParentRunID.toLowerCase()) && visitedSettleIDs.size < 10) {
+                visitedSettleIDs.add(currentParentRunID.toLowerCase());
+                const ancestorRun = await provider.GetEntityObject<MJAIAgentRunEntity>('MJ: AI Agent Runs', this.contextUser);
+                if (!(await ancestorRun.Load(currentParentRunID))) {
+                    break;
+                }
+                if (ancestorRun.Status === 'Paused') {
+                    const ancestorSettled = await this.claims.TrySettleRun(
+                        provider, ancestorRun.ID, succeeded,
+                        failureMessage,
+                        this.contextUser,
+                    );
+                    if (ancestorSettled) {
+                        LogStatus(
+                            `[TaskGraphDispatcher] Ancestor run ${ancestorRun.ID} settled ${succeeded ? 'Completed' : 'Failed'} — ` +
+                            `workflow "${parent.Name}" ended ${graphStatus}.`,
+                        );
+                    }
+                }
+                currentParentRunID = ancestorRun.ParentRunID;
+            }
+
             return 'done';
         } catch (e) {
             LogError(`[TaskGraphDispatcher] Could not settle the run waiting on graph ${parent.ID}: ${e instanceof Error ? e.message : String(e)}`);
