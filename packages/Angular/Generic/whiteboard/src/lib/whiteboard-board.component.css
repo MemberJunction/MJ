@@ -60,9 +60,11 @@
 
 /* Stepped (button) zoom only: the presets jump 11%, 25%, 33% between consecutive clicks, so the
    transform eases for one step. The wheel/pinch and hold-to-zoom paths never carry this class —
-   a transition on a continuous gesture lags it. */
+   a transition on a continuous gesture lags it.
+   The 180ms MUST match ZOOM_STEP_TRANSITION_MS in whiteboard-board.component.ts: the component
+   drops the class on that timer, so a longer transition here would be cut short (visible snap). */
 .board-viewport--stepping {
-  transition: transform 180ms cubic-bezier(0.33, 1, 0.68, 1);
+  transition: transform 180ms cubic-bezier(0.33, 1, 0.68, 1); /* = ZOOM_STEP_TRANSITION_MS */
 }
 
 @media (prefers-reduced-motion: reduce) {

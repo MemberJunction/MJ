@@ -177,7 +177,11 @@ const WHEEL_ZOOM_RATE = Math.log(1.1) / WHEEL_ZOOM_DELTA_CAP_PX;
 /** `deltaMode` → px: a line is ~16px (Firefox mouse wheel); a page is at least a full notch. */
 const WHEEL_LINE_PX = 16;
 const WHEEL_PAGE_PX = 800;
-/** How long the stepped (button) zoom's transform transition runs — wheel and hold-to-zoom never use it. */
+/**
+ * How long the stepped (button) zoom's transform transition runs — wheel and hold-to-zoom never use it.
+ * MUST match the `transition` duration on `.board-viewport--stepping` in whiteboard-board.component.css:
+ * this timer drops the class, so a CSS duration longer than this is cut short (visible snap).
+ */
 export const ZOOM_STEP_TRANSITION_MS = 180;
 const GRID_SIZE = 22;
 /** How long an agent-added item keeps its pop-in/flash class. */
