@@ -1061,10 +1061,12 @@ export class RealtimeSessionRuntime {
    */
   private userSpeechStartMs: number | null = null;
   /**
-   * `true` once an assistant turn has finalized while {@link userSpeechStartMs} was held. The held
-   * onset may still be claimed by a late user transcript (OpenAI transcribes asynchronously), but
-   * the NEXT onset replaces it: an onset no transcript ever claimed (a VAD false positive, an empty
-   * or failed transcription) must not become the start of the next real user turn.
+   * `true` once an assistant turn has finalized after {@link userSpeechStartMs} was stamped BEFORE
+   * that turn began. The held onset may still be claimed by a late user transcript (OpenAI
+   * transcribes asynchronously), but the NEXT onset replaces it: an onset no transcript ever claimed
+   * (a VAD false positive, a failed transcription) must not become the start of the next real user
+   * turn. A barge-in onset (stamped during the assistant turn) is not superseded by that turn's
+   * final. An EMPTY user transcript releases the onset outright (see onClientTranscript).
    */
   private userSpeechStartSuperseded = false;
   /**
@@ -4196,6 +4198,11 @@ export class RealtimeSessionRuntime {
       }
       return;
     }
+    if (transcript.Role === 'User' && transcript.Text.trim().length === 0) {
+      // An empty final user transcript (a VAD false positive, an empty transcription) never reaches
+      // relayTranscript, so release its onset here: it must not become the next real turn's start.
+      this.releaseUserSpeechStart();
+    }
     if (transcript.Role === 'Assistant') {
       this.hasActiveInterimUserCaption = false;
       this.pendingUserCaption = '';
@@ -4285,8 +4292,9 @@ export class RealtimeSessionRuntime {
   /**
    * Stamps {@link userSpeechStartMs} when the client signals that the user began to speak. Keeps
    * the FIRST onset since the last final user transcript: the VAD fires again after a
-   * mid-sentence pause, and that second onset is not where the utterance began. An onset an
-   * assistant turn has since superseded ({@link userSpeechStartSuperseded}) is replaced instead.
+   * mid-sentence pause, and that second onset is not where the utterance began. An onset that an
+   * assistant turn which began after it has since superseded ({@link userSpeechStartSuperseded}) is
+   * replaced instead.
    */
   private markUserSpeechStart(): void {
     if (this.userSpeechStartMs !== null && !this.userSpeechStartSuperseded) {
@@ -4297,6 +4305,12 @@ export class RealtimeSessionRuntime {
       return;
     }
     this.userSpeechStartMs = offset;
+    this.userSpeechStartSuperseded = false;
+  }
+
+  /** Ends the held user onset: a final user transcript (empty or not) closed the utterance it began. */
+  private releaseUserSpeechStart(): void {
+    this.userSpeechStartMs = null;
     this.userSpeechStartSuperseded = false;
   }
 
@@ -4737,8 +4751,7 @@ export class RealtimeSessionRuntime {
     let userSpeechStartMs: number | null = null;
     if (role === 'user') {
       userSpeechStartMs = this.userSpeechStartMs;
-      this.userSpeechStartMs = null;
-      this.userSpeechStartSuperseded = false;
+      this.releaseUserSpeechStart();
     }
     // Per-turn timing against whichever clock the session is on (#3832): the recorder's when one
     // runs, else the session clock. `utteranceStartMs` is where this turn's audio actually began.
@@ -4758,9 +4771,12 @@ export class RealtimeSessionRuntime {
       // next start. `null` means "not yet captured" and is relayed as-is if nothing stamps it.
       this.currentTurnStartMs = null;
       this.turnAudioStartCaptured = false;
-      if (role === 'assistant') {
-        // The floor moved on: a still-held onset may yet be claimed by a late user transcript,
-        // but the next onset replaces it (see userSpeechStartSuperseded).
+      if (role === 'assistant' && this.userSpeechStartMs !== null && (utteranceStartMs === null || this.userSpeechStartMs < utteranceStartMs)) {
+        // The floor moved on past an onset that began BEFORE this assistant turn: a late user
+        // transcript may still claim it, but the next onset replaces it (see userSpeechStartSuperseded).
+        // An onset that began DURING this turn is a barge-in; it belongs to the user speech still
+        // pending, so it stays the first onset. With no measured assistant start we cannot tell, and
+        // treat the onset as earlier.
         this.userSpeechStartSuperseded = true;
       }
     }

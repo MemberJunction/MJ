@@ -268,4 +268,39 @@ describe('RealtimeSessionRuntime per-turn timing: the user speech start keeps it
         expect(provider.Relayed[0]).toEqual({ role: 'assistant', utteranceStartMs: 1351, utteranceEndMs: 5690 });
         expect(provider.Relayed[1]).toEqual({ role: 'user', utteranceStartMs: 3000, utteranceEndMs: 8000 });
     });
+
+    it('keeps a barge-in onset when the user pauses and resumes before the first transcript arrives', async () => {
+        const { provider, client, advanceTo } = await startRecorded();
+
+        advanceTo(1351);
+        client.Emit({ Role: 'Assistant', Text: 'Hello, let me tell you about', IsFinal: false, Kind: 'normal' });
+        advanceTo(3000);
+        client.SpeechStart(); // the user cuts the assistant off
+        advanceTo(3500);
+        client.Emit({ Role: 'Assistant', Text: 'Hello, let me tell you about', IsFinal: true, Kind: 'normal' });
+        advanceTo(5000);
+        client.SpeechStart(); // the user resumes after a pause
+        advanceTo(5600);
+        client.Emit({ Role: 'User', Text: 'Sorry, one question', IsFinal: true, Kind: 'normal' });
+        await vi.waitFor(() => expect(provider.Relayed).toHaveLength(2));
+
+        expect(provider.Relayed[1]).toEqual({ role: 'user', utteranceStartMs: 3000, utteranceEndMs: 5600 });
+    });
+
+    it('releases a VAD false positive onset on an empty user transcript, with no assistant turn between', async () => {
+        const { provider, client, advanceTo } = await startRecorded();
+        speakAssistantTurn(client, advanceTo);
+
+        advanceTo(8000);
+        client.SpeechStart(); // a cough
+        advanceTo(8800);
+        client.Emit({ Role: 'User', Text: '', IsFinal: true, Kind: 'normal' }); // the provider transcribed nothing
+        advanceTo(20000);
+        client.SpeechStart(); // the user really speaks
+        advanceTo(24000);
+        client.Emit({ Role: 'User', Text: 'I would like to apply', IsFinal: true, Kind: 'normal' });
+        await vi.waitFor(() => expect(provider.Relayed).toHaveLength(2));
+
+        expect(provider.Relayed[1]).toEqual({ role: 'user', utteranceStartMs: 20000, utteranceEndMs: 24000 });
+    });
 });
