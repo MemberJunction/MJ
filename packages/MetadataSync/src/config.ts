@@ -245,6 +245,11 @@ export interface EntityConfig {
    */
   ignoreDirectories?: string[];
   /**
+   * Pushes this folder only when the named environment variable is `true` or `1`,
+   * for example "@env:DEMO_AGENTS_ENABLED". Otherwise push skips the folder and logs it.
+   */
+  pushWhen?: string; // case-violation-ok-legacy-back-compat: mirrors the .mj-sync.json key
+  /**
    * Declarative collection configuration for composition axes.
    * Key is collection property name (e.g. "Lines", "Payments").
    */
