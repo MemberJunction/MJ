@@ -122,6 +122,34 @@ describe('GenerateForeignKeyIndexes — verified joins, not just declared FKs', 
         expect(provider.GenerateForeignKeyIndexes(e)).toEqual([]);
     });
 
+    it('does not add a second index to a key field that is already unique — the declared non-PK FK case', () => {
+        // A declared FK can only reference a column with a unique constraint, so the EntityKeyField
+        // CodeGen writes for one always has an index already. Live on SQL Server this emitted
+        // IDX_AUTO_MJ_FKEY_Customer_ExternalID next to UQ_Customer_ExternalID.
+        const e = entity({
+            fields: [BASE_FIELDS[0], field('ExternalID', 2, { IsUnique: true }), ...BASE_FIELDS.slice(2)],
+            relationships: [{ ID: 'r1', EntityID: 'e-1', RelatedEntityID: 'e-2', RelatedEntityJoinField: 'CustomerExternalID', EntityKeyField: 'ExternalID', Type: 'One To Many' }],
+        });
+        expect(provider.GenerateForeignKeyIndexes(e)).toEqual([]);
+    });
+
+    it('indexes only the organic-key match fields that no unique index already covers', () => {
+        const e = entity({
+            fields: [BASE_FIELDS[0], field('Customer_Key', 2, { IsUnique: true }), ...BASE_FIELDS.slice(2)],
+            organicKeys: [{ ID: 'ok1', EntityID: 'e-1', Name: 'external_id', MatchFieldNames: 'Customer_Key, Email', NormalizationStrategy: 'ExactMatch', Status: 'Active' }],
+        });
+        const indexes = provider.GenerateForeignKeyIndexes(e);
+        expect(indexes).toHaveLength(1);
+        expect(indexes[0]).toContain('[Email]');
+    });
+
+    it('still indexes a declared FK that is unique, exactly as before', () => {
+        const e = entity({ fields: [BASE_FIELDS[0], field('OwnerID', 2, { RelatedEntityID: 'other', IsUnique: true }), ...BASE_FIELDS.slice(2)] });
+        const indexes = provider.GenerateForeignKeyIndexes(e);
+        expect(indexes).toHaveLength(1);
+        expect(indexes[0]).toContain('[OwnerID]');
+    });
+
     it('never indexes a virtual field — there is no column to index', () => {
         const e = entity({
             fields: [...BASE_FIELDS, field('OwnerName', 5, { IsVirtual: true })],

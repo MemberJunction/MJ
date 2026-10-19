@@ -699,9 +699,25 @@ export abstract class CodeGenDatabaseProvider {
      * guard against a future case rather than a change in today's generated output.
      */
     protected isIndexableForeignKey(f: EntityFieldInfo, verifiedJoinColumns?: ReadonlySet<string>): boolean {
-        const isJoinColumn = !!f.RelatedEntityID
-            || (verifiedJoinColumns?.has(f.Name.trim().toLowerCase()) ?? false);
+        const isJoinColumn = !!f.RelatedEntityID || this.isUnindexedVerifiedJoinColumn(f, verifiedJoinColumns);
         return isJoinColumn && !f.IsPrimaryKey && !f.IsVirtual;
+    }
+
+    /**
+     * Whether `f` is a verified join column (see {@link verifiedJoinColumnNames}) that still needs an
+     * index of its own.
+     *
+     * A column that is already `IsUnique` has one: the unique constraint's index serves the join. A
+     * declared FK can only reference a column with a unique constraint or index, on both dialects, so
+     * every `EntityKeyField` set from a declared non-PK FK lands here; indexing it again would add a
+     * second index on the same column, charged on every write and never chosen over the first. Only a
+     * soft FK or organic-key target with no unique index of its own gains anything from one.
+     */
+    protected isUnindexedVerifiedJoinColumn(f: EntityFieldInfo, verifiedJoinColumns?: ReadonlySet<string>): boolean {
+        if (!verifiedJoinColumns?.has(f.Name.trim().toLowerCase())) {
+            return false;
+        }
+        return !f.IsUnique;
     }
 
     /**
@@ -721,7 +737,8 @@ export abstract class CodeGenDatabaseProvider {
      *  - `EntityRelationship.EntityKeyField` on the relationships this entity parents. That column is
      *    exactly what `BuildRelationshipViewParams` puts on the left of the predicate for every
      *    related-records view, once per parent record. It is only ever set for a NON-PK join, so
-     *    every value here is a column that no primary-key index covers.
+     *    every value here is a column that no primary-key index covers. (One that a unique index
+     *    already covers is filtered out in {@link isUnindexedVerifiedJoinColumn}.)
      *
      *  - The match fields of this entity's ACTIVE, `ExactMatch`-normalized organic keys. An organic
      *    key is a human-verified join over columns that carry no constraint at all.
