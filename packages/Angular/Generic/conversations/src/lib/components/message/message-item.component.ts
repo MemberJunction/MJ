@@ -12,7 +12,7 @@ import {
   DoCheck,
   TemplateRef
 } from '@angular/core';
-import { MJConversationDetailEntity, MJConversationEntity, MJArtifactEntity, MJArtifactVersionEntity, MJTaskEntity, RatingJSON } from '@memberjunction/core-entities';
+import { MJConversationDetailEntity, MJConversationEntity, MJArtifactEntity, MJArtifactVersionEntity, MJTaskEntity, RatingJSON, UserInfoEngine } from '@memberjunction/core-entities';
 import { UserInfo, RunView, CompositeKey, KeyValuePair } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
@@ -757,6 +757,19 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    * its `AfterStopClicked` with the outcome.
    */
   @Output() public StopRequested = new EventEmitter<MJConversationDetailEntity>();
+
+  /**
+   * Fired when the user clicks the Task Graph button on the inline workflow card to view
+   * the visual `<mj-task-graph-run-view>` flowchart in the conversation's right-side panel.
+   */
+  @Output() public TaskGraphPanelRequested = new EventEmitter<{
+    parentTaskId: string;
+    workflowName: string;
+    isRunning: boolean;
+  }>();
+
+  /** @deprecated Use {@link TaskGraphPanelRequested}. */
+  @Output() public taskGraphPanelRequested = this.TaskGraphPanelRequested;
 
   /**
    * True from the moment Stop was clicked until the message leaves In-Progress, so the button
@@ -1916,15 +1929,43 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     return this.ShouldShowInlineActions();
   }
 
+  private static readonly SUPPORTING_ARTIFACTS_EXPANDED_SETTING_KEY = 'mj.conversations.supportingArtifactsExpanded';
+
   private _lastArtifactsInput: MessageArtifactRef[] | null = null;
   private _sortedDisplayArtifactsCache: MessageArtifactRef[] = [];
 
-  /** Whether the supporting/step-output artifact grid is expanded when a message has multiple artifacts. */
-  public IsSupportingArtifactsExpanded: boolean = true;
+  /**
+   * Whether the Supporting Artifacts grid is expanded when a message has multiple artifacts.
+   * Defaults to `false` (collapsed) when unset and persists the user's global preference via `UserInfoEngine`.
+   */
+  public IsSupportingArtifactsExpanded: boolean = MessageItemComponent.readSupportingArtifactsExpandedPref();
+
+  private static readSupportingArtifactsExpandedPref(): boolean {
+    try {
+      const raw = UserInfoEngine.Instance?.GetSetting(MessageItemComponent.SUPPORTING_ARTIFACTS_EXPANDED_SETTING_KEY);
+      if (raw === 'true') {
+        return true;
+      }
+      if (raw === 'false') {
+        return false;
+      }
+    } catch {
+      // Fallback when UserInfoEngine is not initialized (e.g., unit test harnesses)
+    }
+    return false;
+  }
 
   public ToggleSupportingArtifacts(event?: Event): void {
     event?.stopPropagation();
     this.IsSupportingArtifactsExpanded = !this.IsSupportingArtifactsExpanded;
+    try {
+      UserInfoEngine.Instance?.SetSettingDebounced(
+        MessageItemComponent.SUPPORTING_ARTIFACTS_EXPANDED_SETTING_KEY,
+        String(this.IsSupportingArtifactsExpanded)
+      );
+    } catch {
+      // Ignore in test harnesses without UserInfoEngine
+    }
     this.cdRef.detectChanges();
   }
 
@@ -2896,6 +2937,40 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       .filter((n) => !Number.isNaN(n));
     const latest = endTimes.length > 0 ? Math.max(...endTimes) : Date.now();
     return this.formatDurationFromMs(Math.max(1000, latest - earliest));
+  }
+
+  /** Parent task ID for opening `<mj-task-graph-run-view>` in the right-side panel. */
+  public get WorkflowParentTaskID(): string | null {
+    return (
+      this.WorkflowParentTask?.ID ??
+      (this.DetailTasks ?? []).find((t) => !!t.ParentID)?.ParentID ??
+      null
+    );
+  }
+
+  /** Whether the completed workflow step list is expanded (always expanded while Running). */
+  public IsWorkflowStepsExpanded: boolean = true;
+
+  public ToggleWorkflowStepsExpanded(event?: Event): void {
+    event?.stopPropagation();
+    if (this.WorkflowStatus === 'Running') {
+      return;
+    }
+    this.IsWorkflowStepsExpanded = !this.IsWorkflowStepsExpanded;
+    this.cdRef.detectChanges();
+  }
+
+  public OpenTaskGraphPanel(event?: Event): void {
+    event?.stopPropagation();
+    const parentId = this.WorkflowParentTaskID;
+    if (!parentId) {
+      return;
+    }
+    this.TaskGraphPanelRequested.emit({
+      parentTaskId: parentId,
+      workflowName: this.WorkflowTitle,
+      isRunning: this.WorkflowStatus === 'Running',
+    });
   }
 
   public ToggleWorkflowStepExpand(stepId: string): void {
