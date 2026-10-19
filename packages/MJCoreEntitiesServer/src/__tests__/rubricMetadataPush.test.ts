@@ -66,7 +66,8 @@ describe('shipped rubric metadata', () => {
         for (const file of shipped) {
             const rubric = JSON.parse(readFileSync(join(root, 'rubrics', file), 'utf8'));
             for (const version of rubric.relatedEntities['MJ: Rubric Versions']) {
-                expect(version.fields.Status).toBe('Draft');
+                // Status is left to the column default ('Draft'); only the publication file sets it.
+                expect(version.fields.Status).toBeUndefined();
                 for (const field of ['MajorVersion', 'MinorVersion', 'PatchVersion', 'ContentHash', 'ScoringHash', 'AppliedBump', 'PublishedAt']) {
                     expect(version.fields[field]).toBeUndefined();
                 }
