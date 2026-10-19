@@ -26,7 +26,7 @@ import {
 import { LoginDesignTokens, LoginThemeTokens, type LoginBlock, type LoginDesign, type LoginRegion, type PublicLoginScreen, type ThemeLogos } from '@memberjunction/theme-engine';
 import { WorkspaceInitializerService } from '@memberjunction/ng-workspace-initializer';
 import { MJEnvironmentConfig, MJ_ENVIRONMENT } from '@memberjunction/ng-bootstrap';
-import { SystemValidationService, ServerConnectivityService, ServerConnectivityBannerComponent } from '@memberjunction/ng-explorer-core';
+import { SystemValidationService, ServerConnectivityService, ServerConnectivityBannerComponent, ShellComponent } from '@memberjunction/ng-explorer-core';
 import { NavigationService, AgentContextUpdate, RecordSourceContext } from '@memberjunction/ng-shared';
 import { AgentClientService } from '@memberjunction/ng-agent-client';
 import { ClientToolResultEvent } from '@memberjunction/ai-agent-client';
@@ -312,9 +312,16 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
     return flags;
   }
 
-  /** Instance Config gate for the floating chat overlay bubble. */
+  /**
+   * Gate for the floating chat overlay bubble. Once the shell is rendered this is the shell's
+   * RESOLVED answer — Instance Config narrowed by the host's chrome policy (LXP P4: a learner
+   * portal that owns its own AI surface hides the bubble per audience, not with CSS). Before the
+   * shell exists the Instance Config read decides on its own; the overlay is gated on workspace
+   * init anyway (`IsChatOverlayReady`), which comes after the shell. The shell marks for check
+   * when its policy changes, and that marks this parent dirty too, so the bubble follows.
+   */
   public get ShowChatOverlay(): boolean {
-    return this.chromeFlags.chatOverlay;
+    return this.shellRef()?.ChromeFlags.chatOverlay ?? this.chromeFlags.chatOverlay;
   }
 
   /** Instance Config gate for the service-worker update toast. */
@@ -344,6 +351,8 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
 
   /** The offline banner above the shell header; absent until the shell renders. */
   private readonly connectivityBanner = viewChild(ServerConnectivityBannerComponent);
+  /** The shell, when rendered — the source of the resolved chrome flags (see {@link ShowChatOverlay}). */
+  private readonly shellRef = viewChild(ShellComponent);
 
   /**
    * Top boundary (in px) the chat overlay bubble cannot be dragged past. The

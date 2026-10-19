@@ -447,6 +447,9 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
           // to 'auto' (compact under a handful of apps, launcher otherwise)
           appSwitcherStyle: rawStyle === 'launcher' || rawStyle === 'compact' ? rawStyle : 'auto',
           appNav: engine.GetBoolean('Shell.AppNav.Enabled', true),
+          // The same key explorer-app read directly before the overlay went through the policy;
+          // explorer-app now reads the resolved bit from ChromeFlags.
+          chatOverlay: engine.GetBoolean('Shell.ChatOverlay.Enabled', true),
           // Resolved (and pushed to collaborators) in resolveRecordOpenStyle()
           // during initializeShell — NEVER as a getter side effect; getters
           // run at change detection's whim and startup correctness must not
@@ -458,6 +461,16 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
           this._chromeFlags = flags;
       }
       return flags;
+  }
+
+  /**
+   * The resolved chrome, for collaborators outside the shell. explorer-app reads `chatOverlay`
+   * from here (through its view query on this component) so the overlay follows the host's
+   * chrome policy with ONE policy instance and ONE `Changed`; the memoization above makes a
+   * read from a parent's change detection a field access.
+   */
+  public get ChromeFlags(): ShellChromeFlags {
+      return this.chromeFlags;
   }
 
   /** The policy's answer may have changed: forget the cached flags and repaint. */
