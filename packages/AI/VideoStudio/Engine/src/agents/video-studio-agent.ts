@@ -1343,12 +1343,6 @@ export class VideoStudioAgent extends BaseAgent {
             }
         }
 
-        if (spec.Deliverables && typeof spec.Deliverables === 'object') {
-            if (!Array.isArray(spec.Deliverables.Formats)) {
-                spec.Deliverables.Formats = [];
-            }
-        }
-
         if (spec.Review && typeof spec.Review === 'object') {
             if (!Array.isArray(spec.Review.Gates)) {
                 spec.Review.Gates = [];

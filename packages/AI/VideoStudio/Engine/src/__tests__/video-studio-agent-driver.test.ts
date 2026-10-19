@@ -185,7 +185,7 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
 
 import { PayloadManager } from '@memberjunction/ai-agents';
 import { VideoStudioAgent } from '../agents/video-studio-agent.js';
-import { FitBeatsToNarration } from '../narration/narration-timeline.js';
+import { FitTimelineToNarration } from '../narration/narration-timeline.js';
 import { CreateDeliveredSpecFixture } from './fixtures/delivered-spec.fixture.js';
 
 type TestableVideoStudioAgent = VideoStudioAgent & {
@@ -1951,7 +1951,7 @@ describe('VideoStudioAgent driver lifecycle', () => {
         expect(g2?.Status).toBe('Passed');
     });
 
-    it('(19) restores empty arrays dropped by real PayloadManager.MergeUpstreamPayload so FitBeatsToNarration (cloneBeat) does not throw', () => {
+    it('(19) restores empty arrays dropped by real PayloadManager.MergeUpstreamPayload so FitTimelineToNarration (cloneBeat) does not throw', () => {
         const agent = createAgent();
         const parentSpec = CreateDeliveredSpecFixture();
         delete (parentSpec as Partial<VideoGenerationSpec>).Beats;
@@ -1981,11 +1981,12 @@ describe('VideoStudioAgent driver lifecycle', () => {
         expect(merged.result.Beats?.[0]?.AssetRefs).toBeUndefined();
         expect(merged.result.Audio?.Cues).toBeUndefined();
         expect(() =>
-            FitBeatsToNarration(
-                merged.result.Beats ?? [],
-                merged.result.Audio?.Narration?.Script ?? [],
-            ),
-        ).toThrow();
+            FitTimelineToNarration({
+                Beats: merged.result.Beats ?? [],
+                Lines: merged.result.Audio?.Narration?.Script ?? [],
+                Cues: merged.result.Audio?.Cues ?? [],
+            }),
+        ).toThrow(/not iterable/);
 
         const params = {
             payload: merged.result,
@@ -2000,10 +2001,11 @@ describe('VideoStudioAgent driver lifecycle', () => {
         }
         expect(repaired.Audio?.Cues).toEqual([]);
 
-        const fitted = FitBeatsToNarration(
-            repaired.Beats ?? [],
-            repaired.Audio?.Narration?.Script ?? [],
-        );
+        const fitted = FitTimelineToNarration({
+            Beats: repaired.Beats ?? [],
+            Lines: repaired.Audio?.Narration?.Script ?? [],
+            Cues: repaired.Audio?.Cues ?? [],
+        });
         expect(fitted.Beats).toHaveLength(storyboardSpec.Beats.length);
         for (const beat of fitted.Beats) {
             expect(beat.DataRefs).toEqual([]);

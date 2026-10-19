@@ -494,7 +494,14 @@ async function loadChildStepDiagnostic(
         ResultType: 'simple',
         BypassCache: true,
     }, user);
-    if (!stepsRes.Success || !stepsRes.Results?.length) {
+    if (!stepsRes.Success) {
+        return {
+            stepName: 'RunView(MJ: AI Agent Run Steps)',
+            agent: defaultAgent,
+            message: `step lookup failed: ${stepsRes.ErrorMessage}`,
+        };
+    }
+    if (!stepsRes.Results?.length) {
         return null;
     }
     return FirstFailedOrRetryStep(stepsRes.Results, defaultAgent);
@@ -790,19 +797,9 @@ export const VideoStudioProductionChecks: NamedCheck[] = [
             const rv = RunView.FromMetadataProvider(ctx.Provider);
             let vsp3Diag = '';
             if (!actionResult.Success && agentRunId) {
-                const actionRunRes = await rv.RunView<{ ID: string }>({
-                    EntityName: 'MJ: AI Agent Runs',
-                    ExtraFilter: `ID='${EscapeSQLString(agentRunId)}'`,
-                    Fields: ['ID'],
-                    ResultType: 'simple',
-                    BypassCache: true,
-                }, ctx.User);
-                const runIdToInspect = actionRunRes.Success && actionRunRes.Results[0]?.ID
-                    ? actionRunRes.Results[0].ID
-                    : agentRunId;
                 const childStepDiag = await loadChildStepDiagnostic(
                     rv,
-                    runIdToInspect,
+                    agentRunId,
                     ctx.User,
                     'Video Studio',
                 );

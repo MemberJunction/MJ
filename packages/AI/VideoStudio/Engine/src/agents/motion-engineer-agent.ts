@@ -203,10 +203,6 @@ export class VideoStudioMotionEngineerAgent extends VideoStudioAgentBase {
                     errorMessage: msg,
                 };
             }
-            // INTERIM: PayloadManager.MergeUpstreamPayload drops empty arrays (plan-notes 39)
-            if (sourceEntry && !Array.isArray(sourceEntry.AssetKeys)) {
-                sourceEntry.AssetKeys = [];
-            }
         }
 
         const contextUser = params.contextUser as UserInfo;
