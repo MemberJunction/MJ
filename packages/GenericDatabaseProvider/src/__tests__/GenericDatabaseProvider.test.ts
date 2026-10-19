@@ -42,6 +42,7 @@ import {
     ProviderConfigDataBase,
     InMemoryLocalStorageProvider,
     LocalCacheManager,
+    SQLMaxLength,
 } from '@memberjunction/core';
 import type { PostCommitToken, QueryExecutionSpec, RunViewParams } from '@memberjunction/core';
 import type { MJEntityAIActionEntity } from '@memberjunction/core-entities';
@@ -851,12 +852,8 @@ describe('GenericDatabaseProvider', () => {
                 Length: f.Length ?? 0,
                 Precision: f.Precision ?? 0,
                 Scale: f.Scale ?? 0,
-                // Mirrors EntityFieldInfo.MaxLength: the n-types halve the byte length.
-                MaxLength: f.MaxLength ?? (
-                    ['nvarchar', 'nchar', 'ntext'].includes((f.Type ?? '').toLowerCase())
-                        ? ((f.Length ?? 0) > 0 ? (f.Length ?? 0) / 2 : 0)
-                        : ((f.Length ?? 0) > 0 ? (f.Length ?? 0) : 0)
-                ),
+                // The helper EntityFieldInfo.MaxLength calls, so the fixture cannot drift from it.
+                MaxLength: f.MaxLength ?? SQLMaxLength(f.Type ?? '', f.Length ?? 0),
             }));
             const entityInfo = {
                 Name: 'TestEntity',
@@ -1043,6 +1040,22 @@ describe('GenericDatabaseProvider', () => {
                         provider.BuildRLSSyntheticRowProjections(entity, entityInfo),
                         `${dialect.constructor.name}: byte length must be halved to characters`,
                     ).toBe(expected);
+                }
+            });
+
+            it('keeps the byte length of a fixed binary column (VARBINARY(16), never VARBINARY(0))', () => {
+                // `MaxLength` is a character count and is 0 for the binary types; SQL Server rejects a
+                // zero length, so a NULL varbinary(n) used to fail the save.
+                for (const Type of ['varbinary', 'binary']) {
+                    const { entity, entityInfo } = MakeRLSEntity({
+                        rlsClause: '',
+                        fields: [{ Name: 'Hash', NeedsQuotes: true, Type, Length: 16, SQLFullType: `${Type}(16)`, Value: null }],
+                    });
+                    const provider = RLS();
+                    (provider as unknown as { getDialect(): unknown }).getDialect = () => new SQLServerDialect();
+
+                    expect(provider.BuildRLSSyntheticRowProjections(entity, entityInfo))
+                        .toBe(`CAST(NULL AS ${Type.toUpperCase()}(16)) AS "Hash"`);
                 }
             });
 
