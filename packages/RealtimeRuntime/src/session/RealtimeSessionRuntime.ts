@@ -1041,9 +1041,11 @@ export class RealtimeSessionRuntime {
   /**
    * Recording-relative ms offset at which the IN-FLIGHT (not-yet-finalized) turn's audio
    * actually BEGAN — captured the moment that turn's audio/text starts flowing (its first
-   * interim transcript), NOT inherited from the previous turn's end. `null` before the first
-   * turn / between turns (until the next turn's audio starts). Sent as `utteranceStartMs` on
-   * the turn's final transcript so per-turn timing lines up with the recording even when a
+   * interim transcript, or the client's user-speech-start event), NOT inherited from the
+   * previous turn's end. `null` before the first turn / between turns (until the next turn's
+   * audio starts), and it stays `null` for a turn whose start was never measured. Sent as
+   * `utteranceStartMs` on the turn's final transcript AS-IS — `null` is relayed as `null`,
+   * never replaced with 0 — so per-turn timing lines up with the recording even when a
    * tool-call / silence gap sits between turns (the inherit-previous-end model mis-stamped
    * the post-gap turn at the pre-gap offset). See {@link markTurnAudioStart}.
    */
@@ -4059,6 +4061,10 @@ export class RealtimeSessionRuntime {
     client.OnInterruption(() => {
       this.cancelPendingNarration();
     });
+    // The provider VAD saw the user start speaking. Final-only user-transcript drivers (OpenAI,
+    // HuggingFace, xAI) emit no interim, so this is their only real turn start; markTurnAudioStart's
+    // once-per-turn guard keeps the first onset when VAD fires again after a pause.
+    client.OnUserSpeechStart(() => this.markTurnAudioStart('normal'));
     client.OnRemoteVideo((video: MediaVideoSource) => this.onAgentVideo(client, video));
   }
 
@@ -4237,11 +4243,11 @@ export class RealtimeSessionRuntime {
    * - NORMAL turns only — NARRATION interims are ephemeral and never persisted, so they must not
    *   claim the next real turn's start slot.
    *
-   * Works for any role whose driver surfaces interim deltas (all drivers for the assistant; the
-   * relevant case here — the post-tool-gap assistant answer — and user-interim drivers like
-   * Gemini/AssemblyAI). For final-only user turns (OpenAI/xAI/ElevenLabs) no interim arrives, so
-   * {@link relayTranscript} falls back to the seeded/prior start — the gap case that drifts is the
-   * assistant answer, which always has interims.
+   * Stamped on a turn's first interim transcript (all drivers for the assistant — the post-tool-gap
+   * assistant answer — and user-interim drivers like Gemini/AssemblyAI) or on the client's
+   * user-speech-start event (OpenAI-protocol drivers, whose user transcripts are final-only). A
+   * final-only user turn with neither signal (ElevenLabs) keeps `null`, which
+   * {@link relayTranscript} sends as-is.
    */
   private markTurnAudioStart(kind: 'normal' | 'narration'): void {
     if (this.turnAudioStartCaptured || kind === 'narration') {
@@ -4664,11 +4670,13 @@ export class RealtimeSessionRuntime {
    *
    * When the session is being recorded, per-turn timing rides along: `utteranceEndMs` is the
    * recording-relative offset at finalization, and `utteranceStartMs` is the offset captured by
-   * {@link markTurnAudioStart} when THIS turn's audio actually began (its first interim) — NOT
+   * {@link markTurnAudioStart} when THIS turn's audio actually began (its first interim, or the
+   * client's user-speech-start event) — NOT
    * inherited from the previous turn's end. That distinction is the timing fix: when a tool-call
    * / silence gap sits between turns, the post-gap turn's audio starts much later, so inheriting
    * the prior turn's end stamped the cue ~gap-length too early. Both are omitted (left `null`)
-   * when the session isn't being recorded.
+   * when the session isn't being recorded. `utteranceStartMs` is also `null` when no start was
+   * measured for this turn; it is never replaced with a placeholder 0.
    *
    * A correction (`replacesPrevious`) doesn't open a new turn, so it carries no start and doesn't
    * reset the per-turn start guard. After a normal finalization the guard is cleared so the NEXT
@@ -4684,14 +4692,16 @@ export class RealtimeSessionRuntime {
     }
     // Per-turn timing against whichever clock the session is on (#3832): the recorder's when one
     // runs, else the session clock. `utteranceStartMs` is where this turn's audio actually began
-    // (captured by markTurnAudioStart on the first interim); the `?? 0` fallback covers a turn
-    // whose interim was missed / a final-only first turn.
+    // (captured by markTurnAudioStart on the first interim or the user-speech-start event). It is
+    // null when no start was measured for this turn (a final-only driver with no speech-start
+    // signal, or a barge-in where the assistant turn still held the once-per-turn guard), so the
+    // server stores NULL rather than a placeholder 0.
     const utteranceEndMs = this.nowTurnOffsetMs();
-    const utteranceStartMs = utteranceEndMs !== null && !replacesPrevious ? (this.currentTurnStartMs ?? 0) : null;
+    const utteranceStartMs = utteranceEndMs !== null && !replacesPrevious ? this.currentTurnStartMs : null;
     if (utteranceEndMs !== null && !replacesPrevious) {
       // This turn is finalized — arm the NEXT turn to re-stamp its start from its own first
       // interim (handles a tool-call gap before the next turn). Stop inheriting this end as the
-      // next start. `null` means "not yet captured"; relay falls back to `?? 0` if no interim fires.
+      // next start. `null` means "not yet captured" and is relayed as-is if nothing stamps it.
       this.currentTurnStartMs = null;
       this.turnAudioStartCaptured = false;
     }
