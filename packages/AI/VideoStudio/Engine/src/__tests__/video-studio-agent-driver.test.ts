@@ -2012,6 +2012,48 @@ describe('VideoStudioAgent driver lifecycle', () => {
             expect(beat.AssetRefs).toEqual([]);
         }
     });
+
+    it('(20) defaults missing Deliverables flags to true when Deliverables is partially provided while preserving explicit false', () => {
+        const agent = createAgent();
+        const baseSpec = CreateDeliveredSpecFixture();
+        const film: VideoGenerationSpec['Film'] = {
+            ...baseSpec.Film,
+            Formats: ['16:9'],
+        };
+        const params = {
+            payload: {},
+            conversationMessages: [],
+        } as unknown as ExecuteAgentParams<Partial<VideoGenerationSpec>>;
+
+        const withFormatsOnly = agent.ApplyStageResult(params, 'Video Studio - Director', {
+            Film: film,
+            Deliverables: {
+                Formats: ['16:9'],
+            } as unknown as VideoGenerationSpec['Deliverables'],
+        });
+        expect(withFormatsOnly.Deliverables).toEqual({
+            Formats: ['16:9'],
+            Poster: true,
+            ContactSheets: true,
+            Source: true,
+            Captions: true,
+        });
+
+        const withExplicitFalsePoster = agent.ApplyStageResult(params, 'Video Studio - Director', {
+            Film: film,
+            Deliverables: {
+                Formats: ['16:9'],
+                Poster: false,
+            } as unknown as VideoGenerationSpec['Deliverables'],
+        });
+        expect(withExplicitFalsePoster.Deliverables).toEqual({
+            Formats: ['16:9'],
+            Poster: false,
+            ContactSheets: true,
+            Source: true,
+            Captions: true,
+        });
+    });
 });
 
 

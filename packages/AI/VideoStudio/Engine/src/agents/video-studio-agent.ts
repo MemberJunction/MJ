@@ -1417,12 +1417,26 @@ export class VideoStudioAgent extends BaseAgent {
                 Source: true,
                 Captions: true,
             };
-        } else if (
-            this._currentSettings.Formats === 'First' ||
-            !Array.isArray(spec.Deliverables.Formats) ||
-            spec.Deliverables.Formats.length === 0
-        ) {
-            spec.Deliverables.Formats = targetFormats;
+        } else {
+            if (
+                this._currentSettings.Formats === 'First' ||
+                !Array.isArray(spec.Deliverables.Formats) ||
+                spec.Deliverables.Formats.length === 0
+            ) {
+                spec.Deliverables.Formats = targetFormats;
+            }
+            if (spec.Deliverables.Poster === undefined) {
+                spec.Deliverables.Poster = true;
+            }
+            if (spec.Deliverables.ContactSheets === undefined) {
+                spec.Deliverables.ContactSheets = true;
+            }
+            if (spec.Deliverables.Source === undefined) {
+                spec.Deliverables.Source = true;
+            }
+            if (spec.Deliverables.Captions === undefined) {
+                spec.Deliverables.Captions = true;
+            }
         }
     }
 
