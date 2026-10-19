@@ -13,8 +13,12 @@
  * @module @memberjunction/server
  */
 import { AgentRunner } from '@memberjunction/ai-agents';
+import { AIEngine } from '@memberjunction/aiengine';
 import { ChatMessageRole } from '@memberjunction/ai';
-import { LogError } from '@memberjunction/core';
+import { LogError, type UserInfo } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
+import { UserCache } from '@memberjunction/generic-database-provider';
+import { MJTaskEntity } from '@memberjunction/core-entities';
 import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended } from '@memberjunction/ai-core-plus';
 import type { AgentExecutionProgressCallback } from '@memberjunction/ai-core-plus';
 import type { TaskAgentRunner, TaskAgentRunParams, TaskAgentRunResult } from '@memberjunction/task-graph';
@@ -27,14 +31,41 @@ export class TaskGraphAgentRunner implements TaskAgentRunner {
                 return { Success: false, ErrorMessage: `Agent ${params.AgentID} could not be loaded.` };
             }
 
-            const result = await new AgentRunner().RunAgent({
+            const parentRun = await this.loadSubmittingRun(params);
+            const actingUser = this.resolveActingUser(parentRun?.UserID, params.ContextUser);
+            const engineLoaded = (AIEngine.Instance?.Agents?.length ?? 0) > 0;
+            if (engineLoaded && actingUser && typeof AIEngine.Instance.CanUserRunAgent === 'function') {
+                const permitted = await AIEngine.Instance.CanUserRunAgent(agent.ID, actingUser);
+                if (!permitted) {
+                    return {
+                        Success: false,
+                        ErrorMessage: `User does not have permission to run agent "${agent.Name}".`,
+                    };
+                }
+            }
+            const taskContext = await this.resolveTaskContext(params);
+            const conversationDetailId =
+                parentRun?.ConversationDetailID ?? taskContext.conversationDetailId ?? undefined;
+
+            const runner = new AgentRunner(params.Provider);
+            const result = await runner.RunAgent({
                 agent,
-                conversationMessages: [{ role: ChatMessageRole.user, content: this.buildPrompt(params) }],
-                contextUser: params.ContextUser,
+                provider: params.Provider,
+                conversationMessages: [{
+                    role: ChatMessageRole.user,
+                    content: this.buildPrompt(params, taskContext.name, taskContext.description),
+                }],
+                contextUser: actingUser,
+                conversationId: parentRun?.ConversationID ?? undefined,
+                // A task-graph step receives its explicit InputPayload and DependencyOutputs.
+                // Passing an empty inputArtifacts array prevents AgentRunner.hydrateConversationArtifacts
+                // from loading unrelated artifacts from earlier turns in the conversation and tempting
+                // the step agent to emit `version-source` against a prior turn's artifact.
+                inputArtifacts: [],
                 // Inherited from the graph, so a graph this run goes on to emit is one hop deeper
                 // rather than starting the chain over. Without it MAX_REINVOKE_DEPTH never fires.
                 continuationDepth: params.ContinuationDepth ?? 0,
-                parentRun: await this.loadSubmittingRun(params),
+                parentRun,
                 // The bridge from the agent's own progress stream up to graph-level observers: the
                 // dispatcher turns these into rate-limited `NodeProgress` frames, which is how a
                 // running Agent step shows "what it is doing right now" on the workflow canvas.
@@ -42,6 +73,41 @@ export class TaskGraphAgentRunner implements TaskAgentRunner {
             });
 
             const success = result?.success === true;
+            if (
+                success &&
+                result?.payload != null &&
+                conversationDetailId &&
+                result.artifactDirective?.behavior !== 'suppress' &&
+                typeof runner.ProcessAgentArtifacts === 'function'
+            ) {
+                try {
+                    // Each step in a task graph is an independent workflow node and multiple steps
+                    // in the same graph share the originating ConversationDetailID. Enforcing
+                    // `behavior: 'create-new'` (while preserving any directive name/description)
+                    // prevents a step from accidentally versioning an earlier turn's artifact or
+                    // overwriting a sibling DAG step's artifact via FindPreviousArtifactForMessage.
+                    const stepArtifactResult = {
+                        ...result,
+                        artifactDirective: {
+                            ...result.artifactDirective,
+                            behavior: 'create-new' as const,
+                        },
+                    };
+                    await runner.ProcessAgentArtifacts(
+                        stepArtifactResult,
+                        conversationDetailId,
+                        undefined,
+                        actingUser,
+                        params.Provider,
+                    );
+                } catch (artifactErr) {
+                    LogError(
+                        `[TaskGraphAgentRunner] Task ${params.TaskID}: artifact persistence failed (non-fatal): ` +
+                        `${artifactErr instanceof Error ? artifactErr.message : String(artifactErr)}`,
+                    );
+                }
+            }
+
             return {
                 Success: success,
                 Output: this.extractOutput(result),
@@ -52,6 +118,58 @@ export class TaskGraphAgentRunner implements TaskAgentRunner {
             const message = e instanceof Error ? e.message : String(e);
             LogError(`[TaskGraphAgentRunner] Task ${params.TaskID} failed: ${message}`);
             return { Success: false, ErrorMessage: message };
+        }
+    }
+
+    private resolveActingUser(ownerUserId: string | null | undefined, fallback: UserInfo): UserInfo {
+        if (!ownerUserId) {
+            return fallback;
+        }
+        try {
+            const users = UserCache.Instance?.Users ?? UserCache.Users ?? [];
+            const matched = users.find((u) => UUIDsEqual(u.ID, ownerUserId));
+            if (matched) {
+                return matched;
+            }
+        } catch {
+            // Fall back to params.ContextUser when UserCache is not initialized.
+        }
+        return fallback;
+    }
+
+    /**
+     * Resolves the step task's `Name`, `Description`, and originating `ConversationDetailID`
+     * (falling back to the parent workflow task row for `ConversationDetailID`).
+     */
+    private async resolveTaskContext(params: TaskAgentRunParams): Promise<{
+        name: string | null;
+        description: string | null;
+        conversationDetailId: string | null;
+    }> {
+        if (!params.TaskID) {
+            return { name: null, description: null, conversationDetailId: null };
+        }
+        try {
+            const task = await params.Provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', params.ContextUser);
+            if (!(await task.Load(params.TaskID))) {
+                return { name: null, description: null, conversationDetailId: null };
+            }
+            const rawDesc = (task.Description || '').trim();
+            const cleanDesc = rawDesc.split(/\n\n--- (?:Output|Error) ---\n/)[0]?.trim() || null;
+            let conversationDetailId = task.ConversationDetailID ?? null;
+            if (!conversationDetailId && task.ParentID) {
+                const parentTask = await params.Provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', params.ContextUser);
+                if (await parentTask.Load(task.ParentID)) {
+                    conversationDetailId = parentTask.ConversationDetailID ?? null;
+                }
+            }
+            return {
+                name: task.Name?.trim() || null,
+                description: cleanDesc,
+                conversationDetailId,
+            };
+        } catch {
+            return { name: null, description: null, conversationDetailId: null };
         }
     }
 
@@ -104,14 +222,24 @@ export class TaskGraphAgentRunner implements TaskAgentRunner {
     }
 
     /**
-     * Builds the agent's instruction from the task's own input plus its dependencies' outputs.
+     * Builds the agent's instruction from the task's name/description, its structured input payload,
+     * and its dependencies' outputs.
      *
      * Dependency outputs are included inline because a task's whole reason for depending on another
      * is to consume what it produced. They are rendered as labelled JSON rather than prose so the
      * agent can parse them reliably rather than inferring structure from formatting.
      */
-    private buildPrompt(params: TaskAgentRunParams): string {
+    private buildPrompt(
+        params: TaskAgentRunParams,
+        taskName?: string | null,
+        taskDescription?: string | null,
+    ): string {
         const sections: string[] = [];
+
+        if (taskName || taskDescription) {
+            const header = taskName ? `## Task: ${taskName}` : '## Task Description';
+            sections.push(taskDescription ? `${header}\n${taskDescription}` : header);
+        }
 
         if (params.InputPayload != null) {
             sections.push(`## Task input\n\`\`\`json\n${JSON.stringify(params.InputPayload, null, 2)}\n\`\`\``);
@@ -129,10 +257,34 @@ export class TaskGraphAgentRunner implements TaskAgentRunner {
             : 'Execute this task.';
     }
 
-    /** Prefers a structured payload over prose, so downstream tasks get data rather than text. */
+    /**
+     * Prefers a structured payload over prose so downstream tasks get data rather than text,
+     * while preserving `agentRun.Message` when the payload object has no `message`/`summary`
+     * property (e.g., when a sub-agent returns a clarification question or human-readable summary).
+     */
     private extractOutput(result: unknown): unknown {
-        const r = result as { payload?: unknown; agentRun?: { Message?: string } } | null;
-        if (r?.payload != null) return r.payload;
-        return r?.agentRun?.Message ?? null;
+        const r = result as {
+            payload?: unknown;
+            agentRun?: { Message?: string; FinalStep?: string };
+        } | null;
+        const runMessage = typeof r?.agentRun?.Message === 'string' ? r.agentRun.Message.trim() : '';
+        if (r?.payload != null) {
+            if (
+                runMessage &&
+                typeof r.payload === 'object' &&
+                !Array.isArray(r.payload)
+            ) {
+                const payloadObj = r.payload as Record<string, unknown>;
+                if (payloadObj.message == null && payloadObj.summary == null) {
+                    return {
+                        ...payloadObj,
+                        message: runMessage,
+                        ...(r.agentRun?.FinalStep === 'Chat' ? { finalStep: 'Chat' } : {}),
+                    };
+                }
+            }
+            return r.payload;
+        }
+        return runMessage || null;
     }
 }
