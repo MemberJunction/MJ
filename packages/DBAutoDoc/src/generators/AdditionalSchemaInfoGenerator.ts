@@ -414,25 +414,44 @@ export class AdditionalSchemaInfoGenerator {
    * key usually point at columns that repeat in the target table (a join on them alone multiplies
    * rows), so they are left out rather than guessed. A column of the constraint that points
    * somewhere else (a different, real target) is kept; single-column keys are unchanged.
+   * A constraint read as a cross product (see {@link isCrossProduct}) keeps none of its pairs.
    */
   private dropNonUniqueCompositePairs(state: DatabaseDocumentation, schema: SchemaDefinition, table: TableDefinition, fks: SoftFKEntry[]): void {
-    const columnsPerConstraint = new Map<string, number>();
-    for (const dep of table.dependsOn) {
-      if (dep.constraintName) {
-        columnsPerConstraint.set(dep.constraintName, (columnsPerConstraint.get(dep.constraintName) ?? 0) + 1);
+    const drop = new Set<string>();
+    for (const pairs of this.compositeConstraints(table).values()) {
+      const crossProduct = this.isCrossProduct(pairs);
+      for (const dep of pairs) {
+        if (crossProduct || !this.isUniqueOnItsOwn(state, dep.schema || schema.name, dep.table, dep.referencedColumn)) {
+          drop.add(`${dep.column}->${dep.table}.${dep.referencedColumn}`);
+        }
       }
     }
-    const drop = new Set(
-      table.dependsOn
-        .filter(dep => !!dep.constraintName && (columnsPerConstraint.get(dep.constraintName) ?? 0) > 1)
-        .filter(dep => !this.isUniqueOnItsOwn(state, dep.schema || schema.name, dep.table, dep.referencedColumn))
-        .map(dep => `${dep.column}->${dep.table}.${dep.referencedColumn}`)
-    );
     if (drop.size === 0) {
       return;
     }
     const kept = fks.filter(f => !drop.has(`${f.FieldName}->${f.RelatedTable}.${f.RelatedField}`));
     fks.splice(0, fks.length, ...kept);
+  }
+
+  /** The introspected column pairs of each multi-column foreign key constraint, by constraint name. */
+  private compositeConstraints(table: TableDefinition): Map<string, TableDefinition['dependsOn']> {
+    const byConstraint = new Map<string, TableDefinition['dependsOn']>();
+    for (const dep of table.dependsOn) {
+      if (dep.constraintName) {
+        byConstraint.set(dep.constraintName, [...(byConstraint.get(dep.constraintName) ?? []), dep]);
+      }
+    }
+    return new Map([...byConstraint].filter(([, pairs]) => pairs.length > 1));
+  }
+
+  /**
+   * True when a constraint's pairs repeat a source column. A foreign key pairs each source column
+   * with exactly one referenced column, so a repeat can only be the N x N cross product the
+   * PostgreSQL driver produced before it read pg_constraint. Which pairing is right is unknown, so
+   * a state file written then must be re-introspected rather than exported as it is.
+   */
+  private isCrossProduct(pairs: TableDefinition['dependsOn']): boolean {
+    return new Set(pairs.map(p => p.column.toLowerCase())).size < pairs.length;
   }
 
   /**

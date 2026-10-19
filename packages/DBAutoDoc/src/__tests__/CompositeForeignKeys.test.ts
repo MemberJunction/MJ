@@ -96,6 +96,27 @@ describe('composite foreign keys in additionalSchemaInfo', () => {
     expect(emittedFKs([table('line', lineColumns, compositeFK()), price], discovered)).toEqual(['a_key->price.prc_key']);
   });
 
+  it('writes no pair of a constraint read as a cross product (PostgreSQL before #5872)', () => {
+    // 3 x 3 rows under one constraint name. Filtering by target uniqueness alone would keep all
+    // three pairs to price.prc_key, two of them wrong.
+    const price = table('price', [col('prc_key', true), col('prc_prd_key'), col('prc_prd_ptp_key')]);
+    const sources = ['a_key', 'a_prd_key', 'a_ptp_key'];
+    const targets = ['prc_key', 'prc_prd_key', 'prc_prd_ptp_key'];
+    const crossProduct: ForeignKeyReference[] = sources.flatMap(column =>
+      targets.map(referencedColumn => ({ schema: 'app', table: 'price', column, referencedColumn, constraintName: 'fk_line_price' })));
+    expect(emittedFKs([table('line', lineColumns, crossProduct), price])).toEqual([]);
+  });
+
+  it('still keeps a column-level FK from a cross-product column to a different, real target', () => {
+    const price = table('price', [col('prc_key', true), col('prc_prd_key'), col('prc_prd_ptp_key')]);
+    const product = table('product', [col('prd_key', true)]);
+    const crossProduct: ForeignKeyReference[] = ['a_key', 'a_prd_key'].flatMap(column =>
+      ['prc_key', 'prc_prd_key'].map(referencedColumn => ({ schema: 'app', table: 'price', column, referencedColumn, constraintName: 'fk_line_price' })));
+    const toProduct: ColumnDefinition = { ...col('a_prd_key'), isForeignKey: true, foreignKeyReferences: { schema: 'app', table: 'product', column: 'a_prd_key', referencedColumn: 'prd_key' } };
+    const line = table('line', [col('id', true), col('a_key'), toProduct, col('a_ptp_key')], crossProduct);
+    expect(emittedFKs([line, price, product])).toEqual(['a_prd_key->product.prd_key']);
+  });
+
   it('leaves single-column foreign keys alone', () => {
     const dependsOn: ForeignKeyReference[] = [{ schema: 'app', table: 'price', column: 'a_prd_key', referencedColumn: 'prc_prd_key', constraintName: 'fk_single' }];
     expect(emittedFKs([table('line', lineColumns, dependsOn)])).toEqual(['a_prd_key->price.prc_prd_key']);
