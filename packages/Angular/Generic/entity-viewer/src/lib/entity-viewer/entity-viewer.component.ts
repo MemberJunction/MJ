@@ -1812,7 +1812,7 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
    * per-user User Settings (the default-view case), or nowhere.
    */
   private persistenceTarget(): ViewPersistenceTarget {
-    if (this._viewEntity?.ID) {
+    if (this._viewEntity?.ID && this._viewEntity.UserCanEdit) {
       return 'record';
     }
     if (this.EffectiveEntity) {
